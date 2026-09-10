@@ -1022,6 +1022,17 @@ export type AttentionFeed =
  * The whole of `/api/state`.
  * ------------------------------------------------------------------ */
 
+/** The dashboard run and kept collection which supplied a fleet payload. */
+export type ProducerStamp = {
+  /** Which run of the dashboard composed this payload: `serverInstanceId()`, INSTANCE_TOKEN-shaped. */
+  instance: string;
+  /** How many refresh turns this run has kept (success or failure). 0 before the first. */
+  publication: number;
+  /** How many successful collections this run has kept: the ordinal of the one `rows` came from.
+   *  null exactly when `collectedAt` is null — never collected. */
+  inventory: number | null;
+};
+
 /**
  * **WHAT `/api/state` RETURNS AND `/api/live` PUSHES**, declared once so the
  * three consumers cannot disagree about it.
@@ -1103,6 +1114,7 @@ export type FleetState<Row, Health> = {
    * know, and a version that changes on every addition is one nobody checks.
    */
   schema: 1;
+  producer: ProducerStamp;
   /**
    * The sessions. **Read `collectedAt` first**: an empty `rows` is only ever a
    * claim about the box when `collectedAt` is non-null, and a freshly restarted

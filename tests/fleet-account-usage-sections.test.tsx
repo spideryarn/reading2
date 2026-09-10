@@ -168,6 +168,10 @@ it("draws a section for every account the Overseer wrote, through every real hop
     refreshMs: 60_000,
     answeringEnabled: false,
     attemptedAt: null,
+    /* Required since source-ordering stage 1 (215b0af8). No snapshot, so no
+       inventory: that session's own rule is that the stamp says "no
+       collection" exactly when there is none, and its tests use this value. */
+    producer: { instance: "1a2b3c4d", publication: 0, inventory: null },
     readCheckpoint: () => readCheckpointFeeds(dir),
   });
   const parsed = parseFleetState(JSON.parse(payload), BASE);

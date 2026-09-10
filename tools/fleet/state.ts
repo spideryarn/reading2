@@ -29,6 +29,7 @@ import type {
   AttentionFeed,
   FleetState as FleetStateWire,
   OverseerStatusFeed,
+  ProducerStamp,
   UsageFeed,
   WorkFeed,
 } from "./wire.js";
@@ -113,11 +114,17 @@ export function fleetState(
    * five-minute health-history cadence. Required so a forgotten composition
    * edge is a type error rather than a quietly empty panel. */
   currentWork: WorkFeed,
+  /** Which server run composed this payload, and which kept outcome and
+   * successful inventory it carries. Required so ordering cannot vanish at a
+   * composition edge. */
+  producer: ProducerStamp,
   now: number = Date.now(),
 ): FleetState {
+  const publishedProducer = producerForSnapshot(producer, snapshot);
   const rows = snapshot?.rows ?? [];
   return {
     schema: 1,
+    producer: publishedProducer,
     attemptedAt,
     attention,
     overseer,
@@ -154,6 +161,25 @@ export function fleetState(
   };
 }
 
+/**
+ * Keep a composition defect visible without making the dashboard disappear.
+ *
+ * The invalid instance makes Stage 2 refuse the stamp rather than believe a
+ * repaired-looking ordinal. Normalising only its nullness keeps the payload's
+ * safety contract intact for older consumers which do not inspect the stamp.
+ */
+function producerForSnapshot(producer: ProducerStamp, snapshot: FleetSnapshot | null): ProducerStamp {
+  if ((producer.inventory === null) === (snapshot === null)) return producer;
+  console.error(
+    "fleet payload producer defect: inventory nullness disagrees with the snapshot; publishing an unreadable stamp",
+  );
+  return {
+    instance: "invalid",
+    publication: producer.publication,
+    inventory: snapshot === null ? null : 0,
+  };
+}
+
 /* ------------------------------------------------------------------ *
  * Composing the payload — the whole of what `/api/state` does.
  * ------------------------------------------------------------------ */
@@ -172,6 +198,9 @@ export type PayloadDeps = {
   refreshMs: number;
   answeringEnabled: boolean;
   attemptedAt: string | null;
+  /** The publication ledger's current stamp. Required so a caller cannot
+   * compose an orderless payload without the compiler saying so. */
+  producer: ProducerStamp;
   /**
    * **THE COORDINATOR'S CHECKPOINT — THE INBOX AND ITS OWN STATUS, OUT OF ONE
    * READ.** Must not throw; `readCheckpointFeeds` in overseer-status.ts is the
@@ -226,9 +255,15 @@ export function statePayload(deps: PayloadDeps): string {
       checkpoint.usage,
       checkpoint.accountUsage,
       checkpoint.work,
+      deps.producer,
       Date.now(),
     ),
   );
+}
+
+/** The initial SSE frame after a kept turn; before that, do not even compose one. */
+export function initialFramePayload(producer: ProducerStamp, compose: () => string): string | null {
+  return producer.publication > 0 ? compose() : null;
 }
 
 /* ------------------------------------------------------------------ *

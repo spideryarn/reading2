@@ -416,6 +416,7 @@ describe("the production payload composition", () => {
         refreshMs: 60_000,
         answeringEnabled: true,
         attemptedAt: stamp,
+        producer: { instance: "1a2b3c4d", publication: 1, inventory: 1 },
         readCheckpoint: () => {
           reads += 1;
           return {

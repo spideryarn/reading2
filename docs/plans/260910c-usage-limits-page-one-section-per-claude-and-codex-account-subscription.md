@@ -374,6 +374,28 @@ full, so the next agent starts from here:
   lines. One record must carry all accounts. This is the trap 260909g Stage 3 names and it is the
   reason this is a separate stage rather than a widening of Stage 2.
 
+## An observation, not a fix: `fleetState(...)`'s signature is where merges collide
+
+Recorded at the Overseer's request, 2026-09-10, after merging `dev` into this branch conflicted in
+four files. The cause was one shape, not four bugs: `fleetState(...)` in `tools/fleet/state.ts`
+takes its feeds as **positional arguments**, so any two sessions that each add a required feed edit
+the same argument list and every call site that spells it out.
+
+- The resource-history close-out in the decision log (260908i, 2026-09-10 06:50Z) already flagged it:
+  *"Left standing, not theirs: `fleetState` takes ten positional arguments."*
+- This plan added an eleventh (`accountUsage`), and source-ordering stage 1 (`215b0af8`) added a
+  twelfth (`producer`) the same day. Call sites now pass **twelve**, thirteen counting the defaulted
+  `now`.
+- The conflict was resolved by keeping both sides — each call site carries this plan's feed in its
+  place and the other session's producer stamp last, with the values that session chose.
+
+**A proposal for whoever owns `state.ts` next, not something this plan does:** an options object
+(`fleetState({ snapshot, error, …, accountUsage, producer })`) would make a new feed an added key
+rather than a shifted position, so two sessions adding feeds would no longer touch the same line.
+It is not done here because it rewrites every call site in files other sessions own, and because
+positional arguments are also what makes a forgotten feed a compile error — an options object keeps
+that only if every key stays required, which is the property to preserve.
+
 ## The simpler options passed over
 
 1. **A live `/api/usage/accounts` route on the dashboard, read on demand.** Much the smallest diff —

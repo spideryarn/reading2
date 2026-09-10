@@ -46,6 +46,7 @@ import { usageHistoryRoute } from "./routes-usage-history.js";
 import { defaultUsageHistoryDir, openUsageHistoryForRead } from "./usage-history.js";
 import { applySecurityHeaders } from "./headers.js";
 import { broadcast, startHeartbeat, subscribe, subscriberCount } from "./live.js";
+import { PublicationLedger, serverInstanceId } from "./instance.js";
 import { readCheckpointFeeds } from "./overseer-status.js";
 import { openSharedQuarantine } from "./quarantine.js";
 import { drainSharedQueues, enqueueSharedMessage, handleActionRequest } from "./routes-actions.js";
@@ -71,7 +72,7 @@ import { openRouterKey } from "./transcribe.js";
 import { readOpeningMessages } from "./transcript.js";
 import { notifyLine, notifyOverseer, promptExcerpt } from "./notify-overseer.js";
 import { claimFromSnapshot } from "./overseer-claim.js";
-import { statePayload as composePayload } from "./state.js";
+import { initialFramePayload, statePayload as composePayload } from "./state.js";
 import { readRecentMessages } from "./transcript.js";
 
 /** Where the built React client lives. */
@@ -123,6 +124,7 @@ const REFRESH_MS = Number(process.env.FLEET_REFRESH_MS ?? 60_000);
 
 let snapshot: FleetSnapshot | null = null;
 let lastError: string | null = null;
+const publicationLedger = new PublicationLedger(serverInstanceId());
 
 /**
  * The box's own vital signs, refreshed alongside the fleet.
@@ -415,6 +417,7 @@ function statePayload(): string {
     refreshMs: REFRESH_MS,
     answeringEnabled: process.env["FLEET_ANSWER_ENABLED"] !== "0",
     attemptedAt,
+    producer: publicationLedger.stamp(),
     readCheckpoint: readCheckpointFeeds,
   });
 }
@@ -509,6 +512,7 @@ async function refresh(): Promise<void> {
         // is legible; a blank one is a lie that looks like an empty box.
         lastError = result.error;
       }
+      publicationLedger.record("snapshot" in result ? "success" : "failure");
     },
     refreshHealth,
     // A no-op when the store would not open, rather than a branch in the loop:
@@ -702,7 +706,7 @@ function handler(req: import("node:http").IncomingMessage, res: import("node:htt
   // waiting up to a minute for the next refresh, so a phone opening the page is
   // never briefly blank.
   if (url.startsWith("/api/live")) {
-    subscribe(req, res, snapshot ? statePayload() : null);
+    subscribe(req, res, initialFramePayload(publicationLedger.stamp(), statePayload));
     return;
   }
 

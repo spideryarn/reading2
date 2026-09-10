@@ -545,6 +545,8 @@ export type FleetState = Omit<
      no imports has neither problem, so `attempt-clock.ts` exists and both sides
      import it. GPT Sol's M5. */
   | "attemptedAt"
+  /* Declined: the page orders its own poll and stream and draws no age from the producer stamp. */
+  | "producer"
   /* Declined: READ AT THE BOUNDARY AND NOT CARRIED. `schema` decides whether to
      believe the payload at all (`parseFleetState` refuses anything else), and
      `servedAt` is consumed into `clockSkew` below — carrying either would be a

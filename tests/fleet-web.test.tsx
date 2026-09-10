@@ -145,6 +145,8 @@ import {
   sortRows,
   triageSort,
 } from "../tools/fleet/web/src/view";
+import { DRAFT_CAP, draftKey, draftNoticeSentence, resetDraftPageStateForTests } from "../tools/fleet/web/src/drafts";
+import { identityWriteGate } from "../tools/fleet/execution-token";
 
 /* React wants this set before anything is rendered inside `act`, and vitest's
    jsdom environment does not set it. Written as a cast rather than a `declare
@@ -471,6 +473,12 @@ let container: HTMLDivElement;
 let root: Root;
 
 beforeEach(() => {
+  /* The session composer keeps drafts in sessionStorage (drafts.ts), which
+     jsdom keeps for the whole file — so without this, one test's draft is
+     restored into the next test's box. Through `window`: the bare global is
+     Node's under jsdom. The page's own memory and refusal latch go too. */
+  window.sessionStorage.clear();
+  resetDraftPageStateForTests();
   container = document.createElement("div");
   document.body.appendChild(container);
   root = createRoot(container);
@@ -1960,6 +1968,7 @@ describe("box health, whose shape belongs to somebody else", () => {
         refreshMs: 60_000,
         answeringEnabled: true,
         attemptedAt: null,
+        producer: { instance: "1a2b3c4d", publication: 0, inventory: null },
         readCheckpoint: () => ({
           attention: { kind: "not-asked" },
           overseer: { kind: "not-asked" },
@@ -2034,6 +2043,7 @@ describe("box health, whose shape belongs to somebody else", () => {
           refreshMs: 60_000,
           answeringEnabled: true,
           attemptedAt: null,
+          producer: { instance: "1a2b3c4d", publication: 0, inventory: null },
           readCheckpoint: () => ({
             attention: { kind: "not-asked" },
             overseer: { kind: "not-asked" },
@@ -2922,6 +2932,7 @@ describe("the box's clock, read with the phone's", () => {
         refreshMs: 60_000,
         answeringEnabled: true,
         attemptedAt: null,
+        producer: { instance: "1a2b3c4d", publication: 0, inventory: null },
         readCheckpoint: () => ({
           attention: { kind: "not-asked" },
           overseer: { kind: "not-asked" },
@@ -9749,6 +9760,7 @@ describe("the composer production uses turns a checkpoint on disk into a questio
           refreshMs: 60_000,
           answeringEnabled: true,
           attemptedAt: null,
+          producer: { instance: "1a2b3c4d", publication: 0, inventory: null },
           readCheckpoint: () => readCheckpointFeeds(root),
         }),
       ) as unknown;
@@ -10946,8 +10958,27 @@ describe("the detail pane's state follows the execution, not the handle", () => 
     expect(container.textContent ?? "").toContain("number 1 in the line");
 
     /* Same `id`, same `claudeSessionId`, a different process. Nothing else on
-       the row can tell these two runs apart, which is the whole point. */
-    act(() => feed.push(state({ rows: rowsRunning(ran({ pid: 5150, startTicks: 90_000_000 })) })));
+       the row can tell these two runs apart, which is the whole point.
+
+       **Its conversation could not be checked**, and that is deliberate. A
+       replacement that verifiably runs the SAME conversation gets its draft
+       back — drafts are keyed by the conversation, and a relaunch of it is the
+       same recipient (plan 260910c § Stage 2; the composer's own tests below).
+       So the draft half of this test holds for a replacement the page cannot
+       place, which is the one where keeping the words would be a guess. */
+    act(() =>
+      feed.push(
+        state({
+          rows: rowsRunning(
+            ran({
+              pid: 5150,
+              startTicks: 90_000_000,
+              conversation: { kind: "unverifiable", claimed: "conv-A", why: "its argv could not be read" },
+            }),
+          ),
+        }),
+      ),
+    );
     await act(async () => {});
 
     expect(composer().value).toBe("");
@@ -10990,7 +11021,13 @@ describe("the detail pane's state follows the execution, not the handle", () => 
               title: "the replacement execution",
               status: { kind: "working" },
               claudeSessionId: "conv-A",
-              execution: ran({ pid: 5150, startTicks: 90_000_000 }),
+              /* Unverifiable conversation, for the reason the test above gives:
+                 a verified relaunch of conv-A would rightly get the draft back. */
+              execution: ran({
+                pid: 5150,
+                startTicks: 90_000_000,
+                conversation: { kind: "unverifiable", claimed: "conv-A", why: "its argv could not be read" },
+              }),
             }),
           ],
         }),
@@ -11958,5 +11995,361 @@ describe("the two answering refusals, and who owns each", () => {
 
     expect(container.textContent ?? "").toContain(REFUSED_SERVER);
     expect(container.querySelectorAll("button.answer")).toHaveLength(0);
+  });
+});
+
+/**
+ * **THE SESSION COMPOSER KEEPS ITS WORDS THROUGH A RELOAD — for the
+ * conversation they were written to, and for nobody else.**
+ *
+ * drafts.ts is the hook, and its rules are tested one by one in
+ * tests/fleet-drafts.test.tsx. What is under test here is the composer's wiring
+ * through the whole page: the remount Stage 1 keys by execution, the two send
+ * paths that must take the stored draft with them, and what Send and Queue may
+ * do under each execution reading — Fable's table in docs/plans/260910c
+ * § Withhold, caveat or relabel.
+ *
+ * A **reload** here is: unmount, forget the page's memory, mount again.
+ * sessionStorage is what a reload keeps, so it is left alone; the file-wide
+ * `beforeEach` empties it, so one test's draft cannot answer another's
+ * assertion. Conversation ids are not uuids, for tests/fixture-ids.test.ts.
+ */
+describe("the session composer keeps its draft for the conversation it was written to", () => {
+  const KEY_A = draftKey("session-composer", "conv-A");
+  const KEY_B = draftKey("session-composer", "conv-B");
+
+  /**
+   * The prototype of the storage the page actually uses. Under jsdom the bare
+   * `Storage` global is Node's, so a spy on `Storage.prototype` watches a class
+   * nothing calls (tests/fleet-drafts.test.tsx found that the hard way).
+   */
+  const storageProto = (): Storage => Object.getPrototypeOf(window.sessionStorage) as Storage;
+
+  /** The one line beside Send when the page cannot tell which Claude is in the pane. */
+  const CANNOT_TELL_LINE =
+    "The page cannot confirm which Claude is in this pane right now; the box checks before it types.";
+
+  function running(
+    over: {
+      pid?: number;
+      conversation?: ConversationReading;
+      harness?: Extract<ExecutionReading, { kind: "verified" }>["harness"];
+    } = {},
+  ): ExecutionReading {
+    const pid = over.pid ?? 7001;
+    return {
+      kind: "verified",
+      token: { boot: "5d81e0aa-boot", pid, startTicks: 11_000_000 + pid },
+      harness: over.harness ?? "claude-code",
+      conversation: over.conversation ?? { kind: "verified", id: "conv-A" },
+    };
+  }
+
+  /** The box's normal weather: a collection too loaded to look. */
+  const WEATHER: ExecutionReading = {
+    kind: "unknown",
+    cause: "process-table-unreadable",
+    why: "the process table could not be read at load average 300",
+  };
+
+  /**
+   * A different Claude in the pane. A new process, because one process cannot
+   * carry `--session-id conv-A` at one reading and `conv-B` at the next.
+   */
+  const CONFLICTING = running({ pid: 7002, conversation: { kind: "conflicting", claimed: "conv-A", observed: "conv-B" } });
+
+  function rowsOf(execution: ExecutionReading, claim = "conv-A"): FleetState["rows"] {
+    return [steerable({ id: "$d", title: "drafting", status: { kind: "working" }, claudeSessionId: claim, execution })];
+  }
+
+  function composer(): HTMLTextAreaElement {
+    const box = container.querySelector<HTMLTextAreaElement>("#steer-text");
+    if (!box) throw new Error("no message box on the page");
+    return box;
+  }
+
+  function pressed(text: string): HTMLButtonElement {
+    const button = buttonSaying(text);
+    if (!button) throw new Error(`no button saying ${JSON.stringify(text)} on the page`);
+    return button;
+  }
+
+  /** Mount the page and open the session — unless the hash already has, which after a reload it does. */
+  async function start(
+    execution: ExecutionReading,
+    seams: { steer?: SteerApi; actionsApi?: ActionsApi } = {},
+  ): Promise<ReturnType<typeof manualTransport>> {
+    const feed = manualTransport();
+    mountFull({ transport: feed.transport, ...seams });
+    act(() => feed.push(state({ rows: rowsOf(execution) })));
+    if (container.querySelector("#steer-text") === null) openSession("drafting");
+    await act(async () => {});
+    return feed;
+  }
+
+  async function arrives(feed: ReturnType<typeof manualTransport>, rows: FleetState["rows"]): Promise<void> {
+    act(() => feed.push(state({ rows })));
+    await act(async () => {});
+  }
+
+  /** What iOS does when it reclaims the tab: the page goes, sessionStorage stays. */
+  function reload(): void {
+    act(() => root.unmount());
+    resetDraftPageStateForTests();
+    root = createRoot(container);
+  }
+
+  function draftKeys(): string[] {
+    const s = window.sessionStorage;
+    const keys: string[] = [];
+    for (let i = 0; i < s.length; i += 1) {
+      const key = s.key(i);
+      if (key !== null && key.startsWith("sy.draft.v1:")) keys.push(key);
+    }
+    return keys.sort();
+  }
+
+  // 1
+  it("brings a draft back after a reload, under the same verified conversation", async () => {
+    await start(running());
+    typeInto(composer(), "half a thought about the migration");
+    expect(window.sessionStorage.getItem(KEY_A)).toBe("half a thought about the migration");
+
+    reload();
+    await start(running());
+    expect(composer().value).toBe("half a thought about the migration");
+  });
+
+  // 2
+  it("restores nothing in front of a different verified conversation, and never reads the old draft", async () => {
+    const feed = await start(running());
+    typeInto(composer(), "meant for conversation A");
+
+    const getItem = vi.spyOn(storageProto(), "getItem");
+    /* The claim and the process both moved: a genuinely different recipient. */
+    await arrives(feed, [
+      steerable({
+        id: "$d",
+        title: "drafting",
+        status: { kind: "working" },
+        claudeSessionId: "conv-B",
+        execution: running({ pid: 7003, conversation: { kind: "verified", id: "conv-B" } }),
+      }),
+    ]);
+    const read = getItem.mock.calls.map(([key]) => key);
+    getItem.mockRestore();
+
+    expect(composer().value).toBe("");
+    /* The spy is live — it saw the new conversation's key looked up — so its
+       silence about the old one means something. */
+    expect(read).toContain(KEY_B);
+    expect(read).not.toContain(KEY_A);
+    expect(window.sessionStorage.getItem(KEY_A)).toBe("meant for conversation A");
+  });
+
+  // 3
+  it("brings the draft back when the same conversation is relaunched in a new process", async () => {
+    const feed = await start(running());
+    typeInto(composer(), "still for conversation A");
+    await arrives(feed, rowsOf(running({ pid: 7004 })));
+    expect(composer().value).toBe("still for conversation A");
+  });
+
+  // 4
+  it("restores nothing after a reload it cannot verify, then restores into the untouched box once it can", async () => {
+    await start(running());
+    typeInto(composer(), "written before the reload");
+
+    reload();
+    const feed = await start(WEATHER);
+    expect(composer().value).toBe("");
+
+    await arrives(feed, rowsOf(running()));
+    expect(composer().value).toBe("written before the reload");
+  });
+
+  // 5
+  it("keeps typing through an unverifiable gap under the last verified conversation, and under nothing else", async () => {
+    const feed = await start(running());
+    await arrives(feed, rowsOf(WEATHER));
+    typeInto(composer(), "typed while the box was too loaded to look");
+    expect(window.sessionStorage.getItem(KEY_A)).toBe("typed while the box was too loaded to look");
+    expect(draftKeys()).toEqual([KEY_A]);
+  });
+
+  it("stores nothing until a conversation is verified, then files the box's words under it", async () => {
+    const feed = await start(WEATHER);
+    typeInto(composer(), "nobody has been verified yet");
+    expect(draftKeys()).toEqual([]);
+
+    await arrives(feed, rowsOf(running()));
+    expect(draftKeys()).toEqual([KEY_A]);
+    expect(window.sessionStorage.getItem(KEY_A)).toBe("nobody has been verified yet");
+  });
+
+  // 6
+  it("never replaces what is in the box with a stored draft — the box's words are the ones kept", async () => {
+    await start(running());
+    typeInto(composer(), "the old draft");
+
+    reload();
+    const feed = await start(WEATHER);
+    typeInto(composer(), "what I am typing now");
+    await arrives(feed, rowsOf(running()));
+
+    expect(composer().value).toBe("what I am typing now");
+    expect(window.sessionStorage.getItem(KEY_A)).toBe("what I am typing now");
+  });
+
+  // 7 — the hook's own tests cover the three ways storage refuses; this proves the composer draws the line.
+  it("says in one line that the message will not survive a reload when the browser refuses storage", async () => {
+    vi.spyOn(window, "sessionStorage", "get").mockImplementation(() => {
+      throw new DOMException("The operation is insecure.", "SecurityError");
+    });
+    await start(running());
+    typeInto(composer(), "a message in a private window");
+    expect(composer().value).toBe("a message in a private window");
+    expect(container.textContent ?? "").toContain(draftNoticeSentence("storage-refused"));
+  });
+
+  // 8 — likewise one composer-level case.
+  it("removes the stored copy rather than keep a shorter one when the text goes over the cap, and says so", async () => {
+    await start(running());
+    typeInto(composer(), "the start of it");
+    expect(window.sessionStorage.getItem(KEY_A)).toBe("the start of it");
+
+    typeInto(composer(), "x".repeat(DRAFT_CAP + 1));
+    expect(window.sessionStorage.getItem(KEY_A)).toBeNull();
+    expect(container.textContent ?? "").toContain(draftNoticeSentence("too-long"));
+  });
+
+  // 9
+  it("takes the stored draft away on Clear, on a Send the server accepted, and on a Queue it accepted", async () => {
+    await start(running());
+    typeInto(composer(), "to be cleared");
+    act(() => pressed("Clear").click());
+    expect(composer().value).toBe("");
+    expect(window.sessionStorage.getItem(KEY_A)).toBeNull();
+
+    typeInto(composer(), "to be sent");
+    expect(window.sessionStorage.getItem(KEY_A)).toBe("to be sent");
+    await act(async () => {
+      pressed("Send now").click();
+    });
+    expect(composer().value).toBe("");
+    expect(window.sessionStorage.getItem(KEY_A)).toBeNull();
+
+    typeInto(composer(), "to be queued");
+    expect(window.sessionStorage.getItem(KEY_A)).toBe("to be queued");
+    await act(async () => {
+      pressed("Queue (~73s)").click();
+    });
+    expect(composer().value).toBe("");
+    expect(window.sessionStorage.getItem(KEY_A)).toBeNull();
+  });
+
+  it("keeps the box and its stored copy when the server refuses the send", async () => {
+    await start(running(), {
+      steer: refusingSteer({
+        ok: false,
+        code: "wrong-pane",
+        why: "pane %2108 is in session $1643 now, not $d",
+        status: 409,
+        from: "server",
+        delivery: { kind: "none" },
+      }),
+    });
+    typeInto(composer(), "try this again in a moment");
+    await act(async () => {
+      pressed("Send now").click();
+    });
+    expect(composer().value).toBe("try this again in a moment");
+    expect(window.sessionStorage.getItem(KEY_A)).toBe("try this again in a moment");
+  });
+
+  // 10 — cannot tell: live, and one line.
+  const cannotTell: [string, ExecutionReading][] = [
+    ["an unknown reading", WEATHER],
+    [
+      "a claimed-only reading",
+      {
+        kind: "claimed-only",
+        conversation: { kind: "unverifiable", claimed: "conv-A", why: "nothing under the pane could be identified" },
+        why: "no process under the pane matched a harness",
+      },
+    ],
+    [
+      "a verified process whose conversation cannot be checked",
+      running({ conversation: { kind: "unverifiable", claimed: "conv-A", why: "its argv could not be read" } }),
+    ],
+  ];
+  it.each(cannotTell)("keeps Send and Queue live under %s, with one line beside Send", async (_, execution) => {
+    await start(execution);
+    typeInto(composer(), "go on");
+    expect(pressed("Send now").disabled).toBe(false);
+    expect(pressed("Queue (~73s)").disabled).toBe(false);
+    expect((container.textContent ?? "").split(CANNOT_TELL_LINE)).toHaveLength(2);
+  });
+
+  it("draws no such line when the conversation is verified", async () => {
+    await start(running());
+    typeInto(composer(), "go on");
+    expect(pressed("Send now").disabled).toBe(false);
+    expect(container.textContent ?? "").not.toContain(CANNOT_TELL_LINE);
+  });
+
+  // 10 — can tell: off, with the gate's sentence, and typing still on.
+  const canTell: [string, ExecutionReading][] = [
+    ["a conflicting conversation", CONFLICTING],
+    ["a pane whose process claims no conversation", running({ conversation: { kind: "not-claimed" } })],
+    [
+      "a harness that cannot be addressed",
+      running({
+        harness: "claude-headless",
+        conversation: { kind: "unverifiable", claimed: "conv-A", why: "a headless Claude stopped reading its terminal" },
+      }),
+    ],
+  ];
+  it.each(canTell)("disables Send and Queue under %s, says why in the gate's words, and leaves typing on", async (_, execution) => {
+    await start(execution);
+    typeInto(composer(), "go on");
+    expect(composer().disabled).toBe(false);
+    expect(composer().value).toBe("go on");
+    expect(pressed("Send now").disabled).toBe(true);
+    expect(pressed("Queue (~73s)").disabled).toBe(true);
+
+    const gate = identityWriteGate(execution);
+    if (gate.allowed) throw new Error("this fixture is one the gate allows, so it proves nothing here");
+    expect(container.textContent ?? "").toContain(gate.why);
+    expect(container.textContent ?? "").not.toContain(CANNOT_TELL_LINE);
+  });
+
+  /**
+   * **AN UNKNOWN READING DOES NOT END A CONFLICT.** The same rule the
+   * transcript's relabel follows (RecentMessages.tsx, `lastConflict`): a
+   * collection too loaded to look is not evidence that the pane went back to
+   * the conversation this row addresses.
+   */
+  it("keeps Send and Queue off through an unverifiable flicker after a conflict", async () => {
+    const feed = await start(CONFLICTING);
+    await arrives(feed, rowsOf(WEATHER));
+    typeInto(composer(), "go on");
+    expect(pressed("Send now").disabled).toBe(true);
+    expect(pressed("Queue (~73s)").disabled).toBe(true);
+  });
+
+  // 11
+  it("puts the claimed conversation's draft back under a conflict, and stores none of the edits", async () => {
+    const feed = await start(running());
+    typeInto(composer(), "for conversation A");
+
+    await arrives(feed, rowsOf(CONFLICTING));
+    expect(composer().value).toBe("for conversation A");
+    expect(pressed("Send now").disabled).toBe(true);
+
+    typeInto(composer(), "for conversation A, and a bit more");
+    expect(composer().value).toBe("for conversation A, and a bit more");
+    expect(window.sessionStorage.getItem(KEY_A)).toBe("for conversation A");
+    expect(draftKeys()).toEqual([KEY_A]);
   });
 });
