@@ -227,6 +227,41 @@ describe("the Box health admission section", () => {
     expect(container.textContent).toContain(CAVEAT);
   });
 
+  /**
+   * **Memory is stated in the same unit the rest of this panel and the gate
+   * itself use.** Found in a browser at 390 px rather than in a test: the
+   * section rendered "available memory 20,733,063,168 bytes; reserve
+   * 4,294,967,296 bytes", which nobody can read on a phone and which no other
+   * number on Box health is written like.
+   *
+   * The unit is not a cosmetic choice here. `health.ts` carries a scar about
+   * exactly this — it once drew "10298 GiB of 31337 GiB" on a 32 GB box because
+   * a field named `…KiB` held bytes — and its rule since is that every reading
+   * carries its unit in its name. The gate's own refusal message formats these
+   * two figures as `(n / 1024 ** 3).toFixed(2)` GB, so matching it keeps the
+   * forecast and the refusal text the reader may see next to each other in
+   * agreement.
+   */
+  it("states memory in GB, as the gate's own message does, not in raw bytes", async () => {
+    await mountFull({
+      forecast: async () =>
+        forecast({
+          kind: "would-admit",
+          nominalWorkers: 4,
+          workers: 4,
+          capacity: 9,
+          availableBytes: 17_179_869_184,
+          reserveBytes: 4_294_967_296,
+          caveat: CAVEAT,
+        }),
+    });
+    const text = container.querySelector('[data-section="admission"]')?.textContent ?? "";
+    expect(text).toContain("16.00 GB");
+    expect(text).toContain("4.00 GB");
+    expect(text).not.toContain("17,179,869,184");
+    expect(text).not.toContain("4,294,967,296");
+  });
+
   it.each(["review", "browser"] as const)("says %s work has no cost model", async (requestKind) => {
     await mountFull({
       forecast: async () => ({

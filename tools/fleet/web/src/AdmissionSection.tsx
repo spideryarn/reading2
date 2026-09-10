@@ -4,6 +4,23 @@ import { DATE_LIMIT_MS, type AdmissionApi, type AdmissionView } from "./admissio
 import { shiftMsToBrowserClock, type ClockSkew } from "./types";
 import { Card, Pill, SectionHeading } from "./ui";
 
+/**
+ * Memory, in the unit the gate's own message uses.
+ *
+ * `vitest-admission.ts` formats these two figures as `(n / 1024 ** 3).toFixed(2)`
+ * followed by " GB", and a reader may see this forecast and that refusal text
+ * next to each other, so the two must agree. Raw bytes were what shipped first
+ * and a browser at 390 px was what caught it — "available memory
+ * 20,733,063,168 bytes" is not a number anybody reads on a phone, and no other
+ * figure on Box health is written like that. `health.ts` carries the scar that
+ * makes this worth a comment rather than a silent edit: it once drew
+ * "10298 GiB of 31337 GiB" on a 32 GB box, and every reading there now names
+ * its unit for that reason.
+ */
+function gb(bytes: number): string {
+  return `${(bytes / 1024 ** 3).toFixed(2)} GB`;
+}
+
 function forecastTime(ms: number | null, skew: ClockSkew): string | null {
   if (ms === null || !Number.isFinite(ms) || Math.abs(ms) > DATE_LIMIT_MS) return null;
   const corrected = shiftMsToBrowserClock(ms, skew);
@@ -29,8 +46,8 @@ function Outcome({ view }: { view: Exclude<AdmissionView, { kind: "no-answer" }>
           config would ask Vitest for {outcome.workers} workers{outcome.kind === "would-reduce" ? " instead" : ""}.
         </p>
         <p>
-          Gate figures: capacity {outcome.capacity} workers; available memory {outcome.availableBytes.toLocaleString()} bytes;
-          reserve {outcome.reserveBytes.toLocaleString()} bytes.
+          Gate figures: capacity {outcome.capacity} workers; available memory {gb(outcome.availableBytes)};
+          reserve {gb(outcome.reserveBytes)}.
         </p>
         <p className="tw:text-ink-faint">{outcome.caveat}</p>
       </div>
