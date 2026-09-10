@@ -663,7 +663,10 @@ function fromOwned(outcome: OwnedOutcome): CommandOutcome {
         pid,
     };
   }
-  return { ok: false, why: outcome.why };
+  return {
+    ok: false,
+    why: `${outcome.why}; owned probe ran for ${Math.max(1, outcome.tookMs)}ms`,
+  };
 }
 
 async function runOwned(owner: ProbeOwner, spec: ProbeSpec): Promise<CommandOutcome> {
@@ -677,6 +680,49 @@ async function runOwned(owner: ProbeOwner, spec: ProbeSpec): Promise<CommandOutc
   }
 }
 
+const HEALTH_CHILD_CAP = 4;
+
+/**
+ * Refuse locally when timed-out calls have released limiter slots but their
+ * children are still alive. `limit(3)` bounds unresolved cheap-probe calls;
+ * this bounds the children those calls can leave behind, with vmstat beside
+ * them, across this turn and later turns owned by the same registry.
+ */
+async function runHealthOwned(owner: ProbeOwner, spec: ProbeSpec, nowMs: () => number): Promise<CommandOutcome> {
+  let live: ReturnType<ProbeOwner["live"]>;
+  try {
+    live = owner.live().filter((child) => child.key.startsWith("health:"));
+  } catch (cause) {
+    return { ok: false, why: `probe "${spec.key}" could not inspect the health child registry: ${errorText(cause)}` };
+  }
+  /* A same-key call cannot add a sibling: the owner first re-checks the old
+     child's kernel identity, then either refuses the call or replaces a child
+     it proved gone. Let that check happen so one missed exit event cannot pin
+     the local cap for ever. */
+  const ownerCanRecheckThisKey = live.some((child) => child.key === spec.key);
+  if (live.length >= HEALTH_CHILD_CAP && !ownerCanRecheckThisKey) {
+    let now: number;
+    try {
+      now = nowMs();
+    } catch {
+      now = Number.NaN;
+    }
+    const children = live
+      .map((child) => {
+        const duration = Number.isFinite(now) ? ` for ${Math.max(1, now - child.startedAtMs)}ms` : "";
+        return `pid ${child.pid}${duration}`;
+      })
+      .join(", ");
+    return {
+      ok: false,
+      why:
+        `probe "${spec.key}" was not started because ${live.length} health children remain unaccounted for ` +
+        `(${children}); the ${HEALTH_CHILD_CAP}-child health cap was kept`,
+    };
+  }
+  return runOwned(owner, spec);
+}
+
 /** Gather the survey without holding Node's request thread while children run. */
 export async function collectHealthAsync(options: {
   owner: ProbeOwner;
@@ -687,7 +733,11 @@ export async function collectHealthAsync(options: {
   const startedAtMs = nowMs();
   const runCheap = limit(3);
   const cheap = (key: string, cmd: string, args: readonly string[]) =>
-    runCheap(() => runOwned(options.owner, { key, cmd, args, timeoutMs: CHEAP_TIMEOUT_MS, maxBytes: HEALTH_MAX_BYTES }));
+    runCheap(() => runHealthOwned(
+      options.owner,
+      { key, cmd, args, timeoutMs: CHEAP_TIMEOUT_MS, maxBytes: HEALTH_MAX_BYTES },
+      nowMs,
+    ));
   const includeSwapActivity = options.includeSwapActivity ?? true;
 
   // vmstat is outside the cheap-command limiter because its one-second sample
@@ -702,13 +752,13 @@ export async function collectHealthAsync(options: {
     cheap("health:df", "df", ["-k", "/"]),
     cheap("health:ps", "ps", ["-eo", "rss,args", "--no-headers"]),
     includeSwapActivity
-      ? runOwned(options.owner, {
+      ? runHealthOwned(options.owner, {
           key: "health:vmstat",
           cmd: "vmstat",
           args: ["1", "2"],
           timeoutMs: VMSTAT_TIMEOUT_MS,
           maxBytes: HEALTH_MAX_BYTES,
-        })
+        }, nowMs)
       : Promise.resolve({ skipped: true } as const),
   ]);
 

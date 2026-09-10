@@ -510,6 +510,28 @@ async function modeReal(runs: number): Promise<void> {
     const healthQuick = await timed("collectHealth({includeSwapActivity:false}) [sync]", () => collectHealth({ includeSwapActivity: false }));
     rows.push({ phase: healthQuick.name, tookMs: healthQuick.tookMs, lag: healthQuick.lag });
 
+    /* **STAGE 2's AFTER, BESIDE ITS BEFORE, IN ONE RUN.** The same seven
+       commands through the owned-child helper. The WALL time is expected to
+       stay about the same — `vmstat 1 2` still has to wait out its sampling
+       interval — and that is not the claim. The claim is the LOOP LAG column:
+       the thread that answers `/api/state` should be free while it happens.
+
+       An owner per iteration rather than one for the process, which the server
+       must not do: a bench iteration that leaves a stuck child is a bench bug
+       to see, not a condition to carry into the next one. */
+    const { collectHealthAsync } = await import("../tools/fleet/health.js");
+    const { probeOwner } = await import("../tools/fleet/child.js");
+    const owner = probeOwner();
+    const healthAsync = await timed("collectHealthAsync({includeSwapActivity:true}) [owned, async]", () =>
+      collectHealthAsync({ owner, includeSwapActivity: true }),
+    );
+    rows.push({
+      phase: healthAsync.name,
+      tookMs: healthAsync.tookMs,
+      lag: healthAsync.lag,
+      note: `${healthAsync.value.verdict.level}; ${owner.live().length} children still live after`,
+    });
+
     const whole = await timed("collect() end to end", () => collect());
     rows.push({ phase: whole.name, tookMs: whole.tookMs, lag: whole.lag, note: `${whole.value.rows.length} rows` });
     // From here on the bench's own `/api/state` serves a real snapshot, so the

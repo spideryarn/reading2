@@ -283,7 +283,14 @@ describe("one refresh turn", () => {
 
     await refreshOnce(deps);
 
-    expect(events.indexOf("health-finished")).toBeLessThan(events.indexOf("publish"));
+    expect(events).toEqual([
+      "keep",
+      "logError",
+      "health-started",
+      "health-finished",
+      "publish",
+      "retain",
+    ]);
     expect(retained[0]?.turn).toEqual({ kind: "reading", report: bareReport() });
   });
 

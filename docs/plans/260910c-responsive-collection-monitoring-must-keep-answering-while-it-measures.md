@@ -214,20 +214,45 @@ New module `tools/fleet/child.ts`, importing nothing but node builtins.
 
 ## Stage 2 — Health off the request thread
 
-**Status (2026-09-10): built by Codex, gates green, independent review pending.** The boxes below
-were ticked by the implementing run; each is a claim about code that exists, and the independent
-stage review is what turns them into facts. **The implementing run's own review was not
-independent**: its nested reviewer failed to start and it dispatched a same-model subagent instead
-— [260910c-stage2-code-review-sol.md](260910c-stage2-code-review-sol.md) is that record and says so.
-It found and fixed four real things, which the independent review treats as unreviewed code.
-**No step of `refreshOnce` moved**: the only code change in `refresh.ts` is `await` on
-`refreshHealth`; its header's steps 3 and 4 were reworded to *publish, then retain*, which is what
-the code has done since GPT Sol's finding 11 while the header still said the opposite.
+**Status (2026-09-10): built by Codex, independently reviewed by GPT Sol, measured.** Codex
+implemented both the build and the review round.
 
-**One question for the review, not yet decided:** `publish` now waits on the health turn, so a
-`vmstat` that wedges delays that turn's publish by its 10-second deadline plus the owner's 1-second
-grace, and is `refused` instantly on every later turn. That holds the *loop*, not the event loop —
-`/api/state` keeps answering from the previous state — but it is a delay a person can see.
+**Measured — Stage 2's before and after in one run** (`npx tsx scripts/fleet-collect-bench.ts
+--mode=real --runs=2`, load ~9, 24 sessions; request accounting 1055 issued = 1055 completed):
+
+| phase | wall | loop lag p95 | loop lag max |
+|---|---|---|---|
+| `collectHealth`, synchronous — before | 1160 / 1161 ms | 1159 / 1161 ms | **1159 / 1161 ms** |
+| `collectHealthAsync`, owned — after | 1021 / 1021 ms | 2.1 / 2.4 ms | **30 / 44 ms** |
+
+Wall time barely moves — `vmstat` still waits out its sampling interval — and that was never the
+claim. **The thread that answers `/api/state` is free while it happens**, and no child was left
+alive afterwards. (The run's overall HTTP p95 still includes the bench's synchronous *before*
+phases, so it is not a Stage 2 number; the whole-collection after comes with Stage 3.)
+
+**The independent review found a P1 the implementing run's review had not: the limiter bounded
+pending *calls*, not surviving *children*.** `limit(3)` frees a slot when a call settles, and a
+timed-out call settles at `timeoutMs + graceMs` while its child can live on — so across turns, seven
+children could accumulate, one per key. A health-wide cap of four now refuses locally, naming every
+live child's pid and age. A call whose own key already has a live child is still passed to the
+owner, which re-checks that child's kernel identity — so one missed exit event cannot pin the cap
+for ever. *Recorded, not a hole:* the cap is checked when a call starts, so one turn's concurrent
+starts can overshoot four; they can never exceed seven, because the owner's one-child-per-key rule
+is the hard bound. It also restored the measured duration to `failed` and `overflowed` reasons.
+
+**Decided, no change: `publish` waits on the health turn.** A `vmstat` that wedges delays that turn's
+publish by its 10-second deadline plus the 1-second grace, and is `refused` instantly on every later
+turn. It holds the *loop*, never the event loop — `/api/state` keeps answering from the previous
+state throughout, and a test now pins that — and publishing before health would reorder a turn
+`refresh.ts` deliberately preserves. The reviewer recommended no change; so do I.
+
+**How it got here.** The implementing run's own review was not independent — its nested reviewer
+failed to start and it dispatched a same-model subagent instead
+([260910c-stage2-code-review-sol.md](260910c-stage2-code-review-sol.md) is that record and says so).
+It fixed four real things, which the independent review then re-checked as unreviewed code. **No
+step of `refreshOnce` moved**: the only code change in `refresh.ts` is `await` on `refreshHealth`;
+its header's steps 3 and 4 were reworded to *publish, then retain*, which is what the code has done
+since GPT Sol's finding 11 while the header still said the opposite.
 
 - [x] **Split the assembly from the gathering.** `assembleHealth(reads)` takes the seven command
       outcomes and returns the `HealthReport`. One place decides what a reading means.
