@@ -69,9 +69,16 @@ On the composed `LaunchProtocol` (and in its F9 import-walk test's expectations)
   `planned` record may hold an owner reservation the journal never recorded (the lost reply)**: look
   the key up and release it; if the owner is `unavailable`, answer `held` with the reason and leave
   it to reconciliation's F7 release. Tests: abandon from `planned` with an owner-held lost reply
-  releases it; abandon from `launching` is refused; after abandon, the same origin is not
-  launchable again (the occurrence is terminal) and a new origin plans normally; the new proof
+  releases it; abandon from `launching` is refused; a new origin plans normally; the new proof
   parses and replays.
+- **A superseded occurrence never launches, and the fold says so, not the caller** (Fable, checking
+  `scheduled-dispatch`'s F1): today an attempt-less `failed-before-launch` is `retryable()` and so
+  `admissible`, which would let an abandoned occurrence be reserved and launched again. So:
+  `retryable()` excludes `proof === "superseded"`; `nextRecord`'s attempt-null `failed-before-launch`
+  branch gets an explicit `superseded` arm requiring `admissible(prev)` and `attempts.length === 0`,
+  and any other `superseded` line is illegal (history lost on replay). Test: after `abandon`, both
+  `launchOccurrence(sameRequest)` and `resumeOccurrence(id)` answer `not-launchable` and invoke
+  nothing.
 
 ## Three from `gradual-recovery`'s plan review (G6, G7, G1), checked and accepted
 
