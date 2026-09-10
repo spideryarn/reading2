@@ -276,6 +276,10 @@ recurring form.
 - **[feedback-reports.md](feedback-reports.md)**, a couple of times a day. Read the queue in full
   first, check `gjd-remote ls` for an `fb<short-id>` prefix before dispatching anything — that list
   is the claim register and it fails in the safe direction — and never more than three at a time.
+  Since 2026-09-10 a tmux loop (`feedback-sweep-loop`, started with `scripts/tmux-job.ts` from the
+  Overseer's scratchpad, the same shape as the dashboard-refresh loop) starts one `fbsweep-<HHMM>`
+  session every three hours while the daemon's scheduler stays off; its first output is queue
+  entries — [feedback-reports.md § Into the Overseer's queue](feedback-reports.md#into-the-overseers-queue).
 - **[improve-the-codebase.md](../reusable/improve-the-codebase.md)**, every week or so, ending in an
   umbrella plan; then fan the clusters out to separate agents, **staggered, with non-overlapping file
   sets**.

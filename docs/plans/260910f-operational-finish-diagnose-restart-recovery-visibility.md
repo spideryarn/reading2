@@ -160,9 +160,9 @@ fails safely to unknown. All six accepted; an Opus subagent fixes them.
   the two clocks and their ages, recorded vs host boot id, every store file via `store-probe.ts`,
   held vs built job list (`schedulePreviewLines`' comparison), and the dashboard's
   `/api/diagnostics` — or *unreachable*, which is a line, not a crash.
-- [ ] Revision verdicts per service: *same as this checkout's HEAD*, *N commits behind HEAD*,
+- [x] Revision verdicts per service (worded per F1 since): *same as this checkout's HEAD*, *N commits behind HEAD*,
   *not an ancestor of HEAD*, *dirty at start*, *not stamped*, *unknown*. Never *same* from absence.
-- [ ] `scripts/overseer.ts diagnose [--json]`. Tests on a scratch store built by the real daemon.
+- [x] `scripts/overseer.ts diagnose [--json]`. Tests on a scratch store built by the real daemon.
 
 ### Stage 3 — Web summary
 
@@ -180,7 +180,12 @@ largest live file is ~110 KB. (5) App-level panel tests now make one failing rel
 because `App` does not pass the section an api — harmless, and threading one through is a small
 follow-up.
 
-- [x] `DiagnosticsSummary` in `wire.ts`; `routes-diagnostics.ts` with a runtime parser at the client
+- [x] **(browser-checked 2026-09-10 by a Sonnet subagent on a confined server over the recovery
+  drill's store: 1280 px and 400 px, no page scroll, the store table scrolls in its own container,
+  the three bundle facts kept apart and "all three are the same build", none of the forbidden
+  wording, no console errors. One incidental pre-existing defect, not this stage's: `Header.tsx`
+  prints the collector error untruncated in the sticky masthead, so a 16.8 KB error made it ~2549 px
+  tall and covered the page — a follow-up for the Overseer's queue)** `DiagnosticsSummary` in `wire.ts`; `routes-diagnostics.ts` with a runtime parser at the client
   boundary; `DiagnosticsSection.tsx` in Box health: each service's revision and verdict, the bundle
   this tab runs vs the bundle on disk vs the one the server started with, collector clocks, store
   files. Browser check at desktop and phone widths on a fixture-backed server (Sonnet subagent).
@@ -231,7 +236,8 @@ and no test runs the daemon twice with jobs.** The gaps, each a new test on scra
   F7 in the same stage. Original wording, kept for the record: only if `overseer run` can be started with no outbound calls
   (no model, no usage fetch, jobs disarmed); otherwise the in-process crash tests stand and this is
   recorded here. SIGKILL the child, `diagnose` says *killed*, a second child takes the lock.
-- [ ] **Stopped clock observed**: `diagnose` on a scratch store whose daemon stopped reports the
+- [x] **Stopped clock observed** (overseer-diagnose's stopped/killed/cannot-tell controls, and the
+  outage test's mid-outage `diagnose`): `diagnose` on a scratch store whose daemon stopped reports the
   stale heartbeat, and on one with an unparseable checkpoint reports *cannot tell*, not *absent*.
 
 ### Stage 5 — Off-box dead-man proposal
@@ -315,13 +321,47 @@ returned. Every finding accepted; where it lands:
 
 ## Status
 
-2026-09-10, ~20:20 UTC. **All of it is on `dev` (`84b8c2a4`).** The full suite on the merged tree
+2026-09-10, ~20:55 UTC. **The narrow Sol check of the ten P1 fixes** (`--sandbox review`, 20-minute
+wall; answer `260910f-…p1-fix-check-answer.md`, committed `3f16c523`): **eight closed** — F3, S1-F1,
+S1-F2, S1-F3, F40, F41, F43, F44 — **and two residues**: F42 (past the 200-entry census cap one real
+entry gets no row) and F45 (the 2 s tolerance after `startedAt` lets a pid reused inside it read
+RUNNING). The brief allows no further Sol round; **Fable ruled both documented limits:**
+
+- **F42.** The census is bounded and says so: `diagnose` lists at most 200 directory entries; past
+  that, catalogued files still get rows, the page and `--json`'s `listing.truncated` say the listing
+  was cut, and an uncatalogued entry beyond the cap has no row. A store directory with 200 top-level
+  entries is itself the finding — the live one holds about twenty.
+- **F45.** A pid reissued within two seconds of the daemon taking its lock, to a daemon that died in
+  that same window after writing a checkpoint, reads RUNNING. Any tighter slack makes a forward clock
+  step after a healthy daemon's start a false KILLED, which is worse. Closing it is a token, not a
+  tolerance: record the daemon's own `/proc` start ticks and boot id in the lock holder
+  (`execution-identity.ts` already mints them) and compare for equality — a checkpoint field, so its
+  own reviewed follow-up.
+
+**Ending (Fable): done enough to stop here.** The roadmap stage's boxes that stay unticked, and who
+owns each: *builds/versioning, measure first* — Overseer queue; *the dead-man's activation* and
+*monitor failure / lost heartbeat / dedup on a disposable target* — Greg picks a destination, then
+whoever builds Stage 5; *integrated gates, phone smoke, bounded soak, live deployment revision* —
+gates run and the phone smoke in flight, soak not done, deployment revision not recorded — Overseer;
+*persistent host changes* — Overseer, after both restarts. The diagnostics box ticks only once both
+restarted services show their stamps.
+
+~20:20 UTC. **All of it is on `dev` (`84b8c2a4`; since then `3f16c523`, pushed at `54622d64`).**
+`3d6e851b` had not been through a full suite when this was written; a final one was run after the
+Fable pass. The full suite on the merged tree
 found one regression of this branch's own: `tests/fleet-work-evidence-e2e.test.tsx` had been red on
 `dev` since Stage 1 (`1c6e1e4e`). `runOverseer`'s first line derived its checkout with
 `fileURLToPath(new URL("../..", import.meta.url))`, which throws under jsdom, so a diagnostic stopped
 a daemon starting — invisible to every daemon test, because all of them run under node. Fixed in
 `3d6e851b`: `readModuleStartRevision` owns the derivation and makes a module with no file `unknown`,
-for the daemon and the dashboard both. Red first; the postmortem waits on the pause. Otherwise the
+for the daemon and the dashboard both. Red first. **Correction from the postmortem**
+([260910d](../postmortems/260910d-a-literal-new-url-import-meta-url-is-rewritten-when-a-jsdom-test-loads-the-module.md)):
+`import.meta.url` *is* `file:` under jsdom; vitest's normalize-url plugin rewrites the literal
+`new URL("../..", import.meta.url)` into an `http:` URL. The fix works because the helper builds the
+URL from a parameter, which the rewrite does not reach — not through its catch arm, as the fix's
+commit message says. `dev` was red about 1 h 24 min. The same literal form remains at
+`tools/overseer/diagnose.ts:908`, `scripts/overseer.ts:134` and `scripts/bench-cold-start.ts:74`,
+none reached by a jsdom test today. Otherwise the
 suite's only reds were the two environment ones (`cold-start-lazy-imports`, `pdf-bundle-trace`).
 
 ~19:56 UTC. **Every stage is built and committed** in the worktree: the Stage 1 review's

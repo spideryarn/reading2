@@ -1756,6 +1756,26 @@ hard budget; 36 sessions do not imply 36 model calls each minute. No proposal be
 works, and existing guards are tested at the HTTP/browser boundary. This is not a top-priority
 security rewrite and does not override Greg's explicit deferrals.
 
+**Status (2026-09-10, Overseer): finished, on dev at 8089052c and served by the dashboard since
+20:46Z; session `access-review`, plan 260910f-fleet-access-review-composed-server, worktree
+`fleet-access-review` standing and clean.** Boxes 2–4 done on the real composed server: a Host
+guard before routing (421 with the security headers unless Host is one field holding one IP
+literal, `localhost`, a `*.ts.net` name or a single label; the read routes had checked no Host, so
+a DNS-rebinding page could have read state, messages and the live stream), exact path and method
+on the four inline read routes (405 otherwise), and `tests/fleet-composed-access.test.ts` (76
+tests) starting the real `server.ts` as an isolated child on a private loopback port, every guard
+mutated and seen red; hostile framing refused in Chrome's own words. Box 3's "prove production
+composition shares the queue with the refresh drainer" was scoped out by the Overseer at plan
+review and is queued as qi-3mgbkjrn with the receipt actor. Box 1 stands as it was: loopback plus
+the tailnet bind Greg already has, the Serve-plus-owner-check widening still his to authorise
+(A5 corrected in overseer-direction.md). Smoke after the restart: evil Host 421, plain 200,
+localhost 200, tailnet IP 200, MagicDNS 200. Reusable child-server harness in
+`tests/helpers/fleet-child-server.ts`, pointed to from security-map.md. Sol: plan 10 findings, 8
+taken; stage 6 taken (two P1s: a killed vitest orphaning the child, a lax Host parser); narrow
+check clean. Learned: Sol's fixer sandbox cannot bind loopback, so its two composed tests were
+never run before they failed; tsx runs the script in a grandchild, so killing the started pid
+leaves the real process.
+
 ### Stage: Operational finish — prove failure, restart, and recovery visibility
 
 - [ ] Add a cheap diagnostics/status command and web summary naming producer instance/revision,
@@ -1784,6 +1804,25 @@ security rewrite and does not override Greg's explicit deferrals.
 **Acceptance:** failure becomes visible through a channel that survives it; restart preserves
 honesty and avoids duplicate side effects. The SSH/manual path remains complete. A green test suite
 without an observed stopped-clock/failed-source control is insufficient evidence.
+
+**Status (2026-09-10, Overseer): done enough to stop, on dev at 33f99bbe; session
+`operational-finish`, plan 260910f, worktree `ops-diagnose` left standing.** Boxes 1 and 3 are
+built and reviewed: `npx tsx scripts/overseer.ts diagnose [--json]`, `GET /api/diagnostics` and a
+Diagnostics section in Box health report each service's recorded start HEAD, checkpoint schema,
+clocks, boot ids and job-list agreement, never inferred from HEAD; crash, bad-build, failed-bind,
+SIGKILL-takeover and restart-without-double-dispatch all proven on scratch instances. Box 2 is
+measured, not changed (the unit's rebuild-on-start stays). Box 4 is a proposal, not a build: the
+destination is **Greg's** (Healthchecks.io recommended over Better Stack and Cronitor). Boxes 5–7
+wait on that choice and on the two restarts the Overseer owes (dashboard, then daemon) for the
+stamps and the route to show; until then unstamped services read `unknown`, which is honest. Sol:
+plan review 9 findings (5 P1), stage reviews 3 P1 + 1 P2 then 6 P1, all taken; the narrow check
+closed eight of ten, and Fable ruled the other two documented limits (store listing stops at 200
+entries; a pid reused within 2 s of the lock still reads RUNNING, needing an identity token, queued).
+One regression of its own, `fleet-work-evidence-e2e` red on dev for 84 minutes, root-caused in
+`docs/postmortems/260910d-a-literal-new-url-…` (vitest's normalize-url plugin rewrites a `new URL("../..",
+import.meta.url)` literal under jsdom; three more such literals are queued). Contracts that outlive
+the branch: an optional `revision` on the daemon-started note, `dist/build-stamp.json`, and the
+`/api/diagnostics` payload.
 
 ## Parallel commitments and optional convenience
 

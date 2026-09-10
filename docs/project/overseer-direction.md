@@ -1416,7 +1416,11 @@ with this now."* Measured first, arbitrated second.
 **What the box actually says.** The tailnet has **exactly two devices** — this box
 (`100.92.255.119`) and Greg's iPhone, both his — and `tailscale serve status` and `funnel status` both
 report **"No serve config"**, so nothing is public. **The running dashboard binds `127.0.0.1` only**;
-it is not tailnet-reachable at all today, and Greg reaches it over an ssh forward. The repo's unit
+it is not tailnet-reachable at all today, and Greg reaches it over an ssh forward. **That was true on
+2026-09-08 and not on 2026-09-10**: `ss -ltnp` then showed `100.92.255.119:8787` beside loopback,
+still with no serve config, and the tailnet had **three** devices — `gregs-macbook-pro` had joined.
+Every device is Greg's; the widening's precondition below is not in place
+([260910f](../plans/260910f-fleet-access-review-composed-server.md)). The repo's unit
 already says `Environment=FLEET_BIND=127.0.0.1`, and
 [a test enforces exactly that string](../../tests/systemd-units.test.ts). **The widening is not in the
 unit — it is in `/etc/fleet-dashboard.env`**, which exists on this box, contains
