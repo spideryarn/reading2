@@ -8,14 +8,14 @@
  * Every store is a temp directory; nothing here touches `~/.overseer`.
  */
 import { randomUUID } from "node:crypto";
-import { existsSync, mkdtempSync, readdirSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readdirSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, test, vi } from "vitest";
 
 import { parseArgv, runParsed, runReport, runReports, type Parsed, type ReportDeps } from "../scripts/overseer.js";
 import type { SessionKey, StatusKey } from "../tools/overseer/diff.js";
-import { drainReports, INBOX_DIR, type ReportSubmission } from "../tools/overseer/reports.js";
+import { drainReports, INBOX_DIR, REFUSED_DIR, type ReportSubmission } from "../tools/overseer/reports.js";
 import type { RegisterEntry } from "../tools/overseer/store.js";
 
 const roots: string[] = [];
@@ -270,6 +270,31 @@ describe("runReports", () => {
     const out: string[] = [];
     runReports(root, { command: "reports", session: null, kind: null, search: null, event: null, json: false }, (l) => out.push(l));
     expect(out.join("\n")).toMatch(new RegExp(`refused.*\\n.*${id}`, "s"));
+  });
+
+  test("a hand-written refusal cannot put control characters in terminal output", () => {
+    const root = tempRoot();
+    const id = randomUUID();
+    const dir = join(root, REFUSED_DIR);
+    mkdirSync(dir, { recursive: true });
+    writeFileSync(join(dir, `${id}.json`), JSON.stringify({ eventId: id, refusedAt: `time${BELL}`, why: `reason${BELL}`, original: "" }));
+    const out: string[] = [];
+    runReports(root, { command: "reports", session: null, kind: null, search: null, event: null, json: false }, (line) => out.push(line));
+    expect(out.join("\n")).not.toContain(BELL);
+  });
+
+  test("a symlink in the refusal directory is not followed into terminal output", () => {
+    const root = tempRoot();
+    const id = randomUUID();
+    const dir = join(root, REFUSED_DIR);
+    mkdirSync(dir, { recursive: true });
+    const elsewhere = join(root, "elsewhere-refusal.json");
+    writeFileSync(elsewhere, JSON.stringify({ eventId: id, refusedAt: "2026-09-10T12:00:00.000Z", why: "FOLLOWED LINK", original: "" }));
+    symlinkSync(elsewhere, join(dir, `${id}.json`));
+    const out: string[] = [];
+    runReports(root, { command: "reports", session: null, kind: null, search: null, event: null, json: false }, (line) => out.push(line));
+    expect(out.join("\n")).not.toContain("FOLLOWED LINK");
+    expect(out.join("\n")).toMatch(/refusal record could not be read/);
   });
 });
 

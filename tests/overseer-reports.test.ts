@@ -10,10 +10,12 @@
 import { randomUUID } from "node:crypto";
 import {
   existsSync,
+  linkSync,
   mkdirSync,
   mkdtempSync,
   readdirSync,
   readFileSync,
+  renameSync,
   rmSync,
   symlinkSync,
   unlinkSync,
@@ -23,7 +25,7 @@ import {
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { execFileSync } from "node:child_process";
-import { afterEach, describe, expect, test } from "vitest";
+import { afterEach, describe, expect, test, vi } from "vitest";
 
 import type { ArtefactCheck, ArtefactRef } from "../tools/fleet/artefact-ref.js";
 import type { SessionKey, StatusKey } from "../tools/overseer/diff.js";
@@ -551,6 +553,49 @@ describe("bounds per pass", () => {
     }
     expect(total).toBe(6);
   });
+
+  test("the wall-clock limit is checked between artefact probes within one report", () => {
+    const root = tempRoot();
+    const s = submission({
+      artefacts: [
+        { kind: "commit", sha: "abc1234" },
+        { kind: "path", path: "package.json" },
+        { kind: "queue-item", id: "qi-22222222" },
+      ],
+    });
+    submitReport(root, s);
+    const probes = checker(() => ({ state: "not-found" }));
+    const readings = [0, 0, 0, 2];
+    const clock = vi.spyOn(Date, "now").mockImplementation(() => readings.shift() ?? 2);
+    try {
+      const outcome = drainReports(options(root, { checkArtefact: probes.check, limits: { wallMs: 1 } }));
+      expect(outcome.stoppedBy).toBe("time");
+      expect(outcome.recorded).toBe(0);
+      expect(outcome.probes).toBe(1);
+      expect(probes.calls).toHaveLength(1);
+      expect(readInbox(root).inFlight.map((item) => item.eventId)).toEqual([s.eventId]);
+    } finally {
+      clock.mockRestore();
+    }
+  });
+
+  test("zero byte and probe budgets do no work", () => {
+    const bytesRoot = tempRoot();
+    submitReport(bytesRoot, submission());
+    const bytes = drainReports(options(bytesRoot, { limits: { bytes: 0 } }));
+    expect(bytes.bytesRead).toBe(0);
+    expect(bytes.recorded).toBe(0);
+    expect(bytes.stoppedBy).toBe("bytes");
+
+    const probesRoot = tempRoot();
+    submitReport(probesRoot, submission({ artefacts: [{ kind: "commit", sha: "abc1234" }] }));
+    const checked = checker();
+    const probes = drainReports(options(probesRoot, { checkArtefact: checked.check, limits: { probes: 0 } }));
+    expect(probes.probes).toBe(0);
+    expect(checked.calls).toEqual([]);
+    expect(probes.recorded).toBe(0);
+    expect(probes.stoppedBy).toBe("probes");
+  });
 });
 
 describe("inbox hygiene", () => {
@@ -596,6 +641,41 @@ describe("inbox hygiene", () => {
     expect(existsSync(old)).toBe(false);
     expect(existsSync(fresh)).toBe(true);
   });
+
+  test("a hard-linked submission is skipped and neither link is removed", () => {
+    const root = tempRoot();
+    const s = submission();
+    const elsewhere = join(root, "elsewhere.json");
+    writeFileSync(elsewhere, serializeSubmission(s));
+    mkdirSync(join(root, INBOX_DIR), { recursive: true });
+    const inboxFile = join(root, INBOX_DIR, `${s.eventId}.json`);
+    linkSync(elsewhere, inboxFile);
+
+    const outcome = drainReports(options(root));
+    expect(outcome.skippedEntries).toBe(1);
+    expect(outcome.recorded).toBe(0);
+    expect(readReports(root).kind).toBe("never-written");
+    expect(existsSync(elsewhere)).toBe(true);
+    expect(existsSync(inboxFile)).toBe(true);
+  });
+
+  test("a prepared report replaced by a symlink is left pending rather than followed", () => {
+    const root = tempRoot();
+    const s = submission();
+    submitReport(root, s);
+    expect(() => drainReports(options(root, { crashAt: "processing-written" }))).toThrow(SimulatedCrash);
+    const prepared = join(root, PROCESSING_DIR, `${s.eventId}.json`);
+    const elsewhere = join(root, "prepared-elsewhere.json");
+    renameSync(prepared, elsewhere);
+    symlinkSync(elsewhere, prepared);
+
+    const outcome = drainReports(options(root));
+    expect(outcome.pending).toBe(1);
+    expect(outcome.recorded).toBe(0);
+    expect(readReports(root).kind).toBe("never-written");
+    expect(existsSync(prepared)).toBe(true);
+    expect(existsSync(join(root, INBOX_DIR, `${s.eventId}.json`))).toBe(true);
+  });
 });
 
 describe("a transient failure leaves the item pending", () => {
@@ -618,6 +698,40 @@ describe("a transient failure leaves the item pending", () => {
     expect(readInbox(root).inFlight.map((i) => i.eventId)).toEqual([s.eventId]);
 
     expect(drainReports(options(root)).recorded).toBe(1);
+  });
+
+  test("a failed append stops the pass before another line can be welded to its torn tail", () => {
+    const root = tempRoot();
+    const first = submission({ summary: "first" });
+    const second = submission({ summary: "second" });
+    const firstPath = submitReport(root, first);
+    const secondPath = submitReport(root, second);
+    const base = Date.parse("2026-09-10T09:00:00.000Z") / 1000;
+    utimesSync(firstPath, base, base);
+    utimesSync(secondPath, base + 1, base + 1);
+    let calls = 0;
+    const outcome = drainReports(
+      options(root, {
+        appendReportLine: (file, line) => {
+          calls += 1;
+          if (calls === 1) {
+            writeFileSync(file, '{"torn"', { flag: "a" });
+            throw new Error("disk filled during append");
+          }
+          writeFileSync(file, `${line}\n`, { flag: "a" });
+        },
+      }),
+    );
+
+    expect(calls).toBe(1);
+    expect(outcome.recorded).toBe(0);
+    expect(outcome.pending).toBe(1);
+    expect(new Set(readInbox(root).inFlight.map((item) => item.eventId))).toEqual(new Set([first.eventId, second.eventId]));
+
+    const retry = drainReports(options(root));
+    expect(retry.replayed).toBe(1);
+    expect(retry.recorded).toBe(1);
+    expect(rows(root).rows.map((row) => row.event.summary)).toEqual(["first", "second"]);
   });
 });
 
@@ -710,6 +824,22 @@ describe("observeOwnExecution walks up to the claude process", () => {
     const got = observeOwnExecution({ ppid: 1000, read: fakeProc(procs), platform: "linux" });
     expect(got.kind).toBe("unobserved");
     if (got.kind === "unobserved") expect(got.why).toMatch(String(MAX_ANCESTRY_STEPS));
+  });
+
+  test("a pid replaced between its command line and start-time reads is not observed as a Claude run", () => {
+    let statReads = 0;
+    const read = (path: string): string => {
+      if (path === "/proc/sys/kernel/random/boot_id") return "boot-1111\n";
+      if (path === "/proc/80/cmdline") return "/home/greg/.local/bin/claude\0";
+      if (path === "/proc/80/stat") {
+        statReads += 1;
+        return stat(80, 1, statReads === 1 ? 5555 : 6666);
+      }
+      throw new Error(`ENOENT ${path}`);
+    };
+
+    const got = observeOwnExecution({ ppid: 80, read, platform: "linux" });
+    expect(got).toEqual({ kind: "unobserved", why: expect.stringMatching(/changed while it was read/) });
   });
 
   test("off Linux it says so", () => {

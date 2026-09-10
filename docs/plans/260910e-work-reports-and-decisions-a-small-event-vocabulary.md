@@ -252,6 +252,14 @@ say, all accepted:
 - Condition `reports` in `notes.ts` (opens on a throwing drain, closes on the next good pass) rather than
   a new note kind.
 
+**Sol's stage review, first run: timed out.** Killed at its 30-minute limit before writing an answer
+(`run-codex` EXIT=1). It left partial fixes — exact keys in `artefact-ref.ts`, a before/after `stat`
+read around the command line in `report-identity.ts`, hard-link refusal, bounded reads of the
+processing and refused records, stopping a pass on any transient failure so the next pass's repair
+runs before another append, and bounds that hold for the first item — which the orchestrator read,
+tested (170 passed) and committed as unreviewed code. A second run, 45 minutes, reviews Stage 1
+including those fixes; the Overseer was told first.
+
 Left for Stage 3: `appendDecision` is in the signature but unreached (decisions are refused before step
 [2]), so "decisions lock held ⇒ pending" is Stage 3's test. The drain re-reads all of `reports.jsonl`
 each pass to index event ids — fine at today's size.

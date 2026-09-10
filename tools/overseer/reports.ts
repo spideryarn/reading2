@@ -100,6 +100,10 @@ export const PROCESSING_DIR = "report-processing";
 export const REFUSED_DIR = "report-refused";
 
 export const MAX_SUBMISSION_BYTES = 16 * 1024;
+/** A prepared event adds daemon checks to a bounded submission; it is still never an unbounded read. */
+export const MAX_PREPARED_BYTES = 64 * 1024;
+/** Includes a JSON-escaped copy of at most 16 KiB of rejected input. */
+export const MAX_REFUSAL_BYTES = 128 * 1024;
 export const MAX_SUMMARY_CHARS = 1000;
 export const MAX_NEEDS_CHARS = 500;
 export const MAX_REVISIONS = 20;
@@ -550,6 +554,7 @@ function readBounded(file: string, limit: number = MAX_SUBMISSION_BYTES): Bounde
   try {
     const stat = fstatSync(fd);
     if (!stat.isFile()) return { kind: "not-regular", why: "is not a regular file" };
+    if (stat.nlink !== 1) return { kind: "not-regular", why: `has ${stat.nlink} hard links rather than being a private submission file` };
     const buffer = Buffer.alloc(Math.min(stat.size, limit) + 1);
     let read = 0;
     while (read < buffer.length) {
@@ -615,6 +620,8 @@ export type DrainOptions = {
   now: () => Date;
   checkArtefact: ArtefactChecker;
   appendDecision: DecisionAppender;
+  /** TEST SEAM for a torn/failed append. Production omits it and gets append + fsync. */
+  appendReportLine?: (file: string, line: string) => void;
   limits?: Partial<DrainLimits>;
   /** A TEST SEAM: throw `SimulatedCrash` at this boundary, as a `kill -9` there would stop the pass. */
   crashAt?: DrainBoundary;
@@ -774,6 +781,17 @@ export function drainReports(options: DrainOptions): ReportDrainOutcome {
   }
   const recorded = log.recorded;
   const logFile = path.join(root, REPORTS_FILE);
+  const appendReportLine =
+    options.appendReportLine ??
+    ((file: string, line: string): void => {
+      const fd = openSync(file, "a");
+      try {
+        writeAll(fd, `${line}\n`);
+        fsyncSync(fd);
+      } finally {
+        closeSync(fd);
+      }
+    });
 
   /** One refusal record, atomically, then the inputs go. Newest 200 kept. */
   const refuseItem = (eventId: string, why: string, original: string, inputs: readonly string[]): void => {
@@ -797,13 +815,7 @@ export function drainReports(options: DrainOptions): ReportDrainOutcome {
     const existing = recorded.get(prepared.eventId);
     if (existing === undefined) {
       writeInitMarker(root);
-      const fd = openSync(logFile, "a");
-      try {
-        writeAll(fd, `${prepared.reportLine}\n`);
-        fsyncSync(fd);
-      } finally {
-        closeSync(fd);
-      }
+      appendReportLine(logFile, prepared.reportLine);
       recorded.set(prepared.eventId, prepared.reportLine);
     } else if (existing !== prepared.reportLine) {
       refuseItem(prepared.eventId, `event id ${prepared.eventId} is already recorded with different content`, original, [processingFile, inboxFile]);
@@ -822,7 +834,12 @@ export function drainReports(options: DrainOptions): ReportDrainOutcome {
     const eventId = name.slice(0, -".json".length);
     const inboxFile = path.join(inboxDir, name);
     try {
-      const prepared = JSON.parse(readFileSync(path.join(processingDir, name), "utf8")) as PreparedReport;
+      const processingFile = path.join(processingDir, name);
+      const read = readBounded(processingFile, MAX_PREPARED_BYTES);
+      if (read.kind === "gone") continue;
+      if (read.kind === "not-regular") throw new Error(read.why);
+      if (read.kind === "oversize") throw new Error(`is ${read.size} bytes, over the ${MAX_PREPARED_BYTES}-byte prepared-report limit`);
+      const prepared = JSON.parse(read.text) as PreparedReport;
       const reparsed = parseReportEvent(prepared.reportLine);
       if (prepared.eventId !== eventId || !reparsed.ok || reparsed.event.eventId !== eventId) {
         throw new Error(`the prepared report ${name} does not hold a report for ${eventId}`);
@@ -834,6 +851,9 @@ export function drainReports(options: DrainOptions): ReportDrainOutcome {
       inFlight.add(eventId);
       outcome.pending += 1;
       outcome.notes.push(`pending ${eventId}: its prepared report could not be replayed: ${cause instanceof Error ? cause.message : String(cause)}`);
+      // A failed append may have left a torn tail. The next pass repairs it;
+      // appending another line in this pass could weld good bytes onto the tear.
+      return outcome;
     }
   }
 
@@ -875,7 +895,7 @@ export function drainReports(options: DrainOptions): ReportDrainOutcome {
   candidates.sort((a, b) => a.mtimeMs - b.mtimeMs || a.name.localeCompare(b.name));
 
   let files = 0;
-  for (let index = 0; index < candidates.length; index += 1) {
+  candidateLoop: for (let index = 0; index < candidates.length; index += 1) {
     const candidate = candidates[index];
     if (candidate === undefined) continue;
     const { eventId } = candidate;
@@ -892,7 +912,7 @@ export function drainReports(options: DrainOptions): ReportDrainOutcome {
       stopAt("files");
       break;
     }
-    if (files > 0 && Date.now() - startedMs >= limits.wallMs) {
+    if (Date.now() - startedMs >= limits.wallMs) {
       stopAt("time");
       break;
     }
@@ -910,7 +930,7 @@ export function drainReports(options: DrainOptions): ReportDrainOutcome {
         outcome.notes.push(`skipped ${candidate.name}: ${read.why}; left where it is`);
         continue;
       }
-      if (files > 0 && outcome.bytesRead + read.bytes > limits.bytes) {
+      if (outcome.bytesRead + read.bytes > limits.bytes) {
         stopAt("bytes");
         break;
       }
@@ -961,13 +981,17 @@ export function drainReports(options: DrainOptions): ReportDrainOutcome {
         refuseItem(eventId, `corrects ${submission.corrects}, which is not a recorded report`, read.text, [inboxFile]);
         continue;
       }
-      if (outcome.probes > 0 && outcome.probes + submission.artefacts.length > limits.probes) {
+      if (outcome.probes + submission.artefacts.length > limits.probes) {
         stopAt("probes");
         break;
       }
 
       const artefacts: CheckedArtefact[] = [];
       for (const ref of submission.artefacts) {
+        if (Date.now() - startedMs >= limits.wallMs) {
+          stopAt("time");
+          break candidateLoop;
+        }
         outcome.probes += 1;
         artefacts.push({ ref, check: options.checkArtefact(ref) });
       }
@@ -989,6 +1013,9 @@ export function drainReports(options: DrainOptions): ReportDrainOutcome {
       if (cause instanceof SimulatedCrash) throw cause;
       outcome.pending += 1;
       outcome.notes.push(`pending ${eventId}: ${cause instanceof Error ? cause.message : String(cause)}`);
+      // Stop on every transient failure: if it came from the append, only the
+      // next pass's opening repair makes another append safe.
+      return outcome;
     }
   }
   return outcome;
@@ -1144,7 +1171,11 @@ export function readInbox(root: string): InboxListing {
   const processing = uuidJsonNames(path.join(root, PROCESSING_DIR)).map((name): ProcessingItem => {
     const eventId = name.slice(0, -".json".length);
     try {
-      const prepared = JSON.parse(readFileSync(path.join(root, PROCESSING_DIR, name), "utf8")) as { reportLine?: unknown };
+      const read = readBounded(path.join(root, PROCESSING_DIR, name), MAX_PREPARED_BYTES);
+      if (read.kind === "gone") return { eventId, event: null, why: "its prepared report disappeared while it was listed" };
+      if (read.kind === "not-regular") return { eventId, event: null, why: read.why };
+      if (read.kind === "oversize") return { eventId, event: null, why: `over the ${MAX_PREPARED_BYTES}-byte prepared-report limit` };
+      const prepared = JSON.parse(read.text) as { reportLine?: unknown };
       const parsed = typeof prepared.reportLine === "string" ? parseReportEvent(prepared.reportLine) : null;
       return parsed?.ok === true ? { eventId, event: parsed.event, why: null } : { eventId, event: null, why: "its prepared report does not read" };
     } catch (cause) {
@@ -1153,15 +1184,27 @@ export function readInbox(root: string): InboxListing {
   });
   const refused: RefusedItem[] = [];
   for (const name of uuidJsonNames(path.join(root, REFUSED_DIR))) {
+    const eventId = name.slice(0, -".json".length);
     try {
-      const body = JSON.parse(readFileSync(path.join(root, REFUSED_DIR, name), "utf8")) as Record<string, unknown>;
+      const read = readBounded(path.join(root, REFUSED_DIR, name), MAX_REFUSAL_BYTES);
+      if (read.kind === "gone") continue;
+      if (read.kind !== "text") {
+        refused.push({ eventId, refusedAt: "an unrecorded time", why: "the refusal record could not be read safely" });
+        continue;
+      }
+      const body = JSON.parse(read.text) as Record<string, unknown>;
+      const rawAt = body["refusedAt"];
+      const refusedAt =
+        typeof rawAt === "string" && !Number.isNaN(Date.parse(rawAt)) && new Date(rawAt).toISOString() === rawAt
+          ? rawAt
+          : "an unrecorded time";
       refused.push({
-        eventId: name.slice(0, -".json".length),
-        refusedAt: typeof body["refusedAt"] === "string" ? body["refusedAt"] : "an unrecorded time",
+        eventId,
+        refusedAt,
         why: typeof body["why"] === "string" ? printable(body["why"]) : "no reason was recorded",
       });
     } catch {
-      refused.push({ eventId: name.slice(0, -".json".length), refusedAt: "an unrecorded time", why: "the refusal record could not be read" });
+      refused.push({ eventId, refusedAt: "an unrecorded time", why: "the refusal record could not be read" });
     }
   }
   refused.sort((a, b) => b.refusedAt.localeCompare(a.refusedAt));
