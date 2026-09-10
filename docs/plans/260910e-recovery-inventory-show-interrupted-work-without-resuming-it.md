@@ -799,8 +799,38 @@ exception included), F31, F32 and F33. Not closed: F28 and F30.**
   check (five of seven closed), the F30 fix and the F28 no-delete test (`3cd88642`), Fable's
   settle; commit.
 
-Status, 2026-09-10: **Stage 3 done.** What remains is the push, after the full suite on the final
-tree. The shared-file hunks:
+**The full suite on the merged tree** (`npm test` through `tmux-job`, started 17:13 on `0a684ebb`):
+1,019 files passed, 3 failed, 1 skipped (21,955 tests passed).
+
+- **Two failures are the known environment ones**: `cold-start-lazy-imports` and `pdf-bundle-trace`,
+  in a worktree with no `api-dist/`.
+- **The third is an artefact of timing**: `fleet-recovery-panel` had three failing tests, which are
+  exactly the F30b cases. Their test file was written at 17:22:39, red first, and the fix landed in
+  `recovery-client.ts` at 17:25:40. The suite reached that file in between. On the final tree it
+  passes 51 of 51.
+- **`fleet-attention` passes**, now that `dev`'s `b8505d8b` is in.
+
+## Status
+
+2026-09-10: **finished.** All three stages are done, reviewed and settled:
+
+- the plan: Sol, 10 findings;
+- Stage 1: Sol, 3 P1s fixed, 1 P2 overruled;
+- Stage 2: Sol round 1 salvaged; round 2 refused on 4 P1s, all fixed; the narrow check; Fable settled
+  F22;
+- Stage 3: Sol refused on 7 P1s, all fixed; the narrow check; Fable settled F30 and the F28
+  overrule.
+
+The acceptance was shown with the reboot drill. To go live it needs a daemon restart and a
+dashboard restart.
+
+**Named follow-ups:**
+
+- F26, a shared bounded transcript locator;
+- refused dismissals as daemon notes;
+- cleaning `recovery-inbox/junk/`;
+- Fable's two Stage 3 nits;
+- the next roadmap stage, Gradual recovery. The shared-file hunks:
 
 - `server.ts`: the three approved lines.
 - `App.tsx`: the approved mount line, **plus its import line**. The mount cannot exist without it,
@@ -871,6 +901,7 @@ Each finding was checked against the code before it was accepted.
   fold with deterministic ids, and there is no marker event.
 - **F10, P2: the overflow wording promised the CLI could list omitted records.** Accepted.
 
-## Status
+## Where this stands
 
-2026-09-10: plan reviewed (Stage 0 done), Stage 1 next.
+**Finished, 2026-09-10.** The full account is under Stage 3, in the "Status" section just above
+Findings. Each stage's own status paragraph records what landed and what its reviews found.
