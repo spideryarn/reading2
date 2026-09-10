@@ -800,7 +800,7 @@ export class SteeringQueue {
         why: `'${action.id}' runs commands on the box rather than typing a sentence, and nothing delivers a queued one — dry-run it to see what it would do, then run it with a confirm`,
       };
     }
-    return this.push(target, { kind: "action", action }, speaker, origin, request);
+    return this.push(target, { kind: "action", action }, speaker, origin, request, null);
   }
 
   /**
@@ -826,6 +826,8 @@ export class SteeringQueue {
     speaker: Speaker,
     origin: ReceiptOrigin = "enqueue",
     request: EnqueueRequestKey | null = null,
+    /** The broadcast this item is one recipient of (plan 260910d Stage 3), or null. */
+    parentReceiptId: string | null = null,
   ): EnqueueResult {
     const bad = checkText(text);
     if (bad) return { ok: false, rule: "bad-text", why: bad.why };
@@ -844,7 +846,7 @@ export class SteeringQueue {
         why: `${afterPrefix.why} — the line saying who is speaking is added when it goes out, and counts towards that`,
       };
     }
-    return this.push(target, { kind: "message", text }, speaker, origin, request);
+    return this.push(target, { kind: "message", text }, speaker, origin, request, parentReceiptId);
   }
 
   private push(
@@ -853,6 +855,7 @@ export class SteeringQueue {
     speaker: Speaker,
     origin: ReceiptOrigin,
     request: EnqueueRequestKey | null,
+    parentReceiptId: string | null,
   ): EnqueueResult {
     if (!SESSION_HANDLE.test(target.sessionId)) {
       return { ok: false, rule: "bad-target", why: `'${target.sessionId}' is not a tmux session handle` };
@@ -921,6 +924,7 @@ export class SteeringQueue {
         tmuxGeneration: this.generation ?? this.receipts.lastGeneration(),
       },
       queue: { itemId, enqueuedAt: at },
+      parentReceiptId,
       what: payload.kind === "message" ? `message (${payload.text.length} characters)` : `action ${payload.action.id}`,
       material:
         payload.kind === "message"

@@ -2255,8 +2255,8 @@ describe("a broadcast keeps one delivery reading per recipient", () => {
     const r = await previewAndConfirm(routes, body());
     const row = (resultOf(r).recipients as { paneId: string; outcome: string; why: string }[]).find((x) => x.paneId === "%3");
     expect(row?.outcome).toBe("outcome-unknown");
-    expect(row?.why).toContain("EAGAIN");
     expect(row?.why).toContain("the delivery module threw while handling this recipient");
+    expect(row?.why).not.toContain("EAGAIN");
     // The uncertainty survives the rewrite; the invented timing does not.
     expect(row?.why).toContain("Nothing here can tell whether any of it reached the pane.");
     expect(row?.why).not.toContain("partway");

@@ -30,13 +30,16 @@ import {
   type JournalFile,
   type SharedJournalLock,
 } from "./journal-file.js";
-import type { ReceiptSummary, Speaker } from "./wire.js";
+import type { SendAttempt } from "./send-coordinator.js";
+import type { PlanStepStatus, ReceiptSummary, Speaker } from "./wire.js";
 
 export const RECEIPTS_FILE = "receipts.jsonl";
 export const UNREADABLE_RECEIPTS_FILE = "receipts.unreadable.jsonl";
 export const MATERIAL_DIR = "material";
 export const MAX_WHAT_CHARS = 200;
 export const MAX_WHY_CHARS = 500;
+/** A plan step's gate verdict, bounded. Never message text: step index, status and this. */
+export const MAX_VERDICT_CHARS = 200;
 export const RETENTION_MS = 7 * 24 * 60 * 60 * 1_000;
 export const REQUEST_ID_SKEW_MS = 60 * 60 * 1_000;
 export const KEYED_RECEIPT_CAP = 5_000;
@@ -54,11 +57,31 @@ export type ReceiptActor = {
   id: string | null;
 };
 /**
- * What was accepted. The two `steer-*` ops are direct keystrokes from
- * `routes-steer.ts` — typed at once, never queued, never restored.
+ * What was accepted, when it is about one session.
+ *
+ * - `queued-*`: queued work, delivered later by the drain; the only restorable ops.
+ * - `steer-*`: direct keystrokes from `routes-steer.ts` — typed at once, never queued, never restored.
+ * - `enacted-session`: `remove-worktree` or `kill-session` run from one session's row (Stage 3).
+ * - `broadcast-recipient`: a direct send to one recipient of a broadcast — a child of a `broadcast`.
  */
-export type ReceiptOp = "queued-message" | "queued-action" | "steer-message" | "steer-answer";
-export type ReceiptOrigin = "enqueue" | "broadcast" | "direct-steer";
+export type SessionReceiptOp =
+  | "queued-message"
+  | "queued-action"
+  | "steer-message"
+  | "steer-answer"
+  | "enacted-session"
+  | "broadcast-recipient";
+/**
+ * What was accepted, when it is about the whole box (Stage 3). **Its target is null**:
+ * a box kill names no session, and a broadcast's sessions are its children.
+ *
+ * - `enacted-box`: a box-wide kill on `/api/actions/box`.
+ * - `broadcast`: the parent of one broadcast request (free text or ease-off). It carries the
+ *   request id; each recipient's receipt names it in `parentReceiptId`.
+ */
+export type BoxReceiptOp = "enacted-box" | "broadcast";
+export type ReceiptOp = SessionReceiptOp | BoxReceiptOp;
+export type ReceiptOrigin = "enqueue" | "broadcast" | "direct-steer" | "enacted";
 export type ReceiptTarget = {
   sessionId: string;
   paneId: string | null;
@@ -67,21 +90,51 @@ export type ReceiptTarget = {
 };
 export type ReceiptQueue = { itemId: string; enqueuedAt: number };
 
+/**
+ * The op and its target together, so a box-scoped receipt cannot carry a session
+ * and a session-scoped one cannot lack one. **Never a sentinel session id.** The
+ * parser enforces the same pairing on every line it reads.
+ */
+export type ReceiptScope = { op: SessionReceiptOp; target: ReceiptTarget } | { op: BoxReceiptOp; target: null };
+
 type RecordBase<K extends string> = { schema: 1; kind: K; at: number };
-export type AcceptedReceiptRecord = RecordBase<"accepted"> & {
+type AcceptedFields = {
   receiptId: string;
   requestId: string | null;
   fingerprint: string | null;
-  op: ReceiptOp;
   origin: ReceiptOrigin;
   actor: ReceiptActor;
   speaker: Speaker | null;
-  target: ReceiptTarget;
   what: string;
   serverInstanceId: string;
   queue: ReceiptQueue | null;
+  /**
+   * The broadcast this receipt is one recipient of, or null. Set on every child
+   * of a broadcast — a direct `broadcast-recipient` and a queued item alike —
+   * and only on those. A line written before Stage 3 has no such field and is
+   * read as null.
+   */
+  parentReceiptId: string | null;
 };
+export type AcceptedReceiptRecord = RecordBase<"accepted"> & AcceptedFields & ReceiptScope;
 export type AttemptedReceiptRecord = RecordBase<"attempted"> & { receiptId: string };
+/**
+ * One step of an enacted plan finished, and what its gate said (Stage 3).
+ *
+ * `step` is the zero-based index `runPlan` uses (`PlanRun.stoppedAt`). Legal only
+ * for an enacted op, after `attempted` and before the outcome, once per index,
+ * in order. It is evidence ON the receipt and never its `last`: the receipt stays
+ * `attempted` until an outcome lands, so recovery reads a crash mid-plan exactly
+ * as it reads any other interrupted attempt — and the progress records say how
+ * far it is known to have got. **Never a word of message text**: an index, a
+ * status and a bounded verdict.
+ */
+export type ProgressReceiptRecord = RecordBase<"progress"> & {
+  receiptId: string;
+  step: number;
+  status: PlanStepStatus;
+  verdict: string;
+};
 export type ReturnedReceiptRecord = RecordBase<"returned"> & { receiptId: string; code: string };
 
 export type KeysSubmittedOutcome = {
@@ -110,7 +163,19 @@ export type NotSentOutcome = {
      * receipt, that is proof it was never attempted. Never restored: a direct
      * send is not queued work.
      */
-    | "interrupted-before-attempt";
+    | "interrupted-before-attempt"
+    /**
+     * A broadcast's fan-out passed its deadline before this recipient. It was
+     * accepted as a child so the broadcast accounts for it, and never attempted.
+     */
+    | "not-reached"
+    /**
+     * An enacted plan or broadcast accepted at its one-way door, then refused by
+     * a check that can only run after it — the box unreadable, nothing left to
+     * kill, a stored preview that no longer parses. Nothing was attempted; `code`
+     * names the refusal.
+     */
+    | "refused-before-attempt";
   code: string | null;
   why: string;
 };
@@ -127,7 +192,26 @@ export type UnknownOutcome = {
   code: string | null;
   why: string;
 };
-export type ReceiptOutcome = KeysSubmittedOutcome | NotSentOutcome | UnknownOutcome;
+/**
+ * Stage 3. `plan-passed`: an enacted plan passed every gate. `fan-out-finished`:
+ * a broadcast's fan-out came to an end with every recipient it began accounted
+ * for by its own child receipt — which says nothing about what those children
+ * say; the parent's `why` counts them.
+ */
+export type CompletedOutcome = {
+  state: "completed";
+  reason: "plan-passed" | "fan-out-finished";
+  code: string | null;
+  why: string;
+};
+/** Stage 3. An enacted plan stopped because a gate refused at step k; `code` is `step-<k>`, zero-based. */
+export type PlanStoppedOutcome = {
+  state: "plan-stopped";
+  reason: "gate-refused";
+  code: string | null;
+  why: string;
+};
+export type ReceiptOutcome = KeysSubmittedOutcome | NotSentOutcome | UnknownOutcome | CompletedOutcome | PlanStoppedOutcome;
 export type OutcomeReceiptRecord = RecordBase<"outcome"> & { receiptId: string } & ReceiptOutcome;
 export type ReconciledReceiptRecord = RecordBase<"reconciled"> & {
   receiptId: string;
@@ -147,25 +231,28 @@ export type ReceiptRecord =
   | OutcomeReceiptRecord
   | ReconciledReceiptRecord
   | WithdrawnReceiptRecord
-  | GenerationReceiptRecord;
+  | GenerationReceiptRecord
+  | ProgressReceiptRecord;
 
 export type ReceiptMaterial =
   | { kind: "message"; text: string; speaker: Speaker }
   | { kind: "action"; action: SpokenAction; speaker: Speaker };
 
-export type AcceptReceiptInput = Omit<
-  AcceptedReceiptRecord,
-  "schema" | "kind" | "at" | "receiptId" | "serverInstanceId" | "what"
-> & {
-  what: string;
-  /** Preferred production path: the store pins this before writing accepted. */
-  material?: ReceiptMaterial | undefined;
-};
+export type AcceptReceiptInput = Omit<AcceptedFields, "receiptId" | "serverInstanceId" | "parentReceiptId"> &
+  ReceiptScope & {
+    /** Null, the default, unless this is one recipient of a broadcast. */
+    parentReceiptId?: string | null | undefined;
+    /** Preferred production path: the store pins this before writing accepted. */
+    material?: ReceiptMaterial | undefined;
+  };
 
 export type ReceiptState = {
   receiptId: string;
   accepted: AcceptedReceiptRecord;
-  last: Exclude<ReceiptRecord, AcceptedReceiptRecord | GenerationReceiptRecord> | AcceptedReceiptRecord;
+  /** Never a `progress` record: see `ProgressReceiptRecord`. */
+  last:
+    | Exclude<ReceiptRecord, AcceptedReceiptRecord | GenerationReceiptRecord | ProgressReceiptRecord>
+    | AcceptedReceiptRecord;
   records: ReceiptRecord[];
   materialDeletionPending: boolean;
 };
@@ -217,6 +304,11 @@ export type ReceiptJournal = {
   /** Test/recovery seam. Production callers should pass material to accept. */
   putMaterial(receiptId: string, payload: ReceiptMaterial): boolean;
   attempted(receiptId: string): { landed: boolean };
+  /**
+   * One finished step of an enacted plan. **Fail-open**: a lost line only makes
+   * a crash report fewer completed steps, which is the conservative direction.
+   */
+  progress(receiptId: string, step: number, status: PlanStepStatus, verdict: string): boolean;
   returned(receiptId: string, code: string): boolean;
   outcome(receiptId: string, arm: ReceiptOutcome): boolean;
   withdrawn(receiptIds: string[], reason: "cancelled" | "cleared", actor: ReceiptActor): boolean;
@@ -225,6 +317,8 @@ export type ReceiptJournal = {
   lastGeneration(): number | null;
   get(receiptId: string): ReceiptState | null;
   byRequestId(requestId: string): ReceiptState | null;
+  /** Every receipt whose `parentReceiptId` names this one, in acceptance order. */
+  childrenOf(parentReceiptId: string): ReceiptState[];
   recent(limit: number): ReceiptState[];
   forSession(sessionId: string): ReceiptState[];
   nonTerminal(): ReceiptState[];
@@ -232,6 +326,8 @@ export type ReceiptJournal = {
   unknownKeystrokeReceipts(): ReceiptState[];
   durable(): boolean;
   acceptedDurably(receiptId: string): boolean;
+  /** Every record in this receipt's current in-memory fold exists on disk. */
+  evidenceDurable?(receiptId: string): boolean;
   reservedQueueItemIds(): string[];
   compact(): boolean;
   recovery(): RecoverySummary;
@@ -255,17 +351,56 @@ export type OpenReceiptJournalOptions = {
 export type OpenedReceiptJournal = { kind: "open"; journal: ReceiptJournal } | { kind: "refused"; why: string };
 
 const SPEAKERS: readonly Speaker[] = ["greg", "overseer", "dashboard"];
-const OPS: readonly ReceiptOp[] = ["queued-message", "queued-action", "steer-message", "steer-answer"];
-const ORIGINS: readonly ReceiptOrigin[] = ["enqueue", "broadcast", "direct-steer"];
+const SESSION_OPS: readonly SessionReceiptOp[] = [
+  "queued-message", "queued-action", "steer-message", "steer-answer", "enacted-session", "broadcast-recipient",
+];
+const BOX_OPS: readonly BoxReceiptOp[] = ["enacted-box", "broadcast"];
+const OPS: readonly ReceiptOp[] = [...SESSION_OPS, ...BOX_OPS];
+const ORIGINS: readonly ReceiptOrigin[] = ["enqueue", "broadcast", "direct-steer", "enacted"];
 const ACTOR_KINDS: readonly ReceiptActor["kind"][] = ["client-claimed", "unattributed-http", "system"];
 const NOT_SENT_REASONS: readonly NotSentOutcome["reason"][] = [
   "transport-refused-unsent", "session-held", "undeliverable", "lost-at-restart",
   "tmux-generation-changed", "tmux-generation-unproven", "attempt-not-recorded", "interrupted-before-attempt",
+  "not-reached", "refused-before-attempt",
 ];
 const UNKNOWN_REASONS: readonly UnknownOutcome["reason"][] = [
   "partial", "unknown", "none-contradicted", "threw", "interrupted", "lease-abandoned", "recovery-blocked",
 ];
-const ACTION_KINDS = new Set(["accepted", "attempted", "returned", "outcome", "reconciled", "withdrawn"]);
+const STEP_STATUSES: readonly PlanStepStatus[] = ["passed", "failed", "failed-ignored"];
+const ACTION_KINDS = new Set(["accepted", "attempted", "returned", "outcome", "reconciled", "withdrawn", "progress"]);
+const ACCEPTED_KEYS = [
+  "schema", "kind", "at", "receiptId", "requestId", "fingerprint", "op", "origin", "actor", "speaker", "target", "what",
+  "serverInstanceId", "queue",
+] as const;
+
+/** A box-scoped op: its receipt's target is null. */
+export function isBoxOp(op: ReceiptOp): op is BoxReceiptOp {
+  return (BOX_OPS as readonly ReceiptOp[]).includes(op);
+}
+/** An op whose effect is a plan of steps, and so the only kind of receipt with `progress`. */
+export function isEnactedOp(op: ReceiptOp): op is "enacted-session" | "enacted-box" {
+  return op === "enacted-session" || op === "enacted-box";
+}
+function progressCount(state: ReceiptState): number {
+  return state.records.filter((record) => record.kind === "progress").length;
+}
+/** `completed` and `plan-stopped` belong to the ops that can produce them, and to no other. */
+function outcomeFitsOp(op: ReceiptOp, arm: ReceiptOutcome): boolean {
+  switch (arm.state) {
+    case "completed":
+      return arm.reason === "plan-passed" ? isEnactedOp(op) : op === "broadcast";
+    case "plan-stopped":
+      return isEnactedOp(op);
+    case "keys-submitted":
+    case "not-sent":
+    case "outcome-unknown":
+      return true;
+    default: {
+      const never: never = arm;
+      return never;
+    }
+  }
+}
 
 function object(v: unknown): v is Record<string, unknown> {
   return typeof v === "object" && v !== null && !Array.isArray(v);
@@ -312,20 +447,49 @@ export function parseReceiptLine(line: string): ReceiptRecord | null {
   if (!string(value["receiptId"])) return null;
   const receiptId = value["receiptId"];
   if (value["kind"] === "accepted") {
-    if (!exact(value, ["schema", "kind", "at", "receiptId", "requestId", "fingerprint", "op", "origin", "actor", "speaker", "target", "what", "serverInstanceId", "queue"])
+    /* A Stage 1/2 line has no `parentReceiptId`, and reads as having no parent:
+       the receipts file already on the box stays readable across this deploy. */
+    const legacy = !Object.hasOwn(value, "parentReceiptId");
+    const parent = legacy ? null : value["parentReceiptId"];
+    const op = value["op"] as ReceiptOp;
+    const parentValid = legacy
+      ? op !== "broadcast-recipient"
+      : parent === null
+        ? op !== "broadcast-recipient"
+        : string(parent) && value["origin"] === "broadcast"
+          && (op === "broadcast-recipient"
+            ? value["queue"] === null
+            : (op === "queued-message" || op === "queued-action") && value["queue"] !== null);
+    if (!exact(value, legacy ? ACCEPTED_KEYS : [...ACCEPTED_KEYS, "parentReceiptId"])
       || !nullableString(value["requestId"]) || !nullableString(value["fingerprint"])
       || ((value["requestId"] === null) !== (value["fingerprint"] === null))
-      || !OPS.includes(value["op"] as ReceiptOp) || !ORIGINS.includes(value["origin"] as ReceiptOrigin)
+      || !OPS.includes(op) || !ORIGINS.includes(value["origin"] as ReceiptOrigin)
       || !actor(value["actor"]) || !(value["speaker"] === null || SPEAKERS.includes(value["speaker"] as Speaker))
-      || !target(value["target"]) || typeof value["what"] !== "string" || value["what"].length > MAX_WHAT_CHARS
-      || !string(value["serverInstanceId"]) || !queue(value["queue"])) return null;
+      // Null exactly for a box-scoped op — never a sentinel session.
+      || !(isBoxOp(op) ? value["target"] === null : target(value["target"]))
+      || typeof value["what"] !== "string" || value["what"].length > MAX_WHAT_CHARS
+      || !string(value["serverInstanceId"]) || !queue(value["queue"])
+      // A direct broadcast child always names its parent. A parent link is
+      // otherwise legal only on a queued broadcast recipient. Legacy lines
+      // predate the field and remain readable above as parentless.
+      || !parentValid) return null;
     return { ...base, kind: "accepted", receiptId, requestId: value["requestId"] as string | null,
-      fingerprint: value["fingerprint"] as string | null, op: value["op"] as ReceiptOp, origin: value["origin"] as ReceiptOrigin,
+      fingerprint: value["fingerprint"] as string | null, op, origin: value["origin"] as ReceiptOrigin,
       actor: value["actor"], speaker: value["speaker"] as Speaker | null, target: value["target"],
-      what: value["what"].slice(0, MAX_WHAT_CHARS), serverInstanceId: value["serverInstanceId"], queue: value["queue"] };
+      what: value["what"].slice(0, MAX_WHAT_CHARS), serverInstanceId: value["serverInstanceId"], queue: value["queue"],
+      parentReceiptId: parent as string | null } as AcceptedReceiptRecord;
   }
   if (value["kind"] === "attempted") {
     return exact(value, ["schema", "kind", "at", "receiptId"]) ? { ...base, kind: "attempted", receiptId } : null;
+  }
+  if (value["kind"] === "progress") {
+    const step = value["step"];
+    return exact(value, ["schema", "kind", "at", "receiptId", "step", "status", "verdict"])
+      && typeof step === "number" && Number.isSafeInteger(step) && step >= 0
+      && STEP_STATUSES.includes(value["status"] as PlanStepStatus)
+      && typeof value["verdict"] === "string" && value["verdict"].length <= MAX_VERDICT_CHARS
+      ? { ...base, kind: "progress", receiptId, step, status: value["status"] as PlanStepStatus, verdict: value["verdict"] }
+      : null;
   }
   if (value["kind"] === "returned") {
     return exact(value, ["schema", "kind", "at", "receiptId", "code"]) && string(value["code"])
@@ -345,6 +509,12 @@ export function parseReceiptLine(line: string): ReceiptRecord | null {
   }
   if (value["state"] === "outcome-unknown" && UNKNOWN_REASONS.includes(value["reason"] as UnknownOutcome["reason"])) {
     return { ...common, state: "outcome-unknown", reason: value["reason"] as UnknownOutcome["reason"] };
+  }
+  if (value["state"] === "completed" && (value["reason"] === "plan-passed" || value["reason"] === "fan-out-finished")) {
+    return { ...common, state: "completed", reason: value["reason"] };
+  }
+  if (value["state"] === "plan-stopped" && value["reason"] === "gate-refused") {
+    return { ...common, state: "plan-stopped", reason: "gate-refused" };
   }
   return null;
 }
@@ -419,6 +589,8 @@ function makeReceiptJournal(options: MakerOptions): InternalJournal {
   const reservedReceipts = new Set<string>();
   const reservedQueue = new Set<string>();
   const durableAccepted = new Set<string>();
+  /** Durable accepts followed by a fail-open record which has not reached disk. */
+  const incompleteDurableEvidence = new Set<string>();
   /** Receipts deliberately kept only for this run after an unkeyed write failure. */
   const volatileReceipts = new Set<string>();
   /** Durable attempts whose fail-open `returned` exists only in this fold. */
@@ -465,7 +637,11 @@ function makeReceiptJournal(options: MakerOptions): InternalJournal {
     if (state === undefined) return false;
     if (record.kind === "attempted") return state.last.kind === "accepted" || state.last.kind === "returned";
     if (record.kind === "returned") return state.last.kind === "attempted";
+    if (record.kind === "progress") {
+      return state.last.kind === "attempted" && isEnactedOp(state.accepted.op) && record.step === progressCount(state);
+    }
     if (record.kind === "outcome") {
+      if (!outcomeFitsOp(state.accepted.op, record)) return false;
       if (state.last.kind === "attempted") return true;
       if (state.last.kind === "accepted" || state.last.kind === "returned") {
         return record.state === "not-sent" || (record.state === "outcome-unknown" && record.reason === "recovery-blocked");
@@ -499,6 +675,9 @@ function makeReceiptJournal(options: MakerOptions): InternalJournal {
       if (fromDisk) durableAccepted.add(record.receiptId);
       const suffix = currentRunReceiptSuffix(record.receiptId, options.serverInstanceId);
       if (suffix !== null) receiptSequence = Math.max(receiptSequence, suffix);
+    } else if (record.kind === "progress") {
+      // Evidence on the receipt, never its `last`: see `ProgressReceiptRecord`.
+      state!.records.push(record);
     } else {
       state!.records.push(record);
       state!.last = record;
@@ -544,6 +723,9 @@ function makeReceiptJournal(options: MakerOptions): InternalJournal {
     if (!apply(record)) return { accepted: false, landed };
     if (landed && !forceMemory) domainFailure = null;
     if (record.kind === "accepted" && landed) durableAccepted.add(record.receiptId);
+    if (!landed) {
+      for (const id of ids) if (durableAccepted.has(id)) incompleteDurableEvidence.add(id);
+    }
     if (record.kind === "returned" && durableAccepted.has(record.receiptId)) {
       if (landed) unlandedReturns.delete(record.receiptId);
       else unlandedReturns.add(record.receiptId);
@@ -642,7 +824,10 @@ function makeReceiptJournal(options: MakerOptions): InternalJournal {
       }
     }
     if (core !== null && !core.replace(physicalReplacement)) return memoryFallback();
-    if (core !== null) unlandedReturns.clear();
+    if (core !== null) {
+      unlandedReturns.clear();
+      incompleteDurableEvidence.clear();
+    }
     rebuild(kept, replacement);
     for (const id of [...volatileReceipts]) if (!kept.has(id)) volatileReceipts.delete(id);
     if (core !== null) {
@@ -843,11 +1028,13 @@ function makeReceiptJournal(options: MakerOptions): InternalJournal {
         materialMemory.set(receiptId, input.material);
         materialVolatile = true;
       }
-      const { material: _material, ...fields } = input;
-      const record: AcceptedReceiptRecord = {
+      const { material: _material, parentReceiptId, ...fields } = input;
+      // The input type already pairs op and target; `append` re-parses the line, so a
+      // pairing that slipped past the type is refused rather than written.
+      const record = {
         schema: 1, kind: "accepted", at: options.now(), receiptId, serverInstanceId: options.serverInstanceId,
-        ...fields, what: input.what.slice(0, MAX_WHAT_CHARS),
-      };
+        ...fields, parentReceiptId: parentReceiptId ?? null, what: input.what.slice(0, MAX_WHAT_CHARS),
+      } as AcceptedReceiptRecord;
       const result = append(record, { failOpen: input.requestId === null, forceMemory: materialVolatile });
       if (!result.accepted) {
         if (input.material !== undefined) deleteMaterialFor(receiptId);
@@ -889,6 +1076,12 @@ function makeReceiptJournal(options: MakerOptions): InternalJournal {
         { failOpen: !durableAccepted.has(receiptId) },
       );
       return { landed: result.accepted };
+    },
+    progress(receiptId, step, status, verdict) {
+      return append(
+        { schema: 1, kind: "progress", at: options.now(), receiptId, step, status, verdict: verdict.slice(0, MAX_VERDICT_CHARS) },
+        { failOpen: true, forceMemory: incompleteDurableEvidence.has(receiptId) },
+      ).accepted;
     },
     returned(receiptId, code) {
       return append({ schema: 1, kind: "returned", at: options.now(), receiptId, code }, { failOpen: true }).accepted;
@@ -934,19 +1127,22 @@ function makeReceiptJournal(options: MakerOptions): InternalJournal {
     lastGeneration: () => generation,
     get: (receiptId) => states.has(receiptId) ? view(states.get(receiptId)!) : null,
     byRequestId(requestId) { const id = requestIds.get(requestId); return id === undefined ? null : api.get(id); },
+    childrenOf(parentReceiptId) { return [...states.values()].filter((state) => state.accepted.parentReceiptId === parentReceiptId).map(view); },
     recent(limit) { return [...states.values()].sort((a, b) => b.accepted.at - a.accepted.at || b.receiptId.localeCompare(a.receiptId)).slice(0, Math.max(0, limit)).map(view); },
-    forSession(sessionId) { return [...states.values()].filter((state) => state.accepted.target.sessionId === sessionId).map(view); },
+    forSession(sessionId) { return [...states.values()].filter((state) => state.accepted.target?.sessionId === sessionId).map(view); },
     nonTerminal: () => [...states.values()].filter(isNonTerminal).map(view),
     restorable() {
       const result: RestorableItem[] = [];
       for (const state of states.values()) {
         if (recoverySuppressed.has(state.receiptId)) continue;
         if (!(state.last.kind === "accepted" || state.last.kind === "returned") || state.accepted.queue === null) continue;
+        const target = state.accepted.target;
+        if (target === null) continue;
         const material = readMaterial(state.receiptId);
         if (material === null) continue;
         result.push({ receiptId: state.receiptId, op: state.accepted.op, origin: state.accepted.origin,
-          actor: state.accepted.actor, speaker: state.accepted.speaker, target: state.accepted.target,
-          what: state.accepted.what, queue: state.accepted.queue, material, tmuxGeneration: state.accepted.target.tmuxGeneration });
+          actor: state.accepted.actor, speaker: state.accepted.speaker, target,
+          what: state.accepted.what, queue: state.accepted.queue, material, tmuxGeneration: target.tmuxGeneration });
       }
       return result;
     },
@@ -954,11 +1150,13 @@ function makeReceiptJournal(options: MakerOptions): InternalJournal {
     durable: () => physicalWritable() && core!.status().failure === null
       && domainFailure === null && recoveryFailure === null
       && unlandedReturns.size === 0
+      && incompleteDurableEvidence.size === 0
       && ![...volatileReceipts].some((id) => {
         const state = states.get(id);
         return state !== undefined && isNonTerminal(state);
       }),
     acceptedDurably: (receiptId) => durableAccepted.has(receiptId),
+    evidenceDurable: (receiptId) => durableAccepted.has(receiptId) && !incompleteDurableEvidence.has(receiptId),
     reservedQueueItemIds: () => [...reservedQueue],
     compact,
     recovery: () => ({ ...recovery, interrupted: [...recovery.interrupted], interruptedBeforeAttempt: [...recovery.interruptedBeforeAttempt], lostAtRestart: [...recovery.lostAtRestart], recoveryBlocked: [...recovery.recoveryBlocked], orphanEvidence: [...recovery.orphanEvidence], wouldConclude: [...recovery.wouldConclude] }),
@@ -1016,6 +1214,153 @@ function spokenAction(value: unknown): value is SpokenAction {
 export function reservedQueueItemIds(journal: ReceiptJournal): string[] { return journal.reservedQueueItemIds(); }
 
 /**
+ * The receipt arm for one coordinator reading of a direct send — the same
+ * mapping Stage 2's direct steer records (`routes-steer.ts`): `held` is
+ * `not-sent`/`session-held`, `ok` is `keys-submitted`, `unsent` is `not-sent`,
+ * anything else ambiguous is `outcome-unknown`. Both broadcast loops settle their
+ * recipients through this, so a recipient cannot be recorded differently from a
+ * steer. The coordinator's `unsent` is the one licence for `not-sent`.
+ */
+export function sendAttemptOutcome(attempt: SendAttempt): ReceiptOutcome {
+  if (attempt.kind === "held") {
+    return { state: "not-sent", reason: "session-held", code: "session-held", why: "the session was held, so the coordinator refused before the transport" };
+  }
+  if (attempt.kind === "threw") {
+    return { state: "outcome-unknown", reason: "threw", code: null, why: "the delivery module threw and could not establish whether any keystroke was sent" };
+  }
+  const result = attempt.result;
+  if (result.ok) return { state: "keys-submitted", reason: "transport-ok", code: null, why: "the transport submitted every key" };
+  if (attempt.unsent !== null) {
+    return { state: "not-sent", reason: "transport-refused-unsent", code: result.reason.code, why: "the transport refused before any keystroke left this process" };
+  }
+  const reading = result.delivery === "partial" ? "partial" : result.delivery === "unknown" ? "unknown" : "none-contradicted";
+  return {
+    state: "outcome-unknown",
+    reason: reading,
+    code: result.reason.code,
+    why: `the transport's reading was '${reading}', so what reached the input box cannot be told`,
+  };
+}
+
+/** One direct recipient of a broadcast, as its own child receipt (Stage 3). */
+export type RecipientReceipt = {
+  parentReceiptId: string;
+  actor: ReceiptActor;
+  speaker: Speaker | null;
+  target: ReceiptTarget;
+  what: string;
+};
+
+/**
+ * Accept and attempt one direct recipient's child receipt, on the line above
+ * its send — the one way both broadcast loops do it. Unkeyed (the parent carries
+ * the request id), so the accept is fail-open; `attempted` is fail-closed when
+ * the accept landed durably. `ok: false` means nothing may be sent to this
+ * recipient, and where a receipt exists it already says
+ * `not-sent`/`attempt-not-recorded`.
+ */
+export function beginRecipientReceipt(
+  journal: ReceiptJournal,
+  child: RecipientReceipt,
+): { ok: true; receiptId: string } | { ok: false; why: string } {
+  const accepted = journal.accept({ requestId: null, fingerprint: null, op: "broadcast-recipient", origin: "broadcast", queue: null, ...child });
+  if (!accepted.ok) {
+    return { ok: false, why: `nothing was sent to this recipient: it could not be given a receipt first (${accepted.why})` };
+  }
+  if (!journal.attempted(accepted.receiptId).landed) {
+    journal.outcome(accepted.receiptId, {
+      state: "not-sent",
+      reason: "attempt-not-recorded",
+      code: null,
+      why: "the record that this send was being attempted could not be written, so nothing was sent",
+    });
+    return { ok: false, why: "nothing was sent to this recipient: the record that it was being attempted could not be written" };
+  }
+  return { ok: true, receiptId: accepted.receiptId };
+}
+
+/**
+ * A recipient the fan-out's deadline cut off: accounted for by a child that was
+ * never attempted, `not-sent`/`not-reached`. False when it could not be recorded.
+ */
+export function recordUnreachedRecipient(journal: ReceiptJournal, child: RecipientReceipt): boolean {
+  return recordUnattemptedRecipient(journal, child, {
+    state: "not-sent",
+    reason: "not-reached",
+    code: null,
+    why: "the fan-out passed its deadline before this recipient",
+  });
+}
+
+/** A broadcast recipient proved unsent without entering the transport. */
+export function recordUnattemptedRecipient(
+  journal: ReceiptJournal,
+  child: RecipientReceipt,
+  outcome: NotSentOutcome,
+): boolean {
+  const accepted = journal.accept({
+    requestId: null,
+    fingerprint: null,
+    op: "broadcast-recipient",
+    origin: "broadcast",
+    queue: null,
+    ...child,
+  });
+  return accepted.ok && journal.outcome(accepted.receiptId, outcome);
+}
+
+/**
+ * A broadcast parent's `why`: its children counted by state, and how many of
+ * their receipts are not durable. Counts only, never a word of what was said.
+ * A queued child still waiting is counted as `queued`, not by its `accepted`.
+ */
+export function describeChildren(journal: ReceiptJournal, parentReceiptId: string): string {
+  const children = journal.childrenOf(parentReceiptId);
+  const counts = new Map<string, number>();
+  let notDurable = 0;
+  for (const child of children) {
+    const summary = summarizeReceipt(child);
+    const label = child.accepted.queue !== null && summary.pending ? "queued" : summary.state;
+    counts.set(label, (counts.get(label) ?? 0) + 1);
+    if (!journal.acceptedDurably(child.receiptId)) notDurable += 1;
+  }
+  const parts = [...counts].sort(([a], [b]) => a.localeCompare(b)).map(([label, n]) => `${label} ${n}`);
+  return (
+    `${children.length} recipient receipt(s): ${parts.length === 0 ? "none" : parts.join(", ")}` +
+    (notDurable > 0 ? `; ${notDurable} not durable` : "")
+  ).slice(0, MAX_WHY_CHARS);
+}
+
+/**
+ * A broadcast parent is no more certain than its least certain child. Queued
+ * children may remain pending: their durable acceptance is the broadcast's
+ * completed act for that recipient, while delivery keeps its own lifecycle.
+ */
+export function broadcastParentOutcome(
+  journal: ReceiptJournal,
+  parentReceiptId: string,
+  expectedChildren: number,
+): ReceiptOutcome {
+  const children = journal.childrenOf(parentReceiptId);
+  const uncertain = children.length !== expectedChildren || children.some((child) => {
+    if (!(journal.evidenceDurable?.(child.receiptId) ?? journal.acceptedDurably(child.receiptId))) return true;
+    const summary = summarizeReceipt(child);
+    if (summary.state === "outcome-unknown") return true;
+    return child.accepted.queue === null && summary.pending;
+  });
+  const description = describeChildren(journal, parentReceiptId);
+  if (uncertain) {
+    return {
+      state: "outcome-unknown",
+      reason: "unknown",
+      code: null,
+      why: `${description}; expected ${expectedChildren}; at least one recipient lacks durable settled evidence`.slice(0, MAX_WHY_CHARS),
+    };
+  }
+  return { state: "completed", reason: "fan-out-finished", code: null, why: description };
+}
+
+/**
  * One receipt as the wire shows it: text-free, and saying whether it is still
  * pending. The read route's list and a request-id replay both answer with it,
  * so the two cannot describe one receipt differently.
@@ -1026,7 +1371,9 @@ export function summarizeReceipt(receipt: ReceiptState): ReceiptSummary {
   let reconciled = false;
   let state: ReceiptSummary["state"] = "accepted";
   let reason: string | null = null;
+  let steps = 0;
   for (const record of receipt.records) {
+    if (record.kind === "progress") steps += 1;
     if (record.kind === "attempted") attemptedAt = record.at;
     if (record.kind === "outcome") {
       outcomeAt = record.at;
@@ -1052,7 +1399,11 @@ export function summarizeReceipt(receipt: ReceiptState): ReceiptSummary {
     pending: receipt.last.kind === "accepted" || receipt.last.kind === "attempted" || receipt.last.kind === "returned",
     actor: { ...receipt.accepted.actor },
     speaker: receipt.accepted.speaker,
-    target: { ...receipt.accepted.target },
+    target: receipt.accepted.target === null ? null : { ...receipt.accepted.target },
+    parentReceiptId: receipt.accepted.parentReceiptId,
+    /* The steps of an enacted plan KNOWN to have finished — one per progress
+       record, whatever its gate said. A crash mid-plan reports exactly these. */
+    stepsCompleted: isEnactedOp(receipt.accepted.op) ? steps : null,
     what: receipt.accepted.what,
     acceptedAt: receipt.accepted.at,
     state,

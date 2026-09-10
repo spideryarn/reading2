@@ -48,7 +48,10 @@ function lockFor(dir: string): HeldLock {
   return result.lock;
 }
 
-function accepted(overrides: Partial<AcceptReceiptInput> = {}): AcceptReceiptInput {
+/** The session-scoped arm of the input: every fixture here is about one session. */
+type SessionAcceptInput = Extract<AcceptReceiptInput, { target: object }>;
+
+function accepted(overrides: Partial<SessionAcceptInput> = {}): SessionAcceptInput {
   return {
     requestId: null,
     fingerprint: null,
@@ -123,11 +126,14 @@ describe("receipt record parsing and transitions", () => {
       schema: 1, kind: "accepted", at: NOW, receiptId: "receipt-old-r1", requestId: null,
       fingerprint: null, op: "queued-message", origin: "enqueue", actor: ACTOR, speaker: "greg",
       target: TARGET, what: "message (1 character)", serverInstanceId: "receipt-old",
-      queue: { itemId: "receipt-old-q1", enqueuedAt: NOW },
+      queue: { itemId: "receipt-old-q1", enqueuedAt: NOW }, parentReceiptId: null,
     };
     expect(parseReceiptLine(JSON.stringify({ ...validAccepted, extra: true }))).toBeNull();
     expect(parseReceiptLine(JSON.stringify({ ...validAccepted, speaker: "root" }))).toBeNull();
     expect(parseReceiptLine(JSON.stringify(validAccepted))).toEqual(validAccepted);
+    // A Stage 1/2 line, written before `parentReceiptId` existed, stays readable and reads as no parent.
+    const { parentReceiptId: _none, ...legacy } = validAccepted;
+    expect(parseReceiptLine(JSON.stringify(legacy))).toEqual(validAccepted);
 
     const dir = directory("illegal-read");
     writeFileSync(join(dir, RECEIPTS_FILE), [
@@ -144,11 +150,58 @@ describe("receipt record parsing and transitions", () => {
     expect(journal.status().illegalTransitions).toBe(1);
   });
 
+  it("Stage 3: a box-scoped receipt has a null target, a child names its parent, and progress is strict", () => {
+    const box = {
+      schema: 1, kind: "accepted", at: NOW, receiptId: "stage3-run-r1", requestId: null, fingerprint: null,
+      op: "enacted-box", origin: "enacted", actor: { kind: "unattributed-http", id: null }, speaker: null,
+      target: null, what: "action kill-test-suites", serverInstanceId: "stage3-run", queue: null, parentReceiptId: null,
+    };
+    expect(parseReceiptLine(JSON.stringify(box))).toEqual(box);
+    // Never a sentinel: a box op with a session target, or a session op without one, is unreadable.
+    expect(parseReceiptLine(JSON.stringify({ ...box, target: TARGET }))).toBeNull();
+    expect(parseReceiptLine(JSON.stringify({ ...box, op: "enacted-session" }))).toBeNull();
+    const child = { ...box, receiptId: "stage3-run-r2", op: "broadcast-recipient", origin: "broadcast", target: TARGET, parentReceiptId: "stage3-run-r1" };
+    expect(parseReceiptLine(JSON.stringify(child))).toEqual(child);
+    expect(parseReceiptLine(JSON.stringify({ ...child, parentReceiptId: null }))).toBeNull();
+    expect(parseReceiptLine(JSON.stringify({ ...child, origin: "direct-steer" }))).toBeNull();
+    expect(parseReceiptLine(JSON.stringify({ ...child, op: "steer-message" }))).toBeNull();
+    expect(parseReceiptLine(JSON.stringify({ ...child, queue: { itemId: "not-direct", enqueuedAt: NOW } }))).toBeNull();
+    const progress = { schema: 1, kind: "progress", at: NOW, receiptId: "stage3-run-r1", step: 0, status: "passed", verdict: "it exited 0" };
+    expect(parseReceiptLine(JSON.stringify(progress))).toEqual(progress);
+    expect(parseReceiptLine(JSON.stringify({ ...progress, step: -1 }))).toBeNull();
+    expect(parseReceiptLine(JSON.stringify({ ...progress, verdict: "v".repeat(201) }))).toBeNull();
+
+    const journal = memoryReceiptJournal({ now: () => NOW, serverInstanceId: "stage3-mem" });
+    const run = journal.accept({
+      requestId: null, fingerprint: null, op: "enacted-session", origin: "enacted",
+      actor: ACTOR, speaker: "greg", target: TARGET, what: "action remove-worktree", queue: null,
+    });
+    if (!run.ok) throw new Error(run.why);
+    expect(journal.progress(run.receiptId, 0, "passed", "before attempted")).toBe(false);
+    expect(journal.attempted(run.receiptId).landed).toBe(true);
+    expect(journal.progress(run.receiptId, 1, "passed", "out of order")).toBe(false);
+    expect(journal.progress(run.receiptId, 0, "passed", "it exited 0")).toBe(true);
+    expect(journal.progress(run.receiptId, 0, "passed", "twice")).toBe(false);
+    expect(journal.get(run.receiptId)?.last.kind).toBe("attempted");
+    expect(journal.outcome(run.receiptId, { state: "completed", reason: "fan-out-finished", code: null, why: "a broadcast's arm" })).toBe(false);
+    expect(journal.outcome(run.receiptId, { state: "plan-stopped", reason: "gate-refused", code: "step-1", why: "step 1 refused" })).toBe(true);
+    expect(journal.progress(run.receiptId, 1, "failed", "after the outcome")).toBe(false);
+
+    const steer = journal.accept({
+      requestId: null, fingerprint: null, op: "steer-message", origin: "direct-steer",
+      actor: ACTOR, speaker: "greg", target: TARGET, what: "message (3 characters)", queue: null,
+    });
+    if (!steer.ok) throw new Error(steer.why);
+    expect(journal.attempted(steer.receiptId).landed).toBe(true);
+    expect(journal.progress(steer.receiptId, 0, "passed", "a steer has no steps")).toBe(false);
+    expect(journal.outcome(steer.receiptId, { state: "completed", reason: "plan-passed", code: null, why: "a steer is not a plan" })).toBe(false);
+  });
+
   it("strictly parses every record kind and rejects every outcome state/reason mismatch", () => {
     const acceptedRecord = {
       schema: 1, kind: "accepted", at: NOW, receiptId: "parse-run-r1", requestId: null,
       fingerprint: null, op: "queued-action", origin: "broadcast", actor: { kind: "system", id: null }, speaker: null,
-      target: TARGET, what: "catalogue action", serverInstanceId: "parse-run", queue: null,
+      target: TARGET, what: "catalogue action", serverInstanceId: "parse-run", queue: null, parentReceiptId: null,
     } as const;
     const records = [
       acceptedRecord,

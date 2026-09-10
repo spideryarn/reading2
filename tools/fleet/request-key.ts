@@ -35,7 +35,7 @@ import {
 } from "./receipt-journal.js";
 
 /** Which write the key was sent to. Hashed into the fingerprint — see the header. */
-export type RequestRoute = "steer-message" | "steer-answer" | "actions-session";
+export type RequestRoute = "steer-message" | "steer-answer" | "actions-session" | "actions-box" | "broadcast";
 
 /**
  * JSON with its object keys sorted at every depth.
