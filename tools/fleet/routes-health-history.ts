@@ -29,7 +29,7 @@
 import type { IncomingMessage, ServerResponse } from "node:http";
 import { gzipSync } from "node:zlib";
 
-import type { HealthHistory, HealthSample, RetentionStatus } from "./health-history.js";
+import { WORK_EVERY_MS, type HealthHistory, type HealthSample, type RetentionStatus } from "./health-history.js";
 
 export const HISTORY_PATH = "/api/health/history";
 
@@ -88,6 +88,8 @@ export type HistoryPayload =
        * which no sample can record because it is the one that has not arrived.
        */
       refreshMs: number;
+      /** Persistence cadence for work readings; the browser must not restate five minutes. */
+      workEveryMs: number;
     }
   | { schema: 1; kind: "unreadable"; why: string };
 
@@ -163,6 +165,7 @@ export function historyPayload(deps: HistoryRouteDeps, windowHours: number): His
     retention: deps.store.status(),
     unreadableLines: read.unreadableLines,
     refreshMs: deps.refreshMs,
+    workEveryMs: WORK_EVERY_MS,
   };
 }
 

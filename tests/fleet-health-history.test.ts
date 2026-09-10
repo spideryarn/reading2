@@ -9,7 +9,7 @@
  *  1. a reading with a number in it;
  *  2. a reading whose command failed, carrying the collector's own `why`;
  *  3. a turn on which the collector itself threw;
- *  4. **no sample at all** — nothing was running.
+ *  4. **no sample at all** — nothing was written, so the cause is unknown.
  *
  * (3) and (4) are the pair that matters most and the pair most easily merged:
  * *"the box was up and health collection has been broken for six hours"* and
@@ -31,14 +31,26 @@ import {
   MAX_FILE_BYTES,
   MAX_LINE_BYTES,
   MAX_WHY_CHARS,
+  WORK_EVERY_MS,
   openHealthHistory,
+  parseSampleLine,
   sampleLine,
   type HealthHistory,
   type HealthSample,
 } from "../tools/fleet/health-history.js";
+import { MAX_STORED_WORK_BYTES } from "../tools/fleet/work-groups.js";
+import type { StoredWork, StoredWorkTurn } from "../tools/fleet/wire.js";
 
 const dirs: string[] = [];
 const open: HealthHistory[] = [];
+
+type TestHistory = Omit<HealthHistory, "append"> & {
+  append(
+    turn: Parameters<HealthHistory["append"]>[0],
+    stamp: Parameters<HealthHistory["append"]>[1],
+    workTurn?: StoredWorkTurn,
+  ): boolean;
+};
 
 afterEach(() => {
   /* CLOSE BEFORE REMOVING. Each store holds a writer lock for the life of the
@@ -59,7 +71,14 @@ afterEach(() => {
  * whose consequence (a torn record welded to a valid one, unrepairable after
  * the next append) is the worst in the file.
  */
-function withPartialWriter(): HealthHistory {
+function testHistory(store: HealthHistory): TestHistory {
+  return {
+    ...store,
+    append: (turn, stamp, workTurn = NOT_DUE) => store.append(turn, stamp, workTurn),
+  };
+}
+
+function withPartialWriter(): TestHistory {
   const dir = mkdtempSync(join(tmpdir(), "fleet-health-history-partial-"));
   dirs.push(dir);
   const opened = openHealthHistory(dir, {
@@ -69,16 +88,16 @@ function withPartialWriter(): HealthHistory {
   });
   if (opened.kind !== "open") throw new Error(`store would not open: ${opened.why}`);
   open.push(opened.store);
-  return opened.store;
+  return testHistory(opened.store);
 }
 
-function withStore(): { dir: string; store: HealthHistory } {
+function withStore(): { dir: string; store: TestHistory } {
   const dir = mkdtempSync(join(tmpdir(), "fleet-health-history-"));
   dirs.push(dir);
   const opened = openHealthHistory(dir);
   if (opened.kind !== "open") throw new Error(`store would not open: ${opened.why}`);
   open.push(opened.store);
-  return { dir, store: opened.store };
+  return { dir, store: testHistory(opened.store) };
 }
 
 /** A report with one value reading and one that could not be taken. */
@@ -97,6 +116,12 @@ function report(overrides: Partial<HealthReport> = {}): HealthReport {
   };
 }
 
+const NOT_DUE: StoredWorkTurn = { kind: "not-due" };
+
+function due(result: StoredWork): StoredWorkTurn {
+  return { kind: "due", result };
+}
+
 describe("openHealthHistory", () => {
   it("refuses a relative directory, because two processes would resolve it differently", () => {
     const opened = openHealthHistory("./fleet-health");
@@ -107,6 +132,91 @@ describe("openHealthHistory", () => {
 });
 
 describe("a sample survives the round trip with its arms intact", () => {
+  it("parses a line written before work tracking without inventing a work turn", () => {
+    const legacyLine =
+      '{"schema":1,"at":"2026-09-08T11:59:00.000Z","nextDueMs":73000,"kind":"collector-failed","why":"legacy collector failure"}\n';
+    const expected = {
+      schema: 1,
+      at: "2026-09-08T11:59:00.000Z",
+      nextDueMs: 73_000,
+      kind: "collector-failed",
+      why: "legacy collector failure",
+    };
+
+    expect(parseSampleLine(legacyLine)).toEqual(expected);
+    expect(parseSampleLine(legacyLine)).not.toHaveProperty("workTurn");
+  });
+
+  it("keeps an empty successful work scan as a real answer", () => {
+    const { store } = withStore();
+    const workTurn = due({
+      kind: "scan",
+      scannedAt: "2026-09-08T11:59:58.000Z",
+      groups: [],
+      groupsDropped: 0,
+      panes: { work: 0, none: 4, cannotTell: 0 },
+    });
+    store.append(
+      { kind: "reading", report: report() },
+      { at: "2026-09-08T12:00:00.000Z", nextDueMs: 73_000 },
+      workTurn,
+    );
+
+    const read = store.read({ sinceMs: 0 });
+    if (read.kind !== "read") throw new Error(read.why);
+    expect(read.samples[0]?.workTurn).toEqual(workTurn);
+  });
+
+  it("keeps every unavailable work arm and its own clock intact", () => {
+    const { store } = withStore();
+    const turns: StoredWorkTurn[] = [
+      due({ kind: "not-yet-run", asOf: "2026-09-08T12:00:01.000Z", why: "the daemon has not scanned yet" }),
+      due({
+        kind: "probe-failed",
+        attemptedAt: "2026-09-08T12:04:50.000Z",
+        sourceCollectedAt: "2026-09-08T12:04:40.000Z",
+        why: "ps failed",
+      }),
+      due({
+        kind: "checkpoint-unavailable",
+        checkedAt: "2026-09-08T12:10:01.000Z",
+        why: "checkpoint could not be read",
+      }),
+    ];
+
+    for (const [index, workTurn] of turns.entries()) {
+      store.append(
+        { kind: "reading", report: report() },
+        { at: new Date(Date.parse("2026-09-08T12:00:00.000Z") + index * WORK_EVERY_MS).toISOString(), nextDueMs: 73_000 },
+        workTurn,
+      );
+    }
+
+    const read = store.read({ sinceMs: 0 });
+    if (read.kind !== "read") throw new Error(read.why);
+    expect(read.samples.map((sample) => sample.workTurn)).toEqual(turns);
+  });
+
+  it("records due work even when health collection itself failed", () => {
+    const { store } = withStore();
+    const workTurn = due({
+      kind: "scan",
+      scannedAt: "2026-09-08T12:14:59.000Z",
+      groups: [],
+      groupsDropped: 0,
+      panes: { work: 0, none: 0, cannotTell: 0 },
+    });
+    store.append(
+      { kind: "collector-failed", why: "collectHealth threw" },
+      { at: "2026-09-08T12:15:00.000Z", nextDueMs: 313_000 },
+      workTurn,
+    );
+
+    const read = store.read({ sinceMs: 0 });
+    if (read.kind !== "read") throw new Error(read.why);
+    expect(read.samples[0]).toMatchObject({ kind: "collector-failed", workTurn });
+  });
+
   it("keeps an unknown reading as unknown, carrying the collector's own words", () => {
     const { store } = withStore();
     store.append({ kind: "reading", report: report() }, { at: "2026-09-08T12:00:00.000Z", nextDueMs: 73_000 });
@@ -189,6 +299,33 @@ describe("the window", () => {
     if (read.kind !== "read") throw new Error(read.why);
     expect(read.samples).toHaveLength(1);
     expect(read.earliestAt).toBe(new Date(base).toISOString());
+  });
+
+  it("does not return a work summary after its sample has expired from the requested window", () => {
+    const { store } = withStore();
+    const base = Date.parse("2026-09-08T12:00:00.000Z");
+    store.append(
+      { kind: "reading", report: report() },
+      { at: new Date(base).toISOString(), nextDueMs: 73_000 },
+      due({
+        kind: "scan",
+        scannedAt: new Date(base - 1_000).toISOString(),
+        groups: [],
+        groupsDropped: 0,
+        panes: { work: 0, none: 1, cannotTell: 0 },
+      }),
+    );
+    store.append(
+      { kind: "reading", report: report() },
+      { at: new Date(base + WORK_EVERY_MS).toISOString(), nextDueMs: 73_000 },
+      NOT_DUE,
+    );
+
+    const read = store.read({ sinceMs: base + WORK_EVERY_MS });
+    if (read.kind !== "read") throw new Error(read.why);
+    expect(read.samples).toHaveLength(1);
+    expect(read.samples[0]?.workTurn).toEqual(NOT_DUE);
+    expect(read.samples.some((sample) => sample.workTurn?.kind === "due")).toBe(false);
   });
 });
 
@@ -276,6 +413,7 @@ describe("damage", () => {
     reopened.store.append(
       { kind: "reading", report: report() },
       { at: "2026-09-08T12:02:00.000Z", nextDueMs: 73_000 },
+      NOT_DUE,
     );
     const read = reopened.store.read({ sinceMs: 0 });
     if (read.kind !== "read") throw new Error(read.why);
@@ -467,7 +605,11 @@ describe("the writer's own condition", () => {
     open.push(second.store);
 
     expect(second.store.status().lockedOutBy).not.toBeNull();
-    second.store.append({ kind: "reading", report: report() }, { at: "2026-09-08T12:01:13.000Z", nextDueMs: 73_000 });
+    second.store.append(
+      { kind: "reading", report: report() },
+      { at: "2026-09-08T12:01:13.000Z", nextDueMs: 73_000 },
+      NOT_DUE,
+    );
 
     const read = second.store.read({ sinceMs: 0 });
     if (read.kind !== "read") throw new Error(read.why);
@@ -568,6 +710,142 @@ describe("what the earliest sample is allowed to claim", () => {
 });
 
 describe("bounding a record", () => {
+  it("drops an oversized work summary but keeps the health reading and states the loss on disk", () => {
+    const { dir, store } = withStore();
+    const oversizedWork = due({
+      kind: "scan",
+      scannedAt: "2026-09-08T12:00:00.000Z",
+      groups: [{
+        session: "x".repeat(MAX_LINE_BYTES),
+        recogniser: "vitest",
+        jobs: 1,
+        timing: { kind: "unknown" },
+      }],
+      groupsDropped: 0,
+      panes: { work: 1, none: 0, cannotTell: 0 },
+    });
+    store.append(
+      { kind: "reading", report: report() },
+      { at: "2026-09-08T12:00:00.000Z", nextDueMs: 73_000 },
+      oversizedWork,
+    );
+
+    const raw = readFileSync(join(dir, "health.jsonl"), "utf8").trim();
+    const stored = JSON.parse(raw) as HealthSample;
+    expect(stored.kind).toBe("reading");
+    expect(stored.workTurn).toMatchObject({
+      kind: "due",
+      result: { kind: "checkpoint-unavailable", why: expect.stringMatching(/dropped.*size/i) },
+    });
+    expect(store.status().failure).toMatch(/dropped.*size/i);
+  });
+
+  it("keeps a maximum-work day plus pessimistic ordinary health comfortably inside one rotation", () => {
+    const groups = Array.from({ length: 100 }, (_, index) => ({
+      session: `session-${index}-${"s".repeat(80)}`,
+      recogniser: `recogniser-${index}-${"r".repeat(40)}`,
+      jobs: 99,
+      timing: {
+        kind: "known" as const,
+        oldestStartedAt: "2026-09-10T00:00:00.000Z",
+        longestRanForMs: 86_400_000,
+      },
+    }));
+    let maximumWork: StoredWork = {
+      kind: "scan",
+      scannedAt: "2026-09-10T23:59:59.999Z",
+      groups,
+      groupsDropped: 0,
+      panes: { work: 100, none: 100, cannotTell: 100 },
+    };
+    while (Buffer.byteLength(JSON.stringify(maximumWork), "utf8") > MAX_STORED_WORK_BYTES) {
+      groups.pop();
+      maximumWork = { ...maximumWork, groups, groupsDropped: maximumWork.groupsDropped + 1 };
+    }
+    const workBytes = Buffer.byteLength(JSON.stringify(maximumWork), "utf8");
+    expect(workBytes).toBeGreaterThan(MAX_STORED_WORK_BYTES - 256);
+
+    const pessimisticReport = report({
+      load: { kind: "value", load1: 72.5, load5: 61, load15: 44, cores: 16, ratio1: 72.5 / 16 },
+      memory: {
+        kind: "value",
+        totalBytes: 32_000_000_000,
+        availableBytes: 1_400_000_000,
+        availableFraction: 0.04375,
+      },
+      swap: {
+        kind: "value",
+        totalBytes: 34_000_000_000,
+        usedBytes: 33_500_000_000,
+        usedFraction: 33.5 / 34,
+        areas: 2,
+      },
+      disk: {
+        kind: "value",
+        totalKiB: 150_000_000,
+        usedKiB: 146_000_000,
+        availableKiB: 4_000_000,
+        usePercent: 97,
+      },
+      swapActivity: { kind: "value", siKBs: 18_000, soKBs: 9_000, waPercent: 63, activelySwapping: true },
+      attribution: {
+        kind: "value",
+        groups: [
+          { kind: "vitest", procs: 38, rssKiB: 8_518_356 },
+          { kind: "vite", procs: 12, rssKiB: 2_518_356 },
+          { kind: "chrome", procs: 18, rssKiB: 4_518_356 },
+          { kind: "node", procs: 20, rssKiB: 6_518_356 },
+          { kind: "other", procs: 9, rssKiB: 1_518_356 },
+        ],
+      },
+      verdict: {
+        level: "critical",
+        reasons: [
+          "the one-minute load average is more than four times the available core count",
+          "less than five percent of memory remains available after reclaimable cache",
+          "more than ninety-eight percent of configured swap is resident",
+          "the root filesystem is at the critical disk-use boundary",
+          "the sampled CPU interval spent more than half its time waiting for IO",
+        ],
+      },
+      tookMs: 29_874,
+    });
+    const base = Date.parse("2026-09-10T00:00:00.000Z");
+    const sampleCount = 24 * 60;
+    let workCount = 0;
+    let dayBytes = 0;
+    for (let index = 0; index < sampleCount; index += 1) {
+      const workTurn = index % 5 === 0 ? due(maximumWork) : NOT_DUE;
+      if (workTurn.kind === "due") workCount += 1;
+      dayBytes += Buffer.byteLength(sampleLine({
+        schema: 1,
+        at: new Date(base + index * 60_000).toISOString(),
+        nextDueMs: 60_000,
+        kind: "reading",
+        report: pessimisticReport,
+        workTurn,
+      }), "utf8");
+    }
+
+    expect(sampleCount).toBe(1_440);
+    expect(workCount).toBe(288);
+    expect(dayBytes).toBeLessThan(MAX_FILE_BYTES / 2);
+  });
+
+  it("still writes sample-omitted when the health reading itself is oversized", () => {
+    const { dir, store } = withStore();
+    const huge = report({ verdict: { level: "critical", reasons: ["y".repeat(MAX_LINE_BYTES * 2)] } });
+    store.append(
+      { kind: "reading", report: huge },
+      { at: "2026-09-08T12:00:00.000Z", nextDueMs: 73_000 },
+      NOT_DUE,
+    );
+
+    const stored = JSON.parse(readFileSync(join(dir, "health.jsonl"), "utf8")) as HealthSample;
+    expect(stored.kind).toBe("sample-omitted");
+    expect(stored.workTurn).toEqual(NOT_DUE);
+  });
+
   it("refuses a sample whose SERIALISED size blows the per-record limit", () => {
     /* Bounding one `why` was not bounding the record. A type-valid report whose
        READINGS' own `why` strings were long — every parser carries one, and

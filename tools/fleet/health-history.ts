@@ -81,6 +81,7 @@ import { isAbsolute, join } from "node:path";
 import { truncateToLastLine, writeAll, type JsonlRepair } from "../overseer/jsonl.js";
 import { describeLockRefusal, releaseLock, stillOurs, takeLock, type HeldLock } from "../overseer/lock.js";
 import type { HealthReport } from "./health.js";
+import type { StoredWork, StoredWorkGroup, StoredWorkTurn } from "./wire.js";
 
 /* ------------------------------------------------------------------ *
  * Where it lives.
@@ -116,9 +117,10 @@ export const PREV_FILE = "health.prev.jsonl";
  * the chart at a moment when nothing was wrong, and a blank chart reads as *the
  * box was down*, which is the one thing this feature must never say by accident.
  *
- * 8 MiB against a measured ~1 MB/day is about eight days of margin on a window
- * of one, and about five days at the pessimistic ~1.4 KB/sample rate a
- * permanently critical box would produce. The store's ceiling is two of these.
+ * 8 MiB against a measured ~1 MB/day of health plus at most ~1.15 MB/day of
+ * five-minute work summaries leaves several days of margin on a window of one.
+ * The arithmetic is executable in tests/fleet-health-history.test.ts rather
+ * than trusted to this paragraph. The store's ceiling is two of these files.
  *
  * The pathological case is a dashboard in a crash loop appending a
  * `collector-failed` line every second: ~150 bytes × 86,400 = 13 MB/day, which
@@ -129,6 +131,9 @@ export const PREV_FILE = "health.prev.jsonl";
  * rather than diagnosed.
  */
 export const MAX_FILE_BYTES = 8 * 1024 * 1024;
+
+/** How often a health turn carries the checkpoint's work reading. Persistence cadence only. */
+export const WORK_EVERY_MS = 5 * 60_000;
 
 /* ------------------------------------------------------------------ *
  * The record.
@@ -178,8 +183,18 @@ export type HealthSample =
       nextDueMs: number;
       kind: "reading";
       report: StoredReport;
+      /** Absent only on lines written before work tracking existed. */
+      workTurn?: StoredWorkTurn;
     }
-  | { schema: 1; at: string; nextDueMs: number; kind: "collector-failed"; why: string }
+  | {
+      schema: 1;
+      at: string;
+      nextDueMs: number;
+      kind: "collector-failed";
+      why: string;
+      /** Absent only on lines written before work tracking existed. */
+      workTurn?: StoredWorkTurn;
+    }
   /**
    * **A reading was taken and could not be kept.** Written in place of a sample
    * whose serialised form exceeded `MAX_LINE_BYTES`.
@@ -189,7 +204,15 @@ export type HealthSample =
    * clears — let a critical turn be erased with nothing anywhere to say a sample
    * had been dropped. It breaks the line where the reading would have been.
    */
-  | { schema: 1; at: string; nextDueMs: number; kind: "sample-omitted"; why: string };
+  | {
+      schema: 1;
+      at: string;
+      nextDueMs: number;
+      kind: "sample-omitted";
+      why: string;
+      /** Absent only on lines written before work tracking existed. */
+      workTurn?: StoredWorkTurn;
+    };
 
 /**
  * The longest `why` that goes on disk.
@@ -239,6 +262,91 @@ function isRecord(v: unknown): v is Record<string, unknown> {
   return typeof v === "object" && v !== null && !Array.isArray(v);
 }
 
+function isFiniteNonNegative(v: unknown): v is number {
+  return typeof v === "number" && Number.isFinite(v) && v >= 0;
+}
+
+function isTimestamp(v: unknown): v is string {
+  return typeof v === "string" && Number.isFinite(Date.parse(v));
+}
+
+function parseStoredWorkGroup(value: unknown): StoredWorkGroup | null {
+  if (!isRecord(value)) return null;
+  const session = value["session"];
+  const recogniser = value["recogniser"];
+  const jobs = value["jobs"];
+  const timing = value["timing"];
+  if (typeof session !== "string" || typeof recogniser !== "string" || !isFiniteNonNegative(jobs)) return null;
+  if (!isRecord(timing)) return null;
+
+  if (timing["kind"] === "unknown") return { session, recogniser, jobs, timing: { kind: "unknown" } };
+  const oldestStartedAt = timing["oldestStartedAt"];
+  const longestRanForMs = timing["longestRanForMs"];
+  if (!isTimestamp(oldestStartedAt) || !isFiniteNonNegative(longestRanForMs)) return null;
+  if (timing["kind"] === "known") {
+    return { session, recogniser, jobs, timing: { kind: "known", oldestStartedAt, longestRanForMs } };
+  }
+  const knownJobs = timing["knownJobs"];
+  if (timing["kind"] !== "partial" || !isFiniteNonNegative(knownJobs)) return null;
+  return { session, recogniser, jobs, timing: { kind: "partial", knownJobs, oldestStartedAt, longestRanForMs } };
+}
+
+function parseStoredWork(value: unknown): StoredWork | null {
+  if (!isRecord(value)) return null;
+  const why = value["why"];
+  if (value["kind"] === "not-yet-run") {
+    const asOf = value["asOf"];
+    return isTimestamp(asOf) && typeof why === "string" ? { kind: "not-yet-run", asOf, why } : null;
+  }
+  if (value["kind"] === "probe-failed") {
+    const attemptedAt = value["attemptedAt"];
+    const sourceCollectedAt = value["sourceCollectedAt"];
+    return isTimestamp(attemptedAt) && isTimestamp(sourceCollectedAt) && typeof why === "string"
+      ? { kind: "probe-failed", attemptedAt, sourceCollectedAt, why }
+      : null;
+  }
+  if (value["kind"] === "checkpoint-unavailable") {
+    const checkedAt = value["checkedAt"];
+    return isTimestamp(checkedAt) && typeof why === "string"
+      ? { kind: "checkpoint-unavailable", checkedAt, why }
+      : null;
+  }
+  if (value["kind"] !== "scan") return null;
+  const scannedAt = value["scannedAt"];
+  const rawGroups = value["groups"];
+  const groupsDropped = value["groupsDropped"];
+  const panes = value["panes"];
+  if (!isTimestamp(scannedAt) || !Array.isArray(rawGroups) || !isFiniteNonNegative(groupsDropped) || !isRecord(panes)) {
+    return null;
+  }
+  const groups: StoredWorkGroup[] = [];
+  for (const rawGroup of rawGroups) {
+    const group = parseStoredWorkGroup(rawGroup);
+    if (group === null) return null;
+    groups.push(group);
+  }
+  const work = panes["work"];
+  const none = panes["none"];
+  const cannotTell = panes["cannotTell"];
+  if (!isFiniteNonNegative(work) || !isFiniteNonNegative(none) || !isFiniteNonNegative(cannotTell)) return null;
+  return { kind: "scan", scannedAt, groups, groupsDropped, panes: { work, none, cannotTell } };
+}
+
+type ParsedWorkTurn =
+  | { kind: "absent" }
+  | { kind: "invalid" }
+  | { kind: "present"; value: StoredWorkTurn };
+
+function parseWorkTurn(sample: Record<string, unknown>): ParsedWorkTurn {
+  if (!Object.hasOwn(sample, "workTurn")) return { kind: "absent" };
+  const value = sample["workTurn"];
+  if (!isRecord(value)) return { kind: "invalid" };
+  if (value["kind"] === "not-due") return { kind: "present", value: { kind: "not-due" } };
+  if (value["kind"] !== "due") return { kind: "invalid" };
+  const result = parseStoredWork(value["result"]);
+  return result === null ? { kind: "invalid" } : { kind: "present", value: { kind: "due", result } };
+}
+
 /**
  * One line to a sample, or null when it is not one.
  *
@@ -264,18 +372,21 @@ export function parseSampleLine(line: string): HealthSample | null {
   if (typeof at !== "string" || !Number.isFinite(Date.parse(at))) return null;
   const nextDueMs = parsed["nextDueMs"];
   if (typeof nextDueMs !== "number" || !Number.isFinite(nextDueMs)) return null;
+  const parsedWorkTurn = parseWorkTurn(parsed);
+  if (parsedWorkTurn.kind === "invalid") return null;
+  const workTurn = parsedWorkTurn.kind === "present" ? { workTurn: parsedWorkTurn.value } : {};
 
   if (parsed["kind"] === "reading") {
     const report = parsed["report"];
     if (!isRecord(report)) return null;
     /* No cast to `HealthReport`. See `StoredReport`: this is the version
        boundary, and the honest type for what came off it is the loose one. */
-    return { schema: 1, at, nextDueMs, kind: "reading", report };
+    return { schema: 1, at, nextDueMs, kind: "reading", report, ...workTurn };
   }
   if (parsed["kind"] === "collector-failed" || parsed["kind"] === "sample-omitted") {
     const why = parsed["why"];
     if (typeof why !== "string") return null;
-    return { schema: 1, at, nextDueMs, kind: parsed["kind"], why };
+    return { schema: 1, at, nextDueMs, kind: parsed["kind"], why, ...workTurn };
   }
   return null;
 }
@@ -390,8 +501,11 @@ export type HealthHistory = {
    * load 17.5). It may throw, and the caller guards it — but it also records the
    * failure on itself, because a caught-and-logged exception is invisible to the
    * page that is drawing the consequences.
+   *
+   * Returns true only when some record reached disk. The cadence owner uses
+   * that answer to avoid treating a read-only or poisoned attempt as a write.
    */
-  append(turn: HealthTurn, stamp: SampleStamp): void;
+  append(turn: HealthTurn, stamp: SampleStamp, workTurn: StoredWorkTurn): boolean;
   read(options: ReadOptions): HistoryRead;
   /** How the writer itself is doing. See `RetentionStatus`. */
   status(): RetentionStatus;
@@ -673,20 +787,46 @@ function makeStore(
       lockedOutBy = "this store has been closed and has given up the writer lock";
     },
 
-    append(turn, stamp): void {
+    append(turn, stamp, workTurn): boolean {
       lastAttemptAt = stamp.at;
-      if (mayNotWrite()) return;
+      if (mayNotWrite()) return false;
 
-      const sample: HealthSample =
+      let storedWorkTurn = workTurn;
+      let sample: HealthSample =
         turn.kind === "reading"
-          ? { schema: 1, at: stamp.at, nextDueMs: stamp.nextDueMs, kind: "reading", report: turn.report }
-          : { schema: 1, at: stamp.at, nextDueMs: stamp.nextDueMs, kind: "collector-failed", why: boundWhy(turn.why) };
-      const line = sampleLine(sample);
+          ? { schema: 1, at: stamp.at, nextDueMs: stamp.nextDueMs, kind: "reading", report: turn.report, workTurn }
+          : {
+              schema: 1,
+              at: stamp.at,
+              nextDueMs: stamp.nextDueMs,
+              kind: "collector-failed",
+              why: boundWhy(turn.why),
+              workTurn,
+            };
+      let line = sampleLine(sample);
       /* **BYTES, NOT CHARACTERS.** `statSync().size` is bytes and `String.length`
          is UTF-16 code units, so comparing them was a unit mismatch of exactly
          the kind health.ts's `totalBytes` rename exists to stop — and here it
          made the rotation cap advisory rather than real. GPT Sol's finding 7. */
-      const lineBytes = Buffer.byteLength(line, "utf8");
+      let lineBytes = Buffer.byteLength(line, "utf8");
+      let workDroppedWhy: string | null = null;
+
+      if (lineBytes > MAX_LINE_BYTES && workTurn.kind === "due") {
+        /* A work summary is decoration on the health reading. If it somehow
+           crosses the line limit despite Stage 2's byte cap, replace that
+           result with a stated loss and retry the real measurement once. */
+        workDroppedWhy =
+          `the work summary was dropped for size because the combined sample serialised to ${lineBytes} bytes, ` +
+          `over the ${MAX_LINE_BYTES}-byte per-record limit`;
+        const replacement: StoredWorkTurn = {
+          kind: "due",
+          result: { kind: "checkpoint-unavailable", checkedAt: stamp.at, why: workDroppedWhy },
+        };
+        storedWorkTurn = replacement;
+        sample = { ...sample, workTurn: replacement };
+        line = sampleLine(sample);
+        lineBytes = Buffer.byteLength(line, "utf8");
+      }
 
       if (lineBytes > MAX_LINE_BYTES) {
         /**
@@ -712,15 +852,24 @@ function makeStore(
         failure = why;
         try {
           writeLine(
-            sampleLine({ schema: 1, at: stamp.at, nextDueMs: stamp.nextDueMs, kind: "sample-omitted", why }),
+            sampleLine({
+              schema: 1,
+              at: stamp.at,
+              nextDueMs: stamp.nextDueMs,
+              kind: "sample-omitted",
+              why,
+              workTurn: storedWorkTurn,
+            }),
           );
+          lastSuccessAt = stamp.at;
+          return true;
         } catch (err) {
           /* If even the small line will not go down, the ordinary failure path
              owns it — and `poisoned` is not set, because nothing partial can
              have been written by a failure to open. */
           failure = err instanceof Error ? err.message : String(err);
+          return false;
         }
-        return;
       }
 
       try {
@@ -765,8 +914,9 @@ function makeStore(
          * the record.
          */
         writeLine(line);
-        failure = null;
+        failure = workDroppedWhy;
         lastSuccessAt = stamp.at;
+        return true;
       } catch (err) {
         failure = err instanceof Error ? err.message : String(err);
         throw err;

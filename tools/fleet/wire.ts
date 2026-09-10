@@ -3752,3 +3752,24 @@ export type WorkFeed =
   | { kind: "checkpoint-absent" }
   | { kind: "checkpoint-unreadable"; why: string }
   | { kind: "published"; work: StoredWork; coordinatorWrittenAt: string };
+
+/**
+ * **WAS WORK LOOKED AT ON THIS TURN, AND WHAT CAME BACK.** Carried on every arm
+ * of a stored health sample, including the ones where the health collector
+ * itself failed.
+ *
+ * `not-due` is written down rather than left implied, and that is the whole
+ * point of the envelope existing at all. Without it, four different situations
+ * produced an identical stored shape — a record from before work tracking
+ * existed, a turn the cadence did not call for, a turn that was due while
+ * health collection failed, and a turn whose summary would not fit — and no
+ * amount of arithmetic over `WORK_EVERY_MS` could recover the difference across
+ * a restart's phase change or before the first work sample. GPT Sol's F1,
+ * 2026-09-10.
+ *
+ * So the absence of this field now means exactly one thing: **a sample written
+ * before work tracking existed.** Everything else is a value.
+ */
+export type StoredWorkTurn =
+  | { kind: "not-due" }
+  | { kind: "due"; result: StoredWork };

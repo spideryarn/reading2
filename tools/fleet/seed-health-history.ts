@@ -112,7 +112,7 @@ for (let at = start; at <= now; at += CADENCE_MS) {
     };
   }
 
-  opened.store.append(turn, { at: date.toISOString(), nextDueMs: CADENCE_MS });
+  opened.store.append(turn, { at: date.toISOString(), nextDueMs: CADENCE_MS }, { kind: "not-due" });
   written += 1;
 }
 
