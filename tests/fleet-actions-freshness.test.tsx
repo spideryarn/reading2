@@ -280,6 +280,23 @@ describe("a refresh asked for during a read", () => {
     expect(calls).toHaveLength(2);
     expect(maxUnsettled()).toBe(1);
   });
+
+  it("does not turn a poll tick during the pending read into a third read", async () => {
+    const { api, calls } = manualApi();
+    await mount(api, ACTIONS_POLL_MS);
+    act(() => ui().refresh());
+
+    /* The first read reaches its deadline and releases the one explicit
+       refresh. That second read straddles the poll tick at 10s. */
+    await advance(ACTIONS_READ_DEADLINE_MS);
+    expect(calls).toHaveLength(2);
+    await advance(ACTIONS_POLL_MS - ACTIONS_READ_DEADLINE_MS);
+    expect(calls).toHaveLength(2);
+
+    await answer(call(calls, 1), { ok: true, feed: aFeed() });
+    expect(calls).toHaveLength(2);
+    expect(ui().error).toBeNull();
+  });
 });
 
 /* ------------------------------------------------------------------ *

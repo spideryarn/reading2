@@ -327,9 +327,9 @@ async function timed<T>(name: string, body: () => T | Promise<T>): Promise<{ nam
  * N sessions that look enough like the real thing for the passes that read
  * them, and are not the real thing in any way that could touch a live session.
  *
- * The pane ids are `%9000…`, which tmux will refuse — every capture in fixture
- * mode goes through an injected fake rather than to tmux, and a pane id that
- * cannot exist means a bug in the wiring shows up as an error rather than as a
+ * The pane ids are `%9000…`, which tmux will refuse — fixture mode injects
+ * synthetic commands into the capture seam rather than asking tmux. A pane id
+ * that cannot exist means a wiring bug shows up as an error rather than as a
  * capture of somebody's terminal.
  */
 export function fixtureRows(n: number): FleetRow[] {
@@ -411,10 +411,12 @@ function snapshotOf(rows: FleetRow[]): FleetSnapshot {
  * still pending, because the pending ones are the slowest requests in the run
  * by construction and leaving them out is how a bad p95 passes. If the parts do
  * not add up to what the child says it issued, this prints the discrepancy in
- * the loudest terms it has and sets a non-zero exit code: a benchmark that has
- * lost track of its own requests is not evidence of anything.
+ * the loudest terms it has and sets a non-zero exit code. Balanced arithmetic
+ * is necessary but not sufficient: zero requests and requests that failed have
+ * no latency sample, so either would flatter the percentile while still adding
+ * up perfectly. Those runs are not evidence either.
  */
-function report(title: string, rows: readonly Row[], http: PollResult, context: readonly string[]): void {
+export function report(title: string, rows: readonly Row[], http: PollResult, context: readonly string[]): void {
   console.log(`\n## ${title}\n`);
   for (const line of context) console.log(`- ${line}`);
   console.log("");
@@ -433,11 +435,26 @@ function report(title: string, rows: readonly Row[], http: PollResult, context: 
   console.log(
     `Accounting: ${http.issued} issued = ${http.latencies.length} completed + ${http.failures} failed + ${http.pending.length} still pending at the drain deadline.`,
   );
+  const invalid: string[] = [];
   if (accounted !== http.issued) {
+    invalid.push(
+      `${http.issued - accounted} of the ${http.issued} requests it issued are unaccounted for, ` +
+      "and the ones a run like this loses are its slowest — so every percentile above is flattered by an unknown amount",
+    );
+  }
+  if (http.issued === 0) {
+    invalid.push("the poller issued no HTTP requests, so there is no responsiveness measurement");
+  }
+  if (http.failures > 0) {
+    invalid.push(
+      `${http.failures} HTTP request(s) failed and therefore contributed no latency sample — ` +
+      "the percentile above is flattered by excluding them",
+    );
+  }
+  if (invalid.length > 0) {
     console.log(
-      `\n**THIS RUN IS NOT EVIDENCE.** ${http.issued - accounted} of the ${http.issued} requests it issued are unaccounted for, ` +
-        `and the ones a run like this loses are its slowest — so every percentile above is flattered by an unknown amount. ` +
-        `Fix the poller before quoting anything from here.`,
+      `\n**THIS RUN IS NOT EVIDENCE.** ${invalid.join("; ")}. ` +
+      "Fix the poller or server before quoting anything from here.",
     );
     process.exitCode = 3;
   }
@@ -533,7 +550,7 @@ async function modeReal(runs: number): Promise<void> {
       note: `${healthAsync.value.verdict.level}; ${owner.live().length} children still live after`,
     });
 
-    const whole = await timed("collect() end to end", () => collect());
+    const whole = await timed("collect() end to end", () => collect(owner));
     rows.push({ phase: whole.name, tookMs: whole.tookMs, lag: whole.lag, note: `${whole.value.rows.length} rows` });
     // From here on the bench's own `/api/state` serves a real snapshot, so the
     // per-request cost the poller pays is the one the dashboard pays.
@@ -611,43 +628,130 @@ async function modeFixture(sessions: number, probeMs: number): Promise<void> {
      that would not be read; these counters check the other end, that the passes
      below really made N cheap probes and exactly one slow one. GPT Sol's P1. */
   let cheapProbes = 0;
-  let slowProbes = 0;
+  let syncSlowProbes = 0;
 
-  /* A capture that costs what a real one costs: an actual child process, not a
-     busy-wait. `execFileSync("true")` is ~2–4 ms here, which is the same order
-     as `tmux capture-pane`, and it is a real spawn — so the fixture measures
-     spawn cost rather than a number somebody chose. */
-  const fast = await timed(`readPanes over ${sessions} rows, each capture a real child [sync]`, () =>
-    readPanes(rows, () => {
-      cheapProbes += 1;
-      execFileSync("true", { encoding: "utf8", timeout: 5_000 });
-      return "";
-    }),
-  );
-  out.push({ phase: fast.name, tookMs: fast.tookMs, lag: fast.lag, note: `${cheapProbes} probes` });
-  if (cheapProbes !== sessions) throw new Error(`the cheap pass ran ${cheapProbes} probes over ${sessions} rows — it measured something other than what it claims`);
-
+  /* **WHICH PASSES RUN, AND WHY THE ACCEPTANCE RUN NEEDS `--variant=owned`.**
+     `both` (the default) is the before and the after in one run. But the HTTP
+     poller summarises every phase together, so under `both` the synchronous
+     30-second pass decides the p95 on its own and the owned pass's `/api/state`
+     latency is never isolated. The stage's acceptance sentence — a 30-second
+     probe must not hold `/api/state` open — is measured with `--variant=owned`,
+     where the owned pass is the only thing the poller sees. */
+  const variant = arg("variant", "both");
+  if (variant !== "both" && variant !== "sync" && variant !== "owned") {
+    throw new Error(`unknown --variant=${variant}; one of both, sync, owned`);
+  }
   const seconds = String(Math.round(probeMs / 1000));
-  const before = cheapProbes;
-  const slow = await timed(`readPanes over ${sessions} rows, ONE capture sleeps ${seconds}s [sync]`, () => {
-    let first = true;
-    return readPanes(rows, () => {
-      cheapProbes += 1;
-      if (first) {
-        first = false;
-        slowProbes += 1;
-        try {
+
+  if (variant !== "owned") {
+    /* A capture that costs what a real one costs: an actual child process, not a
+       busy-wait. `execFileSync("true")` is ~2–4 ms here, which is the same order
+       as `tmux capture-pane`, and it is a real spawn — so the fixture measures
+       spawn cost rather than a number somebody chose. */
+    const fast = await timed(`readPanes over ${sessions} rows, each capture a real child [sync]`, () =>
+      readPanes(rows, async () => {
+        cheapProbes += 1;
+        execFileSync("true", { encoding: "utf8", timeout: 5_000 });
+        return "";
+      }),
+    );
+    out.push({ phase: fast.name, tookMs: fast.tookMs, lag: fast.lag, note: `${cheapProbes} probes` });
+    if (cheapProbes !== sessions) throw new Error(`the cheap pass ran ${cheapProbes} probes over ${sessions} rows — it measured something other than what it claims`);
+
+    const before = cheapProbes;
+    const slow = await timed(`readPanes over ${sessions} rows, ONE capture sleeps ${seconds}s [sync]`, () => {
+      let first = true;
+      return readPanes(rows, async () => {
+        cheapProbes += 1;
+        if (first) {
+          first = false;
+          syncSlowProbes += 1;
           execFileSync("sleep", [seconds], { encoding: "utf8", timeout: probeMs + 60_000 });
-        } catch {
-          /* the block is the measurement */
         }
-      }
-      return "";
+        return "";
+      });
     });
-  });
-  out.push({ phase: slow.name, tookMs: slow.tookMs, lag: slow.lag, note: `${cheapProbes - before} probes, ${slowProbes} of them slow` });
-  if (cheapProbes - before !== sessions || slowProbes !== 1) {
-    throw new Error(`the slow pass ran ${cheapProbes - before} probes (${slowProbes} slow) over ${sessions} rows — not the fixture it claims to be`);
+    out.push({ phase: slow.name, tookMs: slow.tookMs, lag: slow.lag, note: `${cheapProbes - before} probes, ${syncSlowProbes} of them slow` });
+    if (cheapProbes - before !== sessions || syncSlowProbes !== 1) {
+      throw new Error(`the synchronous slow pass ran ${cheapProbes - before} probes (${syncSlowProbes} slow) over ${sessions} rows — not the fixture it claims to be`);
+    }
+  }
+
+  if (variant !== "sync") {
+    /* **THE AFTER USES THE REAL OWNER.** A Promise.race around a fake capture
+       would prove only that this function can race promises. The acceptance
+       failure is a real `sleep 30` child, started and stopped by `owner.run`, so
+       this phase exercises the same spawn, deadline, signalling and ownership
+       path as production without touching a tmux pane. */
+    const { probeOwner } = await import("../tools/fleet/child.js");
+    const owner = probeOwner();
+    let ownedProbes = 0;
+    let ownedSlowProbes = 0;
+    let ownedOk = 0;
+    let ownedTimedOut = 0;
+    /* **THE SLOW CHILD LIVES ITS WHOLE DURATION BY DEFAULT.** The first version
+       of this phase killed it at 250 ms. That proves the owner *bounds* a probe —
+       true, and worth keeping as `--owned-deadline-ms=250` — but it is not the
+       acceptance sentence, which is that `/api/state` keeps answering WHILE a
+       30-second probe is alive. A child killed at a quarter of a second never
+       tests that. So the default deadline is the probe's length plus five
+       seconds, the slow capture ends `ok`, and the assertions below follow
+       whichever deadline was chosen. */
+    const ownedDeadlineMs = Number(arg("owned-deadline-ms", String(probeMs + 5_000)));
+    const slowShouldTimeOut = ownedDeadlineMs < probeMs;
+    const owned = await timed(`readPanes over ${sessions} rows, ONE capture sleeps ${seconds}s [owned, async, deadline ${ownedDeadlineMs}ms]`, () => {
+      let first = true;
+      return readPanes(rows, async (paneId) => {
+        ownedProbes += 1;
+        const isSlow = first;
+        first = false;
+        if (isSlow) ownedSlowProbes += 1;
+        const outcome = await owner.run({
+          key: `capture-pane:${paneId}`,
+          cmd: isSlow ? "sleep" : "true",
+          args: isSlow ? [seconds] : [],
+          timeoutMs: ownedDeadlineMs,
+          graceMs: 100,
+          maxBytes: 4 * 1024 * 1024,
+        });
+        if (outcome.kind === "ok") {
+          ownedOk += 1;
+          return outcome.stdout;
+        }
+        if (outcome.kind === "timed-out") ownedTimedOut += 1;
+        throw new Error(outcome.why);
+      });
+    });
+    /* Node can deliver the real child's exit event just after the owner's bounded
+       result. Give that event a short turn before asserting the registry is
+       empty; an owner still tracking a child immediately after timeout is doing
+       its job, while one still tracking this killable `sleep` two seconds later
+       means the fixture did not clean up what it started. */
+    const drainDeadline = Date.now() + 2_000;
+    while (owner.live().length > 0 && Date.now() < drainDeadline) {
+      await new Promise((resolve) => setTimeout(resolve, 10));
+    }
+    const liveAfter = owner.live().length;
+    out.push({
+      phase: owned.name,
+      tookMs: owned.tookMs,
+      lag: owned.lag,
+      note:
+        `${ownedProbes} probes, ${ownedSlowProbes} slow, ${ownedOk} ok, ${ownedTimedOut} timed out; ` +
+        `${liveAfter} children still live after`,
+    });
+    const expectedOk = slowShouldTimeOut ? sessions - 1 : sessions;
+    const expectedTimedOut = slowShouldTimeOut ? 1 : 0;
+    if (
+      ownedProbes !== sessions || ownedSlowProbes !== 1 || ownedOk !== expectedOk ||
+      ownedTimedOut !== expectedTimedOut || liveAfter !== 0
+    ) {
+      throw new Error(
+        `the owned slow pass ran ${ownedProbes} probes (${ownedSlowProbes} slow, ${ownedOk} ok, ` +
+        `${ownedTimedOut} timed out, ${liveAfter} children still live) over ${sessions} rows, with a ` +
+        `${ownedDeadlineMs}ms deadline against a ${probeMs}ms probe — not the fixture it claims to be`,
+      );
+    }
   }
 
   report(`Controlled fixture: ${sessions} sessions, one ${seconds}s probe`, out, await poller.stop(), [
@@ -681,7 +785,7 @@ async function main(): Promise<void> {
   }
 }
 
-const invokedDirectly = process.argv[1] !== undefined && process.argv[1].endsWith("fleet-collect-bench.ts");
+const invokedDirectly = process.argv[1]?.endsWith("fleet-collect-bench.ts") ?? false;
 if (invokedDirectly) {
   await main();
 }

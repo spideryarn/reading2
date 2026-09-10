@@ -435,12 +435,19 @@ export async function loadRepoEnv(): Promise<void> {
  * `drop` is the third list, and it is not about secrets: it removes variables that are *correct*
  * for the calling process and wrong for the child — the session-scoped plumbing a nested
  * `claude -p` would otherwise inherit from the Claude Code session that launched it.
+ *
+ * **`drop` beats `passThrough`.** A name on both is withheld, and `onOverruled` is told which —
+ * by default a WARNING on stderr, names only. It used to be the other way round: passThrough was
+ * re-added after the sweep, so `--pass-env` quietly defeated a drop list, and a child routed to
+ * one account could be handed another's token beside it (plan 260910d). A caller that wants a name
+ * to be restorable leaves it out of `drop` when it is asked for — see `claudeEnv` in run-claude.ts.
  */
 export function sanitisedEnv(
   parent: NodeJS.ProcessEnv, passThrough: string[] = [], drop: string[] = [],
+  onOverruled: (names: string[]) => void = warnOverruled,
 ): NodeJS.ProcessEnv {
-  const allowed = new Set(passThrough);
   const dropped = new Set(drop);
+  const allowed = new Set(passThrough.filter((name) => !dropped.has(name)));
   const out: NodeJS.ProcessEnv = {};
   for (const [name, value] of Object.entries(parent)) {
     if (value === undefined) continue;
@@ -454,7 +461,17 @@ export function sanitisedEnv(
     const value = parent[name];
     if (value !== undefined) out[name] = value;
   }
+  // Only names the parent actually has: withholding an absent variable refused nothing.
+  const overruled = [...new Set(passThrough)].filter(
+    (n) => dropped.has(n) && Object.hasOwn(parent, n) && parent[n] !== undefined,
+  );
+  if (overruled.length > 0) onOverruled(overruled);
   return out;
+}
+
+function warnOverruled(names: string[]): void {
+  console.error(`WARNING: not passed to the child: ${names.join(', ')} — on this run's drop list,`
+    + ' which --pass-env cannot override');
 }
 
 /**

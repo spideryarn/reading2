@@ -307,12 +307,18 @@ describe("server.ts", () => {
     expect(source.match(/makeHealthRetention\(/g) ?? []).toHaveLength(1);
   });
 
-  it("keeps one health probe owner for the lifetime of the server", () => {
+  it("keeps one probe owner for the lifetime of the server, shared by health and the collection", () => {
+    /* ONE, and at module scope: an owner built per turn forgets every stuck
+       child and starts it a sibling next minute. It was `healthProbeOwner` until
+       the collection began using it too (plan 260910c, Stage 3a); the rename
+       broke this guard, and this guard was the only test in the fleet suite
+       that noticed — so it now pins both users of the owner, not just one. */
     expect(source.match(/probeOwner\(\)/g) ?? []).toHaveLength(1);
-    expect(source).toMatch(/const healthProbeOwner = probeOwner\(\);/);
+    expect(source).toMatch(/const fleetProbeOwner = probeOwner\(\);/);
     expect(source).toMatch(/async function refreshHealth\(\): Promise<HealthTurn>/);
     expect(source).toMatch(/await collectHealthAsync\(\{/);
-    expect(source).toMatch(/collectHealthAsync\(\{\s*owner: healthProbeOwner,/);
+    expect(source).toMatch(/collectHealthAsync\(\{\s*owner: fleetProbeOwner,/);
+    expect(source).toMatch(/run: \(\) => collect\(fleetProbeOwner\)/);
     expect(source).toMatch(/await refreshOnce\(\{[\s\S]*?\n {4}refreshHealth,/);
   });
 });

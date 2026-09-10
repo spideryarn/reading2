@@ -68,7 +68,7 @@ import {
   type SessionKey,
 } from "./diff.js";
 import type { Arming, AuthorisedJob, SpawnJob } from "./jobs.js";
-import { conditionTracker, describeNote, openNoteLog, type DaemonNote } from "./notes.js";
+import { conditionTracker, describeNote, NOTES_FILE, openNoteLog, type DaemonNote, type NoteLog } from "./notes.js";
 import type { ProposingRuleWork } from "./rule-protocol.js";
 import { describeReport, schedulerStandingOf, schedulerTick, type LostRecord, type RuleRun } from "./scheduler.js";
 import { parseAttempt, parseObservation, type JsonValue, type ObservedAttemptClock, type ObservedRow } from "./observation.js";
@@ -552,7 +552,20 @@ export async function runOverseer(options: DaemonOptions): Promise<DaemonOutcome
   if (!opened.ok) return { kind: "refused", refusal: opened.refusal };
   const store = opened.store;
 
-  const notes = openNoteLog(root);
+  let notes: NoteLog;
+  try {
+    notes = openNoteLog(root);
+  } catch (cause) {
+    store.close();
+    return {
+      kind: "refused",
+      refusal: {
+        reason: "unusable-log",
+        path: join(root, NOTES_FILE),
+        detail: cause instanceof Error ? cause.message : String(cause),
+      },
+    };
+  }
   const conditions = conditionTracker(store.instanceId);
   const write = (note: DaemonNote | null): void => {
     if (note === null) return;

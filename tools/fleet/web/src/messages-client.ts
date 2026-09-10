@@ -423,7 +423,14 @@ export function transcriptAge(lastModified: string | null, status: FleetStatus, 
  * ------------------------------------------------------------------ */
 
 /** The injection point, the same shape as `SteerApi` and `ActionsApi`. */
-export type MessagesApi = { recent: (row: FleetRow) => Promise<MessagesView> };
+export type MessagesApi = {
+  /**
+   * `signal` reaches `fetch` (plan 260910c, F5): a controller in the hook cannot
+   * abort a fetch it does not make, and an abandoned read here is a
+   * multi-megabyte transcript the box goes on reading for nobody.
+   */
+  recent: (row: FleetRow, signal?: AbortSignal) => Promise<MessagesView>;
+};
 
 /** A thrown thing, as a sentence. Never "[object Object]". */
 function describe(cause: unknown): string {
@@ -443,10 +450,13 @@ function describe(cause: unknown): string {
  */
 export function makeMessagesApi(fetchImpl: typeof fetch = fetch): MessagesApi {
   return {
-    async recent(row): Promise<MessagesView> {
+    async recent(row, signal): Promise<MessagesView> {
       let response: Response;
       try {
-        response = await fetchImpl(messagesUrl(row), { cache: "no-store" });
+        response = await fetchImpl(messagesUrl(row), {
+          cache: "no-store",
+          ...(signal === undefined ? {} : { signal }),
+        });
       } catch (cause) {
         return { kind: "no-answer", why: `this browser could not reach the dashboard: ${describe(cause)}` };
       }
@@ -466,7 +476,7 @@ export function makeMessagesApi(fetchImpl: typeof fetch = fetch): MessagesApi {
 
 /** The default instance. Late-bound `fetch`, for the reason in steer-client.ts. */
 export const httpMessagesApi: MessagesApi = {
-  recent: (row) => makeMessagesApi().recent(row),
+  recent: (row, signal) => makeMessagesApi().recent(row, signal),
 };
 
 /**
@@ -498,8 +508,11 @@ export const httpMessagesApi: MessagesApi = {
  */
 export function withClockSkew(api: MessagesApi, skew: () => ClockSkew): MessagesApi {
   return {
-    async recent(row): Promise<MessagesView> {
-      const view = await api.recent(row);
+    async recent(row, signal): Promise<MessagesView> {
+      /* The signal passes straight through: App.tsx hands the page this
+         wrapper, not the api it was given, so dropping it here would leave the
+         production read uncancellable whatever the hook does. */
+      const view = await api.recent(row, signal);
       if (view.kind !== "found") return view;
       const at = skew();
       return {

@@ -146,6 +146,8 @@ import {
   triageSort,
 } from "../tools/fleet/web/src/view";
 import { DRAFT_CAP, draftKey, draftNoticeSentence, resetDraftPageStateForTests } from "../tools/fleet/web/src/drafts";
+import { actionsStaleAfterMs } from "../tools/fleet/web/src/SessionDetail";
+import { ACTIONS_READ_DEADLINE_MS } from "../tools/fleet/web/src/useActions";
 import { identityWriteGate } from "../tools/fleet/execution-token";
 
 /* React wants this set before anything is rendered inside `act`, and vitest's
@@ -3417,6 +3419,8 @@ function mountFull(args: {
   actionsApi?: ActionsApi;
   messagesApi?: MessagesApi;
   historyApi?: HistoryApi;
+  /** The actions poll. An hour unless the test is about the poll's own clock — see below. */
+  actionsPollMs?: number;
 }): void {
   act(() =>
     root.render(
@@ -3431,7 +3435,7 @@ function mountFull(args: {
         /* An hour, so the poll never fires inside a test. The poll itself is
            tested on its own; leaving it live here would make every other test
            in the file depend on a timer. */
-        actionsPollMs={3_600_000}
+        actionsPollMs={args.actionsPollMs ?? 3_600_000}
       />,
     ),
   );
@@ -6948,6 +6952,182 @@ describe("the queue, which is the feature and so is on screen", () => {
   });
 });
 
+/* ------------------------------------------------------------------ *
+ * How old the queue on screen is — plan 260910c Stage 4, Sol's F8.
+ *
+ * `useActions` keeps its last good feed through a failure, and since Stage 4a
+ * it knows when that feed arrived. These are about the half that makes the
+ * field worth having: the page SAYS how old the queue is once that matters,
+ * and says the latest read failed, while still drawing what the last good read
+ * found — a queue you cannot currently read is not an empty queue.
+ * ------------------------------------------------------------------ */
+
+describe("how old the queue on screen is", () => {
+  const ROW = steerable({ id: "$1643", title: "the one whose queue ages" });
+  /* "read 30s ago", "read 1m 5s ago" — formatDuration's shapes. NO LEADING
+     `\b`: the section's text runs the heading straight into the line
+     ("…go to itread 0s ago"), so a word boundary there never matches, and
+     every `not.toMatch` below would pass whatever the page drew. */
+  const AGE = /read \d[\dhms ]* ago/;
+  const HELLO = itemWire({ id: "q1", payload: { kind: "message", text: "hello" } });
+
+  function setVisibility(value: "visible" | "hidden"): void {
+    /* jsdom's `visibilityState` is a prototype getter with no setter. Not
+       announced: the point is that the page's own poll skips a hidden tab. */
+    Object.defineProperty(document, "visibilityState", { value, configurable: true });
+  }
+
+  /** The queue's own section, so an age drawn anywhere else on the page cannot answer for it. */
+  function queueSection(): string {
+    const heading = [...container.querySelectorAll("h3")].find((h) => h.textContent === "Waiting to go to it");
+    const section = heading?.closest("section");
+    if (!section) throw new Error("no queue section on the page");
+    return section.textContent ?? "";
+  }
+
+  /** The page open on a session with a queue, and a switch that makes every later read fail. */
+  function openAging(items: unknown[], pollMs?: number): { failWith: (why: string | null) => void } {
+    let failing: string | null = null;
+    const rec = recordingActions(() => actionsWire({ actions: [CONTINUE_WIRE], queues: [queueWire({ items })] }));
+    const api: ActionsApi = {
+      ...rec.api,
+      feed: async (signal) => (failing === null ? rec.api.feed(signal) : { ok: false, why: failing }),
+    };
+    const feed = manualTransport();
+    mountFull({ transport: feed.transport, actionsApi: api, ...(pollMs === undefined ? {} : { actionsPollMs: pollMs }) });
+    act(() => feed.push(state({ rows: [ROW] })));
+    openSession("the one whose queue ages");
+    return {
+      failWith: (why) => {
+        failing = why;
+      },
+    };
+  }
+
+  /** One read, now: `online` is one of the two moments the hook reads at once. */
+  async function readNow(): Promise<void> {
+    await act(async () => {
+      window.dispatchEvent(new Event("online"));
+    });
+    await act(async () => {});
+  }
+
+  async function advance(ms: number): Promise<void> {
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(ms);
+    });
+  }
+
+  it("draws no age while every poll lands", async () => {
+    vi.useFakeTimers();
+    try {
+      vi.setSystemTime(new Date());
+      openAging([HELLO], 10_000);
+      await advance(0);
+      /* Six polls' worth of time. Each lands, so the feed is never older than
+         one interval, which is well inside the threshold. */
+      for (let i = 0; i < 12; i += 1) await advance(5_000);
+      const text = queueSection();
+      expect(text).toContain("hello");
+      expect(text).not.toMatch(AGE);
+      expect(text).not.toContain("latest read failed");
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("draws the age once the feed is older than two polls and one read's deadline", async () => {
+    vi.useFakeTimers();
+    try {
+      vi.setSystemTime(new Date());
+      openAging([HELLO], 10_000);
+      await advance(0);
+      const stale = actionsStaleAfterMs(10_000);
+      expect(stale).toBe(2 * 10_000 + ACTIONS_READ_DEADLINE_MS);
+
+      /* A hidden tab skips the page's own polls — the one way this feed ages
+         with no error to say so. */
+      setVisibility("hidden");
+      await advance(stale - 2_000);
+      expect(queueSection()).not.toMatch(AGE);
+
+      await advance(4_000);
+      const text = queueSection();
+      expect(text).toContain(`read ${(stale + 2_000) / 1000}s ago`);
+      // The last good queue is still drawn under its age.
+      expect(text).toContain("hello");
+      expect(text).not.toContain("latest read failed");
+    } finally {
+      vi.useRealTimers();
+      setVisibility("visible");
+    }
+  });
+
+  it("draws the error beside the queue, and keeps the items the last good read found", async () => {
+    const page = openAging([HELLO]);
+    await act(async () => {});
+    expect(queueSection()).toContain("hello");
+
+    page.failWith("connect ECONNREFUSED 127.0.0.1:8787");
+    await readNow();
+
+    const text = queueSection();
+    expect(text).toContain("the latest read failed: connect ECONNREFUSED 127.0.0.1:8787");
+    // With the age, which is what says how much the failure matters.
+    expect(text).toMatch(AGE);
+    // And NOT instead of the queue: the item and its button are still there.
+    expect(text).toContain("hello");
+    expect(buttonSaying("Cancel")).toBeDefined();
+  });
+
+  it("clears the age and the error once a read works again", async () => {
+    const page = openAging([HELLO]);
+    await act(async () => {});
+    page.failWith("connect ECONNREFUSED 127.0.0.1:8787");
+    await readNow();
+    expect(queueSection()).toContain("latest read failed");
+
+    page.failWith(null);
+    await readNow();
+    const text = queueSection();
+    expect(text).not.toContain("latest read failed");
+    expect(text).not.toMatch(AGE);
+    expect(text).toContain("hello");
+  });
+
+  /* The empty queue drew the error INSTEAD of its status line. Right when
+     there is no feed at all; once the age and the error are drawn above it,
+     it is the same error twice, and a claim that the queue "could not be
+     read" beside an age saying when it was. */
+  it("says what the last good read found on an empty queue, and names the failure once", async () => {
+    const page = openAging([]);
+    await act(async () => {});
+    expect(queueSection()).toContain("Nothing is waiting.");
+
+    page.failWith("connect ECONNREFUSED 127.0.0.1:8787");
+    await readNow();
+    const text = queueSection();
+    // Not the present tense: nothing here knows what is waiting now.
+    expect(text).not.toContain("Nothing is waiting.");
+    expect(text).toContain("Nothing was waiting at the last read that worked.");
+    expect(text.split("ECONNREFUSED").length - 1).toBe(1);
+  });
+
+  /* The feed-panel and decisions-panel tests mount App with
+     `actionsPollMs={0}`. A threshold that scaled only with the interval would
+     be zero there, and every feed would be "stale" the moment it landed.
+
+     The threshold, not a render. A mounted page at a 0 ms poll cannot be
+     driven deterministically here: on real timers the poll re-renders without
+     pause and `act` timed out at 30 s on correct code; on fake timers every
+     tick schedules the next at +0, and advancing the clock never ends. None
+     of those tests opens a session, so no age can be drawn in them anyway. */
+  it("keeps a floor of one read's deadline at a zero poll interval", () => {
+    expect(actionsStaleAfterMs(0)).toBe(ACTIONS_READ_DEADLINE_MS);
+    expect(actionsStaleAfterMs(0)).toBeGreaterThan(0);
+  });
+});
+
 describe("queueing a message, in one line with the buttons", () => {
   /* WORKING, not idle, and that is now load-bearing: v0.5g stops offering
      Queue on an idle session, so a fixture left at the default status would
@@ -7555,6 +7735,33 @@ describe("the Overseer tab, which no longer says it is empty", () => {
     expect(container.textContent).toContain("may be sitting in its input box");
     // And the header says how many sessions are in this state.
     expect(container.textContent).toContain("held after a send nobody can account for");
+  });
+
+  /* Plan 260910c Stage 4b. SessionDetail draws the actions feed's error in its
+     own age line and so asks the shared `SessionQueue` for a past-tense
+     sentence instead; this tab draws no such line, so it must keep the old
+     sentence WITH the reason, or a reader here loses why. */
+  it("still says a held, empty queue could not be read, with the reason, when a read fails", async () => {
+    let failing: string | null = null;
+    const base = heldFleet();
+    const rec = {
+      ...base,
+      api: {
+        ...base.api,
+        feed: async (signal?: AbortSignal) =>
+          failing === null ? base.api.feed(signal) : { ok: false as const, why: failing },
+      },
+    };
+    await mountHeld(rec);
+    expect(container.textContent).toContain("Nothing is being delivered to this session.");
+
+    failing = "connect ECONNREFUSED 127.0.0.1:8787";
+    await act(async () => {
+      window.dispatchEvent(new Event("online"));
+    });
+    await act(async () => {});
+    expect(container.textContent).toContain("The queue could not be read: connect ECONNREFUSED 127.0.0.1:8787");
+    expect(container.textContent).not.toContain("Nothing was waiting at the last read that worked.");
   });
 
   it("never says nothing has been sent over a held session", async () => {
@@ -10793,6 +11000,28 @@ describe("the detail pane's state follows the execution, not the handle", () => 
     expect(container.textContent ?? "").not.toContain("number 1 in the line");
   });
 
+  it("restores the draft but clears both outcome cards on a verified same-conversation relaunch", async () => {
+    const feed = manualTransport();
+    mountFull({ transport: feed.transport });
+    act(() => feed.push(state({ rows: rowsRunning(ran()) })));
+    openSession("a session");
+    await act(async () => {});
+    await leaveStateBehind();
+
+    act(() =>
+      feed.push(
+        state({
+          rows: rowsRunning(ran({ pid: 5150, startTicks: 90_000_000 })),
+        }),
+      ),
+    );
+    await act(async () => {});
+
+    expect(composer().value).toBe("a draft I am still writing");
+    expect(container.textContent ?? "").not.toContain("Typed at the pane:");
+    expect(container.textContent ?? "").not.toContain("number 1 in the line");
+  });
+
   it("commits no stale-key frame on replacement under StrictMode", async () => {
     const feed = manualTransport();
     let frames: string[] = [];
@@ -10876,7 +11105,7 @@ describe("the detail pane's state follows the execution, not the handle", () => 
     expect(container.textContent ?? "").toContain("number 1 in the line");
   });
 
-  it("clears detail state when the claimed conversation changes inside one execution epoch", async () => {
+  it("keeps unfiled words but clears outcome cards when the claimed conversation changes", async () => {
     const feed = manualTransport();
     mountFull({ transport: feed.transport });
     act(() => feed.push(state({ rows: rowsRunning(CANNOT_TELL) })));
@@ -10909,12 +11138,13 @@ describe("the detail pane's state follows the execution, not the handle", () => 
     );
     await act(async () => {});
 
-    expect(composer().value).toBe("");
+    expect(composer().value).toBe("a draft I am still writing");
+    expect(buttonSaying("Send now")?.disabled).toBe(true);
     expect(container.textContent ?? "").not.toContain("Typed at the pane:");
     expect(container.textContent ?? "").not.toContain("number 1 in the line");
   });
 
-  it("clears detail state when the tmux world changes around the same unverifiable handle", async () => {
+  it("keeps unfiled words but clears outcome cards when the tmux world changes", async () => {
     const feed = manualTransport();
     mountFull({ transport: feed.transport });
     act(() => feed.push(state({ tmuxServerPid: 132280, rows: rowsRunning(CANNOT_TELL) })));
@@ -10930,7 +11160,8 @@ describe("the detail pane's state follows the execution, not the handle", () => 
     act(() => feed.push(state({ tmuxServerPid: 132281, rows: rowsRunning(CANNOT_TELL) })));
     await act(async () => {});
 
-    expect(composer().value).toBe("");
+    expect(composer().value).toBe("a draft I am still writing");
+    expect(buttonSaying("Send now")?.disabled).toBe(true);
     expect(container.textContent ?? "").not.toContain("Typed at the pane:");
     expect(container.textContent ?? "").not.toContain("number 1 in the line");
   });
@@ -11018,7 +11249,7 @@ describe("the detail pane's state follows the execution, not the handle", () => 
    * version that let the null overwrite what it held would treat 132281 as a
    * first sighting and keep one server's draft under another's handle.
    */
-  it("still clears detail state when the world changes to a different known one across an unreadable snapshot", async () => {
+  it("still keeps unfiled words while clearing cards when the world changes across an unreadable snapshot", async () => {
     const feed = manualTransport();
     mountFull({ transport: feed.transport });
     act(() => feed.push(state({ tmuxServerPid: 132280, rows: rowsRunning(CANNOT_TELL) })));
@@ -11032,12 +11263,13 @@ describe("the detail pane's state follows the execution, not the handle", () => 
     act(() => feed.push(state({ tmuxServerPid: 132281, rows: rowsRunning(CANNOT_TELL) })));
     await act(async () => {});
 
-    expect(composer().value).toBe("");
+    expect(composer().value).toBe("a draft I am still writing");
+    expect(buttonSaying("Send now")?.disabled).toBe(true);
     expect(container.textContent ?? "").not.toContain("Typed at the pane:");
     expect(container.textContent ?? "").not.toContain("number 1 in the line");
   });
 
-  it("still clears detail state when the claim changes to a different known one across an unreadable snapshot", async () => {
+  it("still keeps unfiled words while clearing cards when the claim changes across an unreadable snapshot", async () => {
     const feed = manualTransport();
     mountFull({ transport: feed.transport });
     act(() => feed.push(state({ rows: rowsRunning(CANNOT_TELL) })));
@@ -11054,7 +11286,8 @@ describe("the detail pane's state follows the execution, not the handle", () => 
     act(() => feed.push(state({ rows: claiming("conv-B") })));
     await act(async () => {});
 
-    expect(composer().value).toBe("");
+    expect(composer().value).toBe("a draft I am still writing");
+    expect(buttonSaying("Send now")?.disabled).toBe(true);
     expect(container.textContent ?? "").not.toContain("Typed at the pane:");
     expect(container.textContent ?? "").not.toContain("number 1 in the line");
   });
@@ -11962,6 +12195,55 @@ describe("the session composer keeps its draft for the conversation it was writt
     expect(composer().value).toBe("still for conversation A");
   });
 
+  it("does not resurrect a successfully sent draft when the same conversation relaunches before the answer", async () => {
+    let settle: ((outcome: SteerOutcome) => void) | null = null;
+    const pending: SteerApi = {
+      message: async () =>
+        await new Promise<SteerOutcome>((resolve) => {
+          settle = resolve;
+        }),
+      answer: async () => ({ ok: true, op: "answer", sent: [], verified: { kind: "not-told" } }),
+    };
+    const feed = await start(running(), { steer: pending });
+    typeInto(composer(), "sent once, not a new draft");
+    act(() => pressed("Send now").click());
+
+    /* The process is new, but it resumes the same conversation. The new pane
+       correctly restores the stored draft while the old request is pending. */
+    await arrives(feed, rowsOf(running({ pid: 7004 })));
+    expect(composer().value).toBe("sent once, not a new draft");
+
+    await act(async () => {
+      settle?.({ ok: true, op: "message", sent: [], verified: { kind: "not-told" } });
+    });
+    expect(window.sessionStorage.getItem(KEY_A)).toBeNull();
+    expect(composer().value).toBe("");
+  });
+
+  it("does not resurrect a successfully queued draft when same conversation relaunches before the answer", async () => {
+    let settle: ((outcome: Awaited<ReturnType<ActionsApi["queueMessage"]>>) => void) | null = null;
+    const base = recordingActions();
+    const pending: ActionsApi = {
+      ...base.api,
+      queueMessage: async () =>
+        await new Promise<Awaited<ReturnType<ActionsApi["queueMessage"]>>>((resolve) => {
+          settle = resolve;
+        }),
+    };
+    const feed = await start(running(), { actionsApi: pending });
+    typeInto(composer(), "queue this once");
+    act(() => pressed("Queue (~73s)").click());
+
+    await arrives(feed, rowsOf(running({ pid: 7004 })));
+    expect(composer().value).toBe("queue this once");
+
+    await act(async () => {
+      settle?.({ ok: true, kind: "queued", position: 1, why: null });
+    });
+    expect(window.sessionStorage.getItem(KEY_A)).toBeNull();
+    expect(composer().value).toBe("");
+  });
+
   // 4
   it("restores nothing after a reload it cannot verify, then restores into the untouched box once it can", async () => {
     await start(running());
@@ -11992,6 +12274,54 @@ describe("the session composer keeps its draft for the conversation it was writt
     await arrives(feed, rowsOf(running()));
     expect(draftKeys()).toEqual([KEY_A]);
     expect(window.sessionStorage.getItem(KEY_A)).toBe("nobody has been verified yet");
+  });
+
+  it("does not silently destroy blind typing when the first verified reading also changes the target", async () => {
+    const feed = await start(WEATHER);
+    typeInto(composer(), "typed before this pane could be placed");
+    expect(draftKeys()).toEqual([]);
+
+    await arrives(feed, [
+      steerable({
+        id: "$d",
+        title: "drafting",
+        status: { kind: "working" },
+        claudeSessionId: "conv-B",
+        execution: running({ pid: 7005, conversation: { kind: "verified", id: "conv-B" } }),
+      }),
+    ]);
+
+    expect(composer().value).toBe("typed before this pane could be placed");
+    expect(pressed("Send now").disabled).toBe(true);
+    expect(draftKeys()).toEqual([]);
+  });
+
+  it("keeps blind typing when a flushSync transport delivery remounts the pane in the same turn", async () => {
+    const feed = await start(WEATHER);
+    const input = composer();
+    act(() => {
+      const setter = Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, "value")?.set;
+      setter?.call(input, "typed immediately before the delivery");
+      input.dispatchEvent(new Event("input", { bubbles: true }));
+      feed.push(
+        state({
+          rows: [
+            steerable({
+              id: "$d",
+              title: "drafting",
+              status: { kind: "working" },
+              claudeSessionId: "conv-B",
+              execution: running({ pid: 7005, conversation: { kind: "verified", id: "conv-B" } }),
+            }),
+          ],
+        }),
+      );
+    });
+    await act(async () => {});
+
+    expect(composer().value).toBe("typed immediately before the delivery");
+    expect(pressed("Send now").disabled).toBe(true);
+    expect(draftKeys()).toEqual([]);
   });
 
   // 6

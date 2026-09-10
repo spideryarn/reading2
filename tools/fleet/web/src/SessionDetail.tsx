@@ -139,8 +139,14 @@ type SteerFailure = Extract<SteerOutcome, { ok: false }>;
 import { questionSafetyKey } from "./types";
 import type { AnsweringReading, FleetGate, FleetRow, FleetStatus } from "./types";
 import { useExecutionEpoch } from "./continuity";
-import { draftAddressOf, draftNoticeSentence, useDraft } from "./drafts";
-import type { ActionsUi } from "./useActions";
+import {
+  DRAFT_RECIPIENT_CHANGED_SENTENCE,
+  draftAddressOf,
+  draftNoticeSentence,
+  useDraft,
+  type DraftSubmission,
+} from "./drafts";
+import { ACTIONS_READ_DEADLINE_MS, type ActionsUi } from "./useActions";
 import { Button, Card, Mono, cx } from "./ui";
 import { formatDuration, statusLabel, whereLine } from "./view";
 
@@ -153,6 +159,77 @@ function Section({ title, children }: { title: string; children: ReactNode }): R
       </h3>
       {children}
     </section>
+  );
+}
+
+/**
+ * **WHEN THE QUEUE ON SCREEN STOPS BEING CURRENT** — the age past which
+ * `ActionsFeedAge` says how old the actions feed is. Plan 260910c Stage 4,
+ * Sol's F8.
+ *
+ * Two poll intervals and one read's deadline. A poll that is working leaves at
+ * most one interval and one read between good feeds. One read lost to its
+ * deadline adds at most one more interval, because the deadline is shorter
+ * than the interval (useActions.ts § `ACTIONS_READ_DEADLINE_MS`) and the lost
+ * read is released before the next tick. So a feed older than this means two
+ * reads running have come back without a feed, or none was asked for because
+ * the tab was hidden — and becoming visible reads at once. One lost read is
+ * not news: the next tick replaces it without anybody asking.
+ *
+ * `pollMs` is the interval actually in use, not the default. The deadline is
+ * also the floor, and the floor matters at the edge: the feed-panel and
+ * decisions-panel tests mount App with `actionsPollMs={0}`, and `2 × pollMs`
+ * alone would call every feed stale the moment it landed.
+ */
+export function actionsStaleAfterMs(pollMs: number): number {
+  return 2 * Math.max(0, pollMs) + ACTIONS_READ_DEADLINE_MS;
+}
+
+/**
+ * How old the actions feed on screen is, and whether the latest read of it
+ * failed — drawn at the top of the queue section, and only when one of those
+ * is true.
+ *
+ * **Once, above the queue, rather than beside both sections.** The same feed
+ * carries the buttons in *Ask it to…*, but the catalogue behind them does not
+ * change while the server runs (useActions.ts's header), and a button posts
+ * and the server decides — so an old catalogue changes nothing you would do.
+ * An old queue does: *Nothing is waiting*, read two minutes ago, is the claim
+ * somebody acts on. The tip says the age covers both, which is the truth, and
+ * the clutter rule in this file's header keeps it to one line.
+ *
+ * **Nothing before the first good read.** With no feed there is no age to
+ * give, and `SessionActions` and `SessionQueue` already draw "asking" or the
+ * error in their own empty states.
+ *
+ * **The age joins any error, however young**, because how long the page has
+ * been showing the last good read is what says how much the failure matters.
+ * On its own it waits for `actionsStaleAfterMs`: a fresh age changes nothing
+ * you would do in the next ten seconds.
+ */
+function ActionsFeedAge({ actions, now }: { actions: ActionsUi; now: number }): ReactNode {
+  const { lastGoodAt, error, pollMs } = actions;
+  if (lastGoodAt === null) return null;
+  const staleAfterMs = actionsStaleAfterMs(pollMs);
+  /* Clamped: `now` ticks once a second and `lastGoodAt` is stamped between
+     ticks, so the page clock can trail a good read by up to a second. */
+  const ageMs = Math.max(0, now - lastGoodAt);
+  if (error === null && ageMs <= staleAfterMs) return null;
+  return (
+    <p className="tw:mb-1 tw:px-1 tw:text-[12px] tw:break-words">
+      <Explain
+        tip={{
+          head: "When this was read",
+          what: "How long ago this page last read the queue below and the list of actions above it, by this device's clock. A read that fails does not move it: both are drawn from the last read that worked.",
+          how: `It is asked for every ${formatDuration(pollMs)} while this tab is visible, at once when the tab comes back or the network does, and after anything you press here. This line appears once no read has worked for ${formatDuration(staleAfterMs)} — two of those intervals and one read's ${formatDuration(ACTIONS_READ_DEADLINE_MS)} deadline — or as soon as a read fails.`,
+        }}
+        placement="bottom"
+        className="tw:text-ink-faint"
+      >
+        read {formatDuration(ageMs)} ago
+      </Explain>
+      {error === null ? null : <span className="tw:text-alarm-ink"> — the latest read failed: {error}</span>}
+    </p>
   );
 }
 
@@ -719,6 +796,7 @@ function useSettledExecution(reading: ExecutionReading): ExecutionReading {
 
 export function SessionDetail({
   row,
+  draftScope,
   now,
   answeringEnabled,
   answeringRefusal,
@@ -732,6 +810,8 @@ export function SessionDetail({
   onBack,
 }: {
   row: FleetRow;
+  /** The stable pane identity used to carry unfiled words across a keyed remount. */
+  draftScope: string;
   now: number;
   /**
    * **Whether `POST /api/steer/answer` will do anything**, as the four-arm
@@ -780,16 +860,23 @@ export function SessionDetail({
 }): ReactNode {
   /**
    * **THE BOX'S WORDS ARE KEPT THROUGH A RELOAD, UNDER THE CONVERSATION THEY
-   * WERE WRITTEN TO** — drafts.ts, docs/plans/260910c § Stage 2. No `scope`:
+   * WERE WRITTEN TO** — drafts.ts, docs/plans/260910c § Stage 2.
    * SessionsPanel remounts this pane whenever its process, its conversation
-   * claim or its tmux server changes (continuity.ts, `useDetailTargetKey`), so
-   * a mount never outlives its recipient. Under a conflict the address is
+   * claim or its tmux server changes (continuity.ts, `useDetailTargetKey`). The
+   * same key is also passed as `scope`, with the stable row id as `pageSlot`,
+   * so words typed before any conversation could be verified survive that
+   * remount but become non-submittable if its recipient changed. Under a conflict the address is
    * `hold(claimed)`: the claimed conversation's draft comes back into the box,
    * in front of disabled buttons, and nothing typed there is stored.
    */
   const execution = useSettledExecution(row.execution);
   const stance = composerStance(execution);
-  const draft = useDraft({ purpose: "session-composer", address: draftAddressOf(execution) });
+  const draft = useDraft({
+    purpose: "session-composer",
+    address: draftAddressOf(execution),
+    scope: draftScope,
+    pageSlot: row.id,
+  });
   const text = draft.text;
   /* **Through refs, like `blocked` below.** The hook hands back new `setText`
      and `clear` functions on every render; a `useCallback` that listed them
@@ -920,7 +1007,11 @@ export function SessionDetail({
         : null;
 
   const send = useCallback(
-    async (run: () => Promise<SteerOutcome>, target: SentTarget, clear: boolean): Promise<void> => {
+    async (
+      run: () => Promise<SteerOutcome>,
+      target: SentTarget,
+      submission: DraftSubmission | null,
+    ): Promise<void> => {
       setBusy(true);
       /* SNAPSHOTTED BY THE CALLER, BEFORE THE AWAIT. Reading `row` here would
          read the render that resolved the promise, which is the bug. */
@@ -940,7 +1031,7 @@ export function SessionDetail({
       }
       /* Only a send the server accepted takes the draft with it, stored copy
          and all. A refusal leaves both, so the words are there to try again. */
-      if (result.ok && clear) drafted.current.clear();
+      if (result.ok && submission !== null) drafted.current.accept(submission);
       setBusy(false);
     },
     [dialogKey, onAnsweringRefused],
@@ -948,7 +1039,7 @@ export function SessionDetail({
 
   const onAnswer = useCallback(
     (index: number) => {
-      void send(() => steer.answer(row, index), sentTarget(row), false);
+      void send(() => steer.answer(row, index), sentTarget(row), null);
     },
     [row, send, steer],
   );
@@ -963,9 +1054,11 @@ export function SessionDetail({
   const onSend = useCallback(() => {
     /* The same boundary holds the execution rule: under a reading that shows
        this pane is not what the row addresses, nothing leaves from here. */
-    if (blocked.current || refused.current) return;
-    void send(() => steer.message(row, text), sentTarget(row), true);
-  }, [row, send, steer, text]);
+    if (blocked.current || refused.current || !drafted.current.canSubmit) return;
+    const submission = drafted.current.submission();
+    if (submission === null || submission.text.trim() === "") return;
+    void send(() => steer.message(row, submission.text), sentTarget(row), submission);
+  }, [row, send, steer]);
 
   /**
    * **Two buttons, because they are two different things.**
@@ -1028,14 +1121,16 @@ export function SessionDetail({
 
   const onQueue = useCallback(async (): Promise<void> => {
     /* Same guard, same reason. See `onSend`. */
-    if (blocked.current || refused.current) return;
+    if (blocked.current || refused.current || !drafted.current.canSubmit) return;
+    const submission = drafted.current.submission();
+    if (submission === null || submission.text.trim() === "") return;
     setBusy(true);
-    const result = await actions.api.queueMessage(row, text);
+    const result = await actions.api.queueMessage(row, submission.text);
     setQueueOutcome(result);
-    if (result.ok) drafted.current.clear();
+    if (result.ok) drafted.current.accept(submission);
     setBusy(false);
     actions.refresh();
-  }, [actions, row, text]);
+  }, [actions, row]);
 
   return (
     <Card
@@ -1200,7 +1295,8 @@ export function SessionDetail({
                   text.trim() === "" ||
                   unaddressable !== null ||
                   dictate.sendBlocked ||
-                  stance.kind === "refused"
+                  stance.kind === "refused" ||
+                  !draft.canSubmit
                 }
               >
                 {busy ? "Sending…" : "Send now"}
@@ -1224,7 +1320,8 @@ export function SessionDetail({
                       text.trim() === "" ||
                       unaddressable !== null ||
                       dictate.sendBlocked ||
-                      stance.kind === "refused"
+                      stance.kind === "refused" ||
+                      !draft.canSubmit
                     }
                   >
                     Queue (~73s)
@@ -1255,6 +1352,11 @@ export function SessionDetail({
                 {stance.why}
               </p>
             ) : null}
+            {stance.kind === "refused" || draft.canSubmit ? null : (
+              <p className="tw:mt-1 tw:text-[12px] tw:break-words tw:text-alarm-ink">
+                Send and Queue are off: {DRAFT_RECIPIENT_CHANGED_SENTENCE}
+              </p>
+            )}
             {draft.notice === null ? null : (
               <p className="tw:mt-1 tw:text-[12px] tw:text-ink-faint">{draftNoticeSentence(draft.notice)}</p>
             )}
@@ -1306,12 +1408,14 @@ export function SessionDetail({
 
           {/* --------------------------------------------- 4. the queue -- */}
           <Section title="Waiting to go to it">
+            <ActionsFeedAge actions={actions} now={now} />
             <SessionQueue
               sessionId={row.id}
               feed={actions.feed}
               api={actions.api}
               asked={actions.asked}
               error={actions.error}
+              errorDrawnAbove
               onChanged={actions.refresh}
             />
           </Section>

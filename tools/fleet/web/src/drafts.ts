@@ -67,7 +67,7 @@
  * `DRAFT_CAP`, so a pasted transcript can neither fill the quota nor sit in
  * storage.
  */
-import { useEffect, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 
 import { isAddressableHarness } from "../../execution-token.js";
 import type { ExecutionReading } from "../../wire.js";
@@ -116,6 +116,30 @@ let refused = false;
  * empties it, which is the whole of what "will not survive a reload" means.
  */
 const memory = new Map<string, string>();
+
+/**
+ * Text that cannot yet be filed under a verified conversation. Unlike
+ * `memory`, these entries have no storage key and deliberately die with the
+ * page. They exist only so a keyed detail-pane remount cannot silently eat
+ * words typed while the pane was unverifiable.
+ */
+const unplaced = new Map<string, { text: string; scope: string | null }>();
+
+/**
+ * Edit generations live outside a mount because a request may finish after the
+ * mount that began it has gone. A generation, not text equality, catches an
+ * edit that changes A to B and back to A while the request is in flight.
+ */
+const versions = new Map<string, number>();
+const acceptedSubmissions = new Set<(versionKey: string) => void>();
+
+function versionOf(key: string): number {
+  return versions.get(key) ?? 0;
+}
+
+function advanceVersion(key: string): void {
+  versions.set(key, versionOf(key) + 1);
+}
 
 function storage(): Storage | null {
   try {
@@ -190,6 +214,8 @@ function remove(key: string): void {
 export function resetDraftPageStateForTests(): void {
   refused = false;
   memory.clear();
+  unplaced.clear();
+  versions.clear();
 }
 
 /* ------------------------------------------------------------------ *
@@ -280,6 +306,10 @@ export function draftNoticeSentence(notice: DraftNotice): string {
   }
 }
 
+/** The fail-safe line when a pane moved while its old recipient's words remain. */
+export const DRAFT_RECIPIENT_CHANGED_SENTENCE =
+  "These words were typed for the previous recipient. Clear them, or copy them before writing a new message.";
+
 /**
  * The broadcast takes no address and no scope, and the types say so: there is
  * no conversation for it to be addressed to.
@@ -294,7 +324,7 @@ export function draftNoticeSentence(notice: DraftNotice): string {
  * last scope, the same way an unverifiable reading preserves an epoch.
  */
 export type UseDraftArgs =
-  | { purpose: ConversationPurpose; address: DraftAddress; scope?: string | null }
+  | { purpose: ConversationPurpose; address: DraftAddress; pageSlot: string; scope?: string | null }
   | { purpose: "broadcast" };
 
 export type Draft = {
@@ -303,8 +333,23 @@ export type Draft = {
   setText(next: string): void;
   /** Clear, and what a successful Send or Queue calls: empties the box and removes the stored copy. */
   clear(): void;
+  /** Snapshot the exact draft generation a request is about to submit. */
+  submission(): DraftSubmission | null;
+  /** Accept a successful request, clearing that generation and no later one. */
+  accept(submission: DraftSubmission): void;
+  /** False when the words on screen pre-date a resolved recipient change. */
+  canSubmit: boolean;
   /** Non-null when the words on screen will not survive a reload. */
   notice: DraftNotice | null;
+};
+
+/** Opaque outside this module: callers may only return it to `Draft.accept`. */
+export type DraftSubmission = {
+  readonly text: string;
+  readonly versionKey: string;
+  readonly version: number;
+  readonly filedUnder: string | null;
+  readonly pageKey: string | null;
 };
 
 /**
@@ -327,7 +372,11 @@ type Owner =
   | { kind: "purpose" }
   | { kind: "not-kept" };
 
-type Op = { kind: "put"; key: string; text: string } | { kind: "remove"; key: string };
+type Op =
+  | { kind: "put"; key: string; text: string }
+  | { kind: "remove"; key: string }
+  | { kind: "put-unplaced"; key: string; text: string; scope: string | null }
+  | { kind: "remove-unplaced"; key: string };
 
 type Held = {
   text: string;
@@ -341,6 +390,8 @@ type Held = {
   looked: string | null;
   /** The key holding a copy of this box's words — written from it or restored into it. What Clear removes. */
   filedUnder: string | null;
+  /** The target scope in which page-only, unplaced words began. */
+  unplacedUnder: string | null;
   /**
    * Storage writes decided and not yet made. Render and state updaters stay
    * pure; the effect below performs these after commit. Only ever appended to,
@@ -365,11 +416,26 @@ const START: Held = {
   lastSeen: null,
   looked: null,
   filedUnder: null,
+  unplacedUnder: null,
   pending: [],
 };
 
 /** `null` is the broadcast's key; anything else is a conversation id. */
 type KeyOf = (conversationId: string | null) => string;
+
+function startHeld(pageKey: string | null, scope: string | null): Held {
+  if (pageKey === null) return START;
+  const found = unplaced.get(pageKey);
+  if (found === undefined || found.text === "") return START;
+  return {
+    ...START,
+    text: found.text,
+    touched: true,
+    scope,
+    owner: found.scope === scope ? UNBOUND : NOT_KEPT,
+    unplacedUnder: found.scope,
+  };
+}
 
 /** Restore into an untouched, empty box, reading each key once per scope. */
 function restoreInto(h: Held, key: string, owner: Owner): Held {
@@ -387,13 +453,22 @@ function restoreInto(h: Held, key: string, owner: Owner): Held {
  * pattern and why an effect would paint one wrong frame first). Reading storage
  * here is a read; every write is queued in `pending`.
  */
-function settle(h: Held, address: Address, scope: string | null, keyOf: KeyOf): Held {
+function settle(h: Held, address: Address, scope: string | null, keyOf: KeyOf, pageKey: string | null): Held {
   let n = h;
   if (scope !== null && scope !== n.scope) {
     if (n.scope === null) {
       n = { ...n, scope };
     } else if (n.text === "") {
-      n = { ...n, scope, lastSeen: null, touched: false, looked: null, owner: EMPTY, filedUnder: null };
+      n = {
+        ...n,
+        scope,
+        lastSeen: null,
+        touched: false,
+        looked: null,
+        owner: EMPTY,
+        filedUnder: null,
+        unplacedUnder: null,
+      };
     } else {
       /* Words from the last scope stay on screen. A conversation owner keeps
          its claim — a same-conversation relaunch is the same recipient, and the
@@ -410,7 +485,17 @@ function settle(h: Held, address: Address, scope: string | null, keyOf: KeyOf): 
       if (n.lastSeen !== id) n = { ...n, lastSeen: id };
       if (n.owner.kind === "conversation" && n.owner.id !== id) n = { ...n, owner: NOT_KEPT };
       if (n.owner.kind === "unbound") {
-        n = { ...n, owner: conversationOwner(id), filedUnder: key, pending: [...n.pending, { kind: "put", key, text: n.text }] };
+        n = {
+          ...n,
+          owner: conversationOwner(id),
+          filedUnder: key,
+          unplacedUnder: null,
+          pending: [
+            ...n.pending,
+            { kind: "put", key, text: n.text },
+            ...(pageKey === null ? [] : [{ kind: "remove-unplaced" as const, key: pageKey }]),
+          ],
+        };
       }
       return restoreInto(n, key, conversationOwner(id));
     }
@@ -420,6 +505,7 @@ function settle(h: Held, address: Address, scope: string | null, keyOf: KeyOf): 
       /* Restored as NOT-KEPT, not as that conversation's: the box is in front
          of something that is not its recipient, and no edit made here may be
          written back. `filedUnder` still names it, so Clear removes it. */
+      if (n.text !== "" && n.owner.kind !== "not-kept") n = { ...n, owner: NOT_KEPT };
       return address.restoreFrom === null ? n : restoreInto(n, keyOf(address.restoreFrom), NOT_KEPT);
     case "purpose":
       return restoreInto(n, keyOf(null), PURPOSE);
@@ -431,7 +517,7 @@ function settle(h: Held, address: Address, scope: string | null, keyOf: KeyOf): 
 }
 
 /** The person changed the box. Pure: storage is written by the effect. */
-function edit(h: Held, address: Address, next: string, keyOf: KeyOf): Held {
+function edit(h: Held, address: Address, next: string, keyOf: KeyOf, pageKey: string | null): Held {
   if (next === "") {
     /* Deleting every character is removing the draft — except under `hold`,
        where nothing this box does is written back, a removal included. Clear
@@ -443,7 +529,12 @@ function edit(h: Held, address: Address, next: string, keyOf: KeyOf): Held {
       owner: EMPTY,
       touched: true,
       filedUnder: drop ? null : h.filedUnder,
-      pending: drop && h.filedUnder !== null ? [...h.pending, { kind: "remove", key: h.filedUnder }] : h.pending,
+      unplacedUnder: null,
+      pending: [
+        ...h.pending,
+        ...(drop && h.filedUnder !== null ? [{ kind: "remove" as const, key: h.filedUnder }] : []),
+        ...(pageKey === null ? [] : [{ kind: "remove-unplaced" as const, key: pageKey }]),
+      ],
     };
   }
 
@@ -460,25 +551,58 @@ function edit(h: Held, address: Address, next: string, keyOf: KeyOf): Held {
   else owner = UNBOUND;
 
   const key = owner.kind === "conversation" ? keyOf(owner.id) : owner.kind === "purpose" ? keyOf(null) : null;
+  const unplacedUnder = key === null && pageKey !== null ? (h.unplacedUnder ?? h.scope) : null;
   return {
     ...h,
     text: next,
     owner,
     touched: true,
     filedUnder: key ?? h.filedUnder,
-    pending: key === null ? h.pending : [...h.pending, { kind: "put", key, text: next }],
+    unplacedUnder,
+    pending:
+      key === null
+        ? pageKey === null
+          ? h.pending
+          : [...h.pending, { kind: "put-unplaced", key: pageKey, text: next, scope: unplacedUnder }]
+        : [
+            ...h.pending,
+            { kind: "put", key, text: next },
+            ...(pageKey === null ? [] : [{ kind: "remove-unplaced" as const, key: pageKey }]),
+          ],
   };
 }
 
-function cleared(h: Held): Held {
+function cleared(h: Held, pageKey: string | null): Held {
   return {
     ...h,
     text: "",
     owner: EMPTY,
     touched: true,
     filedUnder: null,
-    pending: h.filedUnder === null ? h.pending : [...h.pending, { kind: "remove", key: h.filedUnder }],
+    unplacedUnder: null,
+    pending: [
+      ...h.pending,
+      ...(h.filedUnder === null ? [] : [{ kind: "remove" as const, key: h.filedUnder }]),
+      ...(pageKey === null ? [] : [{ kind: "remove-unplaced" as const, key: pageKey }]),
+    ],
   };
+}
+
+function versionKeyOf(h: Held, pageKey: string | null): string | null {
+  if (h.text === "") return null;
+  /* A session composer keeps one page identity while an unverifiable draft is
+     later filed under a conversation, and across the keyed remount made by a
+     process replacement. An in-flight submission must follow that transition. */
+  if (pageKey !== null) return `page:${pageKey}`;
+  return h.filedUnder === null ? null : `stored:${h.filedUnder}`;
+}
+
+function acceptSubmission(submission: DraftSubmission): void {
+  if (versionOf(submission.versionKey) !== submission.version) return;
+  advanceVersion(submission.versionKey);
+  if (submission.filedUnder !== null) remove(submission.filedUnder);
+  if (submission.pageKey !== null) unplaced.delete(submission.pageKey);
+  for (const notify of acceptedSubmissions) notify(submission.versionKey);
 }
 
 const PURPOSE_ADDRESS: Address = { kind: "purpose" };
@@ -487,8 +611,10 @@ const PURPOSE_ADDRESS: Address = { kind: "purpose" };
  * **THE ONE HOOK ALL THREE BOXES KEEP THEIR WORDS THROUGH.**
  *
  * It owns the box's text: the caller renders `text` and routes every change the
- * person makes through `setText`, and calls `clear` from its Clear button and
- * after a send the server accepted. That is the whole contract, which is why a
+ * person makes through `setText`, calls `clear` from its Clear button, and
+ * returns a `submission` to `accept` after a send the server accepted. That
+ * generation-aware pair is why an old answer cannot erase later typing. It is
+ * also why a
  * box with dictation — whose `onChange` is just another source of the person's
  * words — can hand it `setText` unchanged.
  */
@@ -496,23 +622,52 @@ export function useDraft(args: UseDraftArgs): Draft {
   const address: Address = args.purpose === "broadcast" ? PURPOSE_ADDRESS : args.address;
   const scope = args.purpose === "broadcast" ? null : (args.scope ?? null);
   const purpose = args.purpose;
+  const pageKey = args.purpose === "broadcast" ? null : `${purpose}:${args.pageSlot}`;
   const keyOf: KeyOf = (id) =>
     purpose === "broadcast" || id === null ? draftKey("broadcast") : draftKey(purpose, id);
 
-  const [held, setHeld] = useState<Held>(() => settle(START, address, scope, keyOf));
+  const [held, setHeld] = useState<Held>(() => settle(startHeld(pageKey, scope), address, scope, keyOf, pageKey));
 
   /* Render-phase adjustment: the new address's consequences are in THIS
      render's output, not one frame later. `settle` returns its argument when
      there is nothing to do, so this converges. */
-  const now = settle(held, address, scope, keyOf);
+  const now = settle(held, address, scope, keyOf, pageKey);
   if (now !== held) setHeld(now);
+  const latest = useRef(now);
+  latest.current = now;
+
+  /* Installed before an async completion can run after a replacement mount's
+     commit. The accepted generation is removed from storage above; this is
+     the half that removes the copy already restored into the new textarea. */
+  useLayoutEffect(() => {
+    const onAccepted = (versionKey: string): void => {
+      setHeld((h) => {
+        if (versionKeyOf(h, pageKey) !== versionKey) return h;
+        return {
+          ...h,
+          text: "",
+          owner: EMPTY,
+          touched: true,
+          filedUnder: null,
+          unplacedUnder: null,
+          pending: [],
+        };
+      });
+    };
+    acceptedSubmissions.add(onAccepted);
+    return () => {
+      acceptedSubmissions.delete(onAccepted);
+    };
+  }, [pageKey]);
 
   const { pending } = now;
   useEffect(() => {
     if (pending.length === 0) return;
     for (const op of pending) {
       if (op.kind === "put") put(op.key, op.text);
-      else remove(op.key);
+      else if (op.kind === "remove") remove(op.key);
+      else if (op.kind === "put-unplaced") unplaced.set(op.key, { text: op.text, scope: op.scope });
+      else unplaced.delete(op.key);
     }
     /* By identity, not by count: an updater queued after this effect was
        scheduled may already have appended, and those must survive. The new
@@ -526,8 +681,37 @@ export function useDraft(args: UseDraftArgs): Draft {
 
   return {
     text: now.text,
-    setText: (next) => setHeld((h) => edit(h, address, next, keyOf)),
-    clear: () => setHeld(cleared),
+    setText: (next) => {
+      const before = latest.current;
+      const after = edit(before, address, next, keyOf, pageKey);
+      const changed = versionKeyOf(after, pageKey) ?? versionKeyOf(before, pageKey);
+      if (changed !== null) advanceVersion(changed);
+      latest.current = after;
+      setHeld(after);
+    },
+    clear: () => {
+      const before = latest.current;
+      const changed = versionKeyOf(before, pageKey);
+      if (changed !== null) advanceVersion(changed);
+      const after = cleared(before, pageKey);
+      latest.current = after;
+      setHeld(after);
+    },
+    submission: () => {
+      const current = latest.current;
+      if (current.text === "" || current.owner.kind === "not-kept") return null;
+      const versionKey = versionKeyOf(current, pageKey);
+      if (versionKey === null) return null;
+      return {
+        text: current.text,
+        versionKey,
+        version: versionOf(versionKey),
+        filedUnder: current.filedUnder,
+        pageKey,
+      };
+    },
+    accept: acceptSubmission,
+    canSubmit: now.owner.kind !== "not-kept",
     notice,
   };
 }

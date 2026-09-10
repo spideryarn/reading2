@@ -249,6 +249,9 @@ export function BroadcastCard({
   const go = useCallback(
     async (dryRun: boolean) => {
       if (words === "" || targets.length === 0 || incomplete) return;
+      const submission = dryRun ? null : draft.submission();
+      if (!dryRun && submission === null) return;
+      const submittedWords = submission === null ? words : submission.text.trim();
       setBusy(true);
       /* SNAPSHOTTED BEFORE THE AWAIT, and kept: `SteerReceipt` compares what
          the server verified against what was addressed, and the rows underneath
@@ -256,7 +259,7 @@ export function BroadcastCard({
          Passing `panePid: null` — which this did until GPT Sol's P2 — made every
          receipt say the pid "could not be compared" when it had been sent. */
       const sent = new Map<string, SentTarget>(targets.map((r) => [r.id, sentTarget(r)]));
-      const answer = await api.send(targets, words, dryRun);
+      const answer = await api.send(targets, submittedWords, dryRun);
       /**
        * **THE ANSWER'S OPERATION IS CHECKED HERE TOO, AND THAT IS NOT
        * BELT-AND-BRACES.**
@@ -296,7 +299,7 @@ export function BroadcastCard({
         setDone({ outcome, sent });
         /* Only a broadcast that RAN takes the draft with it — a refusal or an
            unknown answer leaves the sentence, and its stored copy, where it is. */
-        if (outcome.kind === "ran") draft.clear();
+        if (outcome.kind === "ran" && submission !== null) draft.accept(submission);
       }
       setBusy(false);
     },
