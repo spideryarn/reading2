@@ -24,6 +24,7 @@ import { describe, expect, it } from "vitest";
 import { ACTIONS } from "../tools/fleet/actions.js";
 import {
   deliveryGate,
+  DURABLE_PERSISTENCE_WARNING,
   drainGate,
   nothingWasSent,
   PERSISTENCE_WARNING,
@@ -33,6 +34,7 @@ import {
   type UnsentFailure,
 } from "../tools/fleet/queue.js";
 import { QuarantineBook } from "../tools/fleet/quarantine.js";
+import { memoryReceiptJournal, type ReceiptJournal } from "../tools/fleet/receipt-journal.js";
 import type { FleetStatus } from "../tools/fleet/status.js";
 import { steerableStatus, type SteerFailure } from "../tools/fleet/steer.js";
 
@@ -81,8 +83,43 @@ function makeQueue(limits?: Partial<QueueLimits>, serverInstanceId = INSTANCE) {
   // opens a hold; what it needs is a real book rather than a stub, so that a
   // `next()` here asks the same question production's does.
   const quarantine = new QuarantineBook({ now: () => clock.t, serverInstanceId });
-  const q = new SteeringQueue({ now: () => clock.t, serverInstanceId, quarantine, ...(limits ? { limits } : {}) });
-  return { q, quarantine, clock, advance: (ms: number) => (clock.t += ms) };
+  const receipts = memoryReceiptJournal({ now: () => clock.t, serverInstanceId });
+  const q = new SteeringQueue({ now: () => clock.t, serverInstanceId, quarantine, receipts, ...(limits ? { limits } : {}) });
+  return { q, quarantine, receipts, clock, advance: (ms: number) => (clock.t += ms) };
+}
+
+function journalThatClaimsDurability(base: ReceiptJournal): ReceiptJournal {
+  return {
+    ...base,
+    accept(input) {
+      const accepted = base.accept(input);
+      return accepted.ok ? { ...accepted, durable: true } : accepted;
+    },
+    acceptedDurably: () => true,
+    durable: () => true,
+  };
+}
+
+function seedMessageReceipt(
+  receipts: ReceiptJournal,
+  itemId: string,
+  tmuxGeneration: number | null,
+  text = `material for ${itemId}`,
+): string {
+  const accepted = receipts.accept({
+    requestId: null,
+    fingerprint: null,
+    op: "queued-message",
+    origin: "enqueue",
+    actor: { kind: "client-claimed", id: "greg" },
+    speaker: "greg",
+    target: { sessionId: SESSION, paneId: null, claudeSessionId: CONVO, tmuxGeneration },
+    queue: { itemId, enqueuedAt: 1_699_999_999_000 },
+    what: `message (${text.length} characters)`,
+    material: { kind: "message", text, speaker: "greg" },
+  });
+  if (!accepted.ok) throw new Error(accepted.why);
+  return accepted.receiptId;
 }
 
 function ctx(status: FleetStatus, claudeSessionId = CONVO) {
@@ -171,6 +208,43 @@ describe("deliveryGate", () => {
  * ---------------------------------------------------------------- */
 
 describe("enqueueing", () => {
+  it("pins each payload and accepts its receipt before the item enters memory", () => {
+    const { q, receipts } = makeQueue();
+
+    const message = q.enqueueMessage(TARGET, "words which must survive", "greg");
+    const action = q.enqueueAction(TARGET, "continue", "overseer", "broadcast");
+
+    expect(message).toMatchObject({ ok: true, durable: false });
+    expect(action).toMatchObject({ ok: true, durable: false });
+    if (!message.ok || !action.ok) return;
+    expect(receipts.recent(10).map((receipt) => ({
+      op: receipt.accepted.op,
+      origin: receipt.accepted.origin,
+      actor: receipt.accepted.actor,
+      speaker: receipt.accepted.speaker,
+      itemId: receipt.accepted.queue?.itemId,
+    }))).toEqual([
+      { op: "queued-action", origin: "broadcast", actor: { kind: "client-claimed", id: "overseer" }, speaker: "overseer", itemId: action.item.id },
+      { op: "queued-message", origin: "enqueue", actor: { kind: "client-claimed", id: "greg" }, speaker: "greg", itemId: message.item.id },
+    ]);
+    expect(receipts.restorable().map((item) => item.material)).toEqual([
+      { kind: "message", text: "words which must survive", speaker: "greg" },
+      { kind: "action", action: action.item.payload.kind === "action" ? action.item.payload.action : null, speaker: "overseer" },
+    ]);
+  });
+
+  it("refuses receipt capacity before putting an item in memory", () => {
+    const clock = { t: 1_700_000_000_000 };
+    const quarantine = new QuarantineBook({ now: () => clock.t, serverInstanceId: INSTANCE });
+    const receipts = memoryReceiptJournal({ now: () => clock.t, serverInstanceId: INSTANCE, nonTerminalCap: 1 });
+    const q = new SteeringQueue({ now: () => clock.t, serverInstanceId: INSTANCE, quarantine, receipts });
+
+    expect(q.enqueueMessage(TARGET, "first", "greg").ok).toBe(true);
+    const refused = q.enqueueMessage(TARGET, "second", "greg");
+    expect(refused).toMatchObject({ ok: false, rule: "receipt-capacity" });
+    expect(q.size(SESSION)).toBe(1);
+  });
+
   it("keeps actions and messages in one list, in the order they were pressed", () => {
     const { q } = makeQueue();
     expect(q.enqueueAction(TARGET, "pull", "greg").ok).toBe(true);
@@ -445,6 +519,89 @@ describe("draining", () => {
  * ---------------------------------------------------------------- */
 
 describe("settling", () => {
+  it("puts a durably accepted item back when attempted cannot land", () => {
+    const clock = { t: 1_700_000_000_000 };
+    const base = memoryReceiptJournal({ now: () => clock.t, serverInstanceId: INSTANCE });
+    const receipts: ReceiptJournal = {
+      ...journalThatClaimsDurability(base),
+      attempted: () => ({ landed: false }),
+    };
+    const q = new SteeringQueue({
+      now: () => clock.t,
+      serverInstanceId: INSTANCE,
+      quarantine: new QuarantineBook({ now: () => clock.t, serverInstanceId: INSTANCE }),
+      receipts,
+    });
+    const added = q.enqueueMessage(TARGET, "do not type this yet", "greg");
+    if (!added.ok) throw new Error("setup");
+    const leased = q.next(SESSION, ctx(IDLE));
+    if (leased.kind !== "ready") throw new Error("expected lease");
+
+    const begun = q.beginDelivery(SESSION, leased.item.id);
+
+    expect(begun).toMatchObject({ ok: false });
+    expect(q.snapshot(SESSION).items[0]?.leasedAt).toBeNull();
+    expect(q.size(SESSION)).toBe(1);
+    expect(base.recent(1)[0]?.last.kind).toBe("accepted");
+  });
+
+  it("records attempted, delivered, undeliverable, returned, uncertain, threw and abandoned transitions", () => {
+    const { q, receipts, advance } = makeQueue({ leaseMs: 1 });
+    const receiptFor = (itemId: string) => receipts.recent(20).find((state) => state.accepted.queue?.itemId === itemId);
+
+    const delivered = q.enqueueMessage(TARGET, "delivered", "greg");
+    if (!delivered.ok) throw new Error("setup");
+    let lease = q.next(SESSION, ctx(IDLE));
+    if (lease.kind !== "ready") throw new Error("expected lease");
+    expect(q.beginDelivery(SESSION, lease.item.id)).toEqual({ ok: true });
+    expect(q.settle(SESSION, lease.item.id, "delivered").ok).toBe(true);
+    expect(receiptFor(delivered.item.id)?.last).toMatchObject({ kind: "outcome", state: "keys-submitted", reason: "transport-ok" });
+
+    const undeliverable = q.enqueueMessage(TARGET, "undeliverable", "greg");
+    if (!undeliverable.ok) throw new Error("setup");
+    lease = q.next(SESSION, ctx(IDLE));
+    if (lease.kind !== "ready") throw new Error("expected lease");
+    expect(q.settle(SESSION, lease.item.id, "refused").ok).toBe(true);
+    expect(receiptFor(undeliverable.item.id)?.last).toMatchObject({ kind: "outcome", state: "not-sent", reason: "undeliverable" });
+
+    const returned = q.enqueueMessage(TARGET, "returned", "greg");
+    if (!returned.ok) throw new Error("setup");
+    lease = q.next(SESSION, ctx(IDLE));
+    if (lease.kind !== "ready") throw new Error("expected lease");
+    q.beginDelivery(SESSION, lease.item.id);
+    const unsent = nothingWasSent(NOTHING_SENT);
+    if (!unsent) throw new Error("expected unsent evidence");
+    expect(q.release(SESSION, lease.item.id, unsent).ok).toBe(true);
+    expect(receiptFor(returned.item.id)?.last).toMatchObject({ kind: "returned", code: "pane-is-asking" });
+    lease = q.next(SESSION, ctx(IDLE));
+    if (lease.kind !== "ready") throw new Error("expected released lease");
+    q.beginDelivery(SESSION, lease.item.id);
+    const uncertain = q.quarantineLeased(SESSION, lease.item.id, {
+      paneId: "%1643", claudeSessionId: CONVO, reading: "partial", origin: "queued-delivery", what: "message (8 characters)",
+    });
+    expect(uncertain.ok).toBe(true);
+    expect(receiptFor(returned.item.id)?.last).toMatchObject({ kind: "outcome", state: "outcome-unknown", reason: "partial" });
+    if (uncertain.ok) {
+      q.quarantineBook().release({
+        holdId: uncertain.hold.id,
+        version: uncertain.hold.version,
+        gesture: "abandoned-unknown",
+      });
+    }
+
+    const threw = q.enqueueMessage(TARGET, "threw", "greg");
+    if (!threw.ok) throw new Error("setup");
+    lease = q.next(SESSION, ctx(IDLE));
+    if (lease.kind !== "ready") throw new Error("expected lease");
+    q.beginDelivery(SESSION, lease.item.id);
+    expect(q.noteThrew(SESSION, lease.item.id)).toEqual({ ok: true });
+    expect(q.snapshot(SESSION).items[0]?.leasedAt).not.toBeNull();
+    expect(receiptFor(threw.item.id)?.last).toMatchObject({ kind: "outcome", state: "outcome-unknown", reason: "threw" });
+    advance(2);
+    expect(q.settle(SESSION, lease.item.id, "abandoned").ok).toBe(true);
+    expect(receiptFor(threw.item.id)?.last).toMatchObject({ kind: "reconciled", disposition: "lease-abandoned" });
+  });
+
   it("removes a delivered item and moves on", () => {
     const { q } = makeQueue();
     q.enqueueAction(TARGET, "continue", "greg");
@@ -614,6 +771,72 @@ describe("releasing", () => {
  * ---------------------------------------------------------------- */
 
 describe("noteGeneration", () => {
+  it("restores original ids, skips every reserved id, and keeps matching generations", () => {
+    const clock = { t: 1_700_000_000_000 };
+    const receipts = memoryReceiptJournal({ now: () => clock.t, serverInstanceId: "deadbeef" });
+    const originalId = "deadbeef-q2";
+    seedMessageReceipt(receipts, originalId, 132_280, "the original words");
+    const terminalId = seedMessageReceipt(receipts, `${INSTANCE}-q7`, 132_280, "already finished");
+    receipts.outcome(terminalId, {
+      state: "not-sent",
+      reason: "undeliverable",
+      code: null,
+      why: "the fixture is terminal",
+    });
+    const q = new SteeringQueue({
+      now: () => clock.t,
+      serverInstanceId: INSTANCE,
+      quarantine: new QuarantineBook({ now: () => clock.t, serverInstanceId: INSTANCE }),
+      receipts,
+    });
+
+    expect(q.restore()).toBe(1);
+    expect(q.restore()).toBe(0);
+    expect(q.snapshot(SESSION).items).toMatchObject([
+      { id: originalId, enqueuedAt: 1_699_999_999_000, payload: { kind: "message", text: "the original words" } },
+    ]);
+    expect(q.noteGeneration(132_280)).toBe(0);
+    expect(q.size(SESSION)).toBe(1);
+
+    const fresh = q.enqueueMessage(TARGET, "new words", "greg");
+    expect(fresh.ok && fresh.item.id).toBe(`${INSTANCE}-q8`);
+  });
+
+  it("concludes restored items whose generation changed, is absent, or is unproven", () => {
+    const clock = { t: 1_700_000_000_000 };
+    const base = memoryReceiptJournal({ now: () => clock.t, serverInstanceId: "deadbeef" });
+    const changed = seedMessageReceipt(base, "deadbeef-q3", 132_280);
+    const absent = seedMessageReceipt(base, "deadbeef-q4", null);
+    const q = new SteeringQueue({
+      now: () => clock.t,
+      serverInstanceId: INSTANCE,
+      quarantine: new QuarantineBook({ now: () => clock.t, serverInstanceId: INSTANCE }),
+      receipts: base,
+    });
+    expect(q.restore()).toBe(2);
+
+    expect(q.noteGeneration(400_100)).toBe(2);
+    expect(q.size(SESSION)).toBe(0);
+    expect(base.get(changed)?.last).toMatchObject({ kind: "outcome", state: "not-sent", reason: "tmux-generation-changed" });
+    expect(base.get(absent)?.last).toMatchObject({ kind: "outcome", state: "not-sent", reason: "tmux-generation-unproven" });
+
+    const unprovenBase = memoryReceiptJournal({ now: () => clock.t, serverInstanceId: "cafebabe" });
+    const unproven = seedMessageReceipt(unprovenBase, "cafebabe-q1", 400_100);
+    const unprovenReceipts: ReceiptJournal = {
+      ...unprovenBase,
+      recovery: () => ({ ...unprovenBase.recovery(), generationUnproven: true }),
+    };
+    const unprovenQueue = new SteeringQueue({
+      now: () => clock.t,
+      serverInstanceId: INSTANCE,
+      quarantine: new QuarantineBook({ now: () => clock.t, serverInstanceId: INSTANCE }),
+      receipts: unprovenReceipts,
+    });
+    unprovenQueue.restore();
+    expect(unprovenQueue.noteGeneration(400_100)).toBe(1);
+    expect(unprovenBase.get(unproven)?.last).toMatchObject({ reason: "tmux-generation-unproven" });
+  });
+
   it("learns the generation once and says nothing changed", () => {
     const { q } = makeQueue();
     q.enqueueAction(TARGET, "continue", "greg");
@@ -770,6 +993,45 @@ describe("instance-qualified ids", () => {
  * ---------------------------------------------------------------- */
 
 describe("visibility and cancellation", () => {
+  it("does not cancel or clear durable items until withdrawn lands, and clears with one record", () => {
+    const clock = { t: 1_700_000_000_000 };
+    const base = memoryReceiptJournal({ now: () => clock.t, serverInstanceId: INSTANCE });
+    let refuse = true;
+    const calls: string[][] = [];
+    const receipts: ReceiptJournal = {
+      ...journalThatClaimsDurability(base),
+      withdrawn(ids, reason, actor) {
+        calls.push([...ids]);
+        return refuse ? false : base.withdrawn(ids, reason, actor);
+      },
+    };
+    const q = new SteeringQueue({
+      now: () => clock.t,
+      serverInstanceId: INSTANCE,
+      quarantine: new QuarantineBook({ now: () => clock.t, serverInstanceId: INSTANCE }),
+      receipts,
+    });
+    const one = q.enqueueMessage(TARGET, "one", "greg");
+    const two = q.enqueueMessage(TARGET, "two", "greg");
+    if (!one.ok || !two.ok) throw new Error("setup");
+
+    expect(q.cancel(SESSION, one.item.id)).toMatchObject({ ok: false, rule: "receipt-unavailable" });
+    expect(q.size(SESSION)).toBe(2);
+    expect(q.clear(SESSION)).toMatchObject({ ok: false, rule: "receipt-unavailable" });
+    expect(q.size(SESSION)).toBe(2);
+
+    refuse = false;
+    const cleared = q.clear(SESSION);
+    expect(cleared).toMatchObject({ ok: true, removed: [{ id: one.item.id }, { id: two.item.id }] });
+    expect(calls.at(-1)).toHaveLength(2);
+    expect(base.recent(10).every((state) => state.last.kind === "withdrawn")).toBe(true);
+
+    const three = q.enqueueMessage(TARGET, "three", "greg");
+    if (!three.ok) throw new Error("setup");
+    expect(q.cancel(SESSION, three.item.id)).toMatchObject({ ok: true });
+    expect(base.recent(1)[0]?.last).toMatchObject({ kind: "withdrawn", reason: "cancelled" });
+  });
+
   it("cancels a waiting item", () => {
     const { q } = makeQueue();
     const a = q.enqueueAction(TARGET, "continue", "greg");
@@ -802,6 +1064,7 @@ describe("visibility and cancellation", () => {
     if (out.kind !== "ready") throw new Error("expected a lease");
 
     const cleared = q.clear(SESSION);
+    if (!cleared.ok) throw new Error(cleared.why);
     expect(cleared.removed).toHaveLength(2);
     expect(cleared.keptInFlight?.id).toBe(out.item.id);
     expect(q.size(SESSION)).toBe(1);
@@ -817,6 +1080,24 @@ describe("visibility and cancellation", () => {
     expect(snap.warning).toBe(PERSISTENCE_WARNING);
     expect(snap.warning).toContain("Restarting it discards");
     expect(snap.since).toBeLessThanOrEqual(snap.items[0]?.enqueuedAt ?? 0);
+  });
+
+  it("reports durability from the journal dynamically and exposes that same journal", () => {
+    const clock = { t: 1_700_000_000_000 };
+    const base = memoryReceiptJournal({ now: () => clock.t, serverInstanceId: INSTANCE });
+    let durable = true;
+    const receipts: ReceiptJournal = { ...journalThatClaimsDurability(base), durable: () => durable };
+    const q = new SteeringQueue({
+      now: () => clock.t,
+      serverInstanceId: INSTANCE,
+      quarantine: new QuarantineBook({ now: () => clock.t, serverInstanceId: INSTANCE }),
+      receipts,
+    });
+
+    expect(q.receiptJournal()).toBe(receipts);
+    expect(q.snapshot(SESSION)).toMatchObject({ volatile: false, warning: DURABLE_PERSISTENCE_WARNING });
+    durable = false;
+    expect(q.snapshot(SESSION)).toMatchObject({ volatile: true, warning: PERSISTENCE_WARNING });
   });
 
   it("lists only the sessions that have something waiting", () => {

@@ -306,9 +306,12 @@ not one label), `?sessionId=`, and the component.
 
 ## Stages
 
-Each stage lands useful on its own. Implementation by GPT (`scripts/run-codex.ts`, workspace-write,
-in this worktree) from a written brief, which says which stages Codex implemented; review by GPT Sol,
-write-capable, at the end of each stage.
+Each stage lands useful on its own. Stages 1a and 1b were implemented by GPT Sol
+(`scripts/run-codex.ts`, workspace-write, in this worktree) from written briefs. **From Stage 2 on,
+implementation is by Opus subagents** — the Overseer's budget notice of 2026-09-10 ~09:35Z: the
+Codex weekly window went 49% to 61% in four hours with seven sessions implementing through it, and
+every stage review depends on it. Codex is kept for the obligatory review at the end of each stage
+(GPT Sol, write-capable, `--effort high --timeout-minutes 30`).
 
 ### Stage 1 — the stores, and queued work survives a restart
 
@@ -343,7 +346,8 @@ Two Codex runs, committed separately.
   (2) the composition lives in `quarantine.ts` with `action-stores.ts` re-exporting it, to avoid a
   cycle with the legacy `openSharedQuarantine()` — which Stage 1b can delete once `server.ts` and
   the guard move, and the composition can then move where the plan put it.
-- [ ] **1b** The queue takes the journal as a required option and writes its own receipts at every
+- [x] **1b** *(built 2026-09-10 10:56 by GPT Sol from [the 1b brief](260910d-durable-action-receipts-stage1b-task.md);
+  gates re-run here; Sol stage review — which is also 1a's second round — next.)* The queue takes the journal as a required option and writes its own receipts at every
   item transition — enqueue, cancel and clear write-ahead; `beginDelivery` (the drain's `attempted`,
   fail-closed); settle, `release` (`returned`), `quarantineLeased`, the drain's throw, abandon — so no
   enqueue path, HTTP or broadcast, can skip it. Restore under original ids; the generation guard;

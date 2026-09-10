@@ -26,6 +26,7 @@ import type { HealthTurn, SampleStamp } from "../tools/fleet/health-history.js";
 import type { HealthReport } from "../tools/fleet/health.js";
 import { QuarantineBook } from "../tools/fleet/quarantine.js";
 import { SteeringQueue } from "../tools/fleet/queue.js";
+import { memoryReceiptJournal } from "../tools/fleet/receipt-journal.js";
 import { collectionStillRunning, refreshOnce, singleFlightCollect, type RefreshDeps } from "../tools/fleet/refresh.js";
 import { makeActionRoutes, type ActionDeps, type ActionRoutes } from "../tools/fleet/routes-actions.js";
 import { createRateLimiter } from "../tools/fleet/routes-steer.js";
@@ -93,7 +94,7 @@ type Sent = { target: SteerTarget; text: string; declaredStatus: FleetStatus };
 function actionRoutes(): { routes: ActionRoutes; sent: Sent[]; queue: SteeringQueue } {
   let clock = 1_000_000;
   const sent: Sent[] = [];
-  const queue = new SteeringQueue({ now: () => clock, serverInstanceId: "1a2b3c4d", quarantine: new QuarantineBook({ now: () => clock, serverInstanceId: "1a2b3c4d" }) });
+  const queue = new SteeringQueue({ now: () => clock, serverInstanceId: "1a2b3c4d", quarantine: new QuarantineBook({ now: () => clock, serverInstanceId: "1a2b3c4d" }), receipts: memoryReceiptJournal({ now: () => clock, serverInstanceId: "1a2b3c4d" }) });
   const routes = makeActionRoutes({
     queue,
     // THE TRANSPORT INSIDE THE COORDINATOR, over the queue's OWN book — the

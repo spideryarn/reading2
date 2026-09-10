@@ -48,7 +48,7 @@ import { applySecurityHeaders } from "./headers.js";
 import { broadcast, startHeartbeat, subscribe, subscriberCount } from "./live.js";
 import { PublicationLedger, serverInstanceId } from "./instance.js";
 import { readCheckpointFeeds } from "./overseer-status.js";
-import { openSharedQuarantine } from "./quarantine.js";
+import { openFleetActionStores } from "./action-stores.js";
 import { drainSharedQueues, enqueueSharedMessage, handleActionRequest } from "./routes-actions.js";
 import { handleBroadcastRequest } from "./routes-broadcast.js";
 import { nextWaitMs, refreshOnce, singleFlightCollect } from "./refresh.js";
@@ -187,8 +187,8 @@ for (const line of retention.lines.log) console.log(line);
 for (const line of retention.lines.error) console.error(line);
 
 /**
- * **THE HOLDS FROM THE LAST RUN, READ BACK BEFORE THIS ONE CAN BE ASKED TO
- * TYPE.**
+ * **THE HOLDS AND ACTION RECEIPTS FROM THE LAST RUN, READ BACK BEFORE THIS ONE
+ * CAN BE ASKED TO TYPE.**
  *
  * A session held after a send nobody could account for may still have half a
  * sentence in its input box, and a tmux server does not restart just because
@@ -198,18 +198,18 @@ for (const line of retention.lines.error) console.error(line);
  * **THE POSITION OF THIS LINE IS THE WHOLE GUARANTEE**: it is synchronous, and
  * it is above `createServer` and every route mounted in `handler`, so there is
  * no window in which this server can be asked to send while it is still
- * reading. tests/fleet-hold-wiring.test.ts reads this file and fails if the
- * call goes missing or drifts below the listener — the same kind of source
- * guard health-wiring.ts describes, and for the same reason: nothing can import
- * this file without binding port 8787.
+ * reading either store. tests/fleet-hold-restart.test.ts reads this file and
+ * fails if the call goes missing or drifts below the listener — the same kind
+ * of source guard health-wiring.ts describes, and for the same reason: nothing
+ * can import this file without binding port 8787.
  *
- * A ledger that will not open is NOT fatal, exactly like the health store: the
- * dashboard is the thing you reach for when other things are broken, so it runs
- * on with the holds in memory only — and says so, loudly, rather than silently.
+ * A store that will not open is NOT fatal, exactly like the health store: the
+ * dashboard is the thing you reach for when other things are broken, so it
+ * opens both stores here, falls back in memory where needed, and says so loudly.
  */
-const quarantine = openSharedQuarantine({ log: (line) => console.error(line) });
-for (const line of quarantine.lines.log) console.log(line);
-for (const line of quarantine.lines.error) console.error(line);
+const actionStores = openFleetActionStores({ log: (line) => console.error(line) });
+for (const line of actionStores.lines.log) console.log(line);
+for (const line of actionStores.lines.error) console.error(line);
 
 /**
  * Readiness: whether dev is green, and the day behind that answer.

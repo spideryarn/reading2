@@ -261,7 +261,7 @@ export type QueueView = {
    * ahead of a new message; see the comment on the field's producer.
    */
   deliverable: number;
-  volatile: true;
+  volatile: boolean;
   warning: string;
   since: number;
   /**
@@ -3904,3 +3904,44 @@ export type AdmissionPayload = AdmissionPayloadBase &
         policy?: never;
       }
   );
+
+/* ---------------- Durable action receipt summaries ---------------- */
+
+/**
+ * The deliberately small, text-free receipt shape exposed by the Stage 1
+ * read endpoint. Exact queued words remain only in the short-lived material
+ * file and never cross this boundary.
+ */
+export type ReceiptSummary = {
+  receiptId: string;
+  op: "queued-message" | "queued-action";
+  origin: "enqueue" | "broadcast";
+  actor: {
+    kind: "client-claimed" | "unattributed-http" | "system";
+    id: string | null;
+  };
+  speaker: Speaker | null;
+  target: {
+    sessionId: string;
+    paneId: string | null;
+    claudeSessionId: string | null;
+    tmuxGeneration: number | null;
+  };
+  /** A bounded description such as `message (42 characters)`, never its text. */
+  what: string;
+  acceptedAt: number;
+  state:
+    | "accepted"
+    | "attempted"
+    | "returned"
+    | "withdrawn"
+    | "keys-submitted"
+    | "not-sent"
+    | "outcome-unknown";
+  reason: string | null;
+  attemptedAt: number | null;
+  outcomeAt: number | null;
+  reconciled: boolean;
+  queueItemId: string | null;
+  materialDeletionPending: boolean;
+};

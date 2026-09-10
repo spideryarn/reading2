@@ -77,6 +77,11 @@ import {
   type Speaker,
   type Step,
 } from "./actions.js";
+import {
+  sharedReceiptJournal,
+  sharedUnknownWithoutHold,
+  type UnknownWithoutHold,
+} from "./action-stores.js";
 import type { FleetSnapshot } from "./collect.js";
 import { createDrainCursor, drainOnce, type DrainResult } from "./drain.js";
 import {
@@ -87,12 +92,14 @@ import {
 } from "./execution-identity.js";
 import { serverInstanceId } from "./instance.js";
 import { sharedQuarantineBook, type ReleaseRefusalRule } from "./quarantine.js";
+import type { ReceiptJournalStatus, ReceiptState, RecoverySummary } from "./receipt-journal.js";
 import { sharedSendCoordinator, type SendCoordinator, type SendPurpose } from "./send-coordinator.js";
 import {
   deliveryGate,
   drainGate,
   SteeringQueue,
   type DrainGate,
+  type ClearResult,
   type EnqueueRefusalRule,
   type EnqueueResult,
   type QueuedItem,
@@ -206,6 +213,8 @@ export type ActionErrorCode =
   | "acting-disabled"
   /** The queue refused it — full, a double tap, an unsendable message. */
   | "queue-refused"
+  /** A durable queue mutation could not be written, so memory was left alone. */
+  | "receipt-unavailable"
   /** This session cannot be typed into at all, in steer.ts's own words. */
   | "not-steerable"
   /** No queued item with that id in that session's queue. */
@@ -328,6 +337,7 @@ export const ACTION_ERROR_STATUS: Record<ActionErrorCode, number> = {
   "confirm-required": 400,
   "acting-disabled": 503,
   "queue-refused": 409,
+  "receipt-unavailable": 503,
   "not-steerable": 409,
   "no-such-item": 404,
   "in-flight": 409,
@@ -392,6 +402,7 @@ import type {
   PlanStepView,
   QuarantineHoldView,
   QueueView,
+  ReceiptSummary,
 } from "./wire.js";
 
 export type { QueuedItemView, QueueView } from "./wire.js";
@@ -514,7 +525,18 @@ export function killReport(pids: readonly number[], run: PlanRun): KillReport {
 
 export type ActionResponse =
   | { ok: true; op: "catalogue"; schema: 1; actions: { session: readonly Action[]; box: readonly Action[] }; queues: QueueView[]; acting: { enabled: boolean; why: string }; now: number }
-  | { ok: true; op: "enqueued"; item: QueuedItem; position: number; gate: DrainGate }
+  | { ok: true; op: "enqueued"; item: QueuedItem; position: number; gate: DrainGate; durable: boolean }
+  | {
+      ok: true;
+      op: "receipts";
+      schema: 1;
+      durable: boolean;
+      status: ReceiptJournalStatus;
+      recovery: RecoverySummary;
+      recent: ReceiptSummary[];
+      nonTerminal: ReceiptSummary[];
+      unknownWithoutHold: UnknownWithoutHold[];
+    }
   | { ok: true; op: "cancelled"; item: QueuedItem }
   /** A stale item's clock reset, so the next pass may deliver it. */
   | { ok: true; op: "revived"; item: QueuedItem }
@@ -1317,6 +1339,8 @@ export type ActionDeps = {
   serverInstanceId: string;
   /** The one queue per server. Shared with whatever drains it. */
   queue: SteeringQueue;
+  /** Startup-only recovery mismatches; null in hand-built test composition. */
+  startupUnknownWithoutHold: UnknownWithoutHold[] | null;
   /**
    * **The only thing here that can type into a pane** — `send-coordinator.ts`.
    *
@@ -1380,7 +1404,9 @@ export function realActionDeps(): ActionDeps {
       now: () => Date.now(),
       serverInstanceId: instanceId,
       quarantine: sharedQuarantineBook(),
+      receipts: sharedReceiptJournal(),
     }),
+    startupUnknownWithoutHold: sharedUnknownWithoutHold(),
     // THE SAME BOOK, REACHED THE SAME WAY. `sharedSendCoordinator()` is built
     // over `sharedQuarantineBook()`, so the queue above and the transport below
     // are looking at one set of holds — which is what makes a hold opened by a
@@ -1442,23 +1468,111 @@ function refuse(res: ServerResponse, code: ActionErrorCode, why: string, run?: P
  * guard whoever adds the fifth route will not know about. The judgment itself
  * is `SteeringQueue.idOrigin`'s: the queue owns the shape of an id.
  *
- * Takes a LIST because `clear` posts one, and answers on the first foreign id
- * it finds: one such id already means the whole list was drawn by a page that
- * has been watching a dead server, so there is nothing useful to say about the
- * rest of it.
+ * Takes a LIST because `clear` posts one. A foreign-run id is valid when the
+ * queue has restored that exact item: the old page still names the same work,
+ * and letting it cancel before another drain is the safe recovery gesture.
+ * Only an absent foreign id is stale enough to refuse.
  *
  * Returns the sentence, or null. The caller refuses — it does not, because each
  * of the four writes its own log line and this must not become the place that
  * decides what a route logs.
  */
 function fromAnotherRun(queue: SteeringQueue, itemIds: readonly string[]): string | null {
-  const foreign = itemIds.find((id) => queue.idOrigin(id) === "other-instance");
+  const foreign = itemIds.find((id) => queue.idOrigin(id) === "other-instance" && queue.findItem(id) === null);
   if (foreign === undefined) return null;
   return (
     `${foreign} was queued by a different run of this dashboard; this one is ${queue.serverInstanceId}. ` +
-    "The queue does not survive a restart, so that item is gone — and an id from before it can now name something else entirely. " +
+    "After the restart, no restored queue item has that exact id, so it cannot safely name work in this run. " +
     "Reload the page and look at what is actually queued."
   );
+}
+
+function summarizeReceipt(receipt: ReceiptState): ReceiptSummary {
+  let attemptedAt: number | null = null;
+  let outcomeAt: number | null = null;
+  let reconciled = false;
+  let state: ReceiptSummary["state"] = "accepted";
+  let reason: string | null = null;
+  for (const record of receipt.records) {
+    if (record.kind === "attempted") attemptedAt = record.at;
+    if (record.kind === "outcome") {
+      outcomeAt = record.at;
+      state = record.state;
+      reason = record.reason;
+    }
+    if (record.kind === "reconciled") reconciled = true;
+  }
+  if (outcomeAt === null) {
+    if (receipt.last.kind === "attempted") state = "attempted";
+    else if (receipt.last.kind === "returned") {
+      state = "returned";
+      reason = receipt.last.code;
+    } else if (receipt.last.kind === "withdrawn") {
+      state = "withdrawn";
+      reason = receipt.last.reason;
+    }
+  }
+  return {
+    receiptId: receipt.receiptId,
+    op: receipt.accepted.op,
+    origin: receipt.accepted.origin,
+    actor: { ...receipt.accepted.actor },
+    speaker: receipt.accepted.speaker,
+    target: { ...receipt.accepted.target },
+    what: receipt.accepted.what,
+    acceptedAt: receipt.accepted.at,
+    state,
+    reason,
+    attemptedAt,
+    outcomeAt,
+    reconciled,
+    queueItemId: receipt.accepted.queue?.itemId ?? null,
+    materialDeletionPending: receipt.materialDeletionPending,
+  };
+}
+
+/** Test-only fallback for compositions that open the two stores by hand. */
+function recoveredUnknownWithoutHold(queue: SteeringQueue): UnknownWithoutHold[] {
+  const receipts = queue.receiptJournal();
+  const recovery = receipts.recovery();
+  const ids = new Set([...recovery.interrupted, ...recovery.recoveryBlocked]);
+  for (const conclusion of recovery.wouldConclude) {
+    if (
+      conclusion.state === "outcome-unknown" &&
+      (conclusion.reason === "interrupted" || conclusion.reason === "recovery-blocked")
+    ) {
+      ids.add(conclusion.receiptId);
+    }
+  }
+  const grouped = new Map<string, string[]>();
+  for (const receiptId of ids) {
+    const receipt = receipts.get(receiptId);
+    if (receipt === null) continue;
+    const sessionId = receipt.accepted.target.sessionId;
+    if (queue.quarantineBook().holding(sessionId) !== null) continue;
+    const sessionReceipts = grouped.get(sessionId) ?? [];
+    sessionReceipts.push(receiptId);
+    grouped.set(sessionId, sessionReceipts);
+  }
+  return [...grouped]
+    .sort(([left], [right]) => left.localeCompare(right))
+    .map(([sessionId, receiptIds]) => ({ sessionId, receiptIds: receiptIds.sort((a, b) => a.localeCompare(b)) }));
+}
+
+function answerClear(
+  res: ServerResponse,
+  result: ClearResult,
+  sessionId: string,
+  itemCount: number,
+  log: (line: string) => void,
+): void {
+  if (!result.ok) {
+    log(`action clear: refused code=receipt-unavailable session=${sessionId} items=${itemCount}`);
+    refuse(res, "receipt-unavailable", result.why);
+    return;
+  }
+  log(`action clear: REMOVED ${result.removed.length} session=${sessionId} kept=${result.keptInFlight?.id ?? "-"}`);
+  respond(res, 200, { ok: true, op: "cleared", removed: result.removed, keptInFlight: result.keptInFlight });
 }
 
 function header(headers: IncomingHttpHeaders, name: string): string | null {
@@ -1498,6 +1612,7 @@ const ENQUEUE_CODE: Record<EnqueueRefusalRule, ActionErrorCode> = {
   "session-queue-full": "queue-refused",
   "fleet-queue-full": "queue-refused",
   "double-tap": "queue-refused",
+  "receipt-capacity": "queue-refused",
 };
 
 /** Every reason `plan*` can refuse, as one code. They are all "your input was wrong". */
@@ -1533,6 +1648,8 @@ export function makeActionRoutes(overrides: Partial<ActionDeps> = {}): ActionRou
         "the page says nothing may be sent to.",
     );
   }
+  deps.queue.restore();
+  const unknownWithoutHold = deps.startupUnknownWithoutHold ?? recoveredUnknownWithoutHold(deps.queue);
   /** When the fleet was last told to ease off. Server-lifetime, like the queue. */
   let lastBroadcastAt: number | null = null;
   type PreviewEntry = { preview: FleetActionPreview; state: "fresh" | "claimed" };
@@ -1606,7 +1723,7 @@ export function makeActionRoutes(overrides: Partial<ActionDeps> = {}): ActionRou
       // `items.length` is the wrong answer to that question: an invalidated or
       // stale item is in the list and is ahead of nothing.
       deliverable: deps.queue.deliverableCount(s.sessionId),
-      volatile: true,
+      volatile: s.volatile,
       warning: s.warning,
       since: s.since,
       // THE QUEUE'S OWN, verbatim. A queue is in `snapshots()` when it has
@@ -1625,6 +1742,21 @@ export function makeActionRoutes(overrides: Partial<ActionDeps> = {}): ActionRou
       // the alternative is a person discovering it by tapping and getting a 503.
       acting: { enabled: deps.actEnabled(), why: deps.actEnabled() ? "" : ACTING_DISABLED_WHY },
       now: deps.now(),
+    });
+  }
+
+  function receipts(res: ServerResponse): void {
+    const journal = deps.queue.receiptJournal();
+    respond(res, 200, {
+      ok: true,
+      op: "receipts",
+      schema: 1,
+      durable: journal.durable(),
+      status: journal.status(),
+      recovery: journal.recovery(),
+      recent: journal.recent(50).map(summarizeReceipt),
+      nonTerminal: journal.nonTerminal().map(summarizeReceipt),
+      unknownWithoutHold,
     });
   }
 
@@ -1815,7 +1947,14 @@ export function makeActionRoutes(overrides: Partial<ActionDeps> = {}): ActionRou
     deps.log(
       `action session: QUEUED id=${result.item.id} session=${r.target.sessionId} speaker=${r.speaker} position=${result.position} gate=${willGo.kind}`,
     );
-    respond(res, 200, { ok: true, op: "enqueued", item: result.item, position: result.position, gate: willGo });
+    respond(res, 200, {
+      ok: true,
+      op: "enqueued",
+      item: result.item,
+      position: result.position,
+      gate: willGo,
+      durable: result.durable,
+    });
   }
 
   /* ---------------- POST/DELETE /api/actions/cancel ---------------- */
@@ -1837,6 +1976,11 @@ export function makeActionRoutes(overrides: Partial<ActionDeps> = {}): ActionRou
     }
     const result = deps.queue.cancel(sessionId, itemId);
     if (!result.ok) {
+      if (result.rule === "receipt-unavailable") {
+        deps.log(`action cancel: refused code=receipt-unavailable session=${sessionId} item=${itemId}`);
+        refuse(res, "receipt-unavailable", result.why);
+        return;
+      }
       // The queue returns one sentence for both failures, and the page needs to
       // tell them apart: "there is nothing there" and "it is going out right
       // now" call for different words on the button. Classified by asking the
@@ -2042,10 +2186,7 @@ export function makeActionRoutes(overrides: Partial<ActionDeps> = {}): ActionRou
       return;
     }
     const result = deps.queue.clear(sessionId);
-    deps.log(
-      `action clear: REMOVED ${result.removed.length} session=${sessionId} kept=${result.keptInFlight?.id ?? "-"}`,
-    );
-    respond(res, 200, { ok: true, op: "cleared", removed: result.removed, keptInFlight: result.keptInFlight });
+    answerClear(res, result, sessionId, itemIds.length, deps.log);
   }
 
   /* ---------------- POST /api/actions/hold/release ---------------- */
@@ -2928,7 +3069,7 @@ export function makeActionRoutes(overrides: Partial<ActionDeps> = {}): ActionRou
        `checkText`, `renderMessage`'s slash rule, the per-session and fleet
        caps, the double-tap window — because those live in `enqueueMessage`. */
     enqueueMessage(target, text, speaker) {
-      return deps.queue.enqueueMessage(target, text, speaker);
+      return deps.queue.enqueueMessage(target, text, speaker, "broadcast");
     },
     handle(req, res) {
       const pathname = (req.url ?? "/").split("?")[0] ?? "/";
@@ -2947,6 +3088,14 @@ export function makeActionRoutes(overrides: Partial<ActionDeps> = {}): ActionRou
           return true;
         }
         catalogue(res);
+        return true;
+      }
+      if (pathname === "/api/actions/receipts") {
+        if (method !== "GET" && method !== "HEAD") {
+          refuse(res, "method-not-allowed", "receipts are a read-only GET", undefined, { allow: "GET" });
+          return true;
+        }
+        receipts(res);
         return true;
       }
       // Every write is a POST (cancel also takes DELETE, because that is what a

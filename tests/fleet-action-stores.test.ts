@@ -10,7 +10,7 @@
  *
  * docs/plans/260910d § The stores, and who owns them.
  */
-import { existsSync, mkdirSync, mkdtempSync, readdirSync, rmSync, writeFileSync } from "node:fs";
+import { appendFileSync, existsSync, mkdirSync, mkdtempSync, readdirSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
@@ -19,10 +19,13 @@ import { afterEach, describe, expect, it } from "vitest";
 import {
   openFleetActionStores,
   resetFleetActionStoresForTests,
+  sharedUnknownWithoutHold,
   sharedReceiptJournal,
 } from "../tools/fleet/action-stores.js";
 import { LOCK_FILE, openHoldLedger, type HoldLedger } from "../tools/fleet/hold-ledger.js";
-import { openSharedQuarantine, sharedQuarantineBook } from "../tools/fleet/quarantine.js";
+import * as quarantineExports from "../tools/fleet/quarantine.js";
+import { sharedQuarantineBook } from "../tools/fleet/quarantine.js";
+import { RECEIPTS_FILE } from "../tools/fleet/receipt-journal.js";
 import { releaseLock, takeLock, type HeldLock } from "../tools/overseer/lock.js";
 
 const roots: string[] = [];
@@ -46,6 +49,14 @@ afterEach(() => {
 });
 
 describe("the fleet action stores composition", () => {
+  it("exposes the composition only from action-stores", () => {
+    expect("openFleetActionStores" in quarantineExports).toBe(false);
+    expect("resetFleetActionStoresForTests" in quarantineExports).toBe(false);
+    expect("sharedReceiptJournal" in quarantineExports).toBe(false);
+    expect("openSharedQuarantine" in quarantineExports).toBe(false);
+    expect("resetSharedQuarantineForTests" in quarantineExports).toBe(false);
+  });
+
   it("takes writer.lock once and hands that one claim to both journals", () => {
     const dir = tempRoot();
     const started = openFleetActionStores({
@@ -79,6 +90,112 @@ describe("the fleet action stores composition", () => {
     expect(lockFiles).toEqual([LOCK_FILE]);
   });
 
+  it("freezes recovery unknowns after the hold book has rehydrated", () => {
+    expect(sharedUnknownWithoutHold()).toBeNull();
+    const dir = tempRoot();
+    const seeded = openFleetActionStores({
+      dir,
+      now: () => 1_700_000_000_000,
+      serverInstanceId: "7b8c9d0e",
+      log: () => {},
+    });
+    const accept = (sessionId: string, itemId: string) => seeded.receipts.accept({
+      requestId: null,
+      fingerprint: null,
+      op: "queued-message",
+      origin: "enqueue",
+      actor: { kind: "client-claimed", id: "greg" },
+      speaker: "greg",
+      target: { sessionId, paneId: null, claudeSessionId: null, tmuxGeneration: 980_000 },
+      what: "message (6 characters)",
+      queue: { itemId, enqueuedAt: 1_700_000_000_000 },
+      material: { kind: "message", text: "pinned", speaker: "greg" },
+    });
+    const first = accept("$97905", "7b8c9d0e-q1");
+    const second = accept("$97905", "7b8c9d0e-q2");
+    const held = accept("$97906", "7b8c9d0e-q3");
+    if (!first.ok || !second.ok || !held.ok) throw new Error("the seed receipts were refused");
+    expect(seeded.receipts.attempted(first.receiptId).landed).toBe(true);
+    expect(seeded.receipts.attempted(second.receiptId).landed).toBe(true);
+    expect(seeded.receipts.attempted(held.receiptId).landed).toBe(true);
+    seeded.book.noteAttempt({
+      sessionId: "$97906",
+      paneId: null,
+      claudeSessionId: null,
+      origin: "queued-delivery",
+      what: "message (6 characters)",
+    });
+    resetFleetActionStoresForTests();
+
+    const restarted = openFleetActionStores({
+      dir,
+      now: () => 1_700_000_001_000,
+      serverInstanceId: "8c9d0e1f",
+      log: () => {},
+    });
+    expect(restarted.book.holding("$97906")).not.toBeNull();
+    expect(restarted.unknownWithoutHold).toEqual([
+      { sessionId: "$97905", receiptIds: [first.receiptId, second.receiptId] },
+    ]);
+
+    restarted.unknownWithoutHold[0]?.receiptIds.push("caller-mutation");
+    restarted.unknownWithoutHold.push({ sessionId: "$mutated", receiptIds: [] });
+    const fromAccessor = sharedUnknownWithoutHold();
+    expect(fromAccessor).toEqual([
+      { sessionId: "$97905", receiptIds: [first.receiptId, second.receiptId] },
+    ]);
+    fromAccessor?.[0]?.receiptIds.push("second-caller-mutation");
+    expect(openFleetActionStores().unknownWithoutHold).toEqual([
+      { sessionId: "$97905", receiptIds: [first.receiptId, second.receiptId] },
+    ]);
+  });
+
+  it("includes conservative recovery conclusions when this process cannot write", () => {
+    const dir = tempRoot();
+    const seeded = openFleetActionStores({
+      dir,
+      now: () => 1_700_000_000_000,
+      serverInstanceId: "8d9e0f1a",
+      log: () => {},
+    });
+    const accepted = seeded.receipts.accept({
+      requestId: null,
+      fingerprint: null,
+      op: "queued-action",
+      origin: "enqueue",
+      actor: { kind: "client-claimed", id: "greg" },
+      speaker: "greg",
+      target: { sessionId: "$97907", paneId: null, claudeSessionId: null, tmuxGeneration: 980_000 },
+      what: "action continue",
+      queue: { itemId: "8d9e0f1a-q1", enqueuedAt: 1_700_000_000_000 },
+    });
+    if (!accepted.ok) throw new Error("the seed receipt was refused");
+    expect(seeded.receipts.attempted(accepted.receiptId).landed).toBe(true);
+    resetFleetActionStoresForTests();
+    appendFileSync(
+      join(dir, RECEIPTS_FILE),
+      `${JSON.stringify({ schema: 1, kind: "attempted", at: "unreadable", receiptId: accepted.receiptId })}\n`,
+    );
+
+    const taken = takeLock(join(dir, LOCK_FILE), () => new Date(1_700_000_001_000));
+    if (!taken.ok) throw new Error("the test could not plant its live writer lock");
+    outsideLocks.push({ dir, lock: taken.lock });
+    const restarted = openFleetActionStores({
+      dir,
+      now: () => 1_700_000_001_000,
+      serverInstanceId: "9e0f1a2b",
+      log: () => {},
+    });
+    expect(restarted.recovery.wouldConclude).toContainEqual({
+      receiptId: accepted.receiptId,
+      state: "outcome-unknown",
+      reason: "recovery-blocked",
+    });
+    expect(restarted.unknownWithoutHold).toEqual([
+      { sessionId: "$97907", receiptIds: [accepted.receiptId] },
+    ]);
+  });
+
   it("opens both journals read-only when another dashboard owns the shared claim", () => {
     const dir = tempRoot();
     mkdirSync(dir, { recursive: true, mode: 0o700 });
@@ -105,7 +222,7 @@ describe("the fleet action stores composition", () => {
     expect(existsSync(join(dir, "receipts.jsonl"))).toBe(false);
   });
 
-  it("rehydrates the quarantine with the same startup account as openSharedQuarantine", () => {
+  it("rehydrates the quarantine through the action-store composition", () => {
     const dir = tempRoot();
     const seeded = openHoldLedger(dir);
     if (seeded.kind !== "open") throw new Error(`the seed ledger would not open: ${seeded.why}`);
@@ -136,26 +253,26 @@ describe("the fleet action stores composition", () => {
     expect(started.recovery).toEqual(started.receipts.recovery());
   });
 
-  it("keeps openSharedQuarantine's API over the same composition", () => {
+  it("installs both shared stores through the action-store composition", () => {
     const dir = tempRoot();
-    const legacy = openSharedQuarantine({ dir, log: () => {} });
+    const started = openFleetActionStores({ dir, log: () => {} });
 
-    expect(legacy.book).toBe(sharedQuarantineBook());
-    expect(legacy.ledger).not.toBeNull();
+    expect(started.book).toBe(sharedQuarantineBook());
+    expect(started.ledger).not.toBeNull();
     expect(sharedReceiptJournal().durable()).toBe(true);
-    expect(legacy.lines.log.join(" ")).toContain("hold ledger");
+    expect(started.lines.log.join(" ")).toContain("hold ledger");
   });
 
   it("keeps the hold ledger durable when only the receipt journal cannot open", () => {
     const dir = tempRoot();
     writeFileSync(join(dir, "material"), "blocks the receipt material directory");
 
-    const legacy = openSharedQuarantine({ dir, log: () => {} });
-    expect(legacy.ledger).not.toBeNull();
-    expect(legacy.ledger?.status().lockedOutBy).toBeNull();
+    const started = openFleetActionStores({ dir, log: () => {} });
+    expect(started.ledger).not.toBeNull();
+    expect(started.ledger?.status().lockedOutBy).toBeNull();
     expect(sharedReceiptJournal().durable()).toBe(false);
 
-    legacy.ledger?.noteResolved({ at: 1_700_000_000_001, sessionId: "$97903", how: "delivered" });
+    started.ledger?.noteResolved({ at: 1_700_000_000_001, sessionId: "$97903", how: "delivered" });
     expect(existsSync(join(dir, "holds.jsonl"))).toBe(true);
   });
 
