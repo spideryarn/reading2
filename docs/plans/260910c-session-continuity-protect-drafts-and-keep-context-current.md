@@ -1,7 +1,7 @@
 # Session continuity: protect drafts and keep context current
 
-**Status:** planning · revision 2, after GPT Sol refused revision 1 · worktree `session-continuity`
-· branch `worktree-session-continuity`
+**Status:** planning · revision 3, after GPT Sol refused revision 1 and Fable arbitrated ·
+worktree `session-continuity` · branch `worktree-session-continuity`
 
 Roadmap stage: [260908f](260908f-overseer-and-fleet-improvement-roadmap.md) § *Stage: Session
 continuity — protect drafts and keep context current*. Queue item `qi-aav3g688`, authorised by Greg
@@ -51,30 +51,45 @@ could be *presented under, or delivered to*, an execution other than the one it 
 **That was false and Sol refused the plan for it.** The corrected claim is:
 
 > After this stage, no state the browser **holds and draws** about a session — a draft, a transcript
-> reading, an action outcome, a refusal — can be **presented under**, or **restored for**, an
-> execution other than the one it was created against. Whether a message **reaches** the run it was
-> written for is not decided here and is not protected by this stage.
+> reading, an action outcome, a refusal — can be **presented under**, or **restored for**, a
+> conversation other than the one it was created against. Whether a keystroke **reaches** the right
+> conversation is not decided here: the server decides it, freshly, at the moment of the write.
 
-### The uncovered hazard, named rather than implied
+### Delivery — what the server already protects, and the one thing it does not
 
-**Delivery is not protected, and the server cannot currently catch it either.** Sol's F1, verified
-independently against the source: `tools/fleet/steer.ts` § `verifyTarget` runs six checks against
-the live box in the moment before it types, and an in-pane replacement passes all six. Check 4
-compares the pane's pid, which belongs to the pane's *shell* and never died; check 5 requires a live
-`claude --session-id <expected uuid>` under that pane, and the replacement is launched from that
-shell reading `$CLAUDE_SESSION_ID`, which tmux pinned before the first claude ran and never
-rewrites — so it presents the same conversation id on its own argv. Queueing is weaker again:
-`routes-actions.ts` § `enqueue` records the session and conversation with no live execution check,
-and the drainer delivers later against the same claims.
+**This section was wrong in revision 2 and the correction matters more than the original claim.**
+Revision 2 said, on Sol's F1, that a message could be delivered into a *stranger's* conversation
+because `verifyTarget` checked identifiers that survive a replacement. Fable caught it and the code
+settles it:
 
-The repair is server-side and structural — every execution-bound steer, answer, action and queued
-message carries the verified token from the row the person acted on; the server re-derives identity
-immediately before sending, acting, enqueueing **and draining**, and refuses on mismatch or
-unverifiability; queue items retain the token so a replacement invalidates rather than inherits
-them. That is `steer.ts`, `routes-steer.ts`, `routes-actions.ts`, `queue.ts` and `drain.ts`, none of
-which is in this stage's file set, and `queue`/`drain` is shared runtime. **Escalated to the
-Overseer on 2026-09-10 as its own queue item, with Sol's exact proposed wording.** It is not built
-here and this plan does not pretend it is.
+`tools/fleet/steer.ts` § `readCandidates` (~915) reads each candidate's **live**
+`/proc/<pid>/cmdline`, and `isClaudeForSession` (~810) requires an interactive `claude` whose
+distinct `--session-id` set is exactly the claimed uuid —
+`const ours = distinct.size === 1 && distinct.has(claudeSessionId)`. It is not the tmux-env claim
+that is compared; it is the live argv of whatever is actually under the pane. A replacement running
+a different conversation is `other-claude` → `competing-claude`, refused. `claude --resume <uuid>`
+is refused too, because `claude-argv.ts` keeps only `--session-id` values and `--resume`'s value is
+optional and deliberately unread. **And the drainer is covered**: `SendCoordinator.message` →
+`steer.ts` § `sendMessage` (line 1323) → `verifyTarget`, so a queued item is re-verified against a
+fresh reading at delivery rather than against what was true at enqueue. Sol's observation that
+`enqueue` performs no execution check is correct and does not matter, because `drain` does.
+
+So what passes `verifyTarget` is a **same-conversation relaunch**: a new process running
+`claude --session-id <the same uuid>`. Not a stranger — the conversation the person was reading.
+
+**The residual gap, sized honestly.** A relaunched agent has lost its in-memory context, so *"yes,
+go ahead with that"* can land in the right conversation at an agent that no longer knows what
+*that* was. Real, much smaller than revision 2 claimed, and plausibly a caveat rather than a
+refusal. Plus the pid-recycling race already written down and accepted in `steer.ts` § KNOWN GAPS.
+Sent back to the Overseer on 2026-09-10 with a recommendation to drop or heavily re-scope the queue
+item raised off revision 2.
+
+**What this stage is therefore about.** Not where a keystroke lands — the server settles that,
+freshly, at the moment of the write, which is exactly what `identityWriteGate`'s own header says a
+cached `allowed` may not be trusted for. This stage is about **what the page holds and draws**: a
+draft, a transcript, an outcome, a refusal. The server's freshness check protects the keystroke's
+destination and says nothing about what is on the screen, so the misattribution this stage fixes is
+entirely uncovered by it.
 
 ## What is in scope, and what is emphatically not
 
@@ -118,6 +133,45 @@ already refused once.
 
 ---
 
+## Withhold, caveat or relabel — Fable's ruling, 2026-09-10
+
+Sol's F2 and F3 both wanted the page to **withhold** whenever the execution is not verified: no
+typing, no sending, no transcript, "Read again" disabled. I thought that too strong and would not
+overrule a P1 on my own judgment, so Fable arbitrated. Its principle, and this plan now follows it:
+
+> **Withhold what you would be inventing. Caveat what you have but cannot place. Relabel what you
+> have and can place somewhere else.**
+
+The argument that decided it: *"not verified"* is not one state, and Sol's rule collapses two.
+
+- **Cannot tell** (`unknown`, `claimed-only`, or verified-with-`unverifiable`-conversation) — no new
+  fact has arrived; the page knows exactly what it knew before this stage existed. On this box,
+  absence of confirmation is *the weather*, not evidence of replacement, and `wire.ts`'s own type
+  comment says so: *"none of them means there is nothing running."* A page that goes dark in the
+  weather is a page you cannot use when you most need it.
+- **Can tell, and it is different** (`conflicting`, `not-claimed`, or a non-addressable harness) — a
+  fact has arrived. Here the page acts, under the rule Fable already set for shells on 2026-09-08: a
+  control the page *knows* will be refused is not offered.
+
+| Reading | Transcript | Type | Send / Queue | Draft |
+|---|---|---|---|---|
+| verified + conversation verified | show | yes | live | persist, keyed by conversation id |
+| cannot tell | show + caveat (`StaleNote` stands) | yes | live, one line beside Send | keep in memory |
+| `conflicting` | show, **relabelled** as the previous conversation, alarm tone | yes | **disabled**, with the gate's sentence | keep on screen, do not persist |
+| `not-claimed` / non-addressable | as today | — | **disabled** (existing shell rule) | — |
+
+Two consequences worth stating separately, because they are where the design got better rather than
+merely settled:
+
+- **`StaleNote` should consume the execution reading rather than guess.** It already asks this exact
+  question in violet — *"this may not be this session's conversation"* — from an inference about
+  transcript age. When the conversation reading is `verified`, its hazard is **disproved** and it can
+  withdraw; when unverifiable, it stands as written. A note that guessed becomes a note that reports.
+- **A confirm dialog is the wrong fourth option.** It would fire in the box's normal state, so it
+  trains the tap-through reflex and is inert by the second day, on a page already measured at four
+  screens. The cheap version that passes the ten-second rule is a **changed label or one line on the
+  control itself** — and under *can tell* there is nothing to make deliberate, because we know.
+
 ## Stages
 
 Each ends green and committable. Every stage gets a GPT Sol review (`--sandbox workspace-write`; the
@@ -128,7 +182,9 @@ reviewer fixes inside the stage and reports wider).
 - [x] Sol reviewed revision 1 read-only and **refused it**: F1–F3 and F5–F7 established P1s.
       Artefact: `sc-plan-review-answer.md` (contents transcribed into the ledger below).
 - [x] Plan sha sent to the Overseer; F1 escalated as a separate queue item.
-- [ ] Fable arbitrates the one product judgment F2 and F3 share (withhold vs caveat). Pending.
+- [x] Fable arbitrated the one product judgment F2 and F3 share (withhold vs caveat) — see the
+      section below. It also found the error in F1, which is why § Delivery now says the opposite of
+      what revision 2 said.
 
 ### Stage 1 — Detail state follows the execution, not the handle
 
@@ -148,10 +204,19 @@ Roadmap checkbox 1. Files: `continuity.ts` (new), `SessionsPanel.tsx`, `SessionD
       outcome card and the queue outcome card; a snapshot that goes `unknown` and returns with **the
       same** token clears nothing; switching between two sessions that are both unverifiable still
       changes the key.
-- [ ] `identityOf` in `RecentMessages.tsx` — **wording pending Fable**, see the ledger. What is
-      settled either way: a `conflicting` conversation reading must not go on presenting the held
-      transcript as this session's, and an in-flight read is generation-discarded when identity
-      changes.
+- [ ] `identityOf` in `RecentMessages.tsx` gains the **verified conversation id** — not the raw
+      `claudeSessionId` claim, and not the execution token. A transcript belongs to a conversation.
+      `coherentWith` can keep a verified token while downgrading the conversation, so the token
+      alone would not notice (Sol F3, the half that is right). An in-flight read is
+      generation-discarded when this identity changes, as today.
+- [ ] `conflicting` is **relabelled, not withheld**: the turns stay — they are a real conversation,
+      correctly attributed, and *"what did the old one say before it died"* is a question that gets
+      asked — under an alarm-tone heading saying they are the previous conversation in this pane and
+      naming what is running now. "Read again" stays live and reads the same file. What is withheld
+      is the *implication* that this is the pane's current state, which is a heading rather than a
+      hidden panel.
+- [ ] `StaleNote` consumes the execution reading: withdraws when the conversation is verified,
+      stands unchanged when it is not.
 - [ ] `answeringOff`, split into two with the right owners and the existing key (Sol F7, verbatim):
       `grants-permission` is keyed by `[row.id, verified execution token,
       questionSafetyKey(row.rawQuestion)]` and clears whenever that tuple changes, **including a
@@ -171,8 +236,20 @@ its buttons back; a server-wide refusal survives a tab change.
 Roadmap checkbox 2. Files: `drafts.ts` (new), `SessionDetail.tsx`, tests.
 
 - [ ] `drafts.ts`: `useDraft(purpose, key)` over **sessionStorage** — per tab, dies with the tab,
-      survives the reload iOS forces. Key `sy.draft.v1:<purpose>:<sessionId>:<token>`; `purpose` is
-      in the key because two boxes on one screen must not share a draft.
+      survives the reload iOS forces. Key `sy.draft.v1:<purpose>:<verified conversation id>`;
+      `purpose` is in the key because two boxes on one screen must not share a draft.
+
+      **Keyed by the conversation, not by the execution token** — Fable's ruling, and it is a
+      deviation from the roadmap's literal *"per execution"* that is worth the words. A draft is
+      addressed to a conversation, not to a process. Keying by the token would drop a person's typed
+      work on the *benign* replacement — a same-conversation relaunch, where the recipient has not
+      changed — which is destruction rather than caution. Keying by the verified conversation id
+      gets every case right: a relaunch restores it; a genuinely different conversation in the pane
+      never finds it, because the key is not there; and it cannot legitimately collide, because two
+      interactive claudes on one uuid are `competing-claude` and refused. The tmux handle is
+      deliberately **not** in the key: a conversation that moved panes is the same recipient.
+
+      It also makes the unverifiable gap safe rather than merely survivable — see below.
 - [ ] Access through `window.sessionStorage`, never the bare global: under jsdom the bare name is
       shadowed by Node's own and reads `undefined`, which is how a guard passes its tests and fails
       in a browser. Safari private mode throws on the *accessor*, not only on write; a full quota
@@ -185,9 +262,18 @@ Roadmap checkbox 2. Files: `drafts.ts` (new), `SessionDetail.tsx`, tests.
       identifiers beyond the key.
 - [ ] A **Clear** control beside the composer: empties the box and removes the stored draft. A
       successful send already clears the box and now also removes the stored draft.
-- [ ] **The unverifiable gap — wording pending Fable**, see the ledger. Revision 1's rule ("keep
-      writing to the last verified key") is **dead**: Sol's F2 showed it binds text typed at run B
-      into run A's storage key, which is the exact failure this stage exists to prevent.
+- [ ] **The unverifiable gap.** Revision 1's rule ("keep writing to the last verified *token* key")
+      is dead — Sol's F2 showed it binds text typed at run B into run A's key. Under a
+      conversation-id key the problem dissolves: persistence during a gap writes under the last
+      verified *conversation*, and **restoration is gated on live verification of that same
+      conversation id**, so a draft for C can only ever come back when C is what is running. A token
+      key could not do this, because a token names a process that may be dead; a conversation key
+      names the recipient. Typing stays enabled throughout (Fable's ruling); Send stays live under
+      *cannot tell* with one line beside it, and is disabled under *can tell*.
+- [ ] **Never silently destroy typed text.** Where revision 1 said "different verified token →
+      drop", the rule is now: a different verified conversation leaves the text **on screen**,
+      persists nothing, and lets the disabled Send do the protecting. Dropping a person's words on
+      the evidence of a process id was a bug wearing caution's clothes.
 - [ ] Tests: suspend/resume restores the draft; a different token restores nothing and leaves the
       old draft unread in storage; storage that throws on the accessor, on `getItem`, and on
       `setItem`; Clear removes the key; over-cap text is not stored.
@@ -295,9 +381,9 @@ Round 1, GPT Sol, 2026-09-10, on revision 1. Verdict: **refuse**. Sol also ran
 
 | ID | Finding | Severity | Disposition |
 |---|---|---|---|
-| F1 | Browser-only identity cannot protect *delivery*; `verifyTarget` and `enqueue` both pass an in-pane replacement | P1 established | **Gap taken, repair escalated.** Invariant narrowed above; hazard named; server work sent to the Overseer as its own queue item. Outside this stage's file set. |
-| F2 | The unverifiable-gap draft rule binds run B's text into run A's storage key | P1 established | **Accepted — revision 1's rule is dead.** Replacement wording pending Fable (withhold vs caveat). |
-| F3 | Adding only the token leaves transcript quarantine incomplete: `coherentWith` can keep a verified token while downgrading the conversation to `unverifiable`, and a `conflicting` conversation does the same | P1 established | **Partly accepted.** The `conflicting` case is real and will be handled. Sol's blanket rule — no identity, no read, no held view unless `identityWriteGate` allows — is **contested**: on a loaded box it would blank every session's transcript, against `RecentMessages.tsx`'s stated purpose. Pending Fable. |
+| F1 | Browser-only identity cannot protect *delivery*; `verifyTarget` and `enqueue` both pass an in-pane replacement | graded P1 established; **actually reasoned, and its conclusion is wrong** | **Not accepted.** The conversation check reads live argv, not the row's claim, and `drain` re-verifies through `sendMessage`. Only a same-conversation relaunch passes. See § Delivery. My revision-2 escalation repeated Sol's conclusion after quoting the doc comment that disproves it; corrected to the Overseer the same day. The invariant it prompted me to narrow stays narrowed — that part was right for a different reason. |
+| F2 | The unverifiable-gap draft rule binds run B's text into run A's storage key | P1 established | **Gap accepted, repair overruled via Fable.** Revision 1's token key is dead; the conversation-id key dissolves the finding. Sol's repair (no typing while unverifiable) is not built: unverifiable is the box's normal weather, and typing is not an act on the box. |
+| F3 | Adding only the token leaves transcript quarantine incomplete: `coherentWith` can keep a verified token while downgrading the conversation | P1 established | **Gap accepted, blanket repair overruled via Fable.** The identity is the verified *conversation id*, which is the half Sol was right about; `conflicting` is relabelled rather than hidden. Sol's rule — no held view unless `identityWriteGate` allows — would blank every transcript on a loaded box, against `RecentMessages.tsx`'s stated purpose, and misuses a gate whose own header forbids caching its verdict. |
 | F4 | The mount key's selection domain is underspecified | P1 reasoned | **Accepted verbatim**, Stage 1. |
 | F5 | Stages 3 and 4 cannot abort through APIs that take no `AbortSignal` | P1 established | **Accepted verbatim.** `feed-client.ts` and `actions-client.ts` added to scope, plus the promise-versus-deadline race. |
 | F6 | The feed digest omits `claudeSessionId` and `tmuxServerPid` | P1 established | **Accepted verbatim**, Stage 3. |
@@ -329,8 +415,22 @@ Round 1, GPT Sol, 2026-09-10, on revision 1. Verdict: **refuse**. Sol also ran
 
 ## Decision log
 
-- 2026-09-10 — **No server change in this stage**, and the guarantee narrowed to match. The delivery
-  hazard is real, verified, escalated, and named above rather than papered over.
+- 2026-09-10 — **No server change in this stage**, and the guarantee narrowed to display and drafts.
+  Revision 2 narrowed it because delivery looked unprotected; revision 3 keeps the narrowing because
+  delivery is *somebody else's* protection — the server's, applied fresh at the moment of the write.
+  Same boundary, sounder reason.
+- 2026-09-10 — **Fable arbitrated withhold vs caveat**, and this plan follows its ruling rather than
+  Sol's F2/F3 repairs. Recorded as an overrule with an arbitration behind it, not as my own
+  judgment: two established P1s do not go past on an author's say-so.
+- 2026-09-10 — **Drafts keyed by verified conversation id, not by execution token.** A deviation
+  from the roadmap's literal "per execution", taken deliberately and argued in Stage 2: a draft is
+  addressed to a conversation, and a token key destroys typed work on a benign relaunch.
+- 2026-09-10 — **A lesson about reviews, worth keeping.** F1 arrived graded "established", named the
+  right file, and reached the wrong conclusion; I verified its premise (which fields survive a
+  replacement — true) and not its conclusion (what `verifyTarget` compares — false), then escalated
+  it. A finding arrives already framed as a defect with a fix implied, which makes a wrong premise
+  harder to see than wrong code — review-prompt-template.md says exactly this, and it was still the
+  thing that got me. Check the conclusion against the code, not just the premise.
 - 2026-09-10 — Remount on a *replaced* verified token rather than threading an identity through five
   pieces of state. Simpler, and it is `continuityOf` used as designed. The transcript reader keeps
   an identity of its own anyway, because it is exported (F3).
