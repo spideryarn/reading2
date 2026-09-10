@@ -17,12 +17,16 @@ rounds, or say the code is one round short when restarting early."* **Stage 1 is
 rounds and an independent check of the round-2 fixes). **Stage 3 is closed** (two rounds).
 **Stage 5 is closed** (one round, accepted, no P0/P1). **On `dev` since the 14:50Z restart, not yet
 live:** Stage 2b (`0e3d92c0`), 4b (`cd35abac`), 5c (`c2d1c191`), the abort follow-up (`f5fe6fec`)
-and the Playwright traps doc (`7411ca37`, committed, awaiting its push). **The browser check passed
-every Stage 1–4 bullet.** **In flight:** an independent Opus verification of the four draft fixes
-GPT Sol wrote in its Stages 2+4 review before that review was killed at its timeout — if it comes
-back clean, those fixes and Stage 5's F80 fix are gated, committed and pushed, and Stages 2 and 4
-close without another Codex run. **Still to do:** that, the full suite, and the debrief. **For
-Greg:** the Sessions text filter and the page's touch targets, below.
+the Playwright traps doc (`7411ca37`), **the verified Stages 2+4 fixes (`16e54022`) and Stage 5's F80
+fix (`32389249`)** — all pushed to `dev` at `5e8df0da`, after all 100 fleet and doc-link test files
+passed on the tree merged with `origin/dev` and typecheck was exit 0. **The browser check passed
+every Stage 1–4 bullet.** **Stages 2, 4 and 5 are closed**: 2 and 4 on an independent Opus
+verification of GPT Sol's fixes from a review killed at its timeout, 5 on one Sol round. **Committed
+with this status line:** F29, the limit that verification found, and F30, the one F29's implementer
+found — both built by Opus, red-first, with no cross-family review. **F31**, found last and
+deliberately not fixed, is the named follow-up where the drafts chain stops. **Still to do:** the
+full suite, and the debrief. **For Greg:** the
+Sessions text filter and the page's touch targets, below.
 
 **One P3 note on Stage 5's F80 fix, left as it is:** its `rejectedStart` helper in
 `NewSessionPanel.tsx` repeats `describeError` from `transport.ts` almost word for word, so there are
@@ -836,7 +840,9 @@ keeps its target scope across a remount and is never stored.
 | F26 | The broadcast box's old success cleared newer text typed while it was in flight | P1 established | **Fixed by Sol, verified.** |
 | F27 | Text typed before the pane could be placed vanished when it remounted on a verified target — including when the delivery lands in the same instant as the typing | P1 established | **Fixed by Sol, verified.** |
 | F28 | The mounted Overseer card, moved between conversations, kept the first one's words beside a live Send | P1 established | **Fixed by Sol, verified.** |
-| F29 | The generation that decides whether a success may clear is kept per *box*, not per *conversation*: a Send to A, a remount onto B and typing there before A answers, and A's success is ignored — its sent draft stays in storage and returns with A, inviting a duplicate message | P2 established, found by the verifier | **Fixed next, without a Codex review** (below). Not a regression — the old code removed nothing in that case either. |
+| F29 | The generation that decides whether a success may clear is kept per *box*, not per *conversation*: a Send to A, a remount onto B and typing there before A answers, and A's success is ignored — its sent draft stays in storage and returns with A, inviting a duplicate message | P2 established, found by the verifier | **Fixed — Opus, red-first, no cross-family review.** Beside the per-box generation, `drafts.ts` now keeps one per *stored key*, advanced whenever a box writes or removes that key, and the ticket records both. A success removes the stored copy if nothing has written *that key* since the ticket, whatever the box has done since, and clears the box only if the box itself is unchanged — so A's success removes A's copy after the box has moved to B, never touches B's text, and still leaves alone an edit made to A's own box after the send. Red first for Send and Queue and for the Overseer card's version of it; the guards proved by deliberate mutation. Not a regression — the old code removed nothing in that case either. |
+| F30 | Text typed before any conversation could be verified, then sent, then filed under A when A verified, survived A's success in A's stored key and came back after a reload — the ticket had been taken with no stored key | P2 established, found by F29's implementer | **Fixed — Opus, red-first, no cross-family review.** When a success clears a box, the box also removes the key its words were filed under *after* the send. The box only hears of a success while its generation is unchanged since the ticket, so that key holds exactly the sent words; an edit made after the send stops the clear and so survives, proved by a deliberate mutation. |
+| F31 | The same sequence as F30, but the pane is *unmounted* while the request is open — the success lands with no box mounted to remove A's copy, so the sent words come back when A is next shown | P2 established, found and deliberately **not** fixed | **A named follow-up, and where this chain stops.** Every gap in this hook so far has been real and narrower than the last — F25–F28 from the review, F29 from its verifier, F30 and F31 from F29's implementer — and a chain like that has no natural floor. Closing F31 needs a record, outside the mounted component, of which key each box's words were filed under: more machinery for a narrower case. So F30 was the last discovery on this hook in this stage, by decision, and F31 is written down rather than built. |
 
 **Why no Codex rerun.** A 30-minute rerun of work that had just overrun 45 minutes would likely time
 out again, and Codex is rationed. Instead an **independent Opus agent** — a different model from the

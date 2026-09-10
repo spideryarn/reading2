@@ -12244,6 +12244,161 @@ describe("the session composer keeps its draft for the conversation it was writt
     expect(composer().value).toBe("");
   });
 
+  /**
+   * **A SUCCESS CLEARS THE DRAFT IT SUBMITTED, WHEREVER THE PANE HAS GONE
+   * SINCE** — F29 in docs/plans/260910c. The answer may arrive after the pane
+   * has been remounted onto another conversation and somebody has started
+   * typing there. Its ticket must still take the sent words out of storage
+   * under the key they were filed under, or they come back the next time the
+   * pane shows that conversation, ready to be sent a second time; and it must
+   * never touch the words in the other conversation's box.
+   */
+  function heldOpen(path: "send" | "queue"): {
+    seams: { steer?: SteerApi; actionsApi?: ActionsApi };
+    button: string;
+    succeed(): void;
+  } {
+    if (path === "send") {
+      let settle: ((outcome: SteerOutcome) => void) | null = null;
+      const steer: SteerApi = {
+        message: async () =>
+          await new Promise<SteerOutcome>((resolve) => {
+            settle = resolve;
+          }),
+        answer: async () => ({ ok: true, op: "answer", sent: [], verified: { kind: "not-told" } }),
+      };
+      return {
+        seams: { steer },
+        button: "Send now",
+        succeed: () => settle?.({ ok: true, op: "message", sent: [], verified: { kind: "not-told" } }),
+      };
+    }
+    let settle: ((outcome: Awaited<ReturnType<ActionsApi["queueMessage"]>>) => void) | null = null;
+    const base = recordingActions();
+    const actionsApi: ActionsApi = {
+      ...base.api,
+      queueMessage: async () =>
+        await new Promise<Awaited<ReturnType<ActionsApi["queueMessage"]>>>((resolve) => {
+          settle = resolve;
+        }),
+    };
+    return {
+      seams: { actionsApi },
+      button: "Queue (~73s)",
+      succeed: () => settle?.({ ok: true, kind: "queued", position: 1, why: null }),
+    };
+  }
+
+  /** The same row, now running a genuinely different conversation in a new process. */
+  const rowsOnB = (): FleetState["rows"] => [
+    steerable({
+      id: "$d",
+      title: "drafting",
+      status: { kind: "working" },
+      claudeSessionId: "conv-B",
+      execution: running({ pid: 7003, conversation: { kind: "verified", id: "conv-B" } }),
+    }),
+  ];
+
+  it.each(["send", "queue"] as const)(
+    "takes A's sent draft out of storage when the %s answers after the pane moved to B and somebody typed there",
+    async (path) => {
+      const held = heldOpen(path);
+      const feed = await start(running(), held.seams);
+      typeInto(composer(), "sent to A once");
+      act(() => pressed(held.button).click());
+
+      await arrives(feed, rowsOnB());
+      expect(composer().value).toBe("");
+      typeInto(composer(), "the start of something for B");
+
+      await act(async () => {
+        held.succeed();
+      });
+      expect(window.sessionStorage.getItem(KEY_A)).toBeNull();
+      expect(composer().value).toBe("the start of something for B");
+      expect(window.sessionStorage.getItem(KEY_B)).toBe("the start of something for B");
+
+      /* Back to A, in a new process: nothing comes back to be sent twice. */
+      await arrives(feed, rowsOf(running({ pid: 7006 })));
+      expect(composer().value).toBe("");
+      expect(window.sessionStorage.getItem(KEY_B)).toBe("the start of something for B");
+    },
+  );
+
+  it.each(["send", "queue"] as const)(
+    "takes A's sent draft out of storage when the %s answers after the pane moved to B and nobody typed there",
+    async (path) => {
+      const held = heldOpen(path);
+      const feed = await start(running(), held.seams);
+      typeInto(composer(), "sent to A once");
+      act(() => pressed(held.button).click());
+
+      await arrives(feed, rowsOnB());
+      await act(async () => {
+        held.succeed();
+      });
+      expect(window.sessionStorage.getItem(KEY_A)).toBeNull();
+      expect(composer().value).toBe("");
+      expect(draftKeys()).toEqual([]);
+
+      await arrives(feed, rowsOf(running({ pid: 7006 })));
+      expect(composer().value).toBe("");
+    },
+  );
+
+  it.each(["send", "queue"] as const)(
+    "keeps an edit made to the same conversation's box while its %s was open, on screen and in storage",
+    async (path) => {
+      const held = heldOpen(path);
+      const feed = await start(running(), held.seams);
+      typeInto(composer(), "sent to A once");
+      act(() => pressed(held.button).click());
+
+      /* A same-conversation relaunch gives a fresh, editable box with the
+         stored draft restored into it; the person then changes it. */
+      await arrives(feed, rowsOf(running({ pid: 7004 })));
+      expect(composer().value).toBe("sent to A once");
+      typeInto(composer(), "sent to A once, and then a correction");
+
+      await act(async () => {
+        held.succeed();
+      });
+      expect(composer().value).toBe("sent to A once, and then a correction");
+      expect(window.sessionStorage.getItem(KEY_A)).toBe("sent to A once, and then a correction");
+    },
+  );
+
+  /**
+   * **F30: WORDS FILED AFTER THE SEND ARE STILL THE SENT WORDS.** Typing done
+   * before any conversation verified has no stored key when it is sent; the
+   * conversation verifying while the request is open files it under A. The
+   * success must take it out of A's key too, or a reload restores what was
+   * already sent.
+   */
+  it.each(["send", "queue"] as const)(
+    "takes the sent words out of the key they were filed under when the conversation verified during the %s",
+    async (path) => {
+      const held = heldOpen(path);
+      const feed = await start(WEATHER, held.seams);
+      typeInto(composer(), "sent before anyone was verified");
+      act(() => pressed(held.button).click());
+
+      await arrives(feed, rowsOf(running()));
+      expect(window.sessionStorage.getItem(KEY_A)).toBe("sent before anyone was verified");
+
+      await act(async () => {
+        held.succeed();
+      });
+      expect(composer().value).toBe("");
+      expect(window.sessionStorage.getItem(KEY_A)).toBeNull();
+
+      reload();
+      await start(running());
+      expect(composer().value).toBe("");
+    },
+  );
+
   // 4
   it("restores nothing after a reload it cannot verify, then restores into the untouched box once it can", async () => {
     await start(running());
