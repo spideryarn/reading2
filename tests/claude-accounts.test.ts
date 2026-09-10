@@ -416,6 +416,7 @@ describe("identity assertion and add", () => {
       for (const flag of ["--name", "--email", "--role", "--config-dir", "--yes"]) {
         expect(text).toContain(flag);
       }
+      expect(text).toMatch(/Codex always seeds/i);
     },
   );
 
@@ -1219,6 +1220,11 @@ describe("Codex account preparation and identity", () => {
     const root = tempRoot();
     const output: string[] = [];
     const deps = codexBaseDeps(root, output);
+    const stateDir = path.join(root, ".codex-codex-pool1");
+    mkdirSync(stateDir, { recursive: true, mode: 0o700 });
+    const configPath = path.join(stateDir, "config.toml");
+    writeFileSync(configPath, 'model = "home-specific-model"\n');
+    const configBefore = readFileSync(configPath);
     // The wording says "missing" on purpose. If the offer were still decided by
     // matching words, this would wrongly offer to log in over a live credential.
     deps.codexAuth = async (stateDir) => ({ kind: "unknown", stateDir, reason: "malformed", why: `${stateDir}/auth.json is missing a closing brace` });
@@ -1227,6 +1233,38 @@ describe("Codex account preparation and identity", () => {
     expect(output.join("\n")).toMatch(/credential.*present.*unreadable/i);
     expect(output.join("\n")).not.toMatch(/CODEX_HOME=.*codex login/);
     expect(existsSync(deps.registryPath!)).toBe(false);
+    expect(readFileSync(configPath).equals(configBefore)).toBe(true);
+  });
+
+  test("does not offer login through a redirected Codex config", async () => {
+    const root = tempRoot();
+    const output: string[] = [];
+    const deps = codexBaseDeps(root, output);
+    const stateDir = path.join(root, ".codex-codex-pool1");
+    mkdirSync(stateDir, { recursive: true, mode: 0o700 });
+    const configPath = path.join(stateDir, "config.toml");
+    writeFileSync(configPath, 'chatgpt_base_url = "https://proxy.example"\n');
+    const configBefore = readFileSync(configPath);
+    deps.codexAuth = async (dir) => ({ kind: "unknown", stateDir: dir, reason: "missing", why: "no credential here yet" });
+
+    expect(await main(["add", "--family", "codex", "--name", "codex-pool1", "--yes"], deps)).toBe(1);
+    expect(output.join("\n")).toMatch(/chatgpt_base_url.*not allowed|redirect/i);
+    expect(output.join("\n")).not.toMatch(/CODEX_HOME=.*codex login/);
+    expect(readFileSync(configPath).equals(configBefore)).toBe(true);
+  });
+
+  test("does not offer file-based login when doctor reports keyring auth storage", async () => {
+    const root = tempRoot();
+    const output: string[] = [];
+    const deps = codexBaseDeps(root, output);
+    deps.codexAuth = async (dir) => ({ kind: "unknown", stateDir: dir, reason: "missing", why: "no credential here yet" });
+    deps.codexDoctor = (stateDir) => ({ ...codexDoctorValue(stateDir), authStorageMode: "Keyring", authOk: false });
+
+    expect(await main(["add", "--family", "codex", "--name", "codex-pool1", "--yes"], deps)).toBe(1);
+    expect(output.join("\n")).toMatch(/auth storage.*File/i);
+    expect(output.join("\n")).not.toMatch(/CODEX_HOME=.*codex login/);
+    expect(existsSync(deps.registryPath!)).toBe(false);
+    expect(existsSync(path.join(root, ".codex-codex-pool1", "config.toml"))).toBe(false);
   });
 
   test("registers Codex identity from auth.json without asking for email or calling Claude profile", async () => {
@@ -1348,6 +1386,9 @@ describe("Codex account preparation and identity", () => {
     const deps = codexBaseDeps(root, output);
     const stateDir = path.join(root, ".codex-codex-pool1");
     mkdirSync(stateDir, { recursive: true });
+    const configPath = path.join(stateDir, "config.toml");
+    writeFileSync(configPath, 'model = "home-specific-model"\n');
+    const configBefore = readFileSync(configPath);
     deps.codexAuth = async (dir) => codexReading(dir, "codex-pool2");
     mkdirSync(path.dirname(deps.registryPath!), { recursive: true });
     writeFileSync(deps.registryPath!, `${JSON.stringify({ schema: 1, accounts: [codexEntry("codex-pool1", stateDir)] }, null, 2)}\n`);
@@ -1355,6 +1396,7 @@ describe("Codex account preparation and identity", () => {
 
     expect(await main(["add", "--family", "codex", "--name", "codex-pool1", "--yes"], deps)).toBe(1);
     expect(readFileSync(deps.registryPath!).equals(before)).toBe(true);
+    expect(readFileSync(configPath).equals(configBefore)).toBe(true);
     expect(output.join("\n")).toMatch(/FATAL.*pinned.*different provider account/i);
   });
 

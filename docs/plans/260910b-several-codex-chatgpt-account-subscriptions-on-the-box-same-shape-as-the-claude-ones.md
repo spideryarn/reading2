@@ -601,6 +601,46 @@ What the manager changed after reading the diff, each red-first:
       parsing" returning a `CodexIdentity` is exactly the shape a later reader upgrades into an
       authenticity claim it never made.
 
+#### Cross-family review — GPT Sol, 2026-09-10, `workspace-write`
+
+The prompt stated the guarantee at its true strength and asked whether the *statement* was accurate,
+rather than whether the code was sound — the floor that
+[review-prompt-template.md](../reusable/review-prompt-template.md#give-the-question-a-floor) asks
+for. Verdict: **accurate**, and *"no outstanding P0/P1. Accept after repairs."* Two P1s found and
+repaired by the reviewer, both of which are the same shape and neither of which the manager saw:
+
+- **F1 (P1, fixed) — a refusal was mutating the home.** `addCodex` seeded and rewrote `config.toml`
+  *before* checking whether the credential was readable or whether the name was already pinned to a
+  different account. So an `add` that was always going to be refused still edited a live home's
+  config on its way to refusing. Now identity, workspace and pin checks all precede the seed, and
+  only the genuinely-missing-credential path seeds at all — with byte-preservation tests.
+- **F2 (P1, fixed) — the login offer could send Greg down a road that does not arrive.** A missing
+  credential got the `codex login` instruction even when the home was configured with a redirected
+  `chatgpt_base_url` or with keyring credential storage, where the credential the login produced
+  could never be read back and registered. The seed now runs its routing/storage/provider/state
+  preflight **before** modifying anything or printing the command.
+- **F3 (P3, fixed).** `--help` implied `--seed` governed Codex seeding; it now says Codex always
+  seeds.
+
+**Two P2s accepted as stated limits rather than chased**, because both are honest boundaries and the
+next round would find the level below them rather than converge:
+
+- **F4 — the verifier proves the *home's own* `config.toml` is not redirected, not that every
+  configuration layer is.** Codex 0.153.4 can also load system/managed layers, and `doctor` reports
+  the effective *provider* but not the effective `chatgpt_base_url`. Sol was explicit that those
+  layers are absent on this box and that a project config is forbidden from setting routing keys, so
+  **this is not an established defect** — it is the true strength of the claim. Recorded here so the
+  guarantee is not later restated as something larger. **Stage 2 must separately constrain the
+  runtime flags and the environment**, which is where the drop list from Q2 lands.
+- **F5 — `primaryRepoRoot()` is a path-string heuristic, not a git relationship check.** It strips
+  `/.claude/worktrees/<name>`, which is right for this repo's layout and wrong for an unrelated
+  checkout nested beneath such a path. No current path is wrong. Left as-is: asking git would mean
+  running git from the wizard, and the failure it would prevent is one nobody can currently reach.
+
+Sol's remaining answers to the manager's own suspicions, all negative: `smol-toml`'s serialization
+is stable across the second run so the idempotency comparison holds; the multi-workspace refusal is
+actionable; and nothing downstream trusts `familyData.workspaces` without re-reading `auth.json`.
+
 Stage 0 settled the unknowns this stage was told not to guess,
 so the seeding row in the table below is now answered rather than open. Three things Stage 0 found
 change what this stage builds:

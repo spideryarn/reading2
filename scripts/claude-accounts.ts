@@ -892,6 +892,16 @@ function seedCodexConfig(targetDir: string, deps: ClaudeAccountsDeps): SeedResul
   const targetPath = path.join(targetDir, "config.toml");
   const target = parseTomlFile(targetPath, false);
   if (!target.ok) return target;
+  const configFailure = codexConfigFailure(targetDir, undefined, target.value);
+  if (configFailure !== null) return { ok: false, why: configFailure };
+  // Check the existing effective routing before touching the file. The second
+  // doctor call below proves the newly written seed loaded; this first one
+  // keeps an already-doomed add (for example, keyring auth or an inherited
+  // sqlite override) from changing a live home's config before it refuses.
+  const beforeDoctorFailure = codexDoctorStateFailure(targetDir, deps.codexDoctor(targetDir), false);
+  if (beforeDoctorFailure !== null) {
+    return { ok: false, why: `codex doctor could not verify the seed target: ${beforeDoctorFailure}` };
+  }
 
   const after: Record<string, unknown> = { ...target.value };
   for (const key of ["model", "model_reasoning_effort", "approvals_reviewer"] as const) {
@@ -917,10 +927,8 @@ function seedCodexConfig(targetDir: string, deps: ClaudeAccountsDeps): SeedResul
   // back through doctor proves the seed loaded, rather than merely that bytes
   // were written to a plausible-looking file.
   const doctor = deps.codexDoctor(targetDir);
-  if (doctor.kind === "unknown") return { ok: false, why: `codex doctor could not verify the seed: ${doctor.why}` };
-  if (doctor.codexHome !== targetDir) {
-    return { ok: false, why: `codex doctor read back CODEX_HOME ${doctor.codexHome}, not ${targetDir}` };
-  }
+  const doctorFailure = codexDoctorStateFailure(targetDir, doctor, false);
+  if (doctorFailure !== null) return { ok: false, why: `codex doctor could not verify the seed: ${doctorFailure}` };
   return {
     ok: true,
     changed,
@@ -986,27 +994,40 @@ function pathIsInside(parent: string, child: string): boolean {
   return relative === "" || (!relative.startsWith(`..${path.sep}`) && relative !== ".." && !path.isAbsolute(relative));
 }
 
-function codexDoctorFailure(account: AccountEntry, reading: CodexDoctorReading): string | null {
+function codexDoctorStateFailure(
+  stateDir: string,
+  reading: CodexDoctorReading,
+  requireUsableAuth: boolean,
+): string | null {
   if (reading.kind === "unknown") return reading.why;
-  if (reading.codexHome !== account.stateDir) {
-    return `codex doctor reports CODEX_HOME ${reading.codexHome}, not registry stateDir ${account.stateDir}`;
+  if (reading.codexHome !== stateDir) {
+    return `codex doctor reports CODEX_HOME ${reading.codexHome}, not stateDir ${stateDir}`;
   }
-  if (!pathIsInside(account.stateDir, reading.sqliteHome)) {
-    return `codex doctor reports sqlite home ${reading.sqliteHome} outside ${account.stateDir}; unset inherited CODEX_SQLITE_HOME`;
+  if (!pathIsInside(stateDir, reading.sqliteHome)) {
+    return `codex doctor reports sqlite home ${reading.sqliteHome} outside ${stateDir}; unset inherited CODEX_SQLITE_HOME`;
   }
   if (reading.modelProvider !== "openai") {
     return `codex doctor reports model provider ${reading.modelProvider}, not openai`;
   }
-  const expectedAuthFile = path.join(account.stateDir, "auth.json");
+  const expectedAuthFile = path.join(stateDir, "auth.json");
   if (reading.authFile !== expectedAuthFile) {
     return `codex doctor reports auth file ${reading.authFile}, not ${expectedAuthFile}`;
   }
   if (reading.authStorageMode.toLowerCase() !== "file") {
     return `codex doctor reports auth storage ${reading.authStorageMode}, not File`;
   }
-  if (!reading.authOk) return "codex doctor reports that auth credentials are not usable";
+  if (requireUsableAuth && !reading.authOk) return "codex doctor reports that auth credentials are not usable";
+  return null;
+}
 
-  const config = parseTomlFile(path.join(account.stateDir, "config.toml"), false);
+function codexConfigFailure(
+  stateDir: string,
+  tenantId: string | null | undefined,
+  alreadyParsed?: Record<string, unknown>,
+): string | null {
+  const config = alreadyParsed === undefined
+    ? parseTomlFile(path.join(stateDir, "config.toml"), false)
+    : { ok: true as const, value: alreadyParsed };
   if (!config.ok) return config.why;
   for (const key of ["chatgpt_base_url", "openai_base_url", "model_providers", "profile"] as const) {
     if (Object.hasOwn(config.value, key)) {
@@ -1019,13 +1040,18 @@ function codexDoctorFailure(account: AccountEntry, reading: CodexDoctorReading):
   ) {
     return "config.toml forced_login_method must be chatgpt when present";
   }
-  if (Object.hasOwn(config.value, "forced_chatgpt_workspace_id")) {
+  if (tenantId !== undefined && Object.hasOwn(config.value, "forced_chatgpt_workspace_id")) {
     const forced = config.value.forced_chatgpt_workspace_id;
-    if (typeof forced !== "string" || forced !== account.providerTenantId) {
-      return `config.toml forced_chatgpt_workspace_id disagrees with registry providerTenantId ${account.providerTenantId ?? "null"}`;
+    if (typeof forced !== "string" || forced !== tenantId) {
+      return `config.toml forced_chatgpt_workspace_id disagrees with registry providerTenantId ${tenantId ?? "null"}`;
     }
   }
   return null;
+}
+
+function codexDoctorFailure(account: AccountEntry, reading: CodexDoctorReading): string | null {
+  return codexDoctorStateFailure(account.stateDir, reading, true)
+    ?? codexConfigFailure(account.stateDir, account.providerTenantId);
 }
 
 interface ParsedArgs {
@@ -1736,25 +1762,25 @@ async function addCodex(
     return 1;
   }
 
-  const seeded = seedCodexConfig(configDir, deps);
-  if (!seeded.ok) {
-    deps.err(`refused: seed failed: ${seeded.why}; registry was not changed`);
-    return 1;
-  }
-  for (const message of seeded.messages) deps.out(`${seedMessageKind(message)}: seed ${message}`);
-  if (!seeded.changed) deps.out("found: seed nothing to change");
-
   const auth = await deps.codexAuth(configDir);
   if (auth.kind === "unknown") {
     // On the reason, never on the wording of `why`. Offering a login over a
     // credential that exists but will not parse is how a live credential gets
     // rotated out from under running work.
-    if (auth.reason === "missing") {
-      deps.err(`refused: ${auth.why}; directory prepared; registry unchanged`);
-      deps.out(`next: CODEX_HOME=${shellQuote(configDir)} codex login`);
-    } else {
+    if (auth.reason !== "missing") {
       deps.err(`refused: credential under ${configDir} is present but unreadable (${auth.why}); registry was not changed`);
+      return 1;
     }
+
+    const seeded = seedCodexConfig(configDir, deps);
+    if (!seeded.ok) {
+      deps.err(`refused: seed failed: ${seeded.why}; registry was not changed`);
+      return 1;
+    }
+    for (const message of seeded.messages) deps.out(`${seedMessageKind(message)}: seed ${message}`);
+    if (!seeded.changed) deps.out("found: seed nothing to change");
+    deps.err(`refused: ${auth.why}; directory prepared; registry unchanged`);
+    deps.out(`next: CODEX_HOME=${shellQuote(configDir)} codex login`);
     return 1;
   }
   const tenant = codexTenantId(auth.identity);
@@ -1788,6 +1814,13 @@ async function addCodex(
       workspaces: auth.identity.workspaces,
     },
   };
+  const seeded = seedCodexConfig(configDir, deps);
+  if (!seeded.ok) {
+    deps.err(`refused: seed failed: ${seeded.why}; registry was not changed`);
+    return 1;
+  }
+  for (const message of seeded.messages) deps.out(`${seedMessageKind(message)}: seed ${message}`);
+  if (!seeded.changed) deps.out("found: seed nothing to change");
   const doctorFailure = codexDoctorFailure(next, deps.codexDoctor(configDir));
   if (doctorFailure !== null) {
     deps.err(`refused: codex doctor could not verify the routed account: ${doctorFailure}; registry was not changed`);
@@ -1953,7 +1986,7 @@ add flags — each one is a question it would otherwise ask:
   --email <address>      Claude only; Codex reads it from auth.json
   --config-dir <path>    the account's state directory (default: ~/.claude-<name> or ~/.codex-<name>)
                          used as CLAUDE_CONFIG_DIR / CODEX_HOME
-  --seed                 seed the account state dir (implied in wizard mode)
+  --seed                 seed a Claude state dir (implied in wizard mode); Codex always seeds
   --yes                  accept every default; ask nothing
 
 Claude login is skipped when the account is already signed in as that email.
