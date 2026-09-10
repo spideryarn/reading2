@@ -657,6 +657,20 @@ every item red first.** 454 tests across the ten launch, wrapper and env suites 
 each with the exact lines (`…-stage2-fixcheck-sol.md`). Stage 2 is done reviewing. Stages 1, 1b, 2
 and 2b go to dev once the full suite on the merged tree (79a55e94) is accounted for.
 
+**The full suite on the merged tree (79a55e94), 2026-09-10: 6 failed files of 1,063 (6 tests of
+22,991).** Four are the known fresh-worktree environment reds (`cold-start-lazy-imports`,
+`pdf-bundle-trace`: no `api-dist/`; `fleet-decisions-route`, `fleet-reports-route`: no built fleet
+client). One was another session's: a raw NUL byte in `gradual-recovery`'s
+`tests/overseer-recovery-resume.test.ts`, already fixed on dev at b9479b79 and merged in (9f976ba8;
+it passes). **One was mine: `no-undeclared-spend` flags `tools/overseer/launchers.ts` for naming
+`ANTHROPIC_API_KEY` and `OPENAI_API_KEY`** — only in `SESSION_UNSET_VARIABLES`, the list a
+`tmux-headless` session unsets so it never inherits the daemon's credentials. Not a
+`Declaration` (the declarations file refuses a second `tools/overseer` entry), and not names
+assembled at runtime to hide them from the scan; an `ALLOWED` reason like `run-claude.ts`'s own,
+asked of the Overseer because the test file is outside the set. Two background waiters on the suite
+were killed by the harness for low memory (18 GB available, 14 GB swapped) while the suite itself
+ran on in tmux; a Monitor held.
+
 ### Stage 3: the daemon, the controls, the drill (the page moved to Scheduled dispatch — F8)
 
 Files: `tools/overseer/daemon.ts` (open the launch store and owner at start, reconcile at start and
