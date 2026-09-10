@@ -87,8 +87,13 @@ for keeping things working in prod."*
 
 ### The fingerprint (260908j's R5)
 
-**A sha256 over the canonical JSON (keys sorted) of a `WireIntent` — the client-supplied fields
-exactly as sent and shape-validated, with `requestId` removed — every field, not a chosen list.**
+**A sha256 over the canonical JSON (keys sorted) of the operation — the route the request was sent
+to — and a `WireIntent`: the client-supplied fields exactly as sent and shape-validated, with
+`requestId` removed — every field, not a chosen list.** The route is the client's operation, not
+server metadata: it is chosen by the client, stable across deploys and restarts, and a genuine retry
+always goes to the same one; 260908j's R5 named "operation" first. Without it, a message body and an
+enqueue body (the session route defaults `mode` to `enqueue`) can be byte-identical, and a retry of a
+direct steer would be answered with a queued message's receipt.
 That includes `declaredStatus`, `panePid`, the full question material, the ordered broadcast
 recipients, and the complete preview claim and submitted material. **Nothing the server derives goes
 in**: not the catalogue `Action` a parse resolves an id to, not a preview entry, not the tmux
@@ -387,6 +392,17 @@ refused** until Stage 3 records enacted runs (honouring the key would let a retr
 be accepted is refused `503`. The same commit carries the server half of the restart-check hold fix
 (`QuarantineBook.durable()`, the catalogue's `holdsDurable`).
 
+**Stage review, 2026-09-10 12:17** ([answer](260910d-durable-action-receipts-stage2-review-sol.md), write-capable
+GPT Sol, 30 minutes): "land with the fixes above", two P1s. **F39 taken**: `holdsDurable` could stay
+true after the hold ledger lost its lock (status now re-checks the lock when read) or after a hold
+whose own write failed was masked by a later successful write (`durable()` now requires every open
+hold to have a live ledger record). **F38 overruled, on Fable's arbitration**: Sol removed the route
+from the fingerprint on a literal reading of "the client-supplied body". Fable: *"Restore `{route,
+body − requestId}`; the route is the client's operation, not server metadata, and dropping it makes a
+retry get a receipt for something it never asked for."* Restored red-first, and the plan's sentence
+now names the operation so it cannot be re-filed. Fable also noted that a client path falling back
+from one route to another must mint a new id; that is in the Stage 4 brief.
+
 - [ ] `requestId` parsed on `/api/steer/message`, `/api/steer/answer` and `/api/actions/session`
   (enqueue); format and freshness; lookup and conflict before the limiter; keyed accept fail-closed.
 - [ ] Receipts for direct steer and answer: `accepted` then `attempted` (both fail-closed when keyed)
@@ -429,6 +445,34 @@ by re-posting it, before or after a restart.
   `actions-client.ts`, `steer-client.ts`, `broadcast-client.ts` — **coordinated with
   `session-continuity` before editing**, since `useActions` is theirs; mounting the list in a host
   component is theirs too.
+
+**Agreed with `session-continuity`, 2026-09-10** — Stage 4's client work is this job's; none of its
+open work is in the three client files (its only `actions-client.ts` change, `cd785c23`, is on the
+read side). The seam to respect is `tools/fleet/web/src/drafts.ts`, in its words:
+
+- The three composers (`SessionDetail.tsx`, `MessageOverseerCard.tsx`, `BroadcastCard.tsx`) take a
+  **submission ticket** at Send and call `accept(ticket)` only on success. **A pending envelope must
+  never reach `accept`** — the text stays in the box and in sessionStorage until a definitive answer,
+  or a retry has nothing on screen to match.
+- **A replay (`200, replay: true`) is a definitive success**: accept it with the ticket from the
+  ORIGINAL send, not a new one. **A 409 is a definitive refusal**: keep the draft.
+- **A separate retry click carries the ticket in the envelope**; a fresh ticket taken after the
+  person edited would clear their edit. The postmortem is
+  [260910c](../postmortems/260910c-a-mutable-text-hook-erased-the-submission-it-produced.md);
+  the tests are `tests/fleet-drafts.test.tsx`. Known limit: 260910c's F31 (a pane unmounted while a
+  request is open) is unfixed, and a pending envelope that outlives its component meets it too.
+- **`ReceiptList` is not mounted inside the Sessions detail pane** (it remounts on a change of
+  execution identity — `useDetailTargetKey` in `SessionsPanel.tsx`), nor in `HealthPanel.tsx` or the
+  Usage Limits tab. The Overseer tab (`OverseerPanel.tsx`) is the neutral host its cards already
+  share. If it polls, it uses `single-flight-reader.ts` (one request in flight, a deadline, abort on
+  unmount, the last good answer kept on a failed read).
+
+Stage 4 therefore touches the three composers and `OverseerPanel.tsx` as well as the clients — none
+in this job's original file set. **Authorised by the Overseer, 2026-09-10**: the three clients; the
+composer in `SessionDetail.tsx`, `MessageOverseerCard.tsx` and `BroadcastCard.tsx`, with drafts.ts's
+ticket seam exactly as above; a new `ReceiptList.tsx` mounted in `OverseerPanel.tsx`, which is free
+(260908j's status agent finished 2026-09-09). Condition: merge `origin/dev` before touching the
+three cards — `session-continuity`'s drafts changes landed there today. Sol stage review, 30 minutes.
 
 **Done:** a person on a phone can see, for recent actions, which were proven, which were withdrawn,
 which are unknown, and which unknowns somebody has since looked at — and pressing retry after a lost

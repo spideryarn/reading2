@@ -63,11 +63,26 @@ describe("requestFingerprint", () => {
     expect(requestFingerprint("steer-message", { speaker: "greg", text: "hello" })).toBe(expected);
   });
 
+  /**
+   * **THE ROUTE IS THE CLIENT'S OPERATION, NOT SERVER METADATA** — Stage 2
+   * review F38 removed it and was overruled on Fable's arbitration (plan
+   * § The fingerprint). A message body and an enqueue body can be
+   * byte-identical, because the session route defaults `mode` to `enqueue`;
+   * without the route, one id posted to both would answer a retried direct
+   * steer with a queued message's receipt. A genuine retry always goes to
+   * the same route, so including it never breaks a replay.
+   */
   it("changes with any field, and with the route", () => {
     const base = requestFingerprint("steer-message", { text: "hello", panePid: 1 });
     expect(requestFingerprint("steer-message", { text: "hello", panePid: 2 })).not.toBe(base);
     expect(requestFingerprint("steer-message", { text: "hello" })).not.toBe(base);
+    expect(requestFingerprint("steer-message", { panePid: 1, text: "hello" })).toBe(base);
     expect(requestFingerprint("actions-session", { text: "hello", panePid: 1 })).not.toBe(base);
+    const keyed = { requestId: GOOD_ID, text: "hello", panePid: 1 };
+    const onSteer = readRequestKey("steer-message", keyed);
+    const onSession = readRequestKey("actions-session", keyed);
+    if (onSteer.kind !== "keyed" || onSession.kind !== "keyed") throw new Error("both should be keyed");
+    expect(onSteer.fingerprint).not.toBe(onSession.fingerprint);
   });
 });
 

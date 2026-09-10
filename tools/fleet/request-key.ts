@@ -13,11 +13,17 @@
  *     make an identical retry conflict with itself);
  *  3. has this dashboard seen it (`lookupRequest`).
  *
- * **THE ROUTE IS PART OF THE FINGERPRINT.** A message body and an enqueue body
- * can be identical field for field (the session route defaults `mode` to
- * `enqueue`), and without the route in the hash one id could replay a direct
- * steer's receipt as the answer to an enqueue. Hashing the route makes that a
- * conflict, which is the honest reading of one key used for two intentions.
+ * **THE ROUTE IS PART OF THE FINGERPRINT, BECAUSE IT IS THE CLIENT'S
+ * OPERATION.** It is chosen by the client, stable across deploys and restarts,
+ * and a genuine retry always goes to the same one — so, unlike anything the
+ * server derives, hashing it can never make an identical retry conflict with
+ * itself. A message body and an enqueue body can be identical field for field
+ * (the session route defaults `mode` to `enqueue`), and without the route one
+ * id could answer a retried direct steer with a queued message's receipt: the
+ * "never twice" half of idempotency kept, the "tell the truth about what was
+ * done" half broken. The Stage 2 review (F38) removed it on a literal reading
+ * of the plan's "client-supplied body"; that was overruled on Fable's
+ * arbitration and the plan's sentence now names the operation (§ The fingerprint).
  */
 import { createHash } from "node:crypto";
 
@@ -28,7 +34,7 @@ import {
   type ReceiptState,
 } from "./receipt-journal.js";
 
-/** Which write the key was sent to. */
+/** Which write the key was sent to. Hashed into the fingerprint — see the header. */
 export type RequestRoute = "steer-message" | "steer-answer" | "actions-session";
 
 /**

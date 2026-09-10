@@ -12,7 +12,7 @@
  * only), a ledger another dashboard holds the lock for (read-only here), and a
  * ledger whose last write failed are all a restart that may lose a hold.
  */
-import { mkdtempSync, rmSync } from "node:fs";
+import { mkdtempSync, rmSync, unlinkSync, writeSync } from "node:fs";
 import type { IncomingMessage, ServerResponse } from "node:http";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -79,6 +79,39 @@ describe("QuarantineBook.durable — whether a hold opened now would survive a r
     const b = book(failing);
     b.noteAttempt({ sessionId: "$7301", paneId: "%7301", claudeSessionId: null, origin: "direct-steer", what: "message (4 characters)" });
     expect(failing.status().failure).not.toBeNull();
+    expect(b.durable()).toBe(false);
+  });
+
+  it("is false when the writer lock is lost after opening, before another write notices", () => {
+    const dir = tempDir();
+    const ledger = ledgerIn(dir);
+    const b = book(ledger);
+    expect(b.durable()).toBe(true);
+
+    unlinkSync(join(dir, "writer.lock"));
+
+    expect(b.durable()).toBe(false);
+  });
+
+  it("stays false when a later successful write clears the failure but an open hold was never recorded", () => {
+    let fail = true;
+    const ledger = ledgerIn(tempDir(), (fd, line) => {
+      if (fail) throw new Error("ENOSPC: no space left on device");
+      writeSync(fd, line);
+    });
+    const b = book(ledger);
+    b.hold({
+      sessionId: "$7302",
+      paneId: "%7302",
+      claudeSessionId: null,
+      reading: "unknown",
+      origin: "direct-steer",
+      what: "message (4 characters)",
+    });
+    fail = false;
+    b.noteAttempt({ sessionId: "$7303", paneId: "%7303", claudeSessionId: null, origin: "direct-steer", what: "message (5 characters)" });
+    expect(ledger.status().failure).toBeNull();
+
     expect(b.durable()).toBe(false);
   });
 });

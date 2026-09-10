@@ -399,7 +399,14 @@ export class QuarantineBook {
   durable(): boolean {
     if (this.ledger === null) return false;
     const status = this.ledger.status();
-    return status.lockedOutBy === null && status.failure === null;
+    if (status.lockedOutBy !== null || status.failure !== null) return false;
+    // A later successful append clears the ledger's last-failure field, but it
+    // cannot retroactively persist a hold whose own write failed. The restart
+    // check is about the holds that exist, not only the next write, so every
+    // open in-memory hold must still have some live ledger barrier for its
+    // session (an attempt or a held record both rebuild a hold).
+    const durableSessions = new Set(this.ledger.live().map((record) => record.sessionId));
+    return this.heldSessions().every((sessionId) => durableSessions.has(sessionId));
   }
 
   /* ---------------- writing ---------------- */
