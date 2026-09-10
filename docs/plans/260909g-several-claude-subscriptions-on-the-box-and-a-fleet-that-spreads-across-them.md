@@ -803,6 +803,49 @@ attributed to an account*.
 checkpoint parsing, daemon retention and carry, history projection, the reader and chart, the CLI
 JSON, the UI, and their tests.
 
+#### `sessions/` is shared too, and why that was not optional
+
+`<config dir>/sessions/<pid>.json` is **two things at once**: the listing behind
+`claude agents --json`, and the peer registry behind `SendMessage`/`ListAgents` — it carries `name`,
+`messagingSocketPath` and `sessionId`. The sockets themselves already live in the shared
+`/run/user/1000/cc-socks/`; only this listing was per config dir.
+
+So an unshared pool session was **invisible and mute**: `running-but-unlisted` in the register, and
+unable to message the Overseer at all. For a dispatched agent whose job ends in a debrief, that is
+close to fatal.
+
+**Sharing is safe here for the reason sharing memory would not be.** These files are pid-keyed and
+pids are unique on a box, so each has exactly one writer; the record also carries `procStart` and
+`pidDomain`, so the CLI disambiguates pid reuse itself. That is the opposite of `MEMORY.md`, where
+many writers share one path. **This plan had that backwards at first** — it cited pid-keying as the
+hazard, when pid-keying is precisely what makes it safe.
+
+**Proven live, 2026-09-10**, on two sessions that were already running:
+
+| | ambient `claude agents --json` |
+|---|---|
+| 02:04:14, before the re-seed | **10** — neither pool session |
+| 02:04:40, after | **12** — `admission-visibility` and `resource-history` by name |
+
+**No restart**, because the migration copies the existing records across before swapping the
+directory. Without that copy, re-seeding would have made two working sessions *vanish* rather than
+appear — the opposite of the bug being fixed.
+
+And from the pool session itself: `ListAgents` went from **2 rows, both Remote Control, no local
+sessions at all** to **13 peers**, and a `SendMessage` to the Overseer that had failed at ~00:50Z
+with *"No agent named 'Overseer' is reachable"* now succeeds. It also confirmed the shared
+`projects/` works **in both directions** — it loaded ~70 auto-memory files and wrote one back.
+
+##### The cheap tell, if this ever recurs
+
+The failure was not silent, but it was **ambiguous in the worst way**: *"No agent named 'Overseer' is
+reachable"* reads as *that peer has gone*, not as *you cannot see any peer*. A session hunting a
+missing Overseer will not find a seeding fault.
+
+**The diagnostic that is unambiguous — `admission-visibility`'s, and worth more than the error
+message — is `ListAgents` showing zero local sessions on a box that plainly has a dozen.** Absence of
+everything is a different claim from absence of one thing, and only the first names the real fault.
+
 #### The attribution proof, measured 2026-09-10 on live sessions
 
 **This is the evidence the Usage Limits tab rests on**, and until it existed the per-account claim was
