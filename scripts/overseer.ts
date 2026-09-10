@@ -53,6 +53,12 @@ import { groupUsageIncidents } from "../tools/fleet/usage-feed.js";
 import { makeUsageRetention, type UsageRetention } from "../tools/fleet/usage-history-wiring.js";
 import type { CodexUsageReading } from "../tools/fleet/wire.js";
 import { reconcileArming } from "../tools/overseer/arming.js";
+import {
+  readAccountRegistry,
+  readUsage,
+  type AccountEntry,
+  type AccountUsageReading,
+} from "../tools/overseer/accounts.js";
 import type { Arming, AuthorisedJob } from "../tools/overseer/jobs.js";
 import { eligibilityOf, type JobEligibility } from "../tools/overseer/scheduler.js";
 import { LAUNCH_SEPARATION_MS } from "../tools/overseer/schedules.js";
@@ -234,7 +240,68 @@ function codexUsageLines(codex: CodexUsageReading): string[] {
   return out;
 }
 
-export function usageLines(report: UsageReport, codex: CodexUsageReading): string[] {
+type RegisteredAccountUsage = { account: AccountEntry; usage: AccountUsageReading };
+
+/* LIVE CLI PROJECTION ONLY. The daemon pass, wire `UsageReport`, checkpoint,
+   and stored history remain singular. Making those plural needs the separate
+   history-schema change from Stage 3; alternating account records would break
+   every series that is absent from the current record. */
+
+function shortAccountUuid(uuid: string): string {
+  return uuid.length > 8 ? `${uuid.slice(0, 8)}…` : uuid;
+}
+
+function accountWindow(
+  usage: AccountUsageReading,
+  windowName: "five_hour" | "seven_day",
+): { text: string; why: string | null } {
+  if (usage.kind === "unknown") return { text: "unknown", why: usage.why };
+  const matches = usage.windows.filter((window) => window.window === windowName);
+  if (matches.length === 0) return { text: "unknown", why: `${windowName} was not reported` };
+  if (matches.length > 1) return { text: "unknown", why: `${windowName} was reported more than once` };
+  const window = matches[0]!;
+  if (window.kind === "value") return { text: `${window.utilizationPercent}%`, why: null };
+  if (window.kind === "expired") {
+    // Never append `why` here: it deliberately contains the stale percentage,
+    // and an expired window has no percentage a renderer may claim.
+    return { text: "expired", why: null };
+  }
+  return { text: "unknown", why: window.why };
+}
+
+function registeredAccountLines(readings: readonly RegisteredAccountUsage[]): string[] {
+  if (readings.length === 0) return [];
+  const out = ["Claude accounts (registry)"];
+  const nameWidth = Math.max(...readings.map(({ account }) => account.name.length));
+  const roleWidth = Math.max(...readings.map(({ account }) => account.role.length));
+  const emailWidth = Math.max(...readings.map(({ account, usage }) =>
+    (usage.kind === "value" ? usage.identity.displayEmail : undefined)?.length ?? account.displayEmail?.length ?? 1
+  ));
+
+  for (const { account, usage } of readings) {
+    const fiveHour = accountWindow(usage, "five_hour");
+    const sevenDay = accountWindow(usage, "seven_day");
+    const email = usage.kind === "value"
+      ? usage.identity.displayEmail ?? account.displayEmail ?? "?"
+      : account.displayEmail ?? "?";
+    const accountUuid = usage.kind === "value"
+      ? usage.identity.providerAccountId
+      : account.providerAccountId;
+    const reasons = [...new Set([fiveHour.why, sevenDay.why].filter((why): why is string => why !== null))];
+    out.push(
+      `  ${account.name.padEnd(nameWidth)}  ${account.role.padEnd(roleWidth)}  ${email.padEnd(emailWidth)}  ` +
+        `5h ${fiveHour.text}   7d ${sevenDay.text}   uuid ${shortAccountUuid(accountUuid)}   ` +
+        `taken ${usage.takenAt}${reasons.length === 0 ? "" : ` — ${reasons.join("; ")}`}`,
+    );
+  }
+  return out;
+}
+
+export function usageLines(
+  report: UsageReport,
+  codex: CodexUsageReading,
+  accounts: readonly RegisteredAccountUsage[] = [],
+): string[] {
   const out: string[] = ["Claude subscription"];
   const a = report.account;
   out.push(
@@ -306,13 +373,18 @@ export function usageLines(report: UsageReport, codex: CodexUsageReading): strin
     }
   }
   out.push(`took      ${report.tookMs}ms, at ${when(report.collectedAt)}`);
+  if (accounts.length > 0) out.push("", ...registeredAccountLines(accounts));
   out.push("", ...codexUsageLines(codex));
   return out;
 }
 
-/** The old report remains at the top level; Codex is an additive JSON field. */
-export function usageJson(report: UsageReport, codex: CodexUsageReading): UsageReport & { codex: CodexUsageReading } {
-  return { ...report, codex };
+/** The old report remains at the top level; Codex and live registered accounts are additive fields. */
+export function usageJson(
+  report: UsageReport,
+  codex: CodexUsageReading,
+  accounts: readonly RegisteredAccountUsage[] = [],
+): UsageReport & { codex: CodexUsageReading; accounts: readonly RegisteredAccountUsage[] } {
+  return { ...report, codex, accounts };
 }
 
 /** The complete `overseer usage` action, injectable so both output paths are exercised without live reads. */
@@ -321,15 +393,71 @@ export async function runUsageCommand(
   deps: {
     claude: typeof collectUsage;
     codex: typeof collectCodexUsage;
+    registry: typeof readAccountRegistry;
+    accountUsage(configDir: string): Promise<AccountUsageReading>;
     out(line: string): void;
-  } = { claude: collectUsage, codex: collectCodexUsage, out: console.log },
+  } = {
+    claude: collectUsage,
+    codex: collectCodexUsage,
+    registry: readAccountRegistry,
+    // `readUsage` reads only the access token and owns the 401 policy: it may
+    // re-read a token another Claude process already rotated, but never reads
+    // or spends the refresh token itself.
+    accountUsage: (configDir) => readUsage(configDir, { fetch }),
+    out: console.log,
+  },
 ): Promise<number> {
-  const [claudeResult, codexResult] = await Promise.allSettled([
+  const registry = await deps.registry();
+  if (registry.kind === "error") {
+    throw new Error(`Claude account registry is unusable: ${registry.why}`);
+  }
+  const registeredAccounts = registry.kind === "value"
+    ? registry.accounts.filter((account) => account.family === "claude")
+    : [];
+  const [claudeResult, codexResult, accountResults] = await Promise.all([
     Promise.resolve().then(() => deps.claude({
       ...(parsed.sinceHours === undefined ? {} : { sinceMs: parsed.sinceHours * 3600_000 }),
       ...(parsed.maxTranscripts === undefined ? {} : { maxTranscripts: parsed.maxTranscripts }),
+    })).then(
+      (value) => ({ status: "fulfilled" as const, value }),
+      (reason: unknown) => ({ status: "rejected" as const, reason }),
+    ),
+    Promise.resolve().then(() => deps.codex()).then(
+      (value) => ({ status: "fulfilled" as const, value }),
+      (reason: unknown) => ({ status: "rejected" as const, reason }),
+    ),
+    Promise.all(registeredAccounts.map(async (account): Promise<RegisteredAccountUsage> => {
+      try {
+        const usage = await deps.accountUsage(account.stateDir);
+        if (
+          usage.kind === "value" &&
+          (usage.identity.providerAccountId !== account.providerAccountId ||
+            usage.identity.providerTenantId !== account.providerTenantId ||
+            (account.displayEmail !== undefined && usage.identity.displayEmail !== account.displayEmail))
+        ) {
+          return {
+            account,
+            usage: {
+              kind: "unknown",
+              configDir: account.stateDir,
+              takenAt: usage.takenAt,
+              why: "live identity does not match the registry pin",
+            },
+          };
+        }
+        return { account, usage };
+      } catch (cause) {
+        return {
+          account,
+          usage: {
+            kind: "unknown",
+            configDir: account.stateDir,
+            takenAt: new Date().toISOString(),
+            why: `account usage reader rejected: ${cause instanceof Error ? cause.message : String(cause)}`,
+          },
+        };
+      }
     })),
-    Promise.resolve().then(() => deps.codex()),
   ]);
   if (claudeResult.status === "rejected") throw claudeResult.reason;
   const codex: CodexUsageReading =
@@ -342,8 +470,8 @@ export async function runUsageCommand(
         };
   deps.out(
     parsed.json
-      ? JSON.stringify(usageJson(claudeResult.value, codex), null, 2)
-      : usageLines(claudeResult.value, codex).join("\n"),
+      ? JSON.stringify(usageJson(claudeResult.value, codex, accountResults), null, 2)
+      : usageLines(claudeResult.value, codex, accountResults).join("\n"),
   );
   return 0;
 }
