@@ -2,6 +2,7 @@ import { fileURLToPath } from "node:url";
 import type { InlineConfig } from "vitest/node";
 import { defaultExclude, defineConfig } from "vitest/config";
 
+import { recordRefusal } from "./admission-journal.js";
 import { TEST_LANES, type TestLane } from "./tests/store-migration-registry.js";
 import {
   ADMISSION_POLICY_VERSION,
@@ -111,16 +112,20 @@ function workersForThisRun(): number {
   const readinessAdmissionToken = process.env[READINESS_ADMISSION_TOKEN_ENV];
   delete process.env[READINESS_ADMISSION_TOKEN_ENV];
   const nominal = resolveParallelWorkers();
-  const decision = decideAdmission({
-    nominalWorkers: nominal,
-    snapshot: readMemorySnapshot(),
-    reserveBytes: readReserveBytes(),
-  });
+  /* Held in consts rather than read inline, because the journal below has to
+     record the readings this decision was actually made on. Passing the readers
+     themselves made it re-read /proc/meminfo at record time and write a later
+     sample — wrong by however much the box moved in between, which is most
+     under exactly the pressure that caused the refusal. */
+  const snapshot = readMemorySnapshot();
+  const reserveBytes = readReserveBytes();
+  const decision = decideAdmission({ nominalWorkers: nominal, snapshot, reserveBytes });
   /* A refusal is thrown rather than returned as a small number: the arithmetic
      has said no worker fits, and the failure mode this whole file exists to
      stop is a run that starts anyway and takes postgres down with it. It must
      also not look like a red test — the message says so in as many words. */
   if (decision.kind === "refuse") {
+    recordRefusal({ source: "test-run", policyVersion: ADMISSION_POLICY_VERSION, snapshot, reserveBytes });
     throw new Error(markReadinessAdmissionRefusal(decision.message, readinessAdmissionToken));
   }
   if (decision.kind === "not-applicable") return nominal;

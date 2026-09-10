@@ -59,6 +59,7 @@ import { useActions } from "./useActions";
 import { useFleetState } from "./useFleetState";
 import { useNow } from "./useNow";
 import { parseOrdering, tally } from "./view";
+import { CURRENT_WORK_NOT_REPORTED } from "./work-client";
 
 export function App({
   transport,
@@ -387,6 +388,8 @@ export function App({
               actions={actions}
               rows={rows}
               historyApi={historyApi}
+              currentWork={feed.state?.currentWork ?? CURRENT_WORK_NOT_REPORTED}
+              now={now}
               admissionApi={admissionApi}
               /* **THE CHART'S LABELS ARE WALL-CLOCK TIMES**, so they are the
                  reader's to read off their own watch — and the masthead above

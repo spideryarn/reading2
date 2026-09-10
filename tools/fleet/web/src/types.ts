@@ -41,6 +41,10 @@ import {
   SCAN_STALE_MS,
 } from "../../question-freshness.js";
 import { absenceGapReason } from "../../usage-absence.js";
+import {
+  parseCurrentWork,
+  type CurrentWorkView,
+} from "./work-client";
 import type {
   AttentionAnswerability,
   AttentionEvidence,
@@ -509,6 +513,10 @@ export type FleetState = Omit<
      shifted onto the browser's clock, because they are rendered as wall-clock
      times in three zones rather than as ages. */
   | "usage"
+  /* Re-typed: live work also needs client-only absent/unreadable arms, and its
+     three source clocks are shifted here so the panel can state reading age
+     without mixing the box's clock with the phone's. */
+  | "currentWork"
   /* Re-typed too, and it was DECLINED for a day on reasoning that did not hold.
      The entry here used to say that `readAttemptClock` is a runtime value, so it
      could not live in wire.ts, so both sides could not share one — and therefore
@@ -585,6 +593,8 @@ export type FleetState = Omit<
    * why, and `UsageCard` is the one component that applies the skew itself.
    */
   usage: UsageView;
+  /** Live work from this payload's checkpoint read, never from history. */
+  currentWork: CurrentWorkView;
   /**
    * **How many rows in the payload could not be read**, which is a fact about
    * the fleet and not a tidiness note.
@@ -3249,6 +3259,10 @@ export function parseFleetState(raw: unknown, receivedAt: number): FleetStateRea
          SHIFTED. Fails the same way as the two above it — never throws, never
          fails the payload. */
       usage: parseUsage(raw["usage"]),
+      currentWork: parseCurrentWork(
+        raw["currentWork"],
+        (value) => shiftToBrowserClock(value, clockSkew) ?? value,
+      ),
       /* `null` rather than a default: "the server did not say" and "the server
          says 60s" are different facts, and only the first should let the observed
          cadence win. */

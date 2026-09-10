@@ -12,12 +12,13 @@
  * **The other half already exists.** tools/fleet/live.ts serves `/api/live` as
  * an event stream with two named events — `snapshot`, carrying the same JSON
  * this file parses, and `ping` as a heartbeat. So the swap is one function here
- * (an `EventSource`, `onmessage` on `snapshot` into `sink.onState`, `onerror`
- * into `sink.onError`, `close()` as `stop`) and one word in the default
- * argument of `useFleetState`. It is not done in this pass because polling is
- * what the plan asked for at this slice and because an `EventSource` written
- * against a stream nobody here has watched reconnect is exactly the kind of
- * change that looks finished — see docs/reusable/silent-success.md.
+ * (an `EventSource`, `addEventListener("snapshot", ...)` into `sink.onState`,
+ * `onerror` into `sink.onError`, `close()` as `stop`) and one word in the
+ * default argument of `useFleetState`. Named events do not reach `onmessage`.
+ * It is not done in this pass because polling is what the plan asked for at
+ * this slice and because an `EventSource` written against a stream nobody here
+ * has watched reconnect is exactly the kind of change that looks finished —
+ * see docs/reusable/silent-success.md.
  *
  * What a replacement must keep, because the UI depends on all four:
  *
@@ -28,9 +29,16 @@
  *    the previous rows on screen with STALE over them, because a fleet you
  *    cannot currently reach is not an empty fleet.
  *  - **`refresh()` is a person pressing a button.** It must do the thing
- *    immediately and reset any backoff.
+ *    immediately and reset any backoff — including when a request is already
+ *    open, where "immediately" means *one* fresh attempt the moment that one
+ *    settles, not a press that quietly evaporates and not two overlapping asks.
  *  - **`stop()` must be idempotent**, since React calls it on every effect
  *    teardown including the double one in StrictMode.
+ *  - **`stop()` must leave nothing owned that can keep working**: no timer, no
+ *    window listener, and any request in flight has been aborted. A transport
+ *    that lets a fetch finish after the page has gone is not visibly broken,
+ *    which is why it survived until somebody went looking
+ *    (`tests/fleet-transport.test.ts`).
  *
  * ## Why polling first
  *
@@ -138,9 +146,9 @@ export async function fetchFleetState(
  *
  * Three things beyond the timer, all of them about a phone:
  *
- *  - **A hidden tab does not poll.** Greg leaves this open; a backgrounded page
- *    asking a loaded box for a 12-second collection every five seconds is rude,
- *    and the answer would be stale by the time anybody looked at it anyway.
+ *  - **A hidden tab does not poll.** Greg leaves this open; even a cheap request
+ *    for the server's cached snapshot is wasted while nobody can see it, and
+ *    the answer would be stale by the time anybody looked at it anyway.
  *  - **Becoming visible refreshes immediately**, which is the moment the number
  *    on screen matters most and the moment it is most likely to be wrong.
  *  - **Coming back online refreshes too**, rather than waiting out a backoff
@@ -165,6 +173,26 @@ export function pollingTransport(options: {
     let inFlight = false;
     let failures = 0;
     let timer: ReturnType<typeof setTimeout> | null = null;
+    /**
+     * The request in flight, **at transport scope so `stop()` can reach it.**
+     *
+     * It used to live inside `tick`, which meant a closed tab left a fetch open
+     * for up to `timeoutMs` — twenty seconds of work on a box that has hit load
+     * average 391, on behalf of a page that no longer exists. Nothing looked
+     * wrong, because the answer was discarded when it eventually arrived.
+     */
+    let controller: AbortController | null = null;
+    /**
+     * Somebody pressed refresh while a request was open.
+     *
+     * The press used to be absorbed: `tick()` returns immediately on
+     * `inFlight`, and the in-flight request's `finally` then scheduled the next
+     * one at the ordinary interval — or after a doubled backoff, if it failed,
+     * which is the wait the person was pressing the button to escape. A flag
+     * rather than a queue, because two presses during one request are still one
+     * question.
+     */
+    let pendingRefresh = false;
 
     const clear = (): void => {
       if (timer !== null) {
@@ -172,6 +200,18 @@ export function pollingTransport(options: {
         timer = null;
       }
     };
+
+    /**
+     * A failure, in words a person can act on.
+     *
+     * The abort is the interesting half: it is this file's own deadline rather
+     * than anything the server said, so "the request failed" would be a shrug
+     * where "no answer in 20s" is a fact about the box.
+     */
+    const whyItFailed = (signal: AbortSignal, cause: unknown): string =>
+      signal.aborted
+        ? `no answer in ${Math.round(timeoutMs / 1000)}s — the server may be collecting, or gone`
+        : describeError(cause);
 
     const schedule = (): void => {
       if (stopped) return;
@@ -189,30 +229,59 @@ export function pollingTransport(options: {
         return;
       }
       inFlight = true;
-      const controller = new AbortController();
-      const abort = setTimeout(() => controller.abort(), timeoutMs);
+      const mine = new AbortController();
+      controller = mine;
+      const abort = setTimeout(() => mine.abort(), timeoutMs);
       try {
-        const state = await fetchFleetState(url, { signal: controller.signal });
+        const state = await fetchFleetState(url, { signal: mine.signal });
         if (stopped) return;
         failures = 0;
         sink.onState(state);
       } catch (cause) {
         if (stopped) return;
         failures += 1;
-        sink.onError(
-          controller.signal.aborted
-            ? `no answer in ${Math.round(timeoutMs / 1000)}s — the server may be collecting, or gone`
-            : describeError(cause),
-        );
+        sink.onError(whyItFailed(mine.signal, cause));
       } finally {
         clearTimeout(abort);
-        inFlight = false;
-        schedule();
+        if (controller === mine) controller = null;
+        whatNext();
       }
     };
 
+    /**
+     * What happens after a request settles, however it settled.
+     *
+     * Its own function rather than the body of a `finally`, for two reasons
+     * that are both about that `finally`: an early `return` inside one silently
+     * discards what the `try` or `catch` was doing, and everything here has to
+     * run on the success path, the failure path and the abort path alike — so
+     * it is easier to be sure of when there is one place to read.
+     *
+     * **A press that landed while the request was open is answered now**, not
+     * at the next scheduled tick, which is the difference between a button that
+     * works and one that seems not to (see `pendingRefresh`). Not while
+     * stopped: `tick` would refuse it anyway, and clearing the flag keeps a
+     * torn-down transport from holding a press nobody will ever see.
+     */
+    const whatNext = (): void => {
+      inFlight = false;
+      const pressed = pendingRefresh && !stopped;
+      pendingRefresh = false;
+      if (pressed) void tick();
+      else schedule();
+    };
+
     const refresh = (): void => {
+      if (stopped) return;
       failures = 0;
+      if (inFlight) {
+        // The answer to this press is one fresh request after the current one
+        // finishes. The timer is deliberately left alone: `finally` decides
+        // what happens next, and clearing it here would leave a moment with
+        // neither a timer nor a request if the fetch had already settled.
+        pendingRefresh = true;
+        return;
+      }
       clear();
       void tick();
     };
@@ -230,7 +299,13 @@ export function pollingTransport(options: {
       refresh,
       stop: () => {
         stopped = true;
+        pendingRefresh = false;
         clear();
+        // The request in flight goes with the page. `tick`'s `catch` sees
+        // `stopped` and says nothing to the sink, so this is silent rather than
+        // an error banner on a component that has already unmounted.
+        controller?.abort();
+        controller = null;
         if (typeof document !== "undefined") document.removeEventListener("visibilitychange", onVisible);
         if (typeof window !== "undefined") window.removeEventListener("online", refresh);
       },

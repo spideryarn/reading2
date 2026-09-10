@@ -7,20 +7,29 @@
  * >
  * > — Greg, 2026-09-08
  *
- * ## The thresholds are a COPY, and that is a deliberate cost
+ * ## The thresholds are NOT a copy any more, since 2026-09-10
  *
- * Every cutoff below is `computeVerdict`'s in tools/fleet/health.ts, restated
- * rather than imported — that file opens with `node:child_process`, so a
- * type-only import still makes TypeScript walk a module this browser project
- * has no node types for. It is the same trade view.ts already makes with
- * `triageRank`, and its header says the same thing: *the duplication is the
- * price of the client not importing node modules.*
+ * They were, and the reason was good: every cutoff is `computeVerdict`'s in
+ * tools/fleet/health.ts, and that file opens with `node:child_process`, so even
+ * a type-only import makes TypeScript walk a module this browser project has no
+ * node types for. The cost was named honestly — *a tile coloured amber beside a
+ * badge that says `ok`, because one of the two moved* — and the mitigation was
+ * to keep the numbers together in one `THRESHOLDS` object here.
  *
- * **The failure it buys is specific and worth naming**: a tile coloured amber
- * beside a badge that says `ok`, because one of the two moved. So the numbers
- * are all in `THRESHOLDS` below rather than scattered through the readers, and
- * tests/fleet-web.test.tsx pins each boundary. If health.ts's cutoffs change,
- * that test is what should go red.
+ * **The mitigation did not work, and could not have.** This header used to say
+ * "tests/fleet-web.test.tsx pins each boundary; if health.ts's cutoffs change,
+ * that test is what should go red". That test pins the *tile* at the literal
+ * `0.15` and never calls `computeVerdict` — the name appears in it only in
+ * comments — so moving health.ts's literal left the suite green and the page
+ * contradicting itself.
+ *
+ * The premise is what has changed rather than the reasoning:
+ * `tools/fleet/resource-policy.ts` is a **leaf with no imports at all**, so it
+ * costs this project nothing to import, the way `zones.ts`,
+ * `attempt-clock.ts` and `overseer-claim.ts` already do. `THRESHOLDS` is now
+ * that module, re-exported under the name every reader here already uses, and
+ * `tests/fleet-resource-policy.test.ts` drives `computeVerdict` at boundaries
+ * computed from it — so the two genuinely cannot drift.
  *
  * ## What a tile must never do
  *
@@ -46,67 +55,26 @@
  * flip — see `MEMORY_USED_PERCENT`.
  */
 
+import { LOAD_BAR_CEILING, MEMORY_USED_PERCENT, RESOURCE_POLICY as THRESHOLDS } from "../../resource-policy.js";
 import type { Tip } from "./Tooltip";
 import type { Tone } from "./view";
 
 /**
- * The cutoffs, in one place, mirroring `computeVerdict`.
+ * The cutoffs — **`resource-policy.ts`'s, under the name this file's readers
+ * already use.**
  *
  * Read as: at or above `strained` is amber, at or above `critical` is red —
  * except `memoryAvailable`, where the scale runs the other way and *less* is
  * worse. That inversion is exactly the kind of thing a shared constant hides,
- * so the memory reader states its comparison out loud rather than looping over
- * this table.
+ * so the memory reader below states its comparison out loud rather than looping
+ * over this table.
+ *
+ * An alias rather than a rename because a dozen call sites and three tooltip
+ * strings say `THRESHOLDS`, and a rename would have made the diff that removes
+ * a duplication look like a diff that moves a feature. The evidence for each
+ * number is on the policy module, which is the only place it now lives.
  */
-export const THRESHOLDS = {
-  /** load1 / cores. health.ts: ">2x strained, >4x critical", and the doc names no exact multiplier. */
-  loadRatio: { strained: 2, critical: 4 },
-  /** `availableFraction` (`availableBytes / totalBytes`). health.ts's own cutoffs; the doc only says "near zero". */
-  memoryAvailable: { strained: 0.15, critical: 0.05 },
-  /** `usedFraction` (`usedBytes / totalBytes`). A step function, not a ramp: "swap is a cliff, not a slope". */
-  swapUsed: { strained: 0.9, critical: 0.98 },
-  /** `df` percent on `/`. Ordinary sysadmin defaults rather than anything from the doc. */
-  diskUsed: { strained: 90, critical: 97 },
-  /** Percent of CPU time waiting on IO. health.ts treats >=50 with swapping as thrashing. */
-  ioWait: { thrashing: 50 },
-} as const;
-
-/**
- * The same cutoffs as `memoryAvailable`, said the other way round, in percent —
- * **for drawing and for words, never for deciding a colour.**
- *
- * The obvious version of this file's memory flip compared `used > 85` instead
- * of `available < 0.15`, on the grounds that they are the same statement. They
- * are not, once a double has been through a subtraction:
- *
- *     availableFraction = 0.14999999999999997
- *     0.14999999999999997 < 0.15          → true   (the collector: strained)
- *     100 - 0.14999999999999997 * 100     → 85     (exactly)
- *     85 > 85                             → false  (the tile: ok)
- *
- * An amber badge over a green tile, on one value in ten thousand billion, found
- * by GPT Sol reading the plan rather than by any test. So **the tone is decided
- * on the collector's own number in the collector's own direction**, and this
- * exists for the tile's tooltip, the chart's bands and the label — none of
- * which is a judgement about a particular reading.
- *
- * `Math.round` because `(1 - 0.15) * 100` is 85.00000000000001, and a number
- * that goes on a page as a threshold should not carry that.
- */
-export const MEMORY_USED_PERCENT = {
-  strained: Math.round((1 - THRESHOLDS.memoryAvailable.strained) * 100),
-  critical: Math.round((1 - THRESHOLDS.memoryAvailable.critical) * 100),
-} as const;
-
-/**
- * How far a load bar runs before it clips: twice the critical multiple.
- *
- * **Shared with the chart's y axis** (`history-series.ts` § SERIES), so the
- * tile's bar and the line under it agree about what "half way along" means.
- * Twice critical puts amber at a quarter of the track and red at half — the
- * reasoning is on `SeriesSpec.max`, and it is the axis that survived load 391.
- */
-export const LOAD_BAR_CEILING = THRESHOLDS.loadRatio.critical * 2;
+export { LOAD_BAR_CEILING, MEMORY_USED_PERCENT, THRESHOLDS };
 
 /**
  * The little track under a tile's number: how full or busy this one is, at a

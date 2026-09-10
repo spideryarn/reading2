@@ -152,7 +152,7 @@ export function projectDecisionCheckpoint(
     return { kind: "unavailable", why: `the Overseer checkpoint is unreadable: ${input.why}` };
   }
 
-  const status = projectOverseerStatus(input.json);
+  const status = projectOverseerStatus(input.json, now.toISOString());
   if (status.kind === "checkpoint-absent") {
     return { kind: "unavailable", why: "the Overseer checkpoint is absent" };
   }

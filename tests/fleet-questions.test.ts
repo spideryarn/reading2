@@ -418,7 +418,12 @@ describe("the production payload composition", () => {
         attemptedAt: stamp,
         readCheckpoint: () => {
           reads += 1;
-          return { attention: attentionFeed, overseer: { kind: "not-asked" }, usage: { kind: "not-asked" } };
+          return {
+            attention: attentionFeed,
+            overseer: { kind: "not-asked" },
+            usage: { kind: "not-asked" },
+            work: { kind: "checkpoint-absent" },
+          };
         },
       }),
     ) as Record<string, unknown>;

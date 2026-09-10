@@ -705,7 +705,7 @@ describe("the field on the payload", () => {
     writeCheckpoint(root);
     const state = fleetState(null, null, null, 60_000, true, null, readAttention(root), { kind: "not-asked" }, {
       kind: "not-asked",
-    });
+    }, { kind: "checkpoint-absent" });
     expect(state.attention).toMatchObject({ kind: "published", list: LIST });
     /* The only form the browser ever sees. A `readonly` array that survives a
        function call has not been shown to survive a serialisation. */

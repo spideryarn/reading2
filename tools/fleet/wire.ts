@@ -1200,6 +1200,13 @@ export type FleetState<Row, Health> = {
    */
   usage: UsageFeed;
   /**
+   * **WHAT EXPENSIVE WORK IS RUNNING NOW.** This is the work projection from
+   * the same single checkpoint read as `attention`, `overseer` and `usage`.
+   * It is live state, never inferred from the five-minute persistence cadence:
+   * that cadence governs what history keeps, not what this page calls current.
+   */
+  currentWork: WorkFeed;
+  /**
    * **THE SERVER'S OWN CLOCK, AT THE MOMENT IT ANSWERED** — the one field here
    * that is about us rather than about the box.
    *
@@ -3714,6 +3721,84 @@ export type FleetBoxActionRequest =
     };
 
 /* ================================================================== *
+ * WORK HISTORY — WHAT THE ACCEPTED PROCESS-TABLE SCAN SAW
+ * ================================================================== */
+
+export type StoredWorkGroup = {
+  /**
+   * The Overseer's session key — an IDENTITY, and never a command line.
+   *
+   * `"$2916 none"`, or `"$2890 claims:<uuid>"`. It is what survives a rename,
+   * which is why the scan is keyed by it, and it is **not** something to put in
+   * front of a reader: see `sessionName`.
+   */
+  session: string;
+  /**
+   * The name the launcher gave that session, as it was **at the moment of the
+   * scan** — or null when the register could not supply one.
+   *
+   * Stored beside the key rather than looked up at render time, because a
+   * history is read long after the session it describes has gone: resolving a
+   * name later would either fail for everything interesting or, worse, attach
+   * today's name to yesterday's tmux id after a reuse. Null renders as the key,
+   * which is ugly and true.
+   */
+  sessionName: string | null;
+  /** The recogniser's id, as a plain string — the Overseer's vocabulary. */
+  recogniser: string;
+  /** Job processes with that recogniser under that pane, at the scanned instant. */
+  jobs: number;
+  timing:
+    | { kind: "known"; oldestStartedAt: string; longestRanForMs: number }
+    /** Some jobs' timing was unavailable. These aggregates cover `knownJobs` of `jobs`. */
+    | { kind: "partial"; knownJobs: number; oldestStartedAt: string; longestRanForMs: number }
+    | { kind: "unknown" };
+};
+
+export type StoredWork =
+  | { kind: "not-yet-run"; asOf: string; why: string }
+  | { kind: "probe-failed"; attemptedAt: string; sourceCollectedAt: string; why: string }
+  /** We could not read the checkpoint, or could not accept its scan. OUR clock, not the daemon's. */
+  | { kind: "checkpoint-unavailable"; checkedAt: string; why: string }
+  | {
+      kind: "scan";
+      /** When the kernel was read. NOT the sample's own clock. */
+      scannedAt: string;
+      groups: StoredWorkGroup[];
+      /** How many groups the cap dropped. Zero is the ordinary case. */
+      groupsDropped: number;
+      /** The uncertainty, as counts. */
+      panes: { work: number; none: number; cannotTell: number };
+    };
+
+/** One checkpoint read's projection of its accepted work scan. */
+export type WorkFeed =
+  | { kind: "checkpoint-absent" }
+  | { kind: "checkpoint-unreadable"; why: string }
+  | { kind: "published"; work: StoredWork; coordinatorWrittenAt: string };
+
+/**
+ * **WAS WORK LOOKED AT ON THIS TURN, AND WHAT CAME BACK.** Carried on every arm
+ * of a stored health sample, including the ones where the health collector
+ * itself failed.
+ *
+ * `not-due` is written down rather than left implied, and that is the whole
+ * point of the envelope existing at all. Without it, four different situations
+ * produced an identical stored shape — a record from before work tracking
+ * existed, a turn the cadence did not call for, a turn that was due while
+ * health collection failed, and a turn whose summary would not fit — and no
+ * amount of arithmetic over `WORK_EVERY_MS` could recover the difference across
+ * a restart's phase change or before the first work sample. GPT Sol's F1,
+ * 2026-09-10.
+ *
+ * So the absence of this field now means exactly one thing: **a sample written
+ * before work tracking existed.** Everything else is a value.
+ */
+export type StoredWorkTurn =
+  | { kind: "not-due" }
+  | { kind: "due"; result: StoredWork };
+
+/* ================================================================== *
  * ADMISSION FORECAST — A HYPOTHETICAL ANSWER, NEVER A RESERVATION
  * ================================================================== */
 
@@ -3766,12 +3851,31 @@ export type AdmissionOutcome =
   | { kind: "unknown"; why: string }
   | { kind: "not-modelled"; why: string };
 
+export type AdmissionRefusalEntry = {
+  at: string;
+  source: "test-run" | "readiness-precheck";
+  policyVersion: number;
+  availableBytes: number | null;
+  reserveBytes: number | null;
+  swapTotalBytes: number | null;
+  swapFreeBytes: number | null;
+  pid: number;
+  host: string;
+};
+
+/** A readable journal, no directory yet, and a failed read are different facts. */
+export type AdmissionRefusalJournal =
+  | { kind: "read"; entries: AdmissionRefusalEntry[]; unparseableLines: number }
+  | { kind: "directory-absent" }
+  | { kind: "unreadable"; why: string };
+
 /** `GET /api/admission`: a fresh forecast. It changes and reserves nothing. */
 type AdmissionPayloadBase = {
   schema: 1;
   request: AdmissionRequest;
   /** When the server completed building this answer, by the SERVER's clock. */
   computedAtMs: number;
+  journal: AdmissionRefusalJournal;
 };
 
 /** The label and outcome are one union so a non-modelled request cannot acquire the test gate's policy. */

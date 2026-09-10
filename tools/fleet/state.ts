@@ -24,7 +24,7 @@ import type { FleetSnapshot } from "./collect.js";
 import type { HealthReport } from "./health.js";
 import type { CheckpointFeeds } from "./overseer-status.js";
 import { composeQuestions } from "./questions.js";
-import type { AttentionFeed, FleetState as FleetStateWire, OverseerStatusFeed, UsageFeed } from "./wire.js";
+import type { AttentionFeed, FleetState as FleetStateWire, OverseerStatusFeed, UsageFeed, WorkFeed } from "./wire.js";
 
 /**
  * What `/api/state` returns and `/api/live` pushes — the same bytes, by
@@ -92,6 +92,10 @@ export function fleetState(
    * in as many words, which is true of it — it did not look.
    */
   usage: UsageFeed,
+  /** Live work from the same checkpoint bytes, never reconstructed from the
+   * five-minute health-history cadence. Required so a forgotten composition
+   * edge is a type error rather than a quietly empty panel. */
+  currentWork: WorkFeed,
   now: number = Date.now(),
 ): FleetState {
   const rows = snapshot?.rows ?? [];
@@ -101,6 +105,7 @@ export function fleetState(
     attention,
     overseer,
     usage,
+    currentWork,
     /* The clock read that makes every age on the page comparable. Unlike
        `collectedAt` above, inventing this one here is not a lie with a clock on
        it — it is the only honest reading of it, because composing the payload
@@ -201,6 +206,7 @@ export function statePayload(deps: PayloadDeps): string {
       checkpoint.attention,
       checkpoint.overseer,
       checkpoint.usage,
+      checkpoint.work,
       Date.now(),
     ),
   );
