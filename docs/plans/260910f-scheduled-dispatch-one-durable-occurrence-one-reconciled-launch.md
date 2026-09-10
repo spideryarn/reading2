@@ -446,6 +446,60 @@ F1 is also my own finding M1, made independently while the review was running.
   `onUnknown: "clear"` and `usageStaleAfterMs` of 30 minutes, and the planner takes the result as a
   value.
 
+**M11: the account, a runtime choice pinned per occurrence (settled with `launch-protocol`,
+2026-09-10). This replaces M5's single daemon-wide gate.**
+- A scheduled session runs on a registered **Claude pool account** that the scheduler chooses at
+  plan time, never the daemon's own. The reason is the existing policy in `dispatch.ts`:
+  "dispatched work must draw only from pool accounts". run-claude has no `--account auto`, and
+  without the flag it inherits the daemon's `CLAUDE_CONFIG_DIR` through tmux.
+- The protocol's `RunSpec` gains `account`. The account is pinned in `planned` and `intent.json`,
+  and it's part of F5's conflict check. The adapter passes `--account <handle>` and strips the
+  account variables from the session's environment. run-claude refuses a bad handle into exit.json.
+- **Chosen per tick.** The daemon's `AccountChoice` is the first Claude pool account, in registry
+  order, whose `bothGates(healthGate, accountQuotaGate)` is clear. No clear account means
+  `usage-held`.
+- **Not part of the job's authority.** The hashed run spec stays `{ timeoutMinutes, access }`,
+  because which account runs a job is not something Greg authorises per job.
+- **A resume keeps its stored account.** It holds while that account is held, and never re-plans:
+  the same key with a different run is a conflict. The accepted cost: a waiting occurrence stays on
+  its account until that account clears, or until the job's hash moves and `abandon` supersedes it.
+
+**M12: an abandoned occurrence releases its due instant; a lost account forces an abandon
+(settled with `launch-protocol`, 2026-09-10). This overrides the "one interval lost" wording of
+Fable's P4 and P5 above.**
+- **The strand it closes.** An occurrence pinned to an account that has left the registry, or whose
+  credential is gone for good, would never clear its gate. Under M11's "a resume keeps its
+  account", it would wait until the job's hash moved, which may be never. (Found by
+  `launch-protocol`.)
+- **The new `LastRun` arm, `replaced`.** Any `failed-before-launch` with proof `superseded`,
+  whatever the reason for the abandon, reads as `replaced { at: endedAt }`, not `settled`.
+  - `due()` answers `due` with `dueAt = at`, not `at + everyMs`.
+  - The replacement's `scheduledAt`, and so its occurrence id, is the abandonment's `endedAt`: a
+    new id, no F5 conflict, and the abandoned id is never passed to the protocol again.
+  - Supersession, rollback and a lost account therefore all replan at once. P4's crash window and
+    P5's rollback no longer cost an interval. A crash between `abandon` and the new `plan()`
+    replans on the next tick.
+- **Per-account standing.** The daemon's `AccountChoice` carries `standing(handle)`, which answers
+  `clear`, `held` or `gone`.
+  - `gone` means the account is not a registered Claude pool account, or its credential is
+    permanently unusable.
+  - A waiting occurrence's stored account decides what happens: `clear` → resume; `held` →
+    `usage-held`, naming the account; `gone` → `abandon(id, "pinned account … is no longer
+    usable: …")`, and the replacement plans on this same tick, on the chosen account, or it holds.
+  - A waiting occurrence holds no slot, because `planned` and `waiting-admission` have no
+    reservation. So a wait on a busy account only ever delays its own job, never another job or a
+    resume.
+- **Not in v1: a staleness bound**, such as "abandon a scheduled occurrence waiting longer than N
+  intervals rather than launch it late". It is a possible later policy, on the same `abandon`. The
+  protocol does not need to know about it.
+- **The test Sol named for F1, updated:**
+  1. Revision A waits.
+  2. Revision B supersedes it, and B launches once.
+  3. A rollback to A abandons B, and a fresh occurrence (a new id) launches once.
+  4. A's original id is never passed to the protocol again.
+  - Plus: a pinned account going `gone` abandons the waiting occurrence and replans once, on
+    another account.
+
 **Stage A departures, as built and accepted.**
 - A disposition is dated by its own `at`.
 - The commands follow the result, not the bare state.
