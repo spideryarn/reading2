@@ -978,6 +978,13 @@ type InboxCandidate = { readonly name: string; readonly eventId: string; readonl
 
 /** How many quarantined names a pass's note quotes; the count covers the rest. */
 const QUARANTINE_EXAMPLES = 5;
+/** Name order is arrival order even when two synchronous passes begin in the same wall-clock millisecond. */
+let lastQuarantineBatchMs = 0;
+
+function quarantineBatchStamp(): string {
+  lastQuarantineBatchMs = Math.max(Date.now(), lastQuarantineBatchMs + 1);
+  return String(lastQuarantineBatchMs).padStart(13, "0");
+}
 
 /**
  * **ONE BOUNDED LOOK AT THE INBOX.** Lazily, through `opendirSync`, stopping
@@ -994,7 +1001,7 @@ function scanInbox(inboxDir: string, quarantineDir: string, cap: number, nowMs: 
   const candidates: InboxCandidate[] = [];
   const examples: string[] = [];
   const prefix = Buffer.from(`${inboxDir}${path.sep}`);
-  const stamp = String(Date.now()).padStart(13, "0");
+  const stamp = quarantineBatchStamp();
   let moved = 0;
   // The types only admit string encodings; Node honours "buffer" and hands back Buffer names.
   const dir = opendirSync(inboxDir, { encoding: "buffer" as BufferEncoding });

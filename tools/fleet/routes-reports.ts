@@ -260,9 +260,15 @@ export function reportsPayload(readers: ReportsRouteReaders): ReportsFeed {
   return answerWith(low);
 }
 
-function sendJson(res: ServerResponse, status: number, body: string, extra: Record<string, string> = {}): void {
+function sendJson(
+  res: ServerResponse,
+  status: number,
+  body: string,
+  extra: Record<string, string> = {},
+  withoutBody = false,
+): void {
   res.writeHead(status, { "content-type": "application/json", "cache-control": "no-store", ...extra });
-  res.end(body);
+  res.end(withoutBody ? undefined : body);
 }
 
 /** The exact production composition. Tests inject only its leaf readers. */
@@ -273,9 +279,10 @@ export function makeReportsRoute(readers: ReportsRouteReaders = realReaders()): 
     handle(req, res): boolean {
       const url = req.url ?? "/";
       if (!url.startsWith(REPORTS_PATH)) return false;
+      const head = req.method === "HEAD";
       const bare = url.split("?")[0] ?? "";
       if (bare !== REPORTS_PATH) {
-        sendJson(res, 404, JSON.stringify(unreadable(`no such route: ${bare}`, readers.now().toISOString())));
+        sendJson(res, 404, JSON.stringify(unreadable(`no such route: ${bare}`, readers.now().toISOString())), {}, head);
         return true;
       }
       if (req.method !== "GET" && req.method !== "HEAD") {
@@ -307,6 +314,8 @@ export function makeReportsRoute(readers: ReportsRouteReaders = realReaders()): 
               readers.now().toISOString(),
             ),
           ),
+          {},
+          head,
         );
         return true;
       }

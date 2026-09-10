@@ -898,16 +898,21 @@ describe("the inbox scan is bounded, and what can never be a report is moved out
   });
 
   test(`the quarantine keeps the newest ${200}, and the latest arrivals are among them`, () => {
-    const root = tempRoot();
-    for (let i = 0; i < 300; i += 1) drop(root, `junk-${i}.txt`, "");
-    expect(drainReports(options(root)).quarantined).toBe(300);
-    expect(QUARANTINE_KEPT).toBe(200);
-    expect(listed(root, QUARANTINE_DIR)).toHaveLength(200);
-    for (let i = 0; i < 5; i += 1) drop(root, `late-${i}.txt`, "");
-    expect(drainReports(options(root)).quarantined).toBe(5);
-    const kept = listed(root, QUARANTINE_DIR);
-    expect(kept).toHaveLength(200);
-    for (let i = 0; i < 5; i += 1) expect(kept.some((name) => name.endsWith(`late-${i}.txt`)), `late-${i}`).toBe(true);
+    const wall = vi.spyOn(Date, "now").mockReturnValue(1_799_568_000_000);
+    try {
+      const root = tempRoot();
+      for (let i = 0; i < 300; i += 1) drop(root, `junk-${i}.txt`, "");
+      expect(drainReports(options(root)).quarantined).toBe(300);
+      expect(QUARANTINE_KEPT).toBe(200);
+      expect(listed(root, QUARANTINE_DIR)).toHaveLength(200);
+      for (let i = 0; i < 5; i += 1) drop(root, `late-${i}.txt`, "");
+      expect(drainReports(options(root)).quarantined).toBe(5);
+      const kept = listed(root, QUARANTINE_DIR);
+      expect(kept).toHaveLength(200);
+      for (let i = 0; i < 5; i += 1) expect(kept.some((name) => name.endsWith(`late-${i}.txt`)), `late-${i}`).toBe(true);
+    } finally {
+      wall.mockRestore();
+    }
   });
 
   test("a symlink in the inbox is moved, never followed, and its target is untouched", () => {

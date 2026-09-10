@@ -201,6 +201,22 @@ describe("the mount", () => {
     const answer = call(readers(reportsRead([])), REPORTS_PATH, "HEAD");
     expect(answer.status).toBe(200);
     expect(answer.raw).toBe("");
+
+    const failed = call(
+      readers(reportsRead([]), {
+        readInbox: () => {
+          throw new Error("EACCES on report-inbox");
+        },
+      }),
+      REPORTS_PATH,
+      "HEAD",
+    );
+    expect(failed.status).toBe(500);
+    expect(failed.raw).toBe("");
+
+    const missing = call(readers(reportsRead([])), `${REPORTS_PATH}/missing`, "HEAD");
+    expect(missing.status).toBe(404);
+    expect(missing.raw).toBe("");
   });
 
   it("turns a reader that throws into a loud answer, not an empty one", () => {

@@ -394,6 +394,34 @@ Known and left for the review to weigh: `readInbox` still lists the whole inbox 
 (the dashboard, not the daemon); pruning a quarantined *directory* is recursive; the daemon logs a pass
 that only quarantined nothing.
 
+**Sol's Stage 3 review** ([findings](260910e-work-reports-stage3-review-sol-findings.md),
+[answer](260910e-work-reports-stage3-review-sol.md); 3a and 3b together, 30 minutes, findings written to a
+separate file first — which is why they survived): **not approved.** Fixed by the reviewer, each red
+first: WR-S3-1 (P1) a Sessions row made a completed claim read like the session's state — now "latest:
+claimed by …"; WR-S3-2 (P1) failed and 404 HEAD requests sent bodies; WR-S3-3 (P2) two quarantine passes in
+one millisecond could delete newer entries. Orchestrator's run after: 9 files, 214 passed. Gate 1 held:
+session decisions are frozen before either append, recorded `by: daemon, author: session`, cannot become
+reviews, replay exact bytes, leave lock contention pending, and honour `OVERSEER_DECISIONS_DIR`.
+
+Open, and taken by **Stage 3c** ([brief](260910e-work-reports-stage3c-task.md)):
+
+- **WR-S3-4 (P0)**: quarantine pruning deleted old entries with a recursive `rmSync`, so one quarantined
+  directory holding a huge tree could wedge the daemon — the failure the inbox bound exists to prevent.
+  **Decided: the daemon never deletes from quarantine.** Sol's route was a budgeted, resumable cleanup
+  protocol; the simpler one wins because moving an entry into quarantine costs no disk (the writer already
+  put it there), so there is nothing for the daemon to reclaim, and deleting someone else's files was never
+  its job. This drops "newest 200 kept"; emptying the quarantine is a person's act. Accepted by the Overseer
+  as its default pending Greg. **The one cost: the quarantine grows until someone empties it.** So the
+  growth shows rather than being silent — the Claims section and `overseer reports` say how many entries
+  are quarantined and how old the oldest is (capped like every other count here, "at least" when it is).
+- **WR-S3-5 (P1)**: `GET /api/reports` listed and opened the whole inbox, so a flood could block the fleet
+  server. Fix: the same capped lazy read, and every count says `{ exact }` or `{ atLeast }` through the
+  wire (reports payload schema 2), the client, the panel and the CLI ("AT LEAST …") — never a partial count
+  that looks exact.
+
+After 3c, one narrowly scoped Sol check of those two fixes (the P0 was not in the reviewed snapshot),
+announced to the Overseer as the sixth run.
+
 - [ ] Step [2] of the drain: a session's decision into `decisions.jsonl`, replay tests at each boundary,
   `OVERSEER_DECISIONS_DIR` honoured, a decisions-lock contention left pending.
 - [ ] `tools/fleet/reports-view.ts` (pure, joined with the register ⇒ unreported), `routes-reports.ts`

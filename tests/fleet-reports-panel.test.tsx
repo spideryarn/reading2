@@ -136,6 +136,25 @@ describe("sessions", () => {
     expect(host.querySelector('[data-session="gone-now"]')?.textContent).toContain("not in the register");
   });
 
+  it("keeps a latest completed report explicitly framed as the session's claim", async () => {
+    const said = claim({
+      kind: "completed",
+      ending: "finished",
+      revisions: { reviewed: [], tested: [], merged: [] },
+    } as Partial<ReportWireClaim>);
+    await render(
+      feed([said], {
+        sessions: {
+          kind: "joined-with-register",
+          rows: [{ name: "work-reports", register: "in-register", latest: { kind: "claimed", claims: 1, latest: said } }],
+        },
+      }),
+    );
+    const row = host.querySelector<HTMLElement>('[data-session="work-reports"]');
+    expect(row?.textContent).toContain("claimed by session work-reports");
+    expect(row?.textContent).toContain("completed (finished)");
+  });
+
   it("never calls anyone unreported when the register could not be read", async () => {
     const said = claim();
     await render(

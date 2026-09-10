@@ -696,7 +696,7 @@ function ClaimCard({ claim }: { claim: ReportWireClaim }): ReactNode {
 function LatestClaim({ claimed }: { claimed: ReportWireClaimed }): ReactNode {
   return (
     <span className="tw:min-w-0 tw:break-words tw:text-ink-soft">
-      {`${claimKindText(claimed.latest)} · ${claimed.latest.summary} `}
+      {`latest: claimed by ${actorText(claimed.latest.claimedBy)} · ${claimKindText(claimed.latest)} · ${claimed.latest.summary} `}
       <span className="tw:text-ink-faint">
         {`(${claimed.claims} ${claimed.claims === 1 ? "claim" : "claims"}, latest received `}
         <time dateTime={claimed.latest.receivedAt}>{claimed.latest.receivedAt}</time>)
