@@ -504,7 +504,7 @@ interface Props {
      sentence per part, with a `3 / 7` step marker and a loading tint while the
      stage was still running — and Greg took the column out: "let's get rid of
      the 'Arg' button and functionality altogether". The arc itself is alive and
-     well; App.tsx hands it to `OutlinePanel` instead
+     well; Reader hands it through `StructureBand` to `OutlinePanel` instead
      (docs/plans/260905d-declutter-the-reading-view-top-bars.md § Decisions 5). */
   /** Jump to a block, recording it in the URL. See App § useReadingPosition. */
   onJump(blockId: BlockId): void;
@@ -1232,7 +1232,7 @@ function TableViewInner({
    * names the leaf depth by hand, and a reader who had it open when the labels
    * went. The table's own outline mode (`showText` false), where this column
    * would have been the view, is unreachable: nothing sets that flag any more
-   * and `?text=0` is rewritten to `?mode=outline`, which is the band
+   * and `?text=0` is rewritten to `?mode=structure`, whose narrow face is the band
    * (`OutlinePanel`) and a different feature — docs/project/browser-testing.md
    * says so, and it was confirmed on 2026-09-06.
    */

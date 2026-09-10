@@ -66,7 +66,7 @@ import {
   stoppedByReader,
   whereSearchCountCameFrom,
 } from "./openrouter-stream.js";
-import { ProviderRefused, classifyEnd, openRouterStream } from "./ai-call.js";
+import { ProviderRefused, type StreamOutcome, classifyEnd, openRouterStream } from "./ai-call.js";
 import { ENDED_UNFINISHED, NOT_CONFIGURED, saidNothing } from "./messages.js";
 import { PROFILE_RULES, profileSection } from "./profile.js";
 import {
@@ -347,7 +347,25 @@ export interface ExplainResult {
  */
 export type ExplainEvent =
   | { type: "delta"; text: string }
-  | ({ type: "done" } & ExplainResult);
+  | ({ type: "done"; ending: ExplainEnding } & ExplainResult);
+
+/**
+ * **How a `done` came about**, for a caller whose idea of finished is stricter
+ * than this file's.
+ *
+ * `explainStream` accepts six endings as a clean `done`, each for a reason
+ * written at its `case` below — an abandoned answer and a truncated one among
+ * them, because half a comment has a row to live on and nowhere to say
+ * otherwise. The glossary does not: its only reader of a `done` draws a finished
+ * answer, so it refuses the ones that are not (src/term-lookup.ts). The kind
+ * travels rather than the raw finish reason so that nobody re-derives it —
+ * docs/postmortems/260901c-the-success-signal-that-outlived-its-witness.md is
+ * what seven re-derivations cost.
+ */
+export type ExplainEnding = Extract<
+  StreamOutcome["kind"],
+  "finished" | "abandoned" | "truncated" | "filtered" | "unknown-finish-reason" | "wants-tools"
+>;
 
 /**
  * The extra instruction for a deep search, and where it has to go.
@@ -823,7 +841,16 @@ export async function* explainStream({
     // Nothing to do about it, and nothing worth failing a reader's answer over.
   }
 
-  yield { type: "done", answer, citations: [...citations.values()], searches, model: used };
+  yield {
+    type: "done",
+    /* Every other kind threw in the `switch` above, so this narrowing is a
+       fact about the code rather than a hope — the compiler checks it. */
+    ending: outcome.kind,
+    answer,
+    citations: [...citations.values()],
+    searches,
+    model: used,
+  };
 }
 
 /**
@@ -838,7 +865,7 @@ export async function* explainStream({
 export async function explain(req: ExplainRequest): Promise<ExplainResult> {
   for await (const event of explainStream(req)) {
     if (event.type === "done") {
-      const { type: _type, ...result } = event;
+      const { type: _type, ending: _ending, ...result } = event;
       return result;
     }
   }

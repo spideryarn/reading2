@@ -357,6 +357,10 @@ export const CODE_KINDS: Record<string, FailureKind> = {
   "gl-ask-absent": "blocked",
   "gl-ask-part-word": "blocked",
   "gl-ask-no-prose": "blocked",
+  /* **A glossary answer that hit its ceiling**, refused rather than shown or
+     saved as whole. `retry`, `ai-mark-cut-off`'s reason: a second go usually
+     fits. See `GLOSSARY_CUT_OFF`. */
+  "gl-cut-off": "retry",
   /* **Debate's own, and the only `db-`.** `retry` because the model choosing
      not to search, and a provider falling back to one that dropped the tool,
      both come out differently next time. See `DEBATE_SEARCH_DID_NOT_RUN` for
@@ -2405,6 +2409,22 @@ export const MARK_CUT_OFF: ReaderFacingFailure = {
     "whole mark. Trying again usually gets one that fits. [ai-mark-cut-off]",
 };
 
+/**
+ * A glossary explanation ran into its token ceiling and stopped part-way.
+ *
+ * `MARK_CUT_OFF`'s reasoning, for the glossary: `explainStream` keeps a
+ * truncated answer for a comment, which has nowhere to say it was cut, but the
+ * glossary's only reader of a finished answer draws it as finished — so a cut
+ * one is refused rather than shown, or saved, as whole.
+ * docs/plans/260910g-stream-glossary-answers-as-they-arrive.md.
+ */
+export const GLOSSARY_CUT_OFF: ReaderFacingFailure = {
+  kind: "retry",
+  message:
+    "The explanation ran past the room it had and stopped part-way, so it is not shown as a " +
+    "whole answer. Trying again usually gets one that fits. [gl-cut-off]",
+};
+
 /** The call succeeded and the model said nothing. */
 export function saidNothing(finishReason: string | null): ReaderFacingFailure {
   if (finishReason === "content_filter") return FILTER_STOPPED_IT;
@@ -3962,7 +3982,6 @@ export const OWNER_MODE_NOTE: Record<Mode, string> = {
   hierarchy:
     "The nested table of contents and the zoom levels — the headings, and the model's one-line " +
     "gist for each section where there are gists.",
-  outline: "The whole piece as one nested list, from those same headings and gists.",
   summary: "The one-line gist written for each section, down the page, where there is one.",
   glossary:
     "The terms the model pulled out of the piece, and what each one means here. Your lookups are " +
@@ -3995,18 +4014,19 @@ export const OWNER_MODE_NOTE: Record<Mode, string> = {
   debate:
     "What we went looking for on the open web: replies to this piece, and the argument around " +
     "the claims it makes.",
-  /* **The same three words as `hierarchy` and `outline` do the work here** —
-     "where there are gists" — for the reason those two carry it: a provisional
-     tree has none, and this row is read about articles that have not finished
-     ingesting (src/public/dto.ts § `provisional`).
+  /* **The same three words as `hierarchy` do the work here** — "where there
+     are gists" — for the reason that row carries them: a provisional tree has
+     none, and this row is read about articles that have not finished ingesting
+     (src/public/dto.ts § `provisional`).
 
-     It says "again" on purpose. This mode adds no content to what an owner is
-     about to publish; it is a third arrangement of the two things the rows
-     above already named, and a row implying otherwise would over-state what
-     sharing hands over. */
+     "Those same" on purpose. This mode adds no content to what an owner is
+     about to publish; it is another arrangement of the two things the
+     Hierarchy row already named, and a row implying otherwise would over-state
+     what sharing hands over. Since 2026-09-10 it is also the nested list
+     Outline used to be, which is why it names both arrangements. */
   structure:
-    "Those same headings and gists again, arranged as two linked columns — the parts, and the " +
-    "sections of the one you are reading, where there are gists.",
+    "Those same headings and gists, arranged as two linked columns or, on a narrow screen, one " +
+    "nested list — where there are gists.",
 };
 
 /* ---------------------------------------------------------------- timeline --

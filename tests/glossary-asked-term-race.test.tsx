@@ -76,10 +76,17 @@ vi.mock("../src/web/lib/api.js", () => {
         });
       }
       await new Promise<void>((go) => held.push(go));
-      return new Response(JSON.stringify(ANSWER), {
-        status: 200,
-        headers: { "content-type": "application/json" },
-      });
+      /* The route streams since 2026-09-10: a `begin`, the words, and one
+         `done` carrying the same `AskedTermAnswer` the JSON reply used to be.
+         Held whole rather than frame by frame, because what this file asks
+         about is the reply as a unit landing late —
+         tests/glossary-asked-term-stream.test.tsx holds it open mid-stream. */
+      const { lookup: _lookup, ...found } = ANSWER;
+      const sse = (event: string, data: unknown) => `event: ${event}\ndata: ${JSON.stringify(data)}\n\n`;
+      return new Response(
+        sse("begin", found) + sse("delta", { text: ANSWER.lookup.answer }) + sse("done", ANSWER),
+        { status: 200, headers: { "content-type": "text/event-stream" } },
+      );
     },
     readJson: async (res: Response) => res.json(),
     failure: async (res: Response) => new Error(String(res.status)),

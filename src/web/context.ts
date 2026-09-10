@@ -45,7 +45,7 @@ export type Tier = "cur" | "near" | "mid" | "far";
  * only a sentence per part and a `3 / 9` marker. That column went with the
  * top-bar declutter (layout.ts § `offerableGists`) and took them with it, so
  * every entry here now has a title and a gist. The arc artefact is untouched
- * and Outline mode still renders it.
+ * and Structure's list face still renders it.
  */
 export interface ContextItem {
   node: TreeNode;

@@ -90,7 +90,6 @@ describe("an article", () => {
       /* Named like any other since 2026-08-31 — it stopped being the default
          that day, and the default is the one that goes unwritten. */
       hierarchy: "Hierarchy",
-      outline: "Outline",
       structure: "Structure",
       summary: "Summary",
       glossary: "Glossary",

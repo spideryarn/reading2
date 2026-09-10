@@ -30,6 +30,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import type {
   AskedTermAnswer,
+  Citation,
   Glossary,
   GlossaryEntry,
   GlossaryLookup,
@@ -37,13 +38,113 @@ import type {
   Job,
 } from "../types.js";
 import { ASKED_TERM_REFUSED, parseAskedTerm } from "../asked-term.js";
+import { ENDED_UNFINISHED, wentQuiet } from "../messages.js";
 import { useAutoRun } from "./useAutoRun.js";
 import { useOrderedRead } from "./useOrderedRead.js";
 import { type StepFailure, useStepJob } from "./useStepJob.js";
 import { apiFetch, readJson } from "./lib/api.js";
+import { readEvents, STREAM_STALL_MS, StreamStalled } from "./lib/sse.js";
 import { useHasProfile } from "./useProfile.js";
 
 type GlossaryStatus = "loading" | "none" | "ready" | "error";
+
+/**
+ * **The part of an asked term's answer that has arrived — which is never an
+ * answer.**
+ *
+ * Where the server found the term (its `begin` frame: the reader's `term`, the
+ * `blockId`, and the article's own characters as `quote`) and the text so far.
+ * It lives beside `asked` rather than inside it, so nothing can draw it as a
+ * finished answer with provenance and sources: `asked` is set from a `done`
+ * frame and from nowhere else. After a failure it stays, under the failure's
+ * sentence — the reader has read it, and the server's sentences for a broken
+ * stream say *what arrived is real*. docs/plans/260910g-stream-glossary-answers-as-they-arrive.md.
+ */
+export interface AskedTermDraft extends Omit<AskedTermAnswer, "lookup"> {
+  text: string;
+}
+
+/**
+ * **The asked-term stream's terminal contract, in one function** — `readMark`
+ * in src/web/useQuiz.ts, for the glossary's box.
+ *
+ * One `begin`, any number of `delta`, then exactly one `done` or `error`. The
+ * answer is returned **only** from a `done` whose shape checks out; an `error`
+ * frame throws its sentence, and so does the body simply ending, which is the
+ * case the whole design is arranged against — a stream that stops cleanly looks
+ * exactly like one that finished. A stall throws `StreamStalled` from
+ * `readEvents`, and the caller words it.
+ */
+async function readAskedTerm(
+  body: ReadableStream<Uint8Array>,
+  on: { begin(found: Omit<AskedTermAnswer, "lookup">): void; delta(text: string): void },
+): Promise<AskedTermAnswer> {
+  let text = "";
+  for await (const event of readEvents(body, { stallMs: STREAM_STALL_MS })) {
+    if (event.name === "begin") {
+      const found = event.data as Partial<AskedTermAnswer> | null;
+      if (
+        typeof found?.term === "string" &&
+        typeof found.blockId === "string" &&
+        typeof found.quote === "string"
+      ) {
+        on.begin({ term: found.term, blockId: found.blockId, quote: found.quote });
+      }
+      continue;
+    }
+    if (event.name === "delta") {
+      const piece = (event.data as { text?: unknown } | null)?.text;
+      if (typeof piece === "string" && piece) {
+        text += piece;
+        on.delta(text);
+      }
+      continue;
+    }
+    if (event.name === "done") {
+      /* **Checked rather than cast**, because this is the one object that
+         becomes a finished answer on screen. A malformed `done` is a failure,
+         not an answer with holes in it. */
+      if (!isAskedTermAnswer(event.data)) {
+        throw new Error(
+          "The answer arrived in a form this page could not read, so it is not shown as finished. " +
+            "Trying again starts a fresh answer.",
+        );
+      }
+      return event.data;
+    }
+    if (event.name === "error") {
+      const message = (event.data as { error?: unknown } | null)?.error;
+      throw new Error(typeof message === "string" && message ? message : ENDED_UNFINISHED.message);
+    }
+  }
+  throw new Error(ENDED_UNFINISHED.message);
+}
+
+function isAskedTermAnswer(data: unknown): data is AskedTermAnswer {
+  const a = data as Partial<AskedTermAnswer> | null;
+  const l = a?.lookup as Partial<GlossaryLookup> | undefined;
+  return (
+    typeof a?.term === "string" &&
+    typeof a.blockId === "string" &&
+    typeof a.quote === "string" &&
+    typeof l?.answer === "string" &&
+    l.answer.trim() !== "" &&
+    Array.isArray(l.citations) &&
+    l.citations.every(isCitation) &&
+    typeof l.searches === "number" &&
+    typeof l.model === "string" &&
+    typeof l.at === "string"
+  );
+}
+
+/** One member of the wire's `citations` array, checked before render reads it. */
+function isCitation(data: unknown): data is Citation {
+  const citation = data as Partial<Citation> | null;
+  return (
+    typeof citation?.url === "string" &&
+    (citation.title === undefined || typeof citation.title === "string")
+  );
+}
 
 /**
  * The glossary read: the list, whether it still describes the article, and the
@@ -403,7 +504,15 @@ export interface UseGlossary {
   ask(term: string): Promise<void>;
   /** True while the box's call is out. One at a time, like `look`. */
   asking: boolean;
-  /** The last answer the box got, or null. Never stored, never in the URL. */
+  /**
+   * The answer as it arrives, or what arrived before it broke. **Never a
+   * finished answer** — `AskedTermDraft` says why it is its own field.
+   */
+  askDraft: AskedTermDraft | null;
+  /**
+   * The last answer the box got, or null. Never stored, never in the URL.
+   * **Set only from the stream's `done` frame.**
+   */
   asked: AskedTermAnswer | null;
   /** Why the last one was refused, if it was. Carries a `[gl-ask-…]` code. */
   askFailed: string | null;
@@ -423,6 +532,7 @@ export function useGlossary(slug: string, read: GlossaryRead): UseGlossary {
   const [looking, setLooking] = useState<string | null>(null);
   const [lookFailed, setLookFailed] = useState<string | null>(null);
   const [asking, setAsking] = useState(false);
+  const [askDraft, setAskDraft] = useState<AskedTermDraft | null>(null);
   const [asked, setAsked] = useState<AskedTermAnswer | null>(null);
   const [askFailed, setAskFailed] = useState<string | null>(null);
 
@@ -555,12 +665,30 @@ export function useGlossary(slug: string, read: GlossaryRead): UseGlossary {
    */
   const askGeneration = useRef(0);
 
+  /**
+   * **The one live request, so it can be stopped.** A stream nobody is reading
+   * holds a socket open, and the server only learns the reader has gone — and
+   * stops the paid call — when the body is cancelled, which is what aborting
+   * this does. `useQuiz`'s `live`, for the same reason.
+   *
+   * It is also what `asking` means: a request is live exactly while this holds
+   * its controller, so the button comes back the moment the reader disowns one
+   * rather than when its reply finally drains.
+   */
+  const live = useRef<AbortController | null>(null);
+
   const ask = useCallback(
     async (term: string) => {
-      if (asking) return;
+      /* The ref is the admission record. React state has not necessarily
+         committed between two calls in one tick, so `asking` can still be
+         false for both halves of a double submit; `live.current` changes
+         synchronously and admits exactly one. `useQuiz.mark` has the same
+         guard for the same reason. */
+      if (live.current) return;
       const parsed = parseAskedTerm(term);
       if (!parsed.ok) {
         setAsked(null);
+        setAskDraft(null);
         /* **The server's own sentence, from the file both halves import.** Not a
            second set of words for the same rule: a reader must not be told two
            different things by one check depending on which side caught it.
@@ -569,44 +697,99 @@ export function useGlossary(slug: string, read: GlossaryRead): UseGlossary {
         return;
       }
       const mine = ++askGeneration.current;
+      const current = () => askGeneration.current === mine;
+      const controller = new AbortController();
+      live.current = controller;
       setAsking(true);
       setAsked(null);
+      setAskDraft(null);
       setAskFailed(null);
       try {
         const res = await apiFetch(`/api/glossary/${encodeURIComponent(slug)}/ask`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ term: parsed.term }),
+          signal: controller.signal,
         });
-        const answer = await readJson<AskedTermAnswer>(res);
-        /* After the await, not before: the reader can type during the read as
-           well as during the request. */
-        if (askGeneration.current === mine) setAsked(answer);
+        if (!res.ok || !res.body) {
+          /* Every refusal — the three `[gl-ask-…]` 409s among them — is decided
+             before the server opens the stream, so it is an ordinary JSON error
+             and `readJson` throws its sentence. */
+          await readJson(res);
+          throw new Error(`The server replied ${res.status}.`);
+        }
+        /* **`asked` is what `readAskedTerm` returns, and it returns only on a
+           `done` frame.** Every other ending throws, so the draft can never be
+           promoted by accident. The generation check after each frame, not
+           before the request: the reader can type while the words arrive. */
+        const answer = await readAskedTerm(res.body, {
+          begin: (found) => {
+            if (current()) setAskDraft({ ...found, text: "" });
+          },
+          delta: (text) => {
+            if (current()) setAskDraft((was) => (was ? { ...was, text } : was));
+          },
+        });
+        if (current()) {
+          setAskDraft(null);
+          setAsked(answer);
+        }
       } catch (err) {
-        if (askGeneration.current === mine) setAskFailed((err as Error).message);
+        /* Stopped on purpose — a keystroke, another article, the band closing.
+           Not a failure, and nothing to put on a screen that has moved on. */
+        if (controller.signal.aborted || !current()) return;
+        /* The draft stays: the reader has read it, and the sentence says what
+           it is. */
+        setAskFailed(
+          err instanceof StreamStalled ? wentQuiet(err.seconds).message : (err as Error).message,
+        );
       } finally {
-        /* **Always**, superseded or not. The request is over either way, and
-           leaving `asking` true would disable the button for the rest of the
-           visit — the failure mode of guarding a `finally` with the generation
-           it was about to discard. */
-        setAsking(false);
+        /* **Only if it is still ours.** `clearAsked` hands the box back the
+           moment it disowns a request, and a later `ask` may already own
+           `live` — so an old request's ending must not switch a newer one's
+           spinner off. Guarding on the controller rather than the generation
+           is the point: the generation moves on every keystroke, and a
+           `finally` guarded by it left the button disabled for the rest of the
+           visit in the first version. */
+        if (live.current === controller) {
+          live.current = null;
+          setAsking(false);
+        }
       }
     },
-    [slug, asking],
+    [slug],
   );
 
   /**
-   * Put the box back to nothing, **and disown whatever is in flight.**
+   * Put the box back to nothing, **and stop whatever is in flight.**
    *
    * The bump is the half that is not obvious: with an answer already on screen
-   * the two `setState`s are the whole of it, but during a request there is
-   * nothing on screen to clear and the reply is still coming.
+   * the `setState`s are the whole of it, but during a request there is nothing
+   * on screen to clear and the reply is still coming. The abort is the half
+   * streaming added: disowning the reply is not enough when the server is still
+   * paying for it.
    */
   const clearAsked = useCallback(() => {
     askGeneration.current += 1;
+    live.current?.abort();
+    live.current = null;
+    setAsking(false);
     setAsked(null);
+    setAskDraft(null);
     setAskFailed(null);
   }, []);
+
+  /**
+   * **Another article, or the band going, takes the question with it.**
+   *
+   * The band is not keyed by slug (src/web/reader/Reader.tsx), so this hook
+   * outlives an article change: without this, an answer about one piece would
+   * sit under the next, and its stream would go on arriving — and being paid
+   * for — into a panel about something else. The cleanup runs on both a slug
+   * change and unmount.
+   */
+  // biome-ignore lint/correctness/useExhaustiveDependencies: `slug` is the trigger — the cleanup must run when it changes
+  useEffect(() => clearAsked, [slug, clearAsked]);
 
   return {
     status,
@@ -631,6 +814,7 @@ export function useGlossary(slug: string, read: GlossaryRead): UseGlossary {
     lookFailed,
     ask,
     asking,
+    askDraft,
     asked,
     askFailed,
     clearAsked,

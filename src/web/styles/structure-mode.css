@@ -1,19 +1,20 @@
-/* structure-mode.css — the Structure panel in the mode band: the document's
-   shape in two linked columns. StructurePanel.tsx.
+/* structure-mode.css — Structure's wide face in the mode band: the document's
+   shape in two linked columns. StructurePanel.tsx. Its narrow face is
+   Outline's nested list, styled by outline-mode.css.
 
    Read docs/plans/260907c-structure-mode-as-a-third-mode-behind-the-experimental-switch.md
-   first. Structure is the third of three views over one tree — Hierarchy's
-   columns, Outline's nested list, and this — added on 2026-09-06 so that the
-   three can be compared, and hidden behind the experimental switch so that
-   adding it changes nothing for an ordinary reader. It is an instrument rather
-   than an addition.
+   first, then docs/plans/260910g-structure-mode-subsumes-outline.md. Structure
+   was added on 2026-09-06 as the third of three views over one tree, behind the
+   experimental switch, so the three could be compared; the comparison ended on
+   2026-09-10 with these columns kept where there is room and Outline's list
+   taking over where there is not.
 
    **Deliberately not written by extending `.mode-band.outln`** in
-   outline-mode.css. Outline is one of the two things being compared against,
-   and a shared selector is a change to it: the comparison would then be
-   measuring a mode that this work moved. The duplication is on the record in
-   the plan doc § Why Outline's measuring code is copied rather than shared, and
-   it comes out when Greg has decided what survives.
+   outline-mode.css. Outline was one of the things being compared against, and
+   a shared selector would have been a change to it. The duplication is on the
+   record in 260907c § Why Outline's measuring code is copied rather than
+   shared; Greg has now decided what survives (both, as two faces), so it could
+   come out, and has not yet — the two faces are never on screen together.
 
    -------------------------------------------------------- § structure mode --
 
@@ -26,23 +27,12 @@
    **Stage 1 draws both columns at a fixed rung.** The measured ladders, the
    reserved-height wells and the row window on a short viewport are stage 2. */
 .mode-band.struct {
-  /* **The query container is the band, NOT the grid**, and this one line was a
-     real bug for the length of one commit.
-
-     `container-type` was on `.struct-grid` with `@container (min-width: 364px)`
-     restyling `.struct-grid` — and **an element is never its own query
-     container**, so that rule could never match at any width. What made it look
-     right was the *descendant* query below: `.struct-inner` really is inside
-     `.struct-grid`, so the bracket flipped correctly between a left border and a
-     top border while the grid stayed stubbornly one column. A stacked layout
-     decorated as though it were side by side, on every screen.
-
-     Nothing in the test suite could see it: jsdom performs no layout and
-     evaluates no container query, so the panel tests pass identically either
-     way. It took a browser — docs/reusable/silent-success.md, and the reason
-     docs/project/browser-testing.md exists. GPT Sol's code review and the
-     browser pass found it independently, 2026-09-07. */
-  container-type: inline-size;
+  /* **No `container-type` since 2026-09-10.** The band was the query container
+     for the two-tracks-or-one switch below; that switch moved to JS
+     (StructureMode.tsx § `structureFace`), because a narrow band now gets
+     a different *component* — Outline's list — rather than a restyled grid, and
+     CSS cannot choose a component. The history of the one-line bug the
+     container once had is in this file's git log. */
   overflow: hidden;
   /* The browser adjusts a scroll container's position to keep visible content
      still when content above it resizes — which is every part boundary here.
@@ -50,34 +40,25 @@
      reason as `.mode-band.outln` and ContextPanel. */
   overflow-anchor: none;
   /* **This padding is not free, and the cost is the two-column threshold.**
-     `.mode-band` is `border-box` with a 1px border, so a 400px band carries 399
-     content pixels; two `GIST_MIN` (176) tracks and a 12px gutter need 364, so
-     the bare threshold is a 365px band. Every pixel of horizontal padding here
-     raises that by two — 12px a side puts it at 389, which still fits inside
-     `MODE_IDEAL` and is why this number is 0.75rem rather than Outline's
-     1.25rem. GPT Sol's review of the plan, finding 6. */
+     `.mode-band` is `border-box` with a 1px border; two `GIST_MIN` (176) tracks
+     and a 12px gutter need 364 content pixels, and every pixel of horizontal
+     padding here raises the band width that affords them by two — 12px a side
+     puts it at 389, which still fits inside `MODE_IDEAL` and is why this number
+     is 0.75rem rather than Outline's 1.25rem. GPT Sol's review of the plan,
+     finding 6. **Change it and change `STRUCTURE_PAD_X_REM`** in
+     StructureMode.tsx, which is this arithmetic written down as a number. */
   padding: 0.75rem 0.75rem 0.5rem;
 }
 
-/* **Two tracks, or one, and the switch is a container query rather than a width
-   read off `--mode-w`.**
-
-   `fitMode` reports `modeW: 0` when the band *covers* the prose, while the CSS
-   expands the band to the whole viewport (narrow-window.css) — so a query on
-   `--mode-w` would stack the columns on the one screen where the band is
-   widest. A container query asks the element how wide it actually is, which is
-   the only question with a true answer here. Sol's plan review, finding 6.
-
-   **364px is measured against the BAND's content box**, which is the band's
-   width less its 1px right border and its 24px of horizontal padding — the
-   grid's own box, since the grid has no padding of its own. Two `GIST_MIN` (176)
-   tracks and a 12px gutter need 364, so the band has to be 389px wide, which
-   fits inside `MODE_IDEAL` 400 and not inside `MODE_MIN` 288. Both of those are
-   deliberate: widest is two columns, narrowest is one. */
+/* **Always two tracks.** A band too narrow for them gets Outline's list instead
+   of this panel (StructureMode.tsx § `structureFace`), so the one-track
+   stacked layout, and the container queries that switched to it, went on
+   2026-09-10 — Greg found the stacked pair "very confusing".
+   docs/plans/260910g-structure-mode-subsumes-outline.md. */
 .struct-grid {
   display: grid;
-  grid-template-columns: 1fr;
-  gap: 0.5rem;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.75rem;
   /* `flex: 1 1 auto` and not `height: 100%`. The band is a column flexbox with
      `min-height: 0` (mode-band.css), so a percentage height here resolves
      against a box that is itself still being sized — and `min-height: 0` is what
@@ -86,13 +67,6 @@
   flex: 1 1 auto;
   min-height: 0;
   align-content: start;
-}
-
-@container (min-width: 364px) {
-  .struct-grid {
-    grid-template-columns: 1fr 1fr;
-    gap: 0.75rem;
-  }
 }
 
 .struct-side {
@@ -104,9 +78,9 @@
    The rule `OutlinePanel` learned and this copies: a hidden candidate must be
    laid out at EXACTLY the width the real list gets, or its height is a
    measurement of something else. So it is `position: absolute` inside the grid
-   with `inset: 0` and the same two-track template — out of flow, so it adds no
-   height and cannot make the panel it is measuring taller, but the same width
-   per column as the real thing.
+   with `inset: 0` and the same two-track template and gutter — out of flow, so
+   it adds no height and cannot make the panel it is measuring taller, but the
+   same width per column as the real thing.
 
    `visibility: hidden` and NOT `display: none`: a `display: none` subtree has no
    layout at all and every `offsetHeight` in it reads 0, which would silently
@@ -118,18 +92,11 @@
   position: absolute;
   inset: 0;
   display: grid;
-  grid-template-columns: 1fr;
-  gap: 0.5rem;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.75rem;
   visibility: hidden;
   pointer-events: none;
   overflow: hidden;
-}
-
-@container (min-width: 364px) {
-  .struct-measure {
-    grid-template-columns: 1fr 1fr;
-    gap: 0.75rem;
-  }
 }
 
 /* The grid is the positioning context for the copies above. It has no other
@@ -145,18 +112,6 @@
 .struct-inner {
   padding-left: 0.6rem;
   border-left: 2px solid var(--rule-strong);
-}
-
-/* Stacked, the bracket would point at the row above rather than to the left, so
-   it moves to the top edge and the indent goes. Same mark, honest in both
-   layouts. */
-@container (max-width: 363.98px) {
-  .struct-inner {
-    padding-left: 0;
-    padding-top: 0.5rem;
-    border-left: 0;
-    border-top: 2px solid var(--rule-strong);
-  }
 }
 
 /* Column B's header: the part these rows are the inside of. Not a `.band-head`
@@ -275,14 +230,6 @@
    the columns and cannot be clipped by the band's `overflow: hidden`. */
 .struct-side:not(.struct-inner) .struct-row[aria-current] {
   box-shadow: inset -2px 0 0 0 var(--rule-strong);
-}
-
-/* Stacked, the two columns are above and below rather than left and right, so
-   the marker moves to the bottom edge to point the way the bracket now points. */
-@container (max-width: 363.98px) {
-  .struct-side:not(.struct-inner) .struct-row[aria-current] {
-    box-shadow: inset 0 -2px 0 0 var(--rule-strong);
-  }
 }
 
 /* The number is an address, so it is tabular and it does not wrap: "10" and "9"

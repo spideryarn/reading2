@@ -1507,7 +1507,7 @@ function AskATerm({
   onAskChat?: (() => void) | undefined;
 }) {
   const [term, setTerm] = useState("");
-  const { ask, asking, asked, askFailed, clearAsked } = owner;
+  const { ask, asking, askDraft, asked, askFailed, clearAsked } = owner;
 
   return (
     <div className="gloss-ask">
@@ -1572,7 +1572,9 @@ function AskATerm({
         Finds the words in this article and explains the passage. Not added to the list.
       </p>
 
-      {asking && (
+      {/* Until the first words land. After that the words are the progress, and
+          a sentence about waiting beside them would be describing the past. */}
+      {asking && !askDraft?.text && (
         <p className="gloss-look-wait">
           The whole piece goes to the model, and it may search the web as well, so this can take up
           to a minute.
@@ -1599,6 +1601,28 @@ function AskATerm({
             <button type="button" className="gloss-btn" onClick={onAskChat}>
               Ask in chat
             </button>
+          )}
+        </div>
+      )}
+
+      {/* **The answer as it arrives, drawn as unfinished.** Where it was found —
+          the server's quote, the article's characters — and the text so far,
+          with no provenance line and no sources: *checked* and the hosts it
+          cited are facts of a finished answer, and this one is not finished
+          until the stream says `done`. After a failure it stays under the
+          failure's sentence, marked as cut short rather than quietly passed
+          off as complete. docs/plans/260910g-stream-glossary-answers-as-they-arrive.md. */}
+      {askDraft && !asked && (
+        <div className="gloss-ask-answer">
+          <p className="gloss-ask-found">
+            <strong>{askDraft.quote}</strong>
+            <BlockRef id={askDraft.blockId} onJump={onJump} />
+          </p>
+          {askDraft.text && (
+            <div className="gloss-look on">
+              <p className="gloss-part-label">{asking ? "arriving…" : "unfinished"}</p>
+              <p className="gloss-part-text">{askDraft.text}</p>
+            </div>
           )}
         </div>
       )}
@@ -1981,5 +2005,4 @@ function Progress(props: {
     <JobProgress {...props} step="glossary" icon={<Search size={13} />} runningLabel="Finding…" />
   );
 }
-
 

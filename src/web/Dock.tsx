@@ -171,7 +171,6 @@ import {
   ChevronUp,
   Clock,
   FlaskConical,
-  Focus,
   Globe,
   LoaderCircle,
   Network,
@@ -222,6 +221,7 @@ import { shownBehindTheSwitch } from "./experimental-visibility.js";
    on, already degraded by `diagramInSearch`. */
 import type { DiagramKind } from "./diagram.js";
 import { DEFAULT_MODE, diagramInSearch, type Mode, type Panel } from "./params.js";
+import { modeFromParam } from "../modes.js";
 import { cn } from "@/lib/utils";
 import { Link } from "./Link.js";
 import { useLogoAnimation } from "./logo-animation.js";
@@ -593,28 +593,20 @@ const MODES_UI = [
     icon: ListTree,
   },
   /* Straight after Hierarchy, because it answers the same question — what shape
-     is this piece, and where am I in it — with one nested list instead of
-     columns you read across. Greg set this order by hand and it runs from the
-     article's own words outwards, so the two structural views belong together
-     at the near end. docs/plans/260828aw-outline-mode.md. */
-  {
-    mode: "outline",
-    icon: Focus,
-  },
-  /* Third of the three structural views, and it is here so that the comparison
-     it was built for is three adjacent buttons rather than a hunt across the
-     bar — Greg, 2026-09-06: "that way I can flip back and forth to compare".
+     is this piece, and where am I in it — with linked columns, or a nested list
+     where there is no room for them, instead of columns you read across. Greg
+     set this order by hand and it runs from the article's own words outwards,
+     so the two structural views belong together at the near end.
 
-     **Most readers never see this row**, because the mode is behind the
-     experimental switch (src/mode-catalog.ts § structure), so the bar an
-     ordinary reader gets is unchanged by it: Hierarchy, then Outline, then
-     Summary, exactly as before. `visibleModes` below is what makes that true,
-     and `tests/dock-experimental-modes.test.tsx` is what keeps it true.
+     **This is Outline's slot.** Outline stood here from 2026-08-28 and
+     Structure sat after it behind the experimental switch; on 2026-09-10
+     Structure took Outline's list as its narrow face, Outline left the bar,
+     and Structure came out from behind the switch into this place.
 
-     `Columns2` rather than another tree or list glyph: Hierarchy has `ListTree`
-     and Outline has `Focus`, and the thing this mode is *for* is the pair of
-     linked columns rather than the tree all three read.
-     docs/plans/260907c-structure-mode-as-a-third-mode-behind-the-experimental-switch.md. */
+     `Columns2` rather than another tree or list glyph: Hierarchy has
+     `ListTree`, and what distinguishes this mode where there is room is the
+     pair of linked columns rather than the tree both read. Outline's `Focus`
+     went with it. docs/plans/260910g-structure-mode-subsumes-outline.md. */
   {
     mode: "structure",
     icon: Columns2,
@@ -860,7 +852,9 @@ export function visibleModes(on: boolean, current: Mode | undefined): readonly M
  * default rather than throwing (params.ts § modeParam).
  */
 function modeInSearch(search: string): Mode | undefined {
-  const named = new URLSearchParams(search).get("mode");
+  /* Through `modeFromParam`, so a carried `?mode=outline` names Structure here
+     exactly as it does on the reading view. */
+  const named = modeFromParam(new URLSearchParams(search).get("mode"));
   return MODES_UI.find((m) => m.mode === named)?.mode;
 }
 

@@ -71,7 +71,7 @@ describe("rememberableSearch", () => {
   });
 
   it("keeps every other mode as it stands", () => {
-    for (const mode of ["plain", "hierarchy", "glossary", "search", "referee", "summary", "ideas", "outline", "quotes", "timeline"]) {
+    for (const mode of ["plain", "hierarchy", "glossary", "search", "referee", "summary", "ideas", "structure", "quotes", "timeline"]) {
       expect(rememberableSearch(`?mode=${mode}`), mode).toBe(`?mode=${mode}`);
     }
     expect(rememberableSearch("?mode=glossary&term=spya-h4r2wd")).toBe(
@@ -159,7 +159,7 @@ describe("restoredHref", () => {
    * stops tomorrow's writes and does nothing whatever about yesterday's. On
    * 2026-09-05 `text` moved to `NEVER_REMEMBERED`, because the `Text` pill that
    * turned the prose back on had gone and `?mode=hierarchy&text=0` became a
-   * state with no exit — `settleAddress` rewrites it to `?mode=outline` at boot
+   * state with no exit — `settleAddress` rewrites it to `?mode=structure` at boot
    * for exactly that reason (router.ts § `liftStrandedText`).
    *
    * But a restore runs from a layout effect, *after* boot. So a browser holding

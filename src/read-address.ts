@@ -14,7 +14,7 @@
  * (tests/client-imports.test.ts) both accept it.
  */
 
-import { DEFAULT_MODE, isMode, type Mode } from "./modes.js";
+import { DEFAULT_MODE, type Mode, modeFromParam } from "./modes.js";
 
 /**
  * **Which middle-band mode a `/read/` address asked for**, or the default.
@@ -28,19 +28,23 @@ import { DEFAULT_MODE, isMode, type Mode } from "./modes.js";
  *
  * **Unknown values land on the default rather than failing**, which is the rule
  * `modeParam` in src/web/params.ts already keeps: a link naming a mode this
- * version has not got degrades to the article. `isMode` is the one place that
+ * version has not got degrades to the article. `modeFromParam` is the one place that
  * decides, so the two cannot answer differently.
  *
  * It is a safety net and no longer a promise about any particular old link — the
  * pre-2026-08-29 `?mode=toc` links rode on it until the default moved to `plain`
  * on 2026-08-31, deliberately. src/modes.ts § DEFAULT_MODE.
  *
- * **`?text=0` moves Hierarchy to Outline here too**, since 2026-09-05, and this
+ * **A retired mode lands on its successor** — `?mode=outline` is Structure since
+ * 2026-09-10 — through `modeFromParam`, the same function `modeParam` calls.
+ *
+ * **`?text=0` moves Hierarchy to Structure here too** (to Outline from
+ * 2026-09-05 until Outline became Structure's narrow face), and this
  * is the second thing in this file that exists only because the client is about
  * to do it. `liftStrandedText` in src/web/router.ts rewrites the address before
  * React mounts; without the same answer here the tab would read
  * `Article · Hierarchy · Spideryarn` and be replaced a second later by
- * `Article · Outline · Spideryarn` — the eleventh of exactly that fault, and the
+ * `Article · Structure · Spideryarn` — the eleventh of exactly that fault, and the
  * one `tests/address-settling.test.ts` exists to make arithmetic rather than
  * vigilance. `hidesProse` below is the shared predicate, the way `isMetadataPair`
  * is for the other rewrite: one function decides, so the two cannot come apart.
@@ -58,8 +62,8 @@ export function readMode(url: string): Mode {
   } catch {
     return DEFAULT_MODE;
   }
-  const mode = isMode(asked) ? asked : DEFAULT_MODE;
-  return mode === "hierarchy" && hidesProse(url) ? "outline" : mode;
+  const mode = modeFromParam(asked) ?? DEFAULT_MODE;
+  return mode === "hierarchy" && hidesProse(url) ? "structure" : mode;
 }
 
 /**

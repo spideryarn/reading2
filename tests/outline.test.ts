@@ -1,6 +1,6 @@
 /**
- * Outline mode's projection (src/web/outline.ts): the whole document as one
- * nested list, expanded around the reader.
+ * Structure mode's list-face projection (src/web/outline.ts): the whole
+ * document as one nested list, expanded around the reader.
  *
  * Run against the `example/` fixture for the ordinary shape, and against a
  * hand-built tree for the two cases the fixture cannot produce — a leaf sitting

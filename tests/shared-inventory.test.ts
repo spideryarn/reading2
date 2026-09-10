@@ -161,7 +161,7 @@ describe("the sweep over the modes", () => {
 
   /* The four that cost nothing and are drawn from the payload the visitor
      already holds — the whole point of the feature, so they are pinned. */
-  it.each(["hierarchy", "outline", "summary"])("always shares %s", (mode) => {
+  it.each(["hierarchy", "structure", "summary"])("always shares %s", (mode) => {
     expect(keys(sharedInventory(NOTHING).shared)).toContain(mode);
   });
 
@@ -279,12 +279,14 @@ const WIRE_ROW = {
   blocks: "text",
   assets: "pictures",
   /* The tree is three rows, because it is three things the owner recognises:
-     the nested contents, the flat outline, and the gists down the page. Any one
+     the nested contents, the structure (columns, or the nested list that was
+     Outline), and the gists down the page. Any one
      of them proves the tree crosses. */
   tree: "hierarchy",
-  /* The arc has no mode of its own — it is the extra rung Outline draws when
-     there is one. src/web/visitor.ts § outline. */
-  arc: "outline",
+  /* The arc has no mode of its own — it is the extra rung Structure's list
+     face draws when there is one (Outline's, until that list became the face on
+     2026-09-10). src/web/visitor.ts § structure. */
+  arc: "structure",
   glossary: "glossary",
   ideas: "ideas",
   quotes: "quotes",
@@ -307,13 +309,14 @@ const WIRE_ROW = {
   searches: "search",
   /* Not a thing that crosses so much as a fact *about* one that does: where the
      tree's paragraph nav labels are in their life (src/types.ts §
-     `NavLabelStatus`). The deepest rung of Outline is what draws them, and it
-     is the row that goes blank without them — so it is Outline's row, on the
-     same reading that gives `arc` its. A visitor gets the enum for the same
+     `NavLabelStatus`). Structure's paragraph rows are what draw them (the
+     deepest rung of its list face, which was Outline), and they are the rows
+     that go blank without them — so it is Structure's row, on the same reading
+     that gives `arc` its. A visitor gets the enum for the same
      reason they get `tree.provisional`: without it the client cannot tell
      *still arriving* from *this article has none*, and draws a run of blank
      cells either way. src/web/nav-labels.ts. */
-  navLabelStatus: "outline",
+  navLabelStatus: "structure",
 } satisfies Record<keyof PublicArticle, string>;
 
 describe("the list against the wire", () => {

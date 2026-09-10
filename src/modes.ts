@@ -107,28 +107,15 @@ export const MODES = [
      that, so it has to stay accurate.
      docs/plans/260901d-rename-review-mode-to-remember-mode-everywhere.md. */
   "remember",
-  /* The eighth, 2026-08-28: the whole document as one nested list that never
-     scrolls and expands around where the reader is. It costs this list one
-     word like the six before it, and it is the first mode that is a second
-     answer to a question an existing surface already answers — the gist
-     columns' context panels — rather than a new question. It arrived as a
-     comparison rather than as a commitment: Greg asked for it as an eighth mode
-     "for now, so that it doesn't mess with what we have, and so that I can go
-     back and forth to compare".
-     docs/plans/260828aw-outline-mode.md § Where it sits, and what happens if it
-     wins.
-
-     **Outline is staying**, and this comment said the opposite until
-     2026-09-07. It called the duplication "deliberate and temporary", pending a
-     reconciliation with the context panels that never happened. Asked on
-     2026-09-06 whether the merged Structure mode should replace both Hierarchy
-     and Outline, replace only Outline, be dropped, or be added as a third, Greg
-     chose the third and kept both: "I don't know if Structure will be better,
-     so let's build it as a third, and that way I can flip back and forth to
-     compare." So the second answer is now a *standing* one — three views of one
-     tree, which is what `structure` below exists to be compared against.
-     docs/plans/260907c-structure-mode-as-a-third-mode-behind-the-experimental-switch.md. */
-  "outline",
+  /* **`outline` was the eighth, 2026-08-28 to 2026-09-10, and it is not a mode
+     any more** — the whole document as one nested list that never scrolls. It
+     became `structure`'s narrow face: where the band is too narrow for
+     Structure's two columns, Structure draws Outline's list instead, and the
+     word left this vocabulary. `?mode=outline` still works, through
+     `RETIRED_MODES` below. Greg, 2026-09-08: "if the page is wide, show the
+     current Structure 2-column mode. If it's narrower, show the current Outline
+     mode. And get rid of Outline mode altogether."
+     docs/plans/260910g-structure-mode-subsumes-outline.md. */
   /* The tenth, 2026-08-31: the lines worth keeping, in the article's own words.
      It costs this list one word like the eight before it, and it is the first
      mode whose content is *the article itself* — every other one shows the
@@ -196,7 +183,13 @@ export const MODES = [
      **`structure` and not `map` or `contents`**: Map collides with Diagram,
      Contents sounds authored, and Outline already names the flattened
      rendering. GPT Sol's pick, and Greg's decision 9 in 260903b.
-     docs/plans/260907c-structure-mode-as-a-third-mode-behind-the-experimental-switch.md. */
+     docs/plans/260907c-structure-mode-as-a-third-mode-behind-the-experimental-switch.md.
+
+     **Superseded on 2026-09-10: the comparison was run and it answered.**
+     Greg liked the two columns and not the stacked pair a narrow band got, so
+     Structure kept its columns where there is room, took Outline's list where
+     there is not, and came out from behind the switch in Outline's place.
+     Hierarchy stays. docs/plans/260910g-structure-mode-subsumes-outline.md. */
   "structure",
 ] as const;
 export type Mode = (typeof MODES)[number];
@@ -238,4 +231,31 @@ export const DEFAULT_MODE: Mode = "plain";
  */
 export function isMode(value: string | null | undefined): value is Mode {
   return value !== null && value !== undefined && (MODES as readonly string[]).includes(value);
+}
+
+/**
+ * **Modes that left the vocabulary, and the one each became.**
+ *
+ * Unlike the `toc` links `isMode` above no longer promises anything about, these
+ * are links real readers have: `?mode=outline` was on every reader's bar for
+ * twelve days, and a bookmark or a shared link naming it should open the mode
+ * that now holds it rather than degrading to the article.
+ */
+export const RETIRED_MODES: Readonly<Record<string, Mode>> = {
+  outline: "structure",
+};
+
+/**
+ * **What a `?mode=` value means**: a mode, a retired mode's successor, or null
+ * for anything else (the caller supplies the default).
+ *
+ * The one function both sides call — `modeParam` in src/web/params.ts, which
+ * decides the view, and `readMode` in src/read-address.ts, which puts the mode in
+ * a shared link's tab title — so `?mode=outline` cannot open Structure while
+ * the tab says the article.
+ */
+export function modeFromParam(value: string | null | undefined): Mode | null {
+  if (isMode(value)) return value;
+  if (value === null || value === undefined) return null;
+  return Object.hasOwn(RETIRED_MODES, value) ? (RETIRED_MODES[value] ?? null) : null;
 }

@@ -14,8 +14,8 @@
  * effect re-runs on `layoutKey`, so it re-read the getter on *every* mode
  * switch, and GPT Sol attributed the whole 2,727ms node to it. `useDockFit`'s
  * effect depends on a `useCallback(…, [])` and runs once; `OutlinePanel` only
- * mounts in Outline. Those two are changed for consistency and for the coverage
- * below, not because they cost anything measurable — an earlier draft of this
+ * mounts as Structure's list face. Those two are changed for consistency and
+ * for the coverage below, not because they cost anything measurable — an earlier draft of this
  * claimed all three re-ran per switch, and that was simply wrong.
  * docs/plans/260905d-mode-switching-is-sluggish-on-a-very-long-article.md.
  *

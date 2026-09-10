@@ -117,7 +117,7 @@ unless the URL says otherwise ([granularity-zoom.md § the spine](granularity-zo
 [url-state.md](url-state.md) for `?spine=`). The prose has no off switch at all any more: `?text=0`
 hid it in the hierarchy mode and nowhere else — which is what `proseVisible` in
 [`layout.ts`](../../src/web/layout.ts) exists to say once rather than twice — and since 2026-09-05
-that address is rewritten to `?mode=outline` on arrival, because the pill that put the prose back
+that address is rewritten on arrival — to `?mode=structure` since 2026-09-10, `?mode=outline` before — because the pill that put the prose back
 went with the controls bar ([url-state.md](url-state.md#the-parameters)).
 
 Chat is the first mode that is not the hierarchy
