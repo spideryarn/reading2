@@ -31,20 +31,29 @@
  *   "nothing here" — the calm-inbox failure docs/reusable/silent-success.md is
  *   about.
  *
- * ## Routing reads a field that does not exist yet
+ * ## Routing reads `recipient`, which only prompt version 2 returns
  *
- * Stage 2 adds `recipient` to the question verdict under prompt version 2. Until
- * then no verdict carries one, so `recipientOf` reads it defensively and the
- * report says routing is "not measured: this prompt version returns no
- * recipient" rather than inventing a zero. A recipient of `"unplaced"` is read
- * as D8's visible unplaced arm and counted apart from N.
+ * Under version 1 no verdict carries one, so `recipientOf` reads it through an
+ * `in` check and the report says routing is "not measured: this prompt version
+ * returns no recipient" rather than inventing a zero. Under version 2
+ * (`--prompt-version 2`, `PROPOSAL_PROMPT_VERSION`) every question verdict
+ * carries one flat on the verdict — attention-classify.ts's `VerdictRoute`.
+ * A recipient of `"unplaced"` is read as D8's visible unplaced arm and counted
+ * apart from N.
  */
 import { mkdtempSync, readFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
 import { type AttentionLabel, type LabelCategory, type MechanicalVerdict, mechanicalInbox, parseLabels } from "./attention-labels.js";
-import { type ClassifierSpend, type ClassifierVerdict, NO_SPEND, addSpend, describeCost } from "./attention-classify.js";
+import {
+  type ClassifierSpend,
+  type ClassifierVerdict,
+  type PromptVersion,
+  NO_SPEND,
+  addSpend,
+  describeCost,
+} from "./attention-classify.js";
 import { type ClassifyOutcome, modelBudget, paidClassifier } from "./model-budget.js";
 import { readTurnTail } from "./turn-tail.js";
 
@@ -520,10 +529,14 @@ export function fakeClassifierFromLabels(
  * inbox's day ceiling nor is refused by it; the ceiling still bounds the run.
  * The key is a parameter: this file does not read the environment.
  */
-export function paidEvalClassifier(apiKey: string): {
+export function paidEvalClassifier(
+  apiKey: string,
+  /** Which prompt to score. Version 2 is the proposal-aware one, and the only one that yields routing. */
+  promptVersion: PromptVersion,
+): {
   classify: (tail: string) => Promise<ClassifyOutcome>;
   budgetRoot: string;
 } {
   const budgetRoot = mkdtempSync(join(tmpdir(), "attention-eval-budget-"));
-  return { classify: paidClassifier(modelBudget({ root: budgetRoot }), { apiKey }), budgetRoot };
+  return { classify: paidClassifier(modelBudget({ root: budgetRoot }), { apiKey, promptVersion }), budgetRoot };
 }

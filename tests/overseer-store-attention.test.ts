@@ -65,6 +65,15 @@ const LIST: AttentionList = {
       evidence: { kind: "prose", excerpt: "Say the word and I'll shut it down.", why: "it named an action and stopped" },
       answerability: { kind: "phone" },
       duplicates: [],
+      proposal: {
+        kind: "proposed",
+        id: "fp-1:v2",
+        recipient: "fable",
+        reason: "it is a question of wording",
+        asks: "Say the word and I'll shut it down.",
+        by: { kind: "model", model: "openai/gpt-5.6-luna", via: "overseer" },
+        reach: { kind: "unavailable", why: "the last usage pass found the account limited" },
+      },
     },
   ],
   sessionsScanned: 32,
@@ -241,6 +250,62 @@ describe("the attention list on the checkpoint", () => {
     const written = second.checkpoint({ lastGoodSnapshotAt: null, tick: true });
     if (!written.ok) throw new Error("unreachable");
     expect(written.checkpoint.attention.kind).toBe("unknown");
+  });
+});
+
+describe("an item's proposal on the checkpoint (plan 260910f Stage 2)", () => {
+  const BY = { kind: "model", model: "openai/gpt-5.6-luna", via: "overseer" };
+
+  /** The checkpoint with its one item's `proposal` replaced by `proposal`, or removed when `undefined`. */
+  function readWithProposal(proposal: unknown): AttentionList {
+    const root = tempRoot();
+    const store = mustOpen(root);
+    store.checkpoint({ lastGoodSnapshotAt: null, tick: true, attention: LIST });
+    const path = join(root, CHECKPOINT_FILE);
+    const raw = JSON.parse(readFileSync(path, "utf8")) as Record<string, unknown>;
+    const list = raw["attention"] as { items: Record<string, unknown>[] };
+    if (proposal === undefined) delete list.items[0]!["proposal"];
+    else list.items[0]!["proposal"] = proposal;
+    writeFileSync(path, JSON.stringify(raw, null, 2));
+    const read = readCheckpoint(root);
+    if (read.kind !== "checkpoint") throw new Error("the checkpoint must survive");
+    return read.checkpoint.attention;
+  }
+
+  test("an item from an older producer, with no proposal at all, reads as `not-reported` — not a failure", () => {
+    const list = readWithProposal(undefined);
+    if (list.kind !== "list") throw new Error(`expected a list, got ${list.kind}`);
+    expect(list.items[0]?.proposal).toEqual({ kind: "not-reported" });
+  });
+
+  test.each([
+    ["proposed", LIST.kind === "list" ? LIST.items[0]?.proposal : null],
+    ["unplaced", { kind: "unplaced", id: "fp:v2", why: "could be either", by: BY }],
+    ["off", { kind: "off", why: "proposals are off" }],
+    ["not-reached", { kind: "not-reached", why: "the budget refused the re-read" }],
+    ["not-applicable", { kind: "not-applicable" }],
+    ["not-reported", { kind: "not-reported" }],
+    ["proposed, reach available", { kind: "proposed", id: "i", recipient: "greg", reason: "r", asks: "a", by: BY, reach: { kind: "available" } }],
+    ["proposed, reach not checked", { kind: "proposed", id: "i", recipient: "sol", reason: "r", asks: "a", by: BY, reach: { kind: "not-checked", why: "no Codex reading" } }],
+  ])("reads the %s arm back whole", (_name, proposal) => {
+    const list = readWithProposal(proposal);
+    if (list.kind !== "list") throw new Error(`expected a list, got ${list.kind}`);
+    expect(list.items[0]?.proposal).toEqual(proposal);
+  });
+
+  test.each([
+    ["an unknown kind", { kind: "sent", why: "x" }],
+    ["an unknown recipient", { kind: "proposed", id: "i", recipient: "gpt", reason: "r", asks: "a", by: BY, reach: { kind: "available" } }],
+    ["no reach", { kind: "proposed", id: "i", recipient: "sol", reason: "r", asks: "a", by: BY }],
+    ["a blank quote", { kind: "proposed", id: "i", recipient: "sol", reason: "r", asks: "", by: BY, reach: { kind: "available" } }],
+    ["an author that is not the model", { kind: "proposed", id: "i", recipient: "sol", reason: "r", asks: "a", by: { kind: "person", model: "Greg", via: "overseer" }, reach: { kind: "available" } }],
+    ["an author via somebody else", { kind: "unplaced", id: "i", why: "w", by: { ...BY, via: "greg" } }],
+    ["an unplaced answer with no why", { kind: "unplaced", id: "i", by: BY }],
+    ["a reach whose why is missing", { kind: "proposed", id: "i", recipient: "fable", reason: "r", asks: "a", by: BY, reach: { kind: "unavailable" } }],
+    ["an off with no why", { kind: "off" }],
+    ["a proposal that is not an object", "fable"],
+  ])("refuses %s — the list degrades to `unknown`, never a proposal half-read", (_name, proposal) => {
+    expect(readWithProposal(proposal).kind).toBe("unknown");
   });
 });
 

@@ -54,7 +54,7 @@
  * successful injection can achieve is a card in Greg's inbox saying a session
  * asked something it did not, on a surface with no answer control at all.
  */
-import type { AttentionAnswerability, AttentionKind } from "../fleet/wire.js";
+import type { AttentionAnswerability, AttentionKind, ProposalRecipient } from "../fleet/wire.js";
 import { MAX_TAIL_CHARS } from "./turn-tail.js";
 
 /**
@@ -84,11 +84,41 @@ export const OPENROUTER_CHAT_URL = "https://openrouter.ai/api/v1/chat/completion
  * budget allows (`planClassifications`). Bump this whenever `buildClassifierPrompt`
  * or `parseVerdict` changes what a verdict means.
  *
- * One version today. Stage 2 adds a proposal-aware prompt as version 2, chosen
- * per pass, and hands the pass the version it chose (`AttentionPassOptions.promptVersion`)
- * — so there is no second prompt here yet, only the plumbing that will carry it.
+ * Version 1 is the plain question and stays the default. Version 2,
+ * `PROPOSAL_PROMPT_VERSION`, is the proposal-aware prompt (plan 260910f D1),
+ * selected by `OVERSEER_PROPOSALS=1` in attention-cli.ts — the only reader of
+ * that variable — and handed BOTH to the classifier (`ClassifierOptions`) and
+ * to the pass (`AttentionPassOptions.promptVersion`), so an answer is always
+ * filed under the prompt that produced it.
  */
 export const CLASSIFIER_PROMPT_VERSION = 1;
+
+/**
+ * The proposal-aware prompt: the same one call, whose `asked: true` answer also
+ * names who holds the information, why, and the sentence that asks. With it
+ * off, prompt, version and output are exactly version 1's (D1, D7).
+ */
+export const PROPOSAL_PROMPT_VERSION = 2;
+
+export type PromptVersion = typeof CLASSIFIER_PROMPT_VERSION | typeof PROPOSAL_PROMPT_VERSION;
+
+/** The five holders, in the direction doc's order. `unplaced` is not one of them — see `VerdictRoute`. */
+export const PROPOSAL_RECIPIENTS: readonly ProposalRecipient[] = ["sol", "fable", "greg", "overseer", "self"];
+
+/**
+ * What a version-2 question verdict adds: a holder with a reason and the quoted
+ * sentence, or `unplaced` with the model's reason for not placing it.
+ *
+ * FLAT ON THE VERDICT rather than nested, so `recipientOf` in attention-eval.ts
+ * reads it where it already looks. **There is no `by` and no `reach`**: who
+ * proposed it is stamped by the pass from `ATTENTION_CLASSIFIER_MODEL` (D9), and
+ * whether the holder can take it now is projected every pass and never
+ * remembered (D14) — this is the part of an answer that is true about the text,
+ * so it is the part the memory keeps.
+ */
+export type VerdictRoute =
+  | { recipient: ProposalRecipient; reason: string; asks: string }
+  | { recipient: "unplaced"; unplacedWhy: string };
 
 /**
  * The most one call may write back, sent to the gateway as `max_tokens`.
@@ -111,7 +141,7 @@ export const MAX_COMPLETION_TOKENS = 1_000;
  * through to `other`.
  */
 export type ClassifierVerdict =
-  | {
+  | ({
       kind: "question";
       /** Canonical, short, for grouping. Never published — see `AttentionObservation.topic`. */
       topic: string;
@@ -119,7 +149,12 @@ export type ClassifierVerdict =
       why: string;
       attentionKind: AttentionKind;
       answerability: AttentionAnswerability;
-    }
+    } & (
+      /** Version 1: no proposal at all. */
+      | { recipient?: never }
+      /** Version 2: who holds it, or `unplaced` (D8). */
+      | VerdictRoute
+    ))
   | { kind: "no-question"; why: string }
   | { kind: "unreadable"; why: string }
   /**
@@ -252,8 +287,69 @@ export function planClassifications(input: {
  * next"* is not a question, and a question the agent then answered itself is not
  * a question either.
  */
-export function buildClassifierPrompt(tail: string): { system: string; user: string } {
-  const system = [
+export function buildClassifierPrompt(
+  tail: string,
+  promptVersion: PromptVersion = CLASSIFIER_PROMPT_VERSION,
+): { system: string; user: string } {
+  const user = ["Here is the tail of the turn, between the markers.", "", "<<<TURN", tail, "TURN>>>"].join("\n");
+  // Version 1 is built by the code it always was, untouched, so D1's "with
+  // proposals off the prompt is exactly today's" is a fact about this file
+  // rather than about two copies agreeing; a test pins its hash.
+  if (promptVersion === CLASSIFIER_PROMPT_VERSION) return { system: classifierSystemPromptV1(), user };
+  return { system: proposalSystemPrompt(), user };
+}
+
+/**
+ * Version 2: version 1's question, then who holds the answer.
+ *
+ * The recipients are docs/project/overseer-direction.md § Route by who has the
+ * information, not by confidence, in the model's words — and the prompt says
+ * outright that `unplaced` is an answer and `greg` is not a default (D8),
+ * because a model asked to pick one of six will otherwise pick the safe-sounding
+ * one. `asks` is asked for as a CONTIGUOUS verbatim span because the parse
+ * checks it is one (D13): two sentences stitched together would be refused.
+ */
+function proposalSystemPrompt(): string {
+  const v1 = classifierSystemPromptV1();
+  const answerAt = v1.indexOf("Answer with a single JSON object and nothing else:");
+  const judgement = v1.slice(0, answerAt);
+  const fields = v1.slice(v1.indexOf("topic: at most twelve words"));
+  return [
+    judgement.trimEnd(),
+    "",
+    "IF IT DID HAND OVER A DECISION, ALSO SAY WHO HOLDS THE INFORMATION NEEDED TO ANSWER IT — not who the",
+    "agent happened to address, and not how sure anyone is. Pick exactly one:",
+    '- "sol": a technical question whose evidence is in the code — which approach is right, why a test fails,',
+    "  whether a design holds.",
+    '- "fable": wording, a default, or whether a case can be dropped.',
+    '- "greg": anything irreversible or visible outside the project (deploying, production data, spending money,',
+    "  pushing to main, deleting work); any change to a rule or policy document; whether a small product tweak",
+    "  would remove a lot of engineering; or anything where the agent's own recommendation looks contestable.",
+    '- "overseer": something that can be CHECKED rather than judged — whether to pull the latest changes, whose',
+    "  tests are failing, whether the machine is overloaded.",
+    '- "self": the agent already has everything it needs and stopped out of habit.',
+    'If you cannot tell, answer "unplaced". That is a real answer. Never use "greg" as a default.',
+    "",
+    "Answer with a single JSON object and nothing else:",
+    '{"asked": true, "topic": "...", "why": "...", "kind": "...", "answerable": "...", "answerableWhy": "...",',
+    ' "recipient": "...", "reason": "...", "asks": "..."}',
+    'or {"asked": true, "topic": "...", "why": "...", "kind": "...", "answerable": "...", "answerableWhy": "...",',
+    ' "recipient": "unplaced", "unplacedWhy": "..."}',
+    'or {"asked": false, "why": "..."}',
+    "",
+    fields,
+    'recipient: one of "sol", "fable", "greg", "overseer", "self", "unplaced", as above.',
+    "reason: one sentence saying why that holder has what is needed to answer. Never a score.",
+    "asks: the sentence or sentences in the text that hand over the decision, COPIED EXACTLY as one continuous",
+    "  passage in the agent's own words. Never paraphrase, never join two separate places, never quote anything",
+    "  the agent was told.",
+    'unplacedWhy: one sentence saying why you could not tell; only when recipient is "unplaced".',
+  ].join("\n");
+}
+
+/** Version 1's system prompt, exactly as it was before there were versions. */
+function classifierSystemPromptV1(): string {
+  return [
     "You read the last screenful of one AI coding agent's finished turn and answer ONE question:",
     "did that turn end by handing a PERSON a decision it is now waiting on?",
     "",
@@ -293,9 +389,6 @@ export function buildClassifierPrompt(tail: string): { system: string; user: str
     "  means reading a diff, a file, or test output first.",
     "answerableWhy: one short clause, required when needs-a-screen, otherwise an empty string.",
   ].join("\n");
-
-  const user = ["Here is the tail of the turn, between the markers.", "", "<<<TURN", tail, "TURN>>>"].join("\n");
-  return { system, user };
 }
 
 const CLIP_MARKER = "\n[… cut here: the rest would not fit the classifier's input bound …]\n";
@@ -330,10 +423,41 @@ const CHAT_TEMPLATE_TOKENS = 64;
  * roughly ten times the ~1,500 a real call measures, which is the price of a
  * number nobody has to hope about.
  */
-export const WORST_CASE_PROMPT_TOKENS = (() => {
-  const longest = buildClassifierPrompt("x".repeat(MAX_TAIL_CHARS));
-  return 3 * (longest.system.length + longest.user.length) + CHAT_TEMPLATE_TOKENS;
-})();
+export const WORST_CASE_PROMPT_TOKENS = Math.max(
+  // OVER EVERY VERSION, not the default: the proposal-aware prompt is the
+  // longer one, and a budget reserving against version 1's length would let a
+  // version-2 call cost more than it reserved.
+  ...promptVersions().map((version) => {
+    const longest = buildClassifierPrompt("x".repeat(MAX_TAIL_CHARS), version);
+    return 3 * (longest.system.length + longest.user.length) + CHAT_TEMPLATE_TOKENS;
+  }),
+);
+
+/** Every prompt version this file can build, oldest first. */
+export const PROMPT_VERSIONS: readonly PromptVersion[] = promptVersions();
+
+function promptVersions(): PromptVersion[] {
+  return [CLASSIFIER_PROMPT_VERSION, PROPOSAL_PROMPT_VERSION];
+}
+
+/**
+ * A verdict rebuilt from the fields this file defines, and from nothing else.
+ *
+ * `parseVerdict` already builds clean objects, but the pass's `classify` is
+ * injected and a verdict is an object, so a stray field — a `by` naming
+ * somebody, say — would otherwise be remembered and read back as though this
+ * file had written it. Attribution is stamped by the pass (D9) and reach is
+ * projected (D14); neither is ever a field of a remembered verdict.
+ */
+export function canonicalVerdict(v: CacheableVerdict): CacheableVerdict {
+  if (v.kind === "no-question") return { kind: "no-question", why: v.why };
+  const answerability: AttentionAnswerability =
+    v.answerability.kind === "phone" ? { kind: "phone" } : { kind: v.answerability.kind, why: v.answerability.why };
+  const base = { kind: "question" as const, topic: v.topic, why: v.why, attentionKind: v.attentionKind, answerability };
+  if (v.recipient === undefined) return base;
+  if (v.recipient === "unplaced") return { ...base, recipient: "unplaced", unplacedWhy: v.unplacedWhy };
+  return { ...base, recipient: v.recipient, reason: v.reason, asks: v.asks };
+}
 
 const KINDS: readonly string[] = ["irreversible", "product", "technical", "other"];
 
@@ -345,7 +469,74 @@ const KINDS: readonly string[] = ["irreversible", "product", "technical", "other
  * `other` is a place in the ranking and using it as a shrug would put a
  * mis-parsed verdict in the list looking exactly like a placed one.
  */
-export function parseVerdict(raw: string): ClassifierVerdict {
+export function parseVerdict(
+  raw: string,
+  context: VerdictContext = { promptVersion: CLASSIFIER_PROMPT_VERSION },
+): ClassifierVerdict {
+  const question = parseQuestion(raw);
+  if (question.kind !== "question" || context.promptVersion === CLASSIFIER_PROMPT_VERSION) return question;
+  // VERSION 2: the proposal is part of the answer, and a question without a
+  // readable one is an unreadable answer — never a default, never Greg (D8).
+  const route = parseRoute(jsonObject(raw) ?? {}, context.tail);
+  if (typeof route === "string") return { kind: "unreadable", why: route };
+  return { ...question, ...route };
+}
+
+/**
+ * What the parse needs besides the text: version 2 checks its quote against
+ * the tail the model was shown (D13), so it needs that tail.
+ */
+export type VerdictContext =
+  | { promptVersion: typeof CLASSIFIER_PROMPT_VERSION }
+  | { promptVersion: typeof PROPOSAL_PROMPT_VERSION; tail: string };
+
+/** Runs of whitespace as one space. A pane wraps lines; a model quoting a sentence does not. Nothing else is forgiven. */
+function normaliseSpace(s: string): string {
+  return s.replace(/\s+/g, " ").trim();
+}
+
+/**
+ * Version 2's proposal, or the reason it cannot be believed.
+ *
+ * **Strict on every field, and a refusal is a sentence** so a broken prompt is
+ * diagnosable from the log. **The quote must be in the tail** after whitespace
+ * normalisation (D13): `readTurnTail` has already cut after the last thing
+ * Greg typed, so a quote that is in the tail is the agent's own words, and one
+ * that is not is either an invention or somebody else's sentence.
+ */
+function parseRoute(o: Record<string, unknown>, tail: string): VerdictRoute | string {
+  const recipient = o["recipient"];
+  if (recipient === "unplaced") {
+    const unplacedWhy = str(o["unplacedWhy"])?.trim() ?? "";
+    if (unplacedWhy === "") return "it answered `unplaced` and gave no reason";
+    return { recipient: "unplaced", unplacedWhy };
+  }
+  const known = PROPOSAL_RECIPIENTS.find((r) => r === recipient);
+  if (known === undefined) {
+    return `\`recipient\` was ${JSON.stringify(recipient)}, which is none of ${PROPOSAL_RECIPIENTS.join(", ")} or unplaced`;
+  }
+  const reason = str(o["reason"])?.trim() ?? "";
+  if (reason === "") return "it proposed a holder and gave no reason";
+  const asks = str(o["asks"])?.trim() ?? "";
+  if (asks === "") return "it proposed a holder and quoted no sentence";
+  if (!normaliseSpace(tail).includes(normaliseSpace(asks))) {
+    return `the quoted sentence is not in the tail it read: ${JSON.stringify(asks.slice(0, 120))}`;
+  }
+  return { recipient: known, reason, asks };
+}
+
+/** The answer as a JSON object, or null. `parseQuestion` has already said why when it is not one. */
+function jsonObject(raw: string): Record<string, unknown> | null {
+  try {
+    const parsed: unknown = JSON.parse(stripFence(raw).trim());
+    return typeof parsed === "object" && parsed !== null && !Array.isArray(parsed) ? (parsed as Record<string, unknown>) : null;
+  } catch {
+    return null;
+  }
+}
+
+/** Version 1's parse, unchanged: the question and nothing about who holds it. */
+function parseQuestion(raw: string): ClassifierVerdict {
   const text = stripFence(raw).trim();
   if (text === "") return { kind: "unreadable", why: "the model returned nothing" };
 
@@ -534,6 +725,13 @@ export type ClassifierOptions = {
   /** So a wedged gateway cannot hold a tick open. The pass reports a timeout as `unreadable`. */
   timeoutMs?: number;
   fetchImpl?: typeof fetch;
+  /**
+   * Which prompt to ask under, and so how to read the answer. Absent means
+   * version 1. The caller passes the SAME version to the pass
+   * (`AttentionPassOptions.promptVersion`), which files the answer under it;
+   * attention-cli.ts's `promptVersionFor` is where both come from.
+   */
+  promptVersion?: PromptVersion;
 };
 
 /**
@@ -553,7 +751,11 @@ export async function classifyTail(
   tail: string,
   options: ClassifierOptions,
 ): Promise<{ verdict: ClassifierVerdict; spend: ClassifierSpend }> {
-  const { system, user } = buildClassifierPrompt(clipForClassifier(tail));
+  const version = options.promptVersion ?? CLASSIFIER_PROMPT_VERSION;
+  // The model reads the CLIPPED text, so a version-2 quote is checked against
+  // exactly that (D13) — not against the longer input it never saw.
+  const input = clipForClassifier(tail);
+  const { system, user } = buildClassifierPrompt(input, version);
   const doFetch = options.fetchImpl ?? fetch;
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), options.timeoutMs ?? 30_000);
@@ -603,7 +805,10 @@ export async function classifyTail(
     const content = json.choices?.[0]?.message?.content ?? "";
     const money = callCost(json.usage);
     return {
-      verdict: parseVerdict(content),
+      verdict: parseVerdict(
+        content,
+        version === PROPOSAL_PROMPT_VERSION ? { promptVersion: version, tail: input } : { promptVersion: version },
+      ),
       spend: {
         calls: 1,
         promptTokens: json.usage?.prompt_tokens ?? 0,

@@ -26,6 +26,7 @@ import { tmpdir } from "node:os";
 import { describe, expect, it } from "vitest";
 
 import type { ClassifierSpend, ClassifierVerdict } from "../tools/overseer/attention-classify.js";
+import { PROPOSAL_PROMPT_VERSION, parseVerdict } from "../tools/overseer/attention-classify.js";
 import {
   describeEvaluation,
   evaluate,
@@ -250,6 +251,36 @@ describe("routing", () => {
     expect(perRoute.usd).toBeCloseTo((0.001 * (f.asked() - 1)) / 2, 12);
   });
 
+  it("counts a real version-2 verdict's recipient in routing — the shape `recipientOf` reads", async () => {
+    // Built by the real parser rather than cast, so this fails if the version-2
+    // verdict ever stops carrying `recipient` where `recipientOf` looks.
+    const byTail = labelByTail();
+    const classify = async (tail: string): Promise<ClassifyOutcome> => {
+      const label = byTail.get(tail);
+      if (label?.case !== "question") return { verdict: NO, spend: PRICED };
+      const lastLine = tail.split("\n").filter((l) => l.trim() !== "").pop()?.trim() ?? "";
+      const raw = JSON.stringify({
+        asked: true,
+        topic: "t",
+        why: "w",
+        kind: "technical",
+        answerable: "phone",
+        recipient: label.recipient,
+        reason: "the label says so",
+        asks: lastLine,
+      });
+      return { verdict: parseVerdict(raw, { promptVersion: PROPOSAL_PROMPT_VERSION, tail }), spend: PRICED };
+    };
+    const r = await evaluate(labels, captures, classify, { promptVersion: PROPOSAL_PROMPT_VERSION, model: "fake/v2" });
+    if (r.routing.kind !== "measured") throw new Error(`expected routing to be measured: ${JSON.stringify(r.routing)}`);
+    expect(r.routing.proposed).toBe(r.routing.trueQuestions);
+    expect(r.routing.correct).toBe(r.routing.trueQuestions);
+    expect(recipientOf(parseVerdict(
+      JSON.stringify({ asked: true, topic: "t", why: "w", kind: "other", answerable: "phone", recipient: "fable", reason: "r", asks: "abc" }),
+      { promptVersion: PROPOSAL_PROMPT_VERSION, tail: "xx abc yy" },
+    ))).toBe("fable");
+  });
+
   it("says in words what K is and that avoided waiting is not measured", async () => {
     const r = await evaluate(labels, captures, fake(detectionAnswer(routingExtra)).classify, OPTS);
     const text = describeEvaluation(r).join("\n");
@@ -300,9 +331,11 @@ describe("the CLI's two classifiers", () => {
   });
 
   it("the paid one is built on a fresh budget root under the temp dir, and is not called here", () => {
-    const { classify, budgetRoot } = paidEvalClassifier("not-a-real-key");
-    expect(typeof classify).toBe("function");
-    expect(budgetRoot.startsWith(tmpdir())).toBe(true);
-    expect(existsSync(budgetRoot)).toBe(true);
+    for (const version of [1, PROPOSAL_PROMPT_VERSION] as const) {
+      const { classify, budgetRoot } = paidEvalClassifier("not-a-real-key", version);
+      expect(typeof classify).toBe("function");
+      expect(budgetRoot.startsWith(tmpdir())).toBe(true);
+      expect(existsSync(budgetRoot)).toBe(true);
+    }
   });
 });

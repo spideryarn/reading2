@@ -65,6 +65,27 @@ const ITEM: AttentionItem = {
   evidence: { kind: "dialog", question: "Drop the sessions table?", options: ["Yes", "No"] },
   answerability: { kind: "phone" },
   duplicates: [],
+  proposal: { kind: "not-applicable" },
+};
+
+const PROSE_ITEM: AttentionItem = {
+  id: "item-2",
+  sessionId: "$216",
+  sessionName: "worktree-copy-edit",
+  waitingSince: "2026-09-08T02:12:00.000Z",
+  kind: "product",
+  evidence: { kind: "prose", excerpt: "Tell me which wording you'd rather.", why: "it offered two wordings and stopped" },
+  answerability: { kind: "phone" },
+  duplicates: [],
+  proposal: {
+    kind: "proposed",
+    id: "fp-2:v2",
+    recipient: "fable",
+    reason: "it is a question of wording",
+    asks: "Tell me which wording you'd rather.",
+    by: { kind: "model", model: "openai/gpt-5.6-luna", via: "overseer" },
+    reach: { kind: "not-checked", why: "only a hit usage limit is checked" },
+  },
 };
 
 const LIST: AttentionList = {
@@ -105,6 +126,57 @@ function writeCheckpoint(root: string, over: Record<string, unknown> = {}): void
   };
   writeFileSync(join(root, "current.json"), `${JSON.stringify(checkpoint, null, 2)}\n`, "utf8");
 }
+
+describe("an item's proposal, read off the file (plan 260910f Stage 2)", () => {
+  const BY = { kind: "model", model: "openai/gpt-5.6-luna", via: "overseer" };
+
+  function readWith(item: Record<string, unknown>): AttentionList | null {
+    const root = tempRoot();
+    writeCheckpoint(root, { attention: { ...LIST, items: [item] } });
+    const feed = readAttention(root);
+    return feed.kind === "published" ? feed.list : null;
+  }
+
+  it("reads a proposal back whole, every arm", () => {
+    for (const proposal of [
+      PROSE_ITEM.proposal,
+      { kind: "unplaced", id: "fp:v2", why: "could be either", by: BY },
+      { kind: "off", why: "proposals are off" },
+      { kind: "not-reached", why: "the budget refused" },
+      { kind: "not-applicable" },
+      { kind: "not-reported" },
+      { kind: "proposed", id: "i", recipient: "self", reason: "r", asks: "a", by: BY, reach: { kind: "available" } },
+    ]) {
+      const list = readWith({ ...PROSE_ITEM, proposal });
+      expect(list?.kind, JSON.stringify(proposal)).toBe("list");
+      if (list?.kind !== "list") continue;
+      expect(list.items[0]?.proposal).toEqual(proposal);
+    }
+  });
+
+  it("reads an item from an older producer, with no proposal, as `not-reported` — not a failure", () => {
+    const { proposal: _dropped, ...older } = PROSE_ITEM;
+    const list = readWith(older);
+    expect(list?.kind).toBe("list");
+    if (list?.kind !== "list") return;
+    expect(list.items[0]?.proposal).toEqual({ kind: "not-reported" });
+  });
+
+  it("refuses a malformed proposal, so the list degrades rather than half-drawing one", () => {
+    for (const proposal of [
+      { kind: "sent" },
+      { kind: "proposed", id: "i", recipient: "gpt", reason: "r", asks: "a", by: BY, reach: { kind: "available" } },
+      { kind: "proposed", id: "i", recipient: "sol", reason: "r", asks: "a", by: BY },
+      { kind: "proposed", id: "i", recipient: "sol", reason: " ", asks: "a", by: BY, reach: { kind: "available" } },
+      { kind: "proposed", id: "i", recipient: "sol", reason: "r", asks: "a", by: { kind: "person", model: "Greg", via: "overseer" }, reach: { kind: "available" } },
+      { kind: "unplaced", id: "i", why: "w", by: { ...BY, via: "greg" } },
+      { kind: "not-reached" },
+      null,
+    ]) {
+      expect(readWith({ ...PROSE_ITEM, proposal })?.kind, JSON.stringify(proposal)).toBe("unknown");
+    }
+  });
+});
 
 describe("readAttention", () => {
   it("hands back the published list, with the CHECKPOINT's clock beside it", () => {

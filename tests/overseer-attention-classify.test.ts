@@ -19,11 +19,16 @@
  * a cached verdict carries the key it was computed under so a stale one is
  * detectable rather than invisible.
  */
+import { createHash } from "node:crypto";
+
 import { describe, expect, it } from "vitest";
 
+import { UNMETERED_SPEND } from "../src/spend-declarations.js";
+import { DAY_CEILING } from "../tools/overseer/model-budget.js";
 import {
   ATTENTION_CLASSIFIER_MODEL,
   CLASSIFIER_PROMPT_VERSION,
+  PROPOSAL_PROMPT_VERSION,
   MAX_COMPLETION_TOKENS,
   WORST_CASE_PROMPT_TOKENS,
   addSpend,
@@ -384,6 +389,166 @@ describe("what a call cost, which is three cases and not one", () => {
   it("says `not reported` rather than $0.00 when nothing was priced", () => {
     const none: ClassifierSpend = { calls: 2, promptTokens: 1, completionTokens: 1, costUsd: null, unpricedCalls: 2 };
     expect(describeCost(none)).not.toMatch(/\$0\.0+\b/);
+  });
+});
+
+describe("prompt version 2 — the proposal (plan 260910f D1, D8, D9, D13)", () => {
+  const TAIL = [
+    "⏺ The stack is idle and I can free it on request. Nothing is using the app right now;",
+    "  supabase stop plus killing vite would return ~0.5 GB. Say the word and I'll",
+    "  shut it down.",
+  ].join("\n");
+  const v2 = { promptVersion: PROPOSAL_PROMPT_VERSION, tail: TAIL } as const;
+  const asked = (extra: Record<string, unknown>) =>
+    JSON.stringify({
+      asked: true,
+      topic: "whether to shut the idle stack down",
+      why: "it named an action and stopped",
+      kind: "irreversible",
+      answerable: "phone",
+      answerableWhy: "",
+      ...extra,
+    });
+
+  it("leaves version 1's prompt byte-for-byte as it was before version 2 existed", () => {
+    // The hash of `buildClassifierPrompt("TAIL")` taken on 261b4759, before any
+    // Stage 2 edit. D1: with proposals off, prompt, version and output are
+    // exactly today's.
+    const p = buildClassifierPrompt("TAIL");
+    expect(createHash("sha256").update(JSON.stringify(p)).digest("hex")).toBe(
+      "47702d75abb14b00da31b3421fda51c304df0f93695b97ff359b49cefef17231",
+    );
+    expect(buildClassifierPrompt("TAIL", CLASSIFIER_PROMPT_VERSION)).toEqual(p);
+  });
+
+  it("asks version 2 for a recipient, a reason and the verbatim sentence, naming all five holders", () => {
+    const { system } = buildClassifierPrompt("TAIL", PROPOSAL_PROMPT_VERSION);
+    for (const word of ['"sol"', '"fable"', '"greg"', '"overseer"', '"self"', '"unplaced"', "recipient", "reason", "asks"]) {
+      expect(system).toContain(word);
+    }
+    expect(system).not.toEqual(buildClassifierPrompt("TAIL").system);
+  });
+
+  it("reads a proposal naming a holder, with its reason and its quoted sentence", () => {
+    const v = parseVerdict(
+      asked({ recipient: "fable", reason: "it is a question of wording", asks: "Say the word and I'll shut it down." }),
+      v2,
+    );
+    expect(v).toMatchObject({
+      kind: "question",
+      recipient: "fable",
+      reason: "it is a question of wording",
+      asks: "Say the word and I'll shut it down.",
+    });
+  });
+
+  it("accepts a quote whose line breaks differ from the pane's — whitespace is normalised, nothing else", () => {
+    const v = parseVerdict(asked({ recipient: "greg", reason: "r", asks: "Say the word and I'll shut it down." }), v2);
+    expect(v.kind).toBe("question");
+    // The pane wraps "I'll\n  shut" — the quote does not.
+    expect(TAIL).not.toContain("Say the word and I'll shut it down.");
+  });
+
+  it.each([
+    ["an unknown recipient", { recipient: "gpt", reason: "r", asks: "Say the word and I'll shut it down." }],
+    ["a missing recipient", { reason: "r", asks: "Say the word and I'll shut it down." }],
+    ["a recipient that is not a string", { recipient: 1, reason: "r", asks: "Say the word and I'll shut it down." }],
+    ["a missing reason", { recipient: "sol", asks: "Say the word and I'll shut it down." }],
+    ["a missing quote", { recipient: "sol", reason: "r" }],
+    ["a blank quote", { recipient: "sol", reason: "r", asks: "   " }],
+  ])("refuses %s as unreadable — never a default, never Greg", (_name, extra) => {
+    const v = parseVerdict(asked(extra), v2);
+    expect(v.kind).toBe("unreadable");
+    expect(JSON.stringify(v)).not.toContain('"greg"');
+  });
+
+  it("refuses a quote that is not in the tail the model read, and says so (D13)", () => {
+    // The sentence a proposal is about must be the AGENT's; a model that quotes
+    // something the tail does not hold — Greg's own prompt, or an invention —
+    // is not believed.
+    const v = parseVerdict(asked({ recipient: "self", reason: "r", asks: "Please go ahead and delete the worktree." }), v2);
+    expect(v.kind).toBe("unreadable");
+    if (v.kind !== "unreadable") return;
+    expect(v.why).toMatch(/not in the tail/);
+  });
+
+  it("reads `unplaced` as its own arm, with the model's reason, and never as Greg", () => {
+    const v = parseVerdict(asked({ recipient: "unplaced", unplacedWhy: "it could be technical or product" }), v2);
+    expect(v).toMatchObject({ kind: "question", recipient: "unplaced", unplacedWhy: "it could be technical or product" });
+  });
+
+  it("refuses `unplaced` with no reason", () => {
+    expect(parseVerdict(asked({ recipient: "unplaced" }), v2).kind).toBe("unreadable");
+  });
+
+  it("drops any attribution the model writes — `by` is stamped by the code, never read from the answer (D9)", () => {
+    const v = parseVerdict(
+      asked({ recipient: "sol", reason: "r", asks: "Say the word and I'll shut it down.", by: "Greg" }),
+      v2,
+    );
+    expect(v.kind).toBe("question");
+    expect("by" in v).toBe(false);
+  });
+
+  it("reads a `no-question` answer under version 2 exactly as under version 1", () => {
+    expect(parseVerdict(JSON.stringify({ asked: false, why: "a status report" }), v2)).toEqual({
+      kind: "no-question",
+      why: "a status report",
+    });
+  });
+
+  it("keeps version 1's output as it was: a version-2-shaped answer read under version 1 carries no proposal", () => {
+    const v = parseVerdict(asked({ recipient: "sol", reason: "r", asks: "Say the word and I'll shut it down." }));
+    expect(v.kind).toBe("question");
+    expect("recipient" in v).toBe(false);
+    expect("asks" in v).toBe(false);
+  });
+
+  it("classifyTail under version 2 sends version 2's prompt and checks the quote against what it sent", async () => {
+    const bodies: Record<string, unknown>[] = [];
+    const reply = (content: string) =>
+      (async (_url: unknown, init?: RequestInit) => {
+        bodies.push(JSON.parse(String(init?.body)) as Record<string, unknown>);
+        return new Response(JSON.stringify({ choices: [{ message: { content } }], usage: { cost: 0.0001 } }), { status: 200 });
+      }) as typeof fetch;
+    const good = await classifyTail(TAIL, {
+      apiKey: "k",
+      promptVersion: PROPOSAL_PROMPT_VERSION,
+      fetchImpl: reply(asked({ recipient: "overseer", reason: "r", asks: "Say the word and I'll shut it down." })),
+    });
+    expect(good.verdict).toMatchObject({ kind: "question", recipient: "overseer" });
+    const messages = bodies[0]?.["messages"] as { content: string }[];
+    expect(messages[0]?.content).toBe(buildClassifierPrompt("x", PROPOSAL_PROMPT_VERSION).system);
+
+    const invented = await classifyTail(TAIL, {
+      apiKey: "k",
+      promptVersion: PROPOSAL_PROMPT_VERSION,
+      fetchImpl: reply(asked({ recipient: "overseer", reason: "r", asks: "Go ahead." })),
+    });
+    expect(invented.verdict.kind).toBe("unreadable");
+  });
+
+  it("reserves at least the bytes of version 2's longest prompt too, since it is the longer one", () => {
+    const worst = clipForClassifier("€".repeat(MAX_TAIL_CHARS * 2));
+    const prompt = buildClassifierPrompt(worst, PROPOSAL_PROMPT_VERSION);
+    expect(prompt.system.length).toBeGreaterThan(buildClassifierPrompt(worst).system.length);
+    expect(Buffer.byteLength(prompt.system, "utf8") + Buffer.byteLength(prompt.user, "utf8")).toBeLessThanOrEqual(
+      WORST_CASE_PROMPT_TOKENS,
+    );
+  });
+});
+
+describe("the spend declaration says what this file may spend (plan 260910f D2)", () => {
+  const row = UNMETERED_SPEND.find((r) => r.file === "tools/overseer/attention-classify.ts");
+
+  it("carries the day ceiling from model-budget.ts, the proposal-aware prompt, and the evaluation's own budget", () => {
+    expect(row).toBeDefined();
+    const what = row?.what ?? "";
+    expect(what).toContain(`${DAY_CEILING.calls.toLocaleString("en-GB")} calls`);
+    expect(what).toContain(`${DAY_CEILING.tokens.toLocaleString("en-GB")} tokens`);
+    expect(what).toContain(`$${DAY_CEILING.costUsd.toFixed(2)}`);
+    expect(what).toContain("OVERSEER_PROPOSALS");
+    expect(what).toContain("scripts/attention-eval.ts");
   });
 });
 

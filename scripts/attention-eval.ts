@@ -22,7 +22,12 @@ import { writeFileSync } from "node:fs";
 import { parseArgs } from "node:util";
 
 import { readGatewayKey } from "../tools/overseer/attention-cli.js";
-import { ATTENTION_CLASSIFIER_MODEL, CLASSIFIER_PROMPT_VERSION } from "../tools/overseer/attention-classify.js";
+import {
+  ATTENTION_CLASSIFIER_MODEL,
+  CLASSIFIER_PROMPT_VERSION,
+  PROMPT_VERSIONS,
+  PROPOSAL_PROMPT_VERSION,
+} from "../tools/overseer/attention-classify.js";
 import {
   describeEvaluation,
   evaluate,
@@ -49,11 +54,12 @@ async function main(): Promise<number> {
     return 2;
   }
 
-  const promptVersion = values["prompt-version"] === undefined ? CLASSIFIER_PROMPT_VERSION : Number(values["prompt-version"]);
-  if (promptVersion !== CLASSIFIER_PROMPT_VERSION) {
+  const requested = values["prompt-version"] === undefined ? CLASSIFIER_PROMPT_VERSION : Number(values["prompt-version"]);
+  const promptVersion = PROMPT_VERSIONS.find((v) => v === requested);
+  if (promptVersion === undefined) {
     console.error(
-      `prompt version ${values["prompt-version"]} does not exist: the classifier has only version ${CLASSIFIER_PROMPT_VERSION}. ` +
-        "Stage 2 of plan 260910f adds the proposal-aware version.",
+      `prompt version ${values["prompt-version"]} does not exist: the classifier has version ${CLASSIFIER_PROMPT_VERSION} ` +
+        `(the plain question) and version ${PROPOSAL_PROMPT_VERSION} (the proposal-aware one, the only one that yields routing).`,
     );
     return 2;
   }
@@ -74,7 +80,7 @@ async function main(): Promise<number> {
       );
       return 1;
     }
-    const paid = paidEvalClassifier(key);
+    const paid = paidEvalClassifier(key, promptVersion);
     classify = paid.classify;
     model = ATTENTION_CLASSIFIER_MODEL;
     // Said up front, so a person can read the ledger this run spent against.

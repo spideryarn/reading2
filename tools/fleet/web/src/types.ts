@@ -52,8 +52,12 @@ import type {
   AttentionItem,
   AttentionKind,
   AttentionList,
+  AttentionProposal,
   ConversationReading,
   ExecutionReading,
+  ProposalAuthor,
+  ProposalReach,
+  ProposalRecipient,
   SessionDescription,
   ExecutionUnknownCause,
   FleetState as FleetStateWire,
@@ -91,6 +95,9 @@ export type {
   AttentionItem,
   AttentionKind,
   AttentionList,
+  AttentionProposal,
+  ProposalReach,
+  ProposalRecipient,
   OverseerHeartbeat,
   OverseerRegister,
   OverseerRegisterWork,
@@ -1698,7 +1705,72 @@ function parseAttentionItem(raw: unknown, skew: ClockSkew): AttentionItem | null
     if (dupId === null || dupName === null || dupSince === null) return null;
     duplicates.push({ sessionId: dupId, sessionName: dupName, waitingSince: shiftToBrowserClock(dupSince, skew) ?? dupSince });
   }
-  return { id, sessionId, sessionName, waitingSince, kind, evidence, answerability, duplicates };
+  const proposal = parseAttentionProposal(raw["proposal"]);
+  if (proposal === null) return null;
+  return { id, sessionId, sessionName, waitingSince, kind, evidence, answerability, duplicates, proposal };
+}
+
+const PROPOSAL_RECIPIENTS: readonly ProposalRecipient[] = ["sol", "fable", "greg", "overseer", "self"];
+
+/**
+ * An item's proposal, every arm in full (plan 260910f Stage 2) — restated
+ * rather than imported, like every parser in this file.
+ *
+ * **ABSENT IS `not-reported`, NOT A FAILURE**: this page may be reading a server
+ * older than itself, and an item from before the field made no claim.
+ * Present and malformed is refused — the list degrades whole, as for any other
+ * field — because the card draws `recipient`, `reason`, `asks` and `by` as
+ * words, and a half-read one would name a holder nobody proposed.
+ */
+function parseAttentionProposal(raw: unknown): AttentionProposal | null {
+  if (raw === undefined) return { kind: "not-reported" };
+  if (!isRecord(raw)) return null;
+  switch (raw["kind"]) {
+    case "proposed": {
+      const id = nonBlank(raw["id"]);
+      const recipient = PROPOSAL_RECIPIENTS.find((r) => r === raw["recipient"]);
+      const reason = nonBlank(raw["reason"]);
+      const asks = nonBlank(raw["asks"]);
+      const by = parseProposalAuthor(raw["by"]);
+      const reach = parseProposalReach(raw["reach"]);
+      if (id === null || recipient === undefined || reason === null || asks === null || by === null || reach === null) return null;
+      return { kind: "proposed", id, recipient, reason, asks, by, reach };
+    }
+    case "unplaced": {
+      const id = nonBlank(raw["id"]);
+      const why = nonBlank(raw["why"]);
+      const by = parseProposalAuthor(raw["by"]);
+      return id === null || why === null || by === null ? null : { kind: "unplaced", id, why, by };
+    }
+    case "off":
+    case "not-reached": {
+      const why = nonBlank(raw["why"]);
+      return why === null ? null : { kind: raw["kind"], why };
+    }
+    case "not-applicable":
+      return { kind: "not-applicable" };
+    case "not-reported":
+      return { kind: "not-reported" };
+    default:
+      return null;
+  }
+}
+
+/** The wire's one author arm: a model, via the Overseer. A person is never an author (D9). */
+function parseProposalAuthor(raw: unknown): ProposalAuthor | null {
+  if (!isRecord(raw) || raw["kind"] !== "model" || raw["via"] !== "overseer") return null;
+  const model = nonBlank(raw["model"]);
+  return model === null ? null : { kind: "model", model, via: "overseer" };
+}
+
+function parseProposalReach(raw: unknown): ProposalReach | null {
+  if (!isRecord(raw)) return null;
+  if (raw["kind"] === "available") return { kind: "available" };
+  const why = nonBlank(raw["why"]);
+  if (why === null) return null;
+  if (raw["kind"] === "unavailable") return { kind: "unavailable", why };
+  if (raw["kind"] === "not-checked") return { kind: "not-checked", why };
+  return null;
 }
 
 /**

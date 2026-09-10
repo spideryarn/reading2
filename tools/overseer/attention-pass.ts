@@ -47,13 +47,25 @@
  * doing twice. The model calls are the cost, and they are bounded by `maxCalls`
  * and made once per DISTINCT tail rather than once per session.
  */
-import type { AttentionAnswerability, AttentionJudgementStopped, AttentionList } from "../fleet/wire.js";
+import type {
+  AttentionAnswerability,
+  AttentionJudgementStopped,
+  AttentionList,
+  AttentionProposal,
+  ProposalAuthor,
+  ProposalReach,
+  ProposalRecipient,
+  UsageVerdict,
+} from "../fleet/wire.js";
 import { grantsPermission, parsePane, type PaneQuestion } from "../fleet/pane.js";
 import {
   addSpend,
+  ATTENTION_CLASSIFIER_MODEL,
+  canonicalVerdict,
   CLASSIFIER_PROMPT_VERSION,
   isCacheable,
   NO_SPEND,
+  PROPOSAL_PROMPT_VERSION,
   planClassifications,
   type CachedVerdict,
   type ClassifierSpend,
@@ -135,6 +147,14 @@ export type AttentionPassOptions = {
    * version would be answered from memory by the wrong prompt.
    */
   promptVersion?: number;
+  /**
+   * The checkpoint's stored usage verdict — `null` when it holds none — which
+   * is all `reach` knows about whether Fable could take a question now (plan
+   * 260910f D14). A PLAIN INPUT, read by the caller, so the pass stays free of
+   * the store; and projected into every card on every pass, never cached, so a
+   * limit that lifts reaches the next card at no cost.
+   */
+  usage?: UsageVerdict | null;
   now: () => Date;
 };
 
@@ -254,6 +274,10 @@ export async function runAttentionPass(options: AttentionPassOptions): Promise<A
   // would say the same and each ask costs a lock round-trip for nothing.
   let stopped: AttentionJudgementStopped | null = null;
   let refusedBecause: string | null = null;
+  // Why a tail the pass TRIED to (re-)read got no usable answer this pass. Only
+  // a stale verdict still has a card for this to explain, and it says why that
+  // card's proposal is `not-reached` rather than drawn (plan 260910f D3).
+  const notReread = new Map<string, string>();
   for (const tail of plan.toCall) {
     if (refusedBecause === null) {
       const outcome = await options.classify(tail.tail);
@@ -264,7 +288,9 @@ export async function runAttentionPass(options: AttentionPassOptions): Promise<A
             fingerprint: tail.fingerprint,
             classifiedAt: nowIso,
             promptVersion,
-            verdict: outcome.verdict,
+            // Rebuilt from known fields: whatever else the object carried —
+            // a `by`, say — is not remembered (D9).
+            verdict: canonicalVerdict(outcome.verdict),
           });
           judgedNow.add(tail.fingerprint);
           continue;
@@ -282,6 +308,7 @@ export async function runAttentionPass(options: AttentionPassOptions): Promise<A
         breakdown.verdictsUnreadable += 1;
         // Unjudged even when a stale verdict still places its card (F12).
         unclassified.push(`${tail.fingerprint}: ${outcome.verdict.why}`);
+        notReread.set(tail.fingerprint, `its re-read failed: ${outcome.verdict.why}`);
         continue;
       }
       const refusal = outcome.notCalled;
@@ -290,6 +317,7 @@ export async function runAttentionPass(options: AttentionPassOptions): Promise<A
     }
     breakdown.budgetRefused += 1;
     unclassified.push(`${tail.fingerprint}: not asked — ${refusedBecause}`);
+    notReread.set(tail.fingerprint, `not re-read — ${refusedBecause}`);
   }
 
   // SESSIONS, NOT FINGERPRINTS — GPT Sol's second round. Two sessions that ended
@@ -321,19 +349,28 @@ export async function runAttentionPass(options: AttentionPassOptions): Promise<A
         evidence: { kind: "dialog", question: m.question.prompt, options: m.question.options.map((o) => o.label) },
         answerability: verdict?.kind === "question" ? verdict.answerability : unknownAnswerability(verdict),
         topic: verdict?.kind === "question" ? verdict.topic : m.question.prompt,
+        // Observed, not inferred: answered in the detail pane, never routed.
+        proposal: { kind: "not-applicable" },
       });
       continue;
     }
 
-    if (verdict?.kind !== "question") continue;
+    if (cached === undefined || cached.verdict.kind !== "question") continue;
+    const question = cached.verdict;
     breakdown.questionsFound += 1;
     observations.push({
       sessionId: m.session.sessionId,
       sessionName: m.session.sessionName,
-      kind: verdict.attentionKind,
-      evidence: { kind: "prose", excerpt: m.tail, why: verdict.why },
-      answerability: verdict.answerability,
-      topic: verdict.topic,
+      kind: question.attentionKind,
+      evidence: { kind: "prose", excerpt: m.tail, why: question.why },
+      answerability: question.answerability,
+      topic: question.topic,
+      proposal: proposalFor({
+        cached,
+        promptVersion,
+        usage: options.usage ?? null,
+        notReread: notReread.get(m.fingerprint),
+      }),
     });
   }
 
@@ -393,6 +430,105 @@ export function breakdownBalances(b: PassBreakdown): boolean {
       b.unreadable + b.endedTurns ===
     b.scanned
   );
+}
+
+/**
+ * What a prose card says when proposals are off (D7). It names the variable so
+ * anybody reading the payload knows what turns it on, and it is never drawn.
+ */
+export const PROPOSALS_OFF_WHY =
+  "proposals are off: the Overseer asks the plain question unless OVERSEER_PROPOSALS=1 is set in its environment";
+
+/**
+ * Who proposed it — THIS CODE, from the constant, never the model's own output
+ * (plan 260910f D9). A fresh object each time so no card can mutate another's.
+ */
+function proposalAuthor(): ProposalAuthor {
+  return { kind: "model", model: ATTENTION_CLASSIFIER_MODEL, via: "overseer" };
+}
+
+/**
+ * Could the proposed holder take it now? Projected on EVERY pass from the
+ * usage reading the caller hands in, and never remembered (D14), so a limit
+ * that lifts reaches the next card at no cost.
+ *
+ * **Missing capability is shown, never substituted**: a Fable question whose
+ * Fable is limited still names Fable, with `unavailable`. And where nothing is
+ * measured it says `not-checked` rather than hoping — the checkpoint carries
+ * no Codex reading and nothing reads the Overseer's own capacity.
+ */
+export function projectReach(recipient: ProposalRecipient, usage: UsageVerdict | null): ProposalReach {
+  switch (recipient) {
+    case "greg":
+    case "self":
+      return { kind: "available" };
+    case "fable": {
+      if (usage?.level === "limited") {
+        const detail = usage.reasons[0];
+        return {
+          kind: "unavailable",
+          why: `the last usage pass found this account's Claude limit hit${detail === undefined ? "" : ` (${detail})`}`,
+        };
+      }
+      return {
+        kind: "not-checked",
+        why:
+          usage === null
+            ? "the checkpoint holds no usage reading"
+            : "only a hit usage limit is checked; nothing checks that Fable can take a question now",
+      };
+    }
+    case "sol":
+      return { kind: "not-checked", why: "the checkpoint carries no Codex reading" };
+    case "overseer":
+      return { kind: "not-checked", why: "nothing checks the Overseer's own capacity yet" };
+  }
+}
+
+/**
+ * The proposal on a prose card, from the verdict that placed it.
+ *
+ * `off` when this pass is not proposal-aware, whatever the verdict holds — a
+ * version-2 verdict left in memory after proposals are turned off is not
+ * drawn. `not-reached` when the verdict came from another prompt (stale, D3):
+ * it still places the card, and says whether its re-read was refused, failed,
+ * or not reached by the per-pass budget.
+ */
+function proposalFor(input: {
+  cached: CachedVerdict;
+  promptVersion: number;
+  usage: UsageVerdict | null;
+  notReread: string | undefined;
+}): AttentionProposal {
+  const { cached, promptVersion } = input;
+  if (promptVersion !== PROPOSAL_PROMPT_VERSION) return { kind: "off", why: PROPOSALS_OFF_WHY };
+  if (cached.promptVersion !== promptVersion) {
+    return {
+      kind: "not-reached",
+      why:
+        input.notReread === undefined
+          ? "this card's verdict came from an earlier prompt and the pass's per-pass budget has not yet reached its re-read"
+          : `this card's verdict came from an earlier prompt, and ${input.notReread}`,
+    };
+  }
+  const v = cached.verdict;
+  // `parseVerdict` and the memory parser both refuse a version-2 question with
+  // no proposal, so this is unreachable — but a card with no proposal is not a
+  // card with a default one.
+  if (v.kind !== "question" || v.recipient === undefined) {
+    return { kind: "not-reached", why: "the verdict carries no proposal" };
+  }
+  const id = `${cached.fingerprint}:v${promptVersion}`;
+  if (v.recipient === "unplaced") return { kind: "unplaced", id, why: v.unplacedWhy, by: proposalAuthor() };
+  return {
+    kind: "proposed",
+    id,
+    recipient: v.recipient,
+    reason: v.reason,
+    asks: v.asks,
+    by: proposalAuthor(),
+    reach: projectReach(v.recipient, input.usage),
+  };
 }
 
 function unknownAnswerability(verdict: ClassifierVerdict | undefined): AttentionAnswerability {

@@ -110,7 +110,11 @@ import type {
   AttentionItem,
   AttentionJudgementStopped,
   AttentionList,
+  AttentionProposal,
   ConversationReading,
+  ProposalAuthor,
+  ProposalReach,
+  ProposalRecipient,
   HarnessKind,
   OverseerWork,
   PaneJob,
@@ -2688,6 +2692,8 @@ function parseAttentionItem(u: unknown): AttentionItem | null {
     if (!isIsoTimestamp(d["waitingSince"])) return null;
     duplicates.push({ sessionId: d["sessionId"], sessionName: d["sessionName"], waitingSince: d["waitingSince"] });
   }
+  const proposal = parseAttentionProposal(u["proposal"]);
+  if (proposal === null) return null;
   return {
     id,
     sessionId,
@@ -2697,7 +2703,75 @@ function parseAttentionItem(u: unknown): AttentionItem | null {
     evidence,
     answerability,
     duplicates,
+    proposal,
   };
+}
+
+const PROPOSAL_RECIPIENTS: readonly ProposalRecipient[] = ["sol", "fable", "greg", "overseer", "self"];
+
+/** A string with something in it. Every text field of a proposal is drawn on its own line, so a blank one is refused. */
+function filledText(u: unknown): string | null {
+  return typeof u === "string" && u.trim() !== "" ? u : null;
+}
+
+/**
+ * An item's proposal, every arm in full (plan 260910f Stage 2).
+ *
+ * **ABSENT IS `not-reported`, NOT A FAILURE** — an item from a producer that
+ * predates the field made no claim, and failing the list over it would blank a
+ * live inbox between a dashboard restart and a daemon restart. Present and
+ * malformed IS a failure, like every other field here: a half-read proposal
+ * would draw a holder nobody proposed, or an attribution nobody made.
+ */
+function parseAttentionProposal(u: unknown): AttentionProposal | null {
+  if (u === undefined) return { kind: "not-reported" };
+  if (!isRecord(u)) return null;
+  switch (u["kind"]) {
+    case "proposed": {
+      const id = filledText(u["id"]);
+      const recipient = PROPOSAL_RECIPIENTS.find((r) => r === u["recipient"]);
+      const reason = filledText(u["reason"]);
+      const asks = filledText(u["asks"]);
+      const by = parseProposalAuthor(u["by"]);
+      const reach = parseProposalReach(u["reach"]);
+      if (id === null || recipient === undefined || reason === null || asks === null || by === null || reach === null) return null;
+      return { kind: "proposed", id, recipient, reason, asks, by, reach };
+    }
+    case "unplaced": {
+      const id = filledText(u["id"]);
+      const why = filledText(u["why"]);
+      const by = parseProposalAuthor(u["by"]);
+      return id === null || why === null || by === null ? null : { kind: "unplaced", id, why, by };
+    }
+    case "off":
+    case "not-reached": {
+      const why = filledText(u["why"]);
+      return why === null ? null : { kind: u["kind"], why };
+    }
+    case "not-applicable":
+      return { kind: "not-applicable" };
+    case "not-reported":
+      return { kind: "not-reported" };
+    default:
+      return null;
+  }
+}
+
+/** Only the one arm the wire has: a model, via the Overseer. A person is never an author (D9). */
+function parseProposalAuthor(u: unknown): ProposalAuthor | null {
+  if (!isRecord(u) || u["kind"] !== "model" || u["via"] !== "overseer") return null;
+  const model = filledText(u["model"]);
+  return model === null ? null : { kind: "model", model, via: "overseer" };
+}
+
+function parseProposalReach(u: unknown): ProposalReach | null {
+  if (!isRecord(u)) return null;
+  if (u["kind"] === "available") return { kind: "available" };
+  const why = filledText(u["why"]);
+  if (why === null) return null;
+  if (u["kind"] === "unavailable") return { kind: "unavailable", why };
+  if (u["kind"] === "not-checked") return { kind: "not-checked", why };
+  return null;
 }
 
 /**

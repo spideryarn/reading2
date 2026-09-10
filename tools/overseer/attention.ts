@@ -55,6 +55,7 @@ import type {
   AttentionJudgementStopped,
   AttentionKind,
   AttentionList,
+  AttentionProposal,
 } from "../fleet/wire.js";
 
 /**
@@ -94,6 +95,12 @@ export type AttentionObservation = {
   answerability: AttentionAnswerability;
   /** Canonical, for grouping. Producer-internal; never crosses the wire. */
   topic: string;
+  /**
+   * Who the model proposes holds the answer, or why there is no proposal
+   * (plan 260910f Stage 2). Worked out by the pass; carried onto the item from
+   * the group's PRIMARY observation, the one whose tail the card quotes.
+   */
+  proposal: AttentionProposal;
 };
 
 /**
@@ -285,6 +292,9 @@ export function buildAttentionList(input: BuildAttentionInput): AttentionList {
       kind: primary.o.kind,
       evidence: primary.o.evidence,
       answerability: primary.o.answerability,
+      // The PRIMARY's, like the evidence it sits beside: the proposal is about
+      // the sentence in this card's tail, and its id is that tail's.
+      proposal: primary.o.proposal,
       duplicates: members.slice(1).map((m) => ({
         sessionId: m.o.sessionId,
         sessionName: m.o.sessionName,

@@ -302,14 +302,38 @@ fixes only, per the brief; Fable reads items 4 and 5 independently afterwards.
 
 ### Stage 2 — the proposal
 
-- [ ] The proposal-aware prompt version, `OVERSEER_PROPOSALS`, strict parse (unknown recipient ⇒
+- [x] The proposal-aware prompt version, `OVERSEER_PROPOSALS`, strict parse (unknown recipient ⇒
       unreadable, never a default), `asks` substring check, producer-stamped `by`.
-- [ ] `AttentionItem.proposal` in `wire.ts` and the three parsers; absent ⇒ `not-reported`.
-- [ ] `reach` projected each pass from the checkpoint's usage (D14).
-- [ ] `AttentionPanel.tsx`: the proposal under the `why`; the `asks` quote in place of the
-      position-chosen excerpt when present (which fixes the panel's standing *"taken by position, not
-      by search"* defect); attribution; *"nothing has been sent"*.
-- [ ] `src/spend-declarations.ts`: the row amended with the day ceiling and the widened prompt.
+- [x] `AttentionItem.proposal` in `wire.ts` and the three parsers; absent ⇒ `not-reported`.
+- [x] `reach` projected each pass from the checkpoint's usage (D14).
+- [x] `AttentionPanel.tsx`: the proposal under the `why`; the `asks` quote as the card's evidence
+      (which fixes the panel's standing *"taken by position, not by search"* defect); attribution;
+      *"nothing has been sent"*.
+- [x] `src/spend-declarations.ts`: the row amended with the day ceiling and the widened prompt.
+
+**As built** (Opus subagent; 74 new tests seen red before any code, and the prompt-version plumbing
+checked by breaking it three ways — each break went red on exactly its test). Scoped suites 1,060 of
+1,060 across 20 files, typecheck clean. Departures, each accepted:
+
+- **The quote does not replace the tail; it sits above it.** The plan said *"in place of"*. The quote
+  is the evidence a person acts on, labelled *"the sentence this proposal is about"*; the tail stays
+  behind its disclosure, caveat and all, because it is what the model's inference is checked against.
+- **`ATTENTION_MEMORY_SCHEMA` 1 → 2**, as that file's own rule requires. This build reads both;
+  rolling back to Stage 1's build rebuilds the memory once, at a few cheap calls.
+- **A verdict is rebuilt from known fields before it is cached**, so a stray `by` in the model's
+  output is never remembered, let alone shown.
+- **The worst-case prompt bound is the larger of the two versions**, so a reservation covers the
+  longer version-2 prompt; `model-budget.ts` itself unchanged.
+- **Greg as recipient reads *"Proposed: this one is yours"***, never "Greg"; an unavailable holder
+  shows *"· not available now"* on the card as well as in its tooltip; `unplaced` needs no quote.
+- `OVERSEER_PROPOSALS` is read by one function, `proposalsEnabled()` (exactly `"1"`), and both
+  compositions take injected seams so `tests/overseer-attention-cli.test.ts` drives each as composed.
+- **Not checked in a browser at 390px** — the layout only wraps and breaks words, and the render
+  test covers the content. Browser work goes to a Sonnet subagent here, and Sonnet is rate-limited
+  on this account until 2026-09-12. Recorded as unverified.
+
+**Committed, not yet Sol-reviewed**: the Overseer paused new reviews at 19:1xZ for the five-hour
+window, so the stage review waits for its resume.
 
 ### Stage 3 — the evaluation, and the answer
 

@@ -19,8 +19,14 @@ import { readFileSync } from "node:fs";
 
 import { describe, expect, it } from "vitest";
 
+import type { UsageVerdict } from "../tools/fleet/wire.js";
 import type { ClassifierVerdict } from "../tools/overseer/attention-classify.js";
-import { CLASSIFIER_PROMPT_VERSION, NO_SPEND } from "../tools/overseer/attention-classify.js";
+import {
+  ATTENTION_CLASSIFIER_MODEL,
+  CLASSIFIER_PROMPT_VERSION,
+  NO_SPEND,
+  PROPOSAL_PROMPT_VERSION,
+} from "../tools/overseer/attention-classify.js";
 import type { AttentionMemory } from "../tools/overseer/attention-memory.js";
 import type { ClassifyOutcome } from "../tools/overseer/model-budget.js";
 import {
@@ -69,6 +75,19 @@ const askedSomething: ClassifierVerdict = {
   answerability: { kind: "phone" },
 };
 const askedNothing: ClassifierVerdict = { kind: "no-question", why: "a status report" };
+
+/** A version-2 answer about the shut-it-down fixture, naming `recipient`. Its quote IS in that fixture's tail. */
+function proposing(recipient: "sol" | "fable" | "greg" | "overseer" | "self"): ClassifierVerdict {
+  return {
+    ...askedSomething,
+    recipient,
+    reason: `it is ${recipient}'s kind of question`,
+    asks: "Say the word and I'll shut it down.",
+  } as ClassifierVerdict;
+}
+
+const USAGE_OK: UsageVerdict = { level: "ok", reasons: [], activeLimit: null };
+const USAGE_LIMITED: UsageVerdict = { level: "limited", reasons: ["a 429 on the five-hour window"], activeLimit: null };
 
 describe("the accounting, which is the positive control", () => {
   it("puts every session in exactly one bucket", async () => {
@@ -829,6 +848,21 @@ describe("the day budget and the prompt version (plan 260910f D3–D6)", () => {
     expect(result.list.items).toHaveLength(1);
   });
 
+  it("files what it re-read under the version it was HANDED, so a version-2 pass never files under 1", async () => {
+    const memory = staleOf(await remembered());
+    const { sessions, capture } = fleetOf([["asks", pane("ended-prose-question-shut-it-down.txt")]]);
+    const result = await runAttentionPass({
+      sessions,
+      capture,
+      classify: async () => ({ verdict: proposing("fable"), spend: { ...NO_SPEND, calls: 1 } }),
+      memory,
+      maxCalls: 10,
+      promptVersion: PROPOSAL_PROMPT_VERSION,
+      now: NOW,
+    });
+    expect([...result.memory.verdicts.values()].map((v) => v.promptVersion)).toEqual([PROPOSAL_PROMPT_VERSION]);
+  });
+
   it("counts nothing unjudged when a stale verdict's re-read succeeds", async () => {
     const memory = staleOf(await remembered());
     const { sessions, capture } = fleetOf([["asks", pane("ended-prose-question-shut-it-down.txt")]]);
@@ -843,5 +877,227 @@ describe("the day budget and the prompt version (plan 260910f D3–D6)", () => {
     expect(result.list).toMatchObject({ kind: "list", sessionsUnreadable: 0 });
     if (result.list.kind !== "list") return;
     expect(result.list.items).toHaveLength(1);
+  });
+});
+
+describe("the proposal on each item (plan 260910f D1, D3, D7, D8, D9, D14)", () => {
+  const BY = { kind: "model", model: ATTENTION_CLASSIFIER_MODEL, via: "overseer" };
+
+  function asks(): { sessions: SessionToScan[]; capture: (paneId: string) => string } {
+    return fleetOf([["asks", pane("ended-prose-question-shut-it-down.txt")]]);
+  }
+
+  function onlyItem(list: Awaited<ReturnType<typeof runAttentionPass>>["list"]) {
+    if (list.kind === "unknown") throw new Error(`expected items, got unknown: ${list.why}`);
+    const item = list.items[0];
+    if (item === undefined) throw new Error("expected one item");
+    return item;
+  }
+
+  it("marks every prose item `off`, naming the variable, when proposals are not enabled (D7)", async () => {
+    const result = await runAttentionPass({
+      ...asks(),
+      classify: async () => ({ verdict: proposing("fable"), spend: { ...NO_SPEND, calls: 1 } }),
+      maxCalls: 10,
+      now: NOW,
+    });
+    const proposal = onlyItem(result.list).proposal;
+    expect(proposal.kind).toBe("off");
+    if (proposal.kind !== "off") return;
+    expect(proposal.why).toContain("OVERSEER_PROPOSALS");
+  });
+
+  it("proposes the holder the model named, with its reason and quote, attributed to the model", async () => {
+    const { sessions, capture } = asks();
+    const result = await runAttentionPass({
+      sessions,
+      capture,
+      classify: async () => ({ verdict: proposing("fable"), spend: { ...NO_SPEND, calls: 1 } }),
+      maxCalls: 10,
+      promptVersion: PROPOSAL_PROMPT_VERSION,
+      usage: USAGE_OK,
+      now: NOW,
+    });
+    const proposal = onlyItem(result.list).proposal;
+    const fingerprint = [...result.memory.verdicts.keys()][0];
+    expect(proposal).toEqual({
+      kind: "proposed",
+      id: `${fingerprint}:v${PROPOSAL_PROMPT_VERSION}`,
+      recipient: "fable",
+      reason: "it is fable's kind of question",
+      asks: "Say the word and I'll shut it down.",
+      by: BY,
+      reach: { kind: "not-checked", why: expect.any(String) },
+    });
+  });
+
+  it("stamps `by` from the constant even when the verdict object carries one of its own (D9)", async () => {
+    // Through `unknown`: the type rightly has no `by`, which is the point.
+    const forged = { ...proposing("greg"), by: { kind: "person", model: "Greg", via: "overseer" } } as unknown as ClassifierVerdict;
+    const result = await runAttentionPass({
+      ...asks(),
+      classify: async () => ({ verdict: forged, spend: { ...NO_SPEND, calls: 1 } }),
+      maxCalls: 10,
+      promptVersion: PROPOSAL_PROMPT_VERSION,
+      now: NOW,
+    });
+    const proposal = onlyItem(result.list).proposal;
+    expect(proposal.kind).toBe("proposed");
+    if (proposal.kind !== "proposed") return;
+    expect(proposal.by).toEqual(BY);
+    // …and the forgery was not remembered either.
+    expect(JSON.stringify([...result.memory.verdicts.values()])).not.toContain("Greg");
+  });
+
+  it("draws `unplaced` as its own arm, never promoted to Greg (D8)", async () => {
+    const unplaced = { ...askedSomething, recipient: "unplaced", unplacedWhy: "could be technical or product" } as ClassifierVerdict;
+    const result = await runAttentionPass({
+      ...asks(),
+      classify: async () => ({ verdict: unplaced, spend: { ...NO_SPEND, calls: 1 } }),
+      maxCalls: 10,
+      promptVersion: PROPOSAL_PROMPT_VERSION,
+      now: NOW,
+    });
+    const proposal = onlyItem(result.list).proposal;
+    expect(proposal).toMatchObject({ kind: "unplaced", why: "could be technical or product", by: BY });
+  });
+
+  it("says `not-applicable` for a drawn dialog, proposals on or off", async () => {
+    for (const promptVersion of [CLASSIFIER_PROMPT_VERSION, PROPOSAL_PROMPT_VERSION]) {
+      const result = await runAttentionPass({
+        ...fleetOf([["dialog", fleetPane("dialog-ask-user-question.txt")]]),
+        classify: async () => ({ verdict: proposing("sol"), spend: { ...NO_SPEND, calls: 1 } }),
+        maxCalls: 10,
+        promptVersion,
+        now: NOW,
+      });
+      expect(onlyItem(result.list).proposal).toEqual({ kind: "not-applicable" });
+    }
+  });
+
+  async function rememberedUnderVersion1() {
+    const fleet = asks();
+    const first = await runAttentionPass({
+      ...fleet,
+      classify: async () => ({ verdict: askedSomething, spend: { ...NO_SPEND, calls: 1 } }),
+      maxCalls: 10,
+      now: NOW,
+    });
+    return { ...fleet, memory: first.memory };
+  }
+
+  it("says `not-reached`, with the budget's reason, for a version-1 card whose re-read was refused (D3)", async () => {
+    const { sessions, capture, memory } = await rememberedUnderVersion1();
+    const result = await runAttentionPass({
+      sessions,
+      capture,
+      memory,
+      classify: async (): Promise<ClassifyOutcome> => ({
+        notCalled: { kind: "stopped", stopped: { kind: "exhausted", why: "the day's ceiling is spent", until: "2026-09-09T00:00:00.000Z" } },
+      }),
+      maxCalls: 10,
+      promptVersion: PROPOSAL_PROMPT_VERSION,
+      now: NOW,
+    });
+    const proposal = onlyItem(result.list).proposal;
+    expect(proposal.kind).toBe("not-reached");
+    if (proposal.kind !== "not-reached") return;
+    expect(proposal.why).toContain("the day's ceiling is spent");
+  });
+
+  it("says `not-reached` for a version-1 card the per-pass budget did not get to", async () => {
+    const { sessions, capture, memory } = await rememberedUnderVersion1();
+    const result = await runAttentionPass({
+      sessions,
+      capture,
+      memory,
+      classify: async () => {
+        throw new Error("maxCalls 0 must not call");
+      },
+      maxCalls: 0,
+      promptVersion: PROPOSAL_PROMPT_VERSION,
+      now: NOW,
+    });
+    expect(onlyItem(result.list).proposal.kind).toBe("not-reached");
+  });
+
+  it("says `not-reached` for a version-1 card whose re-read came back unreadable", async () => {
+    const { sessions, capture, memory } = await rememberedUnderVersion1();
+    const result = await runAttentionPass({
+      sessions,
+      capture,
+      memory,
+      classify: async () => ({ verdict: { kind: "unreadable", why: "the quote is not in the tail" }, spend: { ...NO_SPEND, calls: 1 } }),
+      maxCalls: 10,
+      promptVersion: PROPOSAL_PROMPT_VERSION,
+      now: NOW,
+    });
+    const proposal = onlyItem(result.list).proposal;
+    expect(proposal.kind).toBe("not-reached");
+    if (proposal.kind !== "not-reached") return;
+    expect(proposal.why).toContain("the quote is not in the tail");
+  });
+
+  it("remembers recipient, reason and quote with the verdict, and never `reach` (D14)", async () => {
+    const result = await runAttentionPass({
+      ...asks(),
+      classify: async () => ({ verdict: proposing("fable"), spend: { ...NO_SPEND, calls: 1 } }),
+      maxCalls: 10,
+      promptVersion: PROPOSAL_PROMPT_VERSION,
+      usage: USAGE_LIMITED,
+      now: NOW,
+    });
+    const remembered = [...result.memory.verdicts.values()][0]?.verdict;
+    expect(remembered).toMatchObject({ recipient: "fable", reason: "it is fable's kind of question", asks: "Say the word and I'll shut it down." });
+    expect(JSON.stringify(remembered)).not.toContain("reach");
+    expect(JSON.stringify(remembered)).not.toContain("unavailable");
+  });
+
+  it("projects `reach` afresh each pass: an unchanged tail follows usage ok → limited → ok at no extra cost", async () => {
+    const fleet = asks();
+    let calls = 0;
+    const classify = async (): Promise<ClassifyOutcome> => {
+      calls += 1;
+      return { verdict: proposing("fable"), spend: { ...NO_SPEND, calls: 1 } };
+    };
+    let memory: AttentionMemory | undefined;
+    const reaches: string[] = [];
+    for (const usage of [USAGE_OK, USAGE_LIMITED, USAGE_OK]) {
+      const result = await runAttentionPass({
+        ...fleet,
+        classify,
+        ...(memory === undefined ? {} : { memory }),
+        maxCalls: 10,
+        promptVersion: PROPOSAL_PROMPT_VERSION,
+        usage,
+        now: NOW,
+      });
+      memory = result.memory;
+      const proposal = onlyItem(result.list).proposal;
+      if (proposal.kind !== "proposed") throw new Error(`expected proposed, got ${proposal.kind}`);
+      // Missing capability is SHOWN, never substituted: Fable stays the recipient.
+      expect(proposal.recipient).toBe("fable");
+      reaches.push(proposal.reach.kind);
+    }
+    expect(reaches).toEqual(["not-checked", "unavailable", "not-checked"]);
+    expect(calls).toBe(1);
+  });
+
+  it("marks Greg and the agent itself available, and Sol and the Overseer not checked, whatever usage says", async () => {
+    const reach: Record<string, string> = {};
+    for (const recipient of ["greg", "self", "sol", "overseer"] as const) {
+      const result = await runAttentionPass({
+        ...asks(),
+        classify: async () => ({ verdict: proposing(recipient), spend: { ...NO_SPEND, calls: 1 } }),
+        maxCalls: 10,
+        promptVersion: PROPOSAL_PROMPT_VERSION,
+        usage: USAGE_LIMITED,
+        now: NOW,
+      });
+      const proposal = onlyItem(result.list).proposal;
+      if (proposal.kind !== "proposed") throw new Error(`expected proposed, got ${proposal.kind}`);
+      reach[recipient] = proposal.reach.kind;
+    }
+    expect(reach).toEqual({ greg: "available", self: "available", sol: "not-checked", overseer: "not-checked" });
   });
 });

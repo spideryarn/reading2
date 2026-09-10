@@ -65,6 +65,7 @@ function attentionItem(
     evidence,
     answerability: { kind: "phone" },
     duplicates: [],
+    proposal: evidence.kind === "dialog" ? { kind: "not-applicable" } : { kind: "off", why: "proposals are off" },
     ...over,
   };
 }

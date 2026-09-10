@@ -26,14 +26,19 @@
  */
 import { writeFileSync } from "node:fs";
 
-import type { AttentionList } from "../fleet/wire.js";
+import type { AttentionList, AttentionProposal, UsageVerdict } from "../fleet/wire.js";
 import {
   ATTENTION_CLASSIFIER_MODEL,
+  CLASSIFIER_PROMPT_VERSION,
   NO_SPEND,
+  PROPOSAL_PROMPT_VERSION,
   planClassifications,
   describeCost,
+  type ClassifierOptions,
   type ClassifierSpend,
+  type PromptVersion,
 } from "./attention-classify.js";
+import { readCheckpoint } from "./store.js";
 import {
   EMPTY_ATTENTION_MEMORY,
   memoryForEpoch,
@@ -110,17 +115,77 @@ export function readGatewayKey(): string | null {
   return key === undefined || key === "" ? null : key;
 }
 
-export async function runAttentionCommand(options: AttentionCommandOptions): Promise<number> {
+/**
+ * Whether the proposal-aware prompt is on — `OVERSEER_PROPOSALS=1` in this
+ * process's environment, the daemon's unit file or a hand run's shell (plan
+ * 260910f D7). **The one reader of it**, for the reason `readGatewayKey` is the
+ * one reader of the key: a second place deciding it could decide differently,
+ * and then a version-2 answer would be filed under version 1.
+ *
+ * Exactly `"1"`, never merely set: `OVERSEER_PROPOSALS=0` must not turn on the
+ * one change here that costs a cold re-read of the fleet.
+ */
+export function proposalsEnabled(): boolean {
+  return process.env["OVERSEER_PROPOSALS"] === "1";
+}
+
+/** The prompt version a composition runs under. One function, so the classifier and the pass cannot be told two different things. */
+export function promptVersionFor(proposals: boolean): PromptVersion {
+  return proposals ? PROPOSAL_PROMPT_VERSION : CLASSIFIER_PROMPT_VERSION;
+}
+
+/**
+ * The usage verdict the Overseer's checkpoint holds, or `null` when it holds
+ * none — the only thing `reach` knows about whether Fable could take a question
+ * (D14). Read from the file like any other reader of the checkpoint; the pass
+ * takes it as a plain input and stays free of the store.
+ */
+export function storedUsageVerdict(root: string): UsageVerdict | null {
+  const read = readCheckpoint(root);
+  if (read.kind !== "checkpoint") return null;
+  const usage = read.checkpoint.usage;
+  return usage.kind === "report" ? usage.report.verdict : null;
+}
+
+/**
+ * The edges of both compositions — the fleet, the gateway, the key and the
+ * switch — so that tests/overseer-attention-cli.test.ts can drive the daemon's
+ * runner and the hand run AS COMPOSED, with no tmux and no network. What that
+ * test pins is that each passes its prompt version to both the classifier and
+ * the pass; the unit tests of the pass cannot see a caller forget to.
+ */
+export type AttentionSeams = {
+  apiKey: () => string | null;
+  proposals: () => boolean;
+  listSessions: typeof listSessions;
+  capture: typeof capturePane;
+  tmuxGeneration: typeof tmuxServerGeneration;
+  /** The gateway transport. Absent means the real `fetch`. */
+  fetchImpl?: typeof fetch;
+};
+
+export const LIVE_SEAMS: AttentionSeams = {
+  apiKey: readGatewayKey,
+  proposals: proposalsEnabled,
+  listSessions,
+  capture: capturePane,
+  tmuxGeneration: tmuxServerGeneration,
+};
+
+export async function runAttentionCommand(
+  options: AttentionCommandOptions,
+  seams: AttentionSeams = LIVE_SEAMS,
+): Promise<number> {
   const fleet =
     options.panes !== null
       ? readCapturedFleet(options.panes)
       : options.captureTo !== null
-        ? captureFleet(listSessions(), options.captureTo)
+        ? captureFleet(seams.listSessions(), options.captureTo)
         : null;
-  const sessions = fleet?.sessions ?? listSessions();
+  const sessions = fleet?.sessions ?? seams.listSessions();
   const capture =
     fleet === null
-      ? capturePane
+      ? seams.capture
       : (paneId: string) => {
           const session = fleet.sessions.find((s) => s.paneId === paneId);
           const text = session === undefined ? undefined : fleet.captures.get(session.sessionId);
@@ -144,11 +209,11 @@ export async function runAttentionCommand(options: AttentionCommandOptions): Pro
   // is a different session wearing the same handle.
   const memory = memoryForEpoch(
     read.kind === "memory" ? read.memory : EMPTY_ATTENTION_MEMORY,
-    `cli-${process.pid}:tmux-${tmuxServerGeneration() ?? "unknown"}`,
+    `cli-${process.pid}:tmux-${seams.tmuxGeneration() ?? "unknown"}`,
   );
 
   // From the environment, never `.env.local` — `readGatewayKey` says why.
-  const apiKey = readGatewayKey();
+  const apiKey = seams.apiKey();
   if (!options.dry && apiKey === null) {
     console.error(
       "OPENROUTER_API_KEY is not set, and this reads the environment rather than .env.local — see the\n" +
@@ -165,14 +230,20 @@ export async function runAttentionCommand(options: AttentionCommandOptions): Pro
   // because `--write`/`--no-write` governs the attention MEMORY and nothing
   // else. `--dry` makes no calls, so it only reads the ledger.
   const budget = modelBudget({ root: options.root });
+  // ONE VERSION, HANDED TO BOTH HALVES — the classifier asks under it and the
+  // pass files the answer under it. tests/overseer-attention-cli.test.ts fails
+  // if either is dropped.
+  const promptVersion = promptVersionFor(seams.proposals());
   const result = await runAttentionPass({
     sessions,
     capture,
     classify: options.dry
       ? async () => ({ verdict: { kind: "unreadable", why: "--dry: no model was asked" }, spend: NO_SPEND })
-      : paidClassifier(budget, { apiKey: apiKey ?? "" }),
+      : paidClassifier(budget, classifierOptions(apiKey ?? "", promptVersion, seams)),
     memory,
     maxCalls: options.dry ? 0 : options.maxCalls,
+    promptVersion,
+    usage: storedUsageVerdict(options.root),
     now: () => new Date(),
   });
 
@@ -270,6 +341,18 @@ export function describeList(list: AttentionList): readonly string[] {
       for (const option of item.evidence.options) lines.push(`      · ${option}`);
     } else {
       lines.push(`    why: ${item.evidence.why}`);
+      // The proposal, when there is one — a reading for the hand run and the
+      // Stage 3 census, attributed like the card's. `off`, `not-reached` and
+      // the rest print nothing, as they draw nothing.
+      const proposal: AttentionProposal = item.proposal;
+      if (proposal.kind === "proposed") {
+        lines.push(
+          `    proposed: ${proposal.recipient} (${proposal.reach.kind}) — ${proposal.reason} · by ${proposal.by.model}, nothing sent`,
+        );
+        lines.push(`    asks: "${proposal.asks}"`);
+      } else if (proposal.kind === "unplaced") {
+        lines.push(`    no proposal — the model could not tell who holds the answer: ${proposal.why}`);
+      }
       for (const line of lastLines(item.evidence.excerpt, 4)) lines.push(`    | ${line}`);
     }
     lines.push(`    ${phone}`);
@@ -333,8 +416,17 @@ export { planClassifications };
  * writing there. `overseer attention --no-write` exists for the other case — a
  * person poking at a root a daemon owns.
  */
-export function attentionRunner(root: string, instance: string): (() => Promise<AttentionList>) | null {
-  const apiKey = readGatewayKey();
+/** The classifier's options for one composition: the key, the version, and the transport if a test replaced it. */
+function classifierOptions(apiKey: string, promptVersion: PromptVersion, seams: AttentionSeams): ClassifierOptions {
+  return { apiKey, promptVersion, ...(seams.fetchImpl === undefined ? {} : { fetchImpl: seams.fetchImpl }) };
+}
+
+export function attentionRunner(
+  root: string,
+  instance: string,
+  seams: AttentionSeams = LIVE_SEAMS,
+): (() => Promise<AttentionList>) | null {
+  const apiKey = seams.apiKey();
   if (apiKey === null) return null;
   // The day budget, in the root this daemon holds — the same ledger a hand run
   // of `overseer attention` reserves against (plan 260910f D4). Stateless apart
@@ -348,7 +440,7 @@ export function attentionRunner(root: string, instance: string): (() => Promise<
     // generation, and diff.ts refuses to diff two snapshots that disagree on it
     // because they describe different worlds. A wait carried across that would be
     // a duration measured on somebody else's question.
-    const epoch = `${instance}:tmux-${tmuxServerGeneration() ?? "unknown"}`;
+    const epoch = `${instance}:tmux-${seams.tmuxGeneration() ?? "unknown"}`;
     const read = readAttentionMemory(root);
     // THE EPOCH DROPS THE WAITS AND KEEPS THE VERDICTS — GPT Sol's finding 2.
     // `store.ts` refuses to republish the previous attention list after a
@@ -358,12 +450,18 @@ export function attentionRunner(root: string, instance: string): (() => Promise<
     // text and survives any gap; a wait is about continuous observation and
     // cannot.
     const memory = memoryForEpoch(read.kind === "memory" ? read.memory : EMPTY_ATTENTION_MEMORY, epoch);
+    // ONE VERSION, HANDED TO BOTH HALVES, exactly as the hand run does. Read
+    // per pass rather than per runner so both compositions follow one rule;
+    // a daemon's environment is fixed at start, so in practice it never moves.
+    const promptVersion = promptVersionFor(seams.proposals());
     const result = await runAttentionPass({
-      sessions: listSessions(),
-      capture: capturePane,
-      classify: paidClassifier(budget, { apiKey }),
+      sessions: seams.listSessions(),
+      capture: seams.capture,
+      classify: paidClassifier(budget, classifierOptions(apiKey, promptVersion, seams)),
       memory,
       maxCalls: DEFAULT_MAX_CALLS,
+      promptVersion,
+      usage: storedUsageVerdict(root),
       now: () => new Date(),
     });
     // The same assertion the CLI makes, in the same run that produced the list.

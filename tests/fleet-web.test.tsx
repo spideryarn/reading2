@@ -9127,6 +9127,7 @@ function attentionItem(over: Partial<AttentionItem> & { id: string }): Attention
     evidence: { kind: "prose", excerpt: "Say the word and I'll drop it.", why: "it named an action and stopped" },
     answerability: { kind: "phone" },
     duplicates: [],
+    proposal: { kind: "off", why: "proposals are off" },
     ...over,
   };
 }
