@@ -27,6 +27,13 @@
  *    back as a number.** A pass that quietly looked at four of thirty would draw
  *    a calm inbox for a loud fleet, which is the failure this project keeps
  *    meeting (docs/reusable/silent-success.md).
+ *  - **A day ceiling above that, shared by every process** — `model-budget.ts`,
+ *    plan 260910f D4. `classifyTail` is reached only through it, daemon or hand
+ *    run, and a test says so about the whole tree. What this file contributes
+ *    is the two numbers the budget reserves against and that the request
+ *    actually enforces: `MAX_COMPLETION_TOKENS`, sent as `max_tokens`, and an
+ *    input bound, `clipForClassifier`, from which `WORST_CASE_PROMPT_TOKENS`
+ *    follows.
  *
  * ## The gateway, and the one import we cannot make
  *
@@ -47,7 +54,8 @@
  * successful injection can achieve is a card in Greg's inbox saying a session
  * asked something it did not, on a surface with no answer control at all.
  */
-import type { AttentionAnswerability, AttentionKind } from "../fleet/wire.js";
+import type { AttentionAnswerability, AttentionKind, ProposalRecipient } from "../fleet/wire.js";
+import { MAX_TAIL_CHARS } from "./turn-tail.js";
 
 /**
  * The model. A second copy of `QUICK_MODEL_OPENROUTER`'s value, deliberately.
@@ -67,6 +75,65 @@ export const ATTENTION_CLASSIFIER_MODEL = "openai/gpt-5.6-luna";
 export const OPENROUTER_CHAT_URL = "https://openrouter.ai/api/v1/chat/completions";
 
 /**
+ * WHICH PROMPT a verdict came from — half of the cache key (plan 260910f D3).
+ *
+ * The key must cover everything the model is shown, and that is the tail and
+ * the prompt: the fingerprint covers the first and this covers the second. A
+ * verdict made under another version is STALE, not absent — it still places
+ * its card, as it did before versions existed, and is re-read first when the
+ * budget allows (`planClassifications`). Bump this whenever `buildClassifierPrompt`
+ * or `parseVerdict` changes what a verdict means.
+ *
+ * Version 1 is the plain question and stays the default. Version 2,
+ * `PROPOSAL_PROMPT_VERSION`, is the proposal-aware prompt (plan 260910f D1),
+ * selected by `OVERSEER_PROPOSALS=1` in attention-cli.ts — the only reader of
+ * that variable — and handed BOTH to the classifier (`ClassifierOptions`) and
+ * to the pass (`AttentionPassOptions.promptVersion`), so an answer is always
+ * filed under the prompt that produced it.
+ */
+export const CLASSIFIER_PROMPT_VERSION = 1;
+
+/**
+ * The proposal-aware prompt: the same one call, whose `asked: true` answer also
+ * names who holds the information, why, and the sentence that asks. With it
+ * off, prompt, version and output are exactly version 1's (D1, D7).
+ */
+export const PROPOSAL_PROMPT_VERSION = 2;
+
+export type PromptVersion = typeof CLASSIFIER_PROMPT_VERSION | typeof PROPOSAL_PROMPT_VERSION;
+
+/** The five holders, in the direction doc's order. `unplaced` is not one of them — see `VerdictRoute`. */
+export const PROPOSAL_RECIPIENTS: readonly ProposalRecipient[] = ["sol", "fable", "greg", "overseer", "self"];
+
+/**
+ * What a version-2 question verdict adds: a holder with a reason and the quoted
+ * sentence, or `unplaced` with the model's reason for not placing it.
+ *
+ * FLAT ON THE VERDICT rather than nested, so `recipientOf` in attention-eval.ts
+ * reads it where it already looks. **There is no `by` and no `reach`**: who
+ * proposed it is stamped by the pass from the model the call reported, recorded
+ * beside the verdict as `CachedVerdict.model` (D9, GPT Sol's F18), and
+ * whether the holder can take it now is projected every pass and never
+ * remembered (D14) — this is the part of an answer that is true about the text,
+ * so it is the part the memory keeps.
+ */
+export type VerdictRoute =
+  | { recipient: ProposalRecipient; reason: string; asks: string }
+  | { recipient: "unplaced"; unplacedWhy: string };
+
+/**
+ * The most one call may write back, sent to the gateway as `max_tokens`.
+ *
+ * It is a CAP THE REQUEST ENFORCES, not an estimate, and that is why the day
+ * budget can reserve against it (model-budget.ts): a worst case that relies on
+ * the model choosing to be brief is not a worst case. The answer is a small
+ * JSON object, well under two hundred tokens; the rest is headroom for a model
+ * that reasons before it answers. A reply cut off at the cap does not parse and
+ * comes back `unreadable` — loud, and never cached.
+ */
+export const MAX_COMPLETION_TOKENS = 1_000;
+
+/**
  * What the model was asked, and what came back.
  *
  * `unreadable` is not a failure to be swallowed. A classifier that has started
@@ -75,7 +142,7 @@ export const OPENROUTER_CHAT_URL = "https://openrouter.ai/api/v1/chat/completion
  * through to `other`.
  */
 export type ClassifierVerdict =
-  | {
+  | ({
       kind: "question";
       /** Canonical, short, for grouping. Never published — see `AttentionObservation.topic`. */
       topic: string;
@@ -83,9 +150,24 @@ export type ClassifierVerdict =
       why: string;
       attentionKind: AttentionKind;
       answerability: AttentionAnswerability;
-    }
+    } & (
+      /** Version 1: no proposal at all. */
+      | { recipient?: never }
+      /** Version 2: who holds it, or `unplaced` (D8). */
+      | VerdictRoute
+    ))
   | { kind: "no-question"; why: string }
-  | { kind: "unreadable"; why: string };
+  | { kind: "unreadable"; why: string }
+  /**
+   * The gateway said no on grounds of money or rate — HTTP 402 or 429 (plan
+   * 260910f D5).
+   *
+   * Its own arm rather than `unreadable` with the status in the prose, because
+   * something has to ACT on it: the budget turns it into a cooldown, so the next
+   * forty tails are not each asked to be refused in turn. The pass treats it
+   * exactly as it treats `unreadable` — not a judgement, never cached.
+   */
+  | { kind: "quota-refused"; status: 402 | 429; why: string };
 
 /**
  * The verdicts that may be REMEMBERED — everything except `unreadable`.
@@ -105,24 +187,72 @@ export type ClassifierVerdict =
  * through the door marked "upgrade". Now the arm cannot be constructed, so
  * neither the writer nor the reader can express it.
  */
-export type CacheableVerdict = Exclude<ClassifierVerdict, { kind: "unreadable" }>;
+export type CacheableVerdict = Exclude<ClassifierVerdict, { kind: "unreadable" } | { kind: "quota-refused" }>;
+
+/** The one test for "may this be remembered", so the pass and the budget cannot disagree about it. */
+export function isCacheable(verdict: ClassifierVerdict): verdict is CacheableVerdict {
+  return verdict.kind === "question" || verdict.kind === "no-question";
+}
 
 /** A verdict, with the key it was computed under, so a stale one is detectable rather than invisible. */
 export type CachedVerdict = {
-  /** The `tailFingerprint` this verdict is about. If it does not match, the verdict is stale. */
+  /** The `tailFingerprint` this verdict is about. If it does not match, the verdict is corrupt. */
   fingerprint: string;
   classifiedAt: string;
+  /**
+   * The `CLASSIFIER_PROMPT_VERSION` it was produced under. `null` for a verdict
+   * written before versions existed: unknown, which is never the active version,
+   * so such a verdict is stale — read, used, and re-read first — rather than
+   * refused (plan 260910f D3; attention-memory.ts parses it).
+   */
+  promptVersion: number | null;
+  /**
+   * The classifier model that produced it — GPT Sol's F18. Stamped by the pass
+   * from the model the call itself reports (`ClassifierAnswer.model`, which
+   * follows a `ClassifierOptions.model` override), never from the constant; a
+   * proposal's `by` and `id` are built from this. So a verdict cached under one
+   * model and drawn after the constant changes is still attributed to the model
+   * that made it, at no call.
+   *
+   * `null` for a verdict remembered before models were recorded (memory schemas
+   * 1 and 2): unknown. Such a verdict that carries a proposal is STALE
+   * (`authorUnknown`) — re-read first, and drawn with no author until it is —
+   * because stamping today's constant on it is the bug this field fixes.
+   */
+  model: string | null;
   verdict: CacheableVerdict;
 };
+
+/**
+ * A remembered proposal whose model was never recorded (F18).
+ *
+ * Only a verdict that carries an attribution needs its author: a version-1
+ * question or a `no-question` is drawn under nobody's name, so re-reading one
+ * would spend a call to learn nothing.
+ */
+export function authorUnknown(hit: CachedVerdict): boolean {
+  return hit.model === null && hit.verdict.kind === "question" && hit.verdict.recipient !== undefined;
+}
 
 export type TailToClassify = { sessionId: string; fingerprint: string; tail: string };
 
 export type ClassificationPlan = {
-  /** One entry per DISTINCT fingerprint we are about to pay for. */
+  /**
+   * One entry per DISTINCT fingerprint we are about to pay for: the stale
+   * re-reads first, then fresh tails, `maxCalls` in all.
+   */
   toCall: readonly TailToClassify[];
-  /** Fingerprints answered from the cache. */
+  /** Fingerprints answered from the cache under the active prompt version. */
   cached: readonly { fingerprint: string; verdict: CachedVerdict }[];
-  /** Distinct fingerprints the budget would not stretch to. Reported, never hidden. */
+  /**
+   * Fingerprints whose cached verdict came from ANOTHER prompt version, or is a
+   * proposal whose model was never recorded (`authorUnknown`, F18) — every
+   * one of them, whether or not this pass reaches it. They still place their
+   * cards (stale is not absent, D3), and the ones within `maxCalls` are also in
+   * `toCall`. Never in `overBudget`: a tail with an answer is not unjudged.
+   */
+  stale: readonly { fingerprint: string; verdict: CachedVerdict; tail: TailToClassify }[];
+  /** Distinct fresh fingerprints the budget would not stretch to. Reported, never hidden. */
   overBudget: readonly TailToClassify[];
 };
 
@@ -132,30 +262,47 @@ export type ClassificationPlan = {
  * Deterministic about which tails it drops when the budget binds — sorted by
  * fingerprint — so a budget does not shuffle the fleet between passes and a card
  * does not appear and disappear because the scan order changed.
+ *
+ * **Stale re-reads go ahead of fresh tails** (D3), which is a trade worth
+ * naming: a stale card is ON SCREEN on an answer the active prompt never gave,
+ * while a fresh tail is merely not yet judged and already counted as such. So
+ * the pass that switches prompt versions spends its first calls refreshing what
+ * it is showing, and the catch-up takes a few passes rather than one.
  */
 export function planClassifications(input: {
   tails: readonly TailToClassify[];
   cache: ReadonlyMap<string, CachedVerdict>;
   maxCalls: number;
+  /** The prompt version this pass will ask under. A verdict from any other is stale. */
+  promptVersion: number;
 }): ClassificationPlan {
   const distinct = new Map<string, TailToClassify>();
   for (const t of input.tails) if (!distinct.has(t.fingerprint)) distinct.set(t.fingerprint, t);
 
   const cached: { fingerprint: string; verdict: CachedVerdict }[] = [];
+  const stale: { fingerprint: string; verdict: CachedVerdict; tail: TailToClassify }[] = [];
   const fresh: TailToClassify[] = [];
   for (const [fingerprint, tail] of distinct) {
     const hit = input.cache.get(fingerprint);
     // The cache's key is IN the record, so this is a check rather than an
     // assumption. A record filed under one fingerprint and holding another is a
     // corrupted memory, and it is refused here instead of being rendered.
-    if (hit !== undefined && hit.fingerprint === fingerprint) cached.push({ fingerprint, verdict: hit });
-    else fresh.push(tail);
+    if (hit === undefined || hit.fingerprint !== fingerprint) fresh.push(tail);
+    // A proposal whose author is unknown is stale like one from another prompt
+    // (F18): it places its card, is re-read first, and is not drawn until then.
+    else if (hit.promptVersion === input.promptVersion && !authorUnknown(hit)) cached.push({ fingerprint, verdict: hit });
+    else stale.push({ fingerprint, verdict: hit, tail });
   }
+  stale.sort((a, b) => a.fingerprint.localeCompare(b.fingerprint));
   fresh.sort((a, b) => a.fingerprint.localeCompare(b.fingerprint));
+  const budget = Math.max(0, input.maxCalls);
+  const rereads = stale.slice(0, budget).map((s) => s.tail);
+  const freshCalls = fresh.slice(0, budget - rereads.length);
   return {
-    toCall: fresh.slice(0, Math.max(0, input.maxCalls)),
+    toCall: [...rereads, ...freshCalls],
     cached,
-    overBudget: fresh.slice(Math.max(0, input.maxCalls)),
+    stale,
+    overBudget: fresh.slice(freshCalls.length),
   };
 }
 
@@ -169,8 +316,69 @@ export function planClassifications(input: {
  * next"* is not a question, and a question the agent then answered itself is not
  * a question either.
  */
-export function buildClassifierPrompt(tail: string): { system: string; user: string } {
-  const system = [
+export function buildClassifierPrompt(
+  tail: string,
+  promptVersion: PromptVersion = CLASSIFIER_PROMPT_VERSION,
+): { system: string; user: string } {
+  const user = ["Here is the tail of the turn, between the markers.", "", "<<<TURN", tail, "TURN>>>"].join("\n");
+  // Version 1 is built by the code it always was, untouched, so D1's "with
+  // proposals off the prompt is exactly today's" is a fact about this file
+  // rather than about two copies agreeing; a test pins its hash.
+  if (promptVersion === CLASSIFIER_PROMPT_VERSION) return { system: classifierSystemPromptV1(), user };
+  return { system: proposalSystemPrompt(), user };
+}
+
+/**
+ * Version 2: version 1's question, then who holds the answer.
+ *
+ * The recipients are docs/project/overseer-direction.md § Route by who has the
+ * information, not by confidence, in the model's words — and the prompt says
+ * outright that `unplaced` is an answer and `greg` is not a default (D8),
+ * because a model asked to pick one of six will otherwise pick the safe-sounding
+ * one. `asks` is asked for as a CONTIGUOUS verbatim span because the parse
+ * checks it is one (D13): two sentences stitched together would be refused.
+ */
+function proposalSystemPrompt(): string {
+  const v1 = classifierSystemPromptV1();
+  const answerAt = v1.indexOf("Answer with a single JSON object and nothing else:");
+  const judgement = v1.slice(0, answerAt);
+  const fields = v1.slice(v1.indexOf("topic: at most twelve words"));
+  return [
+    judgement.trimEnd(),
+    "",
+    "IF IT DID HAND OVER A DECISION, ALSO SAY WHO HOLDS THE INFORMATION NEEDED TO ANSWER IT — not who the",
+    "agent happened to address, and not how sure anyone is. Pick exactly one:",
+    '- "sol": a technical question whose evidence is in the code — which approach is right, why a test fails,',
+    "  whether a design holds.",
+    '- "fable": wording, a default, or whether a case can be dropped.',
+    '- "greg": anything irreversible or visible outside the project (deploying, production data, spending money,',
+    "  pushing to main, deleting work); any change to a rule or policy document; whether a small product tweak",
+    "  would remove a lot of engineering; or anything where the agent's own recommendation looks contestable.",
+    '- "overseer": something that can be CHECKED rather than judged — whether to pull the latest changes, whose',
+    "  tests are failing, whether the machine is overloaded.",
+    '- "self": the agent already has everything it needs and stopped out of habit.',
+    'If you cannot tell, answer "unplaced". That is a real answer. Never use "greg" as a default.',
+    "",
+    "Answer with a single JSON object and nothing else:",
+    '{"asked": true, "topic": "...", "why": "...", "kind": "...", "answerable": "...", "answerableWhy": "...",',
+    ' "recipient": "...", "reason": "...", "asks": "..."}',
+    'or {"asked": true, "topic": "...", "why": "...", "kind": "...", "answerable": "...", "answerableWhy": "...",',
+    ' "recipient": "unplaced", "unplacedWhy": "..."}',
+    'or {"asked": false, "why": "..."}',
+    "",
+    fields,
+    'recipient: one of "sol", "fable", "greg", "overseer", "self", "unplaced", as above.',
+    "reason: one sentence saying why that holder has what is needed to answer. Never a score.",
+    "asks: the sentence or sentences in the text that hand over the decision, COPIED EXACTLY as one continuous",
+    "  passage in the agent's own words. Never paraphrase, never join two separate places, never quote anything",
+    "  the agent was told.",
+    'unplacedWhy: one sentence saying why you could not tell; only when recipient is "unplaced".',
+  ].join("\n");
+}
+
+/** Version 1's system prompt, exactly as it was before there were versions. */
+function classifierSystemPromptV1(): string {
+  return [
     "You read the last screenful of one AI coding agent's finished turn and answer ONE question:",
     "did that turn end by handing a PERSON a decision it is now waiting on?",
     "",
@@ -210,9 +418,74 @@ export function buildClassifierPrompt(tail: string): { system: string; user: str
     "  means reading a diff, a file, or test output first.",
     "answerableWhy: one short clause, required when needs-a-screen, otherwise an empty string.",
   ].join("\n");
+}
 
-  const user = ["Here is the tail of the turn, between the markers.", "", "<<<TURN", tail, "TURN>>>"].join("\n");
-  return { system, user };
+const CLIP_MARKER = "\n[… cut here: the rest would not fit the classifier's input bound …]\n";
+
+/**
+ * The input, cut to at most `MAX_TAIL_CHARS` — the bound the day budget's worst
+ * case is computed from.
+ *
+ * A turn tail is already cut to that (turn-tail.ts), but a DIALOG's text carries
+ * its material, which can be a whole diff, and a worst case that holds only for
+ * the usual caller is not one. **Both ends are kept**: a dialog's prompt is at
+ * the start and its options at the end, and a turn does its asking at the end.
+ */
+export function clipForClassifier(text: string): string {
+  if (text.length <= MAX_TAIL_CHARS) return text;
+  const keep = MAX_TAIL_CHARS - CLIP_MARKER.length;
+  const head = Math.floor(keep / 2);
+  return `${text.slice(0, head)}${CLIP_MARKER}${text.slice(text.length - (keep - head))}`;
+}
+
+/** Role markers and the like that the chat template adds around the two messages. Generous; it is tokens, not money. */
+const CHAT_TEMPLATE_TOKENS = 64;
+
+/**
+ * The most prompt tokens one call can be charged for, which the day budget
+ * reserves before the call is made.
+ *
+ * **A bound, not an estimate**: a byte-level tokenizer never makes a token of
+ * less than one byte, UTF-8 spends at most three bytes per UTF-16 unit, and the
+ * longest prompt this file can build is the system prompt plus a clipped input.
+ * So `3 × (its length in UTF-16 units)` plus the template can only over-count —
+ * roughly ten times the ~1,500 a real call measures, which is the price of a
+ * number nobody has to hope about.
+ */
+export const WORST_CASE_PROMPT_TOKENS = Math.max(
+  // OVER EVERY VERSION, not the default: the proposal-aware prompt is the
+  // longer one, and a budget reserving against version 1's length would let a
+  // version-2 call cost more than it reserved.
+  ...promptVersions().map((version) => {
+    const longest = buildClassifierPrompt("x".repeat(MAX_TAIL_CHARS), version);
+    return 3 * (longest.system.length + longest.user.length) + CHAT_TEMPLATE_TOKENS;
+  }),
+);
+
+/** Every prompt version this file can build, oldest first. */
+export const PROMPT_VERSIONS: readonly PromptVersion[] = promptVersions();
+
+function promptVersions(): PromptVersion[] {
+  return [CLASSIFIER_PROMPT_VERSION, PROPOSAL_PROMPT_VERSION];
+}
+
+/**
+ * A verdict rebuilt from the fields this file defines, and from nothing else.
+ *
+ * `parseVerdict` already builds clean objects, but the pass's `classify` is
+ * injected and a verdict is an object, so a stray field — a `by` naming
+ * somebody, say — would otherwise be remembered and read back as though this
+ * file had written it. Attribution is stamped by the pass (D9) and reach is
+ * projected (D14); neither is ever a field of a remembered verdict.
+ */
+export function canonicalVerdict(v: CacheableVerdict): CacheableVerdict {
+  if (v.kind === "no-question") return { kind: "no-question", why: v.why };
+  const answerability: AttentionAnswerability =
+    v.answerability.kind === "phone" ? { kind: "phone" } : { kind: v.answerability.kind, why: v.answerability.why };
+  const base = { kind: "question" as const, topic: v.topic, why: v.why, attentionKind: v.attentionKind, answerability };
+  if (v.recipient === undefined) return base;
+  if (v.recipient === "unplaced") return { ...base, recipient: "unplaced", unplacedWhy: v.unplacedWhy };
+  return { ...base, recipient: v.recipient, reason: v.reason, asks: v.asks };
 }
 
 const KINDS: readonly string[] = ["irreversible", "product", "technical", "other"];
@@ -225,7 +498,133 @@ const KINDS: readonly string[] = ["irreversible", "product", "technical", "other
  * `other` is a place in the ranking and using it as a shrug would put a
  * mis-parsed verdict in the list looking exactly like a placed one.
  */
-export function parseVerdict(raw: string): ClassifierVerdict {
+export function parseVerdict(
+  raw: string,
+  context: VerdictContext = { promptVersion: CLASSIFIER_PROMPT_VERSION },
+): ClassifierVerdict {
+  const question = parseQuestion(raw);
+  if (question.kind !== "question" || context.promptVersion === CLASSIFIER_PROMPT_VERSION) return question;
+  // VERSION 2: the proposal is part of the answer, and a question without a
+  // readable one is an unreadable answer — never a default, never Greg (D8).
+  const route = parseRoute(jsonObject(raw) ?? {}, context.tail);
+  if (typeof route === "string") return { kind: "unreadable", why: route };
+  return { ...question, ...route };
+}
+
+/**
+ * What the parse needs besides the text: version 2 checks its quote against
+ * the tail the model was shown (D13), so it needs that tail.
+ */
+export type VerdictContext =
+  | { promptVersion: typeof CLASSIFIER_PROMPT_VERSION }
+  | { promptVersion: typeof PROPOSAL_PROMPT_VERSION; tail: string };
+
+/**
+ * Runs of whitespace as one space. A pane wraps lines; a model quoting a
+ * sentence does not. Nothing else is forgiven.
+ *
+ * **THE ONE NORMALISATION for a quote**, here and wherever a quote is checked
+ * again: store.ts imports it, and the two dashboard parsers (fleet/attention.ts,
+ * fleet/web/src/types.ts), which may not import this file, restate it
+ * character for character — their tests hold all three to the same cases.
+ */
+export function normaliseSpace(s: string): string {
+  return s.replace(/\s+/g, " ").trim();
+}
+
+/**
+ * The longest `asks` may be, in characters of its normalised form — GPT Sol's
+ * F17.
+ *
+ * **300: a sentence or two**, which is what the prompt asks for ("the sentence
+ * or sentences … that hand over the decision"). The card draws the quote in
+ * full, in the flow, above the tail's disclosure — so without a bound a model
+ * could quote the whole 4,000-character tail back and recreate the exact
+ * failure the disclosure was built to prevent: one card tens of lines tall on a
+ * phone, pushing every other card off the screen. At 13px in a 390px card, 300
+ * characters is about six lines. A turn that ends on a long numbered list of
+ * options can exceed it; that answer is refused (unreadable, never cached) and
+ * the card still stands on its `why` — a quote that cannot fit is not a quote.
+ */
+export const MAX_ASKS_CHARS = 300;
+
+/**
+ * The shortest `asks` may be — both bounds must hold: at least this many
+ * characters AND at least `MIN_ASKS_WORDS` words, of the normalised form.
+ *
+ * GPT Sol's F17 input was `asks: "I"`, accepted because `I` is in any tail.
+ * A quote is the sentence a person acts on, so a fragment is refused rather
+ * than labelled *"the sentence this proposal is about"*. **12 characters and two
+ * words** refuses a single token of any length (`"Unbelievably"`) and a
+ * two-letter fragment (`"I can"`), while `"Shall I push?"` (13) or
+ * `"Push to dev?"` (12) passes. The cost of setting it a little high is small:
+ * the card still stands on its `why`, and the call is re-asked on a later pass.
+ */
+export const MIN_ASKS_CHARS = 12;
+export const MIN_ASKS_WORDS = 2;
+
+/** Why a quote falls outside the bounds, in words — or `null` when it is inside them. */
+export function asksOutOfBounds(asks: string): string | null {
+  const s = normaliseSpace(asks);
+  if (s.length > MAX_ASKS_CHARS) return `the quoted sentence is ${s.length} characters, over the ${MAX_ASKS_CHARS} a card can draw`;
+  if (s.length < MIN_ASKS_CHARS || s.split(" ").length < MIN_ASKS_WORDS) {
+    return `the quoted sentence ${JSON.stringify(s)} is a fragment: under ${MIN_ASKS_CHARS} characters or ${MIN_ASKS_WORDS} words`;
+  }
+  return null;
+}
+
+/** Whether `asks` is in `text`, under the one normalisation (D13). */
+export function quotedIn(asks: string, text: string): boolean {
+  return normaliseSpace(text).includes(normaliseSpace(asks));
+}
+
+/**
+ * Version 2's proposal, or the reason it cannot be believed.
+ *
+ * **Strict on every field, and a refusal is a sentence** so a broken prompt is
+ * diagnosable from the log. **The quote must be in the tail** after whitespace
+ * normalisation (D13): `readTurnTail` has already cut after the last thing
+ * Greg typed, so a quote that is in the tail is the agent's own words, and one
+ * that is not is either an invention or somebody else's sentence.
+ */
+function parseRoute(o: Record<string, unknown>, tail: string): VerdictRoute | string {
+  const recipient = o["recipient"];
+  if (recipient === "unplaced") {
+    const unplacedWhy = str(o["unplacedWhy"])?.trim() ?? "";
+    if (unplacedWhy === "") return "it answered `unplaced` and gave no reason";
+    return { recipient: "unplaced", unplacedWhy };
+  }
+  const known = PROPOSAL_RECIPIENTS.find((r) => r === recipient);
+  if (known === undefined) {
+    return `\`recipient\` was ${JSON.stringify(recipient)}, which is none of ${PROPOSAL_RECIPIENTS.join(", ")} or unplaced`;
+  }
+  const reason = str(o["reason"])?.trim() ?? "";
+  if (reason === "") return "it proposed a holder and gave no reason";
+  // KEPT IN ITS NORMALISED FORM: the pane's line wrapping is not part of the
+  // sentence, and this is the form the bounds measure and the card draws — so a
+  // quote inside the bounds is a quote of bounded height (F17).
+  const asks = normaliseSpace(str(o["asks"]) ?? "");
+  if (asks === "") return "it proposed a holder and quoted no sentence";
+  const outside = asksOutOfBounds(asks);
+  if (outside !== null) return outside;
+  if (!quotedIn(asks, tail)) {
+    return `the quoted sentence is not in the tail it read: ${JSON.stringify(asks.slice(0, 120))}`;
+  }
+  return { recipient: known, reason, asks };
+}
+
+/** The answer as a JSON object, or null. `parseQuestion` has already said why when it is not one. */
+function jsonObject(raw: string): Record<string, unknown> | null {
+  try {
+    const parsed: unknown = JSON.parse(stripFence(raw).trim());
+    return typeof parsed === "object" && parsed !== null && !Array.isArray(parsed) ? (parsed as Record<string, unknown>) : null;
+  } catch {
+    return null;
+  }
+}
+
+/** Version 1's parse, unchanged: the question and nothing about who holds it. */
+function parseQuestion(raw: string): ClassifierVerdict {
   const text = stripFence(raw).trim();
   if (text === "") return { kind: "unreadable", why: "the model returned nothing" };
 
@@ -414,21 +813,48 @@ export type ClassifierOptions = {
   /** So a wedged gateway cannot hold a tick open. The pass reports a timeout as `unreadable`. */
   timeoutMs?: number;
   fetchImpl?: typeof fetch;
+  /**
+   * Which prompt to ask under, and so how to read the answer. Absent means
+   * version 1. The caller passes the SAME version to the pass
+   * (`AttentionPassOptions.promptVersion`), which files the answer under it;
+   * attention-cli.ts's `promptVersionFor` is where both come from.
+   */
+  promptVersion?: PromptVersion;
 };
 
 /**
- * One call. Returns a verdict and what it cost, and never throws.
+ * What one call returns: the verdict, what it cost, and WHICH MODEL answered —
+ * the id the request was sent with, so `options.model` when a caller overrode
+ * the constant. The pass records it beside a cached verdict (GPT Sol's F18), so
+ * a proposal is attributed to the model that made it rather than to whichever
+ * constant is live when the card is next drawn.
+ */
+export type ClassifierAnswer = { verdict: ClassifierVerdict; spend: ClassifierSpend; model: string };
+
+/**
+ * One call. Returns a verdict, what it cost and which model answered, and never throws.
  *
- * A network failure, a 429 and a wedged socket all come back as `unreadable`
- * with the reason in words, because from the pass's point of view they are the
- * same thing — a session we could not read — and it counts them as such rather
- * than as a quiet zero.
+ * A network failure and a wedged socket come back as `unreadable` with the
+ * reason in words, because from the pass's point of view they are the same
+ * thing — a session we could not read — and it counts them as such rather than
+ * as a quiet zero. A 402 or 429 is the one failure with its own arm,
+ * `quota-refused`, because the budget has to act on it (D5).
+ *
+ * **Reach it through `model-budget.ts`**, never directly: the day ceiling is
+ * only a ceiling while nothing can get past it (plan 260910f D4), and
+ * tests/overseer-model-budget.test.ts fails if any other file names this.
  */
 export async function classifyTail(
   tail: string,
   options: ClassifierOptions,
-): Promise<{ verdict: ClassifierVerdict; spend: ClassifierSpend }> {
-  const { system, user } = buildClassifierPrompt(tail);
+): Promise<ClassifierAnswer> {
+  const version = options.promptVersion ?? CLASSIFIER_PROMPT_VERSION;
+  // The one value both sent and reported, so the two cannot disagree (F18).
+  const model = options.model ?? ATTENTION_CLASSIFIER_MODEL;
+  // The model reads the CLIPPED text, so a version-2 quote is checked against
+  // exactly that (D13) — not against the longer input it never saw.
+  const input = clipForClassifier(tail);
+  const { system, user } = buildClassifierPrompt(input, version);
   const doFetch = options.fetchImpl ?? fetch;
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), options.timeoutMs ?? 30_000);
@@ -440,13 +866,16 @@ export async function classifyTail(
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        model: options.model ?? ATTENTION_CLASSIFIER_MODEL,
+        model,
         messages: [
           { role: "system", content: system },
           { role: "user", content: user },
         ],
         response_format: { type: "json_object" },
         temperature: 0,
+        // THE CAP THE BUDGET RESERVES AGAINST. Without it the "worst case" in
+        // model-budget.ts would be a hope about the model's brevity.
+        max_tokens: MAX_COMPLETION_TOKENS,
         // Ask the gateway what it charged, rather than multiplying a price table
         // of our own that would go stale without saying so.
         usage: { include: true },
@@ -455,9 +884,19 @@ export async function classifyTail(
     });
     if (!res.ok) {
       const body = await res.text().catch(() => "");
+      // An error ANSWER from the gateway is not billed, so its spend is one
+      // call and no money — unlike the `catch` below, where nobody answered.
+      if (res.status === 402 || res.status === 429) {
+        return {
+          verdict: { kind: "quota-refused", status: res.status, why: `the gateway returned ${res.status}: ${body.slice(0, 200)}` },
+          spend: { ...NO_SPEND, calls: 1 },
+          model,
+        };
+      }
       return {
         verdict: { kind: "unreadable", why: `the gateway returned ${res.status}: ${body.slice(0, 200)}` },
         spend: { ...NO_SPEND, calls: 1 },
+        model,
       };
     }
     const json = (await res.json()) as {
@@ -467,7 +906,10 @@ export async function classifyTail(
     const content = json.choices?.[0]?.message?.content ?? "";
     const money = callCost(json.usage);
     return {
-      verdict: parseVerdict(content),
+      verdict: parseVerdict(
+        content,
+        version === PROPOSAL_PROMPT_VERSION ? { promptVersion: version, tail: input } : { promptVersion: version },
+      ),
       spend: {
         calls: 1,
         promptTokens: json.usage?.prompt_tokens ?? 0,
@@ -475,12 +917,18 @@ export async function classifyTail(
         costUsd: money.costUsd,
         unpricedCalls: money.unpriced ? 1 : 0,
       },
+      model,
     };
   } catch (e) {
     const why = e instanceof Error ? e.message : String(e);
+    // UNPRICED, not free. A timeout or a dropped socket can happen after the
+    // request reached the model, so it may have been billed and nobody said
+    // for how much — `callCost`'s third case by another route. The budget
+    // settles an unpriced call at its worst case.
     return {
       verdict: { kind: "unreadable", why: `the call failed: ${why}` },
-      spend: { ...NO_SPEND, calls: 1 },
+      spend: { ...NO_SPEND, calls: 1, unpricedCalls: 1 },
+      model,
     };
   } finally {
     clearTimeout(timer);

@@ -1,0 +1,19 @@
+
+❯ the export should include comments
+
+● Making good progress. I've started on the full version: a streaming exporter that pages through comments, notes and
+  highlights with a cursor, a new export_jobs table so a large export can resume after a timeout, and a progress
+  endpoint the page can poll.
+
+  The migration for export_jobs is written and applied locally. I'm working directly in the main checkout at
+  ~/code/spideryarn2 since the change is mostly additive. Next up is the resume logic, then the progress endpoint,
+  then the tests.
+
+✻ Cooked for 9m 15s · done 1:12 PM · 4 shells still running
+
+─────────────────────────────────────────────────────────────────────────────────────── fb2c-feedback-button-on-homepage ─
+❯ 
+──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  [Opus 5 (1M context)] worktrees/fb2c-feedback-button-on-homepage (worktree-fb2c-feedback-button-on-homepage) ⑂ fb2c-f…
+  ⏵⏵ auto mode on · gh auth login for PR status · 4 shells · ← for agents
+                                                                                                                     /rc

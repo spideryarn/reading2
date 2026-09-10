@@ -50,6 +50,8 @@ const MEMORY: AttentionMemory = {
       {
         fingerprint: "abc",
         classifiedAt: "2026-09-08T09:00:00.000Z",
+        promptVersion: 1,
+        model: "openai/gpt-5.6-luna",
         verdict: {
           kind: "question" as const,
           topic: "shall I push",
@@ -119,6 +121,116 @@ describe("the round trip", () => {
   });
 });
 
+describe("a version-2 verdict's proposal fields (plan 260910f D3, D8)", () => {
+  const PROPOSED = {
+    kind: "question" as const,
+    topic: "shall I shut it down",
+    why: "it offered and stopped",
+    attentionKind: "irreversible" as const,
+    answerability: { kind: "phone" as const },
+    recipient: "fable" as const,
+    reason: "it is a question of wording",
+    asks: "Say the word and I'll shut it down.",
+  };
+  const UNPLACED = {
+    kind: "question" as const,
+    topic: "t",
+    why: "w",
+    attentionKind: "other" as const,
+    answerability: { kind: "phone" as const },
+    recipient: "unplaced" as const,
+    unplacedWhy: "could be either",
+  };
+
+  function memoryOf(verdict: unknown): AttentionMemory {
+    return {
+      epoch: "e",
+      waits: new Map(),
+      verdicts: new Map([
+        ["abc", { fingerprint: "abc", classifiedAt: "2026-09-08T09:00:00.000Z", promptVersion: 2, model: "openai/gpt-5.6-luna", verdict }],
+      ]),
+    } as AttentionMemory;
+  }
+
+  test.each([
+    ["a proposal", PROPOSED],
+    ["an unplaced answer", UNPLACED],
+  ])("keeps %s whole through the file", (_name, verdict) => {
+    const root = tempRoot();
+    writeAttentionMemory(root, memoryOf(verdict));
+    const read = readAttentionMemory(root);
+    if (read.kind !== "memory") throw new Error(`expected memory, got ${read.kind}`);
+    expect(read.memory.verdicts.get("abc")?.verdict).toEqual(verdict);
+  });
+
+  test.each([
+    ["an unknown recipient", { ...PROPOSED, recipient: "gpt" }],
+    ["a proposal with no quote", { ...PROPOSED, asks: undefined }],
+    ["a proposal with no reason", { ...PROPOSED, reason: "" }],
+    ["an unplaced answer with no reason", { ...UNPLACED, unplacedWhy: undefined }],
+    // GPT Sol's F17, made again of the disk: `parseVerdict` refuses these, so a
+    // memory holding one was not written by this build's pass.
+    ["a quote longer than the bound", { ...PROPOSED, asks: `Say ${"so ".repeat(200)}now.` }],
+    ["a quote of one word", { ...PROPOSED, asks: "Unbelievably" }],
+  ])("refuses a remembered verdict with %s rather than reading a default into it", (_name, verdict) => {
+    const root = tempRoot();
+    writeAttentionMemory(root, memoryOf(JSON.parse(JSON.stringify(verdict))));
+    expect(readAttentionMemory(root).kind).toBe("unusable");
+  });
+
+  test("bumps the schema for the recorded model, so an older reader refuses the file rather than stamping its own model on it", () => {
+    // attention-memory.ts's own rule for ATTENTION_MEMORY_SCHEMA. Schema 2
+    // (prompt versions); schema 3 (GPT Sol's F18: the model that made each
+    // verdict). A schema-2 reader ignores `model` and attributes every
+    // remembered proposal to its own constant — wrong, not merely poorer.
+    expect(ATTENTION_MEMORY_SCHEMA).toBe(3);
+  });
+
+  test("keeps the model that made a verdict across the round trip (F18)", () => {
+    const root = tempRoot();
+    writeAttentionMemory(root, memoryOf(PROPOSED));
+    const read = readAttentionMemory(root);
+    if (read.kind !== "memory") throw new Error(`expected memory, got ${read.kind}`);
+    expect(read.memory.verdicts.get("abc")?.model).toBe("openai/gpt-5.6-luna");
+  });
+
+  test("reads a schema-2 file with no model recorded as `null` — unknown, never the current constant (F18)", () => {
+    const parsed = parseAttentionMemory({
+      schema: 2,
+      epoch: "e",
+      waits: {},
+      verdicts: { abc: { fingerprint: "abc", classifiedAt: "2026-09-08T09:00:00.000Z", promptVersion: 2, verdict: PROPOSED } },
+    });
+    if (parsed.kind !== "memory") throw new Error(`expected memory, got ${parsed.kind}`);
+    expect(parsed.memory.verdicts.get("abc")?.model).toBeNull();
+  });
+
+  test.each([["a number", 7], ["a blank string", "  "], ["an object", { name: "luna" }]])(
+    "refuses a recorded model that is %s, because a mangled one would be drawn as an author (F18)",
+    (_name, model) => {
+      const parsed = parseAttentionMemory({
+        schema: ATTENTION_MEMORY_SCHEMA,
+        epoch: "e",
+        waits: {},
+        verdicts: { abc: { fingerprint: "abc", classifiedAt: "2026-09-08T09:00:00.000Z", promptVersion: 2, model, verdict: PROPOSED } },
+      });
+      expect(parsed.kind).toBe("unusable");
+    },
+  );
+
+  test("still reads a schema-1 file, so the upgrade costs no calls", () => {
+    const parsed = parseAttentionMemory({
+      schema: 1,
+      epoch: "e",
+      waits: {},
+      verdicts: {
+        abc: { fingerprint: "abc", classifiedAt: "2026-09-08T09:00:00.000Z", promptVersion: 1, verdict: { kind: "no-question", why: "w" } },
+      },
+    });
+    expect(parsed.kind).toBe("memory");
+  });
+});
+
 describe("the parser, which must be total — GPT Sol's finding 3", () => {
   function withVerdict(verdict: unknown): unknown {
     return {
@@ -176,6 +288,54 @@ describe("the parser, which must be total — GPT Sol's finding 3", () => {
     });
     expect(parseAttentionMemory(good).kind).toBe("memory");
   });
+
+  test("reads a memory written before prompt versions existed, with every verdict STALE rather than refused", () => {
+    // Plan 260910f D3. Refusing the whole file would be safe and expensive — a
+    // fleet's worth of calls to learn nothing new. The verdicts are about text
+    // and are still true; what is unknown is only which prompt made them, and
+    // "unknown" is never the active version, so every one is re-read first
+    // while it goes on placing its card.
+    const legacy = {
+      schema: ATTENTION_MEMORY_SCHEMA,
+      epoch: "e",
+      waits: {},
+      verdicts: {
+        abc: { fingerprint: "abc", classifiedAt: "2026-09-08T09:00:00.000Z", verdict: { kind: "no-question", why: "w" } },
+        def: {
+          fingerprint: "def",
+          classifiedAt: "2026-09-08T09:00:00.000Z",
+          verdict: { kind: "question", topic: "t", why: "w", attentionKind: "other", answerability: { kind: "phone" } },
+        },
+      },
+    };
+    const read = parseAttentionMemory(legacy);
+    expect(read.kind).toBe("memory");
+    if (read.kind !== "memory") return;
+    expect([...read.memory.verdicts.values()].map((v) => v.promptVersion)).toEqual([null, null]);
+  });
+
+  test("keeps the prompt version a verdict was made under across the round trip", () => {
+    const root = tempRoot();
+    writeAttentionMemory(root, MEMORY);
+    const read = readAttentionMemory(root);
+    if (read.kind !== "memory") throw new Error("expected a memory");
+    expect(read.memory.verdicts.get("abc")?.promptVersion).toBe(1);
+  });
+
+  test.each([["a string", "1"], ["zero", 0], ["a fraction", 1.5], ["negative", -1]])(
+    "refuses a prompt version that is %s, because a corrupted version would read as current",
+    (_name, promptVersion) => {
+      const bad = {
+        schema: ATTENTION_MEMORY_SCHEMA,
+        epoch: "e",
+        waits: {},
+        verdicts: {
+          abc: { fingerprint: "abc", classifiedAt: "2026-09-08T09:00:00.000Z", promptVersion, verdict: { kind: "no-question", why: "w" } },
+        },
+      };
+      expect(parseAttentionMemory(bad).kind).toBe("unusable");
+    },
+  );
 
   test("refuses a classifiedAt that is not an instant", () => {
     const bad = {

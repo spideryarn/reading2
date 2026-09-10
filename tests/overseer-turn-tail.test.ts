@@ -1,11 +1,14 @@
 /**
  * Did this turn END, and what did it end by saying — tools/overseer/turn-tail.ts.
  *
- * EVERY FIXTURE UNDER tests/fixtures/overseer-turn-tails/ IS A REAL CAPTURE,
- * taken with `tmux capture-pane -p -S -80` off this box on 2026-09-08, read
- * only. Nothing here is hand-written; where a case needs a shape the box did not
- * offer, it is DERIVED from a named capture by one stated change made in the
- * test, so the change sits next to the assertion.
+ * EVERY FIXTURE THIS FILE READS IS A REAL CAPTURE, taken with
+ * `tmux capture-pane -p -S -80` off this box on 2026-09-08, read only. Nothing
+ * here is hand-written; where a case needs a shape the box did not offer, it is
+ * DERIVED from a named capture by one stated change made in the test, so the
+ * change sits next to the assertion. (The same directory also holds plan
+ * 260910f's hand-written labelled set — everything not named `ended-*`,
+ * `mid-turn-*` or `no-input-box-*` — which tests/overseer-attention-labels.test.ts
+ * reads, and this file does not.)
  *
  * WHY THIS FILE EXISTS AT ALL, and it is a measurement rather than a taste.
  * `needs-you` means *Claude Code says a dialog is open*, and ten of fifteen

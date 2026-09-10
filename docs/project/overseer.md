@@ -202,14 +202,22 @@ minute.**
 to a locally sensible number of model calls is unbounded in total; the limit is a shared reservation
 across all three, with an explicit *exhausted* state that says so out loud rather than degrading.
 
-> **NOT BUILT, as of 2026-09-08 — this gate is the one you have to keep yourself.** There is no
-> shared reservation, no cost or wall-time budget and no exhausted state; nothing counts your model
-> calls but you. GPT Sol found this twice, and the second time called it *"acknowledged, not
-> answered"*, so it is written here as unbuilt rather than acknowledged a third time — a runbook that
-> describes a guard that does not exist is worse than one that admits the gap, because you would
-> spend against a limit you believed was enforced. It becomes load-bearing the moment the scheduler
-> is armed, and it is Stage 7 of
+> **PARTLY BUILT, as of 2026-09-10 — the attention pass is on a hard day budget; nothing else is.**
+> [`tools/overseer/model-budget.ts`](../../tools/overseer/model-budget.ts)
+> ([260910f](../plans/260910f-bounded-judgement-proposals-for-the-attention-inbox.md) D4–D6) is the
+> only way to a paid attention call, from the daemon or a hand run of `overseer attention`: it reserves
+> each call's worst case under a lock before the request, can be neither exceeded nor reset by a second
+> process, a crash, a lost ledger or a clock moving back, and when it refuses, the inbox publishes a
+> `limited` list saying so and until when. The ceiling and the cooldown are in
+> `tools/overseer/model-budget.ts` and 260910f.
+>
+> **What it does not cover is still yours to keep.** The scheduler's and recovery's model calls are not
+> on this ledger, so the gate is not global yet; and your own session's model use is not counted by
+> anything. The ledger was built as the shared seam — a second component slots in beside the first —
+> and wiring the scheduler to it before the scheduler is armed is Stage 7 of
 > [260908g](../plans/260908g-the-overseer-runbook-its-gates-and-the-scheduler-that-wakes-it.md).
+> Until then, a runbook that said "global" would describe a guard that does not exist. The live daemon
+> runs this only after it restarts on the code.
 
 ### On editing docs whose wording is a rule
 

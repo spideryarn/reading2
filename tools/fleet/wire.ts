@@ -747,7 +747,68 @@ export type AttentionItem = {
   answerability: AttentionAnswerability;
   /** Other sessions asking the same thing. Answer once, apply to all. */
   duplicates: readonly { sessionId: string; sessionName: string; waitingSince: string }[];
+  /**
+   * Who the model thinks holds the answer — a PROPOSAL, never a decision, and
+   * **nothing is sent to anyone because of it** (plan 260910f Stage 2). Every
+   * arm is spelled out so a reader draws exactly one thing for each, and the
+   * three parsers of this type refuse a malformed one whole.
+   *
+   * An item from an older producer has no such field; its parsers read that as
+   * `not-reported` rather than as a failure, and an older parser reading a newer
+   * item drops the field — poorer, not wrong.
+   */
+  proposal: AttentionProposal;
 };
+
+/**
+ * The five holders a question can be routed to — docs/project/overseer-direction.md
+ * § Route by who has the information, not by confidence, plus `overseer` (it answers
+ * only what it can verify) and `self` (the agent already has what it needs).
+ * `unplaced` is NOT one of them; it is its own arm of `AttentionProposal`, and it
+ * is never promoted to `greg` (plan 260910f D8).
+ */
+export type ProposalRecipient = "sol" | "fable" | "greg" | "overseer" | "self";
+
+/**
+ * Whether the proposed holder could take the question NOW. Projected on every
+ * pass and never remembered (D14). `not-checked` is honest rather than
+ * hopeful: nothing reads, for instance, whether Codex has capacity.
+ */
+export type ProposalReach =
+  | { kind: "available" }
+  | { kind: "unavailable"; why: string }
+  | { kind: "not-checked"; why: string };
+
+/**
+ * Who proposed it — stamped by the code that made the call, never read from
+ * the model's own output (D9). There is deliberately no arm for a person: a
+ * proposal is never anybody's voice, least of all Greg's.
+ */
+export type ProposalAuthor = { kind: "model"; model: string; via: "overseer" };
+
+export type AttentionProposal =
+  | {
+      kind: "proposed";
+      /** The tail's fingerprint plus the prompt version, so a later stage's mark can be keyed to it. */
+      id: string;
+      recipient: ProposalRecipient;
+      /** One sentence: why that holder has the information. */
+      reason: string;
+      /** The agent's own sentence that hands over the decision — checked to be in the tail it was read from (D13). */
+      asks: string;
+      by: ProposalAuthor;
+      reach: ProposalReach;
+    }
+  /** The model answered and could not tell who holds it. Drawn as such; never Greg by default. */
+  | { kind: "unplaced"; id: string; why: string; by: ProposalAuthor }
+  /** Proposals are not enabled — the default (D7). Draws nothing. */
+  | { kind: "off"; why: string }
+  /** A verdict from an earlier prompt not yet re-read, or a re-read the budget or the gateway refused. Draws nothing. */
+  | { kind: "not-reached"; why: string }
+  /** A drawn dialog: observed rather than inferred, and answered in the detail pane. Draws nothing. */
+  | { kind: "not-applicable" }
+  /** Parsed from an older producer that had no such field. Draws nothing. */
+  | { kind: "not-reported" };
 
 export type AttentionList =
   | {
@@ -782,7 +843,50 @@ export type AttentionList =
       sessionsUnreadable: number;
       scannedAt: string;
     }
-  | { kind: "unknown"; why: string; scannedAt: string };
+  | { kind: "unknown"; why: string; scannedAt: string }
+  /**
+   * **THE MODEL WAS STOPPED, NOT MERELY RATIONED** — the day budget or a quota
+   * cooldown refused at least one paid call this pass (plan 260910f, D4–D6).
+   * The items are still real — dialogs are observed, and cached verdicts,
+   * stale ones included, still place theirs — and `sessionsUnreadable` counts
+   * the tails the refusal left unjudged, exactly as it does on `list`.
+   *
+   * **A NEW ARM RATHER THAN A FIELD ON `list`, and the reason is the older
+   * readers.** All three parsers of this type (store.ts, tools/fleet/attention.ts,
+   * web/src/types.ts) project the fields they know and ignore the rest, so a
+   * `stopped` field on `{kind:"list", items:[]}` would reach an older dashboard
+   * as *nothing is waiting on you* — the one sentence a stopped judge must never
+   * produce. An unknown KIND, by contrast, every older parser already rejects
+   * into its loud `unknown`. GPT Sol's F2 on the plan.
+   *
+   * `list` keeps exactly its old meaning — fully judged within the pass's own
+   * per-pass budget — so a list from an older producer needs no reinterpreting.
+   * The per-pass catch-up after a fleet-wide restart is ordinary operation and
+   * stays a `list` with `sessionsUnreadable`; this arm is only for a refusal.
+   */
+  | {
+      kind: "limited";
+      /** Already sorted, like `list`'s. May be empty, and an empty one is NOT a calm fleet. */
+      items: readonly AttentionItem[];
+      sessionsScanned: number;
+      sessionsUnreadable: number;
+      scannedAt: string;
+      stopped: AttentionJudgementStopped;
+    };
+
+/**
+ * Why the model pass was refused, and when it may be tried again.
+ *
+ * `exhausted` is the day's ceiling (or a ledger that cannot be trusted, which is
+ * refused for the rest of the UTC day rather than reset); `cooling-down` is the
+ * gateway's own 402/429, backed off. `until` is an instant, never a duration,
+ * so every reader converts it once rather than each doing its own arithmetic.
+ */
+export type AttentionJudgementStopped = {
+  kind: "exhausted" | "cooling-down";
+  why: string;
+  until: string;
+};
 
 /* ------------------------------------------------------------------ *
  * Why a session is not doing anything, which is three facts wearing one word.
@@ -3715,7 +3819,9 @@ export type QuestionGap =
   | {
       kind: "eligible-observation-omitted";
       observation: { kind: "dialog"; rowId: string } | { kind: "prose"; itemId: string };
-    };
+    }
+  /** Written by either composer when the attention pass published `limited`: the model was refused, so prose went unjudged until `until`. */
+  | { kind: "attention-judgement-stopped"; why: string; until: string };
 
 /** Only this arm may support the sentence “nothing needs you”. */
 export type QuestionsView =

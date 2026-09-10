@@ -23,6 +23,28 @@ use, and nothing the daemon happens to hold), and test that a variable present o
 environment does not reach the session. Any test that creates a real session must put its stand-in
 CLI on the creating client's PATH and assert which `claude` resolves before launching anything.
 
+## What has changed since this brief was first written (read before starting)
+
+- **`recovery-inbox.ts` is on this branch** (dev merged at 79a55e94): mirror its drop-directory
+  shape, and tighten the `recovery` origin's candidate-id check to its `isCandidateId` rule.
+- **The composed protocol has nine keys**, including `resumeOccurrence`, `abandon`, `inspect`,
+  `inFlight` and `view()` (`LaunchJournalView`). The daemon composes it **once** and holds it as one
+  named value beside the scheduler's tick site; `scheduled-dispatch` will add the `TickInput` field
+  and the line that hands it `launchOccurrence`/`resumeOccurrence`/`abandon` and `view()`. Export the
+  name and say it in your report — two sessions are waiting for it. Still no production call to
+  `launchOccurrence` from this stage.
+- **Accounts:** `RunSpec.account` is chosen by the scheduler per occurrence; the adapters pass
+  `--account` and the `tmux-headless` command unsets the session's account-routing variables. The
+  composition's `env` for the launchers must be the sanitised set, never the daemon's own
+  environment — test that a variable present only in the daemon's environment does not reach a
+  session (compare **names only**, never values — see the postmortem on an env diff that printed
+  real keys into a subagent's context).
+- **Admission classes** are `claude-session` and `recovery-resume` with `admissionPolicy(cls)`; the
+  projection should show each class's capacity and holders.
+- **Tests that spawn a wrapper** must use `tests/helpers/wrapper-env.ts` (`wrapperEnv`,
+  `resolveAsWrapper`): an inherited `PATH` is not pinned, so `.env.local` could replace a fake CLI
+  with the real one.
+
 ## Files
 
 - `tools/overseer/daemon.ts` — **small targeted edits; another session is editing this file's
