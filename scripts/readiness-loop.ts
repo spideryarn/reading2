@@ -52,9 +52,11 @@ import {
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
+import { recordRefusal } from "../admission-journal.js";
 import { isLocalDatabaseUrl } from "../src/db/ssl.js";
 import { parseEnvFile, pinnedNames } from "../src/env.js";
 import {
+  ADMISSION_POLICY_VERSION,
   readMemorySnapshot,
   readReserveBytes,
   resolveParallelWorkers,
@@ -786,21 +788,25 @@ async function tick(
     nowMs: tickMs,
   });
   const health = collectHealth();
+  /* Held rather than read inline, for the reason vitest.config.ts states: the
+     journal records the readings this decision was made on, and re-reading at
+     record time would write a later sample under their name. */
+  const snapshot = readMemorySnapshot();
+  const reserveBytes = readReserveBytes();
   const decision = decideTick({
     nowMs: tickMs,
     fastForwardProblem,
     dev,
     runnerTree: tree,
     history,
-    admission: {
-      nominalWorkers: nominalWorkers(),
-      snapshot: readMemorySnapshot(),
-      reserveBytes: readReserveBytes(),
-    },
+    admission: { nominalWorkers: nominalWorkers(), snapshot, reserveBytes },
     health,
     databaseProblem: databaseProblem(db),
   });
   console.log(decisionLine(nowIso, dev, decision));
+  if (decision.kind === "skip" && decision.cause === "memory-admission") {
+    recordRefusal({ source: "readiness-precheck", policyVersion: ADMISSION_POLICY_VERSION, snapshot, reserveBytes });
+  }
   if (decision.kind === "run") {
     assertLock();
     await runReadinessCheck(runner, decision.sha, store);

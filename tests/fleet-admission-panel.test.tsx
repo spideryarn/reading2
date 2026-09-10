@@ -87,6 +87,7 @@ function forecast(
     requestKind: "test",
     policy: { gateVersion: 1, explanation: "The gate uses its measured test-run cost model.", whyWithheld: null },
     outcome,
+    journal: { kind: "read", entries: [], unparseableLines: 0 },
   };
 }
 
@@ -227,6 +228,96 @@ describe("the Box health admission section", () => {
     expect(container.textContent).toContain(CAVEAT);
   });
 
+  it('renders an empty journal as "nothing was recorded", without claiming nothing was refused', async () => {
+    const reply = {
+      ...forecast({ kind: "not-applicable", why: "no reserve file" }),
+      journal: { kind: "read", entries: [], unparseableLines: 0 },
+    } as AdmissionView;
+    await mountFull({ forecast: async () => reply });
+
+    const text = container.querySelector("[data-admission-journal]")?.textContent ?? "";
+    expect(text.toLowerCase()).toContain("nothing was recorded");
+    expect(text.toLowerCase()).not.toContain("nothing was refused");
+    expect(text.toLowerCase()).not.toContain("no refusals");
+    expect(text).toContain("this repo's Vitest config on this machine");
+    expect(text).toContain("readiness loop");
+    expect(text).toContain("another machine");
+    expect(text).toContain("bypassed the config");
+    expect(text).toContain("append that failed");
+  });
+
+  it.each([
+    [{ kind: "directory-absent" }, "The refusal journal directory does not exist"],
+    [{ kind: "unreadable", why: "permission denied" }, "The refusal journal could not be read: permission denied"],
+  ] as const)("renders the journal's %s arm as a stated absence", async (journal, sentence) => {
+    const reply = {
+      ...forecast({ kind: "not-applicable", why: "no reserve file" }),
+      journal,
+    } as AdmissionView;
+    await mountFull({ forecast: async () => reply });
+    const text = container.querySelector("[data-admission-journal]")?.textContent ?? "";
+    expect(text).toContain(sentence);
+    expect(text.toLowerCase()).not.toContain("nothing was recorded");
+  });
+
+  it("renders readable entries and counts lines it could not parse", async () => {
+    const reply = {
+      ...forecast({ kind: "not-applicable", why: "no reserve file" }),
+      journal: {
+        kind: "read",
+        entries: [{
+          at: "2026-09-10T04:05:06.000Z",
+          source: "readiness-precheck",
+          policyVersion: 1,
+          availableBytes: 2 * 1024 ** 3,
+          reserveBytes: 4 * 1024 ** 3,
+          swapTotalBytes: 8 * 1024 ** 3,
+          swapFreeBytes: 1024 ** 3,
+          pid: 4242,
+          host: "fleet-box",
+        }],
+        unparseableLines: 2,
+      },
+    } as AdmissionView;
+    await mountFull({ forecast: async () => reply });
+    const text = container.querySelector("[data-admission-journal]")?.textContent ?? "";
+    expect(text).toContain("readiness precheck");
+    expect(text).toContain("fleet-box");
+    expect(text).toContain("2 lines could not be parsed");
+  });
+
+  it("prints journal instants on the corrected clock used by the rest of Box health", async () => {
+    const recordedAt = "2026-09-10T04:05:06.000Z";
+    const skew = { kind: "known", ms: -5 * 60_000 } as const;
+    const reply = {
+      ...forecast({ kind: "not-applicable", why: "no reserve file" }),
+      journal: {
+        kind: "read",
+        entries: [{
+          at: recordedAt,
+          source: "test-run",
+          policyVersion: 1,
+          availableBytes: 2 * 1024 ** 3,
+          reserveBytes: 4 * 1024 ** 3,
+          swapTotalBytes: 8 * 1024 ** 3,
+          swapFreeBytes: 1024 ** 3,
+          pid: 4242,
+          host: "fleet-box",
+        }],
+        unparseableLines: 0,
+      },
+    } as AdmissionView;
+    await mountFull({ forecast: async () => reply }, state({ clockSkew: skew }));
+
+    const expected = new Date(Date.parse(recordedAt) - skew.ms).toLocaleString([], {
+      dateStyle: "medium",
+      timeStyle: "medium",
+    });
+    const text = container.querySelector("[data-admission-journal]")?.textContent ?? "";
+    expect(text).toContain(expected);
+    expect(text).not.toContain(recordedAt);
+  });
+
   /**
    * **Memory is stated in the same unit the rest of this panel and the gate
    * itself use.** Found in a browser at 390 px rather than in a test: the
@@ -270,6 +361,7 @@ describe("the Box health admission section", () => {
         computedAtMs: COMPUTED_AT,
         requestKind,
         outcome: { kind: "not-modelled", why: `no measured cost model exists for ${requestKind} work` },
+        journal: { kind: "read", entries: [], unparseableLines: 0 },
       }),
     });
     const text = container.querySelector('[data-section="admission"]')?.textContent ?? "";
@@ -302,7 +394,8 @@ describe("the Box health admission section", () => {
         computedAtMs: COMPUTED_AT,
         requestKind: "review",
         outcome: { kind: "not-modelled", why: "no measured cost model exists" },
-      } as const,
+        journal: { kind: "read", entries: [], unparseableLines: 0 },
+      } as AdmissionView,
       "tw:bg-unknown",
     ],
   ] as const)("does not reuse a live-health tone for a forecast or an idle tone for an unknown", async (reply, expected) => {
