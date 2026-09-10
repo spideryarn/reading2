@@ -153,12 +153,14 @@ const EMPTY_DEPTHS: number[] = [];
  *
  * ## A known follow-up, measured rather than guessed
  *
- * `noExcessiveCognitiveComplexity` scores this function **46** against a
- * threshold of 25. It was **38** before the capability seam, **49** after it and
- * **54** by the time the dispatch was extracted, and over the threshold at every
- * one of those, so this is not a line that was crossed here — but the gates are
- * worth a number and the number keeps going up. `band()` below took eight off
- * it and is scored **46** in its own right, which is the honest arithmetic: a
+ * `noExcessiveCognitiveComplexity` scores this function **50** against a
+ * threshold of 25 (measured 2026-09-10). It was **38** before the capability
+ * seam, **49** after it and **54** by the time the dispatch was extracted, and
+ * over the threshold at every one of those, so this is not a line that was
+ * crossed here — but the gates are worth a number and the number keeps going
+ * up. `band()` below took eight off it when it was extracted, has crept back
+ * since, and is scored **50** in its own right — 46 until Debate's boundary
+ * added its owner/visitor branches — which is the honest arithmetic: a
  * switch over every mode is not simpler than one `&&` per mode to a counter of
  * branches. What it is instead is *checked*, and that was the point.
  *
@@ -1690,9 +1692,28 @@ export function Reader({
          GPT Sol review (F23) refused. Until then `POLICY.debate` is
          `owners-only`, so a visitor meets the boundary sentence rather than an
          empty band.
-         docs/plans/260905f-debate-mode-what-the-web-says-about-this-piece.md § Stage 4. */
+         docs/plans/260905f-debate-mode-what-the-web-says-about-this-piece.md § Stage 4.
+
+         **The second mode that may break on its own**, in Ideas' shape: one
+         boundary at the composition point, around the whole of `DebateBand` —
+         `useDebate`'s read, job poll and `useAutoRun` as well as the panel —
+         so a throw in any of it costs the reader Debate and not the article,
+         and a press that met the throw is retired rather than left for a later
+         Back to spend on two web searches. The key carries the access class for
+         the day Stage 4 adds the visitor child beside the owner's.
+         docs/plans/260908f-prioritised-spideryarn-codebase-improvements.md § B. */
       case "debate":
-        return owner ? <DebateBand slug={slug} onJump={jumpTo} /> : null;
+        return (
+          <FeatureBoundary
+            name="Debate"
+            slug={slug}
+            target={owner ? "debate" : null}
+            resetKey={`${slug}|${owner ? "owner" : "visitor"}`}
+            onPlain={() => void setMode("plain")}
+          >
+            {owner && <DebateBand slug={slug} onJump={jumpTo} />}
+          </FeatureBoundary>
+        );
       /* **The owner/visitor pair, since 2026-09-04.** It was the owner alone
          until then, because search is the one mode where the reader's own
          question is the artefact. Greg drew the line at *making* one: a
