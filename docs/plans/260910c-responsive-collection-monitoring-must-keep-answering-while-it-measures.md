@@ -54,10 +54,33 @@ None of those nominal timeouts is enforceable, per the measurement above.
 ## What this stage does and does not claim
 
 **It claims: the collection and the health reading stop holding the request thread.** It does not
-claim "the dashboard is responsive", because `drain.ts` can hold the same server in up to six
-synchronous `execFileSync` tmux calls at ten seconds each — about 65 seconds — on any turn with
-messages queued (`tools/fleet/drain.ts` header). That is delivery, not measuring, and it is
-somebody else's stage. GPT Sol's finding.
+claim "the dashboard is responsive", because `drain.ts` holds the same server in synchronous
+`execFileSync` tmux calls on any turn with messages queued. Its header puts the worst case at "about
+65 seconds"; **after this plan's finding that is wrong too — it is five seconds plus one *unbounded*
+send**, because each of those ten-second timeouts is a signal and not a bound, and the pass's two
+counters are checked only *between* sends. That is delivery, not measuring, and it is somebody
+else's stage. GPT Sol's finding, corrected by the postmortem below.
+
+### Found on the way, and not fixed here
+
+- **The class has a postmortem:**
+  [260910a — a timeout that signals and then waits is not a bound](../postmortems/260910a-a-timeout-that-signals-and-then-waits-is-not-a-bound.md).
+  It had been met twice before and fixed only where it hit (`e8f00815` in `scripts/subagent-cli.ts`,
+  `8f7de0fc` on the async inventory call). It lists every other member on the dashboard's request
+  path and loop — `steer.ts`'s send, `routes-actions.ts`, `routes-rename.ts`, `routes-new.ts`,
+  `drain.ts`, `readiness-wiring.ts` and `readiness-git.ts` — and on the Overseer daemon, none of which
+  this plan converts, and ranks three countermeasures, the strongest a test that walks the import
+  graph from `server.ts` and `daemon.ts` and fails on any value import of a synchronous child API.
+- **The one message written to quote a timeout's clock can never be printed.** On a timeout
+  `spawnSync` sets `error` and `signal` together, and `probeProcessTable` checks `error` first, so
+  its *"killed by SIGTERM after N ms"* branch is unreachable and a timed-out `ps` reads *"could not be
+  run"*. Stage 3b's extraction in that file is authorised on a no-behaviour-change condition, so it
+  leaves this alone; the async path reports the clock correctly anyway.
+- **A third environment red in any fresh worktree.** `tests/fleet-decisions-route.test.ts` imports
+  `server.ts`, which exits at load (`process.exit(2)`, line 113) when the fleet web client has not
+  been built — and `npm run build:fleet` is not part of `npm run build`, so no worktree has it. It
+  joins the two bundle tests (`cold-start-lazy-imports`, `pdf-bundle-trace`) that a worktree without
+  `api-dist/` always reds. After `npm run build:fleet` it is 15/15.
 
 **No speed improvement is claimed without before/after output** from `scripts/fleet-collect-bench.ts`
 pasted into the Measurements section. The roadmap's "12-second grepping" is context from a source
