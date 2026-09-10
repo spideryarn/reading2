@@ -625,9 +625,9 @@ type Held = { identity: string; view: MessagesView };
  * of its own (server.ts), and a multi-megabyte transcript on a box at load 391
  * is slow to read, so this sits well past a slow read rather than at the feed's
  * fifteen, which rests on that route's five-second server-side limit. Too short
- * costs something real: the page gives up, the person taps again, and the box
- * reads one file twice, because `MessagesApi.recent` takes no signal and the
- * first read is never cancelled.
+ * costs something real: the page gives up, the person taps again, and a read
+ * that was nearly done is thrown away. The abandoned read is cancelled — its
+ * signal reaches `fetch` — but the box has already spent the disk time.
  */
 export const MESSAGES_READ_DEADLINE_MS = 30_000;
 
@@ -702,18 +702,20 @@ export function useRecentMessages(api: MessagesApi, row: FleetRow): MessagesRead
     const asked = row;
     const askedFor = identity;
     const core = singleFlightReader<MessagesView>({
-      /* The signal goes nowhere: `MessagesApi.recent` takes none, so a read this
-         page has given up on still finishes on the server. Its answer is
-         dropped all the same, because the core never settles a read it has
-         stopped waiting for. */
-      read: async () =>
+      /* The signal reaches `fetch`, so a read this page has given up on — at
+         the deadline, on unmount, or replaced by a newer identity — is
+         cancelled rather than left to finish on the server for nobody. Its
+         answer would be dropped either way, because the core never settles a
+         read it has stopped waiting for; the signal is what stops the box
+         paying for it. */
+      read: async (signal) =>
         /* **COMPARED WITH THE CLAIM THIS REQUEST WAS ASKED UNDER**, which is
            `asked`'s rather than the current row's: the server resolved the
            conversation off its own row at request time, and the question is
            whether that is the one this page meant. A mismatch becomes the
            `moved` arm — a refusal on screen, never these turns under this
            row's name and never nothing. GPT Sol's F10. */
-        ofTheClaimAsked(await api.recent(asked), asked.claudeSessionId),
+        ofTheClaimAsked(await api.recent(asked, signal), asked.claudeSessionId),
       deadlineMs: MESSAGES_READ_DEADLINE_MS,
       noAnswer: (why) => ({ kind: "no-answer", why }),
       onStart: () => setBusy(true),

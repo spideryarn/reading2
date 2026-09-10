@@ -49,7 +49,12 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { ActionsApi } from "../tools/fleet/web/src/actions-client";
 import { App } from "../tools/fleet/web/src/App";
 import { COLUMN_MIN_PX, DETAIL_MIN_PX, PANE_GAP_PX } from "../tools/fleet/web/src/fit";
-import { parseRecentMessages, type MessagesApi } from "../tools/fleet/web/src/messages-client";
+import {
+  makeMessagesApi,
+  parseRecentMessages,
+  withClockSkew,
+  type MessagesApi,
+} from "../tools/fleet/web/src/messages-client";
 import type { NewSessionApi } from "../tools/fleet/web/src/new-session-client";
 import { Conversation, MESSAGES_READ_DEADLINE_MS, useRecentMessages } from "../tools/fleet/web/src/RecentMessages";
 import type { RenameApi } from "../tools/fleet/web/src/rename-client";
@@ -139,24 +144,32 @@ function messagesWire(text: string): Record<string, unknown> {
  * A messages api whose every read is HELD until the test lets it answer — the
  * only way to put a tap, an unmount or a clock *inside* a read. Each answer
  * names the conversation and the read's ordinal, so a test can tell which read
- * a turn on screen came from.
+ * a turn on screen came from. Each read also keeps the signal it was handed,
+ * so a test can ask whether the page really let go of it.
  */
-function heldMessages(): {
-  api: MessagesApi;
-  reads: { conversation: string | null; answer: () => void }[];
-} {
-  const reads: { conversation: string | null; answer: () => void }[] = [];
+type HeldRead = { conversation: string | null; signal: AbortSignal | undefined; answer: () => void };
+function heldMessages(): { api: MessagesApi; reads: HeldRead[] } {
+  const reads: HeldRead[] = [];
   const api: MessagesApi = {
-    recent: (row) =>
+    recent: (row, signal) =>
       new Promise((resolve) => {
         const nth = reads.length + 1;
         reads.push({
           conversation: row.claudeSessionId,
+          signal,
           answer: () => resolve(parseRecentMessages(messagesWire(`a turn from ${row.claudeSessionId} read ${nth}`))),
         });
       }),
   };
   return { api, reads };
+}
+
+/** The signal read `index` was handed. Throws on a read that never started, or one handed none. */
+function signalOf(reads: HeldRead[], index: number): AbortSignal {
+  const read = reads[index];
+  if (read === undefined) throw new Error(`read ${index + 1} never started; ${reads.length} did`);
+  if (read.signal === undefined) throw new Error(`read ${index + 1} was handed no signal`);
+  return read.signal;
 }
 
 /** Let read `index` answer, and flush what it releases. Throws on a read that never started. */
@@ -368,6 +381,128 @@ describe("the detail pane's transcript reader, when a read never answers", () =>
     expect(messages.reads).toHaveLength(2);
     await answer(messages.reads, 1);
     expect(container.textContent ?? "").toContain("a turn from conv-A read 2");
+  });
+});
+
+/**
+ * **AN ABANDONED READ STOPS COSTING THE SERVER.** Everything above proves the
+ * page DROPS an answer it has stopped waiting for; none of it can see whether
+ * the read itself was cancelled, because a test double that ignores its signal
+ * passes them all. Before this, `MessagesApi.recent` took no signal, so the
+ * shared reader's abort reached nothing and a multi-megabyte transcript read ran
+ * to completion on the box for an answer nobody would draw — plan 260910c's F5
+ * class, *an `AbortController` in a hook that does not make the fetch aborts
+ * nothing*, fixed here the way feed-client.ts and actions-client.ts fixed it.
+ *
+ * Each test asks two things: that the signal the read was handed is aborted at
+ * the moment the page gives up, and — the control — that it was NOT aborted a
+ * moment before, so an always-aborted signal cannot pass.
+ */
+describe("the detail pane's transcript reader, cancelling what it abandons", () => {
+  it("hands the read a live signal", () => {
+    const messages = heldMessages();
+    act(() => root.render(<Pane api={messages.api} row={rowOf("$a", "conv-A")} />));
+    expect(signalOf(messages.reads, 0).aborted).toBe(false);
+  });
+
+  it("aborts the read in flight when the pane unmounts", () => {
+    const messages = heldMessages();
+    act(() => root.render(<Pane api={messages.api} row={rowOf("$a", "conv-A")} />));
+    const signal = signalOf(messages.reads, 0);
+    expect(signal.aborted).toBe(false);
+
+    act(() => root.render(<p>the session list</p>));
+    expect(signal.aborted).toBe(true);
+  });
+
+  it("aborts the read at the deadline", async () => {
+    vi.useFakeTimers();
+    const messages = heldMessages();
+    act(() => root.render(<Pane api={messages.api} row={rowOf("$a", "conv-A")} />));
+    const signal = signalOf(messages.reads, 0);
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(MESSAGES_READ_DEADLINE_MS - 1);
+    });
+    expect(signal.aborted).toBe(false);
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(2);
+    });
+    expect(signal.aborted).toBe(true);
+  });
+
+  it("aborts the read in flight when a newer identity replaces it, and not the newer one", () => {
+    const messages = heldMessages();
+    act(() => root.render(<Pane api={messages.api} row={rowOf("$a", null)} />));
+    const earlier = signalOf(messages.reads, 0);
+    expect(earlier.aborted).toBe(false);
+
+    act(() => root.render(<Pane api={messages.api} row={rowOf("$a", "conv-A")} />));
+    expect(earlier.aborted).toBe(true);
+    expect(signalOf(messages.reads, 1).aborted).toBe(false);
+  });
+
+  /**
+   * **THROUGH THE PAGE, because the page wraps the api.** App.tsx hands the
+   * detail `withClockSkew(messagesApi, …)`, not `messagesApi` itself, so a
+   * wrapper that dropped the signal would leave every hook-level test above
+   * green and the production read uncancellable. This mounts the real App.
+   */
+  it("reaches the api the App was given, through the clock-skew wrapper", async () => {
+    const feed = manualTransport();
+    const messages = heldMessages();
+    mountApp(feed.transport, messages.api);
+    act(() => feed.push(state([rowOf("$a", "conv-A", "the one I picked")])));
+    openSession("the one I picked");
+    await act(async () => {});
+    expect(signalOf(messages.reads, 0).aborted).toBe(false);
+  });
+});
+
+describe("the messages client, passing the signal on", () => {
+  const found = (): Response =>
+    new Response(JSON.stringify(messagesWire("hello")), {
+      status: 200,
+      headers: { "content-type": "application/json" },
+    });
+
+  it("hands fetch the signal it was given", async () => {
+    const seen: (RequestInit | undefined)[] = [];
+    const api = makeMessagesApi(async (_url, init) => {
+      seen.push(init);
+      return found();
+    });
+    const controller = new AbortController();
+    await api.recent(rowOf("$a", "conv-A"), controller.signal);
+    expect(seen).toHaveLength(1);
+    expect(seen[0]?.signal).toBe(controller.signal);
+  });
+
+  /* `exactOptionalPropertyTypes` refuses `signal: undefined`, and a caller with
+     no signal should send the request it always sent. */
+  it("sends no signal key at all when given none", async () => {
+    const seen: (RequestInit | undefined)[] = [];
+    const api = makeMessagesApi(async (_url, init) => {
+      seen.push(init);
+      return found();
+    });
+    await api.recent(rowOf("$a", "conv-A"));
+    expect(seen).toHaveLength(1);
+    expect(seen[0] !== undefined && "signal" in seen[0]).toBe(false);
+  });
+
+  it("keeps the signal through withClockSkew", async () => {
+    const seen: (AbortSignal | undefined)[] = [];
+    const inner: MessagesApi = {
+      recent: async (_row, signal) => {
+        seen.push(signal);
+        return parseRecentMessages(messagesWire("hello"));
+      },
+    };
+    const controller = new AbortController();
+    await withClockSkew(inner, () => CLOCK_SKEW_UNMEASURED).recent(rowOf("$a", "conv-A"), controller.signal);
+    expect(seen).toEqual([controller.signal]);
   });
 });
 
