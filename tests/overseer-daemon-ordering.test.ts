@@ -23,7 +23,7 @@ import type { FleetSnapshot } from "../tools/fleet/collect.js";
 import { statePayload, type PayloadDeps } from "../tools/fleet/state.js";
 import type { ProducerStamp } from "../tools/fleet/wire.js";
 import type { OverseerEvent } from "../tools/overseer/diff.js";
-import { runOverseer } from "../tools/overseer/daemon.js";
+import { BASELINE_FILE, runOverseer } from "../tools/overseer/daemon.js";
 import { readNotes, type DaemonNote } from "../tools/overseer/notes.js";
 import { parseObservation, type JsonValue } from "../tools/overseer/observation.js";
 import type { SourceMessage } from "../tools/overseer/source.js";
@@ -180,6 +180,7 @@ describe("duplicates: one collection, however it arrives", () => {
     });
     expect(events.length).toBe(6);
     expect(notes.filter((n) => n.kind === "condition-degraded")).toEqual([]);
+    expect(lastGood(root)).toBe(BEFORE_AT);
   });
 });
 
@@ -330,6 +331,29 @@ describe("empty row lists", () => {
     const snapshotEdges = edges(notes, "snapshots");
     expect(snapshotEdges).toEqual(["condition-degraded"]);
   });
+
+  test("no silent deletion: an unknown-schema empty sample cannot reconcile a warm register when the baseline is missing", async () => {
+    const root = tempRoot();
+    await run(root, async function* () {
+      yield payload(stamped("session-new-before", { instance: RUN_A, publication: 1, inventory: 1 }));
+    });
+    rmSync(join(root, BASELINE_FILE));
+
+    const second = await run(root, async function* () {
+      yield payload(
+        fixtureWith("session-new-after", {
+          schema: 2,
+          rows: [],
+          producer: { instance: RUN_B, publication: 1, inventory: 1 },
+        }),
+      );
+    });
+
+    expect(second.events.filter((event) => event.kind === "tmux-session-gone")).toEqual([]);
+    expect(second.events.length).toBe(6);
+    expect(registerSize(root)).toBe(6);
+    expect(refusals(second.notes).at(-1)).toContain("schema 2");
+  });
 });
 
 describe("an old producer, which is ordered exactly as well as it was yesterday", () => {
@@ -422,6 +446,8 @@ describe("a daemon restart", () => {
     // Eighteen runs, each replacing the last. After the eighteenth, the
     // seventeen before it have been retired and the oldest has been let go:
     // a late payload from run 2 is still refused, and one from run 1 is not.
+    // Once run 1 is accepted as apparently new, the real current run is retired
+    // in turn — the full, explicit cost of forgetting an ancient run.
     const root = tempRoot();
     const runs = Array.from({ length: 18 }, (_, i) => (0x10000000 + i).toString(16));
     const start = Date.parse("2026-09-08T02:50:00.000Z");
@@ -430,12 +456,17 @@ describe("a daemon restart", () => {
       for (const [i, instance] of runs.entries()) {
         yield payload(stamped("session-new-before", { instance, publication: 1, inventory: 1 }, { collectedAt: at(i) }));
       }
+      // The current run itself was never in `retired`, so trimming the set must
+      // not refuse its next collection.
+      yield payload(stamped("session-new-before", { instance: runs[17] ?? "", publication: 2, inventory: 2 }, { collectedAt: at(19) }));
       yield payload(stamped("session-new-before", { instance: runs[1] ?? "", publication: 2, inventory: 2 }, { collectedAt: at(20) }));
       yield payload(stamped("session-new-before", { instance: runs[0] ?? "", publication: 2, inventory: 2 }, { collectedAt: at(21) }));
+      yield payload(stamped("session-new-before", { instance: runs[17] ?? "", publication: 3, inventory: 3 }, { collectedAt: at(22) }));
     });
     const said = refusals(notes);
-    expect(said).toHaveLength(1);
+    expect(said).toHaveLength(2);
     expect(said[0]).toContain(runs[1]);
+    expect(said[1]).toContain(runs[17]);
     expect(lastGood(root)).toBe(at(21));
     expect(events.length).toBe(6);
   });
@@ -484,6 +515,33 @@ describe("an unknown schema stays unknown", () => {
     expect(edges(notes, "collector")).toEqual(["condition-degraded"]);
     expect(edges(notes, "ordering")).toEqual([]);
     expect(kinds(events)).toEqual([...Array(6).fill("session-seen"), "tmux-session-gone", "session-seen"]);
+  });
+
+  test("a schema-2 payload cannot open a closed collector condition", async () => {
+    const root = tempRoot();
+    const clock = fakeClock("2026-09-08T02:47:25.000Z");
+    const attemptedAt = "2026-09-08T02:47:20.000Z";
+    const { notes } = await run(
+      root,
+      async function* () {
+        yield payload(stamped("session-new-before", { instance: RUN_A, publication: 1, inventory: 1 }, { attemptedAt }));
+        clock.advance(6 * 60_000);
+        yield payload(
+          fixtureWith("session-new-after", {
+            schema: 2,
+            attemptedAt,
+            producer: { instance: RUN_B, publication: 1, inventory: 1 },
+          }),
+        );
+        await sleep(20);
+      },
+      { clock },
+    );
+
+    // Installing "cannot say" is neither a degradation nor a restoration.
+    // If the old positive reading survived, or schema-2's stale clock were
+    // believed, the tick above would open this condition.
+    expect(edges(notes, "collector")).toEqual([]);
   });
 });
 

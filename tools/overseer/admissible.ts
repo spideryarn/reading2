@@ -139,8 +139,8 @@ export type Admissibility =
  *
  * `previous` is the last ACCEPTED snapshot and is null until one has been —
  * not "the last one that arrived". Comparing against something that was
- * rejected would let a stale broadcast set the high-water mark and stall
- * everything after it.
+ * rejected would let a stale broadcast set the ordering mark and stall or
+ * misorder everything after it.
  *
  * `next` is the parse RESULT rather than a snapshot, so that a failed parse
  * gets a verdict from the same function as everything else; see the module

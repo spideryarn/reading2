@@ -101,6 +101,7 @@ describe("the dashboard's own payload", () => {
     const verdict = admissible(null, parsed, NONE_RETIRED);
     expect(verdict.verdict).toBe("reject");
     expect(verdict.reason).toContain("never collected");
+    expect(verdict.reason).not.toContain("out of order");
   });
 
   test("a snapshot's schema number is still the one this reader was written against", () => {

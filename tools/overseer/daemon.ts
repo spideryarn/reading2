@@ -42,9 +42,9 @@
  * its baseline file is ignored rather than trusted.
  *
  * **Two marks, not one.** `accepted` is the newest snapshot the gate blessed
- * and is what the next payload's clock is compared against; `baseline` is the
- * newest world the differ agreed to stand on. A `held` result moves the first
- * and not the second.
+ * and is what the next payload is ordered against — by run and collection when
+ * both are stamped, by clock otherwise; `baseline` is the newest world the
+ * differ agreed to stand on. A `held` result moves the first and not the second.
  *
  * ## What it does not do
  *
@@ -585,8 +585,8 @@ export async function runOverseer(options: DaemonOptions): Promise<DaemonOutcome
   // what the next payload is ordered against — its run and collection when
   // both are stamped, its clock when either is not. `baseline` is the last
   // world `diff()` agreed to stand on. They come apart on a `held` result: the
-  // snapshot was perfectly admissible, so the clock must move on, and it could
-  // not be placed in a world, so the baseline must not.
+  // snapshot was perfectly admissible, so the accepted mark must move on, and
+  // it could not be placed in a world, so the baseline must not.
   //
   // A BASELINE IS ONLY USABLE BESIDE THE REGISTER IT MATCHES, and a cold store
   // has no register at all. The store starts cold when the log is gone, or when
@@ -1249,10 +1249,9 @@ export async function runOverseer(options: DaemonOptions): Promise<DaemonOutcome
     const observed = verdict.snapshot.snapshot;
     write(conditions.restore("snapshots", at, `a collection from ${observed.clock.at} was accepted`));
     refreshMs = observed.refreshMs;
-    // THE CLOCK MOVES ON EVEN IF THE WORLD DOES NOT. This is the accepted mark,
-    // not the baseline; a snapshot that is held below is still the newest
-    // collection this Overseer has seen, and forgetting that would let the next
-    // one look like a duplicate.
+    // THE ACCEPTED MARK MOVES ON EVEN IF THE WORLD DOES NOT. A snapshot that is
+    // held below is still the newest collection this Overseer has seen, and
+    // forgetting that would let the next one look like a duplicate.
     //
     // AND A NEW RUN RETIRES THE ONE IT REPLACED, here and only here: when an
     // accepted stamped snapshot's run differs from the previous accepted one's.

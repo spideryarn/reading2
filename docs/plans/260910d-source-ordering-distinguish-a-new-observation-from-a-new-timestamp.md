@@ -246,9 +246,12 @@ hunk does not overlap its usage-pass hunk. `origin/dev` merged immediately befor
 started and again before the push.
 
 - [x] Parse, gate, daemon wiring, condition.
-- [ ] Tests red then green (48 new tests red before the implementation, all green after); focused
-  suites and typecheck green on the manager's own run (typecheck exit 0; 44 files / 1,581 tests);
-  Sol review; commit.
+- [x] Tests red then green (48 new tests red before the implementation, all green after); focused
+  suites and typecheck green on the manager's own runs, before and after the review's fixes (after:
+  typecheck exit 0; 44 files / 1,583 tests); Sol review; commit.
+
+Status, 2026-09-10: **done.** Sol's stage review passed it with fixes, and found no defect in
+production behaviour; see Findings.
 
 Decisions the implementer made, recorded so the review can check them:
 
@@ -416,6 +419,34 @@ apart from `UNREADABLE`). A status read that lands mid-append will therefore say
 read; it corrects itself on the next. Reporting from the last complete note instead was the
 alternative, and it could call a daemon *running* while its stopping note is half-written. Rare,
 transient, and on the safe side, so it was not worth a second paid review round.
+
+### Stage 2 — stage review, GPT Sol, 2026-09-10 (*pass with fixes*)
+
+No defect in production behaviour. Every hard check held: an A→B dashboard restart, across a
+daemon restart too, produces no events after A's baseline, and a late A payload is refused; every
+inadmissible sample returns before `diff()` and `goneWhileAway()`; a duplicate, re-stamped or
+out-of-order payload cannot move `lastGoodSnapshotAt`; the rule order matches the plan; the Stage 1
+sentinel is tested through the real `statePayload()`.
+
+1. **P2, the tests did not prove two of the safety claims.** Proved by mutation: breaking
+   `parseAttempt` so a schema-2 payload was read opened `collector` with every test still green, and
+   admitting a baseline-null sample produced six false `tmux-session-gone` events, again unseen.
+   **Fixed:** tests for the closed→unknown-schema direction and a warm-register, missing-baseline,
+   unknown-schema empty sample; also pinned a duplicate not moving `lastGoodSnapshotAt`, the startup
+   placeholder's sentence, and the current run surviving retirement trimming.
+2. **P2, the bound on `retired` has a consequence, left as designed — a decision.** After seventeen
+   dashboard replacements the oldest run is let go; a payload from it would then be accepted as a new
+   run, retiring the real current run, whose payloads would be refused until the next dashboard
+   restart. The reviewer did not change it because the plan chose the bound. **Kept, deliberately:**
+   a payload can only come from a live process, and a dashboard sixteen restarts old is not one, so
+   the path needs something the single sequential source cannot deliver. If it ever happened it
+   would not be silent: every refused payload degrades `snapshots`, and the next dashboard restart
+   clears it. Raising the bound would cost nothing in memory but would need either a test that drives
+   a thousand restarts or a new daemon option to inject it, which is more surface than an
+   unreachable path is worth. The test now exposes the whole consequence, so a future change to the
+   bound is made knowingly.
+3. **P3, `daemon.ts`'s module header still described clock-only ordering.** **Fixed**, with two
+   related "the clock moves on" comments.
 
 **Implementer for Stage 2 changed.** The Overseer's budget notice of 2026-09-10 (~09:35Z) moved
 implementation off Codex, whose weekly window was emptying under seven sessions; Codex is now for
