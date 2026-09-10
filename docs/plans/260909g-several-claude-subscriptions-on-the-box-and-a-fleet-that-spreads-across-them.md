@@ -547,6 +547,23 @@ operations behind a per-family interface. Nothing Codex-specific is built now.
 **Why the registry first:** it is the one new concept everything else reads, and Stage 0 has already
 established what goes in it.
 
+#### The orchestrator account cannot be registered, and that is accepted for now
+
+**Discovered by registering a real account, 2026-09-10.** `add` requires `--config-dir`, but the
+orchestrator/ambient account is precisely *"no `CLAUDE_CONFIG_DIR`"* — and pointing one at
+`/home/greg/.claude` is **actively wrong**, not merely redundant: the CLI then looks for
+`.claude.json` *inside* the directory, where the default account's does not live, and the session
+gets no identity, no user-level MCP servers, no trust flags and no first-run state.
+
+The launcher already handles ambient correctly — `stateDir: null` emits no `env` prefix at all, just
+plain `claude` — so the gap is only that `add` cannot express it.
+
+**Accepted as is** (the Overseer, 2026-09-10): the registry holds pool accounts only, an unflagged
+launch stays ambient, and `auto` picks from the pool. That is the wanted behaviour anyway, so
+**`add --ambient` is not to be built unless the wizard turns out to need it.** Recorded here so the
+next reader does not mistake the gap for an oversight, or "fix" it by registering `main` with a
+`--config-dir` — which would be the one thing that actively breaks.
+
 **Where it lives.** Outside the repo — credentials never go in git:
 
 ```
