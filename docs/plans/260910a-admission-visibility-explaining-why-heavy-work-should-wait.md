@@ -6,8 +6,8 @@ implements. Queue item `qi-5e9beszv`, dispatched by the Overseer on 2026-09-10.
 
 **One sentence:** the box already refuses test runs it has no memory for, and nobody can see it
 happen — so this puts the *same* decision, computed by the *same* code, on the Box health tab,
-labelled honestly as a **forecast** rather than as an event, and beside it a census of the heavy work
-already running.
+labelled honestly as a **forecast** rather than as an event, beside a record of the refusals that
+really happened and a census of what is running.
 
 **Acceptance, from the roadmap:** *an agent and Greg can find out why work should wait.*
 
@@ -16,10 +16,11 @@ admission owner with atomic reservations; nothing here reserves, locks, queues o
 that was not already refused. Every sentence this feature puts on screen has to survive that
 distinction being read strictly, which is most of what the design below is about.
 
-**Round 1 of the plan review refused this plan** — five established P1s, all of them variants of the
-same defect: a true number under a label that promised more than it could deliver. The design below
-is the corrected one; the findings and their dispositions are at the end, including the roadmap
-checkbox this stage deliberately leaves unmet.
+**Two rounds of plan review refused this plan** — ten established P1s between them, and every single
+one was the same defect: a true number under a label promising more than it could deliver. The
+design below is what survived. The findings and their dispositions are at the end, and the largest
+consequence is that a whole feature was **cut** rather than fixed (§6), because it kept generating
+the defect faster than the fixes closed it.
 
 ---
 
@@ -60,13 +61,16 @@ Deliberately phrased as questions a person actually asks, because the panel's he
 
 1. **If a test run started right now, what would the gate say?** — a **forecast**, computed by
    calling the gate on a fresh memory reading, stamped with when it was computed.
-2. **What heavy work is already running?** — a census of *job roots*, classified conservatively,
-   with everything it is not sure about counted separately and out loud.
-3. **How often would the gate have refused, over the last day?** — the gate replayed over the health
-   history the dashboard already keeps, so *why did work wait an hour ago* has an answer.
+2. **Was anything actually refused, and when?** — a journal, one appended line written by the two
+   places that already decide, so the answer is a record rather than an inference.
+3. **What is running that I would recognise?** — a census of live process roots, with a heading that
+   claims exactly that and no more.
 
 And running through all three: **nothing on this panel enforced anything**, and the panel says so in
 those words rather than in a footnote.
+
+A fourth question — *how much of the last day would the gate have refused?* — was designed twice and
+cut. §6 says why, and keeps the design for whoever picks it up.
 
 ---
 
@@ -162,9 +166,12 @@ The roadmap asks for *"a clear statement of whether a signal is an enforced admi
 advisory resource claim. A claim file is not a lock."*
 
 Established while reading the tree, and worth stating plainly because it is the load-bearing fact of
-this whole stage: **there is no claim file anywhere in this repo today, and no lock.** Nothing
-reserves capacity, nothing waits on anything, and the only thing in the codebase that stops work
-starting is `vitest-admission.ts`, inside the very process it stops. So every block on the panel
+this whole stage: **there is no resource-admission claim file in this repo today, and no admission
+lock.** (There are plenty of other locks — the health-history writer's, the readiness runner's, the
+scheduler's occurrence reservations. None of them is about resources, and an earlier draft of this
+sentence said "no lock" flatly and was simply false.) Nothing reserves capacity, nothing waits on
+anything, and **the only resource gate that stops an ordinary vitest launch** is
+`vitest-admission.ts`, inside the very process it stops. So every block on the panel
 carries one of exactly three labels, and **the word "enforced" is never one of them** — it appears
 only inside a sentence describing where enforcement actually happens:
 
@@ -174,36 +181,49 @@ only inside a sentence describing where enforcement actually happens:
 - **`observed`** — a reading of what is running. It stopped nothing and reserved nothing.
 - **`not-modelled`** — we have no cost model for this, so there is no answer to give (see §5).
 
-### 4. What heavy work is running: a job-root census, conservative on purpose
+### 4. Recognised live process roots — and the three words that are not in its heading
 
-The first draft reused `health.ts`'s existing `ps` grouping, and the review was right that this does
-not meet the roadmap checkbox: that reading groups *processes* by a keyword anywhere in argv, cannot
-tell a codex review from any other node process, and its own header says it deliberately calls
-anything Chrome-flavoured a browser. Under a heading that says *what heavy work is running*, that is
-a promise the data cannot keep, and a caveat underneath does not repair it.
+The first draft reused `health.ts`'s `ps` grouping; round 1 was right that this cannot meet the
+roadmap checkbox, since it groups *processes* by a keyword anywhere in argv. Round 2 was right about
+the replacement, twice over, and both corrections are about the **label** rather than the data:
 
-So this stage builds a small census of its own, in its own module, reading `/proc` directly:
+- **It is not "heavy", and it is not "active".** A live Chrome root may be idle, or deliberately
+  parked for reconnection — `actions.ts` documents that case. Presence establishes presence. Making
+  it a claim about load would need per-root resource evidence this stage is not gathering.
+- **It is not "reviews".** `codex` is how this very plan is being implemented; `codex exec` is a
+  generic batch job, and the tree's own vocabulary already calls it `codex-batch`. A stage-1
+  implementation run appearing on screen as *a review in progress* is a small lie told confidently.
 
-- **Classify by argv elements, not by a substring of the joined line** — the memory of this box
-  records `ps -eo args | grep -c` over-counting because it matches its own apparatus. Read
-  `/proc/<pid>/cmdline`, split on `NUL`, and match elements.
-- **Fold processes to job roots** by walking `ppid` from `/proc/<pid>/stat`: a process whose ancestor
-  carries the same class is not a root, and a Chrome helper (`--type=` in argv) is never a root.
-- **Report only what it is confident about**, plus an explicit **uncertain** count and an explicit
-  **unreadable** count. A process that vanished mid-walk is unreadable, not absent.
-- **Three classes to start**: `test` (vitest), `review` (codex), `browser` (chrome/chromium/
-  playwright). Anything else is not counted as heavy work at all, and the panel says the census only
-  looks for those three.
+So the block is headed **"Recognised live process roots"**, its subtitle names the finite list of
+things it can recognise — vitest runners, Codex batch jobs, browsers — and it says outright that
+anything it does not recognise is not counted at all. `AdmissionRequest.kind` keeps `"review"` as
+the **caller's declared intent**, which is a different thing from an intent inferred from an
+executable, and §5 keeps them apart.
 
-**Measured on this box, 2026-09-10**, over 425 processes: **37.7 ms median, 56.0 ms worst**, folding
-to 40 candidate roots. Two things follow. First, **this cannot go on the request path** — the
-dashboard is a single Node process the Overseer has no alternative to, and 56 ms of blocked event
-loop per tab open is over the ceiling `fleet-dashboard-modes.md` sets. It goes on the timer in §7.
-Second, the raw fold gave **33 browser roots**, which is certainly wrong — Chrome helpers whose
-parents are not themselves classified read as roots. That over-count is the census's characteristic
-failure and it is the reason for the conservative rules above and for the uncertain arm: on this
-panel an over-count means *the box looks busier than it is*, which is a wrong number under a true
-label, the exact defect the review refused the first draft for.
+**The recognisers are reused, not rewritten**, and this is the single most valuable thing round 2
+produced. `tools/fleet/actions.ts` already has them, already takes a `ProcRecord`, and already
+carries the scars: `isVitestRunner` matches on an **executable path** and its header explains that
+matching the string "vitest" catches an agent who is merely editing `vitest.config.ts`; the browser
+rule matches `comm` exactly, because a substring match once *"counted 162 'chrome' processes that
+were mostly MCP servers whose arguments mentioned chrome"*. My own naive fold reproduced exactly
+that error — 33 "browser" roots on a box that had a handful — so the census imports `ProcRecord`,
+`isVitestRunner` and the browser rule rather than growing a second, worse copy. Only `codex-batch`
+needs a new recogniser, written to the same rule: an executable path, never a substring.
+
+**Identity, because two reads of `/proc` are not one observation.** Reading `cmdline` and then
+`stat` for a pid can staple an old parent relation onto a reused pid's new argv, describing a
+process that never existed — `execution-identity.ts` uses start ticks and before/after bracketing
+for precisely this. So the census keeps `startTicks` per row, brackets its walk, and classifies
+anything that changed under the read as **uncertain** rather than guessing.
+
+Then the fold: a process whose ancestor carries the same class is not a root, and a Chrome helper
+(`--type=` in argv) is never a root. Every count is accompanied by an **uncertain** count and an
+**unreadable** count — a process that vanished mid-walk is unreadable, not absent.
+
+**Measured on this box, 2026-09-10**, over 425 processes: **37.7 ms median, 56.0 ms worst**. That
+cannot go on the request path — the dashboard is one Node process the Overseer has no alternative
+to, and 56 ms of blocked event loop per tab open is over the ceiling `fleet-dashboard-modes.md`
+sets. It goes on the timer in §7.
 
 ### 5. The typed admission request
 
@@ -230,8 +250,15 @@ export type AdmissionRequest = {
 };
 ```
 
-`GET /api/admission?kind=…&cost=…` builds one and answers it. The default, with no query string, is
-`kind=test`, `cost=heavy` — the case the gate actually governs.
+`GET /api/admission?kind=…` builds one and answers it; the default is `kind=test`, the case the gate
+actually governs.
+
+**`cost` is on the type and is not accepted by the endpoint.** `?cost=light` and `?cost=heavy`
+would produce identical answers — the same fixed vitest model for `kind=test`, the same
+`not-modelled` for everything else — and a query parameter that looks semantically active while
+changing nothing is API surface that teaches the wrong thing. It stays a field on
+`AdmissionRequest`, where the next stage will need it once something can measure it, and the route
+grows it when a consumer exists.
 
 - **`kind=test`** → the gate's forecast, per §1.
 - **`kind=review` / `kind=browser`** → **`not-modelled`**, and nothing else. The first draft ran
@@ -247,87 +274,155 @@ export type AdmissionRequest = {
 any future queue position must be stamped `receivedAtMs` by whatever owns admission, not by the
 caller. Recorded here so the next stage inherits the rule rather than the field.
 
-### 6. The would-refuse history — and the checkbox this stage does not close
+### 6. The refusal record — what this stage builds, and the replay it cut
 
-**Correction to the first draft, and it was the sharpest finding.** That draft asserted that no
-admission refusal is durably recorded anywhere on this box. That is false, and the review produced
-the counter-example: `logs/tmux-jobs/grfd-check3-0934-2389191.log` line 80 holds a real refusal, in
-full, with its numbers — `MemAvailable 8.39 GB, and swap 12.29 GB of 32.00 GB used`. It is there
-because `scripts/tmux-job.ts` opens its log before running the command precisely so output survives
-the pane. Refusals also survive in agent transcripts. **The accurate statement is:**
+**Correction to the first draft, and it was the sharpest finding of round 1.** That draft asserted
+that no admission refusal is durably recorded anywhere on this box. That is false, and the review
+produced the counter-example: `logs/tmux-jobs/grfd-check3-0934-2389191.log` line 80 holds a real
+refusal, in full, with its numbers — `MemAvailable 8.39 GB, and swap 12.29 GB of 32.00 GB used`. It
+is there because `scripts/tmux-job.ts` opens its log before running the command precisely so output
+survives the pane. Refusals also survive in agent transcripts. **The accurate statement is:**
 
 > No complete, centralized admission-refusal journal exists. Some refusals survive incidentally in
 > tmux-job logs and agent transcripts, but those sources are incomplete and are not a stable fleet
 > API.
 
-**And a scan of those traces was considered and rejected, on a measurement.** The newest 40 log
-tails (32 KiB each) cost 4.3 ms median / 23.7 ms worst; all 136 across every worktree cost 10.5 ms
-median / 61.8 ms worst. Affordable. What kills it is not cost but honesty: the refusal in that log
-is at **line 80 of an 800 KB file**, because the refused step was one of several in an
-`npm run check`, so neither a head scan nor a tail scan reliably finds it, and the primary's logs
-alone are 55 MB. A scanner that sometimes misses a refusal reports *no recent refusals* in exactly
-the same words as one that looked properly — a silence that reads as a finding, which is
+**A scan of those traces was considered and rejected, on a measurement.** The newest 40 log tails
+(32 KiB each) cost 4.3 ms median / 23.7 ms worst; all 136 across every worktree cost 10.5 ms median
+/ 61.8 ms worst. Affordable. What kills it is not cost but honesty: the refusal in that log is at
+**line 80 of an 800 KB file**, because the refused step was one of several in an `npm run check`, so
+neither a head scan nor a tail scan reliably finds it, and the primary's logs alone are 55 MB. A
+scanner that sometimes misses reports *no recent refusals* in the same words as one that looked
+properly — a silence that reads as a finding, which is
 [silent-success.md](../reusable/silent-success.md)'s subject.
 
-**So the roadmap's "the last refusal" is recorded as UNMET**, deferred to a stage that authorises a
-centralized writer, and this is the item to put in front of Greg: one appended line per refusal,
-from the two places that already compute one, would make the real answer trivially available. Both
-of those places are outside this stage's file set.
+**The Overseer authorised the cheap fix instead, on 2026-09-10:**
 
-What the panel shows instead, under its own honest heading **"Would-refuse history"**: the gate
-replayed over the health history at `~/.fleet-health/`, which the dashboard already keeps.
+> take the cheap fix, one appended line per refusal from the two places that already compute one,
+> written to a small dedicated file the panel reads, not a scan of tmux-job logs; that widening of
+> your file set is authorised, name the two files in your plan and keep each edit to the append.
 
-**The replay obeys the stored union, not today's file contents.** The history's `report` is
-deliberately `Record<string, unknown>` because records cross version boundaries, and a sample may be
-`collector-failed` or `sample-omitted`, and `memory` itself has an `unknown` arm. So each sample
-lands in one of three classes:
+So the roadmap's "last refusal" is met properly rather than approximated, by a **refusal journal**
+— §6b.
 
-| Class | When |
+#### The would-refuse replay, cut from this stage
+
+Both drafts also proposed replaying `decideAdmission` over the 24 hours of health history the
+dashboard already keeps, to say how much of the day the gate *would* have refused. **It is cut**,
+and this section records why, because the reasoning is worth more than the feature.
+
+It generated four findings across two review rounds and every one of them was the same shape: a
+second, independent interpretation of somebody else's recorded data, drifting from the first.
+
+- The stored record is deliberately loose (`Record<string, unknown>`, crossing version boundaries)
+  and has `collector-failed`, `sample-omitted` and `memory: unknown` arms, so a replay needs its
+  own three-class union — and must never map a failed `free` onto the gate's `broken` snapshot,
+  which would manufacture a refusal out of a collector fault.
+- Counts alone erase unobserved time. Round 2's scenario is exact and damning: one hour of samples
+  followed by twenty-three hours of nothing renders as *"60 readable, 0 refused"* under a heading
+  that says *the last day*. Fixing it needs coverage, and `history-series.ts` already owns the span
+  algebra for coverage — so a second one on the same screen could disagree with the chart above it.
+- A cache's own `computedAtMs` is not the freshness of what it read. A scan a second old, over a
+  file whose newest sample is ten hours old, reports as current. The history UI already carries
+  `lastAttemptAt`, `lastSuccessAt`, failure, poisoning and lock state to stop exactly that.
+- And the tab that would show it already triggers its own history scan, so the panel would cause two
+  reads of the same file per open.
+
+Every one of those is fixable. Together they are a second, careful reader of a store owned by
+someone else, needing coverage algebra extracted from a file another session owns — and it answers a
+softer question than the journal does. *A run asked and was told no, at 04:12* is what an agent
+needs; *37% of yesterday would have refused* is a nice-to-have. **Simplest version first**: the
+journal ships, the replay is written down here with its constraints intact so whoever builds it
+starts from round 2's findings rather than rediscovering them.
+
+**One measurement worth keeping from the cut work**, because the next attempt will need it. The gate
+reads `MemAvailable` from `/proc/meminfo`; `health.ts` reads the sixth column of `free -b`'s `Mem:`
+row. Sampled a few milliseconds apart on 2026-09-10: `free` said 20,207,513,600 bytes and
+`/proc/meminfo` said 20,206,481,408 — 0.005% apart, the number moving between two reads rather than
+two different numbers. **They are the same kernel figure, so a replay is legitimate arithmetic.**
+Swap is not the same measurement and does not need to be: the gate uses swap only in the *text* of
+its refusal message, never in the arithmetic that decides.
+### 6b. The refusal journal — one appended line, from the places that already decide
+
+**One new leaf module, three one-line writer edits, and a reader.** The module is
+`admission-journal.ts`, at the repo root beside the gate, with **no imports but node builtins** — the
+same discipline `overseer-claim.ts` and `attempt-clock.ts` keep, and here it is forced: one of its
+callers is `vitest.config.ts`, evaluated at the start of every test run in this repo, and a config
+that imported `tools/fleet/` would drag the dashboard into every suite's startup.
+
+**Where the appends go, named as the Overseer asked.**
+
+| File | The edit |
 |---|---|
-| **replayable** | a finite stored `memory.availableBytes` — apply today's policy to that recorded value |
-| **admission-unknown** | collector failure, omitted sample, missing/unknown/unrecognised memory shape |
-| **unobserved** | no sample there at all — a gap, or before the record begins |
+| `vitest.config.ts` | in `workersForThisRun()`, one call before the existing `throw` on `decision.kind === "refuse"` |
+| `scripts/readiness-loop.ts` | one call at the existing consumer of `decideTick`, when the skip's cause is memory admission |
+| `tools/fleet/readiness-loop.ts` | **the third file, and it is why the second is possible**: `TickDecision`'s skip arm carries only `why`, so a consumer can tell an admission refusal from the other twelve skips only by matching the sentence. One optional `cause` discriminator on that arm, set at the admission branch, no behaviour change |
 
-**A failed `free` is not a failed `/proc/meminfo`.** Mapping an `unknown` memory reading onto the
-gate's `broken` snapshot would produce a *would-refuse* out of a collector problem — manufacturing a
-refusal from a missing measurement. `admission-unknown` exists to stop exactly that.
+That third file is a readiness file and outside the original file set. It is named here rather than
+slipped in: without it the second writer is a string match on prose, which is the kind of check that
+goes quietly wrong when somebody rewords a sentence. **If the Overseer would rather not widen that
+far, the readiness writer drops and only `vitest.config.ts` writes** — and then the panel says the
+journal sees test runs only, which is still the answer an agent needs.
 
-The panel states **counts, not coverage**: *of N readable memory samples in the last 24 hours, M
-would have been refused, and K samples could not be replayed.* Counts rather than a percentage of
-the day deliberately — `history-series.ts` already owns one coverage calculation for the chart, and
-a second one here could disagree with it on the same screen. The panel's wording:
+**The first rule of this writer is that it may not break what it observes.** A refusal is already a
+bad moment; a journal that threw would turn "your test run was refused" into "your test run crashed
+in the config". So every append is wrapped, failures are swallowed, and the panel says the journal
+is best-effort. It is a record of refusals, not a proof of their absence.
 
-> For samples containing a readable stored memory value, this applies today's policy to that
-> recorded value. Other samples are admission-unknown. These are sampled counterfactuals, not
-> decisions made by a run.
+**Concurrency is solved by staying under `PIPE_BUF`.** Many processes append and none coordinates,
+so each line is one `appendFileSync` of at most 1 KiB with `O_APPEND`, which Linux makes atomic
+below 4 KiB. That is the whole locking story, and it is the reason the line is small and fixed:
+`at`, `source` (`test-run` | `readiness-precheck`), `policyVersion`, `availableBytes`,
+`reserveBytes`, swap totals, `pid`, and the host. **Not the gate's message** — it is reconstructible
+from those numbers, and an unbounded string is how a bounded file stops being bounded.
 
-**The one equality this rests on, measured rather than assumed.** The gate reads `MemAvailable` out
-of `/proc/meminfo`; `health.ts` reads the sixth column of `free -b`'s `Mem:` row. Sampled on this box
-on 2026-09-10, a few milliseconds apart: `free` said 20,207,513,600 bytes and `/proc/meminfo` said
-20,206,481,408 — a gap of 0.005%, which is the number moving between two reads rather than two
-different numbers. Swap is **not** the same measurement, and does not need to be: the gate uses swap
-only in the *text* of its refusal message, never in the arithmetic that decides.
+**Appenders never rotate; the reader prunes.** The dashboard's timer is a single process and is the
+only thing that renames `refusals.jsonl` to `refusals.prev.jsonl` when the live file passes its cap;
+the reader reads both. A rename cannot lose an append, because an appender opens by path each time —
+it either wrote into the old inode, which is still read as `.prev`, or into the new file. That is
+`health-history.ts`'s two-file trick, borrowed as an idea rather than as code, because that store has
+a single-writer lock and this one deliberately has many writers and none.
+
+**What the journal cannot see, on the panel, in its own words:** refusals from test runs using this
+repo's vitest config on this machine, and from the readiness loop. Not a run on another machine, not
+a run that bypassed the config, and not an append that failed. Empty means *nothing was recorded*,
+which is a weaker claim than *nothing was refused*, and the panel makes the weaker one.
 
 ### 7. Everything expensive happens on a timer, and the route serves a cache
 
-The review measured the history scan the first draft put in the request handler: **18.85 ms median,
-26.65 ms worst** over the current 1.8 MiB store, returning 1,346 samples in the window — not the
-"well under 7 ms" the draft claimed, and worse than that, opening Box health *already* triggers the
-existing history request, so the tab would have caused two scans. The store rotates at 8 MiB and may
-read two files, so the bound is 16 MiB, and 250 ms of blocked event loop is a frozen control plane.
+The first draft put a history scan in the request handler and claimed it was "well under" 7 ms. The
+review measured it: **18.85 ms median, 26.65 ms worst** on the current 1.8 MiB store — and opening
+Box health *already* triggers the existing history request, so the tab would have caused two scans
+of the same file. Cutting the replay (§6) removes that read entirely, which is one of the reasons
+the cut was worth making rather than merely acceptable.
 
-Add the census's 38–56 ms and the request path is indefensible. So:
+What is left needing a cadence is the census, at **37.7 ms median, 56.0 ms worst**. That is still
+far too much for a handler — the dashboard is one Node process the Overseer has no alternative to.
+So:
 
-**`admission-wiring.ts` owns a timer.** It recomputes the census and the would-refuse replay on the
-dashboard's own refresh cadence, keeps a small summary in memory, and **the route never scans
-anything**. The forecast — one `/proc/meminfo` read and some arithmetic, sub-millisecond — is the
-only thing computed per request, because it is the one that must be current.
+**`admission-wiring.ts` owns a repeating task**, and it is **end-chained, never a fixed interval**:
+it waits the cadence *after* each pass finishes, which is the non-overlap rule `server.ts` already
+follows for its own refresh loop. A fixed interval on a box under load queues passes on top of each
+other, which is how a 56 ms cost becomes a stall.
 
-The payload carries `computedAtMs` for the cached halves and a separate instant for the forecast, so
-the panel can say how old each is; a cache with no age on screen is how a stale number becomes a
-current claim. And the synthetic worst case — a full 2 × 8 MiB store, including the rotation retry
-`health-history.ts` performs — gets measured during Stage 1 and written here, rather than reasoned
-about.
+**The forecast is not cached.** One `/proc/meminfo` read and some arithmetic, sub-millisecond, per
+request — because it is the one answer that must be current, and caching it would put a stale
+verdict under a live-sounding sentence.
+
+**The cache is a state, not a value, and every producer gets its own.** Round 2's F12 is the rule
+here: modelling an unreadable *process* while not modelling a failure to enumerate `/proc` at all
+leaves the exact hole the dashboard's own standing rule forbids — *a reading that could not be taken
+must not render as a reading*. So each cached producer is a discriminated union:
+
+| State | Meaning |
+|---|---|
+| `not-yet-computed` | the dashboard started less than one cadence ago. Not an empty result |
+| `value` | a completed pass, with the instant it completed |
+| `failed` | a pass that threw, with its cause — **and the last good value, explicitly marked stale, if there is one** |
+
+Each producer is caught separately, so one half failing never blanks the other, and **the repeating
+task never throws out into the server**. Startup, a top-level `/proc` failure, and a one-half-only
+failure are all tested rather than reasoned about.
 
 ### 8. Where it appears
 
@@ -350,7 +445,8 @@ client-side arm, in the browser's voice, never in the server's.
 ## What this deliberately does not do
 
 - **It reserves nothing and refuses nothing new.** Reading the panel changes no behaviour anywhere.
-- **It does not show the last refusal**, and says so — §6. Roadmap checkbox recorded unmet.
+  The journal in §6b is the one thing this stage adds to a path outside the dashboard, and it only
+  writes a line where a refusal was already being thrown.
 - **It scores nothing but test runs** — §5.
 - **It does not touch `collect.ts` or the refresh path.** No new per-session or per-pane work.
 - **It classifies conservatively and under-reports** rather than over-reporting heavy work — §4.
@@ -383,27 +479,49 @@ session writes the prompts, runs the gates, reviews, and commits.
 
 **Status:** not started.
 
-### Stage 2 — the census and the would-refuse replay, on the timer
+### Stage 2 — the client section, showing the forecast
 
-- [ ] The job-root census (§4) and the replay (§6), both pure over inputs a test supplies, both
-      driven by the timer in `admission-wiring.ts` (§7), never by the handler.
-- [ ] Measure the synthetic worst case (2 × 8 MiB store, rotation retry) and write it into §7.
-- [ ] Tests: the census's uncertain and unreadable arms; a Chrome helper is not a root; a vitest
-      worker is not a root; the replay over a fixture history containing a reading, a gap, a
-      `collector-failed` line, a `sample-omitted` line, a `memory: unknown` sample and an
-      unrecognised report shape — **none of which may become a zero, a healthy value or a refusal**;
-      and that a stale cache renders with its age rather than as current.
-
-**Status:** not started.
-
-### Stage 3 — the client section
+Deliberately second rather than last: **the visibility is the deliverable**, so the earliest stage
+that puts something true on screen comes before the stages that enrich it. If this plan has to stop
+early, it should stop with a working panel that answers one question rather than three unrendered
+payloads.
 
 - [ ] `admission-client.ts` (seam + parser + the three nothings), `AdmissionSection.tsx`, mounted in
       `HealthPanel.tsx`, injectable from `App.tsx`.
-- [ ] Tests: opening Box health issues the request; each outcome renders its own sentence; the
-      forecast's disclaimer sentence is present verbatim; a browser that never got an answer says so
-      in its own voice.
+- [ ] Tests: opening Box health issues the request; each of the five outcomes renders its own
+      sentence; the forecast's disclaimer sentence is present verbatim; a browser that never got an
+      answer says so in its own voice, not the server's.
 - [ ] The real page at 390 × 844 and at desktop width, on its own port, never `:8787`.
+
+**Status:** not started.
+
+### Stage 3 — the refusal journal
+
+- [ ] `admission-journal.ts` — append (bounded, atomic, swallowing), read, and prune. Node builtins
+      only; nothing may import `tools/` or `src/` from it.
+- [ ] The three writer edits named in §6b, each one line at a point that already decides.
+- [ ] The reader on the dashboard's timer, and the block on the panel.
+- [ ] Tests, red first: two processes appending concurrently lose nothing; a line is refused rather
+      than truncated if it would exceed the cap; an append that throws does not propagate, and the
+      refusal still reaches the caller unchanged; a prune mid-append loses no line; **an empty
+      journal renders as "nothing was recorded", never as "nothing was refused"**; and a source
+      guard, comment-stripped, on the `vitest.config.ts` call — checked red by commenting it out.
+
+**Status:** not started. **Authorised by the Overseer on 2026-09-10**, widening the file set; §6b
+names the third file and says what to drop if that widening is one file too far.
+
+### Stage 4 — the census, on the end-chained task
+
+- [ ] The census (§4), pure over a list of `ProcRecord`-shaped rows a test supplies, reusing
+      `actions.ts`'s `isVitestRunner` and browser rule rather than growing new regexes; a new
+      `codex-batch` recogniser on an executable path.
+- [ ] The end-chained task and the three-state cache (§7).
+- [ ] Tests: a Chrome helper is not a root; a vitest **worker** is not a root; an agent merely
+      editing `vitest.config.ts` is not a runner and an MCP server mentioning chrome is not a
+      browser (both are recorded failures in `actions.ts`, so both get a test here); a row that
+      changed under the read is `uncertain`, not guessed; a vanished pid is `unreadable`, not
+      absent; `/proc` unenumerable is a **failed** cache state with its cause, not an empty census;
+      the task never throws into the server; and `not-yet-computed` renders as itself.
 
 **Status:** not started.
 
@@ -439,3 +557,35 @@ the tree before being taken; two were verified by hand because the design turned
 
 The review's answer to suspicion 4 — prefer a version-indexed explanation map that fails closed over
 two numbers somebody must remember to increment — was also taken, and is §2.
+
+## Review dispositions — round 2
+
+Full review: [260910a-admission-visibility-plan-review-sol-r2.md](260910a-admission-visibility-plan-review-sol-r2.md).
+Verdict **REFUSE as written**, F8–F12 established P1s, F13–F15 P2s, F16 P3. Round 1's F1, F2, F5 and
+F7 were confirmed closed; F3 and F4 were not, and are closed here.
+
+**Round 2 reviewed the plan before the Overseer authorised the refusal journal**, so its answer to
+my second suspicion — that deferring "last refusal" was correct because no complete source exists —
+is superseded by §6b, which builds the source rather than looking for one. Its reasoning stands and
+is the argument *for* the journal.
+
+| ID | Finding | Disposition |
+|---|---|---|
+| F8 | `review` is a false census label — `codex exec` is a generic batch job, and this plan's own implementation runs would appear on screen as reviews | **Taken in full.** The observed class is `codex-batch`; `AdmissionRequest.kind = "review"` survives only as the caller's *declared* intent, never inferred from an executable. §4, §5 |
+| F9 | Process presence does not establish *active heavy work* — a Chrome root may be parked and idle, and unrecognised heavy processes are omitted rather than counted uncertain | **Taken in full.** The heading is now "Recognised live process roots", the recogniser scope is stated on the page, and no claim of heaviness or activity is made. This closes F3. §4 |
+| F10 | Counts erase unobserved time: one hour of samples then 23 hours of nothing reads as "60 readable, 0 refused" under a *last day* heading | **Taken by cutting the feature.** The scenario is exact and I could not close it without a second coverage calculation beside `history-series.ts`'s. §6 |
+| F11 | `computedAtMs` is not history freshness — a fresh scan of a ten-hour-stale file reports as current | **Taken by cutting the feature**, and recorded in §6 as a constraint on whoever rebuilds it. The surviving cache states carry the instant a pass *completed*, which for a `/proc` census is genuinely the observation time |
+| F12 | The cache has no top-level failure lifecycle: no `/proc`-unenumerable, no store-unreadable, no before-first-pass, no one-half-failed | **Taken in full.** Three-state discriminated cache per producer, caught separately, task never throws into the server, and each state is tested. §7 |
+| F13 | The timer relocates blocking rather than removing it, and the open tab still causes two history scans | **Taken.** Cutting the replay removes the history scan altogether, so only the census has a cadence; and it is end-chained per `server.ts`'s existing non-overlap rule rather than a fixed interval. §7 |
+| F14 | The census omits the identity and race rules its data source requires — a `cmdline` read and a `stat` read can staple an old parent onto a reused pid | **Taken in full**, and it produced the best change in this round: the recognisers are now *reused* from `actions.ts`, which already matches on executable paths because a substring match once counted 162 "chrome" processes that were MCP servers. Start ticks retained; changed-under-read is `uncertain`. §4 |
+| F15 | The GET accepts a `cost` that cannot affect its answer | **Taken in full.** `cost` stays on the type and leaves the endpoint. §5 |
+| F16 | "No claim file anywhere and no lock" and "the only thing that stops work starting" are literally false — the tree has writer locks, readiness locks and scheduler reservations | **Taken in full.** Narrowed to "no resource-admission claim file or admission lock" and "the only resource gate that stops an ordinary vitest launch". §3 |
+
+**The largest disposition is a deletion**, and it is worth naming as a pattern rather than an
+outcome. The would-refuse replay drew F4 in round 1 and F10, F11 and F13 in round 2. Every fix was
+available and every fix was real; what the second round made clear is that they were a *series* —
+each one closing the resolution at which the previous answer was wrong, because the feature was a
+second reader of somebody else's store and that is a class of defect, not an instance of one. The
+plan review's own guidance is to bound the question rather than keep answering it, and the way to
+bound this one was to stop building it. What ships instead — a journal written by the two processes
+that already decide — answers the sharper question with no interpretation at all.
