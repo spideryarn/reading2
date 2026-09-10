@@ -2,6 +2,8 @@
 
 Verdict: **refuse the plan as written**. F1–F6 and F9 are established P1s against the stated acceptance/contracts. F7–F8 are P2 simplifications/risks. No repository file was changed.
 
+Review basis: the requested plan commit was `6638d2bd` when the review began. HEAD advanced during the review to committed Stage 1a `ac02c4c9`, which refined D11 and recorded the labelled-set baseline; the findings below were rechecked against that committed revision. A later uncommitted rewrite of the plan appeared in the shared tree and is not treated as the candidate. `npx vitest run tests/fleet-attention.test.ts` passed (24/24), confirming the current readers reject unknown list arms loudly while ignoring additive item/list fields they do not project.
+
 ## F1 — P1 — established: the “global hard” budget has a bypass and a crash gap
 
 **Scenario / contradicted contract.** Today `overseer attention` makes paid calls while being read-only by default; `--write` governs only `attention.json`, and it can run beside the locked daemon. D4/Stage 1 say “one ledger”, “refusal before a call”, and “one call in flight”, but never say that the daemon and CLI share an exclusion/reservation operation, that `--no-write` still records spend, or that the reservation is durable *before* the fetch. Two processes can both observe one remaining call and both spend it; a process can die after the request and before recording it, restart, and spend it again. A missing/unreadable ledger is also unspecified, so the natural “start empty” recovery resets the day. Recording tokens/cost after the response is accounting, not the roadmap’s hard token/cost limits.

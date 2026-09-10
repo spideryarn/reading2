@@ -48,7 +48,7 @@ So this stage adds three things to the existing detector rather than building a 
 
 ## Decisions (and the simpler options passed over)
 
-**D1. One classifier call, widened when proposals are on** — Sol's F8, replacing the first draft's
+**D1. One classifier call, widened when proposals are on** — Sol's F7, replacing the first draft's
 separate proposer. With proposals off, the prompt, version and output are exactly today's. With
 proposals on, a proposal-aware prompt version's `asked:true` arm also returns `recipient`, `reason`
 and a verbatim `asks`, validated through the same closed union. Enabling it makes one bounded cold
@@ -133,16 +133,19 @@ measure."*
 call; the card reads *"Proposed by openai/gpt-5.6-luna via the Overseer — nothing has been sent."*
 No rendered arm uses Greg as a speaker.
 
-**D10. The veto is a recorded mark, and it says who could have made it** — Fable (D9 of the first
-draft) and Sol's F4 together. `npx tsx scripts/overseer-proposals.ts mark <proposalId> right|wrong
-[--why …]` writes one file per proposal id, atomically, into `proposal-marks/` in the store; the pass
-reads the marks for the ids it is publishing and the card shows *"marked wrong via the local CLI
-(identity not verified)"*. Fable: *"(a) is not vetoable, it is ignorable … an unrecorded veto
-teaches nothing"*. Sol's note asked for a daemon-drained inbox into a loss-detecting log; passed over
-because a mark is a keyed record rather than an event history — last write per id wins, a lost file
-reads as *unjudged*, and there is nothing to append or replay. **Cuttable**: it is the last item of
-Stage 3, and Fable's hedge applies — Greg will rarely `ssh` in to mark, so the v1 judgement is the
-labelled set.
+**D10. Live marks are deferred; v1's judgement is the evaluation artefact** — Sol's F9, taking the
+fallback it offered. Fable wanted the veto recorded (*"(a) is not vetoable, it is ignorable … an
+unrecorded veto teaches nothing"*), and the first draft had a mark CLI writing into the store. Sol
+showed that is a second writer with no protocol — no lock, no init marker, no lost state — and that
+**a silently lost `wrong` mark is a lost veto**, which is worse than none. Doing it properly means a
+daemon-drained submission inbox and a loss-detecting event log, and `daemon.ts` is not this stage's
+file. So: **this stage records its judgements in the evaluation artefact** (every proposal on the
+labelled set, marked right or wrong against the labels, by us), and the card says *"nothing has been
+sent"*. A live veto matters from the moment something *acts* on a proposal, and it arrives with the
+stage that sends — the roadmap already requires that stage to get a concrete autonomy change from
+Greg and to preserve attribution and durable receipts. Fable's own hedge made the same point: *"the
+eval set you're already labelling is the judgement for v1."* **For the Overseer:** the roadmap's
+"vetoable" is met only in the weak sense until then.
 
 **D11. Work reports inform the evaluation, not the runtime** — revised on Sol's F5. The first draft
 let a session's own `blocked --on greg` report replace the proposer call. Sol showed the join was
@@ -155,8 +158,8 @@ cannot improve on explicit reports at reasonable cost, retain reporting/manual t
 asked the detector to read reports before spending; this is the reason it does not, for the
 Overseer to overrule.
 
-**D12. Misdirection is out of scope for this detector; concluded work is not** — Fable, then Sol's
-F7. The wrong-task fixtures (including *"done — I skipped the gates"*, which is misdirection wearing
+**D12. Misdirection is out of scope for this detector; concluded work is not** — Fable, then an
+interim Sol finding that its final answer withdrew once it saw the labelled set already did this. The wrong-task fixtures (including *"done — I skipped the gates"*, which is misdirection wearing
 a debrief) are `out-of-scope-for-this-detector`, **excluded from precision and recall**, and the
 eval says *"N of M labelled items are misdirection; this stage detects 0 of them by design."*
 Concluded work, background review, rhetorical questions and permission defects are scored. A debrief
@@ -167,7 +170,7 @@ optional offer is a negative.
 read (after whitespace normalisation) — `readTurnTail` has already cut after the last user prompt, so
 a proposal cannot quote Greg's own sentence back as the agent's. Fable's first named risk.
 
-**D14. `reach` is a live projection, never cached** — Sol's F9. Recomputed each pass and not part of
+**D14. `reach` is a live projection, never cached** — Sol's F8. Recomputed each pass and not part of
 the proposal id: `greg`, `self` → available; `fable` → unavailable when the checkpoint's usage
 verdict is `limited`, else not-checked; `sol`, `overseer` → not-checked, because the checkpoint
 carries no Codex reading. **Missing capability is shown, never substituted**: a Fable question whose
@@ -181,11 +184,10 @@ export type ProposalRecipient = "sol" | "fable" | "greg" | "overseer" | "self";
 export type ProposalReach =
   | { kind: "available" } | { kind: "unavailable"; why: string } | { kind: "not-checked"; why: string };
 export type ProposalAuthor = { kind: "model"; model: string; via: "overseer" };
-export type ProposalMark = { verdict: "right" | "wrong"; at: string; why: string | null; recordedVia: "local-cli" };
 export type AttentionProposal =
   | { kind: "proposed"; id: string; recipient: ProposalRecipient; reason: string; asks: string;
-      by: ProposalAuthor; reach: ProposalReach; mark: ProposalMark | null }
-  | { kind: "unplaced"; id: string; why: string; by: ProposalAuthor; mark: ProposalMark | null }
+      by: ProposalAuthor; reach: ProposalReach }
+  | { kind: "unplaced"; id: string; why: string; by: ProposalAuthor }
   | { kind: "off"; why: string }            // proposals not enabled (the default)
   | { kind: "not-reached"; why: string }    // stale verdict not yet re-read, budget, cooldown
   | { kind: "not-applicable" }              // a dialog: observed, answered in the detail pane
@@ -197,8 +199,8 @@ export type AttentionProposal =
       stopped: { kind: "exhausted" | "cooling-down"; why: string; until: string } }
 ```
 
-`id` is `fingerprint + prompt version`, so a mark survives republishing and dies with the content it
-was about.
+`id` is `fingerprint + prompt version`, so a proposal keeps its identity across republishing and a
+later stage's mark or veto can be keyed to it. No `mark` field in v1 (D10).
 
 ## Stages
 
@@ -233,7 +235,7 @@ fixes get one narrow 20-minute check, then Fable, and no further round.
 - [ ] `reach` projected each pass from the checkpoint's usage (D14).
 - [ ] `AttentionPanel.tsx`: the proposal under the `why`; the `asks` quote in place of the
       position-chosen excerpt when present (which fixes the panel's standing *"taken by position, not
-      by search"* defect); attribution; the mark when there is one.
+      by search"* defect); attribution; *"nothing has been sent"*.
 - [ ] `src/spend-declarations.ts`: the row amended with the day ceiling and the widened prompt.
 
 ### Stage 3 — the evaluation, and the answer
@@ -249,7 +251,6 @@ fixes get one narrow 20-minute check, then Fable, and no further round.
       and the reports comparison (D11): how many sessions waiting on Greg had said so in a report.
 - [ ] The answer: does the model beat explicit reports at reasonable cost? If not, say so, leave
       proposals off, keep manual triage — a legitimate ending.
-- [ ] `scripts/overseer-proposals.ts mark` (D10) — cuttable.
 - [ ] Docs: the owning doc for the inbox gets the proposal and the budget; overseer.md's gate 4
       **NOT BUILT** block is narrowed to what is still unbuilt (the scheduler and recovery are not on
       the ledger) — overseer.md is a rule doc, so this goes to the Overseer as a proposed edit rather
@@ -257,19 +258,22 @@ fixes get one narrow 20-minute check, then Fable, and no further round.
 
 ## The review
 
-GPT Sol, plan review, 2026-09-10, read-only: refused on F1–F7 (P1), with F8–F9 (P2).
+GPT Sol, plan review of `6638d2bd` (rechecked against `ac02c4c9`), 2026-09-10, read-only and
+independent (it ran `tests/fleet-attention.test.ts` itself, 24/24): refused on F1–F6 and F9 (P1),
+with F7–F8 (P2). Answer: [plan-review-sol](260910f-bounded-judgement-proposals-for-the-attention-inbox-plan-review-sol.md).
 
 | ID | Finding | Disposition |
 |---|---|---|
 | F1 | the budget has a CLI bypass and a crash gap | **fixed** — D4; lock held for reserve and settle, not across the request (argued there) |
-| F2 | an additive `judgement` field is ignored by old consumers | **fixed** — D6, a `limited` arm; the second half (old `list` read as unknown) declined, argued there |
-| F3 | the proposal cache could store failures | **fixed** — D3; moot for a second cache after F8, and the existing type enforces it |
-| F4 | `by`, report-derived and marks have no trustworthy speaker | **fixed** — D9, D10; report-derived proposals are gone (D11) |
-| F5 | `same-verified-run` at receipt does not join to the current run | **fixed by removal** — D11; the runtime shortcut is dropped rather than repaired |
+| F2 | an additive `judgement` field is ignored by old consumers | **fixed** — D6, a `limited` arm and no field on `list`; the second half (old `list` read as unknown) declined, argued there |
+| F3 | the proposal cache could store failures | **fixed** — D3; moot for a second cache after F7, and the existing type enforces it |
+| F4 | `by`, report-derived and marks have no trustworthy speaker | **fixed** — D9; report-derived proposals and marks are gone (D11, D10) |
+| F5 | `same-verified-run` at receipt does not join to the current run | **fixed by removal** — D11; Sol's answer agrees removal resolves it |
 | F6 | `K/N` cannot measure avoided waiting | **fixed** — Stage 3 wording |
-| F7 | concluded work wrongly out of scope | **fixed** — D12 |
-| F8 | the second call costs more than it buys | **accepted** — D1 |
-| F9 | cached `reach` goes stale | **fixed** — D14 |
+| F7 | the second call costs more than it buys | **accepted** — D1 |
+| F8 | cached `reach` goes stale | **fixed** — D14 |
+| F9 | the veto log has multiple writers and no write protocol | **accepted, by Sol's own fallback** — D10: live marks deferred, judgements in the evaluation artefact |
+| — | (interim) concluded work wrongly out of scope | withdrawn by Sol in its final answer; the split is D12 |
 | note | `proposals.jsonl` unnecessary | **accepted** — dropped |
 
 ## Status
