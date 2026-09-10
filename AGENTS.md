@@ -293,8 +293,9 @@ nothing else has a copy of.
   across the whole tree for six hours. Do not reinvent it.
   [version-control.md](docs/project/version-control.md) has the accidents and the reproductions.
 - **A merge conflict is a proposal before it is an edit.** Read the history behind both sides, keep
-  the best of both, and show Greg the proposal before you change anything —
-  [git-resolve-merge-conflicts.md](docs/reusable/git-resolve-merge-conflicts.md).
+  the best of both, write the proposal down, and resolve it yourself — with GPT Sol or Fable when
+  unsure. It goes to Greg only if it is a real product trade-off neither side can keep (Greg,
+  2026-09-10) — [git-resolve-merge-conflicts.md](docs/reusable/git-resolve-merge-conflicts.md).
 - **Commit when the work is done**, or when you reach a good stopping point, without being asked —
   **and push it.** Unpushed work is invisible to the other machine and to every check that asks
   whether it landed.
