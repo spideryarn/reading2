@@ -106,6 +106,22 @@ alive, never a 200 from the port — a port can be answered by somebody else's s
 - [ ] **Attribution at the boundary**: a refused action's log line names the real peer
       (`from=127.0.0.1`), not `-`.
 - [ ] Mutation for each: remove the property in the source, watch its test go red, put it back.
+- [ ] **Roadmap checkbox 4, cited rather than rebuilt** (component and route level; F8):
+      hostile text renders as text — `tests/fleet-web.test.tsx` *"…onerror…"* at `:5094`
+      (transcript turn), `:3949` (approval material), `:2176` (row title); an unsupported or
+      unclassifiable dialog acquires no answer path — `tests/fleet-steer.test.ts:1099` *"refuses a
+      dialog it could not classify, exactly as if it were a permission"*, `:599` *"refuses a dialog
+      the parser no longer recognises"*, `tests/fleet-web.test.tsx:3961` *"refuses to offer an
+      answer when the material could not be read"*; unknown action variants — the server refuses
+      any id not in its own catalogue at the body boundary (`tests/fleet-actions.test.ts:110`
+      *"refuses an id that is not one of ours"*), and a variant that does not fit its slot is
+      explained and not offered (`tests/fleet-web.test.tsx:6441`, a broadcast addressed to a
+      session). **One nuance worth keeping:** a catalogue entry the *client* has never heard of is
+      deliberately still drawn and pressable (`tests/fleet-web.test.tsx:6419`), because the server
+      owns the catalogue and is the gate; "disabled" is the server's refusal, not the button's.
+- [ ] One real-browser check against the composed child (a subagent, Playwright on the box): the
+      built page renders under its CSP with no violation in the console, and a page that frames it
+      is refused.
 
 ### Stage 2 — fix what Stage 1 shows, red first
 
@@ -139,6 +155,28 @@ an owner check (the widening's precondition, Greg's); token authentication (the 
 every same-user agent could read the token); the action routes' behaviour (session
 `action-receipts`); anything in `tools/overseer/` or `tools/fleet/web/src/`.
 
+## Plan review (GPT Sol, 2026-09-10) and what was done with it
+
+Sol refused the first draft (`6f2aa690`) with ten findings, one reasoned P0:
+[answer](260910f-fleet-access-review-composed-server-plan-review-answer.md),
+[findings](260910f-fleet-access-review-composed-server-plan-review-answer-findings.md). It confirmed
+the rebinding diagnosis and the shape of the fix (*"a global pre-routing authority check is the
+right fix shape"*). Dispositions:
+
+| ID | Finding | Disposition |
+|---|---|---|
+| F9 P0 | Positive same-origin controls on real routes could start an agent (`gjd-remote`) or call OpenRouter (`/api/transcribe`) | **Taken.** Every positive control sends a schema-invalid body that the route refuses with 400 before any receipt, tmux, launcher, write or fetch — the route line is cited in the test. Enable flags forced off; `FLEET_NEW_DIR*`, `GJD_REMOTE_*`, `CLAUDE_CONFIG_DIR`, `XDG_CONFIG_HOME` cleared or redirected; a sentinel fails the file on any launch or provider-attempt log line. |
+| F2 P1 | A rebound `Host`+`Origin` cannot be both the routes' 403 and the global guard's 421, and after the guard it proves nothing about a route | **Taken.** Two matrices: hostile `Host` (global refusal), and allowed `Host` with hostile, missing or `null` `Origin` (each route's 403). Each route's origin call mutated independently. |
+| F3 P1 | The `Host` test named only `/api/state` | **Taken.** Data-driven over the shell, an asset, state, messages, live, a route-module GET, a write, an unknown path, and a missing `Host`. |
+| F4 P1 | Only two of four inline clauses tested; `HEAD /api/live` would subscribe forever | **Taken.** `/api/live` is `GET` only; the other three `GET`/finite `HEAD`; every clause tested and mutated. |
+| F5 P1 | The other-interface bind test could pass vacuously | **Taken.** Witness `127.0.0.2`, proven reachable by a control listener first; fails, never skips, if it is not. |
+| F1 P1 | `addressableHost` refuses the MagicDNS short name `spideryarn-box` a phone may use | **Taken, by widening the predicate to single-label names** (no dot, `[a-z0-9-]` only). A rebinding page must be served from a name the attacker controls in public DNS, which always has a dot. This also lets the *write* routes answer to the short name, which they refused. The before/after smoke through the ssh forward and the tailnet URL needs the live dashboard restarted, which is the Overseer's; the commands are in the debrief. |
+| F10 P2 | Bare `--import tsx` fails from a temp cwd (Sol reproduced it) | **Taken.** The loader is resolved to an absolute path in the parent. |
+| F7 P1 | The composed log test proves the peer address, not receipt/speaker attribution | **Renamed** to *audit source*. **The receipt half is overruled on scope** — see F6. |
+| F6 P1 | The roadmap asks to *prove* the page's queue is the drainer's; the plan left it source-level | **Overruled on scope, and sent to the Overseer.** Both F6 and F7's receipt half need a request that reaches a real target: either a session the collector will list on an isolated tmux server (a Claude process tree the collector recognises), or a composition seam in `routes-actions.ts`, which is the `action-receipts` session's file and not this stage's. The receipt actor derivation is tested at the route by that session's work (`receipt-journal.ts`, `routes-steer.ts:1215`). The roadmap's checkbox 3 stays unticked. |
+| F8 P1 | Two of checkbox 4's three properties were dropped, and the acceptance names a browser boundary | **Partly taken.** The existing witnesses for all three are cited under Stage 1. One real-browser check against the composed child: the built page renders under its CSP with no violation, and a page that frames it is refused. A hostile string *through* the composed server needs a listed session, the same obstacle as F6, so that stays at the component level. |
+
 ## Status
 
-Plan written 2026-09-10; not yet reviewed.
+Plan written 2026-09-10 and revised after Sol's review; Stages 1 and 2 are being implemented by an
+Opus subagent.
