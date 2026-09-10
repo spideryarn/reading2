@@ -557,11 +557,12 @@ describe("the card, against its own clock", () => {
     expect(screen()).toContain("this window reset at");
     expect(screen()).toContain("so its cached number describes nothing");
     /* The window that has NOT passed still shows its number: the rule is about
-       a void reading, not about hiding the cache. Both forms are on screen —
-       the producer's `41% used`, and the `59% left` the reader actually asked
-       for — so the derived number can be checked against the source one. */
-    expect(screen()).toContain("41%");
-    expect(screen()).toContain("59% left");
+       a void reading, not about hiding the cache. **One form only, and it is
+       the producer's** — Greg, 2026-09-09: *"always & only say X% used (and
+       leave it to the user that 100-X% is remaining)"*. The complement used to
+       be the headline with the producer's number beneath it. */
+    expect(screen()).toContain("41% used");
+    expect(screen()).not.toContain("59% left");
   });
 
   it("does not invent a severity of its own for a window the verdict calls fine", () => {
@@ -612,7 +613,7 @@ describe("the card, against its own clock", () => {
     });
     draw(feed, BASE);
     const value = container.querySelector('[data-slot="stat-value"]');
-    expect(value?.textContent).toBe("25% left");
+    expect(value?.textContent).toBe("75% used");
     expect(value?.className).not.toContain("alarm");
     expect(value?.className).not.toContain("needs");
     /* **AND NOT THE REASSURING COLOUR EITHER**, which the first fix got wrong:
@@ -620,7 +621,8 @@ describe("the card, against its own clock", () => {
        colour of a session that is running. On a headroom figure green does not
        read as "measured", it reads as "healthy", so `5% left` would have been
        drawn as good news. A severity claim in the opposite direction is still a
-       severity claim. */
+       severity claim. (The value now reads `75% used` rather than `25% left`;
+       the colour argument is unchanged by which way round the number is.) */
     expect(value?.className).not.toContain("work");
   });
 
@@ -658,11 +660,14 @@ describe("the card, against its own clock", () => {
       },
     });
     draw(feed, BASE);
-    expect(container.querySelector('[data-slot="stat-value"]')?.textContent).toBe("0% left");
+    /* **THERE IS NO COMPLEMENT TO ROUND ANY MORE.** This test was written
+       against `0% left`, which came from `100 - 99.99` and reached the screen
+       once as `0.010000000000005116` (GPT Sol's UL-06). Drawing the producer's
+       own number disposes of the class rather than rounding it away: nothing on
+       this page is arithmetic derived from the reading. */
+    expect(container.querySelector('[data-slot="stat-value"]')?.textContent).toBe("99.99% used");
     expect(screen()).not.toContain("0.0100000");
-    /* The producer's own number survives beside the derived one, so the
-       rounding can be checked rather than trusted. */
-    expect(screen()).toContain("99.99% used");
+    expect(screen()).not.toContain("% left");
   });
 
   it("will not draw another account's percentages under this account's name", () => {

@@ -165,6 +165,23 @@ export function UsageHistory({
     <section className="tw:mt-6">
       <h3 className="tw:text-sm tw:font-medium">The last {WINDOW_HOURS} hours</h3>
 
+      {/* **THE CHART IS NOT THE SECTIONS ABOVE IT, AND SAYS SO.**
+          Added 2026-09-10 with the per-account sections (plan 260910c). Each
+          persisted record carries the ONE account the daemon's usage pass
+          observed, so this chart is a history of the ambient login and not of
+          the registered accounts drawn above.
+
+          **It deliberately names no email.** The first draft of this line said
+          "this chart is greg@rehearsable.ai only", and GPT Sol showed that is
+          false: a `/login` swap inside the window produces several account uuids
+          across the range, and the legend above already distinguishes them by
+          uuid fragment when it happens. Naming one would be a claim about every
+          plotted series that nothing here has checked. */}
+      <p className="tw:mt-1 tw:text-xs tw:opacity-70">
+        History samples only the account the daemon itself observed on each pass, identified by uuid. It does not
+        yet record the per-account sections above.
+      </p>
+
       {/* **"NOTHING RECORDED" MEANS NO RECORDS, NOT NO LINE TO DRAW.** This was
           keyed off `hasPoints`, so a window full of collector failures, an
           unattributed cache, or nothing but named unknown windows and rejections

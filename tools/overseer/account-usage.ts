@@ -361,9 +361,8 @@ function parseWindowCard(value: unknown): UsageWindowCard | null {
 const ROLES: readonly AccountUsageRole[] = ["orchestrator", "pool"];
 const ORIGINS: readonly AccountUsageOrigin[] = ["ambient", "registered"];
 
-function parseSection(value: unknown): AccountUsageSection | null {
-  const raw = record(value);
-  if (raw === null) return null;
+/** The fields every section has, whatever family it is. */
+function parseCommon(raw: Record<string, unknown>): Omit<AccountUsageSection, "family" | "reading"> | null {
   const name = text(raw.name);
   const takenAt = instant(raw.takenAt);
   const role = ROLES.find((candidate) => candidate === raw.role);
@@ -373,50 +372,66 @@ function parseSection(value: unknown): AccountUsageSection | null {
   if (raw.displayEmail !== null && displayEmail === null) return null;
   const providerAccountId = raw.providerAccountId === null ? null : text(raw.providerAccountId);
   if (raw.providerAccountId !== null && providerAccountId === null) return null;
-  const common = { name, role, origin, displayEmail, providerAccountId, takenAt };
+  return { name, role, origin, displayEmail, providerAccountId, takenAt };
+}
 
+function parseClaudeReading(
+  reading: Record<string, unknown>,
+): Extract<AccountUsageSection, { family: "claude" }>["reading"] | null {
+  if (reading.kind === "unknown") {
+    const why = text(reading.why);
+    return why === null ? null : { kind: "unknown", why };
+  }
+  if (reading.kind !== "windows" || !Array.isArray(reading.windows)) return null;
+  const windows: UsageWindowCard[] = [];
+  for (const entry of reading.windows) {
+    const parsed = parseWindowCard(entry);
+    if (parsed === null) return null;
+    windows.push(parsed);
+  }
+  return { kind: "windows", windows };
+}
+
+function parseCodexReading(
+  reading: Record<string, unknown>,
+): Extract<AccountUsageSection, { family: "codex" }>["reading"] | null {
+  if (reading.kind === "unknown") {
+    const why = text(reading.why);
+    return why === null ? null : { kind: "unknown", why };
+  }
+  // The buckets are handed back as the Codex collector produced them. This
+  // parser checks the envelope rather than re-deriving a bucket's shape: the
+  // alternative is a fourth hand-written declaration of `CodexUsageBucket`,
+  // which is the thing this split exists to avoid. A bucket that has lost its
+  // interior renders as an empty bucket, which says nothing rather than
+  // something false.
+  if (reading.kind !== "buckets" || !Array.isArray(reading.buckets)) return null;
+  const credits = reading.resetCredits;
+  if (credits !== null && credits !== undefined && (typeof credits !== "number" || !Number.isFinite(credits))) {
+    return null;
+  }
+  return {
+    kind: "buckets",
+    buckets: reading.buckets as CodexUsageBucket[],
+    resetCredits: typeof credits === "number" ? credits : null,
+  };
+}
+
+function parseSection(value: unknown): AccountUsageSection | null {
+  const raw = record(value);
+  if (raw === null) return null;
+  const common = parseCommon(raw);
   const reading = record(raw.reading);
-  if (reading === null) return null;
+  if (common === null || reading === null) return null;
 
   if (raw.family === "claude") {
-    if (reading.kind === "unknown") {
-      const why = text(reading.why);
-      return why === null ? null : { ...common, family: "claude", reading: { kind: "unknown", why } };
-    }
-    if (reading.kind !== "windows" || !Array.isArray(reading.windows)) return null;
-    const windows: UsageWindowCard[] = [];
-    for (const entry of reading.windows) {
-      const parsed = parseWindowCard(entry);
-      if (parsed === null) return null;
-      windows.push(parsed);
-    }
-    return { ...common, family: "claude", reading: { kind: "windows", windows } };
+    const claude = parseClaudeReading(reading);
+    return claude === null ? null : { ...common, family: "claude", reading: claude };
   }
 
   if (raw.family === "codex") {
-    if (reading.kind === "unknown") {
-      const why = text(reading.why);
-      return why === null ? null : { ...common, family: "codex", reading: { kind: "unknown", why } };
-    }
-    // The buckets are handed back as the Codex collector produced them. This
-    // parser checks the envelope rather than re-deriving a bucket's shape: the
-    // alternative is a fourth hand-written declaration of `CodexUsageBucket`,
-    // which is the thing this split exists to avoid. A bucket that has lost its
-    // interior renders as an empty bucket, which says nothing rather than
-    // something false.
-    if (reading.kind !== "buckets" || !Array.isArray(reading.buckets)) return null;
-    const resetCredits =
-      reading.resetCredits === null || reading.resetCredits === undefined
-        ? null
-        : typeof reading.resetCredits === "number" && Number.isFinite(reading.resetCredits)
-          ? reading.resetCredits
-          : undefined;
-    if (resetCredits === undefined) return null;
-    return {
-      ...common,
-      family: "codex",
-      reading: { kind: "buckets", buckets: reading.buckets as CodexUsageBucket[], resetCredits },
-    };
+    const codex = parseCodexReading(reading);
+    return codex === null ? null : { ...common, family: "codex", reading: codex };
   }
 
   return null;

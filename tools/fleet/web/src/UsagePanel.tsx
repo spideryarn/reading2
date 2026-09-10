@@ -88,7 +88,7 @@ function browserMs(at: string, skew: ClockSkew): number | null {
  * would read as "0s ago" for exactly as long as the fault lasted, which is how
  * a reading that stopped being taken goes on looking current.
  */
-function ago(at: string, asOf: number, skew: ClockSkew): { ms: number | null; text: string } {
+export function ago(at: string, asOf: number, skew: ClockSkew): { ms: number | null; text: string } {
   const ms = browserMs(at, skew);
   if (ms === null || asOf - ms < 0) return { ms: null, text: "at a time this page cannot read" };
   return { ms: asOf - ms, text: `${formatDuration(asOf - ms)} ago` };
@@ -293,13 +293,22 @@ function AccountLine({ account }: { account: UsageSummary["account"] }): ReactNo
  * non-answers beside it. The reader's question is *how much headroom is there*;
  * `StatCard` makes the answer the biggest thing in its box.
  *
- * ## `% LEFT`, NOT `% USED`, AND BOTH ARE ON SCREEN
+ * ## `% USED`, AND ONLY THAT — GREG'S CALL, AND IT REVERSED AN EARLIER ONE
  *
- * The wire carries `utilizationPercent` — how much is *gone*. The reader is
- * asking how much is *left*, and a card answering the complement of the
- * question makes them do the subtraction. So the value slot is `42% left` and
- * the evidence line under it says `58% used`, which keeps the producer's own
- * number visible and checkable rather than replacing it. GPT Sol's S2-01.
+ * The wire carries `utilizationPercent` — how much is *gone*. This card used to
+ * headline the complement, `58% left`, with `42% used` on the evidence line
+ * under it: GPT Sol's S2-01, on the reasoning that the reader is asking how
+ * much is left and should not have to do the subtraction.
+ *
+ * Greg overruled it on 2026-09-09, and this is his wording:
+ *
+ * > actually I think it is better to always & only say X% used (and leave it to
+ * > the user that 100-X% is remaining)
+ *
+ * Two numbers for one fact meant working out which way round they were on every
+ * glance. So the producer's own number is the headline and there is no derived
+ * arithmetic on the page at all. Landed 2026-09-10 with the per-account
+ * sections, which follow the same rule.
  *
  * ## EVERY WAY THIS CAN FAIL TO BE A NUMBER IS A DIFFERENT WORD
  *
@@ -368,23 +377,45 @@ function windowStat(window: UsageWindowCard, asOf: number, skew: ClockSkew): {
       tone: "unknown",
     };
   }
-  /* **ROUNDED, BECAUSE THE COMPLEMENT OF A DECIMAL IS UGLY.** Both parsers
-     require a finite value in [0, 100], so `left` can be neither negative nor
-     NaN nor over 100 — but `100 - 99.99` is `0.010000000000005116`, and that
-     reaches the screen as the answer to "how much is left". GPT Sol's UL-06.
-     One decimal place, then trailing zeroes dropped, so 42 stays `42` and 0.01
-     becomes `0`. A `0% left` that was really 0.01% is the right rounding
-     direction: it does not overstate the headroom. */
-  const left = Number((100 - window.utilizationPercent).toFixed(1));
+  /* **"X% USED", AND ONLY THAT — Greg, 2026-09-09:**
+
+       > actually I think it is better to always & only say X% used (and leave
+       > it to the user that 100-X% is remaining)
+
+     This card said `58% left` with `42% used` underneath it until 2026-09-10.
+     Two numbers for one fact, and the reader has to work out which way round
+     they are every time. The producer's own number is now the headline, so
+     nothing on this page is derived arithmetic a reader has to check.
+
+     That also disposes of the rounding problem the derived number had: both
+     parsers require a finite value in [0, 100], but `100 - 99.99` is
+     `0.010000000000005116`, and that reached the screen as the answer to "how
+     much is left" (GPT Sol's UL-06). There is no complement to round now. */
+  /* **AND A BAR, WHICH THE CODEX CARDS HAD AND THESE DID NOT.** Greg,
+     2026-09-09: *"Can you make the usage/remaining clearer (e.g. with a
+     progress bar filling up or similar)"* — `CodexWindowStat` below has drawn
+     one since it was written and this one never did, so the Claude half of the
+     same page answered his request and the other half did not. Same markup, so
+     the two halves cannot drift.
+
+     `aria-hidden`, because the number beside it already says the same thing and
+     a screen reader reading a decorative bar twice is worse than not reading it. */
+  const barWidth = Math.max(0, Math.min(100, window.utilizationPercent));
   return {
-    value: { kind: "value", text: `${left}% left` },
-    /* The producer's own number stays on screen beside the one derived from it,
-       so a reader can check the arithmetic without leaving the page — and the
-       reset is a DURATION, because that is the form that survives being read in
-       another timezone. The three zoned instants are one tap away, not gone. */
+    value: { kind: "value", text: `${window.utilizationPercent}% used` },
+    /* The reset as a DURATION, because that is the form that survives being
+       read in another timezone. The three zoned instants are one tap away in
+       the tip, not gone. */
     evidence: (
       <>
-        {window.utilizationPercent}% used · resets in {formatDuration(until.ms)}
+        <span>resets in {formatDuration(until.ms)}</span>
+        <span className="tw:mt-2 tw:block tw:h-1 tw:overflow-hidden tw:rounded-full tw:bg-rule" aria-hidden="true">
+          <span
+            data-slot="claude-utilization-bar"
+            className="tw:block tw:h-full tw:bg-current"
+            style={{ width: `${barWidth}%` }}
+          />
+        </span>
       </>
     ),
     /* **NO SEVERITY OF OUR OWN.** The first draft coloured this card by
@@ -415,7 +446,7 @@ function windowStat(window: UsageWindowCard, asOf: number, skew: ClockSkew): {
 }
 
 /** One cached window as a card, with its zoned reset instant in the tip rather than on the page. */
-function WindowStatCard({ window, asOf, skew }: { window: UsageWindowCard; asOf: number; skew: ClockSkew }): ReactNode {
+export function WindowStatCard({ window, asOf, skew }: { window: UsageWindowCard; asOf: number; skew: ClockSkew }): ReactNode {
   const { value, evidence, tone } = windowStat(window, asOf, skew);
   return (
     <StatCard
@@ -669,11 +700,14 @@ function Reading({
   coordinatorWrittenAt,
   asOf,
   skew,
+  headroomShownAbove = false,
 }: {
   summary: UsageSummary;
   coordinatorWrittenAt: string;
   asOf: number;
   skew: ClockSkew;
+  /** The live per-account sections are on this page, so the cached copy is not repeated. */
+  headroomShownAbove?: boolean;
 }): ReactNode {
   const head = headline(summary, asOf, skew);
   const reading = ago(summary.collectedAt, asOf, skew);
@@ -726,6 +760,27 @@ function Reading({
           rewrite dropped the heading, on the grounds that each card now carries
           its own label; the existing suite caught it, which is what it is for.
           A tooltip saying "a hint, not ground truth" is not the page saying it. */}
+      {/* **ONE PLACE PER SUBSCRIPTION, AND ON THE USAGE TAB IT IS NOT HERE.**
+
+          These are the `~/.claude.json` CACHE's percentages for this account.
+          Since 2026-09-10 the Usage tab draws a live per-account section for the
+          same login above this card (plan 260910c), and the two are the same
+          source at two moments — the cache is itself populated from
+          `/api/oauth/usage`. Drawing both puts two numbers for one subscription
+          on one page, minutes apart, each undermining the other. The live one is
+          strictly fresher, so it wins and this block says where to look.
+
+          It is NOT removed: the Overseer tab mounts this same card with no
+          sections beside it, and there the cache is the only headroom reading
+          there is. A prop rather than a second component, so the two mounts
+          cannot drift. GPT Sol's coherence finding on this plan. */}
+      {headroomShownAbove ? (
+        <p className="tw:mt-3 tw:text-note tw:text-ink-faint">
+          This account&rsquo;s headroom is in the live per-account section above; the cached copy is not repeated
+          here.
+        </p>
+      ) : (
+      <>
       <h3 className="tw:mt-3 tw:text-label tw:font-semibold tw:tracking-widest tw:text-ink-faint tw:uppercase">
         Cached headroom
       </h3>
@@ -830,6 +885,8 @@ function Reading({
           />
         ) : null}
       </div>
+      </>
+      )}
 
       {/* ------------------------------------------------------- 3 · WHY --
           The producer's reasons stay on the page rather than going into a
@@ -977,6 +1034,7 @@ function ClaudeUsageCard({
   now,
   receivedAt,
   skew,
+  headroomShownAbove = false,
 }: {
   /** The reading, or `null` before any payload has arrived. */
   usage: UsageView | null;
@@ -992,6 +1050,8 @@ function ClaudeUsageCard({
    * prints a time that is not the time. See the header, and `parseUsage`.
    */
   skew: ClockSkew;
+  /** Passed straight through to `Reading` — see `UsageCard`. */
+  headroomShownAbove?: boolean;
 }): ReactNode {
   /* ONE ANCHOR FOR THE WHOLE CARD, so two ages on it cannot be judged against
      two different readings of ours. OverseerPanel.tsx § `ageMs`. */
@@ -1007,6 +1067,7 @@ function ClaudeUsageCard({
           coordinatorWrittenAt={usage.coordinatorWrittenAt}
           asOf={asOf}
           skew={skew}
+          headroomShownAbove={headroomShownAbove}
         />
       </Card>
     );
@@ -1201,7 +1262,7 @@ function bucketWindowCards(bucket: CodexBucketView, asOf: number, skew: ClockSke
   );
 }
 
-function CodexBucketSection({
+export function CodexBucketSection({
   bucket,
   general,
   asOf,
@@ -1367,18 +1428,39 @@ export function UsageCard({
   now,
   receivedAt,
   skew,
+  headroomShownAbove = false,
 }: {
   usage: UsageView | null;
   codex: CodexObservationView | null;
   now: number;
   receivedAt: number | null;
   skew: ClockSkew;
+  /**
+   * **The live per-account sections are on this page.**
+   *
+   * True only on the Usage tab, where `AccountUsageSections` draws every
+   * subscription's live headroom above this card. It suppresses the two things
+   * that would then be on screen twice — this account's cached windows, and the
+   * whole Codex card — leaving the card to carry what only it has: the
+   * transcript scan, the 429s, the coverage and the verdict.
+   *
+   * False on the Overseer tab, where this card stands alone and the cache is
+   * the only headroom reading there is. One component, two mounts, one prop —
+   * so the two can never disagree about the same bytes.
+   */
+  headroomShownAbove?: boolean;
 }): ReactNode {
   const asOf = receivedAt === null ? now : Math.max(now, receivedAt);
   return (
     <>
-      <ClaudeUsageCard usage={usage} now={now} receivedAt={receivedAt} skew={skew} />
-      <CodexUsageCard codex={codex} asOf={asOf} skew={skew} />
+      <ClaudeUsageCard
+        usage={usage}
+        now={now}
+        receivedAt={receivedAt}
+        skew={skew}
+        headroomShownAbove={headroomShownAbove}
+      />
+      {headroomShownAbove ? null : <CodexUsageCard codex={codex} asOf={asOf} skew={skew} />}
     </>
   );
 }

@@ -29,6 +29,7 @@ import { QueuePanel } from "./QueuePanel";
 import { QuestionsPanel } from "./QuestionsPanel";
 import { ReadinessPanel } from "./ReadinessPanel";
 import { SessionsPanel } from "./SessionsPanel";
+import { AccountUsageSections } from "./AccountUsageSections";
 import { UsageCard } from "./UsagePanel";
 import { UsageHistory, useUsageHistoryView } from "./UsageHistory";
 import { httpActionsApi, type ActionsApi } from "./actions-client";
@@ -409,12 +410,39 @@ export function App({
             the history route above both mounts. */}
         {mode === "usage" ? (
           <div className="tw:mx-auto tw:max-w-3xl">
+            {/* **THE PER-ACCOUNT SECTIONS COME FIRST, AND THAT ORDER IS THE
+                ANSWER TO THE QUESTION THE TAB EXISTS FOR.** *Which subscription
+                still has room* is a question about every login on the box; the
+                card below answers it in depth for exactly one of them, the
+                Overseer's own. Putting the deep single-account card first made
+                the page look like it was about one subscription, which is what
+                it was about until 2026-09-10 and is no longer.
+
+                Plan 260910c, and Greg's ask: *"sections for each Claude and
+                Codex account-subscription, summarising 5d and weekly X% used
+                and when they reset"*. */}
+            <AccountUsageSections
+              view={feed.state === null ? { kind: "not-asked" } : feed.state.accountUsage}
+              asOf={now}
+              skew={feed.state?.clockSkew ?? CLOCK_SKEW_UNMEASURED}
+            />
+            {/* **The same `UsageCard` the Overseer tab draws, mounted a second
+                time rather than copied**, and kept here for what the sections
+                above cannot carry: the transcript scan, the 429s it found, the
+                coverage that makes their absence believable, and the verdict.
+                None of those can be made per-account honestly — a rejection in
+                a transcript carries no account id at all. */}
             <UsageCard
               usage={feed.state === null ? null : feed.state.usage}
               codex={codexUsage}
               now={now}
               receivedAt={feed.receivedAt}
               skew={feed.state?.clockSkew ?? CLOCK_SKEW_UNMEASURED}
+              /* The sections above own every subscription's headroom on this
+                 tab, so the card drops its cached copy and its Codex half
+                 rather than drawing either a second time. The Overseer tab's
+                 mount passes nothing and keeps both. */
+              headroomShownAbove
             />
             {/* **The history is on its OWN route, not in the snapshot.** That
                 route is active only on Usage and Overseer: the chart needs it
