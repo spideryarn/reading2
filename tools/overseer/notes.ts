@@ -90,8 +90,15 @@ export const NOTES_FILE = "daemon.jsonl";
  *    as it was before stamps existed, and an alarm about that would mean
  *    nothing. docs/plans/260910d § The daemon.
  */
-export type OverseerCondition = "sse-stream" | "poll" | "snapshots" | "freshness" | "baseline" | "collector" | "ordering";
+export type OverseerCondition = "sse-stream" | "poll" | "snapshots" | "freshness" | "baseline" | "collector" | "ordering" | "reports";
 
+/*
+ * `reports` — **the work-report drain threw**, so submissions are waiting in the
+ * inbox and nothing is recording them. A condition rather than a new note kind:
+ * it opens on a throw and closes on the next pass that completes, which is the
+ * shape of a condition, and a refused or pending ITEM is not one — those are in
+ * the drain's own outcome and in `report-refused/`. docs/plans/260910e.
+ */
 const CONDITIONS: Record<OverseerCondition, true> = {
   "sse-stream": true,
   poll: true,
@@ -100,6 +107,7 @@ const CONDITIONS: Record<OverseerCondition, true> = {
   baseline: true,
   collector: true,
   ordering: true,
+  reports: true,
 };
 
 /**

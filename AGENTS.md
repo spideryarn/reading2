@@ -96,6 +96,7 @@ listed here; the names under each are files in `docs/project/`.
   a session actually costs) ·
   `overseer.md` (the runbook the Overseer itself reads: its four gates, and its standing jobs) ·
   `overseer-queue.md` (the deferred work the Overseer may pick up in a lull, and what each waits on) ·
+  `work-reports.md` (an agent's progress, blocks, decisions and completion, recorded as claims) ·
   `fleet-dashboard-modes.md` (adding a tab to the dashboard: six places in three files, two of them
   checked by nothing) ·
   `fleet-recent-messages.md` (every agent's messages in one feed, and what makes "the last N" a

@@ -15,6 +15,7 @@ import { groupUsageIncidents } from "../fleet/usage-feed.js";
 import { zonedLine } from "../fleet/zones.js";
 import type { OverseerEvent } from "./diff.js";
 import { splitJsonl } from "./jsonl.js";
+import { describeAge } from "./format-age.js";
 import { describeRuleOutcome } from "./rules.js";
 import { describeNote, openConditions, readNotes, type DaemonNote } from "./notes.js";
 import {
@@ -388,14 +389,9 @@ function describeStatusAge(since: StatusSince, nowMs: number): string {
   }
 }
 
-export function describeAge(ms: number): string {
-  if (ms < 0) return "in the future";
-  const seconds = Math.round(ms / 1000);
-  if (seconds < 90) return `${seconds}s`;
-  const minutes = Math.round(seconds / 60);
-  if (minutes < 90) return `${minutes}m`;
-  return `${Math.round(minutes / 60)}h`;
-}
+// Compatibility for callers that imported this from the renderer before the
+// schedule preview needed the formatter in the daemon's import graph.
+export { describeAge } from "./format-age.js";
 
 export function when(iso: string): string {
   return zonedLine(iso) ?? `${iso} (a time this tool cannot read)`;

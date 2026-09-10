@@ -69,12 +69,14 @@ import {
 } from "./diff.js";
 import type { Arming, AuthorisedJob, SpawnJob } from "./jobs.js";
 import { conditionTracker, describeNote, NOTES_FILE, openNoteLog, type DaemonNote, type NoteLog } from "./notes.js";
+import type { ReportDrainOutcome } from "./reports.js";
 import type { ProposingRuleWork } from "./rule-protocol.js";
 import { deriveDispositions, observationOf, producerRunOf, withRecoveryCandidates } from "./recovery.js";
 import { drainRecoveryInbox, pendingRecoveryRequestCount } from "./recovery-inbox.js";
 import { buildRecoveryView, evidenceDeps, type EvidenceDeps, type InventoryTrust } from "./recovery-view.js";
-import { resolveEvidence, type ReadDocument } from "./schedule-plan.js";
-import { describeReport, schedulerStandingOf, schedulerTick, type LostRecord, type RuleRun } from "./scheduler.js";
+import { resolveEvidence, type DocumentEvidence, type ReadDocument } from "./schedule-plan.js";
+import { schedulePreview, writeSchedulePreview } from "./schedule-preview.js";
+import { describeReport, schedulerStandingOf, schedulerTick, type HeldCapabilities, type LostRecord, type RuleRun } from "./scheduler.js";
 import {
   parseAttempt,
   parseObservation,
@@ -505,6 +507,47 @@ export type DaemonOptions = {
    * heartbeat, and until GPT Sol's C1 nothing anywhere could tell them apart.
    */
   schedulerDetail?: string;
+  /**
+   * **THE LIST THE SCHEDULER WOULD RUN, FOR THE SCHEDULE PREVIEW — and nothing
+   * this daemon can dispatch from.** Plan 260910e § D6.
+   *
+   * Separate from `jobs` because `jobs` is absent whenever the scheduler is off,
+   * and off is exactly when a person most needs to see what arming would do.
+   * It carries the definitions, how to read their documents, and facts about
+   * this process — never a spawner or a rule runner, so no code path from here
+   * can start anything. On every checkpoint tick the daemon plans these with
+   * the shared planner against its in-memory ledger and writes
+   * `schedule.json` (`schedule-preview.ts`).
+   *
+   * **Absent means this daemon was given no job list**, and the file it writes
+   * says exactly that — not no file, which is what a daemon predating this
+   * build leaves, and a reader tells the two apart.
+   */
+  preview?: {
+    /** The full list — standing jobs and rules — whatever the arming. */
+    definitions: readonly AuthorisedJob[];
+    /** Read every session job's documents afresh each checkpoint, as the tick does. */
+    readDocument: ReadDocument;
+    /** What this process holds, matching `jobs`: a disarmed daemon holds neither. */
+    capabilities: HeldCapabilities;
+    /** `schedule-preview.ts` § `listRevision` of `definitions`, so a reader can compare its checkout's. */
+    listRevision: string;
+    /** The arming `jobs` would carry — `unknown` on a disarmed daemon, which the preview renders as "after it is armed". */
+    arming: Arming;
+    /** The launch spacing an armed scheduler would apply, so the preview's spacing verdicts are the real ones. */
+    launchSeparationMs: number;
+  };
+  /**
+   * WORK REPORTS, drained into `reports.jsonl` on their own timer. Plan 260910e.
+   *
+   * Injected, like the passes above, because the drain shells out to git and
+   * this file does not. It is handed `store.register` — the live one — so its
+   * execution comparison is against what this daemon verified, which is the
+   * whole reason the daemon rather than the CLI is the writer. It is synchronous
+   * and relies on this process holding `overseer.lock` for its exclusion, so
+   * there is nothing to await on the way out.
+   */
+  reports?: { intervalMs?: number; drain: (register: SessionRegister) => ReportDrainOutcome };
 };
 
 /**
@@ -552,6 +595,9 @@ export const USAGE_INTERVAL_MS = 300_000;
  * Overseer from a quiet one. Astra's A17, the same argument the usage scan makes.
  */
 export const JOBS_INTERVAL_MS = 30_000;
+
+/** How often the report inbox is drained: 30 s, which is the "within about 30 s" `overseer report` promises. */
+export const REPORTS_INTERVAL_MS = 30_000;
 
 /**
  * **Fifteen seconds.** How long a shutdown waits for rule runs still in flight.
@@ -785,7 +831,7 @@ export async function runOverseer(options: DaemonOptions): Promise<DaemonOutcome
   // start would have the tick refusing its job while every checkpoint went on
   // saying ARMED. So it is made of the same fresh reading the tick uses, and
   // `at` is when this checkpoint decided it.
-  const schedulerStandingNow = (): StoredScheduler =>
+  const schedulerStandingNow = (evidence?: DocumentEvidence): StoredScheduler =>
     schedulerStandingOf({
       jobs:
         options.jobs === undefined
@@ -793,15 +839,19 @@ export async function runOverseer(options: DaemonOptions): Promise<DaemonOutcome
           : {
               definitions: options.jobs.definitions,
               held: { session: options.jobs.spawn !== undefined, rules: options.jobs.rules !== undefined },
-              evidence: resolveEvidence(options.jobs.definitions, options.jobs.readDocument),
+              evidence: evidence ?? resolveEvidence(options.jobs.definitions, options.jobs.readDocument),
             },
       detail: options.schedulerDetail,
       at: now().toISOString(),
     });
-  const checkpointUpdate = (): CheckpointUpdate => ({
+  // THE HEADLINE CAN BE HANDED IN, so the checkpoint and the schedule preview
+  // written on the same tick carry the same one rather than two readings a
+  // moment apart. Defaulted, because the checkpoint written from `take()` has
+  // no preview beside it to agree with.
+  const checkpointUpdate = (scheduler: StoredScheduler = schedulerStandingNow()): CheckpointUpdate => ({
     lastGoodSnapshotAt,
     tick: true,
-    scheduler: schedulerStandingNow(),
+    scheduler,
     // THE DEADLINE, NOT THE CADENCE, and written on every tick because
     // `refreshMs` moves when a producer says so. `overseer-watchdog.ts` reads
     // this instead of computing its own: sharing `staleAfterMs` stopped the
@@ -830,7 +880,9 @@ export async function runOverseer(options: DaemonOptions): Promise<DaemonOutcome
   // evidence of interruption. A daemon that has accepted nothing in its own life
   // trusts nothing: a restored baseline is a cache of the previous process's
   // bytes, not a current inventory.
-  const evidence = evidenceDeps(options.recovery ?? {});
+  // `recoveryEvidence`, not `evidence`: the schedule preview below and the
+  // ticker use `evidence` for the job documents' reading, a different thing.
+  const recoveryEvidence = evidenceDeps(options.recovery ?? {});
   const viewIntervalMs = options.recovery?.viewIntervalMs ?? RECOVERY_VIEW_INTERVAL_MS;
   let inventory: InventoryTrust = { kind: "untrusted", why: "no inventory has been accepted in this daemon's life yet" };
   // ONE VIEW PASS AT A TIME, and a request during one is remembered rather than
@@ -852,7 +904,7 @@ export async function runOverseer(options: DaemonOptions): Promise<DaemonOutcome
       recovery.replay.kind === "not-run"
         ? { kind: "untrusted", why: `the recovery index is incomplete: ${recovery.replay.why}` }
         : inventory;
-    viewRunning = buildRecoveryView(recovery, viewInventory, { ...evidence, now })
+    viewRunning = buildRecoveryView(recovery, viewInventory, { ...recoveryEvidence, now })
       .then((view) => {
         if (revision !== viewRevision) return;
         lastViewAtMs = now().getTime();
@@ -958,12 +1010,121 @@ export async function runOverseer(options: DaemonOptions): Promise<DaemonOutcome
     log(`recovery inbox pass failed: ${cause instanceof Error ? cause.message : String(cause)}`);
   });
 
+  /*
+   * THE SCHEDULE PREVIEW, written after every checkpoint the ticker lands —
+   * plan 260910e § D6.
+   *
+   * Computed from what THIS process holds: its loaded definitions, the
+   * documents as they are now, its in-memory ledger (`store.occurrences`, which
+   * is ahead of the checkpoint's copy), its arming and its capabilities — the
+   * reason the daemon writes it rather than a reader computing it (Sol's P1-4).
+   * It plans; it never launches. The preview's `launch` answers without
+   * starting anything, and no spawner is in reach of this code.
+   *
+   * **A failure here never stops the daemon, and is said once.** A preview that
+   * cannot be written is a missing convenience, not a fault in the thing the
+   * daemon is for; logging it every 30 seconds would be the alarm fatigue this
+   * area refuses everywhere else. So: one line when it starts failing, one when
+   * it recovers, and the reason carried between them.
+   */
+  const previewOptions = options.preview;
+  let previewFailing: string | null = null;
+  const recordPreviewResult = (written: { ok: true } | { ok: false; why: string }): void => {
+    if (!written.ok) {
+      if (previewFailing === null) log(`schedule preview: NOT WRITTEN — ${written.why}. The daemon carries on; this is said once, and again when it recovers`);
+      previewFailing = written.why;
+      return;
+    }
+    if (previewFailing !== null) {
+      log(`schedule preview: written again (it had been failing: ${previewFailing})`);
+      previewFailing = null;
+    }
+  };
+  const writePreview = (headline: StoredScheduler, evidence: DocumentEvidence | null): void => {
+    let written: { ok: true } | { ok: false; why: string };
+    try {
+      // WHEN ARMED, THESE ARE THE LIVE TICKER'S FACTS. The copies on `preview`
+      // exist for the disarmed case; allowing them to overrule `jobs` would let
+      // one process publish a different arming, capability set or spacing from
+      // the scheduler it actually runs.
+      const capabilities: HeldCapabilities =
+        options.jobs === undefined
+          ? (previewOptions?.capabilities ?? { session: false, rules: false })
+          : { session: options.jobs.spawn !== undefined, rules: options.jobs.rules !== undefined };
+      const list: Parameters<typeof schedulePreview>[0]["list"] =
+        previewOptions === undefined
+          ? { kind: "not-given", why: "the process that started this daemon handed it no job list to preview" }
+          : evidence === null
+            ? (() => {
+                throw new Error("no document evidence was resolved for this checkpoint's preview");
+              })()
+            : {
+                kind: "given",
+                definitions: previewOptions.definitions,
+                listRevision: previewOptions.listRevision,
+                evidence,
+              };
+      written = writeSchedulePreview(
+        root,
+        schedulePreview({
+          instanceId: store.instanceId,
+          now: now(),
+          list,
+          occurrences: store.occurrences,
+          history: store.occurrenceHistory,
+          arming: options.jobs?.arming ?? previewOptions?.arming ?? { kind: "unknown", why: "this daemon was given no job list, so no arming instant either" },
+          launchSeparationMs: options.jobs?.launchSeparationMs ?? previewOptions?.launchSeparationMs ?? 0,
+          capabilities,
+          headline,
+        }),
+      );
+    } catch (cause) {
+      written = { ok: false, why: `the preview could not be computed (${cause instanceof Error ? cause.message : String(cause)})` };
+    }
+    recordPreviewResult(written);
+  };
+
   const ticker = setInterval(() => {
     if (halted() !== null) return;
     checkFreshness();
     recoveryTick();
     if (halted() !== null) return;
-    guard(store.checkpoint(checkpointUpdate()));
+    // ONE DOCUMENT READING, THEN ONE HEADLINE FOR BOTH FILES written this tick.
+    // Re-reading between them lets a file edit in that tiny window produce an
+    // ARMED headline over an unauthorised row (or the reverse).
+    let evidence: DocumentEvidence | null;
+    try {
+      // OVER BOTH LISTS. The headline is judged over `jobs.definitions` and the
+      // preview over its own; a session job in the first and not the second
+      // would have had no reading, and `authorisationUnder` fails closed on
+      // that — a BLOCKED headline over a tick that dispatches. The shipped
+      // wiring makes one a subset of the other; this does not rely on it.
+      // `resolveEvidence` reads each distinct loaded definition once; duplicate
+      // ids with different documents need separate evidence for their rows.
+      evidence =
+        previewOptions === undefined
+          ? null
+          : resolveEvidence(
+              [...(options.jobs?.definitions ?? []), ...previewOptions.definitions],
+              options.jobs?.readDocument ?? previewOptions.readDocument,
+            );
+    } catch (cause) {
+      const why = `the preview's document evidence could not be resolved (${cause instanceof Error ? cause.message : String(cause)})`;
+      // A throwing reader still must not stop the heartbeat. When jobs are live,
+      // make the headline fail closed from an explicit unreadable reading; when
+      // they are off, the headline needs no document evidence at all.
+      const unavailable =
+        options.jobs === undefined
+          ? undefined
+          : resolveEvidence(options.jobs.definitions, (path) => ({ kind: "unreadable", path, why }));
+      const headline = schedulerStandingNow(unavailable);
+      if (!guard(store.checkpoint(checkpointUpdate(headline)))) return;
+      recordPreviewResult({ ok: false, why });
+      return;
+    }
+    const headline = schedulerStandingNow(evidence ?? undefined);
+    if (!guard(store.checkpoint(checkpointUpdate(headline)))) return;
+    writePreview(headline, evidence);
   }, tickMs);
   ticker.unref?.();
 
@@ -1219,6 +1380,31 @@ export async function runOverseer(options: DaemonOptions): Promise<DaemonOutcome
         }, jobOptions.intervalMs ?? JOBS_INTERVAL_MS);
   jobsTicker?.unref?.();
 
+  /*
+   * The report drain, on its own timer. A throw is the `reports` condition — it
+   * opens a note and closes on the next pass that completes — and never stops
+   * the daemon: a broken inbox is a reason to say so, not to stop watching the
+   * fleet. A pass that refused or left something pending says so once.
+   */
+  const reportOptions = options.reports;
+  const reportsTicker =
+    reportOptions === undefined
+      ? null
+      : setInterval(() => {
+          if (halted() !== null) return;
+          const at = now().toISOString();
+          try {
+            const outcome = reportOptions.drain(store.register);
+            write(conditions.restore("reports", at, "a report drain pass completed"));
+            if (outcome.refused > 0 || outcome.pending > 0) {
+              log(`reports: ${outcome.recorded} recorded, ${outcome.refused} refused, ${outcome.pending} pending — ${outcome.notes.join("; ")}`);
+            }
+          } catch (cause) {
+            write(conditions.degrade("reports", at, `the report drain threw: ${cause instanceof Error ? cause.message : String(cause)}`));
+          }
+        }, reportOptions.intervalMs ?? REPORTS_INTERVAL_MS);
+  reportsTicker?.unref?.();
+
   /**
    * Wait for everything this PROCESS is in the middle of — the two passes, and
    * the rule runs.
@@ -1303,6 +1489,7 @@ export async function runOverseer(options: DaemonOptions): Promise<DaemonOutcome
     // it. A dispatched RULE runs in here, and this comment used to cover it too
     // — GPT Sol's SC-1. Those are awaited, bounded, in `settleRuleRuns`.
     if (jobsTicker !== null) clearInterval(jobsTicker);
+    if (reportsTicker !== null) clearInterval(reportsTicker);
   };
 
   try {

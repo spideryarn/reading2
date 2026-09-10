@@ -62,6 +62,13 @@ import {
 
 export const DECISIONS_PATH = "/api/decisions";
 
+/**
+ * The payload's schema, on every arm including the inline refusals. Separate
+ * from the event log's schema: the two boundaries are bumped together here,
+ * but they version different things (plan 260910e, WR-P2).
+ */
+export const DECISIONS_FEED_SCHEMA = 2;
+
 /** One hundred recent history rows show useful review/reversal context without making the record unbounded. */
 export const REVIEWED_HISTORY_LIMIT = 100;
 
@@ -121,6 +128,18 @@ function rowForWire(row: DecisionsProjection["records"][number]): DecisionRow {
         plan: row.record.bearsOn.plan,
       },
       touches: row.record.touches.map((touch) => ({ ...touch })),
+      author:
+        row.record.author.kind === "session"
+          ? { kind: "session", name: row.record.author.name, execution: { ...row.record.author.execution } }
+          : { kind: row.record.author.kind },
+      recommendation: { ...row.record.recommendation },
+      evidence:
+        row.record.evidence.kind === "recorded"
+          ? {
+              kind: "recorded",
+              value: row.record.evidence.value.map((item) => ({ ref: { ...item.ref }, check: { ...item.check } })),
+            }
+          : { kind: "not-recorded" },
     },
     ageMs: row.ageMs,
     pendingReview: row.pendingReview,
@@ -143,7 +162,7 @@ function answerWithRows(
   historyWithheld: number,
 ): DecisionsAnswer {
   return {
-    schema: 1,
+    schema: DECISIONS_FEED_SCHEMA,
     kind: "decisions",
     version: spellVersion(read.view.version),
     path: read.path,
@@ -165,7 +184,7 @@ function unreadable(
   composedAt: string,
 ): Extract<DecisionsFeed, { kind: "unreadable" }> {
   const answer: Extract<DecisionsFeed, { kind: "unreadable" }> = {
-    schema: 1,
+    schema: DECISIONS_FEED_SCHEMA,
     kind: "unreadable",
     composedAt,
     why,
@@ -173,7 +192,7 @@ function unreadable(
   return bodyBytes(answer) <= MAX_DECISIONS_RESPONSE_BYTES
     ? answer
     : {
-        schema: 1,
+        schema: DECISIONS_FEED_SCHEMA,
         kind: "unreadable",
         composedAt,
         why: "the decision record failed with a reason too large for this route's 2097152-byte response limit",
@@ -185,7 +204,7 @@ function oversized(
   composedAt: string,
 ): Extract<DecisionsFeed, { kind: "oversized-unreviewed" }> {
   return {
-    schema: 1,
+    schema: DECISIONS_FEED_SCHEMA,
     kind: "oversized-unreviewed",
     composedAt,
     unreviewedCount,
@@ -202,7 +221,7 @@ function oversizedFile(
   composedAt: string,
 ): Extract<DecisionsFeed, { kind: "oversized-file" }> {
   return {
-    schema: 1,
+    schema: DECISIONS_FEED_SCHEMA,
     kind: "oversized-file",
     composedAt,
     sizeBytes: input.sizeBytes,
@@ -228,7 +247,7 @@ export function decisionsPayload(readers: DecisionsRouteReaders): DecisionsFeed 
   const read = readers.readDecisions();
   if (read.kind === "never-written") {
     return {
-      schema: 1,
+      schema: DECISIONS_FEED_SCHEMA,
       kind: "never-written",
       composedAt,
       why:
@@ -322,7 +341,7 @@ export function makeDecisionsRoute(readers: DecisionsRouteReaders = realReaders(
         });
         res.end(
           JSON.stringify({
-            schema: 1,
+            schema: DECISIONS_FEED_SCHEMA,
             kind: "unreadable",
             composedAt: readers.now().toISOString(),
             why:

@@ -35,6 +35,7 @@ import { fileURLToPath } from "node:url";
 import { collect, COLLECT_DEADLINE_MS, type FleetSnapshot } from "./collect.js";
 import { probeOwner } from "./child.js";
 import { makeAdmission } from "./admission-wiring.js";
+import { makeSchedule } from "./schedule-wiring.js";
 import { parseBinds } from "./config.js";
 import { collectHealthAsync, type HealthReport } from "./health.js";
 import { type HealthTurn } from "./health-history.js";
@@ -54,6 +55,7 @@ import { handleBroadcastRequest } from "./routes-broadcast.js";
 import { nextWaitMs, refreshOnce, singleFlightCollect } from "./refresh.js";
 import { configureNewSessionNotifier, newSessionRoutes } from "./routes-new.js";
 import { makeDecisionsRoute } from "./routes-decisions.js";
+import { reportsApiRoute } from "./routes-reports.js";
 import { ideaQueueRoute } from "./routes-idea-queue.js";
 import { recentFeedRoute } from "./routes-recent-feed.js";
 import { renameRoute } from "./routes-rename.js";
@@ -184,6 +186,9 @@ const retention = makeHealthRetention({
   refreshMs: REFRESH_MS,
 });
 const admission = makeAdmission();
+// The scheduler's preview, as the Overseer daemon last wrote it. A store that
+// cannot be resolved answers `unreadable` rather than stopping the dashboard.
+const schedule = makeSchedule();
 for (const line of retention.lines.log) console.log(line);
 for (const line of retention.lines.error) console.error(line);
 
@@ -733,6 +738,9 @@ function handler(req: import("node:http").IncomingMessage, res: import("node:htt
   // reads nothing but this process's own append-only file.
   if (retention.route.handle(req, res)) return;
   if (admission.route.handle(req, res)) return;
+  // What the Overseer's scheduler would run next. Read-only: one bounded read of
+  // the file the daemon writes each tick, and nothing computed here.
+  if (schedule.route.handle(req, res)) return;
 
   // Whether dev is green, and the day behind it. Read-only, and it serves the
   // snapshot the refresh loop built rather than computing anything here.
@@ -884,6 +892,7 @@ function handler(req: import("node:http").IncomingMessage, res: import("node:htt
   // Things done in Greg's name, for later review. READ-ONLY because this
   // dashboard has no authenticated identity; only the CLI may write reviews.
   if (decisionsApiRoute.handle(req, res)) return;
+  if (reportsApiRoute.handle(req, res)) return;
 
   // Starting a session, which is the other write. `startsWith` mounts it, but
   // the route 404s any path that is not exactly this one, so the prefix cannot

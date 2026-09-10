@@ -3251,7 +3251,8 @@ export type HoldBasis =
  * ================================================================== */
 
 export type DecisionWireClass = "assumption" | "decision" | "decline";
-export type DecisionWireActor = "greg" | "overseer";
+/** Who recorded a line. `daemon` is the report drain, and only ever copies a session's decision. */
+export type DecisionWireRecorder = "greg" | "overseer" | "daemon";
 export type DecisionWireAdviser = "sol" | "fable" | "nobody";
 
 export type DecisionWireExecution =
@@ -3259,9 +3260,43 @@ export type DecisionWireExecution =
   | { kind: "not-found" }
   | { kind: "unavailable"; why: string };
 
+/** Who DECIDED. A schema-1 row is `legacy-unrecorded`, never the Overseer. */
+export type DecisionWireAuthor =
+  | { kind: "overseer" }
+  | { kind: "greg" }
+  | { kind: "session"; name: string; execution: DecisionWireExecution }
+  | { kind: "legacy-unrecorded" };
+
+/** What a schema-1 row carries for every schema-2 field. */
+export type DecisionWireNotRecorded = "not-recorded";
+export type DecisionWireRecorded<T> = { kind: "not-recorded" } | { kind: "recorded"; value: T };
+export type DecisionWireConsequence = "high" | "medium" | "low";
+export type DecisionWireReversibility = "easy" | "costly" | "one-way";
+export type DecisionWireDomain = "product" | "technical";
+/** The author's claim about Greg, shown as a claim — never as review. */
+export type DecisionWireGregAsked = "no" | "asked-answered" | "asked-awaiting";
+export type DecisionWireConfidence = "high" | "medium" | "low";
+
+/* Restated from `artefact-ref.ts`, because this file may import nothing. The
+   two must stay structurally equal: `routes-decisions.ts` assigns the owner's
+   type to this one and the panel hands this one to `artefactHref`, so a drift
+   in either direction is a compile error rather than a silent mismatch. */
+export type DecisionWireArtefactRef =
+  | { kind: "commit"; sha: string }
+  | { kind: "path"; path: string }
+  | { kind: "decision"; id: string }
+  | { kind: "queue-item"; id: string };
+export type DecisionWireArtefactCheck =
+  | { state: "on-dev" }
+  | { state: "found-locally" }
+  | { state: "found" }
+  | { state: "not-found" }
+  | { state: "unchecked"; why: string };
+export type DecisionWireEvidence = { ref: DecisionWireArtefactRef; check: DecisionWireArtefactCheck };
+
 export type DecisionWireRecord = {
   id: string;
-  recordedBy: DecisionWireActor;
+  recordedBy: DecisionWireRecorder;
   class: DecisionWireClass;
   question: string;
   options: { name: string; tradeoffs: string }[];
@@ -3284,9 +3319,17 @@ export type DecisionWireRecord = {
   touches: {
     kind: "decided" | "reviewed" | "reversed";
     at: string;
-    by: DecisionWireActor;
+    by: DecisionWireRecorder;
     what: string;
   }[];
+  author: DecisionWireAuthor;
+  consequence: DecisionWireConsequence | DecisionWireNotRecorded;
+  reversibility: DecisionWireReversibility | DecisionWireNotRecorded;
+  domain: DecisionWireDomain | DecisionWireNotRecorded;
+  recommendation: DecisionWireRecorded<string | null>;
+  evidence: DecisionWireRecorded<DecisionWireEvidence[]>;
+  gregAsked: DecisionWireGregAsked | DecisionWireNotRecorded;
+  confidence: DecisionWireConfidence | null | DecisionWireNotRecorded;
 };
 
 export type DecisionWireSessionState =
@@ -3336,12 +3379,16 @@ export type DecisionWireAggregates =
  * `GET /api/decisions`. Every arm carries the instant at which its claim was
  * composed. The route refuses loudly before either an input file or mandatory
  * context can exceed the synchronous work and response bounds respectively.
+ *
+ * **Schema 2 on every arm** (plan 260910e, WR-P2): schema 1's browser ignores
+ * fields it does not know, so it would have drawn a session's decision as
+ * "recorded by overseer". At 2 it says which version it can read instead.
  */
 export type DecisionsFeed =
-  | { schema: 1; kind: "never-written"; composedAt: string; why: string }
-  | { schema: 1; kind: "unreadable"; composedAt: string; why: string }
+  | { schema: 2; kind: "never-written"; composedAt: string; why: string }
+  | { schema: 2; kind: "unreadable"; composedAt: string; why: string }
   | {
-      schema: 1;
+      schema: 2;
       kind: "oversized-file";
       composedAt: string;
       why: string;
@@ -3349,7 +3396,7 @@ export type DecisionsFeed =
       limitBytes: number;
     }
   | {
-      schema: 1;
+      schema: 2;
       kind: "oversized-unreviewed";
       composedAt: string;
       why: string;
@@ -3357,7 +3404,7 @@ export type DecisionsFeed =
       limitBytes: number;
     }
   | {
-      schema: 1;
+      schema: 2;
       kind: "decisions";
       version: string;
       path: string;
@@ -4025,3 +4072,287 @@ export type ReceiptSummary = {
   queueItemId: string | null;
   materialDeletionPending: boolean;
 };
+
+/* ================================================================== *
+ * SCHEDULE PREVIEW — WHAT THE OVERSEER'S SCHEDULER WOULD RUN, AND WHY NOT
+ * ================================================================== */
+
+/**
+ * **`~/.overseer/schedule.json`: what the scheduler would do with every job it
+ * holds, as of one checkpoint.** Plan 260910e § D6.
+ *
+ * Written by the daemon on every checkpoint tick, from the definitions it
+ * LOADED, the documents as they are NOW, its in-memory occurrence ledger and the
+ * capabilities it actually holds — not computed on demand by a reader, because a
+ * reader holds its own prompts, pins and schedule constants rather than the
+ * daemon's (Sol's P1-4). `tools/fleet/schedule-parse.ts` is the one parser; the
+ * CLI, the fleet route and the browser all go through it.
+ *
+ * **It launches nothing and authorises nothing.** Every verdict in it is the
+ * shared planner's (`tools/overseer/schedule-plan.ts`), so the preview and the
+ * tick cannot disagree about the gate order.
+ */
+export type SchedulePreview = {
+  schema: 1;
+  /** When the daemon computed this. Every verdict below is as of this instant — see `caveat`. */
+  writtenAt: string;
+  /** The daemon instance that wrote it, so a reader can tell a restarted daemon's file from the one before. */
+  instanceId: string;
+  /** Which job list the daemon holds, by revision — or that it was handed none. */
+  list: SchedulePreviewList;
+  /** What the daemon holds, not what it would hold armed: a disarmed daemon holds neither. */
+  capabilities: { session: boolean; rules: boolean };
+  arming: SchedulePreviewArming;
+  history: SchedulePreviewHistory;
+  /** The checkpoint's own scheduler headline, recomputed from the same fresh evidence on the same tick. */
+  headline: SchedulePreviewHeadline;
+  missedRunPolicy: { kind: "one-run"; sentence: string };
+  /** The limits of the file, in one sentence a reader is shown: as of `writtenAt`, and rows after a proposed launch assume it succeeded. */
+  caveat: string;
+  jobs: SchedulePreviewJob[];
+};
+
+/**
+ * `given` carries a short hash over every job's id, pin, schedule and dispatch
+ * mode (`tools/overseer/schedule-preview.ts` § `listRevision`), so a reader
+ * building the list from a checkout can say whether the running daemon holds
+ * the same one. `not-given` is a daemon started with no list at all — its own
+ * arm rather than an empty revision, because "no list" and "a list whose hash
+ * we have" are two facts.
+ */
+export type SchedulePreviewList = { kind: "given"; listRevision: string } | { kind: "not-given"; why: string };
+
+/** When the scheduler was armed — what a never-run job's first eligibility is measured from — or why there is no such instant. */
+export type SchedulePreviewArming = { kind: "armed"; at: string } | { kind: "none"; why: string };
+
+/** Whether the occurrence ledger is whole. `lost` holds every job, and the rows say so. */
+export type SchedulePreviewHistory = { kind: "intact" } | { kind: "lost"; why: string };
+
+/** `store.ts`'s `StoredScheduler`, restated here because this file imports nothing. */
+export type SchedulePreviewHeadline = { kind: "armed" | "blocked" | "off" | "unknown"; why: string; at: string };
+
+/**
+ * One job, as the scheduler would treat it now.
+ *
+ * `sessionTimeout` and `sessionNoOverlap` are literals on purpose: they are
+ * things this build does NOT do, stated on every row so nobody reads the
+ * launcher lease as either (plan 260910e § D1). The Scheduled-dispatch stage is
+ * what changes them.
+ */
+export type SchedulePreviewJob = {
+  jobId: string;
+  /** Derived from the job's hashed `work.kind`: a Claude session on the box (rationed by the spacing gate), or a rule inside the daemon. */
+  resourceClass: "claude-session" | "in-process-rule";
+  dispatch: { kind: "live" } | { kind: "dry-run"; why: string };
+  verdict: SchedulePreviewVerdict;
+  lastAttempt: SchedulePreviewAttempt;
+  /** Durations in milliseconds. `launcherLeaseMs` is how long the LAUNCHER may stay unsettled — not a session timeout. */
+  schedule: { everyMs: number; launcherLeaseMs: number; initialDelayMs: number };
+  sessionTimeout: "not built";
+  sessionNoOverlap: "not enforced";
+  /** The authorised instruction — the job's `what`. */
+  prompt: string;
+  /** What the job fingerprints as against the documents read this checkpoint, or why that could not be computed. */
+  behaviourHash: SchedulePreviewHash;
+  /** The pin it must equal to be dispatched at all. */
+  authorisedHash: string;
+  documents: SchedulePreviewDocument[];
+};
+
+export type SchedulePreviewHash = { kind: "computed"; hash: string } | { kind: "not-computed"; why: string };
+
+/** Every kind the planner can give a job. `JobPlan` in `tools/overseer/schedule-plan.ts`, one for one. */
+export type SchedulePreviewVerdictKind =
+  | "history-lost"
+  | "duplicate-id"
+  | "unauthorised"
+  | "held"
+  | "waiting"
+  | "not-yet-eligible"
+  | "dry-run"
+  | "spacing-held"
+  | "dispatch";
+
+/** The planner's verdict, with its sentence and when the job could next run. Only `unauthorised` carries more: which documents moved. */
+export type SchedulePreviewVerdict =
+  | { kind: "unauthorised"; sentence: string; drift: string[]; next: SchedulePreviewNext }
+  | { kind: Exclude<SchedulePreviewVerdictKind, "unauthorised">; sentence: string; next: SchedulePreviewNext };
+
+/**
+ * **WHEN THE JOB COULD NEXT RUN — every case its own arm, never a null.**
+ *
+ * `next-due` and `first-eligible` are absolute UTC instants, so a backward clock
+ * jump does not move them. `after-in-flight-settles` is a run still inside its
+ * lease; `after-arming` is a never-run job on a daemon that is not armed (its
+ * first run is its own delay after somebody arms it); `none` says why there is
+ * no answer — a lost ledger, a moved pin, a duplicate id.
+ */
+export type SchedulePreviewNext =
+  | { kind: "due-now" }
+  | { kind: "next-due"; at: string }
+  | { kind: "first-eligible"; at: string }
+  | { kind: "after-in-flight-settles"; leaseUntil: string }
+  | { kind: "after-arming"; initialDelayMs: number }
+  | { kind: "none"; why: string };
+
+/**
+ * The newest occurrence the ledger holds for this job, in its own state.
+ *
+ * `meaning` is on every arm that is an occurrence, and it is the sentence that
+ * stops a reader over-trusting the word `finished`: **for a session job the
+ * ledger follows the `gjd-remote` launcher, not the session** — `finished` is
+ * the launcher exiting, and the Claude session it started runs on, detached.
+ * `not-known` is a ledger that is not whole, which must not read as `never`.
+ */
+export type SchedulePreviewAttempt =
+  | { kind: "never" }
+  | { kind: "not-known"; why: string }
+  | { kind: "reserved"; occurrenceId: string; reservedAt: string; leaseUntil: string; meaning: string }
+  | { kind: "started"; occurrenceId: string; reservedAt: string; startedAt: string; leaseUntil: string; pid: number; meaning: string }
+  | {
+      kind: "finished";
+      occurrenceId: string;
+      reservedAt: string;
+      finishedAt: string;
+      outcome: { kind: "exited"; code: number } | { kind: "failed"; why: string };
+      meaning: string;
+    }
+  | { kind: "refused"; occurrenceId: string; reservedAt: string; refusedAt: string; why: string; meaning: string }
+  | {
+      kind: "unknown";
+      occurrenceId: string;
+      reservedAt: string;
+      why: string;
+      /** `derived`: read off a reservation a dead daemon left; `recorded`: a later instance wrote it down at `at`. */
+      noticed: { kind: "derived" } | { kind: "recorded"; at: string };
+      meaning: string;
+    };
+
+/**
+ * One document the job's authority comes from: its pinned digest, its digest
+ * now, and whether they differ.
+ *
+ * `current.when` says which reading it is: a session job's documents are read
+ * `this-checkpoint`; a rule's are the source of code already loaded, so they are
+ * the digests taken `when-loaded` (`schedule-plan.ts` § `DocumentEvidence`).
+ * `changed` is `cannot-tell` when the document could not be read — a
+ * three-valued answer, because "no" would be a claim nobody could make.
+ */
+export type SchedulePreviewDocument = {
+  path: string;
+  pinned: { kind: "pinned"; sha256: string } | { kind: "not-pinned" };
+  current: { kind: "read"; sha256: string; when: "this-checkpoint" | "when-loaded" } | { kind: "unreadable"; why: string } | { kind: "absent" };
+  changed: "yes" | "no" | "cannot-tell";
+};
+
+/**
+ * One row as the parser returned it: a job it could read, or that row's own
+ * `unreadable` arm — a verdict or state kind this build does not know makes ONE
+ * row unreadable, never the file and never a different kind. `jobId` is null
+ * only when the row carried no readable id.
+ */
+export type SchedulePreviewRow = { kind: "job"; job: SchedulePreviewJob } | { kind: "unreadable"; jobId: string | null; why: string };
+
+/** The file as a reader holds it: every field of `SchedulePreview`, with its jobs as rows. */
+export type ParsedSchedulePreview = Omit<SchedulePreview, "jobs"> & { jobs: SchedulePreviewRow[] };
+
+/** What `parseSchedulePreview` returns. It never throws. */
+export type SchedulePreviewParse =
+  | { kind: "preview"; preview: ParsedSchedulePreview }
+  | { kind: "unsupported-schema"; schema: number }
+  | { kind: "unreadable"; why: string };
+
+/* ===== WORK REPORTS — WHAT AN AGENT CLAIMED ====================== *
+ * `GET /api/reports` (plan 260910e). A uniquely named banner, for the
+ * reason the DECISIONS MADE block gives.
+ *
+ * **Every row is a claim, and the types say so**: `claimedBy`, never
+ * "done", "ready", "landed" or "contradicts". A later claim is only a later
+ * claim. Types only; restated from `tools/overseer/reports.ts`, which this
+ * leaf may not import — `routes-reports.ts` assigns the owner's values to
+ * these, so a drift is a compile error there. The artefact types are the
+ * decision block's, which are pinned to `artefact-ref.ts` the same way.
+ * ================================================================== */
+
+export type ReportWireKind = "progress" | "blocked" | "decision" | "completed";
+/** A self-declaration, as a decision's `by` is. */
+export type ReportWireActor = { kind: "session"; name: string } | { kind: "overseer" } | { kind: "greg" };
+/** The submitter's token against the register's verified run; null unless the actor is a session. */
+export type ReportWireExecution = "same-verified-run" | "different-verified-run" | { unverifiable: string } | null;
+export type ReportWireCorrection = { eventId: string; actor: ReportWireActor; at: string };
+export type ReportWireJob = {
+  plan: string | null;
+  queueItem: string | null;
+  occurrence: { jobId: string; scheduledAt: string } | null;
+};
+export type ReportWireBlockedOn = "greg" | "peer" | "review" | "environment" | "other";
+export type ReportWireEnding = "finished" | "done-enough" | "important-work-left";
+/** What the agent SAID it reviewed, tested and merged. An empty list is "not stated". */
+export type ReportWireRevisions = { reviewed: string[]; tested: string[]; merged: string[] };
+
+export type ReportWireClaim = {
+  eventId: string;
+  claimedBy: ReportWireActor;
+  submittedAt: string;
+  receivedAt: string;
+  execution: ReportWireExecution;
+  job: ReportWireJob;
+  summary: string;
+  artefacts: DecisionWireEvidence[];
+  corrects: string | null;
+  correctedBy: ReportWireCorrection | null;
+  /** The next claim by the same reporter, if there is one. Never read as a disagreement. */
+  laterClaim: string | null;
+} & (
+  | { kind: "progress" }
+  | { kind: "blocked"; on: ReportWireBlockedOn; needs: string }
+  | { kind: "completed"; ending: ReportWireEnding; revisions: ReportWireRevisions }
+  | { kind: "decision"; decisionId: string }
+);
+
+/** Unreported is not idle, stuck or failed: it means nothing was said. */
+export type ReportWireClaimed = { kind: "claimed"; claims: number; latest: ReportWireClaim };
+export type ReportWireSession =
+  | { name: string; register: "in-register"; latest: { kind: "unreported" } | ReportWireClaimed }
+  | { name: string; register: "not-in-register"; latest: ReportWireClaimed };
+
+/**
+ * The register join, or why there is none. **Two shapes, so "every session is
+ * unreported" and "the register could not be read" can never look alike.**
+ */
+export type ReportWireSessions =
+  | { kind: "joined-with-register"; rows: ReportWireSession[] }
+  | { kind: "register-unavailable"; why: string; reported: { name: string; latest: ReportWireClaimed }[] };
+
+export type ReportWireProblem = {
+  kind: "unreadable-line" | "duplicate-event" | "invalid-correction";
+  why: string;
+  eventId: string | null;
+};
+
+export type ReportsFeed =
+  | {
+      schema: 1;
+      kind: "never-written";
+      composedAt: string;
+      why: string;
+      /** Submitted and not yet recorded — the sign of a daemon that is not draining. */
+      inFlight: number;
+      refused: number;
+    }
+  | { schema: 1; kind: "unreadable"; composedAt: string; why: string }
+  | { schema: 1; kind: "oversized-file"; composedAt: string; why: string; sizeBytes: number; limitBytes: number }
+  | {
+      schema: 1;
+      kind: "reports";
+      path: string;
+      composedAt: string;
+      sessions: ReportWireSessions;
+      /** Newest first. */
+      recent: ReportWireClaim[];
+      /** Claims left out by the 200-row cap or the 2 MiB byte cap. */
+      recentWithheld: number;
+      inFlight: number;
+      refused: number;
+      problems: ReportWireProblem[];
+    };
