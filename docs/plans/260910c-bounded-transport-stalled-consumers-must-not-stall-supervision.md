@@ -1,7 +1,7 @@
 # Bounded transport: stalled consumers must not stall supervision
 
 The stage is
-[260908f § Bounded transport](260908f-overseer-and-fleet-improvement-roadmap.md#stage-bounded-transport--stalled-consumers-must-not-stall-supervision),
+[260908f § Bounded transport](260908f-overseer-and-fleet-improvement-roadmap.md#stage-bounded-transport-stalled-consumers-must-not-stall-supervision),
 queue item `qi-8hsc8b4e`, dispatched by the Overseer on 2026-09-10.
 
 **What it is for.** Three transports carry supervision evidence, and each has a peer that can stop
@@ -117,13 +117,14 @@ passes once the cancel is fire-and-forget, as `readBounded` already was. What is
 guarantee that the socket is released before the consumer's `break` returns; the neighbouring test
 watches the dashboard's subscriber count fall to zero straight afterwards.
 
-**And a second finding, P2, also Sol's:** `sseFrames` recognised `\n` and `\r\n` but not a bare
+**And a second finding, P2, also Sol's — which then took two attempts to get right; the first is in
+the review record below.** `sseFrames` recognised `\n` and `\r\n` but not a bare
 `\r`, which the HTML Standard permits. A producer or proxy using CR-only line endings would have had
 every frame held as incomplete until the 4 MB bound refused a perfectly valid stream — bounded, and
 wrong. Fixed by normalising line endings on the way in, holding back a trailing `\r` until the next
-chunk says whether it was a line ending or half a CRLF. That also **removed** three special cases:
-one terminator to find instead of two, one separator to split on, and a one-character partial
-delimiter instead of three.
+chunk says whether it was a `\n` belonging to that same line ending. That also **removed** three
+special cases: one terminator to find instead of two, one separator to split on, and a one-character
+partial delimiter instead of three.
 
 ## Stage 3 — the browser transport: an unmounted page must own nothing
 
@@ -190,7 +191,44 @@ phone hiccupped" is the precise failure mode this project keeps writing postmort
   the cancel probe that could not fail. Both were things I had already written into code comments,
   which is the class this repo keeps meeting: a claim travels from a brief into a source comment
   without anybody tracing it.
-- The stage diff then went back to Sol with the raw test output.
+- The stage diff then went back to Sol (`--sandbox workspace-write`, so it fixed inside the stage),
+  with the scoped diff and the raw output of the five affected suites. **REVISE**, no P0, one P1 and
+  two P2 — and the P1 was a defect this branch had introduced the day before.
+
+  Accepting bare-CR line endings, I held back a trailing `\r` until the next chunk could say whether
+  it was a line ending or half a CRLF, and wrote that into a test as *the one thing that legitimately
+  waits*. It is wrong. **A CR is already a complete line ending**; the ambiguity is only ever about
+  whether a FOLLOWING `\n` is a second one, never about whether this one ended a line. So
+  `data: 1\r\r` dispatches at exactly the same point as `data: 1\r\r\n`, and holding it delayed
+  every frame of a CR-only stream by a chunk and **lost the last frame entirely** when the stream
+  ended — which is this stage's own subject, in miniature. Now the CR normalises immediately and a
+  following LF is suppressed instead.
+
+  The two P2s: the memory bound was misstated as exactly one buffered frame (several small pings can
+  accumulate below Node's high-water mark before one write crosses it, so the bound is the queue up
+  to the mark, plus the crossing write, plus one retained reference — and the stalled-subscriber test
+  now asserts `> 1` rather than `> 0`, which is the stronger claim); and three load-bearing comments
+  said things the code does not do, two of them older than this branch — that `EventSource`'s
+  `onmessage` receives named events, and that `/api/state` costs a 12-second collection when it is
+  served from cache.
+
+  What it attacked and could not break: duplicate or out-of-order delivery in `live.ts`, a deadline
+  left armed or un-armed across a second drain cycle, listener teardown ordering (it added a test for
+  an initial write that throws), the fire-and-forget cancel, overlap or a lost press in
+  `pollingTransport`, and whether normalisation can destroy a payload character — it cannot, since a
+  raw CR or LF is not permitted inside an SSE field value.
+
+  **It could not bind port 0 in its sandbox**, so it never executed the HTTP half of
+  `tests/overseer-source.test.ts` and said so. Those were run here.
+- A third artefact, `tests/sse-frames-splits.test.ts`, exists because this parser has now been wrong
+  about packetization three times in three days and every previous test pushed one tidy frame per
+  `push`. It asserts the property instead: **how a stream is cut must not change what comes out of
+  it**, for seven streams across LF, CRLF, bare CR and mixed endings, over every single and double
+  cut, plus the size bound at a limit the stream sits exactly on. It survived the round-1 rewrite
+  unchanged; only its one *exception* clause needed replacing, because that clause was the thing Sol
+  falsified.
+- Round 2 sent Sol's own fixes back to Sol, on the house rule that a reviewer's edits are somebody
+  else's unreviewed code the next time round.
 
 ## Gates
 
