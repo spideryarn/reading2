@@ -99,8 +99,10 @@ function Journal({ journal, skew }: { journal: AdmissionJournalView; skew: Clock
     contents = <p>The refusal journal directory does not exist, so there is no record to read.</p>;
   } else if (journal.kind === "unreadable") {
     contents = <p>The refusal journal could not be read: {journal.why}.</p>;
-  } else if (journal.entries.length === 0) {
+  } else if (journal.entries.length === 0 && journal.unparseableLines === 0) {
     contents = <p>The journal is readable, but nothing was recorded.</p>;
+  } else if (journal.entries.length === 0) {
+    contents = <p>No readable refusal entries were found.</p>;
   } else {
     contents = (
       <ol className="tw:space-y-1 tw:pl-5">
@@ -126,7 +128,7 @@ function Journal({ journal, skew }: { journal: AdmissionJournalView; skew: Clock
       <p className="tw:mt-2">
         This best-effort journal sees refusals from test runs using this repo's Vitest config on this machine and from
         the readiness loop, and nothing else. It cannot see another machine, a run that bypassed the config, or an
-        append that failed.
+        append that failed. Only a bounded number of the newest records are kept; older entries are discarded.
       </p>
     </div>
   );

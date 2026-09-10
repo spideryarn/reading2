@@ -244,6 +244,22 @@ describe("the Box health admission section", () => {
     expect(text).toContain("another machine");
     expect(text).toContain("bypassed the config");
     expect(text).toContain("append that failed");
+    expect(text).toContain("bounded number of the newest records");
+    expect(text).toContain("older entries are discarded");
+    expect(text).not.toContain("live file and one previous file");
+  });
+
+  it("does not call an all-unparseable journal empty", async () => {
+    const reply = {
+      ...forecast({ kind: "not-applicable", why: "no reserve file" }),
+      journal: { kind: "read", entries: [], unparseableLines: 2 },
+    } as AdmissionView;
+    await mountFull({ forecast: async () => reply });
+
+    const text = container.querySelector("[data-admission-journal]")?.textContent ?? "";
+    expect(text).toContain("No readable refusal entries were found");
+    expect(text).toContain("2 lines could not be parsed");
+    expect(text.toLowerCase()).not.toContain("nothing was recorded");
   });
 
   it.each([

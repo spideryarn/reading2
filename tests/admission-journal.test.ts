@@ -1,5 +1,14 @@
 import { spawn } from "node:child_process";
-import { appendFileSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import {
+  existsSync,
+  mkdtempSync,
+  readFileSync,
+  readdirSync,
+  rmSync,
+  unlinkSync,
+  utimesSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -7,6 +16,7 @@ import { fileURLToPath } from "node:url";
 import { afterEach, describe, expect, it } from "vitest";
 
 import {
+  MAX_RETAINED_REFUSALS,
   pruneRefusals,
   readRefusals,
   recordRefusal,
@@ -17,14 +27,25 @@ import { decideTick, type TickDecision, type TickInput } from "../tools/fleet/re
 const REPO = join(dirname(fileURLToPath(import.meta.url)), "..");
 const dirs: string[] = [];
 const GB = 1024 ** 3;
-const REFUSALS_FILE = "refusals.jsonl";
-const PREVIOUS_REFUSALS_FILE = "refusals.prev.jsonl";
+const FINAL_NAME = /^refusal-.*\.json$/;
+
+const input = {
+  source: "test-run" as const,
+  policyVersion: 1,
+  snapshot: {
+    kind: "linux" as const,
+    availableBytes: 10_000_000,
+    swapTotalBytes: 20_000_000,
+    swapFreeBytes: 5_000_000,
+  },
+  reserveBytes: 4_000_000,
+};
 
 afterEach(() => {
   for (const dir of dirs.splice(0)) rmSync(dir, { recursive: true, force: true });
 });
 
-function childAppend(dir: string, count: number): Promise<void> {
+function childWrite(dir: string, count: number): Promise<void> {
   const script = `
     import { recordRefusal } from ${JSON.stringify(join(REPO, "admission-journal.ts"))};
     for (let index = 0; index < ${count}; index += 1) {
@@ -53,51 +74,269 @@ function childAppend(dir: string, count: number): Promise<void> {
     child.once("error", reject);
     child.once("close", (code) => {
       if (code === 0) resolve();
-      else reject(new Error(`append child exited ${code}: ${stderr}`));
+      else reject(new Error(`journal child exited ${code}: ${stderr}`));
     });
   });
 }
 
+type ChildResult = {
+  code: number | null;
+  signal: NodeJS.Signals | null;
+  stdout: string;
+  stderr: string;
+};
+
+function runChild(command: string, args: string[], env?: NodeJS.ProcessEnv): Promise<ChildResult> {
+  return new Promise((resolve, reject) => {
+    const child = spawn(command, args, {
+      cwd: REPO,
+      env: env ?? process.env,
+      stdio: ["ignore", "pipe", "pipe"],
+    });
+    let stdout = "";
+    let stderr = "";
+    child.stdout.setEncoding("utf8");
+    child.stderr.setEncoding("utf8");
+    child.stdout.on("data", (chunk: string) => { stdout += chunk; });
+    child.stderr.on("data", (chunk: string) => { stderr += chunk; });
+    child.once("error", reject);
+    child.once("close", (code, signal) => resolve({ code, signal, stdout, stderr }));
+  });
+}
+
+function finalNames(dir: string): string[] {
+  return readdirSync(dir).filter((name) => FINAL_NAME.test(name)).sort();
+}
+
+async function waitForFile(path: string): Promise<void> {
+  const deadline = Date.now() + 10_000;
+  while (!existsSync(path)) {
+    if (Date.now() >= deadline) throw new Error(`timed out waiting for ${path}`);
+    await new Promise((resolve) => setTimeout(resolve, 10));
+  }
+}
+
+function pausedCollisionWriter(
+  dir: string,
+  policyVersion: number,
+  ready: string,
+  release: string,
+  result: string,
+): { closed: Promise<{ code: number | null; signal: NodeJS.Signals | null }>; stderr: () => string } {
+  const script = `
+    import crypto from "node:crypto";
+    import fs from "node:fs";
+    import { syncBuiltinESMExports } from "node:module";
+    const original = {
+      existsSync: fs.existsSync.bind(fs),
+      renameSync: fs.renameSync.bind(fs),
+      writeFileSync: fs.writeFileSync.bind(fs),
+    };
+    crypto.randomBytes = (size) => Buffer.alloc(size, 0xcd);
+    fs.renameSync = (from, to) => {
+      if (String(from).includes("/.tmp-")) {
+        original.writeFileSync(${JSON.stringify(ready)}, "ready");
+        const wait = new Int32Array(new SharedArrayBuffer(4));
+        while (!original.existsSync(${JSON.stringify(release)})) Atomics.wait(wait, 0, 0, 10);
+      }
+      original.renameSync(from, to);
+    };
+    syncBuiltinESMExports();
+    const { recordRefusal } = await import(${JSON.stringify(join(REPO, "admission-journal.ts"))});
+    const wrote = recordRefusal({ ...${JSON.stringify(input)}, policyVersion: ${policyVersion} }, {
+      dir: ${JSON.stringify(dir)}, pid: 404, now: () => new Date("2026-09-10T05:45:00.000Z"),
+    });
+    original.writeFileSync(${JSON.stringify(result)}, JSON.stringify({ wrote }));
+  `;
+  const child = spawn(process.execPath, ["--import", "tsx", "--input-type=module", "--eval", script], {
+    cwd: REPO,
+    stdio: ["ignore", "pipe", "pipe"],
+  });
+  let childStderr = "";
+  child.stderr.setEncoding("utf8");
+  child.stderr.on("data", (chunk: string) => { childStderr += chunk; });
+  return {
+    closed: new Promise((resolve, reject) => {
+      child.once("error", reject);
+      child.once("close", (code, signal) => resolve({ code, signal }));
+    }),
+    stderr: () => childStderr,
+  };
+}
+
 describe("the admission refusal journal", () => {
-  it("loses no lines when separate processes append concurrently", async () => {
+  it.runIf(process.platform === "linux" && existsSync("/usr/bin/prlimit"))(
+    "a partial write cannot expose a fragment or hide the next successful record",
+    async () => {
+      const dir = mkdtempSync(join(tmpdir(), "admission-journal-partial-"));
+      dirs.push(dir);
+      const limitedAt = "2026-09-10T00:00:00.000Z";
+      const childScript = `
+      process.on("SIGXFSZ", () => {});
+      const { recordRefusal } = await import(${JSON.stringify(join(REPO, "admission-journal.ts"))});
+      const wrote = recordRefusal(${JSON.stringify(input)}, {
+        dir: ${JSON.stringify(dir)},
+        host: "size-limited-child",
+        now: () => new Date(${JSON.stringify(limitedAt)}),
+      });
+      process.exitCode = wrote ? 42 : 0;
+    `;
+      const child = await runChild("/usr/bin/prlimit", [
+        "--fsize=60:60",
+        "--",
+        process.execPath,
+        "--import",
+        "tsx",
+        "--input-type=module",
+        "--eval",
+        childScript,
+      ]);
+      expect(child, child.stderr).toMatchObject({ code: 0, signal: null });
+
+      const visibleAt = "2026-09-10T00:00:01.000Z";
+      expect(recordRefusal(input, {
+        dir,
+        host: "unrestricted-parent",
+        now: () => new Date(visibleAt),
+      })).toBe(true);
+      const result = readRefusals({ dir });
+      expect(result).toMatchObject({ kind: "read", unparseableLines: 0 });
+      expect(result.kind === "read" ? result.entries.map((entry) => entry.at) : []).toEqual([visibleAt]);
+    },
+  );
+
+  it("a writer paused across two prunes is visible when it reports success", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "admission-journal-paused-writer-"));
+    dirs.push(dir);
+    const ready = join(dir, "child-ready");
+    const release = join(dir, "child-release");
+    const childResult = join(dir, "child-result");
+    const pausedAt = "2026-09-10T03:00:00.000Z";
+
+    expect(recordRefusal(input, { dir, now: () => new Date("2026-09-10T01:00:00.000Z") })).toBe(true);
+    const childScript = `
+      import fs from "node:fs";
+      import { syncBuiltinESMExports } from "node:module";
+      const original = {
+        appendFileSync: fs.appendFileSync.bind(fs),
+        closeSync: fs.closeSync.bind(fs),
+        existsSync: fs.existsSync.bind(fs),
+        openSync: fs.openSync.bind(fs),
+        renameSync: fs.renameSync.bind(fs),
+        writeFileSync: fs.writeFileSync.bind(fs),
+      };
+      const pause = () => {
+        original.writeFileSync(${JSON.stringify(ready)}, "ready");
+        const wait = new Int32Array(new SharedArrayBuffer(4));
+        while (!original.existsSync(${JSON.stringify(release)})) Atomics.wait(wait, 0, 0, 10);
+      };
+      fs.appendFileSync = (path, data, options) => {
+        const fd = original.openSync(path, "a", 0o600);
+        pause();
+        try { original.writeFileSync(fd, data, options); }
+        finally { original.closeSync(fd); }
+      };
+      fs.renameSync = (from, to) => {
+        if (String(from).includes("/.tmp-")) pause();
+        original.renameSync(from, to);
+      };
+      syncBuiltinESMExports();
+      const { recordRefusal } = await import(${JSON.stringify(join(REPO, "admission-journal.ts"))});
+      const wrote = recordRefusal(${JSON.stringify(input)}, {
+        dir: ${JSON.stringify(dir)},
+        host: "paused-writer",
+        now: () => new Date(${JSON.stringify(pausedAt)}),
+      });
+      original.writeFileSync(${JSON.stringify(childResult)}, JSON.stringify({ wrote }));
+    `;
+    const child = spawn(process.execPath, ["--import", "tsx", "--input-type=module", "--eval", childScript], {
+      cwd: REPO,
+      stdio: ["ignore", "pipe", "pipe"],
+    });
+    let stderr = "";
+    child.stderr.setEncoding("utf8");
+    child.stderr.on("data", (chunk: string) => { stderr += chunk; });
+    const childClosed = new Promise<{ code: number | null; signal: NodeJS.Signals | null }>((resolve, reject) => {
+      child.once("error", reject);
+      child.once("close", (code, signal) => resolve({ code, signal }));
+    });
+    let firstPrune = false;
+    let middleWrite = false;
+    let secondPrune = false;
+    try {
+      await waitForFile(ready);
+      /* Both keys deliberately make this same source exercise the old byte
+         rotation and the replacement count-prune implementation. */
+      const tinyCap = { maxFileBytes: 1, maxRecords: 0 } as Parameters<typeof pruneRefusals>[0];
+      firstPrune = pruneRefusals({ dir, ...tinyCap });
+      middleWrite = recordRefusal(input, { dir, now: () => new Date("2026-09-10T02:00:00.000Z") });
+      secondPrune = pruneRefusals({ dir, ...tinyCap });
+    } finally {
+      writeFileSync(release, "release");
+    }
+    const closed = await childClosed;
+    expect(firstPrune).toBe(true);
+    expect(middleWrite).toBe(true);
+    expect(secondPrune).toBe(true);
+    expect(closed, stderr).toEqual({ code: 0, signal: null });
+    const wrote = (JSON.parse(readFileSync(childResult, "utf8")) as { wrote: boolean }).wrote;
+    const read = readRefusals({ dir });
+    const visible = read.kind === "read" && read.entries.some((entry) => entry.at === pausedAt);
+    expect(wrote && !visible, "recordRefusal returned true but its record was absent").toBe(false);
+    expect(wrote).toBe(true);
+  });
+
+  it("loses no records when separate processes write concurrently", async () => {
     const dir = mkdtempSync(join(tmpdir(), "admission-journal-concurrent-"));
     dirs.push(dir);
 
     const childCount = 4;
     const linesPerChild = 40;
-    await Promise.all(Array.from({ length: childCount }, () => childAppend(dir, linesPerChild)));
+    await Promise.all(Array.from({ length: childCount }, () => childWrite(dir, linesPerChild)));
 
     const result = readRefusals({ dir });
     expect(result).toMatchObject({ kind: "read", unparseableLines: 0 });
     expect(result.kind === "read" ? result.entries : []).toHaveLength(childCount * linesPerChild);
   });
 
-  it("refuses an oversized line without truncating or corrupting the live file", () => {
+  it("refuses an oversized record without disturbing existing record files", () => {
     const dir = mkdtempSync(join(tmpdir(), "admission-journal-bounded-"));
     dirs.push(dir);
-    const input = {
-      source: "test-run" as const,
-      policyVersion: 1,
-      snapshot: {
-        kind: "linux" as const,
-        availableBytes: 10_000_000,
-        swapTotalBytes: 20_000_000,
-        swapFreeBytes: 5_000_000,
-      },
-      reserveBytes: 4_000_000,
-    };
-
     expect(recordRefusal(input, { dir, host: "box" })).toBe(true);
-    const before = readFileSync(join(dir, REFUSALS_FILE), "utf8");
+    const before = finalNames(dir);
     expect(recordRefusal(input, { dir, host: "x".repeat(2_000) })).toBe(false);
-    const after = readFileSync(join(dir, REFUSALS_FILE), "utf8");
+    const after = finalNames(dir);
 
-    expect(after).toBe(before);
-    expect(() => JSON.parse(after.trim())).not.toThrow();
+    expect(after).toEqual(before);
+    expect(() => JSON.parse(readFileSync(join(dir, after[0] as string), "utf8"))).not.toThrow();
     expect(readRefusals({ dir })).toMatchObject({ kind: "read", unparseableLines: 0 });
   });
 
-  it("swallows an append failure without replacing the caller's refusal", () => {
+  it("refuses serialisable values that its own reader would reject", () => {
+    const dir = mkdtempSync(join(tmpdir(), "admission-journal-invalid-values-"));
+    dirs.push(dir);
+    expect(recordRefusal(input, { dir, host: "box" })).toBe(true);
+    const before = finalNames(dir);
+    expect(
+      recordRefusal({ ...input, policyVersion: Number.POSITIVE_INFINITY }, { dir, host: "box" }),
+    ).toBe(false);
+    expect(
+      recordRefusal(
+        { ...input, snapshot: { ...input.snapshot, availableBytes: -1 } },
+        { dir, host: "box" },
+      ),
+    ).toBe(false);
+    expect(recordRefusal(input, { dir, host: "   " })).toBe(false);
+
+    expect(finalNames(dir)).toEqual(before);
+    expect(readRefusals({ dir })).toMatchObject({
+      kind: "read",
+      entries: [expect.any(Object)],
+      unparseableLines: 0,
+    });
+  });
+
+  it("swallows a write failure without replacing the caller's refusal", () => {
     const parent = mkdtempSync(join(tmpdir(), "admission-journal-unwritable-"));
     dirs.push(parent);
     const blockingFile = join(parent, "not-a-directory");
@@ -120,48 +359,172 @@ describe("the admission refusal journal", () => {
     expect(configShapedCaller).toThrow(gateRefusal);
   });
 
-  it("loses no line when pruning happens between two appends", () => {
+  it("pruning keeps the newest records and cannot lose a write interleaved with deletion", () => {
     const dir = mkdtempSync(join(tmpdir(), "admission-journal-prune-"));
     dirs.push(dir);
-    const input = {
-      source: "test-run" as const,
-      policyVersion: 1,
-      snapshot: {
-        kind: "linux" as const,
-        availableBytes: 10_000_000,
-        swapTotalBytes: 20_000_000,
-        swapFreeBytes: 5_000_000,
+    const instants = ["01", "02", "03", "04"].map((hour) => `2026-09-10T${hour}:00:00.000Z`);
+    for (const at of instants.slice(0, 3)) {
+      expect(recordRefusal(input, { dir, now: () => new Date(at) })).toBe(true);
+    }
+    /* mtime points in the opposite direction. Filename order, not copy- or
+       clock-sensitive metadata, still decides which records are oldest. */
+    for (const [index, name] of finalNames(dir).entries()) {
+      const reversed = new Date(Date.parse("2026-09-11T00:00:00.000Z") - index * 1_000);
+      utimesSync(join(dir, name), reversed, reversed);
+    }
+    let interleaved = false;
+    expect(pruneRefusals({
+      dir,
+      maxRecords: 2,
+      unlinkFile: (path) => {
+        if (!interleaved) {
+          interleaved = true;
+          expect(recordRefusal(input, { dir, now: () => new Date(instants[3] as string) })).toBe(true);
+        }
+        unlinkSync(path);
       },
-      reserveBytes: 4_000_000,
-    };
+    })).toBe(true);
 
-    expect(recordRefusal(input, { dir, now: () => new Date("2026-09-10T01:00:00.000Z") })).toBe(true);
-    expect(pruneRefusals({ dir, maxFileBytes: 1 })).toBe(true);
-    expect(recordRefusal(input, { dir, now: () => new Date("2026-09-10T02:00:00.000Z") })).toBe(true);
-
-    expect(readFileSync(join(dir, PREVIOUS_REFUSALS_FILE), "utf8")).toContain("2026-09-10T01:00:00.000Z");
-    const result = readRefusals({ dir });
-    expect(result.kind).toBe("read");
-    expect(result.kind === "read" ? result.entries.map((entry) => entry.at) : []).toEqual([
-      "2026-09-10T01:00:00.000Z",
-      "2026-09-10T02:00:00.000Z",
-    ]);
+    const result = readRefusals({ dir, maxRecords: 3 });
+    expect(result.kind === "read" ? result.entries.map((entry) => entry.at) : []).toEqual(instants.slice(1));
+    expect(finalNames(dir)).toHaveLength(3);
   });
 
-  it("counts unparseable lines while retaining the readable entries", () => {
+  it("ignores temporary files, does not count them as unparseable, and removes stale ones", () => {
+    const dir = mkdtempSync(join(tmpdir(), "admission-journal-temporary-"));
+    dirs.push(dir);
+    const stale = join(dir, ".tmp-101-stale");
+    const fresh = join(dir, ".tmp-101-fresh");
+    writeFileSync(stale, "{partial");
+    writeFileSync(fresh, "{partial");
+    const nowMs = Date.parse("2026-09-10T04:00:00.000Z");
+    utimesSync(stale, new Date(nowMs - 2 * 60 * 60 * 1_000), new Date(nowMs - 2 * 60 * 60 * 1_000));
+    utimesSync(fresh, new Date(nowMs - 30 * 60 * 1_000), new Date(nowMs - 30 * 60 * 1_000));
+
+    expect(readRefusals({ dir, nowMs })).toEqual({ kind: "read", entries: [], unparseableLines: 0 });
+    expect(existsSync(stale)).toBe(false);
+    expect(existsSync(fresh)).toBe(true);
+  });
+
+  it("counts unparseable record files while retaining the readable entries", () => {
     const dir = mkdtempSync(join(tmpdir(), "admission-journal-unparseable-"));
     dirs.push(dir);
-    expect(recordRefusal({
-      source: "test-run",
-      policyVersion: 1,
-      snapshot: { kind: "linux", availableBytes: 10, swapTotalBytes: 20, swapFreeBytes: 5 },
-      reserveBytes: 4,
-    }, { dir })).toBe(true);
-    appendFileSync(join(dir, REFUSALS_FILE), "{not json}\n{}\n", "utf8");
+    for (const at of ["01", "02", "03"].map((hour) => `2026-09-10T${hour}:00:00.000Z`)) {
+      expect(recordRefusal(input, { dir, now: () => new Date(at) })).toBe(true);
+    }
+    for (const name of finalNames(dir).slice(0, 2)) writeFileSync(join(dir, name), "{not json}", "utf8");
 
     const result = readRefusals({ dir });
     expect(result).toMatchObject({ kind: "read", unparseableLines: 2 });
     expect(result.kind === "read" ? result.entries : []).toHaveLength(1);
+  });
+
+  it("does not collide when different pids write in the same millisecond", () => {
+    const dir = mkdtempSync(join(tmpdir(), "admission-journal-same-millisecond-"));
+    dirs.push(dir);
+    const now = () => new Date("2026-09-10T05:00:00.000Z");
+    expect(recordRefusal(input, { dir, now, pid: 101 })).toBe(true);
+    expect(recordRefusal(input, { dir, now, pid: 202 })).toBe(true);
+
+    expect(finalNames(dir)).toHaveLength(2);
+    const result = readRefusals({ dir });
+    expect(result.kind === "read" ? result.entries.map((entry) => entry.pid).sort() : []).toEqual([101, 202]);
+  });
+
+  it("reports failure rather than overwriting a record when every name component collides", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "admission-journal-forced-collision-"));
+    dirs.push(dir);
+    const childResult = join(dir, "collision-result");
+    const childScript = `
+      import crypto from "node:crypto";
+      import fs from "node:fs";
+      import { syncBuiltinESMExports } from "node:module";
+      const originalWrite = fs.writeFileSync.bind(fs);
+      crypto.randomBytes = (size) => Buffer.alloc(size, 0xab);
+      syncBuiltinESMExports();
+      const { recordRefusal } = await import(${JSON.stringify(join(REPO, "admission-journal.ts"))});
+      const first = recordRefusal(${JSON.stringify(input)}, {
+        dir: ${JSON.stringify(dir)}, pid: 303, now: () => new Date("2026-09-10T05:30:00.000Z"),
+      });
+      const second = recordRefusal({ ...${JSON.stringify(input)}, policyVersion: 2 }, {
+        dir: ${JSON.stringify(dir)}, pid: 303, now: () => new Date("2026-09-10T05:30:00.000Z"),
+      });
+      originalWrite(${JSON.stringify(childResult)}, JSON.stringify({ first, second }));
+    `;
+    const child = await runChild(process.execPath, [
+      "--import",
+      "tsx",
+      "--input-type=module",
+      "--eval",
+      childScript,
+    ]);
+    expect(child, child.stderr).toMatchObject({ code: 0, signal: null });
+    const writes = JSON.parse(readFileSync(childResult, "utf8")) as { first: boolean; second: boolean };
+    expect(writes).toEqual({ first: true, second: false });
+    const read = readRefusals({ dir });
+    expect(read.kind === "read" ? read.entries.map((entry) => entry.policyVersion) : []).toEqual([1]);
+  });
+
+  it("cannot claim a colliding temp pathname that stale cleanup let another writer reuse", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "admission-journal-stale-collision-"));
+    dirs.push(dir);
+    const paths = (label: string) => ({
+      ready: join(dir, `${label}-ready`),
+      release: join(dir, `${label}-release`),
+      result: join(dir, `${label}-result`),
+    });
+    const a = paths("a");
+    const b = paths("b");
+    const writerA = pausedCollisionWriter(dir, 11, a.ready, a.release, a.result);
+    let writerB: ReturnType<typeof pausedCollisionWriter> | null = null;
+    try {
+      await waitForFile(a.ready);
+      expect(readRefusals({ dir, nowMs: Date.now() + 2 * 60 * 60 * 1_000 })).toEqual({
+        kind: "read",
+        entries: [],
+        unparseableLines: 0,
+      });
+      writerB = pausedCollisionWriter(dir, 22, b.ready, b.release, b.result);
+      await waitForFile(b.ready);
+      writeFileSync(a.release, "release a");
+      expect(await writerA.closed, writerA.stderr()).toEqual({ code: 0, signal: null });
+    } finally {
+      writeFileSync(a.release, "release a");
+      writeFileSync(b.release, "release b");
+    }
+    expect(writerB).not.toBeNull();
+    if (writerB === null) return;
+    expect(await writerB.closed, writerB.stderr()).toEqual({ code: 0, signal: null });
+
+    const aWrote = (JSON.parse(readFileSync(a.result, "utf8")) as { wrote: boolean }).wrote;
+    const bWrote = (JSON.parse(readFileSync(b.result, "utf8")) as { wrote: boolean }).wrote;
+    const read = readRefusals({ dir });
+    const policies = read.kind === "read" ? new Set(read.entries.map((entry) => entry.policyVersion)) : new Set();
+    expect(aWrote && !policies.has(11), "writer A reported success for writer B's inode").toBe(false);
+    expect(bWrote && !policies.has(22), "writer B reported success without its record").toBe(false);
+  });
+
+  it("retains and reads no more than the count cap", () => {
+    const dir = mkdtempSync(join(tmpdir(), "admission-journal-count-cap-"));
+    dirs.push(dir);
+    for (let index = 0; index < MAX_RETAINED_REFUSALS + 25; index += 1) {
+      expect(recordRefusal(input, {
+        dir,
+        now: () => new Date(Date.parse("2026-09-10T06:00:00.000Z") + index),
+      })).toBe(true);
+    }
+    let filesRead = 0;
+    const result = readRefusals({
+      dir,
+      readFile: (path) => {
+        filesRead += 1;
+        return readFileSync(path, "utf8");
+      },
+    });
+
+    expect(result.kind === "read" ? result.entries : []).toHaveLength(MAX_RETAINED_REFUSALS);
+    expect(finalNames(dir)).toHaveLength(MAX_RETAINED_REFUSALS);
+    expect(filesRead).toBe(MAX_RETAINED_REFUSALS);
   });
 
   it("keeps an absent directory distinct from a directory that could not be read", () => {
