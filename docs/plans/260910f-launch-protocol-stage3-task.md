@@ -31,7 +31,11 @@ later page will read, and produce the acceptance evidence — without launching 
   reconcile).
 - `scripts/overseer-launches.ts` (new) — `list`, `show <id>` (reads `launches.json` and the
   occurrence's artefact directory, read-only), `dispose …`, `resolve-history …` (each writes one
-  request file and says the daemon will apply it within a tick).
+  request file and says the daemon will apply it within a tick). **The dispose form is pinned —
+  `scheduled-dispatch`'s page prints it verbatim:**
+  `npx tsx scripts/overseer-launches.ts dispose <lo-id> --as not-running|ended --why "<reason>"`.
+  The script fills the request id (a fresh uuid) and the actor itself; neither is a flag. Test that
+  exact argv parses.
 - `tools/overseer/launch-projection.ts` (new) — `launches.json`, bounded per F10 (200 non-terminal,
   most actionable first; the newest 50 terminal; `totalNonTerminal`, `omittedNonTerminal`; the
   journal's replay status and the owner's), written atomically each checkpoint.

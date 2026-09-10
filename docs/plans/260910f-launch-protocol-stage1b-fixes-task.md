@@ -35,6 +35,14 @@ the code and is real.
   line" row uses `acknowledgement: "x"`, which fails to parse on its own, so it is not isolating the
   rule it is named for. Make it a well-formed reset line that fails only because of its position.
 
+## `endedAt` on the terminal arms (asked by `scheduled-dispatch`)
+
+The fold's `completed` and `failed-before-launch` states each carry `endedAt`: the `at` of the event
+that entered that state, never moved by `released` or anything after it (`updatedAt` keeps meaning
+"the last line about this occurrence"). Test: complete an occurrence, release it later, and assert
+`endedAt` is the completion's instant and differs from `updatedAt`; the same for a
+`failed-before-launch` followed by `released`.
+
 ## The per-class hold condition (plan: "(Q2) Admission classes get a typed hold condition")
 
 In `launch-admission.ts` and `launch-protocol.ts`: the admission class becomes a closed set of two,
