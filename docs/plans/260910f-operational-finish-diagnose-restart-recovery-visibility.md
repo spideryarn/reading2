@@ -95,14 +95,25 @@ systemd units, the usage pass, the attention pass, `launch*`, `OverseerPanel.tsx
 
 ### Stage 1 — Revision stamps
 
-- [ ] `tools/fleet/revision.ts`: `readStartRevision(dir, run)`, injected `run` for tests; unknown on
+**Status, 2026-09-10: built and committed (`cb4c3ba7`), implemented by an Opus subagent; Sol stage
+review running (findings-only, because three agents share this tree).** Started before the plan
+review returned, for speed; reworked if that review touches D1–D3.
+
+- [x] `tools/fleet/revision.ts`: `readStartRevision(dir, run)`, injected `run` for tests; unknown on
   any git failure, with the reason. Red first: a test that a dirty tree reports dirty, and that the
   value does not change when HEAD moves after the read.
-- [ ] Daemon: optional `revision` on `daemon-started`, parsed tolerantly; `DaemonOptions.revision`
+- [x] Daemon: optional `revision` on `daemon-started`, parsed tolerantly; `DaemonOptions.revision`
   injectable. Red first in `overseer-daemon.test.ts`'s harness.
-- [ ] Dashboard: stamp captured once at startup in `server.ts`.
-- [ ] Client: `__FLEET_BUILD__` + `dist/build-stamp.json`. Red first: a test that builds a stamp
+- [x] Dashboard: stamp captured once at startup in `server.ts`.
+- [x] Client: `__FLEET_BUILD__` + `dist/build-stamp.json`. Red first: a test that builds a stamp
   from a fake run and that the server-side reader treats a missing/malformed stamp file as unknown.
+
+**What the plan did not know.** Tracked-only dirtiness has a hole: a commit can import a file its
+author never added, and a checkout still holding it untracked stamps clean — the reason
+`readiness-git.ts`'s `stampTree` counts untracked files. Counting every untracked file in the
+primary makes dirty always true. Put to the stage review; the gap is written into `revision.ts`'s
+doc comment meanwhile. Also: every existing daemon test now reads real git once, because start notes
+carry a real revision by default.
 
 ### Stage 2 — `overseer diagnose`
 
@@ -141,13 +152,22 @@ and no test runs the daemon twice with jobs.** The gaps, each a new test on scra
   respawn: a new `instance`, `/api/diagnostics` answers with a fresh `attemptedAt`. (b) Missing
   client build: exits 2 with the sentence, needs a `FLEET_DIST` override (one line in `server.ts`;
   today `DIST` is fixed beside the file). (c) Failed bind: a port already held, exits 1.
-- [ ] **Daemon over a source that dies and returns**: real `runOverseer` wired to the real
+- [x] **Daemon over a source that dies and returns** (`tests/overseer-daemon-source-outage.test.ts`,
+  Opus subagent; asserted on the checkpoint and notes, since `diagnose` did not exist yet — seen red
+  with the heartbeat stopped and with the dashboard never returning): real `runOverseer` wired to the real
   `source.ts` over `overseer-source.test.ts`'s `fakeFleet` stand-in, which is closed and then
   reopened: `condition-degraded` is written, then `condition-restored`, and `diagnose` on that store
   shows the stopped `lastGoodSnapshotAt` while the heartbeat still moves — the *deaf* control the
   acceptance paragraph asks for.
-- [ ] **Restart without double dispatch**: two real `runOverseer` runs on one root with the same
-  `jobs`, the first aborted mid-lease; the second makes no dispatch and writes the unknown down.
+- [x] **Restart without double dispatch** (`tests/overseer-daemon-restart-no-double-dispatch.test.ts`,
+  Opus subagent): two real `runOverseer` runs on one root with the same `jobs`. **The invariant is
+  "the same occurrence is never dispatched twice", not "the counter never moves"** — the plan's first
+  wording was wrong: an occurrence written down as unknown holds nothing up, so the job's *next*
+  occurrence rightly runs. Inside the lease the correct state is `started` (the child may outlive the
+  daemon); the unknown and its `lease-expired` note appear only once the lease runs out, and the test
+  asserts both phases. A spawn-window crash (lock overwritten by a dead pid from inside the
+  dispatcher) records `reservation-abandoned`; a clean control proves a genuinely new occurrence runs
+  exactly once. Each seen red on a one-line mutant.
 - [ ] **A killed daemon process** — only if `overseer run` can be started with no outbound calls
   (no model, no usage fetch, jobs disarmed); otherwise the in-process crash tests stand and this is
   recorded here. SIGKILL the child, `diagnose` says *killed*, a second child takes the lock.
