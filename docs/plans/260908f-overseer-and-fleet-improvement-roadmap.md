@@ -1132,6 +1132,23 @@ improvement is claimed without before/after output.
 **Acceptance:** the page can relate a resource spike to observed concurrent work with its timestamp
 and uncertainty. v1 has simple trend charts/tables, no metrics backend or forecasting model.
 
+**Status (2026-09-10, Overseer): landed on dev at 111b2062, session `resource-history`, plan
+[260910a](260910a-resource-history-what-was-running-when-load-rose.md).** The half that already
+existed was the 24h health store and its chart; the half that was missing was a *stored* work
+history, because the checkpoint's `work` is overwritten every pass and could not answer the
+acceptance sentence at all. Now: one policy module for the cutoffs (the collector and the browser
+had five separate copies), a fourth `work` projection out of the one checkpoint read, a
+byte-bounded work summary written onto each five-minute health sample, disk as a fifth series, a
+"work beside the load" section, and a live `currentWork` never derived from the history. Rendered
+sentence at 400px: peak load, the load sample's timestamp, the nearest work scan and how far off
+it was, and the memory attribution from the same survey turn. Found on the way: a rotation bypass
+older than the branch (`sample-omitted` records skipped the size check, so the file could grow
+without bound — fixed, mutation-verified); capping the number of groups capped no bytes (Sol);
+rows labelled with session UUIDs rather than names, and one line per observation making the page
+5,713px tall — both found only in a browser, both passing every test. Names are now stored beside
+the key because a history outlives its sessions. Left standing: `fleetState` takes ten positional
+arguments (pre-existing).
+
 ### Stage: Admission visibility — reuse the gate already present
 
 - [ ] Read `vitest-admission.ts` and its tests before designing caps. It already checks memory and
