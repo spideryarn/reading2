@@ -1,3 +1,25 @@
+/**
+ * Bounded ownership for the short-lived subprocesses that measure the fleet.
+ *
+ * `spawnSync`'s timeout only sends SIGTERM and can then wait forever, so it
+ * blocked the dashboard precisely when the watched box was least able to
+ * answer. Merely racing an asynchronous child against a timer was no better:
+ * each refresh forgot the survivor and started a sibling. This owner keeps one
+ * child per probe key, bounds captured output and the caller's wait, closes fd
+ * 0, releases inherited pipes, and sweeps the detached process group even when
+ * its leader exits before its descendants.
+ *
+ * Pids are recyclable addresses, not identities. We capture Linux's stable
+ * `/proc/<pid>/stat` start-time tick immediately after spawn and re-check it
+ * before every signal, so a delayed watchdog never kills a stranger wearing
+ * the old pid. The process-group proof is captured at the same moment because
+ * it cannot be reconstructed after a dead leader has disappeared from `/proc`.
+ *
+ * Known limitation: ownership is only in this process's memory. A dashboard
+ * server restart loses the registry and can start a sibling of a genuinely
+ * stuck survivor. Adopting survivors across restarts needs durable identities
+ * and is deliberately outside this stage.
+ */
 import { spawn as nodeSpawn, type ChildProcess } from "node:child_process";
 import { readFileSync } from "node:fs";
 import { StringDecoder } from "node:string_decoder";
@@ -49,17 +71,24 @@ type TrackedChild = {
   signalled: NodeJS.Signals[];
   exitObserved: boolean;
   child: ChildProcess;
+  identity: CapturedIdentity;
 };
 
-type GroupProof =
-  | { kind: "owned" }
-  | { kind: "different"; pgrp: number }
+type CapturedIdentity =
+  | { kind: "known"; pgrp: number; startTime: string }
   | { kind: "unreadable"; why: string };
 
-const DEFAULT_GRACE_MS = 100;
+// A tenth of a second is not a meaningful cleanup opportunity on the machine
+// this watches: it has reached load average 391. One second is still a small
+// addition to a failed probe, but gives SIGTERM a real scheduling turn before
+// SIGKILL makes cleanup impossible. Callers can choose a probe-specific value.
+const DEFAULT_GRACE_MS = 1_000;
 const DEFAULT_MAX_BYTES = 1024 * 1024;
+// Node clamps larger delays to 1 ms (with only a warning), which would turn a
+// generous probe deadline into an immediate kill.
+const MAX_TIMER_MS = 2_147_483_647;
 
-type ProcIdentity = { state: string; pgrp: number };
+type ProcIdentity = { state: string; pgrp: number; startTime: string };
 
 function errorText(cause: unknown): string {
   return cause instanceof Error ? cause.message : String(cause);
@@ -67,15 +96,20 @@ function errorText(cause: unknown): string {
 
 function procIdentity(stat: string): ProcIdentity | null {
   // `comm` may contain spaces and `)`, so fields counted from the left are not
-  // fields at all. After the last `)`: state, ppid, pgrp, … — pgrp is index 2.
+  // fields at all. After the last `)`: state, ppid, pgrp, …, starttime — pgrp
+  // is index 2 and starttime (the kernel's stable identity tick) is index 19.
   const commEnd = stat.lastIndexOf(")");
   if (commEnd < 0) return null;
   const fields = stat.slice(commEnd + 1).trim().split(/\s+/);
   const state = fields[0];
-  const raw = fields[2];
-  if (state === undefined || raw === undefined || !/^\d+$/.test(raw)) return null;
-  const parsed = Number(raw);
-  return Number.isSafeInteger(parsed) ? { state, pgrp: parsed } : null;
+  const rawPgrp = fields[2];
+  const startTime = fields[19];
+  if (
+    state === undefined || rawPgrp === undefined || startTime === undefined ||
+    !/^\d+$/.test(rawPgrp) || !/^\d+$/.test(startTime)
+  ) return null;
+  const pgrp = Number(rawPgrp);
+  return Number.isSafeInteger(pgrp) ? { state, pgrp, startTime } : null;
 }
 
 function stderrSuffix(stderr: string): string {
@@ -83,8 +117,8 @@ function stderrSuffix(stderr: string): string {
   return explanation === "" ? "" : `: ${explanation}`;
 }
 
-function validBound(value: number): boolean {
-  return Number.isFinite(value) && value >= 0;
+function validTimer(value: number): boolean {
+  return Number.isFinite(value) && value >= 0 && value <= MAX_TIMER_MS;
 }
 
 type OutcomeState = {
@@ -173,6 +207,34 @@ export function probeOwner(deps: {
   const now = deps.now ?? Date.now;
   const readProcStat = deps.readProcStat ?? ((pid: number) => readFileSync(`/proc/${pid}/stat`, "utf8"));
   const children = new Map<string, TrackedChild>();
+  let signalsAttached = false;
+
+  function detachParentSignals(): void {
+    if (!signalsAttached) return;
+    signalsAttached = false;
+    process.off("SIGINT", onParentInt);
+    process.off("SIGTERM", onParentTerm);
+  }
+
+  function forwardParentSignal(requested: "SIGINT" | "SIGTERM"): void {
+    for (const entry of children.values()) {
+      if (!entry.exitObserved) signal(entry, requested);
+    }
+    // A listener suppresses Node's default termination, so remove it and
+    // re-raise after the detached children have received the same signal.
+    detachParentSignals();
+    process.kill(process.pid, requested);
+  }
+
+  const onParentInt = (): void => forwardParentSignal("SIGINT");
+  const onParentTerm = (): void => forwardParentSignal("SIGTERM");
+
+  function attachParentSignals(): void {
+    if (signalsAttached) return;
+    signalsAttached = true;
+    process.on("SIGINT", onParentInt);
+    process.on("SIGTERM", onParentTerm);
+  }
 
   function elapsedSince(startedAtMs: number): number {
     try {
@@ -196,7 +258,7 @@ export function probeOwner(deps: {
       }));
   }
 
-  function proveGroup(pid: number): GroupProof {
+  function captureIdentity(pid: number): CapturedIdentity {
     let stat: string;
     try {
       stat = readProcStat(pid);
@@ -205,9 +267,58 @@ export function probeOwner(deps: {
     }
     const identity = procIdentity(stat);
     if (identity === null) {
-      return { kind: "unreadable", why: `/proc/${pid}/stat did not contain a readable process-group id` };
+      return {
+        kind: "unreadable",
+        why: `/proc/${pid}/stat did not contain a readable process-group id and start time`,
+      };
     }
-    return identity.pgrp === pid ? { kind: "owned" } : { kind: "different", pgrp: identity.pgrp };
+    return { kind: "known", pgrp: identity.pgrp, startTime: identity.startTime };
+  }
+
+  type IdentityCheck =
+    | { kind: "same"; identity: ProcIdentity }
+    | { kind: "gone" }
+    | { kind: "reused"; startTime: string }
+    | { kind: "unreadable"; why: string };
+
+  function checkIdentity(entry: TrackedChild): IdentityCheck {
+    if (entry.identity.kind === "unreadable") {
+      return { kind: "unreadable", why: `${entry.identity.why} at spawn` };
+    }
+    let stat: string;
+    try {
+      stat = readProcStat(entry.pid);
+    } catch (cause) {
+      if ((cause as NodeJS.ErrnoException).code === "ENOENT") return { kind: "gone" };
+      return { kind: "unreadable", why: `could not re-read /proc/${entry.pid}/stat: ${errorText(cause)}` };
+    }
+    const current = procIdentity(stat);
+    if (current === null) {
+      return { kind: "unreadable", why: `/proc/${entry.pid}/stat no longer contained a readable identity` };
+    }
+    if (current.startTime !== entry.identity.startTime) {
+      return { kind: "reused", startTime: current.startTime };
+    }
+    return { kind: "same", identity: current };
+  }
+
+  function observeExit(entry: TrackedChild): void {
+    if (entry.exitObserved) return;
+    entry.exitObserved = true;
+    // An old child's late event must not delete a successor under the key.
+    if (children.get(entry.key) === entry) children.delete(entry.key);
+    if (children.size === 0) detachParentSignals();
+  }
+
+  function observeKernelExit(entry: TrackedChild): void {
+    if (entry.exitObserved) return;
+    const checked = checkIdentity(entry);
+    // ENOENT and a different start time both prove that THIS child is gone.
+    // EACCES and malformed input prove only that we could not look.
+    if (
+      checked.kind === "gone" || checked.kind === "reused" ||
+      (checked.kind === "same" && (checked.identity.state === "Z" || checked.identity.state === "X"))
+    ) observeExit(entry);
   }
 
   function sendToPid(entry: TrackedChild, signal: NodeJS.Signals, reason: string): string {
@@ -223,28 +334,48 @@ export function probeOwner(deps: {
   }
 
   function signal(entry: TrackedChild, requested: NodeJS.Signals): string {
-    const proof = proveGroup(entry.pid);
-    if (proof.kind === "different") {
+    const checked = checkIdentity(entry);
+    if (checked.kind === "reused") {
+      const captured = entry.identity.kind === "known" ? entry.identity.startTime : "unknown";
+      return (
+        `pid ${entry.pid} had start time ${captured} at spawn but now names a process with start time ` +
+        `${checked.startTime}; sent no signal`
+      );
+    }
+    if (checked.kind === "unreadable") return `${checked.why}; sent no ${requested}`;
+    if (checked.kind === "gone") {
+      if (entry.identity.kind === "known" && entry.identity.pgrp === entry.pid) {
+        try {
+          process.kill(-entry.pid, requested);
+          entry.signalled.push(requested);
+          return (
+            `/proc/${entry.pid}/stat no longer exists; sent ${requested} to process group ${entry.pid} ` +
+            "on the ownership proof captured at spawn"
+          );
+        } catch (cause) {
+          return `sending ${requested} to recorded process group ${entry.pid} failed: ${errorText(cause)}`;
+        }
+      }
+      return `/proc/${entry.pid}/stat no longer exists and no owned group was captured; sent no ${requested}`;
+    }
+
+    if (entry.identity.kind === "unreadable") return `${entry.identity.why}; sent no ${requested}`;
+    if (entry.identity.pgrp !== entry.pid) {
       return sendToPid(
         entry,
         requested,
-        `/proc/${entry.pid}/stat reported process group ${proof.pgrp}, not child pid ${entry.pid}`,
+        `/proc/${entry.pid}/stat reported process group ${entry.identity.pgrp}, not child pid ${entry.pid}`,
       );
     }
-    if (proof.kind === "unreadable") return sendToPid(entry, requested, proof.why);
 
-    // A negative pid addresses a process group. It is used only after the
-    // immediately preceding /proc read proved that this child leads that group.
+    // A negative pid addresses the group proved at spawn; the re-read above
+    // proved that the pid still names the same process before we use it.
     try {
       process.kill(-entry.pid, requested);
       entry.signalled.push(requested);
-      return `sent ${requested} to proved child process group ${entry.pid}`;
+      return `sent ${requested} to child process group ${entry.pid} proved at spawn`;
     } catch (cause) {
-      return sendToPid(
-        entry,
-        requested,
-        `sending ${requested} to proved process group ${entry.pid} failed: ${errorText(cause)}`,
-      );
+      return `sending ${requested} to proved process group ${entry.pid} failed: ${errorText(cause)}`;
     }
   }
 
@@ -263,6 +394,7 @@ export function probeOwner(deps: {
     }
 
     const existing = children.get(spec.key);
+    if (existing !== undefined) observeKernelExit(existing);
     if (existing !== undefined && !existing.exitObserved) {
       const liveForMs = Math.max(0, startedAtMs - existing.startedAtMs);
       return {
@@ -277,11 +409,12 @@ export function probeOwner(deps: {
 
     const graceMs = spec.graceMs ?? DEFAULT_GRACE_MS;
     const maxBytes = spec.maxBytes ?? DEFAULT_MAX_BYTES;
-    if (!validBound(spec.timeoutMs) || !validBound(graceMs) || !Number.isSafeInteger(maxBytes) || maxBytes <= 0) {
+    if (!validTimer(spec.timeoutMs) || !validTimer(graceMs) || !Number.isSafeInteger(maxBytes) || maxBytes <= 0) {
       return {
         kind: "failed",
         why:
-          `probe "${spec.key}" has invalid bounds: timeoutMs and graceMs must be finite and non-negative, ` +
+          `probe "${spec.key}" has invalid bounds: timeoutMs and graceMs must be finite timers from 0 to ` +
+          `${MAX_TIMER_MS}ms, ` +
           "and maxBytes must be a positive safe integer",
         tookMs: elapsedSince(startedAtMs),
         exitCode: null,
@@ -316,8 +449,14 @@ export function probeOwner(deps: {
       signalled: [],
       exitObserved: false,
       child,
+      // Synchronous and immediately after spawn: a short-lived leader can be
+      // gone by the time the watchdog fires, taking this proof with it.
+      identity: captureIdentity(pid),
     };
-    if (tracked !== null) children.set(spec.key, tracked);
+    if (tracked !== null) {
+      children.set(spec.key, tracked);
+      attachParentSignals();
+    }
 
     try {
       return await new Promise<OwnedOutcome>((settle) => {
@@ -335,34 +474,12 @@ export function probeOwner(deps: {
         const stdoutDecoder = new StringDecoder("utf8");
         const stderrDecoder = new StringDecoder("utf8");
         let deadlineTimer: NodeJS.Timeout | undefined;
-        let killTimer: NodeJS.Timeout | undefined;
         let forcedTimer: NodeJS.Timeout | undefined;
         let forcedImmediate: NodeJS.Immediate | undefined;
+        let sweepKillTimer: NodeJS.Timeout | undefined;
+        let terminationStarted = false;
 
         const tookMs = (): number => elapsedSince(startedAtMs);
-
-        const observeExit = (): void => {
-          if (tracked === null || tracked.exitObserved) return;
-          tracked.exitObserved = true;
-          // An old child's later `close` must not delete a successor which was
-          // started after this child's earlier `exit` released the key.
-          if (children.get(tracked.key) === tracked) children.delete(tracked.key);
-        };
-
-        const observeKernelExit = (): void => {
-          if (tracked === null || tracked.exitObserved) return;
-          try {
-            const identity = procIdentity(readProcStat(tracked.pid));
-            // `Z` is dead and awaiting its parent's reap; `X` is the kernel's
-            // rarer dead state. Neither can still run or multiply probe work.
-            if (identity?.state === "Z" || identity?.state === "X") observeExit();
-          } catch (cause) {
-            // After a successful spawn, ENOENT is positive evidence that this
-            // pid is gone. EACCES and every generic read failure say only that
-            // we could not look, and must leave the child registered.
-            if ((cause as NodeJS.ErrnoException).code === "ENOENT") observeExit();
-          }
-        };
 
         const flushDecoders = (): void => {
           if (decodersFlushed) return;
@@ -391,7 +508,6 @@ export function probeOwner(deps: {
           if (settled) return;
           settled = true;
           clearTimeout(deadlineTimer);
-          clearTimeout(killTimer);
           clearTimeout(forcedTimer);
           clearImmediate(forcedImmediate);
           flushDecoders();
@@ -432,7 +548,7 @@ export function probeOwner(deps: {
             // when the process is already dead. Sample the kernel here so the
             // result does not depend on libuv scheduling: only Z/X or ENOENT is
             // positive evidence. A D/S/R child remains live and blocks retries.
-            observeKernelExit();
+            if (tracked !== null) observeKernelExit(tracked);
             finish();
           });
         };
@@ -442,6 +558,16 @@ export function probeOwner(deps: {
           forcedTimer ??= setTimeout(finish, graceMs);
         };
 
+        const beginDescendantSweep = (): void => {
+          if (tracked === null || terminationStarted) return;
+          terminationStarted = true;
+          signalNotes.push(signal(tracked, "SIGTERM"));
+          sweepKillTimer = setTimeout(() => {
+            signalNotes.push(signal(tracked, "SIGKILL"));
+          }, graceMs);
+          sweepKillTimer.unref?.();
+        };
+
         const capture = (chunk: unknown, destination: "stdout" | "stderr"): void => {
           if (overflowed || settled) return;
           const bytes = Buffer.isBuffer(chunk) ? chunk : Buffer.from(String(chunk));
@@ -449,7 +575,9 @@ export function probeOwner(deps: {
           if (capturedBytes > maxBytes) {
             overflowed = true;
             clearTimeout(deadlineTimer);
-            clearTimeout(killTimer);
+            // SIGKILL is already the terminal sweep. If its exit event arrives
+            // later, it must not start a fresh TERM→KILL sequence.
+            terminationStarted = true;
             if (tracked !== null) signalNotes.push(signal(tracked, "SIGKILL"));
             else signalNotes.push("the child had no pid, so SIGKILL could not be sent");
             // Clearing all timers here used to make overflow unbounded when a
@@ -474,10 +602,12 @@ export function probeOwner(deps: {
         child.on("exit", (code, sentSignal) => {
           exitCode = code;
           exitSignal = sentSignal;
-          observeExit();
+          if (tracked !== null) observeExit(tracked);
+          // A cleanly exited leader can leave helpers in its detached group.
+          // Start this before settling; it deliberately survives `finish()`.
+          beginDescendantSweep();
           if (settled) return;
           clearTimeout(deadlineTimer);
-          clearTimeout(killTimer);
           if (timedOut) forceOnImmediate();
           else armForcedTimer();
         });
@@ -485,28 +615,30 @@ export function probeOwner(deps: {
         child.on("close", (code, sentSignal) => {
           exitCode = code;
           exitSignal = sentSignal;
-          observeExit();
+          if (tracked !== null) observeExit(tracked);
           finish();
         });
 
         deadlineTimer = setTimeout(() => {
           timedOut = true;
+          terminationStarted = true;
           if (tracked !== null) signalNotes.push(signal(tracked, "SIGTERM"));
           else signalNotes.push("the child had no pid, so SIGTERM could not be sent");
           if (tracked?.exitObserved) {
             forceOnImmediate();
             return;
           }
-          killTimer = setTimeout(() => {
+          sweepKillTimer = setTimeout(() => {
             if (tracked !== null) signalNotes.push(signal(tracked, "SIGKILL"));
             else signalNotes.push("the child had no pid, so SIGKILL could not be sent");
-            observeKernelExit();
+            if (tracked !== null) observeKernelExit(tracked);
             // There is one grace, not two. F11 in subagent-cli.ts waited a
             // second grace here and returned at timeout + 2×grace. One
             // immediate lets an exit from this SIGKILL tick count, then frees
             // the caller whether the process obeyed or not.
             forceOnImmediate();
           }, graceMs);
+          sweepKillTimer.unref?.();
         }, spec.timeoutMs);
       });
     } catch (cause) {
@@ -539,7 +671,7 @@ export function limit(n: number): <T>(job: () => Promise<T>) => Promise<T> {
   };
 
   return function runLimited<T>(job: () => Promise<T>): Promise<T> {
-    return new Promise<T>((resolve, reject) => {
+    const result = new Promise<T>((resolve, reject) => {
       waiting.push(() => {
         const complete = (): void => {
           active -= 1;
@@ -560,5 +692,11 @@ export function limit(n: number): <T>(job: () => Promise<T>) => Promise<T> {
       });
       startWaiting();
     });
+    // The caller still receives the rejecting promise, but the owner's derived
+    // observer means abandoning it cannot turn one failed probe into a process-
+    // terminating unhandled rejection. This is the same rule as
+    // `singleFlightCollect`'s late-result observer.
+    void result.catch(() => undefined);
+    return result;
   };
 }

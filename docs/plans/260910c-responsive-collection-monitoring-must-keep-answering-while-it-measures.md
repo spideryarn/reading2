@@ -135,20 +135,42 @@ is not enforced at all.
 
 ## Stage 1 — Owned children: a probe you can stop waiting for and still be responsible for
 
+**Status (2026-09-10): built and reviewed; Codex implemented both rounds.** The implementation run
+(GPT Sol, workspace-write) hit its 45-minute wall before writing a report but had finished the code,
+and handled the hardest part better than the brief asked: when neither `exit` nor `close` has
+arrived, it samples the kernel and counts only `Z`/`X` or `ENOENT` as evidence of death. The review
+round fixed two P1s — both about signalling the wrong thing: **pid reuse** (a recycled pid leading
+its own group would have had `SIGKILL` sent to a stranger's whole group; start time is now captured
+at spawn and a mismatch sends nothing) and **the group proof taken at kill time** (a vanished leader
+left its descendants unreachable; the proof is now captured at spawn). 13 tests → 28, each red
+first.
+
+*Accepted after checking:* the review added parent `SIGINT`/`SIGTERM` forwarding — process-global
+listeners that signal owned children and then re-raise. `git grep` at `HEAD` found no signal handler
+anywhere in `tools/fleet`, `tools/overseer` or `tmux-job.ts`, so forward-then-re-raise reproduces
+Node's default death plus child cleanup. **Whoever adds the first shutdown handler to `server.ts`
+must reckon with it**: a handler that does not exit would see the re-raise and run twice.
+
+*Residual, recorded rather than fixed:* the post-exit descendant sweep signals the group on the
+spawn-time proof a grace after the leader is reaped. If every member of that group died and the
+group id was recycled into a new group leader inside that one second, the sweep would reach it. With
+`pid_max` in the millions and a one-second window this is not worth more machinery; it is written
+here so the next person to widen the window knows.
+
 New module `tools/fleet/child.ts`, importing nothing but node builtins.
 
-- [ ] **`runOwned(spec)`** — `spawn`, stdout under a byte cap, and a lifecycle whose arms are
+- [x] **`runOwned(spec)`** — `spawn`, stdout under a byte cap, and a lifecycle whose arms are
       distinguishable: `ok` / `failed` / `timed-out` / `refused` / `overflowed`. The caller is freed
       at `timeoutMs + graceMs` and not a millisecond later: SIGTERM at the deadline, SIGKILL a grace
       later, settle on `setImmediate` after it so an `exit` in the same tick still counts. **Not two
       graces in series** — `scripts/subagent-cli.ts`'s GPT Sol F11 is exactly that mistake.
-- [ ] **`stuck` is decided on `exit`, NEVER on `close`** — GPT Sol's P1, and the plan had it wrong.
+- [x] **`stuck` is decided on `exit`, NEVER on `close`** — GPT Sol's P1, and the plan had it wrong.
       `exit` says the process is gone; `close` also waits for everything holding its stdout and
       stderr pipes, so a helper that escaped into another group keeps `close` pending after the child
       is dead. Defining `stuck` by `close` would report a dead child as stuck and **refuse that probe
       for ever**. So: listen to both, start a bounded pipe-flush grace from `exit`, destroy the read
       streams when it expires, and let `exit` alone decide whether the process is still with us.
-- [ ] **The group proof is captured at spawn, not at the kill.** GPT Sol's second P1 here: by the
+- [x] **The group proof is captured at spawn, not at the kill.** GPT Sol's second P1 here: by the
       time we want to signal, `/proc/<leader>/stat` may be gone while its descendants are alive, and
       a proof that cannot be re-taken is a fallback to signalling a dead pid and leaking the rest. So
       immediately after `spawn` (`detached: true`, which makes the child its own group leader) read
@@ -158,7 +180,7 @@ New module `tools/fleet/child.ts`, importing nothing but node builtins.
       still matches; otherwise signal the pid alone and say which in the `why`.
       `/proc/<pid>/stat`'s `comm` field is parenthesised and may contain spaces and parentheses, so
       parse the fields after the **last** `)`.
-- [ ] **`refused` is how "repeated timeouts do not multiply live owned children" is enforced**, and
+- [x] **`refused` is how "repeated timeouts do not multiply live owned children" is enforced**, and
       **it does not expire on time alone.** A time-based expiry turns one D-state child into one new
       child per period, which is the multiplication the roadmap forbids. It ends when the child's
       exit is observed (including late, after `stuck` was reported), or when an identity check proves
@@ -170,15 +192,15 @@ New module `tools/fleet/child.ts`, importing nothing but node builtins.
       server restart loses the registry and can start a sibling of a genuinely stuck survivor. Adopting
       survivors across a restart is a bigger piece of work than this stage; it is written into the
       module header so nobody has to rediscover it.
-- [ ] **Everything `subagent-cli.ts` paid for, restated here so it is not paid twice:** fd 0 never
+- [x] **Everything `subagent-cli.ts` paid for, restated here so it is not paid twice:** fd 0 never
       inherited (`"ignore"`); the child's `error` event handled, so a spawn failure is a `failed`
       value and never a throw; pipes drained or destroyed after overflow and after exit; UTF-8
       decoded through `StringDecoder`; the parent's own `SIGTERM`/`SIGINT` forwarded to detached
       children, or a dashboard restart orphans them; and descendants swept even when the leader
       exits cleanly.
-- [ ] **`limit(n)`**, a small concurrency limiter, so cheap independent probes run a few at a time
+- [x] **`limit(n)`**, a small concurrency limiter, so cheap independent probes run a few at a time
       rather than one child per session at once.
-- [ ] **Tests, red first**, driven by a fake spawn where a real process cannot make the case: a clean
+- [x] **Tests, red first**, driven by a fake spawn where a real process cannot make the case: a clean
       exit; a non-zero exit; `ENOENT`; a child that ignores SIGTERM and dies on SIGKILL (real:
       `sh -c 'trap "" TERM; sleep 30'`) settling at about `timeout + grace`; a child that never exits
       (fake — SIGKILL is uncatchable, so an unkillable child cannot be manufactured, and the comment
