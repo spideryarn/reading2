@@ -410,7 +410,7 @@ export async function main(argv: string[], io: Io = realIo): Promise<number> {
   // not close it, and nothing here can: the real fix is an atomic quiesce in
   // the dashboard itself, which belongs to tools/fleet/ and is noted in the
   // plan as a follow-up for its owner. GPT Sol, 2026-09-09.
-  const queue = serviceUp ? await readQueue(io, port.port) : ({ ok: true, items: [], holds: [], durable: false } as QueueRead);
+  const queue = serviceUp ? await readQueue(io, port.port) : ({ ok: true, items: [], holds: [], durable: false, holdsDurable: false } as QueueRead);
 
   const preconditions: Check[] = [
     { name: "unit", verdict: "pass", detail: `${UNIT} loaded from ${facts.fragmentPath}, ${facts.activeState} (${facts.subState}), WorkingDirectory ${facts.workDir}` },
