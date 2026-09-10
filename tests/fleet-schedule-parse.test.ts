@@ -131,6 +131,36 @@ describe("what it does not know, it says it does not know — per row", () => {
     expect(parsed.preview.jobs[1]).toEqual({ kind: "unreadable", jobId: null, why: expect.any(String) });
   });
 
+  test("a known verdict paired with a next-run shape the writer never gives it is an unreadable row", () => {
+    const value = copy();
+    (jobsOf(value)[0] as Record<string, unknown>)["verdict"] = { kind: "waiting", sentence: "still waiting", next: { kind: "due-now" } };
+    const parsed = parseSchedulePreview(value);
+    if (parsed.kind !== "preview") throw new Error("expected a preview");
+    expect(parsed.preview.jobs[0]).toEqual({
+      kind: "unreadable",
+      jobId: "parse-fixture-job",
+      why: expect.stringContaining("waiting"),
+    });
+  });
+
+  test("a changed=no document whose current digest differs from its pin is an unreadable row", () => {
+    const value = copy();
+    const first = jobsOf(value)[0] as Record<string, unknown>;
+    const documents = first["documents"] as Record<string, unknown>[];
+    (documents[0] as Record<string, unknown>)["current"] = {
+      kind: "read",
+      sha256: "f".repeat(64),
+      when: "this-checkpoint",
+    };
+    const parsed = parseSchedulePreview(value);
+    if (parsed.kind !== "preview") throw new Error("expected a preview");
+    expect(parsed.preview.jobs[0]).toEqual({
+      kind: "unreadable",
+      jobId: "parse-fixture-job",
+      why: expect.stringContaining("changed"),
+    });
+  });
+
   test("a schema this build does not read is its own answer, not an unreadable file", () => {
     const value = copy();
     value["schema"] = 2;
@@ -182,6 +212,15 @@ describe("instants are range-checked, not just finiteness-checked", () => {
     const parsed = parseSchedulePreview(value);
     if (parsed.kind !== "preview") throw new Error("expected a preview");
     expect(parsed.preview.jobs.map((row) => row.kind)).toEqual(["unreadable", "job"]);
+  });
+
+  test("reads every instant Date.toISOString can write, including an extended year", () => {
+    const value = copy();
+    const writtenAt = new Date("+010000-01-01T00:00:00.000Z").toISOString();
+    value["writtenAt"] = writtenAt;
+    const parsed = parseSchedulePreview(value);
+    expect(parsed.kind).toBe("preview");
+    if (parsed.kind === "preview") expect(parsed.preview.writtenAt).toBe(writtenAt);
   });
 
   test("a duration that is not a sane number of milliseconds makes its row unreadable", () => {

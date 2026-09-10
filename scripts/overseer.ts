@@ -68,6 +68,7 @@ import {
   EVENTS_FILE,
   RECONCILE_FILE,
   describeRefusal,
+  readCheckpoint,
   storeRoot,
 } from "../tools/overseer/store.js";
 import { collectUsage, type UsageReport } from "../tools/overseer/usage.js";
@@ -1101,7 +1102,9 @@ export async function runParsed(parsed: Parsed): Promise<number> {
       // builds it, so an unchanged checkout reads as the same list.
       const checkout = repoRoot();
       const builds = listRevision([...standingJobs(checkout).jobs, ...ruleJobs(checkout).jobs]);
-      console.log(["", ...schedulePreviewLines(readSchedulePreviewFile(root), { listRevision: builds }, Date.now())].join("\n"));
+      const checkpoint = readCheckpoint(root);
+      const runningInstanceId = checkpoint.kind === "checkpoint" ? checkpoint.checkpoint.heartbeat.instanceId : null;
+      console.log(["", ...schedulePreviewLines(readSchedulePreviewFile(root), { listRevision: builds, runningInstanceId }, Date.now())].join("\n"));
       return 0;
     }
     case "tick":

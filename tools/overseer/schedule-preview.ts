@@ -13,9 +13,10 @@
  * fact was added to the planner's output rather than re-read here.
  *
  * The one thing the planner cannot know is whether a launch succeeds, so the
- * preview's `launch` answers `true` for a live session job and `false` for
- * anything else — and the file says, on every row it affects and once at the
- * top, that **rows after a proposed launch assume it succeeded**.
+ * preview's `launch` answers `true` for a live session job when this daemon
+ * holds a session dispatcher, and `false` otherwise — and the file says, on
+ * every row it affects and once at the top, that **rows after a proposed launch
+ * assume it succeeded**.
  *
  * ## Why the daemon writes it rather than a reader computing it
  *
@@ -51,10 +52,10 @@ import type {
   SchedulePreviewVerdictKind,
 } from "../fleet/wire.js";
 import { zonedReadings, type Zones } from "../fleet/zones.js";
+import { describeAge } from "./format-age.js";
 import type { Arming, AuthorisedJob, JobWork, OccurrenceHistory, OccurrenceIndex } from "./jobs.js";
 import { authorisationUnder, planJobs, type DocumentEvidence, type JobPlan } from "./schedule-plan.js";
 import type { HeldCapabilities } from "./scheduler.js";
-import { describeAge } from "./status-cli.js";
 import type { StoredScheduler } from "./store.js";
 
 /** The file, inside the store directory — beside `armed.json`, for the reason `arming.ts` gives: it is a fact about one store's scheduler. */
@@ -78,7 +79,7 @@ export const MISSED_RUN_SENTENCE =
 
 /** The limits of the file, stated in it. One copy, because the CLI prints it and the browser will. */
 export const SCHEDULE_PREVIEW_CAVEAT =
-  "As of the instant it was written, which is at most one checkpoint tick (30s) old while the daemon runs. " +
+  "As of the instant it was written, which is at most one checkpoint tick old while the daemon runs. " +
   "Rows are in the order the scheduler walks them, and a row after a proposed session launch assumes that launch succeeded.";
 
 /** Twelve hex characters, the same length as a behaviour hash — enough to tell two lists apart, short enough to read aloud. */
@@ -172,12 +173,12 @@ export function schedulePreview(input: SchedulePreviewInput): SchedulePreview {
       nowMs: input.now.getTime(),
       evidence,
     },
-    // THE PREVIEW'S LAUNCH: a live session job counts as a launch, so the rows
-    // after it are spaced against it exactly as the tick's would be if the
-    // launch succeeded. A rule starts no session. (The planner never hands a
-    // dry-run job to `launch`; the check is here so this line says the whole
-    // rule on its own.)
-    (job) => job.definition.behaviour.work.kind === "session" && job.definition.behaviour.dispatch.kind === "live",
+    // THE PREVIEW'S LAUNCH: a live session job counts as a launch only when this
+    // process has a dispatcher, so the rows after it are spaced exactly as the
+    // tick's would be if the proposed launch succeeded. A refusal for a missing
+    // capability and a rule start no session. (The planner never hands a dry-run
+    // job to `launch`; the check is here so this line says the whole rule.)
+    (job) => input.capabilities.session && job.definition.behaviour.work.kind === "session" && job.definition.behaviour.dispatch.kind === "live",
   );
   const jobs = definitions.map((job, index) => {
     const plan = plans[index];
@@ -492,13 +493,23 @@ function relative(iso: string, nowMs: number): string {
  * so the block can say whether the running daemon holds it — the one question a
  * reader cannot answer from the file alone.
  */
-export function schedulePreviewLines(read: SchedulePreviewRead, checkout: { readonly listRevision: string }, nowMs: number): string[] {
+export function schedulePreviewLines(
+  read: SchedulePreviewRead,
+  checkout: { readonly listRevision: string; readonly runningInstanceId?: string | null },
+  nowMs: number,
+): string[] {
   const builds = `${INDENT}this checkout builds list ${checkout.listRevision}`;
   switch (read.kind) {
     case "absent":
       return [
-        `${label("schedule")}NO PREVIEW — there is no ${SCHEDULE_PREVIEW_FILE} in this store: the running daemon predates this build and writes no preview ` +
-          "(a daemon of this build writes one on every checkpoint tick)",
+        checkout.runningInstanceId === undefined
+          ? `${label("schedule")}NO PREVIEW — there is no ${SCHEDULE_PREVIEW_FILE} in this store: the running daemon predates this build and writes no preview ` +
+            "(a daemon of this build writes one on every checkpoint tick)"
+          : checkout.runningInstanceId === null
+            ? `${label("schedule")}NO PREVIEW — there is no ${SCHEDULE_PREVIEW_FILE} and no readable current checkpoint; ` +
+              "the daemon may predate this build or may not have completed a successful preview write"
+            : `${label("schedule")}NO PREVIEW — current checkpoint instance ${checkout.runningInstanceId} has not completed a successful preview write: ` +
+              `there is no ${SCHEDULE_PREVIEW_FILE} (it may predate this build, still be inside its first checkpoint interval, or be failing to write the file)`,
         builds,
       ];
     case "unsupported-schema":
@@ -518,11 +529,11 @@ export function schedulePreviewLines(read: SchedulePreviewRead, checkout: { read
   }
 }
 
-function previewLines(preview: ParsedSchedulePreview, checkout: { readonly listRevision: string }, nowMs: number): string[] {
+function previewLines(preview: ParsedSchedulePreview, checkout: { readonly listRevision: string; readonly runningInstanceId?: string | null }, nowMs: number): string[] {
   const lines = [
     `${label("schedule")}${preview.headline.kind.toUpperCase()} — preview as of ${londonFirst(preview.writtenAt)} ` +
       `(${describeAge(nowMs - Date.parse(preview.writtenAt))} old), written by instance ${preview.instanceId}`,
-    `${INDENT}${listLine(preview.list, checkout)}`,
+    `${INDENT}${listLine(preview.list, checkout, preview.instanceId)}`,
     `${INDENT}arming: ${preview.arming.kind === "armed" ? `armed at ${londonFirst(preview.arming.at)}` : `none — ${preview.arming.why}`}`,
     `${INDENT}history: ${preview.history.kind === "intact" ? "the occurrence ledger is whole" : `LOST, so every job is held — ${preview.history.why}`}`,
     `${INDENT}this daemon holds: session dispatcher ${preview.capabilities.session ? "yes" : "no"}, rule runner ${preview.capabilities.rules ? "yes" : "no"}`,
@@ -534,7 +545,18 @@ function previewLines(preview: ParsedSchedulePreview, checkout: { readonly listR
   return lines;
 }
 
-function listLine(list: ParsedSchedulePreview["list"], checkout: { readonly listRevision: string }): string {
+function listLine(
+  list: ParsedSchedulePreview["list"],
+  checkout: { readonly listRevision: string; readonly runningInstanceId?: string | null },
+  previewInstanceId: string,
+): string {
+  if (checkout.runningInstanceId !== undefined && checkout.runningInstanceId !== previewInstanceId) {
+    return checkout.runningInstanceId === null
+      ? `this preview was written by daemon instance ${previewInstanceId}, and there is no readable current checkpoint, so it does not say which list the current daemon holds; ` +
+          `this checkout builds list ${checkout.listRevision}`
+      : `this preview was written by daemon instance ${previewInstanceId}, while the current checkpoint belongs to ${checkout.runningInstanceId}, so it does not say which list the current daemon holds; ` +
+          `this checkout builds list ${checkout.listRevision}`;
+  }
   if (list.kind === "not-given") {
     return `the running daemon was given no job list (${list.why}), so it previews nothing; this checkout builds list ${checkout.listRevision}`;
   }

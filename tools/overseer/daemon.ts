@@ -70,7 +70,7 @@ import {
 import type { Arming, AuthorisedJob, SpawnJob } from "./jobs.js";
 import { conditionTracker, describeNote, NOTES_FILE, openNoteLog, type DaemonNote, type NoteLog } from "./notes.js";
 import type { ProposingRuleWork } from "./rule-protocol.js";
-import { resolveEvidence, type ReadDocument } from "./schedule-plan.js";
+import { resolveEvidence, type DocumentEvidence, type ReadDocument } from "./schedule-plan.js";
 import { schedulePreview, writeSchedulePreview } from "./schedule-preview.js";
 import { describeReport, schedulerStandingOf, schedulerTick, type HeldCapabilities, type LostRecord, type RuleRun } from "./scheduler.js";
 import {
@@ -792,7 +792,7 @@ export async function runOverseer(options: DaemonOptions): Promise<DaemonOutcome
   // start would have the tick refusing its job while every checkpoint went on
   // saying ARMED. So it is made of the same fresh reading the tick uses, and
   // `at` is when this checkpoint decided it.
-  const schedulerStandingNow = (): StoredScheduler =>
+  const schedulerStandingNow = (evidence?: DocumentEvidence): StoredScheduler =>
     schedulerStandingOf({
       jobs:
         options.jobs === undefined
@@ -800,7 +800,7 @@ export async function runOverseer(options: DaemonOptions): Promise<DaemonOutcome
           : {
               definitions: options.jobs.definitions,
               held: { session: options.jobs.spawn !== undefined, rules: options.jobs.rules !== undefined },
-              evidence: resolveEvidence(options.jobs.definitions, options.jobs.readDocument),
+              evidence: evidence ?? resolveEvidence(options.jobs.definitions, options.jobs.readDocument),
             },
       detail: options.schedulerDetail,
       at: now().toISOString(),
@@ -847,40 +847,7 @@ export async function runOverseer(options: DaemonOptions): Promise<DaemonOutcome
    */
   const previewOptions = options.preview;
   let previewFailing: string | null = null;
-  const writePreview = (headline: StoredScheduler): void => {
-    let written: { ok: true } | { ok: false; why: string };
-    try {
-      const capabilities: HeldCapabilities = previewOptions?.capabilities ?? {
-        session: options.jobs?.spawn !== undefined,
-        rules: options.jobs?.rules !== undefined,
-      };
-      written = writeSchedulePreview(
-        root,
-        schedulePreview({
-          instanceId: store.instanceId,
-          now: now(),
-          list:
-            previewOptions === undefined
-              ? { kind: "not-given", why: "the process that started this daemon handed it no job list to preview" }
-              : {
-                  kind: "given",
-                  definitions: previewOptions.definitions,
-                  listRevision: previewOptions.listRevision,
-                  // READ NOW, like the tick and the headline — a preview of the
-                  // documents as they were at start would be defect 1 again.
-                  evidence: resolveEvidence(previewOptions.definitions, previewOptions.readDocument),
-                },
-          occurrences: store.occurrences,
-          history: store.occurrenceHistory,
-          arming: previewOptions?.arming ?? options.jobs?.arming ?? { kind: "unknown", why: "this daemon was given no job list, so no arming instant either" },
-          launchSeparationMs: previewOptions?.launchSeparationMs ?? options.jobs?.launchSeparationMs ?? 0,
-          capabilities,
-          headline,
-        }),
-      );
-    } catch (cause) {
-      written = { ok: false, why: `the preview could not be computed (${cause instanceof Error ? cause.message : String(cause)})` };
-    }
+  const recordPreviewResult = (written: { ok: true } | { ok: false; why: string }): void => {
     if (!written.ok) {
       if (previewFailing === null) log(`schedule preview: NOT WRITTEN — ${written.why}. The daemon carries on; this is said once, and again when it recovers`);
       previewFailing = written.why;
@@ -891,14 +858,79 @@ export async function runOverseer(options: DaemonOptions): Promise<DaemonOutcome
       previewFailing = null;
     }
   };
+  const writePreview = (headline: StoredScheduler, evidence: DocumentEvidence | null): void => {
+    let written: { ok: true } | { ok: false; why: string };
+    try {
+      // WHEN ARMED, THESE ARE THE LIVE TICKER'S FACTS. The copies on `preview`
+      // exist for the disarmed case; allowing them to overrule `jobs` would let
+      // one process publish a different arming, capability set or spacing from
+      // the scheduler it actually runs.
+      const capabilities: HeldCapabilities =
+        options.jobs === undefined
+          ? (previewOptions?.capabilities ?? { session: false, rules: false })
+          : { session: options.jobs.spawn !== undefined, rules: options.jobs.rules !== undefined };
+      const list: Parameters<typeof schedulePreview>[0]["list"] =
+        previewOptions === undefined
+          ? { kind: "not-given", why: "the process that started this daemon handed it no job list to preview" }
+          : evidence === null
+            ? (() => {
+                throw new Error("no document evidence was resolved for this checkpoint's preview");
+              })()
+            : {
+                kind: "given",
+                definitions: previewOptions.definitions,
+                listRevision: previewOptions.listRevision,
+                evidence,
+              };
+      written = writeSchedulePreview(
+        root,
+        schedulePreview({
+          instanceId: store.instanceId,
+          now: now(),
+          list,
+          occurrences: store.occurrences,
+          history: store.occurrenceHistory,
+          arming: options.jobs?.arming ?? previewOptions?.arming ?? { kind: "unknown", why: "this daemon was given no job list, so no arming instant either" },
+          launchSeparationMs: options.jobs?.launchSeparationMs ?? previewOptions?.launchSeparationMs ?? 0,
+          capabilities,
+          headline,
+        }),
+      );
+    } catch (cause) {
+      written = { ok: false, why: `the preview could not be computed (${cause instanceof Error ? cause.message : String(cause)})` };
+    }
+    recordPreviewResult(written);
+  };
 
   const ticker = setInterval(() => {
     if (halted() !== null) return;
     checkFreshness();
-    // ONE HEADLINE FOR BOTH FILES written this tick.
-    const headline = schedulerStandingNow();
+    // ONE DOCUMENT READING, THEN ONE HEADLINE FOR BOTH FILES written this tick.
+    // Re-reading between them lets a file edit in that tiny window produce an
+    // ARMED headline over an unauthorised row (or the reverse).
+    let evidence: DocumentEvidence | null;
+    try {
+      evidence =
+        previewOptions === undefined
+          ? null
+          : resolveEvidence(previewOptions.definitions, options.jobs?.readDocument ?? previewOptions.readDocument);
+    } catch (cause) {
+      const why = `the preview's document evidence could not be resolved (${cause instanceof Error ? cause.message : String(cause)})`;
+      // A throwing reader still must not stop the heartbeat. When jobs are live,
+      // make the headline fail closed from an explicit unreadable reading; when
+      // they are off, the headline needs no document evidence at all.
+      const unavailable =
+        options.jobs === undefined
+          ? undefined
+          : resolveEvidence(options.jobs.definitions, (path) => ({ kind: "unreadable", path, why }));
+      const headline = schedulerStandingNow(unavailable);
+      if (!guard(store.checkpoint(checkpointUpdate(headline)))) return;
+      recordPreviewResult({ ok: false, why });
+      return;
+    }
+    const headline = schedulerStandingNow(evidence ?? undefined);
     if (!guard(store.checkpoint(checkpointUpdate(headline)))) return;
-    writePreview(headline);
+    writePreview(headline, evidence);
   }, tickMs);
   ticker.unref?.();
 

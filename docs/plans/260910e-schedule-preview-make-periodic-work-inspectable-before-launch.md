@@ -252,11 +252,27 @@ tests, typecheck exit 0. What the plan did not know:
 
 ### Stage 2 — the preview file and the CLI
 
-- [ ] `wire.ts` types; `schedule-parse.ts`; pure `schedulePreview()` over `planJobs`;
+**Done, review pending.** `6b5ce4a9` (an Opus subagent, from
+[the task](260910e-schedule-preview-stage2-task.md)). Sol's stage review
+([prompt](260910e-schedule-preview-stage2-review-sol-prompt.md)) **timed out at 30 minutes with no
+answer**, having already edited the tree; the manager read every hunk and kept them as a separate
+commit — see its message. The Overseer was told; the proposal is that Stage 3's review also covers
+Stage 2's final state rather than a separate second round. What the plan did not know:
+
+- **`list: given | not-given`** in the file, so *"this daemon was handed no list"* differs from *"no
+  file"* (a daemon predating this build).
+- **The preview needs `arming` and `launchSeparationMs` of its own** for the disarmed case — and,
+  per Sol's edit, the live ticker's values must win when armed.
+- **`zonedLine` marks days against UTC**, so London-first printed 23:30 UTC as *"00:30 London
+  (+1d)"*; `londonFirst` marks them against London. Stage 3 prints through it.
+- **`describeAge` had to become a leaf** (`format-age.ts`): importing it from `status-cli.ts` pulled
+  `gjd-remote-tmux.ts` into the daemon.
+
+- [x] `wire.ts` types; `schedule-parse.ts`; pure `schedulePreview()` over `planJobs`;
   `listRevision`; `MISSED_RUN_POLICY`.
-- [ ] The daemon writes `schedule.json` each checkpoint tick; the `preview` option from
+- [x] The daemon writes `schedule.json` each checkpoint tick; the `preview` option from
   `schedulerWiring`; a daemon test with a disposable store.
-- [ ] `overseer status` prints the block, and the checkout-vs-daemon `listRevision` line.
+- [x] `overseer status` prints the block, and the checkout-vs-daemon `listRevision` line.
 
 ### Stage 3 — the browser section
 

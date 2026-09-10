@@ -273,6 +273,14 @@ describe("each verdict the planner can give becomes a row that says so", () => {
     expect(row.verdict.sentence).toContain("no session dispatcher");
   });
 
+  test("a daemon holding no session dispatcher does not space later rows against a launch it cannot make", () => {
+    const preview = previewOf([sessionJob("first"), sessionJob("second")], {
+      capabilities: NONE,
+      launchSeparationMs: minutes(30),
+    });
+    expect(preview.jobs.map((row) => row.verdict.kind)).toEqual(["dispatch", "dispatch"]);
+  });
+
   test("the fixed facts of every row: resource class, the lease labelled as the launcher's, and what is NOT built", () => {
     const preview = previewOf([sessionJob("s", { leaseMs: hours(6) }), ruleJob("r")]);
     expect(only(preview, "s")).toMatchObject({
@@ -434,6 +442,18 @@ describe("the file: written atomically, read back through the one parser", () =>
   });
 });
 
+describe("the preview's own claims describe this daemon", () => {
+  test("does not promise a fixed 30-second age when the daemon's checkpoint interval is configurable", () => {
+    expect(previewOf([sessionJob("a")]).caveat).toContain("one checkpoint tick");
+    expect(previewOf([sessionJob("a")]).caveat).not.toContain("30s");
+  });
+
+  test("the long-lived daemon does not reach the CLI and remote-tmux modules for one duration formatter", () => {
+    const source = readFileSync(join(repoRoot(), "tools/overseer/schedule-preview.ts"), "utf8");
+    expect(source).not.toContain('from "./status-cli.js"');
+  });
+});
+
 describe("the CLI block", () => {
   const CHANGED_TO = "c".repeat(64);
 
@@ -443,10 +463,21 @@ describe("the CLI block", () => {
     return schedulePreviewLines(readSchedulePreviewFile(root), { listRevision: checkoutRevision }, NOW.getTime() + 20_000);
   }
 
-  test("with no file: the running daemon predates this build, and the checkout's list is still named", () => {
+  test("with no file and no checkpoint context: the possible pre-build daemon and the checkout's list are named", () => {
     const lines = schedulePreviewLines({ kind: "absent" }, { listRevision: "0a1b2c3d4e5f" }, NOW.getTime()).join("\n");
     expect(lines).toContain("predates this build");
     expect(lines).toContain("0a1b2c3d4e5f");
+  });
+
+  test("no file beside a current checkpoint does not claim that current daemon predates this build", () => {
+    const lines = schedulePreviewLines(
+      { kind: "absent" },
+      { listRevision: "0a1b2c3d4e5f", runningInstanceId: "current-daemon" },
+      NOW.getTime(),
+    ).join("\n");
+    expect(lines).toContain("current-daemon");
+    expect(lines).toContain("has not completed a successful preview write");
+    expect(lines).not.toContain("the running daemon predates this build");
   });
 
   test("with a file: a line per fact per job, the next run London first, and a changed document with both digests", () => {
@@ -476,6 +507,20 @@ describe("the CLI block", () => {
     const preview = previewOf([sessionJob("a")]);
     const text = linesFor(preview, "fedcba987654").join("\n");
     expect(text).toContain(`the running daemon holds list ${listRevision([sessionJob("a")])}; this checkout builds fedcba987654 — a restart loads it`);
+  });
+
+  test("a preview left by a previous daemon instance does not claim what the current daemon holds", () => {
+    const preview = previewOf([sessionJob("a")]);
+    const root = tempRoot();
+    writeSchedulePreview(root, preview);
+    const text = schedulePreviewLines(
+      readSchedulePreviewFile(root),
+      { listRevision: listRevision([sessionJob("a")]), runningInstanceId: "a-new-daemon-instance" },
+      NOW.getTime(),
+    ).join("\n");
+    expect(text).toContain("a-new-daemon-instance");
+    expect(text).toContain("does not say which list the current daemon holds");
+    expect(text).not.toContain("the running daemon holds list");
   });
 
   test("an unreadable row is printed as unreadable, and the others still print", () => {
@@ -556,6 +601,100 @@ describe("the daemon writes it on every checkpoint tick, and a disarmed daemon d
     expect(rows).toEqual(["would-dispatch:dispatch", "dry:dry-run"]);
     // THE ASSERTION THAT MATTERS: it previewed a dispatch and made none.
     expect(eventsIn(root).filter((event) => event.kind.startsWith("job-occurrence") || event.kind.startsWith("rule-"))).toEqual([]);
+  });
+
+  test("one checkpoint uses one document reading for both its headline and its preview rows", async () => {
+    const root = tempRoot();
+    const job = sessionJob("one-reading");
+    let readings = 0;
+    const readDocument = (path: string) => ({
+      kind: "read" as const,
+      path,
+      // Each checkpoint currently asks twice: the headline sees the pin and the
+      // row sees the edit. A single evidence snapshot alternates across ticks,
+      // but the two claims inside each file always agree.
+      sha256: ++readings % 2 === 1 ? DOC.sha256 : "f".repeat(64),
+    });
+    await runOverseer({
+      root,
+      baseUrl: "http://127.0.0.1:0",
+      signal: new AbortController().signal,
+      now: () => NOW,
+      tickMs: 5,
+      log: () => {},
+      source: () =>
+        (async function* () {
+          await sleep(50);
+          yield* [];
+        })(),
+      jobs: {
+        definitions: [job],
+        spawn: () => ({ kind: "refused", why: "the test never starts a process" }),
+        arming: ARMED_LONG_AGO,
+        launchSeparationMs: 0,
+        readDocument,
+        // Keep the live scheduler out of this reproduction. Only the checkpoint
+        // ticker is under test, and no dispatch path is entered.
+        intervalMs: hours(24),
+      },
+      preview: {
+        definitions: [job],
+        readDocument,
+        capabilities: { session: true, rules: false },
+        listRevision: listRevision([job]),
+        arming: ARMED_LONG_AGO,
+        launchSeparationMs: 0,
+      },
+    });
+    const read = readSchedulePreviewFile(root);
+    if (read.kind !== "preview") throw new Error(`expected a preview, got ${read.kind}`);
+    const row = read.preview.jobs[0];
+    if (row?.kind !== "job") throw new Error("expected a readable job row");
+    expect([
+      ["armed", "dispatch"],
+      ["blocked", "unauthorised"],
+    ]).toContainEqual([read.preview.headline.kind, row.job.verdict.kind]);
+  });
+
+  test("an armed daemon previews the arming, capabilities, spacing and document reader its live scheduler actually uses", async () => {
+    const root = tempRoot();
+    const definitions = [sessionJob("first"), sessionJob("second")];
+    await runOverseer({
+      root,
+      baseUrl: "http://127.0.0.1:0",
+      signal: new AbortController().signal,
+      now: () => NOW,
+      tickMs: 5,
+      log: () => {},
+      source: () =>
+        (async function* () {
+          await sleep(50);
+          yield* [];
+        })(),
+      jobs: {
+        definitions,
+        spawn: () => ({ kind: "refused", why: "the test never starts a process" }),
+        arming: ARMED_LONG_AGO,
+        launchSeparationMs: minutes(30),
+        readDocument: (path) => ({ kind: "read", path, sha256: DOC.sha256 }),
+        intervalMs: hours(24),
+      },
+      // Deliberately contradictory copies. They exist for a disarmed daemon;
+      // once `jobs` exists they must not overrule what the live ticker holds.
+      preview: {
+        definitions,
+        readDocument: (path) => ({ kind: "read", path, sha256: "f".repeat(64) }),
+        capabilities: NONE,
+        listRevision: listRevision(definitions),
+        arming: DISARMED,
+        launchSeparationMs: 0,
+      },
+    });
+    const read = readSchedulePreviewFile(root);
+    if (read.kind !== "preview") throw new Error(`expected a preview, got ${read.kind}`);
+    expect(read.preview.capabilities).toEqual({ session: true, rules: false });
+    expect(read.preview.arming).toEqual({ kind: "armed", at: ARMED_LONG_AGO.at });
+    expect(read.preview.jobs.map((row) => (row.kind === "job" ? row.job.verdict.kind : "unreadable"))).toEqual(["dispatch", "spacing-held"]);
   });
 
   test("a daemon handed no job list writes a file that says so, rather than no file", async () => {

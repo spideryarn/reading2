@@ -56,8 +56,6 @@ const MAX_TEXT = 20_000;
 const MAX_DURATION_MS = 3_650 * 86_400_000;
 /** `Date`'s own range, in milliseconds either side of the epoch. */
 const INSTANT_RANGE_MS = 8.64e15;
-/** What `toISOString()` produces for any instant this box will write. */
-const ISO_INSTANT = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,3})?Z$/;
 /** Behaviour hashes, list revisions and document digests: lower-case hex, 8 to 64 characters. */
 const HEX = /^[0-9a-f]{8,64}$/;
 
@@ -76,6 +74,19 @@ const VERDICT_KINDS: { readonly [K in SchedulePreviewVerdictKind]: true } = {
   "dry-run": true,
   "spacing-held": true,
   dispatch: true,
+};
+
+/** The next-run arm each planner verdict can actually produce. A known word in an impossible pairing is still an unknown row. */
+const VERDICT_NEXT_KINDS: Readonly<Record<SchedulePreviewVerdictKind, ReadonlySet<SchedulePreviewNext["kind"]>>> = {
+  "history-lost": new Set(["none"]),
+  "duplicate-id": new Set(["none"]),
+  unauthorised: new Set(["none"]),
+  held: new Set(["after-in-flight-settles", "after-arming", "none"]),
+  waiting: new Set(["next-due"]),
+  "not-yet-eligible": new Set(["first-eligible"]),
+  "dry-run": new Set(["due-now"]),
+  "spacing-held": new Set(["next-due"]),
+  dispatch: new Set(["due-now"]),
 };
 
 /**
@@ -165,6 +176,7 @@ function parseVerdict(value: Obj, where: string): SchedulePreviewVerdict {
   const known = kind as SchedulePreviewVerdictKind;
   const sentence = text(value, "sentence", where);
   const next = parseNext(object(value["next"], `${where}'s next run`), where);
+  if (!VERDICT_NEXT_KINDS[known].has(next.kind)) fail(`${where} has verdict ${known} with next run ${next.kind}, a combination this build does not know`);
   if (known === "unauthorised") {
     const drift = array(value, "drift", where).map((line) => {
       if (typeof line !== "string" || line.length > MAX_TEXT) fail(`${where} has a drift entry that is not a sentence`);
@@ -271,24 +283,31 @@ function parseDocument(value: Obj, where: string): SchedulePreviewDocument {
   if (changed !== "yes" && changed !== "no" && changed !== "cannot-tell") fail(`${where} says ${path} changed ${JSON.stringify(changed)}, which this build does not know`);
   const pinnedKind = text(pinned, "kind", where);
   const currentKind = text(current, "kind", where);
-  return {
-    path,
-    pinned:
-      pinnedKind === "pinned"
-        ? { kind: pinnedKind, sha256: hex(pinned, "sha256", where) }
-        : pinnedKind === "not-pinned"
-          ? { kind: pinnedKind }
-          : fail(`${where} has a pin of a kind this build does not know (${pinnedKind})`),
-    current:
-      currentKind === "read"
-        ? { kind: currentKind, sha256: hex(current, "sha256", where), when: readingWhen(current, where) }
-        : currentKind === "unreadable"
-          ? { kind: currentKind, why: text(current, "why", where) }
-          : currentKind === "absent"
-            ? { kind: currentKind }
-            : fail(`${where} has a document reading of a kind this build does not know (${currentKind})`),
-    changed,
-  };
+  const parsedPinned: SchedulePreviewDocument["pinned"] =
+    pinnedKind === "pinned"
+      ? { kind: pinnedKind, sha256: hex(pinned, "sha256", where) }
+      : pinnedKind === "not-pinned"
+        ? { kind: pinnedKind }
+        : fail(`${where} has a pin of a kind this build does not know (${pinnedKind})`);
+  const parsedCurrent: SchedulePreviewDocument["current"] =
+    currentKind === "read"
+      ? { kind: currentKind, sha256: hex(current, "sha256", where), when: readingWhen(current, where) }
+      : currentKind === "unreadable"
+        ? { kind: currentKind, why: text(current, "why", where) }
+        : currentKind === "absent"
+          ? { kind: currentKind }
+          : fail(`${where} has a document reading of a kind this build does not know (${currentKind})`);
+  if (parsedPinned.kind === "not-pinned" && parsedCurrent.kind === "absent") {
+    fail(`${where} says ${path} is neither pinned nor current, a document row this build does not know`);
+  }
+  const expectedChanged: SchedulePreviewDocument["changed"] =
+    parsedCurrent.kind === "unreadable"
+      ? "cannot-tell"
+      : parsedCurrent.kind === "absent" || parsedPinned.kind === "not-pinned" || parsedPinned.sha256 !== parsedCurrent.sha256
+        ? "yes"
+        : "no";
+  if (changed !== expectedChanged) fail(`${where} says ${path} changed ${changed}, but its pin and current reading say ${expectedChanged}`);
+  return { path, pinned: parsedPinned, current: parsedCurrent, changed };
 }
 
 function readingWhen(value: Obj, where: string): "this-checkpoint" | "when-loaded" {
@@ -391,9 +410,10 @@ function hex(value: Obj, key: string, where: string): string {
 /** An instant as `toISOString()` writes it, and inside `Date`'s range — see the header for why both. */
 function instant(value: Obj, key: string, where: string): string {
   const found = value[key];
-  if (typeof found !== "string" || !ISO_INSTANT.test(found)) fail(`${where}'s ${key} is not an ISO instant`);
+  if (typeof found !== "string") fail(`${where}'s ${key} is not an ISO instant`);
   const ms = Date.parse(found);
   if (!Number.isFinite(ms) || Math.abs(ms) > INSTANT_RANGE_MS) fail(`${where}'s ${key} (${found}) is not an instant this build can show`);
+  if (new Date(ms).toISOString() !== found) fail(`${where}'s ${key} is not the canonical ISO instant this build writes`);
   return found;
 }
 
