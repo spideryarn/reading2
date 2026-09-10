@@ -336,6 +336,28 @@ export function rowLabel(row: FleetRow): string {
 }
 
 /**
+ * The row a `sel` handle names in this snapshot, or null.
+ *
+ * **A handle from another tmux server is not this session**, however exactly it
+ * matches: `$1643` means something only inside one server, so a `selpid` that is
+ * present AND disagrees with the snapshot's refuses. A missing one on either side
+ * resolves by handle alone — see SessionsPanel § the wrong-world check for why
+ * not knowing is not evidence. One function because the detail pane and the tab
+ * title both ask, and a tab naming a session the pane refused would be two
+ * answers to one question.
+ */
+export function resolveSelected(
+  rows: readonly FleetRow[],
+  selectedId: string | null,
+  selectedPid: number | null,
+  tmuxServerPid: number | null,
+): FleetRow | null {
+  if (selectedId === null) return null;
+  if (selectedPid !== null && tmuxServerPid !== null && selectedPid !== tmuxServerPid) return null;
+  return rows.find((r) => r.id === selectedId) ?? null;
+}
+
+/**
  * Start time as a number, with the unparseable ones pushed to one end.
  *
  * `NaN` is the hazard the whole of `triageSort`'s comment is about: every
