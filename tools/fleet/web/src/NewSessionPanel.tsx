@@ -66,6 +66,17 @@ export const POLL_MS = 3_000;
  * evaluated after `await` is a deadline that the exact failure it exists for
  * can walk straight past. The interval now decides, and a poll in flight cannot
  * hold the decision open. See `GaveUp` for what the two endings may claim.
+ *
+ * **And the clock is read again when an answer ARRIVES, not only when the
+ * interval ticks.** GPT Sol's F9, 2026-09-10, is the rule: *a poll begun before
+ * the deadline but resolving after it must not update the launch or erase the
+ * give-up state; the absolute deadline wins, the late result is discarded, and
+ * no further poll starts.* Checked only at the tick, there was a window of up to
+ * `POLL_MS` — the tick that lands exactly on the deadline does not pass it, so
+ * the give-up tick is the one after — in which a late answer was applied as
+ * though it were on time and no give-up was ever drawn. The price is that a real
+ * `started` arriving a second late is thrown away; the banner says the session
+ * list is the authority, which is where it will show. tests/fleet-new-session-deadline.test.tsx.
  */
 export const POLL_GIVE_UP_MS = 4 * 60_000;
 
@@ -313,12 +324,23 @@ export function NewSessionPanel({ api }: { api: NewSessionApi }): ReactNode {
     /** The most recent failure's own words, or null if the last ask answered. */
     let lastError: string | null = null;
 
+    /** Past the absolute deadline, by the clock. `>` so the deadline itself is still on time. */
+    const expired = (): boolean => Date.now() - pollingSince > POLL_GIVE_UP_MS;
+
     const ask = async (): Promise<void> => {
       if (stopped || inFlight) return;
       inFlight = true;
       try {
         const result = await apiRef.current.poll();
         if (stopped) return;
+        /* **The deadline wins over a late answer** — F9, in the header. Before
+           the result is read at all, success or failure: an answer that lands
+           after the deadline is not news this page may act on, and the give-up
+           it triggers stops the interval, so nothing further is asked. */
+        if (expired()) {
+          giveUp();
+          return;
+        }
         if (!result.ok) {
           /* **The launches are left exactly as they are.** A failed ask is not
              news about the launch, and the record carries the only id anybody
@@ -365,7 +387,7 @@ export function NewSessionPanel({ api }: { api: NewSessionApi }): ReactNode {
       /* The clock decides, before anything is asked. An ask still in flight is
          abandoned with the rest of the effect: this page has stopped asking,
          and the session list is the thing in a position to answer. */
-      if (Date.now() - pollingSince > POLL_GIVE_UP_MS) {
+      if (expired()) {
         giveUp();
         return;
       }
@@ -426,16 +448,35 @@ export function NewSessionPanel({ api }: { api: NewSessionApi }): ReactNode {
     if (!open && armed) stopMic();
   }, [open, armed, stopMic]);
 
+  /* **ONE POST AT A TIME, guarded in the action.** `busy` disables the button,
+     but only once the page has redrawn: a second tap that lands before then —
+     or any programmatic call — reached `apiRef.current.start` again, and two
+     POSTs are two Claudes on a box that has met the OOM killer. The same
+     reasoning as `blocked` above, and a ref for the same reason: a state read
+     inside `start` is whatever it was when the closure was built.
+     tests/fleet-new-session-deadline.test.tsx, "two taps". */
+  const posting = useRef(false);
+
   const start = useCallback(async () => {
     /* **The guard lives here as well as on the button**, because `disabled` is a
        property of a rendered element and this is the action. A programmatic
        call, or a keyboard path somebody adds later, would otherwise start an
        agent on the rough live guesses — or, on Safari and Firefox, on nothing
        that was said at all. GPT Sol's review of the built code, finding 6. */
-    if (blocked.current) return;
+    if (blocked.current || posting.current) return;
+    posting.current = true;
     setBusy(true);
     setRefusal(null);
-    const result = await apiRef.current.start(prompt);
+    let result: Awaited<ReturnType<NewSessionApi["start"]>>;
+    try {
+      result = await apiRef.current.start(prompt);
+    } finally {
+      /* Released however the POST ends, so an api that throws cannot leave the
+         button dead for the life of the page. `setBusy` moved in here with it:
+         after the `await`, the updates below batch with this one either way. */
+      posting.current = false;
+      setBusy(false);
+    }
     if (result.accepted) {
       setPrompt("");
       const launch = result.launch;
@@ -454,7 +495,6 @@ export function NewSessionPanel({ api }: { api: NewSessionApi }): ReactNode {
       // prompt size limit, and none of those sentences should be rewritten here.
       setRefusal(result.why);
     }
-    setBusy(false);
   }, [prompt]);
 
   return (

@@ -345,7 +345,28 @@ assumption pending Greg rather than decided):
 
 ### Stage 3 — The feed knows when it last read, and re-reads on evidence
 
-Roadmap checkbox 3. Files: `FeedPanel.tsx`, **`feed-client.ts`** (F5), tests.
+Roadmap checkbox 3. Files: `FeedPanel.tsx`, **`feed-client.ts`** (F5), a new
+`tests/fleet-feed-freshness.test.tsx` (it runs on fake timers throughout, so it is not folded into
+`fleet-feed-panel.test.tsx`), and one section of `docs/project/fleet-recent-messages.md`.
+
+**Status: built, one correction in flight, then Sol's stage review.** Implemented by an Opus
+subagent in parallel with Stage 1's review — the file sets do not overlap. Ten cases, each seen red
+first. Three of them (twenty identical snapshots, the `why`-only difference, cannot-loop) would have
+passed on the old code, since a page that never re-reads trivially "reads once"; each now ends with
+a real change that must cause a read, and the implementer broke the new code twice on purpose to
+prove they fail for the right reason. Judgment calls it made, all accepted: a 15 s read deadline
+(`FEED_READ_DEADLINE_MS`, three times the server's own per-session limit); the floor measured from
+when the last read *started*; only a change between two *known* tmux-server pids bypasses the floor,
+so a collector that intermittently omits the pid cannot use that path to escape it; a hidden tab
+defers only the reads the page starts itself; the first digest is a baseline, never a trigger.
+
+**The correction, and it is a flaw in the spec rather than the build.** F6's wording, accepted
+verbatim, put the execution reading's *kind* into the digest. The implementer flagged the
+consequence: every verified ↔ unknown flip counts as evidence, and on a loaded box that flip is
+routine, so the feed would re-read about once a minute — ~10 MB of transcript reads each time,
+triggered by nothing that changed a transcript. That is the very distinction Fable's ruling draws.
+The execution component is now **the last verified token per row id**, so a real replacement
+triggers a read and a flicker does not — the same idea as `useExecutionEpoch`, applied to many rows.
 
 Today `useFeed` fetches on mount and on the button, has a generation guard, and has **no clock, no
 error state and no abort**. A feed read costs the box ~250 ms and ~10 MB of transcript reads, so it
@@ -405,6 +426,30 @@ timeout or abort, and offers no age for its last good feed.
 
 Roadmap checkboxes 4 and 6.
 
+**Stage 5a — the creation-poll half — status: built, ahead of stage order, awaiting the Stage 5
+review.** Its files (`NewSessionPanel.tsx` and a new `tests/fleet-new-session-deadline.test.tsx`)
+overlap nothing else in flight, so it ran in parallel. Implemented by an Opus subagent. **It found
+two production bugs, and one of them could have launched two agents from one press:**
+
+- **A double tap on Start launched two sessions.** The only guard was the button's `disabled`,
+  which takes effect after the redraw, so two taps before it both reached `api.start`. Now a
+  `posting` ref guards the action itself — the same shape as the existing `blocked` guard for
+  dictation — released in a `finally` so an api that throws cannot leave the button dead. Red first:
+  `expected 2 to be 1`.
+- **A late poll answer could beat the deadline.** The deadline was checked only when the 3-second
+  interval ticked, and the tick landing exactly on the 4-minute mark does not pass it (`>`), so for
+  up to one interval a poll begun before the deadline could land and settle the launch as though it
+  were on time, with no give-up ever drawn. The clock is now also checked when an answer arrives,
+  before it is read. Red first, for both a late `started` and a late `failed`.
+- **The F9 trade-off, accepted as written:** a genuine `started` arriving a second after the
+  4-minute mark is thrown away and the panel says it stopped asking. The banner already sends the
+  reader to the session list, which is where that session will appear.
+- **Unmount mid-poll and tap-after-give-up passed on the old code**; each was proved able to fail by
+  a deliberate mutation (removing `clearInterval`; reusing the old launch's start time).
+- **React here is 19.2.8, not 18** as this plan's review prompts said. React 19 no longer warns
+  about a state update on an unmounted component, so a `console.error` spy cannot catch that
+  teardown class; the timer and request counts are what catch it. Corrected in the later prompts.
+
 - [ ] Extend, do not redo, Baseline's two: the creation-polling **absolute discovery deadline**
       (`NewSessionPanel.tsx`) and the conversation-claim refresh. New cases: **a poll begun before
       the absolute deadline but resolving after it must not update the launch or erase the give-up
@@ -417,8 +462,30 @@ Roadmap checkboxes 4 and 6.
       here; built only if the answer is yes.
 - [ ] Browser check in a Sonnet subagent with Playwright on this box, per
       `docs/project/browser-control.md`: 390 px and desktop, keyboard-only, and returning from
-      offline. Against this worktree's own dev server on its own port — **never the live dashboard**,
-      and the subagent is told to kill only its own pid.
+      offline. **Never the live dashboard**, and the subagent is told to kill only its own pid.
+
+      **How, since there is no fixture mode.** The fleet server's rows come only from real tmux
+      (`FLEET_PORT` moves the port, nothing injects state), and every behaviour this stage adds
+      turns on execution readings that are derived from `/proc` — a *replaced* run needs a real
+      `claude` to be replaced, which the brief forbids on the live box. So the check does not go
+      through the fleet server at all: `npm run build:fleet` builds `tools/fleet/web/dist`, a static
+      server serves it on a side port, and **Playwright's `page.route` answers `/api/*` from
+      fixtures**. The client asks only relative URLs (`api/state`, `api/messages?id=…`,
+      `api/actions`, `api/feed`), so a replacement, a flicker, a `conflicting` reading and a
+      refused answer are each one JSON edit, and *offline* is `context.setOffline`. What that cannot
+      prove is the wire from a real collector — which the unit tests' `parseFleetState` round trips
+      and the existing server tests cover, and which this stage does not change.
+- [ ] **One existing-control defect already found, for this stage's accessibility line.** Biome
+      reports `useAriaPropsSupportedByRole` twice in `SessionsPanel.tsx` (lines 879 and 891 at
+      `93c3af30`): the detail pane's focus target is a `div` with `tabIndex={-1}` and an
+      `aria-label`, and a label on an element with no role may not be announced at all — so the
+      region the page moves focus into on selection has no name to a screen reader. Present
+      unchanged in the parent commit, so not a Stage 1 regression. The fix is one attribute,
+      `role="region"`, and the roadmap makes it this stage's: *"keyboard labels, focus and touch
+      targets are acceptance criteria for existing controls."*
+- [ ] **Risk noted up front**: this account's Sonnet subagents hit a hard weekly 429 on 2026-09-07
+      that was not due to reset until 2026-09-12. If the browser subagent dies on a 429, it is
+      rerun on Opus rather than skipped.
 
 **Acceptance for the whole stage** (roadmap, unchanged): suspend/resume preserves the right draft; a
 replacement session never inherits it; creation polling terminates under permanent failure; recent
@@ -438,7 +505,7 @@ Round 1, GPT Sol, 2026-09-10, on revision 1. Verdict: **refuse**. Sol also ran
 | F3 | Adding only the token leaves transcript quarantine incomplete: `coherentWith` can keep a verified token while downgrading the conversation | P1 established | **Gap accepted, blanket repair overruled via Fable.** The identity is the verified *conversation id*, which is the half Sol was right about; `conflicting` is relabelled rather than hidden. Sol's rule — no held view unless `identityWriteGate` allows — would blank every transcript on a loaded box, against `RecentMessages.tsx`'s stated purpose, and misuses a gate whose own header forbids caching its verdict. |
 | F4 | The mount key's selection domain is underspecified | P1 reasoned | **Accepted verbatim**, Stage 1. |
 | F5 | Stages 3 and 4 cannot abort through APIs that take no `AbortSignal` | P1 established | **Accepted verbatim.** `feed-client.ts` and `actions-client.ts` added to scope, plus the promise-versus-deadline race. |
-| F6 | The feed digest omits `claudeSessionId` and `tmuxServerPid` | P1 established | **Accepted verbatim**, Stage 3. |
+| F6 | The feed digest omits `claudeSessionId` and `tmuxServerPid` | P1 established | **Accepted, then corrected in the build.** Both omissions were real and are fixed. But the replacement wording's "unverifiable arms contain only their stable kind/cause" made every verified ↔ unknown flip a trigger — a re-read a minute on a loaded box. The execution component is now the last verified token per row. |
 | F7 | `answeringOff` needs `questionSafetyKey` and a genuinely page-level owner in `App.tsx` | P1 established | **Accepted verbatim**, Stage 1. Found an existing helper I was about to reinvent. |
 | F8 | `lastGoodAt` planned as a field nothing renders | P2 established | **Accepted verbatim**, Stage 4. |
 | F9 | The late-discovery regression names no winner | P2 reasoned | **Accepted verbatim**, Stage 5. |
