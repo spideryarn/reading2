@@ -232,16 +232,40 @@ need, `tools/fleet/artefact-ref.ts`, I write first, by hand (it is types, a pars
 
 ### Stage 1 — the reports log, the inbox, the drain, the CLI
 
-- [ ] `tools/fleet/artefact-ref.ts` + its test (orchestrator, by hand, before the stage).
-- [ ] `tools/overseer/reports.ts`: submission and event parsers, `submitReport`, `drainReports` (the
+**Status: built, not yet Sol-reviewed.** Implemented by an Opus subagent from
+[the Stage 1 brief](260910e-work-reports-stage1-task.md); `artefact-ref.ts` by the orchestrator. Its
+own seven test files: 167 passed, exit 0 (orchestrator's run). What it decided that the plan did not
+say, all accepted:
+
+- The three directories are siblings — `report-inbox/`, `report-processing/`, `report-refused/` — not
+  subdirectories of the inbox, which a pass would otherwise count as skipped entries every time.
+- A re-dropped duplicate is recognised by rebuilding the submission from the recorded event, not by
+  comparing stored bytes: the daemon stamps a fresh `receivedAt` on each attempt, so bytes would call
+  every honest re-drop a conflict.
+- `deferred` (a limit reached) is counted apart from `pending` (a transient failure).
+- A report that `corrects` one still waiting in the inbox waits too, rather than being refused.
+- A lost log (`reports.created` present, `reports.jsonl` absent or empty) leaves everything pending and
+  never recreates the file. The cost: a crash between writing the marker and the first append sticks
+  until someone deletes the marker — the same small window the decision record accepts.
+- Unknown fields are refused in submissions and in recorded events; the pass's 5 s budget uses the real
+  clock, not the injected one.
+- Condition `reports` in `notes.ts` (opens on a throwing drain, closes on the next good pass) rather than
+  a new note kind.
+
+Left for Stage 3: `appendDecision` is in the signature but unreached (decisions are refused before step
+[2]), so "decisions lock held ⇒ pending" is Stage 3's test. The drain re-reads all of `reports.jsonl`
+each pass to index event ids — fine at today's size.
+
+- [x] `tools/fleet/artefact-ref.ts` + its test (orchestrator, by hand, before the stage).
+- [x] `tools/overseer/reports.ts`: submission and event parsers, `submitReport`, `drainReports` (the
   four steps, `processing/`, refusals, bounds), `readReports` (three arms, `reports.created` marker),
   `foldReports`. A `decision` submission is refused in this stage with "decision reports are wired in
   stage 3"; the prepare/replay protocol is built generally so stage 3 only adds step [2].
-- [ ] `tools/overseer/report-artefacts.ts`: the real checker (git via `execFile` argv, timeouts).
-- [ ] `tools/overseer/report-identity.ts`: the submitter's own execution token from `/proc`.
-- [ ] `scripts/overseer.ts`: `report <kind>` and `reports`; `run` composes the drain into the daemon.
-- [ ] `tools/overseer/daemon.ts`: one optional `reports` option on its own interval; errors contained.
-- [ ] Tests red first: duplicates (same bytes ⇒ one row; other bytes ⇒ refused), execution tokens (same /
+- [x] `tools/overseer/report-artefacts.ts`: the real checker (git via `execFile` argv, timeouts).
+- [x] `tools/overseer/report-identity.ts`: the submitter's own execution token from `/proc`.
+- [x] `scripts/overseer.ts`: `report <kind>` and `reports`; `run` composes the drain into the daemon.
+- [x] `tools/overseer/daemon.ts`: one optional `reports` option on its own interval; errors contained.
+- [x] Tests red first: duplicates (same bytes ⇒ one row; other bytes ⇒ refused), execution tokens (same /
   different / unverifiable), untrusted text in every field (control characters, bidi, `..`, oversize),
   unknown kind (CLI and hand-dropped), nonexistent artefact kept `not-found`, explicit correction kept
   and attributed, a later claim not called a contradiction, crash at every step boundary with the

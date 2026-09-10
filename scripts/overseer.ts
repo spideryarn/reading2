@@ -24,12 +24,13 @@
  * `console.log` rather than src/log.ts: this is a CLI, and that is the rule —
  * docs/project/logging.md.
  */
+import { execFileSync } from "node:child_process";
 import { randomUUID } from "node:crypto";
-import { writeFileSync } from "node:fs";
+import { readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 
-import { Command, InvalidArgumentError } from "commander";
+import { Command, InvalidArgumentError, Option } from "commander";
 
 import { renderRootHelp } from "../tools/overseer/cli-help.js";
 import { addMine, cliStatePath, readCliState, removeMine, updateCliState, whyNotASessionName } from "../tools/overseer/cli-state.js";
@@ -63,6 +64,31 @@ import type { Arming, AuthorisedJob } from "../tools/overseer/jobs.js";
 import { eligibilityOf, type JobEligibility } from "../tools/overseer/scheduler.js";
 import { LAUNCH_SEPARATION_MS } from "../tools/overseer/schedules.js";
 import { describeNote, readNotes } from "../tools/overseer/notes.js";
+import { describeArtefactCheck, parseArtefactSpec, spellArtefactRef, type ArtefactRef } from "../tools/fleet/artefact-ref.js";
+import { decisionsRoot } from "../tools/overseer/decisions.js";
+import { queueRoot } from "../tools/overseer/idea-queue.js";
+import { makeArtefactChecker } from "../tools/overseer/report-artefacts.js";
+import { observeOwnExecution, type OwnExecution } from "../tools/overseer/report-identity.js";
+import {
+  BLOCKED_ON,
+  COMPLETED_ENDINGS,
+  DECISION_NOT_WIRED,
+  REPORT_KINDS,
+  drainReports,
+  parseSubmission,
+  printable,
+  readInbox,
+  readReports,
+  submitReport,
+  type BlockedOn,
+  type CompletedEnding,
+  type ExecutionComparison,
+  type ReportActor,
+  type ReportEvent,
+  type ReportKind,
+  type ReportRow,
+  type ReportSubmission,
+} from "../tools/overseer/reports.js";
 import {
   EVENTS_FILE,
   RECONCILE_FILE,
@@ -716,7 +742,30 @@ export type Parsed =
   | { command: "reconcile-jobs"; why: string }
   | { command: "run"; attention: boolean; usage: boolean; url?: string; tickMs?: number }
   | { command: "mine"; action: "list" }
-  | { command: "mine"; action: "add" | "rm"; name: string };
+  | { command: "mine"; action: "add" | "rm"; name: string }
+  | { command: "report"; report: ReportCommand }
+  | { command: "reports"; session: string | null; kind: ReportKind | null; search: string | null; event: string | null; json: boolean };
+
+/**
+ * **`report <kind>` as the command line said it** — before the one parser the
+ * drain also uses has seen it. Commander refuses what it can see (an unknown
+ * kind, an `--on` off its list, a malformed `--artefact`); every text field is
+ * left to `parseSubmission`, so there is exactly one rule for each.
+ */
+export type ReportCommand = {
+  summary: string;
+  artefacts: readonly ArtefactRef[];
+  plan: string | null;
+  queueItem: string | null;
+  corrects: string | null;
+  session: string | null;
+  as: "overseer" | "greg" | null;
+} & (
+  | { kind: "progress" }
+  | { kind: "blocked"; on: BlockedOn; needs: string }
+  | { kind: "completed"; ending: CompletedEnding; reviewed: string[]; tested: string[]; merged: string[] }
+  | { kind: "decision"; file: string }
+);
 
 /**
  * The grammar, and nothing else — no store is opened and no environment is read
@@ -827,6 +876,86 @@ export function buildProgram(sink: (parsed: Parsed) => void = () => {}): Command
     .argument("<name>", "a session name")
     .description("stop looking after one")
     .action((name: string) => sink({ command: "mine", action: "rm", name }));
+
+  // WORK REPORTS. One verb per kind rather than `report --kind`, so an unknown
+  // kind is an unknown command and each kind's own flags are mandatory where
+  // they must be. Plan 260910e.
+  type CommonReportOpts = {
+    summary: string;
+    artefact: ArtefactRef[];
+    plan?: string;
+    queueItem?: string;
+    corrects?: string;
+    session?: string;
+    as?: "overseer" | "greg";
+  };
+  const artefactSpec = (raw: string, previous: ArtefactRef[]): ArtefactRef[] => {
+    const parsed = parseArtefactSpec(raw);
+    if (!parsed.ok) throw new InvalidArgumentError(parsed.why);
+    return [...previous, parsed.ref];
+  };
+  const collect = (raw: string, previous: string[]): string[] => [...previous, raw];
+  const withCommon = (command: Command): Command =>
+    command
+      .requiredOption("--summary <text>", "what you claim, in one line of at most 1000 characters")
+      .option("--artefact <spec>", "commit:<sha>, path:<repo path>, decision:<id> or queue:<id>; repeatable", artefactSpec, [] as ArtefactRef[])
+      .option("--plan <path>", "the plan this work belongs to, relative to the repository")
+      .option("--queue-item <id>", "the queue item this work belongs to")
+      .option("--corrects <eventId>", "an earlier report this one corrects")
+      .option("--session <name>", "the session reporting; default is this tmux session")
+      .addOption(new Option("--as <who>", "report as the Overseer or Greg instead of a session").choices(["overseer", "greg"]));
+  const common = (opts: CommonReportOpts): Omit<ReportCommand, "kind"> => ({
+    summary: opts.summary,
+    artefacts: opts.artefact,
+    plan: opts.plan ?? null,
+    queueItem: opts.queueItem ?? null,
+    corrects: opts.corrects ?? null,
+    session: opts.session ?? null,
+    as: opts.as ?? null,
+  });
+  const reportGroup = program.command("report").description("claim progress, a block, a decision or completion; the daemon records it");
+  withCommon(reportGroup.command("progress").description("a claim of progress")).action((opts: CommonReportOpts) =>
+    sink({ command: "report", report: { kind: "progress", ...common(opts) } }),
+  );
+  withCommon(reportGroup.command("blocked").description("a claim of being blocked"))
+    .addOption(new Option("--on <what>", "what it waits on").choices([...BLOCKED_ON]).makeOptionMandatory())
+    .requiredOption("--needs <text>", "what would unblock it, at most 500 characters")
+    .action((opts: CommonReportOpts & { on: BlockedOn; needs: string }) =>
+      sink({ command: "report", report: { kind: "blocked", on: opts.on, needs: opts.needs, ...common(opts) } }),
+    );
+  withCommon(reportGroup.command("completed").description("a claim of completion"))
+    .addOption(new Option("--ending <ending>", "which of the three endings").choices([...COMPLETED_ENDINGS]).makeOptionMandatory())
+    .option("--reviewed <sha>", "a revision that was reviewed; repeatable", collect, [] as string[])
+    .option("--tested <sha>", "a revision that was tested; repeatable", collect, [] as string[])
+    .option("--merged <sha>", "a revision that was merged; repeatable", collect, [] as string[])
+    .action((opts: CommonReportOpts & { ending: CompletedEnding; reviewed: string[]; tested: string[]; merged: string[] }) =>
+      sink({
+        command: "report",
+        report: { kind: "completed", ending: opts.ending, reviewed: opts.reviewed, tested: opts.tested, merged: opts.merged, ...common(opts) },
+      }),
+    );
+  withCommon(reportGroup.command("decision").description("a decision; parsed, and refused until stage 3 wires it"))
+    .requiredOption("--file <json|->", "the decision draft as a JSON file, or - for stdin")
+    .action((opts: CommonReportOpts & { file: string }) => sink({ command: "report", report: { kind: "decision", file: opts.file, ...common(opts) } }));
+
+  program
+    .command("reports")
+    .description("what agents claimed, what is still in flight, and what was refused")
+    .option("--session <name>", "only this session's claims")
+    .addOption(new Option("--kind <kind>", "only this kind of claim").choices([...REPORT_KINDS]))
+    .option("--search <text>", "only claims whose text contains this")
+    .option("--event <id>", "one report, wherever it has got to")
+    .option("--json", "as JSON", false)
+    .action((opts: { session?: string; kind?: ReportKind; search?: string; event?: string; json: boolean }) =>
+      sink({
+        command: "reports",
+        session: opts.session ?? null,
+        kind: opts.kind ?? null,
+        search: opts.search ?? null,
+        event: opts.event ?? null,
+        json: opts.json,
+      }),
+    );
 
   program
     .command("run")
@@ -1060,6 +1189,255 @@ export const WHY_IS_NOT_OPTIONAL =
   "  Look at the log and at `gjd-remote ls` first, and put what you found in the reason —\n" +
   "  it is written into the store and read by whoever asks why a job ran twice.";
 
+/* ------------------------------------------------------------------ *
+ * Work reports: submit one, and read what was claimed. Plan 260910e.
+ * ------------------------------------------------------------------ */
+
+/** Everything `runReport` reaches outside itself, so each arm is testable without tmux or /proc. */
+export type ReportDeps = {
+  env: NodeJS.ProcessEnv;
+  tmuxSessionName: () => { ok: true; name: string } | { ok: false; why: string };
+  observe: () => OwnExecution;
+  now: () => Date;
+  mintId: () => string;
+  readFile: (path: string) => string;
+  out: (line: string) => void;
+  err: (line: string) => void;
+};
+
+/** The session this command is running in, from tmux itself — argv, no shell. */
+export function tmuxSessionName(): { ok: true; name: string } | { ok: false; why: string } {
+  try {
+    const name = execFileSync("tmux", ["display-message", "-p", "#S"], { encoding: "utf8", timeout: 2_000, stdio: ["ignore", "pipe", "pipe"] }).trim();
+    return name === "" ? { ok: false, why: "tmux printed no session name" } : { ok: true, name };
+  } catch (cause) {
+    return { ok: false, why: `tmux could not say which session this is: ${cause instanceof Error ? cause.message.split("\n")[0] : String(cause)}` };
+  }
+}
+
+function defaultReportDeps(): ReportDeps {
+  return {
+    env: process.env,
+    tmuxSessionName,
+    observe: () => observeOwnExecution(),
+    now: () => new Date(),
+    mintId: () => randomUUID(),
+    readFile: (path) => readFileSync(path === "-" ? 0 : path, "utf8"),
+    out: (line) => console.log(line),
+    err: (line) => console.error(line),
+  };
+}
+
+function describeActor(actor: ReportActor): string {
+  return actor.kind === "session" ? `session ${actor.name}` : actor.kind === "overseer" ? "the Overseer" : "Greg";
+}
+
+/**
+ * Submit one report. **It is not recorded when this returns**, and the output
+ * says so: the daemon records it on its next pass, and `reports --event <id>`
+ * is how to find out whether it has.
+ */
+export function runReport(root: string, report: ReportCommand, deps: ReportDeps = defaultReportDeps()): number {
+  if (report.session !== null && report.as !== null) {
+    deps.err("✗ --session and --as name two different reporters; give one of them");
+    return 1;
+  }
+  let actor: ReportActor;
+  if (report.as !== null) actor = { kind: report.as };
+  else if (report.session !== null) actor = { kind: "session", name: report.session };
+  else {
+    // THE DEFAULT IS THIS TMUX SESSION, and only when there is one. With no
+    // tmux and no flag there is nobody to attribute the claim to, and guessing
+    // would attribute it wrongly rather than not at all.
+    const tmux =
+      (deps.env["TMUX"] ?? "") !== ""
+        ? deps.tmuxSessionName()
+        : { ok: false as const, why: "$TMUX is not set, so this is not running inside a tmux session" };
+    if (!tmux.ok) {
+      deps.err(`✗ say who is reporting with --session <name> or --as overseer|greg — ${tmux.why}`);
+      return 1;
+    }
+    actor = { kind: "session", name: tmux.name };
+  }
+
+  let body: Record<string, unknown>;
+  switch (report.kind) {
+    case "progress":
+      body = {};
+      break;
+    case "blocked":
+      body = { on: report.on, needs: report.needs };
+      break;
+    case "completed":
+      body = { ending: report.ending, revisions: { reviewed: report.reviewed, tested: report.tested, merged: report.merged } };
+      break;
+    case "decision": {
+      let draft: unknown;
+      try {
+        draft = JSON.parse(deps.readFile(report.file));
+      } catch (cause) {
+        deps.err(`✗ the decision draft could not be read as JSON: ${cause instanceof Error ? cause.message : String(cause)}`);
+        return 1;
+      }
+      body = { draft };
+      break;
+    }
+    default: {
+      const never: never = report;
+      throw new Error(`unhandled report kind ${JSON.stringify(never)}`);
+    }
+  }
+
+  const own = deps.observe();
+  const eventId = deps.mintId();
+  const parsed = parseSubmission(
+    JSON.stringify({
+      schema: 1,
+      eventId,
+      submittedAt: deps.now().toISOString(),
+      kind: report.kind,
+      actor,
+      observedExecution: own.kind === "observed" ? own.token : null,
+      job: { plan: report.plan, queueItem: report.queueItem, occurrence: null },
+      summary: report.summary,
+      artefacts: report.artefacts,
+      corrects: report.corrects,
+      ...body,
+    }),
+  );
+  if (!parsed.ok) {
+    deps.err(`✗ ${printable(parsed.why)} — nothing was submitted`);
+    return 1;
+  }
+  if (parsed.submission.kind === "decision") {
+    deps.err(`✗ ${DECISION_NOT_WIRED}: the draft parsed, and nothing was submitted. Record it with scripts/overseer-decisions.ts for now.`);
+    return 1;
+  }
+  submitReport(root, parsed.submission);
+  deps.out(eventId);
+  deps.out(
+    "submitted, not yet recorded — the daemon records it within about 30 s; " +
+      `\`npx tsx scripts/overseer.ts reports --event ${eventId}\` shows whether it has`,
+  );
+  deps.out(
+    `claimed by ${describeActor(actor)}; ` +
+      (own.kind === "observed"
+        ? `this run is ${own.token}`
+        : `this run could not be identified (${own.why}), so the daemon will record it as unverifiable`),
+  );
+  return 0;
+}
+
+function describeExecution(execution: ExecutionComparison): string {
+  if (execution === null) return "not a session, so there is no run to compare";
+  if (execution === "same-verified-run") return "same verified run";
+  if (execution === "different-verified-run") return "a DIFFERENT run from the one the register verified for that name";
+  return `run unverifiable: ${execution.unverifiable}`;
+}
+
+/** An empty list is "not stated", never "not reviewed": the list is what the agent said. */
+function stated(list: readonly string[]): string {
+  return list.length === 0 ? "not stated" : list.join(", ");
+}
+
+function rowLines(row: ReportRow): string[] {
+  const e = row.event;
+  const what = e.kind === "blocked" ? `blocked on ${e.on}` : e.kind === "completed" ? `completed (${e.ending})` : e.kind;
+  const lines = [`${e.receivedAt}  ${what}  claimed by ${describeActor(e.actor)} — ${describeExecution(e.execution)}`, `    ${e.summary}`];
+  if (e.kind === "blocked") lines.push(`    needs: ${e.needs}`);
+  if (e.kind === "completed") {
+    lines.push(`    reviewed: ${stated(e.revisions.reviewed)} · tested: ${stated(e.revisions.tested)} · merged: ${stated(e.revisions.merged)}`);
+  }
+  if (e.kind === "decision") lines.push(`    decision ${e.decisionId}`);
+  for (const item of e.artefacts) lines.push(`    ${spellArtefactRef(item.ref)} — ${describeArtefactCheck(item.check)}`);
+  if (e.job.plan !== null) lines.push(`    plan ${e.job.plan}`);
+  if (e.job.queueItem !== null) lines.push(`    queue item ${e.job.queueItem}`);
+  if (e.job.occurrence !== null) lines.push(`    job ${e.job.occurrence.jobId} scheduled ${e.job.occurrence.scheduledAt}`);
+  if (e.corrects !== null) lines.push(`    corrects ${e.corrects}`);
+  if (row.correctedBy !== null) {
+    lines.push(`    corrected by ${row.correctedBy.eventId}, by ${describeActor(row.correctedBy.actor)}, at ${row.correctedBy.at}`);
+  }
+  lines.push(`    event ${e.eventId}`);
+  return lines;
+}
+
+/**
+ * Recorded claims, then what is in flight, then what was refused and why.
+ * **Every empty case prints a sentence**: "nothing recorded" and "no file" and
+ * "nothing matched" are three different facts, and a blank screen is a fourth
+ * that looks like all of them.
+ */
+export function runReports(
+  root: string,
+  parsed: Extract<Parsed, { command: "reports" }>,
+  out: (line: string) => void = (line) => console.log(line),
+): number {
+  const read = readReports(root);
+  const inbox = readInbox(root);
+  const filtered = parsed.session !== null || parsed.kind !== null || parsed.search !== null;
+  const matches = (claim: ReportEvent | ReportSubmission): boolean => {
+    if (parsed.event !== null && claim.eventId !== parsed.event) return false;
+    if (parsed.session !== null && !(claim.actor.kind === "session" && claim.actor.name === parsed.session)) return false;
+    if (parsed.kind !== null && claim.kind !== parsed.kind) return false;
+    if (parsed.search !== null) {
+      const text = `${claim.summary} ${claim.kind === "blocked" ? claim.needs : ""}`.toLowerCase();
+      if (!text.includes(parsed.search.toLowerCase())) return false;
+    }
+    return true;
+  };
+  // Unparsed items have no session or kind to filter on, so they show only unfiltered, or by id.
+  const byIdOnly = (eventId: string): boolean => !filtered && (parsed.event === null || parsed.event === eventId);
+
+  const rows = read.kind === "reports" ? read.view.rows.filter((row) => matches(row.event)) : [];
+  const inFlight = inbox.inFlight.filter((item) => (item.submission === null ? byIdOnly(item.eventId) : matches(item.submission)));
+  const processing = inbox.processing.filter((item) => (item.event === null ? byIdOnly(item.eventId) : matches(item.event)));
+  const refused = inbox.refused.filter((item) => byIdOnly(item.eventId));
+
+  if (parsed.json) {
+    out(JSON.stringify({ recorded: read.kind === "reports" ? { kind: read.kind, rows, problems: read.view.problems } : read, inFlight, processing, refused }, null, 2));
+    return read.kind === "unreadable" ? 1 : 0;
+  }
+
+  const describeFilter = [
+    parsed.session === null ? null : `session ${parsed.session}`,
+    parsed.kind === null ? null : `kind ${parsed.kind}`,
+    parsed.search === null ? null : `text containing ${JSON.stringify(parsed.search)}`,
+    parsed.event === null ? null : `event ${parsed.event}`,
+  ]
+    .filter((part): part is string => part !== null)
+    .join(", ");
+
+  out("Recorded claims — each one is what an agent said, not a verified fact");
+  if (read.kind === "never-written") out(`  no reports have been recorded yet — ${read.path} has never been written`);
+  else if (read.kind === "unreadable") out(`  ✗ ${read.why}`);
+  else if (read.view.rows.length === 0) out("  no reports have been recorded yet");
+  else if (rows.length === 0) out(`  no recorded report matches ${describeFilter}`);
+  for (const row of rows) for (const line of rowLines(row)) out(`  ${line}`);
+  if (read.kind === "reports") for (const problem of read.view.problems) out(`  ✗ ${problem.kind}: ${problem.why}`);
+
+  out("");
+  out("In flight — submitted, not yet recorded");
+  if (inFlight.length === 0 && processing.length === 0) out("  nothing in flight");
+  for (const item of inFlight) {
+    out(
+      item.submission === null
+        ? `  ${item.eventId}  ${item.why ?? "unreadable"}`
+        : `  ${item.eventId}  in flight: ${item.submission.kind} by ${describeActor(item.submission.actor)}, submitted ${item.submission.submittedAt} — ${item.submission.summary}`,
+    );
+  }
+  for (const item of processing) {
+    out(item.event === null ? `  ${item.eventId}  being recorded — ${item.why ?? ""}` : `  ${item.eventId}  being recorded — ${item.event.summary}`);
+  }
+
+  out("");
+  out("Refused — what the daemon refused to record, and why");
+  if (filtered) out("  (refusals are listed only without --session, --kind or --search: a refused file may not have parsed far enough to have them)");
+  else if (refused.length === 0) out("  nothing refused");
+  for (const item of refused) out(`  ${item.refusedAt}  ${item.eventId} — ${printable(item.why)}`);
+
+  return read.kind === "unreadable" || (read.kind === "reports" && read.view.problems.length > 0) ? 1 : 0;
+}
+
 export async function runParsed(parsed: Parsed): Promise<number> {
   const root = requireAbsoluteRoot(storeRoot());
 
@@ -1137,6 +1515,10 @@ export async function runParsed(parsed: Parsed): Promise<number> {
       return runMine(root, parsed);
     case "reconcile-jobs":
       return runReconcileJobs(root, parsed.why);
+    case "report":
+      return runReport(root, parsed.report);
+    case "reports":
+      return runReports(root, parsed);
     case "run": {
       const controller = new AbortController();
       // SIGTERM is what systemd sends and SIGINT is what a person sends; both
@@ -1215,9 +1597,24 @@ export async function runParsed(parsed: Parsed): Promise<number> {
       for (const one of wiring.eligibility) {
         if (one.kind === "ineligible") console.error(`✗ scheduler: ${one.jobId} cannot run — ${one.why}`);
       }
+      // WORK REPORTS, drained by this daemon and nobody else — it holds the
+      // store's lock, which is the only exclusion the drain relies on. The
+      // checker looks at THIS checkout, from this file's own location, for the
+      // reason `repoRoot` gives. Step [2] (a session's decision) is Stage 3's.
+      const checkArtefact = makeArtefactChecker({ repoDir: repoRoot(), decisionsRoot: decisionsRoot(), queueRoot: queueRoot() });
       const outcome = await runOverseer({
         root,
         baseUrl: parsed.url ?? process.env["OVERSEER_FLEET_URL"] ?? DEFAULT_FLEET_URL,
+        reports: {
+          drain: (register) =>
+            drainReports({
+              root,
+              register,
+              now: () => new Date(),
+              checkArtefact,
+              appendDecision: () => ({ kind: "pending", why: DECISION_NOT_WIRED }),
+            }),
+        },
         signal: controller.signal,
         // Absent rather than undefined: `exactOptionalPropertyTypes` tells those
         // apart, and absent is what "take the default" means.

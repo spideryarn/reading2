@@ -69,6 +69,7 @@ import {
 } from "./diff.js";
 import type { Arming, AuthorisedJob, SpawnJob } from "./jobs.js";
 import { conditionTracker, describeNote, NOTES_FILE, openNoteLog, type DaemonNote, type NoteLog } from "./notes.js";
+import type { ReportDrainOutcome } from "./reports.js";
 import type { ProposingRuleWork } from "./rule-protocol.js";
 import { describeReport, schedulerStandingOf, schedulerTick, type LostRecord, type RuleRun } from "./scheduler.js";
 import {
@@ -477,6 +478,17 @@ export type DaemonOptions = {
    * heartbeat, and until GPT Sol's C1 nothing anywhere could tell them apart.
    */
   schedulerDetail?: string;
+  /**
+   * WORK REPORTS, drained into `reports.jsonl` on their own timer. Plan 260910e.
+   *
+   * Injected, like the passes above, because the drain shells out to git and
+   * this file does not. It is handed `store.register` — the live one — so its
+   * execution comparison is against what this daemon verified, which is the
+   * whole reason the daemon rather than the CLI is the writer. It is synchronous
+   * and relies on this process holding `overseer.lock` for its exclusion, so
+   * there is nothing to await on the way out.
+   */
+  reports?: { intervalMs?: number; drain: (register: SessionRegister) => ReportDrainOutcome };
 };
 
 /**
@@ -522,6 +534,9 @@ export const USAGE_INTERVAL_MS = 300_000;
  * Overseer from a quiet one. Astra's A17, the same argument the usage scan makes.
  */
 export const JOBS_INTERVAL_MS = 30_000;
+
+/** How often the report inbox is drained: 30 s, which is the "within about 30 s" `overseer report` promises. */
+export const REPORTS_INTERVAL_MS = 30_000;
 
 /**
  * **Fifteen seconds.** How long a shutdown waits for rule runs still in flight.
@@ -1024,6 +1039,31 @@ export async function runOverseer(options: DaemonOptions): Promise<DaemonOutcome
         }, jobOptions.intervalMs ?? JOBS_INTERVAL_MS);
   jobsTicker?.unref?.();
 
+  /*
+   * The report drain, on its own timer. A throw is the `reports` condition — it
+   * opens a note and closes on the next pass that completes — and never stops
+   * the daemon: a broken inbox is a reason to say so, not to stop watching the
+   * fleet. A pass that refused or left something pending says so once.
+   */
+  const reportOptions = options.reports;
+  const reportsTicker =
+    reportOptions === undefined
+      ? null
+      : setInterval(() => {
+          if (halted() !== null) return;
+          const at = now().toISOString();
+          try {
+            const outcome = reportOptions.drain(store.register);
+            write(conditions.restore("reports", at, "a report drain pass completed"));
+            if (outcome.refused > 0 || outcome.pending > 0) {
+              log(`reports: ${outcome.recorded} recorded, ${outcome.refused} refused, ${outcome.pending} pending — ${outcome.notes.join("; ")}`);
+            }
+          } catch (cause) {
+            write(conditions.degrade("reports", at, `the report drain threw: ${cause instanceof Error ? cause.message : String(cause)}`));
+          }
+        }, reportOptions.intervalMs ?? REPORTS_INTERVAL_MS);
+  reportsTicker?.unref?.();
+
   /**
    * Wait for everything this PROCESS is in the middle of — the two passes, and
    * the rule runs.
@@ -1154,6 +1194,7 @@ export async function runOverseer(options: DaemonOptions): Promise<DaemonOutcome
     // it. A dispatched RULE runs in here, and this comment used to cover it too
     // — GPT Sol's SC-1. Those are awaited, bounded, in `settleRuleRuns`.
     if (jobsTicker !== null) clearInterval(jobsTicker);
+    if (reportsTicker !== null) clearInterval(reportsTicker);
   }
 
   /**
