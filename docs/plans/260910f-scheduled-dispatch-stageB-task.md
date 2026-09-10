@@ -40,6 +40,37 @@ journal, projected into the planner. Its material is pinned. Its run spec is aut
      `newestAttemptOf` and the resume candidate. `launchOccurrencesOf` preserves fold order.
    - A superseded sibling is `abandon`ed before the new revision is planned, and a refused `abandon`
      plans nothing.
+2c. **M11 and M12 (the plan's dispositions), sent to the B1 builder mid-run on 2026-09-10, and
+   binding here.**
+   - **The planner's usage input is an `AccountChoice`, not a bare `LaunchGate`:**
+
+     ```ts
+     AccountChoice = {
+       chosen:
+         | { kind: "chosen"; account: string; notes: string[] }
+         | { kind: "held"; why: string; until: string | null };
+       standing: (handle: string) =>
+         | { kind: "clear" }
+         | { kind: "held"; why: string; until: string | null }
+         | { kind: "gone"; why: string };
+     }
+     ```
+
+     - Stage C's daemon computes it.
+     - Until then, `daemon.ts` passes a "not wired" held value.
+   - **A new plan uses `chosen.account`.** It is carried to the launch as
+     `ScheduledLaunchRun = RunSpec & { account }` until the protocol's 2b round ships
+     `RunSpec.account`.
+   - **The job's hashed run spec stays `{ timeoutMinutes, access }`.**
+   - **A resume keeps its stored account:**
+     - `clear` → resume;
+     - `held` → `usage-held`, naming the account;
+     - `gone` → `abandon`, then a replacement planned on the same tick.
+   - **A `failed-before-launch` with proof `superseded` is `LastRun` `replaced { at: endedAt }`.**
+     - `due()` answers `due` with `dueAt = at`.
+     - The replacement's `scheduledAt` is the abandonment's `endedAt`.
+     - So it gets a new id, and no interval is lost.
+     - The abandoned id is never passed to the protocol again.
 3. **`tools/overseer/schedule-plan.ts`**
    - `PlanInput.history` per kind (F2).
    - The `resume` verdict (F1).

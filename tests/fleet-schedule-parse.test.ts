@@ -27,8 +27,8 @@ const JOB: SchedulePreviewJob = {
   verdict: { kind: "not-yet-eligible", sentence: "never run; first eligible at 2026-09-10T14:00:00.000Z", next: { kind: "first-eligible", at: "2026-09-10T14:00:00.000Z" } },
   lastAttempt: { kind: "never" },
   schedule: { everyMs: 86_400_000, launcherLeaseMs: 3_600_000, initialDelayMs: 7_200_000 },
-  sessionTimeout: "not built",
-  sessionNoOverlap: "not enforced",
+  sessionTimeout: { kind: "run-spec", timeoutMinutes: 5, access: "read-only" },
+  sessionNoOverlap: "enforced",
   prompt: "reply one line",
   behaviourHash: { kind: "computed", hash: "465648545712" },
   authorisedHash: "465648545712",
@@ -46,6 +46,7 @@ const SECOND: SchedulePreviewJob = {
   ...JOB,
   jobId: "parse-fixture-rule",
   resourceClass: "in-process-rule",
+  sessionTimeout: { kind: "not-a-session" },
   dispatch: { kind: "live" },
   verdict: { kind: "unauthorised", sentence: "moved", drift: ["rules.ts: pinned aaaaaaaa…, now bbbbbbbb…"], next: { kind: "none", why: "not until it is re-pinned" } },
   lastAttempt: {
@@ -67,6 +68,7 @@ const PREVIEW: SchedulePreview = {
   capabilities: { session: false, rules: false },
   arming: { kind: "none", why: "not armed" },
   history: { kind: "intact" },
+  sessionHistory: { kind: "lost", why: "the launch journal lost its history at line 3" },
   headline: { kind: "off", why: "not armed", at: "2026-09-10T12:00:00.000Z" },
   missedRunPolicy: { kind: "one-run", sentence: "runs once" },
   caveat: "as of writtenAt",
@@ -182,6 +184,121 @@ describe("what it does not know, it says it does not know — per row", () => {
     const other = copy();
     other["list"] = { kind: "given" };
     expect(parseSchedulePreview(other).kind).toBe("unreadable");
+  });
+});
+
+describe("a session job's launch, its run spec, and the Stage B verdicts (plan 260910f, scheduled dispatch)", () => {
+  /** A launch as the preview writes one: the protocol's state under the standing it gives the job. */
+  const LAUNCH = {
+    kind: "launch",
+    occurrenceId: "parse-fixture-job@2026-09-10T11:00:00.000Z#540c65ff660b",
+    launchId: `lo-${"0a".repeat(10)}`,
+    plannedAt: "2026-09-10T11:00:00.000Z",
+    state: "completed",
+    standing: "settled",
+    endedAt: "2026-09-10T11:20:00.000Z",
+    why: "completed attempt 1",
+    meaning: "the launch journal's own record of this occurrence",
+  } as const;
+
+  function withAttempt(attempt: Record<string, unknown>): Record<string, unknown> {
+    const value = copy();
+    (jobsOf(value)[0] as Record<string, unknown>)["lastAttempt"] = attempt;
+    return value;
+  }
+
+  function rowsOf(value: unknown): string[] {
+    const parsed = parseSchedulePreview(value);
+    if (parsed.kind !== "preview") throw new Error(`expected a preview, got ${parsed.kind}`);
+    return parsed.preview.jobs.map((row) => row.kind);
+  }
+
+  test("a launch attempt reads back exactly, in every standing it can have", () => {
+    const cases: [string, string, string | null][] = [
+      ["resumable", "planned", null],
+      ["resumable", "waiting-admission", null],
+      ["open", "outcome-unknown", null],
+      ["open", "carried", null],
+      ["settled", "completed", "2026-09-10T11:20:00.000Z"],
+      ["settled", "disposed", "2026-09-10T11:20:00.000Z"],
+      ["replaced", "superseded", "2026-09-10T11:20:00.000Z"],
+    ];
+    for (const [standing, state, endedAt] of cases) {
+      const attempt = { ...LAUNCH, standing, state, endedAt };
+      const parsed = parseSchedulePreview(withAttempt(attempt));
+      if (parsed.kind !== "preview") throw new Error("expected a preview");
+      expect(parsed.preview.jobs[0], `${standing}/${state}`).toEqual({ kind: "job", job: { ...JOB, lastAttempt: attempt } });
+    }
+  });
+
+  test("A STATE UNDER THE WRONG STANDING is an unreadable row — `completed` claiming to hold its job is drawn as neither", () => {
+    for (const [standing, state] of [
+      ["open", "completed"],
+      ["resumable", "launching"],
+      ["settled", "superseded"],
+      ["replaced", "failed-before-launch"],
+    ]) {
+      expect(rowsOf(withAttempt({ ...LAUNCH, standing, state, endedAt: standing === "settled" || standing === "replaced" ? LAUNCH.endedAt : null })), `${standing}/${state}`).toEqual([
+        "unreadable",
+        "job",
+      ]);
+    }
+    expect(rowsOf(withAttempt({ ...LAUNCH, standing: "paused" }))).toEqual(["unreadable", "job"]);
+    expect(rowsOf(withAttempt({ ...LAUNCH, state: "being-thought-about" }))).toEqual(["unreadable", "job"]);
+  });
+
+  test("`endedAt` is present exactly when the launch ended: a settled one with none, or an open one with one, is unreadable", () => {
+    expect(rowsOf(withAttempt({ ...LAUNCH, endedAt: null }))).toEqual(["unreadable", "job"]);
+    expect(rowsOf(withAttempt({ ...LAUNCH, standing: "open", state: "launching", endedAt: "2026-09-10T11:20:00.000Z" }))).toEqual(["unreadable", "job"]);
+    expect(rowsOf(withAttempt({ ...LAUNCH, endedAt: "+275760-09-13T00:00:00.001Z" }))).toEqual(["unreadable", "job"]);
+  });
+
+  test("A SESSION ROW CARRIES A RUN SPEC AND A RULE ROW DOES NOT: each the other way round is an unreadable row", () => {
+    const sessionWithout = copy();
+    (jobsOf(sessionWithout)[0] as Record<string, unknown>)["sessionTimeout"] = { kind: "not-a-session" };
+    expect(rowsOf(sessionWithout)).toEqual(["unreadable", "job"]);
+    const ruleWith = copy();
+    (jobsOf(ruleWith)[1] as Record<string, unknown>)["sessionTimeout"] = { kind: "run-spec", timeoutMinutes: 5, access: "read-only" };
+    expect(rowsOf(ruleWith)).toEqual(["job", "unreadable"]);
+  });
+
+  test("a run spec it cannot read — an access it does not know, a timeout that is not minutes, the old literal — is an unreadable row", () => {
+    for (const sessionTimeout of [
+      { kind: "run-spec", timeoutMinutes: 5, access: "root" },
+      { kind: "run-spec", timeoutMinutes: 0, access: "read-only" },
+      { kind: "run-spec", timeoutMinutes: 2.5, access: "read-only" },
+      { kind: "forever" },
+      "not built",
+    ]) {
+      const value = copy();
+      (jobsOf(value)[0] as Record<string, unknown>)["sessionTimeout"] = sessionTimeout;
+      expect(rowsOf(value), JSON.stringify(sessionTimeout)).toEqual(["unreadable", "job"]);
+    }
+    const oldOverlap = copy();
+    (jobsOf(oldOverlap)[0] as Record<string, unknown>)["sessionNoOverlap"] = "not enforced";
+    expect(rowsOf(oldOverlap)).toEqual(["unreadable", "job"]);
+  });
+
+  test("USAGE-HELD AND RESUME read, each only with the next-run shapes the planner gives it", () => {
+    const withVerdict = (verdict: Record<string, unknown>): Record<string, unknown> => {
+      const value = copy();
+      (jobsOf(value)[0] as Record<string, unknown>)["verdict"] = verdict;
+      return value;
+    };
+    expect(rowsOf(withVerdict({ kind: "usage-held", sentence: "held", next: { kind: "next-due", at: "2026-09-10T14:00:00.000Z" } }))).toEqual(["job", "job"]);
+    expect(rowsOf(withVerdict({ kind: "usage-held", sentence: "held", next: { kind: "none", why: "nobody can date it" } }))).toEqual(["job", "job"]);
+    expect(rowsOf(withVerdict({ kind: "usage-held", sentence: "held", next: { kind: "due-now" } }))).toEqual(["unreadable", "job"]);
+    expect(rowsOf(withVerdict({ kind: "resume", sentence: "resumes it", next: { kind: "due-now" } }))).toEqual(["job", "job"]);
+    expect(rowsOf(withVerdict({ kind: "resume", sentence: "resumes it", next: { kind: "next-due", at: "2026-09-10T14:00:00.000Z" } }))).toEqual(["unreadable", "job"]);
+  });
+
+  test("A FILE WITH NO `sessionHistory` IS UNREADABLE: every session row would be read against a history nobody stated", () => {
+    const value = copy();
+    delete value["sessionHistory"];
+    expect(parseSchedulePreview(value).kind).toBe("unreadable");
+    const unknown = copy();
+    unknown["sessionHistory"] = { kind: "mostly" };
+    expect(parseSchedulePreview(unknown).kind).toBe("unreadable");
   });
 });
 

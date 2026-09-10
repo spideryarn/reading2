@@ -78,6 +78,33 @@ It also proves the acceptance paragraph end to end, on scratch infrastructure on
 
    Negative control: a no-op launcher must make the first post-invocation row fail. The drill exits
    non-zero on any mismatch.
+   **Two constraints from launch-protocol's Stage 2b (e3bcace3):**
+   - **A routed `run-claude --account <handle>` reads the account's live profile over the network
+     before it spawns anything, so no offline run through the `tmux-headless` adapter can reach
+     `ok`.**
+     - Launch-protocol's own real-tmux test asserts only `run-claude`'s refusal of an unregistered
+       handle: `not-run`, and no `claude` spawned.
+     - **Decided (checked 2026-09-10): option (b).**
+       - The routed path calls `readProfile` (`tools/overseer/accounts.ts:382`, from
+         `run-claude.ts:801`), which `fetch`es `https://api.anthropic.com/api/oauth/profile`
+         (`accounts.ts:88`, `:390`).
+       - That is a real network request inside the wrapper's own process, not a call through the
+         `claude` binary, so no stand-in can answer it. Option (a), where a stand-in answers
+         everything the routed path asks, is therefore closed.
+     - **The success rows use an unrouted `run-claude`**, started through a test launcher composed
+       the same way as the real one: the same artefact directory, the same `--launch-dir`, the same
+       attempt-private prompt, and the same tmux session named by the correlation id. **Only
+       `--account` is dropped.**
+     - **A separate row drives the real `tmux-headless` adapter with an unregistered handle.** It
+       must end at `run-claude`'s refusal (`not-run`, and no `claude` spawned), which reads as
+       `launch-failed`.
+     - Say in the report that the success path skipped the routed profile read and why.
+     - No occurrence may read `succeeded` off a run that did not happen.
+   - **Every test or drill that spawns a wrapper uses `tests/helpers/wrapper-env.ts`.**
+     - `wrapperEnv` pins `PATH` and the account-routing names through `SPIDERYARN_ENV_PINNED`.
+     - `resolveAsWrapper` does the preflight through the wrapper's own `.env.local` load.
+     - The reason is Sol's F22 on the protocol: an inherited `PATH` is not pinned, so `.env.local`
+       could put the real, paid `claude` back in front of the stand-in.
 3. **`tests/scheduled-dispatch-drill.test.ts`** runs the drill, and its negative control, where
    tmux is present, and is skipped otherwise.
 4. **`tests/overseer-daemon-occurrences.test.ts`** checks the daemon wiring against a temp store

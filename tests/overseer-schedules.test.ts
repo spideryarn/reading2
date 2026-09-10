@@ -22,7 +22,7 @@
  * The scheduler tests proper live in `tests/overseer-jobs.test.ts`; this file is
  * the config, the arming record, the two gates and the activation verdict.
  */
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, unlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -43,20 +43,25 @@ import {
   type BehaviourHash,
   type JobBehaviour,
   type JobDefinition,
+  type JobWork,
   type Occurrence,
   type OccurrenceId,
   type OccurrenceKey,
-  type SpawnJob,
 } from "../tools/overseer/jobs.js";
+import { openLocalAdmission, type LocalAdmission } from "../tools/overseer/launch-admission.js";
+import { readArtefacts, writeExitFile } from "../tools/overseer/launch-artefacts.js";
+import { composeLaunchProtocol, type CorrelationId, type LaunchOccurrenceId, type LaunchProtocol, type Launcher, type RunSpec } from "../tools/overseer/launch-protocol.js";
+import { openLaunchStore, type LaunchStore } from "../tools/overseer/launch-store.js";
 import {
   describeReport,
   eligibilityOf,
   schedulerStandingOf,
   schedulerTick,
   type OccurrenceLog,
+  type SchedulerLaunch,
   type SchedulerReport,
 } from "../tools/overseer/scheduler.js";
-import type { ReadDocument } from "../tools/overseer/schedule-plan.js";
+import type { AccountChoice, ReadDocument } from "../tools/overseer/schedule-plan.js";
 import {
   hours,
   LAUNCH_SEPARATION_MS,
@@ -75,6 +80,13 @@ const REPO = join(dirname(fileURLToPath(import.meta.url)), "..");
 /** Every session job this file ticks leans on no document, so a tick that asked for one would be a bug — it says so rather than inventing a digest. */
 const NO_DOCUMENTS: ReadDocument = (path) => ({ kind: "unreadable", path, why: "no job in this file leans on a document" });
 
+/** A session job's work, with the run spec that has been part of its fingerprint since plan 260910f (scheduled dispatch) § D4. */
+const RUN: RunSpec = { timeoutMinutes: 30, access: "read-only" };
+const SESSION: JobWork = { kind: "session", run: RUN };
+
+/** The two real jobs whose run specs await Greg, and whose pins were deliberately not moved (plan 260910f § D4). */
+const AWAITING_GREG: readonly string[] = ["get-ready-to-deploy", "feedback-sweep"];
+
 const temporary: string[] = [];
 afterEach(() => {
   for (const path of temporary.splice(0)) rmSync(path, { recursive: true, force: true });
@@ -89,7 +101,7 @@ function tempDir(): string {
 // ───────────────────────────────────────────────────────────── S8-1, the split
 
 describe("S8-1: a schedule edit moves no fingerprint, and a behaviour edit still does", () => {
-  const BEHAVIOUR: JobBehaviour = { id: "j", what: "do the thing", documents: [], work: { kind: "session" }, dispatch: { kind: "live" } };
+  const BEHAVIOUR: JobBehaviour = { id: "j", what: "do the thing", documents: [], work: SESSION, dispatch: { kind: "live" } };
   const SCHEDULE: ScheduleConfig = { everyMs: hours(6), leaseMs: hours(6), initialDelayMs: minutes(30) };
 
   test("THE ONE THAT MAKES GREG'S CONFIG FILE WORK: every schedule field can move without moving the hash", () => {
@@ -137,17 +149,22 @@ describe("S8-1: a schedule edit moves no fingerprint, and a behaviour edit still
     expect([...JOB_BEHAVIOUR_HASHED_FIELDS].sort()).toEqual(["dispatch", "documents", "id", "what", "work"]);
   });
 
-  test("the SHIPPED jobs are pinned against their behaviour, and rebuilding them with other schedules changes nothing", () => {
+  test("the SHIPPED jobs are fingerprinted by their behaviour alone, and rebuilding them with other schedules changes nothing", () => {
     // Against the real checkout, not a fixture: the claim is about the box.
     const built = standingJobs(REPO);
     expect(built.problems).toEqual([]);
     for (const job of built.jobs) {
       const id = job.definition.behaviour.id as keyof typeof AUTHORISED_HASHES;
-      expect(`${id} ${behaviourHash(job.definition.behaviour)}`).toBe(`${id} ${AUTHORISED_HASHES[id]}`);
+      const found = behaviourHash(job.definition.behaviour);
+      // THE FIXTURE IS PINNED; the two real jobs are not, deliberately, until
+      // Greg authorises the run specs that grant them write access (plan 260910f
+      // § D4) — so they fingerprint as something other than their pin.
+      if (AWAITING_GREG.includes(id)) expect(`${id} ${found}`).not.toBe(`${id} ${AUTHORISED_HASHES[id]}`);
+      else expect(`${id} ${found}`).toBe(`${id} ${AUTHORISED_HASHES[id]}`);
       // The same behaviour under a wildly different schedule is the same
-      // authorisation. This is the sentence Greg was promised.
+      // fingerprint. This is the sentence Greg was promised.
       const retimed: JobDefinition = { behaviour: job.definition.behaviour, schedule: { everyMs: hours(1), leaseMs: minutes(30), initialDelayMs: 0 } };
-      expect(behaviourHash(retimed.behaviour)).toBe(AUTHORISED_HASHES[id]);
+      expect(behaviourHash(retimed.behaviour)).toBe(found);
     }
   });
 });
@@ -218,8 +235,8 @@ describe("S8-1: the config, and the validation that replaced the re-pin", () => 
 // ────────────────────────────────────────────────────────── S8-4, the lineage
 
 describe("S8-4: a re-pin no longer discards a job's cadence", () => {
-  const OLD: JobBehaviour = { id: "feedback-sweep", what: "the old instruction", documents: [], work: { kind: "session" }, dispatch: { kind: "live" } };
-  const NEW: JobBehaviour = { id: "feedback-sweep", what: "the new instruction", documents: [], work: { kind: "session" }, dispatch: { kind: "live" } };
+  const OLD: JobBehaviour = { id: "feedback-sweep", what: "the old instruction", documents: [], work: SESSION, dispatch: { kind: "live" } };
+  const NEW: JobBehaviour = { id: "feedback-sweep", what: "the new instruction", documents: [], work: SESSION, dispatch: { kind: "live" } };
 
   function ran(behaviour: JobBehaviour, at: string, kind: "finished" | "started"): Occurrence {
     const key: OccurrenceKey = { jobId: behaviour.id, scheduledAt: at, behaviourHash: behaviourHash(behaviour) };
@@ -356,14 +373,100 @@ describe("S8-6: `armedAt` is durable, and the first run is deferred honestly", (
 describe("S8-5: a durable minimum separation between session launches", () => {
   const ARMED: Arming = { kind: "armed", at: "2026-09-01T00:00:00.000Z" };
   const NOW = new Date("2026-09-09T12:00:00.000Z");
+  const ACCOUNTS: AccountChoice = { chosen: { kind: "chosen", account: "pool-a", notes: [] }, standing: () => ({ kind: "clear" }) };
 
   function sessionJob(id: string): AuthorisedJob {
-    const behaviour: JobBehaviour = { id, what: `run ${id}`, documents: [], work: { kind: "session" }, dispatch: { kind: "live" } };
+    const behaviour: JobBehaviour = { id, what: `run ${id}`, documents: [], work: SESSION, dispatch: { kind: "live" } };
     return {
       definition: { behaviour, schedule: { everyMs: hours(6), leaseMs: hours(6), initialDelayMs: 0 } },
       authorisedDocuments: [],
       authorisedHash: behaviourHash(behaviour),
     };
+  }
+
+  /**
+   * A REAL LAUNCH STORE AND ADMISSION OWNER in a temp dir, composed by the
+   * protocol's own `composeLaunchProtocol`, with a fake `tmux-headless`
+   * launcher that writes down every occurrence it was asked to start —
+   * `tests/overseer-scheduled-dispatch.test.ts`'s harness, cut to what spacing
+   * needs. Since plan 260910f (scheduled dispatch) a session job starts only
+   * through this, and its launch is timed from the journal (F3).
+   */
+  type World = { readonly launch: SchedulerLaunch; readonly protocol: LaunchProtocol; readonly store: LaunchStore; kill(): void };
+  const open: World[] = [];
+  afterEach(() => {
+    for (const one of open.splice(0)) one.kill();
+  });
+
+  function world(root: string, now: () => Date, started: LaunchOccurrenceId[]): World {
+    const opened = openLaunchStore({ root, now });
+    if (!opened.ok) throw new Error(`launch store refused: ${JSON.stringify(opened.refusal)}`);
+    const owned = openLocalAdmission({ root, now });
+    if (!owned.ok) throw new Error(`owner refused: ${JSON.stringify(owned.refusal)}`);
+    const store = opened.store;
+    const owner: LocalAdmission = owned.owner;
+    const sessions = join(root, "sessions");
+    const launcher: Launcher = {
+      kind: "tmux-headless",
+      launch(input) {
+        started.push(input.occurrenceId);
+        mkdirSync(sessions, { recursive: true });
+        writeFileSync(join(sessions, input.correlationId), "");
+        return { kind: "started", detail: "a pretend tmux session" };
+      },
+    };
+    const protocol = composeLaunchProtocol({
+      journal: store,
+      owner,
+      launchers: { "tmux-headless": launcher },
+      evidence: {
+        artefacts: (dir, correlationId) => readArtefacts(dir, correlationId),
+        identity: () => ({ kind: "cannot-tell", why: "no process is probed in this test" }),
+        boot: () => ({ read: true, id: "boot-one" }),
+        tmux: (correlationId) => (existsSync(join(sessions, correlationId)) ? { kind: "found", sessionId: "$1" } : { kind: "absent" }),
+      },
+      now,
+    });
+    let closed = false;
+    const made: World = {
+      protocol,
+      store,
+      launch: {
+        launchOccurrence: protocol.launchOccurrence,
+        resumeOccurrence: protocol.resumeOccurrence,
+        abandon: protocol.abandon,
+        view: () => ({ status: () => store.status(), fold: () => store.fold(), attemptDir: (id, attempt) => store.attemptDir(id, attempt) }),
+      },
+      kill() {
+        if (closed) return;
+        closed = true;
+        store.close();
+        owner.close();
+      },
+    };
+    open.push(made);
+    return made;
+  }
+
+  /** The job each started occurrence belonged to, read back from the journal's own record of it. */
+  function startedJobs(w: World, started: readonly LaunchOccurrenceId[]): string[] {
+    return started.map((id) => {
+      const origin = w.store.fold().occurrences.get(id)?.origin;
+      return origin?.kind === "schedule" ? origin.jobId : "?";
+    });
+  }
+
+  function tick(w: World, definitions: readonly AuthorisedJob[], at: Date, store: OccurrenceLog = fakeStore()): readonly SchedulerReport[] {
+    return schedulerTick({
+      definitions,
+      store,
+      launch: w.launch,
+      accounts: ACCOUNTS,
+      arming: ARMED,
+      launchSeparationMs: minutes(30),
+      readDocument: NO_DOCUMENTS,
+      now: () => at,
+    });
   }
 
   /** A store that records what it was asked to append, so a test can see what actually landed. */
@@ -381,31 +484,13 @@ describe("S8-5: a durable minimum separation between session launches", () => {
     };
   }
 
-  function spawner(): { spawn: SpawnJob; started: string[] } {
-    const started: string[] = [];
-    return {
-      started,
-      spawn: (definition) => {
-        started.push(definition.behaviour.id);
-        return { kind: "spawned", pid: 4242, done: new Promise<never>(() => undefined) };
-      },
-    };
-  }
-
-  test("TWO JOBS DUE IN ONE TICK: one is dispatched and the other is VISIBLY waiting", () => {
+  test("TWO JOBS DUE IN ONE TICK: one is launched and the other is VISIBLY waiting", () => {
     // The catch-up case, which is the one a phase offset cannot survive: after
     // downtime both jobs are overdue in the same tick, whatever their phase was.
-    const spawn = spawner();
-    const reports = schedulerTick({
-      definitions: [sessionJob("get-ready-to-deploy"), sessionJob("feedback-sweep")],
-      store: fakeStore(),
-      spawn: spawn.spawn,
-      arming: ARMED,
-      launchSeparationMs: minutes(30),
-      readDocument: NO_DOCUMENTS,
-      now: () => NOW,
-    });
-    expect(spawn.started).toEqual(["get-ready-to-deploy"]);
+    const started: LaunchOccurrenceId[] = [];
+    const w = world(tempDir(), () => NOW, started);
+    const reports = tick(w, [sessionJob("get-ready-to-deploy"), sessionJob("feedback-sweep")], NOW);
+    expect(startedJobs(w, started)).toEqual(["get-ready-to-deploy"]);
     const spaced = reports.find((report) => report.kind === "spacing-held");
     expect(spaced).toBeDefined();
     // VISIBLE, not silent. A skip nobody can see is how a job stops running
@@ -416,53 +501,56 @@ describe("S8-5: a durable minimum separation between session launches", () => {
     expect(spaced.why).toContain("waits");
   });
 
-  test("AND IT IS DURABLE: a reservation from a previous process still holds the next launch", () => {
-    // The half an in-memory counter would get wrong. A daemon restarted a minute
-    // after launching a session must not launch another one.
-    const key: OccurrenceKey = {
-      jobId: "get-ready-to-deploy",
-      scheduledAt: "2026-09-09T11:50:00.000Z",
-      behaviourHash: "aaaaaaaaaaaa" as BehaviourHash,
-    };
-    const id = occurrenceId(key);
-    const occurrences = new Map<OccurrenceId, Occurrence>([
-      [
-        id,
-        {
-          kind: "finished",
-          id,
-          key,
-          reservedAt: "2026-09-09T11:50:00.000Z",
-          instanceId: "a-previous-instance",
-          what: "run it",
-          finishedAt: "2026-09-09T11:51:00.000Z",
-          outcome: { kind: "exited", code: 0 },
-        },
-      ],
-    ]);
-    const spawn = spawner();
-    const reports = schedulerTick({
-      // BOTH jobs, which is what the box always has: the gate reads the ledger
-      // for the session jobs this daemon knows about, and a job absent from the
-      // list is one that is not being scheduled at all. `lastSessionLaunchOf`
-      // names that limitation.
-      definitions: [sessionJob("get-ready-to-deploy"), sessionJob("feedback-sweep")],
-      store: fakeStore(occurrences),
-      spawn: spawn.spawn,
-      arming: ARMED,
-      launchSeparationMs: minutes(30),
-      readDocument: NO_DOCUMENTS,
-      now: () => NOW,
+  test("AND IT IS DURABLE: a launch made by a previous process still holds the next launch", () => {
+    // The half an in-memory counter would get wrong. A daemon restarted ten
+    // minutes after launching a session must not launch another one — and the
+    // launch it reads is the launch journal's, from a process that is gone.
+    const root = tempDir();
+    let at = Date.parse("2026-09-09T11:50:00.000Z");
+    const clock = (): Date => new Date(at);
+    const started: LaunchOccurrenceId[] = [];
+    const before = world(root, clock, started);
+    expect(tick(before, [sessionJob("get-ready-to-deploy")], clock()).map((report) => report.kind)).toEqual(["launch"]);
+    const [launched] = started;
+    if (launched === undefined) throw new Error("expected a launch");
+    // The child ends a minute later and leaves its exit record; reconciliation settles it.
+    at = Date.parse("2026-09-09T11:51:00.000Z");
+    const record = before.store.fold().occurrences.get(launched);
+    if (record === undefined || record.state !== "launching") throw new Error(`expected ${launched} launching`);
+    writeExitFile(before.store.attemptDir(launched, 1), {
+      v: 1,
+      kind: "exit",
+      correlationId: record.current.correlationId as CorrelationId,
+      at: clock().toISOString(),
+      ending: { kind: "exited", code: 0 },
+      verdict: { kind: "ok" },
+      usageLimit: false,
+      permissionDenials: 0,
+      answer: null,
+      transcript: null,
     });
-    expect(spawn.started).toEqual([]);
-    const spaced = reports.filter((report) => report.kind === "spacing-held").map((report) => report.jobId);
-    expect(spaced).toEqual(["feedback-sweep"]);
-    // `get-ready-to-deploy` is not spaced, it is simply not due — ten minutes
-    // into a six-hour cadence. Two different facts, two different reports.
+    unlinkSync(join(root, "sessions", record.current.correlationId));
+    before.protocol.reconcile();
+    expect(before.store.fold().occurrences.get(launched)?.state).toBe("completed");
+    before.kill();
+
+    // THE RESTART, ten minutes after the launch.
+    const after = world(root, () => NOW, started);
+    // BOTH jobs, which is what the box always has.
+    const reports = tick(after, [sessionJob("get-ready-to-deploy"), sessionJob("feedback-sweep")], NOW);
+    expect(started).toEqual([launched]);
+    const spaced = reports.filter((report) => report.kind === "spacing-held");
+    expect(spaced.map((report) => report.jobId)).toEqual(["feedback-sweep"]);
+    // Timed from the launch's `launchingAt` (11:50), not from when it ended.
+    expect(spaced[0]?.kind === "spacing-held" && spaced[0].remainingMs).toBe(minutes(20));
+    // `get-ready-to-deploy` is not spaced, it is simply not due — nine minutes
+    // into a six-hour cadence that runs from its end. Two different facts, two
+    // different reports.
     expect(reports.find((report) => report.jobId === "get-ready-to-deploy")?.kind).toBe("waiting");
-    // AND NOTHING WAS RESERVED. The gate is before the reservation, so a spaced
-    // job leaves no trace that would ration the next one.
-    expect(reports.some((report) => report.kind === "dispatched")).toBe(false);
+    // AND NOTHING WAS PLANNED. The gate is before the plan, so a spaced job
+    // leaves no trace that would ration the next one.
+    expect(reports.some((report) => report.kind === "launch")).toBe(false);
+    expect([...after.store.fold().occurrences.keys()]).toEqual([launched]);
   });
 
   test("a rule is not rationed by it, because a rule is not a session", () => {
@@ -477,20 +565,13 @@ describe("S8-5: a durable minimum separation between session launches", () => {
       authorisedDocuments: [],
       authorisedHash: behaviourHash(behaviour),
     };
-    const spawn = spawner();
-    const reports = schedulerTick({
-      definitions: [sessionJob("get-ready-to-deploy"), rule],
-      store: fakeStore(),
-      spawn: spawn.spawn,
-      // A rule with no `rules` capability is REFUSED rather than dispatched,
-      // which is a settled outcome and exactly what this test wants: it proves
-      // the rule reached `start`, past the spacing gate.
-      arming: ARMED,
-      launchSeparationMs: minutes(30),
-      readDocument: NO_DOCUMENTS,
-      now: () => NOW,
-    });
-    expect(spawn.started).toEqual(["get-ready-to-deploy"]);
+    const started: LaunchOccurrenceId[] = [];
+    const w = world(tempDir(), () => NOW, started);
+    // A rule with no `rules` capability is REFUSED rather than dispatched, which
+    // is a settled outcome and exactly what this test wants: it proves the rule
+    // reached `start`, past the spacing gate the session launch had just moved.
+    const reports = tick(w, [sessionJob("get-ready-to-deploy"), rule], NOW);
+    expect(startedJobs(w, started)).toEqual(["get-ready-to-deploy"]);
     const forRule = reports.filter((report) => report.jobId === "wedged-work");
     expect(forRule.map((report) => report.kind)).not.toContain("spacing-held");
     expect(forRule.map((report) => report.kind)).toContain("refused");
@@ -532,21 +613,21 @@ describe("S8-7: `ARMED` is a fact about the loaded definitions, not about an env
   }
 
   test("a job whose pin no longer matches is INELIGIBLE, whatever the environment says", () => {
-    const [one] = eligibilityOf([job("get-ready-to-deploy", { kind: "session" }, "deadbeef1234")], { session: true, rules: true });
+    const [one] = eligibilityOf([job("get-ready-to-deploy", SESSION,"deadbeef1234")], { session: true, rules: true });
     expect(one?.kind).toBe("ineligible");
     if (one?.kind !== "ineligible") return;
     expect(one.why).toContain("deadbeef1234");
   });
 
   test("a session job in a process holding no dispatcher is INELIGIBLE, not merely quiet", () => {
-    const [one] = eligibilityOf([job("get-ready-to-deploy", { kind: "session" }, null)], { session: false, rules: true });
+    const [one] = eligibilityOf([job("get-ready-to-deploy", SESSION,null)], { session: false, rules: true });
     expect(one?.kind).toBe("ineligible");
     if (one?.kind !== "ineligible") return;
-    expect(one.why).toContain("no session dispatcher");
+    expect(one.why).toContain("no launch protocol");
   });
 
   test("an authorised job whose capability is held is eligible, and says nothing about the clock", () => {
-    expect(eligibilityOf([job("get-ready-to-deploy", { kind: "session" }, null)], { session: true, rules: true })).toEqual([
+    expect(eligibilityOf([job("get-ready-to-deploy", SESSION,null)], { session: true, rules: true })).toEqual([
       { kind: "eligible", jobId: "get-ready-to-deploy" },
     ]);
   });
@@ -559,7 +640,7 @@ describe("S8-7: `ARMED` is a fact about the loaded definitions, not about an env
     // unauthorised. A person reading that line would have been told the opposite
     // of the truth by the one thing they trusted.
     const standing = schedulerStandingOf({
-      jobs: { definitions: [job("get-ready-to-deploy", { kind: "session" }, "deadbeef1234")], held: { session: true, rules: true } },
+      jobs: { definitions: [job("get-ready-to-deploy", SESSION,"deadbeef1234")], held: { session: true, rules: true } },
       detail: undefined,
       at: AT,
     });
@@ -578,7 +659,7 @@ describe("S8-7: `ARMED` is a fact about the loaded definitions, not about an env
   test("one runnable job out of two is ARMED, and the word counts them", () => {
     const standing = schedulerStandingOf({
       jobs: {
-        definitions: [job("get-ready-to-deploy", { kind: "session" }, null), job("feedback-sweep", { kind: "session" }, "deadbeef1234")],
+        definitions: [job("get-ready-to-deploy", SESSION,null), job("feedback-sweep", SESSION,"deadbeef1234")],
         held: { session: true, rules: true },
       },
       detail: undefined,
@@ -598,12 +679,12 @@ describe("S8-7: `ARMED` is a fact about the loaded definitions, not about an env
     // claim the standing jobs were scheduled by a daemon structurally incapable
     // of starting one.
     const standing = schedulerStandingOf({
-      jobs: { definitions: [job("get-ready-to-deploy", { kind: "session" }, null)], held: { session: false, rules: true } },
+      jobs: { definitions: [job("get-ready-to-deploy", SESSION,null)], held: { session: false, rules: true } },
       detail: undefined,
       at: AT,
     });
     expect(standing.kind).toBe("blocked");
-    expect(standing.why).toContain("no session dispatcher");
+    expect(standing.why).toContain("no launch protocol");
   });
 });
 
@@ -620,6 +701,7 @@ describe("S8-3: the activation command cannot report success on the old unit", (
     restartedAt: "2026-09-09T12:00:00.000Z",
     eligibility: [{ kind: "eligible" as const, jobId: "get-ready-to-deploy" }, { kind: "eligible" as const, jobId: "feedback-sweep" }],
     requiredJobIds: ["get-ready-to-deploy", "feedback-sweep"],
+    sessionJobIds: new Set(["get-ready-to-deploy", "feedback-sweep"]),
     armed: true,
   };
 

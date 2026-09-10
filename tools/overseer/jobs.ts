@@ -79,6 +79,7 @@
 import { createHash } from "node:crypto";
 
 import type { OverseerEvent } from "./diff.js";
+import type { LaunchOccurrenceId, RunSpec } from "./launch-protocol.js";
 import { canonicalRuleSpec, type RuleSpec } from "./rules.js";
 import type { ScheduleConfig } from "./schedules.js";
 
@@ -96,8 +97,17 @@ import type { ScheduleConfig } from "./schedules.js";
  * is data, `behaviourHash` hashes it, and a moved knob refuses the job.
  */
 export type JobWork =
-  /** A Claude session, started by `SpawnJob`. What the standing jobs are. */
-  | { readonly kind: "session" }
+  /**
+   * A Claude session, started through the launch protocol. What the standing
+   * jobs are.
+   *
+   * **`run` is part of the authorised behaviour** (plan 260910f scheduled
+   * dispatch, § D4): the timeout and the access profile an unattended session
+   * gets are things Greg authorised, so moving either one re-pins. Which POOL
+   * ACCOUNT it runs on is deliberately not here: that is a runtime choice the
+   * scheduler makes at plan time, not authority.
+   */
+  | { readonly kind: "session"; readonly run: RunSpec }
   /** A deterministic rule, run in process by the scheduler's two-phase protocol. No model calls, no session. */
   | { readonly kind: "rule"; readonly rule: RuleSpec };
 
@@ -147,7 +157,8 @@ function canonicalDispatch(dispatch: JobDispatch): string {
  * rather than a filter (SP-4): `ruleJobs()` returns these, so a session job
  * cannot be handed to that path without changing a declared type, which is a
  * visible edit rather than something a future job falls through. The other half
- * is that the path supplies no `SpawnJob` at all — see `scheduler.ts`.
+ * is that the path supplies no launch protocol at all — see `scheduler.ts` §
+ * `TickInput.launch`.
  */
 export type RuleJobDefinition = JobDefinition & { readonly behaviour: { readonly work: Extract<JobWork, { kind: "rule" }> } };
 
@@ -168,7 +179,7 @@ export type AuthorisedRuleJob = {
 function canonicalWork(work: JobWork): string {
   switch (work.kind) {
     case "session":
-      return "work:session";
+      return `work:session\n${canonicalRun(work.run)}`;
     case "rule":
       return `work:rule\n${canonicalRuleSpec(work.rule)}`;
     default: {
@@ -176,6 +187,23 @@ function canonicalWork(work: JobWork): string {
       throw new Error(`no canonical form for job work ${JSON.stringify(never)}`);
     }
   }
+}
+
+/**
+ * HOW EACH FIELD OF A RUN SPEC IS ENCODED — the compiler counts them, for the
+ * reason `BEHAVIOUR_ENCODERS` gives: a field added to `RunSpec` (2b adds
+ * `account`, which is deliberately NOT authority) is a compile error here until
+ * somebody decides whether it belongs in the fingerprint. The encoders are
+ * `Pick`ed to the two that are authority, so adding `account` to `RunSpec`
+ * leaves this table as it is and the decision is the `Pick`.
+ */
+const RUN_ENCODERS: { readonly [K in keyof Pick<RunSpec, "timeoutMinutes" | "access">]-?: (value: RunSpec[K]) => string } = {
+  timeoutMinutes: (minutes) => `timeoutMinutes:${minutes}`,
+  access: (access) => `access:${access.length}:${access}`,
+};
+
+function canonicalRun(run: RunSpec): string {
+  return ["run", RUN_ENCODERS.timeoutMinutes(run.timeoutMinutes), RUN_ENCODERS.access(run.access)].join("\n");
 }
 
 /**
@@ -532,19 +560,15 @@ export type JobOutcome = { readonly kind: "exited"; readonly code: number } | { 
  * `done` settles when the work does. A promise that never settles is not an
  * error here; it is the case the lease exists for.
  *
- * **It lives here rather than in `scheduler.ts` because BOTH starters answer in
- * it** — the session dispatcher and the rule protocol — and the rule protocol is
- * a pinned file that must not import the scheduler. A type in the module that
- * already owns `JobOutcome` and `JobDefinition` is the shared leaf; the
- * alternative was a second type meaning the same thing on the rule side, which
- * is the twin-declaration failure this area keeps writing up.
+ * **It lives here rather than in `scheduler.ts` because the rule protocol
+ * answers in it**, and the rule protocol is a pinned file that must not import
+ * the scheduler. A session job used to answer in it too, through a `SpawnJob`;
+ * since plan 260910f (scheduled dispatch) a session starts only through the
+ * launch protocol, and that second starter is gone rather than left beside it.
  */
 export type JobSpawn =
   | { readonly kind: "spawned"; readonly pid: number; readonly done: Promise<JobOutcome> }
   | { readonly kind: "refused"; readonly why: string };
-
-/** How a session job is started. The rule protocol is the other starter, and it is not one of these — see `scheduler.ts` § `TickInput.spawn`. */
-export type SpawnJob = (definition: JobDefinition, key: OccurrenceKey) => JobSpawn;
 
 /**
  * Why an `unknown` occurrence is unknown, and whether anybody wrote that down.
@@ -626,6 +650,76 @@ export type Occurrence =
 export type OccurrenceIndex = ReadonlyMap<OccurrenceId, Occurrence>;
 
 /**
+ * **A SESSION JOB'S OCCURRENCE, AS THE LAUNCH JOURNAL HOLDS IT** — plan 260910f
+ * (scheduled dispatch) § D2.
+ *
+ * A live session job writes nothing to `events.jsonl`: the launch protocol's
+ * journal is its one ledger. `launch-occurrences.ts` projects each
+ * schedule-origin `LaunchRecord` into this arm so the planner's clocks read it
+ * beside the rules' occurrences. **It is never stored**: the store's
+ * `OccurrenceIndex` stays the five ledger arms above, and a `ScheduleIndex` is
+ * the two merged for one planning pass.
+ *
+ * `reservedAt` is the record's `plannedAt`, because the one comparator every
+ * "newest" uses reads `reservedAt` and then index order (Fable's P3).
+ */
+export type LaunchOccurrence = {
+  readonly kind: "launch";
+  readonly id: OccurrenceId;
+  readonly key: OccurrenceKey;
+  readonly reservedAt: string;
+  /** The protocol's id: the hash of `scheduleOrigin(key)`. Recomputed from the key, never stored beside it (D1), so the join cannot drift. */
+  readonly launchId: LaunchOccurrenceId;
+  readonly standing: LaunchStanding;
+};
+
+/**
+ * What a launch record means for its job's clock — four answers to *may this
+ * job have another occurrence?*, and none of them a boolean.
+ */
+export type LaunchStanding =
+  /**
+   * `planned` or `waiting-admission`: **not a run**. The planner resumes it
+   * rather than planning a sibling (F1). `account` is the pool account it was
+   * planned on, or null when the record does not say — every record, until the
+   * protocol's 2b puts `account` in `RunSpec`.
+   */
+  | { readonly kind: "resumable"; readonly state: "planned" | "waiting-admission"; readonly account: string | null; readonly why: string }
+  /**
+   * **Holds its job**: a launch in flight, one nobody can account for, or one
+   * carried over a history reset. There is no lease — only evidence or Greg's
+   * disposition moves it ("timeout alone is not proof"). `launchedAt` is the
+   * first attempt's `launchingAt`, the launch-spacing gate's instant (F3).
+   */
+  | {
+      readonly kind: "open";
+      readonly state: "reserved" | "launching" | "observed-running" | "outcome-unknown" | "carried";
+      readonly launchedAt: string | null;
+      readonly why: string;
+    }
+  /** Ended, at the instant the journal says it ended — never the later release (F4). `disposed` is Greg's decision about a launch nobody could account for. */
+  | {
+      readonly kind: "settled";
+      readonly state: "completed" | "failed-before-launch" | "disposed";
+      readonly endedAt: string;
+      readonly launchedAt: string | null;
+      readonly why: string;
+    }
+  /**
+   * **Abandoned before it ever launched**, because a later revision or a new
+   * account replaced it (`failed-before-launch`, proof `superseded`). It
+   * releases its due instant: the replacement is due at once, keyed at this
+   * `endedAt`, so it gets a new id and the old one is never asked for again.
+   */
+  | { readonly kind: "replaced"; readonly endedAt: string; readonly why: string };
+
+/** Any occurrence the planner reads: one of the ledger's five arms, or a launch. */
+export type ScheduledOccurrence = Occurrence | LaunchOccurrence;
+
+/** The merged index one planning pass reads. `launch-occurrences.ts` § `scheduleIndexOf` builds it; nothing stores it. */
+export type ScheduleIndex = ReadonlyMap<OccurrenceId, ScheduledOccurrence>;
+
+/**
  * An occurrence read against a clock.
  *
  * The state says what was written down; the standing says what a scheduler may
@@ -638,7 +732,13 @@ export type OccurrenceStanding =
   | { readonly kind: "stuck"; readonly leaseUntil: string; readonly overdueMs: number }
   | { readonly kind: "settled"; readonly at: string }
   /** `unknown`: it holds nothing up, and it is never retried. Both halves matter. */
-  | { readonly kind: "unresolved"; readonly why: string };
+  | { readonly kind: "unresolved"; readonly why: string }
+  /** A launch that holds its job. No lease: only evidence or Greg moves it. */
+  | { readonly kind: "launch-open"; readonly since: string; readonly why: string }
+  /** A launch not yet made, waiting to be resumed. Not a run. */
+  | { readonly kind: "launch-resumable"; readonly since: string }
+  /** A launch replaced before it ever ran. Its due instant is released. */
+  | { readonly kind: "replaced"; readonly at: string };
 
 /** Whether an occurrence's lease has run out. False for anything already settled — a finished run has no deadline left to miss. */
 export function leaseExpired(occurrence: Occurrence, nowMs: number): boolean {
@@ -666,7 +766,7 @@ export function leaseExpired(occurrence: Occurrence, nowMs: number): boolean {
  * deadline there it would hold its job for ever, which is precisely S6 wearing a
  * different hat.
  */
-export function standingOf(occurrence: Occurrence, nowMs: number): OccurrenceStanding {
+export function standingOf(occurrence: ScheduledOccurrence, nowMs: number): OccurrenceStanding {
   switch (occurrence.kind) {
     case "reserved":
     case "started": {
@@ -680,9 +780,30 @@ export function standingOf(occurrence: Occurrence, nowMs: number): OccurrenceSta
       return { kind: "settled", at: occurrence.refusedAt };
     case "unknown":
       return { kind: "unresolved", why: occurrence.why };
+    case "launch":
+      return launchStandingOf(occurrence);
     default: {
       const never: never = occurrence;
       throw new Error(`no standing for occurrence ${JSON.stringify(never)}`);
+    }
+  }
+}
+
+/** A launch occurrence against the clock — which it does not read: a launch has no lease, and its standing is the journal's. */
+function launchStandingOf(occurrence: LaunchOccurrence): OccurrenceStanding {
+  const standing = occurrence.standing;
+  switch (standing.kind) {
+    case "resumable":
+      return { kind: "launch-resumable", since: occurrence.reservedAt };
+    case "open":
+      return { kind: "launch-open", since: occurrence.reservedAt, why: standing.why };
+    case "settled":
+      return { kind: "settled", at: standing.endedAt };
+    case "replaced":
+      return { kind: "replaced", at: standing.endedAt };
+    default: {
+      const never: never = standing;
+      throw new Error(`no standing for launch ${JSON.stringify(never)}`);
     }
   }
 }
@@ -706,7 +827,21 @@ export type LastRun =
   | { readonly kind: "never" }
   | { readonly kind: "settled"; readonly at: string }
   | { readonly kind: "in-flight"; readonly since: string; readonly leaseUntil: string }
-  | { readonly kind: "unresolved"; readonly at: string; readonly why: string };
+  | { readonly kind: "unresolved"; readonly at: string; readonly why: string }
+  /** A launch in flight or unaccounted for (`LaunchStanding`'s `open`). **The no-overlap guard for a session job**, and it has no lease (D2). */
+  | { readonly kind: "launch-open"; readonly since: string; readonly why: string }
+  /** The newest occurrence was abandoned before it launched. The replacement is due at once, keyed at `at` — the abandonment's `endedAt`. */
+  | { readonly kind: "replaced"; readonly at: string }
+  /**
+   * **THE NEWEST OCCURRENCE IS A LAUNCH WAITING TO BE RESUMED — not a run**
+   * (F1). `prior` is the job's last actual run, which `due()` answers from, so
+   * a superseded sibling never delays its replacement. The planner decides a
+   * resume BEFORE asking `due()` at all (Fable's P2).
+   */
+  | { readonly kind: "launch-resumable"; readonly occurrence: LaunchOccurrence; readonly prior: PriorRun };
+
+/** Every `LastRun` but `launch-resumable`: what a job's last actual run can be. */
+export type PriorRun = Exclude<LastRun, { readonly kind: "launch-resumable" }>;
 
 /**
  * Whether a job may run now.
@@ -716,7 +851,15 @@ export type LastRun =
  * a person needs to see in a log when a job has gone quiet.
  */
 export type Due =
-  | { readonly kind: "due"; readonly sinceMs: number }
+  /**
+   * `dueAt` is the job's **nominal** due instant, deterministic from its state
+   * (plan 260910f scheduled dispatch, M2): never run, the arming instant plus
+   * the first-run delay; replaced, the abandonment's `endedAt`; otherwise the
+   * last run plus the cadence. A session job's occurrence key is made of it, so
+   * the key is the same on every tick and across a restart inside one due
+   * window — which is what lets a `waiting` occurrence be found again (D5).
+   */
+  | { readonly kind: "due"; readonly sinceMs: number; readonly dueAt: string }
   | { readonly kind: "not-due"; readonly remainingMs: number }
   | { readonly kind: "held"; readonly why: string }
   /**
@@ -776,17 +919,33 @@ export function due(schedule: ScheduleConfig, last: LastRun, nowMs: number, armi
       if (Number.isNaN(firstEligibleMs)) {
         return { kind: "held", why: `this job has never run and the recorded arming instant ${arming.at} is not readable, so its first run cannot be dated` };
       }
-      if (nowMs >= firstEligibleMs) return { kind: "due", sinceMs: 0 };
+      if (nowMs >= firstEligibleMs) return { kind: "due", sinceMs: 0, dueAt: new Date(firstEligibleMs).toISOString() };
       return { kind: "not-yet-eligible", firstEligibleAt: new Date(firstEligibleMs).toISOString(), remainingMs: firstEligibleMs - nowMs };
     }
     case "in-flight":
       return { kind: "held", why: `a run reserved at ${last.since} is still in flight (lease until ${last.leaseUntil})` };
+    case "launch-open":
+      return { kind: "held", why: `its launch planned at ${last.since} is ${last.why}` };
+    case "replaced": {
+      // THE REPLACEMENT IS DUE AT ONCE, at the abandonment's own instant — a
+      // new key, so a new id, and no interval lost to a supersession or a
+      // rollback.
+      const atMs = Date.parse(last.at);
+      if (Number.isNaN(atMs)) return { kind: "held", why: `its last occurrence was replaced at ${last.at}, an instant this build cannot read` };
+      return { kind: "due", sinceMs: nowMs - atMs, dueAt: new Date(atMs).toISOString() };
+    }
     case "settled":
     case "unresolved": {
-      const sinceMs = nowMs - Date.parse(last.at);
-      if (sinceMs >= schedule.everyMs) return { kind: "due", sinceMs };
+      const lastMs = Date.parse(last.at);
+      const sinceMs = nowMs - lastMs;
+      if (sinceMs >= schedule.everyMs) return { kind: "due", sinceMs, dueAt: new Date(lastMs + schedule.everyMs).toISOString() };
       return { kind: "not-due", remainingMs: schedule.everyMs - sinceMs };
     }
+    case "launch-resumable":
+      // A WAITING LAUNCH IS NOT A RUN: the clock reads the one before it. The
+      // planner only gets here for a waiting launch it is NOT resuming (a moved
+      // revision, or its account gone); a resume never asks the clock (P2).
+      return due(schedule, last.prior, nowMs, arming);
     default: {
       const never: never = last;
       throw new Error(`no due reading for ${JSON.stringify(never)}`);
@@ -795,18 +954,30 @@ export function due(schedule: ScheduleConfig, last: LastRun, nowMs: number, armi
 }
 
 /**
- * The job's most recent run, read out of the index against a clock.
+ * **THE ONE COMPARATOR FOR EVERY "NEWEST"** — Fable's P3 on plan 260910f
+ * (scheduled dispatch). Newer by `reservedAt` (a launch occurrence's
+ * `plannedAt`), and on a tie, later in index order: this is asked while walking
+ * the index in order, so `>=` lets the later of two equal instants win. Index
+ * order is the fold's insertion order — the order of the `planned` lines —
+ * which is what separates two siblings that share one `scheduledAt`.
  *
- * "Most recent" is by `scheduledAt` — the key's own instant — rather than by the
- * order the events landed, so a log written by two instances across a restart
- * still orders correctly.
- *
- * **A stuck occurrence is not `in-flight`.** That single line is the whole of
- * the S6 fix: the guard releases when the lease runs out, so the job's next
- * occurrence may be scheduled while the stuck one stays visible and unretried.
+ * `lastRunOf`, `newestAttemptOf` and the planner's resume candidate all use
+ * it, through `newestOccurrenceOf`, so they cannot pick different occurrences.
+ * It used to be the key's `scheduledAt`; for a ledger occurrence that is the
+ * same instant as its reservation, and for a launch it is not — siblings share
+ * a due instant, which is exactly why P3 named the plan time.
  */
-export function lastRunOf(index: OccurrenceIndex, jobId: string, nowMs: number): LastRun {
-  let newest: Occurrence | null = null;
+function atLeastAsNew(candidate: ScheduledOccurrence, held: ScheduledOccurrence): boolean {
+  return Date.parse(candidate.reservedAt) >= Date.parse(held.reservedAt);
+}
+
+/** The job's newest occurrence by the one comparator, among those `include` admits, or null. */
+export function newestOccurrenceOf(
+  index: ScheduleIndex,
+  jobId: string,
+  include: (occurrence: ScheduledOccurrence) => boolean = () => true,
+): ScheduledOccurrence | null {
+  let newest: ScheduledOccurrence | null = null;
   for (const occurrence of index.values()) {
     // **BY LINEAGE — THE JOB ID — AND NOT BY THE BEHAVIOUR HASH.** It used to
     // skip any occurrence whose hash differed from the definition in front of
@@ -820,24 +991,58 @@ export function lastRunOf(index: OccurrenceIndex, jobId: string, nowMs: number):
     // gate, which `planJobs` asks BEFORE it asks this function anything: an
     // edited behaviour does not reach the arithmetic at all (C2). The hash stays
     // on the key for audit; it is not a lineage.
-    if (occurrence.key.jobId !== jobId) continue;
-    if (newest === null || Date.parse(occurrence.key.scheduledAt) > Date.parse(newest.key.scheduledAt)) newest = occurrence;
+    if (occurrence.key.jobId !== jobId || !include(occurrence)) continue;
+    if (newest === null || atLeastAsNew(occurrence, newest)) newest = occurrence;
   }
-  if (newest === null) return { kind: "never" };
-  const standing = standingOf(newest, nowMs);
+  return newest;
+}
+
+/** A launch waiting to be resumed — the one kind of occurrence that is not a run. */
+function isResumable(occurrence: ScheduledOccurrence): boolean {
+  return occurrence.kind === "launch" && occurrence.standing.kind === "resumable";
+}
+
+/**
+ * The job's most recent run, read out of the index against a clock.
+ *
+ * **A stuck occurrence is not `in-flight`.** That single line is the whole of
+ * the S6 fix: the guard releases when the lease runs out, so the job's next
+ * occurrence may be scheduled while the stuck one stays visible and unretried.
+ *
+ * **A launch waiting to be resumed is not a run either** (F1): when it is the
+ * newest, the answer is `launch-resumable`, carrying it and the job's last
+ * actual run beneath it.
+ */
+export function lastRunOf(index: ScheduleIndex, jobId: string, nowMs: number): LastRun {
+  const newest = newestOccurrenceOf(index, jobId);
+  const newestRun = newestOccurrenceOf(index, jobId, (occurrence) => !isResumable(occurrence));
+  const prior: PriorRun = newestRun === null ? { kind: "never" } : priorRunOf(newestRun, nowMs);
+  if (newest !== null && newest.kind === "launch" && newest.standing.kind === "resumable") return { kind: "launch-resumable", occurrence: newest, prior };
+  return prior;
+}
+
+/** One occurrence that is a run, as the clock reads it. `lastRunOf` never hands it a resumable launch. */
+function priorRunOf(occurrence: ScheduledOccurrence, nowMs: number): PriorRun {
+  const standing = standingOf(occurrence, nowMs);
   switch (standing.kind) {
     case "in-flight":
-      return { kind: "in-flight", since: newest.reservedAt, leaseUntil: standing.leaseUntil };
+      return { kind: "in-flight", since: occurrence.reservedAt, leaseUntil: standing.leaseUntil };
     case "stuck":
       return {
         kind: "unresolved",
-        at: newest.reservedAt,
+        at: occurrence.reservedAt,
         why: `its lease ran out ${Math.round(standing.overdueMs / 1000)}s ago and nothing said how it ended`,
       };
     case "settled":
       return { kind: "settled", at: standing.at };
     case "unresolved":
-      return { kind: "unresolved", at: newest.reservedAt, why: standing.why };
+      return { kind: "unresolved", at: occurrence.reservedAt, why: standing.why };
+    case "launch-open":
+      return { kind: "launch-open", since: standing.since, why: standing.why };
+    case "replaced":
+      return { kind: "replaced", at: standing.at };
+    case "launch-resumable":
+      throw new Error(`${occurrence.id} is a launch waiting to be resumed, which is not a run; lastRunOf filters it out before reading one`);
     default: {
       const never: never = standing;
       throw new Error(`no last run for ${JSON.stringify(never)}`);
@@ -865,7 +1070,8 @@ export function stuckOccurrences(index: OccurrenceIndex, nowMs: number): readonl
  * and every arm carries it. `finishedAt` would be wrong twice over: a run that
  * never settles has none, and the outcome the ledger records for a session job is
  * the short-lived `gjd-remote` launcher exiting, not the detached session ending
- * (`dispatch.ts` § the launcher).
+ * (the dispatcher that did that is deleted; a session now starts through the
+ * launch protocol).
  *
  * **A `refused` occurrence does not count**, because nothing started — and
  * `unknown` does, because something may have. Spacing is a rationing decision,
@@ -877,22 +1083,52 @@ export function stuckOccurrences(index: OccurrenceIndex, nowMs: number): readonl
  * and the next tick therefore stops rationing — its occurrence is still in the
  * ledger and no longer recognised as a launch.
  *
- * That is accepted rather than overlooked. Closing it means putting the work
- * kind on the reserved event and on every arm of `Occurrence`, which is a wire
- * change and a checkpoint change to buy protection against a window that needs a
- * code edit AND a deploy inside the separation interval. If a third session job
- * ever arrives, or jobs become editable at runtime, revisit it — that is when
- * the window stops needing a deploy to open.
+ * That is accepted rather than overlooked, and **it is closed for every launch
+ * occurrence**: the launch journal only ever holds Claude sessions, so a
+ * launch counts whatever the definitions say. What remains is the legacy
+ * ledger's session occurrences, which nothing writes any more.
+ *
+ * **A launch occurrence is timed at its first attempt's `launchingAt`** — the
+ * moment the launcher could first have been invoked — never at its plan (F3):
+ * an occurrence that waited two hours for admission and then launched a minute
+ * ago was launched a minute ago. One with no attempt does not count, the same
+ * way a `refused` does not: nothing was started. A carried entry, whose
+ * attempts its reset could not see, does not count either — it holds its own
+ * job, and rationing others against an instant nobody knows would be inventing
+ * one.
  */
-export function lastSessionLaunchOf(index: OccurrenceIndex, sessionJobIds: ReadonlySet<string>): { readonly kind: "none" } | { readonly kind: "at"; readonly at: string; readonly jobId: string } {
-  let newest: Occurrence | null = null;
+export function lastSessionLaunchOf(index: ScheduleIndex, sessionJobIds: ReadonlySet<string>): { readonly kind: "none" } | { readonly kind: "at"; readonly at: string; readonly jobId: string } {
+  let newest: { readonly at: string; readonly ms: number; readonly jobId: string } | null = null;
   for (const occurrence of index.values()) {
-    if (!sessionJobIds.has(occurrence.key.jobId)) continue;
-    if (occurrence.kind === "refused") continue;
-    if (newest === null || Date.parse(occurrence.reservedAt) > Date.parse(newest.reservedAt)) newest = occurrence;
+    const at = launchInstantOf(occurrence, sessionJobIds);
+    if (at === null) continue;
+    const ms = Date.parse(at);
+    if (newest === null || ms > newest.ms) newest = { at, ms, jobId: occurrence.key.jobId };
   }
   if (newest === null) return { kind: "none" };
-  return { kind: "at", at: newest.reservedAt, jobId: newest.key.jobId };
+  return { kind: "at", at: newest.at, jobId: newest.jobId };
+}
+
+/** When this occurrence launched, or may have: the spacing gate's reading of it, or null when it launched nothing. */
+function launchInstantOf(occurrence: ScheduledOccurrence, sessionJobIds: ReadonlySet<string>): string | null {
+  if (occurrence.kind === "launch") {
+    const standing = occurrence.standing;
+    switch (standing.kind) {
+      case "open":
+      case "settled":
+        return standing.launchedAt;
+      case "resumable":
+      case "replaced":
+        return null;
+      default: {
+        const never: never = standing;
+        throw new Error(`no launch instant for ${JSON.stringify(never)}`);
+      }
+    }
+  }
+  if (!sessionJobIds.has(occurrence.key.jobId)) return null;
+  if (occurrence.kind === "refused") return null;
+  return occurrence.reservedAt;
 }
 
 /**

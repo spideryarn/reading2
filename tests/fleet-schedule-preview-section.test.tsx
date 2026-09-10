@@ -76,8 +76,8 @@ const DRY: SchedulePreviewJob = {
   verdict: { kind: "dry-run", sentence: "due, and in dry-run: the scheduler records it and launches nothing", next: { kind: "due-now" } },
   lastAttempt: { kind: "never" },
   schedule: { everyMs: 86_400_000, launcherLeaseMs: 3_600_000, initialDelayMs: 7_200_000 },
-  sessionTimeout: "not built",
-  sessionNoOverlap: "not enforced",
+  sessionTimeout: { kind: "run-spec", timeoutMinutes: 5, access: "read-only" },
+  sessionNoOverlap: "enforced",
   prompt: "reply with one line and stop",
   behaviourHash: { kind: "computed", hash: "465648545712" },
   authorisedHash: "465648545712",
@@ -131,6 +131,7 @@ const PREVIEW: SchedulePreview = {
   capabilities: { session: false, rules: false },
   arming: { kind: "none", why: "the scheduler has not been armed on this box" },
   history: { kind: "intact" },
+  sessionHistory: { kind: "intact" },
   headline: { kind: "off", why: "not armed", at: WRITTEN },
   missedRunPolicy: { kind: "one-run", sentence: "a missed run runs once" },
   caveat: "As of the instant it was written.",
@@ -307,14 +308,48 @@ describe("the preview", () => {
     expect(visible('[data-slot="last"]', row("section-dry-job"))).toContain("never run");
   });
 
-  it("puts the prompt, the pin, the lease and the two things not built behind the disclosure", async () => {
+  it("puts the prompt, the pin, the lease and the authorised run spec behind the disclosure", async () => {
     await draw(previewView());
     const details = visible("details", row("section-edited-job"));
     expect(details).toContain("reply with one line and stop");
     expect(details).toContain("NOT the job that was authorised");
     expect(details).toContain("launcher lease 1h");
-    expect(details).toContain("session timeout: not built");
-    expect(details).toContain("session no-overlap: not enforced");
+    expect(details).toContain("session timeout: 5 min, read-only access");
+    expect(details).toContain("session no-overlap: enforced");
+  });
+
+  it("draws a session job's launch as its last attempt, the two Stage B verdicts in their own words, and a lost launch journal", async () => {
+    const resumed: SchedulePreviewJob = {
+      ...DRY,
+      jobId: "section-resume-job",
+      dispatch: { kind: "live" },
+      verdict: { kind: "resume", sentence: "its occurrence is waiting for admission: the scheduler resumes it", next: { kind: "due-now" } },
+      lastAttempt: {
+        kind: "launch",
+        occurrenceId: "section-resume-job@2026-09-10T11:00:00.000Z#540c65ff660b",
+        launchId: `lo-${"0b".repeat(10)}`,
+        plannedAt: "2026-09-10T11:00:00.000Z",
+        state: "waiting-admission",
+        standing: "resumable",
+        endedAt: null,
+        why: "waiting for admission: the one claude-session slot is taken",
+        meaning: "the launch journal's own record of this occurrence",
+      },
+    };
+    const held: SchedulePreviewJob = {
+      ...DRY,
+      jobId: "section-usage-job",
+      dispatch: { kind: "live" },
+      verdict: { kind: "usage-held", sentence: "due, and no pool account may start a session now", next: { kind: "none", why: "nobody can date it" } },
+    };
+    await draw(previewView({ ...PREVIEW, sessionHistory: { kind: "lost", why: "a torn line at 3" }, jobs: [resumed, held] }));
+    expect(visible('[data-slot="verdict"]', row("section-resume-job"))).toContain("WOULD RESUME");
+    const last = visible('[data-slot="last"]', row("section-resume-job"));
+    expect(last).toContain("waiting-admission");
+    expect(last).toContain("the one claude-session slot is taken");
+    expect(visible('[data-slot="verdict"]', row("section-usage-job"))).toContain("HELD FOR A POOL ACCOUNT");
+    expect(container.textContent).toContain("the launch journal is LOST, so every session job is held — a torn line at 3");
+    expect(container.textContent).toContain("launch protocol no");
   });
 
   it("gives a row this build cannot read its own line, naming the job", async () => {

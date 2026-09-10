@@ -127,6 +127,8 @@ export function activationVerdict(input: {
   readonly restartedAt: string;
   readonly eligibility: readonly JobEligibility[];
   readonly requiredJobIds: readonly string[];
+  /** Which of those are session jobs: a stale pin on one is a warning while disarmed (F6). */
+  readonly sessionJobIds: ReadonlySet<string>;
   readonly armed: boolean;
 }): ActivationVerdict {
   const problems: string[] = [];
@@ -192,7 +194,12 @@ export function activationVerdict(input: {
   for (const jobId of input.requiredJobIds) {
     const one = byId.get(jobId);
     if (one === undefined) problems.push(`${jobId} is not among the loaded job definitions at all`);
-    else if (one.kind === "ineligible") problems.push(`${jobId} could not run: ${one.why}`);
+    // F6 (plan 260910f, scheduled dispatch): A STALE LIVE SESSION PIN MUST NOT
+    // STOP A DISARMED INSTALL. Nothing will dispatch it, and refusing would make
+    // re-pinning a job a precondition of installing a disarmed daemon.
+    else if (one.kind === "ineligible" && !input.armed && input.sessionJobIds.has(jobId)) {
+      notes.push(`${jobId} could not run (${one.why}) — a warning, not a failure, because nothing is armed; arming would be refused until it is re-pinned`);
+    } else if (one.kind === "ineligible") problems.push(`${jobId} could not run: ${one.why}`);
     // A DRY-RUN JOB IS NEITHER. It is pinned never to dispatch (plan 260910e
     // D5), so it must not stop activation — and calling it "eligible" in the
     // success notes would tell whoever armed the box that it will run.
@@ -207,6 +214,39 @@ export function activationVerdict(input: {
   notes.push(input.armed ? `${JOBS_ENABLED_VAR}=1: session jobs WILL be dispatched` : `${JOBS_ENABLED_VAR} is not "1": no session job will be dispatched`);
 
   return { ok: problems.length === 0, problems, notes };
+}
+
+/**
+ * **THE PREFLIGHT'S VERDICT ON THE DEFINITIONS, once the resulting arming is
+ * known** — F6 on plan 260910f (scheduled dispatch).
+ *
+ * A live session job whose pin is stale is a **warning when the result is
+ * disarmed** — nothing will dispatch it, and a box must be installable while
+ * Greg decides whether to re-pin — and **blocks `--arm`, or an already-armed
+ * result**, because then it is a job the box would be armed for and could not
+ * run. Everything else that is ineligible, and every build problem, blocks as
+ * before. Pure, for the reason `activationVerdict` is.
+ */
+export function preflightVerdict(input: {
+  readonly problems: readonly string[];
+  readonly eligibility: readonly JobEligibility[];
+  readonly sessionJobIds: ReadonlySet<string>;
+  readonly requiredJobIds: readonly string[];
+  readonly armedAfter: boolean;
+}): { readonly blockers: readonly string[]; readonly warnings: readonly string[] } {
+  const blockers = [...input.problems];
+  const warnings: string[] = [];
+  if (input.requiredJobIds.length === 0) blockers.push("this checkout builds no standing job at all, so installing the unit would arm nothing");
+  for (const one of input.eligibility) {
+    if (one.kind !== "ineligible") continue;
+    const session = input.sessionJobIds.has(one.jobId);
+    if (session && !input.armedAfter) {
+      warnings.push(`${one.jobId} would NOT be eligible (${one.why}); the result is disarmed, so this is a warning — arming will be refused until it is re-pinned`);
+    } else {
+      blockers.push(`${one.jobId} would NOT be eligible${session ? " and the result would be ARMED" : ""}: ${one.why}`);
+    }
+  }
+  return { blockers, warnings };
 }
 
 /**
@@ -264,6 +304,7 @@ function main(argv: readonly string[]): number {
   // asking about the wrong process.
   const eligibility = eligibilityOf(definitions, { session: true, rules: true });
   const requiredJobIds = standing.jobs.map((job) => job.definition.behaviour.id);
+  const sessionJobIds = new Set(definitions.filter((job) => job.definition.behaviour.work.kind === "session").map((job) => job.definition.behaviour.id));
   console.log("preflight");
   for (const problem of problems) console.log(`  ✗ ${problem}`);
   for (const one of eligibility) {
@@ -275,7 +316,9 @@ function main(argv: readonly string[]): number {
           : `  ✗ ${one.jobId} would NOT be eligible: ${one.why}`,
     );
   }
-  if (problems.length > 0 || eligibility.some((one) => one.kind === "ineligible") || requiredJobIds.length === 0) {
+  // A BUILD PROBLEM OR AN INELIGIBLE RULE STOPS HERE, whatever the arming. An
+  // ineligible SESSION job waits for the arming to be known (F6), below.
+  if (problems.length > 0 || eligibility.some((one) => one.kind === "ineligible" && !sessionJobIds.has(one.jobId)) || requiredJobIds.length === 0) {
     console.error("\nSTOPPING: the definitions this checkout builds cannot all run, so installing the unit would arm nothing.");
     return 1;
   }
@@ -310,6 +353,11 @@ function main(argv: readonly string[]): number {
   const armedNow = new RegExp(`^${JOBS_ENABLED_VAR}=1\\s*$`, "m").test(armingFile ?? "");
   const armedAfter = arm ? true : disarm ? false : armedNow;
   console.log(`  · ${ARMING_ENV_FILE}: ${armedNow ? "ARMED" : "disarmed"}${armedAfter === armedNow ? "" : ` → ${armedAfter ? "ARMED" : "disarmed"}`}`);
+  // F6: NOW THE RESULTING ARMING IS KNOWN, a stale live session pin is either a
+  // warning (disarmed) or a blocker (`--arm`, or already armed).
+  const preflight = preflightVerdict({ problems: [], eligibility, sessionJobIds, requiredJobIds, armedAfter });
+  for (const warning of preflight.warnings) console.log(`  ! ${warning}`);
+  blockers.push(...preflight.blockers);
 
   const mainPid = systemdMainPid();
   const holder = lockHolderStanding({ storeDir, systemdMainPid: mainPid });
@@ -411,6 +459,7 @@ function main(argv: readonly string[]): number {
     // process and that one are different checkouts' worth of risk apart.
     eligibility,
     requiredJobIds,
+    sessionJobIds,
     armed: armedAfter,
   });
   console.log("");

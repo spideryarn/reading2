@@ -28,7 +28,10 @@
  *
  * ## The order, and why each step is where it is
  *
- *  1. **History lost → every job held.** A cold start is not permission (C3).
+ *  1. **History lost → the job held — per ledger** (F2 on plan 260910f,
+ *     scheduled dispatch). A cold start is not permission (C3), and since a
+ *     session job's history is the launch journal, a lost `events.jsonl` holds
+ *     the rules only and a lost launch journal the session jobs only.
  *  2. **Duplicate ids → every definition sharing an id refused, over the whole
  *     list, before anything is planned.** The old loop refused an id only on
  *     meeting it the second time, so the first definition had already been
@@ -37,10 +40,17 @@
  *  3. Per job, in order:
  *     - **authorisation** — a session job against the documents as they are
  *       NOW, a rule job against its load-time digests (§ D3, and below);
+ *     - **a launch waiting to be resumed** — decided BEFORE the clock (Fable's
+ *       P2): the same revision on a usable account is resumed; a moved
+ *       revision, or a pinned account that is gone, is superseded first and
+ *       the replacement is due at once;
  *     - **`due()`** — the clock, only for a job that got past the pin (C2);
  *     - **dry-run** — due, and deliberately not started (§ D5);
  *     - **the spacing gate** — sessions only (S8-5);
- *     - **dispatch** — `launch`.
+ *     - **the account gate** — live sessions only: a new plan needs a chosen
+ *       pool account, and a resume needs its own pinned one clear (M5, and
+ *       the account choice that replaced the bare launch gate);
+ *     - **dispatch** — `launch`, or a resume.
  */
 import {
   authorisationOf,
@@ -49,14 +59,16 @@ import {
   due,
   lastRunOf,
   lastSessionLaunchOf,
+  newestOccurrenceOf,
   type Arming,
   type AuthorisedJob,
   type BehaviourHash,
   type JobDocument,
   type LastRun,
-  type Occurrence,
+  type LaunchOccurrence,
   type OccurrenceHistory,
-  type OccurrenceIndex,
+  type ScheduledOccurrence,
+  type ScheduleIndex,
 } from "./jobs.js";
 
 /**
@@ -72,6 +84,55 @@ export type DocumentReading =
 
 /** How a caller reads one document. `standing-jobs.ts` § `readJobDocument` is the real one. */
 export type ReadDocument = (path: string) => DocumentReading;
+
+/**
+ * One document's BYTES, read once, with the digest of exactly those bytes — or
+ * why it could not be read. What a session's pinned material is built from
+ * (plan 260910f scheduled dispatch, § D3). `standing-jobs.ts` §
+ * `readJobDocumentBytes` is the real one, and it digests with the same function
+ * `readJobDocument` does.
+ */
+export type DocumentBytes =
+  | { readonly kind: "read"; readonly path: string; readonly sha256: string; readonly bytes: Buffer }
+  | { readonly kind: "unreadable"; readonly path: string; readonly why: string };
+
+export type ReadDocumentBytes = (path: string) => DocumentBytes;
+
+/**
+ * **WHETHER ONE POOL ACCOUNT MAY START A SESSION NOW** — `gone` is an account
+ * that is not a registered Claude pool account, or whose credential is
+ * permanently unusable. The daemon decides which (Stage C); the planner only
+ * branches on the value.
+ */
+export type AccountStanding =
+  | { readonly kind: "clear" }
+  | { readonly kind: "held"; readonly why: string; readonly until: string | null }
+  | { readonly kind: "gone"; readonly why: string };
+
+/**
+ * **WHICH POOL ACCOUNT A NEW SESSION RUNS ON — and each account's standing.**
+ * Computed by the daemon once per tick from the account registry and the
+ * shared health and quota gates (`launch-gate.ts`), and handed in as a value,
+ * so the planner stays pure.
+ *
+ * `chosen` is for a NEW plan: an account, or why none may start a session now.
+ * `standing` is for a RESUME, which never re-chooses: its account was pinned
+ * when it was planned (2b), and the same key on a different account would be a
+ * conflict at the protocol.
+ */
+export type AccountChoice = {
+  readonly chosen:
+    | { readonly kind: "chosen"; readonly account: string; readonly notes: readonly string[] }
+    | { readonly kind: "held"; readonly why: string; readonly until: string | null };
+  readonly standing: (handle: string) => AccountStanding;
+};
+
+/**
+ * **THE HISTORY EACH KIND OF JOB IS PLANNED ON** (F2): the rules' ledger is
+ * `events.jsonl`, and a session job's is the launch journal. A hole in one
+ * holds only its own kind.
+ */
+export type PlanHistory = { readonly rules: OccurrenceHistory; readonly sessions: OccurrenceHistory };
 
 /**
  * **THE DOCUMENTS EACH SESSION JOB WOULD FOLLOW, AS THEY ARE NOW**, by loaded definition.
@@ -234,7 +295,12 @@ export type JobPlan =
   | { readonly kind: "duplicate-id"; readonly jobId: string; readonly why: string; readonly attempt: PlannedAttempt }
   /** `drift` names each document that moved, when that is why — empty when the reason is something else. */
   | { readonly kind: "unauthorised"; readonly jobId: string; readonly why: string; readonly drift: readonly string[]; readonly attempt: PlannedAttempt }
-  /** In flight inside its lease (`last.kind === "in-flight"`: next due after it settles), or never run with no arming to date it from. */
+  /**
+   * In flight inside its lease (`last.kind === "in-flight"`: next due after it
+   * settles), a launch that holds its job (`launch-open`, no lease), never run
+   * with no arming to date it from, or a waiting launch that had to be
+   * superseded and could not be (a refused abandon plans nothing).
+   */
   | { readonly kind: "held"; readonly jobId: string; readonly why: string; readonly last: LastRun; readonly attempt: PlannedAttempt }
   | { readonly kind: "waiting"; readonly jobId: string; readonly remainingMs: number; readonly nextDueAt: string; readonly last: LastRun; readonly attempt: PlannedAttempt }
   | {
@@ -257,13 +323,46 @@ export type JobPlan =
       readonly attempt: PlannedAttempt;
     }
   /**
+   * **DUE, SPACED, AND NO POOL ACCOUNT MAY START IT.** A live session job only,
+   * after spacing: a new plan whose account choice is held, or a resume whose
+   * own pinned account is held. `account` names the pinned one, and is null
+   * for a new plan. `until` is when the hold is expected to lift, if anybody
+   * knows.
+   */
+  | {
+      readonly kind: "usage-held";
+      readonly jobId: string;
+      readonly why: string;
+      readonly until: string | null;
+      readonly account: string | null;
+      readonly last: LastRun;
+      readonly attempt: PlannedAttempt;
+    }
+  /**
+   * **A LAUNCH WAITING TO BE RESUMED, AND RESUMED** (F1): its revision is the
+   * authorised one and its account is usable, so it is driven on from the
+   * stored, pinned record — never re-planned. `launched` is what `launch`
+   * answered.
+   */
+  | {
+      readonly kind: "resume";
+      readonly jobId: string;
+      readonly job: AuthorisedJob;
+      readonly occurrence: LaunchOccurrence;
+      readonly launched: boolean;
+      readonly last: LastRun;
+      readonly attempt: PlannedAttempt;
+    }
+  /**
    * Handed to `launch`. `job` is the job as launched (see `EvidencedAuthorisation`),
-   * and `launched` is what `launch` answered.
+   * `how` is a rule run or a new session plan — its nominal due instant and
+   * its chosen account — and `launched` is what `launch` answered.
    */
   | {
       readonly kind: "dispatch";
       readonly jobId: string;
       readonly job: AuthorisedJob;
+      readonly how: Exclude<LaunchHow, { readonly kind: "resume" }>;
       readonly launched: boolean;
       readonly last: LastRun;
       readonly attempt: PlannedAttempt;
@@ -275,41 +374,58 @@ export type JobPlan =
  * A union rather than `Occurrence | null` for the house reason, and because the
  * preview turns each arm into a different sentence.
  */
-export type PlannedAttempt = { readonly kind: "never" } | { readonly kind: "occurred"; readonly occurrence: Occurrence };
+export type PlannedAttempt = { readonly kind: "never" } | { readonly kind: "occurred"; readonly occurrence: ScheduledOccurrence };
 
 /**
- * **THE SAME OCCURRENCE `lastRunOf` READS**: by lineage (the job id) and newest
- * by the key's own `scheduledAt`, never by the order events landed.
- *
- * A second loop rather than a change to `jobs.ts`, which this stage does not
- * touch; `lastRunOf` then folds the one it finds into a `LastRun`, and this
- * hands it on whole. The two rules are one sentence each and must stay the same
- * sentence — `tests/overseer-schedule-preview.test.ts` § the newest occurrence
- * holds them together through the verdict.
+ * **THE SAME OCCURRENCE `lastRunOf` READS**, by the same comparator —
+ * `jobs.ts` § `newestOccurrenceOf` (Fable's P3) — handed on whole rather than
+ * folded into a `LastRun`, for the preview's *last attempt* column.
  */
-export function newestAttemptOf(index: OccurrenceIndex, jobId: string): PlannedAttempt {
-  let newest: Occurrence | null = null;
-  for (const occurrence of index.values()) {
-    if (occurrence.key.jobId !== jobId) continue;
-    if (newest === null || Date.parse(occurrence.key.scheduledAt) > Date.parse(newest.key.scheduledAt)) newest = occurrence;
-  }
+export function newestAttemptOf(index: ScheduleIndex, jobId: string): PlannedAttempt {
+  const newest = newestOccurrenceOf(index, jobId);
   return newest === null ? { kind: "never" } : { kind: "occurred", occurrence: newest };
 }
 
 export type PlanInput = {
   readonly definitions: readonly AuthorisedJob[];
-  readonly occurrences: OccurrenceIndex;
-  readonly history: OccurrenceHistory;
+  /** The rules' ledger and the launch journal's projection, merged — `launch-occurrences.ts` § `scheduleIndexOf`. */
+  readonly occurrences: ScheduleIndex;
+  readonly history: PlanHistory;
   readonly arming: Arming;
   /** `schedules.ts` § `LAUNCH_SEPARATION_MS`. Zero disables the gate. */
   readonly launchSeparationMs: number;
   readonly nowMs: number;
   /** Session jobs' documents as they are now — `resolveEvidence`. A session job missing from it is refused, not waved through. */
   readonly evidence: DocumentEvidence;
+  /** Which pool account a new session would run on, and each account's standing. Computed once per tick by the daemon. */
+  readonly accounts: AccountChoice;
 };
 
+/**
+ * What `launch` is asked to do. A rule runs in process; a new session plans a
+ * fresh occurrence at its nominal due instant on the chosen account; a resume
+ * drives a waiting occurrence on from its stored record.
+ */
+export type LaunchHow =
+  | { readonly kind: "rule" }
+  | { readonly kind: "new-session"; readonly dueAt: string; readonly account: string }
+  | { readonly kind: "resume"; readonly occurrence: LaunchOccurrence };
+
 /** Start this job — or, for a preview, say whether it would count as a launch. `true` means a session did or may have started. */
-export type Launch = (job: AuthorisedJob) => boolean;
+export type Launch = (job: AuthorisedJob, how: LaunchHow) => boolean;
+
+/** What superseding a waiting occurrence came to: replaced at the abandonment's instant, or refused with the reason. */
+export type Superseded = { readonly kind: "replaced"; readonly at: string } | { readonly kind: "refused"; readonly why: string };
+
+/**
+ * **ABANDON A WAITING OCCURRENCE THAT IS NO LONGER THE ONE TO RUN** — its
+ * revision moved, or its pinned account is gone. The tick's answers from the
+ * protocol's `abandon` and the record's `endedAt`; a preview's forecasts it.
+ */
+export type Supersede = (job: AuthorisedJob, occurrence: LaunchOccurrence, why: string) => Superseded;
+
+/** The planner's two side-effecting questions, both injected so it stays pure. */
+export type PlanPorts = { readonly launch: Launch; readonly supersede: Supersede };
 
 /** The sentence every duplicate gets. One copy, because the tick, preview and eligibility headline print it. */
 export const DUPLICATE_WHY =
@@ -334,17 +450,12 @@ export function duplicateJobIds(definitions: readonly AuthorisedJob[]): Readonly
 }
 
 /**
- * Plan every job, in definition order, calling `launch` for each that reaches
- * dispatch. Returns one verdict per definition, in the same order.
+ * Plan every job, in definition order, calling `ports.launch` for each that
+ * reaches dispatch or a resume, and `ports.supersede` for a waiting launch
+ * that is no longer the one to run. Returns one verdict per definition, in the
+ * same order.
  */
-export function planJobs(input: PlanInput, launch: Launch): readonly JobPlan[] {
-  // (1) THE LEDGER IS WHOLE, OR NOTHING IS PLANNED. Duplicates included: this
-  // gate is about the history, and it holds whatever the list looks like.
-  if (input.history.kind === "lost") {
-    const why = input.history.why;
-    return input.definitions.map((job) => ({ kind: "history-lost", jobId: job.definition.behaviour.id, why }));
-  }
-
+export function planJobs(input: PlanInput, ports: PlanPorts): readonly JobPlan[] {
   // (2) THE DUPLICATE PREFLIGHT, OVER THE WHOLE LIST, BEFORE ANY JOB IS
   // PLANNED. Counting first is the whole fix: a check made while walking the
   // list can only refuse the SECOND definition, by which time the first has
@@ -364,6 +475,17 @@ export function planJobs(input: PlanInput, launch: Launch): readonly JobPlan[] {
   for (const job of input.definitions) {
     const behaviour = job.definition.behaviour;
     const jobId = behaviour.id;
+
+    // (1) THE LEDGER THIS JOB'S HISTORY LIVES IN IS WHOLE, OR IT IS HELD —
+    // duplicates included, because this gate is about the history. PER LEDGER
+    // (F2): a session job's history is the launch journal, a rule's is
+    // `events.jsonl`, and a hole in one says nothing about the other.
+    const history = behaviour.work.kind === "session" ? input.history.sessions : input.history.rules;
+    if (history.kind === "lost") {
+      plans.push({ kind: "history-lost", jobId, why: history.why });
+      continue;
+    }
+
     // THE NEWEST OCCURRENCE, WHOLE — for the preview's *last attempt* column.
     // Read here, once, beside the clock's own reading of the same index.
     const attempt = newestAttemptOf(input.occurrences, jobId);
@@ -381,8 +503,38 @@ export function planJobs(input: PlanInput, launch: Launch): readonly JobPlan[] {
       continue;
     }
 
-    // (3b) THE CLOCK.
-    const last = lastRunOf(input.occurrences, jobId, input.nowMs);
+    let last = lastRunOf(input.occurrences, jobId, input.nowMs);
+
+    // (3b) A LAUNCH WAITING TO BE RESUMED, DECIDED BEFORE THE CLOCK (Fable's
+    // P2). Its due instant was fixed when it was planned, and asking `due()`
+    // again would read an older sibling and delay it. Only a session job can
+    // have one: the launch journal holds nothing else.
+    if (last.kind === "launch-resumable") {
+      const waiting = last.occurrence;
+      const decision = resumeDecision(waiting, authorisation.hash, input.accounts);
+      if (decision.kind === "resume") {
+        plans.push(afterTheClock({ job: authorisation.job, jobId, last, attempt, how: { kind: "resume", occurrence: waiting } }));
+        continue;
+      }
+      // NOT THE ONE TO RUN ANY MORE: abandoned first — so every older sibling is
+      // terminal in the journal, not merely ignored here — and the replacement
+      // is due at once, keyed at the abandonment's own instant, so it gets a new
+      // id and no interval is lost. A refused abandon plans nothing.
+      const superseded = ports.supersede(authorisation.job, waiting, decision.why);
+      if (superseded.kind === "refused") {
+        plans.push({
+          kind: "held",
+          jobId,
+          why: `its waiting occurrence ${waiting.launchId} is ${decision.why}, and it could not be abandoned (${superseded.why}), so nothing new is planned`,
+          last,
+          attempt,
+        });
+        continue;
+      }
+      last = { kind: "replaced", at: superseded.at };
+    }
+
+    // (3c) THE CLOCK.
     const verdict = due(job.definition.schedule, last, input.nowMs, input.arming);
     switch (verdict.kind) {
       case "held":
@@ -402,31 +554,56 @@ export function planJobs(input: PlanInput, launch: Launch): readonly JobPlan[] {
         plans.push({ kind: "not-yet-eligible", jobId, firstEligibleAt: verdict.firstEligibleAt, remainingMs: verdict.remainingMs, last, attempt });
         continue;
       case "due":
-        break;
+        plans.push(
+          afterTheClock({
+            job: authorisation.job,
+            jobId,
+            last,
+            attempt,
+            how: behaviour.work.kind === "session" ? { kind: "new-session", dueAt: verdict.dueAt } : { kind: "rule" },
+          }),
+        );
+        continue;
       default: {
         const never: never = verdict;
         throw new Error(`no plan for ${JSON.stringify(never)}`);
       }
     }
+  }
+  return plans;
 
-    // (3c) DRY-RUN, AFTER `due` AND BEFORE SPACING. After, so a dry-run job that
-    // is not due reads as not due; before, so it never waits on the spacing
-    // gate for a launch it will not make — and never moves that gate either.
+  /**
+   * THE GATES AFTER THE CLOCK — the same ones, in the same order, for a new
+   * plan and a resume (P2: only the clock is skipped for a resume). Written once,
+   * so the two cannot drift into different orders.
+   */
+  function afterTheClock(step: {
+    readonly job: AuthorisedJob;
+    readonly jobId: string;
+    readonly last: LastRun;
+    readonly attempt: PlannedAttempt;
+    readonly how: { readonly kind: "rule" } | { readonly kind: "new-session"; readonly dueAt: string } | { readonly kind: "resume"; readonly occurrence: LaunchOccurrence };
+  }): JobPlan {
+    const { job, jobId, last, attempt, how } = step;
+    const behaviour = job.definition.behaviour;
+
+    // DRY-RUN, AFTER `due` AND BEFORE SPACING. After, so a dry-run job that is
+    // not due reads as not due; before, so it never waits on the spacing gate
+    // for a launch it will not make — and never moves that gate either.
     const dispatchMode = behaviour.dispatch;
     if (dispatchMode.kind === "dry-run") {
-      plans.push({ kind: "dry-run", jobId, why: `due now; dry-run, so nothing is reserved or launched — ${dispatchMode.why}`, last, attempt });
-      continue;
+      return { kind: "dry-run", jobId, why: `due now; dry-run, so nothing is reserved or launched — ${dispatchMode.why}`, last, attempt };
     }
 
-    // (3d) THE LAUNCH-SPACING GATE. After `due`, so a job that is not due is
+    // THE LAUNCH-SPACING GATE. After `due`, so a job that is not due is
     // reported as not due rather than as spaced — only one of those is
     // temporary. Sessions only: a rule runs in this process, spends nothing, and
     // rationing it would be rationing the wrong thing.
-    if (behaviour.work.kind === "session" && input.launchSeparationMs > 0) {
+    if (how.kind !== "rule" && input.launchSeparationMs > 0) {
       const sinceMs = input.nowMs - lastLaunchMs;
       if (sinceMs < input.launchSeparationMs) {
         const remainingMs = input.launchSeparationMs - sinceMs;
-        plans.push({
+        return {
           kind: "spacing-held",
           jobId,
           remainingMs,
@@ -436,17 +613,97 @@ export function planJobs(input: PlanInput, launch: Launch): readonly JobPlan[] {
             `this box starts at most one every ${Math.round(input.launchSeparationMs / 1000)}s, so this one waits ${Math.round(remainingMs / 1000)}s`,
           last,
           attempt,
-        });
-        continue;
+        };
       }
     }
 
-    // (3e) DISPATCH. ONLY A LAUNCH MOVES THE GATE: a refusal, a failed
-    // reservation, or a rule started no session, and counting one would ration
-    // the next job against an event that did not happen.
-    const launched = launch(authorisation.job);
-    if (launched) lastLaunchMs = input.nowMs;
-    plans.push({ kind: "dispatch", jobId, job: authorisation.job, launched, last, attempt });
+    // THE ACCOUNT GATE, AFTER SPACING, FOR LIVE SESSIONS ONLY — and ONLY A
+    // LAUNCH MOVES THE SPACING GATE: a refusal, a wait, or a rule started no
+    // session, and counting one would ration the next job against an event
+    // that did not happen.
+    switch (how.kind) {
+      case "rule": {
+        const launched = ports.launch(job, how);
+        return { kind: "dispatch", jobId, job, how, launched, last, attempt };
+      }
+      case "new-session": {
+        const chosen = input.accounts.chosen;
+        if (chosen.kind === "held") {
+          return { kind: "usage-held", jobId, why: `due, and no pool account may start a session now: ${chosen.why}`, until: chosen.until, account: null, last, attempt };
+        }
+        const planned = { kind: "new-session" as const, dueAt: how.dueAt, account: chosen.account };
+        const launched = ports.launch(job, planned);
+        if (launched) lastLaunchMs = input.nowMs;
+        return { kind: "dispatch", jobId, job, how: planned, launched, last, attempt };
+      }
+      case "resume": {
+        const held = resumeHold(how.occurrence, input.accounts);
+        if (held !== null) return { kind: "usage-held", jobId, why: held.why, until: held.until, account: held.account, last, attempt };
+        const launched = ports.launch(job, how);
+        if (launched) lastLaunchMs = input.nowMs;
+        return { kind: "resume", jobId, job, occurrence: how.occurrence, launched, last, attempt };
+      }
+      default: {
+        const never: never = how;
+        throw new Error(`no launch for ${JSON.stringify(never)}`);
+      }
+    }
   }
-  return plans;
+}
+
+/** The pool account a waiting launch was planned on, or null when its record does not say (2b: `RunSpec.account`). */
+function pinnedAccountOf(occurrence: LaunchOccurrence): string | null {
+  return occurrence.standing.kind === "resumable" ? occurrence.standing.account : null;
+}
+
+/**
+ * **WHETHER A WAITING LAUNCH IS STILL THE ONE TO RUN.** It is resumed only if
+ * its revision is the job's current authorised one (F1, step 2) and its pinned
+ * account is not gone. Otherwise it is superseded, with the sentence that
+ * becomes the abandonment's reason.
+ */
+function resumeDecision(occurrence: LaunchOccurrence, authorisedHash: BehaviourHash, accounts: AccountChoice): { readonly kind: "resume" } | { readonly kind: "supersede"; readonly why: string } {
+  if (occurrence.key.behaviourHash !== authorisedHash) return { kind: "supersede", why: `superseded by ${authorisedHash}` };
+  const account = pinnedAccountOf(occurrence);
+  if (account !== null) {
+    const standing = accounts.standing(account);
+    if (standing.kind === "gone") return { kind: "supersede", why: `pinned account ${account} is no longer usable: ${standing.why}` };
+  }
+  return { kind: "resume" };
+}
+
+/**
+ * Why a resume must wait, or null when it may go.
+ *
+ * **A RESUME NEVER RE-CHOOSES ITS ACCOUNT.** It relaunches the stored request,
+ * so it runs on the account it was planned with; if that account is held, the
+ * resume waits for it. It is not abandoned and no sibling is planned: the same
+ * key on a different run spec would be a conflict at the protocol (F5), and a
+ * held account is a reason to wait, not a reason to replace. (A `gone` account
+ * never reaches here — `resumeDecision` supersedes it.) A record that names no
+ * account — every one, until 2b — waits on the account choice a new plan would.
+ */
+function resumeHold(occurrence: LaunchOccurrence, accounts: AccountChoice): { readonly why: string; readonly until: string | null; readonly account: string | null } | null {
+  const account = pinnedAccountOf(occurrence);
+  if (account === null) {
+    const chosen = accounts.chosen;
+    return chosen.kind === "held" ? { why: `its waiting occurrence is resumable, and no pool account may start a session now: ${chosen.why}`, until: chosen.until, account: null } : null;
+  }
+  const standing = accounts.standing(account);
+  switch (standing.kind) {
+    case "clear":
+      return null;
+    case "held":
+      return {
+        why: `its waiting occurrence is pinned to pool account ${account}, which is held: ${standing.why}. A resume never re-chooses its account, so it waits for this one`,
+        until: standing.until,
+        account,
+      };
+    case "gone":
+      return { why: `its pinned pool account ${account} is gone: ${standing.why}`, until: null, account };
+    default: {
+      const never: never = standing;
+      throw new Error(`no hold for ${JSON.stringify(never)}`);
+    }
+  }
 }

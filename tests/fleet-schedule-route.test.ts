@@ -41,6 +41,7 @@ import { makeSchedule } from "../tools/fleet/schedule-wiring.js";
 import { makeScheduleApi, parseSchedulePayload } from "../tools/fleet/web/src/schedule-client";
 import type { SchedulePreview } from "../tools/fleet/wire.js";
 import { behaviourHash, type AuthorisedJob, type JobBehaviour, type JobDocument } from "../tools/overseer/jobs.js";
+import { emptyFold } from "../tools/overseer/launch-protocol.js";
 import { evidenceAsBuilt, type DocumentEvidence } from "../tools/overseer/schedule-plan.js";
 import {
   listRevision,
@@ -76,7 +77,7 @@ const RECEIVED_MS = 1_789_100_000_000;
 const DOC: JobDocument = { path: "docs/fixture/route-test-job.md", sha256: "b".repeat(64) };
 
 function job(id: string, dispatch: JobBehaviour["dispatch"]): AuthorisedJob {
-  const behaviour: JobBehaviour = { id, what: `run ${id}`, documents: [DOC], work: { kind: "session" }, dispatch };
+  const behaviour: JobBehaviour = { id, what: `run ${id}`, documents: [DOC], work: { kind: "session", run: { timeoutMinutes: 30, access: "read-only" } }, dispatch };
   return {
     definition: { behaviour, schedule: { everyMs: hours(24), leaseMs: hours(1), initialDelayMs: hours(2) } },
     authorisedHash: behaviourHash(behaviour),
@@ -96,6 +97,10 @@ function daemonPreview(): SchedulePreview {
     list: { kind: "given", definitions, listRevision: listRevision(definitions), evidence },
     occurrences: new Map(),
     history: { kind: "intact" },
+    // A whole, empty launch journal and a chosen account: the rows are then the
+    // planner's verdicts on the jobs, not on a missing journal.
+    journal: { status: () => ({ kind: "whole" }), fold: () => emptyFold() },
+    accounts: { chosen: { kind: "chosen", account: "pool-route", notes: [] }, standing: () => ({ kind: "clear" }) },
     arming: { kind: "armed", at: "2026-09-01T00:00:00.000Z" },
     launchSeparationMs: 0,
     capabilities: { session: true, rules: true },

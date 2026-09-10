@@ -72,7 +72,8 @@ import {
   type JobDispatch,
   type JobDocument,
 } from "./jobs.js";
-import type { ReadDocument } from "./schedule-plan.js";
+import type { RunSpec } from "./launch-protocol.js";
+import type { ReadDocument, ReadDocumentBytes } from "./schedule-plan.js";
 import {
   LAUNCH_SEPARATION_MS,
   STANDING_JOB_SCHEDULES,
@@ -153,6 +154,24 @@ export const SCHEDULE_FIXTURE_DISPATCH: JobDispatch = {
 };
 
 /**
+ * **EACH JOB'S RUN SPEC — its timeout and its access profile — and it is in the
+ * fingerprint** (plan 260910f scheduled dispatch, § D4), so moving either one
+ * re-pins.
+ *
+ * The fixture's is harmless and pinned with it. **The two real jobs' are
+ * PROPOSED, and their pins were deliberately NOT moved**: both plausibly need
+ * `write` (the deploy sweep commits and pushes to `dev`; the feedback sweep
+ * dispatches agents), and an unattended job with write access is Greg's
+ * decision. Until he re-pins them they read NOT AUTHORISED — behaviour moved,
+ * which the preview says, and the daemon is disarmed, so nothing that runs
+ * today loses anything. Neither licenses a push to `main` or a production
+ * write: that is in their documents, not here.
+ */
+export const SCHEDULE_FIXTURE_RUN: RunSpec = { timeoutMinutes: 5, access: "read-only" };
+export const GET_READY_TO_DEPLOY_RUN: RunSpec = { timeoutMinutes: 180, access: "write" };
+export const FEEDBACK_SWEEP_RUN: RunSpec = { timeoutMinutes: 120, access: "write" };
+
+/**
  * The documents each job's authority actually comes from, repo-relative.
  *
  * **One document per job: the one that IS the job, never the ones it cites.**
@@ -221,7 +240,18 @@ export const AUTHORISED_HASHES: Readonly<Record<StandingJobId, string>> = {
   "feedback-sweep": "c921a5c4b732",
   // PINNED 2026-09-10, new (plan 260910e § D5): the fixture, `dry-run`, on
   // `tools/overseer/schedule-fixture.md`. It can start nothing as pinned.
-  "schedule-fixture": "465648545712",
+  //
+  // RE-PINNED 2026-09-10 (plan 260910f scheduled dispatch, § D4) for ONE thing:
+  // `work: session` gained its run spec, `SCHEDULE_FIXTURE_RUN` (5 minutes,
+  // read-only). Same prompt, same document (digest below, unchanged), still
+  // `dry-run`. Was `465648545712`.
+  //
+  // THE TWO ABOVE WERE DELIBERATELY NOT RE-PINNED by that change. Their run
+  // specs (`GET_READY_TO_DEPLOY_RUN`, `FEEDBACK_SWEEP_RUN`) are proposals that
+  // grant `write`, which is Greg's to authorise, so both read NOT AUTHORISED —
+  // behaviour moved, with no document drift — until he does. They would
+  // fingerprint as `ea779cd99692` and `486baa82be9d`.
+  "schedule-fixture": "540c65ff660b",
 };
 
 /**
@@ -263,9 +293,21 @@ export type StandingJobs = {
  * drift.
  */
 export function digestDocument(repoRoot: string, path: string): { ok: true; document: JobDocument } | { ok: false; why: string } {
+  const read = documentBytes(repoRoot, path);
+  return read.ok ? { ok: true, document: read.document } : read;
+}
+
+/**
+ * A document's bytes, read ONCE, and the digest of exactly those bytes. The one
+ * function `digestDocument` and `readJobDocumentBytes` share, so the digest the
+ * pin gate compares and the digest the material is checked against are
+ * computed the same way from the same place (plan 260910f scheduled dispatch,
+ * § D3).
+ */
+function documentBytes(repoRoot: string, path: string): { ok: true; document: JobDocument; bytes: Buffer } | { ok: false; why: string } {
   try {
     const bytes = readFileSync(join(repoRoot, path));
-    return { ok: true, document: { path, sha256: createHash("sha256").update(bytes).digest("hex") } };
+    return { ok: true, document: { path, sha256: createHash("sha256").update(bytes).digest("hex") }, bytes };
   } catch (cause) {
     return { ok: false, why: `${path} could not be read (${cause instanceof Error ? cause.message : String(cause)})` };
   }
@@ -280,6 +322,19 @@ export function readJobDocument(repoRoot: string): ReadDocument {
   return (path) => {
     const read = digestDocument(repoRoot, path);
     return read.ok ? { kind: "read", path, sha256: read.document.sha256 } : { kind: "unreadable", path, why: read.why };
+  };
+}
+
+/**
+ * **HOW A SESSION'S MATERIAL IS READ**: the same root, the same paths and the
+ * same digest as `readJobDocument`, with the bytes kept. The scheduler reads
+ * every document through this once per launch and refuses if its digest is not
+ * the one the gate accepted this tick (`scheduler.ts` § `materialOf`).
+ */
+export function readJobDocumentBytes(repoRoot: string): ReadDocumentBytes {
+  return (path) => {
+    const read = documentBytes(repoRoot, path);
+    return read.ok ? { kind: "read", path, sha256: read.document.sha256, bytes: read.bytes } : { kind: "unreadable", path, why: read.why };
   };
 }
 
@@ -319,7 +374,7 @@ export function standingJobs(repoRoot: string): StandingJobs {
     return { jobs: [], problems: configProblems.map((problem) => `no standing job is being scheduled: ${problem}`) };
   }
 
-  const build = (id: StandingJobId, what: string, paths: readonly string[], dispatch: JobDispatch): void => {
+  const build = (id: StandingJobId, what: string, paths: readonly string[], dispatch: JobDispatch, run: RunSpec): void => {
     const documents: JobDocument[] = [];
     for (const path of paths) {
       const read = digestDocument(repoRoot, path);
@@ -333,8 +388,9 @@ export function standingJobs(repoRoot: string): StandingJobs {
     // sentence handed to a Claude session on this box. It is in the
     // fingerprint, so the pins below moved on 2026-09-08 when the field was
     // added; that is the mechanism working rather than a cost. So is `dispatch`,
-    // which moved them again on 2026-09-10.
-    const behaviour: JobBehaviour = { id, what, documents, work: { kind: "session" }, dispatch };
+    // which moved them again on 2026-09-10 — and so is `run`, the same day
+    // (plan 260910f scheduled dispatch, § D4).
+    const behaviour: JobBehaviour = { id, what, documents, work: { kind: "session", run }, dispatch };
     // THE SCHEDULE COMES FROM THE CONFIG AND GOES NOWHERE NEAR THE HASH. That
     // one line is the whole of what Greg asked for: edit a number in
     // `schedules.ts`, and this job goes on dispatching under the pin it already
@@ -343,9 +399,9 @@ export function standingJobs(repoRoot: string): StandingJobs {
     jobs.push({ definition, authorisedHash: AUTHORISED_HASHES[id] as BehaviourHash, authorisedDocuments: AUTHORISED_DOCUMENTS[id] });
   };
 
-  build("get-ready-to-deploy", GET_READY_TO_DEPLOY_PROMPT, GET_READY_TO_DEPLOY_DOCS, { kind: "live" });
-  build("feedback-sweep", FEEDBACK_SWEEP_PROMPT, FEEDBACK_SWEEP_DOCS, { kind: "live" });
-  build("schedule-fixture", SCHEDULE_FIXTURE_PROMPT, SCHEDULE_FIXTURE_DOCS, SCHEDULE_FIXTURE_DISPATCH);
+  build("get-ready-to-deploy", GET_READY_TO_DEPLOY_PROMPT, GET_READY_TO_DEPLOY_DOCS, { kind: "live" }, GET_READY_TO_DEPLOY_RUN);
+  build("feedback-sweep", FEEDBACK_SWEEP_PROMPT, FEEDBACK_SWEEP_DOCS, { kind: "live" }, FEEDBACK_SWEEP_RUN);
+  build("schedule-fixture", SCHEDULE_FIXTURE_PROMPT, SCHEDULE_FIXTURE_DOCS, SCHEDULE_FIXTURE_DISPATCH, SCHEDULE_FIXTURE_RUN);
   return { jobs, problems };
 }
 

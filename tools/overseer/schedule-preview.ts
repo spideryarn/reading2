@@ -49,13 +49,15 @@ import type {
   SchedulePreviewNext,
   SchedulePreviewParse,
   SchedulePreviewRow,
+  SchedulePreviewRun,
   SchedulePreviewVerdict,
   SchedulePreviewVerdictKind,
 } from "../fleet/wire.js";
 import { londonFirstLine } from "../fleet/zones.js";
 import { describeAge } from "./format-age.js";
-import type { Arming, AuthorisedJob, JobWork, OccurrenceHistory, OccurrenceIndex } from "./jobs.js";
-import { authorisationUnder, documentEvidenceFor, planJobs, type DocumentEvidence, type JobPlan } from "./schedule-plan.js";
+import type { Arming, AuthorisedJob, JobWork, LaunchOccurrence, OccurrenceHistory, OccurrenceIndex } from "./jobs.js";
+import { scheduleIndexOf, type LaunchJournalReading } from "./launch-occurrences.js";
+import { authorisationUnder, documentEvidenceFor, planJobs, type AccountChoice, type DocumentEvidence, type JobPlan } from "./schedule-plan.js";
 import type { HeldCapabilities } from "./scheduler.js";
 import type { StoredScheduler } from "./store.js";
 
@@ -142,8 +144,18 @@ export type SchedulePreviewInput = {
   readonly list:
     | { readonly kind: "given"; readonly definitions: readonly AuthorisedJob[]; readonly listRevision: string; readonly evidence: DocumentEvidence }
     | { readonly kind: "not-given"; readonly why: string };
+  /** The rules' ledger (`events.jsonl`), and whether it is whole. */
   readonly occurrences: OccurrenceIndex;
   readonly history: OccurrenceHistory;
+  /**
+   * **THE LAUNCH JOURNAL, read through the same merge the tick uses**
+   * (`launch-occurrences.ts` § `scheduleIndexOf`) — every session job's history.
+   * Undefined when this process holds none, which holds every session job's row
+   * exactly as it holds the tick: an unread history is not an empty one.
+   */
+  readonly journal: LaunchJournalReading | undefined;
+  /** The same account choice the tick is handed, so the preview's `usage-held` rows are the tick's. */
+  readonly accounts: AccountChoice;
   readonly arming: Arming;
   readonly launchSeparationMs: number;
   /** What the daemon holds — not what it would hold armed. A disarmed daemon holds neither. */
@@ -154,14 +166,21 @@ export type SchedulePreviewInput = {
 
 export function schedulePreview(input: SchedulePreviewInput): SchedulePreview {
   const arming: SchedulePreview["arming"] = input.arming.kind === "armed" ? { kind: "armed", at: input.arming.at } : { kind: "none", why: input.arming.why };
-  const history: SchedulePreview["history"] = input.history.kind === "intact" ? { kind: "intact" } : { kind: "lost", why: input.history.why };
+  // THE SAME MERGE THE TICK MAKES, with the same function (F2, P3), so the
+  // preview cannot read a different history from the one the tick acts on.
+  const sessionJobIds = new Set(
+    input.list.kind === "given" ? input.list.definitions.filter((job) => job.definition.behaviour.work.kind === "session").map((job) => job.definition.behaviour.id) : [],
+  );
+  const merged = scheduleIndexOf({ ledger: input.occurrences, ledgerHistory: input.history, journal: input.journal, sessionJobIds });
+  const historyOf = (history: OccurrenceHistory): SchedulePreview["history"] => (history.kind === "intact" ? { kind: "intact" } : { kind: "lost", why: history.why });
   const common: Omit<SchedulePreview, "list" | "jobs"> = {
     schema: SCHEDULE_PREVIEW_SCHEMA,
     writtenAt: input.now.toISOString(),
     instanceId: input.instanceId,
     capabilities: { session: input.capabilities.session, rules: input.capabilities.rules },
     arming,
-    history,
+    history: historyOf(merged.history.rules),
+    sessionHistory: historyOf(merged.history.sessions),
     headline: { kind: input.headline.kind, why: input.headline.why, at: input.headline.at },
     missedRunPolicy: { kind: MISSED_RUN_POLICY, sentence: MISSED_RUN_SENTENCE },
     caveat: SCHEDULE_PREVIEW_CAVEAT,
@@ -172,22 +191,30 @@ export function schedulePreview(input: SchedulePreviewInput): SchedulePreview {
   const plans = planJobs(
     {
       definitions,
-      occurrences: input.occurrences,
-      history: input.history,
+      occurrences: merged.occurrences,
+      history: merged.history,
       arming: input.arming,
       launchSeparationMs: input.launchSeparationMs,
       nowMs: input.now.getTime(),
       evidence,
+      accounts: input.accounts,
     },
-    // THE PREVIEW'S LAUNCH: a live session job counts as a launch WHETHER OR NOT
-    // this daemon holds a dispatcher, because the preview is the forecast of
-    // what arming would do — and the spacing arming would apply is exactly what
-    // a person deciding to arm needs to see. A disarmed preview that showed two
-    // sessions due at once would be hiding it (the read-only check of b0b8ee80,
-    // finding 1, reversing a salvaged edit). The row itself says this daemon
-    // cannot launch it now (`dispatchSentence`). A rule starts no session; the
-    // planner never hands a dry-run job to `launch`.
-    (job) => job.definition.behaviour.work.kind === "session" && job.definition.behaviour.dispatch.kind === "live",
+    {
+      // THE PREVIEW'S LAUNCH: a live session job's launch or resume counts
+      // WHETHER OR NOT this daemon holds a launch protocol, because the preview
+      // is the forecast of what arming would do — and the spacing arming would
+      // apply is exactly what a person deciding to arm needs to see. A disarmed
+      // preview that showed two sessions due at once would be hiding it (the
+      // read-only check of b0b8ee80, finding 1, reversing a salvaged edit). The
+      // row itself says this daemon cannot launch it now (`dispatchSentence`). A
+      // rule starts no session; the planner never hands a dry-run job to
+      // `launch`.
+      launch: (_job, how) => how.kind !== "rule",
+      // THE PREVIEW'S SUPERSEDE forecasts the abandonment the tick would make.
+      // Nothing is written: the waiting occurrence is still in the journal, and
+      // its row's last attempt says so; the replacement is due now.
+      supersede: () => ({ kind: "replaced", at: input.now.toISOString() }),
+    },
   );
   const jobs = definitions.map((job, index) => {
     const plan = plans[index];
@@ -214,8 +241,8 @@ function rowOf(job: AuthorisedJob, plan: JobPlan, input: SchedulePreviewInput, e
     verdict: verdictOf(plan, job, input),
     lastAttempt: attemptOf(plan, behaviour.work),
     schedule: { everyMs: schedule.everyMs, launcherLeaseMs: schedule.leaseMs, initialDelayMs: schedule.initialDelayMs },
-    sessionTimeout: "not built",
-    sessionNoOverlap: "not enforced",
+    sessionTimeout: runOf(behaviour.work),
+    sessionNoOverlap: "enforced",
     prompt: behaviour.what,
     behaviourHash:
       authorisation.kind === "authorised"
@@ -237,6 +264,20 @@ function resourceClassOf(work: JobWork): SchedulePreviewJob["resourceClass"] {
     default: {
       const never: never = work;
       throw new Error(`no resource class for job work ${JSON.stringify(never)}`);
+    }
+  }
+}
+
+/** A session job's authorised run spec for the row; a rule has none. */
+function runOf(work: JobWork): SchedulePreviewRun {
+  switch (work.kind) {
+    case "session":
+      return { kind: "run-spec", timeoutMinutes: work.run.timeoutMinutes, access: work.run.access };
+    case "rule":
+      return { kind: "not-a-session" };
+    default: {
+      const never: never = work;
+      throw new Error(`no run spec for job work ${JSON.stringify(never)}`);
     }
   }
 }
@@ -270,13 +311,26 @@ function verdictOf(plan: JobPlan, job: AuthorisedJob, input: SchedulePreviewInpu
       return { kind: plan.kind, sentence: plan.why, next: { kind: "due-now" } };
     case "spacing-held":
       return { kind: plan.kind, sentence: plan.why, next: { kind: "next-due", at: plan.nextDueAt } };
+    case "usage-held":
+      return { kind: plan.kind, sentence: plan.why, next: plan.until === null ? none("when a pool account may start a session again, which nothing here can date") : { kind: "next-due", at: plan.until } };
+    case "resume":
+      return { kind: plan.kind, sentence: resumeSentence(plan.occurrence, input.capabilities), next: { kind: "due-now" } };
     case "dispatch":
-      return { kind: plan.kind, sentence: dispatchSentence(job, input.capabilities), next: { kind: "due-now" } };
+      return { kind: plan.kind, sentence: dispatchSentence(plan, input.capabilities), next: { kind: "due-now" } };
     default: {
       const never: never = plan;
       throw new Error(`no preview verdict for ${JSON.stringify(never)}`);
     }
   }
+}
+
+/** What a resume verdict means on THIS daemon. It never re-plans: the stored record is driven on. */
+function resumeSentence(occurrence: LaunchOccurrence, capabilities: HeldCapabilities): string {
+  const waiting = occurrence.standing.kind === "resumable" ? occurrence.standing.why : "waiting";
+  const pinned = occurrence.standing.kind === "resumable" && occurrence.standing.account !== null ? ` on pool account ${occurrence.standing.account}` : "";
+  return capabilities.session
+    ? `its occurrence planned at ${occurrence.reservedAt}${pinned} is ${waiting}: the scheduler resumes it on its next tick — never re-plans it`
+    : `its occurrence planned at ${occurrence.reservedAt}${pinned} is ${waiting}, and an armed scheduler would resume it — but this daemon holds no launch protocol, so nothing will`;
 }
 
 /**
@@ -298,36 +352,60 @@ function heldNext(plan: Extract<JobPlan, { kind: "held" }>, job: AuthorisedJob, 
 }
 
 /** What a dispatch verdict means on THIS daemon — which may hold no way to start the job at all. */
-function dispatchSentence(job: AuthorisedJob, capabilities: HeldCapabilities): string {
-  const work = job.definition.behaviour.work;
-  switch (work.kind) {
-    case "session":
+function dispatchSentence(plan: Extract<JobPlan, { kind: "dispatch" }>, capabilities: HeldCapabilities): string {
+  const how = plan.how;
+  switch (how.kind) {
+    case "new-session":
       return capabilities.session
-        ? "due now: the scheduler reserves and launches it on its next tick. The rows after this one assume that launch succeeded"
-        : "due now, and an armed scheduler would launch it — but this daemon holds no session dispatcher, so nothing will start it. " +
+        ? `due now: the scheduler plans it on pool account ${how.account} and launches it on its next tick. The rows after this one assume that launch succeeded`
+        : `due now, and an armed scheduler would plan it on pool account ${how.account} — but this daemon holds no launch protocol, so nothing will start it. ` +
             "The rows after this one assume the launch, as an armed scheduler's would";
     case "rule":
       return capabilities.rules
         ? "due now: the rule runs inside the daemon on its next tick"
         : "due now, and an armed scheduler would run it — but this daemon holds no rule capability, so nothing will";
     default: {
-      const never: never = work;
-      throw new Error(`no dispatch sentence for job work ${JSON.stringify(never)}`);
+      const never: never = how;
+      throw new Error(`no dispatch sentence for ${JSON.stringify(never)}`);
     }
   }
 }
 
 /**
- * **WHAT `finished` MEANS**, said on every occurrence row, because the word
- * over-promises for a session job: the ledger follows the short-lived launcher
- * (`dispatch.ts` § the launcher), and the session it starts is invisible to it.
+ * **WHAT A STATE WORD MEANS**, said on every occurrence row, because a word can
+ * over-promise. A session job's occurrence in the rules' ledger is from before
+ * the launch protocol, when the ledger followed the short-lived launcher.
  */
 const ATTEMPT_MEANING: Readonly<Record<JobWork["kind"], string>> = {
   session:
-    "for a session job the ledger follows the gjd-remote launcher, not the session: `finished` is the launcher exiting, " +
-    "and the Claude session it started runs on, detached, without the ledger seeing it end",
+    "an occurrence from before the launch protocol, when the ledger followed the gjd-remote launcher, not the session: `finished` is the launcher exiting, " +
+    "and the Claude session it started ran on, detached, without the ledger seeing it end",
   rule: "a rule runs inside the daemon, so its occurrence settles when the rule itself has settled",
 };
+
+/** A launch occurrence's meaning: the journal's own record of the launch, and not its result. */
+const LAUNCH_MEANING =
+  "the launch journal's own record of this occurrence: the state is the protocol's, and what the run came to — the wrapper's exit, its answer — " +
+  "is the occurrences section's to say, never read off this state";
+
+function launchAttemptOf(occurrence: LaunchOccurrence): SchedulePreviewAttempt {
+  const standing = occurrence.standing;
+  const common = { kind: "launch" as const, occurrenceId: occurrence.id, launchId: occurrence.launchId, plannedAt: occurrence.reservedAt, why: standing.why, meaning: LAUNCH_MEANING };
+  switch (standing.kind) {
+    case "resumable":
+      return { ...common, state: standing.state, standing: "resumable", endedAt: null };
+    case "open":
+      return { ...common, state: standing.state, standing: "open", endedAt: null };
+    case "settled":
+      return { ...common, state: standing.state, standing: "settled", endedAt: standing.endedAt };
+    case "replaced":
+      return { ...common, state: "superseded", standing: "replaced", endedAt: standing.endedAt };
+    default: {
+      const never: never = standing;
+      throw new Error(`no preview for launch ${JSON.stringify(never)}`);
+    }
+  }
+}
 
 function attemptOf(plan: JobPlan, work: JobWork): SchedulePreviewAttempt {
   if (plan.kind === "history-lost") {
@@ -337,6 +415,7 @@ function attemptOf(plan: JobPlan, work: JobWork): SchedulePreviewAttempt {
   }
   if (plan.attempt.kind === "never") return { kind: "never" };
   const occurrence = plan.attempt.occurrence;
+  if (occurrence.kind === "launch") return launchAttemptOf(occurrence);
   const meaning = ATTEMPT_MEANING[work.kind];
   const common = { occurrenceId: occurrence.id, reservedAt: occurrence.reservedAt, meaning };
   switch (occurrence.kind) {
@@ -533,8 +612,9 @@ function previewLines(preview: ParsedSchedulePreview, checkout: { readonly listR
       `(${describeAge(nowMs - Date.parse(preview.writtenAt))} old), written by instance ${preview.instanceId}`,
     `${INDENT}${listLine(preview.list, checkout, preview.instanceId)}`,
     `${INDENT}arming: ${preview.arming.kind === "armed" ? `armed at ${londonFirst(preview.arming.at)}` : `none — ${preview.arming.why}`}`,
-    `${INDENT}history: ${preview.history.kind === "intact" ? "the occurrence ledger is whole" : `LOST, so every job is held — ${preview.history.why}`}`,
-    `${INDENT}this daemon holds: session dispatcher ${preview.capabilities.session ? "yes" : "no"}, rule runner ${preview.capabilities.rules ? "yes" : "no"}`,
+    `${INDENT}history: ${preview.history.kind === "intact" ? "the rules' ledger is whole" : `the rules' ledger is LOST, so every rule is held — ${preview.history.why}`}`,
+    `${INDENT}sessions: ${preview.sessionHistory.kind === "intact" ? "the launch journal is whole" : `the launch journal is LOST, so every session job is held — ${preview.sessionHistory.why}`}`,
+    `${INDENT}this daemon holds: launch protocol ${preview.capabilities.session ? "yes" : "no"}, rule runner ${preview.capabilities.rules ? "yes" : "no"}`,
     `${INDENT}missed runs: ${preview.missedRunPolicy.kind} — ${preview.missedRunPolicy.sentence}`,
     `${INDENT}${preview.caveat}`,
   ];
@@ -572,8 +652,15 @@ const VERDICT_LABEL: Readonly<Record<SchedulePreviewVerdictKind, string>> = {
   "not-yet-eligible": "NOT YET ELIGIBLE",
   "dry-run": "DRY RUN",
   "spacing-held": "WAITING FOR SPACING",
+  "usage-held": "HELD FOR A POOL ACCOUNT",
+  resume: "WOULD RESUME",
   dispatch: "WOULD DISPATCH",
 };
+
+/** A run spec as the page says it. */
+export function runLine(run: SchedulePreviewRun): string {
+  return run.kind === "run-spec" ? `${run.timeoutMinutes} min, ${run.access} access` : "not a session";
+}
 
 function rowLines(row: SchedulePreviewRow, nowMs: number): string[] {
   if (row.kind === "unreadable") return [`${INDENT}${row.jobId ?? "(a row with no readable id)"}  UNREADABLE — ${row.why}`];
@@ -588,7 +675,7 @@ function rowLines(row: SchedulePreviewRow, nowMs: number): string[] {
     `${subLabel("prompt")}${hashLine(job)}`,
     ...documentLines(job),
     `${subLabel("clock")}every ${describeAge(job.schedule.everyMs)}, launcher lease ${describeAge(job.schedule.launcherLeaseMs)}, ` +
-      `first run ${describeAge(job.schedule.initialDelayMs)} after arming; session timeout ${job.sessionTimeout}; session no-overlap ${job.sessionNoOverlap}`,
+      `first run ${describeAge(job.schedule.initialDelayMs)} after arming; session timeout ${runLine(job.sessionTimeout)}; session no-overlap ${job.sessionNoOverlap}`,
   ];
   return lines;
 }
@@ -622,6 +709,11 @@ function attemptLines(attempt: SchedulePreviewAttempt, nowMs: number): string[] 
       return [`${last}never run`];
     case "not-known":
       return [`${last}NOT KNOWN — ${attempt.why}`];
+    case "launch":
+      return [
+        `${last}${attempt.state.toUpperCase()} — planned ${at(attempt.plannedAt)}${attempt.endedAt === null ? "" : `, ended ${at(attempt.endedAt)}`}: ${attempt.why}`,
+        `${SUB}${" ".repeat(10)}${attempt.launchId}; ${attempt.meaning}`,
+      ];
     case "reserved":
       return [`${last}reserved ${at(attempt.reservedAt)}, no start recorded yet; lease until ${londonFirst(attempt.leaseUntil)}`, `${SUB}${" ".repeat(10)}${attempt.meaning}`];
     case "started":

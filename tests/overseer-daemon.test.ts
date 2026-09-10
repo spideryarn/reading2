@@ -35,6 +35,7 @@ import {
   type DaemonOptions,
 } from "../tools/overseer/daemon.js";
 import { behaviourHash, type Arming, type AuthorisedJob, type JobDefinition } from "../tools/overseer/jobs.js";
+import type { RuleObservation } from "../tools/overseer/rules.js";
 import type { ReadDocument } from "../tools/overseer/schedule-plan.js";
 import { NOTES_FILE, openConditions, readNotes, type DaemonNote } from "../tools/overseer/notes.js";
 import { parseAttempt, parseObservation, type JsonValue, type ObservedAttemptClock } from "../tools/overseer/observation.js";
@@ -819,10 +820,24 @@ describe("the scheduler on the daemon's clock", () => {
   /** Real milliseconds, only so the timers under test actually fire. The daemon's own clock is still the fake one. */
   const sleep = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms));
 
+  /**
+   * A RULE, since plan 260910f (scheduled dispatch): a session job starts
+   * through the launch protocol, which this daemon does not hold until Stage C,
+   * so the reservation, the lease and the lost-record notes these tests are
+   * about belong to the one kind of job that still writes them to this ledger.
+   */
   const JOB: JobDefinition = {
-    behaviour: { id: "prod-the-overseer", what: "say hello", documents: [], work: { kind: "session" }, dispatch: { kind: "live" } },
+    behaviour: {
+      id: "prod-the-overseer",
+      what: "look for wedged work",
+      documents: [],
+      work: { kind: "rule", rule: { kind: "wedged-work", minAgeSeconds: 4 * 3600, policy: "safe-to-kill", disposition: "propose" } },
+      dispatch: { kind: "live" },
+    },
     schedule: { everyMs: 60_000, leaseMs: 120_000, initialDelayMs: 0 },
   };
+  /** What an observer answers when there is nothing to propose. */
+  const NOTHING_WEDGED: RuleObservation = { kind: "wedged", candidates: [], scanned: 1 };
   /** Pinned to its own fingerprint: this file is about the daemon's timers, and the pin itself is tested in overseer-jobs.test.ts. */
   const AUTHORISED: AuthorisedJob = { definition: JOB, authorisedDocuments: [], authorisedHash: behaviourHash(JOB.behaviour) };
 
@@ -872,11 +887,17 @@ describe("the scheduler on the daemon's clock", () => {
         arming: ARMED,
         launchSeparationMs: NO_SPACING, readDocument: NO_DOCUMENTS,
         definitions: [AUTHORISED],
-        spawn: () => {
-          spawned.push(spawned.length);
-          // NEVER SETTLES. This is the hung model subprocess the whole lease
-          // exists for, and it is the one shape the old guard could not survive.
-          return { kind: "spawned", pid: 9191, done: new Promise<never>(() => undefined) };
+        // Every run here is still looking when the source ends, and a shutdown
+        // waits this long for each before writing it off.
+        settleGraceMs: 20,
+        rules: {
+          selfPid: 9191,
+          observe: () => {
+            spawned.push(spawned.length);
+            // NEVER SETTLES. This is the hung observer the whole lease exists
+            // for, and it is the one shape the old guard could not survive.
+            return new Promise<never>(() => undefined);
+          },
         },
       },
     });
@@ -1052,13 +1073,13 @@ describe("the scheduler on the daemon's clock", () => {
           arming: ARMED,
           launchSeparationMs: NO_SPACING, readDocument: NO_DOCUMENTS,
           definitions: [AUTHORISED],
-          spawn: () => ({
-            kind: "spawned",
-            pid: 4242,
-            done: new Promise<{ kind: "exited"; code: number }>((resolve) => {
-              settleRun = (code) => resolve({ kind: "exited", code });
-            }),
-          }),
+          rules: {
+            selfPid: 4242,
+            observe: () =>
+              new Promise<RuleObservation>((resolve) => {
+                settleRun = () => resolve(NOTHING_WEDGED);
+              }),
+          },
         },
       },
     );
@@ -1078,9 +1099,10 @@ describe("the scheduler on the daemon's clock", () => {
         arming: ARMED,
         launchSeparationMs: NO_SPACING, readDocument: NO_DOCUMENTS,
         definitions: [AUTHORISED],
-        // Refused, so nothing is started and nothing outlives the test — the
-        // arming is what is under test, not the dispatch.
-        spawn: () => ({ kind: "refused", why: "not in a test" }),
+        // A rule that finds nothing, so nothing outlives the test — the arming
+        // is what is under test, not the run. (A session job cannot earn ARMED
+        // here: this daemon holds no launch protocol until Stage C.)
+        rules: { selfPid: 4242, observe: async () => NOTHING_WEDGED },
       },
       schedulerDetail: "ARMED — prod-the-overseer",
     });
@@ -1090,18 +1112,24 @@ describe("the scheduler on the daemon's clock", () => {
     expect(read.checkpoint.scheduler.why).toContain("prod-the-overseer");
   });
 
-  test("THE HEADLINE IS MADE OF FRESH EVIDENCE: a document edited while the daemon runs turns ARMED into BLOCKED", async () => {
+  test("THE HEADLINE IS MADE OF FRESH EVIDENCE: a document edited while the daemon runs changes the reason it gives", async () => {
     // RED FIRST, and it is Sol's P1-1 on plan 260910e. The headline used to be
     // computed once at start, so once the tick re-read documents it could refuse
     // a job while every checkpoint went on saying ARMED — the one line a person
     // trusts, saying the opposite of what the scheduler was doing.
+    //
+    // RE-SCOPED by plan 260910f (scheduled dispatch): this daemon holds no
+    // launch protocol until Stage C, so a session job reads BLOCKED either way.
+    // What still proves the headline reads FRESH evidence is its reason: the
+    // capability sentence while the document is as pinned, and the document's
+    // own sentence once it is edited — the pin gate is asked first.
     const root = tempRoot();
     const DOCUMENT = { path: "docs/fixture/daemon-headline.md", sha256: "e".repeat(64) };
     const behaviour: AuthorisedJob["definition"]["behaviour"] = {
       id: "follows-a-document",
       what: "follow the document",
       documents: [DOCUMENT],
-      work: { kind: "session" },
+      work: { kind: "session", run: { timeoutMinutes: 30, access: "read-only" } },
       dispatch: { kind: "live" },
     };
     const job: AuthorisedJob = {
@@ -1110,17 +1138,17 @@ describe("the scheduler on the daemon's clock", () => {
       authorisedDocuments: [DOCUMENT],
     };
     let digest = DOCUMENT.sha256;
-    const headlines: string[] = [];
-    const headline = (): string => {
+    const headlines: { kind: string; why: string }[] = [];
+    const headline = (): { kind: string; why: string } => {
       const read = readCheckpoint(root);
-      return read.kind === "checkpoint" ? read.checkpoint.scheduler.kind : read.kind;
+      return read.kind === "checkpoint" ? { kind: read.checkpoint.scheduler.kind, why: read.checkpoint.scheduler.why } : { kind: read.kind, why: "" };
     };
     await run(
       root,
       async function* () {
         yield payload(fixture("session-new-before"));
         await sleep(30);
-        // NON-VACUOUS FIRST: it really did start ARMED.
+        // NON-VACUOUS FIRST: it really did start on the capability sentence.
         headlines.push(headline());
         digest = "f".repeat(64);
         await sleep(40);
@@ -1131,16 +1159,18 @@ describe("the scheduler on the daemon's clock", () => {
           arming: ARMED,
           launchSeparationMs: NO_SPACING,
           definitions: [job],
-          spawn: () => ({ kind: "refused", why: "not in a test" }),
           readDocument: (path) => ({ kind: "read", path, sha256: digest }),
         },
       },
     );
     headlines.push(headline());
-    expect(headlines).toEqual(["armed", "blocked"]);
-    const read = readCheckpoint(root);
-    if (read.kind !== "checkpoint") throw new Error("expected a checkpoint");
-    expect(read.checkpoint.scheduler.why).toContain(DOCUMENT.path);
+    expect(headlines.map((one) => one.kind)).toEqual(["blocked", "blocked"]);
+    // As pinned: the only reason is the missing capability, and the document is not named.
+    expect(headlines[0]?.why).toContain("holds no launch protocol");
+    expect(headlines[0]?.why).not.toContain(DOCUMENT.path);
+    // Edited: the pin gate, asked first, now names the document — read this checkpoint, not at start.
+    expect(headlines[1]?.why).toContain(DOCUMENT.path);
+    expect(headlines[1]?.why).not.toContain("holds no launch protocol");
   });
 });
 
