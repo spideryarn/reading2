@@ -1629,6 +1629,26 @@ pace; unchanged unknowns remain visible. Recovery restores valuable work, not th
 **Acceptance:** Greg can inspect what an agent claimed and which decision was made, with links to
 actual artifacts. No model pass over all transcripts and no automatic authority from a report.
 
+**Status (2026-09-10, Overseer): landed on dev at 2de954f5, session `work-reports`, plan
+[260910e](260910e-work-reports-and-decisions-a-small-event-vocabulary.md); done enough to stop — the
+machinery is complete and reviewed, and the convention that gets agents to use it is now in the
+Overseer's dispatch briefs, with the standing-job prompt suffix (a re-pin) waiting on Greg in
+[the convention proposals](260910e-work-reports-convention-proposals.md).** `overseer report
+progress|blocked|decision|completed` drops a validated file in `~/.overseer/report-inbox/`; the
+daemon, sole writer of `reports.jsonl`, drains it every 30 s, freezing enrichment (execution token
+against the register; artefacts on dev / found / not found) before appending so a crash replays the
+same bytes; every pass is bounded (1,000 entries, 50 files, 1 MiB, 200 probes, 5 s); entries that can
+never become a report go to quarantine, which the daemon never deletes from and never lists in its
+loop — their counts and the oldest age are shown, capped (Overseer's default pending Greg). Claims
+stay claims: "claimed by", "not stated" for evidence not named, corrections explicit. Decisions
+schema 2 separates author from recorder, adds consequence, reversibility, domain, recommendation,
+evidence and gregAsked-as-claim, folds old rows as `legacy-unrecorded`, and the Decisions tab shows
+them with search and evidence links; a Claims section shows every session's latest claim or
+"unreported". Learned: "delete under a listing" was the source of unbounded daemon work three times,
+and the answer each time was to stop deleting and read under a cap; a type-only import across the
+fleet/overseer seam counts. Left small: a pass that only quarantined logs nothing; over 1,000 failing
+processing records could fill every window; not seen in a real browser.
+
 ### Stage: Bounded judgement — find prose questions and propose help
 
 - [ ] Extend Attention completeness's labeled evaluation set rather than creating a second detector: prose question
