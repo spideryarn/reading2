@@ -1081,14 +1081,33 @@ export function openFleetActionStores(options: OpenFleetActionStoresOptions = {}
     onTrouble: (why) => report(`receipt journal: ${why}`),
   });
   if (receipt.kind === "refused") {
-    hold.ledger.close();
-    if (ownedStoreLock !== null) releaseLock(ownedStoreLock, lockPath);
-    ownedStoreLock = null;
-    ownedStoreLockPath = null;
-    return memoryActionStores(now, runId, [
-      `receipt journal: ${receipt.why}. Action receipts will not survive a restart.`,
-      "hold ledger: the shared action-store claim was released. Holds will not survive a restart.",
-    ]);
+    const receipts = memoryReceiptJournal({ now, serverInstanceId: runId });
+    sharedReceipts = receipts;
+    const { book, rehydrated } = installSharedQuarantineLedger(hold.ledger, { now, serverInstanceId: runId });
+    const holdStatus = hold.ledger.status();
+    const log = [`hold ledger → ${holdStatus.dir}`];
+    const error = [`receipt journal: ${receipt.why}. Action receipts will not survive a restart.`];
+    if (holdStatus.repaired.torn) {
+      error.push(`hold ledger: repaired a torn last line (${holdStatus.repaired.droppedBytes} bytes dropped)`);
+    }
+    if (holdStatus.unreadableLines > 0) error.push(`hold ledger: ${holdStatus.unreadableLines} line(s) could not be read`);
+    if (rehydrated.holds + rehydrated.attempts > 0) {
+      error.push(
+        `hold ledger: ${rehydrated.holds + rehydrated.attempts} session(s) came back HELD from the previous run ` +
+          `(${rehydrated.holds} with an answer recorded, ${rehydrated.attempts} with none). Nothing has been re-sent; ` +
+          "somebody has to look at those terminals and release them.",
+      );
+    }
+    const startup: FleetActionStores = {
+      book,
+      ledger: hold.ledger,
+      receipts,
+      rehydrated,
+      recovery: receipts.recovery(),
+      lines: { log, error },
+    };
+    openedStores = startup;
+    return startup;
   }
 
   sharedReceipts = receipt.journal;

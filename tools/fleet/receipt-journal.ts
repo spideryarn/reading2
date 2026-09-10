@@ -6,20 +6,23 @@
  * retried automatically. Message text lives only in short-lived material
  * files, never in this JSONL history.
  */
+import { randomUUID } from "node:crypto";
 import {
-  chmodSync,
   closeSync,
   existsSync,
+  fchmodSync,
+  fsyncSync,
   mkdirSync,
   openSync,
   readFileSync,
   readdirSync,
+  renameSync,
   statSync,
   unlinkSync,
 } from "node:fs";
 import { basename, join } from "node:path";
 
-import { writeAll, writeAtomically, type JsonlRepair } from "../overseer/jsonl.js";
+import { writeAll, type JsonlRepair } from "../overseer/jsonl.js";
 import { stillOurs } from "../overseer/lock.js";
 import type { SpokenAction } from "./actions.js";
 import {
@@ -37,6 +40,7 @@ export const MAX_WHY_CHARS = 500;
 export const RETENTION_MS = 7 * 24 * 60 * 60 * 1_000;
 export const REQUEST_ID_SKEW_MS = 60 * 60 * 1_000;
 export const KEYED_RECEIPT_CAP = 5_000;
+export const UNKEYED_TERMINAL_CAP = 5_000;
 export const NON_TERMINAL_CAP = 1_000;
 export const MIN_COMPACT_BYTES = 1024 * 1024;
 
@@ -352,7 +356,7 @@ export function openReceiptJournal(dir: string, options: OpenReceiptJournalOptio
     directoryLabel: "receipt journal directory",
     lockRefusalSuffix: "This dashboard is reading receipts but not adding durable ones.",
     unavailableSuffix: "Actions accepted here will not have durable receipts.",
-    closedBy: "this receipt journal has been closed",
+    closedBy: "this receipt journal has been closed; its writer claim belongs to the action-store composition",
   });
   if (opened.kind === "refused") return opened;
   if (opened.journal.status().lockedOutBy === null) {
@@ -397,6 +401,10 @@ function makeReceiptJournal(options: MakerOptions): InternalJournal {
   const reservedReceipts = new Set<string>();
   const reservedQueue = new Set<string>();
   const durableAccepted = new Set<string>();
+  /** Receipts deliberately kept only for this run after an unkeyed write failure. */
+  const volatileReceipts = new Set<string>();
+  /** Non-terminal evidence which recovery must never offer back to the queue. */
+  const recoverySuppressed = new Set<string>();
   const materialMemory = new Map<string, ReceiptMaterial>();
   const pendingDeletion = new Set<string>();
   const records: ReceiptRecord[] = [];
@@ -469,8 +477,8 @@ function makeReceiptJournal(options: MakerOptions): InternalJournal {
       if (record.requestId !== null) requestIds.set(record.requestId, record.receiptId);
       if (record.queue !== null) reservedQueue.add(record.queue.itemId);
       if (fromDisk) durableAccepted.add(record.receiptId);
-      const match = new RegExp(`^${escapeRegExp(options.serverInstanceId)}-r([0-9]+)$`).exec(record.receiptId);
-      if (match?.[1] !== undefined) receiptSequence = Math.max(receiptSequence, Number(match[1]));
+      const suffix = currentRunReceiptSuffix(record.receiptId, options.serverInstanceId);
+      if (suffix !== null) receiptSequence = Math.max(receiptSequence, suffix);
     } else {
       state!.records.push(record);
       state!.last = record;
@@ -483,32 +491,43 @@ function makeReceiptJournal(options: MakerOptions): InternalJournal {
     const ids = record.kind === "withdrawn" ? record.receiptIds : [record.receiptId];
     for (const id of ids) {
       reservedReceipts.add(id);
-      const match = new RegExp(`^${escapeRegExp(options.serverInstanceId)}-r([0-9]+)$`).exec(id);
-      if (match?.[1] !== undefined) receiptSequence = Math.max(receiptSequence, Number(match[1]));
+      const suffix = currentRunReceiptSuffix(id, options.serverInstanceId);
+      if (suffix !== null) receiptSequence = Math.max(receiptSequence, suffix);
     }
     if (record.kind === "accepted" && record.queue !== null) reservedQueue.add(record.queue.itemId);
   };
 
-  const append = (record: ReceiptRecord): boolean => {
+  const recordReceiptIds = (record: ReceiptRecord): string[] => {
+    if (record.kind === "generation") return [];
+    return record.kind === "withdrawn" ? record.receiptIds : [record.receiptId];
+  };
+
+  const append = (
+    record: ReceiptRecord,
+    policy: { failOpen?: boolean; forceMemory?: boolean } = {},
+  ): { accepted: boolean; landed: boolean } => {
     if (parseReceiptLine(receiptLine(record)) === null) {
       trouble(`refused invalid ${record.kind} receipt record`);
-      return false;
+      return { accepted: false, landed: false };
     }
     const state = record.kind === "withdrawn" || record.kind === "generation" ? undefined : states.get(record.receiptId);
     if (!validTransition(state, record)) {
       trouble(`refused illegal receipt transition ${record.kind}${"receiptId" in record ? ` for ${record.receiptId}` : ""}`);
-      return false;
+      return { accepted: false, landed: false };
     }
+    const ids = recordReceiptIds(record);
+    const forceMemory = policy.forceMemory === true || (ids.length > 0 && ids.every((id) => volatileReceipts.has(id)));
     let landed = false;
-    if (core !== null) landed = core.append(record);
-    if (!landed && !memoryFallback()) return false;
-    if (!apply(record)) return false;
-    domainFailure = null;
+    if (core !== null && !forceMemory) landed = core.append(record);
+    if (!landed && policy.failOpen !== true) return { accepted: false, landed: false };
+    if (record.kind === "accepted" && !landed) volatileReceipts.add(record.receiptId);
+    if (!apply(record)) return { accepted: false, landed };
+    if (landed && !forceMemory) domainFailure = null;
     if (record.kind === "accepted" && landed) durableAccepted.add(record.receiptId);
     if (record.kind === "outcome") deleteMaterialFor(record.receiptId);
     if (record.kind === "withdrawn") for (const id of record.receiptIds) deleteMaterialFor(id);
     if (!recovering) maybeCompact();
-    return true;
+    return { accepted: true, landed };
   };
 
   const materialPath = (receiptId: string): string | null => {
@@ -556,7 +575,7 @@ function makeReceiptJournal(options: MakerOptions): InternalJournal {
     const keyed = keep.filter((state) => state.accepted.requestId !== null);
     const unkeyedLive = keep.filter((state) => state.accepted.requestId === null && isNonTerminal(state));
     const unkeyedTerminal = keep.filter((state) => state.accepted.requestId === null && !isNonTerminal(state))
-      .sort((a, b) => b.accepted.at - a.accepted.at).slice(0, options.unkeyedTerminalCap ?? KEYED_RECEIPT_CAP);
+      .sort((a, b) => b.accepted.at - a.accepted.at).slice(0, options.unkeyedTerminalCap ?? UNKEYED_TERMINAL_CAP);
     return [...keyed, ...unkeyedLive, ...unkeyedTerminal];
   };
   const rebuild = (kept: Set<string>, replacement: ReceiptRecord[]): void => {
@@ -587,8 +606,20 @@ function makeReceiptJournal(options: MakerOptions): InternalJournal {
       } else if (kept.has(record.receiptId)) replacement.push(record);
     }
     if (latestGeneration !== undefined) replacement.push(latestGeneration);
-    if (core !== null && !core.replace(replacement)) return memoryFallback();
+    const physicalReplacement: ReceiptRecord[] = [];
+    for (const record of replacement) {
+      if (record.kind === "generation") {
+        physicalReplacement.push(record);
+      } else if (record.kind === "withdrawn") {
+        const receiptIds = record.receiptIds.filter((id) => !volatileReceipts.has(id));
+        if (receiptIds.length > 0) physicalReplacement.push({ ...record, receiptIds });
+      } else if (!volatileReceipts.has(record.receiptId)) {
+        physicalReplacement.push(record);
+      }
+    }
+    if (core !== null && !core.replace(physicalReplacement)) return memoryFallback();
     rebuild(kept, replacement);
+    for (const id of [...volatileReceipts]) if (!kept.has(id)) volatileReceipts.delete(id);
     if (core !== null) {
       try { sizeAfterCompaction = statSync(core.file).size; } catch { sizeAfterCompaction = 0; }
     }
@@ -596,17 +627,19 @@ function makeReceiptJournal(options: MakerOptions): InternalJournal {
   };
   const maybeCompact = (): void => {
     const expired = [...states.values()].some((state) => !isNonTerminal(state) && options.now() - state.accepted.at > RETENTION_MS);
+    const excessUnkeyedTerminals = [...states.values()].filter(
+      (state) => state.accepted.requestId === null && !isNonTerminal(state),
+    ).length > (options.unkeyedTerminalCap ?? UNKEYED_TERMINAL_CAP);
     let oversized = false;
     if (core !== null) {
       try { oversized = statSync(core.file).size > Math.max(MIN_COMPACT_BYTES, 2 * sizeAfterCompaction); } catch { /* no file */ }
     }
-    if (expired || oversized) compact();
+    if (expired || excessUnkeyedTerminals || oversized) compact();
   };
 
   const conclude = (receiptId: string, arm: ReceiptOutcome): boolean => {
     const outcome: OutcomeReceiptRecord = { schema: 1, kind: "outcome", at: options.now(), receiptId, ...arm, why: arm.why.slice(0, MAX_WHY_CHARS) } as OutcomeReceiptRecord;
-    const landed = append(outcome);
-    return landed;
+    return append(outcome).accepted;
   };
 
   const openRecover = (): void => {
@@ -619,7 +652,10 @@ function makeReceiptJournal(options: MakerOptions): InternalJournal {
         reserveRecordIds(entry.record);
         if (!apply(entry.record, true)) {
           illegalTransitions += 1;
-          if (entry.record.kind === "accepted" && states.has(entry.record.receiptId)) blockedIds.add(entry.record.receiptId);
+          for (const id of recordReceiptIds(entry.record)) {
+            if (states.has(id)) blockedIds.add(id);
+            else recovery.orphanEvidence.push(id);
+          }
         }
       } else {
         const envelope = parseEnvelope(entry.line);
@@ -633,14 +669,24 @@ function makeReceiptJournal(options: MakerOptions): InternalJournal {
       }
     }
     const queueClaims = new Map<string, string[]>();
+    const requestClaims = new Map<string, string[]>();
     for (const state of states.values()) {
       const itemId = state.accepted.queue?.itemId;
-      if (itemId === undefined) continue;
-      const claimants = queueClaims.get(itemId) ?? [];
-      claimants.push(state.receiptId);
-      queueClaims.set(itemId, claimants);
+      if (itemId !== undefined) {
+        const claimants = queueClaims.get(itemId) ?? [];
+        claimants.push(state.receiptId);
+        queueClaims.set(itemId, claimants);
+      }
+      const requestId = state.accepted.requestId;
+      if (requestId !== null) {
+        const claimants = requestClaims.get(requestId) ?? [];
+        claimants.push(state.receiptId);
+        requestClaims.set(requestId, claimants);
+      }
     }
     for (const claimants of queueClaims.values()) if (claimants.length > 1) for (const id of claimants) blockedIds.add(id);
+    for (const claimants of requestClaims.values()) if (claimants.length > 1) for (const id of claimants) blockedIds.add(id);
+    for (const id of blockedIds) recoverySuppressed.add(id);
     recovery.blocked = blanket;
     recovery.reason = blanket ? "unreadable receipt evidence could hide an attempt for any restorable queued receipt" : null;
 
@@ -669,18 +715,21 @@ function makeReceiptJournal(options: MakerOptions): InternalJournal {
           recovery.recoveryBlocked.push(state.receiptId);
         } else {
           conclusionsLanded = false;
+          recovery.wouldConclude.push({ receiptId: state.receiptId, state: "outcome-unknown", reason: "recovery-blocked" });
         }
       } else if (state.last.kind === "attempted") {
         if (conclude(state.receiptId, { state: "outcome-unknown", reason: "interrupted", code: null, why: "the dashboard restarted after the attempt began" })) {
           recovery.interrupted.push(state.receiptId);
         } else {
           conclusionsLanded = false;
+          recovery.wouldConclude.push({ receiptId: state.receiptId, state: "outcome-unknown", reason: "interrupted" });
         }
       } else if (state.accepted.queue !== null && readMaterial(state.receiptId) === null) {
         if (conclude(state.receiptId, { state: "not-sent", reason: "lost-at-restart", code: null, why: "the pinned queued material was missing at restart" })) {
           recovery.lostAtRestart.push(state.receiptId);
         } else {
           conclusionsLanded = false;
+          recovery.wouldConclude.push({ receiptId: state.receiptId, state: "not-sent", reason: "lost-at-restart" });
         }
       }
     }
@@ -734,6 +783,9 @@ function makeReceiptJournal(options: MakerOptions): InternalJournal {
   const api: InternalJournal = {
     accept(input) {
       if ([...states.values()].some((state) => !isNonTerminal(state) && options.now() - state.accepted.at > RETENTION_MS)) compact();
+      if (input.requestId !== null && requestIds.has(input.requestId)) {
+        return { ok: false, why: `request id ${input.requestId} already has a receipt` };
+      }
       const keyedCount = [...states.values()].filter((state) => state.accepted.requestId !== null).length;
       if (input.requestId !== null && keyedCount >= (options.keyedReceiptCap ?? KEYED_RECEIPT_CAP)) return { ok: false, why: "the receipt journal already retains 5,000 keyed receipts" };
       if (api.nonTerminal().length >= (options.nonTerminalCap ?? NON_TERMINAL_CAP)) return { ok: false, why: "the receipt journal already has 1,000 non-terminal receipts" };
@@ -741,13 +793,22 @@ function makeReceiptJournal(options: MakerOptions): InternalJournal {
       let receiptId: string;
       do { receiptSequence += 1; receiptId = `${options.serverInstanceId}-r${receiptSequence}`; } while (reservedReceipts.has(receiptId));
       reservedReceipts.add(receiptId);
-      if (input.material !== undefined && !api.putMaterial(receiptId, input.material)) return { ok: false, why: `could not pin material for ${receiptId}` };
+      let materialVolatile = false;
+      if (input.material !== undefined && !api.putMaterial(receiptId, input.material)) {
+        if (input.requestId !== null) return { ok: false, why: `could not pin material for ${receiptId}` };
+        materialMemory.set(receiptId, input.material);
+        materialVolatile = true;
+      }
       const { material: _material, ...fields } = input;
       const record: AcceptedReceiptRecord = {
         schema: 1, kind: "accepted", at: options.now(), receiptId, serverInstanceId: options.serverInstanceId,
         ...fields, what: input.what.slice(0, MAX_WHAT_CHARS),
       };
-      if (!append(record)) return { ok: false, why: domainFailure ?? core?.status().failure ?? "the accepted receipt did not land" };
+      const result = append(record, { failOpen: input.requestId === null, forceMemory: materialVolatile });
+      if (!result.accepted) {
+        if (input.material !== undefined) deleteMaterialFor(receiptId);
+        return { ok: false, why: domainFailure ?? core?.status().failure ?? "the accepted receipt did not land" };
+      }
       return { ok: true, receiptId, durable: durableAccepted.has(receiptId) };
     },
     putMaterial(receiptId, payload) {
@@ -762,21 +823,56 @@ function makeReceiptJournal(options: MakerOptions): InternalJournal {
       const directory = join(options.dir, MATERIAL_DIR);
       const path = join(directory, `${receiptId}.json`);
       try {
-        writeAtomically(path, directory, `${JSON.stringify(payload)}\n`);
-        chmodSync(path, 0o600);
+        writePrivateAtomically(path, directory, `${JSON.stringify(payload)}\n`);
+        domainFailure = null;
         return true;
-      } catch (err) { trouble(`could not write receipt material ${path}: ${errorText(err)}`); return false; }
+      } catch (err) {
+        trouble(`could not write receipt material ${path}: ${errorText(err)}`);
+        deleteMaterialFor(receiptId);
+        return false;
+      }
     },
-    attempted(receiptId) { return { landed: append({ schema: 1, kind: "attempted", at: options.now(), receiptId }) }; },
-    returned(receiptId, code) { return append({ schema: 1, kind: "returned", at: options.now(), receiptId, code }); },
-    outcome(receiptId, arm) { return append({ schema: 1, kind: "outcome", at: options.now(), receiptId, ...arm, why: arm.why.slice(0, MAX_WHY_CHARS) } as OutcomeReceiptRecord); },
+    attempted(receiptId) {
+      const result = append(
+        { schema: 1, kind: "attempted", at: options.now(), receiptId },
+        { failOpen: !durableAccepted.has(receiptId) },
+      );
+      return { landed: result.accepted };
+    },
+    returned(receiptId, code) {
+      return append({ schema: 1, kind: "returned", at: options.now(), receiptId, code }, { failOpen: true }).accepted;
+    },
+    outcome(receiptId, arm) {
+      return append(
+        { schema: 1, kind: "outcome", at: options.now(), receiptId, ...arm, why: arm.why.slice(0, MAX_WHY_CHARS) } as OutcomeReceiptRecord,
+        { failOpen: true },
+      ).accepted;
+    },
     withdrawn(receiptIds, reason, by) {
-      return append({ schema: 1, kind: "withdrawn", at: options.now(), receiptIds: [...receiptIds], reason, actor: by });
+      const at = options.now();
+      const durableIds = receiptIds.filter((id) => !volatileReceipts.has(id));
+      const volatileIds = receiptIds.filter((id) => volatileReceipts.has(id));
+      if (durableIds.length > 0) {
+        const durable = append({ schema: 1, kind: "withdrawn", at, receiptIds: durableIds, reason, actor: by });
+        if (!durable.accepted) return false;
+      }
+      if (volatileIds.length > 0) {
+        return append(
+          { schema: 1, kind: "withdrawn", at, receiptIds: volatileIds, reason, actor: by },
+          { failOpen: true, forceMemory: true },
+        ).accepted;
+      }
+      return durableIds.length > 0;
     },
-    reconcile(receiptId, disposition, by) { return append({ schema: 1, kind: "reconciled", at: options.now(), receiptId, disposition, actor: by }); },
+    reconcile(receiptId, disposition, by) {
+      return append(
+        { schema: 1, kind: "reconciled", at: options.now(), receiptId, disposition, actor: by },
+        { failOpen: true },
+      ).accepted;
+    },
     noteGeneration(pid) {
       if (!Number.isInteger(pid) || pid <= 0 || pid === generation) return;
-      append({ schema: 1, kind: "generation", at: options.now(), pid });
+      append({ schema: 1, kind: "generation", at: options.now(), pid }, { failOpen: true });
     },
     lastGeneration: () => generation,
     get: (receiptId) => states.has(receiptId) ? view(states.get(receiptId)!) : null,
@@ -787,6 +883,7 @@ function makeReceiptJournal(options: MakerOptions): InternalJournal {
     restorable() {
       const result: RestorableItem[] = [];
       for (const state of states.values()) {
+        if (recoverySuppressed.has(state.receiptId)) continue;
         if (!(state.last.kind === "accepted" || state.last.kind === "returned") || state.accepted.queue === null) continue;
         const material = readMaterial(state.receiptId);
         if (material === null) continue;
@@ -797,7 +894,8 @@ function makeReceiptJournal(options: MakerOptions): InternalJournal {
       return result;
     },
     unknownKeystrokeReceipts: () => [...states.values()].filter(isUnknown).map(view),
-    durable: () => physicalWritable() && core!.status().failure === null,
+    durable: () => physicalWritable() && core!.status().failure === null
+      && domainFailure === null && recoveryFailure === null,
     acceptedDurably: (receiptId) => durableAccepted.has(receiptId),
     reservedQueueItemIds: () => [...reservedQueue],
     compact,
@@ -854,5 +952,32 @@ function spokenAction(value: unknown): value is SpokenAction {
 }
 
 export function reservedQueueItemIds(journal: ReceiptJournal): string[] { return journal.reservedQueueItemIds(); }
+
+/** Atomic material writes are private from the first temporary byte, not only after rename. */
+function writePrivateAtomically(path: string, directory: string, text: string): void {
+  const temp = `${path}.tmp-${process.pid}-${randomUUID()}`;
+  const fd = openSync(temp, "wx", 0o600);
+  try {
+    fchmodSync(fd, 0o600);
+    writeAll(fd, text);
+    fsyncSync(fd);
+  } finally {
+    closeSync(fd);
+  }
+  renameSync(temp, path);
+  try {
+    const dir = openSync(directory, "r");
+    try { fsyncSync(dir); } finally { closeSync(dir); }
+  } catch {
+    // The content and rename succeeded; directory fsync is not portable.
+  }
+}
+
 function escapeRegExp(text: string): string { return text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"); }
+function currentRunReceiptSuffix(receiptId: string, serverInstanceId: string): number | null {
+  const match = new RegExp(`^${escapeRegExp(serverInstanceId)}-r([0-9]+)$`).exec(receiptId);
+  if (match?.[1] === undefined) return null;
+  const suffix = Number(match[1]);
+  return Number.isSafeInteger(suffix) && suffix >= 0 ? suffix : null;
+}
 function errorText(err: unknown): string { return err instanceof Error ? err.message : String(err); }

@@ -8,6 +8,12 @@ Stage 1a built — `tools/fleet/journal-file.ts`, `tools/fleet/receipt-journal.t
 `tools/fleet/action-stores.ts` and their tests. Use 1a's API as built; where this brief names a
 method that 1a named differently, use 1a's name.
 
+**Read Stage 1a's review too** (`docs/plans/260910d-durable-action-receipts-stage1a-review-sol.md`):
+its fixes define the semantics you build on. In particular: `accept()` without a `requestId` fails
+open (memory, `durable: false`); `attempted()` for a durably accepted receipt returns `{landed:
+false}` and changes nothing unless the line landed; `returned`/`outcome`/`reconcile` fail open in
+memory; `withdrawn` refuses for durably accepted receipts whose record did not land.
+
 Stage 1b wires the receipt journal into queued work. **Direct steer, answers, enacted plans and the
 broadcast's direct sends are Stages 2–3 and are not touched here** — except that the broadcast's
 queued half already goes through `SteeringQueue.enqueueMessage`, so it gets receipts for free.
@@ -101,10 +107,22 @@ say it now opens both stores. **No other line of `server.ts` changes.**
 The test *"server.ts opens the quarantine above the listener, not below it"* (~line 402) becomes the
 guard for `openFleetActionStores(`: it precedes `createServer(handler)`, its lines are printed, and
 **`server.ts` contains no other opener** (`openSharedQuarantine(`, `openHoldLedger(`,
-`openReceiptJournal(`), so the receipt journal cannot later be opened below the listener. Keep the
-existing composition tests; add one that drives `openFleetActionStores` and asserts the queue built by
-`realActionDeps` is looking at the same journal. Correct the three `fleet-hold-wiring` references in
-`tools/fleet/quarantine.ts` to `fleet-hold-restart`.
+`openReceiptJournal(`), so the receipt journal cannot later be opened below the listener. Move the
+existing composition tests in that file onto `openFleetActionStores`, and add one asserting the queue
+built by `realActionDeps` is looking at the same journal. Correct the three `fleet-hold-wiring`
+references in `tools/fleet/quarantine.ts` to `fleet-hold-restart`.
+
+### 6. The composition moves to `action-stores.ts`, and the legacy opener goes
+
+Once `server.ts` and the tests call `openFleetActionStores`, **`openSharedQuarantine()` has no callers
+— delete it**, and move the composition (`openFleetActionStores`, `sharedReceiptJournal`, the reset,
+the shared-lock ownership, the receipt-failure fallback) out of `quarantine.ts` into
+`tools/fleet/action-stores.ts`, where the plan puts it. `quarantine.ts` keeps the book and exports only
+what the composition needs to install a ledger (`installSharedQuarantineLedger`,
+`sharedQuarantineWasOpened`, the state reset). Stage 1a's review: *"The move must carry the singleton
+state, shared-lock ownership, installation helpers, and receipt-failure fallback together."* Grep the
+whole repo (code, tests, docs) for `openSharedQuarantine` and `resetSharedQuarantineForTests` and
+update every hit.
 
 ## Tests — each red first; say in your answer that you saw it red
 

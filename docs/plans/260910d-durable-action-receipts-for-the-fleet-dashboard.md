@@ -318,7 +318,21 @@ Two Codex runs, committed separately.
   `receipt-journal.ts` with records, strict parse, the transition rule, material files, retention,
   recovery and status; `openFleetActionStores()` under one lock. No wiring.
 
-  **Status, 2026-09-10 09:35: built, gates green, Sol stage review next.** Implemented by GPT Sol
+  **Status, 2026-09-10 10:05: built and reviewed.** [Stage review](260910d-durable-action-receipts-stage1a-review-sol.md)
+  (write-capable GPT Sol, [prompt](260910d-durable-action-receipts-stage1a-review-prompt.md)):
+  "land with the fixes above" — **one P0 and ten P1s, each fixed red-first by the reviewer**, all
+  accepted after reading the diff. F31 (P0): a retained receipt id with an unsafe-integer suffix
+  stopped the mint loop advancing and hung the server. F22: my brief's contradiction, resolved
+  toward the plan — unkeyed receipts whose writes fail live in memory with `durable: false`.
+  F23: a locked-out dashboard reported a durable attempt it had not written. F24/F25: evidence that
+  could hide an attempt now suppresses restoration even when recovery's own conclusion cannot be
+  written, including a valid-but-illegal transition on disk. F26: a receipt-store failure no longer
+  disables a healthy hold ledger. F27: material temporary files are 0600 from creation. F28: one
+  request id claiming two receipts fails closed. F29: the unkeyed terminal cap is enforced when
+  crossed. F30: a closed shared-lock journal stops reporting durable. **The second review round for
+  1a is folded into Stage 1b's review**, which is told to treat these fixes as unreviewed code — a
+  separate round now would edit the files 1b is being built on. Mutation testing is at the end of
+  Stage 1, over 1a and 1b together, for the same reason. Earlier note, kept: Implemented by GPT Sol
   (`run-codex.ts`, workspace-write) from [the 1a brief](260910d-durable-action-receipts-stage1a-task.md).
   The run hit its 45-minute limit while waiting on a nested self-review it had started, so it left no
   answer file; the implementation was complete and its own gates had passed. Re-run here: seven

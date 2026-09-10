@@ -456,7 +456,9 @@ export function openHoldLedger(dir: string, options: OpenLedgerOptions = {}): Op
     directoryLabel: "hold ledger directory",
     lockRefusalSuffix: "This dashboard is reading the hold ledger but not adding to it.",
     unavailableSuffix: "Holds opened here will not survive a restart.",
-    closedBy: "this ledger has been closed and has given up the writer lock",
+    closedBy: options.lock === undefined
+      ? "this ledger has been closed and has given up the writer lock"
+      : "this ledger has been closed; its writer claim belongs to the action-store composition",
   });
   if (opened.kind === "refused") return opened;
   return { kind: "open", ledger: makeLedger(dir, opened.journal, foldLedger(opened.journal.records())) };

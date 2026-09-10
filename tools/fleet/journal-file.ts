@@ -268,11 +268,11 @@ export function openJournalFile<R>(dir: string, options: OpenJournalFileOptions<
          A handed-in claim belongs to the composition, not either journal. */
       if (closed) return;
       closed = true;
+      lockedOutBy = options.closedBy;
       if (!ownsLock || held === null) return;
       const mine = held;
       held = null;
       releaseLock(mine, lockPath);
-      lockedOutBy = options.closedBy;
     },
   };
 

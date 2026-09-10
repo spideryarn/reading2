@@ -1,4 +1,4 @@
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync, writeSync } from "node:fs";
 import { join } from "node:path";
 
 import { afterEach, describe, expect, it } from "vitest";
@@ -321,6 +321,55 @@ describe("receipt material", () => {
     expect(existsSync(temp)).toBe(false);
   });
 
+  it("creates material temp files as 0600 and reports residue when an atomic write fails", () => {
+    const dir = directory("private-material-temp");
+    const opened = openReceiptJournal(dir, {
+      lock: { held: lockFor(dir), lockedOutBy: null }, now: () => NOW, serverInstanceId: "private-run",
+      deleteMaterial: () => { throw new Error("busy"); },
+    });
+    if (opened.kind === "refused") throw new Error(opened.why);
+    const final = join(dir, "material", "private-run-r1.json");
+    mkdirSync(final);
+    const previousUmask = process.umask(0);
+    try {
+      expect(opened.journal.putMaterial("private-run-r1", {
+        kind: "message", text: "private temp words", speaker: "greg",
+      })).toBe(false);
+    } finally {
+      process.umask(previousUmask);
+    }
+    const temps = readdirSync(join(dir, "material")).filter((name) => name.startsWith("private-run-r1.json.tmp-"));
+    expect(temps).toHaveLength(1);
+    expect(statSync(join(dir, "material", temps[0]!)).mode & 0o777).toBe(0o600);
+    expect(opened.journal.status().materialDeletionPending).toEqual(["private-run-r1"]);
+    expect(opened.journal.durable()).toBe(false);
+    expect(opened.journal.status().failure).toMatch(/material|busy/i);
+  });
+
+  it("fails open in memory for unkeyed material-write failure but refuses keyed acceptance", () => {
+    const dir = directory("material-fail-open");
+    const journal = openDisk(dir);
+    mkdirSync(join(dir, "material", "receipt-run-r1.json"));
+
+    const unkeyed = journal.accept(accepted({
+      queue: { itemId: "receipt-run-q-material-failure", enqueuedAt: NOW },
+      material: { kind: "message", text: "memory survives", speaker: "greg" },
+    }));
+    expect(unkeyed).toMatchObject({ ok: true, receiptId: "receipt-run-r1", durable: false });
+    if (!unkeyed.ok) return;
+    expect(journal.restorable()).toMatchObject([{ receiptId: unkeyed.receiptId, material: { text: "memory survives" } }]);
+    expect(journal.durable()).toBe(false);
+    expect(journal.status().failure).toMatch(/material/i);
+
+    mkdirSync(join(dir, "material", "receipt-run-r2.json"));
+    const keyed = journal.accept(accepted({
+      requestId: `rq-${NOW.toString(36)}-materialfailkey01`, fingerprint: "fp",
+      queue: { itemId: "receipt-run-q-material-keyed", enqueuedAt: NOW },
+      material: { kind: "message", text: "must be durable", speaker: "greg" },
+    }));
+    expect(keyed).toMatchObject({ ok: false });
+  });
+
   it.each([
     { state: "keys-submitted", reason: "transport-ok" } as const,
     { state: "not-sent", reason: "transport-refused-unsent" } as const,
@@ -399,6 +448,33 @@ describe("recovery", () => {
     const acceptedResult = opened.journal.accept(accepted({ queue: { itemId: "loser-run-q1", enqueuedAt: NOW } }));
     expect(acceptedResult).toMatchObject({ ok: true, durable: false });
     expect(opened.journal.get("loser-run-r1")).not.toBeNull();
+    expect(opened.journal.accept(accepted({
+      requestId: `rq-${NOW.toString(36)}-lockedoutkey0001`, fingerprint: "fp",
+      queue: { itemId: "loser-run-q2", enqueuedAt: NOW },
+    }))).toMatchObject({ ok: false });
+    expect(readFileSync(join(dir, RECEIPTS_FILE), "utf8")).toBe(before);
+    writer.close();
+  });
+
+  it("a locked-out opener refuses to claim a durable receipt's attempt landed", () => {
+    const dir = directory("locked-durable-attempt");
+    const writer = openDisk(dir);
+    const result = writer.accept(accepted({
+      queue: { itemId: "receipt-run-q-locked-attempt", enqueuedAt: NOW },
+      material: { kind: "message", text: "send once", speaker: "greg" },
+    }));
+    if (!result.ok) return;
+    const before = readFileSync(join(dir, RECEIPTS_FILE), "utf8");
+    const opened = openReceiptJournal(dir, {
+      lock: { held: null, lockedOutBy: "the first dashboard owns writer.lock" },
+      now: () => NOW,
+      serverInstanceId: "reader-run",
+    });
+    if (opened.kind === "refused") throw new Error(opened.why);
+
+    expect(opened.journal.acceptedDurably(result.receiptId)).toBe(true);
+    expect(opened.journal.attempted(result.receiptId)).toEqual({ landed: false });
+    expect(opened.journal.get(result.receiptId)?.last.kind).toBe("accepted");
     expect(readFileSync(join(dir, RECEIPTS_FILE), "utf8")).toBe(before);
     writer.close();
   });
@@ -472,6 +548,32 @@ describe("recovery", () => {
     for (const id of ["old-r1", "old-r2"]) expect(journal.get(id)?.last).toMatchObject({ state: "outcome-unknown", reason: "recovery-blocked" });
   });
 
+  it("refuses a duplicate request id and fails closed if disk evidence already claims it twice", () => {
+    const dir = directory("request-id-collision");
+    const requestId = `rq-${NOW.toString(36)}-duplicatekey0001`;
+    const first = {
+      schema: 1, kind: "accepted", at: NOW, receiptId: "duplicate-old-r1", requestId, fingerprint: "same",
+      op: "queued-message", origin: "enqueue", actor: ACTOR, speaker: "greg", target: TARGET, what: "message",
+      serverInstanceId: "duplicate-old", queue: { itemId: "duplicate-old-q1", enqueuedAt: NOW },
+    };
+    const second = {
+      ...first, receiptId: "duplicate-old-r2", queue: { itemId: "duplicate-old-q2", enqueuedAt: NOW },
+    };
+    writeFileSync(join(dir, RECEIPTS_FILE), `${JSON.stringify(first)}\n${JSON.stringify(second)}\n`);
+    mkdirSync(join(dir, "material"), { recursive: true });
+    for (const id of [first.receiptId, second.receiptId]) {
+      writeFileSync(join(dir, "material", `${id}.json`), JSON.stringify({ kind: "message", text: id, speaker: "greg" }));
+    }
+
+    const journal = openDisk(dir);
+    for (const id of [first.receiptId, second.receiptId]) {
+      expect(journal.get(id)?.last).toMatchObject({ state: "outcome-unknown", reason: "recovery-blocked" });
+    }
+    expect(journal.accept(accepted({
+      requestId, fingerprint: "same", queue: { itemId: "duplicate-new-q1", enqueuedAt: NOW },
+    }))).toMatchObject({ ok: false });
+  });
+
   it("deletes final and temporary material with no live receipt at startup", () => {
     const dir = directory("orphan-material");
     mkdirSync(join(dir, "material"), { recursive: true });
@@ -502,12 +604,64 @@ describe("recovery", () => {
     expect(journal.compact()).toBe(false);
     expect(readFileSync(join(dir, RECEIPTS_FILE), "utf8")).toContain(unreadable);
   });
+
+  it("does not restore an unreadable-attempt receipt when its recovery conclusion cannot land", () => {
+    const dir = directory("blocked-conclusion-write-failure");
+    const acceptedRecord = {
+      schema: 1, kind: "accepted", at: NOW, receiptId: "blocked-run-r1", requestId: null,
+      fingerprint: null, op: "queued-message", origin: "enqueue", actor: ACTOR, speaker: "greg",
+      target: TARGET, what: "message", serverInstanceId: "blocked-run",
+      queue: { itemId: "blocked-run-q1", enqueuedAt: NOW },
+    };
+    const unreadableAttempt = JSON.stringify({
+      schema: 1, kind: "attempted", at: "bad", receiptId: "blocked-run-r1",
+    });
+    writeFileSync(join(dir, RECEIPTS_FILE), `${JSON.stringify(acceptedRecord)}\n${unreadableAttempt}\n`);
+    mkdirSync(join(dir, "material"), { recursive: true });
+    writeFileSync(join(dir, "material", "blocked-run-r1.json"), JSON.stringify({ kind: "message", text: "send once", speaker: "greg" }));
+
+    const journal = openDisk(dir, { writeLine: () => { throw new Error("disk full during recovery"); } });
+    expect(journal.status().failure).toContain("disk full during recovery");
+    expect(journal.restorable()).toEqual([]);
+    expect(journal.recovery().wouldConclude).toContainEqual({
+      receiptId: "blocked-run-r1", state: "outcome-unknown", reason: "recovery-blocked",
+    });
+  });
+
+  it("fails a restorable receipt closed when a valid illegal outcome proves an attempt", () => {
+    const dir = directory("illegal-outcome-evidence");
+    const acceptedRecord = {
+      schema: 1, kind: "accepted", at: NOW, receiptId: "illegal-proof-r1", requestId: null,
+      fingerprint: null, op: "queued-message", origin: "enqueue", actor: ACTOR, speaker: "greg",
+      target: TARGET, what: "message", serverInstanceId: "illegal-proof",
+      queue: { itemId: "illegal-proof-q1", enqueuedAt: NOW },
+    };
+    const outcomeWithoutAttempt = {
+      schema: 1, kind: "outcome", at: NOW + 1, receiptId: "illegal-proof-r1",
+      state: "keys-submitted", reason: "transport-ok", code: null, why: "keys left the process",
+    };
+    writeFileSync(join(dir, RECEIPTS_FILE), `${JSON.stringify(acceptedRecord)}\n${JSON.stringify(outcomeWithoutAttempt)}\n`);
+    mkdirSync(join(dir, "material"), { recursive: true });
+    writeFileSync(join(dir, "material", "illegal-proof-r1.json"), JSON.stringify({ kind: "message", text: "do not repeat", speaker: "greg" }));
+
+    const journal = openDisk(dir);
+    expect(journal.status().illegalTransitions).toBe(1);
+    expect(journal.get("illegal-proof-r1")?.last).toMatchObject({
+      kind: "outcome", state: "outcome-unknown", reason: "recovery-blocked",
+    });
+    expect(journal.restorable()).toEqual([]);
+  });
 });
 
 describe("retention, capacity, ids and write failures", () => {
   it("keeps keyed receipts through seven days, then expires them", () => {
     let time = NOW;
-    const journal = memoryReceiptJournal({ now: () => time, serverInstanceId: "receipt-run" });
+    const dir = directory("keyed-retention");
+    const opened = openReceiptJournal(dir, {
+      lock: { held: lockFor(dir), lockedOutBy: null }, now: () => time, serverInstanceId: "receipt-run",
+    });
+    if (opened.kind === "refused") throw new Error(opened.why);
+    const journal = opened.journal;
     const requestId = `rq-${NOW.toString(36)}-abcdefghijklmnop`;
     const got = journal.accept(accepted({ requestId, fingerprint: "fp", queue: null }));
     if (!got.ok) return;
@@ -563,6 +717,20 @@ describe("retention, capacity, ids and write failures", () => {
     expect(live.ok && journal.get(live.receiptId)).not.toBeNull();
   });
 
+  it("enforces the unkeyed terminal cap on append rather than waiting for an unrelated compaction", () => {
+    let time = NOW;
+    const journal = memoryReceiptJournal({ now: () => time, serverInstanceId: "unkeyed-auto-cap", unkeyedTerminalCap: 2 });
+    for (let i = 0; i < 3; i += 1) {
+      const result = journal.accept(accepted({ queue: null }));
+      if (!result.ok) return;
+      expect(journal.outcome(result.receiptId, {
+        state: "not-sent", reason: "undeliverable", code: null, why: "done",
+      })).toBe(true);
+      time += 1;
+    }
+    expect(journal.recent(10).filter((state) => state.accepted.requestId === null)).toHaveLength(2);
+  });
+
   it("stores one physical withdrawn record for several receipts", () => {
     const dir = directory("withdrawn-record");
     const journal = openDisk(dir);
@@ -576,7 +744,13 @@ describe("retention, capacity, ids and write failures", () => {
   });
 
   it("enforces keyed and non-terminal admission caps without eviction", () => {
-    const keyed = memoryReceiptJournal({ now: () => NOW, serverInstanceId: "key-cap", keyedReceiptCap: 2 });
+    const dir = directory("keyed-cap");
+    const opened = openReceiptJournal(dir, {
+      lock: { held: lockFor(dir), lockedOutBy: null }, now: () => NOW,
+      serverInstanceId: "key-cap", keyedReceiptCap: 2,
+    });
+    if (opened.kind === "refused") throw new Error(opened.why);
+    const keyed = opened.journal;
     for (let i = 0; i < 2; i += 1) {
       const result = keyed.accept(accepted({ requestId: `rq-${NOW.toString(36)}-abcdefghijklmnop${i}`, fingerprint: `fp${i}`, queue: null }));
       if (result.ok) keyed.outcome(result.receiptId, { state: "not-sent", reason: "undeliverable", code: null, why: "done" });
@@ -616,6 +790,23 @@ describe("retention, capacity, ids and write failures", () => {
     expect(journal.reservedQueueItemIds()).toContain("receipt-run-q88");
   });
 
+  it("does not let an unsafe retained suffix stall receipt id minting", () => {
+    const dir = directory("unsafe-suffix");
+    const old = {
+      schema: 1, kind: "accepted", at: NOW, receiptId: "receipt-run-r9007199254740992", requestId: null,
+      fingerprint: null, op: "queued-message", origin: "enqueue", actor: ACTOR, speaker: "greg", target: TARGET,
+      what: "message", serverInstanceId: "receipt-run", queue: { itemId: "receipt-run-q-unsafe", enqueuedAt: NOW },
+    };
+    writeFileSync(join(dir, RECEIPTS_FILE), `${JSON.stringify(old)}\n`);
+    mkdirSync(join(dir, "material"), { recursive: true });
+    writeFileSync(join(dir, "material", `${old.receiptId}.json`), JSON.stringify({ kind: "message", text: "old", speaker: "greg" }));
+
+    const journal = openDisk(dir);
+    expect(journal.accept(accepted({ queue: { itemId: "receipt-run-q-new", enqueuedAt: NOW } }))).toMatchObject({
+      ok: true, receiptId: "receipt-run-r1",
+    });
+  });
+
   it("automatically compacts an expired terminal receipt on the next append", () => {
     let time = NOW;
     const dir = directory("automatic-expiry");
@@ -652,6 +843,71 @@ describe("retention, capacity, ids and write failures", () => {
     expect(journal.recent(10)).toEqual([]);
     expect(journal.acceptedDurably("receipt-run-r1")).toBe(false);
     expect(journal.status().failure).toContain("disk full");
+  });
+
+  it("keeps an unkeyed failed accept and later transitions in memory, but still refuses keyed work", () => {
+    const dir = directory("unkeyed-fail-open");
+    const journal = openDisk(dir, { writeLine: () => { throw new Error("disk full"); } });
+
+    const unkeyed = journal.accept(accepted({
+      queue: { itemId: "receipt-run-q-unkeyed", enqueuedAt: NOW },
+      material: { kind: "message", text: "volatile words", speaker: "greg" },
+    }));
+    expect(unkeyed).toMatchObject({ ok: true, receiptId: "receipt-run-r1", durable: false });
+    if (!unkeyed.ok) return;
+    expect(journal.get(unkeyed.receiptId)?.last.kind).toBe("accepted");
+    expect(journal.attempted(unkeyed.receiptId)).toEqual({ landed: true });
+    expect(journal.returned(unkeyed.receiptId, "nothing-sent")).toBe(true);
+
+    const keyed = journal.accept(accepted({
+      requestId: `rq-${NOW.toString(36)}-failclosedkey0001`,
+      fingerprint: "fp",
+      queue: { itemId: "receipt-run-q-keyed", enqueuedAt: NOW },
+    }));
+    expect(keyed).toMatchObject({ ok: false });
+  });
+
+  it("keeps a failed returned settlement in memory after a durable attempt", () => {
+    const dir = directory("returned-fail-open");
+    let writes = 0;
+    const journal = openDisk(dir, {
+      writeLine: (fd, line) => {
+        writes += 1;
+        if (writes > 2) throw new Error("disk full after attempt");
+        writeSync(fd, line);
+      },
+    });
+    const result = journal.accept(accepted({
+      queue: { itemId: "receipt-run-q-returned", enqueuedAt: NOW },
+      material: { kind: "message", text: "try again only in this run", speaker: "greg" },
+    }));
+    if (!result.ok) return;
+    expect(journal.attempted(result.receiptId)).toEqual({ landed: true });
+    expect(journal.returned(result.receiptId, "nothing-sent")).toBe(true);
+    expect(journal.get(result.receiptId)?.last.kind).toBe("returned");
+    expect(journal.restorable()).toHaveLength(1);
+  });
+
+  it("never writes a volatile receipt into a later mixed withdrawal or compaction", () => {
+    const dir = directory("mixed-volatile-withdrawal");
+    let failWrites = true;
+    const journal = openDisk(dir, {
+      writeLine: (fd, line) => {
+        if (failWrites) throw new Error("temporary disk failure");
+        writeSync(fd, line);
+      },
+    });
+    const volatile = journal.accept(accepted({ queue: { itemId: "mixed-q-volatile", enqueuedAt: NOW } }));
+    if (!volatile.ok) return;
+    failWrites = false;
+    const durable = journal.accept(accepted({ queue: { itemId: "mixed-q-durable", enqueuedAt: NOW } }));
+    if (!durable.ok) return;
+
+    expect(journal.withdrawn([volatile.receiptId, durable.receiptId], "cleared", ACTOR)).toBe(true);
+    expect(journal.compact()).toBe(true);
+    const text = readFileSync(join(dir, RECEIPTS_FILE), "utf8");
+    expect(text).toContain(durable.receiptId);
+    expect(text).not.toContain(volatile.receiptId);
   });
 
   it("validates request ids and freshness at every boundary", () => {

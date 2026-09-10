@@ -10,7 +10,7 @@
  *
  * docs/plans/260910d § The stores, and who owns them.
  */
-import { existsSync, mkdirSync, mkdtempSync, readdirSync, rmSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readdirSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
@@ -146,6 +146,19 @@ describe("the fleet action stores composition", () => {
     expect(legacy.lines.log.join(" ")).toContain("hold ledger");
   });
 
+  it("keeps the hold ledger durable when only the receipt journal cannot open", () => {
+    const dir = tempRoot();
+    writeFileSync(join(dir, "material"), "blocks the receipt material directory");
+
+    const legacy = openSharedQuarantine({ dir, log: () => {} });
+    expect(legacy.ledger).not.toBeNull();
+    expect(legacy.ledger?.status().lockedOutBy).toBeNull();
+    expect(sharedReceiptJournal().durable()).toBe(false);
+
+    legacy.ledger?.noteResolved({ at: 1_700_000_000_001, sessionId: "$97903", how: "delivered" });
+    expect(existsSync(join(dir, "holds.jsonl"))).toBe(true);
+  });
+
   it("reset is idempotent and gives the composition-owned lock back", () => {
     const dir = tempRoot();
     openFleetActionStores({ dir, log: () => {} });
@@ -158,6 +171,18 @@ describe("the fleet action stores composition", () => {
     const taken = takeLock(join(dir, LOCK_FILE), () => new Date(1_700_000_000_000));
     expect(taken.ok).toBe(true);
     if (taken.ok) outsideLocks.push({ dir, lock: taken.lock });
+  });
+
+  it("closing one handed-in journal makes only that journal report read-only", () => {
+    const dir = tempRoot();
+    const started = openFleetActionStores({ dir, log: () => {} });
+    started.receipts.noteGeneration(979_004);
+    started.receipts.close();
+
+    expect(started.receipts.durable()).toBe(false);
+    expect(started.receipts.status().lockedOutBy).toMatch(/closed/i);
+    started.ledger?.noteResolved({ at: 1_700_000_000_001, sessionId: "$97904", how: "delivered" });
+    expect(existsSync(join(dir, "holds.jsonl"))).toBe(true);
   });
 
   it("throws when the shared quarantine book was handed out before durable startup", () => {
