@@ -716,6 +716,29 @@ started.**
   evidence. **A decision for the Overseer or Greg:** a narrow Sol check of Stage 3a, which is the
   argv arm alone, or a revert. Until one of them happens, it is live code in the fleet's argv
   reader.
+- **The Overseer's decision on 3a** (after the debrief): a narrow, read-only, findings-only Sol check
+  of the argv arm alone. No revert.
+
+  **Sol's answer, 2026-09-10 ~22:20** ([the answer](260910f-gradual-recovery-stage3a-argv-check-sol.md),
+  [the prompt](260910f-gradual-recovery-stage3a-argv-check-sol-prompt.md)): **two established P1s.**
+  - **G21: the ps-flattened branch cannot be trusted.** A picker search whose value is one argument
+    containing spaces, `["claude","--resume","<uuid> --permission-mode auto -- Reply…"]`, flattens
+    to exactly the same `ps` line as the real resumed capture. So no rule over flattened text can
+    tell a resume from a picker, and execution identity could have called a picker a verified
+    conversation.
+    - **The fix: `--resume` on flattened input is unreadable again**, as it was before 3a. That is
+      no regression for anything that exists today. The faithful-argv arm stays; that is steer's
+      path, and there the example is one non-uuid token, so it is refused.
+    - **The cost moves to Stage 3b.** Verifying a resumed pane needs a faithful
+      `/proc/<pid>/cmdline` read of the harness process, not the flattened `ps` line. Until 3b
+      exists, a resumed pane reads unverifiable, as it did before this plan.
+  - **G22: `--resume A --session-id A` read as session A**, and steer said "yes". But `claude`
+    refuses that combination unless `--fork-session` is given, as this plan's own spike measured.
+    - **The fix: both flags together are unreadable**, in either order, whether the ids are equal
+      or not. Tested through both the reader and steer.
+
+  Both are being fixed red first by an Opus subagent, then pushed. That is the Overseer's terms: fix
+  a P1 and push.
 - **Stage 3b is briefed, not built.** The brief is [the 3b task](260910f-gradual-recovery-stage3b-task.md):
   - the `tmux-resume` launcher arm;
   - gjd-remote's `--resume-conversation`, with the on-box duplicate check;
