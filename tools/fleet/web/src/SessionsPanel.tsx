@@ -70,6 +70,7 @@ import {
   statusLabel,
   triageBand,
   whereLine,
+  resolveSelected,
 } from "./view";
 
 
@@ -576,8 +577,9 @@ export function SessionsPanel({
    */
   const wrongWorld =
     selectedPid !== null && tmuxServerPid !== null && selectedPid !== tmuxServerPid;
-  const selected =
-    selectedId === null || wrongWorld ? null : (sorted.find((r) => r.id === selectedId) ?? null);
+  /* The resolution itself is view.ts § `resolveSelected`, shared with the tab
+     title; `wrongWorld` stays here because the notice below explains it. */
+  const selected = resolveSelected(sorted, selectedId, selectedPid, tmuxServerPid);
 
   /**
    * **WHAT THE DETAIL PANE IS MOUNTED UNDER** — the run, the tmux server and the
