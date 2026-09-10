@@ -457,5 +457,29 @@ its signpost in `AGENTS.md`.
   on `hashchange`, which jsdom delivers as a later task, so the Overseer tab was never drawn. The
   assertions passed anyway because each checked text present on *both* tabs. All three now dispatch
   the event inside `act` and prove the switch landed by asserting a Usage-only heading is gone.
+- **The code review was killed at its 45-minute limit with no verdict written — and had found a
+  P0 no fixture could.** Anthropic's usage endpoint spells reset times with microseconds and
+  `+00:00` (measured on this box: `2026-09-10T08:50:00.391562+00:00`), and every fleet-side reader
+  accepts only the canonical `toISOString()` spelling. On the real box every Claude section would
+  have been refused as unreadable while every test passed, because every fixture — and the seeded
+  checkpoint the browser check used — was canonical. Sol normalised the instant once in the producer
+  before the kill; it was then confirmed live here, with the real collector against this box's
+  accounts, through the real fleet projection and the browser parser, `published` at both.
+  **The class is worth naming for the next feature in this area: a fixture written by hand encodes
+  the author's idea of the provider's format, and the provider does not share it. One live
+  round-trip is worth more than any number of fixture tests here.**
+- The same killed run fixed two further classes, each with a postmortem:
+  [260910a](../postmortems/260910a-a-container-success-cannot-prove-every-suppressed-child-has-a-replacement.md)
+  (the card hid its fallback on `published`, but a published feed can hold an unknown, stale, expired
+  or differently-attributed section — suppression is now earned per provider, account and window)
+  and
+  [260910b](../postmortems/260910b-a-proof-bearing-field-cannot-live-outside-the-branch-it-licenses.md)
+  (`providerAccountId` is now `string` on every numeric arm; the same flaw was live in the older
+  standalone Codex card, which drew numbers under "Account not attributed" and no longer does).
+- **One test Sol's extension left red found a real flicker.** The sections were anchored on the bare
+  once-a-second `now`, so a section read just after a tick had a `takenAt` in the future and withheld
+  its numbers. They now share the card's `Math.max(now, receivedAt)` anchor.
+- **A short read-only re-review was run for the verdict the kill swallowed**, answer in
+  `260910c-code-rereview-sol.md` beside this plan.
 - Gates: `npm test` and `npm run typecheck`, and GPT Sol on the plan before building and on the code
   after.

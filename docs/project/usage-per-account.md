@@ -57,7 +57,7 @@ Modules: `tools/overseer/account-usage.ts` (the collector and the record's parse
 `tools/fleet/web/src/AccountUsageSections.tsx` (the render), and the wire types in
 `tools/fleet/wire.ts`.
 
-## Six things that are not obvious
+## Eight things that are not obvious
 
 ### `role` and `origin` are two fields, and folding them was a category error
 
@@ -135,6 +135,43 @@ and draws no percentage for a window that has since reset.
 This is the one place a live card and the history chart deliberately differ: history preserves what
 was true then, a live card re-derives now. There is no window-drawing code in
 `AccountUsageSections.tsx` at all, and that is why.
+
+### The live endpoint spells time differently from every fixture
+
+`/api/oauth/usage` returns reset instants with **microseconds and `+00:00`** —
+`2026-09-10T08:50:00.391562+00:00`, measured on this box. Every reader on the fleet side of the
+checkpoint (`iso()` in `tools/fleet/attention.ts`, and the browser's parsers) accepts only the one
+spelling `toISOString()` produces, and refuses anything else as unreadable. So the producer
+normalises each instant once, in `windowCard`, **preserving the instant rather than the provider's
+spelling**.
+
+Nothing but a live reading would have shown this. Every fixture was written by hand in the canonical
+form, so every test agreed with the code about a format the provider does not use; the first real
+reading would have made every Claude section unreadable. **When you change anything here, push one
+real reading through the real boundary** — the collector against this box's accounts, serialised as
+a checkpoint, through `projectAccountUsage` and `parseAccountUsage` — before trusting a green suite.
+
+### Hiding a reading has to be earned, per account and per window
+
+On the Usage tab the deep card below the sections can draw the same subscription a second time: its
+cached Claude windows, and the whole Codex card from the history route. `UsageCard` suppresses each
+**only when a live section above has earned it** — `headroomReplacements` in `UsagePanel.tsx`. The
+section must be the same provider family, carry the **same non-null account id**, be no older than
+the fallback and not stale, and cover **every window** the fallback would draw, with a current
+number wherever the fallback has one.
+
+The first version asked one question instead — *did the feed publish?* — and that is the wrong unit of
+evidence. A published feed can hold an unknown section, one family only, an expired window, or a
+different account's numbers; spending the envelope's success as proof about each child hid real
+headroom with nothing in its place.
+[260910a](../postmortems/260910a-a-container-success-cannot-prove-every-suppressed-child-has-a-replacement.md)
+names the class. The rule it leaves: **if hiding a fact requires proof, carry the proof to the line
+that hides it.**
+
+The same instinct governs identity. `providerAccountId` is `string` on every numeric arm and nullable
+only on `unknown`, so *a number with no proven owner* is a state the types cannot spell rather than
+a rule four parsers each have to remember —
+[260910b](../postmortems/260910b-a-proof-bearing-field-cannot-live-outside-the-branch-it-licenses.md).
 
 ## "X% used", and only that
 
