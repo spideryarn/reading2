@@ -188,9 +188,35 @@ export type SseFrame = { event: string; data: string };
  */
 export function sseFrames(maxChars: number = MAX_FRAME_CHARS): { push(chunk: string): SseFrame[] } {
   let buffer = "";
+  /**
+   * A trailing `\r`, held back until the next chunk says what it was.
+   *
+   * `\r` and `\r\n` are ONE line ending each, so a chunk ending in `\r` cannot
+   * be classified yet: deciding early manufactures a blank line out of a split
+   * CRLF and closes a frame in the middle. One character, and it is the whole
+   * price of normalising below.
+   */
+  let heldCr = "";
   return {
     push(chunk: string): SseFrame[] {
-      buffer += chunk;
+      /* **LINE ENDINGS ARE NORMALISED ON THE WAY IN, and that is what makes
+         everything below able to think only in `\n`.**
+         The spec allows CR, LF or CRLF to end a line, and this parser used to
+         know two of them: it looked for `\n\n` or `\r\n\r\n` and split fields
+         on `\n` alone. A producer — or the proxy that rewrote its line endings,
+         which is the reason CRLF was tolerated at all — using bare CR would
+         have had every frame held as incomplete until the bound refused a
+         perfectly healthy stream. Found by GPT Sol reviewing plan 260910c,
+         2026-09-10.
+
+         Normalising is safe because an event stream's payload cannot contain a
+         raw CR or LF: they ARE the line endings, so there is nothing here to
+         corrupt. And it is the simpler answer as well as the more correct one —
+         one terminator to find, one separator to split on, and a one-character
+         partial instead of three. */
+      const text = heldCr + chunk;
+      heldCr = text.endsWith("\r") ? "\r" : "";
+      buffer += (heldCr === "" ? text : text.slice(0, -1)).replace(/\r\n?/g, "\n");
       /**
        * **THE BOUND IS CHECKED AFTER THE COMPLETE FRAMES ARE TAKEN OUT, and an
        * earlier draft checked it before.** That draft threw on a single chunk
@@ -209,9 +235,9 @@ export function sseFrames(maxChars: number = MAX_FRAME_CHARS): { push(chunk: str
        */
       const frames: SseFrame[] = [];
       for (;;) {
-        const end = buffer.indexOf("\n\n");
-        const endCrlf = buffer.indexOf("\r\n\r\n");
-        const at = end === -1 ? endCrlf : endCrlf === -1 ? end : Math.min(end, endCrlf);
+        // One terminator, because every line ending is a `\n` by the time it
+        // reaches here.
+        const at = buffer.indexOf("\n\n");
         if (at === -1) break;
         // One frame, on its own, longer than we are prepared to hold.
         if (at > maxChars) {
@@ -219,7 +245,7 @@ export function sseFrames(maxChars: number = MAX_FRAME_CHARS): { push(chunk: str
           throw new Error(frameTooBig(maxChars));
         }
         const raw = buffer.slice(0, at);
-        buffer = buffer.slice(at + (at === endCrlf && endCrlf !== end ? 4 : 2));
+        buffer = buffer.slice(at + 2);
         const frame = parseFrame(raw);
         if (frame !== null) frames.push(frame);
       }
@@ -232,7 +258,13 @@ export function sseFrames(maxChars: number = MAX_FRAME_CHARS): { push(chunk: str
          lands in the same chunk, and an overflow when the first `\n` arrives
          and the second has not. GPT Sol probed it at an eight-character limit,
          2026-09-08. Packetization is not something a producer controls, so it
-         must not decide whether a stream is called broken. */
+         must not decide whether a stream is called broken.
+
+         Normalisation shrank this from three pending characters to one, and
+         `heldCr` does not need adding back: it is itself a piece of an
+         unfinished terminator, so counting it and discounting it are the same
+         move. `data: xx\r\n\r` under an eight-character bound is still
+         accepted, and `data: xxxxx\r\n\r` is still refused. */
       if (buffer.length - partialDelimiter(buffer) > maxChars) {
         buffer = "";
         throw new Error(frameTooBig(maxChars));
@@ -244,25 +276,22 @@ export function sseFrames(maxChars: number = MAX_FRAME_CHARS): { push(chunk: str
 
 /**
  * How many trailing characters could be the start of a terminator we have not
- * finished receiving — at most three, from `\r\n\r`.
+ * finished receiving — **one**, now that every line ending is a `\n` by the
+ * time it reaches the buffer. (It used to be up to three, from `\r\n\r`; the
+ * other two moved into `heldCr`.)
  *
  * A tail ending in `\n` might equally be the end of a `data:` line, and
  * discounting one character there costs nothing: the bound is four million.
  */
 function partialDelimiter(buffer: string): number {
-  for (const delimiter of ["\r\n\r\n", "\n\n"]) {
-    for (let n = delimiter.length - 1; n > 0; n -= 1) {
-      if (buffer.endsWith(delimiter.slice(0, n))) return n;
-    }
-  }
-  return 0;
+  return buffer.endsWith("\n") ? 1 : 0;
 }
 
 function parseFrame(raw: string): SseFrame | null {
   let event = "message";
   const data: string[] = [];
-  for (const line of raw.split("\n")) {
-    const clean = line.endsWith("\r") ? line.slice(0, -1) : line;
+  // Only `\n`: `sseFrames` normalised CR and CRLF away before this saw them.
+  for (const clean of raw.split("\n")) {
     if (clean === "" || clean.startsWith(":")) continue;
     const colon = clean.indexOf(":");
     const field = colon === -1 ? clean : clean.slice(0, colon);
@@ -406,10 +435,35 @@ async function* readStream(
     yield { kind: "stream-closed", atMs: now(), why: silent ? silence() : `the stream broke: ${message(cause)}` };
   } finally {
     clearTimeout(deadline);
-    // Cancelling releases the socket when the consumer breaks out of the loop
-    // — otherwise a `break` in the daemon leaks a connection per restart, and
-    // `subscriberCount()` on the dashboard slowly climbs for no reason.
-    await reader.cancel().catch(() => undefined);
+    /* Cancelling releases the socket on every way out of this function — the
+       consumer breaking out of the loop, the parser refusing a frame, an
+       abort, an error — because otherwise each one leaks a connection and
+       `subscriberCount()` on the dashboard climbs for no reason.
+
+       **NOT AWAITED, and it was until 2026-09-10.** Same rule as `discardBody`
+       and `readBounded` below, and this is the place it matters most: a cancel
+       promise is allowed to reflect an underlying source that shuts down
+       asynchronously, so nothing bounds it structurally. Awaiting one here
+       parks the whole generator *after* it has yielded `stream-closed` — so the
+       daemon's log says the transport failed, the poll fallback is three lines
+       further down, and it is never reached. Every failure would be correctly
+       reported and permanently unrecovered, which is a worse shape than either
+       half alone.
+
+       No HTTP peer can produce that: undici destroys the socket and resolves,
+       which is why an earlier draft of this comment cited a real-server
+       measurement as proof there was nothing to fix. There was — the probe
+       could not reach it. GPT Sol's review named the case, and
+       `tests/overseer-source.test.ts` § "a body that refuses to be cancelled"
+       arranges it with a `ReadableStream` whose `cancel()` never settles. It
+       hangs for thirty seconds against the awaited version.
+
+       What is given up is the guarantee that the socket is gone by the time the
+       consumer's `break` returns. That was never worth a hostage: the release
+       still starts immediately, and the same test's neighbour watches the
+       dashboard's subscriber count fall to zero straight after. The `catch`
+       covers a body that has already errored, where cancelling rejects. */
+    void reader.cancel().catch(() => undefined);
   }
 }
 

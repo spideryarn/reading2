@@ -17,7 +17,7 @@
  * dashboard on 8787 (which is running on this box and belongs to somebody else).
  */
 import { createServer, type Server, type ServerResponse } from "node:http";
-import { afterEach, describe, expect, test } from "vitest";
+import { afterEach, describe, expect, test, vi } from "vitest";
 
 import { fleetSource, sseFrames, type SourceMessage } from "../tools/overseer/source.js";
 
@@ -314,6 +314,135 @@ describe("the stream", () => {
   });
 });
 
+/* ------------------------------------------------------------------ *
+ * A consumer that walks away.
+ *
+ * The daemon `break`s out of `for await` on shutdown and on a restart, with the
+ * socket still open — which runs `readStream`'s `finally`, which cancels the
+ * body reader. `source.ts` argues twice, at length, that this module must never
+ * *await* a peer that has stopped answering; that `finally` awaited one.
+ *
+ * **This block is a negative control as much as a test.** A claim that the
+ * await hangs is a claim that has to be shown, and against a real socket it
+ * does not: undici destroys the connection and the promise settles. So what is
+ * asserted here is the property that actually matters — a consumer that leaves
+ * is gone promptly and owns nothing on the other end — and it holds for the
+ * awaited version too. It is here so that a future change to the cancel path
+ * has something to fail.
+ * ------------------------------------------------------------------ */
+describe("a consumer that walks away mid-stream", () => {
+  test("breaking out of the loop releases the connection promptly, while the body is still open", async () => {
+    const fleet = await fakeFleet({ state: () => ({ status: 200, body: STATE_BODY }) });
+    const controller = new AbortController();
+    const guard = setTimeout(() => controller.abort(), 5_000);
+
+    let leftAfterMs = Number.NaN;
+    try {
+      const startedAt = Date.now();
+      for await (const message of fleetSource({
+        baseUrl: fleet.url,
+        signal: controller.signal,
+        pollIntervalMs: 25,
+        streamRetryAfterMs: 5_000,
+        streamSilenceMs: 2_000,
+      })) {
+        if (message.kind === "stream-opened") {
+          setTimeout(() => fleet.push(STATE_BODY), 5);
+          continue;
+        }
+        // A payload arrived, the server is holding the stream open, and the
+        // consumer walks off mid-body — the daemon's shutdown, exactly.
+        expect(message).toMatchObject({ kind: "payload", via: "sse" });
+        break;
+      }
+      leftAfterMs = Date.now() - startedAt;
+    } finally {
+      clearTimeout(guard);
+      controller.abort();
+    }
+
+    // It settled at all — the `finally`'s cancel did not park on a body the
+    // server was never going to end.
+    expect(Number.isFinite(leftAfterMs)).toBe(true);
+    expect(leftAfterMs).toBeLessThan(2_000);
+
+    // AND THE OTHER END KNOWS. A consumer that leaves without releasing the
+    // socket is invisible from here and shows up on the dashboard as
+    // `subscriberCount()` climbing by one per daemon restart, for ever.
+    await waitFor(() => fleet.streamCount() === 0, 2_000);
+    expect(fleet.streamCount()).toBe(0);
+  });
+
+  test("a body that refuses to be cancelled does not hold the poll fallback hostage", async () => {
+    /* **THE REAL BOUND, and the one the plan first proposed to establish with
+       a test that could not fail.** `readStream`'s `finally` runs on every exit
+       — a parser refusal included, which is this one — and while it awaited the
+       cancel, an underlying source that never finished shutting down would stop
+       `yield*` from ever returning. The daemon would see `stream-closed`, so
+       the log would say the right thing, and then it would sit there for ever
+       with the poll fallback three lines away and unreachable. */
+    const fleet = await fakeFleet({ state: () => ({ status: 200, body: STATE_BODY }), stream: "404" });
+    const realFetch = globalThis.fetch;
+    vi.stubGlobal("fetch", (input: unknown, init?: RequestInit) => {
+      const url = String(input);
+      if (!url.includes("/api/live")) return realFetch(input as string, init);
+      // Enough of a `Response` for `readStream`: it reads `ok` and `body`.
+      return Promise.resolve({
+        ok: true,
+        status: 200,
+        statusText: "OK",
+        body: uncancellableStream(),
+      } as unknown as Response);
+    });
+    try {
+      const got = await take(fleet, 3, { pollIntervalMs: 10, streamRetryAfterMs: 5_000, maxFrameChars: 20_000 });
+      expect(got[0]).toMatchObject({ kind: "stream-opened" });
+      expect(got[1]).toMatchObject({ kind: "stream-closed" });
+      expect((got[1] as { why: string }).why).toMatch(/20000 characters/);
+      // THE POINT: the fallback was reached at all.
+      expect(got[2]).toMatchObject({ kind: "payload", via: "poll" });
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+});
+
+/**
+ * A body that streams for ever and **whose `cancel()` never settles.**
+ *
+ * No HTTP peer can arrange this: undici destroys the socket and resolves, which
+ * is why the test above is a negative control rather than a reproduction. But
+ * the streams standard permits a cancel promise to reflect an underlying source
+ * shutting down asynchronously, so *nothing structural* bounded the wait — GPT
+ * Sol's review of the plan, 2026-09-10. This is that permission, exercised.
+ */
+function uncancellableStream(): ReadableStream<Uint8Array> {
+  const encoder = new TextEncoder();
+  return new ReadableStream<Uint8Array>({
+    start(controller) {
+      // An SSE frame that opens and never closes: `sseFrames` will refuse it
+      // once it passes the bound, which is the path that reaches `cancel()`
+      // with the body still readable. (A stream that ENDS or ERRORS does not:
+      // cancelling one of those resolves without consulting the source.)
+      controller.enqueue(encoder.encode(`event: snapshot\ndata: ${"x".repeat(30_000)}`));
+    },
+    pull(controller) {
+      controller.enqueue(encoder.encode("x".repeat(30_000)));
+    },
+    cancel() {
+      return new Promise<void>(() => {});
+    },
+  });
+}
+
+/** Poll a condition on a real clock. For a socket closing, which is not synchronous. */
+async function waitFor(ready: () => boolean, withinMs: number): Promise<void> {
+  const until = Date.now() + withinMs;
+  while (!ready() && Date.now() < until) {
+    await new Promise((resolve) => setTimeout(resolve, 10));
+  }
+}
+
 describe("a source that hangs rather than fails", () => {
   // THE FAILURE THE PRODUCER JUST HAD, pointed the other way. On 2026-09-08
   // `collect()`'s child took SIGTERM while in uninterruptible IO and
@@ -512,6 +641,45 @@ describe("sseFrames — the incomplete-frame bound", () => {
     const crlf = sseFrames(8);
     expect(crlf.push(`${body}\r\n\r`)).toEqual([]);
     expect(crlf.push("\n")).toEqual([{ event: "message", data: "xx" }]);
+  });
+
+  test("bare CR line endings are a stream, not a frame that never closes", () => {
+    /* **THE SPEC ALLOWS ALL THREE**: CR, LF and CRLF end a line in an event
+       stream (HTML Standard § event stream interpretation). This parser knew
+       two of them, so a producer — or, far likelier, a proxy that rewrote line
+       endings, which is the reason CRLF is tolerated in the first place — using
+       bare CR would have every frame retained as an incomplete one, growing the
+       tail until the bound refused a perfectly valid stream. Bounded, and
+       wrong. GPT Sol's review of plan 260910c, 2026-09-10. */
+    /* Two frames, so the first one's terminator is followed by a byte that
+       proves it was a bare CR. **The second is deliberately still pending**:
+       a chunk ending in `\r` cannot be resolved until the next byte says
+       whether it was a line ending or the first half of a CRLF, which is what
+       every conforming event-stream parser does and what the `heldCr` in
+       `sseFrames` is. */
+    const parser = sseFrames(64);
+    expect(parser.push('event: snapshot\rdata: {"a":1}\r\revent: ping\rdata: 2\r\r')).toEqual([
+      { event: "snapshot", data: '{"a":1}' },
+    ]);
+    // And the held one lands as soon as anything at all follows it.
+    expect(parser.push("event: ping\r")).toEqual([{ event: "ping", data: "2" }]);
+
+    // Mixed, because a proxy rewriting one direction does not tidy the rest.
+    expect(sseFrames(64).push("event: ping\r\ndata: 1\rdata: 2\n\n")).toEqual([
+      { event: "ping", data: "1\n2" },
+    ]);
+  });
+
+  test("a CRLF split across chunks is one line ending, not two", () => {
+    /* The trap that comes with accepting bare CR: `\r` at the end of a chunk
+       and `\n` at the start of the next is ONE line ending, and a parser that
+       decided as soon as it saw the `\r` would manufacture a blank line and
+       close the frame early — which is the packetization class above, wearing
+       different clothes. */
+    const parser = sseFrames(64);
+    expect(parser.push("event: snapshot\rdata: {\"a\":1}\r")).toEqual([]);
+    expect(parser.push("\n")).toEqual([]); // still just the one line ending
+    expect(parser.push("\n")).toEqual([{ event: "snapshot", data: '{"a":1}' }]);
   });
 
   test("a body genuinely over the bound is still refused, terminator or not", () => {

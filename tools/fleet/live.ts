@@ -67,6 +67,20 @@ type Subscriber = {
   waitingToDrain: boolean;
   /** Destroys the subscriber if `drain` never comes. Cleared when it does. */
   drainTimer: ReturnType<typeof setTimeout> | null;
+  /**
+   * **The newest snapshot frame this subscriber missed while stalled, and
+   * never more than one.** Sent the moment its socket drains — see
+   * `markFull`. Null when nothing has been withheld, and null for a withheld
+   * heartbeat, which is not worth keeping.
+   *
+   * It is a reference to the same string every other subscriber was handed,
+   * so a stalled subscriber costs a pointer rather than a snapshot.
+   */
+  pending: string | null;
+  /** Removes every listener this subscriber attached. Set by `subscribe`. */
+  detach: () => void;
+  /** The outstanding `drain` handler, so teardown can take it off again. */
+  onDrain: (() => void) | null;
 };
 
 const subscribers = new Set<Subscriber>();
@@ -126,6 +140,10 @@ function safeWrite(sub: Subscriber, data: string): boolean {
  * Write, unless this subscriber's buffer is already full — **the one place a
  * `false` is acted on**, so no path writes a frame and ignores the answer.
  *
+ * `retain` says whether this frame is worth keeping for the subscriber if it
+ * cannot be written now: true for a snapshot, false for a heartbeat. See
+ * `markFull` for why a late ping is worse than no ping.
+ *
  * **`false` DOES NOT MEAN THE SOCKET IS DEAD, and an earlier draft of this
  * file assumed it did.** A `ServerResponse` has a 16 KB high-water mark and a
  * fleet snapshot is ~59 KB, so `write` returns `false` on the FIRST frame to a
@@ -143,8 +161,15 @@ function safeWrite(sub: Subscriber, data: string): boolean {
  * never drains is destroyed, and a socket that drains is back in the fold with
  * the next snapshot, which carries everything the skipped one did.
  */
-function writeUnlessFull(sub: Subscriber, data: string): void {
-  if (sub.closed || sub.waitingToDrain) return;
+function writeUnlessFull(sub: Subscriber, data: string, retain: boolean): void {
+  if (sub.closed) return;
+  if (sub.waitingToDrain) {
+    // Not written, and — if it is a snapshot — not lost either. The previous
+    // retained snapshot is simply overwritten: the newer one says everything
+    // it did, which is exactly why this is a bound and not a queue.
+    if (retain) sub.pending = data;
+    return;
+  }
   if (safeWrite(sub, data)) return;
   markFull(sub);
 }
@@ -158,6 +183,31 @@ function writeUnlessFull(sub: Subscriber, data: string): void {
  * `write` that returned `false` has returned and this listener is attached, so
  * there is no window to miss it in. The timer is unref'd: a stalled subscriber
  * must never be the reason this process stays up.
+ *
+ * ## And on `drain`, the newest snapshot goes out at once
+ *
+ * **This used to send nothing at all.** Be careful about what that did and did
+ * not cost, because the first draft of this comment overstated it and GPT Sol
+ * caught it: a `false` does not withhold the frame that caused it — Node has
+ * already buffered that one and it goes out when the socket moves. What was
+ * lost was any snapshot broadcast **while the subscriber was still blocked**,
+ * and those simply vanished: `drain` cleared the block and sent nothing, so the
+ * subscriber sat a generation behind until the next publish, up to 60 seconds
+ * later (`server.ts`'s refresh loop).
+ *
+ * That is a narrow race rather than the ordinary case — publishes are 60s apart
+ * and `DRAIN_DEADLINE_MS` destroys a subscriber that has not drained in 30 — so
+ * the reason to hold the invariant is not the size of the incident. It is that
+ * *a subscriber that is alive when a snapshot is published receives that
+ * snapshot or a newer one* is a sentence this module can be trusted on,
+ * whatever the box's cadence happens to be, and it costs one reference.
+ *
+ * So a withheld **snapshot** is kept (`sub.pending`, one frame, overwritten by
+ * anything newer) and written the moment the socket empties. A withheld
+ * **ping** is dropped: a heartbeat is a claim about *now*, and one delivered
+ * four seconds late tells the client something the snapshot beside it already
+ * proves. Retaining it would also mean a stalled subscriber could come back to
+ * a heartbeat and no state, which is the wrong half.
  */
 function markFull(sub: Subscriber): void {
   if (sub.closed || sub.waitingToDrain) return;
@@ -171,19 +221,48 @@ function markFull(sub: Subscriber): void {
   }, DRAIN_DEADLINE_MS);
   timer.unref?.();
   sub.drainTimer = timer;
-  sub.res.once("drain", () => {
+  const onDrain = (): void => {
     if (sub.drainTimer !== null) clearTimeout(sub.drainTimer);
     sub.drainTimer = null;
+    sub.onDrain = null;
     sub.waitingToDrain = false;
-  });
+    // Taken before the write, so a second `false` re-retains the CURRENT frame
+    // through `writeUnlessFull` rather than looping on a stale one.
+    const missed = sub.pending;
+    sub.pending = null;
+    // `closed` is checked by `writeUnlessFull`: a drain that arrives after the
+    // deadline gave up must not resurrect a subscriber that is already gone.
+    if (missed !== null) writeUnlessFull(sub, missed, true);
+  };
+  sub.onDrain = onDrain;
+  sub.res.once("drain", onDrain);
 }
 
-/** Forget a subscriber. For a socket that has ALREADY gone (a `close`/`error` event). */
+/**
+ * Forget a subscriber. For a socket that has ALREADY gone (a `close`/`error` event).
+ *
+ * **Everything this subscriber owns goes here, and there is nothing else that
+ * owns anything**: the set entry, the drain deadline, the retained frame, the
+ * `drain` handler and the three connection listeners `subscribe` attached. A
+ * departed subscriber must leave nothing behind that could be called or held,
+ * because this process is meant to run for weeks and a slow leak here is
+ * invisible until somebody happens to look at `subscriberCount()`.
+ */
 function removeSubscriber(sub: Subscriber): void {
   if (sub.closed) return;
   sub.closed = true;
   if (sub.drainTimer !== null) clearTimeout(sub.drainTimer);
   sub.drainTimer = null;
+  if (sub.onDrain !== null) {
+    try {
+      sub.res.off("drain", sub.onDrain);
+    } catch {
+      // A half-dead socket. The listener goes with it either way.
+    }
+    sub.onDrain = null;
+  }
+  sub.pending = null;
+  sub.detach();
   subscribers.delete(sub);
 }
 
@@ -244,13 +323,13 @@ function dropSubscriber(sub: Subscriber): void {
  * **`false` is not a dropped frame.** The bytes went into the buffer; what we
  * refuse to do is keep filling a buffer nobody is emptying.
  */
-function broadcastFrame(data: string): void {
+function broadcastFrame(data: string, retain: boolean): void {
   // A copy, because a write can drop a subscriber (a throw, or the drain
   // deadline firing) and delete from `subscribers` as we go. Node Sets tolerate
   // deletion during iteration, but this loop is the one place a bug would be
   // silent — a skipped subscriber just quietly stops updating.
   for (const sub of [...subscribers]) {
-    writeUnlessFull(sub, data);
+    writeUnlessFull(sub, data, retain);
   }
 }
 
@@ -263,7 +342,9 @@ function broadcastFrame(data: string): void {
  * it: there is exactly one place that assembles the wire object).
  */
 export function broadcast(payloadJson: string): void {
-  broadcastFrame(frame("snapshot", payloadJson));
+  // Retained if a subscriber is stalled: a snapshot is the thing the page is
+  // for, and the newest one replaces any older one already held.
+  broadcastFrame(frame("snapshot", payloadJson), true);
 }
 
 /**
@@ -293,15 +374,19 @@ export function subscribe(req: IncomingMessage, res: ServerResponse, initialPayl
   // (and some proxies) treat "no bytes yet" as "not connected".
   if (typeof res.flushHeaders === "function") res.flushHeaders();
 
-  const sub: Subscriber = { res, closed: false, waitingToDrain: false, drainTimer: null };
+  const sub: Subscriber = {
+    res,
+    closed: false,
+    waitingToDrain: false,
+    drainTimer: null,
+    pending: null,
+    // Replaced below. It has to be callable from the moment the subscriber
+    // exists, because the initial write can drop it before the listeners the
+    // real `detach` removes have even been attached.
+    detach: () => {},
+    onDrain: null,
+  };
   subscribers.add(sub);
-
-  if (initialPayloadJson !== null) {
-    // Goes through the same gate as any other write, which matters more here
-    // than anywhere: a 59 KB snapshot into a fresh 16 KB buffer returns `false`
-    // EVERY TIME, and an earlier draft destroyed the connection on it.
-    writeUnlessFull(sub, frame("snapshot", initialPayloadJson));
-  }
 
   const cleanup = (): void => removeSubscriber(sub);
   // `close` fires on both a clean end and an abrupt drop (phone locks, tab
@@ -312,6 +397,30 @@ export function subscribe(req: IncomingMessage, res: ServerResponse, initialPayl
   req.on("close", cleanup);
   req.on("error", cleanup);
   res.on("error", cleanup);
+  // And taken off again on teardown, so a connection this module has finished
+  // with holds no reference back into it. `off` on an emitter that has already
+  // gone can throw, and teardown runs from inside the broadcast loop.
+  sub.detach = (): void => {
+    try {
+      req.off("close", cleanup);
+      req.off("error", cleanup);
+      res.off("error", cleanup);
+    } catch {
+      // The connection is gone; its listeners went with it.
+    }
+  };
+
+  if (initialPayloadJson !== null) {
+    // Goes through the same gate as any other write, which matters more here
+    // than anywhere: a 59 KB snapshot into a fresh 16 KB buffer returns `false`
+    // EVERY TIME, and an earlier draft destroyed the connection on it.
+    //
+    // AFTER the listeners, not before: a write that throws drops the
+    // subscriber, and dropping one whose `detach` was still the placeholder
+    // would leave the three listeners above attached to a connection nothing
+    // is tracking any more.
+    writeUnlessFull(sub, frame("snapshot", initialPayloadJson), true);
+  }
 }
 
 /**
@@ -330,7 +439,10 @@ export function subscribe(req: IncomingMessage, res: ServerResponse, initialPayl
  */
 export function startHeartbeat(intervalMs: number): () => void {
   const timer = setInterval(() => {
-    broadcastFrame(frame("ping", String(Date.now())));
+    // NOT retained: a heartbeat withheld from a stalled subscriber is dropped
+    // rather than kept, because it is a claim about the moment it was sent.
+    // See `markFull`.
+    broadcastFrame(frame("ping", String(Date.now())), false);
   }, intervalMs);
   timer.unref();
   return () => clearInterval(timer);

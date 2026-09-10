@@ -22,7 +22,7 @@ tests green at `4ef94674`.
 | --- | --- |
 | 1. Real Node `Writable`, small highWaterMark, assert pending bytes and write count | **Partly.** `fleet-live.test.ts` § "a raw node Writable that never drains" uses a real `Writable` at `highWaterMark: 1` over 200 broadcasts and asserts one buffered frame. It never **delays and then delivers** a callback, and no ping is interleaved. |
 | 2. Pause-until-drain or close-and-reconnect; retain at most the newest snapshot; clean up listeners | **Partly.** Policy (d) — pause until `drain`, destroy after `DRAIN_DEADLINE_MS` — is implemented and reasoned about in the file. **Nothing is retained**, and `removeSubscriber` removes no listeners. See "The defect" below. |
-| 3. Error headers + never-ending body in `source.ts`; bound `sseFrames` | **Met.** `discardBody` cancels rather than drains on both paths, `readBounded` bounds the poll body, `sseFrames` bounds the incomplete tail per-frame and per-tail. Tested, including the packetization trap. One inconsistency remains — see Stage 2. |
+| 3. Error headers + never-ending body in `source.ts`; bound `sseFrames` | **Nearly, and this row said "met" until Sol's review.** `discardBody` cancels rather than drains on both paths, `readBounded` bounds the poll body, `sseFrames` bounds the incomplete tail per-frame and per-tail, all tested including the packetization trap. But the *time* bound had a hole (the awaited cancel) and `sseFrames` mis-splits bare-CR line endings the spec allows. Both in Stage 2. |
 | 4. Stop/abort through both polling paths; unmounted page owns nothing; manual refresh mid-flight | **Not met, and `pollingTransport` has no tests at all.** Two real defects — see Stage 3. |
 | 5. Keep browser polling unless a measurement says otherwise | **Met by doing nothing.** No measurement says otherwise, so this plan adds no `EventSource`. |
 
@@ -30,32 +30,60 @@ So this plan is three narrow stages against three real defects, plus the evidenc
 in the form it asks for. **It is deliberately not a rewrite of code that was reviewed nine days ago
 and is right.**
 
-### The defect in `live.ts`, in one paragraph
+### The gap in `live.ts` — and the version of it I got wrong first
 
-`writeUnlessFull` writes nothing to a subscriber whose buffer is full — correct, and the whole memory
-bound. But when `drain` arrives, `waitingToDrain` is cleared **and nothing is sent**: the subscriber
-waits for the *next* broadcast. The collector's `REFRESH_MS` is 60 seconds (`server.ts:121`). So a
-phone that stalls for two seconds during a broadcast shows a snapshot that is up to a minute stale,
-on a page whose entire purpose is to say what is true now, and the staleness is invisible because the
-connection is healthy and the heartbeat is arriving. The roadmap's own words for the fix are already
-in the checkbox: *retaining at most the newest snapshot*.
+**The first draft of this plan said a two-second stall costs a phone up to a minute of staleness.
+That is false, and GPT Sol's review of this plan is what caught it.** `res.write` returning `false`
+does not withhold the frame: Node has *already buffered it*, and it goes out as soon as the socket
+moves. A subscriber that stalls and then drains therefore still receives the snapshot that filled its
+buffer. Two other parts of the story were wrong with it — the browser does not consume this endpoint
+at all today (it polls `/api/state`), and the only SSE consumer is the Overseer daemon.
+
+What is actually lost is any snapshot broadcast **while the subscriber was still blocked**. Those
+were dropped on the floor: `drain` cleared the block and sent nothing, so the subscriber held a
+generation-old snapshot until the next publish — up to 60 seconds later, since `server.ts`'s refresh
+loop publishes once per cycle (`server.ts:121`, `:509`). The window is narrow, and the arithmetic is
+why: publishes are 60 s apart and a subscriber that has not drained within `DRAIN_DEADLINE_MS` (30 s)
+is destroyed and reconnects into a fresh cached snapshot. So it takes a block that begins inside the
+30 seconds before a publish, or a new subscriber whose initial cached snapshot blocks while a
+collection that was already running publishes its replacement.
+
+So the honest case for the fix is not a dramatic one. It is the roadmap's requirement in its own
+words — *retaining at most the newest snapshot* — held as a **transport invariant**: a subscriber
+that is alive when a snapshot is published receives that snapshot or a newer one, without depending
+on how the box's refresh cadence happens to line up against a stall. It costs one nullable reference
+per subscriber, and it removes a case where the next consumer of this endpoint (a browser, when the
+`EventSource` swap eventually happens) would silently be a generation behind.
 
 ## Stage 1 — a subscriber that drains gets the newest snapshot, not the next one
 
-- [ ] Red first: a real `Writable` with `highWaterMark: 64` whose `write` callback is **held and then
+- [x] Red first: a real `Writable` with `highWaterMark: 64` whose `write` callback is **held and then
       released** — the checkbox's "delays callbacks", which the existing never-drains double cannot
       express. Assert across ~200 snapshots and interleaved pings: exactly one frame handed to the
       sink while stalled, `writableLength` never above one frame, and — the red part — that releasing
       the callback delivers the **newest** snapshot rather than nothing.
-- [ ] Retain at most one frame per subscriber, and only a `snapshot`: a withheld `ping` is worthless
+- [x] Retain at most one frame per subscriber, and only a `snapshot`: a withheld `ping` is worthless
       (it claims liveness at a moment that has passed), so pings are dropped rather than queued. The
       retained value is the same shared frame string every other subscriber was handed, so the cost
       is one pointer per stalled subscriber, not one snapshot.
-- [ ] Teardown removes the listeners it added — `close`/`error` on the request, `error` and any
+- [x] Teardown removes the listeners it added — `close`/`error` on the request, `error` and any
       outstanding `drain` on the response — so a subscriber that leaves owns nothing. Assert an
       unaffected subscriber goes on receiving throughout.
 
-**Status.** Not started.
+**Status.** Done. `writeUnlessFull` now takes the frame's kind; `markFull` stores `sub.pending`; the
+`drain` handler clears the old deadline, flushes the newest snapshot through the same gate (which
+blocks again and arms a fresh deadline) and drops any withheld ping. `subscribe` builds a `detach()`
+that `removeSubscriber` calls, and the `drain` listener is taken off rather than left on a socket
+about to be destroyed.
+
+Evidence: `tests/fleet-live.test.ts` § "backpressure, measured against a real Writable that delays its
+callbacks" — 7 tests, two of them red against the previous `live.ts`. The write count is asserted on
+`res.write` calls rather than on the sink's `_write` callbacks, because Node queues a second write
+internally without calling `_write` again and counting those would credit this module with restraint
+that was Node's. Sol asked for a second cycle and was right to: at `highWaterMark: 64` the flush
+itself returns `false`, and the four-step test proves the replacement deadline owns the new blocked
+period — mutation-checked by removing the `clearTimeout` from the drain handler, which reds that test
+alone.
 
 ## Stage 2 — `source.ts`: the one awaited cancel, and a consumer that walks away
 
@@ -63,14 +91,39 @@ in the checkbox: *retaining at most the newest snapshot*.
 `readStream`'s `finally` does `await reader.cancel()`. `readBounded`, ten lines down, does
 `void reader.cancel().catch(...)` and cites the same reason for not awaiting.
 
-- [ ] Red first: a consumer that `break`s out of `for await` while a hostile server is holding the
+- [x] Red first: a consumer that `break`s out of `for await` while a hostile server is holding the
       body open. Assert the generator's `return()` settles inside a bound. **If it settles anyway,
       that is the answer and it is recorded as a negative control rather than fixed** — a claim that
       an await hangs is a claim that has to be shown.
-- [ ] Bring the line into agreement with the file's own doctrine, whichever way the test points.
+- [x] Bring the line into agreement with the file's own doctrine, whichever way the test points.
+- [x] **Added after Sol's review**: arrange the case a real peer cannot — a `ReadableStream` whose
+      `cancel()` never settles — because a probe that cannot fail is not evidence.
+- [x] **Added after Sol's review, P2**: accept bare `\r` line endings in `sseFrames`, which the HTML
+      Standard permits and this parser refused.
 
-**Status.** Not started. The two outcomes above are both acceptable endings; which one it is will be
-written here once the test has run.
+**Status.** Done, and **the first answer was wrong.** Against a real server the awaited cancel
+settles in single-digit milliseconds, so the negative control came back clean and this plan was
+briefly ready to record "measured, no defect". Sol's review refused that: a cancel promise is allowed
+to reflect an underlying source shutting down asynchronously, so nothing *structural* bounded the
+wait, and no HTTP peer can produce the case — which makes a real-server probe a test that cannot
+fail. Worse, the `finally` runs on every exit, the parser refusing an oversized frame included, so an
+unbounded cancel parks the generator **after** it has yielded `stream-closed`: the log says the
+transport failed and the poll fallback three lines below is never reached.
+
+Arranged with a `ReadableStream` whose `cancel()` never settles
+(`tests/overseer-source.test.ts` § "a body that refuses to be cancelled"). It hangs for the full 30 s
+test timeout against the awaited version — the abort in the harness cannot rescue it either — and
+passes once the cancel is fire-and-forget, as `readBounded` already was. What is given up is the
+guarantee that the socket is released before the consumer's `break` returns; the neighbouring test
+watches the dashboard's subscriber count fall to zero straight afterwards.
+
+**And a second finding, P2, also Sol's:** `sseFrames` recognised `\n` and `\r\n` but not a bare
+`\r`, which the HTML Standard permits. A producer or proxy using CR-only line endings would have had
+every frame held as incomplete until the 4 MB bound refused a perfectly valid stream — bounded, and
+wrong. Fixed by normalising line endings on the way in, holding back a trailing `\r` until the next
+chunk says whether it was a line ending or half a CRLF. That also **removed** three special cases:
+one terminator to find instead of two, one separator to split on, and a one-character partial
+delimiter instead of three.
 
 ## Stage 3 — the browser transport: an unmounted page must own nothing
 
@@ -87,16 +140,24 @@ window listeners, and it has **no tests**. Two defects, both found by reading it
    that is mid-poll does nothing at all for up to five seconds, and if the in-flight request *fails*,
    the press is swallowed into a backoff the person pressed the button to escape.
 
-- [ ] Red first, in a new `tests/fleet-transport.test.ts`: `stop()` aborts the signal the fetch was
+- [x] Red first, in a new `tests/fleet-transport.test.ts`: `stop()` aborts the signal the fetch was
       handed; `stop()` removes `visibilitychange` and `online` (fire both afterwards, assert no
       further fetch); refresh mid-flight produces exactly **one** fresh attempt and no overlap.
-- [ ] Fix both: hoist the controller to transport scope and abort it in `stop()`; a `pendingRefresh`
+- [x] Fix both: hoist the controller to transport scope and abort it in `stop()`; a `pendingRefresh`
       flag that `finally` acts on once.
-- [ ] Cover the rest of the transport while there is a file to put it in — the hidden tab that keeps
+- [x] Cover the rest of the transport while there is a file to put it in — the hidden tab that keeps
       its rhythm without fetching, visibility and `online` refreshing, the backoff doubling and
       resetting on success, `stop()` idempotent under StrictMode's double teardown.
 
-**Status.** Not started.
+**Status.** Done. Both defects were red first, and `tests/fleet-transport.test.ts` now covers with 16
+tests the file that had none — the rhythm, the whole backoff curve to the millisecond, the hidden
+tab, visibility and `online`, the timeout wording, and teardown.
+
+One addition from Sol's review, and it is the one worth keeping: every other test drives `stop()` by
+hand, which proves the transport *can* clean up and says nothing about whether anything ever asks it
+to. The call lives in one line of `useFleetState`'s effect teardown. So the last test mounts the hook
+and unmounts it — and deleting that line reds that test **and nothing else in the repo**, including
+all 432 tests of `fleet-web.test.tsx`.
 
 ## What this plan is not doing, and why
 
@@ -120,6 +181,16 @@ carry the state — which is what the code does today, and it is not *wrong*, on
 It was passed over because the cost of the fix is one nullable string per subscriber and one branch in
 a handler that already exists, and because "the live view is silently a minute behind for anyone whose
 phone hiccupped" is the precise failure mode this project keeps writing postmortems about.
+
+## The reviews
+
+- GPT Sol reviewed the plan before any code was written (`--sandbox review`, exit 0, non-empty answer,
+  ~12 minutes): **REVISE**, no P0, three P1 and two P2. All five were acted on, and two of them
+  changed what this branch does rather than how it is described — the false staleness story above, and
+  the cancel probe that could not fail. Both were things I had already written into code comments,
+  which is the class this repo keeps meeting: a claim travels from a brief into a source comment
+  without anybody tracing it.
+- The stage diff then went back to Sol with the raw test output.
 
 ## Gates
 
