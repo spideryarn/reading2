@@ -228,7 +228,34 @@ phone hiccupped" is the precise failure mode this project keeps writing postmort
   unchanged; only its one *exception* clause needed replacing, because that clause was the thing Sol
   falsified.
 - Round 2 sent Sol's own fixes back to Sol, on the house rule that a reviewer's edits are somebody
-  else's unreviewed code the next time round.
+  else's unreviewed code the next time round. **APPROVE on the functional side** — no P0, no P1, and
+  an independent 24,692-case packetization probe of the new parser found no divergence. Two P2s, both
+  about tests being weaker than they read: the stalled-subscriber assertion was `> 1`, and a mutation
+  that made `live.ts` keep writing after Node returned `false` — all four frames offered — still
+  passed it. It is now exactly 2, which is what Node's accounting gives for 33-byte pings against a
+  64-byte high-water mark.
+- **Neither review round could bind `127.0.0.1` in its sandbox** (`listen EPERM`), so neither ever
+  executed the seventeen HTTP-backed `overseer-source` tests, and round 2's `npm run typecheck` fell
+  back to the direct `tsx` invocation. Both were run on the box instead. This is worth knowing for
+  the next stage that sends network-dependent tests to a reviewer: it will report the rest as
+  passing, and say so only if asked.
+
+## Where this ended
+
+**Finished.** All five roadmap checkboxes are met, `dev` has it at `f1f55776`, and nothing is left
+that this stage's acceptance paragraph asks for. Three things are worth carrying forward, none of
+them blocking:
+
+- **A restart is needed for the two server-side changes to be live.** `live.ts` and `source.ts` are
+  loaded by the running fleet dashboard and Overseer daemon, which this session must not restart.
+  `transport.ts` reaches a browser on the next fleet client build.
+- **A third environment red exists in a fresh worktree**, beyond the two the brief names:
+  `tests/fleet-decisions-route.test.ts` fails because `server.ts` calls `process.exit(2)` when there
+  is no built client at `tools/fleet/web/dist`. It passes after `npm run build:fleet`. Same family as
+  `cold-start-lazy-imports` and `pdf-bundle-trace` — a missing build artefact, not a defect.
+- **"Both polling paths" in checkbox 4 was read as the transport's scheduled tick and its
+  event-driven refresh**, both of which are audited. If it meant `transport.ts` *and* `useActions.ts`,
+  the second belongs to the Session continuity session and was left alone.
 
 ## Gates
 
