@@ -571,7 +571,37 @@ the way to spend the key is to launch without an account pin.
 
 ### Stage 1 — the registry and the wizard learn `family: codex`
 
-**Status: in progress, 2026-09-10.** Stage 0 settled the unknowns this stage was told not to guess,
+**Status: built, 2026-09-10 — implemented by GPT (`gpt-5.6-sol`, high, `workspace-write`) from a
+written brief, reviewed and repaired by the manager, then sent for cross-family review.** 141 focused
+tests green, `npm run typecheck` exit 0 across all four projects.
+
+What the manager changed after reading the diff, each red-first:
+
+- [x] **`AccountProfileReading.orgId` put back to `string`.** The implementation had widened the
+      *Claude* profile's org id to `string | null` to make the types line up — but the producer,
+      `profileFromJson`, still refuses to return a reading without one. The widening was forced by
+      two lines in `tests/run-claude.test.ts` building a fake profile out of a registry entry; the
+      honest fix was a non-null assertion in the fixture, which that file already uses for
+      `displayEmail`. A type that says less than the code guarantees is a type a later reader will
+      write a dead null-check against.
+- [x] **The seed no longer clobbers `config.toml`'s `projects` table.** It assigned a fresh table
+      containing only the repo root, so re-running `add` on a home where somebody had added a trust
+      entry by hand silently deleted it — and `add` is idempotent precisely so it can be re-run.
+      Now merged; the ambient config's own project entries are still never copied.
+- [x] **The login offer is decided by a typed `reason`, not by the words in `why`.**
+      `codexAuthIsMissing()` matched `/\b(missing|does not exist)\b/` against the error prose to
+      decide whether to offer `codex login`. `CodexAuthReading` now carries
+      `reason: "missing" | "unreadable" | "malformed"`. **The test agreed with the bug**: it
+      asserted the same string the code grepped for, so it could not have caught a rewording. Both
+      tests were rewritten to disagree with the prose — the missing case now says *"no credential
+      here yet"*, and the unreadable case deliberately says *"missing a closing brace"*. Under the
+      old implementation the second one **offers to log in over a live credential**, which is the
+      thing that path exists to prevent; it was watched failing before the fix.
+- [x] **The parser says out loud that it does not verify the signature**, because "strict identity
+      parsing" returning a `CodexIdentity` is exactly the shape a later reader upgrades into an
+      authenticity claim it never made.
+
+Stage 0 settled the unknowns this stage was told not to guess,
 so the seeding row in the table below is now answered rather than open. Three things Stage 0 found
 change what this stage builds:
 
@@ -593,6 +623,41 @@ There is one precedent this stage should follow rather than invent: `claudeEnvir
 `scripts/claude-accounts.ts` builds the Claude child environment by **stripping every `ANTHROPIC_`
 and `CLAUDE_` prefixed variable** and then setting `CLAUDE_CONFIG_DIR`. That is a prefix strip, not
 a secret-name denylist, and it is exactly the shape Stage 0's finding 3 says the Codex side needs.
+
+#### Found while building this: `tests/run-claude.test.ts` fails on any routed session
+
+**Not this plan's file, and not caused by this plan's diff — but it will be blamed on the next
+person's.** Eleven tests in `tests/run-claude.test.ts` § "the CLI, end to end" fail on this box:
+
+```
+run-claude: --account mindstone: the effective auth probe reports claude.ai via an
+unknown provider, not claude.ai via firstParty
+```
+
+`run-claude.ts` routes whenever `--account` is given **or `CLAUDE_CONFIG_DIR` is merely present in
+the environment** (`scripts/run-claude.ts:676`). Those tests spawn it as a subprocess with a fake
+`claude` on `PATH`; that stand-in cannot answer the routed effective-auth probe, so every assertion
+about a successful run fails. The account it names, `mindstone`, appears nowhere in the test file —
+it comes from the machine's real `~/.claude-accounts/registry.json`.
+
+Measured, one variable changed and nothing else:
+
+| session environment | result |
+|---|---|
+| `CLAUDE_CONFIG_DIR` set (this session, routed to `mindstone`) | **11 failed**, 37 passed |
+| `CLAUDE_CONFIG_DIR` unset | **48 passed** |
+
+So the trigger is *who is running the suite*, not what the suite is testing. This became reachable
+only when 260909g registered the first real pool account and the Overseer began dispatching agents
+onto it — which is to say **every agent dispatched onto a pool account from now on will open a red
+`run-claude` suite in a file it never touched**, and the obvious inference is that it broke it. That
+is the ambient-state class: the test's expected environment is "this box has no routed session", and
+that stopped being true this morning.
+
+The repair belongs to whoever owns `run-claude.ts`: the test should pin the registry and the parent
+state dir explicitly rather than inheriting them, so the suite answers the same question whoever
+runs it. Flagged to the Overseer rather than fixed here — it is outside this plan's file set, and it
+is a live launcher.
 
 The `--family codex` refusal becomes a branch. Per-family, behind one interface, the five operations
 the Claude plan named as the seams:
