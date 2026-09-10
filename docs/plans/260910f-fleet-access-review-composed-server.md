@@ -93,21 +93,21 @@ alive, never a 200 from the port — a port can be answered by somebody else's s
 
 ### Stage 1 — a real listener, and one test per property, each seen to fail
 
-- [ ] Harness: start the composed server on a private loopback port inside the test, isolated from
+- [x] Harness: start the composed server on a private loopback port inside the test, isolated from
       the live dashboard's stores, tmux server and model calls.
-- [ ] **Bind.** It answers on the configured address and refuses a connection on any other local
+- [x] **Bind.** It answers on the configured address and refuses a connection on any other local
       interface address; `FLEET_BIND=0.0.0.0` exits non-zero before listening.
-- [ ] **Headers on every response class**: the static shell, a static asset, a 404, `/api/state`,
+- [x] **Headers on every response class**: the static shell, a static asset, a 404, `/api/state`,
       `/api/live` (SSE), a route-module GET, a write-route refusal, a 405.
-- [ ] **Origin on every write route, over HTTP**: steer message and answer, new session, rename,
+- [x] **Origin on every write route, over HTTP**: steer message and answer, new session, rename,
       actions (session, box, cancel, clear, hold release, revive, abandon), broadcast, transcribe —
       a rebound `Origin`, a missing one and a literal `null` each get 403; a same-origin request
       gets past the origin gate (a different answer), so the refusal cannot pass by refusing
       everything.
-- [ ] **Attribution at the boundary**: a refused action's log line names the real peer
+- [x] **Attribution at the boundary**: a refused action's log line names the real peer
       (`from=127.0.0.1`), not `-`.
-- [ ] Mutation for each: remove the property in the source, watch its test go red, put it back.
-- [ ] **Roadmap checkbox 4, cited rather than rebuilt** (component and route level; F8):
+- [x] Mutation for each: remove the property in the source, watch its test go red, put it back.
+- [x] **Roadmap checkbox 4, cited rather than rebuilt** (component and route level; F8):
       hostile text renders as text — `tests/fleet-web.test.tsx` *"…onerror…"* at `:5094`
       (transcript turn), `:3949` (approval material), `:2176` (row title); an unsupported or
       unclassifiable dialog acquires no answer path — `tests/fleet-steer.test.ts:1099` *"refuses a
@@ -120,33 +120,33 @@ alive, never a 200 from the port — a port can be answered by somebody else's s
       session). **One nuance worth keeping:** a catalogue entry the *client* has never heard of is
       deliberately still drawn and pressable (`tests/fleet-web.test.tsx:6419`), because the server
       owns the catalogue and is the gate; "disabled" is the server's refusal, not the button's.
-- [ ] One real-browser check against the composed child (a subagent, Playwright on the box): the
+- [x] One real-browser check against the composed child (a subagent, Playwright on the box): the
       built page renders under its CSP with no violation in the console, and a page that frames it
       is refused.
 
 ### Stage 2 — fix what Stage 1 shows, red first
 
-- [ ] **`Host` allowlist before routing**: any request whose `Host` names something
+- [x] **`Host` allowlist before routing**: any request whose `Host` names something
       `addressableHost` refuses gets `421 Misdirected Request` with the security headers, before
       any route — static, read or write — sees it. One line in `handler()` beside
       `applySecurityHeaders`, and a missing `Host` is refused too. Red first: `GET /api/state`
       with `Host: evil.example` is answered 200 today.
-- [ ] **Exact path and method for the four inline routes**: `pathname ===`, GET/HEAD only, 405
+- [x] **Exact path and method for the four inline routes**: `pathname ===`, GET/HEAD only, 405
       otherwise. Red first: `GET /api/stateX` and `POST /api/state` are answered 200 today.
-- [ ] **What it could break, checked:** every caller in the repo uses `127.0.0.1`, `localhost` or
+- [x] **What it could break, checked:** every caller in the repo uses `127.0.0.1`, `localhost` or
       the MagicDNS name (`tools/overseer/source.ts`, `rule-work.ts`, the page's relative URLs);
       nothing names the bare short name `spideryarn-box`. A bookmark that does would now be refused
       on reads as it already is on every write — the refusal body names the reason.
-- [ ] The simpler option passed over: putting the `Host` check inside each read route. Rejected
+- [x] The simpler option passed over: putting the `Host` check inside each read route. Rejected
       because it is the same mistake `origin.ts`'s header records — one copy per route is how one
       of them came to lack it.
 
 ### Stage 3 — say what is proven
 
-- [ ] A short section in [security-map.md](../project/security-map.md): the fleet dashboard is a
+- [x] A short section in [security-map.md](../project/security-map.md): the fleet dashboard is a
       different product on the same box, what is now proven at the HTTP boundary, and what is
       still source-level (the store-before-listener order; the queue shared with the drainer).
-- [ ] Correct the stale sentence in overseer-direction.md § A5 about what the running dashboard
+- [x] Correct the stale sentence in overseer-direction.md § A5 about what the running dashboard
       binds — a fact, not a rule, so it needs no approval; the widening decision stays Greg's.
 
 ## Out of scope
@@ -240,6 +240,17 @@ committed blobs and the recorded mutations; the execution evidence is the runs a
 disagreement to arbitrate, so the brief's Fable step was not needed, and there is no further round.
 
 ## Status
+
+**Finished, 2026-09-10.** Every checkbox above is done. Roadmap checkbox 3 (the page's queue is the
+drainer's) and F7's receipt half are **not** claimed: they are `qi-3mgbkjrn`, after
+`action-receipts`' Stage 4. The `Host` guard is live only once the dashboard is restarted — the
+Overseer's to arrange.
+
+**The full suite, merged with `origin/dev` at `04860152`: 3 failed of 22,750.** Two are the known
+fresh-worktree reds (`cold-start-lazy-imports`, `pdf-bundle-trace`: no `api-dist/`). The third,
+`no-raw-nul-bytes`, names `tests/overseer-recovery-resume.test.ts`, which arrived in that merge from
+another session and carries a literal NUL; none of this plan's files do (checked by `grep -P '\x00'`).
+Reported to the Overseer rather than edited — not this stage's file.
 
 Plan written 2026-09-10 and revised after Sol's review. **Stages 1 and 2 built by an Opus subagent**
 (not Codex — the brief for this account said Opus or Fable), reviewed and gated by the manager;
