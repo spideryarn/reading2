@@ -15,6 +15,7 @@ Greg — see § O.
 C (the glossary question carried into chat) built 2026-09-11 — see § C.
 A (the submit gate, Greg's choice) built 2026-09-11; the reconciliation stages are skipped — see § A.
 F's first stage (a bounded `srcset` candidate) built 2026-09-11 — see § F.
+M (G from a paragraph to its glossary row, Greg's choice of the jump) built 2026-09-11 — see § M.
 Each stage's own status line is the authority.
 
 > Write a rich many-step plan to improve the codebase (prioritising the various suggestions by a
@@ -757,16 +758,46 @@ handling; “add focus support” would be a stale task.
 
 ### Stage: a small interaction experiment, then implementation if useful
 
-- [ ] Propose a passage-scoped action: from the selected block, open a keyboard-operable list of
+**Built 2026-09-11** (worktree `cluster-m-term-jump`, queue item qi-w96yxjcm). Greg answered the
+product question the same day: try the jump, and build the list only if the jump plainly fails.
+It did not fail, so there is no list. **G** on a paragraph opens its first underlined term in the
+existing glossary band, focused and expanded; G again walks the paragraph's other terms and wraps;
+Escape gives the focus back. The paragraph is the row whose permalink or prose link holds the
+focus, or, with nothing focused, the row at the reading line (`measureRow`, so ↓ then G agree).
+New code is `src/web/TermJump.tsx`, mounted beside the card in `ProseHoverCard.tsx` because that is
+where the entries and `onOpenTerm` already meet and `Reader.tsx` was in B2's hands; the glossary row
+gained a `data-term-id`. No term occurrence gained a tab stop. The rules are
+[keyboard.md § G, the one letter](../project/keyboard.md#g-the-one-letter).
+
+Evidence: `tests/term-jump-from-a-paragraph.test.tsx`, mounted through the real `ProseHoverCard`
+and the real visitor glossary band — 8 of the first 12 cases red before `TermJump` existed (the four
+green were the leave-it-alone controls), 21 after review. Mutations of the link ordering, the
+Escape `stopPropagation`, the link re-find and the band-covers guard each turned a case red;
+`preventScroll` cannot be seen in jsdom and is covered by Chrome. Real key presses in Chrome
+(Playwright, this worktree's dev server) on `fowler-phrenology` and the Noema piece, at 1280px and
+420px: several terms, one term, no term, a term inside a link, a term repeated across blocks, ↓ then
+G with nothing focused, typing and arrow-key editing in the look-up field — the paragraph's position
+unchanged to the pixel throughout. **Chrome found two defects jsdom could not:** opening a term
+re-renders the prose, so Escape lost the link it came from (now re-found by position); and at 420px
+the band covers the article, so Escape focused a permalink nobody could see (now it declines there;
+Back restores the paragraph exactly, measured). GPT Sol reviewed and fixed five more: IME
+composition, row controls other than the permalink and prose links, inferring a row through a
+covering band or an open modeless dialog, a double Escape with an open gutter disclosure, and a
+stale focus search or announcement timer. Left for Greg: a screen reader in browse mode normally
+eats a bare G itself, and nothing advertises or switches off the key.
+
+- [x] (Superseded by Greg's choice of the jump below; no list was built.) Propose a passage-scoped
+  action: from the selected block, open a keyboard-operable list of
   its glossary terms, then the existing definition card. First inspect `TableView`, its selected
   block actions, `term-match.ts`, and existing GlossaryPanel navigation; use those seams.
-- [ ] Show Greg a concrete prototype/interaction before choosing a new shortcut or permanent
+- [x] (Greg chose the jump on 2026-09-11 and asked not to be shown the choice again; the key is G.)
+  Show Greg a concrete prototype/interaction before choosing a new shortcut or permanent
   control. An alternative worth trying is jumping to the corresponding existing glossary row,
   which needs less card/focus machinery. Prefer that if it solves the task adequately.
-- [ ] Test no term/one term/multiple occurrences, term inside a link, stale block id, repeated word
+- [x] Test no term/one term/multiple occurrences, term inside a link, stale block id, repeated word
   across blocks, Escape/focus return, and arrow-key editing. Do not suppress ordinary links or
   turn hundreds of terms into tab stops. Test through real keyboard events and a browser.
-- [ ] Success is reaching the right definition while keeping the passage and place, not a blanket
+- [x] Success is reaching the right definition while keeping the passage and place, not a blanket
   accessibility-conformance claim. Update [keyboard](../project/keyboard.md) and
   [glossary](../project/glossary.md) once the interaction is chosen.
 

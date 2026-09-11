@@ -331,6 +331,61 @@ The chord was verified free before it was taken — a grep of `src/web/` and `te
 `metaKey`/`ctrlKey` with `"k"` returned nothing, 2026-09-06. On a phone there is no chord at all,
 which is why the bar also has a button in the Dock.
 
+## G, the one letter
+
+**G opens the glossary on a term in the paragraph you are on**, focused on that term's row with its
+definition open, and the article does not move. G again moves on to the paragraph's next term and
+wraps; Escape puts the focus back where it was. Built 2026-09-11 for cluster M of
+[260908f](../plans/260908f-prioritised-spideryarn-codebase-improvements.md) § M.
+
+It exists because a term in the prose is a `<mark>`, and a mark takes no focus: an article underlines
+hundreds of them, and hundreds of tab stops would be worse than the gap
+([ProseHoverCard.tsx](../../src/web/ProseHoverCard.tsx) § `focusable`). So a keyboard reader could
+see an underlined word and had no way to its entry short of tabbing through every paragraph's gutter.
+The plan offered two answers — a list of the paragraph's terms in a card of its own, or a jump to
+the glossary row that already exists — and Greg chose the second on 2026-09-11 because it needs no
+new surface: the band already draws the row, expands it and gives it a keyboard. So the whole feature
+is a key and a way back, in [`TermJump.tsx`](../../src/web/TermJump.tsx); the assertions are
+`tests/term-jump-from-a-paragraph.test.tsx`, and the same cases were run with real key presses in
+Chrome at 1280px and 420px.
+
+**Which paragraph is decided by an eligible focus, and only then by the page.** A gutter permalink or
+a link in the prose names its row. Other controls keep G even when they sit inside that row — a figure
+button, disclosure or composite widget may give the letter its own meaning. With nothing focused at
+all and the prose visible, the row at the reading line: `measureRow`, the same measurement ↑ / ↓ step
+from, so ↓ to a paragraph and then G agree about which one it is. It does not infer a row through a
+full-width band covering the prose, or behind an open modeless dialog whose focus has fallen back to
+the page. Focus on any other control — the Dock, a button in a panel — and the key is not ours.
+
+**Which terms are the ones underlined on screen**, read off the rendered marks rather than off the
+entry's stored `blocks`, so a list written for an older extraction cannot send the reader to a term
+the paragraph does not show. Each once, in reading order, except that a term inside the focused
+element comes first: tab to a link whose words are a term and G opens that term, not the paragraph's
+first. A live region says where you are — *"qualia, 2 of 3 in this paragraph"* — and says so when a
+paragraph has none.
+
+**Escape goes back, and stops there.** While the glossary itself owns the press, after a G, it returns
+the focus to what held it — the same link found again, because opening a term re-renders the prose's
+HTML and replaces the `<a>` the reader was on (found in Chrome, not in jsdom) — or, when nothing was
+focused, to that paragraph's permalink. It sits in the escape inventory's T2, at `document`, and
+stops propagation, so a modeless dialog behind the band does not close on the same press. A tooltip
+or gutter disclosure opened in front gets the first Escape instead; if focus remains in the list, a
+later Escape returns to the passage. The band stays open; only the focus moves. **Except where the
+band covers the article** (`.reader.band-covers`,
+[narrow-windows.md](narrow-windows.md)): there the paragraph is underneath it, so Escape leaves the
+focus where the reader can see it and does nothing, and the way back is the Dock or Back — which
+restores the paragraph exactly where it was, measured at 420px.
+
+It obeys the rules the arrows and ⌘-K obey: no modifiers (Shift-G is not G), no auto-repeat, nothing
+while typing in an input, a textarea, a select or anything contenteditable, nothing during IME
+composition, nothing once another handler has called `preventDefault`, and nothing over an open
+native modal.
+
+**What it does not do.** It does not fix the prose hover card's Tab defect described in
+[§ Tab](#tab-and-the-surfaces-it-walks-through) — the card's own controls are still skipped by Tab;
+G reaches the term half of what the card holds by another road. Nothing on screen advertises the
+key, and there is no way to switch it off or remap it.
+
 ## What we gave up
 
 - **Line-by-line scrolling with the arrow keys.** This is the real cost of ↑ / ↓, and it is bigger
@@ -355,7 +410,7 @@ which is why the bar also has a button in the Dock.
 ## This constrains which components we may use
 
 All four arrow keys are spoken for, and now all four by this file: ↑/↓ take the step, ←/→ choose the
-stride. So a component that captures arrow keys takes something real away — more than it did when
+stride. (So is a bare G outside text fields — [§ G](#g-the-one-letter).) So a component that captures arrow keys takes something real away — more than it did when
 ←/→ were only the browser's — and several of the obvious ones do.
 
 **Radix's roving focus binds ArrowLeft, ArrowRight, ArrowUp *and* ArrowDown.** That is why the

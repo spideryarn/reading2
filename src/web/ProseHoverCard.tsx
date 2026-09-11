@@ -57,6 +57,7 @@ import { hostOf } from "../urls.js";
 import { readingMinutes } from "../reading-time.js";
 import { entryProse } from "./GlossaryPanel.js";
 import { useHoverCard } from "./useHoverCard.js";
+import { TermJump } from "./TermJump.js";
 import { describeLink, type ExternalPreview, type LinkPreview } from "./link-preview.js";
 import { worthRetrying } from "../messages.js";
 import { refreshShelf, useLinkFacts, type LinkFacts } from "./link-facts.js";
@@ -105,7 +106,23 @@ interface Hit {
   back: boolean;
 }
 
-export function ProseHoverCard({
+/**
+ * The card, and beside it **the keyboard's way to the same entries**: G from a
+ * paragraph opens its term in the glossary, which is what this card's foot
+ * button does for a pointer (TermJump.tsx). Mounted here because the terms and
+ * the opener already meet here, and every reading view that has the card has
+ * the key.
+ */
+export function ProseHoverCard(props: Parameters<typeof HoverCard>[0]) {
+  return (
+    <>
+      <TermJump entries={props.entries} onOpenTerm={props.onOpenTerm} />
+      <HoverCard {...props} />
+    </>
+  );
+}
+
+function HoverCard({
   entries,
   slug,
   sourceUrl,

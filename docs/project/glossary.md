@@ -390,6 +390,11 @@ Three details worth knowing before changing it:
 - **The mouse click stays inert.** Pressing a mark with a pointer does what pressing prose has
   always done, which is select it. The way to the full entry is the button in the card's foot, which
   opens the band on that term — and on a finger, tapping the words again.
+- **The keyboard's road is G, not the card.** A mark takes no focus, so a keyboard reader reaches a
+  term's entry by pressing G on its paragraph: the band opens on that term's row, focused and
+  expanded, and the prose does not move. It calls the same `onOpenTerm` as the card's foot button
+  and is mounted beside the card for that reason. The rules are
+  [keyboard.md § G, the one letter](keyboard.md#g-the-one-letter).
 - **A mark carrying two terms commits to neither.** Where two entries overlap the same phrase the
   card draws both, because which matched the longer phrase is not something the mark records. A
   second tap there does nothing and leaves the reader the two named buttons.
