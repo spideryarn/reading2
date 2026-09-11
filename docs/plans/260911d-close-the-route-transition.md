@@ -138,3 +138,32 @@ here"* note were updated. The last names `askTerm` as the chain's last guard. Th
 Focused set: the contract test, `cacheable-covers-artefact-routes`, the quiz oracle,
 `quiz-mark-route`, `routes`, `owner-isolation`, `public-dto`, `store-migration-registry`,
 `fixture-ids` and `arc-freshness`. **10 files, 599 tests, green.** `npm run typecheck`: exit 0.
+
+### Slice 2 — the glossary
+
+Four guards. `glossary` GET and DELETE share a matcher, which is now `GLOSSARY_PATTERN`, with its
+declaration comment above it. Verifier: all four `identical`.
+
+**Red first: 4 failed.** The contract test's two slice expectations, and two in
+`cacheable-covers-artefact-routes`: *resolves every artefact kind …* naming exactly `glossary`, with
+*finds the artefact routes that are already cached* as its consequence. That test's table reader
+matched a row by its spelled-out pattern, and the glossary GET row says `pattern: GLOSSARY_PATTERN`.
+It is the loud failure 260907b constraint 8 built the test to give, and the first time a *shared*
+artefact matcher has moved. **The fix**: a row may also name the top-level `const` that holds the
+pattern. **Watched**: the glossary GET row's method changed to `PUT` → *"an artefact kind changed
+sides"*, then restored.
+
+Comments outside bodies: the constant's *"same reasoning as the thread's"* named a declaration that
+sat just above it in the chain, and now says *"the tweet thread's route"*. The lookup row's *"the
+rule above"* now names `GLOSSARY_PATTERN`. The ask row's *"`lookup` above"* is still true. The
+contract control moves from `/api/glossary` to `/api/article`.
+
+**Mutation 5**, `await` → `void` in each moved row, one at a time. `lookup`: glossary oracle **2
+failed of 4**, both lookup's. `askTerm`: **2 failed of 4**, both asked-term's, with the contract
+test green beside it (**325 passed** of the 327 run together). The verifier diffed clean after the
+reverts.
+
+Focused set: the contract test, `cacheable-covers-artefact-routes`, the glossary oracle,
+`glossary-asked-term-stream-route`, `glossary-lookup-stream-route`, `glossary-delete-then-rebuild`,
+`glossary-lookup-refusals`, `route-profile-concurrency`, `routes`, `owner-isolation` and
+`public-dto`. **11 files, 606 tests, green.** Typecheck: exit 0.

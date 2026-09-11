@@ -163,10 +163,24 @@ const chainBindingOf = (kind: string): string | null =>
  * exactly those three — the loud failure this file was built to give.
  */
 const TABLE_BINDING = "AUTH_ROUTES";
-const tableRowOf = (kind: string): boolean =>
-  new RegExp(`method: "GET",\\s*\\n\\s*pattern: ${literally(routePattern(kind))},\\s*\\n`).test(
-    routesSource,
-  );
+
+/**
+ * **Or the module constant the row names.** A matcher two rows share is a
+ * top-level `const` both rows name, not a regex spelled out twice (the
+ * contract test's § *names each matcher once*), so the glossary's GET row says
+ * `pattern: GLOSSARY_PATTERN,`. Moving it (docs/plans/260911d-close-the-route-transition.md)
+ * turned § *resolves every artefact kind …* red naming exactly `glossary` —
+ * the loud failure again — until the constant was resolved here.
+ */
+const constantHolding = (kind: string): string | null =>
+  new RegExp(`^const (\\w+) = ${literally(routePattern(kind))};$`, "m").exec(routesSource)?.[1] ??
+  null;
+
+const tableRowOf = (kind: string): boolean => {
+  const constant = constantHolding(kind);
+  const spelled = constant === null ? literally(routePattern(kind)) : `(?:${literally(routePattern(kind))}|${constant})`;
+  return new RegExp(`method: "GET",\\s*\\n\\s*pattern: ${spelled},\\s*\\n`).test(routesSource);
+};
 
 /**
  * Where the route is bound: the `const` in the chain, `TABLE_BINDING` for a

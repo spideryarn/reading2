@@ -6752,6 +6752,17 @@ const ONE_THREAD_PATTERN = /^\/api\/chat\/([\w.%-]+)\/([\w.%-]+)$/;
    `answer` and `mark` are one row each and are written into those rows. */
 const COMMENTS_PATTERN = /^\/api\/comments\/([\w.%-]+)$/;
 const ONE_COMMENT_PATTERN = /^\/api\/comments\/([\w.%-]+)\/([\w.%-]+)$/;
+/* Same shape and same reasoning as the tweet thread's route — most articles have no
+   glossary, so putting one on the article payload would make every reader of
+   every article download a `null`.
+
+   GET *and* DELETE, which the thread does not have. Asking for the step again
+   appends terms rather than replacing them (src/glossary.ts), so "start over"
+   needs a way to say so — see `deleteGlossary` in src/store/pg-glossary.ts for why that is
+   two acts rather than one flag. There is still no POST: *finding* terms is a
+   model call that takes tens of seconds, which is a job, not a request.
+   POST /api/jobs { slug, steps: ["glossary"] } is how you ask. */
+const GLOSSARY_PATTERN = /^\/api\/glossary\/([\w.%-]+)$/;
 
 /**
  * **The ordered table `serveAuthenticatedApi`'s `if` chain is being moved into,
@@ -6772,8 +6783,9 @@ const ONE_COMMENT_PATTERN = /^\/api\/comments\/([\w.%-]+)\/([\w.%-]+)$/;
  * and uploads the nine immediately above those, referee the eight above them,
  * search the four above *those*, chat and the live sessions the twelve above
  * those again, comments the six above chat, the six from sketch to the two
- * paid pictures (`similar`, `projection`) above comments, and the six from
- * `ideas` to the quiz's mark above sketch — and asking the table
+ * paid pictures (`similar`, `projection`) above comments, the six from `ideas`
+ * to the quiz's mark above sketch, and the four glossary routes above ideas —
+ * and asking the table
  * after every remaining guard and before the terminal 404 puts each of them in
  * exactly the position it already had. The
  * count is deliberately not written here: it changes once per slice, and a
@@ -6782,7 +6794,7 @@ const ONE_COMMENT_PATTERN = /^\/api\/comments\/([\w.%-]+)\/([\w.%-]+)$/;
  * tests/authenticated-api-route-contract.test.ts is where the inventory lives.
  *
  * **So the rows are in chain order, and prepending is how a domain arrives.**
- * The next slice up goes above the ideas row, not below it — the table's
+ * The next slice up goes above the glossary rows, not below them — the table's
  * order *is* the chain's order, continued. Taking the slice contiguously is also what
  * preserves the one interleave here for free: `/api/uploads` and
  * `/api/uploads/:id` sit *between* `GET /api/jobs` and `POST /api/jobs`, which is
@@ -6808,6 +6820,94 @@ const ONE_COMMENT_PATTERN = /^\/api\/comments\/([\w.%-]+)\/([\w.%-]+)$/;
  * **No `g` or `y` flag**, refused by `assertDispatchableRoutes` below.
  */
 const AUTH_ROUTES: readonly AuthRoute[] = [
+  {
+    kind: "pattern",
+    method: "GET",
+    pattern: GLOSSARY_PATTERN,
+    handler: async ({ request: { res } }, captures) => {
+      {
+        const at = slugPart(captures, 1);
+        send(res, 200, await withProfileChanged<GlossaryResponse>(at, () => loadGlossary(at), (found) => found.glossary));
+      }
+    },
+  },
+
+  {
+    kind: "pattern",
+    method: "DELETE",
+    pattern: GLOSSARY_PATTERN,
+    handler: async ({ request: { res } }, captures) => {
+      send(res, 200, await deleteGlossary(slugPart(captures, 1)));
+    },
+  },
+
+  /* The one POST the glossary has, and the exception that proves the rule on
+     `GLOSSARY_PATTERN`:
+     *finding* terms is a job because it is one call over a whole article, but
+     checking **one** term is a single question with a reader sitting in front of
+     it — the same shape as a comment, and it reuses the same call. It can take
+     the better part of a minute if the model searches, so the client's fetch
+     needs a patient deadline; `explain` has its own. */
+  {
+    kind: "pattern",
+    method: "POST",
+    pattern: /^\/api\/glossary\/([\w.%-]+)\/([\w.%-]+)\/lookup$/,
+    handler: async ({ request: { res } }, captures) => {
+      const at = slugPart(captures, 1);
+      await withSpendAttribution({ articleSlug: at }, () =>
+        streamTermLookup(at, slugPart(captures, 2), res),
+      );
+    },
+  },
+
+  /* **The glossary's second POST, and it writes nothing.** A reader types a term
+     into the box and this finds it in the prose and explains the passage —
+     `lookup` above with the entry replaced by a phrase, so it is the same
+     `explain` call at the same cost with the same patient deadline.
+
+     The term is in the **body**, never the path. It is the reader's own words,
+     which docs/project/logging.md keeps out of an address, and it can carry
+     spaces and punctuation `[\w.%-]` would not take.
+
+     It cannot collide with `lookup`: that one is three segments after the slug's
+     and this is one, so no term id can reach it and no article can be named
+     `find`. src/term-lookup.ts § `makeAskAboutTerm`. */
+  {
+    kind: "pattern",
+    method: "POST",
+    pattern: /^\/api\/glossary\/([\w.%-]+)\/ask$/,
+    handler: async ({ request: { req, res } }, captures) => {
+      const at = slugPart(captures, 1);
+      /* **Only `term` is read off the body, and it is the only thing there is
+         to read.** No block id, no offset, no definition, no owner — the
+         passage is found from the article, server-side, which is what stops
+         this being a way to ask a paid model about text of the caller's
+         choosing. `askAboutTerm` validates and normalises it; the route does
+         not pre-judge it, so there is one bound in one place.
+
+         **No rate limit, and there is none to reuse.** The sibling `lookup`
+         POST has none either, and feedback's hourly cap is the only limiter in
+         this file (`fileFeedback`). So an owner with one article of their own
+         can drive paid `explain` calls as fast as they can post: ownership says
+         *which* article, not *how many* requests, and `withSpendAttribution`
+         records the spend rather than authorising it. **This request never
+         enters the job queue**, so the queue's concurrency of three is not a
+         limit on it either — a first draft of this comment claimed it was, and
+         GPT Sol was right that it is false. Stated rather than fixed here
+         because it is the shape of every paid request in this file and a scheme
+         invented on the day for one endpoint would be the wrong place to put
+         one. docs/project/glossary.md § Looking a term up, and the note in
+         docs/user-feedback/ for Greg.
+
+         Re-traced 2026-09-10 for the move to streaming, and still true: the
+         route has no limiter, and `withSpendAttribution` records rather than
+         gates. It wraps the whole stream, so the one model call inside it is
+         attributed to this article however it ends. `streamAskedTerm` above. */
+      const askBody = (await readBody(req)) as { term?: unknown } | null;
+      await withSpendAttribution({ articleSlug: at }, () => streamAskedTerm(at, askBody?.term, res));
+    },
+  },
+
   /* Read only, and no DELETE beside it: `ideas` replaces rather than appends,
      so re-running the step already *is* "start again". The glossary has a delete
      precisely because running it again would add to the list it is trying to
@@ -8367,37 +8467,6 @@ export async function serveAuthenticatedApi(
      (docs/plans/260825g-tweet-thread-page.md#generation-on-demand-through-the-queue-we-already-have).
      POST /api/jobs { slug, steps: ["tweets"] } is how you ask for one. */
   const tweets = /^\/api\/tweets\/([\w.%-]+)$/.exec(path);
-  /* Same shape and same reasoning as the thread's — most articles have no
-     glossary, so putting one on the article payload would make every reader of
-     every article download a `null`.
-
-     GET *and* DELETE, which the thread does not have. Asking for the step again
-     appends terms rather than replacing them (src/glossary.ts), so "start over"
-     needs a way to say so — see `deleteGlossary` in src/store/pg-glossary.ts for why that is
-     two acts rather than one flag. There is still no POST: *finding* terms is a
-     model call that takes tens of seconds, which is a job, not a request.
-     POST /api/jobs { slug, steps: ["glossary"] } is how you ask. */
-  const glossary = /^\/api\/glossary\/([\w.%-]+)$/.exec(path);
-  /* The one POST the glossary has, and the exception that proves the rule above:
-     *finding* terms is a job because it is one call over a whole article, but
-     checking **one** term is a single question with a reader sitting in front of
-     it — the same shape as a comment, and it reuses the same call. It can take
-     the better part of a minute if the model searches, so the client's fetch
-     needs a patient deadline; `explain` has its own. */
-  const lookup = /^\/api\/glossary\/([\w.%-]+)\/([\w.%-]+)\/lookup$/.exec(path);
-  /* **The glossary's second POST, and it writes nothing.** A reader types a term
-     into the box and this finds it in the prose and explains the passage —
-     `lookup` above with the entry replaced by a phrase, so it is the same
-     `explain` call at the same cost with the same patient deadline.
-
-     The term is in the **body**, never the path. It is the reader's own words,
-     which docs/project/logging.md keeps out of an address, and it can carry
-     spaces and punctuation `[\w.%-]` would not take.
-
-     It cannot collide with `lookup`: that one is three segments after the slug's
-     and this is one, so no term id can reach it and no article can be named
-     `find`. src/term-lookup.ts § `makeAskAboutTerm`. */
-  const askTerm = /^\/api\/glossary\/([\w.%-]+)\/ask$/.exec(path);
   const source = /^\/api\/source\/([\w.%-]+)$/.exec(path);
   /* **One of the article's own pictures, out of our bucket** —
      `sendArticleAsset`, and `assetPath` in src/asset-delivery.ts is the same
@@ -8418,16 +8487,17 @@ export async function serveAuthenticatedApi(
      the client parses as JSON. `sendExport` has the rest.
      docs/plans/260901h-export-article-data.md. */
   const exportBundle = /^\/api\/export\/([\w.%-]+)$/.exec(path);
-  /* The ideas, quotes, timeline, quiz, quiz-mark, debate, sketch, illustrated,
-     arc, similar, projection, comments, chat, live-session, search, referee,
-     jobs, uploads and billing matchers used to be declared here and handled at
-     the very end of the chain. (The first eleven were declared between
-     `askTerm` and `source`; the rest here.) They are the rows of `AUTH_ROUTES`
-     above, in dispatch order, and the table is consulted after every guard
-     below and before the terminal 404 — the position they already had, so the
-     move reorders nothing. `exportBundle` is still the last matcher this chain
-     declares, but declaration order is not dispatch order: the last *guard* is
-     `askTerm`, so the four glossary guards are the next slice up. */
+  /* The glossary, ideas, quotes, timeline, quiz, quiz-mark, debate, sketch,
+     illustrated, arc, similar, projection, comments, chat, live-session,
+     search, referee, jobs, uploads and billing matchers used to be declared
+     here and handled at the very end of the chain. (The first fourteen were
+     declared between `tweets` and `source`; the rest here.) They are the rows
+     of `AUTH_ROUTES` above, in dispatch order, and the table is consulted after
+     every guard below and before the terminal 404 — the position they already
+     had, so the move reorders nothing. `exportBundle` is still the last matcher
+     this chain declares, but declaration order is not dispatch order: the last
+     *guard* is `tweets`, so the article block from `article` to `tweets` is the
+     next slice up. */
 
     /* **The second gate, and it guards a prefix rather than a route.**
        Everything under `/api/admin/` is refused to everybody but the one
@@ -8769,60 +8839,12 @@ export async function serveAuthenticatedApi(
       }
       return;
     }
-    if (glossary && req.method === "GET") {
-      {
-        const at = slugPart(glossary, 1);
-        send(res, 200, await withProfileChanged<GlossaryResponse>(at, () => loadGlossary(at), (found) => found.glossary));
-      }
-      return;
-    }
-    if (glossary && req.method === "DELETE") {
-      send(res, 200, await deleteGlossary(slugPart(glossary, 1)));
-      return;
-    }
-    if (lookup && req.method === "POST") {
-      const at = slugPart(lookup, 1);
-      await withSpendAttribution({ articleSlug: at }, () =>
-        streamTermLookup(at, slugPart(lookup, 2), res),
-      );
-      return;
-    }
-    if (askTerm && req.method === "POST") {
-      const at = slugPart(askTerm, 1);
-      /* **Only `term` is read off the body, and it is the only thing there is
-         to read.** No block id, no offset, no definition, no owner — the
-         passage is found from the article, server-side, which is what stops
-         this being a way to ask a paid model about text of the caller's
-         choosing. `askAboutTerm` validates and normalises it; the route does
-         not pre-judge it, so there is one bound in one place.
-
-         **No rate limit, and there is none to reuse.** The sibling `lookup`
-         POST has none either, and feedback's hourly cap is the only limiter in
-         this file (`fileFeedback`). So an owner with one article of their own
-         can drive paid `explain` calls as fast as they can post: ownership says
-         *which* article, not *how many* requests, and `withSpendAttribution`
-         records the spend rather than authorising it. **This request never
-         enters the job queue**, so the queue's concurrency of three is not a
-         limit on it either — a first draft of this comment claimed it was, and
-         GPT Sol was right that it is false. Stated rather than fixed here
-         because it is the shape of every paid request in this file and a scheme
-         invented on the day for one endpoint would be the wrong place to put
-         one. docs/project/glossary.md § Looking a term up, and the note in
-         docs/user-feedback/ for Greg.
-
-         Re-traced 2026-09-10 for the move to streaming, and still true: the
-         route has no limiter, and `withSpendAttribution` records rather than
-         gates. It wraps the whole stream, so the one model call inside it is
-         attributed to this article however it ends. `streamAskedTerm` above. */
-      const askBody = (await readBody(req)) as { term?: unknown } | null;
-      await withSpendAttribution({ articleSlug: at }, () => streamAskedTerm(at, askBody?.term, res));
-      return;
-    }
 
     /**
      * **The table, asked after every guard above and before the 404 below.**
      *
-     * Ideas, quotes, timeline, the quiz and its mark, debate, sketch,
+     * The glossary and its two lookups, ideas, quotes, timeline, the quiz and
+     * its mark, debate, sketch,
      * illustrated, arc, the two paid pictures (similar and projection),
      * comments, chat, the live sessions, search, referee, jobs, uploads and
      * billing live in `AUTH_ROUTES` (above `serveAuthenticatedApi`) rather than
