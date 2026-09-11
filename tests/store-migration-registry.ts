@@ -1237,6 +1237,22 @@ export const STORE_MIGRATION: Readonly<Record<string, StoreEntry>> = {
       "registry cases age the comment's lease in SQL first, because a freshly leased row is " +
       "spared by `sweepPending` whether or not `answering` holds it.",
   },
+  /**
+   * **Written 2026-09-11, after the witness ran**, so `static-only` for the same
+   * reason as the entry above. Born on Postgres, so collateral.
+   */
+  "tests/link-summary-stream-lifetime.test.ts": {
+    category: "shared-mechanism-collateral",
+    mechanisms: ["fixture-loader"],
+    evidence: "static-only",
+    reason:
+      "`GET /api/link-summary` held open mid-stream with the single-flight claim in the real " +
+      "database, so that moving the article guards into `AUTH_ROUTES` cannot quietly turn an " +
+      "awaited stream into a launched one " +
+      "(docs/plans/260911c-paid-single-flight-joins-the-route-table.md). It seeds through " +
+      "`scratchArticleInPg` and that copy step is the only condemned module it reaches: " +
+      "`openRouterStream` is stubbed, so no model is called and no ledger row is written.",
+  },
   "tests/remember-route.test.ts": {
     category: "shared-mechanism-collateral",
     mechanisms: ["ledger-redirect", "fixture-loader"],
@@ -2600,6 +2616,11 @@ export const TEST_LANES: Readonly<Record<string, TestLane>> = {
      shared database may have done to it while a peer is mid-run, and it seeds an
      article under a second owner. */
   "tests/link-summary-cache.test.ts": "private-postgres",
+  /* Written 2026-09-11 before the article slice of the `AUTH_ROUTES` migration
+     (docs/plans/260911c-paid-single-flight-joins-the-route-table.md). The claim,
+     the fill and the allowance are real rows; the model and the one preview it
+     reads are stubbed. Storage through `scratchArticleInPg`, as its neighbours. */
+  "tests/link-summary-stream-lifetime.test.ts": "private-postgres",
   "tests/load-article-serialisation.test.ts": "private-postgres",
   "tests/lock-lifecycle.test.ts": "private-postgres",
   "tests/migration-reconciliations.test.ts": "private-postgres",
