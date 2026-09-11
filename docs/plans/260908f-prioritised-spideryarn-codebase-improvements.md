@@ -17,6 +17,8 @@ C (the glossary question carried into chat) built 2026-09-11 — see § C.
 A (the submit gate, Greg's choice) built 2026-09-11; the reconciliation stages are skipped — see § A.
 F's first stage (a bounded `srcset` candidate) built 2026-09-11 — see § F.
 M (G from a paragraph to its glossary row, Greg's choice of the jump) built 2026-09-11 — see § M.
+N's evidence stage done 2026-09-11: adopt in a scoring-only form, implementation plan written and not
+built — see § N.
 Each stage's own status line is the authority.
 
 > Write a rich many-step plan to improve the codebase (prioritising the various suggestions by a
@@ -885,16 +887,27 @@ was reproduced here.** This is a separate fidelity investigation, not Tier 0 wor
 
 ### Stage: deterministic evidence and a decision
 
-- [ ] Read `PageText`/`TextItem` and every `pass0` consumer. Build a free corpus comparison using the
+**Status, 2026-09-11: done — [260911b](260911b-pdf-item-boundaries-evidence.md).** 15 PDFs, 228
+pages, 206 already-bought transcriptions, no paid call. Splitting page text at the line breaks pdf.js
+did not mark recovers the same 11 Kuhn headings `folioOffset` recovers by vote (0 old-only, 0
+new-only), changes 0 verdicts, withdraws 2 false "invented" faults (a licence URL welded to the next
+line — a class `folioOffset` cannot reach) and adds none, and catches the same 425 of 435 corrupted
+headings; a control arm splitting at every join moves 15 verdicts, so the comparison can see a
+difference. Decision: adopt, scoring-only, keeping `PageText.text` unchanged —
+[260911c](260911c-score-pdf-pages-at-the-line-breaks-pdfjs-did-not-mark.md), written, not built. The
+boxes below are ticked for this stage; the last one is carried by 260911c's stage 3.
+
+- [x] Read `PageText`/`TextItem` and every `pass0` consumer. Build a free corpus comparison using the
   existing PDFs and include adversarial folio/heading adjacency, `12.3.` as an actual section number,
   columns, inline spans and genuine page numbers. No paid extraction is needed to inspect text items.
-- [ ] Keep original page text/hash unchanged initially; carry the minimum additional item-boundary
+- [x] Keep original page text/hash unchanged initially; carry the minimum additional item-boundary
   metadata needed by scoring. Do not blindly insert spaces between every item: fonts split words
   into items too. Explicitly compare old and new heading evidence and refusal reasons.
-- [ ] Build a second scored path only in the experiment. Adopt it only if the corpus demonstrates
+- [x] Build a second scored path only in the experiment. Adopt it only if the corpus demonstrates
   an improvement without weakening fidelity checks, then write a separate implementation plan for
   extraction versions, cache invalidation, old artifacts and stable block-ID carry-forward.
-- [ ] Remove `folioOffset` only when the replacement handles its proven cases. A new PDF formatter,
+- [ ] Remove `folioOffset` only when the replacement handles its proven cases. (Not removed; the
+  experiment shows the replacement handles all eight, and 260911c stage 3 does the removal.) A new PDF formatter,
   decoder dependency or mass re-extraction is outside this stage.
 
 ## O — implement the already-decided on-demand draft cleanup

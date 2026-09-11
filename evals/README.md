@@ -55,6 +55,22 @@ Three things about it are worth copying elsewhere:
   every fixture keeps `pass0-full.json` — the whole document's `metaTitle` and furniture, measured
   before it was cut — and the arms reason with that while the model sees three pages.
 
+## `pdf/item-boundaries/` — what does pass0 lose where pdf.js did not mark a line?
+
+```
+npx tsx --env-file=.env.local evals/pdf/item-boundaries/compare.mts [--db] [--local <file.pdf>]... \
+  [--out <results.json>]
+```
+
+Free: no model call. Reads every committed `source.pdf` (plus any `--local` file that may not be
+committed), classifies each join pass0 makes with no whitespace and no end-of-line, and scores every
+transcription we already own — committed records, and with `--db` the local `pdf-chunk` checkpoints
+— through the unchanged `check` twice: over pass0's text, and over the same text split at unmarked
+line breaks. A control arm splits at every join so a "nothing changed" can be told from a comparison
+that cannot see. Written for [260911b](../docs/plans/260911b-pdf-item-boundaries-evidence.md), whose
+numbers are [`results-2026-09-11.json`](pdf/item-boundaries/results-2026-09-11.json); re-run it after
+a pdf.js upgrade and compare the shift/line-break gap.
+
 ## `extraction/` — what Mozilla Readability does to fifteen hard pages
 
 ```
