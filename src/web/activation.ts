@@ -138,6 +138,7 @@
 import type { Mode } from "../modes.js";
 import type { AutoRunTarget } from "./auto-run-targets.js";
 import type { DiagramKind } from "./diagram.js";
+import type { RememberView } from "./params.js";
 import type { RefereeView } from "./referee-views.js";
 import { jobEngine } from "./jobEngine.js";
 
@@ -523,6 +524,45 @@ export function activationForDiagram(kind: DiagramKind): AutoRunTarget | null {
 export function armActivationForRefereeView(slug: string, view: RefereeView): void {
   const target = REFEREE_TARGET[view];
   if (target) armActivation(slug, target);
+}
+
+/**
+ * **Which of these presses the band now on screen would claim** — the one
+ * token its error boundary must retire if the band throws before `useAutoRun`'s
+ * effect has run. src/web/reader/ModeBoundary.tsx is the one caller.
+ *
+ * It has to be the press's own answer and not a second guess at it, because
+ * `retireActivation` compares identities: a boundary holding `sketch` while the
+ * bar armed `illustrated` retires nothing, and the token waits for a later mount
+ * to spend it. So each arm below reads the table the press itself read — the
+ * bar's `MODE_TARGET` for a mode press, `REFEREE_TARGET` for a Referee chip, and
+ * the literal `"quiz"` the Remember toggle arms (QuizPanel.tsx §
+ * `RememberSubModeToggle`). A Diagram chip arms `activationForDiagram` of the
+ * picture it lands on, which is the delegated row's answer too.
+ *
+ * `sub` is the sub-mode each band is showing, **already parsed** the way the
+ * band parses it — this module knows nothing about URLs, for the reason
+ * `activationForDiagram` gives.
+ */
+export function bandTarget(
+  mode: Mode,
+  sub: { diagram: DiagramKind; referee: RefereeView; remember: RememberView },
+): AutoRunTarget | null {
+  if (mode === "referee") return REFEREE_TARGET[sub.referee] ?? null;
+  if (mode === "remember") return sub.remember === "quiz" ? "quiz" : null;
+  const decision = MODE_TARGET[mode];
+  switch (decision.kind) {
+    case "fixed":
+      return decision.target;
+    case "delegated":
+      return decision.target({ diagram: sub.diagram });
+    case "none":
+      return null;
+    default: {
+      const unhandled: never = decision;
+      throw new Error(`unhandled activation: ${JSON.stringify(unhandled)}`);
+    }
+  }
 }
 
 /**

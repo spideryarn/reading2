@@ -8,8 +8,10 @@
  * behavioural statement of the fix: with the Ideas controller made to throw,
  * the reader keeps the article, keeps the bar, and is told which one thing is
  * broken. docs/plans/260905h-a-mode-failure-should-leave-the-article-readable.md.
- * Debate joined it on 2026-09-10 and has its own two blocks at the end of the
- * file — docs/plans/260908f-prioritised-spideryarn-codebase-improvements.md § B.
+ * Debate joined it on 2026-09-10 and has its own two blocks further down, and on
+ * 2026-09-11 every other band did, through src/web/reader/ModeBoundary.tsx —
+ * the last three blocks, which derive their list from `MODES` —
+ * docs/plans/260908f-prioritised-spideryarn-codebase-improvements.md § B.
  *
  * There is a second, quieter half and it is the one that costs money. `Dock`
  * arms an activation token *before* changing mode, and `useAutoRun` claims it in
@@ -47,7 +49,7 @@ import { createRoot, type Root } from "react-dom/client";
 import { enableHistorySync, NuqsAdapter } from "nuqs/adapters/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { Article, Ideas, IdeasResponse } from "../src/types.js";
-import type { PublicArticle } from "../src/public-types.js";
+import type { PublicArtefacts, PublicArticle } from "../src/public-types.js";
 import { MODE_LABEL } from "../src/title-text.js";
 
 /* -------------------------------------------------------------- the probe --
@@ -82,6 +84,13 @@ const probe = vi.hoisted(() => {
     debateRenders: 0,
     debateThrows: 0,
     debatePanelThrows: 0,
+    /**
+     * The `useRenderCount` label that throws — each witnessed entry component
+     * calls it at the start of render, so this is one switch for all of them.
+     * See the mock of src/web/perf.js below.
+     */
+    throwAt: null as string | null,
+    labelThrows: 0,
     /** Every `captureClientFailure` the boundary made, in order. */
     reports: [] as { name: string; message: string; context: Record<string, unknown> }[],
     version: () => version,
@@ -108,6 +117,8 @@ const probe = vi.hoisted(() => {
       state.debateRenders = 0;
       state.debateThrows = 0;
       state.debatePanelThrows = 0;
+      state.throwAt = null;
+      state.labelThrows = 0;
       state.reports.length = 0;
     },
   };
@@ -247,6 +258,29 @@ vi.mock("../src/web/DebatePanel.js", async (importOriginal) => {
         throw new Error(BOOM);
       }
       return h(actual.DebatePanel, props);
+    },
+  };
+});
+
+/**
+ * **One throw site for every band.** Each tested entry component — controller,
+ * panel, or `VisitorBand` — calls `useRenderCount("<Component>")` at the start
+ * of its render, so throwing from it is a throw inside that component, before
+ * any hook of its own has run (or, for a panel, after its controller's hooks all
+ * have). It is a plain function with no hooks inside, so throwing from it
+ * changes no hook order. The count is the positive control: a label nothing
+ * renders never throws, and every case below asserts it did.
+ */
+vi.mock("../src/web/perf.js", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("../src/web/perf.js")>();
+  return {
+    ...actual,
+    useRenderCount(label: string) {
+      if (probe.throwAt === label) {
+        probe.labelThrows += 1;
+        throw new Error(BOOM);
+      }
+      actual.useRenderCount(label);
     },
   };
 });
@@ -1293,5 +1327,339 @@ describe("a Debate press that met a broken band cannot be spent later", () => {
 
     expect(text(), "Debate did not come back").not.toContain("[mode-render]");
     expect(jobPosts(), "one job, attributable to that click").toHaveLength(1);
+  });
+});
+
+/* ---------------------------------------------------- and every other band --
+
+   The second stage of cluster B: the boundary moved out of the band switch to
+   its one call site, src/web/reader/ModeBoundary.tsx, so every band is inside
+   one. Three things are checked, and only the first is about declarations:
+
+   1. **Every mode has a containment decision**, derived from `MODES`, and the
+      exemptions are pinned by name — so a new mode, or a band quietly moved to
+      the exempt list, is a red test and not a review comment. A synthetic mode
+      is run through the same check to show it can fail.
+   2. **Every contained mode has a throw witness, and it runs.** A declaration
+      says nothing about where the throw lands; the witness makes the band's own
+      controller throw and requires the fallback that names that mode.
+   3. **The press each band would have claimed is retired when it throws** —
+      the Ideas/Debate money rule, for the five other targets a press can arm. */
+
+const { MODES } = await import("../src/modes.js");
+const { MODE_CONTAINMENT } = await import("../src/web/reader/ModeBoundary.js");
+const { visitorGap } = await import("../src/web/visitor.js");
+type AnyMode = (typeof MODES)[number];
+
+/** How to make each contained mode's band throw from inside itself. */
+interface Witness {
+  /** The `useRenderCount` label that throws. */
+  label: string;
+  /** Whose band: the owner's, or a signed-out visitor's on a shared link. */
+  as: "owner" | "visitor";
+  /** Anything else the address needs, beside `?mode=`. */
+  extra?: string;
+}
+
+/**
+ * One row per mode, with a witness for the owner's component and for every
+ * composition path that can replace it: `VisitorBand` when policy stands in
+ * front, and fixture-free visitor components where there is no gap. The
+ * boundary is outside that choice, so the owner witness proves the artefact
+ * visitor twins' composition too; Search, Summary, Diagram and Structure still
+ * exercise the real visitor branch independently.
+ */
+const WITNESS: Partial<Record<AnyMode, Witness[]>> = {
+  chat: [
+    { label: "ConversationBand", as: "owner" },
+    { label: "VisitorBand", as: "visitor" },
+  ],
+  glossary: [
+    { label: "GlossaryBand", as: "owner" },
+    { label: "VisitorBand", as: "visitor" },
+  ],
+  search: [
+    { label: "SearchBand", as: "owner" },
+    { label: "VisitorSearchBand", as: "visitor" },
+  ],
+  referee: [
+    { label: "RefereeBand", as: "owner" },
+    { label: "VisitorBand", as: "visitor" },
+  ],
+  summary: [
+    { label: "SummaryBand", as: "owner" },
+    { label: "SummaryBand", as: "visitor" },
+  ],
+  diagram: [
+    { label: "DiagramBand", as: "owner" },
+    { label: "DiagramBand", as: "visitor" },
+  ],
+  ideas: [
+    { label: "IdeasBand", as: "owner" },
+    { label: "VisitorBand", as: "visitor" },
+  ],
+  remember: [
+    { label: "RememberBand", as: "owner" },
+    { label: "ConversationBand", as: "owner", extra: "&remember=recall" },
+    { label: "QuizSubBand", as: "owner", extra: "&remember=quiz" },
+    { label: "VisitorBand", as: "visitor" },
+  ],
+  quotes: [
+    { label: "QuotesBand", as: "owner" },
+    { label: "VisitorBand", as: "visitor" },
+  ],
+  timeline: [
+    { label: "TimelineBand", as: "owner" },
+    { label: "VisitorBand", as: "visitor" },
+  ],
+  debate: [
+    { label: "DebateBand", as: "owner" },
+    { label: "VisitorBand", as: "visitor" },
+  ],
+  structure: [
+    { label: "StructureBand", as: "owner" },
+    { label: "StructureBand", as: "visitor" },
+  ],
+};
+
+/** The modes allowed to have no boundary, by name. Growing this is a decision. */
+const EXEMPT = ["plain", "hierarchy"];
+
+/** No public artefacts, so every artefact-backed visitor gap is reachable. */
+const NOTHING_AVAILABLE: PublicArtefacts = {
+  arc: false,
+  glossary: false,
+  ideas: false,
+  quotes: false,
+  tweets: false,
+  timeline: false,
+  sketch: false,
+};
+
+/**
+ * **The completeness check, as a function of the mode list**, so it can be
+ * handed a mode that does not exist. A mode fails it by having no decision at
+ * all, or by being contained with no witness to show it.
+ */
+function uncontained(modes: readonly string[]): string[] {
+  const decided = MODE_CONTAINMENT as Record<string, { kind: string } | undefined>;
+  const witnessed = WITNESS as Record<string, Witness[] | undefined>;
+  return modes.filter((m) => {
+    const decision = decided[m];
+    if (decision === undefined) return true;
+    return decision.kind === "contained" && (witnessed[m]?.length ?? 0) === 0;
+  });
+}
+
+function containedInside(mode: AnyMode): void {
+  const name = MODE_LABEL[mode];
+  expect(probe.labelThrows, "the throwing mock never ran").toBeGreaterThan(0);
+  expect(
+    host.querySelector(`[aria-label="${name} is not working"]`),
+    `the fallback does not name ${name}`,
+  ).not.toBeNull();
+  expect(text(), "the root fallback fired").not.toContain("[render]");
+  expect(text(), "the exception text reached the reader").not.toContain(BOOM);
+  expect(text(), "the prose went with it").toContain(PARAGRAPH);
+  expect(host.querySelector(SPINE), "the spine went with it").not.toBeNull();
+  expect(host.querySelector(".dock-modes"), "the dock went with it").not.toBeNull();
+}
+
+describe("every mode has decided whether its band may break on its own", () => {
+  it("gives every mode in MODES a decision, and every contained one a witness", () => {
+    expect(uncontained(MODES)).toEqual([]);
+  });
+
+  it("fails a mode nobody has decided about", () => {
+    expect(uncontained([...MODES, "a-mode-added-tomorrow"])).toEqual(["a-mode-added-tomorrow"]);
+  });
+
+  it("exempts only the two modes that have no band", () => {
+    const exempt = MODES.filter((m) => MODE_CONTAINMENT[m].kind === "exempt");
+    expect(exempt).toEqual(EXEMPT);
+  });
+
+  it("has no witness for a mode it does not contain", () => {
+    for (const m of EXEMPT) expect(WITNESS[m as AnyMode], m).toBeUndefined();
+  });
+
+  it("witnesses every visitor gap as a band, not as parent chrome", () => {
+    for (const mode of MODES) {
+      const hasGap = visitorGap(mode, NOTHING_AVAILABLE) !== null;
+      const witnessesGap = WITNESS[mode]?.some(
+        (w) => w.as === "visitor" && w.label === "VisitorBand",
+      );
+      expect(Boolean(witnessesGap), mode).toBe(hasGap);
+    }
+  });
+});
+
+const CONTAINED = MODES.filter((m) => MODE_CONTAINMENT[m].kind === "contained");
+const WITNESSES = CONTAINED.flatMap((mode) =>
+  (WITNESS[mode] ?? []).map((w) => ({ mode, extra: "", ...w })),
+);
+
+describe("a throw inside any band leaves the article", () => {
+  it.each(WITNESSES)("$mode: $label, as $as $extra", async ({ mode, label, as, extra }) => {
+    if (as === "owner") who.set(OWNER_A);
+    /* Every experimental mode's button is only drawn for a reader who has the
+       switch on; the band itself opens from the address either way. */
+    experimentalSince = "2026-09-01T09:00:00.000Z";
+    probe.throwAt = label;
+    await open(`?mode=${mode}${extra}`);
+
+    containedInside(mode);
+    reportedOnce(MODE_LABEL[mode]);
+
+    /* And the reader can still leave it. */
+    await press(MODE_LABEL.plain);
+    expect(modeInUrl()).toBe("plain");
+    expect(text()).not.toContain("[mode-render]");
+    expect(text()).toContain(PARAGRAPH);
+  });
+
+  /**
+   * **Each mode gets a boundary of its own.** Summary arms nothing, so a press
+   * on it cannot reset a broken boundary the way a fresh token does — only
+   * `key={mode}` at the call site stands between a broken Quotes and a Summary
+   * band that says "Summary is not working" when nothing in Summary threw.
+   */
+  it("does not follow the reader into another mode", async () => {
+    who.set(OWNER_A);
+    probe.throwAt = "QuotesBand";
+    await open("?mode=quotes");
+    containedInside("quotes");
+
+    await press(MODE_LABEL.summary);
+    expect(modeInUrl()).toBe("summary");
+    expect(text(), "the broken band followed the reader").not.toContain("[mode-render]");
+    expect(host.querySelector('.mode-band[aria-label="Summary"]'), "no Summary band").not.toBeNull();
+  });
+
+  it("does not reset a visitor's broken Sketch for a diagram parameter it ignores", async () => {
+    probe.throwAt = "DiagramBand";
+    await open("?mode=diagram&diagram=trail");
+    containedInside("diagram");
+    reportedOnce(MODE_LABEL.diagram);
+    const throws = probe.labelThrows;
+
+    /* A visitor is pinned to Sketch whatever this parameter says. Changing it
+       therefore does not identify a different band and must not retry the
+       broken one behind the reader's back. */
+    await act(async () => history.pushState(null, "", `?mode=diagram&diagram=illustrated`));
+    await settle();
+
+    expect(probe.labelThrows, "an ignored parameter retried the band").toBe(throws);
+    reportedOnce(MODE_LABEL.diagram);
+    expect(text()).toContain(PARAGRAPH);
+  });
+});
+
+/* ----------------------------------------- and the presses those bands take --
+
+   Ideas' and Debate's blocks above carry the full set of money cases. These are
+   the same rule for the other five things a press can arm, at the seam that
+   arms each: the bar's button for a fixed mode and for Diagram's picture, and
+   the chip inside the band for Referee and Remember. Each asserts the token is
+   gone — the direct statement of retirement — and that nothing was bought. */
+
+describe("a press that met any broken band is retired", () => {
+  it.each([
+    { mode: "glossary" as const, label: "GlossaryBand", read: "/api/glossary/" },
+    { mode: "quotes" as const, label: "QuotesBand", read: "/api/quotes/" },
+    { mode: "timeline" as const, label: "TimelineBand", read: "/api/timeline/" },
+  ])("$mode: the bar's press, and a Back after it", async ({ mode, label, read }) => {
+    who.set(OWNER_A);
+    /* Timeline's button is behind the experimental switch. */
+    experimentalSince = "2026-09-01T09:00:00.000Z";
+    notBuilt = read;
+    await open();
+    trace.length = 0;
+
+    probe.throwAt = label;
+    await press(MODE_LABEL[mode]);
+    containedInside(mode);
+    expect(activation.pendingActivation(SLUG, mode), "the press outlived the throw").toBeNull();
+    expect(jobPosts(), "the failed render bought something").toEqual([]);
+
+    probe.throwAt = null;
+    await press(MODE_LABEL.plain);
+    await act(async () => history.back());
+    await modeAfterPress("plain");
+    await settle();
+
+    expect(modeInUrl(), `Back did not return to ${mode}`).toBe(mode);
+    expect(text()).not.toContain("[mode-render]");
+    expect(jobPosts(), "Back spent the retired press").toEqual([]);
+  });
+
+  it("diagram: the bar's press lands on the Sketch, and that is the token retired", async () => {
+    who.set(OWNER_A);
+    notBuilt = "/api/sketch/";
+    await open("?diagram=sketch");
+    trace.length = 0;
+
+    probe.throwAt = "DiagramBand";
+    await press(MODE_LABEL.diagram);
+    containedInside("diagram");
+    expect(activation.pendingActivation(SLUG, "sketch"), "the Sketch press survived").toBeNull();
+    expect(jobPosts()).toEqual([]);
+  });
+
+  it("referee: the Candidates chip, when Candidates throws", async () => {
+    who.set(OWNER_A);
+    await open("?mode=referee");
+    expect(text()).not.toContain("[mode-render]");
+    trace.length = 0;
+
+    probe.throwAt = "CandidatesBand";
+    const chip = [...host.querySelectorAll<HTMLButtonElement>(".ref-view-btn")].find(
+      (b) => (b.textContent ?? "").trim() === "Candidates",
+    );
+    expect(chip, "no Candidates chip").toBeDefined();
+    await act(async () => chip?.click());
+    await settle();
+
+    containedInside("referee");
+    expect(
+      activation.pendingActivation(SLUG, "candidates"),
+      "the Candidates press survived",
+    ).toBeNull();
+    expect(jobPosts()).toEqual([]);
+
+    /* **Back to Criteria is a different band, and gets a fresh start** — the
+       sub-mode is in the reset key, and nothing else would reset it: Back is not
+       a press, and Criteria arms nothing. */
+    await act(async () => history.back());
+    for (let i = 0; i < 40 && new URLSearchParams(location.search).get("referee") !== null; i++) {
+      await act(async () => {
+        await new Promise((go) => setTimeout(go, 10));
+      });
+    }
+    await settle();
+    expect(modeInUrl()).toBe("referee");
+    expect(new URLSearchParams(location.search).get("referee"), "Back did not leave Candidates").toBeNull();
+    expect(text(), "the broken Candidates followed the reader to Criteria").not.toContain(
+      "[mode-render]",
+    );
+  });
+
+  it("remember: the Quiz chip, when the panel throws under the real useQuiz", async () => {
+    who.set(OWNER_A);
+    await open("?mode=remember");
+    expect(text()).not.toContain("[mode-render]");
+    trace.length = 0;
+
+    probe.throwAt = "QuizPanel";
+    const chip = [...host.querySelectorAll<HTMLButtonElement>(".remember-submode-btn")].find(
+      (b) => (b.textContent ?? "").trim() === "Quiz",
+    );
+    expect(chip, "no Quiz chip").toBeDefined();
+    await act(async () => chip?.click());
+    await settle();
+
+    containedInside("remember");
+    expect(activation.pendingActivation(SLUG, "quiz"), "the Quiz press survived").toBeNull();
+    expect(jobPosts()).toEqual([]);
   });
 });

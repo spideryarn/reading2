@@ -17,7 +17,8 @@
  * is where a throw is actually likely — runs in the **controller**, one level
  * up. A boundary around `IdeasPanel` would contain the least likely half. So
  * this wraps `<IdeasBand>` / `<VisitorIdeasBand>` where `Reader` composes them,
- * which is the one place that encloses both.
+ * which is the one place that encloses both — and since 2026-09-11 every other
+ * band too, through src/web/reader/ModeBoundary.tsx at that same place.
  *
  * ## The four things that reset it, and nothing else
  *
@@ -94,7 +95,8 @@ interface BoundaryProps {
  * **Reads the press, then renders the boundary.**
  *
  * The subscription lives here rather than in `Reader` so that it costs nothing
- * in the twelve other modes: this component only exists where a boundary does.
+ * where there is no boundary — Plain and Hierarchy — and so that a press
+ * re-renders this component rather than the whole reading view.
  *
  * `pendingActivation` is the snapshot because it returns a **primitive** — a
  * snapshot handing back a fresh object every call never compares equal and
