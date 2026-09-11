@@ -797,28 +797,6 @@ describe("runCodex", () => {
 
 describe("the CLI, end to end", () => {
   /** Run the wrapper itself, with a stand-in codex on PATH. */
-  /**
-   * What `.env.local` says a variable is, or `undefined` when it says nothing.
-   *
-   * Read here rather than imported so this test asserts against the FILE, not
-   * against `src/env.ts`'s idea of the file — a parser bug that made both agree
-   * would otherwise be invisible to the one test that could catch it.
-   */
-  function envFileValue(name: string): string | undefined {
-    let text: string;
-    try {
-      text = readFileSync(join(import.meta.dirname, "..", ".env.local"), "utf8");
-    } catch {
-      return undefined; // a fresh clone has no file, and the sentinel then wins
-    }
-    for (const line of text.split("\n")) {
-      if (line.trimStart().startsWith("#")) continue;
-      const m = new RegExp(`^\\s*(?:export\\s+)?${name}\\s*=\\s*(.*)$`).exec(line);
-      if (m) return (m[1] ?? "").trim().replace(/^(['"])(.*)\1$/, "$2");
-    }
-    return undefined;
-  }
-
   function runCli(body: string, extraArgs: string[] = [], extraEnv: Record<string, string> = {}) {
     const bin = fakeCodex(body);
     const dir = mkdtempSync(join(tmpdir(), "run-codex-cli-"));
@@ -891,21 +869,21 @@ describe("the CLI, end to end", () => {
     const answer = readFileSync(r.answerPath, "utf8");
     const everything = r.stdout + r.stderr
       + readFileSync(`${r.answerPath}.activity.log`, "utf8") + answer;
-    expect(everything).not.toContain("OPENROUTER-SENTINEL");
-    expect(everything).not.toContain("SUPABASE-SENTINEL");
-    expect(everything).not.toContain("DBPASS-SENTINEL");
+    /* **Booleans, never `everything` itself.** It holds the child's whole environment three times
+       over, and a failing matcher prints its subject: `not.toContain` shows the entire string as
+       "Received". docs/postmortems/260910d-an-assertion-over-a-whole-environment-prints-every-secret-when-it-fails.md. */
+    const holds = (text: string): boolean => everything.includes(text);
+    expect(holds("OPENROUTER-SENTINEL"), "OPENROUTER_API_KEY reached codex").toBe(false);
+    expect(holds("SUPABASE-SENTINEL"), "SUPABASE_SERVICE_ROLE_KEY reached codex").toBe(false);
+    expect(holds("DBPASS-SENTINEL"), "DATABASE_URL reached codex").toBe(false);
     // The child really did dump its environment — without this the assertions above are vacuous.
-    expect(everything).toContain("PATH=");
-    /* And codex still got the one key it needs — but **not necessarily the
-       sentinel**, and that is a real property rather than a test compromise.
-       Since 2026-08-26 `.env.local` beats an inherited value (src/env.ts), and
-       an environment handed to a spawned process IS inherited from that
-       process's point of view — indistinguishable from a `~/.zshrc` export,
-       which is exactly the shadowing that rule exists to stop. So on a machine
-       with a `CODEX_API_KEY` in `.env.local`, the file's value is the one that
-       reaches codex, and asserting the sentinel would be asserting the old
-       precedence. Resolve the same way the loader does. */
-    expect(answer).toContain(envFileValue("CODEX_API_KEY") ?? "sk-CODEX-SENTINEL");
+    expect(holds("PATH="), "the stand-in did not dump its environment").toBe(true);
+    /* And codex still got the one key it needs, and it is **this test's sentinel**. The lane
+       setup pins `CODEX_API_KEY` (tests/helpers/scrub-secrets.ts), and the pin crosses `spawn`,
+       so the wrapper's own `.env.local` load cannot put the real key back over the value this
+       test handed it. Until 2026-09-11 it could, and this line asserted the real key read out of
+       `.env.local`, which a failure would have printed twice. */
+    expect(answer.includes("CODEX_API_KEY=sk-CODEX-SENTINEL"), "codex did not get the sentinel key").toBe(true);
   }, 60_000);
 
   it("never prints the API key on its own status output", () => {

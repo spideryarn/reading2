@@ -154,8 +154,9 @@ function workersForThisRun(): number {
  *  - a routing variable that is not on ACCOUNT_ROUTING_VARIABLES — the list is the thing to extend;
  *  - a child that re-reads a login shell's profile (`bash -l`), which can export them again;
  *  - `.env.local`, which setup files load and which beats the inherited environment, so its
- *    OPENAI_API_KEY and CODEX_API_KEY reappear in workers — the same for every runner, so not
- *    this class, but not absent either.
+ *    OPENAI_API_KEY and CODEX_API_KEY reappear in workers — as a sentinel since 2026-09-11, which
+ *    the setups put there and pin (tests/helpers/scrub-secrets.ts). The same for every runner, so
+ *    not this class, but not absent either.
  */
 for (const name of ACCOUNT_ROUTING_VARIABLES) delete process.env[name];
 

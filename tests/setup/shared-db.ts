@@ -62,6 +62,7 @@ import { beforeEach, onTestFailed } from "vitest";
 
 import { loadEnvLocal } from "../../src/env.js";
 import { projectMismatch } from "../../src/store/blobs.js";
+import { keptOnlyIfLocal, SHARED_LANE_KEEPS, scrubSecrets } from "../helpers/scrub-secrets.js";
 import {
   describeSession,
   isClient,
@@ -92,6 +93,18 @@ import {
 process.env.PGAPPNAME = `spideryarn-test-shared-${process.pid}`;
 
 loadEnvLocal();
+
+/**
+ * **Every secret-named value becomes a sentinel, bar the local stack's own four**
+ * (`SHARED_LANE_KEEPS`), and those only
+ * while both of its URLs are on this machine. See tests/helpers/scrub-secrets.ts.
+ *
+ * The database, the service key GoTrue's admin API wants, and the public client key a sign-in
+ * uses (`SUPABASE_PUBLISHABLE_KEY`, with `SUPABASE_ANON_KEY` as its fallback). A `.env.local`
+ * pointed at a hosted project gets all four scrubbed, `DATABASE_URL` down to a URL with no
+ * password in it, so this lane cannot write to a hosted database. GPT Sol, 2026-09-11.
+ */
+scrubSecrets(process.env, keptOnlyIfLocal(process.env, SHARED_LANE_KEEPS));
 
 /** What the stack's own database is called. `db-test-create.ts` clones from it. */
 const SHARED = "postgres";

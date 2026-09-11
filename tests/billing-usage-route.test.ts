@@ -48,6 +48,22 @@ import { seedAuthUser } from "./helpers/seed-auth-user.js";
 
 loadEnvLocal();
 
+/**
+ * **A Stripe key of this file's own, shaped like a test-mode one.** Every card here is drawn only
+ * when `stripeConfigured()` says yes, and until 2026-09-11 that was the real key `.env.local`
+ * supplied. The lane scrubs it now (tests/helpers/scrub-secrets.ts), so this file says what it
+ * needs. Assigned rather than stubbed, so the `vi.unstubAllEnvs()` below puts this back and not
+ * the sentinel. Nothing here reaches Stripe: the summary only asks whether billing is configured.
+ * GPT Sol, 2026-09-11.
+ */
+const STRIPE_KEY_BEFORE = process.env.STRIPE_SECRET_KEY;
+process.env.STRIPE_SECRET_KEY = "sk_test_billing-usage-route-fake";
+afterAll(() => {
+  /* `delete`, not an assignment: `process.env.X = undefined` stores the string "undefined". */
+  if (STRIPE_KEY_BEFORE === undefined) delete process.env.STRIPE_SECRET_KEY;
+  else process.env.STRIPE_SECRET_KEY = STRIPE_KEY_BEFORE;
+});
+
 /* Put the flag back for whatever runs next in this process. */
 
 const { pool } = await pgReady({

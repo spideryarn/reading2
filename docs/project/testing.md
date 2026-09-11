@@ -266,7 +266,9 @@ one's GoTrue and the control would agree. Measured 2026-09-04: pointed at the ot
 back — silently, for the same `NODE_ENV=test` reason. Several unit tests spawn `tsx` children. The
 fix is a variable rather than an assignment: `SPIDERYARN_ENV_PINNED` (`PINNED` in
 [`src/env.ts`](../../src/env.ts)) is a comma-separated list of names `.env.local` may not write, and
-being in the environment it *is* inherited. The unit lane sets it to `DATABASE_URL,SUPABASE_URL`.
+being in the environment it *is* inherited. The unit lane pins `DATABASE_URL,SUPABASE_URL`, and
+every lane also pins each secret it scrubbed (§ [`.env.local` is loaded into
+tests](#envlocal-is-loaded-into-tests)).
 Nothing outside the test lanes sets it, and in production there is no `.env.local` for it to
 restrain.
 
@@ -829,11 +831,32 @@ under names nobody recognised — `gateA`, `stageDbase`, `stage2base` — one of
 
 ### `.env.local` is loaded into tests
 
-`vite.config.ts` calls `loadEnvLocal()` at config load and vitest uses that same config, so
-**`.env.local` is in `process.env` while tests run**. Nothing in `tests/` mentions it, so a fixture
-looks complete when it is not, and the failure only shows up somewhere without the file. On
-2026-08-27 a control asserting "with a complete environment there are no warnings" passed while the
-fixture never set `VITE_SUPABASE_URL` — `.env.local` was supplying it.
+Each lane's setup file (`tests/setup/unit-no-database.ts`, `private-db.ts`, `shared-db.ts`) calls
+`loadEnvLocal()`, so **`.env.local`'s names are in `process.env` while tests run**. The config
+itself loads nothing: `vitest.config.ts` is not `vite.config.ts` and does not import `src/env.ts`.
+Nothing in a test mentions the file, so a fixture looks complete when it is not, and the failure only
+shows up somewhere without the file. On 2026-08-27 a control asserting "with a complete environment
+there are no warnings" passed while the fixture never set `VITE_SUPABASE_URL` — `.env.local` was
+supplying it.
+
+**Its secrets are not in there, since 2026-09-11.** Straight after the load, each setup replaces
+every variable `isSecretName` calls a secret (scripts/subagent-cli.ts), whether it came from the
+file or from the shell, with a sentinel, and pins the names in `SPIDERYARN_ENV_PINNED` so that a
+`vi.resetModules()` or a child's own `loadEnvLocal()` cannot put the real value back
+([`tests/helpers/scrub-secrets.ts`](../../tests/helpers/scrub-secrets.ts)). The reason is that a
+failing assertion prints its subject, and on 2026-09-10 the subject was a worker's environment:
+[260910d](../postmortems/260910d-an-assertion-over-a-whole-environment-prints-every-secret-when-it-fails.md).
+The unit lane keeps nothing real. The two database lanes keep the local stack's own credentials,
+and only while `DATABASE_URL` and `SUPABASE_URL` both point at this machine:
+`PRIVATE_LANE_KEEPS` and `SHARED_LANE_KEEPS` in that file name them, and the setup that passes each
+list says why. A test that needs a key to look real, such as a Stripe key shaped `sk_test_…`, sets
+a fake one itself. A test that spawns a child needing a real value from the file takes only that
+name off the pin, and never deletes or replaces the pin:
+`tests/store-boots-without-inherited-credentials.test.ts` shows how.
+
+**Still assert names, never an environment's values.** The scrub covers what is in the worker. It
+does not cover a child built without the pin, or code that reads `.env.local` with its own
+`readFileSync`, and a failure in those prints whatever they hold.
 
 In any test that reads `process.env`, stub **every** name explicitly with `vi.stubEnv`, including
 the ones you expect to be absent (stub those to `""`), and `vi.unstubAllEnvs()` in `afterEach`.
@@ -928,9 +951,10 @@ switch.
 
 It exists because two tests made real OpenRouter calls and stayed green —
 [260901g-a-unit-test-that-bought-inference.md](../postmortems/260901g-a-unit-test-that-bought-inference.md).
-The file that did it carried a header saying the key was absent under vitest. It is not, and it never
-was: see [§ `.env.local` is loaded into tests](#envlocal-is-loaded-into-tests). **Any test that
-reaches a model call reaches a real one.**
+The file that did it carried a header saying the key was absent under vitest. It was not, and it is
+not now: since 2026-09-11 it is a sentinel rather than the real key (see [§ `.env.local` is loaded
+into tests](#envlocal-is-loaded-into-tests)), which a provider would refuse, but the request would
+still leave. **Any test that reaches a model call reaches a real endpoint.**
 
 Four things follow:
 

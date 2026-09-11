@@ -59,7 +59,7 @@ import {
   type FetchedDocument,
   type RawManifest,
 } from "../src/fetch.js";
-import { PINNED } from "../src/env.js";
+import { PINNED, pinnedNames } from "../src/env.js";
 import { keepTheOriginal } from "../src/pdf-read.js";
 import { STEPS, UNCONVERTED_STEPS } from "../src/pipeline.js";
 import { canonicalKey } from "../src/source.js";
@@ -820,8 +820,13 @@ describe("`npm run ingest` selects its blob store from the same environment the 
        * **database** — `scripts/stage.ts` with no arguments prints usage before
        * anything asks `getDb()` for a pool, and a pin left in place for free is
        * worth more than the argument about it.
+       *
+       * **Only `target.name` comes off**, and everything else the lane pinned
+       * stays: since 2026-09-11 that includes every secret the lane scrubbed
+       * (tests/helpers/scrub-secrets.ts), and writing the pin outright would
+       * have handed this child every real key in `.env.local`. GPT Sol.
        */
-      env[PINNED] = "DATABASE_URL";
+      env[PINNED] = [...pinnedNames(env[PINNED])].filter((name) => name !== target.name).join(",");
 
       const child = spawnSync(TSX, [CLI], { env, encoding: "utf8" });
 

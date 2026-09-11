@@ -176,9 +176,10 @@ class, and grep cannot tell which ones do. That gap is the argument for item 1 b
 
    Its cost: any test that silently relies on a real key breaks. testing.md already calls that wrong
    (*"Never rely on a variable being unset"*), and a fresh clone has no `.env.local` anyway. The
-   `provider-guard` still stops a sentinel key from spending. *Proposed, not built.* Prove it by
-   re-running this incident's shape against it, a red assertion over a dump, and grepping the output
-   for a value.
+   `provider-guard` still stops a sentinel key from spending. *Built 2026-09-11:
+   [260911f](../plans/260911f-scrub-secrets-from-every-test-lane.md), with the run-codex rows
+   below fixed in the same change.* Prove it by re-running this incident's shape against it, a red
+   assertion over a dump, and grepping the output for a value.
 2. **A names-only helper, and a static test that refuses the other shape.** The helper would be
    something like `envNames(dumpOrObject, names): string[]` in `tests/helpers/`, which is what
    `e3bcace3` wrote inline. The static test scans `tests/` for `expect(` whose subject is

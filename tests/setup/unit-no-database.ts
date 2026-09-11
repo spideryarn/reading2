@@ -122,10 +122,16 @@
  * [`tests/helpers/unit-lane-poison.ts`](../helpers/unit-lane-poison.ts), so that
  * the control suite can read them without importing this file and applying it.
  */
-import { loadEnvLocal, PINNED } from "../../src/env.js";
+import { loadEnvLocal, PINNED, pinnedNames } from "../../src/env.js";
+import { scrubSecrets } from "../helpers/scrub-secrets.js";
 import { UNIT_LANE_POISON, UNIT_LANE_STORAGE_POISON } from "../helpers/unit-lane-poison.js";
 
 loadEnvLocal();
+
+/* Every secret-named value becomes a sentinel, and its name goes onto the pin. This
+   lane keeps nothing real: its database and bucket are poisoned below, and the
+   provider guard refuses a paid call. See tests/helpers/scrub-secrets.ts. */
+scrubSecrets(process.env);
 
 /* AFTER loadEnvLocal(). See the header. */
 process.env.DATABASE_URL = UNIT_LANE_POISON;
@@ -133,5 +139,5 @@ process.env.SUPABASE_URL = UNIT_LANE_STORAGE_POISON;
 
 /* And AFTER the two assignments, so that a child inherits the poisons and the
    instruction not to overwrite them together. See the header, and `PINNED` in
-   src/env.ts. */
-process.env[PINNED] = "DATABASE_URL,SUPABASE_URL";
+   src/env.ts. Added to the scrub's names, not written over them. */
+process.env[PINNED] = [...new Set([...pinnedNames(process.env[PINNED]), "DATABASE_URL", "SUPABASE_URL"])].join(",");

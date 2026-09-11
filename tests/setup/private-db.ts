@@ -51,10 +51,23 @@
 import { Client } from "pg";
 import { inject } from "vitest";
 
-import { loadEnvLocal, PINNED } from "../../src/env.js";
+import { loadEnvLocal, PINNED, pinnedNames } from "../../src/env.js";
+import { keptOnlyIfLocal, PRIVATE_LANE_KEEPS, scrubSecrets } from "../helpers/scrub-secrets.js";
 import type { PrivateDatabase } from "./private-db-global.js";
 
 loadEnvLocal();
+
+/**
+ * **Every secret-named value becomes a sentinel, bar the two this lane really uses**
+ * (`PRIVATE_LANE_KEEPS`), and only
+ * while they belong to the local stack. See tests/helpers/scrub-secrets.ts.
+ *
+ * `DATABASE_URL` is replaced with the run's minted database below either way.
+ * `SUPABASE_SERVICE_ROLE_KEY` is the local stack's, and the bucket is shared with it
+ * (docs/project/testing.md § Storage is not isolated). Nothing else: a paid key is refused by the
+ * provider guard anyway, and a test that needs Stripe to look configured sets its own fake key.
+ */
+scrubSecrets(process.env, keptOnlyIfLocal(process.env, PRIVATE_LANE_KEEPS));
 
 /**
  * **Name `DATABASE_URL` as this process's own, so a module reset cannot take it
@@ -79,7 +92,7 @@ loadEnvLocal();
  * lane that deliberately has *no* database would replace "refused fast" with a
  * live connection to the shared one, which is the same bug wearing a worse face.
  */
-process.env[PINNED] = "DATABASE_URL";
+process.env[PINNED] = [...new Set([...pinnedNames(process.env[PINNED]), "DATABASE_URL"])].join(",");
 
 /**
  * **`undefined` means this setup file ran without its global setup**, which is a

@@ -70,7 +70,7 @@ import { fileURLToPath } from "node:url";
 
 import { describe, expect, it } from "vitest";
 
-import { parseEnvFile } from "../src/env.js";
+import { parseEnvFile, pinnedNames } from "../src/env.js";
 
 const ROOT = fileURLToPath(new URL("..", import.meta.url));
 const TSX = path.join(ROOT, "node_modules", ".bin", "tsx");
@@ -114,12 +114,18 @@ interface Child {
  * the credential check off (src/store/index.ts says why) and the whole point is
  * to be in the environment a server is in rather than the one a test is in.
  *
- * **Every Supabase name and `DATABASE_URL` deleted, and `SPIDERYARN_ENV_PINNED`
- * with them.** The unit lane sets all three: two poisoned URLs and a pin telling
- * `.env.local` not to overwrite them (tests/setup/unit-no-database.ts). A child
- * inheriting the pin cannot read its credentials out of `.env.local` at all,
- * which is the state this function exists to distinguish from — so the pin goes,
- * and each case that wants something withheld says so itself.
+ * **Every Supabase name and `DATABASE_URL` deleted, and taken off
+ * `SPIDERYARN_ENV_PINNED`.** The unit lane sets all three: two poisoned URLs and a
+ * pin telling `.env.local` not to overwrite them (tests/setup/unit-no-database.ts).
+ * A child inheriting the pin cannot read its credentials out of `.env.local` at
+ * all, which is the state this function exists to distinguish from — so those
+ * names come off the pin, and each case that wants something withheld says so
+ * itself.
+ *
+ * **Only those names, not the whole pin.** The lane also pins every other
+ * secret-named variable it scrubbed (tests/helpers/scrub-secrets.ts). Deleting
+ * the pin would hand this child every real key in `.env.local`, when it needs
+ * four names.
  */
 function bootTheStore(mutate: (env: NodeJS.ProcessEnv) => void = () => {}): Child {
   const env: NodeJS.ProcessEnv = { ...process.env, NODE_ENV: "production" };
@@ -128,7 +134,10 @@ function bootTheStore(mutate: (env: NodeJS.ProcessEnv) => void = () => {}): Chil
      it should be visible in this function rather than in Node's spawn rules. */
   delete env.VITEST;
   delete env.VITEST_WORKER_ID;
-  delete env.SPIDERYARN_ENV_PINNED;
+  const needed = new Set<string>([...CREDENTIALS, "DATABASE_URL"]);
+  env.SPIDERYARN_ENV_PINNED = [...pinnedNames(env.SPIDERYARN_ENV_PINNED)]
+    .filter((name) => !needed.has(name))
+    .join(",");
   delete env.DATABASE_URL;
   for (const name of CREDENTIALS) delete env[name];
   mutate(env);
@@ -166,7 +175,7 @@ function bootTheStore(mutate: (env: NodeJS.ProcessEnv) => void = () => {}): Chil
  */
 function withheld(env: NodeJS.ProcessEnv): void {
   for (const name of CREDENTIALS) env[name] = "";
-  env.SPIDERYARN_ENV_PINNED = CREDENTIALS.join(",");
+  env.SPIDERYARN_ENV_PINNED = [...pinnedNames(env.SPIDERYARN_ENV_PINNED), ...CREDENTIALS].join(",");
 }
 
 describe("the store boots on credentials that are only in .env.local", () => {
