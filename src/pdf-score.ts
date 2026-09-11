@@ -469,10 +469,11 @@ const folioOffsets = new WeakMap<Pass0, number | null>();
  * The stronger fix is upstream: `pass0` knows the text-layer item boundary
  * between the folio and the heading and throws it away. Keeping it would mean
  * none of this had to be inferred. src/pdf.ts § `pass0`, and the plan's stage 5.
- * Measured 2026-09-11: the boundary recovers the same 11 headings on Kuhn with no
- * vote, and a URL this cannot reach —
- * docs/plans/260911b-pdf-item-boundaries-evidence.md. The replacement is
- * docs/plans/260911c-score-pdf-pages-at-the-line-breaks-pdfjs-did-not-mark.md.
+ * Measured 2026-09-11 (docs/plans/260911b-pdf-item-boundaries-evidence.md): the
+ * boundary recovers the same 11 headings on Kuhn with no vote, and a URL this
+ * cannot reach — but splitting on it also turns a stacked `1`/`2` into two
+ * tokens and forgives a dropped digit, so this stays until a narrower rule is
+ * proved (docs/plans/260911c-score-pdf-pages-at-the-line-breaks-pdfjs-did-not-mark.md).
  */
 function folioOffset(pass: Pass0): number | null {
   const known = folioOffsets.get(pass);

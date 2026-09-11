@@ -1,5 +1,5 @@
 {
-  "at": "2026-09-11T12:02:56.292Z",
+  "at": "2026-09-11T12:29:53.038Z",
   "LINE_BREAK": 0.7,
   "results": [
     {
@@ -54,9 +54,11 @@
         }
       },
       "adversarial": {
+        "candidates": 0,
         "mutations": 0,
         "caughtOld": 0,
         "caughtNew": 0,
+        "confounded": [],
         "missedOnlyByNew": [],
         "missedOnlyByOld": [],
         "missedByBoth": []
@@ -114,9 +116,11 @@
         }
       },
       "adversarial": {
+        "candidates": 0,
         "mutations": 0,
         "caughtOld": 0,
         "caughtNew": 0,
+        "confounded": [],
         "missedOnlyByNew": [],
         "missedOnlyByOld": [],
         "missedByBoth": []
@@ -174,9 +178,11 @@
         }
       },
       "adversarial": {
+        "candidates": 0,
         "mutations": 0,
         "caughtOld": 0,
         "caughtNew": 0,
+        "confounded": [],
         "missedOnlyByNew": [],
         "missedOnlyByOld": [],
         "missedByBoth": []
@@ -238,9 +244,11 @@
         }
       },
       "adversarial": {
+        "candidates": 0,
         "mutations": 0,
         "caughtOld": 0,
         "caughtNew": 0,
+        "confounded": [],
         "missedOnlyByNew": [],
         "missedOnlyByOld": [],
         "missedByBoth": []
@@ -301,9 +309,11 @@
         }
       },
       "adversarial": {
+        "candidates": 0,
         "mutations": 0,
         "caughtOld": 0,
         "caughtNew": 0,
+        "confounded": [],
         "missedOnlyByNew": [],
         "missedOnlyByOld": [],
         "missedByBoth": []
@@ -361,9 +371,11 @@
         }
       },
       "adversarial": {
+        "candidates": 6,
         "mutations": 6,
         "caughtOld": 0,
         "caughtNew": 0,
+        "confounded": [],
         "missedOnlyByNew": [],
         "missedOnlyByOld": [],
         "missedByBoth": [
@@ -428,9 +440,11 @@
         }
       },
       "adversarial": {
+        "candidates": 0,
         "mutations": 0,
         "caughtOld": 0,
         "caughtNew": 0,
+        "confounded": [],
         "missedOnlyByNew": [],
         "missedOnlyByOld": [],
         "missedByBoth": []
@@ -488,9 +502,11 @@
         }
       },
       "adversarial": {
+        "candidates": 0,
         "mutations": 0,
         "caughtOld": 0,
         "caughtNew": 0,
+        "confounded": [],
         "missedOnlyByNew": [],
         "missedOnlyByOld": [],
         "missedByBoth": []
@@ -548,9 +564,11 @@
         }
       },
       "adversarial": {
+        "candidates": 0,
         "mutations": 0,
         "caughtOld": 0,
         "caughtNew": 0,
+        "confounded": [],
         "missedOnlyByNew": [],
         "missedOnlyByOld": [],
         "missedByBoth": []
@@ -630,9 +648,11 @@
         }
       },
       "adversarial": {
+        "candidates": 0,
         "mutations": 0,
         "caughtOld": 0,
         "caughtNew": 0,
+        "confounded": [],
         "missedOnlyByNew": [],
         "missedOnlyByOld": [],
         "missedByBoth": []
@@ -690,9 +710,11 @@
         }
       },
       "adversarial": {
+        "candidates": 0,
         "mutations": 0,
         "caughtOld": 0,
         "caughtNew": 0,
+        "confounded": [],
         "missedOnlyByNew": [],
         "missedOnlyByOld": [],
         "missedByBoth": []
@@ -750,9 +772,11 @@
         }
       },
       "adversarial": {
+        "candidates": 0,
         "mutations": 0,
         "caughtOld": 0,
         "caughtNew": 0,
+        "confounded": [],
         "missedOnlyByNew": [],
         "missedOnlyByOld": [],
         "missedByBoth": []
@@ -810,9 +834,11 @@
         }
       },
       "adversarial": {
+        "candidates": 0,
         "mutations": 0,
         "caughtOld": 0,
         "caughtNew": 0,
+        "confounded": [],
         "missedOnlyByNew": [],
         "missedOnlyByOld": [],
         "missedByBoth": []
@@ -895,9 +921,11 @@
         }
       },
       "adversarial": {
+        "candidates": 429,
         "mutations": 429,
         "caughtOld": 425,
         "caughtNew": 425,
+        "confounded": [],
         "missedOnlyByNew": [],
         "missedOnlyByOld": [],
         "missedByBoth": [
@@ -960,9 +988,11 @@
         }
       },
       "adversarial": {
+        "candidates": 0,
         "mutations": 0,
         "caughtOld": 0,
         "caughtNew": 0,
+        "confounded": [],
         "missedOnlyByNew": [],
         "missedOnlyByOld": [],
         "missedByBoth": []

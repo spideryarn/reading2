@@ -37,7 +37,8 @@ export interface RawItem {
  * - `touching` — same line, no visible gap: a font or kerning split, usually inside a word.
  * - `gap` — same line, a visible gap the text layer has no space for.
  * - `shift` — a small vertical move: a superscript, subscript or inline maths.
- * - `line-break` — the next item is on another line, and pdf.js did not say so.
+ * - `line-break` — the geometry looks like another line. This is a candidate,
+ *   not proof: vertically stacked maths can satisfy the same predicate.
  */
 export type BoundaryKind = "touching" | "gap" | "shift" | "line-break";
 
@@ -54,10 +55,12 @@ export interface Boundary {
 }
 
 /**
- * **A move of more than this many font sizes is another line.** A superscript or
- * subscript moves about a third of the size; the tightest leading in print is
- * about one. `compare.mts` prints the distribution of every fused boundary's
- * |Δy| so this number is checked against the corpus rather than trusted.
+ * **The experimental line-candidate threshold.** A superscript or subscript in
+ * the measured corpus moves about a third of the size; the tightest observed
+ * candidate is 1.86. That gap does not make the rule generally safe: the
+ * stacked-number case in tests/pdf-item-boundaries-eval.test.ts crosses 0.7 and
+ * exposes a protected substring. `compare.mts` prints the distribution; plan
+ * 260911c is blocked until a narrower predicate rejects that case.
  */
 export const LINE_BREAK = 0.7;
 /** Below this, a vertical move is jitter in the baseline, not a shift. */

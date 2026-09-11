@@ -69,6 +69,12 @@ interface Reading {
   records: PdfRecord[];
 }
 
+/** Did this mutation add the token, or was the same fault already present? */
+export function mutationResult(before: readonly string[], after: readonly string[], token: string) {
+  if (before.includes(token)) return "confounded" as const;
+  return after.includes(token) ? "caught" as const : "missed" as const;
+}
+
 /** The requested pages of a reading, inferred from the pages its records claim — the same for both arms. */
 const requestedOf = (records: PdfRecord[]) => [...new Set(records.map((r) => r.page))].sort((a, b) => a - b);
 
@@ -189,7 +195,20 @@ export async function compareDocument(file: string, opts: { db: boolean }) {
     newFailing: 0,
     invented: { oldOnly: [] as string[], newOnly: [] as string[] },
   };
-  const adversarial = { mutations: 0, caughtOld: 0, caughtNew: 0, missedOnlyByNew: [] as string[], missedOnlyByOld: [] as string[], missedByBoth: [] as string[] };
+  const adversarial = {
+    candidates: 0,
+    mutations: 0,
+    caughtOld: 0,
+    caughtNew: 0,
+    /* A mutation cannot prove that it caused an `invented` token when the
+       unmodified reading already reported that exact token. Keep those cases
+       out of both the numerator and denominator instead of letting an existing
+       fault masquerade as a caught mutation. */
+    confounded: [] as string[],
+    missedOnlyByNew: [] as string[],
+    missedOnlyByOld: [] as string[],
+    missedByBoth: [] as string[],
+  };
   for (const reading of readings) {
     const outOfRange = reading.records.some((r) => r.page < 1 || r.page > old.pages.length);
     if (outOfRange) continue;
@@ -214,10 +233,17 @@ export async function compareDocument(file: string, opts: { db: boolean }) {
       const corrupted = truncatedHeading(record.text);
       if (corrupted === null) continue;
       const token = corrupted.split(" ")[0]!.replace(/\.$/u, "");
+      adversarial.candidates++;
       const mutated = reading.records.map((r, j) => (j === n ? { ...r, text: corrupted } : r));
       const m = scoreBoth(mutated, old, fresh);
-      const caughtA = m.a.overall.invented.includes(token);
-      const caughtB = m.b.overall.invented.includes(token);
+      const oldResult = mutationResult(a.overall.invented, m.a.overall.invented, token);
+      const newResult = mutationResult(b.overall.invented, m.b.overall.invented, token);
+      if (oldResult === "confounded" || newResult === "confounded") {
+        adversarial.confounded.push(`${reading.source} p${record.page} ${token}`);
+        continue;
+      }
+      const caughtA = oldResult === "caught";
+      const caughtB = newResult === "caught";
       adversarial.mutations++;
       if (caughtA) adversarial.caughtOld++;
       if (caughtB) adversarial.caughtNew++;
@@ -253,7 +279,7 @@ function summaryLine(r: Awaited<ReturnType<typeof compareDocument>>): string {
     `joins t${k.touching} g${k.gap} s${k.shift} L${k["line-break"]} (largest shift ${r.census.largestShift}, nearest break ${r.census.nearestBreak})`,
     `headings both ${r.headings.both.length} old-only ${r.headings.oldOnly.length} new-only ${r.headings.newOnly.length}`,
     `readings ${r.refusals.readings} failing ${r.refusals.oldFailing}->${r.refusals.newFailing} verdicts changed ${r.refusals.verdictChanged.length}, failure lists ${r.refusals.failuresChanged.length} (control: ${r.refusals.controlVerdictChanged} verdicts, ${r.refusals.controlFailuresChanged} failure lists)`,
-    `corrupted headings caught ${r.adversarial.caughtOld}->${r.adversarial.caughtNew} of ${r.adversarial.mutations}`,
+    `corrupted headings caught ${r.adversarial.caughtOld}->${r.adversarial.caughtNew} of ${r.adversarial.mutations} unconfounded (${r.adversarial.confounded.length} confounded)`,
   ].join(" | ");
 }
 

@@ -1,13 +1,15 @@
 # Score PDF pages at the line breaks pdf.js did not mark
 
-Status as of 2026-09-11: **written, not built, not yet reviewed by GPT Sol as a plan.** The evidence
-that justifies it is [260911b-pdf-item-boundaries-evidence.md](260911b-pdf-item-boundaries-evidence.md);
-read its Results table first. Nothing here is urgent — no verdict changed on the corpus — so it waits
-for Greg to schedule it.
+Status as of 2026-09-11: **blocked by evidence review; do not build the generic 0.7 + fused-only rule.**
+The corpus run is in
+[260911b-pdf-item-boundaries-evidence.md](260911b-pdf-item-boundaries-evidence.md), but a synthetic
+stacked-number case shows that the proposed split can forgive a numeric omission the current scorer
+catches. This plan remains the architectural sketch for a narrower predicate, if one is proved.
 
 ## What changes, in one paragraph
 
-`pass0` keeps producing `PageText.text` exactly as it does today, and additionally records where on
+The proposed architecture has `pass0` keep producing `PageText.text` exactly as it does today, while
+additionally recording where on
 the page pdf.js joined two items across a real line change without marking it (`breaks`: offsets
 into `text`). `check` in `src/pdf-score.ts` — and only `check` — reads the page with a newline
 inserted at those offsets. That makes the fused folio and the fused licence URL two tokens instead of
@@ -29,45 +31,53 @@ text changed. Page text feeds, besides the scorer:
 | title ladder, furniture, `isScan` | `src/pdf-read.ts` § title, `src/pdf.ts` § `repeatedLines` | furniture was unchanged on the corpus; the rest untested |
 | words-of for the front-matter comparison | `src/pdf-read.ts` § `wordsOf` | token set shifts |
 
-None of them has a known defect from the fused boundary. So none of them moves: the change is one
-reader deep, and the experiment's second arm — which split the text for `check` and left everything
-else to recompute — is what was measured. (The experiment also recomputed furniture from the split
-text; it came out identical on every document, so scoring over pass0's own furniture is the same
-thing on this corpus. Step 3 re-checks that.)
+None of them has a known defect from the fused boundary. Under this architecture none of them moves:
+the change is one reader deep. The experiment represented that scorer input by cloning the pass,
+changing its page text and recomputing furniture; furniture was identical on this corpus. That is
+adequate evidence for the containment claim, not for the split predicate's safety.
 
 ## The four questions the umbrella plan says this must answer
 
-- **Extraction versions.** None needed. `pass0` is not persisted anywhere — every extract recomputes
-  it — and `text` is unchanged, so every artefact downstream of it is byte-identical for the same
-  readings. Only `check`'s verdict can move, and on the corpus it moves only by withdrawing false
-  `invented` faults.
+- **Extraction versions.** None needed for boundary metadata alone. `pass0` is recomputed inside each
+  PDF extraction and `PageText.text` is unchanged, so the same selected readings produce the same
+  extracted HTML. The scorer's verdict is not inert, however: it controls retry and which reading is
+  checkpointed, so a newly accepted first attempt can change the transcript relative to what the old
+  code would have obtained on a second call.
 - **Cache invalidation.** None. The `pdf-chunk` checkpoint key is `rawSha256`, pages, context page,
   prompt fingerprint, reader and `MAX_TOKENS` (`src/pdf-read.ts` § `chunkKey`); none of those
   changes. Cached readings are re-scored on the next extract as they are today, and a reading that was
-  refused only for a fused token now passes instead of buying a re-read.
+  failed only for a fused token can pass instead of buying a re-read. That is the intended operational
+  effect, but only after the narrower predicate is shown not to forgive real faults.
 - **Old artefacts.** No backfill, no re-extraction. A published article keeps its blocks. An article
-  that was refused for this reason can succeed on the reader's next Retry, which is the ordinary path.
+  with a false quality fault changes only if it is re-extracted; content-score failures are published
+  after the bounded retry today, while structural failures alone refuse the stage.
 - **Block-id carry-forward.** No new consequence. Blocks come from transcribed records, which this
   does not touch; a re-extraction reuses cached readings and mints/carries ids through the existing
-  machinery ([block-ids.md](../project/block-ids.md)) exactly as now. The one case to watch: a chunk
-  that *used* to fail and was re-read on its second attempt could, on a future re-extraction, accept
-  its first cached reading instead — but the second-attempt reading is the one checkpointed, so the
-  cached reading that is found is the same one. Step 2 confirms that against `src/pdf-read.ts`'s
-  attempt loop before relying on it.
+  machinery ([block-ids.md](../project/block-ids.md)) exactly as now. `src/pdf-read.ts` checkpoints
+  only a normal reading that passes; a failed first attempt is not available for a later extraction
+  to newly accept. On a new extraction without a usable checkpoint, accepting attempt one instead of
+  asking for attempt two can select different model text, but the ordinary block-ID carry-forward
+  path already handles changed extracted HTML.
 
 ## Stages
 
-Each is its own commit; Sol reviews the code of stage 2 and stage 3 together.
+Do not start these stages until stage 0 is resolved. Each later stage is its own commit; Sol reviews
+the code of stage 2 and stage 3 together.
+
+0. **Prove a narrower predicate.** It must retain the observed Kuhn folio/heading and licence-URL
+   fixes while rejecting a fused numeric token whose items are vertically stacked. Add adversarial
+   RTL, rotated-page and display-maths item runs where pdf.js supplies realistic transforms, then
+   rerun the full corpus with the mutation-confound guard. If no simple predicate survives, stop and
+   keep `folioOffset`; scoring-only containment is not a reason to weaken fidelity.
 
 1. **The metadata, with no reader.** In `pass0`'s item loop, keep the previous upright, non-empty item
-   and, when the next item joins it with no whitespace and no end-of-line, record a break if
-   `|Δy| > 0.7 × max(font size)` — the rule and constant in
-   `evals/pdf/item-boundaries/boundaries.mts`, moved into `src/pdf.ts` and imported *by* the harness,
-   so there is one copy. Offsets are into `text` after the whitespace collapse and trim, so they are
-   built while collapsing, not afterwards. `PageText.breaks?: number[]`, optional for the reason
-   `sideways` is: hand-built fixtures. Red test first: pass0 on the committed Kuhn cut returns three
-   breaks, ACL three, ARNN two, `easy` none, and inserting a newline at each reproduces the harness's
-   split text byte for byte.
+   and apply the narrower predicate proved in stage 0 when the next item joins it with no whitespace
+   and no end-of-line. Move that predicate into `src/pdf.ts` and import it *from* the harness, so there
+   is one copy. Offsets are into `text` after the whitespace collapse and trim, so they are built while
+   collapsing, not afterwards. `PageText.breaks?: number[]`, optional for the reason `sideways` is:
+   hand-built fixtures. Red test first: pass0 on the committed Kuhn cut returns the three retained
+   breaks, the stacked-number case returns none, and inserting a newline at each reproduces the
+   harness's selected split text byte for byte.
 2. **The scorer reads it.** One function in `src/pdf.ts` — `scoringLines(pass, page)` — returns
    `baselineFor`'s lines computed over the split view; `check` and `scorePage`'s `onPage` use it and
    nothing else does. Red test first: the committed Kuhn-cut reading `records-5837a306a4da-1.json` is
@@ -85,6 +95,8 @@ Each is its own commit; Sol reviews the code of stage 2 and stage 3 together.
 ## What would stop it
 
 - Stage 2's harness run shows a verdict moving towards *fail*, or any corrupted heading lost.
+- The stacked-number case remains newly accepted. This stop condition has already fired for the 0.7
+  + fused-only predicate.
 - A pdf.js upgrade moves the shift/line-break gap (the harness prints it; the 0.45 / 1.86 margin is
   the thing to watch).
 - A document where a genuine line break sits inside a token the model is told to join — a URL broken

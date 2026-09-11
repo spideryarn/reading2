@@ -28,8 +28,9 @@ import {
   readRawPages,
   truncatedHeading,
 } from "../evals/pdf/item-boundaries/boundaries.mjs";
-import { compareDocument } from "../evals/pdf/item-boundaries/compare.mjs";
+import { compareDocument, mutationResult } from "../evals/pdf/item-boundaries/compare.mjs";
 import { pass0 } from "../src/pdf.js";
+import { scorePage } from "../src/pdf-score.js";
 
 /** An upright run: `size` is the font's vertical scale, which is what `transform[3]` carries. */
 const item = (str: string, x: number, y: number, size: number, over: Partial<RawItem> = {}): RawItem => ({
@@ -127,6 +128,36 @@ describe("the adversarial transcription", () => {
     expect(truncatedHeading("9.5.10. Mansell")).toBe("5.10. Mansell");
     expect(truncatedHeading("4. My personal")).toBeNull();
     expect(truncatedHeading("In 1843 the society")).toBeNull();
+  });
+
+  it("produces the exact protected token that the invented list reports", () => {
+    const corrupted = truncatedHeading("12.3. Genuine heading")!;
+    const token = corrupted.split(" ")[0]!.replace(/\.$/u, "");
+    const scored = scorePage(
+      1,
+      ["12.3. Genuine heading"],
+      [{ page: 1, type: "heading2", text: corrupted, continues: false, uncertain: false }],
+      "12.3. Genuine heading",
+    );
+    expect(token).toBe("2.3");
+    expect(scored.invented).toContain(token);
+  });
+
+  it("does not count a token that was already invented before the mutation as caught", () => {
+    expect(mutationResult([], ["2.3"], "2.3")).toBe("caught");
+    expect(mutationResult(["2.3"], ["2.3"], "2.3")).toBe("confounded");
+    expect(mutationResult([], [], "2.3")).toBe("missed");
+  });
+
+  it("exposes the unmeasured stacked-maths counterexample: the split can forgive a dropped number", () => {
+    const stacked = [item("1", 40, 710, 10, { width: 5 }), item("2", 40, 700, 10, { width: 5 })];
+    expect(classify(stacked).map((b) => b.kind)).toEqual(["line-break"]);
+    expect(pageTextAsPass0(stacked)).toBe("12");
+    expect(pageTextSplitAtLineBreaks(stacked)).toBe("1\n2");
+
+    const records = [{ page: 1, type: "paragraph" as const, text: "1", continues: false, uncertain: false }];
+    expect(scorePage(1, ["12"], records, "12").invented).toEqual(["1"]);
+    expect(scorePage(1, ["1", "2"], records, "1\n2").invented).toEqual([]);
   });
 });
 
