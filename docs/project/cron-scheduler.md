@@ -17,8 +17,8 @@ that never happens. The next reader believes the comments.
 Twice now, and it is the same shape both times: **a mechanism that is reasoned about rather than
 run.**
 
-- **[`sweepAbandonedDrafts`](../../src/store/pg-revisions.ts)** — defined, and called by nothing. An
-  exhaustive grep over `src tests scripts evals api` returns the definition and about twenty
+- **[`sweepAbandonedDrafts`](../../src/store/pg-revisions.ts)** — defined, and called by nothing
+  until 2026-09-11, when it was wired as below. An exhaustive grep over `src tests scripts evals api` returns the definition and about twenty
   comments. [`src/store/pg-jobs.ts`](../../src/store/pg-jobs.ts) reasons in detail, twice, about what it does to a draft —
   *"spares a revision that any job row names"*, *"a draft it spares for ever"* — and design around
   it. The consequence is storage rather than tidiness; `sweepAbandonedDrafts`'s header records the
@@ -48,12 +48,30 @@ has never run:
 
 On demand means: when an article next runs a step, that article's old drafts go. It needs no
 scheduler, it is self-limiting, and it has the property that an article nobody touches keeps its
-drafts — which is also the article that is not growing. **It is not built yet**; this records the
-decision so that whoever builds it does not re-open the choice, and so that the next person to
-notice `sweepAbandonedDrafts` has no caller finds the reason rather than a mystery. Its argument is
-an age threshold; the last one chosen was six hours (`ABANDONED_DRAFT_MS`, deleted with its only
-use on 2026-09-01), reasoned as comfortably longer than any ingest and short enough that
-abandoned copies do not pile up for a week.
+drafts — which is also the article that is not growing. This records the decision so that nobody
+re-opens the choice.
+
+**Implementation status, 2026-09-11: wired, counting, not yet deleting.**
+
+- `openOrBeginJobDraft` ([`src/store/pg-revisions.ts`](../../src/store/pg-revisions.ts)) calls
+  `sweepAbandonedDrafts` on the branch that mints a draft — the first step of every job — for the
+  article it has just locked, by id. Never the whole library.
+- An abandoned draft is `draft` or `failed`, older than `ABANDONED_DRAFT_MS` (six hours, the value
+  it had before it was deleted on 2026-09-01), named by no job row, and no article's current
+  revision. `abandonedDraftCondition` is that definition, and the inventory script imports it.
+- At most `DRAFT_SWEEP_BATCH` (ten) per job start, oldest first; a longer backlog clears over the
+  article's next few jobs.
+- Protection is rechecked under a row lock, so a job pointer that appears between counting and
+  deleting spares its row. A sweep that fails is rolled back to a savepoint and the step goes ahead;
+  it is logged after the commit, as is every non-empty sweep.
+- **`STEP_START_DRAFT_SWEEP` is `"count"`**: every job start runs the real selection and logs what
+  it would have taken, and deletes nothing. Deploying with `"delete"` would be the first destructive
+  run against readers' data, so flipping it is Greg's approval, made after reading
+  `npx tsx scripts/draft-sweep-inventory.ts` (read-only) against production. Until then this is
+  measured retention, not operated retention.
+
+The reasoning, the race tests and the local measurements are in
+[260908f](../plans/260908f-prioritised-spideryarn-codebase-improvements.md) § O.
 
 The general form of that answer is the one to reach for first: **attach the periodic work to a
 request that is already happening on the same object**. It costs nothing to run, it cannot drift out

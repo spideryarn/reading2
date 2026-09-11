@@ -2446,6 +2446,11 @@ export const TEST_LANES: Readonly<Record<string, TestLane>> = {
   "tests/db-schema-drift.test.ts": "private-postgres",
   "tests/db-schema.test.ts": "private-postgres",
   "tests/db-transaction-errors.test.ts": "private-postgres",
+  /* It deletes revisions, so the private lane is the only acceptable one: two
+     fixed slugs whose articles it creates and whose drafts it sweeps, two
+     concurrent transactions per race case, and a delete that must never be
+     pointed at a database a dev server is using. */
+  "tests/draft-sweep-on-step-start.test.ts": "private-postgres",
   "tests/enqueue-drives-what-it-queues.test.ts": "private-postgres",
   "tests/enqueue-owns-the-article.test.ts": "private-postgres",
   "tests/export-route.test.ts": "private-postgres",

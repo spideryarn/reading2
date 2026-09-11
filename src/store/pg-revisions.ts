@@ -64,7 +64,7 @@
 
 import { randomUUID } from "node:crypto";
 
-import { and, asc, eq, getTableColumns, inArray, lt, sql } from "drizzle-orm";
+import { and, asc, eq, getTableColumns, inArray, sql, type SQL } from "drizzle-orm";
 
 import { getDb } from "../db/client.js";
 import {
@@ -1076,6 +1076,11 @@ async function beginDraftIn(
 export interface OpenDraftResult extends BeginRevisionResult {
   /** True when this call minted the draft; false when it reopened the job's own. */
   readonly created: boolean;
+  /**
+   * What the minting branch did about this article's abandoned drafts, or
+   * `null` when the job reopened its own draft and the sweep did not run.
+   */
+  readonly sweep: DraftSweepOutcome | null;
 }
 
 /**
@@ -1123,11 +1128,13 @@ export interface OpenDraftResult extends BeginRevisionResult {
 export async function openOrBeginJobDraft(opts: {
   readonly slug: string;
   readonly job: { readonly id: string; readonly attemptId: string };
+  /** Tests only: the mode defaults to `STEP_START_DRAFT_SWEEP`. */
+  readonly sweep?: Partial<DraftSweepOptions>;
 }): Promise<OpenDraftResult> {
   const { slug, job } = opts;
   requireSlug(slug);
 
-  return getDb().transaction(async (tx) => {
+  const opened = await getDb().transaction(async (tx): Promise<OpenDraftResult> => {
     /**
      * **The article lock, first, before the job — and it may find nothing.**
      *
@@ -1239,6 +1246,7 @@ export async function openOrBeginJobDraft(opts: {
       if (draft?.status === "draft") {
         logger.debug({ slug, revisionId: draft.id, jobId: job.id }, "reopened this job's draft");
         return {
+          sweep: null,
           revisionId: draft.id,
           articleId: article.id,
           /* **The row's own record of what it was copied from**, not a guess.
@@ -1266,8 +1274,28 @@ export async function openOrBeginJobDraft(opts: {
       );
     }
 
-    return { ...(await beginDraftIn(tx, opts)), created: true };
+    /**
+     * **The on-demand sweep: this article's abandoned drafts, as its next job
+     * starts.** Greg, 2026-09-06: *"Ignore for now - we'll sweep on demand."*
+     * docs/project/cron-scheduler.md is the decision; this is the one caller.
+     *
+     * Here, on the minting branch, because that is the first step of every job
+     * — once per job rather than once per step, and a later step of the same
+     * job would find nothing new. After both locks, so the article is the
+     * resolved, owner-checked row and the id handed down is its identity rather
+     * than a slug; and the article lock is what stops a publication moving
+     * `current_revision_id` while the sweep decides. In a savepoint, so a sweep
+     * that fails costs the reader nothing — see `sweepOnStepStart`.
+     */
+    const sweep = await sweepOnStepStart(tx, article.id, {
+      mode: STEP_START_DRAFT_SWEEP,
+      ...opts.sweep,
+    });
+    return { ...(await beginDraftIn(tx, { slug, job })), created: true, sweep };
   }, READ_COMMITTED);
+
+  if (opened.sweep) logDraftSweep(slug, opened.articleId, opened.sweep);
+  return opened;
 }
 
 /* --------------------------------------------------------- recordStepRun -- */
@@ -2496,7 +2524,110 @@ export function logDraftFailure(
 /* ------------------------------------------------------------ the sweeper -- */
 
 /**
- * Delete drafts nobody owns and nobody is going to publish.
+ * **How old an unowned draft must be before the sweep may take it** — six
+ * hours, the value `ABANDONED_DRAFT_MS` had before it was deleted with its only
+ * use on 2026-09-01, and brought back by name for the on-demand sweep.
+ *
+ * Comfortably longer than any ingest, so a draft still being worked on is never
+ * a candidate on age alone — and the age is not what protects it anyway: a job
+ * pointer does, whatever the age. Short enough that abandoned copies do not pile
+ * up for a week. docs/project/cron-scheduler.md § What we do instead, for now.
+ */
+export const ABANDONED_DRAFT_MS = 6 * 60 * 60 * 1000;
+
+/**
+ * **At most this many revisions per sweep**, oldest first.
+ *
+ * The sweep runs inside a reader's step-start transaction, holding their
+ * article lock, so its cost lands on somebody waiting. Each revision cascades
+ * its `revision_blocks` — a few hundred rows for an ordinary article, each with
+ * a search vector to unindex — so ten is a few thousand row deletions at most.
+ * An article with a longer backlog loses it over its next few jobs, which is
+ * what "self-limiting" was meant to mean.
+ */
+export const DRAFT_SWEEP_BATCH = 10;
+
+/**
+ * `count` enumerates with the real predicate and deletes nothing; `delete`
+ * deletes. There is no third mode — in particular, no whole-library one.
+ */
+export type DraftSweepMode = "count" | "delete";
+
+/**
+ * **What a job's first step does about its article's abandoned drafts.**
+ *
+ * `count`, until Greg approves the first deletion against production. The
+ * on-demand design is decided (docs/project/cron-scheduler.md); what is not yet
+ * approved is the first destructive run over real readers' data, and deploying
+ * this with `delete` would *be* that run, unreviewed, on the next step anybody
+ * started. In `count` mode every step start still runs the exact selection and
+ * logs what it would have taken, so production measures itself. Flipping this
+ * to `delete` is the approval, and it is a one-line commit.
+ * docs/plans/260908f-prioritised-spideryarn-codebase-improvements.md § O.
+ */
+export const STEP_START_DRAFT_SWEEP: DraftSweepMode = "count";
+
+/**
+ * **The one definition of an abandoned draft**, shared by the sweep and by
+ * `scripts/draft-sweep-inventory.ts` so that a count and a deletion can never be
+ * of two different sets.
+ *
+ * Four conditions, all of them, over `article_revisions` as the outer row:
+ *
+ * - **`draft` or `failed`.** Never `published` — current or historical, a
+ *   published revision is the article's record of itself.
+ * - **Older than `olderThanMs`** by the **database's** clock, which is the clock
+ *   that wrote `created_at`.
+ * - **Named by no job row** — live, queued or terminal. A terminal job still
+ *   holding a pointer is a bug elsewhere (src/store/pg-session.ts says why),
+ *   and sparing its draft is the safe direction for it.
+ * - **Not any article's current revision.** A draft cannot be current —
+ *   `publishRevisionIn` publishes as it moves the pointer — but this is the
+ *   statement that would destroy an article if that ever stopped being true.
+ *
+ * `not exists`, never `not in`: `not in` over a nullable column matches nothing
+ * at all, which is a sweep that silently stops deleting and looks exactly like
+ * one with nothing to do. `jobs.draft_revision_id` is uniquely indexed, so the
+ * first test is an index probe.
+ *
+ * **`based_on_revision_id` is deliberately not a condition.** Its foreign key is
+ * `set null`, so deleting a revision that another row was copied from would
+ * blank that row's lineage and its publication would be refused. It cannot
+ * happen: a base is whatever was *current* when a draft was minted, current
+ * means `published`, and published revisions are never candidates.
+ */
+export function abandonedDraftCondition(olderThanMs: number): SQL {
+  return sql`${articleRevisions.status} in ('draft', 'failed')
+    and ${articleRevisions.createdAt} < now() - make_interval(secs => ${olderThanMs / 1000}::double precision)
+    and not exists (select 1 from ${jobs} where ${jobs.draftRevisionId} = ${articleRevisions.id})
+    and not exists (select 1 from ${articles} where ${articles.currentRevisionId} = ${articleRevisions.id})`;
+}
+
+export interface DraftSweepOptions {
+  readonly mode: DraftSweepMode;
+  readonly olderThanMs?: number;
+  readonly limit?: number;
+  /**
+   * **A test's barrier between enumerating and deleting**, and nothing else.
+   * The race cases in tests/draft-sweep-on-step-start.test.ts commit a
+   * protection here and check that the delete notices.
+   */
+  readonly afterEnumerate?: (ids: readonly string[]) => Promise<void>;
+}
+
+/** What one sweep did. `deleted` is the `DELETE`'s own row count, never the candidate count. */
+export interface SweptDrafts {
+  readonly mode: DraftSweepMode;
+  /** How many the predicate named, up to the batch limit. */
+  readonly candidates: number;
+  /** True when the predicate named more than the batch — the rest wait for the next job. */
+  readonly more: boolean;
+  readonly deleted: number;
+}
+
+/**
+ * Delete **one article's** drafts that nobody owns and nobody is going to
+ * publish — or, in `count` mode, say how many there are.
  *
  * **Begin-time copying has a retention cost, and a review was right that nobody
  * had costed it.** A 360-block article is roughly 1.31 MiB of copied payload
@@ -2507,50 +2638,169 @@ export function logDraftFailure(
  * document is an object in the `sources` bucket, referenced rather than
  * copied.)
  *
- * Three conditions, all of them: not `published`, not owned by any job, and
- * older than the cutoff. The article's current revision cannot match, because
- * `publishRevision` is the only thing that moves the pointer and it publishes
- * as it moves — but the status test covers that case anyway.
+ * **Scoped to the article the caller has already resolved**, by id rather than
+ * by slug, and never the whole library: until 2026-09-11 this was a global
+ * delete with no caller, and a global delete run because one reader started a
+ * step would charge that reader for everybody's backlog. Its one caller is
+ * `openOrBeginJobDraft`, on the branch that mints — the first step of every
+ * job — and docs/project/cron-scheduler.md is the decision it implements.
+ *
+ * ## Three statements, because protection has to be rechecked under a lock
+ *
+ * 1. **Enumerate** with `abandonedDraftCondition`, oldest first, one batch.
+ * 2. **Lock** those rows `for update skip locked`. Pointing a job — or an
+ *    article — at a revision is a foreign-key write, and its check holds
+ *    `KEY SHARE` on the revision until it commits. So a protection still in
+ *    flight makes its row unlockable, and `skip locked` leaves it alone rather
+ *    than waiting (a wait inside a reader's request, behind locks we do not
+ *    order, is how deadlocks are made). A protection that tries to start after
+ *    this has to wait for us, and then fails loudly on the missing row.
+ * 3. **Delete the locked rows where the same condition still holds.** Under
+ *    read committed a new statement takes a new snapshot, so any protection
+ *    that committed after step 1 is visible here; and none can commit between
+ *    this snapshot and the delete, because step 2's locks are held. A single
+ *    `DELETE … WHERE not exists (…)` would not do: it would wait on an
+ *    in-flight protection's lock, and on waking it does not re-evaluate a
+ *    subquery against a row that was locked rather than changed — so it would
+ *    delete the row and let `on delete set null` quietly empty the new pointer.
+ *
+ * That argument needs read committed, and the function checks rather than
+ * trusts it: under repeatable read step 3 would see step 1's snapshot again.
  *
  * `revision_blocks` and `revision_step_runs` cascade from the delete, and
  * `block_identities` deliberately does not: an id, once minted, is never
  * deleted. docs/project/block-ids.md.
+ *
+ * It does not log: a line written inside a transaction announces something a
+ * later statement may roll back. The caller logs after its commit.
  */
-export async function sweepAbandonedDrafts(olderThanMs: number): Promise<number> {
-  const db = getDb();
-  const cutoff = new Date(Date.now() - olderThanMs);
+export async function sweepAbandonedDrafts(
+  tx: Tx,
+  articleId: string,
+  opts: DraftSweepOptions,
+): Promise<SweptDrafts> {
+  const olderThanMs = opts.olderThanMs ?? ABANDONED_DRAFT_MS;
+  const limit = opts.limit ?? DRAFT_SWEEP_BATCH;
+  const inThisArticle = eq(articleRevisions.articleId, articleId);
+  const abandoned = abandonedDraftCondition(olderThanMs);
 
-  /* Two small reads and a set difference rather than one clever statement with
-     two `NOT IN` subqueries. `NOT IN` against a column that can be NULL matches
-     nothing at all — silently, and in the *safe* direction, so a sweep that had
-     quietly stopped deleting anything would look exactly like a sweep with
-     nothing to do. Drafts are few; correctness is worth the round trip. */
-  const [candidates, owned, current] = await Promise.all([
-    db
-      .select({ id: articleRevisions.id })
-      .from(articleRevisions)
-      .where(
-        and(
-          inArray(articleRevisions.status, ["draft", "failed"]),
-          lt(articleRevisions.createdAt, cutoff),
+  /* One more than the batch, so "there is more" is a fact rather than a guess. */
+  const found = await tx
+    .select({ id: articleRevisions.id })
+    .from(articleRevisions)
+    .where(and(inThisArticle, abandoned))
+    .orderBy(asc(articleRevisions.createdAt), asc(articleRevisions.id))
+    .limit(limit + 1);
+  const ids = found.slice(0, limit).map((row) => row.id);
+  const enumerated = { mode: opts.mode, candidates: ids.length, more: found.length > limit };
+  if (opts.mode === "count" || ids.length === 0) return { ...enumerated, deleted: 0 };
+
+  const [isolation] = (
+    await tx.execute(sql`select current_setting('transaction_isolation') as level`)
+  ).rows as { level: string }[];
+  if (isolation?.level !== "read committed") {
+    throw new Error(
+      `sweepAbandonedDrafts needs read committed, and this transaction is ` +
+        `${isolation?.level ?? "unknown"}: its protection recheck would read a stale snapshot.`,
+    );
+  }
+
+  await opts.afterEnumerate?.(ids);
+
+  const locked = await tx
+    .select({ id: articleRevisions.id })
+    .from(articleRevisions)
+    .where(and(inThisArticle, inArray(articleRevisions.id, ids)))
+    .for("update", { skipLocked: true });
+  if (locked.length === 0) return { ...enumerated, deleted: 0 };
+
+  const deleted = await tx
+    .delete(articleRevisions)
+    .where(
+      and(
+        inThisArticle,
+        inArray(
+          articleRevisions.id,
+          locked.map((row) => row.id),
         ),
+        abandoned,
       ),
-    db.select({ id: jobs.draftRevisionId }).from(jobs),
-    db.select({ id: articles.currentRevisionId }).from(articles),
-  ]);
+    );
+  return { ...enumerated, deleted: deleted.rowCount ?? 0 };
+}
 
-  const spared = new Set(
-    [...owned, ...current].map((row) => row.id).filter((id): id is string => id !== null),
-  );
-  const doomed = candidates.filter((row) => !spared.has(row.id));
-  if (!doomed.length) return 0;
+/**
+ * What a job's first step did about its article's old drafts — for the log line
+ * and for tests. **`failed` is an answer, not a throw**: cleanup never costs the
+ * reader their step.
+ */
+export type DraftSweepOutcome =
+  | ({ readonly kind: "swept"; readonly ms: number } & SweptDrafts)
+  | { readonly kind: "failed"; readonly mode: DraftSweepMode; readonly ms: number; readonly error: string };
 
-  await db.delete(articleRevisions).where(
-    inArray(
-      articleRevisions.id,
-      doomed.map((r) => r.id),
-    ),
+/**
+ * Run the sweep inside a savepoint of the step-start transaction, and turn any
+ * failure into an outcome.
+ *
+ * **The step always proceeds.** A sweep that throws is rolled back to its
+ * savepoint — nothing it did survives — and the reader's draft is opened as if
+ * it had not run. The alternative, failing the step, would let housekeeping
+ * take down reading, which is the wrong way round for a cleanup nobody is
+ * waiting for. The failure is logged by the caller after its commit, with the
+ * error's class name only: a Drizzle error message carries query text.
+ */
+async function sweepOnStepStart(
+  tx: Tx,
+  articleId: string,
+  opts: DraftSweepOptions,
+): Promise<DraftSweepOutcome> {
+  const started = performance.now();
+  const ms = () => Math.round(performance.now() - started);
+  /* **A savepoint written out, not `tx.transaction(…)`.** Drizzle's nested
+     transaction is a savepoint too, but it takes no options — a savepoint cannot
+     change the isolation level — and tests/store-transaction-isolation.test.ts
+     requires every `.transaction(…)` in src/store to name one, which is the right
+     rule for every other call. If `rollback to savepoint` itself fails (the
+     connection is gone), that error propagates and the step fails, as it would
+     have on its next statement anyway. */
+  await tx.execute(sql`savepoint draft_sweep`);
+  try {
+    const swept = await sweepAbandonedDrafts(tx, articleId, opts);
+    await tx.execute(sql`release savepoint draft_sweep`);
+    return { kind: "swept", ms: ms(), ...swept };
+  } catch (err) {
+    await tx.execute(sql`rollback to savepoint draft_sweep`);
+    return {
+      kind: "failed",
+      mode: opts.mode,
+      ms: ms(),
+      error: err instanceof Error ? err.name : typeof err,
+    };
+  }
+}
+
+/** The line a step-start sweep prints — after the commit, and only when there was something to say. */
+function logDraftSweep(slug: string, articleId: string, outcome: DraftSweepOutcome): void {
+  if (outcome.kind === "failed") {
+    logger.warn(
+      { slug, articleId, mode: outcome.mode, ms: outcome.ms, error: outcome.error },
+      "abandoned-draft sweep failed; the step went ahead without it",
+    );
+    return;
+  }
+  if (outcome.candidates === 0) return;
+  logger.info(
+    {
+      slug,
+      articleId,
+      mode: outcome.mode,
+      candidates: outcome.candidates,
+      more: outcome.more,
+      deleted: outcome.deleted,
+      ms: outcome.ms,
+    },
+    outcome.mode === "count"
+      ? "abandoned draft revisions counted (count mode: nothing deleted)"
+      : "abandoned draft revisions swept",
   );
-  logger.info({ swept: doomed.length, olderThanMs }, "abandoned draft revisions swept");
-  return doomed.length;
 }
