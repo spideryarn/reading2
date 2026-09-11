@@ -1201,6 +1201,9 @@ WHAT DOES NOT
   background", "Let us turn to the second objection."
 - A sentence that needs the paragraph around it to mean anything. A quote is
   shown on its own, so a line beginning "This is why it fails" is useless.
+- A piece cut out of the middle of a sentence. Start where a sentence starts
+  (or a clause that reads as one), so the line has its own subject — "are more
+  pious in church than in the family" is half a thought, however true.
 - A statement of fact with nothing of the author in it. A date, a figure, a
   definition anyone would write the same way.
 - A line the piece is QUOTING rather than saying. Anything inside quotation

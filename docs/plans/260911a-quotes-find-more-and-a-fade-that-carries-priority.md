@@ -231,6 +231,65 @@ sentence for good, because nothing clears it short of the article changing. If t
 him, the two ways out are (a) drop the outdated banner for quotes, or (b) put a "choose them all
 again" on the Metadata page, where nobody meets it by accident.
 
+## What landed, and the code review
+
+Stages 1 and 2 landed together as `4403b44d` — they share every file the fade and Find more touch,
+and neither is useful half-done. The full suite: 1076 files green, 7 red, none of them this change's
+— two are the fresh-worktree bundle tests (`cold-start-lazy-imports`, `pdf-bundle-trace`, no
+`api-dist/`), four are fleet/overseer tests that need `tools/fleet/web/dist` built, and one,
+`glossary-band-wiring`, **was** mine: it reads `useQuoteMarks` for `resolveQuotes(blocks, ` on one
+line, and the formatter-free rewrap had split it. Put back on one line.
+
+GPT Sol then reviewed the built code with `--sandbox workspace-write`, fixed what it found, and
+reported nothing wider. Two P1s, both in the property this change most had to keep — that a Find
+more changes nothing the reader already has, and makes no badge lie:
+
+- **A deleted profile left the badge saying "written for you".** The shared `profileIsStale` treats
+  a cleared profile as no change, which is right for artefacts that replace and wrong for one that
+  appends an unprofiled pass under a kept first-pass stamp. The quotes route alone now counts it as
+  a change (`withProfileChanged`'s `clearedCountsAsChanged`).
+- **A Find more could reorder an existing quote, or miss an overlap with a legacy one.** The merge
+  sorted the whole list against the body-evidence blocks, so an old quote in a block today's policy
+  filters out went to the end; and a legacy quote with no `start`, or carrying the model's straight
+  dash where the article has a curly one, was located with `indexOf` and missed. Existing spans are
+  now re-found through the matcher that admitted them, and new quotes are merged *around* the
+  existing list against the whole article, which is never reordered. Both with regression tests.
+
+`8e0957ea`. Every test file that drives `GET /api/quotes/:slug` was run after it — the route
+change's other callers — and all passed.
+
+## Stage 3, the browser pass
+
+Playwright against system Chrome on the box, its own dev server from this worktree, signed in as
+the local dev owner, on `fowler-phrenology` (15 quotes, `quotes/2`). One real Find more.
+
+**The fade reads as "slightly", and the faintest stroke is clearly visible.** Six distinct values on
+the page (1.00, 0.94, 0.88 at 3px; 0.82, 0.76, 0.70 at 1px). The faintest sampled at
+`rgb(89,143,115)`, about 5.3:1 against the page — the number the contrast test computes from the
+tokens, measured rather than asserted. Against every mark forced back to the old 0.95, the only
+visible difference is a slightly greyer green on the light strokes; weight still does most of the
+work, which is what "slightly" asked for.
+
+**Find more appended and changed nothing it had.** Outdated banner with no button, *Find more* the
+only action, no *Choose them again* anywhere. One press: 34s, 15 → **48** (`passes: 2`, `lastAdded:
+33`); all 15 originals kept id, text, scores and relative order, the new ones interleaved in reading
+order. Banner still up, as designed. No console errors, nothing in the server log.
+
+What it found, and what happened:
+
+- **Five of the 33 new lines began mid-sentence** — *"are more pious in church than in the family"*.
+  The prompt banned a line needing its paragraph, not a fragment cut from a sentence; it now bans
+  that too, with that line as the example. `quotes/4` has not shipped, so no second bump. Unmeasured.
+- **Every new line was light**: top importance 0.6, two unscored — so after one Find more the prose
+  had 29 strokes at 0.70 and 14 at 0.76, where heavy ones had been the majority. That is the model
+  being honest about the tail, and the bar hides it; but in the default `document` rank every one is
+  outlined. The density question quotes.md already records, made sharper. For Greg.
+- **The list stays `quotes/2`**, so the outdated sentence is permanent on it — the designed cost above.
+- Small, not fixed: the running label is the pipeline's *"Choosing the quotes"*, not *"Finding
+  more…"*, once the job is running (`JobProgress` shows the step's own label); for ~0.4s after the
+  job ends the button is back while the old count still shows, before the refresh lands — the same
+  gap every job-driven band has.
+
 ## What would make this wrong
 
 - If the faintest stroke is not clearly visible in the browser pass, raise the floor; the contrast

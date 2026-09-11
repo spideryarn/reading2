@@ -580,9 +580,12 @@ would make the first Find more on every list written before `quotes/4` silently 
 *outdated*, and the banner says *"These include lines chosen by an earlier version of the prompt"*,
 true whether some or all of them were. A **different profile** is appended to as well: Find more
 sends the list's own profile setting and the artefact keeps the `profileHash` of the pass that
-started it, so the only way two profiles' choices meet in one list is a reader who changed theirs
-since — the one state where the badge already says *"Written for a profile you have changed
-since"*, and the kept stamp keeps it saying so. GPT Sol objected to both as provenance written
+started it, so the only way two profiles' choices meet in one list is a reader who changed or
+deleted theirs since — the one state where the badge already says the list was written for a
+profile that is not theirs now, and the kept stamp keeps it saying so. **Deletion counts as a change
+here and nowhere else**: the shared `profileIsStale` treats a cleared profile as no reason to
+rewrite, which is right for an artefact that replaces and wrong for one that appends an unprofiled
+pass under the old stamp (`withProfileChanged`'s `clearedCountsAsChanged`, GPT Sol). GPT Sol objected to both as provenance written
 falsely; Fable arbitrated for this shape. [260911a](../plans/260911a-quotes-find-more-and-a-fade-that-carries-priority.md)
 § What the plan review changed.
 
