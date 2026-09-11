@@ -232,6 +232,8 @@ the six is this slice's**, and each was classified rather than assumed:
   stop at *"no built client at tools/fleet/web/dist — run `npm run build:fleet` first"*. Same class.
 - `overseer-diagnose` § *F40: a checkout whose job list cannot be built…* — re-run alone, still red.
   It is a temp-directory test of `tools/overseer`'s diagnose text and imports nothing this slice
-  touches; it belongs to the Overseer work in flight on `dev`.
+  touches; it belongs to the Overseer work in flight on `dev`. **Fixed there**: the merge of
+  `origin/dev` before pushing brought a change to that one test file, and afterwards it, the
+  contract test and the oracle ran **363 of 363** together.
 
 Every suite that drives a route this slice moved is in the focused set in § *Stage 3*, green.
