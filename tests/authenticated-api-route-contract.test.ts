@@ -22,7 +22,7 @@
  * The comparison is **exact set equality in both directions**: a pair in the
  * source and not here fails, and a row here with no guard fails.
  *
- * **The counts are controls, not the oracle.** 67 matchers and 81 guards are
+ * **The counts are controls, not the oracle.** 67 matchers and 82 guards are
  * asserted because a wrong number is a loud, readable failure — but a count
  * cannot see one guard deleted while another is added, which is the shape a bad
  * refactor actually has. Never weaken the set equality on the grounds that the
@@ -36,12 +36,11 @@
  * ## Two shapes, one contract
  *
  * Since stage 3a the dispatch is written two ways. Most of it is still
- * `if (matcher && req.method === "VERB")` in the chain; the bottom of that chain
- * — billing's four routes, the nine jobs and uploads guards that stood
- * immediately above them since stage 3b, and referee's eight above those since
- * 260907e — are rows of `AUTH_ROUTES`, a static ordered
- * table of closures that `serveAuthenticatedApi` consults after every remaining
- * guard and before its 404. The reader below normalises both into the same
+ * `if (matcher && req.method === "VERB")` in the chain; its bottom 43 guards —
+ * comments, chat and live, search, referee, jobs and uploads, then billing — are
+ * rows of `AUTH_ROUTES`, a static ordered table of closures that
+ * `serveAuthenticatedApi` consults after every remaining guard and before its
+ * 404. The reader below normalises both into the same
  * `(method, match)` pair, so
  * **`EXPECTED_AUTH_ROUTES` did not change by one row or one witness** when they
  * moved — which is the whole evidence that the move was behaviour-preserving. If
@@ -94,7 +93,7 @@
  * and the request is never made — so a drifted contract cannot be the thing
  * that fires a live POST at Stripe. See `REFUSALS`.
  *
- * ## Why the order of the 81 guards is not asserted
+ * ## Why the order of the 82 guards is not asserted
  *
  * The chain is written in one order and compared here as a **set**, which does
  * not record the order at all. The literal below is typed out in declaration
@@ -218,7 +217,7 @@
  *     **1 failed**, and only one: § `keeps the table in the chain's order`. That
  *     is the honest reach of the rest of this file — a reorder is an *equivalent*
  *     mutation for the pair set, the collision corpus and the negative matrix
- *     alike, which is § *Why the order of the 81 guards is not asserted*
+ *     alike, which is § *Why the order of the 82 guards is not asserted*
  *     working as designed. The table is the one place order is recorded, because
  *     it is the one place order was *carried across* rather than merely observed.
  * 16. **A second dispatch of the whole table**, earlier in the chain — GPT Sol's
@@ -1911,7 +1910,7 @@ describe("the authenticated API's route contract", () => {
 
     it("answers the moved domains from the table, not from the chain", () => {
       /* Otherwise everything above could be green because the parser is still
-         reading twenty-one `if`s and the move never happened — the two forms are
+         reading chain `if`s and the move never happened — the two forms are
          normalised to the same pair, which is the whole idea and also the way
          this could pass while proving nothing.
 
@@ -1921,6 +1920,13 @@ describe("the authenticated API's route contract", () => {
       expect(sorted(parsed.guards.filter((g) => g.fromTable).map((g) => pairKey(g.method, g.match))))
         .toEqual(
           sorted([
+            // comments, 260911b
+            "GET regex /^\\/api\\/comments\\/([\\w.%-]+)$/",
+            "POST regex /^\\/api\\/comments\\/([\\w.%-]+)$/",
+            "POST regex /^\\/api\\/comments\\/([\\w.%-]+)\\/([\\w.%-]+)\\/answer$/",
+            "PATCH regex /^\\/api\\/comments\\/([\\w.%-]+)\\/([\\w.%-]+)\\/mark$/",
+            "PATCH regex /^\\/api\\/comments\\/([\\w.%-]+)\\/([\\w.%-]+)$/",
+            "DELETE regex /^\\/api\\/comments\\/([\\w.%-]+)\\/([\\w.%-]+)$/",
             // chat and the live sessions, 260908a
             "GET regex /^\\/api\\/chat\\/([\\w.%-]+)$/",
             "POST regex /^\\/api\\/chat\\/([\\w.%-]+)$/",
@@ -1979,6 +1985,7 @@ describe("the authenticated API's route contract", () => {
         "/api/search",
         "/api/chat",
         "/api/live",
+        "/api/comments",
       ];
       expect(
         parsed.guards.filter((g) => !g.fromTable && moved.some((p) => pathish(g.match).includes(p))),
@@ -1993,11 +2000,12 @@ describe("the authenticated API's route contract", () => {
          and require the same filter to find them. When that domain moves this
          becomes a real failure, and the next unmigrated regex domain takes its
          place — which is the point: a control nobody ever has to maintain is
-         one nobody checks is still true. It has been repointed once already,
-         from `/api/chat` to `/api/comments`, when 260907e moved chat on
-         2026-09-08. */
+         one nobody checks is still true. It has been repointed twice: from
+         `/api/chat` to `/api/comments` when 260907e moved chat on 2026-09-08,
+         and from `/api/comments` to `/api/projection` — the chain's last guard
+         now, and the bottom of the next slice — when 260911b moved comments. */
       const stillInTheChain = parsed.guards.filter(
-        (g) => !g.fromTable && pathish(g.match).includes("/api/comments"),
+        (g) => !g.fromTable && pathish(g.match).includes("/api/projection"),
       );
       expect(
         stillInTheChain.length,
@@ -2029,6 +2037,13 @@ describe("the authenticated API's route contract", () => {
         parsed.guards.filter((g) => g.fromTable).map((g) => pairKey(g.method, g.match)),
         "the table's rows are the bottom of the chain in the order it had them; a domain is prepended, never appended, and the interleave inside jobs/uploads is not to be tidied",
       ).toEqual([
+        // comments, 260911b
+        "GET regex /^\\/api\\/comments\\/([\\w.%-]+)$/",
+        "POST regex /^\\/api\\/comments\\/([\\w.%-]+)$/",
+        "POST regex /^\\/api\\/comments\\/([\\w.%-]+)\\/([\\w.%-]+)\\/answer$/",
+        "PATCH regex /^\\/api\\/comments\\/([\\w.%-]+)\\/([\\w.%-]+)\\/mark$/",
+        "PATCH regex /^\\/api\\/comments\\/([\\w.%-]+)\\/([\\w.%-]+)$/",
+        "DELETE regex /^\\/api\\/comments\\/([\\w.%-]+)\\/([\\w.%-]+)$/",
         // chat and the live sessions, 260908a
         "GET regex /^\\/api\\/chat\\/([\\w.%-]+)$/",
         "POST regex /^\\/api\\/chat\\/([\\w.%-]+)$/",
@@ -2338,7 +2353,7 @@ const ${ROUTE_TABLE}: readonly AuthRoute[] = [
   });
 
   /**
-   * The property that makes the order of the 81 guards irrelevant — asserted
+   * The property that makes the order of the 82 guards irrelevant — asserted
    * instead of the order itself.
    *
    * The chain is *written* in one order and compared above as a *set*, which

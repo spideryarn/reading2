@@ -6747,6 +6747,11 @@ const ONE_RUN_PATTERN = /^\/api\/search\/([\w.%-]+)\/([\w.%-]+)$/;
    holds that, and it held it while these were guards too. */
 const CHAT_PATTERN = /^\/api\/chat\/([\w.%-]+)$/;
 const ONE_THREAD_PATTERN = /^\/api\/chat\/([\w.%-]+)\/([\w.%-]+)$/;
+/* Comments: an article's comments, and one comment. Two rows apiece — GET and
+   POST on the list, PATCH and DELETE on the comment — so both are named here;
+   `answer` and `mark` are one row each and are written into those rows. */
+const COMMENTS_PATTERN = /^\/api\/comments\/([\w.%-]+)$/;
+const ONE_COMMENT_PATTERN = /^\/api\/comments\/([\w.%-]+)\/([\w.%-]+)$/;
 
 /**
  * **The ordered table `serveAuthenticatedApi`'s `if` chain is being moved into,
@@ -6765,16 +6770,17 @@ const ONE_THREAD_PATTERN = /^\/api\/chat\/([\w.%-]+)\/([\w.%-]+)$/;
  * Because the move is incremental and must reorder nothing. What is here is the
  * **bottom of the chain, taken upward**: billing was its last four guards, jobs
  * and uploads the nine immediately above those, referee the eight above them,
- * search the four above *those*, and chat and the live sessions the twelve above
- * those again — and asking the table after every remaining guard and before the
- * terminal 404 puts each of them in exactly the position it already had. The
+ * search the four above *those*, chat and the live sessions the twelve above
+ * those again, and comments the six above chat — and asking the table after
+ * every remaining guard and before the terminal 404 puts each of them in exactly
+ * the position it already had. The
  * count is deliberately not written here: it changes once per slice, and a
  * number in a comment that decays on a schedule is a comment that is wrong more
  * often than right. `EXPECTED_AUTH_ROUTES` in
  * tests/authenticated-api-route-contract.test.ts is where the inventory lives.
  *
  * **So the rows are in chain order, and prepending is how a domain arrives.**
- * The next slice up goes above the search rows, not below them — the table's
+ * The next slice up goes above the comments rows, not below them — the table's
  * order *is* the chain's order, continued. Taking the slice contiguously is also what
  * preserves the one interleave here for free: `/api/uploads` and
  * `/api/uploads/:id` sit *between* `GET /api/jobs` and `POST /api/jobs`, which is
@@ -6800,6 +6806,137 @@ const ONE_THREAD_PATTERN = /^\/api\/chat\/([\w.%-]+)\/([\w.%-]+)$/;
  * **No `g` or `y` flag**, refused by `assertDispatchableRoutes` below.
  */
 const AUTH_ROUTES: readonly AuthRoute[] = [
+  {
+    kind: "pattern",
+    method: "GET",
+    pattern: COMMENTS_PATTERN,
+    handler: async ({ request: { res } }, captures) => {
+      const slug = slugPart(captures, 1);
+      send(res, 200, { comments: await sweepOrphaned(slug) });
+    },
+  },
+
+  {
+    kind: "pattern",
+    method: "POST",
+    pattern: COMMENTS_PATTERN,
+    handler: async ({ request: { req, res } }, captures) => {
+      /* **Making a comment is free and answers with JSON.** Until 2026-08-28
+         this path was `answer`, which spends a model call and streams; the two
+         meanings now have two routes, because a colliding id means opposite
+         things to them — a retry to one, somebody else's comment to the other.
+         docs/plans/260828a-comments-and-bookmarks.md § the store contract. */
+      send(res, 201, { comment: await createFree(slugPart(captures, 1), await readBody(req)) });
+    },
+  },
+
+  /* Answering is its own sub-path rather than a field on the POST, because it
+     is the one thing a comment can do that spends money and streams. **There is
+     deliberately no route for linking a comment to its conversation**: the only
+     place that knows the real thread id is the chat stream itself, so the link
+     is written there. See docs/plans/260828a-comments-and-bookmarks.md. */
+  {
+    kind: "pattern",
+    method: "POST",
+    pattern: /^\/api\/comments\/([\w.%-]+)\/([\w.%-]+)\/answer$/,
+    handler: async ({ request: { req, res } }, captures) => {
+      /* The one endpoint here that does not answer with JSON — it writes its
+         own headers and ends the response. It is still reached through `send`
+         for its *failures*: validation throws before a header is written, so a
+         bad request is an ordinary 400. */
+      const [slug, id] = [slugPart(captures, 1), part(captures, 2)];
+      const answerBody = await readBody(req);
+      await withSpendAttribution({ articleSlug: slug }, () =>
+        answer(slug, id, answerBody, res),
+      );
+    },
+  },
+
+  /* **The referee's own placement, changed** — its own sub-path rather than two
+     more fields on the `PATCH` below, and the reason is what that route's own
+     bug turned out to be. A patch route carrying more than one thing has to
+     decide what an absent key means, and "leave it alone" is one missing branch
+     away from "clear it": a placement would then be destroyed by a request that
+     never mentioned it, with a 200 in the answer and nothing in the log.
+     docs/reusable/silent-success.md, and
+     docs/plans/260901i-the-referee-places-the-passage-themselves.md § *Why a
+     separate path*. A named path cannot express the ambiguity. */
+  {
+    kind: "pattern",
+    method: "PATCH",
+    pattern: /^\/api\/comments\/([\w.%-]+)\/([\w.%-]+)\/mark$/,
+    handler: async ({ request: { req, res } }, captures) => {
+      /* **Both fields, always, and a half body is a 400.** `tidyMark` reads an
+         absent key as "no placement", which is right on the create path and
+         would be a silent wipe here — a request naming only `criterionId` would
+         clear the number the referee chose and answer 200. The pair is one
+         value, so the route asks for the pair; `{ criterionId: null, valence:
+         null }` is how a placement is cleared, deliberately and in writing.
+
+         This rule is the route's own and is not a second copy of what a
+         placement is: `tidyMark` still owns every rule about the values, and it
+         is the same `tidyMark` the create path uses. */
+      const [slug, id] = [slugPart(captures, 1), part(captures, 2)];
+      const raw = fields(await readBody(req));
+      if (!("criterionId" in raw) || !("valence" in raw)) {
+        throw httpError(
+          400,
+          "A placement carries both criterionId and valence, each a value or null [cmt-mark-pair]",
+        );
+      }
+      const mark = await tidyMark(slug, raw);
+      send(res, 200, { comment: await commentStore.patchMark(slug, id, mark) });
+    },
+  },
+
+  {
+    kind: "pattern",
+    method: "PATCH",
+    pattern: ONE_COMMENT_PATTERN,
+    handler: async ({ request: { req, res } }, captures) => {
+      const [slug, id] = [slugPart(captures, 1), part(captures, 2)];
+      const raw = fields(await readBody(req));
+      /* **A patch that never mentions the body must not delete it.**
+         `tidyBody(undefined)` is `null` and `patchBody` writes `body` whatever
+         it is handed, so `PATCH {}` — or a `PATCH` carrying any other field —
+         answered 200 and destroyed the reader's words, with nothing erroring
+         and nothing in the log. It was latent only because `useComments.edit`
+         is the sole caller and always sends `{ body }`, and it would have
+         stopped being latent the moment this route grew a second field. Found
+         by reading, 2026-09-01.
+
+         `"body" in raw` is the whole fix, and the distinction it draws is
+         real: `{ body: null }` is a reader clearing their words back to a bare
+         bookmark and stays a 200, while no `body` key at all is a request that
+         does not say what it wants — absent could mean *clear it* or *leave
+         it*, and the route must not guess. docs/reusable/silent-success.md.
+
+         **Unknown keys are ignored rather than refused**, deliberately: with
+         the body required, the worst a field this route does not act on can do
+         is nothing, and a no-op is visible where a wipe was not. Refusing every
+         unrecognised key is a stricter rule than any other route here keeps,
+         and `POST /api/comments/:slug` cannot keep it at all — it reads several
+         fields off one body. */
+      if (!("body" in raw)) {
+        throw httpError(400, "A body patch has to say what the body is, or null [cmt-body-missing]");
+      }
+      // `tidyBody` is the one place that decides what a body may be, so the
+      // route no longer keeps a second, slightly different copy of that rule.
+      send(res, 200, { comment: await commentStore.patchBody(slug, id, tidyBody(raw.body)) });
+    },
+  },
+
+  {
+    kind: "pattern",
+    method: "DELETE",
+    pattern: ONE_COMMENT_PATTERN,
+    handler: async ({ request: { res } }, captures) => {
+      // The slug becomes a directory; the id is only ever matched against a list.
+      const [slug, id] = [slugPart(captures, 1), part(captures, 2)];
+      send(res, 200, { comments: await commentStore.remove(slug, id) });
+    },
+  },
+
   {
     kind: "pattern",
     method: "GET",
@@ -8015,30 +8152,14 @@ export async function serveAuthenticatedApi(
      the client parses as JSON. `sendExport` has the rest.
      docs/plans/260901h-export-article-data.md. */
   const exportBundle = /^\/api\/export\/([\w.%-]+)$/.exec(path);
-  const comments = /^\/api\/comments\/([\w.%-]+)$/.exec(path);
-  const one = /^\/api\/comments\/([\w.%-]+)\/([\w.%-]+)$/.exec(path);
-  /* Answering is its own sub-path rather than a field on the POST, because it
-     is the one thing a comment can do that spends money and streams. **There is
-     deliberately no route for linking a comment to its conversation**: the only
-     place that knows the real thread id is the chat stream itself, so the link
-     is written there. See docs/plans/260828a-comments-and-bookmarks.md. */
-  const commentAnswer = /^\/api\/comments\/([\w.%-]+)\/([\w.%-]+)\/answer$/.exec(path);
-  /* **The referee's own placement, changed** — its own sub-path rather than two
-     more fields on the `PATCH` above, and the reason is what that route's own
-     bug turned out to be. A patch route carrying more than one thing has to
-     decide what an absent key means, and "leave it alone" is one missing branch
-     away from "clear it": a placement would then be destroyed by a request that
-     never mentioned it, with a 200 in the answer and nothing in the log.
-     docs/reusable/silent-success.md, and
-     docs/plans/260901i-the-referee-places-the-passage-themselves.md § *Why a
-     separate path*. A named path cannot express the ambiguity. */
-  const commentMark = /^\/api\/comments\/([\w.%-]+)\/([\w.%-]+)\/mark$/.exec(path);
-  /* The chat, live-session, search, referee, jobs, uploads and billing matchers
-     used to be declared here and handled at the very end of the chain. They are
-     the rows of `AUTH_ROUTES` above, in that same order, and the table is
-     consulted after every guard below and before the terminal 404 — the position
-     they already had, so the move reorders nothing. `commentMark` is now the last
-     matcher this chain declares, and comments are the next slice up. */
+  /* The comments, chat, live-session, search, referee, jobs, uploads and billing
+     matchers used to be declared here and handled at the very end of the chain.
+     They are the rows of `AUTH_ROUTES` above, in that same order, and the table
+     is consulted after every guard below and before the terminal 404 — the
+     position they already had, so the move reorders nothing. `exportBundle` is
+     now the last matcher this chain declares, but declaration order is not
+     dispatch order: the last *guard* is `projection`, so the sketch-to-projection
+     block is the next slice up. */
 
     /* **The second gate, and it guards a prefix rather than a route.**
        Everything under `/api/admin/` is refused to everybody but the one
@@ -8642,99 +8763,13 @@ export async function serveAuthenticatedApi(
         });
       }
     }
-    if (comments && req.method === "GET") {
-      const slug = slugPart(comments, 1);
-      send(res, 200, { comments: await sweepOrphaned(slug) });
-      return;
-    }
-    if (comments && req.method === "POST") {
-      /* **Making a comment is free and answers with JSON.** Until 2026-08-28
-         this path was `answer`, which spends a model call and streams; the two
-         meanings now have two routes, because a colliding id means opposite
-         things to them — a retry to one, somebody else's comment to the other.
-         docs/plans/260828a-comments-and-bookmarks.md § the store contract. */
-      send(res, 201, { comment: await createFree(slugPart(comments, 1), await readBody(req)) });
-      return;
-    }
-    if (commentAnswer && req.method === "POST") {
-      /* The one endpoint here that does not answer with JSON — it writes its
-         own headers and ends the response. It is still reached through `send`
-         for its *failures*: validation throws before a header is written, so a
-         bad request is an ordinary 400. */
-      const [slug, id] = [slugPart(commentAnswer, 1), part(commentAnswer, 2)];
-      const answerBody = await readBody(req);
-      await withSpendAttribution({ articleSlug: slug }, () =>
-        answer(slug, id, answerBody, res),
-      );
-      return;
-    }
-    if (commentMark && req.method === "PATCH") {
-      /* **Both fields, always, and a half body is a 400.** `tidyMark` reads an
-         absent key as "no placement", which is right on the create path and
-         would be a silent wipe here — a request naming only `criterionId` would
-         clear the number the referee chose and answer 200. The pair is one
-         value, so the route asks for the pair; `{ criterionId: null, valence:
-         null }` is how a placement is cleared, deliberately and in writing.
-
-         This rule is the route's own and is not a second copy of what a
-         placement is: `tidyMark` still owns every rule about the values, and it
-         is the same `tidyMark` the create path uses. */
-      const [slug, id] = [slugPart(commentMark, 1), part(commentMark, 2)];
-      const raw = fields(await readBody(req));
-      if (!("criterionId" in raw) || !("valence" in raw)) {
-        throw httpError(
-          400,
-          "A placement carries both criterionId and valence, each a value or null [cmt-mark-pair]",
-        );
-      }
-      const mark = await tidyMark(slug, raw);
-      send(res, 200, { comment: await commentStore.patchMark(slug, id, mark) });
-      return;
-    }
-    if (one && req.method === "PATCH") {
-      const [slug, id] = [slugPart(one, 1), part(one, 2)];
-      const raw = fields(await readBody(req));
-      /* **A patch that never mentions the body must not delete it.**
-         `tidyBody(undefined)` is `null` and `patchBody` writes `body` whatever
-         it is handed, so `PATCH {}` — or a `PATCH` carrying any other field —
-         answered 200 and destroyed the reader's words, with nothing erroring
-         and nothing in the log. It was latent only because `useComments.edit`
-         is the sole caller and always sends `{ body }`, and it would have
-         stopped being latent the moment this route grew a second field. Found
-         by reading, 2026-09-01.
-
-         `"body" in raw` is the whole fix, and the distinction it draws is
-         real: `{ body: null }` is a reader clearing their words back to a bare
-         bookmark and stays a 200, while no `body` key at all is a request that
-         does not say what it wants — absent could mean *clear it* or *leave
-         it*, and the route must not guess. docs/reusable/silent-success.md.
-
-         **Unknown keys are ignored rather than refused**, deliberately: with
-         the body required, the worst a field this route does not act on can do
-         is nothing, and a no-op is visible where a wipe was not. Refusing every
-         unrecognised key is a stricter rule than any other route here keeps,
-         and `POST /api/comments/:slug` cannot keep it at all — it reads several
-         fields off one body. */
-      if (!("body" in raw)) {
-        throw httpError(400, "A body patch has to say what the body is, or null [cmt-body-missing]");
-      }
-      // `tidyBody` is the one place that decides what a body may be, so the
-      // route no longer keeps a second, slightly different copy of that rule.
-      send(res, 200, { comment: await commentStore.patchBody(slug, id, tidyBody(raw.body)) });
-      return;
-    }
-    if (one && req.method === "DELETE") {
-      // The slug becomes a directory; the id is only ever matched against a list.
-      const [slug, id] = [slugPart(one, 1), part(one, 2)];
-      send(res, 200, { comments: await commentStore.remove(slug, id) });
-      return;
-    }
 
     /**
      * **The table, asked after every guard above and before the 404 below.**
      *
-     * Chat, the live sessions, search, referee, jobs, uploads and billing live in
-     * `AUTH_ROUTES` (above `serveAuthenticatedApi`) rather than in this chain.
+     * Comments, chat, the live sessions, search, referee, jobs, uploads and
+     * billing live in `AUTH_ROUTES` (above `serveAuthenticatedApi`) rather than
+     * in this chain.
      * They were the chain's last guards, in that order, immediately above the
      * terminal 404, so consulting the table exactly here leaves each of them
      * where it already was and reorders nothing — the property that makes each

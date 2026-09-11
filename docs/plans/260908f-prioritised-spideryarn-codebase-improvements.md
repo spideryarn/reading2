@@ -17,6 +17,8 @@ C (the glossary question carried into chat) built 2026-09-11 — see § C.
 A (the submit gate, Greg's choice) built 2026-09-11; the reconciliation stages are skipped — see § A.
 F's first stage (a bounded `srcset` candidate) built 2026-09-11 — see § F.
 M (G from a paragraph to its glossary row, Greg's choice of the jump) built 2026-09-11 — see § M.
+G's first stage (Comments join the route table) built 2026-09-11; the later slices are not started —
+see § G.
 Each stage's own status line is the authority.
 
 > Write a rich many-step plan to improve the codebase (prioritising the various suggestions by a
@@ -642,15 +644,21 @@ rewrite handler bodies during migration, or use total file length as the accepta
 
 ### Stage: Comments, including its missing stream-lifetime witness
 
-- [ ] Verify `/api/comments` is still unclaimed. Begin with the next slice's existing leftover-guard
+**Status, 2026-09-11: built** — [260911b-comments-join-the-route-table.md](260911b-comments-join-the-route-table.md).
+The count this section carried was stale by one guard: **82**, not 81 (`DELETE /api/shelf/:slug`
+joined on 2026-09-06), so after this stage **43 moved, 39 remaining**.
+
+- [x] Verify `/api/comments` is still unclaimed. Begin with the next slice's existing leftover-guard
   control, rather than minting a parallel inventory.
-- [ ] Before moving the six Comments guards, write an oracle for
+- [x] Before moving the six Comments guards, write an oracle for
   `POST /api/comments/:slug/:id/answer`: hold the stream while a second attempt reaches the
   `answering` registry. A dropped `await` must release too early and turn the oracle red. Checking
   only a 409 before streaming starts does not test this lifetime.
-- [ ] Move bodies verbatim in original order, preserve decode/body-read/auth gates and outer
+  `tests/comment-answer-stream-lifetime.test.ts`; red under the dropped `await` before and after the
+  move, and under three registry mutations.
+- [x] Move bodies verbatim in original order, preserve decode/body-read/auth gates and outer
   response error mapping, and run the existing body-comparison/route tests plus the new oracle.
-- [ ] Commit a complete slice. Update the original migration plan's counts and moved prefixes.
+- [x] Commit a complete slice. Update the original migration plan's counts and moved prefixes.
 
 ### Stage: paid single-flight and article/link-summary slices
 
