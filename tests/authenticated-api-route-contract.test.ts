@@ -35,12 +35,12 @@
  *
  * ## Two shapes, one contract
  *
- * Since stage 3a the dispatch is written two ways. Most of it is still
- * `if (matcher && req.method === "VERB")` in the chain; its bottom 43 guards —
- * comments, chat and live, search, referee, jobs and uploads, then billing — are
- * rows of `AUTH_ROUTES`, a static ordered table of closures that
- * `serveAuthenticatedApi` consults after every remaining guard and before its
- * 404. The reader below normalises both into the same
+ * Since stage 3a the dispatch is written two ways. The top of it is still
+ * `if (matcher && req.method === "VERB")` in the chain; its bottom 49 guards —
+ * sketch to projection, comments, chat and live, search, referee, jobs and
+ * uploads, then billing — are rows of `AUTH_ROUTES`, a static ordered table of
+ * closures that `serveAuthenticatedApi` consults after every remaining guard
+ * and before its 404. The reader below normalises both into the same
  * `(method, match)` pair, so
  * **`EXPECTED_AUTH_ROUTES` did not change by one row or one witness** when they
  * moved — which is the whole evidence that the move was behaviour-preserving. If
@@ -956,6 +956,9 @@ function isAdminRefusal(n: unknown): boolean {
  * their own — the plan's § [RETURN]. A transcription that looked only for a
  * trailing `return;` would call both of them non-terminating, and then either
  * report a false problem or, worse, be relaxed until it reported nothing.
+ * (Both have been rows of `AUTH_ROUTES` since 260911c, so no guard left in the
+ * chain needs the descent today; it stays, because the next guard written in
+ * that shape would need it and nothing would say so.)
  */
 function armTerminates(consequent: unknown): boolean {
   let block = consequent;
@@ -1842,9 +1845,9 @@ describe("the authenticated API's route contract", () => {
     it("ends every handled arm", () => {
       /* Not decoration: a guard that falls out of its arm reaches the terminal
          404 below **after** its handler has already answered, which is a second
-         `end()` on a finished response. `similar` and `projection` reach their
-         `return` from inside a nested block, which is why `armTerminates`
-         descends rather than looking at the last line. */
+         `end()` on a finished response. `similar` and `projection` reached their
+         `return` from inside a nested block while they were guards, which is
+         why `armTerminates` descends rather than looking at the last line. */
       expect(parsed.guards.filter((g) => !g.terminates).map((g) => `line ${g.line}`)).toEqual([]);
     });
 
@@ -1920,6 +1923,13 @@ describe("the authenticated API's route contract", () => {
       expect(sorted(parsed.guards.filter((g) => g.fromTable).map((g) => pairKey(g.method, g.match))))
         .toEqual(
           sorted([
+            // sketch to the two paid pictures, 260911c
+            "GET regex /^\\/api\\/sketch\\/([\\w.%-]+)$/",
+            "GET regex /^\\/api\\/illustrated\\/([\\w.%-]+)$/",
+            "GET regex /^\\/api\\/illustrated\\/([\\w.%-]+)\\/([0-9a-f]{64})\\.(jpeg|png)$/",
+            "GET regex /^\\/api\\/arc\\/([\\w.%-]+)$/",
+            "POST regex /^\\/api\\/similar\\/([\\w.%-]+)$/",
+            "POST regex /^\\/api\\/projection\\/([\\w.%-]+)$/",
             // comments, 260911b
             "GET regex /^\\/api\\/comments\\/([\\w.%-]+)$/",
             "POST regex /^\\/api\\/comments\\/([\\w.%-]+)$/",
@@ -1986,6 +1996,11 @@ describe("the authenticated API's route contract", () => {
         "/api/chat",
         "/api/live",
         "/api/comments",
+        "/api/sketch",
+        "/api/illustrated",
+        "/api/arc",
+        "/api/similar",
+        "/api/projection",
       ];
       expect(
         parsed.guards.filter((g) => !g.fromTable && moved.some((p) => pathish(g.match).includes(p))),
@@ -2000,12 +2015,14 @@ describe("the authenticated API's route contract", () => {
          and require the same filter to find them. When that domain moves this
          becomes a real failure, and the next unmigrated regex domain takes its
          place — which is the point: a control nobody ever has to maintain is
-         one nobody checks is still true. It has been repointed twice: from
-         `/api/chat` to `/api/comments` when 260907e moved chat on 2026-09-08,
-         and from `/api/comments` to `/api/projection` — the chain's last guard
-         now, and the bottom of the next slice — when 260911b moved comments. */
+         one nobody checks is still true. It has been repointed three times:
+         from `/api/chat` to `/api/comments` when 260907e moved chat on
+         2026-09-08, from `/api/comments` to `/api/projection` when 260911b moved
+         comments, and from `/api/projection` to `/api/quiz` — `quiz` GET and
+         `quizMark`, the chain's last guard now and the bottom of the next slice
+         — when 260911c moved sketch to projection. */
       const stillInTheChain = parsed.guards.filter(
-        (g) => !g.fromTable && pathish(g.match).includes("/api/projection"),
+        (g) => !g.fromTable && pathish(g.match).includes("/api/quiz"),
       );
       expect(
         stillInTheChain.length,
@@ -2037,6 +2054,13 @@ describe("the authenticated API's route contract", () => {
         parsed.guards.filter((g) => g.fromTable).map((g) => pairKey(g.method, g.match)),
         "the table's rows are the bottom of the chain in the order it had them; a domain is prepended, never appended, and the interleave inside jobs/uploads is not to be tidied",
       ).toEqual([
+        // sketch to the two paid pictures, 260911c
+        "GET regex /^\\/api\\/sketch\\/([\\w.%-]+)$/",
+        "GET regex /^\\/api\\/illustrated\\/([\\w.%-]+)$/",
+        "GET regex /^\\/api\\/illustrated\\/([\\w.%-]+)\\/([0-9a-f]{64})\\.(jpeg|png)$/",
+        "GET regex /^\\/api\\/arc\\/([\\w.%-]+)$/",
+        "POST regex /^\\/api\\/similar\\/([\\w.%-]+)$/",
+        "POST regex /^\\/api\\/projection\\/([\\w.%-]+)$/",
         // comments, 260911b
         "GET regex /^\\/api\\/comments\\/([\\w.%-]+)$/",
         "POST regex /^\\/api\\/comments\\/([\\w.%-]+)$/",

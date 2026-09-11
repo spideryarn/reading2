@@ -2,18 +2,22 @@
 
 Status as of 2026-09-08: **the expensive part is behind us; what remains is mechanical.** Stages 1,
 1b, 1c, 2, 3a, 3b, 3c, 4a, 4b and 5 are landed and reviewed. **Update, 2026-09-11:** `AUTH_ROUTES`
-holds **43 of the 82 guards** — billing, jobs/uploads, referee and search from this plan, chat and
+holds **49 of the 82 guards** — billing, jobs/uploads, referee and search from this plan, chat and
 live from 260907e (`docs/plans/260908a-chat-and-live-sessions-join-the-route-table.md`, 2026-09-08),
-and comments (`docs/plans/260911b-comments-join-the-route-table.md`). The total is 82, not the 81
+comments (`docs/plans/260911b-comments-join-the-route-table.md`), and sketch, illustrated, the
+plate, arc, similar and projection
+(`docs/plans/260911c-paid-single-flight-joins-the-route-table.md`). The total is 82, not the 81
 this line used to carry: `DELETE /api/shelf/:slug` joined on 2026-09-06 (`a239fd83`), and the
-contract test's `EXPECTED_GUARD_COUNT` already said so. **39 remain; the paid single-flight block
-(`sketch` … `projection`) is next and unclaimed**, and needs its own oracle first (260908f § G).
-Whoever takes it inherits the control described below, now pointing at `/api/projection`, which will
-go red the moment they move it — that is the handoff, not a bug. Check `ListAgents` and ask before starting any slice: referee
+contract test's `EXPECTED_GUARD_COUNT` already said so. **33 remain; the next slice up is `ideas` …
+`quizMark` (six guards), then the four glossary guards, and only then the article block**, whose
+`GET /api/link-summary` oracle is already written (`tests/link-summary-stream-lifetime.test.ts`,
+260911c). Whoever takes the next slice inherits the control described below, now pointing at
+`/api/quiz`, which will go red the moment they move it — that is the handoff, not a bug. Check `ListAgents` and ask before starting any slice: referee
 was built twice, in parallel, eleven minutes apart, because both plans queued it and neither session
 announced. Biome on `serveAuthenticatedApi`: **244 → 234 → 183 → 164 → 153**, then 125 after chat
-and **127 → 110** across comments (other work in between added two). The `moved` prefix list in the
-contract test is now billing, jobs, uploads, referee, search, chat, live and **comments**.
+and **127 → 110** across comments (other work in between added two), then **110 → 98** across the
+paid block. The `moved` prefix list in the contract test is now billing, jobs, uploads, referee,
+search, chat, live, comments and **sketch, illustrated, arc, similar, projection**.
 
 **Five holes have been found inside this plan's own safety net, and all five are fixed** — the
 `const` hole in `literalConstants` (stage 3c), the last-match-wins AST extractor (the merge), the

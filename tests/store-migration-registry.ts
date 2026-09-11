@@ -1253,6 +1253,17 @@ export const STORE_MIGRATION: Readonly<Record<string, StoreEntry>> = {
       "`scratchArticleInPg` and that copy step is the only condemned module it reaches: " +
       "`openRouterStream` is stubbed, so no model is called and no ledger row is written.",
   },
+  "tests/paid-single-flight-lifetime.test.ts": {
+    category: "shared-mechanism-collateral",
+    mechanisms: ["fixture-loader"],
+    evidence: "static-only",
+    reason:
+      "`POST /api/similar/:slug` and `POST /api/projection/:slug` held open mid-embedding, so " +
+      "that moving them into `AUTH_ROUTES` cannot quietly turn a returned promise into a launched " +
+      "one (docs/plans/260911c-paid-single-flight-joins-the-route-table.md). It seeds through " +
+      "`scratchArticleInPg` and that copy step is the only condemned module it reaches: " +
+      "`embedAll` is stubbed, so no provider is called and no ledger row is written.",
+  },
   "tests/remember-route.test.ts": {
     category: "shared-mechanism-collateral",
     mechanisms: ["ledger-redirect", "fixture-loader"],
@@ -2645,6 +2656,11 @@ export const TEST_LANES: Readonly<Record<string, TestLane>> = {
      nothing, while the private clone is what keeps a seeded `auth.users` row
      out of the shared stack that `tests/admin-store.test.ts` reports on. */
   "tests/owner-jobs.test.ts": "private-postgres",
+  /* Written 2026-09-11 for the paid single-flight slice of the `AUTH_ROUTES`
+     migration (docs/plans/260911c-paid-single-flight-joins-the-route-table.md).
+     `embedAll` is stubbed, so no provider is called; it reaches Storage through
+     `scratchArticleInPg`, as the comment-answer oracle does. */
+  "tests/paid-single-flight-lifetime.test.ts": "private-postgres",
   "tests/pg-ready.test.ts": "private-postgres",
   "tests/pg-session-exact-base.test.ts": "private-postgres",
   "tests/pg-session-real-step.test.ts": "private-postgres",

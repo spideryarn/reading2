@@ -22,7 +22,8 @@
  *    which the type system itself keeps complete.
  * 2. src/routes.ts is where the kind becomes something a reader can ask for.
  *    There is no exported route table — the patterns are `const`s inside
- *    `serveAuthenticatedApi` — so this reads the file and looks for the route
+ *    `serveAuthenticatedApi`, or rows of the unexported `AUTH_ROUTES` once a
+ *    route has moved there — so this reads the file and looks for the route
  *    **and its GET dispatch**, which is the pair that makes the URL real.
  *    Matching only the pattern would pass a route that is declared and never
  *    served; matching only `req.method === "GET"` would pass a name that is not
@@ -137,16 +138,52 @@ const literally = (text: string) => text.replace(/[.*+?^${}()|[\]\\/]/g, "\\$&")
  * until it does, `resolves every artefact kind to a route` below is what stops
  * this one failing quietly.
  */
-const bindingOf = (kind: string): string | null =>
+const chainBindingOf = (kind: string): string | null =>
   new RegExp(`const (\\w+) = ${literally(routePattern(kind))}\\.exec\\(path\\)`).exec(
     routesSource,
   )?.[1] ?? null;
+
+/**
+ * **The same route, once it has moved into `AUTH_ROUTES`** — the ordered table
+ * the chain is being emptied into, one slice at a time
+ * (docs/plans/260907b-split-the-authenticated-api-dispatch-by-domain.md). A
+ * row writes its method and its pattern on consecutive lines:
+ *
+ *     method: "GET",
+ *     pattern: /^\/api\/sketch\/([\w.%-]+)$/,
+ *
+ * and **the row is its own dispatch**, so a `GET` row is a served route by
+ * construction and there is no separate `if` to look for. The method is part
+ * of the match on purpose: a `POST` row for the same pattern is not a read,
+ * and must not count as one.
+ *
+ * Sketch, Illustrated and the arc were the first artefact kinds to move
+ * (docs/plans/260911c-paid-single-flight-joins-the-route-table.md). Before this
+ * existed, that move turned `resolves every artefact kind …` red naming
+ * exactly those three — the loud failure this file was built to give.
+ */
+const TABLE_BINDING = "AUTH_ROUTES";
+const tableRowOf = (kind: string): boolean =>
+  new RegExp(`method: "GET",\\s*\\n\\s*pattern: ${literally(routePattern(kind))},\\s*\\n`).test(
+    routesSource,
+  );
+
+/**
+ * Where the route is bound: the `const` in the chain, `TABLE_BINDING` for a
+ * table row, or `null` when the kind has no route at all.
+ */
+const bindingOf = (kind: string): string | null =>
+  chainBindingOf(kind) ?? (tableRowOf(kind) ? TABLE_BINDING : null);
 
 /** Every artefact kind with a URL, paired with the name that URL is bound to. */
 const declaredRoutes = Object.keys(SHAPE)
   .map((kind) => ({ kind, binding: bindingOf(kind) }))
   .filter((pair): pair is { kind: string; binding: string } => pair.binding !== null)
   .sort((a, b) => a.kind.localeCompare(b.kind));
+
+/** Whether a declared route is answered: a chain `const` needs its `if`; a row is one. */
+const isAnswered = (binding: string): boolean =>
+  binding === TABLE_BINDING || routesSource.includes(getDispatch(binding));
 
 /**
  * **The other side of that derivation, written down**: the kinds `SHAPE` holds
@@ -176,7 +213,7 @@ const ROUTELESS_KINDS = [
 
 /** Every artefact kind a reader can fetch on its own, one article at a time. */
 const servedArtefacts = declaredRoutes
-  .filter(({ binding }) => routesSource.includes(getDispatch(binding)))
+  .filter(({ binding }) => isAnswered(binding))
   .map(({ kind }) => kind);
 
 /**
@@ -268,9 +305,21 @@ describe("the derivation itself", () => {
    */
   it("finds a GET dispatch for every artefact route it found a declaration for", () => {
     const unanswered = declaredRoutes
-      .filter(({ binding }) => !routesSource.includes(getDispatch(binding)))
+      .filter(({ binding }) => !isAnswered(binding))
       .map(({ kind, binding }) => `${kind} (bound as ${binding})`);
     expect(unanswered).toEqual([]);
+  });
+
+  /**
+   * **One form per kind.** `bindingOf` takes the chain's `const` first, so a
+   * kind still declared in the chain *and* written as a row would be read as a
+   * chain route and the row never looked at. A half-finished move is the
+   * contract test's to catch (its § *answers the moved domains from the
+   * table*); this says so here too, rather than resolving it by picking.
+   */
+  it("finds no artefact route in both the chain and the table", () => {
+    const both = Object.keys(SHAPE).filter((kind) => chainBindingOf(kind) !== null && tableRowOf(kind));
+    expect(both).toEqual([]);
   });
 
   it("does not mistake a pipeline-private kind for a route", () => {

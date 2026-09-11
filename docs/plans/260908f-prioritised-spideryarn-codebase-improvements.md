@@ -662,12 +662,24 @@ joined on 2026-09-06), so after this stage **43 moved, 39 remaining**.
 
 ### Stage: paid single-flight and article/link-summary slices
 
-- [ ] Follow the queue in the Chat/live plan. For sketch/similar/projection, mutate
+**Status, 2026-09-11: paid block built; link-summary oracle written; article move not started** —
+[260911c-paid-single-flight-joins-the-route-table.md](260911c-paid-single-flight-joins-the-route-table.md).
+**49 moved, 33 remaining.** The article block is not at the bottom of the chain: the six guards from
+`ideas` to `quizMark` and the four glossary guards sit below it, so moving it now would be a
+reordering the landed design does not allow. Its oracle is in place for when those ten have gone.
+
+- [x] Follow the queue in the Chat/live plan. For sketch/similar/projection, mutate
   `return withSpendAttribution(...)` to an unawaited `void` in the test control: changing only
   `await` cannot see a return-linked lifetime. Preserve the `INFLIGHT` lock through settlement.
-- [ ] For `GET /api/link-summary`, prove the SSE/database single-flight claim lives until the stream
+  `tests/paid-single-flight-lifetime.test.ts`: red under `return` → `void` in the chain and again in
+  the moved rows, and under the single-flight removed.
+- [x] For `GET /api/link-summary`, prove the SSE/database single-flight claim lives until the stream
   ends. Use the local database lane for the real lock; a mocked promise cannot establish fencing.
-- [ ] Take one contiguous domain per reviewed commit. Reject mixed cleanup in handler bodies.
+  `tests/link-summary-stream-lifetime.test.ts`: real claim, fill and allowance; red under `await` →
+  `void` and under the claim's `pending` exit removed.
+- [x] Take one contiguous domain per reviewed commit. Reject mixed cleanup in handler bodies.
+  The six are one contiguous block; the oracle for the article block is a separate, test-only commit.
+- [ ] Move the article block (`article` … `tweets`, nine guards), after the ten below it have moved.
 
 ### Stage: close the transition
 

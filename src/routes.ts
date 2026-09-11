@@ -6771,16 +6771,17 @@ const ONE_COMMENT_PATTERN = /^\/api\/comments\/([\w.%-]+)\/([\w.%-]+)$/;
  * **bottom of the chain, taken upward**: billing was its last four guards, jobs
  * and uploads the nine immediately above those, referee the eight above them,
  * search the four above *those*, chat and the live sessions the twelve above
- * those again, and comments the six above chat — and asking the table after
- * every remaining guard and before the terminal 404 puts each of them in exactly
- * the position it already had. The
+ * those again, comments the six above chat, and the six from sketch to the two
+ * paid pictures (`similar`, `projection`) above comments — and asking the table
+ * after every remaining guard and before the terminal 404 puts each of them in
+ * exactly the position it already had. The
  * count is deliberately not written here: it changes once per slice, and a
  * number in a comment that decays on a schedule is a comment that is wrong more
  * often than right. `EXPECTED_AUTH_ROUTES` in
  * tests/authenticated-api-route-contract.test.ts is where the inventory lives.
  *
  * **So the rows are in chain order, and prepending is how a domain arrives.**
- * The next slice up goes above the comments rows, not below them — the table's
+ * The next slice up goes above the sketch row, not below it — the table's
  * order *is* the chain's order, continued. Taking the slice contiguously is also what
  * preserves the one interleave here for free: `/api/uploads` and
  * `/api/uploads/:id` sit *between* `GET /api/jobs` and `POST /api/jobs`, which is
@@ -6806,6 +6807,218 @@ const ONE_COMMENT_PATTERN = /^\/api\/comments\/([\w.%-]+)\/([\w.%-]+)$/;
  * **No `g` or `y` flag**, refused by `assertDispatchableRoutes` below.
  */
 const AUTH_ROUTES: readonly AuthRoute[] = [
+  /* The Sketch diagram — docs/project/diagram.md § Sketch. GET only, like the
+     artefact reads still in the chain below: drawing one is
+     POST /api/jobs { slug, steps: ["sketch"] }, which is also how "draw it
+     again" is spelled, because the step replaces rather than appends. */
+  {
+    kind: "pattern",
+    method: "GET",
+    pattern: /^\/api\/sketch\/([\w.%-]+)$/,
+    handler: async ({ request: { res } }, captures) => {
+      {
+        const at = slugPart(captures, 1);
+        /* `found.sketch` is `unknown` on the wire and a `Sketch` in both stores,
+           and the cast is only about reaching `profileHash` for the comparison
+           below — the client parses the scene itself on arrival. See
+           SketchResponse in src/types.ts for why the field is not typed here. */
+        send(
+          res,
+          200,
+          await withProfileChanged<SketchResponse>(
+            at,
+            () => loadSketch(at),
+            (found) => found.sketch as { profileHash?: string | null },
+          ),
+        );
+      }
+    },
+  },
+
+  /* Illustrated — docs/project/diagram.md § Illustrated. GET only, like Sketch
+     above and for the same reason: painting one is
+     POST /api/jobs { slug, steps: ["illustrated"] }.
+
+     **Two routes, and the second is the only one in this file that serves bytes
+     an artefact points at.** The hash is spelled out as 64 hex characters here
+     rather than as a loose capture — not because `sendPlate` trusts it (it does
+     not; see that function) but because a pattern that accepts anything invites
+     the next reader to think the capture is a key.
+
+     **Both extensions since 2026-09-04**, when the illustrator changed to one
+     that ignores `output_format` and returns PNG. The extension is captured and
+     `sendPlate` requires it to be the one the stored record names, so a `.jpeg`
+     URL can never serve a PNG: an artefact holds plates of both kinds side by
+     side, and the URL is a promise about the bytes exactly as the storage key
+     is (src/illustrated-image.ts). */
+  {
+    kind: "pattern",
+    method: "GET",
+    pattern: /^\/api\/illustrated\/([\w.%-]+)$/,
+    handler: async ({ request: { res } }, captures) => {
+      {
+        const at = slugPart(captures, 1);
+        /* Shaped exactly like `sketch` above, including the cast, which is only
+           about reaching `profileHash` — the client parses the plates itself on
+           arrival (IllustratedResponse in src/types.ts).
+
+           **`profileChanged` is about the profile the SKETCH was drawn for**,
+           because that is what this artefact inherits (src/illustrated.ts). The
+           comparison is the same one either way; what differs is where the hash
+           came from, and it came from the Sketch. */
+        send(
+          res,
+          200,
+          await withProfileChanged<IllustratedResponse>(
+            at,
+            () => loadIllustrated(at),
+            (found) => found.illustrated as { profileHash?: string | null },
+          ),
+        );
+      }
+    },
+  },
+
+  {
+    kind: "pattern",
+    method: "GET",
+    pattern: /^\/api\/illustrated\/([\w.%-]+)\/([0-9a-f]{64})\.(jpeg|png)$/,
+    handler: async ({ request: { res } }, captures) => {
+      /* `slugPart` on the slug for the reason the `source` route gives — the
+         pattern allows `%` and `.` — and `part` is not used at all on the hash,
+         which is already narrowed to hex by the pattern and is in any case only
+         ever compared, never joined onto anything. */
+      await sendPlate(
+        res,
+        slugPart(captures, 1),
+        part(captures, 2),
+        part(captures, 3),
+      );
+    },
+  },
+
+  /* The arc on its own. It also travels inside `/api/article/:slug`, and this is
+     not a second way to do the same thing — since 2026-08-29 the arc is not built
+     by every ingest, so a reader can arrive without one, ask for one, and need to
+     collect it when the job lands. Refetching the whole article for that re-reads
+     every block and the whole tree; see docs/plans/260827am-glossary-read-latency.md for
+     what that costs on Postgres. */
+  /* Read only, like the ideas GET in the chain below and for the same reason:
+     running the step again replaces the artefact, so "start over" already has
+     a spelling. Asking for one is POST /api/jobs { slug, steps: ["arc"] }.
+
+     **No `withProfileChanged`**, unlike the two above. The arc's prompt does not
+     take the reader profile (src/arc.ts § `generateArc` sends no profile), so
+     there is no "you are not who you were" answer to give and offering one would
+     be a banner about a thing that cannot have happened. */
+  {
+    kind: "pattern",
+    method: "GET",
+    pattern: /^\/api\/arc\/([\w.%-]+)$/,
+    handler: async ({ request: { res } }, captures) => {
+      send(res, 200, await loadArc(slugPart(captures, 1)));
+    },
+  },
+
+  /* Its own endpoint, and unlike every artefact route above it this one is not
+     a read: it embeds the article's blocks the first time it is asked, then
+     serves the answer out of memory (src/similar.ts). It is here rather than on
+     the article payload because only one of the six diagram pictures wants it,
+     and only when the reader presses that toggle — charging every reader of
+     every article for a model call almost none of them will look at is exactly
+     what the `tweets` note in `serveAuthenticatedApi` refuses to do. */
+  /**
+   * **POST, not GET, and the method is the load-bearing part.**
+   *
+   * Every other artefact route in this file is a GET because it *reads*
+   * something a pipeline step already wrote. This one is different: the first
+   * call embeds the article, which spends money at an external provider. A
+   * GET that does that is wrong in a way that is easy to miss — GET is
+   * supposed to be safe, so a link prefetcher, a proxy retry, a crawler or a
+   * double-tap on Back can all pay for it again, none of them having asked
+   * anybody. GPT Sol's finding, 2026-08-27.
+   *
+   * `useIdeas` makes the same split more visibly: it GETs the ideas and POSTs
+   * a *job* to write them. This is the same shape with the write inline,
+   * because embedding an article takes a second or two rather than the half a
+   * minute that makes something a job.
+   */
+  {
+    kind: "pattern",
+    method: "POST",
+    pattern: /^\/api\/similar\/([\w.%-]+)$/,
+    handler: async ({ request: { res } }, captures) => {
+      {
+        const at = slugPart(captures, 1);
+        /* This route pays for embeddings, so its rows carry the article like
+           chat's and explain's do. GPT Sol found both this and `projection`
+           writing owner-attributed rows with a null slug — which the report then
+           excludes from "by article" entirely, so an article's real cost would
+           have been understated by exactly the two features that embed it. */
+        return withSpendAttribution({ articleSlug: at }, async () => {
+          /* The whole article, because this needs the prose **and the tree** —
+             the tree so that two passages of one section cannot take a place in
+             the answer from two passages of different ones (src/similar.ts §
+             `sectionOfRow`). It is the same read every other artefact route
+             makes and the store caches nothing, so on a warm similarity cache
+             this load is the entire cost of the request. */
+          const loaded = await loadArticle(at);
+          try {
+            send(res, 200, await similarBlocks(at, loaded.blocks, loaded.tree));
+          } catch (err) {
+            /* **This used to catch everything and blame the provider**, which
+               is the bug a GPT Sol review had already found and fixed in
+               `projection` twenty lines below — and this, its sibling, was left
+               with it. A ranking bug in src/similar.ts was reported to the
+               reader, and logged, as an outage at somebody else's company.
+               ⟨Sol⟩, 2026-08-28. */
+            throw embeddingHttpError(err, at);
+          }
+          return;
+        });
+      }
+    },
+  },
+
+  /* The other half of the same purchase, and a second endpoint rather than a
+     second field on the first: `similar` answers "which passages are about the
+     same thing", this one answers "where does every passage sit relative to the
+     others" (src/projection.ts). Different pictures want different ones, they
+     are asked for at different moments, and the vectors underneath are bought
+     once and shared (src/article-vectors.ts) — so a reader who presses Force
+     and then Drift pays for one article, not two. */
+  /**
+   * **POST for the same reason `similar` is a POST**: the first call for an
+   * article spends money, and a GET is something a browser, a proxy or a
+   * prefetcher may repeat without asking anybody.
+   *
+   * The arithmetic afterwards is ours rather than the provider's — principal
+   * components and k-means over vectors already in hand — so a failure here
+   * is either the embedding call or a bug, and only the first of those is
+   * worth a sentence about reaching a model.
+   */
+  {
+    kind: "pattern",
+    method: "POST",
+    pattern: /^\/api\/projection\/([\w.%-]+)$/,
+    handler: async ({ request: { res } }, captures) => {
+      {
+        const at = slugPart(captures, 1);
+        /* Same reason as `similar` above: this route pays for embeddings, so its
+           rows carry the article. */
+        return withSpendAttribution({ articleSlug: at }, async () => {
+          const loaded = await loadArticle(at);
+          try {
+            send(res, 200, await projectArticle(at, loaded.blocks));
+          } catch (err) {
+            throw embeddingHttpError(err, at);
+          }
+          return;
+        });
+      }
+    },
+  },
+
   {
     kind: "pattern",
     method: "GET",
@@ -8087,59 +8300,14 @@ export async function serveAuthenticatedApi(
      POST /api/jobs { slug, steps: ["debate"] }. That is also the only way to
      start one — this route never spends. */
   const debate = /^\/api\/debate\/([\w.%-]+)$/.exec(path);
-  /* The Sketch diagram — docs/project/diagram.md § Sketch. GET only, like the
-     four reads around it: drawing one is
-     POST /api/jobs { slug, steps: ["sketch"] }, which is also how "draw it
-     again" is spelled, because the step replaces rather than appends. */
-  const sketch = /^\/api\/sketch\/([\w.%-]+)$/.exec(path);
-  /* Illustrated — docs/project/diagram.md § Illustrated. GET only, like Sketch
-     above and for the same reason: painting one is
-     POST /api/jobs { slug, steps: ["illustrated"] }.
-
-     **Two routes, and the second is the only one in this file that serves bytes
-     an artefact points at.** The hash is spelled out as 64 hex characters here
-     rather than as a loose capture — not because `sendPlate` trusts it (it does
-     not; see that function) but because a pattern that accepts anything invites
-     the next reader to think the capture is a key.
-
-     **Both extensions since 2026-09-04**, when the illustrator changed to one
-     that ignores `output_format` and returns PNG. The extension is captured and
-     `sendPlate` requires it to be the one the stored record names, so a `.jpeg`
-     URL can never serve a PNG: an artefact holds plates of both kinds side by
-     side, and the URL is a promise about the bytes exactly as the storage key
-     is (src/illustrated-image.ts). */
-  const illustrated = /^\/api\/illustrated\/([\w.%-]+)$/.exec(path);
-  const illustratedPlate = /^\/api\/illustrated\/([\w.%-]+)\/([0-9a-f]{64})\.(jpeg|png)$/.exec(path);
-  /* The arc on its own. It also travels inside `/api/article/:slug`, and this is
-     not a second way to do the same thing — since 2026-08-29 the arc is not built
-     by every ingest, so a reader can arrive without one, ask for one, and need to
-     collect it when the job lands. Refetching the whole article for that re-reads
-     every block and the whole tree; see docs/plans/260827am-glossary-read-latency.md for
-     what that costs on Postgres. */
-  const arc = /^\/api\/arc\/([\w.%-]+)$/.exec(path);
-  /* Its own endpoint, and unlike every artefact route above it this one is not
-     a read: it embeds the article's blocks the first time it is asked, then
-     serves the answer out of memory (src/similar.ts). It is here rather than on
-     the article payload because only one of the six diagram pictures wants it,
-     and only when the reader presses that toggle — charging every reader of
-     every article for a model call almost none of them will look at is exactly
-     what the `tweets` note above refuses to do. */
-  const similar = /^\/api\/similar\/([\w.%-]+)$/.exec(path);
-  /* The other half of the same purchase, and a second endpoint rather than a
-     second field on the first: `similar` answers "which passages are about the
-     same thing", this one answers "where does every passage sit relative to the
-     others" (src/projection.ts). Different pictures want different ones, they
-     are asked for at different moments, and the vectors underneath are bought
-     once and shared (src/article-vectors.ts) — so a reader who presses Force
-     and then Drift pays for one article, not two. */
-  const projection = /^\/api\/projection\/([\w.%-]+)$/.exec(path);
   const source = /^\/api\/source\/([\w.%-]+)$/.exec(path);
   /* **One of the article's own pictures, out of our bucket** —
      `sendArticleAsset`, and `assetPath` in src/asset-delivery.ts is the same
      line without the regex, which is what the client builds its `src` from.
 
      The hash is spelled out as 64 hex characters and the extension as the three
-     formats we host, for `illustratedPlate`'s reason above: not because the
+     formats we host, for the illustrated-plate row's reason (`AUTH_ROUTES`,
+     the comment above the illustrated rows): not because the
      route trusts either (it does not — both are only ever *compared* with what
      the manifest says), but because a pattern that accepts anything invites the
      next reader to think the capture is a key. `AssetExt` in src/assets.ts is
@@ -8152,14 +8320,16 @@ export async function serveAuthenticatedApi(
      the client parses as JSON. `sendExport` has the rest.
      docs/plans/260901h-export-article-data.md. */
   const exportBundle = /^\/api\/export\/([\w.%-]+)$/.exec(path);
-  /* The comments, chat, live-session, search, referee, jobs, uploads and billing
-     matchers used to be declared here and handled at the very end of the chain.
-     They are the rows of `AUTH_ROUTES` above, in that same order, and the table
-     is consulted after every guard below and before the terminal 404 — the
-     position they already had, so the move reorders nothing. `exportBundle` is
-     now the last matcher this chain declares, but declaration order is not
-     dispatch order: the last *guard* is `projection`, so the sketch-to-projection
-     block is the next slice up. */
+  /* The sketch, illustrated, arc, similar, projection, comments, chat,
+     live-session, search, referee, jobs, uploads and billing matchers used to be
+     declared here and handled at the very end of the chain. (The first five were
+     declared between `debate` and `source`; the rest here.) They are the rows of
+     `AUTH_ROUTES` above, in that same order, and the table is consulted after
+     every guard below and before the terminal 404 — the position they already
+     had, so the move reorders nothing. `exportBundle` is still the last matcher
+     this chain declares, but declaration order is not dispatch order: the last
+     *guard* is `quizMark`, so the block from `ideas` to `quizMark` is the next
+     slice up. */
 
     /* **The second gate, and it guards a prefix rather than a route.**
        Everything under `/api/admin/` is refused to everybody but the one
@@ -8475,8 +8645,8 @@ export async function serveAuthenticatedApi(
     /* `slugPart` on the slug for the reason the `source` route above gives —
        the pattern allows `%` and `.` — and `part` is not used on the hash or the
        extension, which the pattern has already narrowed and which are in any
-       case only ever compared, never joined onto anything. The same shape
-       `illustratedPlate` uses below. */
+       case only ever compared, never joined onto anything. The same shape the
+       illustrated-plate row in `AUTH_ROUTES` uses. */
     if (asset && req.method === "GET") {
       await sendArticleAsset(res, slugPart(asset, 1), part(asset, 2), part(asset, 3));
       return;
@@ -8623,151 +8793,12 @@ export async function serveAuthenticatedApi(
       await withSpendAttribution({ articleSlug: at }, () => markOneAnswer(at, markBody, res));
       return;
     }
-    if (sketch && req.method === "GET") {
-      {
-        const at = slugPart(sketch, 1);
-        /* `found.sketch` is `unknown` on the wire and a `Sketch` in both stores,
-           and the cast is only about reaching `profileHash` for the comparison
-           below — the client parses the scene itself on arrival. See
-           SketchResponse in src/types.ts for why the field is not typed here. */
-        send(
-          res,
-          200,
-          await withProfileChanged<SketchResponse>(
-            at,
-            () => loadSketch(at),
-            (found) => found.sketch as { profileHash?: string | null },
-          ),
-        );
-      }
-      return;
-    }
-    if (illustrated && req.method === "GET") {
-      {
-        const at = slugPart(illustrated, 1);
-        /* Shaped exactly like `sketch` above, including the cast, which is only
-           about reaching `profileHash` — the client parses the plates itself on
-           arrival (IllustratedResponse in src/types.ts).
-
-           **`profileChanged` is about the profile the SKETCH was drawn for**,
-           because that is what this artefact inherits (src/illustrated.ts). The
-           comparison is the same one either way; what differs is where the hash
-           came from, and it came from the Sketch. */
-        send(
-          res,
-          200,
-          await withProfileChanged<IllustratedResponse>(
-            at,
-            () => loadIllustrated(at),
-            (found) => found.illustrated as { profileHash?: string | null },
-          ),
-        );
-      }
-      return;
-    }
-    if (illustratedPlate && req.method === "GET") {
-      /* `slugPart` on the slug for the reason the `source` route gives — the
-         pattern allows `%` and `.` — and `part` is not used at all on the hash,
-         which is already narrowed to hex by the pattern and is in any case only
-         ever compared, never joined onto anything. */
-      await sendPlate(
-        res,
-        slugPart(illustratedPlate, 1),
-        part(illustratedPlate, 2),
-        part(illustratedPlate, 3),
-      );
-      return;
-    }
-    /* Read only, like the ideas above and for the same reason: running the step
-       again replaces the artefact, so "start over" already has a spelling. Asking
-       for one is POST /api/jobs { slug, steps: ["arc"] }.
-
-       **No `withProfileChanged`**, unlike the two above. The arc's prompt does not
-       take the reader profile (src/arc.ts § `generateArc` sends no profile), so
-       there is no "you are not who you were" answer to give and offering one would
-       be a banner about a thing that cannot have happened. */
-    if (arc && req.method === "GET") {
-      send(res, 200, await loadArc(slugPart(arc, 1)));
-      return;
-    }
-    /**
-     * **POST, not GET, and the method is the load-bearing part.**
-     *
-     * Every other artefact route in this file is a GET because it *reads*
-     * something a pipeline step already wrote. This one is different: the first
-     * call embeds the article, which spends money at an external provider. A
-     * GET that does that is wrong in a way that is easy to miss — GET is
-     * supposed to be safe, so a link prefetcher, a proxy retry, a crawler or a
-     * double-tap on Back can all pay for it again, none of them having asked
-     * anybody. GPT Sol's finding, 2026-08-27.
-     *
-     * `useIdeas` makes the same split more visibly: it GETs the ideas and POSTs
-     * a *job* to write them. This is the same shape with the write inline,
-     * because embedding an article takes a second or two rather than the half a
-     * minute that makes something a job.
-     */
-    if (similar && req.method === "POST") {
-      {
-        const at = slugPart(similar, 1);
-        /* This route pays for embeddings, so its rows carry the article like
-           chat's and explain's do. GPT Sol found both this and `projection`
-           writing owner-attributed rows with a null slug — which the report then
-           excludes from "by article" entirely, so an article's real cost would
-           have been understated by exactly the two features that embed it. */
-        return withSpendAttribution({ articleSlug: at }, async () => {
-          /* The whole article, because this needs the prose **and the tree** —
-             the tree so that two passages of one section cannot take a place in
-             the answer from two passages of different ones (src/similar.ts §
-             `sectionOfRow`). It is the same read every other artefact route
-             makes and the store caches nothing, so on a warm similarity cache
-             this load is the entire cost of the request. */
-          const loaded = await loadArticle(at);
-          try {
-            send(res, 200, await similarBlocks(at, loaded.blocks, loaded.tree));
-          } catch (err) {
-            /* **This used to catch everything and blame the provider**, which
-               is the bug a GPT Sol review had already found and fixed in
-               `projection` twenty lines below — and this, its sibling, was left
-               with it. A ranking bug in src/similar.ts was reported to the
-               reader, and logged, as an outage at somebody else's company.
-               ⟨Sol⟩, 2026-08-28. */
-            throw embeddingHttpError(err, at);
-          }
-          return;
-        });
-      }
-    }
-    /**
-     * **POST for the same reason `similar` is a POST**: the first call for an
-     * article spends money, and a GET is something a browser, a proxy or a
-     * prefetcher may repeat without asking anybody.
-     *
-     * The arithmetic afterwards is ours rather than the provider's — principal
-     * components and k-means over vectors already in hand — so a failure here
-     * is either the embedding call or a bug, and only the first of those is
-     * worth a sentence about reaching a model.
-     */
-    if (projection && req.method === "POST") {
-      {
-        const at = slugPart(projection, 1);
-        /* Same reason as `similar` above: this route pays for embeddings, so its
-           rows carry the article. */
-        return withSpendAttribution({ articleSlug: at }, async () => {
-          const loaded = await loadArticle(at);
-          try {
-            send(res, 200, await projectArticle(at, loaded.blocks));
-          } catch (err) {
-            throw embeddingHttpError(err, at);
-          }
-          return;
-        });
-      }
-    }
 
     /**
      * **The table, asked after every guard above and before the 404 below.**
      *
-     * Comments, chat, the live sessions, search, referee, jobs, uploads and
+     * Sketch, illustrated, arc, the two paid pictures (similar and projection),
+     * comments, chat, the live sessions, search, referee, jobs, uploads and
      * billing live in `AUTH_ROUTES` (above `serveAuthenticatedApi`) rather than
      * in this chain.
      * They were the chain's last guards, in that order, immediately above the
