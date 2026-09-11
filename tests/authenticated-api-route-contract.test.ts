@@ -783,15 +783,13 @@ const ROUTE_TABLE = "AUTH_ROUTES";
 const TABLE_DISPATCHER = "dispatchAuthRoute";
 
 /**
- * One place in the source that decides whether a path matches — a `const` in the
- * `if` chain, or an entry's `path`/`pattern` in `AUTH_ROUTES`.
+ * One place in the source that decides whether a path matches — an entry's
+ * `path`/`pattern` in `AUTH_ROUTES`, or the module-scope constant it names.
  *
- * **Deliberately not deduplicated.** Fourteen chain matchers are read by two
- * guards each and are still one `const` apiece; a table that wants the same must
- * name a module-scope pattern from two entries rather than spell the regex
- * twice. So two *identical* sites mean two copies of one matcher, which
- * § `names each matcher once` fails on — the copies can drift apart, and the
- * counts would go on agreeing while they did.
+ * **Deliberately not deduplicated.** A matcher two rows share is one constant
+ * both rows name, and counts once; two rows spelling the same regex out are two
+ * sites, which § `names each matcher once` fails on — the copies can drift
+ * apart, and the counts would go on agreeing while they did.
  */
 interface ParsedMatcher {
   line: number;
@@ -801,30 +799,27 @@ interface ParsedMatcher {
 }
 
 /**
- * One (method, matcher) the dispatcher accepts, however it is written.
+ * One (method, matcher) the dispatcher accepts — one row of `AUTH_ROUTES`.
  *
- * The two forms are normalised to the same thing on purpose: an `if (matcher &&
- * req.method === "…")` in the chain and a row of `AUTH_ROUTES` are the same
- * statement about what the API answers, and the contract above is the same
- * literal either way. That is the property the stage-3 move is supposed to have,
- * so it is the property this reader is built to check.
+ * Until 260911d this also read an `if (matcher && req.method === "…")` in the
+ * chain and normalised both forms to the same pair, which is what let each
+ * slice of the move be checked against an unchanged contract. The chain is
+ * empty now, and a guard written there again is refused (§ `readDeclaration`).
  */
 interface ParsedGuard {
   match: MatchSpec;
   method: string;
   /**
-   * Where in the dispatch chain this is *consulted* — the `if` itself for a
-   * chain guard, and the `if (await dispatchAuthRoute(…))` statement for a table
-   * entry, because that is the point at which the table gets its turn. It is
-   * what the admin-gate and terminal-404 ordering case compares against.
+   * Where in `serveAuthenticatedApi` this is *consulted* — the
+   * `if (await dispatchAuthRoute(…))` statement, because that is the point at
+   * which the table gets its turn. It is what the admin-gate and terminal-404
+   * ordering case compares against.
    */
   line: number;
   /** Where it is *written*, for failure messages. Never asserted on. */
   where: string;
-  /** Whether the arm's block ends in a `return` or a `throw`. */
+  /** Whether the dispatch arm ends in a `return` or a `throw`. */
   terminates: boolean;
-  /** Whether it came from `AUTH_ROUTES` rather than from an `if` in the chain. */
-  fromTable: boolean;
 }
 
 interface ParsedDispatch {
@@ -867,36 +862,12 @@ function memberName(n: unknown): string | undefined {
   return `${object}.${property}`;
 }
 
-/** `path === "…"` — the 16 exact matchers. */
+/** `path === "…"` — the admin namespace's first half. */
 function literalMatch(init: AstNode): MatchSpec | undefined {
   if (nodeType(init) !== "BinaryExpression" || init.operator !== "===") return undefined;
   if (identName(init.left) !== "path") return undefined;
   const value = stringValue(init.right);
   return value === undefined ? undefined : { kind: "literal", path: value };
-}
-
-/** `/…/.exec(path)` — the 51 regex matchers. */
-function regexMatch(init: AstNode): MatchSpec | undefined {
-  if (nodeType(init) !== "CallExpression") return undefined;
-  const callee = init.callee;
-  if (!isNode(callee) || nodeType(callee) !== "MemberExpression" || callee.computed === true) {
-    return undefined;
-  }
-  if (identName(callee.property) !== "exec") return undefined;
-  const pattern = callee.object;
-  if (!isNode(pattern) || nodeType(pattern) !== "RegExpLiteral") return undefined;
-  /* **`path`, never `rawUrl` or `req.url`** — the argument is part of what is
-     checked, not incidental. Thirty-two matchers once ran against a string
-     carrying the query string and simply stopped matching:
-     docs/postmortems/260901a-the-route-the-query-string-hid.md. A matcher fed
-     anything else is refused by the caller rather than quietly recorded. */
-  const args = init.arguments as unknown[];
-  if (args.length !== 1 || identName(args[0]) !== "path") return undefined;
-  return {
-    kind: "regex",
-    source: pattern.pattern as string,
-    flags: (pattern.flags as string) ?? "",
-  };
 }
 
 /**
@@ -914,13 +885,6 @@ function isNamespacePredicate(init: AstNode): boolean {
   return memberName(right.callee) === "path.startsWith";
 }
 
-/** `req.method === "VERB"`, giving the verb. */
-function methodTest(n: unknown): string | undefined {
-  if (!isNode(n) || nodeType(n) !== "BinaryExpression" || n.operator !== "===") return undefined;
-  if (memberName(n.left) !== "req.method") return undefined;
-  return stringValue(n.right);
-}
-
 /** `!isAdmin(...)`. */
 function isAdminRefusal(n: unknown): boolean {
   if (!isNode(n) || nodeType(n) !== "UnaryExpression" || n.operator !== "!") return false;
@@ -929,16 +893,13 @@ function isAdminRefusal(n: unknown): boolean {
 }
 
 /**
- * Whether an arm ends the request.
+ * Whether an arm ends the request — today, only the table dispatch's own
+ * `{ return; }`.
  *
- * A trailing bare block is descended into, because `similar` and `projection`
- * end in `{ … return withSpendAttribution(…); }` rather than in a `return;` of
- * their own — the plan's § [RETURN]. A transcription that looked only for a
- * trailing `return;` would call both of them non-terminating, and then either
- * report a false problem or, worse, be relaxed until it reported nothing.
- * (Both have been rows of `AUTH_ROUTES` since 260911c, so no guard left in the
- * chain needs the descent today; it stays, because the next guard written in
- * that shape would need it and nothing would say so.)
+ * A trailing bare block is descended into. That was for `similar` and
+ * `projection`, which ended in `{ … return withSpendAttribution(…); }` while
+ * they were chain guards (the plan's § [RETURN]); it costs nothing to keep and
+ * is the right reading of an arm either way.
  */
 function armTerminates(consequent: unknown): boolean {
   let block = consequent;
@@ -967,9 +928,6 @@ const ALLOWED_TOP_LEVEL_CALLS = new Set([
 
 /** What the walk builds up, so each statement shape can be read on its own. */
 interface Accumulator {
-  matchers: ParsedMatcher[];
-  byName: Map<string, MatchSpec>;
-  guards: ParsedGuard[];
   /** Bindings holding `path === "/api/admin" || path.startsWith(…)`. */
   namespaces: Set<string>;
   adminGateLine: number;
@@ -985,7 +943,17 @@ function refuse(n: AstNode, why: string): never {
   );
 }
 
-/** `const <name> = <matcher>;`, or the one destructure, or a refusal. */
+/**
+ * The one destructure, or the admin namespace, or a refusal.
+ *
+ * **A route matcher here is a refusal, since 260911d.** This used to read
+ * `const <name> = <matcher>;` for the `if` chain, one binding per route, and
+ * normalise it to the same pair as a table row. The last slice emptied the
+ * chain, so that reading is gone rather than kept "just in case": a second way
+ * to declare a route is exactly what the table exists to stop, and the refusal
+ * fires at module scope, before a single case runs.
+ * docs/plans/260911d-close-the-route-transition.md.
+ */
 function readDeclaration(statement: AstNode, acc: Accumulator): void {
   const declarations = statement.declarations as unknown[];
   if (declarations.length !== 1) refuse(statement, "a multi-declarator const");
@@ -1008,12 +976,12 @@ function readDeclaration(statement: AstNode, acc: Accumulator): void {
     acc.namespaces.add(name);
     return;
   }
-  const match = literalMatch(init) ?? regexMatch(init);
-  if (match === undefined) refuse(statement, "a matcher this does not understand");
-  const line = lineOf(statement);
-  acc.matchers.push({ line, match, where: `${describeMatch(match)} declared at line ${line}` });
-  acc.byName.set(name, match);
+  refuse(statement, `\`${name}\`: ${CHAIN_IS_GONE}`);
 }
+
+/** The one sentence both refusals of a chain route end in. */
+const CHAIN_IS_GONE =
+  "a route declared in serveAuthenticatedApi's `if` chain — the chain was emptied in 260911d; add a row to AUTH_ROUTES instead";
 
 /**
  * `if (await dispatchAuthRoute(<table>, { … })) { return; }` — the one statement
@@ -1063,7 +1031,7 @@ function readTableDispatch(statement: AstNode, test: AstNode, acc: Accumulator):
   };
 }
 
-/** A dispatch guard, the admin gate, the table dispatch, or a refusal. */
+/** The admin gate, the table dispatch, or a refusal — a route guard is one (§ `readDeclaration`). */
 function readIf(statement: AstNode, acc: Accumulator): void {
   const test = statement.test;
   if (isNode(test) && nodeType(test) === "AwaitExpression") {
@@ -1091,21 +1059,7 @@ function readIf(statement: AstNode, acc: Accumulator): void {
     return;
   }
 
-  const match = acc.byName.get(binding);
-  if (match === undefined) refuse(statement, `a guard on the unknown binding \`${binding}\``);
-  const method = methodTest(test.right);
-  if (method === undefined) {
-    refuse(statement, 'a guard whose right conjunct is not `req.method === "VERB"`');
-  }
-  const line = lineOf(statement);
-  acc.guards.push({
-    match,
-    method,
-    line,
-    where: `${describeMatch(match)} at line ${line}`,
-    terminates: armTerminates(statement.consequent),
-    fromTable: false,
-  });
+  refuse(statement, `a guard on \`${binding}\`: ${CHAIN_IS_GONE}`);
 }
 
 /** One of the four calls the dispatcher may make at statement level. */
@@ -1458,9 +1412,6 @@ function extractAuthDispatch(source: string): ParsedDispatch {
   }
 
   const acc: Accumulator = {
-    matchers: [],
-    byName: new Map(),
-    guards: [],
     namespaces: new Set(),
     adminGateLine: 0,
     tableDispatch: undefined,
@@ -1493,17 +1444,20 @@ function extractAuthDispatch(source: string): ParsedDispatch {
   }
 
   /**
-   * The table's rows become matchers and guards of exactly the same shape, so
-   * everything downstream — the two set comparisons, the counts, the negative
-   * matrix, the collision corpus — asks the same questions of both forms without
-   * knowing which it is looking at. That is the whole claim stage 3 makes.
+   * The table's rows become the matchers and guards everything downstream —
+   * the two set comparisons, the counts, the negative matrix, the collision
+   * corpus — asks its questions of. While the chain existed its guards were read
+   * into the same shape, which is what let every slice of the move be checked
+   * without the contract changing.
    *
    * **The table is read only because the dispatcher was seen to consult it.** A
    * table nobody dispatches is dead code and its rows are not routes; a dispatch
    * of a table that is not there is a dispatcher this cannot read. Both are
    * refusals rather than a shorter list.
    */
-  const { matchers, guards, adminGateLine, terminal404Line, tableDispatch } = acc;
+  const { adminGateLine, terminal404Line, tableDispatch } = acc;
+  const matchers: ParsedMatcher[] = [];
+  const guards: ParsedGuard[] = [];
   const table = readRouteTable(statements, ROUTE_TABLE);
   if (tableDispatch === undefined) {
     if (table.length > 0) {
@@ -1538,7 +1492,6 @@ function extractAuthDispatch(source: string): ParsedDispatch {
         line: tableDispatch.line,
         where,
         terminates: tableDispatch.terminates,
-        fromTable: true,
       });
     }
   }
@@ -1879,42 +1832,6 @@ describe("the authenticated API's route contract", () => {
       ).toEqual([]);
     });
 
-    it("consults the table after every guard in the chain and before the 404", () => {
-      /* The property that makes moving a domain into `AUTH_ROUTES` a
-         rearrangement rather than a change: billing was the last four guards in
-         the chain, so a table asked *after* the chain and before the terminal 404
-         leaves each of them exactly where it was. A domain lifted out of the
-         middle could not be added without this failing — which is the point. */
-      expect(parsed.tableDispatchLine).toBeGreaterThan(0);
-      const chain = parsed.guards.filter((g) => !g.fromTable).map((g) => g.line);
-      expect(parsed.tableDispatchLine).toBeGreaterThan(Math.max(...chain));
-      expect(parsed.terminal404Line).toBeGreaterThan(parsed.tableDispatchLine);
-    });
-
-    it("answers every route from the table, and leaves none in the chain", () => {
-      /* Otherwise everything above could be green because the parser is still
-         reading chain `if`s — the two forms are normalised to the same pair,
-         which is the whole idea and also the way this could pass while proving
-         nothing.
-
-         **Zero, since 260911d.** This case used to list the domains that had
-         moved, grow by one per slice, and carry a control — a prefix whose
-         guards were demonstrably still in the chain — repointed at every slice
-         because a prefix filter that could not see a regex guard would have
-         passed with the chain full. The last slice emptied the chain, so there
-         is nothing left for a moved-prefix list to be about and no domain left
-         for a control to point at. What is asserted instead is the end state:
-         no guard is read from the chain at all, and the table carries every one
-         of the `EXPECTED_GUARD_COUNT`. The pairs themselves are § `accepts
-         exactly the method-and-matcher pairs` and the order is the case below.
-         docs/plans/260911d-close-the-route-transition.md. */
-      expect(
-        parsed.guards.filter((g) => !g.fromTable).map((g) => g.where),
-        "a route is a guard in serveAuthenticatedApi's chain again — the chain was emptied in 260911d; add a row to AUTH_ROUTES instead",
-      ).toEqual([]);
-      expect(parsed.guards.filter((g) => g.fromTable).length).toBe(EXPECTED_GUARD_COUNT);
-    });
-
     /**
      * **One dispatch of the table, and the rows in the order the chain had
      * them.**
@@ -1936,7 +1853,7 @@ describe("the authenticated API's route contract", () => {
      */
     it("keeps the table in the order the chain had", () => {
       expect(
-        parsed.guards.filter((g) => g.fromTable).map((g) => pairKey(g.method, g.match)),
+        parsed.guards.map((g) => pairKey(g.method, g.match)),
         "the table's rows are the chain's order, carried across — a reorder is a behaviour change until argued otherwise, and the interleave inside jobs/uploads is not to be tidied",
       ).toEqual([
         // the top of the chain, from the admin routes to shelfOpen, 260911d

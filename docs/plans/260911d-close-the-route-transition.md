@@ -14,7 +14,9 @@ says only what is different here. Commissioned as cluster G's third stage, "clos
 of [260908f-prioritised-spideryarn-codebase-improvements.md](260908f-prioritised-spideryarn-codebase-improvements.md)
 § G, dispatched by the Overseer on 2026-09-11 (queue item `qi-ybjeyfpq`).
 
-> **Status, 2026-09-11: in progress.**
+> **Status, 2026-09-11: built.** Three stream oracles, 33 guards moved in four slices (`1eaeb775`,
+> `ae166e94`, `370923e1`, `30851cc5`), the chain readers deleted, and the contract test requiring an
+> empty chain. The single Sol review of the whole stage is § *The review*.
 
 ## Claimed, and the count re-measured
 
@@ -258,3 +260,51 @@ answer, referee, paid single-flight), `referee-scan-route`, `source-store`,
 green.** Route order, status, ownership, spend and streaming are all in it. The verifier, run over
 all four slices against the chain as it was at the start of the stage: *the move is a move*, four
 times. Typecheck: exit 0.
+
+## Closing — the readers the chain needed, deleted
+
+The brief: *"delete superseded matchers and readers only after searching scripts, tests, evals and
+docs; keep no second matching path just in case."*
+
+**The search.** Anything reading chain syntax (`&& req.method ===`, `.exec(path)`, `pathish`, the
+moved-prefix list, `chainBindingOf`) across `src/`, `tests/`, `scripts/`, `evals/`, `tools/`,
+`docs/project/` and `docs/reusable/` came to two files: the contract test and
+`cacheable-covers-artefact-routes`. `scripts/live-spike.ts` matches `req.method ===` only for its own
+tiny server. `referee-scan-route` mentions the old guard only in a comment, and has cut its route
+out of the table since 260907e. `source-store` and `owner-isolation` read `sendSource`, a helper, and
+`embedding-route-failures` counts over the whole file (260907b constraint 8). None of those four
+reads the chain. The verifiers under `docs/plans/*-verify-move.mjs.txt` read the chain form too.
+They are the evidence each slice was a move and are kept as records, not mechanisms. No `src/`
+matcher was superseded: every matcher moved into its row or into a module constant.
+
+**The contract test.** The chain reader, which turned `const <m> = …` and `if (<m> && req.method
+=== …)` into the same pair as a table row, is now a refusal. `readDeclaration` accepts only the
+request destructure and the admin namespace. `readIf` accepts only the admin gate and the table
+dispatch. Anything else is *"a route declared in serveAuthenticatedApi's `if` chain — the chain was
+emptied in 260911d; add a row to AUTH_ROUTES instead"*, thrown at module scope before a case runs.
+Deleted with it: `regexMatch`, `methodTest`, `ParsedGuard.fromTable`, the accumulator's
+`matchers`/`byName`/`guards`, and two cases that only meant anything with a chain: *consults the
+table after every guard in the chain*, now `Math.max()` of nothing, and slice 4's *answers every
+route from the table*, which the refusal replaces. The admin-gate ordering case still pins
+gate < table dispatch < 404. **Watched**: the duplicate `/api/models` chain guard again → the file
+fails to load with *"`zzModels`: a route declared in serveAuthenticatedApi's `if` chain …"*, then
+removed. 323 cases → **321**.
+
+**The artefact-cache test.** The chain branch (`chainBindingOf`, `getDispatch`, `isAnswered`, the
+binding pairs) is gone. `tableRowOf` is the one reader, with slice 2's named-constant case. Two cases
+went with the branch: *finds a GET dispatch for every artefact route it found a declaration for* (a
+`GET` row is its own dispatch) and *finds no artefact route in both the chain and the table*. Its
+bidirectional *resolves every artefact kind …* stays, and is the control. **Watched**: the arc row's
+method changed to `PUT` → *"an artefact kind changed sides … expected [ 'arc', …"*, then restored.
+21 cases → **19**.
+
+## Where the file stands
+
+| | Lines | Complexity of `serveAuthenticatedApi` |
+|---|---|---|
+| before this stage | 8,844 | 98 (260911c) |
+| after it | **8,952** | **under 25**: Biome's `noExcessiveCognitiveComplexity` no longer reports it |
+
+108 lines longer, because 33 guards became 33 rows with their own braces and three constants. As
+260908f § G says, neither number is an acceptance metric. Further domain-file extraction needs its
+own measured reason.

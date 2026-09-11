@@ -17,8 +17,8 @@ C (the glossary question carried into chat) built 2026-09-11 — see § C.
 A (the submit gate, Greg's choice) built 2026-09-11; the reconciliation stages are skipped — see § A.
 F's first stage (a bounded `srcset` candidate) built 2026-09-11 — see § F.
 M (G from a paragraph to its glossary row, Greg's choice of the jump) built 2026-09-11 — see § M.
-G's first stage (Comments join the route table) built 2026-09-11; the later slices are not started —
-see § G.
+G (the route migration) finished 2026-09-11: Comments, the paid block, then the last 33 guards. The
+chain is empty — see § G.
 N's evidence stage done 2026-09-11 and closed with no change: the split helps on the corpus but a
 built counterexample shows it can weaken the check — see § N.
 Each stage's own status line is the authority.
@@ -681,15 +681,27 @@ reordering the landed design does not allow. Its oracle is in place for when tho
   `void` and under the claim's `pending` exit removed.
 - [x] Take one contiguous domain per reviewed commit. Reject mixed cleanup in handler bodies.
   The six are one contiguous block; the oracle for the article block is a separate, test-only commit.
-- [ ] Move the article block (`article` … `tweets`, nine guards), after the ten below it have moved.
+- [x] Move the article block (`article` … `tweets`, nine guards), after the ten below it have moved.
+  Done in the next stage, 260911d slice 3 (`370923e1`).
 
 ### Stage: close the transition
 
-- [ ] Re-enumerate the actual remaining guards; new routes may have arrived since 81 was counted.
-  Migrate the remainder and make the legacy-guard test require zero.
-- [ ] Delete superseded matchers/readers only after searching all scripts, tests, evals and docs.
+**Status, 2026-09-11: built** — [260911d-close-the-route-transition.md](260911d-close-the-route-transition.md).
+**All 82 guards are in `AUTH_ROUTES`; the chain is empty.** Bottom-up, which is not the order the
+brief listed: `ideas` … `quizMark` sits below the glossary guards, so it went first. That changes
+nothing about what was proved, because the glossary's lifetime oracle was written before any move.
+
+- [x] Re-enumerate the actual remaining guards; new routes may have arrived since 81 was counted.
+  Migrate the remainder and make the legacy-guard test require zero. 33 remained and no new route
+  had arrived. Oracles were written red-first for the quiz mark and both glossary streams. The move
+  went in four slices, each verified body-for-body. A chain guard is now a module-scope refusal in
+  the contract test.
+- [x] Delete superseded matchers/readers only after searching all scripts, tests, evals and docs.
   Keep no second matching path “just in case”. Run route order, status, ownership, spend and streaming
-  suites, then common checks. Further domain-file extraction needs its own measured reason.
+  suites, then common checks. Further domain-file extraction needs its own measured reason. The
+  search found two readers, the contract test's chain half and the artefact-cache test's, and both
+  were deleted. One findings-only Sol review covered the whole stage, per the Overseer's
+  rationing.
 
 ## H — share binary response mechanics, keep policies with callers
 
