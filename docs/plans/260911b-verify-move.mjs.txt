@@ -1,0 +1,385 @@
+/**
+ * **The evidence that the Comments slice is a move** — 260908a's verifier with
+ * the guard list changed and two things tightened, both stated here so a reader
+ * can diff this file against its parent and find nothing else:
+ *
+ * 1. **The matcher rename is targeted.** The parent renamed `\b<matcher>\b`
+ *    everywhere in a body. For this slice that is a blind spot, not a nicety:
+ *    the matcher `comments` is also the key in `{ comments: … }`, so a move that
+ *    corrupted that key into `captures` would normalise to the same text on both
+ *    sides and diff clean. Here only `slugPart(<matcher>,` and
+ *    `part(<matcher>,` are renamed — the only two ways these six bodies use
+ *    their matcher — so any other use shows up as a body difference.
+ * 2. **Body boundaries are cross-checked.** `blockAt` counts raw braces,
+ *    including braces inside comments and strings (GPT Sol, 260908a stage 2/3
+ *    review). Two of these bodies carry `{ body: null }`-style braces in their
+ *    comments. The body is now also cut from a copy with comments and string
+ *    contents blanked, and the two cuts must be the same length or the capture
+ *    throws.
+ *
+ * The rest of this header is the parent's, unchanged.
+ *
+ * ---
+ *
+ * **The evidence that the chat slice is a move**, in one script rather than two.
+ *
+ * `260907e-capture-referee.mjs.txt` captured and normalised handler bodies; a
+ * separate script counted returns. GPT Sol's F3 on the chat plan asked for one
+ * verifier "whose new return rail can be reviewed", because the rail decides
+ * what the comparison refuses and a reviewer cannot check that across two files
+ * run in the right order by somebody who knows to.
+ *
+ *     cp docs/plans/260908a-verify-move.mjs.txt /tmp/x/verify.mjs
+ *     node verify.mjs before src/routes.ts before.json
+ *     # …move the guards…
+ *     node verify.mjs after  src/routes.ts after.json
+ *     node verify.mjs diff   before.json after.json
+ *
+ * It is committed as `.txt` so nothing in the repo tries to lint or typecheck
+ * it, and copied out to be run — copy it immediately before running so the file
+ * that produced the evidence and the file in the tree cannot drift.
+ *
+ * ## What it compares, and what it refuses to compare
+ *
+ * `before` cuts each body out of `if (<matcher> && req.method === "<M>") { … }`
+ * in the chain. `after` cuts it out of the matching `AUTH_ROUTES` row, starting
+ * **past the arrow** — the first `{` after `handler:` is the parameter
+ * destructuring, and taking that as the body is a capture that succeeds while
+ * measuring nothing.
+ *
+ * Both go through the same normaliser, so a difference in the output is a
+ * difference in the code and not a difference in the wrapper. It applies only
+ * what the table's shape forces: the matcher identifier becomes `captures`,
+ * comments and whitespace collapse, and **one** trailing argumentless `return;`
+ * is dropped, because a guard has to return and a handler simply ends.
+ *
+ * ## The rail
+ *
+ * GPT Sol corrected the model both migration plans were using: a *retained*
+ * early `return;` in a table handler does not fall through, because
+ * `dispatchAuthRoute` returns `true` after the handler either way. **The
+ * dangerous transformation is removing a return**, so later statements in the
+ * same handler execute — and `.replace(/return;\s*$/, "")` tolerates that
+ * silently, because it only ever looks at the end.
+ *
+ * So this refuses automatic comparison for any guard whose **own function
+ * scope** holds a return other than exactly one final argumentless `return;`.
+ * Returns inside nested arrow functions belong to those functions and are
+ * excluded. A refused guard is not a failure: it is a guard that a person has
+ * to account for by some other means, and the plan doc says which. What would
+ * be a failure is a refused guard nobody noticed, so `diff` exits non-zero if
+ * any refusal is unaccounted for in `EXPECTED_REFUSALS` — **or if the reason it
+ * was refused is not the reason that was accounted for.** "Two returns" and
+ * "three returns" are not the same fact, and an explanation written for one must
+ * not silently cover the other (GPT Sol, 260908a stage 2/3 review § F10).
+ *
+ * **A refusal narrows the evidence; it does not withdraw it.** The first version
+ * of this script skipped a refused guard's body comparison altogether, so any
+ * change anywhere in `chat` GET would have printed `refused, accounted` — the
+ * rail was answering a question about returns and was read as answering the
+ * question about the whole body. Bodies are now compared for **every** guard,
+ * and the rail is an *additional* demand on top (same finding).
+ *
+ * ## Comments are compared too, and that is not fussiness
+ *
+ * `normalise` strips comments, deliberately: re-indenting one is not a code
+ * change and should not read as one. But that makes this script blind by
+ * construction to a comment being **rewritten**, and on 2026-09-08 that was not
+ * hypothetical. The generator that produced the chat rows renamed the matcher
+ * identifier with a global `\bchat\b` and rewrote English with it — *"the
+ * reading view needs one thing from chat"* became *"from captures"*, and a
+ * citation became a link to a file that does not exist. Every body diffed
+ * clean. A person caught it by reading the output, which is not a mechanism.
+ *
+ * So the comment text of each guard is captured as well, whitespace-collapsed,
+ * and compared. An intentional rewrite is declared in `EXPECTED_COMMENT_EDITS`
+ * and reported; an undeclared one is a failure. Comments *outside* handler
+ * bodies — the ones that sit above a row — are not covered here and are read in
+ * the diff by a person; that is stated so the next reader knows the edge of the
+ * instrument rather than inferring one.
+ *
+ * **More than one match is a fact to fail on, not one to resolve by picking.**
+ * An earlier extractor in this repo kept the last match and inspected a
+ * duplicated block's second copy while the mutation sat in the first, and went
+ * green. Every lookup here counts its matches and throws on two.
+ */
+import { readFileSync, writeFileSync } from "node:fs";
+
+/**
+ * The six, in the order the chain has them, with the text of the row's
+ * `pattern:`. A regex literal for a matcher only one row uses; a constant name
+ * for one two rows share.
+ */
+const GUARDS = [
+  ["comments", "GET", "COMMENTS_PATTERN"],
+  ["comments", "POST", "COMMENTS_PATTERN"],
+  ["commentAnswer", "POST", String.raw`/^\/api\/comments\/([\w.%-]+)\/([\w.%-]+)\/answer$/`],
+  ["commentMark", "PATCH", String.raw`/^\/api\/comments\/([\w.%-]+)\/([\w.%-]+)\/mark$/`],
+  ["one", "PATCH", "ONE_COMMENT_PATTERN"],
+  ["one", "DELETE", "ONE_COMMENT_PATTERN"],
+];
+
+/**
+ * The guards the rail is expected to refuse, and why, so a refusal that was not
+ * anticipated is a failure rather than a line of output.
+ *
+ * Empty: all six end in exactly one argumentless `return;` (`commentMark` and
+ * `one` PATCH exit early by `throw`, which is not a return and needs no rail).
+ */
+const EXPECTED_REFUSALS = {};
+
+/**
+ * Guards whose comment text is *meant* to differ across the move, and why.
+ *
+ * Empty: every handler comment moves verbatim.
+ */
+const EXPECTED_COMMENT_EDITS = {};
+
+const escape = (s) => s.replace(/[.*+?^${}()|[\]\\/]/g, "\\$&");
+
+/** Every index at which `needle` occurs, so two can be a failure rather than a choice. */
+function occurrences(haystack, needle) {
+  const at = [];
+  for (let i = haystack.indexOf(needle); i !== -1; i = haystack.indexOf(needle, i + 1)) at.push(i);
+  return at;
+}
+
+/** The one index at which `needle` occurs. Throws on nought or more than one. */
+function only(haystack, needle, what) {
+  const at = occurrences(haystack, needle);
+  if (at.length !== 1) throw new Error(`${what}: expected exactly one match, found ${at.length}`);
+  return at[0];
+}
+
+/** Walk braces from the first `{` at or after `from`; return the body inside. */
+function blockAt(src, from) {
+  const open = src.indexOf("{", from);
+  if (open === -1) throw new Error("no block after that position");
+  let depth = 0;
+  for (let i = open; i < src.length; i++) {
+    if (src[i] === "{") depth++;
+    else if (src[i] === "}") {
+      depth--;
+      if (depth === 0) return src.slice(open + 1, i);
+    }
+  }
+  throw new Error("unbalanced braces");
+}
+
+/**
+ * The comment text of a body, in order, whitespace-collapsed.
+ *
+ * The matcher identifier is **not** renamed here, and that is the point: a
+ * comment that says `chat` before the move must still say `chat` after it. The
+ * rename is a code edit and has no business in prose.
+ */
+function commentsIn(body) {
+  const found = [];
+  for (const m of body.matchAll(/\/\*[\s\S]*?\*\/|\/\/[^\n]*/g)) {
+    const text = m[0].replace(/\s+/g, " ").trim();
+    if (text) found.push(text);
+  }
+  return found;
+}
+
+/**
+ * Everything the table's shape forces, and nothing else. The rename touches only
+ * a matcher handed to `slugPart`/`part` — see the header's point 1.
+ */
+function normalise(body, matcher) {
+  return body
+    .replace(new RegExp(`\\b(slugPart|part)\\(${matcher},`, "g"), "$1(captures,")
+    .replace(/\/\*[\s\S]*?\*\//g, "")
+    .replace(/\/\/.*$/gm, "")
+    .replace(/return;\s*$/, "")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+/**
+ * Blank out comments and the *contents* of strings and templates, keeping the
+ * offsets, so `"return"` in a message is not counted and a `{` inside a template
+ * does not move the depth.
+ */
+function blank(b) {
+  return b
+    .replace(/\/\*[\s\S]*?\*\//g, (m) => " ".repeat(m.length))
+    .replace(/\/\/[^\n]*/g, (m) => " ".repeat(m.length))
+    .replace(/"(?:[^"\\\n]|\\.)*"/g, (m) => `"${" ".repeat(m.length - 2)}"`)
+    .replace(/'(?:[^'\\\n]|\\.)*'/g, (m) => `'${" ".repeat(m.length - 2)}'`)
+    .replace(/`(?:[^`\\]|\\.)*`/g, (m) => `\`${" ".repeat(m.length - 2)}\``);
+}
+
+/**
+ * The returns belonging to this guard's own scope.
+ *
+ * A `{` opens a nested *function* body when the text before it ends in `=>`;
+ * the only nested callables in these six are arrows, and a `function`
+ * keyword anywhere in a body is reported so this assumption cannot rot quietly.
+ */
+function ownScopeReturns(body) {
+  const b = blank(body);
+  if (/\bfunction\b/.test(b)) {
+    throw new Error("a `function` keyword: the rail only understands arrows, so check this by hand");
+  }
+  const out = [];
+  let depth = 0;
+  const fnDepths = [];
+  for (let i = 0; i < b.length; i++) {
+    const c = b[i];
+    if (c === "{") {
+      depth++;
+      if (b.slice(Math.max(0, i - 40), i).trimEnd().endsWith("=>")) fnDepths.push(depth);
+    } else if (c === "}") {
+      if (fnDepths.at(-1) === depth) fnDepths.pop();
+      depth--;
+    } else if (
+      b.startsWith("return", i) &&
+      !/[\w$]/.test(b[i - 1] ?? "") &&
+      !/[\w$]/.test(b[i + 6] ?? "")
+    ) {
+      if (fnDepths.length === 0) {
+        const rest = body.slice(i + 6);
+        const semi = rest.indexOf(";");
+        if (semi === -1) throw new Error("a return with no semicolon; check this by hand");
+        out.push({ argument: rest.slice(0, semi).trim(), after: body.slice(i + 6 + semi + 1).trim() });
+      }
+      i += 5;
+    }
+  }
+  return out;
+}
+
+/**
+ * The rail. `null` means comparable; a string means refused, and says why.
+ *
+ * Exactly one return, argumentless, with nothing after it. Anything else is a
+ * fact to fail on rather than one to resolve by picking.
+ */
+function railVerdict(body) {
+  const returns = ownScopeReturns(body);
+  if (returns.length === 0) return "no return at all in the guard's own scope";
+  if (returns.length > 1) return `${returns.length} returns in the guard's own scope`;
+  const [r] = returns;
+  if (r.argument !== "") return `the return carries a value: \`return ${r.argument};\``;
+  if (r.after !== "") return "the return is not the last statement";
+  return null;
+}
+
+function capture(mode, file) {
+  const src = readFileSync(file, "utf8");
+  const out = {};
+  for (const [matcher, method, pattern] of GUARDS) {
+    const key = `${matcher} ${method}`;
+    let at;
+    if (mode === "before") {
+      at = only(src, `if (${matcher} && req.method === "${method}") {`, key);
+    } else {
+      const re = new RegExp(`method: "${method}",\\s*\\n\\s*pattern: ${escape(pattern)},\\s*\\n`, "g");
+      const hits = [...src.matchAll(re)];
+      if (hits.length !== 1) throw new Error(`${key}: expected one table row, found ${hits.length}`);
+      /* Past the arrow, not merely past `handler:` — the first `{` after the key
+         is the parameter destructuring (`{ request: { res } }`). */
+      at = src.indexOf("=>", hits[0].index) + 2;
+    }
+    const body = blockAt(src, at);
+    /* The same cut from a copy with comments and string contents blanked, so a
+       brace inside either cannot move the boundary unnoticed (header, point 2).
+       Offsets are preserved by `blank`, so equal lengths mean equal cuts. */
+    const blanked = blockAt(blank(src.slice(at)), 0);
+    if (blanked.length !== body.length) {
+      throw new Error(`${key}: the raw and blanked cuts disagree (${body.length} vs ${blanked.length})`);
+    }
+    out[key] = {
+      normalised: normalise(body, matcher),
+      comments: commentsIn(body),
+      /* The rail is computed from the chain body only. Its whole purpose is to
+         decide, before the move, which guards need evidence beyond the diff. */
+      refused: mode === "before" ? railVerdict(body) : undefined,
+    };
+  }
+  return out;
+}
+
+function diff(beforeFile, afterFile) {
+  const before = JSON.parse(readFileSync(beforeFile, "utf8"));
+  const after = JSON.parse(readFileSync(afterFile, "utf8"));
+  let bad = 0;
+
+  const keys = Object.keys(before);
+  if (keys.length !== Object.keys(after).length) throw new Error("the two captures differ in size");
+
+  for (const key of keys) {
+    /* **Bodies first, for every guard, refused or not.** A refusal is a demand
+       for extra evidence about one property; it is not permission to stop
+       looking at the rest. */
+    if (before[key].normalised === after[key].normalised) {
+      console.log(`identical             ${key.padEnd(24)} ${before[key].normalised.length} chars`);
+    } else {
+      console.log(`*** BODY DIFFERS ***  ${key}`);
+      console.log(`  before: ${before[key].normalised}`);
+      console.log(`  after : ${after[key].normalised}`);
+      bad++;
+    }
+
+    /* Comments, which the body comparison above has stripped and so cannot see. */
+    const wasEdited = key in EXPECTED_COMMENT_EDITS;
+    const b = before[key].comments ?? [];
+    const a = after[key].comments ?? [];
+    if (JSON.stringify(b) !== JSON.stringify(a)) {
+      if (wasEdited) {
+        console.log(`  comment edit declared: ${EXPECTED_COMMENT_EDITS[key]}`);
+      } else {
+        console.log(`*** COMMENT CHANGED *** ${key} — ${b.length} before, ${a.length} after`);
+        for (let i = 0; i < Math.max(b.length, a.length); i++) {
+          if (b[i] !== a[i]) {
+            console.log(`  before: ${b[i] ?? "(none)"}`);
+            console.log(`  after : ${a[i] ?? "(none)"}`);
+          }
+        }
+        bad++;
+      }
+    } else if (wasEdited) {
+      console.log(`*** DECLARED EDIT DID NOT HAPPEN *** ${key}`);
+      bad++;
+    }
+
+    /* And then the rail, which narrows what the identical body is worth. */
+    const refused = before[key].refused ?? null;
+    if (refused) {
+      const expected = EXPECTED_REFUSALS[key];
+      if (!expected) {
+        console.log(`REFUSED, UNACCOUNTED  ${key.padEnd(24)} ${refused}`);
+        bad++;
+      } else if (expected.reason !== refused) {
+        console.log(`REFUSED FOR A DIFFERENT REASON THAN ACCOUNTED  ${key}`);
+        console.log(`  accounted for: ${expected.reason}`);
+        console.log(`  actually     : ${refused}`);
+        bad++;
+      } else {
+        console.log(`  ↳ rail refuses: ${refused} — needs the evidence named in the plan`);
+      }
+    } else if (EXPECTED_REFUSALS[key]) {
+      console.log(`ACCOUNTED FOR A REFUSAL THAT DID NOT HAPPEN  ${key}`);
+      bad++;
+    }
+  }
+  console.log(bad === 0 ? "\nthe move is a move" : `\n${bad} problem(s)`);
+  return bad;
+}
+
+const [, , mode, a, b] = process.argv;
+if (mode === "diff") {
+  process.exit(diff(a, b) === 0 ? 0 : 1);
+} else if (mode === "before" || mode === "after") {
+  const captured = capture(mode, a);
+  writeFileSync(b, JSON.stringify(captured, null, 2));
+  console.log(`${mode}: ${Object.keys(captured).length} bodies -> ${b}`);
+  for (const [k, v] of Object.entries(captured)) {
+    const rail = v.refused ? `  RAIL REFUSES: ${v.refused}` : "";
+    console.log(`  ${k.padEnd(24)} ${String(v.normalised.length).padStart(5)} chars${rail}`);
+  }
+} else {
+  console.error("usage: verify.mjs before|after <routes.ts> <out.json>   |   diff <before> <after>");
+  process.exit(2);
+}

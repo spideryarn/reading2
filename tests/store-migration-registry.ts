@@ -1220,6 +1220,23 @@ export const STORE_MIGRATION: Readonly<Record<string, StoreEntry>> = {
       "file stayed green under it, because a freshly begun row is spared by `sweepPending`'s age " +
       "guard whether or not the lock holds it.",
   },
+  /**
+   * **Written 2026-09-11, after the witness ran**, so `static-only` for the same
+   * reason as the entry above. Born on Postgres, so collateral.
+   */
+  "tests/comment-answer-stream-lifetime.test.ts": {
+    category: "shared-mechanism-collateral",
+    mechanisms: ["fixture-loader"],
+    evidence: "static-only",
+    reason:
+      "`POST /api/comments/:slug/:id/answer` held open mid-stream, so that moving the Comments " +
+      "guards into `AUTH_ROUTES` cannot quietly turn an awaited handler into a launched one " +
+      "(docs/plans/260911b-comments-join-the-route-table.md). It seeds through " +
+      "`scratchArticleInPg` and that copy step is the only condemned module it reaches: " +
+      "`explainStream` is stubbed, so no model is called and no ledger row is written. The " +
+      "registry cases age the comment's lease in SQL first, because a freshly leased row is " +
+      "spared by `sweepPending` whether or not `answering` holds it.",
+  },
   "tests/remember-route.test.ts": {
     category: "shared-mechanism-collateral",
     mechanisms: ["ledger-redirect", "fixture-loader"],
@@ -2428,6 +2445,11 @@ export const TEST_LANES: Readonly<Record<string, TestLane>> = {
   "tests/chat-thread-delete-route.test.ts": "private-postgres",
   "tests/checkpoints-durable-resume.test.ts": "private-postgres",
   "tests/claim-session-postgres.test.ts": "private-postgres",
+  /* Written 2026-09-11 for the Comments slice of the `AUTH_ROUTES` migration
+     (docs/plans/260911b-comments-join-the-route-table.md). It ages its own
+     comment's lease and sweeps its own slug; no model is called. It reaches
+     Storage the way its neighbour above does, through `scratchArticleInPg`. */
+  "tests/comment-answer-stream-lifetime.test.ts": "private-postgres",
   "tests/comment-referee-mark.test.ts": "private-postgres",
   "tests/comment-sweep.test.ts": "private-postgres",
   "tests/corpus-lock.test.ts": "private-postgres",
