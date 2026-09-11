@@ -6699,11 +6699,9 @@ type AuthRoute = ExactAuthRoute | PatternAuthRoute;
  * **The matchers two rows each share**, named once so there is one place that
  * decides what they match.
  *
- * The chain still declares bindings read by two guards apiece, and each of those
- * is a single `const`. (It was fourteen when the table was built; every slice
- * takes some of them, so the number is not written down here — a count that
- * decays once per commit is a comment that will be wrong more often than right.)
- * A table row has no such binding, so the same shape has to be a
+ * The `if` chain these rows came from declared a binding read by two guards as
+ * a single `const` inside `serveAuthenticatedApi`. A table row has no such
+ * binding, so the same shape has to be a
  * module-scope constant that both rows name. Spelling a regex out twice would
  * compile, run identically today, and let the copies drift apart tomorrow —
  * tests/authenticated-api-route-contract.test.ts § `names each matcher once` is
@@ -6752,6 +6750,10 @@ const ONE_THREAD_PATTERN = /^\/api\/chat\/([\w.%-]+)\/([\w.%-]+)$/;
    `answer` and `mark` are one row each and are written into those rows. */
 const COMMENTS_PATTERN = /^\/api\/comments\/([\w.%-]+)$/;
 const ONE_COMMENT_PATTERN = /^\/api\/comments\/([\w.%-]+)\/([\w.%-]+)$/;
+const SHELF_ENTRY_PATTERN = /^\/api\/library\/([\w.%-]+)$/;
+/* No slug, and that is the whole shape of it: this one is about the reader
+   rather than about an article. */
+const READER_PATH = "/api/reader";
 /* Same shape and same reasoning as the tweet thread's route — most articles have no
    glossary, so putting one on the article payload would make every reader of
    every article download a `null`.
@@ -6765,8 +6767,8 @@ const ONE_COMMENT_PATTERN = /^\/api\/comments\/([\w.%-]+)\/([\w.%-]+)$/;
 const GLOSSARY_PATTERN = /^\/api\/glossary\/([\w.%-]+)$/;
 
 /**
- * **The ordered table `serveAuthenticatedApi`'s `if` chain is being moved into,
- * one domain at a time.**
+ * **Every authenticated route, in order** — the table `serveAuthenticatedApi`'s
+ * `if` chain was moved into, one domain at a time, until the chain was empty.
  *
  * docs/plans/260907b-split-the-authenticated-api-dispatch-by-domain.md § *The
  * shape, and the fork that had to be settled*. Three opinions disagreed; this is
@@ -6776,38 +6778,26 @@ const GLOSSARY_PATTERN = /^\/api\/glossary\/([\w.%-]+)$/;
  * argument against it is one centralised handled/miss protocol instead of
  * fourteen boolean ones.
  *
- * ## Why it is consulted *after* the chain rather than instead of it
+ * ## The order is the chain's, and it was carried across, not chosen
  *
- * Because the move is incremental and must reorder nothing. What is here is the
- * **bottom of the chain, taken upward**: billing was its last four guards, jobs
- * and uploads the nine immediately above those, referee the eight above them,
- * search the four above *those*, chat and the live sessions the twelve above
- * those again, comments the six above chat, the six from sketch to the two
- * paid pictures (`similar`, `projection`) above comments, the six from `ideas`
- * to the quiz's mark above sketch, the four glossary routes above ideas, and
- * the nine of the article block (`article` … `tweets`) above the glossary —
- * and asking the table
- * after every remaining guard and before the terminal 404 puts each of them in
- * exactly the position it already had. The
- * count is deliberately not written here: it changes once per slice, and a
- * number in a comment that decays on a schedule is a comment that is wrong more
- * often than right. `EXPECTED_AUTH_ROUTES` in
- * tests/authenticated-api-route-contract.test.ts is where the inventory lives.
+ * The move had to reorder nothing, so it took the **bottom of the chain,
+ * upward**, one contiguous slice per commit, and each slice was prepended: the
+ * table asked after every guard still left and before the terminal 404 put each
+ * moved route exactly where it had been. The last slice, the fourteen from the
+ * admin routes to `shelfOpen`, emptied the chain on 2026-09-11
+ * (docs/plans/260911d-close-the-route-transition.md). So the rows are the
+ * chain's order, which is why `/api/uploads` and `/api/uploads/:id` sit
+ * *between* `GET /api/jobs` and `POST /api/jobs`: the rows are not grouped by
+ * domain name and must not be tidied into it. `EXPECTED_AUTH_ROUTES` in
+ * tests/authenticated-api-route-contract.test.ts is where the inventory lives,
+ * and a count is deliberately not written here.
  *
- * **So the rows are in chain order, and prepending is how a domain arrives.**
- * The next slice up goes above the article row, not below it — the table's
- * order *is* the chain's order, continued. Taking the slice contiguously is also what
- * preserves the one interleave here for free: `/api/uploads` and
- * `/api/uploads/:id` sit *between* `GET /api/jobs` and `POST /api/jobs`, which is
- * why these rows are not grouped by domain name and must not be tidied into it.
- *
- * A domain lifted out of the *middle* of the chain could not be added here
- * without also proving the reorder is safe — which the contract test's § *no two
- * guards accept the same method and path* is what would say. Its disjointness is
- * a corpus check over a hand audit, not a proof, so the safe move is to go on
- * taking the bottom slice (GPT Sol, stage 3a review § P2-STAGE3B-ORDER). And
- * there must stay exactly **one** dispatch of this table: a second call earlier
- * in the chain would let billing answer from the wrong position.
+ * **Reordering rows is a behaviour change until proved otherwise.** The
+ * contract test's § *no two guards accept the same method and path* says no
+ * two rows overlap today, but its disjointness is a corpus check over a hand
+ * audit, not a proof (GPT Sol, stage 3a review § P2-STAGE3B-ORDER). A new row
+ * goes where a person would look for it and that check has to stay green. And
+ * there must stay exactly **one** dispatch of this table.
  *
  * ## What the entries may not do
  *
@@ -6821,6 +6811,338 @@ const GLOSSARY_PATTERN = /^\/api\/glossary\/([\w.%-]+)$/;
  * **No `g` or `y` flag**, refused by `assertDispatchableRoutes` below.
  */
 const AUTH_ROUTES: readonly AuthRoute[] = [
+  /* The first route in the admin namespace. Exact on `path` like the shelf's, so a stray
+     `/api/admin/users/anything` is a 404 rather than a quiet match — and behind
+     the namespace check either way. docs/project/admin.md. */
+  {
+    kind: "exact",
+    method: "GET",
+    path: "/api/admin/users",
+    handler: async ({ request: { res } }) => {
+      /* **Said on the response as well as meant by the client.** The offline
+         cache in src/web/lib/api.ts keeps to an allowlist that this route is
+         not on, so nothing of ours would store it — but a page listing other
+         people's accounts should not depend on our own cache's good manners for
+         that, and an intermediary has no way to know the policy unless the
+         response states it. GPT Sol, 2026-08-27. */
+      res.setHeader("Cache-Control", "private, no-store");
+      send(res, 200, { users: await adminStore.listUsersAcrossOwners() });
+    },
+  },
+
+  /* The second admin route, and the only one that returns a reader's own
+     sentences. Exact on `path` for the same reason as the one above.
+     docs/plans/260902l-admin-feedback-page.md. */
+  {
+    kind: "exact",
+    method: "GET",
+    path: "/api/admin/feedback",
+    handler: async ({ request: { res, query } }) => {
+      /* `private, no-store`, and here it is not belt and braces the way it is on
+         the users list. That one carries counts; this one carries what other
+         people wrote to us in confidence, and a cache — ours, a proxy's, a
+         browser's back-forward store — is a second copy of it that nobody
+         decided to make. */
+      res.setHeader("Cache-Control", "private, no-store");
+      /* Absent means the default. A `?limit=` that is not a number is the
+         default too rather than a 400: the store clamps into
+         [1, ADMIN_FEEDBACK_MAX] whatever arrives, so there is no value here
+         that can do harm, and a refusal would be ceremony on a page only one
+         person can open. */
+      const asked = Number(query.get("limit"));
+      /* **A malformed cursor is a 400, and that one is not ceremony.** Silently
+         starting from the top instead would hand back page 1 while the reader
+         pressed *Load older* — a page that looks like it worked and quietly
+         skipped everything in between, which is the shape docs/reusable/silent-success.md
+         is about. */
+      const cursor = decodeFeedbackCursor(query.get("before"));
+      if (cursor === "malformed") throw httpError(400, "That is not a valid page cursor.");
+      send(
+        res,
+        200,
+        await adminStore.listFeedbackAcrossOwners(
+          Number.isFinite(asked) && asked > 0 ? asked : ADMIN_FEEDBACK_DEFAULT_LIMIT,
+          cursor,
+        ),
+      );
+    },
+  },
+
+  /* **One report, and it takes two segments** — `feedback`'s primary key is
+     `(owner_id, id)` because the id is minted by a browser, so an address with
+     only the id in it can name two different people's reports. GPT Sol,
+     2026-09-02; src/store/pg-admin-feedback.ts has the whole argument.
+
+     The patterns are id *shapes*; `isUuid` and `isSpideryarnId` are the *rules*,
+     applied in the handler before the store sees either value — the division
+     every other id route here uses, and the reason a pattern that merely looks
+     strict is not treated as validation. */
+  {
+    kind: "pattern",
+    method: "GET",
+    pattern: /^\/api\/admin\/feedback\/([\w-]+)\/([\w-]+)$/,
+    handler: async ({ request: { res } }, captures) => {
+      const [, owner = "", id = ""] = captures;
+      if (!isUuid(owner)) throw httpError(400, "ownerId must be a uuid");
+      if (!isSpideryarnId(id)) throw httpError(400, "id must be a report id");
+      res.setHeader("Cache-Control", "private, no-store");
+      const report = await adminStore.readFeedbackAcrossOwners(owner, id);
+      if (!report) throw httpError(404, "There is no such report.");
+      send(res, 200, { report });
+    },
+  },
+
+  {
+    kind: "pattern",
+    method: "GET",
+    pattern: /^\/api\/admin\/feedback\/([\w-]+)\/([\w-]+)\/screenshot$/,
+    handler: async ({ request: { res } }, captures) => {
+      const [, owner = "", id = ""] = captures;
+      /* The shapes in the pattern are not the rules. These are, and they run
+         before the store does — src/ids.ts, and docs/project/block-ids.md on
+         why a regex that looks strict enough is how range checks go quietly
+         wrong. Both halves, because both are half of the key. */
+      if (!isUuid(owner)) throw httpError(400, "ownerId must be a uuid");
+      if (!isSpideryarnId(id)) throw httpError(400, "id must be a report id");
+      const bytes = await adminStore.readFeedbackScreenshotAcrossOwners(owner, id);
+      /* No such report and a report with no screenshot are one answer, and the
+         store says so — see its docstring. Distinguishing them here would tell
+         the caller a thing it may do nothing with. */
+      if (!bytes) throw httpError(404, "That report has no screenshot.");
+
+      res.statusCode = 200;
+      /* **A literal, and it is correct by construction rather than by trust.**
+         src/feedback-image.ts does not *check* an uploaded screenshot, it
+         rebuilds one: the stored bytes are a PNG signature and a chunk stream
+         this app wrote, with every ancillary chunk — text, EXIF, colour
+         profiles — dropped. So there is no stored content type to get wrong,
+         and nothing to sniff. */
+      res.setHeader("Content-Type", CONTENT_TYPE.png);
+      res.setHeader("X-Content-Type-Options", "nosniff");
+      res.setHeader("Cache-Control", "private, no-store");
+      /* The bytes being written, not a stored count — the same rule the PDF
+         route follows, and the one that stays true when the two disagree. */
+      res.setHeader("Content-Length", String(bytes.byteLength));
+      res.end(Buffer.from(bytes));
+    },
+  },
+
+  /* An EXACT match, which is what this row has always been for: a stray
+     `/api/library/anything` must 404 rather than quietly serve the whole shelf.
+     The shelf takes `?archived=1`, which is why it was the first route moved
+     off the raw URL. */
+  {
+    kind: "exact",
+    method: "GET",
+    path: "/api/library",
+    handler: async ({ request: { res, query } }) => {
+      /* `=== "1"`, not truthiness. `?archived=0` is a thing somebody will write
+         meaning "no", and a loose check would hand them the archive. */
+      const archived = query.get("archived") === "1";
+      /* Annotated rather than inferred: `LibraryResponse` is the envelope the
+         client filters and reads, and naming it here is what makes a
+         disagreement about it a compile error instead of a silent no-op.
+         docs/postmortems/260903e-offline-shelf-filter-never-ran.md. */
+      const shelf: LibraryResponse = { articles: await listArticles({ archived }) };
+      send(res, 200, shelf);
+    },
+  },
+
+  /* Before the `:slug` pattern below, and it has to be: `search` is a valid
+     slug shape, so the two patterns overlap and the specific one must win.
+     Putting them the other way round would make `/api/library/search` a
+     perfectly plausible request to rename an article called "search". */
+  {
+    kind: "exact",
+    method: "GET",
+    path: "/api/library/search",
+    handler: async ({ request: { res, query } }) => {
+      send(res, 200, await searchTheLibrary(query));
+    },
+  },
+
+  /* PATCH rather than PUT: both fields are optional and the client sends
+     whichever the reader changed. A PUT would mean "here is the whole shelf
+     record", and a client that forgot one field would silently clear it. */
+  {
+    kind: "pattern",
+    method: "PATCH",
+    pattern: SHELF_ENTRY_PATTERN,
+    handler: async ({ request: { req, res } }, captures) => {
+      send(res, 200, await patchShelf(slugPart(captures, 1), await readBody(req)));
+    },
+  },
+
+  /**
+   * **Destroy the article, for good.** The other ending, beside the `archived`
+   * flag the PATCH above sets.
+   *
+   * **No body.** There is nothing to say: the slug is the whole request, and a
+   * body would only invite a confirmation token that the server would have to
+   * either check (a second authorisation, disagreeing with the first) or
+   * ignore (a field that reads as a safeguard and is not one). The two-step
+   * confirm is the client's, and it is a property of the button rather than of
+   * the protocol.
+   *
+   * **And no ownership check here.** Authorisation is the `where` clause
+   * inside the one statement `destroy` runs, so this route asks nobody whose
+   * article it is — a second check would be a second opinion that can disagree
+   * with the first, and the one that matters is the one in the `DELETE`.
+   * docs/project/auth.md § *whose data is it*.
+   */
+  {
+    kind: "pattern",
+    method: "DELETE",
+    pattern: SHELF_ENTRY_PATTERN,
+    handler: async ({ request: { res } }, captures) => {
+      send(res, 200, await shelfStore.destroy(slugPart(captures, 1)));
+    },
+  },
+
+  // Static as far as a request is concerned — a read of two constants. No slug
+  // and no store behind it.
+  {
+    kind: "exact",
+    method: "GET",
+    path: "/api/models",
+    handler: async ({ request: { res } }) => {
+      send(res, 200, modelsInUse());
+    },
+  },
+
+  /* **The only route that carries audio**, and the only one whose body is
+     measured in megabytes rather than kilobytes. No slug in the path even
+     though most dictations are about an article: what the article decides here
+     is the *vocabulary*, which is a property of the request rather than of the
+     resource, and a `/api/transcribe/:slug` would have made a slug mandatory
+     for the profile boxes, which have none. src/transcribe.ts. */
+  {
+    kind: "exact",
+    method: "POST",
+    path: "/api/transcribe",
+    handler: async ({ request: { req, res } }) => {
+      send(res, 200, await transcribeDictation(req, res));
+    },
+  },
+
+  /* **The other route with a body measured in hundreds of kilobytes**, and the
+     only one whose body is a person writing to us. No slug in the path even
+     when the report is about an article: what the reader was looking at is a
+     *field of the report* — one of several, and nullable, because a report can
+     come from the shelf or the profile page. src/feedback.ts and
+     docs/plans/260831aj-feedback-button-and-bug-reports-to-sentry.md. */
+  /* `fileFeedback` answers for itself rather than returning a body, because
+     three of its four outcomes are different statuses and one of them sets a
+     header. `send` inside one function beats a status threaded back out. */
+  {
+    kind: "exact",
+    method: "POST",
+    path: "/api/feedback",
+    handler: async ({ user, request: { req, res } }) => {
+      await fileFeedback(req, res, user);
+    },
+  },
+
+  {
+    kind: "exact",
+    method: "GET",
+    path: READER_PATH,
+    handler: async ({ request: { res, query } }) => {
+      /* **`?slug=` answers a different question, and the panels need that one.**
+         Without it this says only whether the *global* box is written, and a
+         reader who has filled in "why you're reading this one" and nothing else
+         has a profile as far as every prompt is concerned — `renderProfile`
+         joins the two — while every control that offered to turn it off has
+         disappeared. They could not opt out of something they could not see.
+
+         So `profile` is the global text, which is what /profile edits, and
+         `hasProfile` is the real answer to "is anything being taken into
+         account here", resolved the same way the prompts resolve it. One
+         request, right in every state, including the ones with no artefact to
+         hang a flag on. GPT Sol's review, 2026-08-26. */
+      /* **`purpose` is here for the profile panel**, which prints each box on
+         its own with its own way in to edit it (docs/plans/260830c-profile-panel.md).
+         It is the reader's own words being shown back to the reader, which is a
+         different act from the `useProfile: boolean` a generate request sends —
+         that one is still a boolean, because a client that could supply profile
+         *text* is a way to put an arbitrary string into a prompt.
+
+         **Always present, `null` without a slug** — never absent. A field that
+         appears on some responses and not others is the one that gets dropped
+         at a boundary and then read as "this reader has no purpose" rather than
+         "nobody asked": three states wearing two. `profile` is already spelled
+         that way and this matches it.
+
+         `resolveProfileParts` rather than `resolveProfile`, and that also costs
+         one store read fewer than this used to: the old pair read the global
+         profile directly *and* again inside `resolveProfile`. */
+      const at = query.get("slug");
+      const parts: ProfileParts =
+        at && isSlug(at)
+          ? await resolveProfileParts(at)
+          : { profile: await readerStore.readProfile(), purpose: null, purposeFailed: false };
+      /* **On every answer, with or without a slug**, because the switch is a
+         property of the reader and this is the reader's route. It costs one
+         extra row read on a route the article pages already fetch for
+         `hasProfile`, which is the trade that keeps the client from needing a
+         second endpoint — and a second endpoint is how two answers to "is it
+         on" come to disagree. docs/project/experimental-features.md. */
+      const experimentalSince = await readerStore.readExperimental();
+      /* Asked of the *rendered* pair rather than of `parts.profile`, which is
+         what makes a reader who has written only "why you're reading this one"
+         count — the case this whole `?slug=` exists for. */
+      /* **Normalised on the way out, so the two answers cannot disagree.**
+         `hasProfile` is asked of `renderProfile`, which trims and settles line
+         endings — so a legacy whitespace-only value stored before that rule
+         existed makes `hasProfile` false while the raw string is still truthy,
+         and the panel draws a box containing three spaces instead of saying
+         nothing is written. One normalisation, used for both. GPT Sol,
+         2026-08-30. */
+      send(res, 200, {
+        profile: normaliseProfileText(parts.profile),
+        purpose: normaliseProfileText(parts.purpose),
+        purposeFailed: parts.purposeFailed,
+        hasProfile: renderProfile(parts) !== null,
+        /* **The date, not a boolean beside it.** The client derives "on" from
+           this being non-null. Sending both would be two spellings of one fact,
+           free to disagree — and the one that disagreed would be the one a
+           feature gate read. */
+        experimentalSince,
+      });
+    },
+  },
+
+  /* PATCH rather than PUT, for the same reason the shelf's is: the body names
+     what changed. Here that is one field, so the two spellings would mean the
+     same thing today — and PUT would start meaning "here is the whole reader
+     record" the moment a second field arrives, which is exactly when a client
+     that had not been updated would silently clear it. */
+  {
+    kind: "exact",
+    method: "PATCH",
+    path: READER_PATH,
+    handler: async ({ request: { req, res } }) => {
+      send(res, 200, await patchReader(await readBody(req)));
+    },
+  },
+
+  /* POST, not GET, because it writes — and it is its own route rather than a
+     side effect inside `GET /api/article/:slug` for the same reason. A GET
+     that counts is a GET that a prefetch, a retry or a health check inflates
+     without anybody deciding to. */
+  {
+    kind: "pattern",
+    method: "POST",
+    pattern: /^\/api\/library\/([\w.%-]+)\/open$/,
+    handler: async ({ request: { res } }, captures) => {
+      await shelfStore.recordOpen(slugPart(captures, 1));
+      // 204: there is nothing worth reading back, and a body would invite
+      // somebody to render a counter that is one behind.
+      res.statusCode = 204;
+      res.end();
+    },
+  },
+
   {
     kind: "pattern",
     method: "GET",
@@ -8408,11 +8730,11 @@ const AUTH_ROUTES: readonly AuthRoute[] = [
  *
  * A table entry's `RegExp` is constructed once and shared by every request that
  * reaches it — which is the whole point of a static table, and the one way it
- * differs from the 51 literals in the chain above, each of which is built fresh
- * per request. `lastIndex` on a `/g` or `/y` regex survives a call, so a shared
- * one would make whether a route matches depend on the *previous* request. All
- * 51 have no flags today, so nothing is being fixed here; this is the check that
- * stops the property being lost silently when the next domain moves.
+ * differs from the `if` chain it replaced, whose literals were built fresh per
+ * request. `lastIndex` on a `/g` or `/y` regex survives a call, so a shared
+ * one would make whether a route matches depend on the *previous* request. No
+ * pattern has a flag today, so nothing is being fixed here; this is the check
+ * that stops the property being lost silently when the next route is added.
  * § [REGEX] in docs/plans/260907b-split-the-authenticated-api-dispatch-by-domain.md.
  *
  * A throw at import rather than a per-request check: a bad registration is a
@@ -8536,12 +8858,8 @@ export async function serveAuthenticatedApi(
      why it lands on the isolation scope and not the global one. */
   setMonitoringUser(user);
 
-  const { req, res, rawUrl, path, query } = request;
+  const { req, res, rawUrl, path } = request;
 
-  /* An EXACT match, which is what this line has always been for: a stray
-     `/api/library/anything` must 404 rather than quietly serve the whole shelf.
-     The shelf takes `?archived=1`, which is why it was the first route moved
-     off the raw URL. */
   /* **The admin namespace, and it is two comparisons rather than one.**
      `startsWith("/api/admin/")` alone would leave a future endpoint at exactly
      `/api/admin` — no trailing slash — outside the gate, which would make the
@@ -8554,70 +8872,18 @@ export async function serveAuthenticatedApi(
      `/api/administer` is deliberately **not** in here — the prefix ends at a
      slash — and neither is `/api/adminx`. The namespace is a path segment. */
   const adminNamespace = path === "/api/admin" || path.startsWith("/api/admin/");
-  /* The only route in it today. Exact on `path` like the shelf's, so a stray
-     `/api/admin/users/anything` is a 404 rather than a quiet match — and behind
-     the namespace check either way. docs/project/admin.md. */
-  const adminUsers = path === "/api/admin/users";
-  /* The second admin route, and the only one that returns a reader's own
-     sentences. Exact on `path` for the same reason as the one above.
-     docs/plans/260902l-admin-feedback-page.md. */
-  const adminFeedback = path === "/api/admin/feedback";
-  /* **One report, and it takes two segments** — `feedback`'s primary key is
-     `(owner_id, id)` because the id is minted by a browser, so an address with
-     only the id in it can name two different people's reports. GPT Sol,
-     2026-09-02; src/store/pg-admin-feedback.ts has the whole argument.
-
-     The patterns are id *shapes*; `isUuid` and `isSpideryarnId` are the *rules*,
-     applied in the handler before the store sees either value — the division
-     every other id route here uses, and the reason a pattern that merely looks
-     strict is not treated as validation. */
-  const adminFeedbackOne = /^\/api\/admin\/feedback\/([\w-]+)\/([\w-]+)$/.exec(path);
-  const adminFeedbackShot = /^\/api\/admin\/feedback\/([\w-]+)\/([\w-]+)\/screenshot$/.exec(
-    path,
-  );
-  const library = path === "/api/library";
-  /* Before the `:slug` pattern below, and it has to be: `search` is a valid
-     slug shape, so the two patterns overlap and the specific one must win.
-     Putting them the other way round would make `/api/library/search` a
-     perfectly plausible request to rename an article called "search". */
-  const librarySearchRoute = path === "/api/library/search";
-  const shelfEntry = /^\/api\/library\/([\w.%-]+)$/.exec(path);
-  const shelfOpen = /^\/api\/library\/([\w.%-]+)\/open$/.exec(path);
-  /* No slug, and that is the whole shape of it: this one is about the reader
-     rather than about an article. */
-  const readerRoute = path === "/api/reader";
-  // Static as far as a request is concerned — a read of two constants. No slug
-  // and no store behind it.
-  const modelsRoute = path === "/api/models";
-  /* **The only route that carries audio**, and the only one whose body is
-     measured in megabytes rather than kilobytes. No slug in the path even
-     though most dictations are about an article: what the article decides here
-     is the *vocabulary*, which is a property of the request rather than of the
-     resource, and a `/api/transcribe/:slug` would have made a slug mandatory
-     for the profile boxes, which have none. src/transcribe.ts. */
-  const transcribeRoute = path === "/api/transcribe";
-  /* **The other route with a body measured in hundreds of kilobytes**, and the
-     only one whose body is a person writing to us. No slug in the path even
-     when the report is about an article: what the reader was looking at is a
-     *field of the report* — one of several, and nullable, because a report can
-     come from the shelf or the profile page. src/feedback.ts and
-     docs/plans/260831aj-feedback-button-and-bug-reports-to-sentry.md. */
-  const feedbackRoute = path === "/api/feedback";
-  /* The article block's, the glossary, ideas, quotes, timeline, quiz,
-     quiz-mark, debate, sketch, illustrated, arc, similar, projection,
-     comments, chat, live-session, search, referee, jobs, uploads and billing
-     matchers used to be declared here and handled at the very end of the
-     chain. They are the rows of `AUTH_ROUTES` above, in dispatch order, and
-     the table is consulted after every guard below and before the terminal
-     404 — the position they already had, so the move reorders nothing. The
-     last guard left is `shelfOpen`, so the fourteen from the admin routes to
-     `shelfOpen` are the last slice. */
+  /* Every route's matcher used to be declared here, and every route was an
+     `if` below, down to the terminal 404. They are the rows of `AUTH_ROUTES`
+     above, in the order the chain had them — moved bottom-up, one contiguous
+     slice at a time, so no route ever answered from a position it had not had.
+     docs/plans/260907b-split-the-authenticated-api-dispatch-by-domain.md, and
+     docs/plans/260911d-close-the-route-transition.md for the last of them. */
 
     /* **The second gate, and it guards a prefix rather than a route.**
        Everything under `/api/admin/` is refused to everybody but the one
        address in src/admin.ts. Written here, above the route table, rather than
-       inside the one admin handler — so an admin route added later is behind
-       this check whether or not whoever adds it remembers, which is the only
+       inside the admin rows — so an admin route added later is behind this
+       check whether or not whoever adds it remembers, which is the only
        version of this that stays true.
 
        Matched on `path`, not on `url`, for the same reason the shelf's route is:
@@ -8645,258 +8911,17 @@ export async function serveAuthenticatedApi(
       throw httpError(403, "That page is for the site's administrator. [admin-only]");
     }
 
-    if (adminUsers && req.method === "GET") {
-      /* **Said on the response as well as meant by the client.** The offline
-         cache in src/web/lib/api.ts keeps to an allowlist that this route is
-         not on, so nothing of ours would store it — but a page listing other
-         people's accounts should not depend on our own cache's good manners for
-         that, and an intermediary has no way to know the policy unless the
-         response states it. GPT Sol, 2026-08-27. */
-      res.setHeader("Cache-Control", "private, no-store");
-      send(res, 200, { users: await adminStore.listUsersAcrossOwners() });
-      return;
-    }
-
-    if (adminFeedback && req.method === "GET") {
-      /* `private, no-store`, and here it is not belt and braces the way it is on
-         the users list. That one carries counts; this one carries what other
-         people wrote to us in confidence, and a cache — ours, a proxy's, a
-         browser's back-forward store — is a second copy of it that nobody
-         decided to make. */
-      res.setHeader("Cache-Control", "private, no-store");
-      /* Absent means the default. A `?limit=` that is not a number is the
-         default too rather than a 400: the store clamps into
-         [1, ADMIN_FEEDBACK_MAX] whatever arrives, so there is no value here
-         that can do harm, and a refusal would be ceremony on a page only one
-         person can open. */
-      const asked = Number(query.get("limit"));
-      /* **A malformed cursor is a 400, and that one is not ceremony.** Silently
-         starting from the top instead would hand back page 1 while the reader
-         pressed *Load older* — a page that looks like it worked and quietly
-         skipped everything in between, which is the shape docs/reusable/silent-success.md
-         is about. */
-      const cursor = decodeFeedbackCursor(query.get("before"));
-      if (cursor === "malformed") throw httpError(400, "That is not a valid page cursor.");
-      send(
-        res,
-        200,
-        await adminStore.listFeedbackAcrossOwners(
-          Number.isFinite(asked) && asked > 0 ? asked : ADMIN_FEEDBACK_DEFAULT_LIMIT,
-          cursor,
-        ),
-      );
-      return;
-    }
-
-    if (adminFeedbackOne && req.method === "GET") {
-      const [, owner = "", id = ""] = adminFeedbackOne;
-      if (!isUuid(owner)) throw httpError(400, "ownerId must be a uuid");
-      if (!isSpideryarnId(id)) throw httpError(400, "id must be a report id");
-      res.setHeader("Cache-Control", "private, no-store");
-      const report = await adminStore.readFeedbackAcrossOwners(owner, id);
-      if (!report) throw httpError(404, "There is no such report.");
-      send(res, 200, { report });
-      return;
-    }
-
-    if (adminFeedbackShot && req.method === "GET") {
-      const [, owner = "", id = ""] = adminFeedbackShot;
-      /* The shapes in the pattern are not the rules. These are, and they run
-         before the store does — src/ids.ts, and docs/project/block-ids.md on
-         why a regex that looks strict enough is how range checks go quietly
-         wrong. Both halves, because both are half of the key. */
-      if (!isUuid(owner)) throw httpError(400, "ownerId must be a uuid");
-      if (!isSpideryarnId(id)) throw httpError(400, "id must be a report id");
-      const bytes = await adminStore.readFeedbackScreenshotAcrossOwners(owner, id);
-      /* No such report and a report with no screenshot are one answer, and the
-         store says so — see its docstring. Distinguishing them here would tell
-         the caller a thing it may do nothing with. */
-      if (!bytes) throw httpError(404, "That report has no screenshot.");
-
-      res.statusCode = 200;
-      /* **A literal, and it is correct by construction rather than by trust.**
-         src/feedback-image.ts does not *check* an uploaded screenshot, it
-         rebuilds one: the stored bytes are a PNG signature and a chunk stream
-         this app wrote, with every ancillary chunk — text, EXIF, colour
-         profiles — dropped. So there is no stored content type to get wrong,
-         and nothing to sniff. */
-      res.setHeader("Content-Type", CONTENT_TYPE.png);
-      res.setHeader("X-Content-Type-Options", "nosniff");
-      res.setHeader("Cache-Control", "private, no-store");
-      /* The bytes being written, not a stored count — the same rule the PDF
-         route follows, and the one that stays true when the two disagree. */
-      res.setHeader("Content-Length", String(bytes.byteLength));
-      res.end(Buffer.from(bytes));
-      return;
-    }
-
-    if (library && req.method === "GET") {
-      /* `=== "1"`, not truthiness. `?archived=0` is a thing somebody will write
-         meaning "no", and a loose check would hand them the archive. */
-      const archived = query.get("archived") === "1";
-      /* Annotated rather than inferred: `LibraryResponse` is the envelope the
-         client filters and reads, and naming it here is what makes a
-         disagreement about it a compile error instead of a silent no-op.
-         docs/postmortems/260903e-offline-shelf-filter-never-ran.md. */
-      const shelf: LibraryResponse = { articles: await listArticles({ archived }) };
-      send(res, 200, shelf);
-      return;
-    }
-    if (librarySearchRoute && req.method === "GET") {
-      send(res, 200, await searchTheLibrary(query));
-      return;
-    }
-    /* PATCH rather than PUT: both fields are optional and the client sends
-       whichever the reader changed. A PUT would mean "here is the whole shelf
-       record", and a client that forgot one field would silently clear it. */
-    if (shelfEntry && req.method === "PATCH") {
-      send(res, 200, await patchShelf(slugPart(shelfEntry, 1), await readBody(req)));
-      return;
-    }
     /**
-     * **Destroy the article, for good.** The other ending, beside the `archived`
-     * flag the PATCH above sets.
+     * **The table, asked after the admin gate and before the 404 below.**
      *
-     * **No body.** There is nothing to say: the slug is the whole request, and a
-     * body would only invite a confirmation token that the server would have to
-     * either check (a second authorisation, disagreeing with the first) or
-     * ignore (a field that reads as a safeguard and is not one). The two-step
-     * confirm is the client's, and it is a property of the button rather than of
-     * the protocol.
-     *
-     * **And no ownership check here.** Authorisation is the `where` clause
-     * inside the one statement `destroy` runs, so this route asks nobody whose
-     * article it is — a second check would be a second opinion that can disagree
-     * with the first, and the one that matters is the one in the `DELETE`.
-     * docs/project/auth.md § *whose data is it*.
-     */
-    if (shelfEntry && req.method === "DELETE") {
-      send(res, 200, await shelfStore.destroy(slugPart(shelfEntry, 1)));
-      return;
-    }
-    if (modelsRoute && req.method === "GET") {
-      send(res, 200, modelsInUse());
-      return;
-    }
-    if (transcribeRoute && req.method === "POST") {
-      send(res, 200, await transcribeDictation(req, res));
-      return;
-    }
-    /* `fileFeedback` answers for itself rather than returning a body, because
-       three of its four outcomes are different statuses and one of them sets a
-       header. `send` inside one function beats a status threaded back out. */
-    if (feedbackRoute && req.method === "POST") {
-      await fileFeedback(req, res, user);
-      return;
-    }
-    if (readerRoute && req.method === "GET") {
-      /* **`?slug=` answers a different question, and the panels need that one.**
-         Without it this says only whether the *global* box is written, and a
-         reader who has filled in "why you're reading this one" and nothing else
-         has a profile as far as every prompt is concerned — `renderProfile`
-         joins the two — while every control that offered to turn it off has
-         disappeared. They could not opt out of something they could not see.
-
-         So `profile` is the global text, which is what /profile edits, and
-         `hasProfile` is the real answer to "is anything being taken into
-         account here", resolved the same way the prompts resolve it. One
-         request, right in every state, including the ones with no artefact to
-         hang a flag on. GPT Sol's review, 2026-08-26. */
-      /* **`purpose` is here for the profile panel**, which prints each box on
-         its own with its own way in to edit it (docs/plans/260830c-profile-panel.md).
-         It is the reader's own words being shown back to the reader, which is a
-         different act from the `useProfile: boolean` a generate request sends —
-         that one is still a boolean, because a client that could supply profile
-         *text* is a way to put an arbitrary string into a prompt.
-
-         **Always present, `null` without a slug** — never absent. A field that
-         appears on some responses and not others is the one that gets dropped
-         at a boundary and then read as "this reader has no purpose" rather than
-         "nobody asked": three states wearing two. `profile` is already spelled
-         that way and this matches it.
-
-         `resolveProfileParts` rather than `resolveProfile`, and that also costs
-         one store read fewer than this used to: the old pair read the global
-         profile directly *and* again inside `resolveProfile`. */
-      const at = query.get("slug");
-      const parts: ProfileParts =
-        at && isSlug(at)
-          ? await resolveProfileParts(at)
-          : { profile: await readerStore.readProfile(), purpose: null, purposeFailed: false };
-      /* **On every answer, with or without a slug**, because the switch is a
-         property of the reader and this is the reader's route. It costs one
-         extra row read on a route the article pages already fetch for
-         `hasProfile`, which is the trade that keeps the client from needing a
-         second endpoint — and a second endpoint is how two answers to "is it
-         on" come to disagree. docs/project/experimental-features.md. */
-      const experimentalSince = await readerStore.readExperimental();
-      /* Asked of the *rendered* pair rather than of `parts.profile`, which is
-         what makes a reader who has written only "why you're reading this one"
-         count — the case this whole `?slug=` exists for. */
-      /* **Normalised on the way out, so the two answers cannot disagree.**
-         `hasProfile` is asked of `renderProfile`, which trims and settles line
-         endings — so a legacy whitespace-only value stored before that rule
-         existed makes `hasProfile` false while the raw string is still truthy,
-         and the panel draws a box containing three spaces instead of saying
-         nothing is written. One normalisation, used for both. GPT Sol,
-         2026-08-30. */
-      send(res, 200, {
-        profile: normaliseProfileText(parts.profile),
-        purpose: normaliseProfileText(parts.purpose),
-        purposeFailed: parts.purposeFailed,
-        hasProfile: renderProfile(parts) !== null,
-        /* **The date, not a boolean beside it.** The client derives "on" from
-           this being non-null. Sending both would be two spellings of one fact,
-           free to disagree — and the one that disagreed would be the one a
-           feature gate read. */
-        experimentalSince,
-      });
-      return;
-    }
-    /* PATCH rather than PUT, for the same reason the shelf's is: the body names
-       what changed. Here that is one field, so the two spellings would mean the
-       same thing today — and PUT would start meaning "here is the whole reader
-       record" the moment a second field arrives, which is exactly when a client
-       that had not been updated would silently clear it. */
-    if (readerRoute && req.method === "PATCH") {
-      send(res, 200, await patchReader(await readBody(req)));
-      return;
-    }
-    /* POST, not GET, because it writes — and it is its own route rather than a
-       side effect inside `GET /api/article/:slug` for the same reason. A GET
-       that counts is a GET that a prefetch, a retry or a health check inflates
-       without anybody deciding to. */
-    if (shelfOpen && req.method === "POST") {
-      await shelfStore.recordOpen(slugPart(shelfOpen, 1));
-      // 204: there is nothing worth reading back, and a body would invite
-      // somebody to render a counter that is one behind.
-      res.statusCode = 204;
-      res.end();
-      return;
-    }
-
-    /**
-     * **The table, asked after every guard above and before the 404 below.**
-     *
-     * The article block (`article` … `tweets`), the glossary and its two
-     * lookups, ideas, quotes, timeline, the quiz and its mark, debate, sketch,
-     * illustrated, arc, the two paid pictures (similar and projection),
-     * comments, chat, the live sessions, search, referee, jobs, uploads and
-     * billing live in `AUTH_ROUTES` (above `serveAuthenticatedApi`) rather than
-     * in this chain.
-     * They were the chain's last guards, in that order, immediately above the
-     * terminal 404, so consulting the table exactly here leaves each of them
-     * where it already was and reorders nothing — the property that makes each
-     * increment a rearrangement rather than a behaviour change.
-     *
-     * **That property is why the queue is consumed bottom-up.** A domain from
-     * the middle of the chain would answer from here instead of from where it
-     * sits, which is a reordering — safe today, since no two guards accept the
-     * same method and path, but safe by an argument rather than by construction.
+     * Every authenticated route is a row of `AUTH_ROUTES` (above
+     * `serveAuthenticatedApi`), in the order the `if` chain that used to stand
+     * here had them. The gate stays outside it, above, so no row can be reached
+     * without it.
      *
      * **This is the only place the table is dispatched, and it has to be.** A
-     * second call earlier in the chain would give the *whole* table its turn
-     * there, so billing would answer from a position it has never had.
+     * second call would give the *whole* table a second turn at another
+     * position, which is a reordering nothing here has checked.
      *
      * `true` means an entry answered on `res`, so this returns instead of
      * falling into the 404. The handler is awaited inside `dispatchAuthRoute`;

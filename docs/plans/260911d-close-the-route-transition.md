@@ -202,3 +202,59 @@ Focused set: the contract test, `cacheable-covers-artefact-routes`, the link-sum
 `link-summary-occurrence`, `public-dispatch`, `routes-status-classes-survive-the-store-guard`,
 `routes`, `owner-isolation`, `public-dto` and `tweets`: **15 files, 695 tests, green.** Also
 `public-visibility-pg`, 44 of 44. Typecheck: exit 0.
+
+### Slice 4 — the top fourteen, and the chain is empty
+
+`adminUsers` … `shelfOpen`: the four admin routes, the shelf, models, transcribe, feedback, the
+reader profile and the shelf's open counter. Eight exact rows. Two shared matchers become
+`SHELF_ENTRY_PATTERN` and `READER_PATH`. `feedback` is the first row whose handler takes `user`.
+Verifier: all fourteen `identical`. The admin gate does not move. It stays in
+`serveAuthenticatedApi`, above the one table dispatch, so every admin row is still behind it.
+
+**The destructure, watched.** Two admin bodies read their matcher as
+`const [, owner = "", id = ""] = adminFeedbackOne;`. With the verifier's `= <matcher>;` rename
+removed from a scratch copy, the same diff printed `*** BODY DIFFERS ***` for exactly those two. So
+the rename is needed, and being targeted it is the only thing that changed.
+
+**The witnesses for the two rows that hold a lifetime, red against the chain first and then against
+the row:**
+
+| Mutation | Chain | Moved row |
+|---|---|---|
+| `transcribe`: `send(res, 200, await transcribeDictation(…))` → the call launched and `{}` sent | `request-spend` **7 failed of 8**, *has a row per call, written before the request finished* first | **7 failed of 8**, the same |
+| `feedback`: `await fileFeedback(…)` → `void …` | `feedback-route` **17 failed of 33** | **17 failed of 33**, contract test **323 passed** beside it |
+
+`transcribe` is paid, and `request-spend` drives it through `handleApi`. It is the existing oracle,
+so no new file was written for it. `feedback` is not paid, but it answers for itself and has a
+cap-on-writes, so it had the same question to answer.
+
+**Red first: 2 failed**, the contract test's two. Then **the legacy-guard test requires zero.**
+*Answers the moved domains from the table* listed moved prefixes, grew by one slice per commit, and
+carried a control repointed at every slice. Now nothing is left for a prefix list to be about, and
+no domain is left for a control to point at. It became *answers every route from the table, and
+leaves none in the chain*: no guard is read from the chain, and the table carries all
+`EXPECTED_GUARD_COUNT`. The moved-prefix list, the control and `pathish`, the helper that existed
+only for the prefix filter (typecheck named it unused), were deleted. **Watched**: a duplicate
+`/api/models` GET put back as a chain guard → *"a route is a guard in serveAuthenticatedApi's chain
+again … expected [ 'literal /api/models at line 8914' ] to deeply equal []"*, among six failures,
+then removed. The order case keeps its list, now all 82, and is renamed *keeps the table in the
+order the chain had*.
+
+`serveAuthenticatedApi` is now the runtime type check, the owner and monitoring setup, the admin
+namespace and its gate, the one table dispatch and the terminal 404. Its comments no longer describe
+a migration in progress. `query` left its destructure, because nothing reads it there now. The shelf's
+*"An EXACT match, which is what this line has always been for"*, which sat above the admin
+namespace, moved onto the library row. The admin-users row's *"The only route in it today"* became
+*"The first route in the admin namespace"*. The `AUTH_ROUTES` header, the shared-matcher header and
+`assertDispatchableRoutes`'s *"the 51 literals in the chain above"* describe the finished state.
+
+Focused and end-of-stage set: the contract test, `cacheable-covers-artefact-routes`, `admin`,
+`feedback-route`, `feedback-diagnostics`, `request-spend`, `public-dispatch`, `routes`,
+`owner-isolation`, `public-dto`, `seed-admin-signin`, `route-profile-concurrency`,
+`routes-status-classes-survive-the-store-guard`, `no-undeclared-spend`,
+`embedding-route-failures`, every stream-lifetime oracle (quiz mark, glossary, link summary, comment
+answer, referee, paid single-flight), `referee-scan-route`, `source-store`,
+`store-migration-registry`, `fixture-ids`, `library` and `library-search`: **27 files, 813 tests,
+green.** Route order, status, ownership, spend and streaming are all in it. The verifier, run over
+all four slices against the chain as it was at the start of the stage: *the move is a move*, four
+times. Typecheck: exit 0.

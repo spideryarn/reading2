@@ -773,26 +773,6 @@ const EXPECTED_GUARD_COUNT = 82;
 const describeMatch = (m: MatchSpec): string =>
   m.kind === "literal" ? `literal ${m.path}` : `regex /${m.source}/${m.flags}`;
 
-/**
- * **A matcher as something a path prefix can be looked for in**, which
- * `describeMatch` is not.
- *
- * A regex's `source` keeps its escapes, so `/^\/api\/chat\/…$/` renders with
- * `\/` between every segment and the literal substring `/api/chat` never
- * appears in it. § *answers the moved domains from the table* used
- * `describeMatch(...).includes(prefix)` and so was **silently vacuous for every
- * regex route** — it could only ever catch a literal one left behind. Measured
- * 2026-09-08: adding `/api/chat` to that list while all nine `/api/chat` guards
- * were still in the chain left the suite green at 326.
- *
- * That mattered because referee and search are entirely regex, so the
- * assertion had verified nothing for either of the last two slices, while
- * reading in review as though it had. Dropping the backslashes is enough — the
- * result is only ever searched for a prefix, so `\w` becoming `w` is harmless.
- */
-const pathish = (m: MatchSpec): string =>
-  m.kind === "literal" ? m.path : m.source.replace(/\\/g, "");
-
 const sorted = (xs: string[]): string[] => [...xs].sort();
 
 /**
@@ -1911,162 +1891,28 @@ describe("the authenticated API's route contract", () => {
       expect(parsed.terminal404Line).toBeGreaterThan(parsed.tableDispatchLine);
     });
 
-    it("answers the moved domains from the table, not from the chain", () => {
+    it("answers every route from the table, and leaves none in the chain", () => {
       /* Otherwise everything above could be green because the parser is still
-         reading chain `if`s and the move never happened — the two forms are
-         normalised to the same pair, which is the whole idea and also the way
-         this could pass while proving nothing.
+         reading chain `if`s — the two forms are normalised to the same pair,
+         which is the whole idea and also the way this could pass while proving
+         nothing.
 
-         **This list grows by one domain per commit**, and it is the only place
-         that records which domains have moved. Editing it is what a stage does;
-         `EXPECTED_AUTH_ROUTES` is what a stage may not touch. */
-      expect(sorted(parsed.guards.filter((g) => g.fromTable).map((g) => pairKey(g.method, g.match))))
-        .toEqual(
-          sorted([
-            // the article block, 260911d
-            "GET regex /^\\/api\\/article\\/([\\w.%-]+)$/",
-            "GET literal /api/link-preview",
-            "GET literal /api/link-summary",
-            "PUT regex /^\\/api\\/article\\/([\\w.%-]+)\\/visibility$/",
-            "GET regex /^\\/api\\/source\\/([\\w.%-]+)$/",
-            "GET regex /^\\/api\\/asset\\/([\\w.%-]+)\\/([0-9a-f]{64})\\.(png|jpeg|gif)$/",
-            "GET regex /^\\/api\\/export\\/([\\w.%-]+)$/",
-            "GET regex /^\\/api\\/metadata\\/([\\w.%-]+)$/",
-            "GET regex /^\\/api\\/tweets\\/([\\w.%-]+)$/",
-            // the glossary, 260911d
-            "GET regex /^\\/api\\/glossary\\/([\\w.%-]+)$/",
-            "DELETE regex /^\\/api\\/glossary\\/([\\w.%-]+)$/",
-            "POST regex /^\\/api\\/glossary\\/([\\w.%-]+)\\/([\\w.%-]+)\\/lookup$/",
-            "POST regex /^\\/api\\/glossary\\/([\\w.%-]+)\\/ask$/",
-            // ideas to quizMark, 260911d
-            "GET regex /^\\/api\\/ideas\\/([\\w.%-]+)$/",
-            "GET regex /^\\/api\\/quotes\\/([\\w.%-]+)$/",
-            "GET regex /^\\/api\\/timeline\\/([\\w.%-]+)$/",
-            "GET regex /^\\/api\\/quiz\\/([\\w.%-]+)$/",
-            "GET regex /^\\/api\\/debate\\/([\\w.%-]+)$/",
-            "POST regex /^\\/api\\/quiz\\/([\\w.%-]+)\\/mark$/",
-            // sketch to the two paid pictures, 260911c
-            "GET regex /^\\/api\\/sketch\\/([\\w.%-]+)$/",
-            "GET regex /^\\/api\\/illustrated\\/([\\w.%-]+)$/",
-            "GET regex /^\\/api\\/illustrated\\/([\\w.%-]+)\\/([0-9a-f]{64})\\.(jpeg|png)$/",
-            "GET regex /^\\/api\\/arc\\/([\\w.%-]+)$/",
-            "POST regex /^\\/api\\/similar\\/([\\w.%-]+)$/",
-            "POST regex /^\\/api\\/projection\\/([\\w.%-]+)$/",
-            // comments, 260911b
-            "GET regex /^\\/api\\/comments\\/([\\w.%-]+)$/",
-            "POST regex /^\\/api\\/comments\\/([\\w.%-]+)$/",
-            "POST regex /^\\/api\\/comments\\/([\\w.%-]+)\\/([\\w.%-]+)\\/answer$/",
-            "PATCH regex /^\\/api\\/comments\\/([\\w.%-]+)\\/([\\w.%-]+)\\/mark$/",
-            "PATCH regex /^\\/api\\/comments\\/([\\w.%-]+)\\/([\\w.%-]+)$/",
-            "DELETE regex /^\\/api\\/comments\\/([\\w.%-]+)\\/([\\w.%-]+)$/",
-            // chat and the live sessions, 260908a
-            "GET regex /^\\/api\\/chat\\/([\\w.%-]+)$/",
-            "POST regex /^\\/api\\/chat\\/([\\w.%-]+)$/",
-            "POST regex /^\\/api\\/chat\\/([\\w.%-]+)\\/([\\w.%-]+)\\/cancel$/",
-            "POST regex /^\\/api\\/chat\\/([\\w.%-]+)\\/live-tool$/",
-            "POST regex /^\\/api\\/chat\\/([\\w.%-]+)\\/([\\w.%-]+)\\/live$/",
-            "POST regex /^\\/api\\/live\\/([\\w-]+)\\/connected$/",
-            "POST regex /^\\/api\\/live\\/([\\w-]+)\\/usage$/",
-            "POST regex /^\\/api\\/live\\/([\\w-]+)\\/close$/",
-            "POST regex /^\\/api\\/chat\\/([\\w.%-]+)\\/([\\w.%-]+)\\/spoken$/",
-            "POST regex /^\\/api\\/chat\\/([\\w.%-]+)\\/([\\w.%-]+)\\/stop$/",
-            "PATCH regex /^\\/api\\/chat\\/([\\w.%-]+)\\/([\\w.%-]+)$/",
-            "DELETE regex /^\\/api\\/chat\\/([\\w.%-]+)\\/([\\w.%-]+)$/",
-            // search, 260907b stage 5
-            "GET regex /^\\/api\\/search\\/([\\w.%-]+)$/",
-            "POST regex /^\\/api\\/search\\/([\\w.%-]+)$/",
-            "PATCH regex /^\\/api\\/search\\/([\\w.%-]+)\\/([\\w.%-]+)$/",
-            "DELETE regex /^\\/api\\/search\\/([\\w.%-]+)\\/([\\w.%-]+)$/",
-            // referee, 260907e
-            "GET regex /^\\/api\\/referee\\/criteria\\/([\\w.%-]+)$/",
-            "POST regex /^\\/api\\/referee\\/criteria\\/([\\w.%-]+)$/",
-            "PATCH regex /^\\/api\\/referee\\/criteria\\/([\\w.%-]+)\\/([\\w.%-]+)$/",
-            "DELETE regex /^\\/api\\/referee\\/criteria\\/([\\w.%-]+)\\/([\\w.%-]+)$/",
-            "GET regex /^\\/api\\/referee\\/claims\\/([\\w.%-]+)$/",
-            "POST regex /^\\/api\\/referee\\/claims\\/([\\w.%-]+)$/",
-            "GET regex /^\\/api\\/referee\\/scan\\/([\\w.%-]+)$/",
-            "POST regex /^\\/api\\/referee\\/mirror\\/([\\w.%-]+)$/",
-            // jobs and uploads, stage 3b
-            "GET literal /api/jobs",
-            "POST literal /api/uploads",
-            "DELETE regex /^\\/api\\/uploads\\/([\\w-]+)$/",
-            "GET regex /^\\/api\\/uploads\\/([\\w-]+)$/",
-            "POST literal /api/jobs",
-            "GET regex /^\\/api\\/jobs\\/([\\w.%-]+)$/",
-            "DELETE regex /^\\/api\\/jobs\\/([\\w.%-]+)$/",
-            "POST regex /^\\/api\\/jobs\\/([\\w.%-]+)\\/(cancel|retry)$/",
-            "POST regex /^\\/api\\/jobs\\/([\\w.%-]+)\\/advance$/",
-            // billing, stage 3a
-            "POST literal /api/billing/checkout",
-            "POST literal /api/billing/portal",
-            "POST literal /api/billing/confirm",
-            "GET literal /api/billing/usage",
-          ]),
-        );
-      /* **Two prefixes for one slice, and `chatLive` belongs to the first.**
-         `/api/chat/:slug/:threadId/live` is a chat path whose last segment
-         happens to read like the other namespace; sorting these twelve by the
-         word "live" would put it in the wrong list and the filter would then
-         pass while a guard was still in the chain. Nine under `/api/chat`,
-         three under `/api/live`. 260907b flagged it before the slice was cut. */
-      const moved = [
-        "/api/billing",
-        "/api/jobs",
-        "/api/uploads",
-        "/api/referee",
-        "/api/search",
-        "/api/chat",
-        "/api/live",
-        "/api/comments",
-        "/api/sketch",
-        "/api/illustrated",
-        "/api/arc",
-        "/api/similar",
-        "/api/projection",
-        "/api/ideas",
-        "/api/quotes",
-        "/api/timeline",
-        "/api/quiz",
-        "/api/debate",
-        "/api/glossary",
-        "/api/article",
-        "/api/link-preview",
-        "/api/link-summary",
-        "/api/source",
-        "/api/asset",
-        "/api/export",
-        "/api/metadata",
-        "/api/tweets",
-      ];
+         **Zero, since 260911d.** This case used to list the domains that had
+         moved, grow by one per slice, and carry a control — a prefix whose
+         guards were demonstrably still in the chain — repointed at every slice
+         because a prefix filter that could not see a regex guard would have
+         passed with the chain full. The last slice emptied the chain, so there
+         is nothing left for a moved-prefix list to be about and no domain left
+         for a control to point at. What is asserted instead is the end state:
+         no guard is read from the chain at all, and the table carries every one
+         of the `EXPECTED_GUARD_COUNT`. The pairs themselves are § `accepts
+         exactly the method-and-matcher pairs` and the order is the case below.
+         docs/plans/260911d-close-the-route-transition.md. */
       expect(
-        parsed.guards.filter((g) => !g.fromTable && moved.some((p) => pathish(g.match).includes(p))),
-        "a moved route is still a guard in the chain as well as a row in the table",
+        parsed.guards.filter((g) => !g.fromTable).map((g) => g.where),
+        "a route is a guard in serveAuthenticatedApi's chain again — the chain was emptied in 260911d; add a row to AUTH_ROUTES instead",
       ).toEqual([]);
-
-      /* **The control, because the assertion above passes when it is broken.**
-         It reads every remaining chain guard and finds none under a moved
-         prefix — which is also exactly what it does when the prefix test cannot
-         match the guards at all, as it could not for a regex until `pathish`.
-         So: claim a prefix whose guards are demonstrably *still* in the chain,
-         and require the same filter to find them. When that domain moves this
-         becomes a real failure, and the next unmigrated regex domain takes its
-         place — which is the point: a control nobody ever has to maintain is
-         one nobody checks is still true. It has been repointed six times:
-         from `/api/chat` to `/api/comments` when 260907e moved chat on
-         2026-09-08, from `/api/comments` to `/api/projection` when 260911b moved
-         comments, from `/api/projection` to `/api/quiz` when 260911c moved
-         sketch to projection, from `/api/quiz` to `/api/glossary` when 260911d
-         moved `ideas` to `quizMark`, from `/api/glossary` to `/api/article`
-         when it moved the glossary, and from `/api/article` to `/api/library`
-         — the shelf's five guards, in the last slice — when it moved the
-         article block. */
-      const stillInTheChain = parsed.guards.filter(
-        (g) => !g.fromTable && pathish(g.match).includes("/api/library"),
-      );
-      expect(
-        stillInTheChain.length,
-        "the moved-prefix filter cannot see a regex guard, so the assertion above proves nothing",
-      ).toBeGreaterThan(0);
+      expect(parsed.guards.filter((g) => g.fromTable).length).toBe(EXPECTED_GUARD_COUNT);
     });
 
     /**
@@ -2078,21 +1924,36 @@ describe("the authenticated API's route contract", () => {
      * position would let billing — the bottom of the chain — answer from the top
      * of it. `readTableDispatch` refuses a second `dispatchAuthRoute` outright,
      * at module scope, so that half never reaches a case; this asserts the half
-     * a refusal cannot see, which is that the rows are still written bottom-slice
-     * order and a new domain was prepended rather than appended.
+     * a refusal cannot see, which is that the rows are still in the order the
+     * chain had them.
      *
-     * It is an ordering assertion about the *table*, which the § above declines
-     * to make about the chain — and for the opposite reason. The chain's order is
-     * not behaviour because its guards are disjoint over the corpus; the table's
-     * order **is** the chain's order, carried across, and the evidence that the
-     * move preserved it is that it was taken as a contiguous slice. Nothing else
-     * records that.
+     * The table's order **is** the chain's order, carried across one contiguous
+     * slice at a time, bottom-up, until 260911d took the last fourteen — and
+     * nothing but this list records it. The rows are disjoint over the corpus
+     * (§ *no two guards accept the same method and path*), but that is a corpus
+     * check over a hand audit, not a proof, so a reorder is a change to argue
+     * for here rather than a tidy-up. Each comment below names the slice.
      */
-    it("keeps the table in the chain's order, newest domain first", () => {
+    it("keeps the table in the order the chain had", () => {
       expect(
         parsed.guards.filter((g) => g.fromTable).map((g) => pairKey(g.method, g.match)),
-        "the table's rows are the bottom of the chain in the order it had them; a domain is prepended, never appended, and the interleave inside jobs/uploads is not to be tidied",
+        "the table's rows are the chain's order, carried across — a reorder is a behaviour change until argued otherwise, and the interleave inside jobs/uploads is not to be tidied",
       ).toEqual([
+        // the top of the chain, from the admin routes to shelfOpen, 260911d
+        "GET literal /api/admin/users",
+        "GET literal /api/admin/feedback",
+        "GET regex /^\\/api\\/admin\\/feedback\\/([\\w-]+)\\/([\\w-]+)$/",
+        "GET regex /^\\/api\\/admin\\/feedback\\/([\\w-]+)\\/([\\w-]+)\\/screenshot$/",
+        "GET literal /api/library",
+        "GET literal /api/library/search",
+        "PATCH regex /^\\/api\\/library\\/([\\w.%-]+)$/",
+        "DELETE regex /^\\/api\\/library\\/([\\w.%-]+)$/",
+        "GET literal /api/models",
+        "POST literal /api/transcribe",
+        "POST literal /api/feedback",
+        "GET literal /api/reader",
+        "PATCH literal /api/reader",
+        "POST regex /^\\/api\\/library\\/([\\w.%-]+)\\/open$/",
         // the article block, 260911d
         "GET regex /^\\/api\\/article\\/([\\w.%-]+)$/",
         "GET literal /api/link-preview",
