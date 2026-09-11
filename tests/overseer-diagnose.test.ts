@@ -36,7 +36,7 @@ import { CLI_STATE_FILE } from "../tools/overseer/cli-state.js";
 import { DECISIONS_FILE, DECISIONS_INIT_FILE } from "../tools/overseer/decisions.js";
 import { INBOX_DIR } from "../tools/overseer/reports.js";
 import { listRevision, schedulePreviewLines } from "../tools/overseer/schedule-preview.js";
-import { SCHEDULE_PREVIEW_FILE } from "../tools/fleet/schedule-parse.js";
+import { SCHEDULE_PREVIEW_FILE, SCHEDULE_PREVIEW_SCHEMA } from "../tools/fleet/schedule-parse.js";
 import { CHECKPOINT_FILE, EVENTS_FILE, readCheckpoint } from "../tools/overseer/store.js";
 import type { PidReader } from "../tools/overseer/status-cli.js";
 import type { SourceMessage } from "../tools/overseer/source.js";
@@ -338,14 +338,17 @@ describe("Sol's stage-2 review, F40–F45", () => {
     // Sol's reproduction: the running daemon's preview holds the EMPTY list, whose hash is what a
     // checkout that could read none of its job files would compute if it hashed anyway.
     const at = new Date(clock.ms()).toISOString();
+    // This build's own schema, so the preview is read and the list comparison is reached; a file
+    // this build cannot read never gets that far (cd9f0412 moved it to 2 and this stayed on 1).
     const preview = {
-      schema: 1,
+      schema: SCHEDULE_PREVIEW_SCHEMA,
       writtenAt: at,
       instanceId: own.checkpoint.heartbeat.instanceId,
       list: { kind: "given", listRevision: listRevision([]) },
       capabilities: { session: false, rules: false },
       arming: { kind: "none", why: "not armed" },
       history: { kind: "intact" },
+      sessionHistory: { kind: "intact" },
       headline: { kind: "off", why: "not armed", at },
       missedRunPolicy: { kind: "one-run", sentence: "runs once" },
       caveat: "as of writtenAt",
