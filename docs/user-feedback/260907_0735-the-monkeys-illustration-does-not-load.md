@@ -45,7 +45,7 @@ image we hold **no** copy of is still exposed to the same trick, for which the r
 `error`-driven retry that needs its own plan.
 
 **The first is answered, 2026-09-11.** Greg chose to trial a candidate around 1,280 px. The assets
-step now takes one width-descriptor candidate from the `<img>`'s own `srcset` and stores it under the
+step now takes one candidate from the `<img>`'s own `srcset` and stores it under the
 same `src`, falling back to the `src` if it fails. For this figure that is the 1,440 px PNG, about
 1.6 MB against 126 KB, because this publisher's AVIF is a format we do not host yet. It reaches this
 article only when the step next runs on it: nothing re-runs it automatically, and nothing has been
