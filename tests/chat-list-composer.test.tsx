@@ -73,6 +73,7 @@ function paint(
   threads: ChatThread[] = [THREAD],
   threadId: string | null = null,
   loaded = true,
+  seed?: { threadId: string; text: string },
 ): void {
   act(() => {
     root.render(
@@ -107,6 +108,7 @@ function paint(
         blocks: new Map<string, string>(),
         focusNonce: 0,
         error: null,
+        seed,
       }),
     );
   });
@@ -259,5 +261,27 @@ describe("the composer under the conversation list", () => {
     expect(composer()).toBeNull();
     paint([THREAD], null, true);
     expect(composer()?.value).toBe("Still half a question");
+  });
+
+  /* A handed-over question (`seed`, from the glossary's Ask in chat) is the
+     box's *initial* value and nothing more: once the reader has edited it — or
+     cleared it with Escape — a later render still carrying the same seed must
+     not put the handed-over words back. `draftFor` in ChatPanel asks `has`. */
+  it("keeps the reader's edit over a seed the panel is still being handed", () => {
+    const handed = "The handed-over question";
+    paint([THREAD], THREAD.id, true, { threadId: THREAD.id, text: handed });
+    const box = composer();
+    expect(box?.value).toBe(handed);
+    act(() => {
+      const setter = Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, "value")?.set;
+      setter?.call(box, "The reader's edited question");
+      box?.dispatchEvent(new Event("input", { bubbles: true }));
+    });
+
+    /* Away to the list and back remounts the keyed composer, which reads its
+       draft afresh — the moment a seed could win over the edit. */
+    paint([THREAD], null, true, { threadId: THREAD.id, text: handed });
+    paint([THREAD], THREAD.id, true, { threadId: THREAD.id, text: handed });
+    expect(composer()?.value).toBe("The reader's edited question");
   });
 });

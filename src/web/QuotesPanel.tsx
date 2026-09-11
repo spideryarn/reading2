@@ -50,7 +50,7 @@
  */
 import { useState, type ReactElement } from "react";
 import { Info, Quote as QuoteIcon, RotateCcw, Sparkles, TriangleAlert } from "lucide-react";
-import type { BlockId, Job, Quote, QuoteDrops, QuoteTier } from "../types.js";
+import { MAX_QUOTES_TOTAL, type BlockId, type Job, type Quote, type QuoteDrops, type Quotes, type QuoteStroke, type QuoteTier } from "../types.js";
 import type { QuoteRank } from "./params.js";
 import type { UseQuotes } from "./useQuotes.js";
 import type { StepFailure } from "./useStepJob.js";
@@ -278,6 +278,53 @@ export const QUOTE_HEAVY_AT = QUOTE_BAR_DEFAULT;
 export function quoteTier(quote: Quote): QuoteTier {
   const priority = priorityOf(quote);
   return priority !== undefined && priority >= QUOTE_HEAVY_AT ? 2 : 1;
+}
+
+/**
+ * The faintest a quote's outline is ever drawn. **This is where "even
+ * low-priority quotes should still be clearly visible" is kept** — Greg,
+ * SPIDERYARN-READING2-2W — and it is checked rather than felt:
+ * tests/quote-stroke-fade.test.ts composites the 1px stroke at this alpha over
+ * `--page` and requires 3:1, WCAG's floor for a non-text mark. It comes out
+ * well above that; the margin is on purpose, because a 1px line needs more than
+ * a floor written for thicker components.
+ */
+export const QUOTE_ALPHA_FLOOR = 0.7;
+
+/** The priority at and below which a quote is drawn at `QUOTE_ALPHA_FLOOR`. */
+const QUOTE_FADE_FROM = 0.5;
+
+/**
+ * **How brightly this quote is outlined: 0.70 to 1.00, with priority.** The
+ * second channel on the stroke, and the fine one — Greg, 2026-09-10:
+ *
+ * > perhaps slightly fade the border based on the priority-score (but even
+ * > low-priority quotes should still be clearly visible)
+ *
+ * **Weight and fade move the same way, so they reinforce rather than
+ * cancel.** A higher priority is thicker *and* brighter; nothing is ever
+ * thick-but-faint or thin-but-bright. `quoteTier` keeps the coarse step — two
+ * weights, because the blind test found a third indistinguishable — and this is
+ * the continuous one inside and across them, which nobody has to identify
+ * pairwise: it is an impression across a page. 260907c's acceptance pass had
+ * already found that *"the priority does help skimming — but through
+ * brightness more than thickness"*, and this spends that finding.
+ *
+ * `priorityOf`, like the weight and the bar, so raising the bar still takes
+ * away the faintest and thinnest first. Unscored is the floor: visible,
+ * claiming nothing — the argument `quoteTier` makes for drawing it light.
+ * docs/plans/260911a-quotes-find-more-and-a-fade-that-carries-priority.md § 1.
+ */
+export function quoteAlpha(quote: Quote): number {
+  const priority = priorityOf(quote);
+  if (priority === undefined) return QUOTE_ALPHA_FLOOR;
+  const along = Math.min(1, Math.max(0, (priority - QUOTE_FADE_FROM) / (1 - QUOTE_FADE_FROM)));
+  return Math.round((QUOTE_ALPHA_FLOOR + (1 - QUOTE_ALPHA_FLOOR) * along) * 100) / 100;
+}
+
+/** The whole stroke — `QuoteStroke` in src/types.ts — which is what crosses into the marks. */
+export function quoteStroke(quote: Quote): QuoteStroke {
+  return { tier: quoteTier(quote), alpha: quoteAlpha(quote) };
 }
 
 /**
@@ -576,6 +623,32 @@ export function QuotesPanel({
     </div>
   );
 
+  /**
+   * **Find more** — the forced run on a list written from this same article,
+   * which the stage **appends** to (src/quotes.ts § existingFor). Greg,
+   * 2026-09-10: *"Remove the "Choose them again" button, and add a "Find more"
+   * button"*.
+   *
+   * **No profile checkbox**, unlike `rerun`: Find more continues the list the
+   * reader has rather than choosing it for somebody else, so it sends the
+   * list's own setting and the artefact keeps the stamp of the pass that
+   * started it. The box belongs beside a button that writes a list of its own.
+   */
+  const findMore = (
+    <div className="quotes-run">
+      <Progress
+        job={owner?.job ?? null}
+        starting={owner?.starting ?? false}
+        failed={owner?.failed ?? null}
+        stalled={owner?.stalled ?? false}
+        onRun={() => owner?.regenerate(owner.profiled) ?? Promise.resolve()}
+        onCancel={(id) => owner?.cancel(id)}
+        label="Find more"
+        runningLabel="Finding more…"
+      />
+    </div>
+  );
+
   return (
     <ModeSurface
       label="Quotes"
@@ -606,10 +679,11 @@ export function QuotesPanel({
         </>
       }
       /* Pinned under the list rather than at the end of it. Same guard it had
-          as a trailing child of the band. */
+          as a trailing child of the band — and **not on a stale list**, whose
+          banner offers the one honest action there, a list of its own. */
       foot={
-        quotes && (owner === null || owner.status === "ready") && owner?.quotes ? (
-          <Foot rerun={rerun} />
+        quotes && owner?.status === "ready" && owner.quotes && !owner.stale ? (
+          <Foot list={owner.quotes} running={owner.job !== null || owner.starting} findMore={findMore} />
         ) : null
       }
     >
@@ -660,7 +734,15 @@ export function QuotesPanel({
 
               `outdated` is *the article is the same and we would choose
               differently now*, which is what bumping `PROMPT_VERSION` means.
-              Stale wins when both are true; two banners stacked is a wall. */}
+              Stale wins when both are true; two banners stacked is a wall.
+
+              **Only the stale banner has a button since 2026-09-11.** A moved
+              article is the one state where extending the list is impossible
+              and replacing it is the honest action, so *Choose them again*
+              survives there and nowhere else. An outdated list is extended by
+              Find more in the foot — which appends lines chosen by the current
+              prompt and keeps every one the reader has — so the banner says so
+              rather than offering a second button that would throw them away. */}
           {owner?.stale ? (
             <div className="quotes-stale">
               <p>
@@ -674,9 +756,16 @@ export function QuotesPanel({
             <div className="quotes-stale">
               <p>
                 <TriangleAlert size={13} />
-                These were chosen by an earlier version of the prompt.
+                {/* **"Include", so the sentence is true of a mixed list.** A
+                    Find more on an outdated list keeps its older stamp
+                    (src/quotes.ts § buildQuotes), so this banner stays up over
+                    a list that is part old and part new — and "these were
+                    chosen by an earlier version" would then be false of the
+                    new part. "Include" is true whether some or all of them
+                    were. */}
+                These include lines chosen by an earlier version of the prompt. Find more uses the
+                current one, and keeps these.
               </p>
-              {rerun("Choose them again", true)}
             </div>
           ) : null}
 
@@ -1031,11 +1120,38 @@ const LABEL: Record<RowScore["key"], string> = {
  * *Choose them again* is not helped by either. `Foot` in
  * src/web/GlossaryPanel.tsx carries the longer version of the argument.
  *
- * So this takes no artefact at all now, and `owner.quotes` is read at the call
- * site only as the *is there a list yet* test for whether to draw the foot.
+ * **The verb went from *Choose them again* to *Find more* on 2026-09-11**, and
+ * it is a change of behaviour rather than a label: Greg asked for it twice
+ * (report 27, then SPIDERYARN-READING2-2W), and the stage now appends. So the
+ * foot reads the artefact again, for two facts only it has — whether the last
+ * Find more added anything, and whether the list is at the ceiling.
  */
-function Foot({ rerun }: { rerun(label: string, again?: boolean): ReactElement }) {
-  return <div className="quotes-foot">{rerun("Choose them again", true)}</div>;
+function Foot({
+  list,
+  running,
+  findMore,
+}: {
+  list: Quotes;
+  /** A run is in flight, so the last one's answer is about to be superseded. */
+  running: boolean;
+  findMore: ReactElement;
+}) {
+  /* **Said, because otherwise a Find more that found nothing looks exactly
+     like a button that did nothing** — the job finishes, the list is the same
+     length, and nothing on screen changed. docs/reusable/silent-success.md.
+     Absent on a first pass (`passes` 1, or a list from before the field). */
+  const foundNothing = !running && (list.passes ?? 1) > 1 && list.lastAdded === 0;
+  const full = list.quotes.length >= MAX_QUOTES_TOTAL;
+  return (
+    <div className="quotes-foot">
+      {foundNothing && <p className="quotes-quiet">Nothing more worth keeping turned up.</p>}
+      {full ? (
+        <p className="quotes-quiet">That is as many as we keep for one article.</p>
+      ) : (
+        findMore
+      )}
+    </div>
+  );
 }
 
 function Progress(props: {
@@ -1046,8 +1162,11 @@ function Progress(props: {
   onRun(): Promise<void>;
   onCancel(id: string): void;
   label: string;
+  /** What the button says while its run is going. *Choosing…* unless said. */
+  runningLabel?: string;
 }) {
+  const { runningLabel = "Choosing…", ...rest } = props;
   return (
-    <JobProgress {...props} step="quotes" icon={<QuoteIcon size={13} />} runningLabel="Choosing…" />
+    <JobProgress {...rest} step="quotes" icon={<QuoteIcon size={13} />} runningLabel={runningLabel} />
   );
 }

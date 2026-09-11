@@ -103,7 +103,7 @@ describe("tweets' prompt", () => {
  * batch prompt with the same two properties to check and no coverage of them.
  */
 describe("quotes' prompt", () => {
-  const render = (profile: string | null) => quotesPrompt({ tree: TREE, count: 6, profile });
+  const render = (profile: string | null) => quotesPrompt({ tree: TREE, count: 6, profile, existing: [] });
 
   it("carries the profile when there is one", () => {
     const out = render(PROFILE);

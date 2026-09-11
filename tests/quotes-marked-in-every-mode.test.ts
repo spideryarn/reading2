@@ -52,7 +52,7 @@ const HEDGED: Found = {
   confidence: 40,
   valence: null,
   reasoning: "",
-  quoteTier: null,
+  quoteStroke: null,
   /* The snippet fields the panel shows. Nothing here reads them — every
      assertion below is about which passages reach which projection — but the
      type is what stops a `Found` being half-built somewhere that does. */
@@ -64,14 +64,14 @@ const HEDGED: Found = {
 
 /** A quote over the same paragraph, and one over a paragraph nothing else touched. */
 const QUOTED: Found[] = [
-  { ...HEDGED, key: "quote-1", runId: "quotes", confidence: null, quoteTier: 1, start: 2, end: 9 },
+  { ...HEDGED, key: "quote-1", runId: "quotes", confidence: null, quoteStroke: { tier: 1, alpha: 0.7 }, start: 2, end: 9 },
   {
     ...HEDGED,
     key: "quote-2",
     blockId: TWO,
     runId: "quotes",
     confidence: null,
-    quoteTier: 2,
+    quoteStroke: { tier: 2, alpha: 1 },
     start: 0,
     end: 7,
   },

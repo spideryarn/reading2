@@ -714,6 +714,35 @@ reported it. Each says what was established and what the reader can do about it:
 | the characters are there, but never with a boundary on both sides — *axiom* against *axiomatic* | `[gl-ask-part-word]` | try the words as the piece writes them; chat is still offered |
 | there is no prose to search at all | `[gl-ask-no-prose]` | **not a claim about the term** — the branch exists so an empty scan cannot be reported as an answer |
 
+**Ask in chat carries the question, and spends nothing.** Pressing it opens a **fresh** conversation
+in chat mode with an editable question about the term already in the box — *What does "axiom" mean,
+and does it have anything to do with what this article is saying?* — and the caret in it. Nothing is
+sent until the reader presses Send; the conversation that was open, and the floating panel's own
+draft about a passage, are left as they were.
+
+> fresh
+>
+> — Greg, 2026-09-11, choosing a new conversation over putting the question into the one already open
+
+Four things it has to get right, each with a test:
+
+- **The term is the one the box sent** — trimmed and normalised (`UseGlossary.askTerm`), not
+  whatever is in the input when the button is pressed. The sentence treats it as data, quotation
+  marks included: `askAboutTerm` in [`chat-handoff.ts`](../../src/web/chat-handoff.ts).
+- **It crosses as a prop, owned by `Reader`**, never the module-level cell `chat-handoff.ts` used to
+  be, and never the URL — the question is the reader's text. It carries its article, so a band on
+  another article drops it, and `Reader` forgets it the moment the chat band has taken it.
+  `ChatHandoff` in [`ConversationModes.tsx`](../../src/web/modes/conversation/ConversationModes.tsx).
+- **One conversation under StrictMode**, not two: the band remembers which handoff it took. And the
+  arrival rule's latch is spent, so closing the handed-over conversation before the list arrives
+  does not produce a new empty one — a test caught StrictMode undoing that latch in the first draft.
+- **A visitor has neither the box nor the button.** The door is a model call, and chat is owner-only.
+
+[`glossary-ask-in-chat.test.tsx`](../../tests/glossary-ask-in-chat.test.tsx) drives it through the
+whole app; [`conversation-band-handoff.test.tsx`](../../tests/conversation-band-handoff.test.tsx)
+counts the conversations minted. The plan is
+[260908f § C](../plans/260908f-prioritised-spideryarn-codebase-improvements.md#c-keep-the-glossary-question-when-opening-chat).
+
 The third has never fired: **0 of 52** revisions in the local corpus have no text-bearing block
 (`bool_or(text <> '')` over `spideryarn.revision_blocks`, run 2026-09-04). It is reachable by
 construction rather than defensive — `assertSomethingWasProduced`
@@ -1181,9 +1210,6 @@ lengthen the reader's glossary as a side effect of re-fetching the article.
   [Looking a term up](#nothing-is-stored-and-that-is-deferred-rather-than-forgotten) has the three
   reasons and the shape of the table it needs. The sharpest is that the glossary blob is published
   with a shared article, so this is a projection decision before it is a schema one.
-- **The Chat handoff is a mode switch and nothing more.** The composer is not pre-filled with the
-  term, because a draft has to cross a component boundary only chat mode's own dialog has a prop for
-  ([`chat-handoff.ts`](../../src/web/chat-handoff.ts)). One prop's worth of work, not done.
 - **Nothing ties a term to a question.** [comments.md](comments.md) already answers "what does this
   mean" for a selected passage, and our review of their version argued a glossary should be *the same
   mechanism with a different prompt* rather than a second system. It is currently a second system —

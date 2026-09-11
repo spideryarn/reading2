@@ -12,6 +12,7 @@ I (retire the revision alias) built the same day — see § I.
 E (both glossary lookups streamed) built 2026-09-10/11 — see § E.
 O (on-demand draft sweep) built 2026-09-11 and wired in `count` mode; the first deletion waits for
 Greg — see § O.
+C (the glossary question carried into chat) built 2026-09-11 — see § C.
 Each stage's own status line is the authority.
 
 > Write a rich many-step plan to improve the codebase (prioritising the various suggestions by a
@@ -329,18 +330,54 @@ those are different, previously weighed decisions.
 
 ### Stage: one explicit draft handoff
 
-- [ ] Product proposal for Greg: pressing **Ask in chat** opens an editable question about the
+**Status 2026-09-11: built, on `dev`.** Greg answered the proposal the same day — *"fresh"* — so
+**Ask in chat** opens a new conversation with *What does "‹term›" mean, and does it have anything to
+do with what this article is saying?* in its composer, the caret in the box, and nothing sent until
+Send. The term is the one the box sent (`UseGlossary.askTerm`, trimmed and normalised), handed as a
+`ChatHandoff` prop that `Reader` owns and clears once the chat band has taken it; it carries its
+slug, and the band drops one from another article. No global cell, nothing in the URL, no change to
+the ask route's validation or ownership. [glossary.md § The three ways it comes back
+empty](../project/glossary.md#the-three-ways-it-comes-back-empty) has the behaviour.
+
+Evidence: `tests/glossary-ask-in-chat.test.tsx` (the whole app under StrictMode: fresh thread beside a
+stored one, question in the box, editable, focused, zero chat POSTs before Send and exactly one
+after, the reader's edit is what is sent, a long term with quotes, the floating passage draft
+survives the round trip, a visitor has no box) and `tests/conversation-band-handoff.test.tsx` (one
+conversation under StrictMode, another article's handoff dropped, no second empty conversation when
+the reader closes the handed-over one before the list arrives), plus a `chat-list-composer` case (the
+reader's edit beats a seed the panel is still being handed). Red before the change; red again under
+nine mutations (the box's text sent instead of `askTerm`; the StrictMode guard removed; the latch
+removed; the latch moved after the guard; the slug check removed; the seed never used; the seed
+preferred over the reader's edit; the caret left at the start; the mode switch removed). The latch
+one caught a real bug in the first draft: StrictMode re-runs the latch reset, so a latch spent only on
+the first run was undone. A scripted Playwright pass on this worktree's own dev server, at 1280px
+and 390px, saw the question in the box, the caret at its end (it was at the start until the
+composer's focus effect moved it), a new `?thread=`, Escape clearing it, and no chat request.
+
+GPT Sol reviewed the scoped diff and confirmed the spend conclusion: the handoff only creates a local
+thread, and Send is the one request. It made `ChatPanel` read the seed as a pure lookup rather than
+write it into the draft map during render (an abandoned render could have changed the committed
+panel), and strengthened the tests (every chat POST counted, including `/live`; the visitor case
+asserts the article rendered). It also added a path carrying a draft across a server correction of a
+new conversation's id; that was taken out again, because the correction happens only on an id
+collision or a hand-typed id, it widened ordinary drafts beyond this stage, and `ChatPanel`'s
+`drafts` comment already records the limit. Not witnessed by a test:
+`Reader` also clears a handoff chat mode never took when the mode is not chat — no reachable path
+leaves one untaken, so it is a guard rather than a behaviour. Escape keeps the composer's existing
+ladder (the first press clears the handed-over question, like any draft).
+
+- [x] Product proposal for Greg: pressing **Ask in chat** opens an editable question about the
   entered term and sends nothing until the reader presses Send. Prefer a fresh conversation to
   overwriting an existing draft; present that choice concretely before implementing it.
-- [ ] Read `src/web/chat-handoff.ts`, the current `ChatDialog` opening props, and the conversation
+- [x] Read `src/web/chat-handoff.ts`, the current `ChatDialog` opening props, and the conversation
   controller. Use the existing reader-owned prop path if possible. Its old global-cell implementation
   was deleted for cross-article/StrictMode bugs; do not revive it or put private text in a URL.
-- [ ] Carry the trimmed submitted term and article identity, not whichever text happens to be in
+- [x] Carry the trimmed submitted term and article identity, not whichever text happens to be in
   the box when an old failure arrives. Keep validation and ownership checks unchanged.
-- [ ] Test term survives handoff, draft stays editable, zero model requests before Send, exactly one
+- [x] Test term survives handoff, draft stays editable, zero model requests before Send, exactly one
   after Send, existing draft preserved, navigation cancels a pending handoff, and visitors have no
   paid control. Test a long term and quoted characters as data.
-- [ ] Check focus reaches the composer and Escape/back behaves as the current dialog contract says.
+- [x] Check focus reaches the composer and Escape/back behaves as the current dialog contract says.
   Update [glossary](../project/glossary.md); complete common checks.
 
 ## D — let Knip inspect source without requiring build output

@@ -10,13 +10,13 @@
  * docs/plans/260906c-separate-article-access-reader-composition-and-mode-controllers.md.
  */
 
-import { useCallback, useEffect, useLayoutEffect } from "react";
+import { useEffect, useLayoutEffect } from "react";
 import { useQueryState } from "nuqs";
 import type { BlockId, GlossaryEntry } from "../../../types.js";
 import type { PublicGlossary } from "../../../public-types.js";
 import { formsOf } from "../../../term-match.js";
 import type { TermSelection } from "../../annotate.js";
-import { gateParam, type Mode, sortParam, termParam, type TermSort } from "../../params.js";
+import { gateParam, sortParam, termParam, type TermSort } from "../../params.js";
 import { useRenderCount } from "../../perf.js";
 import { NO_TERMS } from "../../reader-capability.js";
 import { useGlossary, type GlossaryRead } from "../../useGlossary.js";
@@ -60,7 +60,7 @@ export function GlossaryBand({
   read,
   onJump,
   onSelected,
-  onMode,
+  onAskChat,
 }: {
   slug: string;
   /**
@@ -75,30 +75,28 @@ export function GlossaryBand({
   onJump(id: BlockId): void;
   onSelected(selection: TermSelection | null): void;
   /**
-   * Switch mode, for the one thing the glossary cannot answer.
+   * Hand a term to chat, for the one thing the glossary cannot answer.
    *
    * The *Look up a term* box explains what the piece says and nothing else, so
    * a word the piece never uses has no answer in this band at any price. Chat
    * is the surface that may go outside the article, and the panel offers it
-   * rather than leaving the reader at a dead end. Same prop and same reason as
-   * `ConversationBand`'s, one band along. See `AskATerm` in GlossaryPanel.tsx.
+   * rather than leaving the reader at a dead end. **The term goes up to
+   * `Reader`**, which owns both the mode and the handoff into the conversation
+   * band; this band used to be given `onMode` and switch to an empty chat. See
+   * `AskATerm` in GlossaryPanel.tsx.
    */
-  onMode(next: Mode): void;
+  onAskChat(term: string): void;
 }) {
   useRenderCount("GlossaryBand");
   const glossary = useGlossary(slug, read);
   const band = useGlossaryMode(glossary.glossary?.entries ?? NO_TERMS, onSelected);
-
-  /* Memoised so the panel's `onAskChat` keeps its identity between renders,
-     which is the same reason every other callback crossing this boundary is. */
-  const askChat = useCallback(() => onMode("chat"), [onMode]);
 
   return (
     <GlossaryPanel
       access={{ kind: "owner", owner: glossary, glossary: glossary.glossary }}
       {...band}
       onJump={onJump}
-      onAskChat={askChat}
+      onAskChat={onAskChat}
     />
   );
 }
