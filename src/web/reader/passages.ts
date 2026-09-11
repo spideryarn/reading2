@@ -37,7 +37,7 @@
  *
  * The `never` default is the idiom in visitor.ts § `visitorGap`: a fifteenth
  * mode is a compile error here rather than a mode that quietly shows the last
- * band's marks. That, and the exhaustive `band()` switch in Reader.tsx, are what
+ * band's marks. That, and the exhaustive `modeBand()` switch in Reader.tsx, are what
  * docs/project/new-mode.md now sends a maintainer to.
  *
  * docs/plans/260906c-separate-article-access-reader-composition-and-mode-controllers.md

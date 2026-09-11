@@ -43,7 +43,7 @@ import {
   RememberBand,
 } from "../modes/conversation/ConversationModes.js";
 import { askAboutTerm } from "../chat-handoff.js";
-import { FeatureBoundary } from "../FeatureBoundary.js";
+import { MODE_CONTAINMENT, ModeBoundary } from "./ModeBoundary.js";
 import { TableView } from "../TableView.js";
 import type { SelectionAnchor } from "../selection.js";
 import type { TermSelection } from "../annotate.js";
@@ -1431,8 +1431,11 @@ export function Reader({
    *
    * docs/plans/260906c-separate-article-access-reader-composition-and-mode-controllers.md
    * § Stage 4b, and docs/project/new-mode.md.
+   *
+   * **And every band it returns is inside one error boundary**, put there by
+   * `band()` below rather than case by case — ModeBoundary.tsx.
    */
-  function band(): ReactNode {
+  function modeBand(): ReactNode {
     switch (mode) {
       /* **The two modes with no band at all**, said rather than fallen into.
          Plain is the way out to the article and the hierarchy is the gist
@@ -1576,52 +1579,32 @@ export function Reader({
             onJump={jumpTo}
           />
         );
-      /* **The first mode that may break on its own.** One boundary around both
-         Ideas branches — the controller as well as its panel, which is why the
-         controller had to leave this file — so a throw in there costs the
-         reader Ideas and not the article.
-         docs/plans/260905h-a-mode-failure-should-leave-the-article-readable.md.
-
-         **Inside the case, so the boundary exists only where it can catch
-         anything.** Wrapping the two branches while leaving the element itself
-         unconditional worked, but it put a live activation subscription in the
-         other thirteen modes for no reason. That gate is also why `mode` is
-         **not** in the key: it cannot change while this boundary is alive, and
-         a feature that has a genuine sub-mode would not change the top-level
-         `mode` either — so it appends that sub-mode's own identity here, not
-         this. Sol, 2026-09-06, F18. */
+      /* **The first mode that could break on its own**, 2026-09-05 — the
+         controller had to leave this file for a boundary to enclose it, which
+         is the shape every band now has. The boundary itself is `band()`'s.
+         docs/plans/260905h-a-mode-failure-should-leave-the-article-readable.md. */
       case "ideas":
-        return (
-          <FeatureBoundary
-            name="Ideas"
-            slug={slug}
-            /* A visitor's band never auto-runs, so there is no press to retire. */
-            target={owner ? "ideas" : null}
-            resetKey={`${slug}|${owner ? "owner" : "visitor"}`}
-            onPlain={() => void setMode("plain")}
-          >
-            {owner && (
-              <IdeasBand
-                slug={slug}
-                blocks={article.blocks}
-                onJump={jumpTo}
-                onFound={setIdeaFound}
-                openKey={openOccurrence}
-                onOpenKey={setOpenOccurrence}
-              />
-            )}
-            {!owner && artefacts?.ideas && (
-              <VisitorIdeasBand
-                ideas={artefacts.ideas}
-                blocks={article.blocks}
-                onJump={jumpTo}
-                onFound={setIdeaFound}
-                openKey={openOccurrence}
-                onOpenKey={setOpenOccurrence}
-              />
-            )}
-          </FeatureBoundary>
-        );
+        if (owner)
+          return (
+            <IdeasBand
+              slug={slug}
+              blocks={article.blocks}
+              onJump={jumpTo}
+              onFound={setIdeaFound}
+              openKey={openOccurrence}
+              onOpenKey={setOpenOccurrence}
+            />
+          );
+        return artefacts?.ideas ? (
+          <VisitorIdeasBand
+            ideas={artefacts.ideas}
+            blocks={article.blocks}
+            onJump={jumpTo}
+            onFound={setIdeaFound}
+            openKey={openOccurrence}
+            onOpenKey={setOpenOccurrence}
+          />
+        ) : null;
       /* **Neither band publishes anything any more.** The marks are
          `useQuoteMarks` above, drawn in every mode; what is left down here is
          the panel, its three controls and — for the owner — the job machinery
@@ -1671,28 +1654,9 @@ export function Reader({
          GPT Sol review (F23) refused. Until then `POLICY.debate` is
          `owners-only`, so a visitor meets the boundary sentence rather than an
          empty band.
-         docs/plans/260905f-debate-mode-what-the-web-says-about-this-piece.md § Stage 4.
-
-         **The second mode that may break on its own**, in Ideas' shape: one
-         boundary at the composition point, around the whole of `DebateBand` —
-         `useDebate`'s read, job poll and `useAutoRun` as well as the panel —
-         so a throw in any of it costs the reader Debate and not the article,
-         and a press that met the throw is retired rather than left for a later
-         Back to spend on two web searches. The key carries the access class for
-         the day Stage 4 adds the visitor child beside the owner's.
-         docs/plans/260908f-prioritised-spideryarn-codebase-improvements.md § B. */
+         docs/plans/260905f-debate-mode-what-the-web-says-about-this-piece.md § Stage 4. */
       case "debate":
-        return (
-          <FeatureBoundary
-            name="Debate"
-            slug={slug}
-            target={owner ? "debate" : null}
-            resetKey={`${slug}|${owner ? "owner" : "visitor"}`}
-            onPlain={() => void setMode("plain")}
-          >
-            {owner && <DebateBand slug={slug} onJump={jumpTo} />}
-          </FeatureBoundary>
-        );
+        return owner ? <DebateBand slug={slug} onJump={jumpTo} /> : null;
       /* **The owner/visitor pair, since 2026-09-04.** It was the owner alone
          until then, because search is the one mode where the reader's own
          question is the artefact. Greg drew the line at *making* one: a
@@ -1767,6 +1731,36 @@ export function Reader({
         return unhandled;
       }
     }
+  }
+
+  /**
+   * **The band, inside the boundary that lets it break on its own.** One call
+   * site for every mode, so a band is contained because it is a band — the two
+   * modes with none are exempt by name, in `MODE_CONTAINMENT`.
+   *
+   * `key={mode}` gives each mode a boundary of its own, so a broken Quotes
+   * does not follow the reader into Timeline. What the boundary cannot protect
+   * is anything computed up here and handed down — ModeBoundary.tsx § What the
+   * boundary encloses. docs/plans/260908f-prioritised-spideryarn-codebase-improvements.md § B.
+   */
+  function band(): ReactNode {
+    /* `VisitorBand` is the band when policy or a missing artefact stands in
+       front of the mode's own component. It belongs under the same boundary:
+       leaving it beside this function would make the public half of eight
+       modes the one visible band that could still take the article with it. */
+    const content = !owner && gap ? <VisitorBand gap={gap} signedIn={signedIn} /> : modeBand();
+    if (MODE_CONTAINMENT[mode].kind === "exempt") return content;
+    return (
+      <ModeBoundary
+        key={mode}
+        mode={mode}
+        slug={slug}
+        owner={owner !== null}
+        onPlain={() => void setMode("plain")}
+      >
+        {content}
+      </ModeBoundary>
+    );
   }
 
   return (
@@ -2330,16 +2324,17 @@ export function Reader({
           visitor.ts is the set of them.
           PublicChrome.tsx, visitor.ts.
 
-          Placed above the real bands rather than woven into each of their
-          conditions, so that a mode added later cannot arrive without one:
+          Chosen once in `band()` rather than woven into each real band's
+          condition, so that a mode added later cannot arrive without one:
           `visitorGap` reads a `Record<Mode, VisitorPolicy>`, so a mode with no
-          row is a compile error rather than a mode that quietly opens. */}
+          row is a compile error rather than a mode that quietly opens. Keeping
+          this choice inside `band()` also keeps the visitor sentence under the
+          same failure boundary as the mode it stands in for. */}
       {/* **Only when there is a gap**, and since slice 1b there usually is not:
           a visitor whose article has a glossary opens the glossary, and
           `visitorGap` answers `null`. What is left here is a mode the pipeline
           never ran for this piece, and the ones that cost a model call —
           `POLICY` in visitor.ts says which, so no count lives here. */}
-      {!owner && gap && <VisitorBand gap={gap} signedIn={signedIn} />}
       {band()}
 
       {/* **The way back from a jump**, drawn only on an entry a jump stamped —

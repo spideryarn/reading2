@@ -1272,6 +1272,9 @@ function Term({
   return (
     <li
       className={`gloss-term${selected ? " on" : ""}`}
+      /* Which entry this row is, for the one reader that has to find it from
+         outside the panel: G from a paragraph puts the focus here (TermJump.tsx). */
+      data-term-id={entry.id}
       {...(unscored && {
         title: "Not scored for prioritising — shown regardless of the threshold",
       })}

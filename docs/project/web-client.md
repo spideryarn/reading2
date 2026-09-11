@@ -148,11 +148,25 @@ The failed controller is unmounted, so its existing cleanup runs and the prose i
 marks. And a mode press that fails has its activation token retired at the point of failure
 ([`activation.ts`](../../src/web/activation.ts) § `retireActivation`), so a later Back cannot spend
 a press that never started anything. Ideas was the first mode wired this way and Debate — the
-dearest press in the app — the second, on 2026-09-10; the other modes still fall through to the
-root boundary.
+dearest press in the app — the second, on 2026-09-10.
+
+**Since 2026-09-11 every band is inside one**, and not by twelve copies: `Reader` § `band()` wraps
+whatever the band switch returns in [`ModeBoundary`](../../src/web/reader/ModeBoundary.tsx), keyed
+on the mode. `MODE_CONTAINMENT` there is a `Record<Mode, …>`, so a new mode does not compile until
+somebody has said whether its band is contained; the only exemptions are Plain and Hierarchy, which
+have no band — a boundary around either would have to take the article with it. The token a band's
+boundary retires is `bandTarget` in `activation.ts`, answered from the same tables the presses arm
+from, including Diagram's picture and the Referee and Remember chips. `band()` makes the visitor's
+not-available `VisitorBand` part of that same choice, so the sentence that replaces an owner-only or
+missing-artefact band cannot take the shared article with it either.
+
+**What it does not protect is anything a band is handed from above.** A boundary cannot catch a
+throw from the component that renders it, so `OwnedReader`'s opening reads (glossary, quotes,
+comments), `Reader`'s passage selection and prose-mark computation, and the glossary's question on
+its way into chat are all still the root boundary's.
 [260905h](../plans/260905h-a-mode-failure-should-leave-the-article-readable.md) is the reasoning,
-[260908f](../plans/260908f-prioritised-spideryarn-codebase-improvements.md) § B is the plan for
-the rest, and
+[260908f](../plans/260908f-prioritised-spideryarn-codebase-improvements.md) § B is the plan and the
+mode-by-mode inventory, and
 [`tests/a-broken-mode-leaves-the-article-readable.test.tsx`](../../tests/a-broken-mode-leaves-the-article-readable.test.tsx)
 is what holds it.
 

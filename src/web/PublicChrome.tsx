@@ -63,6 +63,7 @@ import { HomeLogo } from "./HomeLogo.js";
 import { Link } from "./Link.js";
 import { ModeSurface } from "./ModeSurface.js";
 import { pageTitle, useDocumentTitle } from "./page-title.js";
+import { useRenderCount } from "./perf.js";
 import { LOGIN_HREF } from "./router.js";
 import { anAccountWouldHelp, visitorSentence, type VisitorGap } from "./visitor.js";
 
@@ -191,8 +192,14 @@ export function SharedNotice({
  * `feature` is omitted, rather than the `"mode-band "` with a trailing space
  * that an unguarded template would produce. There is no header row either — the
  * band is one Tailwind box and the sentence inside it.
+ *
+ * It is selected inside `Reader`'s `band()` and therefore sits under the same
+ * `ModeBoundary` as the real component it replaces. That placement matters: a
+ * visitor sentence is still a mode band, and a failure drawing it must leave
+ * the shared article readable too.
  */
 export function VisitorBand({ gap, signedIn }: { gap: VisitorGap; signedIn: boolean }) {
+  useRenderCount("VisitorBand");
   return (
     <ModeSurface label="Not available on a shared link">
       <div className="tw:flex tw:flex-1 tw:flex-col tw:justify-center tw:gap-3 tw:px-4 tw:py-6 tw:text-sm tw:text-ink-faint">

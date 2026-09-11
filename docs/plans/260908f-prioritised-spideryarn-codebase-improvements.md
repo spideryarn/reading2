@@ -5,7 +5,8 @@ Status as of 2026-09-08: **researched umbrella plan; implementation not started*
 results are recorded at the end. This is a plan-only commission: completing this document does
 not authorise implementing every product decision below.
 
-**Progress since:** B's first stage (contain Debate) built 2026-09-10 — see § B. P's study protocol
+**Progress since:** B's first stage (contain Debate) built 2026-09-10, and its second (every band
+contained) 2026-09-11 — see § B. P's study protocol
 prepared the same day — see § P. D (Knip without build output) built the same day — see § D.
 L (the unknown-throw mapper) investigated the same day and closed with no change — see § L.
 I (retire the revision alias) built the same day — see § I.
@@ -15,6 +16,7 @@ Greg — see § O.
 C (the glossary question carried into chat) built 2026-09-11 — see § C.
 A (the submit gate, Greg's choice) built 2026-09-11; the reconciliation stages are skipped — see § A.
 F's first stage (a bounded `srcset` candidate) built 2026-09-11 — see § F.
+M (G from a paragraph to its glossary row, Greg's choice of the jump) built 2026-09-11 — see § M.
 Each stage's own status line is the authority.
 
 > Write a rich many-step plan to improve the codebase (prioritising the various suggestions by a
@@ -294,11 +296,12 @@ fixed, no P0/P1), Playwright pass at 1280/400 with the GETs failed; reload stays
 
 ## B — a broken mode should leave the article readable
 
-**Proved from code:** there is one `<FeatureBoundary>` call site, around Ideas in
-`src/web/reader/Reader.tsx:1590`. `MODES` currently has **15 entries**:
+**Proved from code at this plan's baseline:** there was one `<FeatureBoundary>` call site, around
+Ideas. `MODES` then had **15 entries**:
 `plain, hierarchy, chat, glossary, search, referee, summary, diagram, ideas, remember, outline,
 quotes, timeline, debate, structure`. That is not fifteen identical panels: `plain` and `hierarchy`
 have no independent band, and conversation modes include additional controller/session concerns.
+Outline was subsequently folded into Structure, leaving 14 modes before this stage was built.
 
 The earlier statement that every controller still needs extracting is stale: mode files now live
 under `src/web/modes/`. Read
@@ -335,14 +338,79 @@ figures, which I reworded so the history stays true. Full suite: five red files,
 
 ### Stage: extend containment with an honest inventory
 
-- [ ] Classify each mode's actual mounted controller/visitor branch. Record explicit exemptions for
+**Built 2026-09-11** (worktree `contain-modes-inventory`, queue item qi-ncgj9shy). **One deviation
+from the steps below, on purpose:** rather than twelve per-mode copies of the Ideas/Debate wrapper
+migrated in batches, the boundary moved out of the switch to its one call site. `Reader` § `band()`
+wraps whatever `modeBand()` returns in `ModeBoundary` (src/web/reader/ModeBoundary.tsx), keyed on
+the mode; `MODE_CONTAINMENT` there is a `Record<Mode, Containment>`, so a new mode is a compile
+error until someone decides. Every band was migrated at once, so the "shrinking legacy set" was
+never needed — it starts and ends empty, which is the plan's own finishing condition. The token each
+band's boundary retires is `bandTarget` in `activation.ts`, answered from the same tables the
+presses arm from (`MODE_TARGET`, `REFEREE_TARGET`, the Remember toggle's `"quiz"`), with the sub-mode
+read by `ModeBoundary` rather than by `Reader` and put in an owner's reset key. Visitors ignore
+those selectors, so their key omits them rather than retrying a broken band on an irrelevant Back
+step. Review found one band still beside that call site: the visitor's not-available `VisitorBand`.
+`band()` now chooses that or the real mode band first and contains the answer, so the public half
+obeys the same rule.
+
+**The inventory.** Exempt, with reasons in the table: **Plain** and **Hierarchy**, which have no
+band — a boundary around either would have to take the article with it. Every other mode's band
+component is inside, including `VisitorBand` when policy or a missing public artefact puts that
+sentence in the slot, and so is everything it runs. What each still depends on **from above the
+band, and is therefore not protected** (a throw there is a throw in `Reader` or `OwnedReader`, and
+`AppBoundary` takes it):
+
+| Mode | Inside the boundary | Outside it, not protected | Press retired on a throw |
+|---|---|---|---|
+| Chat | `ConversationBand`: `useChat`, `?thread=`, live conversation, `ChatPanel`; `VisitorBand` for a visitor | `Reader`'s `chatHandoff` (the glossary's question); `Reader`'s own `?thread=` read | none |
+| Remember | `RememberBand`, `ConversationBand` (Recall), `QuizSubBand`/`useQuiz` (Quiz); `VisitorBand` for a visitor | `Reader`'s own `?thread=` read; the article's block text | `quiz` when on Quiz |
+| Glossary | `GlossaryBand`/`useGlossary` job poll and `useAutoRun`; visitor twin when built, `VisitorBand` when not | `OwnedReader`'s `useGlossaryRead`; `Reader`'s `?term=`/`?gate=`/`?sort=` and term marks | `glossary` |
+| Quotes | `QuotesBand`/`useQuotes` job poll and `useAutoRun`; visitor twin when built, `VisitorBand` when not | `OwnedReader`'s `useQuotesRead`; `Reader`'s `useQuoteMarks`, drawn in every mode | `quotes` |
+| Ideas, Timeline | the band, its hook, its passage publishing; visitor twin when built, `VisitorBand` when not | `Reader`'s passage selection/mark drawing and open-key state | `ideas`, `timeline` |
+| Search | `SearchBand`/`useSearch`; visitor twin | `Reader`'s passage selection/mark drawing and `openHit` | none |
+| Referee | `RefereeBand` and all four sub-bands and their hooks; `VisitorBand` for a visitor | `OwnedReader`'s `useComments`; `Reader`'s referee passage selection/mark drawing and open key | `claims`/`candidates` per `?referee=` |
+| Diagram | `DiagramBand` and every picture's hooks | `Reader`'s `at` and experimental flag | `sketch`/`illustrated` per `?diagram=` |
+| Summary, Structure | the band, its tree build, Structure's sampler | `Reader`'s sections/arc cells (Structure) | none |
+| Debate | `DebateBand`/`useDebate`; `VisitorBand` for a visitor | nothing | `debate` |
+
+Chat and Remember were given their own decision rather than a batch: chat's distinctive state above
+the band is its handoff, and containment is the behaviour wanted for it — a throw leaves the
+question in `Reader`, a successful retry takes it, and leaving chat drops it (`Reader`'s existing
+effect). `glossary-ask-in-chat.test.tsx` and `conversation-band-handoff.test.tsx` pin the healthy
+sequence; this stage's witnesses add the throw containment and Quiz retirement.
+
+**Tests** — `tests/a-broken-mode-leaves-the-article-readable.test.tsx`. One throw site for every
+band entry component is injected through `useRenderCount`. Completeness: `uncontained(MODES)` is
+empty, the same function fails `[...MODES, "a-mode-added-tomorrow"]`, the exemptions equal
+`["plain", "hierarchy"]` by name, every contained mode's witnesses run, and every mode for which
+`visitorGap` answers with `VisitorBand` has a visitor witness. The review added those eight public
+witnesses: all failed before `VisitorBand` moved under `ModeBoundary`, then the focused command
+passed 67/67 on 2026-09-11. A Diagram visitor case also proves an ignored picture parameter does
+not reset and retry their broken, Sketch-pinned band. Money: the bar's press for Glossary, Quotes,
+Timeline and Diagram's Sketch, the Candidates chip and the Quiz chip (with the real `useQuiz` above
+the throwing panel), each asserting the token is gone and nothing was posted. The initial eight
+mutations, run by a scratch script that edited and restored one line at a time, were: no
+`key={mode}` (1 red — a broken Quotes followed
+into Summary), target always `null` (13), Referee arming nothing (1), Remember arming nothing (1),
+Quotes exempt (3), no sub-mode in the reset key (1 — Back from a broken Candidates to Criteria),
+Diagram ignoring `?diagram=` (1), no boundary at all (46). The review's one-line mutation returning
+`VisitorBand` before the boundary made all eight new public witnesses fall through to `AppBoundary`
+(re-run independently after the review: 8 red, 59 green). `tests/glossary-band-wiring.test.ts`
+reads the switch's source text and now looks for `modeBand()`. Full `npm test`: the reds were the
+known environment set (two want `npm run build`, three fleet suites), `overseer-diagnose` (not this
+stage), `styles-entry-is-imports-only` (red on `dev` since 599904a5 deleted the preview entries that
+imported `tailwind.css`), the band-wiring text test above, and this file while the reviewer was
+mid-edit — green alone. No browser pass: the boundary adds no DOM to a healthy band, and its
+fallback cannot be reached in a real browser without injecting a throw.
+
+- [x] Classify each mode's actual mounted controller/visitor branch. Record explicit exemptions for
   structural views that cannot be isolated without taking the article with them.
-- [ ] Migrate small independent bands first (Quotes, Timeline, Summary, Glossary), then Search,
+- [x] Migrate small independent bands first (Quotes, Timeline, Summary, Glossary), then Search,
   Referee and Diagram; handle Chat/Remember separately because session and draft state can live
   above the band. Do not wrap stateful hooks that execute in the parent and claim they are protected.
-- [ ] Derive a completeness test from `MODES`, with named exemptions and a shrinking legacy set.
+- [x] Derive a completeness test from `MODES`, with named exemptions and a shrinking legacy set.
   A new mode must force a containment decision. A synthetic new mode must fail the check.
-- [ ] For each migrated family, retain a behavioural throw witness. JSX presence alone does not
+- [x] For each migrated family, retain a behavioural throw witness. JSX presence alone does not
   establish that the throw occurred beneath the boundary. Finish by deleting the legacy set or
   explicitly documenting each remaining architectural exception.
 
@@ -763,16 +831,46 @@ handling; “add focus support” would be a stale task.
 
 ### Stage: a small interaction experiment, then implementation if useful
 
-- [ ] Propose a passage-scoped action: from the selected block, open a keyboard-operable list of
+**Built 2026-09-11** (worktree `cluster-m-term-jump`, queue item qi-w96yxjcm). Greg answered the
+product question the same day: try the jump, and build the list only if the jump plainly fails.
+It did not fail, so there is no list. **G** on a paragraph opens its first underlined term in the
+existing glossary band, focused and expanded; G again walks the paragraph's other terms and wraps;
+Escape gives the focus back. The paragraph is the row whose permalink or prose link holds the
+focus, or, with nothing focused, the row at the reading line (`measureRow`, so ↓ then G agree).
+New code is `src/web/TermJump.tsx`, mounted beside the card in `ProseHoverCard.tsx` because that is
+where the entries and `onOpenTerm` already meet and `Reader.tsx` was in B2's hands; the glossary row
+gained a `data-term-id`. No term occurrence gained a tab stop. The rules are
+[keyboard.md § G, the one letter](../project/keyboard.md#g-the-one-letter).
+
+Evidence: `tests/term-jump-from-a-paragraph.test.tsx`, mounted through the real `ProseHoverCard`
+and the real visitor glossary band — 8 of the first 12 cases red before `TermJump` existed (the four
+green were the leave-it-alone controls), 21 after review. Mutations of the link ordering, the
+Escape `stopPropagation`, the link re-find and the band-covers guard each turned a case red;
+`preventScroll` cannot be seen in jsdom and is covered by Chrome. Real key presses in Chrome
+(Playwright, this worktree's dev server) on `fowler-phrenology` and the Noema piece, at 1280px and
+420px: several terms, one term, no term, a term inside a link, a term repeated across blocks, ↓ then
+G with nothing focused, typing and arrow-key editing in the look-up field — the paragraph's position
+unchanged to the pixel throughout. **Chrome found two defects jsdom could not:** opening a term
+re-renders the prose, so Escape lost the link it came from (now re-found by position); and at 420px
+the band covers the article, so Escape focused a permalink nobody could see (now it declines there;
+Back restores the paragraph exactly, measured). GPT Sol reviewed and fixed five more: IME
+composition, row controls other than the permalink and prose links, inferring a row through a
+covering band or an open modeless dialog, a double Escape with an open gutter disclosure, and a
+stale focus search or announcement timer. Left for Greg: a screen reader in browse mode normally
+eats a bare G itself, and nothing advertises or switches off the key.
+
+- [x] (Superseded by Greg's choice of the jump below; no list was built.) Propose a passage-scoped
+  action: from the selected block, open a keyboard-operable list of
   its glossary terms, then the existing definition card. First inspect `TableView`, its selected
   block actions, `term-match.ts`, and existing GlossaryPanel navigation; use those seams.
-- [ ] Show Greg a concrete prototype/interaction before choosing a new shortcut or permanent
+- [x] (Greg chose the jump on 2026-09-11 and asked not to be shown the choice again; the key is G.)
+  Show Greg a concrete prototype/interaction before choosing a new shortcut or permanent
   control. An alternative worth trying is jumping to the corresponding existing glossary row,
   which needs less card/focus machinery. Prefer that if it solves the task adequately.
-- [ ] Test no term/one term/multiple occurrences, term inside a link, stale block id, repeated word
+- [x] Test no term/one term/multiple occurrences, term inside a link, stale block id, repeated word
   across blocks, Escape/focus return, and arrow-key editing. Do not suppress ordinary links or
   turn hundreds of terms into tab stops. Test through real keyboard events and a browser.
-- [ ] Success is reaching the right definition while keeping the passage and place, not a blanket
+- [x] Success is reaching the right definition while keeping the passage and place, not a blanket
   accessibility-conformance claim. Update [keyboard](../project/keyboard.md) and
   [glossary](../project/glossary.md) once the interaction is chosen.
 

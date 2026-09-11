@@ -387,8 +387,10 @@ describe("the band dispatch", () => {
        expressions became a switch. Asserted here as well as by the typecheck
        because a `default:` that returned `null` would compile forever and open
        an empty band for the mode nobody wrote a case for. */
-    const at = reader.indexOf("function band(): ReactNode");
-    expect(at, "band() must exist in Reader.tsx to be checked").toBeGreaterThan(-1);
+    /* `modeBand()` since 2026-09-11, when `band()` became the one line that puts
+       its answer inside the boundary — src/web/reader/ModeBoundary.tsx. */
+    const at = reader.indexOf("function modeBand(): ReactNode");
+    expect(at, "modeBand() must exist in Reader.tsx to be checked").toBeGreaterThan(-1);
     const body = reader.slice(at, reader.indexOf("\n  return (", at));
     expect(body).toMatch(/switch \(mode\) \{/);
     expect(body).toMatch(/const unhandled: never = mode;/);
