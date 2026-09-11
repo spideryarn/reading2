@@ -308,8 +308,9 @@ describe("the stylesheet entry point is an import manifest", () => {
  *
  * The rule is therefore flat, and the tree already obeys it: **the only
  * stylesheet a TypeScript file may import is `src/web/tailwind.css`**, the one
- * entry point that establishes the layers. Twelve files do (`main.tsx` and the
- * eleven preview entries); no other spelling is legal.
+ * entry point that establishes the layers. One file does (`main.tsx`; the eleven
+ * preview entries that also did were deleted on 2026-09-11); no other spelling is
+ * legal.
  */
 describe("no component loads a stylesheet behind the entry point's back", () => {
   const ALLOWED = "./tailwind.css";
@@ -338,7 +339,10 @@ describe("no component loads a stylesheet behind the entry point's back", () => 
     /* The scanner first. If the import spelling ever changes, this finds
        nothing and the assertion below passes over a tree full of offenders —
        the shape this whole file exists to refuse. */
-    expect(seen, "no CSS imports found at all, so the scan is not working").toBeGreaterThan(5);
+    /* The floor was 5 while the eleven preview entries each imported it; they
+       were deleted on 2026-09-11 (599904a5) and `main.tsx` is the one legal
+       importer left, so the floor is the one import that must always exist. */
+    expect(seen, "no CSS imports found at all, so the scan is not working").toBeGreaterThan(0);
 
     expect(
       offenders,
