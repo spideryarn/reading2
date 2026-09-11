@@ -308,3 +308,40 @@ method changed to `PUT` → *"an artefact kind changed sides … expected [ 'arc
 108 lines longer, because 33 guards became 33 rows with their own braces and three constants. As
 260908f § G says, neither number is an acceptance metric. Further domain-file extraction needs its
 own measured reason.
+
+## The review
+
+[260911d-code-review-sol.md](260911d-code-review-sol.md), GPT Sol (high, `--sandbox review`,
+findings only), 2026-09-11. One review over the combined diff `6bc0c60a..d4c11480`, as the Overseer
+directed. Prompt: [260911d-code-review-prompt.md](260911d-code-review-prompt.md). The run log
+confirms a nested `gpt-5.6-sol` exec, and the answer file arrived. **No P0, P1 or P2.**
+
+The finding I asked it to try hardest on was the order, because the order expectation was edited in
+the same commits as the moves: the trap 260907b § Stage 3 names. Sol **derived the 33 guards'
+order independently from `6bc0c60a`** and found the 33 prefix rows match it in method, matcher and
+order, above an unchanged 49-row suffix. It also re-ran all four body comparisons (*the move is a
+move*). It confirmed the admin gate, the single table dispatch and the 404 in that order. It found no
+moved handler resolving an old dispatcher-local name through a same-named module binding. It ran the
+contract and artefact-cache suites, 340 of 340, and typechecked all four projects.
+
+- **P3, fixed.** Two contract-test comments still described the chain. The pair-key note said the
+  extractor read both forms. The disjointness case's header said the order was asserted nowhere and
+  that pinning it would be wrong. A maintainer following the second could have deleted the order
+  oracle. Both now describe the finished state: the order is pinned by *keeps the table in the order
+  the chain had*, and corpus disjointness is not permission to reorder.
+
+**What its sandbox could not do**: reach local Postgres, so the two new lifetime oracles were read,
+not run: their gates are route-specific, and their failure assertions read the response state
+captured at settlement. They were run here, green and under every mutation above.
+
+## The gate
+
+`npm run typecheck` on the final tree: exit 0. `npm test`, the full suite through
+`scripts/tmux-job.ts` at load ~5, on `d4c11480`: **1,088 files passed, 5 failed, 1 skipped**
+(23,656 tests passed, 4 failed, 115 skipped). None of the five is this stage's. They are the same
+five, in the same environment class, that 260911b and 260911c classified.
+`cold-start-lazy-imports` and `pdf-bundle-trace` stop at *"api-dist/vercel.js is missing — run
+`npm run build`"*, and `fleet-composed-access`, `fleet-decisions-route` and `fleet-reports-route` stop
+at *"no built client at tools/fleet/web/dist"*. A fresh worktree has neither build. Every suite that
+drives a route this stage moved is in the per-slice focused sets, green. The P3 fix after the
+review was to two comments, and the contract test was re-run on it.

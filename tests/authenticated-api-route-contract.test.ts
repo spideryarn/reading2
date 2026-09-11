@@ -1523,10 +1523,10 @@ const SOURCE_MATCHES = parsed.matchers.map((m) => describeMatch(m.match));
 const CONTRACT_PAIRS = EXPECTED_AUTH_ROUTES.flatMap((r) =>
   r.methods.map((method) => pairKey(method, r.match)),
 );
-/* The guard carries its own matcher, in both forms: a chain guard's binding is
-   resolved as it is read (the extractor refuses one it cannot resolve) and a
-   table entry's is written into the row. So there is no later join to lose, and
-   no `undefined` to stringify into a pair key — which is precisely how a set
+/* The guard carries its own matcher: a table entry's is written into the row,
+   or resolved from the constant it names as the row is read (the reader
+   refuses one it cannot resolve). So there is no later join to lose, and no
+   `undefined` to stringify into a pair key — which is precisely how a set
    comparison stops comparing anything. */
 const SOURCE_PAIRS = parsed.guards.map((g) => pairKey(g.method, g.match));
 
@@ -2216,19 +2216,21 @@ const ${ROUTE_TABLE}: readonly AuthRoute[] = [
   });
 
   /**
-   * The property that makes the order of the 82 guards irrelevant — asserted
-   * instead of the order itself.
+   * **Why the order of the 82 rows does not matter today** — which is not
+   * permission to reorder them.
    *
-   * The chain is *written* in one order and compared above as a *set*, which
-   * does not record the order — the contract literal is laid out in declaration
-   * order for a human reader and nothing asserts it. Pinning it would be wrong:
-   * no two guards accept the same method-and-path pair, so every reordering is
-   * an equivalent mutation, and a test that reddened for one would be
-   * defending an implementation detail — the same reason the plan refuses the
-   * library-guard swap as a control. So this asserts the reason instead. **If
-   * this ever fails, order has become load-bearing**: the earlier guard wins,
-   * and moving guards into per-domain helpers (stage 3) stops being a
-   * rearrangement and starts being a behaviour change.
+   * The contract literal is compared above as a *set*. The table's order is
+   * pinned separately, by § *keeps the table in the order the chain had*,
+   * because this case is the only evidence that order is not behaviour, and it
+   * is evidence over a finite corpus (below), not a proof. So a reorder is a
+   * change to argue for there, with this still green, rather than a tidy-up.
+   * **If this ever fails, order has become load-bearing**: the earlier row
+   * wins, and whichever of two overlapping rows comes first is the route.
+   *
+   * (Until 260911d this comment said the order was asserted nowhere and that
+   * pinning it would be wrong, because every reordering of the `if` chain was an
+   * equivalent mutation. The table's rows have been pinned since 260907b stage
+   * 3b, and with the chain gone that list is the only record of its order.)
    *
    * **What it does not cover, and it is a lot.** Regex intersection is
    * undecidable in general and this does not attempt it. The question is asked
