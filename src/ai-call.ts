@@ -727,6 +727,7 @@ export type ChatJob = Exclude<
   | "ideas"
   | "sketch"
   | "timeline"
+  | "citations"
   /* **The brief, not the plate.** `illustrated` writes the words an image model
      draws from and goes down the Messages wire like every other article-reading
      stage; `illustrate` two entries below is the picture itself, excluded for a

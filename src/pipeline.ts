@@ -89,6 +89,12 @@ import {
   inputFingerprint as debateFingerprint,
   PROMPT_VERSION as DEBATE_PROMPT_VERSION,
 } from "./debate.js";
+import {
+  generateCitations,
+  inputFingerprint as citationsFingerprint,
+  PROMPT_VERSION as CITATIONS_PROMPT_VERSION,
+  previousCitationsFrom,
+} from "./citations.js";
 import { stageFailure } from "./job-failure.js";
 import {
   generateIllustrated,
@@ -472,6 +478,10 @@ export const FORCE_ONLY_WHEN_NAMED: ReadonlySet<StepName> = new Set<StepName>([
      really has moved it re-runs without being forced. And it replaces rather
      than appends. */
   "debate",
+  /* A model call over the whole article that nothing else reads, so the
+     positional cascade would buy it for nothing; and it replaces rather than
+     appends. docs/plans/260911g-citations-mode.md. */
+  "citations",
 ]);
 
 export interface StepContext {
@@ -3998,6 +4008,82 @@ export const STEPS: { [K in StepName]: PipelineStep<K> } = {
         detail:
           `${direct.counts.keptRows} about this piece, ` +
           `${claims.counts.keptRows} about what it claims`,
+      };
+    },
+  },
+  /* Stage 5o — the citations: every work the piece cites, where, and a link
+     the article itself gave. Off DEFAULT_INGEST_STEPS like every stage after
+     `arc`. docs/plans/260911g-citations-mode.md. */
+  citations: {
+    name: "citations",
+    label: "Finding what it cites",
+    produces: ["citations"],
+    /**
+     * The blocks (every one — the notes and the bibliography are this stage's
+     * input), the tree and the **cited** head, which prints a `URL:` line.
+     * No `profileHash`: relevance from the reader's profile is deferred.
+     */
+    stamp: async (ctx, store) => {
+      const article = await tryReadArticle(ctx.slug, store);
+      if (!article) return null;
+      return {
+        inputHash: citationsFingerprint(article.blocks, article.tree, article.meta),
+        promptVersion: CITATIONS_PROMPT_VERSION,
+        model: CAPABLE_MODEL,
+      };
+    },
+    async run(ctx, store) {
+      /* The store, not a path — the ids are what stage 3's web lookups are
+         keyed on, so a read that quietly answered `null` would orphan every
+         one of them. `previousCitationsFrom` refuses an unreadable baseline. */
+      const previous = await previousCitationsFrom(store, ctx.slug);
+      const run = await generateCitations({
+        article: await readArticle(ctx.slug, store),
+        previous,
+        onProgress: ctx.report,
+        signal: ctx.signal,
+        cacheArticle: ctx.cacheArticle,
+      });
+      const rows = run.citations.citations;
+      const linkFrom = { doi: 0, arxiv: 0, article: 0, search: 0, web: 0 };
+      for (const c of rows) linkFrom[c.linkFrom]++;
+      const linked = rows.length - linkFrom.search - linkFrom.web;
+      plog.info(
+        {
+          slug: ctx.slug,
+          step: "citations",
+          model: run.model,
+          inputTokens: run.inputTokens,
+          outputTokens: run.outputTokens,
+          cacheReadTokens: run.cacheReadTokens,
+          cacheWriteTokens: run.cacheWriteTokens,
+          maxTokens: run.maxTokens,
+          answerTokens: run.answerTokens,
+          ms: run.elapsedMs,
+          works: rows.length,
+          capped: run.citations.capped,
+          /* Which rule gave each link. `search` is the one to watch: a run
+             where it is nearly everything on an article full of DOIs is the
+             derivation failing, and nothing on screen would say so. */
+          linkDoi: linkFrom.doi,
+          linkArxiv: linkFrom.arxiv,
+          linkArticle: linkFrom.article,
+          linkSearch: linkFrom.search,
+          /* **The coverage witness** — the article's notes and bibliography
+             entries against how many the list reached. A silent under-return
+             on a long bibliography shows up here and nowhere else. */
+          notes: run.coverage.notes,
+          notesReached: run.coverage.notesReached,
+          references: run.coverage.references,
+          referencesReached: run.coverage.referencesReached,
+          ...run.drops,
+          ...run.scores,
+        },
+        `citations ${ctx.slug}: ${rows.length} works (${linked} linked from the article)`,
+      );
+      return {
+        parts: { citations: run.citations },
+        detail: `${rows.length} ${rows.length === 1 ? "work" : "works"}, ${linked} linked`,
       };
     },
   },

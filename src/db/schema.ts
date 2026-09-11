@@ -77,6 +77,7 @@ import type { Sketch } from "../sketch-scene.js";
 import type { Illustrated } from "../illustrated-plate.js";
 import type { LabelsFile } from "../labels.js";
 import type {
+  Citations,
   Arc,
   Citation,
   Debate,
@@ -909,6 +910,18 @@ export const articleRevisions = spideryarn.table(
      * jump rather than take a delete with it or block one.
      */
     debate: jsonb("debate").$type<Debate>(),
+
+    /**
+     * Every work the piece cites — `Citations`, src/types.ts, written by the
+     * `citations` step. docs/plans/260911g-citations-mode.md.
+     *
+     * The WHOLE artefact, like its neighbours. `sourceHash` is
+     * `articleWithIdsFingerprint` over every block (the notes and the
+     * bibliography included), the tree and the cited head. No `profileHash`.
+     * No foreign key from a place's `blockId` to `revision_blocks`, on the
+     * argument its neighbours make.
+     */
+    citations: jsonb("citations").$type<Citations>(),
 
     /**
      * The article's own images, and what became of each — `Assets`,
@@ -2316,7 +2329,7 @@ export const revisionStepRuns = spideryarn.table(
          the truth. `tests/db-step-constraint.test.ts` compares the last
          `ADD CONSTRAINT` in the migrations against `STEP_ORDER` in both
          directions, which is what makes there not be a third drift. */
-      sql`${t.stepName} in ('fetch','extract','blocks','hierarchy','labels','assets','arc','tweets','glossary','quotes','ideas','timeline','quiz','sketch','illustrated','debate')`,
+      sql`${t.stepName} in ('fetch','extract','blocks','hierarchy','labels','assets','arc','tweets','glossary','quotes','ideas','timeline','quiz','sketch','illustrated','debate','citations')`,
     ),
     check(
       "revision_step_runs_status",

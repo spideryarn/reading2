@@ -337,6 +337,15 @@ export const REVISION_CARRY_POLICY: Record<
      that it is current, and the honest degradation is a list still worth
      reading with some of its jumps gone, at up to $0.27 a run to buy back. */
   debate: "carry",
+  /* **Carries, like `quotes` and `timeline`** — the other replace-on-rerun
+     lists — and for their reason: a new draft keeps a list worth reading, and
+     `sourceHash` answers at read time whether the article moved underneath it.
+     What a re-extraction can cost is a `firstCited` jump to a block that has
+     gone; the works, their titles and the links (which name papers, not
+     paragraphs) are as true as they were. Minting would empty the band and
+     orphan every stage-3 lookup keyed on these ids until somebody paid for the
+     call again. */
+  citations: "carry",
 };
 
 const MINTED = new Set(

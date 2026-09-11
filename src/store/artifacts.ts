@@ -44,6 +44,7 @@
 import type {
   Arc,
   Block,
+  Citations,
   Debate,
   Glossary,
   Ideas,
@@ -94,7 +95,8 @@ export type ArtifactKind =
   | "quiz"
   | "sketch"
   | "illustrated"
-  | "debate";
+  | "debate"
+  | "citations";
 
 /**
  * Each kind, and the TypeScript type of the thing itself.
@@ -181,6 +183,11 @@ export interface ArtifactMap {
    * writes none of it.
    */
   debate: Debate;
+  /**
+   * Every work the piece cites — `Citations`, src/types.ts, written by the
+   * `citations` step. docs/plans/260911g-citations-mode.md.
+   */
+  citations: Citations;
 }
 
 /** Some or all of one step's artefacts, handed to `write` in one call. */
@@ -355,6 +362,12 @@ export const SHAPE: Record<ArtifactKind, ShapeCheck> = {
      three answers to one question (Sol's F29). `isDebateDocument` (src/types.ts)
      is now the only one, and all three readers ask it. */
   debate: { field: "direct", ok: isDebateDocument, whole: true },
+  /* A `citations` array, and **an EMPTY one is usable** — `timeline`'s call,
+     not `quotes`'. A blog post that links nothing and names no source cites
+     no work, and that is a real answer the panel has a sentence for;
+     `buildCitations` throws only when the model named works and every one of
+     them was dropped. */
+  citations: { field: "citations", ok: isArray },
 };
 
 /**
@@ -498,6 +511,11 @@ export const BASELINE: Partial<Record<ArtifactKind, BaselineRule>> = {
      twice sends a reader's `?event=` link to the wrong event, which is worse
      than sending it nowhere. */
   timeline: { hashField: "sourceHash", itemsField: "events", idField: "id", keyField: null },
+  /* `keyField: "key"` — the dedupe key is **stored on each row** (`doi:…`,
+     `arxiv:…`, `url:…` or `work:…`), so inheritance reads a field rather
+     than recomputing one from whatever version of src/citations.ts wrote the
+     artefact. src/citations.ts § `keysOf`. */
+  citations: { hashField: "sourceHash", itemsField: "citations", idField: "id", keyField: "key" },
 };
 
 /** A hash we could compare — see `BaselineRule` for why the test is this weak. */
@@ -874,6 +892,7 @@ export const STAMP_SOURCE: Record<StepName, ArtifactKind | null> = {
      in v1, and `readBaseline` throws for a kind with no row precisely so that
      nothing can half-inherit. */
   debate: "debate",
+  citations: "citations",
 };
 
 /**

@@ -856,6 +856,7 @@ const CACHEABLE = [
      is here rather than with the panel because the derived test asks for it the
      moment the route exists. */
   "/api/debate/",
+  "/api/citations/",
   "/api/metadata/",
   "/api/tweets/",
   "/api/chat/",

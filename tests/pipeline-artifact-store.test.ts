@@ -101,6 +101,10 @@ import {
   inputFingerprint as debateFingerprint,
   PROMPT_VERSION as DEBATE_VERSION,
 } from "../src/debate.js";
+import {
+  inputFingerprint as citationsFingerprint,
+  PROMPT_VERSION as CITATIONS_VERSION,
+} from "../src/citations.js";
 import { PROMPT_VERSION as QUOTES_VERSION } from "../src/quotes.js";
 import { PROMPT_VERSION as TWEETS_VERSION } from "../src/tweets.js";
 import { splitIntoBlocks } from "../src/blocks.js";
@@ -222,6 +226,9 @@ const QUIZ_SOURCE_HASH = quizFingerprint(BLOCKS, TREE, META);
    `articleWithIds` — so this is the same number a fourth time, and computed
    through its own module for the same reason. */
 const DEBATE_SOURCE_HASH = debateFingerprint(BLOCKS, TREE, META);
+/* `citations` is `articleWithIdsFingerprint` once more, over every block —
+   computed through its own module for the same reason as the three above. */
+const CITATIONS_SOURCE_HASH = citationsFingerprint(BLOCKS, TREE, META);
 const ARC_SOURCE_HASH = arcFingerprint(BLOCKS, TREE, META);
 /* **The one that is not `articleFingerprint` underneath.** `timeline` stamps
    `datedArticleFingerprint` — the blocks, the tree and a head that carries
@@ -567,6 +574,18 @@ function writeWholeArticle(store: MemoryArtifactStore): void {
     searchedAt: new Date().toISOString(),
     direct: { rows: [], counts: EMPTY_DEBATE_COUNTS },
     claims: { rows: [], counts: EMPTY_DEBATE_COUNTS },
+    elapsedMs: 1,
+  });
+  /* **An EMPTY list**, like `timeline`'s events: an article that cites no work
+     is a real answer, and `SHAPE.citations` accepts it. */
+  store.plant(SLUG, "citations", "citations", {
+    generator: CAPABLE_MODEL,
+    slug: SLUG,
+    sourceHash: CITATIONS_SOURCE_HASH,
+    version: CITATIONS_VERSION,
+    citations: [],
+    capped: false,
+    generatedAt: new Date().toISOString(),
     elapsedMs: 1,
   });
 }

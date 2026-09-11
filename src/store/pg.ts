@@ -70,6 +70,11 @@ import {
   PROMPT_VERSION as DEBATE_PROMPT_VERSION,
 } from "../debate.js";
 import {
+  inputFingerprint as citationsFingerprint,
+  isStale as citationsAreStale,
+  PROMPT_VERSION as CITATIONS_PROMPT_VERSION,
+} from "../citations.js";
+import {
   inputFingerprint as sketchFingerprint,
   isStale as sketchIsStale,
   PROMPT_VERSION as SKETCH_PROMPT_VERSION,
@@ -110,6 +115,8 @@ import type {
   ArticleMetadata,
   StageState,
   Block,
+  Citations,
+  CitationsFound,
   Debate,
   DebateFound,
   Glossary,
@@ -416,6 +423,7 @@ type RevisionReader =
   | "sketch"
   | "illustrated"
   | "debate"
+  | "citations"
   | "arc"
   /**
    * **The image manifest on its own**, for the route that serves one asset's
@@ -461,7 +469,7 @@ const REVISION_READ_POLICY: Record<
     article: "value", library: "value", metadata: "value", publish: "value",
     tweets: "value", glossary: "value", quotes: "value", ideas: "value",
     sketch: "value", arc: "value", timeline: "value", quiz: "value", rawSource: "value",
-    illustrated: "value", debate: "value", assets: "value",
+    illustrated: "value", debate: "value", assets: "value", citations: "value",
   },
   articleId: { publish: "value" },
   /* `publish` refuses a revision that is not still a draft. */
@@ -501,6 +509,9 @@ const REVISION_READ_POLICY: Record<
     /* Pass B sends `articleWithIds`, so this stage is judged on the cited head
        exactly as `ideas`, `sketch`, `timeline` and `quiz` are. */
     debate: "value",
+    /* `citations` sends `articleWithIds` too, so it is judged on the cited
+       head and the outline, as `ideas` is. */
+    citations: "value",
     /* **Not because this stage's own prompt prints them** — its prompt prints
        the scene — but because this read reports the *Sketch's* staleness as
        well as its own, and answering that needs exactly what the `sketch` read
@@ -514,6 +525,9 @@ const REVISION_READ_POLICY: Record<
     /* Pass B sends `articleWithIds`, so this stage is judged on the cited head
        exactly as `ideas`, `sketch`, `timeline` and `quiz` are. */
     debate: "value",
+    /* `citations` sends `articleWithIds` too, so it is judged on the cited
+       head and the outline, as `ideas` is. */
+    citations: "value",
     /* **Not because this stage's own prompt prints them** — its prompt prints
        the scene — but because this read reports the *Sketch's* staleness as
        well as its own, and answering that needs exactly what the `sketch` read
@@ -527,6 +541,9 @@ const REVISION_READ_POLICY: Record<
     /* Pass B sends `articleWithIds`, so this stage is judged on the cited head
        exactly as `ideas`, `sketch`, `timeline` and `quiz` are. */
     debate: "value",
+    /* `citations` sends `articleWithIds` too, so it is judged on the cited
+       head and the outline, as `ideas` is. */
+    citations: "value",
     /* **Not because this stage's own prompt prints them** — its prompt prints
        the scene — but because this read reports the *Sketch's* staleness as
        well as its own, and answering that needs exactly what the `sketch` read
@@ -575,6 +592,9 @@ const REVISION_READ_POLICY: Record<
        read that could not see the column would compute the same fingerprint
        every other article has. */
     debate: "value",
+    /* `citations` sends `articleWithIds` too, so it is judged on the cited
+       head and the outline, as `ideas` is. */
+    citations: "value",
     /* **Not because this stage's own prompt prints them** — its prompt prints
        the scene — but because this read reports the *Sketch's* staleness as
        well as its own, and answering that needs exactly what the `sketch` read
@@ -620,6 +640,9 @@ const REVISION_READ_POLICY: Record<
        re-sectioned article's debate current while the filesystem store called
        it stale. */
     debate: "value",
+    /* `citations` sends `articleWithIds` too, so it is judged on the cited
+       head and the outline, as `ideas` is. */
+    citations: "value",
     /* `quotes` arrived from another session on 2026-08-31 taking
        `FINGERPRINT_COLUMNS` in its projection, which is right — it hashes the
        outline like its five neighbours — and this line had not caught up.
@@ -719,6 +742,10 @@ const REVISION_READ_POLICY: Record<
      column. Falling to `default: true` is the failure that has caught `ideas`,
      `sketch` and `timeline` in turn. */
   debate: { metadata: "value", debate: "value" },
+  /* Its own reader and the metadata page, and not the library — the call
+     `quotes`, `timeline` and `debate` make. `isCurrent` needs the column for
+     its arm. */
+  citations: { metadata: "value", citations: "value" },
 
   /* **Read by nobody through here.** The two HTML columns are the whole article
      again, and they are pipeline artefacts reached through
@@ -997,6 +1024,8 @@ export const REVISION_PROJECTIONS = {
        an article that has since moved reports itself current on the one page
        whose job is to say otherwise. */
     debate: articleRevisions.debate,
+    /* For `isCurrent`'s arm, as `debate` above. */
+    citations: articleRevisions.citations,
   },
   publish: {
     id: articleRevisions.id,
@@ -1061,6 +1090,12 @@ export const REVISION_PROJECTIONS = {
   debate: {
     id: articleRevisions.id,
     debate: articleRevisions.debate,
+    ...CITED_FINGERPRINT_COLUMNS,
+  },
+  /* The cited set, like `ideas`: `articleWithIds` prints a `URL:` line. */
+  citations: {
+    id: articleRevisions.id,
+    citations: articleRevisions.citations,
     ...CITED_FINGERPRINT_COLUMNS,
   },
   /**
@@ -1528,6 +1563,7 @@ export const STEP_STORAGE: Record<StepName, string[]> = {
      the same shape `assets` above has. */
   illustrated: ["article_revisions.illustrated"],
   debate: ["article_revisions.debate"],
+  citations: ["article_revisions.citations"],
 };
 
 /**
@@ -2782,6 +2818,25 @@ const rawPgArticleReader: ArticleReader = {
             },
           );
         }
+        /* The same shape as `quiz`, over the same cited head — written out
+           rather than left to `default: true`, the arm that has caught
+           `ideas`, `sketch` and `timeline` in turn. */
+        case "citations": {
+          const citations = revision.citations as Citations | null;
+          if (!citations || !tree || blocks.length === 0) return false;
+          return sameStamp(
+            {
+              inputHash: citations.sourceHash,
+              promptVersion: citations.version,
+              model: citations.generator,
+            },
+            {
+              inputHash: citationsFingerprint(blocks, tree, citedFingerprint),
+              promptVersion: CITATIONS_PROMPT_VERSION,
+              model: CAPABLE_MODEL,
+            },
+          );
+        }
         case "sketch":
           return sketchIsCurrent(revision, blocks, citedFingerprint);
         /* **The only arm here that does not look at the article**, and the
@@ -3199,6 +3254,39 @@ const rawPgArticleReader: ArticleReader = {
       // Unknown counts as stale, the same way round as its neighbours.
       stale: !tree || debateIsStale(debate, blocks, tree, citedMetaFingerprintOf(found.revision)),
       outdated: debate.version !== DEBATE_PROMPT_VERSION,
+    };
+  },
+
+  /**
+   * The citations on their own — the Postgres half of `loadCitations`.
+   *
+   * The cited head and the tree, like `loadIdeas`, because this stage sends
+   * `articleWithIds`. **A 404 is the ordinary case** (the step is off
+   * `DEFAULT_INGEST_STEPS`); an EMPTY list is a 200 — an article that cites
+   * nothing — as `SHAPE.citations` decides at the store boundary.
+   */
+  async loadCitations(slug: string): Promise<CitationsFound> {
+    requireSlug(slug);
+    const found = await currentRevision(slug, "citations");
+    if (!found) throw notFound(slug);
+    const citations = found.revision.citations as Citations | null;
+    if (!citations || !Array.isArray(citations.citations)) {
+      throw Object.assign(
+        new Error(
+          `No citations for "${slug}" yet. Build them with ` +
+            `POST /api/jobs { "slug": "${slug}", "steps": ["citations"] }.`,
+        ),
+        { status: 404 },
+      );
+    }
+    const blocks = await blockHashInputs(found.revision.id);
+    const tree = found.revision.tree as Tree | null;
+    return {
+      citations,
+      stale:
+        !tree ||
+        citationsAreStale(citations, blocks, tree, citedMetaFingerprintOf(found.revision)),
+      outdated: citations.version !== CITATIONS_PROMPT_VERSION,
     };
   },
 

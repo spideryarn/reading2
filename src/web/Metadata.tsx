@@ -355,6 +355,10 @@ const STAGE_ICONS: Record<StepName, ComponentType<{ size?: number }>> = {
      moment the step exists, which is exactly what that record is for. The mode
      itself, its button and its panel are a later stage. */
   debate: MessagesSquare,
+  /* A link: what the row is for is the address of each work the piece cites.
+     Reused rather than a new import — the Citations panel is stage 2 of
+     docs/plans/260911g-citations-mode.md, and may choose its own glyph. */
+  citations: Link2,
 };
 
 /*

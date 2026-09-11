@@ -541,6 +541,12 @@ export type Task =
    * whose input is somebody else's web page, so folding it into a Sonnet job's
    * line would misreport both the money and the shape.
    */
+  /**
+   * **Every work the piece cites** — src/citations.ts,
+   * docs/plans/260911g-citations-mode.md. Messages wire, capable tier: the
+   * links are code's, but relevance is a reading of the whole argument.
+   */
+  | "citations"
   | "link-summary";
 
 /**
@@ -751,6 +757,7 @@ export const TASK_TIER: Record<Task, Tier> = {
      reception — the exact thing Stage 0 got back, and the thing every rule in
      src/debate.ts exists to refuse. */
   debate: "capable",
+  citations: "capable",
   /**
    * **The first `quick` row in this table**, and the one place its two
    * unmeasured caveats got measured. `openai/gpt-5.6-luna` at roughly a tenth
@@ -940,6 +947,7 @@ export const TASK_WIRE: Record<Task, Wire> = {
      shape. Every other artefact-producing step is `"messages"`. See `Task`
      above, and src/pdf-read.ts for the precedent. */
   debate: "chat",
+  citations: "messages",
   /* Chat, and for this one task the wire is not a free choice: it is the only
      one `QUICK_MODEL_OPENROUTER` is served on, which is what the throw at the
      bottom of this file is about. A reader is watching it stream, so it would
@@ -1022,6 +1030,7 @@ export const MODEL_ENV_VAR: Record<Task, string | null> = {
   timeline: null,
   illustrated: null,
   quiz: null,
+  citations: null,
   explain: "SPIDERYARN_EXPLAIN_MODEL",
   chat: "SPIDERYARN_CHAT_MODEL",
   "quiz-mark": "SPIDERYARN_QUIZ_MARK_MODEL",

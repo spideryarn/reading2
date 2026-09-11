@@ -79,6 +79,7 @@ import type {
   ShelfState,
   ArcFound,
   DebateFound,
+  CitationsFound,
   IdeasFound,
   IllustratedFound,
   SketchFound,
@@ -286,6 +287,14 @@ export interface ArticleReader {
    * (src/store/artifacts.ts) makes the same call at the store boundary.
    */
   loadDebate(slug: string): Promise<DebateFound>;
+
+  /**
+   * Every work the piece cites, plus whether the list still describes the
+   * article — the cited head and the tree, as `loadIdeas`. Two staleness facts,
+   * like the timeline's: no profile is in this stage's stamp. **Owner-only in
+   * v1**, and there is no public twin. docs/plans/260911g-citations-mode.md.
+   */
+  loadCitations(slug: string): Promise<CitationsFound>;
 
   /**
    * The arc, plus whether it still describes the article.

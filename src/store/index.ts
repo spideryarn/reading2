@@ -225,6 +225,7 @@ export const loadQuiz = reader.loadQuiz.bind(reader);
 export const loadSketch = reader.loadSketch.bind(reader);
 export const loadIllustrated = reader.loadIllustrated.bind(reader);
 export const loadDebate = reader.loadDebate.bind(reader);
+export const loadCitations = reader.loadCitations.bind(reader);
 /* The one read whose answer is bytes. See `ArticleReader.loadSource` in
    contracts.ts for what `null` means and what it deliberately does not. */
 export const loadSource = reader.loadSource.bind(reader);

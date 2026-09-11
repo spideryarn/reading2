@@ -169,7 +169,8 @@ type WholeColumn =
   | "quiz"
   | "sketch"
   | "illustrated"
-  | "debate";
+  | "debate"
+  | "citations";
 
 /**
  * Where one `(step, kind)` lives in Postgres.
@@ -261,6 +262,7 @@ export const STORAGE: {
   sketch: { sketch: { at: "column", column: "sketch" } },
   illustrated: { illustrated: { at: "column", column: "illustrated" } },
   debate: { debate: { at: "column", column: "debate" } },
+  citations: { citations: { at: "column", column: "citations" } },
 };
 
 /** The site for one `(step, kind)`, or a clear error rather than `undefined`. */

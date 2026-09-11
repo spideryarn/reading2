@@ -395,6 +395,7 @@ const REVISION_WRITTEN_ELSEWHERE = [
   "ideas",
   "quotes",
   "timeline",
+  "citations",
   "quiz",
   "sketch",
   "illustrated",
@@ -469,6 +470,7 @@ function augmentationFiles(rows: ArticleRows): Map<string, string> {
   at("ideas.json", revision.ideas);
   at("quotes.json", revision.quotes);
   at("timeline.json", revision.timeline);
+  at("citations.json", revision.citations);
   at("quiz.json", revision.quiz);
   at("sketch.json", revision.sketch);
   at("illustrated.json", revision.illustrated);
@@ -569,6 +571,7 @@ one thing that will make the rest of these files make sense.
       ideas.json           Propositions the article takes as given.
       quotes.json          Lines worth keeping.
       timeline.json        When the article says things happened.
+      citations.json       Every work the article cites, and the link the article gave for it.
       sketch.json          The diagram.
       illustrated.json     The same argument painted, and where each plate's bytes are.
       quiz.json            Questions generated from the article.
@@ -744,6 +747,7 @@ const FILE_NOTES: Readonly<Record<string, string>> = {
   "augmentations/ideas.json": "Propositions the article takes as given.",
   "augmentations/quotes.json": "Lines worth keeping.",
   "augmentations/timeline.json": "When the article says things happened.",
+  "augmentations/citations.json": "Every work the article cites, and the link the article gave for it.",
   "augmentations/quiz.json": "Questions generated from the article.",
   "augmentations/sketch.json": "The diagram.",
   /* **The brief and the hashes, and not the pictures.** A plate's bytes are
@@ -845,6 +849,7 @@ function bundleCounts(rows: ArticleRows): { readonly label: string; readonly n: 
     { label: "ideas", n: countOf(revision.ideas, "ideas") },
     { label: "quotes", n: countOf(revision.quotes, "quotes") },
     { label: "timeline events", n: countOf(revision.timeline, "events") },
+    { label: "cited works", n: countOf(revision.citations, "citations") },
     { label: "quiz questions", n: countOf(revision.quiz, "questions") },
     { label: "arc entries", n: countOf(revision.arc, "entries") },
     /* **Both collections, and only what is really named.** `assets` holds the

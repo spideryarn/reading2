@@ -2490,7 +2490,18 @@ export type StepName =
      in `cacheArticleForStep`. Stated here because new-mode.md lists both tables
      among the ones the compiler asks for, and a reader will otherwise go
      looking for the missing rows. */
-  | "debate";
+  | "debate"
+  /* **Every work the piece cites, linked** — docs/plans/260911g-citations-mode.md.
+     One Messages-wire call over the whole article, bibliography and notes
+     included, and a link derived by code from the article's own hrefs.
+
+     **Deliberately NOT an `ArticleStage`** either, for a different reason from
+     `debate`'s: it is on the Messages wire, but it sends `articleWithIds` over
+     *every* block — the notes and the bibliography are the whole point — where
+     `ideas`, `timeline`, `quiz` and `sketch` send the body only. Different
+     bytes, so no shared cached prefix, so no row in `STAGE_EFFORT` or
+     `ARTICLE_RENDERER`; its effort is a constant in src/citations.ts. */
+  | "citations";
 
 export type JobStatus = "queued" | "running" | "done" | "error" | "cancelled";
 export type StepStatus = "pending" | "running" | "done" | "skipped" | "error";
@@ -3318,6 +3329,181 @@ export interface TimelineResponse {
  * after all, the `Omit` goes in one place instead of being searched for.
  */
 export type TimelineFound = TimelineResponse;
+
+/* -------------------------------------------------------------- citations --
+   Every work the piece cites — the `citations` column on `article_revisions`,
+   written by the `citations` step. docs/plans/260911g-citations-mode.md.
+
+   Here rather than in src/citations.ts for the reason every artefact's shape
+   is: the panel (stage 2) reads them, and a client module may not import a
+   stage. src/citations.ts re-exports what it needs.  */
+
+/**
+ * Which rule gave a citation its link — drawn on the row, so a reader can
+ * always tell an address the article gave from one we went looking for.
+ *
+ * - `doi`, `arxiv` — an identifier found in the article's own text or hrefs,
+ *   turned into `https://doi.org/…` / `https://arxiv.org/abs/…` by code.
+ * - `article` — an anchor in the article, chosen because its text matched the
+ *   work's title (in the reference) or the mention's own words.
+ * - `search` — **not the work's address**: a Google Scholar search for its
+ *   title and first author. Every ambiguity lands here, because a link to the
+ *   wrong work is worse than a search.
+ * - `web` — stage 3, *Find it on the web*; not written by stage 1.
+ *
+ * **The model never supplies a URL that is stored.** src/citations.ts §
+ * `linkFor`.
+ */
+export type CitationLinkFrom = "doi" | "arxiv" | "article" | "search" | "web";
+
+/**
+ * One place the article cites a work, **verified**: the block exists and
+ * `quote` was found in its text. `quote` is the article's characters sliced out
+ * of the block, never the model's typing — the model's string is a locator.
+ */
+export interface CitationPlace {
+  blockId: BlockId;
+  quote: string;
+  /** Offset into `block.text`; a disambiguator between repeats, never the anchor. */
+  start: number;
+}
+
+export interface CitedWork {
+  /** `mintUniqueId`, inherited across re-runs by `key`. Stage 3's lookups are keyed on it. */
+  id: string;
+  /**
+   * **The dedupe key, stored so a re-run can inherit the id by it** — `doi:…`,
+   * `arxiv:…`, `url:…` (an article-given link), else `work:<title>|<first
+   * author>|<year>`. src/citations.ts § `keysOf`.
+   */
+  key: string;
+  /** As the article gives it, ≤ 120 characters. */
+  title: string;
+  /** As the article gives them. Absent when it gives none. */
+  authors?: string;
+  year?: string;
+  /** One plain sentence: what the piece uses this work for. */
+  why: string;
+  /** 0–1: how much THIS piece's argument leans on the work. The model's reading. */
+  relevance?: number;
+  /** 0–1: how influential the work is in its field. **The model's memory**, weaker. */
+  influence?: number;
+  /** The bibliography / reference-list / note entry, if the article has one. */
+  reference?: CitationPlace;
+  /** Where the text cites it, ≤ 3. */
+  mentions: CitationPlace[];
+  /**
+   * Every **body** block that cites the work, in document order: body mentions,
+   * plus every body block carrying a `data-spya-note-ref` marker for a note the
+   * work was found in. Footnote expansion is code's, because the model is shown
+   * plain text and cannot see which paragraph a note hangs off.
+   */
+  citedAt: BlockId[];
+  /**
+   * Where the row's *first cited* jump goes: `citedAt[0]`, or — for a work the
+   * article names only in its bibliography — the earliest block it was found
+   * in, with `citedInBody: false`.
+   */
+  firstCited: BlockId;
+  citedInBody: boolean;
+  url: string;
+  linkFrom: CitationLinkFrom;
+}
+
+/**
+ * What was thrown away. Counts only — never a title, a quote or a URL. Logged by
+ * the step; not on the artefact (a reader cannot act on our prompt's misses).
+ */
+export interface CitationDrops {
+  /** A `{block, quote}` naming a block id that is not in the article. */
+  unknownIds: number;
+  /**
+   * A `{block, quote}` whose quote was not in the named block nor, verbatim, in
+   * exactly one other — dropped.
+   */
+  unquoted: number;
+  /**
+   * A `{block, quote}` whose quote was not in the named block but was, verbatim,
+   * in exactly one other — **moved there and kept**. The model names a
+   * neighbouring paragraph often enough (5 of 12 failures on scaling-hypothesis,
+   * stage 1) that dropping these lost works for nothing.
+   */
+  relocated: number;
+  /** Mentions past `MAX_MENTIONS` on one work. */
+  extraMentions: number;
+  /** Works with no verified reference and no verified mention, dropped whole. */
+  unanchored: number;
+  /** Works with no usable title or `why`, or not an object. */
+  malformed: number;
+  /** Works past `MAX_CITATIONS`, discarded whole. */
+  overCap: number;
+  /** Rows folded into another by the dedupe key — a shorthand cite and its full reference. */
+  merged: number;
+  /** Titles or `why`s longer than their cap, shortened. */
+  clipped: number;
+  /**
+   * Works on which the model wrote a `url`/`link`/`doi` field anyway. **Ignored,
+   * always** — counted so a prompt that has started inviting remembered
+   * addresses shows up in a run.
+   */
+  modelUrls: number;
+}
+
+/**
+ * The 0–1 scores the prompt required and did not get — the twin of
+ * `GlossaryScoreDrops` (src/glossary.ts), same absent/rejected split.
+ */
+export interface CitationScoreDrops {
+  relevanceAbsent: number;
+  relevanceRejected: number;
+  influenceAbsent: number;
+  influenceRejected: number;
+}
+
+/**
+ * The most works one list holds. The prompt asks the model to keep the ones the
+ * piece leans on most and to say `capped: true` when it left works out.
+ * Here rather than in src/citations.ts because the panel's foot sentence names
+ * the number.
+ */
+export const MAX_CITATIONS = 80;
+
+/** The artefact. The `citations` column on `article_revisions`. */
+export interface Citations {
+  version: string;
+  generator: string;
+  slug: string;
+  /** `articleWithIdsFingerprint` over every block, the tree and the cited head. */
+  sourceHash: string;
+  /**
+   * In first-cited order — body-cited works by their first body block, then
+   * bibliography-only works by their entry. **Fixed at write time.**
+   */
+  citations: CitedWork[];
+  /**
+   * **The model said it left works out**, or returned more than
+   * `MAX_CITATIONS`. Never inferred from the list's length — the panel's *"this
+   * piece cites more than 80 works"* sentence is drawn only from this.
+   */
+  capped: boolean;
+  generatedAt: string;
+  elapsedMs: number;
+}
+
+/**
+ * `GET /api/citations/:slug`. Two staleness facts, like the timeline's: no
+ * profile is in this stage's stamp.
+ */
+export interface CitationsResponse {
+  citations: Citations;
+  /** The article moved underneath this — blocks, sections or the cited head. */
+  stale: boolean;
+  /** The article is the same and we would write this differently now. */
+  outdated: boolean;
+}
+
+/** As `TimelineFound`: the same type, because there is no `profileChanged` to omit. */
+export type CitationsFound = CitationsResponse;
 
 /* ------------------------------------------------------------------- quiz --
    The questions the piece can ask you back — `data/<slug>/quiz.json`, and the

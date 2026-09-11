@@ -71,7 +71,7 @@ bibliography entry; both were wrong on real pages, and the review showed where.
   visitor gets the explanatory band, not the list.
 - **Stage 3, on demand, per entry: *Find it on the web*** — one chat-wire call with web search,
   whose answer is kept only if it is one of the search's own results and its title matches the work
-  ([§ Stage 3](#stage-3--find-it-on-the-web)). This is where "it will need web search(es)" lands.
+  ([§ Stage 3](#stage-3-find-it-on-the-web)). This is where "it will need web search(es)" lands.
 
 ## What the model returns, and what code does with it
 
@@ -191,7 +191,7 @@ subscription Sol bills was at 93% of its week on 2026-09-11 and the Overseer hel
 until its reset on 2026-09-15 01:23Z. Fable stands in mid-stage. The shas each owed review covers are
 listed under [§ Progress](#progress).
 
-### Stage 3 — Find it on the web
+### Stage 3: find it on the web
 
 `POST /api/citations/:slug/:id/find` → JSON. **One chat-wire call, not one search** (Sol F1): the
 server tool cannot bound the number of searches — a probe asking for 4 results ran 36 billed searches
@@ -263,3 +263,27 @@ The reader's own article is not in the local database.
 ## Progress
 
 - 2026-09-11 — plan written (`1cd148ca`); Sol plan review, verdict no-ship as written; revised.
+- 2026-09-11 — **stage 1 built** (server: types, step, migration `20260911220212_citations`, route,
+  export, `tests/citations.test.ts`), not yet committed. Real runs through `scripts/stage.ts`, local
+  database, `claude-sonnet-5` at `medium`, budget `400 + 80 × 350` = 28,400 answer + 40,000 headroom:
+
+  | Article | prompt | works | capped | doi / arxiv / article / search | unquoted / relocated / unanchored | notes reached | out tokens |
+  |---|---|---|---|---|---|---|---|
+  | scaling-hypothesis | /1 | 57 | no | 0 / 12 / 17 / 28 | 25 / – / 21 | 9 of 34 | 11,034 |
+  | scaling-hypothesis | /2 | 58 | no | 1 / 19 / 11 / 27 | 3 / 3 / 2 | 6 of 34 | 8,254 |
+  | spider-silk | /1 | 80 | yes (100 returned) | 58 / 0 / 10 / 12 | 9 / – / 0 | 75 of 132 | 19,421 |
+  | spider-silk | /2 | 80 | yes (87 returned) | 55 / 0 / 11 / 14 | 9 / 3 / 1 | 72 of 132 | 18,122 |
+  | antikythera | /1 | 46 | no | 20 / 4 / 17 / 5 | 4 / – / 1 | 40 of 122 | 11,433 |
+  | openai-huggingface | /1 | 8 | no | 0 / 0 / 1 / 7 | 3 / – / 0 | 0 of 1 | 2,045 |
+
+  What the runs changed: `/1` → `/2` forbids `"..."` in a quote (the commonest failure); code now
+  relocates a quote found verbatim in exactly one other block; past the cap the highest-relevance
+  works are kept rather than the model's first 80; rule 4 needs the anchor to be most of the quote and
+  refuses a Wikipedia page whose text does not name the title (it had linked works to *Toughness*,
+  *Heron of Alexandria*, *Pappus of Alexandria*, *Atomic force microscopy*). Headroom: the worst
+  output was 19,421 of 68,400. `replication-crisis` belongs to another owner locally and was not run,
+  so the 800-note case is measured only by spider silk's 132.
+
+  **Default bar for prioritised `(2r + i) / 3`: 0.40.** On the `/1` runs the median was 0.37 on both
+  long articles (p75 0.40–0.43) and 0.48 on the blog; 0.40 shows about half of a long list (23 of 57,
+  39 of 80) and 6 of 8 on the short one; 0.50 would show 9, 13 and 4.

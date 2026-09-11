@@ -37,6 +37,7 @@
  *   GET    /api/timeline/:slug   when the piece says things happened, and staleness
  *   GET    /api/quiz/:slug       the questions the piece can ask you back, and staleness
  *   GET    /api/debate/:slug     what the rest of the web says about this piece, and staleness
+ *   GET    /api/citations/:slug  every work the piece cites, with a link the article gave, and staleness
  *   POST   /api/quiz/:slug/mark  one answer, marked against one question — SSE, stateless
  *   GET    /api/quotes/:slug     the lines worth keeping, in the article's own words, and staleness
  *   GET    /api/arc/:slug        one sentence per part, and whether it still fits the article
@@ -138,6 +139,7 @@ import {
   loadSketch,
   loadQuiz,
   loadDebate,
+  loadCitations,
   loadTimeline,
   loadTweets,
 } from "./store/index.js";
@@ -7532,6 +7534,22 @@ const AUTH_ROUTES: readonly AuthRoute[] = [
          staleness, and a year-old shared link must not have its artefact
          declared invalid by the clock. */
       send(res, 200, await loadDebate(slugPart(captures, 1)));
+    },
+  },
+
+  /* Every work the piece cites — docs/plans/260911g-citations-mode.md. GET
+     only, and no DELETE, for the reason `ideas`, `timeline` and `debate` have
+     none: the step replaces, so finding them again is
+     POST /api/jobs { slug, steps: ["citations"] }. This route never spends. */
+  {
+    kind: "pattern",
+    method: "GET",
+    pattern: /^\/api\/citations\/([\w.%-]+)$/,
+    handler: async ({ request: { res } }, captures) => {
+      /* **No `withProfileChanged`**, for `timeline`'s reason: this artefact is
+         not written for a profile, so there is no third staleness fact.
+         `CitationsResponse` in src/types.ts has two fields. */
+      send(res, 200, await loadCitations(slugPart(captures, 1)));
     },
   },
 

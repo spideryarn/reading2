@@ -739,6 +739,11 @@ export const STEP_BUDGET_MS: Record<StepName, number> = {
      plan says so, and the first runs against the shelf are what will say
      whether the article-carrying pass is 20 s or 60 s. */
   debate: 120_000,
+  /* **A GUESS**, in `timeline`'s and `quotes`' family: one Messages call over
+     the whole article, notes and bibliography included, with an answer budget
+     sized for 80 works. Re-measure from the stage-1 runs
+     (docs/plans/260911g-citations-mode.md § Progress). */
+  citations: 240_000,
 };
 
 /**

@@ -245,6 +245,10 @@ const READS = [
      returned citation is compared against to keep the article out of its own
      debate. src/debate.ts § `inputFingerprint`. */
   "debate",
+  /* Added 2026-09-11 with the `citations` stage. `CITED_FINGERPRINT_COLUMNS`,
+     like `ideas`: it sends `articleWithIds`, over every block.
+     docs/plans/260911g-citations-mode.md. */
+  "citations",
   /* Added 2026-09-06 with `pgArticleReader.loadAssets`, for the route that
      serves one asset's bytes (src/routes.ts § `sendArticleAsset`). The
      narrowest projection in the map — one `jsonb` column and the id, and no

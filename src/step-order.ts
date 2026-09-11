@@ -130,6 +130,13 @@ export const STEP_ORDER = [
      it in would spend that on somebody who pressed a button one band along.
      docs/plans/260905f-debate-mode-what-the-web-says-about-this-piece.md. */
   "debate",
+  /* **After `debate`, and like it in no cache group**: it sends `articleWithIds`
+     over every block, notes and bibliography included, so its bytes match no
+     other stage's and its position breaks no contiguity. Off
+     `DEFAULT_INGEST_STEPS` and in `FORCE_ONLY_WHEN_NAMED` — a model call over
+     the whole article that a reader asks for by pressing the mode.
+     docs/plans/260911g-citations-mode.md. */
+  "citations",
 ] as const satisfies readonly StepName[];
 
 /**

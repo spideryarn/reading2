@@ -182,6 +182,7 @@ export const JOB_DISPOSITION: Record<AiJob, JobDisposition> = {
   illustrated: "step-driven",
   quiz: "step-driven",
   debate: "step-driven",
+  citations: "step-driven",
   /* Three tasks a reader waits on with the page open. */
   explain: "interactive request work",
   chat: "interactive request work",

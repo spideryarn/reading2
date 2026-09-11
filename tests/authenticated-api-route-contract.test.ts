@@ -505,6 +505,11 @@ const EXPECTED_AUTH_ROUTES: ExpectedRoute[] = [
     witnesses: ["/api/debate/w1"],
   },
   {
+    match: { kind: "regex", source: "^\\/api\\/citations\\/([\\w.%-]+)$", flags: "" },
+    methods: ["GET"],
+    witnesses: ["/api/citations/w1"],
+  },
+  {
     match: { kind: "regex", source: "^\\/api\\/sketch\\/([\\w.%-]+)$", flags: "" },
     methods: ["GET"],
     witnesses: ["/api/sketch/w1"],
@@ -760,8 +765,8 @@ const EXPECTED_AUTH_ROUTES: ExpectedRoute[] = [
 ];
 
 /** Loud failure controls. Never the oracle — see the header. */
-const EXPECTED_MATCHER_COUNT = 67;
-const EXPECTED_GUARD_COUNT = 82;
+const EXPECTED_MATCHER_COUNT = 68;
+const EXPECTED_GUARD_COUNT = 83;
 
 /* ------------------------------------------------------------- the source read */
 
@@ -1892,6 +1897,7 @@ describe("the authenticated API's route contract", () => {
         "GET regex /^\\/api\\/timeline\\/([\\w.%-]+)$/",
         "GET regex /^\\/api\\/quiz\\/([\\w.%-]+)$/",
         "GET regex /^\\/api\\/debate\\/([\\w.%-]+)$/",
+        "GET regex /^\\/api\\/citations\\/([\\w.%-]+)$/",
         "POST regex /^\\/api\\/quiz\\/([\\w.%-]+)\\/mark$/",
         // sketch to the two paid pictures, 260911c
         "GET regex /^\\/api\\/sketch\\/([\\w.%-]+)$/",
