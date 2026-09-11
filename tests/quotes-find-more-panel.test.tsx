@@ -49,7 +49,7 @@ function quote(i: number): Quote {
 
 function list(over: Partial<Quotes> = {}): Quotes {
   return {
-    version: "quotes/4",
+    version: "quotes/5",
     generator: "m",
     slug: "writes",
     sourceHash: "h",

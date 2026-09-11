@@ -304,6 +304,14 @@ describe("renderPrompt on an append", () => {
     expect(prompt).toContain('{"quotes": []}');
   });
 
+  it("rules out a taken line's point in other words, not only its sentence", () => {
+    /* SPIDERYARN-READING2-2X: "avoid ending up with loads of quotes that say
+       basically the same thing". Spans cannot catch a restatement, so the
+       prompt is the only place this is asked. */
+    const prompt = renderPrompt({ tree: TREE, count: 12, profile: null, existing: previous().quotes });
+    expect(prompt).toMatch(/not a point one of them already makes,\s+in other\s+words/);
+  });
+
   it("says nothing about a taken list on a first pass", () => {
     const prompt = renderPrompt({ tree: TREE, count: 12, profile: null, existing: [] });
     expect(prompt).not.toContain("ALREADY");

@@ -689,6 +689,11 @@ wrong — but worth knowing.
   highlighting them"*): the prompt still takes either reason, and `max` still combines the scores,
   but it tells the model to look for the lines the argument rests on first and to keep a merely
   well-put one only when it is exceptionally so. Whether the lists actually shifted is unmeasured.
+- **`quotes/5` asks for lines that say different things** (*"avoid ending up with loads of quotes
+  that say basically the same thing"*): one paragraph in the system prompt, and Find more's taken
+  list now rules out a taken line's point in other words, not only its sentence. Prompt only —
+  spans cannot see a restatement. Also unmeasured;
+  [260911e](../plans/260911e-quotes-prompt-asks-for-diverse-lines.md).
 - **The density with Find more is unlooked-at.** The default rank marks every quote in Plain, and a
   list can now grow to 120.
 - **`validateHits` (search) and `validateOccurrences` (ideas) have the same two bugs** this stage was
