@@ -31,7 +31,6 @@
 
 import {
   type ExplainEnding,
-  explain as explainDefault,
   explainStream as explainStreamDefault,
 } from "./explain.js";
 import { isStale, safeUrl } from "./glossary.js";
@@ -154,7 +153,7 @@ function anchorIn(
 /**
  * Everything a lookup needs that differs between the two stores.
  *
- * `explain` and `now` are injected for a reason that is not symmetry: without
+ * `explainStream` and `now` are injected for a reason that is not symmetry: without
  * them there is no way to drive the successful model path in a test, and that
  * path is exactly what this move rewrote. The existing glossary tests
  * deliberately stop short of it. Raised by GPT Sol reviewing the step-10
@@ -170,11 +169,33 @@ export interface LookUpTermDeps {
   /** Where the answer goes. One row (or one key) per term. */
   readonly lookups: GlossaryLookupStore;
 
-  /** Overridable so a test can drive the successful path without a model. */
-  readonly explain?: typeof explainDefault;
+  /**
+   * Overridable so a test can drive the successful path without a model. The
+   * stream, not the drain, since cluster E stage 2 —
+   * docs/plans/260910g-stream-glossary-answers-as-they-arrive.md.
+   */
+  readonly explainStream?: typeof explainStreamDefault;
 
   /** Overridable for the same reason. */
   readonly now?: () => string;
+}
+
+/**
+ * What a lookup emits: any number of `delta`, then exactly one `done` — **and
+ * `done` means stored.** It carries the entry with the lookup that was saved,
+ * the `{ entry }` the JSON route used to answer with. A throw means no `done`.
+ */
+export type TermLookupEvent =
+  | { type: "delta"; text: string }
+  | { type: "done"; entry: GlossaryEntry };
+
+/**
+ * A lookup that has passed every refusal, and the answer not yet started —
+ * {@link AskedTermQuestion}'s split, for the same reason: the route answers
+ * the 404 and the two 409s as JSON, and only then opens the stream.
+ */
+export interface TermLookupQuestion {
+  stream(signal?: AbortSignal): AsyncGenerator<TermLookupEvent>;
 }
 
 /**
@@ -223,11 +244,11 @@ export interface LookUpTermDeps {
  */
 export function makeLookUpTerm(
   deps: LookUpTermDeps,
-): (slug: string, termId: string, signal?: AbortSignal) => Promise<{ entry: GlossaryEntry }> {
-  const explain = deps.explain ?? explainDefault;
+): (slug: string, termId: string) => Promise<TermLookupQuestion> {
+  const explainStream = deps.explainStream ?? explainStreamDefault;
   const now = deps.now ?? (() => new Date().toISOString());
 
-  return async function lookUpTerm(slug, termId, signal) {
+  return async function lookUpTerm(slug, termId) {
     /* **`assertWritable` was called here and went on 2026-09-06.** It was the
        filesystem store's extra 403 over the committed `example/` article, which
        nobody owns; that store went on 2026-09-05 and nothing has supplied the
@@ -284,53 +305,87 @@ export function makeLookUpTerm(
       );
     }
 
-    const result = await explain({
-      meta: article.meta,
-      blocks: article.blocks,
-      blockId: anchor.blockId,
-      quote: anchor.quote,
-      ...(signal ? { signal } : {}),
-    });
+    /* Named here because the narrowing above does not reach into `stream`. */
+    const found: GlossaryEntry = entry;
+    const blockId = anchor.blockId;
+    const quote = anchor.quote;
 
-    const lookup: GlossaryLookup = {
-      answer: result.answer,
-      /* Filtered here rather than trusted, even though `explain` built these
-         from the provider's own annotations. This is where a model-supplied URL
-         stops being a value in flight and becomes a value in storage that the
-         panel will put in an `href` — src/glossary.ts § `safeUrl`, and the same
-         call `converse` makes at its own storage boundary. */
-      citations: result.citations.flatMap((c) => {
-        const url = safeUrl(c.url);
-        return url ? [{ url, ...(c.title ? { title: c.title } : {}) }] : [];
-      }),
-      searches: result.searches,
-      model: result.model,
-      at: now(),
-    };
+    async function* stream(signal?: AbortSignal): AsyncGenerator<TermLookupEvent> {
+      for await (const event of explainStream({
+        meta: article.meta,
+        blocks: article.blocks,
+        blockId,
+        quote,
+        ...(signal ? { signal } : {}),
+      })) {
+        if (event.type === "delta") {
+          yield event;
+          continue;
+        }
 
-    /* Keyed by **id** because ids are identity and names are display: a later
-       pass may merge or rename this term, and `merge` keeps the incumbent's id
-       precisely so a `?term=` link survives. The lookup survives with it. */
-    await deps.lookups.save(slug, termId, lookup);
-    const updated: GlossaryEntry = { ...entry, lookup };
+        /* **Only a finished answer is saved** — `refuseUnfinished` above. A
+           truncated answer stored here would be served as whole to every later
+           visit, which is worse than refusing it once. */
+        refuseUnfinished(event.ending);
 
-    /* No prose in the log line, and that includes the answer and the term. What
-       is here is what tells you the feature is working or quietly is not:
-       `searches: 0` on every call means the model has stopped choosing to look,
-       which is invisible from the outside because "I already knew that" is a
-       legitimate answer. src/log.ts, docs/project/logging.md. */
-    log("store").info(
-      {
-        slug,
-        termId,
-        searches: lookup.searches,
-        citations: lookup.citations.length,
-        model: lookup.model,
-      },
-      "looked up a glossary term",
-    );
+        const lookup: GlossaryLookup = {
+          answer: event.answer,
+          /* Filtered here rather than trusted, even though `explainStream` built
+             these from the provider's own annotations. This is where a
+             model-supplied URL stops being a value in flight and becomes a value
+             in storage that the panel will put in an `href` — src/glossary.ts §
+             `safeUrl`, and the same call `converse` makes at its own storage
+             boundary. */
+          citations: event.citations.flatMap((c) => {
+            const url = safeUrl(c.url);
+            return url ? [{ url, ...(c.title ? { title: c.title } : {}) }] : [];
+          }),
+          searches: event.searches,
+          model: event.model,
+          at: now(),
+        };
 
-    return { entry: updated };
+        /* Keyed by **id** because ids are identity and names are display: a
+           later pass may merge or rename this term, and `merge` keeps the
+           incumbent's id precisely so a `?term=` link survives. The lookup
+           survives with it.
+
+           **Awaited before `done`, and a throw here is the stream's throw.** So
+           a save that fails after the reader has watched every word arrive
+           ends in `error`, and the panel never draws an answer as kept when it
+           was not. The converse is not promised: a save can succeed and its
+           read-back fail (src/store/pg-lookups.ts upserts, then reads), and the
+           socket can die between the save and the frame — so the client
+           re-reads the list after any failure rather than trusting `error` to
+           mean "nothing was kept". GPT Sol, reviewing the plan. */
+        await deps.lookups.save(slug, termId, lookup);
+
+        /* No prose in the log line, and that includes the answer and the
+           term. What is here is what tells you the feature is working or
+           quietly is not: `searches: 0` on every call means the model has
+           stopped choosing to look, which is invisible from the outside
+           because "I already knew that" is a legitimate answer. src/log.ts,
+           docs/project/logging.md. */
+        log("store").info(
+          {
+            slug,
+            termId,
+            searches: lookup.searches,
+            citations: lookup.citations.length,
+            model: lookup.model,
+          },
+          "looked up a glossary term",
+        );
+
+        yield { type: "done", entry: { ...found, lookup } };
+        return;
+      }
+      /* Unreachable by `explainStream`'s own contract; the asked term's
+         stream carries the same line for the same reason. */
+      throw new Error("The explanation ended without an answer.");
+    }
+
+    return { stream };
   };
 }
 

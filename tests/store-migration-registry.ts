@@ -1724,6 +1724,18 @@ export const STORE_MIGRATION: Readonly<Record<string, StoreEntry>> = {
       "the seeder's copy step and the spend ledger each provider call writes, the same pair " +
       "`tests/quiz-mark-route.test.ts` is classified by. Read off the graph, not re-witnessed.",
   },
+  "tests/glossary-lookup-stream-route.test.ts": {
+    category: "shared-mechanism-collateral",
+    mechanisms: ["ledger-redirect", "fixture-loader"],
+    evidence: "static-only",
+    reason:
+      "Arrived after the witness ran, with cluster E stage 2 (2026-09-10). It seeds two articles " +
+      "with `scratchArticleInPg`, each with one added glossary entry, and drives `POST " +
+      "/api/glossary/:slug/:id/lookup` through `handleApi` against a stubbed provider, reading " +
+      "the stored lookup back through the glossary GET — entirely Postgres. Its reach into the " +
+      "condemned modules is the seeder's copy step and the spend ledger, as for " +
+      "`tests/glossary-asked-term-stream-route.test.ts`. Read off the graph, not re-witnessed.",
+  },
   "tests/glossary-delete-then-rebuild.test.ts": {
     category: "shared-mechanism-collateral",
     mechanisms: ["step-context-paths"],
@@ -2454,6 +2466,9 @@ export const TEST_LANES: Readonly<Record<string, TestLane>> = {
   /* Seeds one article and reads it; the provider is a stubbed `fetch`, so the
      only Postgres writes are the seed and the spend ledger's row per call. */
   "tests/glossary-asked-term-stream-route.test.ts": "private-postgres",
+  /* Seeds two articles, writes lookups and deletes one article mid-stream;
+     the provider is a stubbed `fetch`. */
+  "tests/glossary-lookup-stream-route.test.ts": "private-postgres",
   "tests/glossary-delete-then-rebuild.test.ts": "private-postgres",
   "tests/glossary-ideas-baseline.test.ts": "private-postgres",
   /* **The scan could not see this one, and T-D's poisoned `DATABASE_URL` found

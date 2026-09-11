@@ -96,7 +96,7 @@ function harness(opts: {
 
   const asked: { blockId: string; quote: string }[] = [];
 
-  const lookUp = makeLookUpTerm({
+  const prepare = makeLookUpTerm({
     reader: {
       loadArticle: async () => article,
       loadGlossary: async () =>
@@ -113,12 +113,29 @@ function harness(opts: {
       load: async (): Promise<LookupsByTerm> => ({}),
       save: async (_slug, termId, lookup): Promise<LookupsByTerm> => ({ [termId]: lookup }),
     },
-    explain: async (req) => {
+    explainStream: async function* (req) {
       asked.push({ blockId: req.blockId, quote: req.quote });
-      return { answer: "An answer.", citations: [], searches: 1, model: "a-model" };
+      yield {
+        type: "done",
+        ending: "finished",
+        answer: "An answer.",
+        citations: [],
+        searches: 1,
+        model: "a-model",
+      };
     },
     now: () => "2026-09-04T00:00:00.000Z",
   });
+
+  /* Refuse, or drain the stream to its one `done` — what the JSON route used
+     to hand back. Every case here is about the refusals, which happen before
+     the stream exists. */
+  const lookUp = async (slug: string, termId: string) => {
+    for await (const event of (await prepare(slug, termId)).stream()) {
+      if (event.type === "done") return { entry: event.entry };
+    }
+    throw new Error("the stream ended without a done");
+  };
 
   return { lookUp, asked };
 }

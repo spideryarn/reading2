@@ -857,10 +857,15 @@ export async function* explainStream({
  * The same explanation, waited for rather than watched.
  *
  * A thin drain of `explainStream`, so there is one implementation of the
- * request, the clocks and the end-of-stream invariants rather than two. The
- * glossary's per-term web lookup (`lookUpTerm`, src/term-lookup.ts) uses this: its panel
- * shows one answer appearing at a time and has nowhere to put a half-written
- * one, so it waits.
+ * request, the clocks and the end-of-stream invariants rather than two.
+ *
+ * **No request handler uses it since 2026-09-10**, when the glossary's two
+ * lookups — its last callers — started streaming
+ * (docs/plans/260910g-stream-glossary-answers-as-they-arrive.md). It stays for
+ * tests/explain.test.ts and the cost eval (evals/cost/interactions.ts), which
+ * want one answer rather than a stream. It keeps `explainStream`'s endings as
+ * they are, abandoned and truncated included; a caller that shows or stores the
+ * result as whole wants `refuseUnfinished` in src/term-lookup.ts instead.
  */
 export async function explain(req: ExplainRequest): Promise<ExplainResult> {
   for await (const event of explainStream(req)) {

@@ -120,6 +120,7 @@ import type {
   ChatMessage,
   Glossary,
   GlossaryEntry,
+  GlossaryLookup,
   RememberStance,
   ThreadKind,
 } from "../../src/types.js";
@@ -370,8 +371,11 @@ const TASKS: readonly InteractionTask[] = [
            model call that costs money, not the row. */
         lookups: { load: async (): Promise<LookupsByTerm> => ({}), save: async (): Promise<LookupsByTerm> => ({}) },
       });
-      const result = await lookUpTerm(slug, entry.id);
-      const lookup = result.entry.lookup;
+      /* The route streams since 2026-09-10; a cost run wants the one `done`. */
+      let lookup: GlossaryLookup | undefined;
+      for await (const event of (await lookUpTerm(slug, entry.id)).stream()) {
+        if (event.type === "done") lookup = event.entry.lookup;
+      }
       return `"${entry.name}" — ${lookup?.answer.length ?? 0} chars, ${lookup?.searches ?? 0} web search(es)`;
     },
   },

@@ -1291,6 +1291,8 @@ function glossaryOwner(glossary: Glossary | null): GlossaryOwner {
     look: async () => {},
     looking: null,
     lookFailed: null,
+    lookDraft: null,
+    lookKept: null,
     ask: async () => {},
     asking: false,
     askDraft: null,

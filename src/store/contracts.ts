@@ -68,7 +68,6 @@ import type {
   FeedbackDiagnostics,
   FeedbackEnvironment,
   FeedbackKind,
-  GlossaryEntry,
   GlossaryLookup,
   GlossaryFound,
   QuotesFound,
@@ -329,18 +328,16 @@ export interface ArticleReader {
 }
 
 /**
- * The two glossary writes that do not go through the pipeline, because a reader
- * asked for them rather than a stage producing them.
+ * The glossary-document write that does not go through the pipeline, because a
+ * reader asked for it rather than a stage producing it.
  *
- * Separate from `ArticleReader` because they are writes, and separate from
- * `ArtifactWriter` because the pipeline does not do them. `deleteGlossary` is
- * the odd one out — it was the one write that went through `src/api.ts` — and
- * docs/project/glossary.md says why it has to.
+ * Separate from `ArticleReader` because it is a write, and separate from
+ * `ArtifactWriter` because the pipeline does not do it. A term lookup is
+ * store-independent orchestration built from `ArticleReader` and
+ * `GlossaryLookupStore` in src/term-lookup.ts; it is deliberately not a method
+ * on this adapter contract.
  */
 export interface GlossaryStore {
-  /** Ask the web about one term and store the answer beside the entry. */
-  lookUpTerm(slug: string, termId: string, signal?: AbortSignal): Promise<{ entry: GlossaryEntry }>;
-
   /** Throw the glossary away so it can be regenerated. */
   deleteGlossary(slug: string): Promise<{ deleted: boolean }>;
 }
