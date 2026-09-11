@@ -418,6 +418,16 @@ export type ImagePlacement =
    *
    * What is left is the one URL the pipeline actually fetched and sniffed, at
    * the cost of the resolutions we were never in a position to vouch for.
+   *
+   * **Since 2026-09-11 that is true only when the entry has no `from`.** When
+   * the step stored a bigger `srcset` candidate (src/assets.ts §
+   * `preferredCandidateOf`) the URL it fetched was the candidate, and the `src`
+   * left here is the publisher's own fallback, unfetched by us. Writing `from`
+   * into the `src` instead was considered and not done: this is the rare path
+   * where our own delivery failed, the `src` is what every reader had before any
+   * of this, and putting a manifest URL into the DOM after `sanitizeArticle` has
+   * run would be a second way past `stripOwnApiUrls`.
+   * docs/plans/260911a-figures-with-enough-resolution-to-read.md.
    */
   | { kind: "unverified" };
 
@@ -684,8 +694,9 @@ export async function rehostImages(
         /* **Not `null`, for the images we meant to serve and could not.** `null`
            is *we never had a copy of this*, and it restores the publisher's
            markup whole — every unchecked candidate with it, one of which can be
-           the only one a browser will consider. `unverified` gives back the one
-           URL this pipeline actually fetched. `wanted.images` is the test
+           the only one a browser will consider. `unverified` gives back the
+           `src` alone — the URL this pipeline fetched, unless it stored a bigger
+           candidate instead (`ImagePlacement`). `wanted.images` is the test
            because it is exactly the set the first draw blanked. */
         return wanted.images.has(url) ? UNVERIFIED : null;
       },

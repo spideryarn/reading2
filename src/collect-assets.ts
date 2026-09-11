@@ -74,12 +74,14 @@ import {
   type AssetEntry,
   type AssetFailure,
   type Assets,
-  imageSourcesIn,
+  type ImageCandidate,
+  imageCandidatesIn,
   type PdfFigureMarker,
   /* Aliased because this module exports the *blocks* walk under that name and
      the two would collide. Same distinction as `imageSourcesIn` (a root) and
      `imageUrlsIn` (an article) above it. */
   pdfFigureMarkersIn as pdfFigureMarkersInRoot,
+  type SniffedImage,
   sniffImage,
 } from "./assets.js";
 import { type AssetFetch, fetchAsset, FetchFailure, type FetchFailureCode } from "./fetch.js";
@@ -114,6 +116,14 @@ import type { Block } from "./types.js";
  * `assetsInputHash`. An unbumped manifest would compare a new-style hash
  * against an old-style one and answer *stale* for every article in the library
  * anyway — bumping is what makes that honest rather than accidental.
+ *
+ * **Deliberately not bumped on 2026-09-11, when the step started preferring a
+ * `srcset` candidate.** Same test as above: it decides differently only about
+ * articles whose images offer a `srcset` candidate, and those are
+ * exactly the articles whose `assetsInputHash` now changes — so they read stale
+ * on their own, and every other manifest in the library stays current. A bump
+ * would call all of them stale to reach the same answer. `assetsInputHash`
+ * gives the rest.
  */
 export const ASSETS_VERSION = "assets/2" as const;
 
@@ -262,8 +272,14 @@ export const GATE = new Gate(CONCURRENCY);
  * Stated here rather than by changing the default in src/fetch.ts, which
  * belongs to stage A and to `fetchDocument`. This is the caller deciding, which
  * is where a budget belongs.
+ *
+ * **A `srcset` candidate is asked with `attempts: 1`**, which is why the seam
+ * carries an optional `attempts` at all: the candidate has a retry already, and
+ * it is the `src`. Two attempts at each would make one image up to four requests
+ * — the multiplier this comment exists to keep visible.
  */
-const politeFetch: AssetFetch = (url, opts) => fetchAsset(url, { ...opts, attempts: 2 });
+const politeFetch: AssetFetch = (url, opts) =>
+  fetchAsset(url, { ...opts, attempts: opts.attempts ?? 2 });
 
 /* ------------------------------------------------------------------ *
  * Finding the images
@@ -286,11 +302,23 @@ const politeFetch: AssetFetch = (url, opts) => fetchAsset(url, { ...opts, attemp
  * represent honestly.
  */
 export function imageUrlsIn(blocks: readonly Block[]): string[] {
+  return imagesIn(blocks).map((image) => image.src);
+}
+
+/**
+ * **`imageUrlsIn`, with each image's preferred `srcset` candidate beside it** —
+ * what the step actually fetches, and what its hash is of.
+ *
+ * `imageCandidatesIn` (src/assets.ts) per block, and the same first-wins dedupe
+ * across the article, so one picture used twice is one entry and the first
+ * occurrence's `srcset` decides.
+ */
+export function imagesIn(blocks: readonly Block[]): ImageCandidate[] {
   const { JSDOM } = jsdom();
   const dom = new JSDOM("<!doctype html><template></template>");
   const template = dom.window.document.querySelector("template");
   if (!template) return [];
-  const found: string[] = [];
+  const found: ImageCandidate[] = [];
   const seen = new Set<string>();
   for (const block of blocks) {
     /* Case-insensitive, and a shortcut past the parse rather than a rule:
@@ -299,10 +327,10 @@ export function imageUrlsIn(blocks: readonly Block[]): string[] {
        silently drops every image in the block. */
     if (!block.html || !/<img[\s>]/i.test(block.html)) continue;
     template.innerHTML = block.html;
-    for (const url of imageSourcesIn(template.content)) {
-      if (seen.has(url)) continue;
-      seen.add(url);
-      found.push(url);
+    for (const image of imageCandidatesIn(template.content)) {
+      if (seen.has(image.src)) continue;
+      seen.add(image.src);
+      found.push(image);
     }
   }
   return found;
@@ -393,11 +421,38 @@ const MARKER_IN_HTML = new RegExp(RESERVED_ATTRS.pdfFigure, "i");
  * markers from ever hashing the same as one with no images and a marker
  * spelling that URL. Bump it if the shape below changes; `ASSETS_VERSION` is
  * the separate question of whether the step would decide differently.
+ *
+ * ## The preferred candidates are a third input — and only when there are any
+ *
+ * Since 2026-09-11 the step fetches a `srcset` candidate where one qualifies,
+ * so the candidate is something it consumes and the rule above says it goes in.
+ * It goes in **as a third element that is absent when no image has one**, and
+ * that is the whole `ASSETS_VERSION` decision for this change, made rather than
+ * inherited:
+ *
+ * - an article with no qualifying `srcset` hashes exactly as before, reports
+ *   its manifest current, and re-fetches nothing;
+ * - an article with one hashes differently — which, since density descriptors
+ *   count too, includes nearly every Wikipedia article — so its manifest reads
+ *   *not current*
+ *   and the next run of this step **on that article** — a re-ingest, somebody
+ *   choosing to re-run it — fetches the bigger picture. Nothing re-runs it on
+ *   its own; there is no scheduler (docs/project/cron-scheduler.md).
+ *
+ * Bumping `ASSETS_VERSION` instead would call every manifest in the library
+ * stale, including the ones the step would rewrite identically. A two-element
+ * and a three-element array cannot serialise alike, so the framing needs no
+ * new prefix. docs/plans/260911a-figures-with-enough-resolution-to-read.md.
  */
 export function assetsInputHash(blocks: readonly Block[]): string {
+  const images = imagesIn(blocks);
+  const preferred = images.flatMap((image) =>
+    image.preferred === null ? [] : [[image.src, image.preferred]],
+  );
   const canonical = `spya-assets/1\n${JSON.stringify([
-    imageUrlsIn(blocks),
+    images.map((image) => image.src),
     pdfFigureMarkersIn(blocks).map((m) => m.ref),
+    ...(preferred.length > 0 ? [preferred] : []),
   ])}`;
   return createHash("sha256").update(canonical, "utf8").digest("hex").slice(0, 16);
 }
@@ -511,6 +566,8 @@ export interface AssetsRun {
   failed: number;
   /** Of the stored ones, how many were already in the bucket. */
   deduped: number;
+  /** Of the stored ones, how many are a `srcset` candidate rather than the `src`. */
+  fromSrcset: number;
   /** Bytes actually downloaded. */
   bytes: number;
   /**
@@ -687,12 +744,13 @@ export async function collectAssets(options: CollectAssetsOptions): Promise<Asse
   const limits: Limits = { ...DEFAULT_LIMITS, ...options.limits };
   const startedAt = Date.now();
 
-  const urls = imageUrlsIn(blocks);
+  const images = imagesIn(blocks);
+  const urls = images.map((image) => image.src);
   /* Everything past the runaway guard is recorded rather than dropped, so that
      "no entry" keeps meaning "this step never looked at it" for every URL in
      the article. A dropped URL and an unvisited one are indistinguishable to
      every later reader, and only one of them is a decision. */
-  const fetchable = urls.slice(0, limits.maxImages);
+  const fetchable = images.slice(0, limits.maxImages);
   const overflow = urls.slice(limits.maxImages);
 
   /**
@@ -711,6 +769,7 @@ export async function collectAssets(options: CollectAssetsOptions): Promise<Asse
   let stored = 0;
   let failed = 0;
   let deduped = 0;
+  let fromSrcset = 0;
   let done = 0;
   const storageErrors: string[] = [];
   /**
@@ -822,7 +881,74 @@ export async function collectAssets(options: CollectAssetsOptions): Promise<Asse
     return err instanceof FetchFailure ? FAILURE_FOR[err.code] : null;
   };
 
-  const one = async (url: string): Promise<void> => {
+  /**
+   * **The `srcset` candidate's bytes, or `null` for any reason to fall back to
+   * the `src`** — a refusal of any kind (the address guard, a redirect, the
+   * byte cap, a 404), a format we do not host, no room left, or the clock.
+   *
+   * One attempt, because the `src` is its retry (`politeFetch`). Nothing about
+   * a failed candidate is recorded: the entry is the image's, keyed by its
+   * `src`, and says only what became of the image.
+   *
+   * **The budget is the `src`'s arithmetic, reserved the same way.** A
+   * candidate that fails is settled here and now — reservation released, bytes
+   * that arrived charged, a `too-large` charged whole — so the `src` after it is
+   * handed exactly what the candidate left: one budget for the article, not one
+   * per URL. A candidate that succeeds hands its reservation and charge back
+   * for `one` to settle in its `finally`, which is when the `src`'s own are
+   * settled, so the two paths hold the budget for the same span.
+   */
+  const tryCandidate = async (
+    candidate: string,
+  ): Promise<{ bytes: Uint8Array; sniffed: SniffedImage; budget: number; charge: number } | null> => {
+    const room = limits.maxArticleBytes - spent - reserved;
+    if (room <= 0) return null;
+    const budget = Math.min(limits.maxImageBytes, room);
+    reserved += budget;
+    let charge = 0;
+    try {
+      const got = await fetchImpl(candidate, {
+        maxBytes: budget,
+        timeoutMs: IMAGE_TIMEOUT_MS,
+        signal: signalFor,
+        attempts: 1,
+      });
+      charge = got.bytes.byteLength;
+      const sniffed = sniffImage(got.bytes);
+      if (sniffed) return { bytes: got.bytes, sniffed, budget, charge };
+    } catch (err) {
+      if (err instanceof FetchFailure && err.code === "too-large") charge = budget;
+    }
+    reserved -= budget;
+    spent += charge;
+    return null;
+  };
+
+  /** Into the bucket, and into the manifest under the `src` it stands for. */
+  const keep = async (
+    url: string,
+    bytes: Uint8Array,
+    sniffed: SniffedImage,
+    from?: string,
+  ): Promise<void> => {
+    const put = blobs
+      ? await storeRawSource(bytes, sniffed.ext, blobs)
+      : await storeRawSource(bytes, sniffed.ext);
+    if (put.outcome === "already-there") deduped += 1;
+    entries.set(url, {
+      url,
+      status: "stored",
+      sha256: put.sha256,
+      ext: sniffed.ext,
+      contentType: sniffed.contentType,
+      bytes: bytes.byteLength,
+      ...(from === undefined ? {} : { from }),
+    });
+    stored += 1;
+    if (from !== undefined) fromSrcset += 1;
+  };
+
+  const one = async ({ src: url, preferred }: ImageCandidate): Promise<void> => {
     /*
      * **The queue first, the budget second, and the order is load-bearing.**
      *
@@ -849,6 +975,26 @@ export async function collectAssets(options: CollectAssetsOptions): Promise<Asse
         fail(url, "out-of-time");
         return;
       }
+
+      /* **The bigger picture first, under the same permit.** Holding the one
+         permit across both requests is what keeps `GATE` a limit on requests
+         in flight rather than on images: a candidate and its fallback are
+         sequential, never side by side. */
+      if (preferred !== null) {
+        const bigger = await tryCandidate(preferred);
+        if (bigger) {
+          ({ budget, charge } = bigger);
+          await keep(url, bigger.bytes, bigger.sniffed, preferred);
+          return;
+        }
+        /* The clock that beat the candidate would beat the src too, and a
+           request dialled now would outlive the manifest. */
+        if (deadline.signal.aborted) {
+          fail(url, "out-of-time");
+          return;
+        }
+      }
+
       const room = limits.maxArticleBytes - spent - reserved;
       if (room <= 0) {
         fail(url, "budget");
@@ -873,20 +1019,7 @@ export async function collectAssets(options: CollectAssetsOptions): Promise<Asse
         fail(url, "unsupported-format");
         return;
       }
-
-      const put = blobs
-        ? await storeRawSource(got.bytes, sniffed.ext, blobs)
-        : await storeRawSource(got.bytes, sniffed.ext);
-      if (put.outcome === "already-there") deduped += 1;
-      entries.set(url, {
-        url,
-        status: "stored",
-        sha256: put.sha256,
-        ext: sniffed.ext,
-        contentType: sniffed.contentType,
-        bytes: got.bytes.byteLength,
-      });
-      stored += 1;
+      await keep(url, got.bytes, sniffed);
     } catch (err) {
       const reason = reasonFor(err);
       if (reason) {
@@ -894,7 +1027,8 @@ export async function collectAssets(options: CollectAssetsOptions): Promise<Asse
            the cap bit, so it is charged rather than refunded. Every other typed
            failure either never got a body or got one we did not read — an image
            abandoned at the deadline included, which is why `out-of-time` leaves
-           `charge` at zero. */
+           `charge` at zero. `tryCandidate` makes the same charge for the
+           candidate. */
         if (err instanceof FetchFailure && err.code === "too-large") charge = budget;
         fail(url, reason);
         return;
@@ -928,7 +1062,7 @@ export async function collectAssets(options: CollectAssetsOptions): Promise<Asse
    * bounds the concurrency — two in flight across the process, however many
    * promises are pending.
    */
-  const everyImage = Promise.all(fetchable.map((url) => one(url)));
+  const everyImage = Promise.all(fetchable.map((image) => one(image)));
   /* A handler so that a rejection arriving *after* the race has been won by the
      deadline is not an unhandled rejection. This is a second, derived promise:
      `everyImage` itself still settles into the race, so a rejection that gets
@@ -962,8 +1096,8 @@ export async function collectAssets(options: CollectAssetsOptions): Promise<Asse
    * apart, so an image dropped here would be indistinguishable from an article
    * that never had it. Empty when `everyImage` won, which is the ordinary case.
    */
-  for (const url of fetchable) {
-    if (!entries.has(url)) fail(url, "out-of-time");
+  for (const { src } of fetchable) {
+    if (!entries.has(src)) fail(src, "out-of-time");
   }
   handedBack = true;
 
@@ -986,6 +1120,7 @@ export async function collectAssets(options: CollectAssetsOptions): Promise<Asse
     stored,
     failed,
     deduped,
+    fromSrcset,
     bytes: spent,
     storageErrors: boundStorageErrors(storageErrors),
     elapsedMs: Date.now() - startedAt,

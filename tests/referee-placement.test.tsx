@@ -365,6 +365,8 @@ function AnnotateHarness({ placing }: { placing: boolean }) {
   return createElement(AnnotateDialog, {
     anchor: ANCHOR,
     placing,
+    /* The hook's own flag, as `Reader` passes it — Save waits for the list. */
+    loaded: comments.loaded,
     onCancel: () => {},
     onSave: (id: string, body: string, _ask: boolean, mark) => {
       void comments.create({

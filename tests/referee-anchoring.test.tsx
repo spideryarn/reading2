@@ -210,6 +210,7 @@ function BothHarness({ dialog }: { dialog: "annotate" | "comment" }) {
             key: "dialog",
             anchor: ANCHOR,
             placing: true,
+            loaded: true,
             onCancel: () => {},
             onSave: () => {},
           })

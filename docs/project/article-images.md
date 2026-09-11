@@ -153,8 +153,8 @@ second draw is rebuilt from the original html — the design that makes *a faile
 hot-linking* need no stash — and rebuilding it verbatim puts the `<source>` back too. So an image we
 hold and fail to *deliver* used to fall back to a `<picture>` that could not work. `ImagePlacement`'s
 third case, `unverified`, is that: the publisher's `src` stays — the one URL we actually fetched and
-sniffed — and every candidate we never checked is dropped, the `<source>` elements and the `<img>`'s
-own `srcset` and `sizes` alike.
+sniffed, unless the step stored a bigger `srcset` candidate instead (below) — and every candidate we
+never checked is dropped, the `<source>` elements and the `<img>`'s own `srcset` and `sizes` alike.
 
 **The `srcset` has to go with it**, which is worth stating because it is the same trap wearing a
 different hat and this fix's own first draft fell into it. A `srcset` is as unchecked as a `<source>`
@@ -164,8 +164,9 @@ it. Measured in Chrome: with an unreachable `600w, 1920w` present the `<img>` is
 `currentSrc` is the broken candidate; with it gone the `src` draws.
 
 One thing this still does *not* fix, in
-[260908a](../plans/260908a-the-monkeys-illustration-did-not-load.md) along with the width question: an
-image we hold **no** copy of is left with its `<picture>` whole, and is exposed to the same trick.
+[260908a](../plans/260908a-the-monkeys-illustration-did-not-load.md): an image we hold **no** copy of
+is left with its `<picture>` whole, and is exposed to the same trick. (The width question that plan
+also left open is answered by the trial below.)
 
 ## The one way to get this silently wrong
 
@@ -181,7 +182,7 @@ the whole defence. [silent-success.md](../reusable/silent-success.md) is the fam
 
 ## Decisions worth knowing before changing anything
 
-- **An image is rehosted as a unit: the `src`, never the `srcset`.** Thirteen `<img>` elements in the
+- **An image is rehosted as a unit, named by its `src`.** Thirteen `<img>` elements in the
   corpus carry 46 `srcset` candidates between them — the same pictures at different widths, which
   content addressing cannot dedup, so fetching them all is 4× the requests and 2.7× the bytes for
   nothing a reader can see. And "the largest candidate" is not well defined once width descriptors,
@@ -190,6 +191,21 @@ the whole defence. [silent-success.md](../reusable/silent-success.md) is the fam
   `src` and an untouched `srcset` prefers the `srcset` and goes on hot-linking while the page looks
   fixed. The removals are the same on both draws, in one loop, so the four lines that actually close
   the leak cannot drift apart between two copies of them.
+- **Since 2026-09-11 the unit may carry one bigger picture than the `src`** — a trial Greg chose after
+  the monkeys report showed a 300 px `src` under a 659 px column, and a ⤢ with nothing to enlarge.
+  `preferredCandidateOf` ([`src/assets.ts`](../../src/assets.ts)) takes one candidate from the
+  `<img>`'s own `srcset`: from a list of **widths**, the smallest at least 1,280 px wide, else the
+  widest; from a list of **densities**, the highest above 1× and at most 2× — which is how Wikipedia
+  marks every figure (the density half was added the same day, the Overseer's call on the plan's open
+  question). Every other form, a mixed list included, keeps the `src`. The step fetches the candidate
+  first, once, through the same guarded fetch, and falls back to the `src` on any failure. **The
+  manifest is still keyed on the `src`**; the candidate is recorded as `from`, because keying on it
+  would make every lookup miss. The version was not bumped: the candidates go into
+  `assetsInputHash`, so only an article that has one reads stale — most Wikipedia articles among
+  them — and nothing re-runs it on its own. On a real Asterisk diagram and chart this took a blur to
+  legible labels for 10–11× the bytes, a few hundred KB each; a painting stored as PNG is the
+  expensive case, at 1.6 MB. [260911a](../plans/260911a-figures-with-enough-resolution-to-read.md)
+  has the evidence.
 - **The format is earned from the bytes, never claimed by the URL or the `Content-Type`.**
   Publishers serve PNGs as `application/octet-stream` and bot walls serve HTML as `image/jpeg`.
   `sniffImage` decides, and the name we store *is* a claim about the contents — see
@@ -230,7 +246,8 @@ the whole defence. [silent-success.md](../reusable/silent-success.md) is the fam
 ## Freshness
 
 `assets` is one of the stages fingerprinted on a content hash, and its hash input is **the image
-URLs and the PDF figure refs in the blocks, and nothing else** — `assetsInputHash` in
+URLs and the PDF figure refs in the blocks — plus, only when there are any, the preferred `srcset`
+candidates — and nothing else** — `assetsInputHash` in
 [`src/collect-assets.ts`](../../src/collect-assets.ts).
 [architecture.md § Conventions](architecture.md#conventions).
 

@@ -2816,6 +2816,10 @@ export const STEPS: { [K in StepName]: PipelineStep<K> } = {
           stored: run.stored,
           failed: run.failed,
           deduped: run.deduped,
+          /* How many of the stored ones are a bigger `srcset` candidate rather
+             than the `src` — the number the 260911a trial is judged on beside
+             `kb`. */
+          fromSrcset: run.fromSrcset,
           kb: Math.round(run.bytes / 1024),
           ms: run.elapsedMs,
           /* What actually failed, from `collectAssets`, and only when there
