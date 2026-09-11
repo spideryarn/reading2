@@ -83,7 +83,8 @@ Code: [`src/ideas.ts`](../../src/ideas.ts) (stage 5f — the prompt, the call, t
 [`src/web/modes/ideas/IdeasMode.tsx`](../../src/web/modes/ideas/IdeasMode.tsx) — `IdeasBand`,
 `VisitorIdeasBand` and `useIdeasMode`, which lived in `App.tsx` until 2026-09-05 and moved out so a
 [`FeatureBoundary`](../../src/web/FeatureBoundary.tsx) could enclose the controller's own
-computation, this being the first mode a failure is contained in
+computation, this being the first mode a failure was contained in — every band has been since
+2026-09-11
 ([web-client.md § A mode that breaks](web-client.md#a-mode-that-breaks-does-not-take-the-article-with-it))
 — and `§ ideas mode` in
 [`src/web/styles/ideas.css`](../../src/web/styles/ideas.css). Tests:

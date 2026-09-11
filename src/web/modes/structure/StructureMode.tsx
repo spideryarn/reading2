@@ -135,7 +135,7 @@ export function StructureBand({
    * expand the current section into its paragraphs and those are leaves.
    *
    * **No `mode === "structure"` guard on the `useMemo`**: this component is only
-   * mounted by the `band()` arm for this mode, so the guard a hook in `Reader`
+   * mounted by the `modeBand()` arm for this mode, so the guard a hook in `Reader`
    * would need — it runs on every render of the reading view in every mode — is
    * exactly the cost that keeping the controller out here removed.
    */

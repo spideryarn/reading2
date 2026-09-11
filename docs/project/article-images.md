@@ -194,16 +194,18 @@ the whole defence. [silent-success.md](../reusable/silent-success.md) is the fam
 - **Since 2026-09-11 the unit may carry one bigger picture than the `src`** — a trial Greg chose after
   the monkeys report showed a 300 px `src` under a 659 px column, and a ⤢ with nothing to enlarge.
   `preferredCandidateOf` ([`src/assets.ts`](../../src/assets.ts)) takes one candidate from the
-  `<img>`'s own `srcset`, **width descriptors only**: the smallest at least 1,280 px wide, else the
-  widest. Every other form keeps the `src`. The step fetches the candidate first, once, through the
-  same guarded fetch, and falls back to the `src` on any failure. **The manifest is still keyed on the
-  `src`**; the candidate is recorded as `from`, because keying on it would make every lookup miss. The
-  version was not bumped: the candidates go into `assetsInputHash`, so only an article that has one
-  reads stale, and nothing re-runs it on its own. On a real Asterisk diagram and chart this took a
-  blur to legible labels for 10–11× the bytes, a few hundred KB each; a painting stored as PNG is the
-  expensive case, at 1.6 MB. Wikipedia marks its figures with density descriptors, so it is not
-  reached. [260911a](../plans/260911a-figures-with-enough-resolution-to-read.md) has the evidence and
-  the open question.
+  `<img>`'s own `srcset`: from a list of **widths**, the smallest at least 1,280 px wide, else the
+  widest; from a list of **densities**, the highest above 1× and at most 2× — which is how Wikipedia
+  marks every figure (the density half was added the same day, the Overseer's call on the plan's open
+  question). Every other form, a mixed list included, keeps the `src`. The step fetches the candidate
+  first, once, through the same guarded fetch, and falls back to the `src` on any failure. **The
+  manifest is still keyed on the `src`**; the candidate is recorded as `from`, because keying on it
+  would make every lookup miss. The version was not bumped: the candidates go into
+  `assetsInputHash`, so only an article that has one reads stale — most Wikipedia articles among
+  them — and nothing re-runs it on its own. On a real Asterisk diagram and chart this took a blur to
+  legible labels for 10–11× the bytes, a few hundred KB each; a painting stored as PNG is the
+  expensive case, at 1.6 MB. [260911a](../plans/260911a-figures-with-enough-resolution-to-read.md)
+  has the evidence.
 - **The format is earned from the bytes, never claimed by the URL or the `Content-Type`.**
   Publishers serve PNGs as `application/octet-stream` and bot walls serve HTML as `image/jpeg`.
   `sniffImage` decides, and the name we store *is* a claim about the contents — see

@@ -95,10 +95,61 @@ describe("which srcset candidate is preferred", () => {
     ).toBe("https://cdn.test/a.png?w=1600&s=3a2bee");
   });
 
+  /**
+   * **Density descriptors: the highest density above 1× and at most 2×.** The
+   * Overseer's call on 260911a's open question, 2026-09-11 — Wikipedia marks
+   * every figure `src` plus `1.5x, 2x`, and it is where most of the corpus's
+   * diagrams come from.
+   */
+  it("takes the 2x candidate from a density list", () => {
+    expect(preferred("https://cdn.test/a-375.png 1.5x, https://cdn.test/a-500.png 2x")).toBe(
+      "https://cdn.test/a-500.png",
+    );
+    /* Order does not matter, and `2.0x` is the same density. */
+    expect(preferred("https://cdn.test/a-500.png 2.0x, https://cdn.test/a-375.png 1.5x")).toBe(
+      "https://cdn.test/a-500.png",
+    );
+    /* The highest there is at or under 2x, when there is no 2x. */
+    expect(preferred("https://cdn.test/a-375.png 1.5x")).toBe("https://cdn.test/a-375.png");
+    /* A 3x beside a 2x is passed over; the cap is 2x. */
+    expect(
+      preferred("https://cdn.test/a-500.png 2x, https://cdn.test/a-750.png 3x, https://cdn.test/a-375.png 1.5x"),
+    ).toBe("https://cdn.test/a-500.png");
+  });
+
+  it("reads a real Wikipedia thumbnail's 2x the way the browser will", () => {
+    const thumb =
+      "https://upload.wikimedia.org/wikipedia/commons/thumb/0/01/Tenets_of_open_science.svg";
+    const src = `${thumb}/250px-Tenets_of_open_science.svg.png?utm_source=en.wikipedia.org&utm_campaign=parser`;
+    const html =
+      `<img src="${src.replace(/&/g, "&amp;")}" width="250" height="180"` +
+      ` srcset="${thumb}/375px-Tenets_of_open_science.svg.png?utm_source=en.wikipedia.org&amp;utm_campaign=parser 1.5x,` +
+      ` ${thumb}/500px-Tenets_of_open_science.svg.png?utm_source=en.wikipedia.org&amp;utm_campaign=parser 2x">`;
+    expect(preferredCandidateOf(imgIn(html), src)).toBe(
+      `${thumb}/500px-Tenets_of_open_science.svg.png?utm_source=en.wikipedia.org&utm_campaign=parser`,
+    );
+  });
+
+  it("offers nothing from a density list with nothing above 1x and at most 2x", () => {
+    const refused: [string, string][] = [
+      ["only a 3x", "https://cdn.test/a-750.png 3x"],
+      ["only a 1x", "https://cdn.test/a-250.png 1x"],
+      ["a zero density", "https://cdn.test/a.png 0x"],
+      ["a density below 1x", "https://cdn.test/a.png 0.5x"],
+      ["a malformed density", "https://cdn.test/a.png 2.x"],
+      ["a signed density", "https://cdn.test/a.png +2x"],
+      ["an exponent", "https://cdn.test/a.png 2e0x"],
+      ["an absurd density", "https://cdn.test/a.png 100x"],
+      ["two candidates claiming one density", "https://cdn.test/a.png 2x, https://cdn.test/b.png 2.0x"],
+      ["a protocol-relative 2x, as some Wikipedia markup has", "//upload.wikimedia.org/a/500px-a.png 2x"],
+    ];
+    for (const [why, srcset] of refused) expect(preferred(srcset), why).toBeNull();
+  });
+
   it("falls back on every form it does not act on", () => {
     const refused: [string, string][] = [
-      ["density descriptors", "https://cdn.test/a.png 1.5x, https://cdn.test/b.png 2x"],
       ["width mixed with density", "https://cdn.test/a.png 600w, https://cdn.test/b.png 2x"],
+      ["density mixed with width", "https://cdn.test/a.png 2x, https://cdn.test/b.png 1600w"],
       ["a candidate with no descriptor", "https://cdn.test/a.png, https://cdn.test/b.png 1600w"],
       ["a height descriptor", "https://cdn.test/a.png 1600w 900h"],
       ["a zero width", "https://cdn.test/a.png 0w"],

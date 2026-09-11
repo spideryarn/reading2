@@ -119,7 +119,7 @@ import type { Block } from "./types.js";
  *
  * **Deliberately not bumped on 2026-09-11, when the step started preferring a
  * `srcset` candidate.** Same test as above: it decides differently only about
- * articles whose images offer a width-descriptor candidate, and those are
+ * articles whose images offer a `srcset` candidate, and those are
  * exactly the articles whose `assetsInputHash` now changes — so they read stale
  * on their own, and every other manifest in the library stays current. A bump
  * would call all of them stale to reach the same answer. `assetsInputHash`
@@ -430,10 +430,11 @@ const MARKER_IN_HTML = new RegExp(RESERVED_ATTRS.pdfFigure, "i");
  * that is the whole `ASSETS_VERSION` decision for this change, made rather than
  * inherited:
  *
- * - an article with no qualifying `srcset` — every Wikipedia article, whose
- *   `srcset`s are density descriptors — hashes exactly as before, reports its
- *   manifest current, and re-fetches nothing;
- * - an article with one hashes differently, so its manifest reads *not current*
+ * - an article with no qualifying `srcset` hashes exactly as before, reports
+ *   its manifest current, and re-fetches nothing;
+ * - an article with one hashes differently — which, since density descriptors
+ *   count too, includes nearly every Wikipedia article — so its manifest reads
+ *   *not current*
  *   and the next run of this step **on that article** — a re-ingest, somebody
  *   choosing to re-run it — fetches the bigger picture. Nothing re-runs it on
  *   its own; there is no scheduler (docs/project/cron-scheduler.md).

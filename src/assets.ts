@@ -41,8 +41,10 @@
  * **Since 2026-09-11 the unit may carry one bigger picture**, and the `src` is
  * still its name. A publisher's `src` is often a thumbnail — 300 px on the
  * monkeys figure (SPIDERYARN-READING2-2B) — so the ⤢ had nothing to enlarge.
- * `preferredCandidateOf` picks **one** `srcset` candidate around 1,280 px, from
- * width descriptors only; the step fetches it first and falls back to the `src`.
+ * `preferredCandidateOf` picks **one** `srcset` candidate — around 1,280 px from
+ * a list of widths, the highest density above 1× and at most 2× from a list of
+ * densities; the step fetches it
+ * first and falls back to the `src`.
  * The manifest is still keyed on the `src` (the candidate goes in `from`),
  * because that is what the reading view looks an element up by: key it on the
  * candidate and every lookup misses. Greg chose the trial, 2026-09-11;
@@ -429,8 +431,22 @@ const MAX_SRCSET_CANDIDATES = 32;
 /** HTML's ASCII whitespace, which is what separates a `srcset`'s tokens. */
 const SRCSET_SPACE = /[\t\n\f\r ]/;
 
-/** One width descriptor, surrounded only by the whitespace HTML permits here. */
-const SRCSET_WIDTH = /^[\t\n\f\r ]*([1-9][0-9]{0,4})w[\t\n\f\r ]*$/;
+/**
+ * One descriptor, surrounded only by the whitespace HTML permits here: a width
+ * (`600w`, group 1) or a density (`1.5x`, group 2). The density grammar is a
+ * bounded subset of HTML's floating-point number — no sign, no exponent, at
+ * most two integer digits — and anything outside it is refused, not guessed.
+ */
+const SRCSET_DESCRIPTOR =
+  /^[\t\n\f\r ]*(?:([1-9][0-9]{0,4})w|([0-9]{1,2}(?:\.[0-9]{1,3})?)x)[\t\n\f\r ]*$/;
+
+/** The highest density we go looking for — see `preferredCandidateOf`. */
+export const MAX_PREFERRED_DENSITY = 2;
+
+/** A parsed `srcset`: every candidate one kind of descriptor, or no list at all. */
+export type SrcsetCandidates =
+  | { kind: "w"; candidates: { url: string; value: number }[] }
+  | { kind: "x"; candidates: { url: string; value: number }[] };
 
 /** The first non-space code unit at or after `at`. */
 function afterSrcsetSpaces(srcset: string, at: number): number {
@@ -439,10 +455,10 @@ function afterSrcsetSpaces(srcset: string, at: number): number {
 }
 
 /** One candidate beginning at `at`, and where its delimiter sits. */
-function widthCandidateAt(
+function candidateAt(
   srcset: string,
   at: number,
-): { url: string; width: number; delimiter: number } | null {
+): { url: string; kind: "w" | "x"; value: number; delimiter: number } | null {
   const start = at;
   while (at < srcset.length && !SRCSET_SPACE.test(srcset[at] as string)) at += 1;
   const url = srcset.slice(start, at);
@@ -453,54 +469,77 @@ function widthCandidateAt(
     if (srcset[at] === "(") return null;
     at += 1;
   }
-  const descriptor = SRCSET_WIDTH.exec(srcset.slice(from, at));
+  const descriptor = SRCSET_DESCRIPTOR.exec(srcset.slice(from, at));
   if (!descriptor) return null;
-  return { url, width: Number(descriptor[1]), delimiter: at };
+  return descriptor[1] !== undefined
+    ? { url, kind: "w", value: Number(descriptor[1]), delimiter: at }
+    : { url, kind: "x", value: Number(descriptor[2]), delimiter: at };
 }
 
 /**
- * A `srcset` whose every candidate carries a **width descriptor** — `600w` —
- * or `null` for anything else.
+ * A `srcset` whose every candidate carries **one kind of descriptor** — all
+ * widths (`600w`) or all densities (`2x`) — or `null` for anything else.
  *
  * A tokenizer after the HTML standard's "parse a srcset attribute", cut down to
- * the one form we act on and made to **refuse rather than guess** on everything
- * else: a density descriptor (`2x`), a candidate with no descriptor, a `h`
- * descriptor, a `(`, a zero or absurd width, two candidates claiming the same
- * width, an empty comma-delimited candidate, non-ASCII descriptor whitespace,
- * or a list past the bounds above. A mixed list is refused whole, not filtered
- * — a candidate we cannot read is one we cannot rank. Refusing costs the reader
- * nothing they have today: the image keeps its `src`.
+ * the two forms we act on and made to **refuse rather than guess** on everything
+ * else: widths mixed with densities, a candidate with no descriptor, a `h`
+ * descriptor, a `(`, a zero or absurd width, a density outside the bounded
+ * grammar, two candidates claiming the same width or density, an empty
+ * comma-delimited candidate, non-ASCII descriptor whitespace, or a list past
+ * the bounds above. A mixed list is refused whole, not filtered — a candidate we
+ * cannot read is one we cannot rank. Refusing costs the reader nothing they have
+ * today: the image keeps its `src`.
  *
  * The URL token is a run of non-space characters, so a `data:` URL's own comma
  * does not split it; a URL token *ending* in commas is a candidate with no
  * descriptor, which is refused.
  */
-export function widthCandidatesOf(srcset: string): { url: string; width: number }[] | null {
+export function srcsetCandidatesOf(srcset: string): SrcsetCandidates | null {
   if (srcset.length > MAX_SRCSET_CHARS) return null;
-  const found: { url: string; width: number }[] = [];
-  const widths = new Set<number>();
+  const found: { url: string; value: number }[] = [];
+  const values = new Set<number>();
+  let kind: "w" | "x" | null = null;
   let at = afterSrcsetSpaces(srcset, 0);
   if (at >= srcset.length || srcset[at] === ",") return null;
   for (;;) {
-    const candidate = widthCandidateAt(srcset, at);
-    if (!candidate || widths.has(candidate.width)) return null;
-    widths.add(candidate.width);
-    found.push({ url: candidate.url, width: candidate.width });
+    const candidate = candidateAt(srcset, at);
+    if (!candidate || values.has(candidate.value)) return null;
+    if (kind !== null && candidate.kind !== kind) return null;
+    kind = candidate.kind;
+    values.add(candidate.value);
+    found.push({ url: candidate.url, value: candidate.value });
     if (found.length > MAX_SRCSET_CANDIDATES) return null;
     if (candidate.delimiter >= srcset.length) break;
     at = afterSrcsetSpaces(srcset, candidate.delimiter + 1);
     if (at >= srcset.length || srcset[at] === ",") return null;
   }
-  return found.length > 0 ? found : null;
+  return kind === null || found.length === 0 ? null : { kind, candidates: found };
+}
+
+/** `srcsetCandidatesOf`, for a list of widths and nothing else. */
+export function widthCandidatesOf(srcset: string): { url: string; width: number }[] | null {
+  const parsed = srcsetCandidatesOf(srcset);
+  if (parsed?.kind !== "w") return null;
+  return parsed.candidates.map((c) => ({ url: c.url, width: c.value }));
 }
 
 /**
  * **The one `srcset` candidate worth fetching instead of `src`**, or `null`.
  *
- * The smallest candidate at least `PREFERRED_IMAGE_WIDTH` wide, else the widest
- * there is. `null` whenever `widthCandidatesOf` refuses, when any candidate is
- * not an absolute http(s) URL (`isRehostableUrl`, the same test the `src` gets),
- * and when the choice *is* the `src` — there is nothing to fetch twice.
+ * From a list of **widths**: the smallest candidate at least
+ * `PREFERRED_IMAGE_WIDTH` wide, else the widest there is.
+ *
+ * From a list of **densities**: the highest density above 1× and at most
+ * `MAX_PREFERRED_DENSITY` (2×) — so `1.5x, 2x` gives the `2x`, and a lone `3x`
+ * gives nothing. A density is relative to the `src`, whose width the markup
+ * does not state, so there is no pixel target to rank against; 2× is the
+ * bounded step. Added 2026-09-11 because Wikipedia marks every figure this way
+ * (the Overseer's call on 260911a's open question, under Greg's "keep things
+ * simple").
+ *
+ * `null` whenever `srcsetCandidatesOf` refuses, when any candidate is not an
+ * absolute http(s) URL (`isRehostableUrl`, the same test the `src` gets), and
+ * when the choice *is* the `src` — there is nothing to fetch twice.
  *
  * **Only the `<img>`'s own `srcset`.** A sibling `<source>` is never read: it is
  * chosen by `type` or `media` — a format we may not host, or a different crop
@@ -516,11 +555,13 @@ export function widthCandidatesOf(srcset: string): { url: string; width: number 
 export function preferredCandidateOf(element: AttributeReader, src: string): string | null {
   const srcset = element.getAttribute("srcset");
   if (srcset === null) return null;
-  const candidates = widthCandidatesOf(srcset);
-  if (!candidates?.every((c) => isRehostableUrl(c.url))) return null;
-  const ascending = [...candidates].sort((a, b) => a.width - b.width);
+  const parsed = srcsetCandidatesOf(srcset);
+  if (!parsed?.candidates.every((c) => isRehostableUrl(c.url))) return null;
+  const ascending = [...parsed.candidates].sort((a, b) => a.value - b.value);
   const chosen =
-    ascending.find((c) => c.width >= PREFERRED_IMAGE_WIDTH) ?? ascending[ascending.length - 1];
+    parsed.kind === "w"
+      ? (ascending.find((c) => c.value >= PREFERRED_IMAGE_WIDTH) ?? ascending[ascending.length - 1])
+      : ascending.filter((c) => c.value > 1 && c.value <= MAX_PREFERRED_DENSITY).pop();
   if (!chosen || chosen.url === src) return null;
   return chosen.url;
 }
