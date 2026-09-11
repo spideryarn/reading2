@@ -760,23 +760,39 @@ deletion is prepared and pending Greg's approval; nothing destructive has run ag
   commit after it because a pointer's foreign-key check needs `KEY SHARE` on the row we hold. An
   in-flight protection makes its row unlockable, so `skip locked` leaves it. The function refuses
   to delete under any other isolation level. `deleted` is the `DELETE`'s own row count.
-- **Errors.** The sweep runs in a savepoint; a failure is rolled back to it, the step goes ahead,
+- **Errors.** The sweep runs in a savepoint, written as SQL rather than `tx.transaction(…)` because
+  a savepoint takes no isolation option and `tests/store-transaction-isolation.test.ts` rightly
+  requires every `.transaction(…)` in `src/store` to name one (the first full suite caught it). A
+  failure — a thrown error or a failed statement — is rolled back to the savepoint, the step goes ahead,
   and a warning is logged with the error's class name after the commit. Every non-empty sweep
   logs its mode, candidate count, whether more remain, the deleted count and the duration.
 - **Why `count`.** `STEP_START_DRAFT_SWEEP = "count"`: every job start runs the real selection
   and logs what it would take. Deploying `"delete"` would be the first destructive run against
   readers' data, unreviewed, so this stage stops short of it; flipping the constant is the
   approval.
-- **Tests.** `tests/draft-sweep-on-step-start.test.ts` (private lane, 10 cases): the plan's six
+- **Tests.** `tests/draft-sweep-on-step-start.test.ts` (private lane, 12 cases): the plan's six
   kinds of revision plus another article's equally old candidates; idempotence; no second sweep
   when a job reopens its draft; the `count` default deletes nothing; the batch limit; an injected
-  failure leaves the step and its draft intact; a job pointer and a publication committed at a
+  error and a real failed statement each leave the step and its draft intact; a job pointer and a publication committed at a
   barrier between enumeration and deletion (candidates 3, deleted 1); a pointer still in flight
   (skipped, pointer kept); the isolation refusal; and scope to one article. **Negative controls,
   each seen red:** dropping the delete-time recheck; replacing the lock step with a single
   rechecking `DELETE` (it waited behind the in-flight pointer, then deleted the row anyway —
   deleted 2, not 1 — which is the claim in the code comment, measured); dropping the article
-  scope; and removing the call from `openOrBeginJobDraft`.
+  scope; removing the call from `openOrBeginJobDraft`; dropping the current-revision condition
+  (a case added after review); and dropping the `rollback to savepoint` (the failed-statement case
+  then dies on "current transaction is aborted").
+- **Full suite** (`npm test`, first commit): 1,070 files passed, 7 failed. One was this stage's —
+  the isolation guard above, fixed. The other six fail alone too and need build output a fresh
+  worktree lacks: `cold-start-lazy-imports` and `pdf-bundle-trace` (no `api-dist/`), and four
+  fleet/overseer files (no built fleet client); none imports anything this stage touched.
+- **GPT Sol review (code, 2026-09-11): ship.** No reachable interleaving found that deletes a
+  protected revision or nulls a pointer; no lock-order cycle through `failRevisionIn`,
+  `publishRevisionIn`, `deleteGlossary`, `writeArtefacts`, article deletion or `settleExpired`;
+  savepoint semantics sound; the only production caller cannot select
+  `delete`. One P3, taken: nothing tested the current-revision condition on its own, because every
+  current fixture was also `published` — the eleventh case makes a `failed` revision current.
+  Not benchmarked: `delete`-mode latency inside a step start.
 - **Local inventory** (the shared dev database, 2026-09-11): 134 candidates across 48 articles
   (7 `draft`, 127 `failed`), 6,662 cascaded block rows, 9.9 MiB by `pg_column_size`; two articles
   above one batch; oldest 2026-09-01; no draft or failed revision was protected by a job or a

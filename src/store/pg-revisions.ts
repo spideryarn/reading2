@@ -2756,12 +2756,20 @@ async function sweepOnStepStart(
 ): Promise<DraftSweepOutcome> {
   const started = performance.now();
   const ms = () => Math.round(performance.now() - started);
+  /* **A savepoint written out, not `tx.transaction(…)`.** Drizzle's nested
+     transaction is a savepoint too, but it takes no options — a savepoint cannot
+     change the isolation level — and tests/store-transaction-isolation.test.ts
+     requires every `.transaction(…)` in src/store to name one, which is the right
+     rule for every other call. If `rollback to savepoint` itself fails (the
+     connection is gone), that error propagates and the step fails, as it would
+     have on its next statement anyway. */
+  await tx.execute(sql`savepoint draft_sweep`);
   try {
-    const swept = await tx.transaction((savepoint) =>
-      sweepAbandonedDrafts(savepoint, articleId, opts),
-    );
+    const swept = await sweepAbandonedDrafts(tx, articleId, opts);
+    await tx.execute(sql`release savepoint draft_sweep`);
     return { kind: "swept", ms: ms(), ...swept };
   } catch (err) {
+    await tx.execute(sql`rollback to savepoint draft_sweep`);
     return {
       kind: "failed",
       mode: opts.mode,

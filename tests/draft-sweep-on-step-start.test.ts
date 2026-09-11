@@ -307,6 +307,25 @@ describe("the on-demand draft sweep", () => {
     expect(await pointerOf(job.id)).toBe(opened.revisionId);
   });
 
+  it("recovers from a failed SQL statement too, which aborts the transaction until the savepoint", async () => {
+    /* A thrown JavaScript error leaves Postgres happy; a failed statement puts
+       the whole transaction into "current transaction is aborted" until
+       something rolls it back. An infinite threshold makes the enumeration ask
+       `make_interval` for an interval Postgres refuses to build — a real
+       statement error, and the draft still has to be minted after it. */
+    const doomed = await revision(a, "failed", OLD);
+    const job = await claimedJob(SLUG);
+    const opened = await openOrBeginJobDraft({
+      slug: SLUG,
+      job,
+      sweep: { mode: "delete", olderThanMs: Number.POSITIVE_INFINITY },
+    });
+    expect(opened.created).toBe(true);
+    expect(opened.sweep).toMatchObject({ kind: "failed", mode: "delete" });
+    expect((await surviving([doomed, opened.revisionId])).size).toBe(2);
+    expect(await pointerOf(job.id)).toBe(opened.revisionId);
+  });
+
   it("rechecks at delete time: protection committed after enumeration deletes nothing protected", async () => {
     const current = await revision(a, "published", OLD);
     await makeCurrent(a, current);
@@ -423,6 +442,23 @@ describe("the on-demand draft sweep", () => {
         isolationLevel: "repeatable read",
       }),
     ).rejects.toThrow(/read committed/i);
+  });
+
+  it("spares an article's current revision on the pointer alone, whatever its status says", async () => {
+    /* Not a state any writer produces — publication marks the row `published`
+       as it moves the pointer — which is exactly why the status test cannot be
+       the only thing standing between the sweep and an article's text. Without
+       this case, removing the current-revision condition left every other case
+       green. GPT Sol, P3 of the stage review. */
+    const currentButFailed = await revision(a, "failed", OLD);
+    await makeCurrent(a, currentButFailed);
+    const unprotected = await revision(a, "failed", OLD);
+    const outcome = await getDb().transaction(
+      (tx) => sweepAbandonedDrafts(tx, a, { mode: "delete" }),
+      READ_COMMITTED,
+    );
+    expect(outcome).toMatchObject({ candidates: 1, deleted: 1 });
+    expect([...(await surviving([currentButFailed, unprotected]))]).toEqual([currentButFailed]);
   });
 
   it("never names an article it was not given", async () => {
