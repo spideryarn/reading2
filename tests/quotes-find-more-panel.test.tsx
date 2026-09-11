@@ -175,4 +175,17 @@ describe("the banners", () => {
     expect(foot()).toBeNull();
     expect(buttons().some((b) => /find more/i.test(b))).toBe(false);
   });
+
+  it("labels a profiled list whose profile was deleted as older, not written for you", async () => {
+    await mount(
+      owner(list({ profileHash: "the-first-pass" }), {
+        profiled: true,
+        profileChanged: true,
+        hasProfile: false,
+      }),
+    );
+    const badge = host.querySelector(".prof-badge");
+    expect(badge?.textContent).toContain("older profile");
+    expect(badge?.textContent).not.toContain("written for you");
+  });
 });

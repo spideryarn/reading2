@@ -43,6 +43,7 @@ const { generateQuotes, inputFingerprint, noneDropped } = await import("../src/q
 
 const FIRST = "Writing is thinking, and there is no other kind of thinking.";
 const SECOND = "The mathematical marriage of convenience starts to fall apart here.";
+const THIRD = "Most people never had to write anything at all, and now they must.";
 
 function block(id: string, text: string): Block {
   return { id, tag: "p", kind: "text", text, words: 400, html: `<p>${text}</p>`, gistable: true };
@@ -94,6 +95,36 @@ describe("generateQuotes, on a Find more", () => {
     const run = await generateQuotes({ article: ARTICLE, previous: previous() });
     expect(run.dropped.unfound).toBe(1);
     expect(run.quotes.discarded.unfound).toBe(6);
+  });
+
+  it("keeps an old supplement quote in place although today's evidence filters its block out", async () => {
+    const supplement = { ...block("spya-bbbbbb", SECOND), treatment: "supplement" as const };
+    const third = block("spya-cccccc", THIRD);
+    const blocks = [BLOCKS[0]!, supplement, third];
+    const article = { ...ARTICLE, blocks };
+    const sourceHash = inputFingerprint(blocks, TREE, null);
+    const keptSupplement: Quote = {
+      id: "spya-keep02",
+      blockId: supplement.id,
+      text: SECOND,
+      start: 0,
+    };
+    answer = JSON.stringify({ quotes: [{ text: THIRD }] });
+
+    const run = await generateQuotes({
+      article,
+      previous: previous({
+        sourceHash,
+        quotes: [previous().quotes[0]!, keptSupplement],
+      }),
+    });
+
+    expect(run.quotes.quotes.map((q) => q.id)).toEqual([
+      "spya-keep01",
+      "spya-keep02",
+      expect.any(String),
+    ]);
+    expect(run.quotes.quotes[1]).toEqual(keptSupplement);
   });
 });
 

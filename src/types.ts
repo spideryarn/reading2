@@ -1102,14 +1102,6 @@ export interface QuoteDrops {
 }
 
 /**
- * The artefact. `data/<slug>/quotes.json`, stage 5h.
- *
- * **No `passes` and no append**, like `Ideas` and unlike `Glossary`. A piece has
- * a dozen quotable lines rather than an encyclopaedia of terms, so running the
- * step again replaces — which removes the FORBIDDEN checklist, `existingFor`,
- * the "a stale list is not appended to" rule and the DELETE route all at once.
- */
-/**
  * The most quotes one article's list may hold, across every Find more.
  *
  * Three long default passes (`MAX_QUOTES` in src/quotes.ts is one pass). It
@@ -1123,6 +1115,14 @@ export interface QuoteDrops {
  */
 export const MAX_QUOTES_TOTAL = 120;
 
+/**
+ * The artefact, stage 5h.
+ *
+ * **Appended to since 2026-09-11** — a Find more on a list from the same
+ * article keeps every quote and adds more (`passes`, `lastAdded`), and only a
+ * stale list is replaced. Until then it replaced, like `Ideas`. src/quotes.ts
+ * § existingFor.
+ */
 export interface Quotes {
   version: string;
   generator: string;

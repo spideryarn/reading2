@@ -3152,11 +3152,11 @@ export const STEPS: { [K in StepName]: PipelineStep<K> } = {
       };
     },
     async run(ctx, store) {
-      /* **The store, not a path.** The only thing the previous artefact is read
-         for is its ids, and only when `sourceHash` matches — so after landing D
-         this stage would keep working in every visible way while every
-         `?quote=` link a reader holds went dead. `previousQuotesFrom` refuses
-         when there is a previous artefact it cannot read, and returns `null`
+      /* **The store, not a path.** The previous artefact is the baseline Find
+         more extends — its quotes, counters, stamps and ids — when `sourceHash`
+         matches. Dropping this read would turn an append back into a replace and
+         make every `?quote=` link a reader holds go dead. `previousQuotesFrom`
+         refuses when there is an artefact it cannot read, and returns `null`
          quietly when there is none. */
       const previous = await previousQuotesFrom(store, ctx.slug);
       const run = await generateQuotes({

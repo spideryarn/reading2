@@ -69,8 +69,8 @@
  * its id, and the model is asked for more, with the taken lines listed. That is
  * the glossary's shape (src/glossary.ts § existingFor), reused rather than
  * reinvented, with one deliberate difference — see `existingFor` below. A list
- * the article has moved out from under is still replaced, with `idsByText`
- * carrying the reader's `?quote=` links across.
+ * the article has moved out from under is still replaced, with every id minted
+ * fresh so a reader's `?quote=` link cannot silently move to changed words.
  *
  * See docs/plans/260911a-quotes-find-more-and-a-fade-that-carries-priority.md,
  * docs/plans/260831j-quotes-mode.md and docs/project/quotes.md.
@@ -681,12 +681,11 @@ export interface TakenSpan {
 /**
  * The spans of the quotes an append is extending, for `dedupeOverlaps`.
  *
- * `start` is on every quote written since the stage began storing it; for one
- * without, the stored text is the block's own slice (`place`), so its first
- * occurrence in the block is where it is. A quote whose block the article no
- * longer has cannot clash with anything and is simply absent here — but an
- * append only happens against an unmoved article (`existingFor`), so that is
- * a belt rather than a case.
+ * `start` disambiguates repeats when it exists; either way the stored words are
+ * re-found with the same matcher that admitted them. A quote whose block the
+ * article no longer has cannot clash with anything and is simply absent here —
+ * but an append only happens against an unmoved article (`existingFor`), so
+ * that is a belt rather than a case.
  */
 export function takenSpans(existing: readonly Quote[], blocks: readonly Block[]): TakenSpan[] {
   const text = new Map(blocks.map((b) => [b.id, b.text] as const));
@@ -694,9 +693,15 @@ export function takenSpans(existing: readonly Quote[], blocks: readonly Block[])
   for (const quote of existing) {
     const body = text.get(quote.blockId);
     if (body === undefined) continue;
-    const start = quote.start ?? body.indexOf(quote.text);
-    if (start < 0) continue;
-    out.push({ blockId: quote.blockId, span: { start, end: start + quote.text.length } });
+    /* Re-find it through the same matcher that admitted it; `start` is only the
+       tie-break between repeated passages, never an anchor (Quote in types.ts).
+       Early artefacts can lack it and can carry the model's straight dash or
+       quote where the article has a curly one. `indexOf`, or trusting
+       `start + text.length`, then misses the existing span and lets Find more
+       add an overlapping version. The article's span supplies both ends. */
+    const span = findQuote(body, quote.text, quote.start, "spaced");
+    if (!span) continue;
+    out.push({ blockId: quote.blockId, span });
   }
   return out;
 }
@@ -728,6 +733,54 @@ export function inDocumentOrder(quotes: Quote[], blocks: readonly Block[]): Quot
         a.rank - b.rank || (a.quote.start ?? 0) - (b.quote.start ?? 0) || a.i - b.i,
     )
     .map((x) => x.quote);
+}
+
+/**
+ * Put a pass's new quotes into document order around the list the reader
+ * already has, without ever reordering that existing list.
+ *
+ * A valid `Quotes` artefact is already in document order, so sorting the whole
+ * concatenated list and merging this way have the same visible result. The
+ * distinction is a preservation guarantee: if an old or hand-migrated artefact
+ * is not perfectly ordered, Find more still cannot change the order the reader
+ * had. Existing wins a tie, just as it wins an overlapping span.
+ */
+function mergeInDocumentOrder(
+  existing: readonly Quote[],
+  added: readonly Quote[],
+  blocks: readonly Block[],
+): Quote[] {
+  const position = new Map<BlockId, number>();
+  const text = new Map<BlockId, string>();
+  for (const [i, block] of blocks.entries()) {
+    position.set(block.id, i);
+    text.set(block.id, block.text);
+  }
+  const key = (quote: Quote): readonly [number, number] => {
+    const body = text.get(quote.blockId);
+    const recovered =
+      quote.start === undefined && body !== undefined
+        ? findQuote(body, quote.text, undefined, "spaced")?.start
+        : undefined;
+    return [
+      position.get(quote.blockId) ?? Number.MAX_SAFE_INTEGER,
+      quote.start ?? recovered ?? 0,
+    ];
+  };
+  const before = (a: Quote, b: Quote): boolean => {
+    const [aBlock, aStart] = key(a);
+    const [bBlock, bStart] = key(b);
+    return aBlock < bBlock || (aBlock === bBlock && aStart < bStart);
+  };
+
+  const out: Quote[] = [];
+  let next = 0;
+  for (const kept of existing) {
+    while (next < added.length && before(added[next]!, kept)) out.push(added[next++]!);
+    out.push(kept);
+  }
+  while (next < added.length) out.push(added[next++]!);
+  return out;
 }
 
 /**
@@ -797,8 +850,8 @@ function inheritIds(fresh: Quote[], inherit: Map<string, string> | null): Quote[
  * **Only the article moving refuses an append.** A list whose `sourceHash` no
  * longer matches holds block ids that may be gone and words that may no longer
  * be in the piece, so extending it would add true lines to a list that is no
- * longer true — that one is replaced, with `idsByText` carrying the reader's
- * links across.
+ * longer true — that one is replaced with fresh ids. Inheriting an id across
+ * changed source text would silently move a reader's link to different words.
  *
  * **An older prompt version does not refuse, and that is the deliberate
  * difference from the glossary.** There, appending across a version "certified
@@ -847,7 +900,22 @@ export function buildQuotes(
   parsed: { quotes?: unknown },
   opts: {
     slug: string;
+    /**
+     * The blocks the model was shown and new quotes may be found in. This is the
+     * body-evidence subset in production.
+     */
     blocks: readonly Block[];
+    /**
+     * Every article block, solely for the final document-order merge.
+     *
+     * A quote kept from an older pass may now be outside `blocks` because the
+     * body-evidence policy changed without the article changing. Sorting the
+     * merged list against the evidence subset would rank that existing quote as
+     * missing and move it to the end — altering the list on a request for more.
+     * Optional only for the pure helper's existing callers; production passes
+     * the full article.
+     */
+    documentBlocks?: readonly Block[];
     sourceHash: string;
     /** The rendered profile this was written from, or null for none. */
     profile?: string | null;
@@ -856,7 +924,8 @@ export function buildQuotes(
     inherit?: Map<string, string> | null;
     /**
      * The list this run is **appending to** — `existingFor`. Mutually exclusive
-     * with `inherit` in practice: `generateQuotes` computes one or the other.
+     * with `inherit`: production passes `existing` or neither; `inherit` remains
+     * only for the tested same-article rewrite helper.
      */
     existing?: Quotes | null;
     dropped: Dropped;
@@ -901,7 +970,8 @@ export function buildQuotes(
      happened to enumerate first; cutting in reading order at least fails
      legibly, as "it stops part-way down the piece". `overCap` counts it either
      way, which is what makes the choice checkable rather than a preference. */
-  const ordered = inDocumentOrder(inheritIds(minted, opts.inherit ?? null), opts.blocks);
+  const documentBlocks = opts.documentBlocks ?? opts.blocks;
+  const ordered = inDocumentOrder(inheritIds(minted, opts.inherit ?? null), documentBlocks);
   if (ordered.length > MAX_QUOTES) opts.dropped.overCap += ordered.length - MAX_QUOTES;
   /* **The total ceiling cuts only new lines**, in document order for the same
      reason the per-pass cap does, and never a quote the reader already has. */
@@ -958,7 +1028,7 @@ export function buildQuotes(
       : opts.profile
         ? hashProfile(opts.profile)
         : null,
-    quotes: opts.existing ? inDocumentOrder([...previous, ...added], opts.blocks) : added,
+    quotes: opts.existing ? mergeInDocumentOrder(previous, added, documentBlocks) : added,
     /* A copy, not the live object. `dropped` is threaded through by reference
        so the counters accumulate across `place` and `dedupeOverlaps`, and
        storing the reference would let a later mutation edit an artefact that
@@ -1038,9 +1108,9 @@ export class QuotesBaselineUnusable extends Error {
  * The previous quotes, **from the store** — the only thing this stage reads the
  * old artefact for, and the thing landing D would otherwise take away.
  *
- * **Four states, and the same table as the glossary's and the ideas'**, for the
- * same reason: this stage inherits ids **only when `sourceHash` matches**, so a
- * mismatch is a legitimate refusal to inherit rather than a fault.
+ * **Four states, and the same table as the glossary's and the ideas'**. This
+ * stage appends **only when `sourceHash` matches**; a mismatch is a legitimate
+ * replace with fresh ids rather than a fault.
  *
  * | | what it means | what happens |
  * |---|---|---|
@@ -1050,9 +1120,8 @@ export class QuotesBaselineUnusable extends Error {
  * | the store read throws | an infrastructure fault | **propagates; the stage fails** |
  *
  * Row two is `generateQuotes`'s to decide and not this function's, which is why
- * this hands back the artefact rather than a map of ids: an id inherited across
- * a re-extraction would carry a reader's link onto a quote from a different
- * text, and the comparison that stops that wants the whole artefact.
+ * this hands back the artefact rather than a map of ids: the source comparison
+ * decides between preserving the whole list and replacing it with fresh ids.
  *
  * Row three is the one that has to be told from row one. A truncated
  * `quotes.json` still holds every id; a person with a backup can put it back,
@@ -1404,6 +1473,7 @@ export async function generateQuotes(opts: {
       quotes: buildQuotes({ quotes: [] }, {
         slug: tree.slug,
         blocks: evidence,
+        documentBlocks: blocks,
         sourceHash,
         profile: opts.profile ?? null,
         elapsedMs: 0,
@@ -1528,6 +1598,7 @@ export async function generateQuotes(opts: {
   const quotes = buildQuotes(parseJson(raw), {
     slug: tree.slug,
     blocks: evidence,
+    documentBlocks: blocks,
     sourceHash,
     profile: opts.profile ?? null,
     elapsedMs: Date.now() - started,

@@ -133,6 +133,78 @@ describe("buildQuotes, appending", () => {
     expect(dropped.overlapping).toBe(1);
   });
 
+  it("re-finds a legacy quote without start before rejecting a typographically folded overlap", () => {
+    const articleText = "Writing — thinking is the practice that makes every later conclusion possible.";
+    const legacyText = "Writing - thinking is the practice that makes every later conclusion possible.";
+    const longer = `${articleText} Everything else follows.`;
+    const blocks = [block("spya-legacy", longer)];
+    const kept: Quote = {
+      id: "spya-keep02",
+      blockId: "spya-legacy",
+      /* Early quote artefacts could preserve the model's typography and have no
+         disambiguating start. Neither difference permits Find more to add the
+         same passage again. */
+      text: legacyText,
+    };
+    const dropped = drops();
+    const built = buildQuotes(
+      { quotes: [{ text: longer }] },
+      {
+        ...opts,
+        blocks,
+        dropped,
+        existing: previous({ quotes: [kept] }),
+      },
+    );
+    expect(built.quotes).toEqual([kept]);
+    expect(dropped.overlapping).toBe(1);
+  });
+
+  it("keeps an existing quote in document order when its block is outside today's evidence", () => {
+    const keptA = previous().quotes[0]!;
+    const keptB: Quote = {
+      id: "spya-keep02",
+      blockId: "spya-bbbbbb",
+      text: SECOND,
+      start: 0,
+      striking: 0.8,
+    };
+    const built = buildQuotes(
+      { quotes: [{ text: THIRD }] },
+      {
+        ...opts,
+        /* Simulates `isBodyEvidence` filtering B out after the earlier pass.
+           It remains in the article and in the full document-order ruler. */
+        blocks: [BLOCKS[0]!, BLOCKS[2]!],
+        documentBlocks: BLOCKS,
+        dropped: drops(),
+        existing: previous({ quotes: [keptA, keptB] }),
+      },
+    );
+    expect(built.quotes.map((q) => q.id)).toEqual([keptA.id, keptB.id, expect.any(String)]);
+    expect(built.quotes[0]).toBe(keptA);
+    expect(built.quotes[1]).toBe(keptB);
+  });
+
+  it("never reorders the existing list, even if a legacy artefact was not perfectly sorted", () => {
+    const keptC: Quote = {
+      id: "spya-keep03",
+      blockId: "spya-cccccc",
+      text: THIRD,
+      start: 0,
+    };
+    const keptA = previous().quotes[0]!;
+    const built = buildQuotes(
+      { quotes: [{ text: SECOND }] },
+      {
+        ...opts,
+        dropped: drops(),
+        existing: previous({ quotes: [keptC, keptA] }),
+      },
+    );
+    expect(built.quotes.filter((q) => q.id.startsWith("spya-keep"))).toEqual([keptC, keptA]);
+  });
+
   it("treats the same line again as an overlap, not a second copy", () => {
     const built = buildQuotes({ quotes: [{ text: FIRST }] }, {
       ...opts,
