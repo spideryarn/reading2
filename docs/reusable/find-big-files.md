@@ -74,9 +74,10 @@ awk '/^(export )?(async )?function |^(export )?const [a-zA-Z0-9_]+ = (async )?\(
 Then cut the top span out with `sed -n 'START,ENDp'` and run cloc on *that*, because the span
 lengths this prints are raw lines and inherit the same comment problem as the whole-file ranking.
 The worked example here is [`src/routes.ts`](../../src/routes.ts) § `serveAuthenticatedApi`: the
-file holds 89 top-level functions, which is fine, and that one function is 684 lines of code and
-about 109 branches of a single if/else chain that every new endpoint appends to. The file was never
-the thing to fix.
+file held 89 top-level functions, which was fine, and that one function was 684 lines of code and
+about 109 branches of a single if/else chain that every new endpoint appended to. The file was never
+the thing to fix. (It has since been split into a route table, finished 2026-09-11 at a70e4529, and
+the function is 75 lines; the lesson stands, the example is history.)
 
 ## The traps
 
