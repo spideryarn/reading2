@@ -6771,8 +6771,9 @@ const ONE_COMMENT_PATTERN = /^\/api\/comments\/([\w.%-]+)\/([\w.%-]+)$/;
  * **bottom of the chain, taken upward**: billing was its last four guards, jobs
  * and uploads the nine immediately above those, referee the eight above them,
  * search the four above *those*, chat and the live sessions the twelve above
- * those again, comments the six above chat, and the six from sketch to the two
- * paid pictures (`similar`, `projection`) above comments — and asking the table
+ * those again, comments the six above chat, the six from sketch to the two
+ * paid pictures (`similar`, `projection`) above comments, and the six from
+ * `ideas` to the quiz's mark above sketch — and asking the table
  * after every remaining guard and before the terminal 404 puts each of them in
  * exactly the position it already had. The
  * count is deliberately not written here: it changes once per slice, and a
@@ -6781,7 +6782,7 @@ const ONE_COMMENT_PATTERN = /^\/api\/comments\/([\w.%-]+)\/([\w.%-]+)$/;
  * tests/authenticated-api-route-contract.test.ts is where the inventory lives.
  *
  * **So the rows are in chain order, and prepending is how a domain arrives.**
- * The next slice up goes above the sketch row, not below it — the table's
+ * The next slice up goes above the ideas row, not below it — the table's
  * order *is* the chain's order, continued. Taking the slice contiguously is also what
  * preserves the one interleave here for free: `/api/uploads` and
  * `/api/uploads/:id` sit *between* `GET /api/jobs` and `POST /api/jobs`, which is
@@ -6807,6 +6808,137 @@ const ONE_COMMENT_PATTERN = /^\/api\/comments\/([\w.%-]+)\/([\w.%-]+)$/;
  * **No `g` or `y` flag**, refused by `assertDispatchableRoutes` below.
  */
 const AUTH_ROUTES: readonly AuthRoute[] = [
+  /* Read only, and no DELETE beside it: `ideas` replaces rather than appends,
+     so re-running the step already *is* "start again". The glossary has a delete
+     precisely because running it again would add to the list it is trying to
+     throw away — though since 2026-09-05 nothing in the client calls it, and
+     this route's shape is the one the glossary's button was measured against
+     when it went (docs/project/glossary.md § Finding more). Asking for these is
+     POST /api/jobs { slug, steps: ["ideas"] }. */
+  {
+    kind: "pattern",
+    method: "GET",
+    pattern: /^\/api\/ideas\/([\w.%-]+)$/,
+    handler: async ({ request: { res } }, captures) => {
+      {
+        const at = slugPart(captures, 1);
+        send(res, 200, await withProfileChanged<IdeasResponse>(at, () => loadIdeas(at), (found) => found.ideas));
+      }
+    },
+  },
+
+  /* Read only, and no DELETE, for exactly the reason `ideas` above has none:
+     the step replaces rather than appends, so re-running it already *is* "find
+     them again". POST /api/jobs { slug, steps: ["quotes"] }. */
+  {
+    kind: "pattern",
+    method: "GET",
+    pattern: /^\/api\/quotes\/([\w.%-]+)$/,
+    handler: async ({ request: { res } }, captures) => {
+      {
+        const at = slugPart(captures, 1);
+        send(
+          res,
+          200,
+          await withProfileChanged<QuotesResponse>(
+            at,
+            () => loadQuotes(at),
+            (found) => found.quotes,
+            /* Unlike the other profiled artefacts, Find more appends. If the
+               profile was deleted, the next pass is unprofiled but the list
+               keeps its first-pass hash; calling that mixed list "written for
+               you" would be false. */
+            true,
+          ),
+        );
+      }
+    },
+  },
+
+  /* The timeline — docs/project/timeline.md. GET only, and no DELETE, for the
+     reason `ideas` above has none: the step replaces rather than appends, so
+     rebuilding it is
+     POST /api/jobs { slug, steps: ["timeline"] }. */
+  {
+    kind: "pattern",
+    method: "GET",
+    pattern: /^\/api\/timeline\/([\w.%-]+)$/,
+    handler: async ({ request: { res } }, captures) => {
+      /* **No `withProfileChanged`**, unlike its five neighbours, and that is
+         the decision rather than an omission: this artefact was never written
+         for a profile, so there is no third staleness fact to add.
+         `TimelineResponse` in src/types.ts has two fields where the others have
+         three. docs/plans/260831i-timeline-mode.md § Freshness. */
+      send(res, 200, await loadTimeline(slugPart(captures, 1)));
+    },
+  },
+
+  /* The quiz. GET only for the artefact, for the reason `ideas` and `timeline`
+     have no DELETE: the step replaces rather than appends, so rewriting the
+     questions is POST /api/jobs { slug, steps: ["quiz"] }.
+
+     `mark` below is the exception, and it is the same exception the glossary's
+     `lookup` is: *writing* the questions is one call over a whole article and so
+     is a job, but marking ONE answer is a single question with a reader sitting
+     in front of it. It stores nothing — see `markOneAnswer`. */
+  {
+    kind: "pattern",
+    method: "GET",
+    pattern: /^\/api\/quiz\/([\w.%-]+)$/,
+    handler: async ({ request: { res } }, captures) => {
+      /* **No `withProfileChanged`**, for `timeline`'s reason rather than by
+         omission: this artefact was never written for a profile, so there is no
+         third staleness fact to add and offering one would be a banner about a
+         thing that cannot have happened. `QuizResponse` in src/types.ts has two
+         fields where `IdeasResponse` has three.
+         docs/plans/260831al-review-quiz-sub-mode.md § No profile in v1. */
+      send(res, 200, await loadQuiz(slugPart(captures, 1)));
+    },
+  },
+
+  /* What the rest of the web says about this piece —
+     docs/plans/260905f-debate-mode-what-the-web-says-about-this-piece.md. GET
+     only, and no DELETE, for the reason `ideas`, `quotes` and `timeline` have
+     none: the step replaces rather than appends, so asking the web again is
+     POST /api/jobs { slug, steps: ["debate"] }. That is also the only way to
+     start one — this route never spends. */
+  {
+    kind: "pattern",
+    method: "GET",
+    pattern: /^\/api\/debate\/([\w.%-]+)$/,
+    handler: async ({ request: { res } }, captures) => {
+      /* **No `withProfileChanged`**, for `timeline`'s and `quiz`'s reason: who
+         is reading does not change what the web said, so there is no third
+         staleness fact and offering one would be a banner about a thing that
+         cannot have happened. `DebateResponse` in src/types.ts has two fields.
+
+         **And nothing here about how old the search is.** `searchedAt` travels
+         on the artefact and the panel prints it; it is provenance rather than
+         staleness, and a year-old shared link must not have its artefact
+         declared invalid by the clock. */
+      send(res, 200, await loadDebate(slugPart(captures, 1)));
+    },
+  },
+
+  {
+    kind: "pattern",
+    method: "POST",
+    pattern: /^\/api\/quiz\/([\w.%-]+)\/mark$/,
+    handler: async ({ request: { req, res } }, captures) => {
+      /* One of the handful of endpoints here that does not answer with JSON —
+         it writes its own headers and ends the response. It is still reached
+         through `send` for its *failures*: every validation and both 409s throw
+         before a header is written, so a stale batch is an ordinary 409 rather
+         than an error frame the client would have to parse. */
+      const at = slugPart(captures, 1);
+      const markBody = await readBody(req);
+      /* **The article goes on every row this request writes**, or "what has
+         this piece cost me" would cover writing the questions and none of the
+         answering. src/ai-spend.ts § `withSpendAttribution`. */
+      await withSpendAttribution({ articleSlug: at }, () => markOneAnswer(at, markBody, res));
+    },
+  },
+
   /* The Sketch diagram — docs/project/diagram.md § Sketch. GET only, like the
      artefact reads still in the chain below: drawing one is
      POST /api/jobs { slug, steps: ["sketch"] }, which is also how "draw it
@@ -6903,7 +7035,7 @@ const AUTH_ROUTES: readonly AuthRoute[] = [
      collect it when the job lands. Refetching the whole article for that re-reads
      every block and the whole tree; see docs/plans/260827am-glossary-read-latency.md for
      what that costs on Postgres. */
-  /* Read only, like the ideas GET in the chain below and for the same reason:
+  /* Read only, like the ideas row above and for the same reason:
      running the step again replaces the artefact, so "start over" already has
      a spelling. Asking for one is POST /api/jobs { slug, steps: ["arc"] }.
 
@@ -8266,40 +8398,6 @@ export async function serveAuthenticatedApi(
      and this is one, so no term id can reach it and no article can be named
      `find`. src/term-lookup.ts § `makeAskAboutTerm`. */
   const askTerm = /^\/api\/glossary\/([\w.%-]+)\/ask$/.exec(path);
-  /* Read only, and no DELETE beside it: `ideas` replaces rather than appends,
-     so re-running the step already *is* "start again". The glossary has a delete
-     precisely because running it again would add to the list it is trying to
-     throw away — though since 2026-09-05 nothing in the client calls it, and
-     this route's shape is the one the glossary's button was measured against
-     when it went (docs/project/glossary.md § Finding more). Asking for these is
-     POST /api/jobs { slug, steps: ["ideas"] }. */
-  const ideas = /^\/api\/ideas\/([\w.%-]+)$/.exec(path);
-  /* Read only, and no DELETE, for exactly the reason `ideas` above has none:
-     the step replaces rather than appends, so re-running it already *is* "find
-     them again". POST /api/jobs { slug, steps: ["quotes"] }. */
-  const quotes = /^\/api\/quotes\/([\w.%-]+)$/.exec(path);
-  /* The timeline — docs/project/timeline.md. GET only, and no DELETE, for the
-     reason `ideas` above has none: the step replaces rather than appends, so
-     rebuilding it is
-     POST /api/jobs { slug, steps: ["timeline"] }. */
-  const timeline = /^\/api\/timeline\/([\w.%-]+)$/.exec(path);
-  /* The quiz. GET only for the artefact, for the reason `ideas` and `timeline`
-     have no DELETE: the step replaces rather than appends, so rewriting the
-     questions is POST /api/jobs { slug, steps: ["quiz"] }.
-
-     `mark` below is the exception, and it is the same exception the glossary's
-     `lookup` is: *writing* the questions is one call over a whole article and so
-     is a job, but marking ONE answer is a single question with a reader sitting
-     in front of it. It stores nothing — see `markOneAnswer`. */
-  const quiz = /^\/api\/quiz\/([\w.%-]+)$/.exec(path);
-  const quizMark = /^\/api\/quiz\/([\w.%-]+)\/mark$/.exec(path);
-  /* What the rest of the web says about this piece —
-     docs/plans/260905f-debate-mode-what-the-web-says-about-this-piece.md. GET
-     only, and no DELETE, for the reason `ideas`, `quotes` and `timeline` have
-     none: the step replaces rather than appends, so asking the web again is
-     POST /api/jobs { slug, steps: ["debate"] }. That is also the only way to
-     start one — this route never spends. */
-  const debate = /^\/api\/debate\/([\w.%-]+)$/.exec(path);
   const source = /^\/api\/source\/([\w.%-]+)$/.exec(path);
   /* **One of the article's own pictures, out of our bucket** —
      `sendArticleAsset`, and `assetPath` in src/asset-delivery.ts is the same
@@ -8320,16 +8418,16 @@ export async function serveAuthenticatedApi(
      the client parses as JSON. `sendExport` has the rest.
      docs/plans/260901h-export-article-data.md. */
   const exportBundle = /^\/api\/export\/([\w.%-]+)$/.exec(path);
-  /* The sketch, illustrated, arc, similar, projection, comments, chat,
-     live-session, search, referee, jobs, uploads and billing matchers used to be
-     declared here and handled at the very end of the chain. (The first five were
-     declared between `debate` and `source`; the rest here.) They are the rows of
-     `AUTH_ROUTES` above, in that same order, and the table is consulted after
-     every guard below and before the terminal 404 — the position they already
-     had, so the move reorders nothing. `exportBundle` is still the last matcher
-     this chain declares, but declaration order is not dispatch order: the last
-     *guard* is `quizMark`, so the block from `ideas` to `quizMark` is the next
-     slice up. */
+  /* The ideas, quotes, timeline, quiz, quiz-mark, debate, sketch, illustrated,
+     arc, similar, projection, comments, chat, live-session, search, referee,
+     jobs, uploads and billing matchers used to be declared here and handled at
+     the very end of the chain. (The first eleven were declared between
+     `askTerm` and `source`; the rest here.) They are the rows of `AUTH_ROUTES`
+     above, in dispatch order, and the table is consulted after every guard
+     below and before the terminal 404 — the position they already had, so the
+     move reorders nothing. `exportBundle` is still the last matcher this chain
+     declares, but declaration order is not dispatch order: the last *guard* is
+     `askTerm`, so the four glossary guards are the next slice up. */
 
     /* **The second gate, and it guards a prefix rather than a route.**
        Everything under `/api/admin/` is refused to everybody but the one
@@ -8720,84 +8818,12 @@ export async function serveAuthenticatedApi(
       await withSpendAttribution({ articleSlug: at }, () => streamAskedTerm(at, askBody?.term, res));
       return;
     }
-    if (ideas && req.method === "GET") {
-      {
-        const at = slugPart(ideas, 1);
-        send(res, 200, await withProfileChanged<IdeasResponse>(at, () => loadIdeas(at), (found) => found.ideas));
-      }
-      return;
-    }
-    if (quotes && req.method === "GET") {
-      {
-        const at = slugPart(quotes, 1);
-        send(
-          res,
-          200,
-          await withProfileChanged<QuotesResponse>(
-            at,
-            () => loadQuotes(at),
-            (found) => found.quotes,
-            /* Unlike the other profiled artefacts, Find more appends. If the
-               profile was deleted, the next pass is unprofiled but the list
-               keeps its first-pass hash; calling that mixed list "written for
-               you" would be false. */
-            true,
-          ),
-        );
-      }
-      return;
-    }
-    if (timeline && req.method === "GET") {
-      /* **No `withProfileChanged`**, unlike its five neighbours, and that is
-         the decision rather than an omission: this artefact was never written
-         for a profile, so there is no third staleness fact to add.
-         `TimelineResponse` in src/types.ts has two fields where the others have
-         three. docs/plans/260831i-timeline-mode.md § Freshness. */
-      send(res, 200, await loadTimeline(slugPart(timeline, 1)));
-      return;
-    }
-    if (quiz && req.method === "GET") {
-      /* **No `withProfileChanged`**, for `timeline`'s reason rather than by
-         omission: this artefact was never written for a profile, so there is no
-         third staleness fact to add and offering one would be a banner about a
-         thing that cannot have happened. `QuizResponse` in src/types.ts has two
-         fields where `IdeasResponse` has three.
-         docs/plans/260831al-review-quiz-sub-mode.md § No profile in v1. */
-      send(res, 200, await loadQuiz(slugPart(quiz, 1)));
-      return;
-    }
-    if (debate && req.method === "GET") {
-      /* **No `withProfileChanged`**, for `timeline`'s and `quiz`'s reason: who
-         is reading does not change what the web said, so there is no third
-         staleness fact and offering one would be a banner about a thing that
-         cannot have happened. `DebateResponse` in src/types.ts has two fields.
-
-         **And nothing here about how old the search is.** `searchedAt` travels
-         on the artefact and the panel prints it; it is provenance rather than
-         staleness, and a year-old shared link must not have its artefact
-         declared invalid by the clock. */
-      send(res, 200, await loadDebate(slugPart(debate, 1)));
-      return;
-    }
-    if (quizMark && req.method === "POST") {
-      /* One of the handful of endpoints here that does not answer with JSON —
-         it writes its own headers and ends the response. It is still reached
-         through `send` for its *failures*: every validation and both 409s throw
-         before a header is written, so a stale batch is an ordinary 409 rather
-         than an error frame the client would have to parse. */
-      const at = slugPart(quizMark, 1);
-      const markBody = await readBody(req);
-      /* **The article goes on every row this request writes**, or "what has
-         this piece cost me" would cover writing the questions and none of the
-         answering. src/ai-spend.ts § `withSpendAttribution`. */
-      await withSpendAttribution({ articleSlug: at }, () => markOneAnswer(at, markBody, res));
-      return;
-    }
 
     /**
      * **The table, asked after every guard above and before the 404 below.**
      *
-     * Sketch, illustrated, arc, the two paid pictures (similar and projection),
+     * Ideas, quotes, timeline, the quiz and its mark, debate, sketch,
+     * illustrated, arc, the two paid pictures (similar and projection),
      * comments, chat, the live sessions, search, referee, jobs, uploads and
      * billing live in `AUTH_ROUTES` (above `serveAuthenticatedApi`) rather than
      * in this chain.

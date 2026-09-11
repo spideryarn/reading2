@@ -1253,6 +1253,36 @@ export const STORE_MIGRATION: Readonly<Record<string, StoreEntry>> = {
       "`scratchArticleInPg` and that copy step is the only condemned module it reaches: " +
       "`openRouterStream` is stubbed, so no model is called and no ledger row is written.",
   },
+  /**
+   * **Written 2026-09-11, after the witness ran**, so `static-only` for the same
+   * reason as the entries above. Born on Postgres, so collateral.
+   */
+  "tests/glossary-stream-lifetime.test.ts": {
+    category: "shared-mechanism-collateral",
+    mechanisms: ["fixture-loader"],
+    evidence: "static-only",
+    reason:
+      "`POST /api/glossary/:slug/:termId/lookup` and `POST /api/glossary/:slug/ask` held open " +
+      "mid-stream, so that moving the glossary guards into `AUTH_ROUTES` cannot quietly turn an " +
+      "awaited stream into a launched one. It seeds through `scratchArticleInPg`, with one added " +
+      "glossary entry, and that copy step is the only condemned module it reaches: " +
+      "`explainStream` is stubbed, so no model is called and no ledger row is written. The " +
+      "lookup's stored answer is read back from `glossary_lookups` directly.",
+  },
+  /**
+   * **Written 2026-09-11, after the witness ran**, so `static-only` for the same
+   * reason as the entries above. Born on Postgres, so collateral.
+   */
+  "tests/quiz-mark-stream-lifetime.test.ts": {
+    category: "shared-mechanism-collateral",
+    mechanisms: ["fixture-loader"],
+    evidence: "static-only",
+    reason:
+      "`POST /api/quiz/:slug/mark` held open mid-stream, so that moving the `quizMark` guard into " +
+      "`AUTH_ROUTES` cannot quietly turn an awaited stream into a launched one. It seeds a quiz " +
+      "through `scratchArticleInPg`, and that copy step is the only condemned module it reaches: " +
+      "`markAnswerStream` is stubbed, so no model is called and no ledger row is written.",
+  },
   "tests/paid-single-flight-lifetime.test.ts": {
     category: "shared-mechanism-collateral",
     mechanisms: ["fixture-loader"],
@@ -2518,6 +2548,9 @@ export const TEST_LANES: Readonly<Record<string, TestLane>> = {
   /* Seeds two articles, writes lookups and deletes one article mid-stream;
      the provider is a stubbed `fetch`. */
   "tests/glossary-lookup-stream-route.test.ts": "private-postgres",
+  /* Written 2026-09-11 for the last slice of the `AUTH_ROUTES` migration. Seeds
+     one article and deletes only its own entry's lookup row; no model is called. */
+  "tests/glossary-stream-lifetime.test.ts": "private-postgres",
   "tests/glossary-delete-then-rebuild.test.ts": "private-postgres",
   "tests/glossary-ideas-baseline.test.ts": "private-postgres",
   /* **The scan could not see this one, and T-D's poisoned `DATABASE_URL` found
@@ -2686,6 +2719,9 @@ export const TEST_LANES: Readonly<Record<string, TestLane>> = {
      failure. No Auth service and no Storage beyond the corpus bytes the seeder
      dedups, so `shared-services` would buy nothing. */
   "tests/quiz-mark-route.test.ts": "private-postgres",
+  /* Written 2026-09-11 for the last slice of the `AUTH_ROUTES` migration. Seeds
+     one article with a quiz and only reads it; no model is called. */
+  "tests/quiz-mark-stream-lifetime.test.ts": "private-postgres",
   /* Storage, not Postgres — see `an-upload-is-queued-…` above. This is the
      worst of the four: it removes and re-plants **one deterministic canonical
      key** with deliberately corrupt bytes, so two concurrent runs can destroy
