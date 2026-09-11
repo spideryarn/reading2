@@ -89,6 +89,7 @@ export function RememberBand({
   onJump(id: BlockId): void;
   onMode(next: Mode): void;
 }) {
+  useRenderCount("RememberBand");
   const [{ remember, thread }, setBoth] = useQueryStates({
     remember: rememberParam,
     thread: threadParam,
@@ -161,6 +162,7 @@ function QuizSubBand({
   blocks: Map<string, string>;
   onJump(id: BlockId): void;
 }) {
+  useRenderCount("QuizSubBand");
   const owner = useQuiz(slug);
   return <QuizPanel owner={owner} subMode={subMode} blocks={blocks} onJump={onJump} />;
 }

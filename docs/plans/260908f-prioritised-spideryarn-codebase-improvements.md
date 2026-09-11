@@ -5,7 +5,8 @@ Status as of 2026-09-08: **researched umbrella plan; implementation not started*
 results are recorded at the end. This is a plan-only commission: completing this document does
 not authorise implementing every product decision below.
 
-**Progress since:** B's first stage (contain Debate) built 2026-09-10 — see § B. P's study protocol
+**Progress since:** B's first stage (contain Debate) built 2026-09-10, and its second (every band
+contained) 2026-09-11 — see § B. P's study protocol
 prepared the same day — see § P. D (Knip without build output) built the same day — see § D.
 L (the unknown-throw mapper) investigated the same day and closed with no change — see § L.
 I (retire the revision alias) built the same day — see § I.
@@ -267,11 +268,12 @@ product option.
 
 ## B — a broken mode should leave the article readable
 
-**Proved from code:** there is one `<FeatureBoundary>` call site, around Ideas in
-`src/web/reader/Reader.tsx:1590`. `MODES` currently has **15 entries**:
+**Proved from code at this plan's baseline:** there was one `<FeatureBoundary>` call site, around
+Ideas. `MODES` then had **15 entries**:
 `plain, hierarchy, chat, glossary, search, referee, summary, diagram, ideas, remember, outline,
 quotes, timeline, debate, structure`. That is not fifteen identical panels: `plain` and `hierarchy`
 have no independent band, and conversation modes include additional controller/session concerns.
+Outline was subsequently folded into Structure, leaving 14 modes before this stage was built.
 
 The earlier statement that every controller still needs extracting is stale: mode files now live
 under `src/web/modes/`. Read
@@ -308,14 +310,79 @@ figures, which I reworded so the history stays true. Full suite: five red files,
 
 ### Stage: extend containment with an honest inventory
 
-- [ ] Classify each mode's actual mounted controller/visitor branch. Record explicit exemptions for
+**Built 2026-09-11** (worktree `contain-modes-inventory`, queue item qi-ncgj9shy). **One deviation
+from the steps below, on purpose:** rather than twelve per-mode copies of the Ideas/Debate wrapper
+migrated in batches, the boundary moved out of the switch to its one call site. `Reader` § `band()`
+wraps whatever `modeBand()` returns in `ModeBoundary` (src/web/reader/ModeBoundary.tsx), keyed on
+the mode; `MODE_CONTAINMENT` there is a `Record<Mode, Containment>`, so a new mode is a compile
+error until someone decides. Every band was migrated at once, so the "shrinking legacy set" was
+never needed — it starts and ends empty, which is the plan's own finishing condition. The token each
+band's boundary retires is `bandTarget` in `activation.ts`, answered from the same tables the
+presses arm from (`MODE_TARGET`, `REFEREE_TARGET`, the Remember toggle's `"quiz"`), with the sub-mode
+read by `ModeBoundary` rather than by `Reader` and put in an owner's reset key. Visitors ignore
+those selectors, so their key omits them rather than retrying a broken band on an irrelevant Back
+step. Review found one band still beside that call site: the visitor's not-available `VisitorBand`.
+`band()` now chooses that or the real mode band first and contains the answer, so the public half
+obeys the same rule.
+
+**The inventory.** Exempt, with reasons in the table: **Plain** and **Hierarchy**, which have no
+band — a boundary around either would have to take the article with it. Every other mode's band
+component is inside, including `VisitorBand` when policy or a missing public artefact puts that
+sentence in the slot, and so is everything it runs. What each still depends on **from above the
+band, and is therefore not protected** (a throw there is a throw in `Reader` or `OwnedReader`, and
+`AppBoundary` takes it):
+
+| Mode | Inside the boundary | Outside it, not protected | Press retired on a throw |
+|---|---|---|---|
+| Chat | `ConversationBand`: `useChat`, `?thread=`, live conversation, `ChatPanel`; `VisitorBand` for a visitor | `Reader`'s `chatHandoff` (the glossary's question); `Reader`'s own `?thread=` read | none |
+| Remember | `RememberBand`, `ConversationBand` (Recall), `QuizSubBand`/`useQuiz` (Quiz); `VisitorBand` for a visitor | `Reader`'s own `?thread=` read; the article's block text | `quiz` when on Quiz |
+| Glossary | `GlossaryBand`/`useGlossary` job poll and `useAutoRun`; visitor twin when built, `VisitorBand` when not | `OwnedReader`'s `useGlossaryRead`; `Reader`'s `?term=`/`?gate=`/`?sort=` and term marks | `glossary` |
+| Quotes | `QuotesBand`/`useQuotes` job poll and `useAutoRun`; visitor twin when built, `VisitorBand` when not | `OwnedReader`'s `useQuotesRead`; `Reader`'s `useQuoteMarks`, drawn in every mode | `quotes` |
+| Ideas, Timeline | the band, its hook, its passage publishing; visitor twin when built, `VisitorBand` when not | `Reader`'s passage selection/mark drawing and open-key state | `ideas`, `timeline` |
+| Search | `SearchBand`/`useSearch`; visitor twin | `Reader`'s passage selection/mark drawing and `openHit` | none |
+| Referee | `RefereeBand` and all four sub-bands and their hooks; `VisitorBand` for a visitor | `OwnedReader`'s `useComments`; `Reader`'s referee passage selection/mark drawing and open key | `claims`/`candidates` per `?referee=` |
+| Diagram | `DiagramBand` and every picture's hooks | `Reader`'s `at` and experimental flag | `sketch`/`illustrated` per `?diagram=` |
+| Summary, Structure | the band, its tree build, Structure's sampler | `Reader`'s sections/arc cells (Structure) | none |
+| Debate | `DebateBand`/`useDebate`; `VisitorBand` for a visitor | nothing | `debate` |
+
+Chat and Remember were given their own decision rather than a batch: chat's distinctive state above
+the band is its handoff, and containment is the behaviour wanted for it — a throw leaves the
+question in `Reader`, a successful retry takes it, and leaving chat drops it (`Reader`'s existing
+effect). `glossary-ask-in-chat.test.tsx` and `conversation-band-handoff.test.tsx` pin the healthy
+sequence; this stage's witnesses add the throw containment and Quiz retirement.
+
+**Tests** — `tests/a-broken-mode-leaves-the-article-readable.test.tsx`. One throw site for every
+band entry component is injected through `useRenderCount`. Completeness: `uncontained(MODES)` is
+empty, the same function fails `[...MODES, "a-mode-added-tomorrow"]`, the exemptions equal
+`["plain", "hierarchy"]` by name, every contained mode's witnesses run, and every mode for which
+`visitorGap` answers with `VisitorBand` has a visitor witness. The review added those eight public
+witnesses: all failed before `VisitorBand` moved under `ModeBoundary`, then the focused command
+passed 67/67 on 2026-09-11. A Diagram visitor case also proves an ignored picture parameter does
+not reset and retry their broken, Sketch-pinned band. Money: the bar's press for Glossary, Quotes,
+Timeline and Diagram's Sketch, the Candidates chip and the Quiz chip (with the real `useQuiz` above
+the throwing panel), each asserting the token is gone and nothing was posted. The initial eight
+mutations, run by a scratch script that edited and restored one line at a time, were: no
+`key={mode}` (1 red — a broken Quotes followed
+into Summary), target always `null` (13), Referee arming nothing (1), Remember arming nothing (1),
+Quotes exempt (3), no sub-mode in the reset key (1 — Back from a broken Candidates to Criteria),
+Diagram ignoring `?diagram=` (1), no boundary at all (46). The review's one-line mutation returning
+`VisitorBand` before the boundary made all eight new public witnesses fall through to `AppBoundary`
+(re-run independently after the review: 8 red, 59 green). `tests/glossary-band-wiring.test.ts`
+reads the switch's source text and now looks for `modeBand()`. Full `npm test`: the reds were the
+known environment set (two want `npm run build`, three fleet suites), `overseer-diagnose` (not this
+stage), `styles-entry-is-imports-only` (red on `dev` since 599904a5 deleted the preview entries that
+imported `tailwind.css`), the band-wiring text test above, and this file while the reviewer was
+mid-edit — green alone. No browser pass: the boundary adds no DOM to a healthy band, and its
+fallback cannot be reached in a real browser without injecting a throw.
+
+- [x] Classify each mode's actual mounted controller/visitor branch. Record explicit exemptions for
   structural views that cannot be isolated without taking the article with them.
-- [ ] Migrate small independent bands first (Quotes, Timeline, Summary, Glossary), then Search,
+- [x] Migrate small independent bands first (Quotes, Timeline, Summary, Glossary), then Search,
   Referee and Diagram; handle Chat/Remember separately because session and draft state can live
   above the band. Do not wrap stateful hooks that execute in the parent and claim they are protected.
-- [ ] Derive a completeness test from `MODES`, with named exemptions and a shrinking legacy set.
+- [x] Derive a completeness test from `MODES`, with named exemptions and a shrinking legacy set.
   A new mode must force a containment decision. A synthetic new mode must fail the check.
-- [ ] For each migrated family, retain a behavioural throw witness. JSX presence alone does not
+- [x] For each migrated family, retain a behavioural throw witness. JSX presence alone does not
   establish that the throw occurred beneath the boundary. Finish by deleting the legacy set or
   explicitly documenting each remaining architectural exception.
 

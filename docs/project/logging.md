@@ -940,7 +940,7 @@ browser has now:
 - **Three React error boundaries**, and all three report —
   [`AppBoundary.tsx`](../../src/web/AppBoundary.tsx) for the whole app,
   `ChunkBoundary` in [`LazyPage.tsx`](../../src/web/LazyPage.tsx) for a lazy route whose chunk never
-  arrived, and [`FeatureBoundary.tsx`](../../src/web/FeatureBoundary.tsx) for one mode
+  arrived, and [`FeatureBoundary.tsx`](../../src/web/FeatureBoundary.tsx) for each mode's band
   ([web-client.md § A mode that breaks](web-client.md#a-mode-that-breaks-does-not-take-the-article-with-it)).
   Each calls `captureClientFailure` (Sentry, through the shared scrubber) and `recordLog`.
 - **`watchUncaughtErrors()`**, called by [`main.tsx`](../../src/web/main.tsx): `window.onerror` and
