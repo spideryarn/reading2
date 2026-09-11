@@ -55,10 +55,10 @@ and eight executable direct `console.log`/`console.error` calls across the six
 files below. This is a dated inventory of direct spellings, not an enforced
 count; re-run it and inspect the matches.
 
-The command is `grep -rn --exclude='preview-*.tsx' 'console\.\(log\|warn\|error\|info\|debug\)' src/web/`,
+The command is `grep -rn 'console\.\(log\|warn\|error\|info\|debug\)' src/web/`,
 and the six files are `upload.ts`, `lib/api.ts` (five lines, three of them comments), `Tweets.tsx`, `perf.ts`,
-`live/useLiveConversation.ts` and `live/wiring.ts`. The `preview-*.tsx` pages are excluded: they are
-standalone dev pages and a different question. See [§ The browser](#the-browser-nothing-yet).
+`live/useLiveConversation.ts` and `live/wiring.ts`. (It used to exclude the `preview-*.tsx` dev
+pages, which were deleted on 2026-09-11.) See [§ The browser](#the-browser-nothing-yet).
 
 ## The decision: Pino
 
