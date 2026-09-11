@@ -2,7 +2,11 @@
  * **The spike's own little server**, so that live conversation mode can be
  * tried in a real browser without touching anything the app ships.
  *
- * `npm run live:spike`, then open the preview page it prints.
+ * `npm run live:spike`. **It has no page any more**: the throwaway
+ * `preview/preview-live.html` it was tried from was deleted on 2026-09-11 with
+ * the other preview pages, and live conversation now runs inside the reading
+ * view (docs/project/live-conversation.md). The page is in git history if the
+ * spike is ever needed again.
  *
  * ## Why this is not two routes in src/routes.ts
  *
@@ -156,13 +160,7 @@ server.listen(PORT, HOST, () => {
   console.log(`  POST /session  { slug }            → an ephemeral OpenAI token`);
   console.log(`  POST /tool     { slug, name, args } → a chat tool, run server-side`);
   console.log(``);
-  /* The port vite ACTUALLY printed, not the 5273 in vite.config.ts — it is not
-     `strictPort`, so a peer's dev server already holding it pushes this one to
-     5274 and the line below would send you to somebody else's app. And
-     `localhost`, not 127.0.0.1: vite binds IPv6, so the numeric form refuses
-     the connection on a perfectly healthy server. */
-  console.log(`  now run "npm run dev" and open, on whichever port it prints:`);
-  console.log(`  http://localhost:<vite's port>/preview/preview-live.html?slug=noema-mythology-of-conscious-ai`);
+  console.log(`  no page ships with this any more — see the header of scripts/live-spike.ts`);
   if (!process.env.OPENAI_API_KEY) {
     console.log(``);
     console.log(`  ! OPENAI_API_KEY is not set — /session will refuse.`);

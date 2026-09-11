@@ -337,7 +337,7 @@ Each of these is a hole rather than a to-do, and none of them may be skipped bef
 | [`src/live.ts`](../../src/live.ts) | the session: the spoken prompt, the eight tools, the vocabulary, minting |
 | [`src/web/live/useLiveConversation.ts`](../../src/web/live/useLiveConversation.ts) | the browser: WebRTC, the data channel, the tool loop |
 | [`scripts/live-spike.ts`](../../scripts/live-spike.ts) | the spike's local-only server — `npm run live:spike` |
-| [`src/web/preview-live.tsx`](../../src/web/preview-live.tsx) | the throwaway page |
+| `src/web/preview-live.tsx` (deleted 2026-09-11) | the throwaway page |
 | [`tests/live.test.ts`](../../tests/live.test.ts) | what crosses the seam, and the four silent failures |
 
 ## See also

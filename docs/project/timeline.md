@@ -78,7 +78,8 @@ extraction. The three sentences are in [`src/messages.ts`](../../src/messages.ts
 **It cannot occur on an article that has a publication date**, and it is the *only* dated state on a
 frameless one — which is every article ingested before 2026-08-31, since the date only arrives on
 re-extraction. So it is simultaneously the hardest state to see and the commonest one on the shelf,
-and `src/web/preview-timeline.tsx` fabricates it deliberately.
+and the throwaway `preview-timeline.tsx` fabricated it deliberately (deleted 2026-09-11; it is in
+history if you need the fixture).
 
 ## The order is the model's reading, and the dates move nothing
 

@@ -529,7 +529,6 @@ td.text.kind-heading .blk-gutter {
    (`glossary.css` and `quotes.css` took the same guard the same day, for the
    same class of reason — a control unreachable, or unavoidable, on a finger.) */
 @media (hover: hover) {
-  tr:hover .blk-permalink,
   tr:hover .block-chat,
   tr:hover .blk-help,
   tr:hover .blk-more {
@@ -537,8 +536,15 @@ td.text.kind-heading .blk-gutter {
     pointer-events: auto;
   }
   /* Recessive on the row, full when it is the thing you are pointing at — the
-     ladder `.block-ref` used to have, kept. */
-  tr:hover .blk-permalink { opacity: 0.6; }
+     ladder `.block-ref` used to have, kept.
+
+     `:where()` is what makes the second half true. As `tr:hover .blk-permalink`
+     this was (0,2,1) against `.blk-permalink:hover`'s (0,2,0), so pointing at
+     the permalink matched both and the 0.6 won: orange, but never lifted,
+     unlike its siblings (SPIDERYARN-READING2-2G, 2026-09-11). At (0,1,0) it
+     still beats the bare hidden state on source order, and loses to `:hover`,
+     `:focus-visible`, `.failed` and `.blk-gutter[data-open] > *`. */
+  :where(tr:hover) .blk-permalink { opacity: 0.6; pointer-events: auto; }
 }
 .blk-permalink:hover,
 .blk-permalink:focus-visible { opacity: 1; color: var(--highlight); }
@@ -546,14 +552,12 @@ td.text.kind-heading .blk-gutter {
 /* Copying failed, and the reader is told rather than left with a tick that
    means nothing. The title says what to do instead.
 
-   `tr:hover` is in the selector because without it this loses: `tr:hover
-   .blk-permalink` above is (0,2,1) against this rule's (0,2,0), so the alert a
-   pointer failure produces would have been drawn at 0.6 — dimmed, on the one
-   row the reader is looking at, in the one state that needs to be seen. Found
-   by reading specificity rather than by looking, which is the only way it could
-   be: it is a wrong *opacity*, not a missing element. GPT Sol, 2026-08-31. */
-.blk-permalink.failed,
-tr:hover .blk-permalink.failed { opacity: 1; color: var(--destructive); }
+   This used to need a second, `tr:hover .blk-permalink.failed`, because the
+   row's recessive rule was (0,2,1) and drew the alert at 0.6 — dimmed, on the
+   one row the reader is looking at, in the one state that needs to be seen
+   (GPT Sol, 2026-08-31). The row rule is `:where()`-wrapped now, so this wins
+   on its own; a wrong *opacity* is only ever found by reading specificity. */
+.blk-permalink.failed { opacity: 1; color: var(--destructive); }
 
 /* **On a touch device there is no hover, so an affordance revealed by hover
    does not exist.** This stylesheet has shipped that bug twice — once for

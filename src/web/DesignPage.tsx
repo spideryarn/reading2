@@ -184,8 +184,8 @@ function RunButton({ label, job = null }: { label: string; job?: Job | null }) {
  *
  * **`.mode-band` is `position: fixed` and stays that way**, which is the whole
  * difficulty and the whole point. Giving it `position: static` for this page —
- * which is what `preview-chat-markdown.tsx` does, and reasonably, since it is a
- * throwaway checking one scroller — would mean the band's height, its
+ * which is what the throwaway `preview-chat-markdown.tsx` did, and reasonably,
+ * since it was checking one scroller — would mean the band's height, its
  * `min-height: 0` and the `flex: 1` on its scroller all stop applying, and the
  * page would be showing a shape the app never draws. So `.design-band` becomes
  * a **containing block for fixed descendants** instead (CSS containment;

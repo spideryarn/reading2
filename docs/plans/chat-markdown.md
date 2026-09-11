@@ -235,7 +235,7 @@ validated `href` and a numeric `start`.
 
 - **Not checked in a browser against a real streaming answer.** The rendering was checked in Chrome
   at the real 288px band width, against answers on a throwaway page
-  ([`preview/preview-chat-markdown.html`](../../preview/preview-chat-markdown.html)) that exercise every block — but
+  (`preview/preview-chat-markdown.html`, deleted 2026-09-11) that exercise every block — but
   not the moment a half-written list item is on screen. The parser has tests for the fence; the
   *look* of a list growing an item at a time is unobserved.
 - **Streaming is cumulatively quadratic, and always was.** The whole answer is re-parsed on every
