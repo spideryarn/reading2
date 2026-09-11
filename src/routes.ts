@@ -6784,7 +6784,8 @@ const GLOSSARY_PATTERN = /^\/api\/glossary\/([\w.%-]+)$/;
  * search the four above *those*, chat and the live sessions the twelve above
  * those again, comments the six above chat, the six from sketch to the two
  * paid pictures (`similar`, `projection`) above comments, the six from `ideas`
- * to the quiz's mark above sketch, and the four glossary routes above ideas —
+ * to the quiz's mark above sketch, the four glossary routes above ideas, and
+ * the nine of the article block (`article` … `tweets`) above the glossary —
  * and asking the table
  * after every remaining guard and before the terminal 404 puts each of them in
  * exactly the position it already had. The
@@ -6794,7 +6795,7 @@ const GLOSSARY_PATTERN = /^\/api\/glossary\/([\w.%-]+)$/;
  * tests/authenticated-api-route-contract.test.ts is where the inventory lives.
  *
  * **So the rows are in chain order, and prepending is how a domain arrives.**
- * The next slice up goes above the glossary rows, not below them — the table's
+ * The next slice up goes above the article row, not below it — the table's
  * order *is* the chain's order, continued. Taking the slice contiguously is also what
  * preserves the one interleave here for free: `/api/uploads` and
  * `/api/uploads/:id` sit *between* `GET /api/jobs` and `POST /api/jobs`, which is
@@ -6820,6 +6821,210 @@ const GLOSSARY_PATTERN = /^\/api\/glossary\/([\w.%-]+)$/;
  * **No `g` or `y` flag**, refused by `assertDispatchableRoutes` below.
  */
 const AUTH_ROUTES: readonly AuthRoute[] = [
+  {
+    kind: "pattern",
+    method: "GET",
+    pattern: /^\/api\/article\/([\w.%-]+)$/,
+    handler: async ({ request: { res } }, captures) => {
+      send(res, 200, await loadArticle(slugPart(captures, 1)));
+    },
+  },
+
+  /**
+   * **What the page on the other end of one of this article's hyperlinks says
+   * about itself** — fetched by us, once, and cached for everybody.
+   * src/link-previews.ts, docs/project/links.md.
+   *
+   * **In this table and not under `/api/public/`**, which is dispatched before
+   * the gate and sets no owner: an unauthenticated fetch endpoint is an open
+   * proxy and an open wallet.
+   *
+   * **Both the slug and the URL are in the query, and the slug's place is the
+   * one deviation from this file's habit.** Everything else that is about an
+   * article carries the slug in the path. Here the pair is the *question* — is
+   * this URL in that article, and does this reader own it — rather than a
+   * resource with a sub-resource: there is no `/api/link-preview/<slug>` worth
+   * asking for on its own, and the answer is not about the article at all. The
+   * URL cannot go in a path in any case (it carries its own `/` and `?`), so a
+   * split address would put half the question in each half of the URL. The plan
+   * fixed this shape: docs/plans/260905f-external-link-panel-add-to-spideryarn-and-server-side-preview.md.
+   *
+   * The URL is a **query parameter that is never logged** — the request's `path`
+   * is already stripped of the query for exactly this reason, and a hovered URL is
+   * a fact about what somebody was reading. docs/project/logging.md.
+   */
+  {
+    kind: "exact",
+    method: "GET",
+    path: "/api/link-preview",
+    handler: async ({ request: { res, query } }) => {
+      /* **A bad slug is a 400**, which is the one thing this route says out
+         loud about the request itself: it is malformed rather than a
+         destination we could not reach, and answering it like a Cloudflare
+         challenge would hide a client bug for ever.
+
+         **An article that is not this reader's is a 404**, thrown by
+         `loadArticle` through the owner filter, exactly as every other
+         per-article route here answers — a slug that does not exist and one
+         that belongs to somebody else are the same miss, which is the property
+         that stops this confirming what other people own.
+
+         Everything *after* those two is a 200 carrying one of the four
+         `LinkPreviewResponse` members, because the card's rule is that a
+         failure leaves it exactly as it was. `refused` and `unavailable` look
+         identical to the reader and differ only to the client's cache —
+         src/link-previews.ts § `linkPreview` says why that distinction exists
+         and why it gives a caller nothing. */
+      const at = query.get("slug") ?? "";
+      if (!isSlug(at)) throw httpError(400, "Not a slug");
+      send(res, 200, await linkPreview(at, query.get("url")));
+    },
+  },
+
+  /**
+   * **How that page stands to the piece the reader is holding** — the other half
+   * of the same card, and the half we wrote. src/link-summary.ts.
+   *
+   * **A `GET` that spends money**, which the file's own rule about counters
+   * argues against. It is deliberate and it is the sibling above's shape: the
+   * question is *(slug, url, block)* and nothing else, the client's cache is
+   * keyed on exactly that, and an SSE stream is a `GET` everywhere else in this
+   * app's client. Nothing prefetches an `/api/` address, and the spending is
+   * behind three things a prefetch could not satisfy anyway — article ownership, link
+   * membership, and a cache that answers almost every call.
+   */
+  {
+    kind: "exact",
+    method: "GET",
+    path: "/api/link-summary",
+    handler: async ({ request: { res, query } }) => {
+      const at = query.get("slug") ?? "";
+      if (!isSlug(at)) throw httpError(400, "Not a slug");
+      /* `query.get` is `null` for a parameter that was never sent, which is
+         exactly what "the client did not say which mention" means here — a
+         client from before this existed, and a chat link, which sits in no
+         block at all. */
+      await streamLinkSummary(at, query.get("url"), query.get("block"), res);
+    },
+  },
+
+  /**
+   * **The sharing switch, and it is a sub-resource rather than a field.**
+   *
+   * Not a new key on `PATCH /api/library/:slug`: that route edits *shelf state*
+   * — the relationship between a reader and a document — and visibility is a
+   * property of *the work*. Stage 3 of docs/plans/260827ai-public-read-only-access.md
+   * splits `articles` from `shelf_entries` along exactly that line, so putting
+   * them together now would mean moving the API twice. GPT Sol's reasoning.
+   *
+   * **`PUT`, not `PATCH`.** Visibility is a singleton sub-resource whose
+   * *complete* state is being replaced, so `PUT` makes the idempotency obvious —
+   * and idempotent it is: asking for the state the article is already in returns
+   * the current representation and changes nothing.
+   *
+   * No ordering hazard against `article` above it — that pattern ends at the slug, so it
+   * cannot match a path with `/visibility` on the end — but it is declared after
+   * it so the two read in the order a person would look for them.
+   */
+  {
+    kind: "pattern",
+    method: "PUT",
+    pattern: /^\/api\/article\/([\w.%-]+)\/visibility$/,
+    handler: async ({ request: { req, res } }, captures) => {
+      const asked = parseVisibilityRequest(await readBody(req));
+      send(
+        res,
+        200,
+        await visibilityStore.set(slugPart(captures, 1), asked.visibility, asked.rightsConfirmed),
+      );
+    },
+  },
+
+  {
+    kind: "pattern",
+    method: "GET",
+    pattern: /^\/api\/source\/([\w.%-]+)$/,
+    handler: async ({ request: { res } }, captures) => {
+      await sendSource(res, slugPart(captures, 1));
+    },
+  },
+
+  /* **One of the article's own pictures, out of our bucket** —
+     `sendArticleAsset`, and `assetPath` in src/asset-delivery.ts is the same
+     line without the regex, which is what the client builds its `src` from.
+
+     The hash is spelled out as 64 hex characters and the extension as the three
+     formats we host, for the illustrated-plate row's reason (`AUTH_ROUTES`,
+     the comment above the illustrated rows): not because the
+     route trusts either (it does not — both are only ever *compared* with what
+     the manifest says), but because a pattern that accepts anything invites the
+     next reader to think the capture is a key. `AssetExt` in src/assets.ts is
+     the list; a fourth format there is a change here too. */
+  /* `slugPart` on the slug for the reason the `source` route above gives —
+     the pattern allows `%` and `.` — and `part` is not used on the hash or the
+     extension, which the pattern has already narrowed and which are in any
+     case only ever compared, never joined onto anything. The same shape the
+     illustrated-plate row in `AUTH_ROUTES` uses. */
+  {
+    kind: "pattern",
+    method: "GET",
+    pattern: /^\/api\/asset\/([\w.%-]+)\/([0-9a-f]{64})\.(png|jpeg|gif)$/,
+    handler: async ({ request: { res } }, captures) => {
+      await sendArticleAsset(res, slugPart(captures, 1), part(captures, 2), part(captures, 3));
+    },
+  },
+
+  /* **Everything Spideryarn holds for one article, as a zip.** Its own
+     namespace rather than `/api/article/:slug/export`, because it is not a
+     representation of the article payload — it is a snapshot across ten tables
+     and two artefact columns, and the article route's response type is a thing
+     the client parses as JSON. `sendExport` has the rest.
+     docs/plans/260901h-export-article-data.md. */
+  /* `slugPart`, not `part` — the pattern below allows `%` and `.` and `part`
+     percent-decodes, so `..%2F..%2F…` would arrive at the store as a path.
+     Nothing here joins a slug onto a filesystem path, but the rule is that
+     the check goes on the capture rather than on what the capture happens to
+     reach today. See the note above `slugPart`. */
+  {
+    kind: "pattern",
+    method: "GET",
+    pattern: /^\/api\/export\/([\w.%-]+)$/,
+    handler: async ({ request: { res } }, captures) => {
+      await sendExport(res, slugPart(captures, 1));
+    },
+  },
+
+  // Its own endpoint rather than a field on the article payload: that one is
+  // ~150KB and is fetched on every page, and stat-ing every file for it would
+  // charge every reader for a page almost nobody opens.
+  {
+    kind: "pattern",
+    method: "GET",
+    pattern: /^\/api\/metadata\/([\w.%-]+)$/,
+    handler: async ({ request: { res } }, captures) => {
+      send(res, 200, await articleMetadata(slugPart(captures, 1)));
+    },
+  },
+
+  /* Its own endpoint too, and for a sharper reason than the metadata one: a
+     thread does not exist for most articles, and putting it on the article
+     payload would mean every reader of every article downloads a `null` for a
+     page almost none of them open. GET only — *writing* a thread is a job, not
+     a request, because it is a model call that takes half a minute
+     (docs/plans/260825g-tweet-thread-page.md#generation-on-demand-through-the-queue-we-already-have).
+     POST /api/jobs { slug, steps: ["tweets"] } is how you ask for one. */
+  {
+    kind: "pattern",
+    method: "GET",
+    pattern: /^\/api\/tweets\/([\w.%-]+)$/,
+    handler: async ({ request: { res } }, captures) => {
+      {
+        const at = slugPart(captures, 1);
+        send(res, 200, await withProfileChanged<ThreadResponse>(at, () => loadTweets(at), (found) => found.thread));
+      }
+    },
+  },
+
   {
     kind: "pattern",
     method: "GET",
@@ -7040,7 +7245,7 @@ const AUTH_ROUTES: readonly AuthRoute[] = [
   },
 
   /* The Sketch diagram — docs/project/diagram.md § Sketch. GET only, like the
-     artefact reads still in the chain below: drawing one is
+     artefact reads above it: drawing one is
      POST /api/jobs { slug, steps: ["sketch"] }, which is also how "draw it
      again" is spelled, because the step replaces rather than appends. */
   {
@@ -7158,7 +7363,7 @@ const AUTH_ROUTES: readonly AuthRoute[] = [
      the article payload because only one of the six diagram pictures wants it,
      and only when the reader presses that toggle — charging every reader of
      every article for a model call almost none of them will look at is exactly
-     what the `tweets` note in `serveAuthenticatedApi` refuses to do. */
+     what the note on the `tweets` row refuses to do. */
   /**
    * **POST, not GET, and the method is the load-bearing part.**
    *
@@ -8398,106 +8603,15 @@ export async function serveAuthenticatedApi(
      come from the shelf or the profile page. src/feedback.ts and
      docs/plans/260831aj-feedback-button-and-bug-reports-to-sentry.md. */
   const feedbackRoute = path === "/api/feedback";
-  /**
-   * **What the page on the other end of one of this article's hyperlinks says
-   * about itself** — fetched by us, once, and cached for everybody.
-   * src/link-previews.ts, docs/project/links.md.
-   *
-   * **In this table and not under `/api/public/`**, which is dispatched before
-   * the gate and sets no owner: an unauthenticated fetch endpoint is an open
-   * proxy and an open wallet.
-   *
-   * **Both the slug and the URL are in the query, and the slug's place is the
-   * one deviation from this file's habit.** Everything else that is about an
-   * article carries the slug in the path. Here the pair is the *question* — is
-   * this URL in that article, and does this reader own it — rather than a
-   * resource with a sub-resource: there is no `/api/link-preview/<slug>` worth
-   * asking for on its own, and the answer is not about the article at all. The
-   * URL cannot go in a path in any case (it carries its own `/` and `?`), so a
-   * split address would put half the question in each half of the URL. The plan
-   * fixed this shape: docs/plans/260905f-external-link-panel-add-to-spideryarn-and-server-side-preview.md.
-   *
-   * The URL is a **query parameter that is never logged** — `path` above is
-   * already stripped of the query for exactly this reason, and a hovered URL is
-   * a fact about what somebody was reading. docs/project/logging.md.
-   */
-  const linkPreviewRoute = path === "/api/link-preview";
-  /**
-   * **How that page stands to the piece the reader is holding** — the other half
-   * of the same card, and the half we wrote. src/link-summary.ts.
-   *
-   * **A `GET` that spends money**, which the file's own rule about counters
-   * argues against. It is deliberate and it is the sibling above's shape: the
-   * question is *(slug, url, block)* and nothing else, the client's cache is
-   * keyed on exactly that, and an SSE stream is a `GET` everywhere else in this
-   * app's client. Nothing prefetches an `/api/` address, and the spending is
-   * behind three things a prefetch could not satisfy anyway — article ownership, link
-   * membership, and a cache that answers almost every call.
-   */
-  const linkSummaryRoute = path === "/api/link-summary";
-  const article = /^\/api\/article\/([\w.%-]+)$/.exec(path);
-  /**
-   * **The sharing switch, and it is a sub-resource rather than a field.**
-   *
-   * Not a new key on `PATCH /api/library/:slug`: that route edits *shelf state*
-   * — the relationship between a reader and a document — and visibility is a
-   * property of *the work*. Stage 3 of docs/plans/260827ai-public-read-only-access.md
-   * splits `articles` from `shelf_entries` along exactly that line, so putting
-   * them together now would mean moving the API twice. GPT Sol's reasoning.
-   *
-   * **`PUT`, not `PATCH`.** Visibility is a singleton sub-resource whose
-   * *complete* state is being replaced, so `PUT` makes the idempotency obvious —
-   * and idempotent it is: asking for the state the article is already in returns
-   * the current representation and changes nothing.
-   *
-   * No ordering hazard against `article` above it — that pattern ends at the slug, so it
-   * cannot match a path with `/visibility` on the end — but it is declared after
-   * it so the two read in the order a person would look for them.
-   */
-  const visibility = /^\/api\/article\/([\w.%-]+)\/visibility$/.exec(path);
-  // Its own endpoint rather than a field on the article payload: that one is
-  // ~150KB and is fetched on every page, and stat-ing every file for it would
-  // charge every reader for a page almost nobody opens.
-  const metadata = /^\/api\/metadata\/([\w.%-]+)$/.exec(path);
-  /* Its own endpoint too, and for a sharper reason than the metadata one: a
-     thread does not exist for most articles, and putting it on the article
-     payload would mean every reader of every article downloads a `null` for a
-     page almost none of them open. GET only — *writing* a thread is a job, not
-     a request, because it is a model call that takes half a minute
-     (docs/plans/260825g-tweet-thread-page.md#generation-on-demand-through-the-queue-we-already-have).
-     POST /api/jobs { slug, steps: ["tweets"] } is how you ask for one. */
-  const tweets = /^\/api\/tweets\/([\w.%-]+)$/.exec(path);
-  const source = /^\/api\/source\/([\w.%-]+)$/.exec(path);
-  /* **One of the article's own pictures, out of our bucket** —
-     `sendArticleAsset`, and `assetPath` in src/asset-delivery.ts is the same
-     line without the regex, which is what the client builds its `src` from.
-
-     The hash is spelled out as 64 hex characters and the extension as the three
-     formats we host, for the illustrated-plate row's reason (`AUTH_ROUTES`,
-     the comment above the illustrated rows): not because the
-     route trusts either (it does not — both are only ever *compared* with what
-     the manifest says), but because a pattern that accepts anything invites the
-     next reader to think the capture is a key. `AssetExt` in src/assets.ts is
-     the list; a fourth format there is a change here too. */
-  const asset = /^\/api\/asset\/([\w.%-]+)\/([0-9a-f]{64})\.(png|jpeg|gif)$/.exec(path);
-  /* **Everything Spideryarn holds for one article, as a zip.** Its own
-     namespace rather than `/api/article/:slug/export`, because it is not a
-     representation of the article payload — it is a snapshot across ten tables
-     and two artefact columns, and the article route's response type is a thing
-     the client parses as JSON. `sendExport` has the rest.
-     docs/plans/260901h-export-article-data.md. */
-  const exportBundle = /^\/api\/export\/([\w.%-]+)$/.exec(path);
-  /* The glossary, ideas, quotes, timeline, quiz, quiz-mark, debate, sketch,
-     illustrated, arc, similar, projection, comments, chat, live-session,
-     search, referee, jobs, uploads and billing matchers used to be declared
-     here and handled at the very end of the chain. (The first fourteen were
-     declared between `tweets` and `source`; the rest here.) They are the rows
-     of `AUTH_ROUTES` above, in dispatch order, and the table is consulted after
-     every guard below and before the terminal 404 — the position they already
-     had, so the move reorders nothing. `exportBundle` is still the last matcher
-     this chain declares, but declaration order is not dispatch order: the last
-     *guard* is `tweets`, so the article block from `article` to `tweets` is the
-     next slice up. */
+  /* The article block's, the glossary, ideas, quotes, timeline, quiz,
+     quiz-mark, debate, sketch, illustrated, arc, similar, projection,
+     comments, chat, live-session, search, referee, jobs, uploads and billing
+     matchers used to be declared here and handled at the very end of the
+     chain. They are the rows of `AUTH_ROUTES` above, in dispatch order, and
+     the table is consulted after every guard below and before the terminal
+     404 — the position they already had, so the move reorders nothing. The
+     last guard left is `shelfOpen`, so the fourteen from the admin routes to
+     `shelfOpen` are the last slice. */
 
     /* **The second gate, and it guards a prefix rather than a route.**
        Everything under `/api/admin/` is refused to everybody but the one
@@ -8760,91 +8874,12 @@ export async function serveAuthenticatedApi(
       res.end();
       return;
     }
-    if (article && req.method === "GET") {
-      send(res, 200, await loadArticle(slugPart(article, 1)));
-      return;
-    }
-    if (linkPreviewRoute && req.method === "GET") {
-      /* **A bad slug is a 400**, which is the one thing this route says out
-         loud about the request itself: it is malformed rather than a
-         destination we could not reach, and answering it like a Cloudflare
-         challenge would hide a client bug for ever.
-
-         **An article that is not this reader's is a 404**, thrown by
-         `loadArticle` through the owner filter, exactly as every other
-         per-article route here answers — a slug that does not exist and one
-         that belongs to somebody else are the same miss, which is the property
-         that stops this confirming what other people own.
-
-         Everything *after* those two is a 200 carrying one of the four
-         `LinkPreviewResponse` members, because the card's rule is that a
-         failure leaves it exactly as it was. `refused` and `unavailable` look
-         identical to the reader and differ only to the client's cache —
-         src/link-previews.ts § `linkPreview` says why that distinction exists
-         and why it gives a caller nothing. */
-      const at = query.get("slug") ?? "";
-      if (!isSlug(at)) throw httpError(400, "Not a slug");
-      send(res, 200, await linkPreview(at, query.get("url")));
-      return;
-    }
-    if (linkSummaryRoute && req.method === "GET") {
-      const at = query.get("slug") ?? "";
-      if (!isSlug(at)) throw httpError(400, "Not a slug");
-      /* `query.get` is `null` for a parameter that was never sent, which is
-         exactly what "the client did not say which mention" means here — a
-         client from before this existed, and a chat link, which sits in no
-         block at all. */
-      await streamLinkSummary(at, query.get("url"), query.get("block"), res);
-      return;
-    }
-    if (visibility && req.method === "PUT") {
-      const asked = parseVisibilityRequest(await readBody(req));
-      send(
-        res,
-        200,
-        await visibilityStore.set(slugPart(visibility, 1), asked.visibility, asked.rightsConfirmed),
-      );
-      return;
-    }
-    if (source && req.method === "GET") {
-      await sendSource(res, slugPart(source, 1));
-      return;
-    }
-    /* `slugPart` on the slug for the reason the `source` route above gives —
-       the pattern allows `%` and `.` — and `part` is not used on the hash or the
-       extension, which the pattern has already narrowed and which are in any
-       case only ever compared, never joined onto anything. The same shape the
-       illustrated-plate row in `AUTH_ROUTES` uses. */
-    if (asset && req.method === "GET") {
-      await sendArticleAsset(res, slugPart(asset, 1), part(asset, 2), part(asset, 3));
-      return;
-    }
-    /* `slugPart`, not `part` — the pattern above allows `%` and `.` and `part`
-       percent-decodes, so `..%2F..%2F…` would arrive at the store as a path.
-       Nothing here joins a slug onto a filesystem path, but the rule is that
-       the check goes on the capture rather than on what the capture happens to
-       reach today. See the note above `slugPart`. */
-    if (exportBundle && req.method === "GET") {
-      await sendExport(res, slugPart(exportBundle, 1));
-      return;
-    }
-    if (metadata && req.method === "GET") {
-      send(res, 200, await articleMetadata(slugPart(metadata, 1)));
-      return;
-    }
-    if (tweets && req.method === "GET") {
-      {
-        const at = slugPart(tweets, 1);
-        send(res, 200, await withProfileChanged<ThreadResponse>(at, () => loadTweets(at), (found) => found.thread));
-      }
-      return;
-    }
 
     /**
      * **The table, asked after every guard above and before the 404 below.**
      *
-     * The glossary and its two lookups, ideas, quotes, timeline, the quiz and
-     * its mark, debate, sketch,
+     * The article block (`article` … `tweets`), the glossary and its two
+     * lookups, ideas, quotes, timeline, the quiz and its mark, debate, sketch,
      * illustrated, arc, the two paid pictures (similar and projection),
      * comments, chat, the live sessions, search, referee, jobs, uploads and
      * billing live in `AUTH_ROUTES` (above `serveAuthenticatedApi`) rather than

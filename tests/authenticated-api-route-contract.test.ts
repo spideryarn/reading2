@@ -1923,6 +1923,16 @@ describe("the authenticated API's route contract", () => {
       expect(sorted(parsed.guards.filter((g) => g.fromTable).map((g) => pairKey(g.method, g.match))))
         .toEqual(
           sorted([
+            // the article block, 260911d
+            "GET regex /^\\/api\\/article\\/([\\w.%-]+)$/",
+            "GET literal /api/link-preview",
+            "GET literal /api/link-summary",
+            "PUT regex /^\\/api\\/article\\/([\\w.%-]+)\\/visibility$/",
+            "GET regex /^\\/api\\/source\\/([\\w.%-]+)$/",
+            "GET regex /^\\/api\\/asset\\/([\\w.%-]+)\\/([0-9a-f]{64})\\.(png|jpeg|gif)$/",
+            "GET regex /^\\/api\\/export\\/([\\w.%-]+)$/",
+            "GET regex /^\\/api\\/metadata\\/([\\w.%-]+)$/",
+            "GET regex /^\\/api\\/tweets\\/([\\w.%-]+)$/",
             // the glossary, 260911d
             "GET regex /^\\/api\\/glossary\\/([\\w.%-]+)$/",
             "DELETE regex /^\\/api\\/glossary\\/([\\w.%-]+)$/",
@@ -2019,6 +2029,14 @@ describe("the authenticated API's route contract", () => {
         "/api/quiz",
         "/api/debate",
         "/api/glossary",
+        "/api/article",
+        "/api/link-preview",
+        "/api/link-summary",
+        "/api/source",
+        "/api/asset",
+        "/api/export",
+        "/api/metadata",
+        "/api/tweets",
       ];
       expect(
         parsed.guards.filter((g) => !g.fromTable && moved.some((p) => pathish(g.match).includes(p))),
@@ -2033,16 +2051,17 @@ describe("the authenticated API's route contract", () => {
          and require the same filter to find them. When that domain moves this
          becomes a real failure, and the next unmigrated regex domain takes its
          place — which is the point: a control nobody ever has to maintain is
-         one nobody checks is still true. It has been repointed five times:
+         one nobody checks is still true. It has been repointed six times:
          from `/api/chat` to `/api/comments` when 260907e moved chat on
          2026-09-08, from `/api/comments` to `/api/projection` when 260911b moved
          comments, from `/api/projection` to `/api/quiz` when 260911c moved
          sketch to projection, from `/api/quiz` to `/api/glossary` when 260911d
-         moved `ideas` to `quizMark`, and from `/api/glossary` to `/api/article`
-         — `article` GET and `visibility` PUT, in the next slice up — when
-         260911d moved the glossary. */
+         moved `ideas` to `quizMark`, from `/api/glossary` to `/api/article`
+         when it moved the glossary, and from `/api/article` to `/api/library`
+         — the shelf's five guards, in the last slice — when it moved the
+         article block. */
       const stillInTheChain = parsed.guards.filter(
-        (g) => !g.fromTable && pathish(g.match).includes("/api/article"),
+        (g) => !g.fromTable && pathish(g.match).includes("/api/library"),
       );
       expect(
         stillInTheChain.length,
@@ -2074,6 +2093,16 @@ describe("the authenticated API's route contract", () => {
         parsed.guards.filter((g) => g.fromTable).map((g) => pairKey(g.method, g.match)),
         "the table's rows are the bottom of the chain in the order it had them; a domain is prepended, never appended, and the interleave inside jobs/uploads is not to be tidied",
       ).toEqual([
+        // the article block, 260911d
+        "GET regex /^\\/api\\/article\\/([\\w.%-]+)$/",
+        "GET literal /api/link-preview",
+        "GET literal /api/link-summary",
+        "PUT regex /^\\/api\\/article\\/([\\w.%-]+)\\/visibility$/",
+        "GET regex /^\\/api\\/source\\/([\\w.%-]+)$/",
+        "GET regex /^\\/api\\/asset\\/([\\w.%-]+)\\/([0-9a-f]{64})\\.(png|jpeg|gif)$/",
+        "GET regex /^\\/api\\/export\\/([\\w.%-]+)$/",
+        "GET regex /^\\/api\\/metadata\\/([\\w.%-]+)$/",
+        "GET regex /^\\/api\\/tweets\\/([\\w.%-]+)$/",
         // the glossary, 260911d
         "GET regex /^\\/api\\/glossary\\/([\\w.%-]+)$/",
         "DELETE regex /^\\/api\\/glossary\\/([\\w.%-]+)$/",

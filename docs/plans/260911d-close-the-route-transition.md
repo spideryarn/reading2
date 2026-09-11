@@ -167,3 +167,38 @@ Focused set: the contract test, `cacheable-covers-artefact-routes`, the glossary
 `glossary-asked-term-stream-route`, `glossary-lookup-stream-route`, `glossary-delete-then-rebuild`,
 `glossary-lookup-refusals`, `route-profile-concurrency`, `routes`, `owner-isolation` and
 `public-dto`. **11 files, 606 tests, green.** Typecheck: exit 0.
+
+### Slice 3 — the article block
+
+Nine guards, `article` … `tweets`, with 260911c's link-summary oracle already in place. The first
+two exact matchers move here, `/api/link-preview` and `/api/link-summary`, as `kind: "exact"` rows
+with the path written in. Verifier: all nine `identical`.
+
+**Red first: 2 failed**, the contract test's two. The artefact-cache test stayed green: `tweets` is
+the one artefact kind here, and it resolves as a spelled-out `GET` row. Contract edits: the nine
+pairs, eight prefixes, and the control moves from `/api/article` to `/api/library`, the shelf's
+guards in the last slice.
+
+**Mutation 5**, `await streamLinkSummary(…)` → `void …` in the **moved** row: the link-summary
+oracle **2 failed of 2** at the handshake, *"the request settled before the model was reached —
+launched rather than awaited?"*. The contract test was green beside it.
+
+Comments outside bodies, four made false by the move:
+
+- the link-preview note's *"`path` above is already stripped of the query"* named the chain's
+  destructure. It now says *"the request's `path`"*;
+- the export row's *"the pattern above allows `%`"* named its declaration. The pattern is now in the
+  row below the comment;
+- the sketch row's *"like the artefact reads still in the chain below"*. None are left in the chain,
+  so it now says *"above it"*;
+- the similar row's *"the `tweets` note in `serveAuthenticatedApi`"* is now *"the note on the
+  `tweets` row"*.
+
+The visibility note's *"`article` above it … declared after it"* and the asset note's *"the `source`
+route above"* are still true in the table.
+
+Focused set: the contract test, `cacheable-covers-artefact-routes`, the link-summary oracle,
+`asset-route`, `export-route`, `source-route`, `source-store`, `link-preview-route`,
+`link-summary-occurrence`, `public-dispatch`, `routes-status-classes-survive-the-store-guard`,
+`routes`, `owner-isolation`, `public-dto` and `tweets`: **15 files, 695 tests, green.** Also
+`public-visibility-pg`, 44 of 44. Typecheck: exit 0.
