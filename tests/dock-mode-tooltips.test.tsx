@@ -445,7 +445,7 @@ function withDrawer(drawer: Record<string, unknown> = {}): void {
     drawer: {
       comments: [],
       loaded: true,
-      loadFailed: false,
+      loadError: null,
       panel: null,
       onPanel: () => {},
       onOpenComment: () => {},

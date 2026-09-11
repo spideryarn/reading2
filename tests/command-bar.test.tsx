@@ -94,7 +94,7 @@ function reading(props: Record<string, unknown> = {}): void {
 const A_DRAWER = {
   comments: [],
   loaded: true,
-  loadFailed: false,
+  loadError: null,
   error: null,
   panel: null,
   onPanel: () => {},
@@ -596,7 +596,7 @@ describe("opening is one policy, whichever door", () => {
         comments: [],
         onOpenComment: () => {},
         loaded: true,
-        loadFailed: false,
+        loadError: null,
       },
     });
     openBar();
@@ -812,7 +812,7 @@ describe("⌘/Ctrl-K", () => {
   it("closes the Dock drawer before opening", () => {
     const onPanel = vi.fn();
     reading({
-      drawer: { panel: "questions", onPanel, comments: [], onOpenComment: () => {}, loaded: true, loadFailed: false },
+      drawer: { panel: "questions", onPanel, comments: [], onOpenComment: () => {}, loaded: true, loadError: null },
     });
     expect(chord()).toBe(true);
     expect(onPanel).toHaveBeenCalledWith(null);
@@ -1064,7 +1064,7 @@ describe("the rows that are not modes", () => {
   it("opens the comments drawer, without changing the address", () => {
     const onPanel = vi.fn();
     readingSignedIn({
-      drawer: { comments: [], loaded: true, loadFailed: false, error: null, panel: null, onPanel },
+      drawer: { comments: [], loaded: true, loadError: null, error: null, panel: null, onPanel },
     });
     openBar();
     type("comments");

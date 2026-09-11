@@ -766,7 +766,7 @@ function drawer(): ReactNode {
       drawer={{
         comments: [] as Comment[],
         loaded: true,
-        loadFailed: false,
+        loadError: null,
         error: null, // nothing has failed to save; this file is about Escape
         panel: "questions",
         onPanel: (next: unknown) => {

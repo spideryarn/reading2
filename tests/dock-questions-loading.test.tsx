@@ -72,7 +72,7 @@ function paint(comments: Comment[], loaded: boolean, loadFailed = false): void {
         drawer: {
           comments,
           loaded,
-          loadFailed,
+          loadError: loadFailed ? "Couldn't reach the server. [net-down]" : null,
           /* **`null` even when the load failed**, because that is what the real
              hook hands over: since 2026-09-11 a failed load goes in
              `loadError`, and `error` is only a refused write (useComments.ts).

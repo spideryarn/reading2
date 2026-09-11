@@ -664,7 +664,7 @@ let drawerApi: ReturnType<typeof useComments> | undefined;
 
 /**
  * The same hook and dialog, with the **real Dock drawer** as the list — joined
- * as `Reader` joins them (`drawer={{ loaded, loadFailed, error, … }}`), because
+ * as `Reader` joins them (`drawer={{ loaded, loadError, error, … }}`), because
  * the drawer is where a reader learns both that the list did not load and that
  * a change did not save, and `CommentsHarness` above prints the hook's fields
  * rather than the app's sentences.
@@ -684,7 +684,7 @@ function DrawerHarness() {
       drawer: {
         comments: comments.comments,
         loaded: comments.loaded,
-        loadFailed: comments.loadFailed,
+        loadError: comments.loadError,
         error: comments.error,
         panel,
         onPanel: setPanel,
@@ -789,6 +789,11 @@ describe("Comments: Save waits for the opening read", () => {
     expect(host.querySelector(".dock-questions")?.textContent).toContain(NEW_BODY);
     expect(host.textContent, "nothing says the earlier comments are missing").toContain(
       "Couldn't load your comments",
+    );
+    /* And its code, as Search and Criteria give theirs, so a reader reporting
+       it has something to quote. The Overseer's call, 2026-09-11. */
+    expect(host.querySelector(".dock-questions")?.previousElementSibling?.textContent).toContain(
+      "[db-busy]",
     );
 
     /* A change that does not save, after that failed load: the drawer used to

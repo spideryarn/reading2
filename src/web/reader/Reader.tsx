@@ -1977,7 +1977,7 @@ export function Reader({
               (`showBar` above), so a refused delete would have summoned 44px of
               chrome and pushed the article down mid-read. **Not deleted** — GPT
               Sol's G3 on 260905g refused that, because `error` is not the
-              drawer's `loadFailed`: that one is about the fetch that fills the
+              drawer's `loadError`: that one is about the fetch that fills the
               list, while this carries every failed *change*, including one
               whose row has scrolled off. The load warning stays above a later
               saved comment too — Dock.tsx § Questions. */}
@@ -2406,7 +2406,7 @@ export function Reader({
             ? {
                 comments: ordered,
                 loaded: owner.comments.loaded,
-                loadFailed: owner.comments.loadFailed,
+                loadError: owner.comments.loadError,
                 /* A refused write, retry or delete. It was a chip in the
                    controls bar until 2026-09-08 and moved here when that bar
                    stopped being drawn on a reading view that had nothing else

@@ -388,9 +388,13 @@ interface Props {
      * yet". docs/project/web-client.md § Empty is not the same as not asked yet.
      * A failed load is also said over a list that is not empty, because a
      * comment saved since is not all the reader had (plan 260908f § A).
+     *
+     * `loadError` rather than a `loadFailed` boolean, because the drawer also
+     * prints why — its `[code]` is what a reader reporting it can quote, as
+     * Search and Criteria print theirs. `CommentsApi.loadError`.
      */
     loaded: boolean;
-    loadFailed: boolean;
+    loadError: string | null;
     /**
      * **A refused write, retry or delete** — `useComments`'s `error`, and it is
      * a different fact from `loadFailed` beside it. `loadFailed` is about the
@@ -1544,7 +1548,7 @@ export function Dock({
                 onOpen={drawer.onOpenComment}
                 access={
                   own
-                    ? { kind: "owner", loaded: own.loaded, loadFailed: own.loadFailed }
+                    ? { kind: "owner", loaded: own.loaded, loadError: own.loadError }
                     : { kind: "visitor" }
                 }
               />
@@ -3329,7 +3333,7 @@ function QuestionsLoading() {
  * sentence that tells them how to add one.
  */
 type QuestionsAccess =
-  | { kind: "owner"; loaded: boolean; loadFailed: boolean }
+  | { kind: "owner"; loaded: boolean; loadError: string | null }
   | { kind: "visitor" };
 
 function Questions({
@@ -3345,7 +3349,8 @@ function Questions({
      rather than three tests that could drift apart — the same move `own` makes
      in `Dock` above. */
   const loaded = access.kind === "visitor" || access.loaded;
-  const loadFailed = access.kind === "owner" && access.loadFailed;
+  const loadError = access.kind === "owner" ? access.loadError : null;
+  const loadFailed = loadError !== null;
   /* **"Nothing asked yet" is a claim about the reader, and it takes a fetch
      that came back and worked to earn it.** Three states get here with an empty
      list and only the third one may say it.
@@ -3372,10 +3377,13 @@ function Questions({
 
      **Over the list too, not only in place of an empty one**: a comment saved
      after a failed load is a list of one, and without this it read as the
-     whole of what the reader had marked. Plan 260908f § A. */
+     whole of what the reader had marked. Plan 260908f § A.
+
+     **With the load's own message after it**, `[code]` and all, as Search and
+     Criteria print theirs: it is what a reader reporting this can quote. */
   const couldNotLoad = loadFailed && (
     <p className="dock-empty">
-      Couldn't load your comments. Reload to try again.
+      Couldn't load your comments. Reload to try again. {loadError}
     </p>
   );
   if (couldNotLoad && comments.length === 0) return couldNotLoad;

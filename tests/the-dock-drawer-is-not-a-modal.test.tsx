@@ -57,7 +57,7 @@ function DrawerHarness() {
       drawer={{
         comments: [],
         loaded: true,
-        loadFailed: false,
+        loadError: null,
         error: null, // nothing has failed to save; this file is about focus
         panel,
         onPanel: setPanel,

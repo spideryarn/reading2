@@ -76,7 +76,7 @@ function paint(
         drawer: {
           comments: [MARKED],
           loaded: true,
-          loadFailed,
+          loadError: loadFailed ? "Couldn't reach the server. [net-down]" : null,
           error,
           panel,
           onPanel: () => {},
