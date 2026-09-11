@@ -39,10 +39,19 @@ The `<picture>` guard had also been written against a synthetic fixture, because
 `<picture>` in it; this article is the first real one, and it is now a fixture in
 `tests/rehost.test.ts` alongside the synthetic one.
 
-**Two things left for Greg**, both in the plan doc: the `src` we store is this publisher's 300 px
-thumbnail while the `srcset` we throw away ran to 1920, so the ⤢ has nothing to enlarge; and an image
-we hold **no** copy of is still exposed to the same trick, for which the right answer is an
+**Two things were left for Greg**, both in the plan doc: the `src` we store is this publisher's
+300 px thumbnail while the `srcset` we throw away ran to 1920, so the ⤢ has nothing to enlarge; and an
+image we hold **no** copy of is still exposed to the same trick, for which the right answer is an
 `error`-driven retry that needs its own plan.
+
+**The first is answered, 2026-09-11.** Greg chose to trial a candidate around 1,280 px. The assets
+step now takes one width-descriptor candidate from the `<img>`'s own `srcset` and stores it under the
+same `src`, falling back to the `src` if it fails. For this figure that is the 1,440 px PNG, about
+1.6 MB against 126 KB, because this publisher's AVIF is a format we do not host yet. It reaches this
+article only when the step next runs on it: nothing re-runs it automatically, and nothing has been
+deployed. On a diagram and a chart from the same publisher, the labels went from unreadable to sharp,
+on a phone and in the ⤢ —
+[260911a](../plans/260911a-figures-with-enough-resolution-to-read.md). The second remains open.
 
 [The plan](../plans/260908a-the-monkeys-illustration-did-not-load.md);
 [article-images.md § And a fourth reason](../project/article-images.md#and-a-fourth-reason-found-by-a-reader-rather-than-reasoned-out)

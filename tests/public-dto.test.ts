@@ -223,10 +223,12 @@ const ARC: Arc = {
  * One image we hold and one we do not, so the key list pins **both arms** of
  * `AssetEntry` rather than whichever one the fixture happened to have.
  *
- * The stored URL carries a query string on purpose: `blocks.json` holds
- * `&amp;s=…` and `getAttribute("src")` returns `&s=…`, and the manifest is
- * keyed on the second spelling — five of the corpus's thirteen images are like
- * this, and getting it wrong is invisible (src/assets.ts).
+ * Both stored URLs carry a query string on purpose: `url` is the manifest key
+ * from the `<img src>`, while `from` is the preferred `<img srcset>` candidate
+ * whose bytes it holds. Both originate in `blocks[].html`, which this DTO sends
+ * unchanged in the same public payload. `blocks.json` spells an ampersand as
+ * `&amp;` and `getAttribute` returns `&`; getting either spelling wrong is
+ * invisible (src/assets.ts).
  */
 const ASSETS: Assets = {
   version: "assets/2",
@@ -240,6 +242,7 @@ const ASSETS: Assets = {
       ext: "jpeg",
       contentType: "image/jpeg",
       bytes: 49_152,
+      from: "https://noemamag.imgix.net/a.jpg?fm=pjpg&w=1600&s=2d3e4f50",
     },
     {
       url: "https://noemamag.imgix.net/b.svg",
@@ -355,6 +358,7 @@ describe("the public article payload", () => {
         "assets.entries[].bytes",
         "assets.entries[].contentType",
         "assets.entries[].ext",
+        "assets.entries[].from",
         "assets.entries[].reason",
         "assets.entries[].sha256",
         "assets.entries[].status",

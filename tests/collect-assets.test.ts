@@ -23,6 +23,8 @@
  * permit rather than after made an article of ten small images come back with
  * six of them refused for budget.
  */
+import { createHash } from "node:crypto";
+
 import { describe, expect, it, vi } from "vitest";
 
 import type { Assets } from "../src/assets.js";
@@ -1559,5 +1561,222 @@ describe("the real fetchAsset satisfies the seam", () => {
     expect(reasons(run.assets)).toEqual(urls.map(() => "out-of-time"));
     expect(reasons(run.assets)).not.toContain("network");
     expect(run.storageErrors).toEqual([]);
+  });
+});
+
+/* ------------------------------------------------------------------ *
+ * A bigger picture from the srcset — docs/plans/260911a
+ * ------------------------------------------------------------------ */
+
+describe("a bigger picture from the srcset", () => {
+  const SRC = "https://cdn.test/fig-300.png";
+  const BIG_URL = "https://cdn.test/fig-1440.png";
+  const BIG = new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 14, 4, 0, 0, 0, 0]);
+  /** An AVIF's `ftypavif` box — a real image, and a format we do not host. */
+  const AVIF = new Uint8Array([0, 0, 0, 0x20, 0x66, 0x74, 0x79, 0x70, 0x61, 0x76, 0x69, 0x66]);
+  const figure = (srcset = `https://cdn.test/fig-600.png 600w, ${BIG_URL} 1440w`): Block =>
+    img(SRC, `srcset="${srcset}"`);
+
+  /** `scripted`, recording the retry budget each request was given as well. */
+  function network(table: Record<string, Uint8Array | Error>) {
+    const asked: { url: string; attempts: number | undefined; maxBytes: number }[] = [];
+    const impl: AssetFetch = async (url, o) => {
+      asked.push({ url, attempts: o.attempts, maxBytes: o.maxBytes });
+      const answer = table[url];
+      if (answer === undefined) throw new FetchFailure("not-found", url, "nothing scripted", { status: 404 });
+      if (answer instanceof Error) throw answer;
+      if (answer.byteLength > o.maxBytes) throw new FetchFailure("too-large", url, `over ${o.maxBytes}`);
+      return { bytes: answer, contentType: null, finalUrl: url };
+    };
+    return { impl, asked };
+  }
+
+  it("fetches the candidate instead of the src, and keys it on the src", async () => {
+    const { impl, asked } = network({ [SRC]: PNG, [BIG_URL]: BIG });
+    const run = await collectAssets({ blocks: [figure()], fetchImpl: impl, blobs: fakeBlobs() });
+    expect(asked.map((a) => a.url)).toEqual([BIG_URL]);
+    expect(stored(run.assets, SRC)).toMatchObject({
+      status: "stored",
+      bytes: BIG.byteLength,
+      from: BIG_URL,
+    });
+    expect(run.fromSrcset).toBe(1);
+  });
+
+  it("gives the candidate one attempt, because the src is its retry", async () => {
+    const { impl, asked } = network({ [SRC]: PNG });
+    await collectAssets({ blocks: [figure()], fetchImpl: impl, blobs: fakeBlobs() });
+    expect(asked).toMatchObject([
+      { url: BIG_URL, attempts: 1 },
+      /* The src keeps the caller's own budget — `politeFetch`'s two. */
+      { url: SRC, attempts: undefined },
+    ]);
+  });
+
+  it("falls back to the src when the candidate fails, and records no `from`", async () => {
+    for (const failure of [
+      new FetchFailure("not-found", BIG_URL, "gone", { status: 404 }),
+      new FetchFailure("server-error", BIG_URL, "down", { status: 503 }),
+      new FetchFailure("blocked-address", BIG_URL, "private"),
+      new FetchFailure("too-many-redirects", BIG_URL, "loop"),
+    ]) {
+      const { impl, asked } = network({ [SRC]: PNG, [BIG_URL]: failure });
+      const run = await collectAssets({ blocks: [figure()], fetchImpl: impl, blobs: fakeBlobs() });
+      expect(asked.map((a) => a.url), failure.code).toEqual([BIG_URL, SRC]);
+      const entry = stored(run.assets, SRC);
+      expect(entry, failure.code).toMatchObject({ status: "stored", bytes: PNG.byteLength });
+      expect(entry, failure.code).not.toHaveProperty("from");
+      expect(run.fromSrcset).toBe(0);
+    }
+  });
+
+  it("falls back to the src when the candidate is a format we do not host", async () => {
+    const { impl, asked } = network({ [SRC]: PNG, [BIG_URL]: AVIF });
+    const run = await collectAssets({ blocks: [figure()], fetchImpl: impl, blobs: fakeBlobs() });
+    expect(asked.map((a) => a.url)).toEqual([BIG_URL, SRC]);
+    expect(stored(run.assets, SRC)).toMatchObject({ status: "stored", ext: "png", bytes: PNG.byteLength });
+    /* The candidate's bytes arrived, so they are charged to the article. */
+    expect(run.bytes).toBe(AVIF.byteLength + PNG.byteLength);
+  });
+
+  it("falls back to the src when the candidate is over the per-image cap, and charges it", async () => {
+    const { impl, asked } = network({ [SRC]: PNG, [BIG_URL]: BIG });
+    const run = await collectAssets({
+      blocks: [figure()],
+      fetchImpl: impl,
+      blobs: fakeBlobs(),
+      limits: { maxImageBytes: BIG.byteLength - 1 },
+    });
+    expect(asked.map((a) => a.url)).toEqual([BIG_URL, SRC]);
+    expect(stored(run.assets, SRC)).toMatchObject({ status: "stored", bytes: PNG.byteLength });
+    expect(run.bytes).toBe(BIG.byteLength - 1 + PNG.byteLength);
+  });
+
+  it("gives the src only what the candidate left of the article's budget", async () => {
+    /* Room for the candidate's refusal and not for the src after it: the budget
+       is one number for the article, not one per URL. */
+    const { impl, asked } = network({ [SRC]: PNG, [BIG_URL]: BIG });
+    const run = await collectAssets({
+      blocks: [figure()],
+      fetchImpl: impl,
+      blobs: fakeBlobs(),
+      limits: { maxImageBytes: 8, maxArticleBytes: 12 },
+    });
+    expect(asked).toMatchObject([
+      { url: BIG_URL, maxBytes: 8 },
+      { url: SRC, maxBytes: 4 },
+    ]);
+    expect(stored(run.assets, SRC)).toMatchObject({ status: "failed", reason: "too-big" });
+  });
+
+  it("records the src's own failure when both fail", async () => {
+    const { impl } = network({ [SRC]: new FetchFailure("forbidden", SRC, "no", { status: 403 }) });
+    const run = await collectAssets({ blocks: [figure()], fetchImpl: impl, blobs: fakeBlobs() });
+    expect(stored(run.assets, SRC)).toMatchObject({ status: "failed", reason: "blocked" });
+  });
+
+  it("does not try the src once the clock has run out on the candidate", async () => {
+    const { impl, asked } = slow(10_000, BIG);
+    const run = await collectAssets({
+      blocks: [figure()],
+      fetchImpl: impl,
+      blobs: fakeBlobs(),
+      limits: { budgetMs: 40 },
+    });
+    expect(asked).toEqual([BIG_URL]);
+    expect(reasons(run.assets)).toEqual(["out-of-time"]);
+  });
+
+  it("fetches a picture used twice once, with the first occurrence's candidate", async () => {
+    const { impl, asked } = network({ [SRC]: PNG, [BIG_URL]: BIG });
+    const run = await collectAssets({
+      blocks: [figure(), figure("https://cdn.test/other-2000.png 2000w")],
+      fetchImpl: impl,
+      blobs: fakeBlobs(),
+    });
+    expect(asked.map((a) => a.url)).toEqual([BIG_URL]);
+    expect(run.assets.entries).toHaveLength(1);
+  });
+
+  it("leaves an image with no usable srcset exactly as it was", async () => {
+    const { impl, asked } = network({ [SRC]: PNG });
+    const run = await collectAssets({
+      blocks: [img(SRC), figure("https://cdn.test/a.png 1x, https://cdn.test/b.png 2x")],
+      fetchImpl: impl,
+      blobs: fakeBlobs(),
+    });
+    expect(asked.map((a) => a.url)).toEqual([SRC]);
+    expect(stored(run.assets, SRC)).not.toHaveProperty("from");
+  });
+
+  /**
+   * **The real address guard, on the candidate** — through the real
+   * `fetchAsset`, so this is the guard itself refusing and not a fake saying it
+   * would. A publisher's srcset is as untrusted as its src: a candidate on a
+   * private address, or one that redirects to one, must be refused and must not
+   * cost the reader the picture the src would have given them.
+   */
+  it("refuses a candidate the address guard refuses, directly or by redirect, and falls back", async () => {
+    const requested: string[] = [];
+    const underlying: FetchLike = async (url) => {
+      requested.push(String(url));
+      if (String(url).startsWith("https://redirects.test/")) {
+        return new Response(null, { status: 302, headers: { location: "https://inside.test/x.png" } });
+      }
+      return new Response(PNG, { status: 200 });
+    };
+    const resolve = async (hostname: string): Promise<string[]> =>
+      hostname === "inside.test" ? ["169.254.169.254"] : ["93.184.216.34"];
+    const fetchImpl: AssetFetch = (url, opts) =>
+      fetchAsset(url, {
+        maxBytes: opts.maxBytes,
+        timeoutMs: opts.timeoutMs,
+        ...(opts.signal ? { signal: opts.signal } : {}),
+        fetchImpl: underlying,
+        attempts: 1,
+        sleep: async () => undefined,
+        resolve,
+      });
+
+    for (const candidate of ["https://inside.test/fig-1440.png", "https://redirects.test/fig-1440.png"]) {
+      requested.length = 0;
+      const run = await collectAssets({
+        blocks: [figure(`${candidate} 1440w`)],
+        fetchImpl,
+        blobs: fakeBlobs(),
+      });
+      const entry = stored(run.assets, SRC);
+      expect(entry, candidate).toMatchObject({ status: "stored", bytes: PNG.byteLength });
+      expect(entry, candidate).not.toHaveProperty("from");
+      /* The private address was never dialled — the guard runs before the dial. */
+      expect(requested.some((u) => u.includes("inside.test")), candidate).toBe(false);
+    }
+  });
+});
+
+describe("assetsInputHash and the srcset", () => {
+  /** The canonical form as it stood before candidates, spelled out. */
+  const before = (urls: string[]): string =>
+    createHash("sha256")
+      .update(`spya-assets/1\n${JSON.stringify([urls, []])}`, "utf8")
+      .digest("hex")
+      .slice(0, 16);
+
+  it("is unchanged for an article with no candidate to prefer", () => {
+    /* So every manifest written before this reports itself current, and no
+       article re-fetches anything because of this change. */
+    const blocks = [
+      img("https://cdn.test/a.png"),
+      img("https://cdn.test/b.png", `srcset="https://cdn.test/b.png 1x, https://cdn.test/b2.png 2x"`),
+    ];
+    expect(assetsInputHash(blocks)).toBe(before(["https://cdn.test/a.png", "https://cdn.test/b.png"]));
+  });
+
+  it("changes when a candidate appears, and when it changes", () => {
+    const plain = [img("https://cdn.test/a.png")];
+    const offered = [img("https://cdn.test/a.png", `srcset="https://cdn.test/a-1600.png 1600w"`)];
+    const other = [img("https://cdn.test/a.png", `srcset="https://cdn.test/a-2000.png 2000w"`)];
+    expect(assetsInputHash(offered)).not.toBe(assetsInputHash(plain));
+    expect(assetsInputHash(other)).not.toBe(assetsInputHash(offered));
   });
 });

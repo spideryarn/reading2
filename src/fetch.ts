@@ -2461,10 +2461,16 @@ export interface FetchedAsset {
   finalUrl: string;
 }
 
-/** What the assets step needs from the network, and all it needs. */
+/**
+ * What the assets step needs from the network, and all it needs.
+ *
+ * `attempts` is optional and absent means the caller's own default: the assets
+ * step passes `1` for a `srcset` candidate, whose retry is the `src` behind it
+ * (src/collect-assets.ts § `politeFetch`).
+ */
 export type AssetFetch = (
   url: string,
-  opts: { maxBytes: number; timeoutMs: number; signal?: AbortSignal },
+  opts: { maxBytes: number; timeoutMs: number; signal?: AbortSignal; attempts?: number },
 ) => Promise<{ bytes: Uint8Array; contentType: string | null; finalUrl: string }>;
 
 /**

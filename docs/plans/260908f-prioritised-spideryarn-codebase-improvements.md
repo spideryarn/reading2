@@ -12,6 +12,7 @@ I (retire the revision alias) built the same day — see § I.
 E (both glossary lookups streamed) built 2026-09-10/11 — see § E.
 O (on-demand draft sweep) built 2026-09-11 and wired in `count` mode; the first deletion waits for
 Greg — see § O.
+F's first stage (a bounded `srcset` candidate) built 2026-09-11 — see § F.
 Each stage's own status line is the authority.
 
 > Write a rich many-step plan to improve the codebase (prioritising the various suggestions by a
@@ -448,13 +449,22 @@ how many lookups one reader can run (the reviews note there is none on either ro
 
 ## F — give figures enough resolution to read
 
-**Code-verified limitation:** `imageSourceOf` (`src/assets.ts:360`) reads only `img[src]`.
+**Code-verified limitation:** `imageSourceOf` ([`src/assets.ts`](../../src/assets.ts)) reads only
+`img[src]`.
 The [monkeys report](../user-feedback/260907_0735-the-monkeys-illustration-does-not-load.md) and
 [its plan](260908a-the-monkeys-illustration-did-not-load.md) measured a 300px fallback against larger
 `srcset` candidates. Those network/byte measurements belong to that investigation; this audit did
 not repeat them. The broken-image fix is shipped; higher-resolution selection is not.
 
 ### Stage: settle and implement a bounded candidate policy
+
+**Status, 2026-09-11: built, GPT Sol-reviewed, on `dev`, not deployed** —
+[260911a](260911a-figures-with-enough-resolution-to-read.md). Greg chose the suggested trial.
+Width descriptors only; the manifest key is still the `src`, with the candidate in `from`;
+`ASSETS_VERSION` was not bumped, and candidates enter `assetsInputHash` only where they exist. On a
+real diagram and chart the gain was worth the bytes (10–11×, a few hundred KB each). Open question for
+Greg: density descriptors, which is how Wikipedia marks every figure. The checklist below is the
+original brief.
 
 - [ ] Put concrete options before Greg: keep current thumbnails, or choose a bounded larger
   candidate for reading/enlarging. Suggested trial: prefer a supported candidate around 1,280px,

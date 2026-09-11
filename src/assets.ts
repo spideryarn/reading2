@@ -38,6 +38,16 @@
  * browser handed a rewritten `src` and an untouched `srcset` prefers the
  * `srcset`, and goes on hot-linking while the page looks fixed.
  *
+ * **Since 2026-09-11 the unit may carry one bigger picture**, and the `src` is
+ * still its name. A publisher's `src` is often a thumbnail — 300 px on the
+ * monkeys figure (SPIDERYARN-READING2-2B) — so the ⤢ had nothing to enlarge.
+ * `preferredCandidateOf` picks **one** `srcset` candidate around 1,280 px, from
+ * width descriptors only; the step fetches it first and falls back to the `src`.
+ * The manifest is still keyed on the `src` (the candidate goes in `from`),
+ * because that is what the reading view looks an element up by: key it on the
+ * candidate and every lookup misses. Greg chose the trial, 2026-09-11;
+ * docs/plans/260911a-figures-with-enough-resolution-to-read.md.
+ *
  * ## 3. The extension is earned from the bytes, never claimed by the URL
  *
  * Publishers serve PNGs as `application/octet-stream`; bot walls serve HTML as
@@ -107,6 +117,17 @@ export type AssetEntry =
       ext: AssetExt;
       contentType: string;
       bytes: number;
+      /**
+       * **Where the bytes came from, when that was not `url`** — the `srcset`
+       * candidate `preferredCandidateOf` chose. Absent means the bytes are
+       * `url`'s own, which is every entry written before 2026-09-11 and every
+       * image whose candidate failed.
+       *
+       * Recorded *beside* `url` and never instead of it: `url` is the lookup
+       * key the reading view finds an element by, and keying on the candidate
+       * would miss every entry, silently. See § 2 of the header.
+       */
+      from?: string;
     }
   | { url: string; status: "failed"; reason: AssetFailure; at: string };
 
@@ -379,6 +400,158 @@ export function imageSourcesIn(root: ParsedRoot): string[] {
     if (url === null || seen.has(url)) continue;
     seen.add(url);
     found.push(url);
+  }
+  return found;
+}
+
+/* ------------------------------------------------------------------ *
+ * A bigger picture than the `src`, when the publisher offers one
+ * ------------------------------------------------------------------ */
+
+/**
+ * **The width we go looking for**, in image pixels.
+ *
+ * A proposal Greg chose to trial on 2026-09-11, not a measured optimum. The
+ * reading column is ~660 CSS px and the ⤢ panel up to 1,600, so ~1,280 is the
+ * column at 2× or most of the panel at 1× — enough for a label to be read in
+ * either, and a long way short of the 1,920 and 2,880 publishers also offer.
+ */
+export const PREFERRED_IMAGE_WIDTH = 1280;
+
+/**
+ * Bounds on what the parser will read — a `srcset` is the publisher's text and
+ * the walk is over every image of every article. Past either, it is not a list
+ * we try to understand, and the image keeps its `src`.
+ */
+const MAX_SRCSET_CHARS = 8192;
+const MAX_SRCSET_CANDIDATES = 32;
+
+/** HTML's ASCII whitespace, which is what separates a `srcset`'s tokens. */
+const SRCSET_SPACE = /[\t\n\f\r ]/;
+
+/** One width descriptor, surrounded only by the whitespace HTML permits here. */
+const SRCSET_WIDTH = /^[\t\n\f\r ]*([1-9][0-9]{0,4})w[\t\n\f\r ]*$/;
+
+/** The first non-space code unit at or after `at`. */
+function afterSrcsetSpaces(srcset: string, at: number): number {
+  while (at < srcset.length && SRCSET_SPACE.test(srcset[at] as string)) at += 1;
+  return at;
+}
+
+/** One candidate beginning at `at`, and where its delimiter sits. */
+function widthCandidateAt(
+  srcset: string,
+  at: number,
+): { url: string; width: number; delimiter: number } | null {
+  const start = at;
+  while (at < srcset.length && !SRCSET_SPACE.test(srcset[at] as string)) at += 1;
+  const url = srcset.slice(start, at);
+  if (url.endsWith(",")) return null;
+
+  const from = at;
+  while (at < srcset.length && srcset[at] !== ",") {
+    if (srcset[at] === "(") return null;
+    at += 1;
+  }
+  const descriptor = SRCSET_WIDTH.exec(srcset.slice(from, at));
+  if (!descriptor) return null;
+  return { url, width: Number(descriptor[1]), delimiter: at };
+}
+
+/**
+ * A `srcset` whose every candidate carries a **width descriptor** — `600w` —
+ * or `null` for anything else.
+ *
+ * A tokenizer after the HTML standard's "parse a srcset attribute", cut down to
+ * the one form we act on and made to **refuse rather than guess** on everything
+ * else: a density descriptor (`2x`), a candidate with no descriptor, a `h`
+ * descriptor, a `(`, a zero or absurd width, two candidates claiming the same
+ * width, an empty comma-delimited candidate, non-ASCII descriptor whitespace,
+ * or a list past the bounds above. A mixed list is refused whole, not filtered
+ * — a candidate we cannot read is one we cannot rank. Refusing costs the reader
+ * nothing they have today: the image keeps its `src`.
+ *
+ * The URL token is a run of non-space characters, so a `data:` URL's own comma
+ * does not split it; a URL token *ending* in commas is a candidate with no
+ * descriptor, which is refused.
+ */
+export function widthCandidatesOf(srcset: string): { url: string; width: number }[] | null {
+  if (srcset.length > MAX_SRCSET_CHARS) return null;
+  const found: { url: string; width: number }[] = [];
+  const widths = new Set<number>();
+  let at = afterSrcsetSpaces(srcset, 0);
+  if (at >= srcset.length || srcset[at] === ",") return null;
+  for (;;) {
+    const candidate = widthCandidateAt(srcset, at);
+    if (!candidate || widths.has(candidate.width)) return null;
+    widths.add(candidate.width);
+    found.push({ url: candidate.url, width: candidate.width });
+    if (found.length > MAX_SRCSET_CANDIDATES) return null;
+    if (candidate.delimiter >= srcset.length) break;
+    at = afterSrcsetSpaces(srcset, candidate.delimiter + 1);
+    if (at >= srcset.length || srcset[at] === ",") return null;
+  }
+  return found.length > 0 ? found : null;
+}
+
+/**
+ * **The one `srcset` candidate worth fetching instead of `src`**, or `null`.
+ *
+ * The smallest candidate at least `PREFERRED_IMAGE_WIDTH` wide, else the widest
+ * there is. `null` whenever `widthCandidatesOf` refuses, when any candidate is
+ * not an absolute http(s) URL (`isRehostableUrl`, the same test the `src` gets),
+ * and when the choice *is* the `src` — there is nothing to fetch twice.
+ *
+ * **Only the `<img>`'s own `srcset`.** A sibling `<source>` is never read: it is
+ * chosen by `type` or `media` — a format we may not host, or a different crop
+ * for a different screen — and the reading view deletes it anyway. The widest
+ * candidate may in principle be narrower than the `src` (the list is the
+ * publisher's claim and the `src` has no descriptor); the byte and time caps
+ * still hold, and the plan names it as a known edge.
+ *
+ * What is chosen here is only ever a *preference*. The step fetches it through
+ * the same guarded fetch as the `src` — address guard, redirect checks, byte
+ * cap — and falls back to the `src` if it fails or is not a format we host.
+ */
+export function preferredCandidateOf(element: AttributeReader, src: string): string | null {
+  const srcset = element.getAttribute("srcset");
+  if (srcset === null) return null;
+  const candidates = widthCandidatesOf(srcset);
+  if (!candidates?.every((c) => isRehostableUrl(c.url))) return null;
+  const ascending = [...candidates].sort((a, b) => a.width - b.width);
+  const chosen =
+    ascending.find((c) => c.width >= PREFERRED_IMAGE_WIDTH) ?? ascending[ascending.length - 1];
+  if (!chosen || chosen.url === src) return null;
+  return chosen.url;
+}
+
+/** One image the step will fetch: its name, and the bigger picture to try first. */
+export interface ImageCandidate {
+  /** `imageSourceOf`'s answer, and the manifest key. */
+  src: string;
+  /** `preferredCandidateOf`'s answer: fetched first, recorded as `from`. */
+  preferred: string | null;
+}
+
+/**
+ * **`imageSourcesIn`, with each image's preferred candidate beside it** — the
+ * pipeline's walk. The browser keeps `imageSourcesIn`, which never parses a
+ * `srcset`, and the two agree on the `src`s because both are `imageSourceOf`
+ * over the same selector with the same first-wins dedupe;
+ * tests/figure-candidates.test.ts holds them to it.
+ *
+ * One picture used twice is one entry, and the first occurrence's `srcset`
+ * decides — the manifest is keyed by `src`, so a second candidate for the same
+ * key has nowhere to go.
+ */
+export function imageCandidatesIn(root: ParsedRoot): ImageCandidate[] {
+  const found: ImageCandidate[] = [];
+  const seen = new Set<string>();
+  for (const element of root.querySelectorAll(IMAGE_SELECTOR)) {
+    const src = imageSourceOf(element);
+    if (src === null || seen.has(src)) continue;
+    seen.add(src);
+    found.push({ src, preferred: preferredCandidateOf(element, src) });
   }
   return found;
 }
