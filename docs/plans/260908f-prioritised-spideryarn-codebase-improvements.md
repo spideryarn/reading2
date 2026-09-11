@@ -517,11 +517,11 @@ not repeat them. The broken-image fix is shipped; higher-resolution selection is
 
 **Status, 2026-09-11: built, GPT Sol-reviewed, on `dev`, not deployed** —
 [260911a](260911a-figures-with-enough-resolution-to-read.md). Greg chose the suggested trial.
-Width descriptors only; the manifest key is still the `src`, with the candidate in `from`;
-`ASSETS_VERSION` was not bumped, and candidates enter `assetsInputHash` only where they exist. On a
-real diagram and chart the gain was worth the bytes (10–11×, a few hundred KB each). Open question for
-Greg: density descriptors, which is how Wikipedia marks every figure. The checklist below is the
-original brief.
+Width descriptors (~1,280 px) and, since the same day, density descriptors (the `2x`, capped there —
+the Overseer's call, so Wikipedia figures with absolute URLs are reached); the manifest key is still the `src`, with
+the candidate in `from`; `ASSETS_VERSION` was not bumped, and candidates enter `assetsInputHash` only
+where they exist. On a real diagram and chart the gain was worth the bytes (10–11×, a few hundred KB
+each). The checklist below is the original brief.
 
 - [ ] Put concrete options before Greg: keep current thumbnails, or choose a bounded larger
   candidate for reading/enlarging. Suggested trial: prefer a supported candidate around 1,280px,

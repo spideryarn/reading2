@@ -21,9 +21,11 @@ measured it: a 300 px image under a 659 px column, and a ⤢ with nothing to enl
 ## What changed
 
 - **`preferredCandidateOf`** ([`src/assets.ts`](../../src/assets.ts)) picks at most one candidate from
-  the `<img>`'s own `srcset`: the smallest at least 1,280 px wide, or the widest if none is. It reads
-  **width descriptors only**, and falls back to the `src` on anything else: density descriptors
-  (`2x`), a candidate with no descriptor, `h` descriptors, parentheses, duplicate widths, a relative,
+  the `<img>`'s own `srcset`: from a list of **widths**, the smallest at least 1,280 px wide, or the
+  widest if none is; from a list of **densities** (added the same day — § Density descriptors,
+  added below), the highest above 1× and at most 2×. It falls back to the `src` on anything else:
+  widths mixed with densities, a candidate with no descriptor, `h` descriptors, parentheses,
+  duplicate widths or densities, a density outside a bounded grammar, a relative,
   protocol-relative, `data:` or non-http candidate, an empty comma-delimited candidate, non-ASCII
   descriptor whitespace, or a list over 8 KB or 32 candidates. A sibling `<source>` is never read.
   If the choice *is* the `src` there is nothing extra to fetch.
@@ -46,9 +48,9 @@ measured it: a 300 px image under a 659 px column, and a ⤢ with nothing to enl
 **Not bumped.** Instead the candidates go into `assetsInputHash` as a third element **that is absent
 when no image has one**, so:
 
-- an article with no qualifying `srcset` hashes exactly as before and re-fetches nothing — and that
-  is every Wikipedia article, whose `srcset`s use density descriptors;
-- an article that has one now reads *not current*, and the next run of the step **on that article**
+- an article with no qualifying `srcset` hashes exactly as before and re-fetches nothing;
+- an article that has one now reads *not current* — since density descriptors count, that includes
+  most Wikipedia articles — and the next run of the step **on that article**
   (a re-ingest, or someone re-running it) fetches the bigger picture. Nothing re-runs a stale step on
   its own; there is no scheduler ([cron-scheduler.md](../project/cron-scheduler.md)). So there is no
   automatic whole-library re-fetch, as the stage required.
@@ -66,9 +68,8 @@ third element was made unconditional.
   from the manifest into the DOM after `sanitizeArticle` has run, which is a second way past
   `stripOwnApiUrls` — and this path only runs when our own asset route has already failed. The
   comments now say what is true.
-- **Density descriptors.** Wikipedia's thumbnails are `src` plus `1.5x, 2x`. Ranking those needs a
-  width for the `src`, which the markup does not give. Left out on the plan's instruction; see the
-  question below.
+- **Rewriting Wikipedia thumbnail URLs to a chosen width** (`/500px-` → `/1280px-`). The biggest gain
+  for Wikipedia, but URL surgery for one publisher; not taken (the Overseer, 2026-09-11).
 - **A per-image wall clock across both requests.** The per-request timeout (15 s) and the article's
   180 s budget are unchanged. A candidate adds at most one 15 s attempt before the `src`'s own two, so
   one image's worst case goes from 30 s to 45 s. It is still inside the article budget, which is what
@@ -155,8 +156,8 @@ and all of that goes through our bucket and to every reader. The per-image (16 M
 save, and it is not this stage.
 
 **Where it applies, in the local corpus** (2026-09-11): 153 `<img>` elements with a `srcset`, in 20
-revisions. Only two publishers use width descriptors: noema (imgix) and Asterisk. Every Wikipedia
-figure — the corpus's commonest source of diagrams — uses density descriptors and keeps its `src`.
+revisions. Only two publishers use width descriptors: noema (imgix) and Asterisk. Wikipedia — the
+corpus's commonest source of diagrams — uses density descriptors, which the section below adds.
 Substack's `src` is already its 1,456 px variant and the candidate would be the same URL, so nothing
 changes there.
 
@@ -171,20 +172,30 @@ The comparison script is not committed; it sat in the session scratchpad. It is 
   Chrome using the app's own CSS rules, not inside the app.
 - **Format support** (F's second stage).
 
-## For Greg
+## Density descriptors, added
 
-**Should density descriptors (`1.5x, 2x`) count as well?** They are how Wikipedia marks up every
-figure, and Wikipedia is where most of the diagrams in our corpus come from — so as built, this trial
-does not reach them at all.
+The first version of this stage read width descriptors only, and so did not reach Wikipedia, which
+marks every figure as a `src` plus `1.5x, 2x` — 250–500 px thumbnails in the local corpus. That was put
+to Greg as the open question. **The Overseer decided it the same day**, under Greg's standing *"use
+your judgment, keep things simple"*: take the `2x` too, since it is the small change and Wikipedia is
+where most of the corpus's diagrams come from. Rewriting Wikipedia's thumbnail URLs to a chosen width
+was not taken.
 
-- *Leave it (as built).* Wikipedia figures stay at their thumbnail: 250–500 px in the local corpus,
-  with the `2x` candidate at 330–960 (a rough read of the stored markup, 2026-09-11).
-- *Take the `2x` candidate.* Simple to add, since a `2x` is by definition the high-density version
-  of the `src`. It would roughly double the width and several-fold the bytes of every Wikipedia
-  figure — and would usually still fall short of 1,280.
-- *Rewrite Wikipedia thumbnail URLs to a chosen width* (`/500px-` → `/1280px-`). The biggest gain, but
-  it is URL surgery for one publisher, which the plan's "one candidate family" rule deliberately
-  avoided.
+- **The rule:** from a list of densities, the highest above 1× and at most 2×. So `1.5x, 2x` gives the
+  `2x`, a lone `1.5x` gives that, and a lone `3x` gives nothing. A density is relative to the `src`,
+  whose width the markup does not state, so there is no pixel target; 2× is the bounded step.
+- **The grammar** is a bounded subset of HTML's floating-point number (no sign, no exponent, at most two
+  integer and three fractional digits). A list that mixes widths and densities is refused whole, as
+  are duplicate densities.
+- **Everything else is the width path's**: the same fetch, guards, single attempt, fallback, budget and
+  `from`. The collect-assets test for a `2x` checks the success and the fallback.
+- **Cost, measured:** Wikipedia's *Tenets of open science* diagram, 250 px **20.6 KB** → 500 px
+  **47.8 KB** (2.3×). A `2x` doubles the width, so it stays well short of 1,280 px; the gain is a sharp
+  figure at column size on a 2× screen, and a ⤢ that shows twice the pixels.
+- **Staleness:** most Wikipedia articles now carry a candidate, so their `assets` step reads stale and
+  picks up the `2x` the next time it runs on them. Nothing re-runs it on its own.
+- Wikipedia markup whose `srcset` is protocol-relative (`//upload…`, 14 of 70 blocks in the local
+  corpus) has a protocol-relative `src` too, so those images are not hosted at all. Unchanged.
 
-What decides it: whether Wikipedia diagrams are too small to read today. If you enlarge one with ⤢ and
-cannot read it, the `2x` option is the cheap next step.
+Red first (four new tests failed), then five mutations, each turning its own test red: the 2× cap
+removed, 1× accepted, mixed kinds accepted, the lowest density taken, and an exponent accepted.

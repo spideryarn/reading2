@@ -1701,12 +1701,27 @@ describe("a bigger picture from the srcset", () => {
   it("leaves an image with no usable srcset exactly as it was", async () => {
     const { impl, asked } = network({ [SRC]: PNG });
     const run = await collectAssets({
-      blocks: [img(SRC), figure("https://cdn.test/a.png 1x, https://cdn.test/b.png 2x")],
+      blocks: [img(SRC), figure("https://cdn.test/a.png 600w, https://cdn.test/b.png 2x")],
       fetchImpl: impl,
       blobs: fakeBlobs(),
     });
     expect(asked.map((a) => a.url)).toEqual([SRC]);
     expect(stored(run.assets, SRC)).not.toHaveProperty("from");
+  });
+
+  it("fetches a 2x density candidate the same way, and falls back the same way", async () => {
+    const X2 = "https://cdn.test/fig-600.png";
+    const density = `https://cdn.test/fig-450.png 1.5x, ${X2} 2x`;
+
+    const ok = network({ [SRC]: PNG, [X2]: BIG });
+    const run = await collectAssets({ blocks: [figure(density)], fetchImpl: ok.impl, blobs: fakeBlobs() });
+    expect(ok.asked).toMatchObject([{ url: X2, attempts: 1 }]);
+    expect(stored(run.assets, SRC)).toMatchObject({ status: "stored", bytes: BIG.byteLength, from: X2 });
+
+    const refused = network({ [SRC]: PNG, [X2]: new FetchFailure("blocked-address", X2, "private") });
+    const fell = await collectAssets({ blocks: [figure(density)], fetchImpl: refused.impl, blobs: fakeBlobs() });
+    expect(refused.asked.map((a) => a.url)).toEqual([X2, SRC]);
+    expect(stored(fell.assets, SRC)).not.toHaveProperty("from");
   });
 
   /**
@@ -1767,9 +1782,20 @@ describe("assetsInputHash and the srcset", () => {
        article re-fetches anything because of this change. */
     const blocks = [
       img("https://cdn.test/a.png"),
-      img("https://cdn.test/b.png", `srcset="https://cdn.test/b.png 1x, https://cdn.test/b2.png 2x"`),
+      img("https://cdn.test/b.png", `srcset="https://cdn.test/b.png 600w, https://cdn.test/b2.png 2x"`),
+      img("https://cdn.test/c.png", `srcset="https://cdn.test/c3.png 3x"`),
     ];
-    expect(assetsInputHash(blocks)).toBe(before(["https://cdn.test/a.png", "https://cdn.test/b.png"]));
+    expect(assetsInputHash(blocks)).toBe(
+      before(["https://cdn.test/a.png", "https://cdn.test/b.png", "https://cdn.test/c.png"]),
+    );
+  });
+
+  it("changes when a density candidate appears", () => {
+    /* Which is every Wikipedia figure: those articles read stale once, and
+       re-fetch only when the step next runs on them. */
+    const plain = [img("https://cdn.test/a.png")];
+    const x2 = [img("https://cdn.test/a.png", `srcset="https://cdn.test/a-500.png 2x"`)];
+    expect(assetsInputHash(x2)).not.toBe(assetsInputHash(plain));
   });
 
   it("changes when a candidate appears, and when it changes", () => {
