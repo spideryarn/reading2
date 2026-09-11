@@ -1031,6 +1031,25 @@ export interface Quote {
 export type QuoteTier = 1 | 2;
 
 /**
+ * **How a quote's outline is drawn: its weight and its brightness, as one
+ * value.** `tier` is the coarse priority step above; `alpha` (0.70–1.00) is
+ * the fine one on top of it, since 2026-09-11 — Greg, SPIDERYARN-READING2-2W:
+ * *"perhaps slightly fade the border based on the priority-score (but even
+ * low-priority quotes should still be clearly visible)"*.
+ *
+ * **One object rather than two fields, all the way to the markup**, so that a
+ * quote with a weight and no brightness is not a state anything can be in —
+ * GPT Sol's point on the plan: two parallel fields would let `baseMarks`
+ * unpack it back into exactly that. `quoteStroke` in src/web/QuotesPanel.tsx
+ * makes one; docs/plans/260911a-quotes-find-more-and-a-fade-that-carries-priority.md
+ * § 1 says why the two channels cannot cancel.
+ */
+export interface QuoteStroke {
+  tier: QuoteTier;
+  alpha: number;
+}
+
+/**
  * What was thrown away, and why. **Every one of these is invisible from
  * outside** — a dropped quote looks exactly like a line the model chose not to
  * offer — which is the whole reason they are counted and logged.
@@ -1083,12 +1102,26 @@ export interface QuoteDrops {
 }
 
 /**
- * The artefact. `data/<slug>/quotes.json`, stage 5h.
+ * The most quotes one article's list may hold, across every Find more.
  *
- * **No `passes` and no append**, like `Ideas` and unlike `Glossary`. A piece has
- * a dozen quotable lines rather than an encyclopaedia of terms, so running the
- * step again replaces — which removes the FORBIDDEN checklist, `existingFor`,
- * the "a stale list is not appended to" rule and the DELETE route all at once.
+ * Three long default passes (`MAX_QUOTES` in src/quotes.ts is one pass). It
+ * exists for two costs that grow with the list rather than with the pass: every
+ * append re-sends the whole taken list in the prompt, and the prose marks every
+ * visible quote in every mode. At the ceiling the panel stops offering Find
+ * more and says why, rather than letting a pass run that could add nothing.
+ *
+ * **Here rather than in src/quotes.ts** because the panel needs it too, and
+ * that module is server-only.
+ */
+export const MAX_QUOTES_TOTAL = 120;
+
+/**
+ * The artefact, stage 5h.
+ *
+ * **Appended to since 2026-09-11** — a Find more on a list from the same
+ * article keeps every quote and adds more (`passes`, `lastAdded`), and only a
+ * stale list is replaced. Until then it replaced, like `Ideas`. src/quotes.ts
+ * § existingFor.
  */
 export interface Quotes {
   version: string;
@@ -1124,6 +1157,19 @@ export interface Quotes {
    * to: it means the model offered words that are not in the piece.
    */
   discarded: QuoteDrops;
+  /**
+   * How many passes built this list — 1 for a fresh one, one more for every
+   * Find more. As `Glossary.passes`. Absent on a list written before
+   * 2026-09-11, which was one pass.
+   */
+  passes?: number;
+  /**
+   * How many quotes the most recent pass added. **The one number that tells a
+   * Find more that found nothing from a button that did nothing** — the panel
+   * says so when it is 0 after the first pass (docs/reusable/silent-success.md).
+   * Absent on a list written before 2026-09-11.
+   */
+  lastAdded?: number;
   generatedAt: string;
   elapsedMs: number;
 }

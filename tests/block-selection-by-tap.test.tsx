@@ -327,7 +327,7 @@ describe("a tap that already means something else does not select the block", ()
     const loaded = await readArticleFromDir(DIR);
     const marked = plainBlocks(loaded)[2];
     if (!marked) throw new Error("the fixture has too few plain-prose blocks");
-    const quote: Mark = { id: "quote-1", start: 0, end: 8, kind: "hit", quoteTier: 1 };
+    const quote: Mark = { id: "quote-1", start: 0, end: 8, kind: "hit", quoteStroke: { tier: 1, alpha: 0.7 } };
     await draw(propsFor(articleFrom(loaded), new Map([[marked.id, [quote]]])));
 
     await tap(inProse(marked.id, "mark[data-quote]"));
@@ -342,7 +342,7 @@ describe("a tap that already means something else does not select the block", ()
     const loaded = await readArticleFromDir(DIR);
     const marked = plainBlocks(loaded)[2];
     if (!marked) throw new Error("the fixture has too few plain-prose blocks");
-    const quote: Mark = { id: "quote-1", start: 0, end: 8, kind: "hit", quoteTier: 1 };
+    const quote: Mark = { id: "quote-1", start: 0, end: 8, kind: "hit", quoteStroke: { tier: 1, alpha: 0.7 } };
     const hit: Mark = { id: "search-1", start: 0, end: 8, kind: "hit", strength: 0.5 };
     await draw(propsFor(articleFrom(loaded), new Map([[marked.id, [quote, hit]]])));
 

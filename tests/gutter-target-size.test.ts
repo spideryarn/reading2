@@ -411,6 +411,26 @@ describe("the column shows as many controls as the row has room for", () => {
     );
   });
 
+  it("brightens the permalink when it is the thing you are pointing at", () => {
+    /* **The row's recessive 0.6 must not outrank `.blk-permalink:hover`.**
+       Written as `tr:hover .blk-permalink` it was (0,2,1) against the hover
+       rule's (0,2,0), so pointing at the permalink matched both and the 0.6
+       won — it went orange without lifting, unlike its siblings
+       (SPIDERYARN-READING2-2G, found 2026-09-08, fixed 2026-09-11). `:where()`
+       puts the row rule at (0,1,0), under `:hover`, `:focus-visible`, `.failed`
+       and `.blk-gutter[data-open] > *` alike. */
+    const recessive = rulesWith(":where(tr:hover) .blk-permalink");
+    expect(recessive.length, "no zero-weight row rule dims the permalink").toBe(1);
+    expect(recessive[0]?.body).toContain("opacity: 0.6");
+    expect(recessive[0]?.body).toContain("pointer-events: auto");
+    expect(hoverBlock()).toContain(":where(tr:hover) .blk-permalink");
+    expect(
+      rulesWith("tr:hover .blk-permalink"),
+      "a plain `tr:hover .blk-permalink` outranks `.blk-permalink:hover`",
+    ).toEqual([]);
+    expect(rulesWith(".blk-permalink:hover")[0]?.body).toContain("opacity: 1");
+  });
+
   it("leaves the reader's marks alone on a touch device", () => {
     /* **The touch block may raise the affordances and must not touch state.**
        Two things live in this gutter that are facts rather than buttons — a

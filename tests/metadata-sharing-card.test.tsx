@@ -450,9 +450,10 @@ describe("the sharing card, on the page that owns it", () => {
    *
    * Here rather than in the preview page or the component's own suite, and
    * that is the whole point of it: the wrapper lives in `SharingSection`, which
-   * only this page draws. `preview-sharing.tsx` puts the card round it by hand
-   * for the screenshots, so it would go on *looking* boxed for ever after
-   * somebody deleted the real one. GPT Sol, 2026-09-04.
+   * only this page draws. `preview-sharing.tsx` (deleted 2026-09-11) put the
+   * card round it by hand for the screenshots, so it would have gone on
+   * *looking* boxed for ever after somebody deleted the real one. GPT Sol,
+   * 2026-09-04.
    */
   it("draws the section inside the page's card, like its neighbours", async () => {
     sharing = {

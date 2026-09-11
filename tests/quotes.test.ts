@@ -94,9 +94,9 @@ function drops(over: Partial<Dropped> = {}): Dropped {
 
 describe("suggestedQuotes", () => {
   it("clamps at both ends and scales in between", () => {
-    expect(suggestedQuotes(0)).toBe(8);
-    expect(suggestedQuotes(600)).toBe(8);
-    expect(suggestedQuotes(4800)).toBe(16);
+    expect(suggestedQuotes(0)).toBe(10);
+    expect(suggestedQuotes(600)).toBe(10);
+    expect(suggestedQuotes(4800)).toBe(24);
     expect(suggestedQuotes(200_000)).toBe(MAX_QUOTES);
   });
 
@@ -108,9 +108,13 @@ describe("suggestedQuotes", () => {
 
        The floor moved too, and that is the half worth pinning: a short piece
        used to get four marks in a whole article, which is not a highlighted
-       article, it is four highlights. */
-    expect(MAX_QUOTES).toBe(32);
-    expect(suggestedQuotes(4192)).toBeGreaterThan(8);
+       article, it is four highlights.
+
+       And again on 2026-09-10 (SPIDERYARN-READING2-2W): "Try and find more
+       quotes by default" — one per ~200 words, clamped 10–40.
+       tests/quotes-find-more.test.ts pins the new numbers. */
+    expect(MAX_QUOTES).toBe(40);
+    expect(suggestedQuotes(4192)).toBeGreaterThan(13);
   });
 });
 
@@ -559,7 +563,7 @@ describe("isStale", () => {
 
 describe("renderPrompt", () => {
   it("sends the skeleton and no block ids", () => {
-    const prompt = renderPrompt({ tree: TREE, count: 6, profile: null });
+    const prompt = renderPrompt({ tree: TREE, count: 6, profile: null, existing: [] });
     expect(prompt).toContain("PART 1");
     expect(prompt).toContain("up to 6");
     // The whole reason this stage can share the glossary's cached article.

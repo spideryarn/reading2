@@ -28,7 +28,7 @@
  */
 import { describe, expect, it } from "vitest";
 import { findLiteral, quoteMarkKey, resolveQuotes } from "../src/web/search-hits.js";
-import { markedQuotes, quoteTier, QUOTE_BAR_DEFAULT } from "../src/web/QuotesPanel.js";
+import { markedQuotes, quoteStroke, quoteTier, QUOTE_BAR_DEFAULT } from "../src/web/QuotesPanel.js";
 import type { Block, Quote } from "../src/types.js";
 
 const block = (id: string, html: string): Block => {
@@ -67,7 +67,7 @@ const THREE: Quote[] = [
 const rq = (quotes: readonly Quote[]) =>
   resolveQuotes(
     BLOCKS,
-    quotes.map((quote) => ({ ...quote, tier: quoteTier(quote) })),
+    quotes.map((quote) => ({ ...quote, stroke: quoteStroke(quote) })),
   );
 
 describe("the quotes the prose marks", () => {
@@ -197,14 +197,14 @@ describe("how heavily each quote is drawn", () => {
 
   it("carries the tier onto the passage, so the prose can draw it", () => {
     const found = rq(markedQuotes(THREE, "document", null));
-    expect(found.map((f) => f.quoteTier)).toEqual([2, 1, 2]);
+    expect(found.map((f) => f.quoteStroke?.tier)).toEqual([2, 1, 2]);
   });
 
   it("leaves a search hit with no tier at all", () => {
-    /* `quoteTier: null` is what the stylesheet reads as "this is a wash, not an
+    /* `quoteStroke: null` is what the stylesheet reads as "this is a wash, not an
        outline". A search hit that acquired one would be drawn as a quote. */
     const hits = findLiteral(BLOCKS, "thinking");
     expect(hits.length).toBeGreaterThan(0);
-    expect(hits.every((f) => f.quoteTier === null)).toBe(true);
+    expect(hits.every((f) => f.quoteStroke === null)).toBe(true);
   });
 });

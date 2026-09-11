@@ -649,8 +649,12 @@ export const STEP_BUDGET_MS: Record<StepName, number> = {
      longer — so the old number is not wrong, it is a headroom claim about a
      call half this size. Raising it costs sixty seconds before a genuinely hung
      call is declared dead; not raising it risks killing a good one the reader
-     has already paid for. */
-  quotes: 180_000,
+     has already paid for.
+
+     **And to 240s on 2026-09-11**, the same argument again: one per ~200 words
+     up to 40 a pass, and a Find more carries the taken list in its prompt
+     (docs/plans/260911a-quotes-find-more-and-a-fade-that-carries-priority.md). */
+  quotes: 240_000,
   /* GUESS, in `glossary`'s family and never measured on its own. */
   ideas: 120_000,
   /* **MEASURED** 2026-08-31, four runs of the stage on the test article, read
