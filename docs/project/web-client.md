@@ -563,6 +563,31 @@ closed over by the effect's cleanup is per-run by construction; all three hooks
 use it. `tests/load-failed-flags.test.ts` mounts under a real `StrictMode` and
 asserts the double-run happened before relying on it.
 
+### A write waits for the opening read
+
+**`live` says a response still belongs to this page; it does not say the response
+is newer than something else this page did.** Saved searches, referee criteria and
+comments each put their opening GET on screen with a *replace*, and each lets the
+reader add a row. Until 2026-09-11 a search, criterion or comment made while that
+GET was out was wiped from the tab when it landed —
+[260908c](../postmortems/260908c-an-opening-read-can-erase-a-later-write.md).
+
+Greg chose an order rather than a merge (2026-09-11): the fields stay editable,
+and **Run / Find / Save — button, form submit and key chord alike — wait for
+`loaded`**. Not `!loadFailed`: a read that failed has no snapshot left to erase
+anything with, so failure releases the press as well as success. A read that never
+answers is given up on after `OPENING_READ_DEADLINE_MS` by
+[`opening-read.ts`](../../src/web/lib/opening-read.ts), which invalidates the
+snapshot *before* the hook marks the load failed — the order that makes a write
+after the deadline safe — and says `[rd-timeout]`. The gate is in each composer's
+own `ready` and its handler (`SearchPanel.Box`, `CriteriaPanel.NewCriterion`,
+`AnnotateDialog`), never a silent refusal inside the hook's `ask`, whose callers
+switch on the id it returns. Recovery is still a page reload: an in-place retry
+would be a second snapshot racing the reader's writes, the same bug again.
+`tests/opening-read-gates-writes.test.tsx` holds all three, with the old row as
+well as the new one required, since dropping the snapshot instead would pass a
+new-row-only check.
+
 ### A failed *reload* must not take the answer away
 
 There is a fourth state, and it is the one the rule above does not cover: **we

@@ -31,7 +31,8 @@ import { mintId } from "../ids.js";
 import type { RefereeCriterionConfig, RefereeResult } from "../referee-criteria.js";
 import type { SavedCriterion } from "../saved-criteria.js";
 import { isStale } from "../search-stale.js";
-import { apiFetch, failure, fetchOk, readJson } from "./lib/api.js";
+import { apiFetch, failure, fetchOk } from "./lib/api.js";
+import { openingRead } from "./lib/opening-read.js";
 import { readEvents, STREAM_STALL_MS } from "./lib/sse.js";
 import { describeFetchFailure } from "./useComments.js";
 
@@ -43,7 +44,10 @@ export interface SavedCriterionState extends SavedCriterion {
 
 export interface CriteriaApi {
   criteria: SavedCriterionState[];
-  /** False until the first fetch has answered, either way — `SearchApi.loaded`. */
+  /**
+   * False until the first fetch has answered, either way — `SearchApi.loaded`.
+   * **Run waits for it**, for the reason given there.
+   */
   loaded: boolean;
   /** Did that first fetch fail? The half `loaded` cannot carry. */
   loadFailed: boolean;
@@ -112,10 +116,12 @@ export function useCriteria(slug: string): CriteriaApi {
     setLoaded(false);
     setLoadFailed(false);
     setFingerprint(null);
-    apiFetch(url(slug))
-      .then((r) =>
-        readJson<{ criteria?: SavedCriterion[]; sourceHash?: string; error?: string }>(r),
-      )
+    /* With a deadline, because `loaded` is what lets the referee press Run —
+       see `loaded` above and src/web/lib/opening-read.ts. */
+    const read = openingRead<{ criteria?: SavedCriterion[]; sourceHash?: string; error?: string }>(
+      url(slug),
+    );
+    read.body
       .then((body) => {
         if (!live) return;
         if (body.error) {
@@ -145,6 +151,7 @@ export function useCriteria(slug: string): CriteriaApi {
       });
     return () => {
       live = false;
+      read.abandon();
     };
   }, [slug]);
 

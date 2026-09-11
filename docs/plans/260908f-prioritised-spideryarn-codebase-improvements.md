@@ -12,6 +12,8 @@ I (retire the revision alias) built the same day — see § I.
 E (both glossary lookups streamed) built 2026-09-10/11 — see § E.
 O (on-demand draft sweep) built 2026-09-11 and wired in `count` mode; the first deletion waits for
 Greg — see § O.
+C (the glossary question carried into chat) built 2026-09-11 — see § C.
+A (the submit gate, Greg's choice) built 2026-09-11; the reconciliation stages are skipped — see § A.
 F's first stage (a bounded `srcset` candidate) built 2026-09-11 — see § F.
 Each stage's own status line is the authority.
 
@@ -203,7 +205,8 @@ path was false and is excluded. Provenance and introducing commits are in
 **Simpler product choice before engineering:** recommend keeping fields mounted/editable but
 gating Run/Find/Save until the opening read settles, successfully **or with an error**. This orders
 the operations without inventing a list merge protocol. Show Greg the brief extra wait before
-implementing that changed behaviour. No choice has been made by Greg in this plan-only task.
+implementing that changed behaviour. Greg selected this gate on 2026-09-11; the reconciliation
+stages below remain unselected.
 A never-ending request must have a bounded failure ending: `apiFetch` currently has no response
 deadline; `SESSION_DEADLINE_MS` only bounds obtaining a credential. If immediate submission is required instead, use
 the reconciliation stages below. Do not build the complex version before asking about the simpler
@@ -211,26 +214,44 @@ product option.
 
 ### Stage: the recommended submit gate, if selected
 
-- [ ] Write one mounted-UI red witness per surface: hold the opening GET containing old row A,
+**Status 2026-09-11: built.** Greg selected it. At `33123d9f` a temporary mounted witness per
+surface, outside StrictMode, showed B created, shown, then erased by GET A — all three reproduced.
+The fix: `src/web/lib/opening-read.ts` (a 15 s deadline that settles the read with
+`OpeningReadTimedOut`, `[rd-timeout]`, before the hook marks it failed/loaded, then aborts); the
+three hooks use it; `NewCriterion`, `SearchPanel.Box` and `AnnotateDialog` fold `loaded` into
+their readiness and their handlers (`AnnotateDialog.loaded` is required; `Reader` passes
+`owner.comments.loaded`). `tests/opening-read-gates-writes.test.tsx`: 14 cases — refused through
+every door with the draft kept, A and B both after load, failure and deadline release, a late GET
+that resolves (abort deliberately ignored) cannot commit, StrictMode, and Reader's wiring.
+Negative controls: removing the Criteria `loaded`, the AnnotateDialog handler guard, or the
+deadline's reject each turned cases red. A Playwright check with the GETs held 5 s confirmed all
+three surfaces at 1280 and 400 px. GPT Sol reviewed the diff and fixed three things (the deadline
+tests leaned on the abort; the timeout copy promised more than a timed-out read knows; a redundant
+`catch`). **Both reconciliation stages below are skipped**: the gate closes every current path.
+Open, for Greg: after a failed or timed-out load, the first new write clears the load's error, so
+the panel shows only new rows with nothing saying older ones did not load — true before this
+change for failed loads too, and separating load from action errors is its own small stage.
+
+- [x] Write one mounted-UI red witness per surface: hold the opening GET containing old row A,
   type the input, and show that today's enabled action can create/complete B before GET A erases it.
   Start this reproduction outside StrictMode: a development remount can hide ordering bugs.
-- [ ] Pin the selected behaviour: typing remains possible, while Run/Find/Save and keyboard submit
+- [x] Pin the selected behaviour: typing remains possible, while Run/Find/Save and keyboard submit
   are refused during the outstanding read. Thread `loaded` to the existing readiness predicates in
   `SearchPanel.Box`, `CriteriaPanel.NewCriterion`, and `AnnotateDialog`; gate the handler as well as
   the button. Do not make a hook's `ask` silently return without writing: its callers immediately
   activate the returned row id. If adding a hook-level refusal, represent refusal in the return
   type and update callers deliberately; gating the actual event handlers is the smaller change.
-- [ ] Use `loaded`, not `!loadFailed`: once GET has failed, there is no later snapshot to overwrite
+- [x] Use `loaded`, not `!loadFailed`: once GET has failed, there is no later snapshot to overwrite
   a write. Test success, failure and timeout release the action; preserve the existing load error.
   Give the opening reads a named response deadline. Its ordering is: **abort or invalidate the
   GET's commit generation → mark the load failed and `loaded=true` → enable writes**. Hold GET A
   past that deadline, successfully create B, then release A and prove B remains. Keep the current
   page-reload recovery for load failure in v1; adding in-place retry would require gating again or
   reconciliation, because a retried GET can otherwise recreate the same race.
-- [ ] After load succeeds, perform the write and require A and B remain. After load fails, require
+- [x] After load succeeds, perform the write and require A and B remain. After load fails, require
   the new write remains. Preserve draft text, dictation guards, colour, reminted ids and tombstones;
   add a StrictMode regression after the non-StrictMode red witness.
-- [ ] Add a concise loading reason where necessary, review all three surfaces in the browser, and
+- [x] Add a concise loading reason where necessary, review all three surfaces in the browser, and
   complete the common checks. If this closes the current paths, skip both reconciliation stages.
 
 ### Alternative stage: reconcile Criteria if pre-load submission must stay
@@ -330,18 +351,54 @@ those are different, previously weighed decisions.
 
 ### Stage: one explicit draft handoff
 
-- [ ] Product proposal for Greg: pressing **Ask in chat** opens an editable question about the
+**Status 2026-09-11: built, on `dev`.** Greg answered the proposal the same day — *"fresh"* — so
+**Ask in chat** opens a new conversation with *What does "‹term›" mean, and does it have anything to
+do with what this article is saying?* in its composer, the caret in the box, and nothing sent until
+Send. The term is the one the box sent (`UseGlossary.askTerm`, trimmed and normalised), handed as a
+`ChatHandoff` prop that `Reader` owns and clears once the chat band has taken it; it carries its
+slug, and the band drops one from another article. No global cell, nothing in the URL, no change to
+the ask route's validation or ownership. [glossary.md § The three ways it comes back
+empty](../project/glossary.md#the-three-ways-it-comes-back-empty) has the behaviour.
+
+Evidence: `tests/glossary-ask-in-chat.test.tsx` (the whole app under StrictMode: fresh thread beside a
+stored one, question in the box, editable, focused, zero chat POSTs before Send and exactly one
+after, the reader's edit is what is sent, a long term with quotes, the floating passage draft
+survives the round trip, a visitor has no box) and `tests/conversation-band-handoff.test.tsx` (one
+conversation under StrictMode, another article's handoff dropped, no second empty conversation when
+the reader closes the handed-over one before the list arrives), plus a `chat-list-composer` case (the
+reader's edit beats a seed the panel is still being handed). Red before the change; red again under
+nine mutations (the box's text sent instead of `askTerm`; the StrictMode guard removed; the latch
+removed; the latch moved after the guard; the slug check removed; the seed never used; the seed
+preferred over the reader's edit; the caret left at the start; the mode switch removed). The latch
+one caught a real bug in the first draft: StrictMode re-runs the latch reset, so a latch spent only on
+the first run was undone. A scripted Playwright pass on this worktree's own dev server, at 1280px
+and 390px, saw the question in the box, the caret at its end (it was at the start until the
+composer's focus effect moved it), a new `?thread=`, Escape clearing it, and no chat request.
+
+GPT Sol reviewed the scoped diff and confirmed the spend conclusion: the handoff only creates a local
+thread, and Send is the one request. It made `ChatPanel` read the seed as a pure lookup rather than
+write it into the draft map during render (an abandoned render could have changed the committed
+panel), and strengthened the tests (every chat POST counted, including `/live`; the visitor case
+asserts the article rendered). It also added a path carrying a draft across a server correction of a
+new conversation's id; that was taken out again, because the correction happens only on an id
+collision or a hand-typed id, it widened ordinary drafts beyond this stage, and `ChatPanel`'s
+`drafts` comment already records the limit. Not witnessed by a test:
+`Reader` also clears a handoff chat mode never took when the mode is not chat — no reachable path
+leaves one untaken, so it is a guard rather than a behaviour. Escape keeps the composer's existing
+ladder (the first press clears the handed-over question, like any draft).
+
+- [x] Product proposal for Greg: pressing **Ask in chat** opens an editable question about the
   entered term and sends nothing until the reader presses Send. Prefer a fresh conversation to
   overwriting an existing draft; present that choice concretely before implementing it.
-- [ ] Read `src/web/chat-handoff.ts`, the current `ChatDialog` opening props, and the conversation
+- [x] Read `src/web/chat-handoff.ts`, the current `ChatDialog` opening props, and the conversation
   controller. Use the existing reader-owned prop path if possible. Its old global-cell implementation
   was deleted for cross-article/StrictMode bugs; do not revive it or put private text in a URL.
-- [ ] Carry the trimmed submitted term and article identity, not whichever text happens to be in
+- [x] Carry the trimmed submitted term and article identity, not whichever text happens to be in
   the box when an old failure arrives. Keep validation and ownership checks unchanged.
-- [ ] Test term survives handoff, draft stays editable, zero model requests before Send, exactly one
+- [x] Test term survives handoff, draft stays editable, zero model requests before Send, exactly one
   after Send, existing draft preserved, navigation cancels a pending handoff, and visitors have no
   paid control. Test a long term and quoted characters as data.
-- [ ] Check focus reaches the composer and Escape/back behaves as the current dialog contract says.
+- [x] Check focus reaches the composer and Escape/back behaves as the current dialog contract says.
   Update [glossary](../project/glossary.md); complete common checks.
 
 ## D — let Knip inspect source without requiring build output

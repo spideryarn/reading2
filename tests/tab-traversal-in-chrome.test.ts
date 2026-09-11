@@ -81,6 +81,7 @@ const ANNOTATE = renderToStaticMarkup(
   createElement(AnnotateDialog, {
     anchor: { blockId: "spya-k3m9qt" as BlockId, quote: "a science of bumps", start: 0 },
     placing: false,
+    loaded: true,
     onSave: () => {},
     onCancel: () => {},
   }),

@@ -243,6 +243,15 @@ interface Props {
    * is a second sub-mode at all.
    */
   subMode?: React.ReactNode;
+  /**
+   * **An unsent question for one conversation**, handed over from another mode
+   * — today, the glossary's *Ask in chat*. Used as that keyed composer's initial
+   * draft, so it is exactly what the reader would have had if they had typed it:
+   * in the box, editable, cleared by Escape, and enough to stop `leave`
+   * discarding the conversation. Sent only by Send.
+   * `ChatHandoff` in src/web/modes/conversation/ConversationModes.tsx.
+   */
+  seed?: { threadId: string; text: string } | null | undefined;
 }
 
 /**
@@ -345,6 +354,7 @@ export function ChatPanel({
   subMode,
   live,
   onStartLive,
+  seed,
 }: Props) {
   useRenderCount("ChatPanel");
   const remember = kind === "remember";
@@ -380,6 +390,22 @@ export function ChatPanel({
    * and the draft, the scroll position and the caret are lost with it.
    */
   const drafts = useRef(new Map<string, string>());
+
+  /**
+   * The draft a keyed composer should adopt on mount.
+   *
+   * A lookup during render rather than a write: React may abandon a render, so
+   * mutating `drafts` here would let an uncommitted tree change the committed
+   * panel. The composer owns the returned value from mount onwards and writes
+   * every reader edit into `drafts`, including Escape's empty string — which is
+   * why this asks `has` rather than for a truthy value: a question the reader
+   * cleared must not come back as the seed.
+   */
+  const draftFor = (id: string): string => {
+    if (drafts.current.has(id)) return drafts.current.get(id) ?? "";
+    if (seed?.threadId !== id) return "";
+    return seed.text;
+  };
 
   /**
    * The highest `focusNonce` the composer has already acted on.
@@ -433,7 +459,7 @@ export function ChatPanel({
       await live.stop();
     }
     const unsavedSpeech = live?.threadId === open?.id && (live?.lines.length ?? 0) > 0;
-    if (open && !unsavedSpeech && open.messages.length === 0 && (drafts.current.get(open.id) ?? "").trim() === "") {
+    if (open && !unsavedSpeech && open.messages.length === 0 && draftFor(open.id).trim() === "") {
       drafts.current.delete(open.id);
       onDiscard(open.id);
     }
@@ -502,7 +528,7 @@ export function ChatPanel({
           onStop={onStop}
           focusNonce={focusNonce}
           focused={focused}
-          draft={drafts.current.get(open.id) ?? ""}
+          draft={draftFor(open.id)}
           onDraft={(text) => drafts.current.set(open.id, text)}
           /* The OPEN conversation's kind, not the mode's. The list is shared,
              so a reader in Remember mode can open a chat — and when they do, the
@@ -1871,11 +1897,19 @@ export function Composer({
    * conversation they already had, from stealing the caret; a focused textarea
    * turns ↑ / ↓ from "step through the article" into "move the cursor", and
    * nothing on screen would say why.
+   *
+   * **The caret goes to the end.** A new conversation's box is usually empty,
+   * where that changes nothing; when it was started with a question handed over
+   * (`seed` in `ChatPanel`), `focus()` alone left the caret before the first
+   * word — measured in Chrome — so the reader's first keystroke landed in front
+   * of the question rather than after it.
    */
   useEffect(() => {
     if (focusNonce > focused.current) {
       focused.current = focusNonce;
-      box.current?.focus();
+      const el = box.current;
+      el?.focus();
+      el?.setSelectionRange(el.value.length, el.value.length);
     }
   }, [focusNonce, focused]);
 

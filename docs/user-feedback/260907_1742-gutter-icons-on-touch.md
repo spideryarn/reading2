@@ -60,11 +60,19 @@ is `matchMedia("(hover: hover)")` in the handler.
   report is evidence Greg's own device is not in it — he was complaining of too many icons, which
   only happens where the rule applies.
 
-## A separate bug found on the way, and left alone
+## A separate bug found on the way — *shipped* 2026-09-11
 
 `tr:hover .blk-permalink { opacity: 0.6 }` is (0,2,1) and `.blk-permalink:hover { opacity: 1 }` is
-(0,2,0), and pointing at the permalink matches both — so **it never brightens when you point at it**,
-against a comment two lines above saying it does. Pre-existing, and the same class as a bug this
-stylesheet already fixed once. Not fixed here because it is a visible change to *desktop* hover
-inside a touch report, and the clean repair moves a heavily-argued selector list. Listed in
-[awaiting-approval.md](awaiting-approval.md) so it does not age out.
+(0,2,0), and pointing at the permalink matches both — so **it never brightened when you pointed at
+it**, against a comment two lines above saying it did. Pre-existing, and the same class as a bug this
+stylesheet already fixed once. Left out of the touch fix because it is a visible change to *desktop*
+hover, and listed in [awaiting-approval.md](awaiting-approval.md); the Overseer closed that row as
+*fix it* on 2026-09-11, under Greg's *"use your judgment"*.
+
+**Fixed as the row proposed**: the recessive rule is now `:where(tr:hover) .blk-permalink` at
+(0,1,0), so `:hover` and `:focus-visible` outrank it, and the `tr:hover .blk-permalink.failed`
+workaround is gone because `.failed` now wins on its own. Measured in Chrome against the old and new
+rules side by side: pointing at the permalink went **0.6 → 1**; on the row it is still 0.6, the chat
+button still 1, a failed permalink still 1. An open "…" panel now draws the permalink at full
+strength too, as that panel's own rule always intended. `tests/gutter-target-size.test.ts` pins the
+shape, and was red before the change.

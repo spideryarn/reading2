@@ -20,6 +20,7 @@ import type { BlockId, Comment } from "../types.js";
 import { readEvents, StreamStalled, STREAM_STALL_MS } from "./lib/sse.js";
 import { wentQuiet } from "../messages.js";
 import { apiFetch, failure, fetchOk, readJson } from "./lib/api.js";
+import { openingRead } from "./lib/opening-read.js";
 import type { Mark } from "./PlaceOnCriterion.js";
 
 /**
@@ -112,6 +113,14 @@ export interface CommentsApi {
    * the drawer stops claiming to be waiting. Which is why it is not enough on
    * its own — see `loadFailed`.
    * docs/project/web-client.md § Empty is not the same as not asked yet.
+   *
+   * **`AnnotateDialog` waits for it before it saves** (2026-09-11): the GET's
+   * answer replaces the list, so a comment created while it was out vanished
+   * from the tab when it landed —
+   * docs/postmortems/260908c-an-opening-read-can-erase-a-later-write.md. "Has
+   * come back, either way" is the right thing to wait on: a failed read has no
+   * snapshot left to erase anything with, and one that never answers is given
+   * up on at a deadline (src/web/lib/opening-read.ts).
    */
   loaded: boolean;
   /**
@@ -295,8 +304,12 @@ export function useComments(slug: string): CommentsApi {
        — the whole point of them is that they describe *this* slug's fetch. */
     setLoaded(false);
     setLoadFailed(false);
-    apiFetch(`/api/comments/${encodeURIComponent(slug)}`)
-      .then((r) => readJson<{ comments?: Comment[]; error?: string }>(r))
+    /* With a deadline, because `loaded` is what lets `AnnotateDialog` save —
+       see `loaded` in CommentsApi and src/web/lib/opening-read.ts. */
+    const read = openingRead<{ comments?: Comment[]; error?: string }>(
+      `/api/comments/${encodeURIComponent(slug)}`,
+    );
+    read.body
       .then((body) => {
         if (!live) return;
         /* A body with an `error` in it is a failed load as much as a thrown
@@ -319,6 +332,7 @@ export function useComments(slug: string): CommentsApi {
       });
     return () => {
       live = false;
+      read.abandon();
     };
   }, [slug]);
 

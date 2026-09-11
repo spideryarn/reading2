@@ -473,6 +473,9 @@ export const CODE_KINDS: Record<string, FailureKind> = {
      reason `db-` and `up-` have theirs: four characters should tell whoever is
      helping which part of the app the reader was in. See THREAD_RECHECK_FAILED. */
   "rd-recheck": "retry",
+  /* The same family: a panel's opening list read, given up on at its deadline.
+     See LIST_LOAD_TIMED_OUT. */
+  "rd-timeout": "retry",
   /* Uploading a file. `up-` for the same reason `db-` is not `ai-`: a reader
      quoting four characters should not have to explain which part of the app
      they were in. **Their kinds are not uniform**, which is the whole reason
@@ -2252,6 +2255,29 @@ export const THREAD_RECHECK_FAILED: ReaderFacingFailure = {
     "This app could not check whether there is a newer thread for this article, so what is on this " +
     "page may not be the latest. Nothing has been changed or lost — reloading the page tries " +
     "again. [rd-recheck]",
+};
+
+/**
+ * A panel's saved list never arrived, so the panel stopped waiting for it.
+ *
+ * Saved searches, referee criteria and comments each read their whole list when
+ * they open, and hold Run / Find / Save until it has — see
+ * src/web/lib/opening-read.ts. This is the sentence for the third way that wait
+ * ends. **One sentence for all three panels**, for the reason
+ * `THREAD_RECHECK_FAILED` gives: a noun each would be three sentences under one
+ * code. "Saved list" is true of all three.
+ *
+ * It says what the reader can safely infer: this page may be missing earlier
+ * items, the button is working again, and a reload makes another attempt. It
+ * does not claim the unseen rows still exist or promise that a future write
+ * will succeed; this timed-out read can establish neither.
+ */
+export const LIST_LOAD_TIMED_OUT: ReaderFacingFailure = {
+  kind: "retry",
+  message:
+    "Things you saved for this article took too long to arrive, so this app stopped waiting. " +
+    "You can add something now; reload the page to try showing the earlier items again. " +
+    "[rd-timeout]",
 };
 
 /** The overall deadline fired. `seconds` is that deadline, not elapsed time. */

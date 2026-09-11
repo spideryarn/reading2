@@ -5,6 +5,13 @@ during the plan-only [Spideryarn improvement audit](../plans/260908f-prioritised
 at `4adcdfd6`, independently traced through mounted UI and history by GPT Sol. No production
 incident rate is known. The loss is from client state; successful rows remain in Postgres.
 
+**Update 2026-09-11: reproduced and fixed by the submit gate** Greg chose. At `33123d9f` a mounted
+witness per surface (outside StrictMode) showed B created, shown, then erased when GET A landed.
+Run / Find / Save now wait for `loaded`, and the opening reads have a 15-second deadline that
+invalidates the snapshot before enabling writes — [web-client.md § A write waits for the opening
+read](../project/web-client.md#a-write-waits-for-the-opening-read);
+`tests/opening-read-gates-writes.test.tsx`. The reconciliation alternatives below were not built.
+
 ## The class and the reachable paths
 
 **An unsequenced whole-list snapshot overwrites a causally later local write.** A mount's `live`
@@ -59,11 +66,12 @@ type while the initial list loads, but enable Run/Find/Save only after it settle
 `loaded`, including failed load, and give a stuck read a bounded abort/invalidation ending before
 enabling writes. This orders the only current pre-load mutation paths and preserves initial rows.
 It changes behaviour, so Greg should see the concrete wait before implementation.
-No such product decision was made in this plan-only task. `apiFetch` currently has no response
-deadline: the new timeout must abort/invalidate the GET before marking it failed/loaded and
-enabling writes. Keep current page-reload recovery; an in-place retry needs the same fence again.
-Gate actual UI handlers as well as buttons. A silent hook-level `ask` refusal is unsafe while its
-return type promises the id that callers immediately activate.
+At the time of this audit no product decision had been made. Greg selected the submit gate on
+2026-09-11, and the update above records its implementation. The requirement was that its timeout
+abort or invalidate the GET before marking it failed/loaded and enabling writes. Page-reload
+recovery remains; an in-place retry would need the same fence again. The UI handlers as well as the
+buttons are gated—a silent hook-level `ask` refusal would be unsafe while its return type promises
+the id that callers immediately activate.
 
 If immediate pre-load submission is required, merge the opening base with explicit locally owned
 rows, reminted ids, deletions and colour choices, preserving newer fingerprints; or fence stale

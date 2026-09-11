@@ -13,10 +13,12 @@
  * **appends**, so "give me more terms" and "start over" cannot be the same
  * button and `reset` needs a DELETE of its own to mean anything.
  *
- * Quotes replaces. A piece has a dozen lines worth keeping, not forty, so there
- * is nothing to paginate — which means running the step again already *is*
- * "choose them again". No DELETE route, and the class of bugs that comes with
- * an append path does not exist here to be got wrong.
+ * Quotes replaced until 2026-09-11, on the argument that a piece has a dozen
+ * lines worth keeping and running the step again already *is* "choose them
+ * again". **Since then a forced run appends**, as the glossary's does — Greg
+ * asked twice for *Find more* (src/quotes.ts § existingFor) — and replaces only
+ * a list the article has moved out from under. Still no DELETE route and no
+ * `reset`: the one way to a list of its own is the stale banner's button.
  *
  * **Two verbs since 2026-09-02** — `ensure` and `regenerate` — and the split is
  * `force` rather than append: see useIdeas.ts, which made the same change for
@@ -168,10 +170,13 @@ export interface UseQuotes {
    */
   ensure(useProfile?: boolean): Promise<void>;
   /**
-   * **Choose them again** — forced, for the button offered beside a list that
-   * is current, where an unforced run would skip. Safe to force because this
-   * step replaces rather than appends, and `quotes` is in
-   * FORCE_ONLY_WHEN_NAMED with `useStepJob` naming the step.
+   * **The forced run, and the stage decides what it does** — the glossary's
+   * `more`, one verb for two buttons since 2026-09-11. On a list written from
+   * this same article it **appends** (*Find more*, in the foot); on one the
+   * article has moved out from under it replaces (*Choose them again*, on the
+   * stale banner, the one place that label survives). src/quotes.ts §
+   * existingFor. Forced because an unforced run on a current list would skip;
+   * `quotes` is in FORCE_ONLY_WHEN_NAMED with `useStepJob` naming the step.
    */
   regenerate(useProfile?: boolean): Promise<void>;
   cancel(id: string): void;

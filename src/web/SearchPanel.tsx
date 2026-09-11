@@ -303,6 +303,7 @@ export function SearchPanel({
           draft={draft}
           onDraft={setDraft}
           busy={matcher === "meaning" && searching}
+          loaded={loaded}
           onAsk={own.onAsk}
         />
       )}
@@ -424,9 +425,14 @@ const Box = forwardRef<
     draft: string;
     onDraft(next: string): void;
     busy: boolean;
+    /**
+     * **Has the saved list come back — answered, failed or given up on?** Find
+     * waits for it: `SearchApi.loaded` says why. Typing does not.
+     */
+    loaded: boolean;
     onAsk(criterion: string): void;
   }
->(function Box({ matcher, onMatcher, find, onFind, draft, onDraft, busy, onAsk }, ref) {
+>(function Box({ matcher, onMatcher, find, onFind, draft, onDraft, busy, loaded, onAsk }, ref) {
   /* The parent needs this to focus the box from ↺, and the input needs it for
      the focus-on-mount below and for `switchTo`. `useImperativeHandle` would
      hand back a narrowed object; there is nothing to narrow, so the ref is
@@ -447,7 +453,7 @@ const Box = forwardRef<
 
   const setDraft = onDraft;
   const value = matcher === "words" ? (find ?? "") : draft;
-  const ready = matcher === "meaning" && draft.trim().length > 0 && !busy;
+  const ready = matcher === "meaning" && loaded && draft.trim().length > 0 && !busy;
 
   /**
    * Change matcher, taking whatever is in the box along with it.
@@ -581,8 +587,17 @@ const Box = forwardRef<
             type="button"
             className="srch-go"
             disabled={!ready}
-            onClick={() => onAsk(draft)}
-            title="Find the passages that match — one model call"
+            /* Checked again here, not only through `disabled`: `disabled`
+               lands on the next render, and the handler is what a press
+               actually reaches. The Enter key above asks the same `ready`. */
+            onClick={() => {
+              if (ready) onAsk(draft);
+            }}
+            title={
+              loaded
+                ? "Find the passages that match — one model call"
+                : "Waiting for your saved searches to load"
+            }
           >
             find
           </button>

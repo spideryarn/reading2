@@ -211,12 +211,14 @@ interface Props {
    * surface in this app that may answer from outside the article. Absent for a
    * visitor, who has no chat.
    *
-   * A mode switch and nothing more: the composer is not pre-filled, because a
-   * draft would have to be carried across a component boundary that only chat
-   * mode's own dialog has a prop for (src/web/chat-handoff.ts). Worth doing
-   * later; not worth blocking the box on.
+   * **Given the term, and it goes with the reader.** Called with the term the
+   * box actually sent (`UseGlossary.askTerm`); `Reader` turns it into a question
+   * in a fresh conversation's composer, sent only when the reader presses Send
+   * — Greg, 2026-09-11, *"fresh"*. Until then it was a bare mode switch and the
+   * reader typed the word twice. `askAboutTerm` in src/web/chat-handoff.ts, and
+   * `ChatHandoff` in src/web/modes/conversation/ConversationModes.tsx.
    */
-  onAskChat?: (() => void) | undefined;
+  onAskChat?: ((term: string) => void) | undefined;
 }
 
 export function GlossaryPanel({
@@ -1527,10 +1529,10 @@ function AskATerm({
 }: {
   owner: UseGlossary;
   onJump(id: BlockId): void;
-  onAskChat?: (() => void) | undefined;
+  onAskChat?: ((term: string) => void) | undefined;
 }) {
   const [term, setTerm] = useState("");
-  const { ask, asking, askDraft, asked, askFailed, clearAsked } = owner;
+  const { ask, asking, askDraft, asked, askFailed, askTerm, clearAsked } = owner;
 
   return (
     <div className="gloss-ask">
@@ -1619,9 +1621,15 @@ function AskATerm({
               question chat can answer either, and *"a term cannot contain
               control characters. Ask in chat"* would be the panel offering a
               door out of a typo. Read off the code rather than off the sentence,
-              docs/project/copy.md § The bracketed code. */}
-          {onAskChat && codeOfMessage(askFailed)?.startsWith("gl-ask-") && (
-            <button type="button" className="gloss-btn" onClick={onAskChat}>
+              docs/project/copy.md § The bracketed code.
+
+              **It carries `askTerm`, not `term`**: the word the article was
+              searched for, as it was sent, rather than whatever the box holds
+              when the button is pressed. Every `gl-ask-` refusal comes from the
+              server, so a request was sent and `askTerm` is set whenever the
+              code is — the null check is the compiler's, not a second rule. */}
+          {onAskChat && askTerm !== null && codeOfMessage(askFailed)?.startsWith("gl-ask-") && (
+            <button type="button" className="gloss-btn" onClick={() => onAskChat(askTerm)}>
               Ask in chat
             </button>
           )}

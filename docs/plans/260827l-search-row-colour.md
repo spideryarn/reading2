@@ -321,7 +321,7 @@ column — `flip` should swing it, and nothing here proves it does), and **wheth
 as two different things** at 1.35rem on a near-black ground.
 
 There is a throwaway preview page for exactly that pass — `preview-colour.html` and
-[`src/web/preview-colour.tsx`](../../src/web/preview-colour.tsx) — which mounts the real
+`src/web/preview-colour.tsx` (deleted 2026-09-11) — which mounts the real
 `SearchPanel` with fixture runs, outside the auth gate and with no article, session or model call.
 Open `http://localhost:<vite port>/preview-colour.html`. **Delete both files once the pass is
 done**; they are not in the router and nothing links to them.

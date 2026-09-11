@@ -190,6 +190,34 @@ function QuizSubBand({
  */
 type ConversationKind = Exclude<ThreadKind, "candidates">;
 
+/**
+ * **A question another mode has handed to chat, to be put in a fresh
+ * conversation's composer and not sent.**
+ *
+ * Today there is one sender: the glossary's *Ask in chat*, for a term the
+ * article does not contain. Greg, 2026-09-11, asked whether the question should
+ * go into the conversation already open or a new one: *"fresh"*. So it never
+ * touches another conversation's draft, and it spends nothing until Send.
+ *
+ * **A prop, owned by `Reader`, and deliberately not the module-level cell that
+ * src/web/chat-handoff.ts used to be.** That cell was deleted for three real
+ * bugs — a question outliving its article, outliving the moment, and firing
+ * twice under StrictMode — and each has an answer here rather than a timer:
+ *
+ * - `slug` is the article it was asked in; a band on another article drops it.
+ * - `Reader` clears it the moment this band has taken it (`onHandoffTaken`), so
+ *   it cannot wait for a later visit to chat mode.
+ * - The band remembers **which object** it took, so StrictMode running the
+ *   effect twice in one commit mints one conversation, not two.
+ *
+ * Nor is it in the URL: the question is the reader's text, which
+ * docs/project/logging.md keeps out of addresses.
+ */
+export interface ChatHandoff {
+  readonly slug: string;
+  readonly question: string;
+}
+
 /** Is this a thread the reader's own conversation panel may show and open? */
 function isConversationThread(t: ChatThread): t is ChatThread & { kind: ConversationKind } {
   return t.kind !== "candidates";
@@ -202,10 +230,19 @@ export function ConversationBand({
   kind,
   subMode,
   onMode,
+  handoff,
+  onHandoffTaken,
 }: {
   slug: string;
   blocks: Map<string, string>;
   onJump(id: BlockId): void;
+  /**
+   * A question to open a fresh conversation with, unsent — see `ChatHandoff`.
+   * Only chat mode is handed one.
+   */
+  handoff?: ChatHandoff | null | undefined;
+  /** The band has taken `handoff` (or refused it); the owner should forget it. */
+  onHandoffTaken?: (() => void) | undefined;
   /**
    * Which mode mounted this — chat, or Remember.
    *
@@ -292,6 +329,17 @@ export function ConversationBand({
   const selectedThread = useRef(thread);
   selectedThread.current = thread;
   const [pendingLive, setPendingLive] = useState<{ id: string; from: string | null } | null>(null);
+  /**
+   * The text a handed-over question starts its conversation's composer with.
+   * `ChatPanel` treats it as that conversation's initial draft — see `seed`
+   * there. Carries its slug, so a band that outlives an article change does not
+   * offer it to the next one.
+   */
+  const [seed, setSeed] = useState<{
+    slug: string;
+    threadId: string;
+    text: string;
+  } | null>(null);
 
   /**
    * **The live conversation, owned here** — above the panel, above the keyed
@@ -376,8 +424,10 @@ export function ConversationBand({
   const [focusNonce, setFocusNonce] = useState(0);
   const startNew = useCallback(() => {
     setPendingLive(null);
-    void setThread(begin(kind));
+    const id = begin(kind);
+    void setThread(id);
     setFocusNonce((n) => n + 1);
+    return id;
   }, [begin, setThread, kind]);
 
   /**
@@ -443,6 +493,39 @@ export function ConversationBand({
     started.current = false;
   }, [slug, kind]);
 
+  /**
+   * **Take a handed-over question: a fresh conversation, the question in its
+   * box, the caret in the box, and nothing sent.**
+   *
+   * Declared after the latch reset above and before the arrival rule below, and
+   * the order is the point: all three can run in one commit, and this one spends
+   * the latch so the arrival rule does not start a *second* empty conversation
+   * beside it. It does not wait for `loaded` — `begin` inserts the conversation
+   * on the spot, and `mergedArrival` (useChat.ts) keeps it when the list lands.
+   *
+   * `taken` is the StrictMode guard: React runs a mount's effects twice in one
+   * commit in development, before `Reader` has had a chance to clear the prop,
+   * and a check on the object's identity is what turns that into one
+   * conversation. The same shape as the activation tokens (src/web/activation.ts).
+   *
+   * **The latch is spent on every run, before the `taken` check**, and that
+   * order is a fix rather than a style. StrictMode re-runs the reset effect
+   * above too, so a latch spent only on the first run was un-spent by the
+   * second — and the reader who closed the handed-over conversation before the
+   * list arrived was handed a new empty one by the arrival rule.
+   * tests/conversation-band-handoff.test.tsx caught it.
+   */
+  const taken = useRef<ChatHandoff | null>(null);
+  useEffect(() => {
+    if (!handoff) return;
+    /* Asked in another article: not this conversation's question. */
+    const ours = handoff.slug === slug;
+    if (ours) started.current = true;
+    if (taken.current === handoff) return;
+    taken.current = handoff;
+    if (ours) setSeed({ slug, threadId: startNew(), text: handoff.question });
+    onHandoffTaken?.();
+  }, [handoff, slug, startNew, onHandoffTaken]);
 
   useEffect(() => {
     if (!loaded || started.current) return;
@@ -480,6 +563,7 @@ export function ConversationBand({
   return (
     <ChatPanel
       slug={slug}
+      seed={seed?.slug === slug ? { threadId: seed.threadId, text: seed.text } : null}
       /* Not for display — the panel offers its "start a new one" box only once
          this is true. It went in because a conversation minted before the first
          fetch landed was wiped by it; that is fixed at source now

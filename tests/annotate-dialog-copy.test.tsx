@@ -66,6 +66,7 @@ function paint(
           start: opts.start ?? 0,
         }}
         placing={false}
+        loaded
         onSave={opts.onSave ?? (() => {})}
         onCancel={opts.onCancel ?? (() => {})}
       />,
