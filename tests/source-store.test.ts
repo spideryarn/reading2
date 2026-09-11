@@ -84,8 +84,11 @@ describe("the source route", () => {
   it("has a body this test can actually read", () => {
     /* A regex that stopped matching would make every assertion below pass
        against an empty string — the guard reporting success for having checked
-       nothing. */
-    expect(body).toContain("res.statusCode = 200");
+       nothing. The sentinel is the call that writes the response; it was
+       `res.statusCode = 200` until 2026-09-11, when the six binary routes'
+       writing moved to src/binary-response.ts
+       (docs/plans/260911e-one-binary-response-writer.md). */
+    expect(body).toContain("sendBinary(res, {");
   });
 
   it("asks the store for the document rather than the disk", () => {

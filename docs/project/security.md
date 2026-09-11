@@ -653,7 +653,8 @@ load-bearing: the slug goes through `slugPart`, the same validator that closed
 itself — since 2026-08-31 it asks `sourceStore.readPdf(slug)`
 ([`src/store/contracts.ts`](../../src/store/contracts.ts)), and the store is the layer that knows
 whether that means a path under `data/` or an object in the `sources` bucket; and the response sets
-`X-Content-Type-Options: nosniff` with an explicit `application/pdf`, because a stranger's file
+`X-Content-Type-Options: nosniff` with an explicit `application/pdf` (the header is written for
+every binary route by [`src/binary-response.ts`](../../src/binary-response.ts)), because a stranger's file
 served from our origin with a sniffable type is how a PDF becomes script. The store method is
 `readPdf` and not "read the source document" for that last reason: the content type is the boundary,
 and a method that could hand back HTML would put the `Content-Type` decision at the call site, where

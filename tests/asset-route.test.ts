@@ -44,6 +44,7 @@ import { loadEnvLocal } from "../src/env.js";
 import { mintId } from "../src/ids.js";
 import type { OwnerId } from "../src/owner.js";
 import { acceptAny, AUTHED_HEADERS, TEST_OWNER } from "./helpers/authed.js";
+import { charCountDiffers, withMultibyteTail } from "./helpers/binary-response.js";
 import { pgReady } from "./helpers/pg-ready.js";
 
 loadEnvLocal();
@@ -99,11 +100,11 @@ interface Sent {
 
 async function get(
   urlPath: string,
-  options: { verify?: Verifier; headers?: Record<string, string> } = {},
+  options: { verify?: Verifier; headers?: Record<string, string>; method?: string } = {},
 ): Promise<Sent> {
   const { handleApi } = await import("../src/routes.js");
   const req = Object.assign((async function* () {})(), {
-    method: "GET",
+    method: options.method ?? "GET",
     url: urlPath,
     headers: options.headers ?? AUTHED_HEADERS,
   }) as unknown as IncomingMessage;
@@ -151,8 +152,8 @@ async function get(
  * is a stranger's request rather than a signed-in one that happened to take the
  * other path. A visitor's browser has no token to send, so neither does this.
  */
-function getAnonymously(urlPath: string): Promise<Sent> {
-  return get(urlPath, { headers: {} });
+function getAnonymously(urlPath: string, method = "GET"): Promise<Sent> {
+  return get(urlPath, { headers: {}, method });
 }
 
 await pgReady({
@@ -239,7 +240,10 @@ const A: Fixture = {
   blockId: "spya-pausa3",
   visibility: "private",
   ref: refFor(RUN, 3),
-  bytes: png(1536, 864),
+  /* With a multibyte tail: the 24-byte header alone decodes to as many
+     characters as it has bytes, so it could not tell a byte count from a
+     character count. tests/helpers/binary-response.ts. */
+  bytes: withMultibyteTail(png(1536, 864)),
   sha256: "",
 };
 const B_ID = randomUUID();
@@ -251,7 +255,7 @@ const B: Fixture = {
   blockId: "spya-qausb3",
   visibility: "public",
   ref: refFor(B_ID, 7),
-  bytes: png(770, 372),
+  bytes: withMultibyteTail(png(770, 372)),
   sha256: "",
 };
 
@@ -609,6 +613,85 @@ describe("the article-asset routes", { timeout: 30_000 }, () => {
    * kinds and a lookup that forgot to check `status` would serve the first
    * entry whose `ref` matched anything.
    */
+  /* ------------------------------------------ the whole response, cluster H */
+
+  /**
+   * **Both routes' responses, each as three separate claims** — pinned before
+   * the six binary writers were folded into one
+   * (docs/plans/260911e-one-binary-response-writer.md).
+   *
+   * The two routes serve the same bytes and must not share a cache policy:
+   * the owner's is `private`, immutable for a year; the stranger's is the
+   * namespace's `no-store`, because un-sharing has to take effect on the next
+   * request. And they must not share a HEAD policy either: the public route
+   * answers one with the GET's headers and no body, and the authenticated
+   * dispatcher answers none.
+   */
+  it("hands the owner exactly these headers, with the year-long private cache", async () => {
+    const sent = await get(`/api/asset/${A.slug}/${A.sha256}.png`);
+    expect(sent.status).toBe(200);
+    expect(sent.headers).toEqual({
+      "content-type": "image/png",
+      "content-length": String(A.bytes.byteLength),
+      "x-content-type-options": "nosniff",
+      "cache-control": "private, max-age=31536000, immutable",
+    });
+  });
+
+  it("hands a stranger exactly these headers, with the namespace's no-store", async () => {
+    const sent = await getAnonymously(`/api/public/asset/${B.slug}/${B.sha256}.png`);
+    expect(sent.status).toBe(200);
+    expect(sent.headers).toEqual({
+      "content-type": "image/png",
+      "content-length": String(B.bytes.byteLength),
+      "x-content-type-options": "nosniff",
+      "cache-control": "no-store",
+    });
+  });
+
+  it("counts the bytes it sends on both routes, not the characters they decode to", async () => {
+    for (const [who, sent] of [
+      [A, await get(`/api/asset/${A.slug}/${A.sha256}.png`)],
+      [B, await getAnonymously(`/api/public/asset/${B.slug}/${B.sha256}.png`)],
+    ] as const) {
+      expect(charCountDiffers(who.bytes), "the fixture must tell bytes from characters").toBe(true);
+      expect(Buffer.from(who.bytes).equals(sent.body)).toBe(true);
+      expect(sent.headers["content-length"]).toBe(String(who.bytes.byteLength));
+    }
+  });
+
+  it("names no disposition on either route — a picture in the prose, not a download", async () => {
+    const owner = await get(`/api/asset/${A.slug}/${A.sha256}.png`);
+    const stranger = await getAnonymously(`/api/public/asset/${B.slug}/${B.sha256}.png`);
+    expect(owner.headers["content-disposition"]).toBeUndefined();
+    expect(stranger.headers["content-disposition"]).toBeUndefined();
+  });
+
+  /**
+   * **HEAD mirrors GET on the public route: the same status and headers —
+   * `Content-Length` included — and no body.** Node would drop the body of a
+   * HEAD on a real socket of its own accord, but not the fake response here,
+   * and it drops the length too; the writer's own suppression is the only
+   * thing this can see, which is why it is asserted rather than trusted.
+   * src/public/routes.ts § `send`.
+   */
+  it("answers a stranger's HEAD with the GET's headers and no body", async () => {
+    const url = `/api/public/asset/${B.slug}/${B.sha256}.png`;
+    const head = await getAnonymously(url, "HEAD");
+    const got = await getAnonymously(url);
+    expect(head.status).toBe(200);
+    expect(head.headers).toEqual(got.headers);
+    expect(head.headers["content-length"]).toBe(String(B.bytes.byteLength));
+    expect(head.body.byteLength).toBe(0);
+  });
+
+  it("does not answer the owner's HEAD", async () => {
+    const sent = await get(`/api/asset/${A.slug}/${A.sha256}.png`, { method: "HEAD" });
+    expect(sent.status).toBe(404);
+    expect(sent.headers["content-type"]).not.toBe("image/png");
+    expect(sent.body.includes(Buffer.from(A.bytes))).toBe(false);
+  });
+
   it("has nothing to serve for a figure recorded as failed", async () => {
     /* There is no hash to ask for, so the closest a caller can come is naming
        the *other* article's object on this article, which is the 404 above —

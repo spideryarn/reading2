@@ -21,6 +21,7 @@ G (the route migration) finished 2026-09-11: Comments, the paid block, then the 
 chain is empty — see § G.
 N's evidence stage done 2026-09-11 and closed with no change: the split helps on the corpus but a
 built counterexample shows it can weaken the check — see § N.
+H (one binary-response writer) built 2026-09-11 — see § H.
 Each stage's own status line is the authority.
 
 > Write a rich many-step plan to improve the codebase (prioritising the various suggestions by a
@@ -718,16 +719,27 @@ nothing about what was proved, because the glossary's lifetime oracle was writte
 
 ### Stage: one response-only helper
 
-- [ ] Characterise each row's full response through its route, including missing/unauthorised cases.
+**Status, 2026-09-11: built** —
+[260911e-one-binary-response-writer.md](260911e-one-binary-response-writer.md). The six writers
+moved as rows and helpers after G's migration; `nosniff` set-sites went from six to one. The writer
+has no conditional (the public route keeps its one HEAD branch) and each caller still sets its own
+disposition and cache policy, so extraction beat the keep-the-writers ending.
+
+- [x] Characterise each row's full response through its route, including missing/unauthorised cases.
   Byte `Content-Length`, disposition and HEAD are separate assertions. Use multibyte fixture bytes.
-- [ ] Extract only status/headers/body writing at the existing server HTTP seam. Inputs are resolved
+  Exact five-header sets per route; the screenshot route got its first success test.
+- [x] Extract only status/headers/body writing at the existing server HTTP seam. Inputs are resolved
   bytes, content type and explicit response options. Authorisation, storage-key derivation,
   manifest validation, cache policy choices and error status remain in each caller.
-- [ ] Move all six response writers; count remaining set-sites. Do not accidentally enable HEAD on
-  authenticated routes merely because the helper supports it for the public route.
-- [ ] Mutate a route's cache policy and omit HEAD body suppression to prove the route tests reject
+  `src/binary-response.ts`, a leaf, since the public graph may not reach `src/routes.ts`.
+- [x] Move all six response writers; count remaining set-sites. Do not accidentally enable HEAD on
+  authenticated routes merely because the helper supports it for the public route. HEAD is a
+  second export only `src/public/routes.ts` imports; every authenticated route now pins its HEAD 404.
+- [x] Mutate a route's cache policy and omit HEAD body suppression to prove the route tests reject
   both. Complete common checks. If a helper adds more branching than it removes, keep the current
-  writers and the stronger tests instead; no current security drift was found.
+  writers and the stronger tests instead; no current security drift was found. Eleven mutations,
+  all red — four cache policies, two HEAD bodies, character-count length, the writer taking over the
+  cache policy, `nosniff`, an extra header, and the dispatcher answering HEAD.
 
 ## I — remove a compatibility address with no production consumer
 
