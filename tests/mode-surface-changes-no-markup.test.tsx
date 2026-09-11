@@ -1298,6 +1298,7 @@ function glossaryOwner(glossary: Glossary | null): GlossaryOwner {
     askDraft: null,
     asked: null,
     askFailed: null,
+    askTerm: null,
     clearAsked: () => {},
   };
 }

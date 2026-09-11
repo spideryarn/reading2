@@ -126,3 +126,27 @@ export function askAboutBlock(opts: {
   const asked = opts.question?.trim() || "Explain this passage.";
   return `${head}\n\n${asked}`;
 }
+
+/**
+ * **What the glossary's *Ask in chat* puts in the composer**, for a term the
+ * article does not contain.
+ *
+ * The box refused the word because the glossary only explains what the piece
+ * says (`[gl-ask-absent]`, `[gl-ask-part-word]` in src/messages.ts), and chat is
+ * the one surface that may answer from outside it. So the sentence asks for the
+ * meaning and then **turns back to the article** — the same filter the chat
+ * suggestions pass (ChatPanel.tsx § SUGGESTIONS): an answer that stops at a
+ * definition has sent the reader away from the piece.
+ *
+ * **Carried across, never sent.** It lands in a fresh conversation's composer
+ * and waits for Send — Greg, 2026-09-11, *"fresh"* — so it is the reader's to
+ * edit, and it is written as they would say it. Like `askAboutBlock`, this text
+ * is for the human; nothing downstream parses it.
+ *
+ * `term` is what the box sent, trimmed, rather than whatever is in it now. It is
+ * quoted as data: quotation marks inside it are the reader's and stay theirs.
+ * docs/plans/260908f-prioritised-spideryarn-codebase-improvements.md § C.
+ */
+export function askAboutTerm(term: string): string {
+  return `What does "${term}" mean, and does it have anything to do with what this article is saying?`;
+}

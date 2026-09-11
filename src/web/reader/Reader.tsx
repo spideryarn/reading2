@@ -37,7 +37,12 @@ import { StructureBand } from "../modes/structure/StructureMode.js";
 import { SummaryBand } from "../modes/summary/SummaryMode.js";
 import { DiagramBand } from "../modes/diagram/DiagramMode.js";
 import { RefereeBand } from "../modes/referee/RefereeMode.js";
-import { ConversationBand, RememberBand } from "../modes/conversation/ConversationModes.js";
+import {
+  type ChatHandoff,
+  ConversationBand,
+  RememberBand,
+} from "../modes/conversation/ConversationModes.js";
+import { askAboutTerm } from "../chat-handoff.js";
 import { FeatureBoundary } from "../FeatureBoundary.js";
 import { TableView } from "../TableView.js";
 import type { SelectionAnchor } from "../selection.js";
@@ -522,6 +527,37 @@ export function Reader({
    */
   const [thread, setThread] = useQueryState("thread", threadParam);
   const [chatDraft, setChatDraft] = useState<ChatTarget | null>(null);
+  /**
+   * **A question on its way into chat mode from another mode** — the glossary's
+   * *Ask in chat*, for a term the article does not contain.
+   *
+   * Not `chatDraft`, and that is Greg's call rather than tidiness: asked on
+   * 2026-09-11 whether the question should go into the conversation already
+   * there or a new one, he said *"fresh"*. `chatDraft` is the floating panel's
+   * draft about a passage, and it is left exactly as it was — suppressed in chat
+   * mode, back when the reader leaves. This one lives for one commit: the chat
+   * band takes it, opens a new conversation with it in the box, and clears it.
+   * `ChatHandoff` in ConversationModes.tsx says what else it guards against.
+   */
+  const [chatHandoff, setChatHandoff] = useState<ChatHandoff | null>(null);
+  const askInChat = useCallback(
+    (term: string) => {
+      setChatHandoff({ slug, question: askAboutTerm(term) });
+      void setMode("chat");
+    },
+    [slug, setMode],
+  );
+  const handoffTaken = useCallback(() => setChatHandoff(null), []);
+  /* **And a handoff chat mode never took does not wait for the next visit.** The
+     band takes it in the commit that switches mode, so this is the case where
+     the switch did not happen, or the reader was elsewhere before it could —
+     without it, the question would open a conversation the next time they
+     pressed Chat, about a word they had long stopped asking about. The mode
+     and the handoff are set in one event, so they arrive in one commit and
+     this cannot fire in between. */
+  useEffect(() => {
+    if (mode !== "chat") setChatHandoff(null);
+  }, [mode]);
   /**
    * The passage the reader has just selected, before they have saved anything.
    *
@@ -1431,6 +1467,8 @@ export function Reader({
             onJump={jumpTo}
             kind="chat"
             onMode={setMode}
+            handoff={chatHandoff}
+            onHandoffTaken={handoffTaken}
           />
         ) : null;
       /* **Remember is two bands behind one mode**, and the choice between them
@@ -1467,7 +1505,7 @@ export function Reader({
               read={glossaryRead}
               onJump={jumpTo}
               onSelected={setTerm}
-              onMode={setMode}
+              onAskChat={askInChat}
             />
           );
         return artefacts?.glossary ? (
