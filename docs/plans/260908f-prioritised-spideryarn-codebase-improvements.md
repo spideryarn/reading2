@@ -12,6 +12,7 @@ I (retire the revision alias) built the same day — see § I.
 E (both glossary lookups streamed) built 2026-09-10/11 — see § E.
 O (on-demand draft sweep) built 2026-09-11 and wired in `count` mode; the first deletion waits for
 Greg — see § O.
+A (the submit gate, Greg's choice) built 2026-09-11; the reconciliation stages are skipped — see § A.
 Each stage's own status line is the authority.
 
 > Write a rich many-step plan to improve the codebase (prioritising the various suggestions by a
@@ -202,7 +203,8 @@ path was false and is excluded. Provenance and introducing commits are in
 **Simpler product choice before engineering:** recommend keeping fields mounted/editable but
 gating Run/Find/Save until the opening read settles, successfully **or with an error**. This orders
 the operations without inventing a list merge protocol. Show Greg the brief extra wait before
-implementing that changed behaviour. No choice has been made by Greg in this plan-only task.
+implementing that changed behaviour. Greg selected this gate on 2026-09-11; the reconciliation
+stages below remain unselected.
 A never-ending request must have a bounded failure ending: `apiFetch` currently has no response
 deadline; `SESSION_DEADLINE_MS` only bounds obtaining a credential. If immediate submission is required instead, use
 the reconciliation stages below. Do not build the complex version before asking about the simpler
@@ -210,26 +212,44 @@ product option.
 
 ### Stage: the recommended submit gate, if selected
 
-- [ ] Write one mounted-UI red witness per surface: hold the opening GET containing old row A,
+**Status 2026-09-11: built.** Greg selected it. At `33123d9f` a temporary mounted witness per
+surface, outside StrictMode, showed B created, shown, then erased by GET A — all three reproduced.
+The fix: `src/web/lib/opening-read.ts` (a 15 s deadline that settles the read with
+`OpeningReadTimedOut`, `[rd-timeout]`, before the hook marks it failed/loaded, then aborts); the
+three hooks use it; `NewCriterion`, `SearchPanel.Box` and `AnnotateDialog` fold `loaded` into
+their readiness and their handlers (`AnnotateDialog.loaded` is required; `Reader` passes
+`owner.comments.loaded`). `tests/opening-read-gates-writes.test.tsx`: 14 cases — refused through
+every door with the draft kept, A and B both after load, failure and deadline release, a late GET
+that resolves (abort deliberately ignored) cannot commit, StrictMode, and Reader's wiring.
+Negative controls: removing the Criteria `loaded`, the AnnotateDialog handler guard, or the
+deadline's reject each turned cases red. A Playwright check with the GETs held 5 s confirmed all
+three surfaces at 1280 and 400 px. GPT Sol reviewed the diff and fixed three things (the deadline
+tests leaned on the abort; the timeout copy promised more than a timed-out read knows; a redundant
+`catch`). **Both reconciliation stages below are skipped**: the gate closes every current path.
+Open, for Greg: after a failed or timed-out load, the first new write clears the load's error, so
+the panel shows only new rows with nothing saying older ones did not load — true before this
+change for failed loads too, and separating load from action errors is its own small stage.
+
+- [x] Write one mounted-UI red witness per surface: hold the opening GET containing old row A,
   type the input, and show that today's enabled action can create/complete B before GET A erases it.
   Start this reproduction outside StrictMode: a development remount can hide ordering bugs.
-- [ ] Pin the selected behaviour: typing remains possible, while Run/Find/Save and keyboard submit
+- [x] Pin the selected behaviour: typing remains possible, while Run/Find/Save and keyboard submit
   are refused during the outstanding read. Thread `loaded` to the existing readiness predicates in
   `SearchPanel.Box`, `CriteriaPanel.NewCriterion`, and `AnnotateDialog`; gate the handler as well as
   the button. Do not make a hook's `ask` silently return without writing: its callers immediately
   activate the returned row id. If adding a hook-level refusal, represent refusal in the return
   type and update callers deliberately; gating the actual event handlers is the smaller change.
-- [ ] Use `loaded`, not `!loadFailed`: once GET has failed, there is no later snapshot to overwrite
+- [x] Use `loaded`, not `!loadFailed`: once GET has failed, there is no later snapshot to overwrite
   a write. Test success, failure and timeout release the action; preserve the existing load error.
   Give the opening reads a named response deadline. Its ordering is: **abort or invalidate the
   GET's commit generation → mark the load failed and `loaded=true` → enable writes**. Hold GET A
   past that deadline, successfully create B, then release A and prove B remains. Keep the current
   page-reload recovery for load failure in v1; adding in-place retry would require gating again or
   reconciliation, because a retried GET can otherwise recreate the same race.
-- [ ] After load succeeds, perform the write and require A and B remain. After load fails, require
+- [x] After load succeeds, perform the write and require A and B remain. After load fails, require
   the new write remains. Preserve draft text, dictation guards, colour, reminted ids and tombstones;
   add a StrictMode regression after the non-StrictMode red witness.
-- [ ] Add a concise loading reason where necessary, review all three surfaces in the browser, and
+- [x] Add a concise loading reason where necessary, review all three surfaces in the browser, and
   complete the common checks. If this closes the current paths, skip both reconciliation stages.
 
 ### Alternative stage: reconcile Criteria if pre-load submission must stay

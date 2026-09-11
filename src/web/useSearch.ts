@@ -35,7 +35,8 @@ import { mintId } from "../ids.js";
 import { isStale } from "../search-stale.js";
 import { describeFetchFailure } from "./useComments.js";
 import { readEvents, STREAM_STALL_MS } from "./lib/sse.js";
-import { apiFetch, failure, fetchOk, readJson } from "./lib/api.js";
+import { apiFetch, failure, fetchOk } from "./lib/api.js";
+import { openingRead } from "./lib/opening-read.js";
 
 /**
  * A saved run, plus the one thing about it that is not on the run.
@@ -71,6 +72,15 @@ export interface SearchApi {
    * A flag rather than a nullable `runs`, so nothing downstream has to learn a
    * new shape — the panel asks this question in exactly one place. Raised by a
    * GPT Sol review, 2026-08-26.
+   *
+   * **Find waits for it, too** (2026-09-11). The GET's answer *replaces* the
+   * list, so a search run while it was out was wiped from the tab when it
+   * landed — docs/postmortems/260908c-an-opening-read-can-erase-a-later-write.md.
+   * "Either way" is what makes that safe to wait on: a failed read has no later
+   * snapshot to erase anything with, and a read that never answers is given up
+   * on at a deadline (src/web/lib/opening-read.ts). `Box` in SearchPanel.tsx is
+   * where the wait is enforced; `ask` itself does not refuse, because its
+   * caller switches on the id it returns.
    */
   loaded: boolean;
   /**
@@ -196,10 +206,12 @@ export function useSearch(slug: string): SearchApi {
     setLoaded(false);
     setLoadFailed(false);
     setFingerprint(null);
-    apiFetch(`/api/search/${encodeURIComponent(slug)}`)
-      .then((r) =>
-        readJson<{ runs?: SearchRun[]; sourceHash?: string; error?: string }>(r),
-      )
+    /* With a deadline, because `loaded` is what lets the reader press Find —
+       see `loaded` above and src/web/lib/opening-read.ts. */
+    const read = openingRead<{ runs?: SearchRun[]; sourceHash?: string; error?: string }>(
+      `/api/search/${encodeURIComponent(slug)}`,
+    );
+    read.body
       .then((body) => {
         if (!live) return;
         /* A body with an `error` in it is a failed load as much as a thrown one
@@ -245,6 +257,7 @@ export function useSearch(slug: string): SearchApi {
       });
     return () => {
       live = false;
+      read.abandon();
     };
   }, [slug]);
 

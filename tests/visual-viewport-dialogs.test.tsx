@@ -159,6 +159,7 @@ function showAnnotate(): void {
       createElement(AnnotateDialog, {
         anchor: { blockId: "spya-aaaaaa", start: 0, end: 4, quote: "some words" } as never,
         placing: false,
+        loaded: true,
         onSave: () => {},
         onCancel: () => {},
       }),

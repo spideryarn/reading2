@@ -204,6 +204,7 @@ const annotate = (escapeEnabled?: boolean): ReactNode => (
   <AnnotateDialog
     anchor={{ blockId: BLOCK, quote: "a science of bumps", start: 0 }}
     placing={false}
+    loaded
     {...(escapeEnabled === undefined ? {} : { escapeEnabled })}
     onSave={() => {}}
     onCancel={() => closed.push("annotate")}

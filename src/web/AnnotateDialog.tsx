@@ -89,6 +89,18 @@ interface Props {
    * the ordinary case and the one this dialog is mostly used for.
    */
   onSave(id: string, body: string, ask: boolean, mark: Mark): void;
+  /**
+   * **Has the article's comment list come back — answered, failed or given up
+   * on?** `useComments`'s `loaded`, and Save waits for it: that GET's answer
+   * replaces the list, so a comment saved while it was out vanished from the
+   * tab when it landed. Typing, dictation and the tick-box all carry on
+   * meanwhile; only the press waits.
+   * docs/postmortems/260908c-an-opening-read-can-erase-a-later-write.md.
+   *
+   * Required rather than defaulting to `true`, so a new caller has to answer
+   * the question instead of inheriting a yes.
+   */
+  loaded: boolean;
   onCancel(): void;
   /**
    * **Does Escape belong to this box?** False while `CommentDialog` or
@@ -116,6 +128,7 @@ export function AnnotateDialog({
   anchor,
   placing,
   onSave,
+  loaded,
   onCancel,
   escapeEnabled = true,
 }: Props) {
@@ -200,6 +213,9 @@ export function AnnotateDialog({
        same reason, as the follow-up box in `CommentDialog`.
        docs/project/dictation.md § Adding it to a box. */
     if (dictate.readOnly || dictate.dictation.armed) return;
+    /* Before the latch, so a press refused for this reason is not remembered
+       as a Save on its way — the next one, once loaded, has to get through. */
+    if (!loaded) return;
     if (sending.current) return;
     sending.current = true;
     onSave(draftId.current, body.trim(), ask, mark);
@@ -308,16 +324,17 @@ export function AnnotateDialog({
             <button type="button" className="linky" onClick={onCancel}>
               Cancel
             </button>
-            {/* Never disabled: saving nothing is a bookmark, which is the point.
-                The label is the price — GPT Sol's review, on why a reader should
-                not have to remember which of two buttons costs money. */}
+            {/* Never disabled for being empty: saving nothing is a bookmark,
+                which is the point. The label is the price — GPT Sol's review,
+                on why a reader should not have to remember which of two
+                buttons costs money. */}
             <button
               type="submit"
               className="annotate-save"
-              /* Both microphone states, matching the guard in `save` — a lit
-                 button over a handler that returns is a press that does
-                 nothing and says nothing. */
-              disabled={dictate.readOnly || dictate.dictation.armed}
+              /* Both microphone states and the list still loading, matching
+                 the guards in `save` — a lit button over a handler that
+                 returns is a press that does nothing and says nothing. */
+              disabled={!loaded || dictate.readOnly || dictate.dictation.armed}
             >
               {ask ? "Save & ask AI" : "Save comment"}
             </button>
@@ -329,7 +346,13 @@ export function AnnotateDialog({
             spent a model call and a reader who learned that needs telling it
             has stopped. */}
         <p className="annotate-hint">
-          {ask ? "Saving this will start a conversation." : "Nothing is asked unless you tick the box."}
+          {/* The one reason the button is off that the reader cannot see for
+              themselves, so it takes the hint's place until it passes. */}
+          {!loaded
+            ? "Loading your comments on this article — Save will be ready in a moment."
+            : ask
+              ? "Saving this will start a conversation."
+              : "Nothing is asked unless you tick the box."}
         </p>
       </div>
     </aside>

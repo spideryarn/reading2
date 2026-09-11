@@ -2060,6 +2060,10 @@ export function Reader({
              docs/plans/260906f-the-active-mode-gets-one-surface-and-one-way-to-fit-the-screen.md;
              the pairs are tests/one-escape-closes-one-surface.test.tsx. */
           escapeEnabled={!openComment && !overlay}
+          /* Save waits for the comment list: its answer replaces the list, and
+             a comment saved before it landed was wiped from the tab.
+             tests/opening-read-gates-writes.test.tsx reads this line. */
+          loaded={owner.comments.loaded}
           onCancel={() => setAnnotating(null)}
           onSave={(id, body, ask, mark) => {
             const anchor = annotating;

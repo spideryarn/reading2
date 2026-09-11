@@ -284,6 +284,7 @@ const DIAGNOSTIC_ERROR_NAMES: ReadonlySet<string> = new Set([
   "HttpError",
   "StreamStalled",
   "MarkStopped",
+  "OpeningReadTimedOut",
 ]);
 
 /**

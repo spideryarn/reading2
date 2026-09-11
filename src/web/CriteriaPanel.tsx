@@ -377,7 +377,11 @@ function CriteriaView({
   );
   return (
     <div className="crit">
-      <NewCriterion scale={scale} onAsk={(criterion, config) => onShow(api.ask(criterion, config))} />
+      <NewCriterion
+        scale={scale}
+        loaded={api.loaded}
+        onAsk={(criterion, config) => onShow(api.ask(criterion, config))}
+      />
 
       {api.error && <p className="crit-error">{api.error}</p>}
 
@@ -595,6 +599,7 @@ const MIXED_SIGN = "±";
  */
 function NewCriterion({
   scale,
+  loaded,
   onAsk,
 }: {
   /**
@@ -612,6 +617,14 @@ function NewCriterion({
    * is a decision rather than a discovery — the plan names it.
    */
   scale: DivergingScale;
+  /**
+   * **Has the saved list come back — answered, failed or given up on?**
+   * `useCriteria`'s `loaded`, and Run waits for it. That GET's answer replaces
+   * the list, so a criterion run while it was out was wiped from the panel when
+   * it landed. The fields stay editable meanwhile; only the press waits.
+   * docs/postmortems/260908c-an-opening-read-can-erase-a-later-write.md.
+   */
+  loaded: boolean;
   onAsk(criterion: string, config: RefereeCriterionConfig): void;
 }) {
   const [text, setText] = useState("");
@@ -629,8 +642,11 @@ function NewCriterion({
      button is off rather than the request refused. Three checks of one rule is
      not duplication to tidy away: this one is a disabled button, the server's
      is a 400 for anything that is not this panel, and the database's is true of
-     every writer there will ever be. */
+     every writer there will ever be. `loaded` is a fourth condition and a
+     different kind — not about the criterion, about the order of two requests —
+     and it is here so the one `ready` guards the submit as well as the look. */
   const ready =
+    loaded &&
     text.trim() !== "" &&
     (kind !== "diverging" || (against.trim() !== "" && favour.trim() !== ""));
 
