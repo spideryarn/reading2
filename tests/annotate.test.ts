@@ -760,12 +760,15 @@ describe("annotateHtml — a quote is drawn as a stroke, not a wash", () => {
     /* `data-wash` is the switch the stylesheet hangs the fill, the hue band and
        its bottom padding off. A quote must not have it, or it arrives wearing a
        fill — the exact opposite of what a quote is supposed to be. */
-    const out = annotateHtml(html, [{ id: "q1", start: 3, end: 10, kind: "hit", quoteTier: 2 }]);
+    const out = annotateHtml(html, [{ id: "q1", start: 3, end: 10, kind: "hit", quoteStroke: { tier: 2, alpha: 1 } }]);
     const mark = host(out).querySelector("mark.hit");
     expect(mark?.getAttribute("data-quote")).toBe("2");
     expect(mark?.hasAttribute("data-wash")).toBe(false);
     expect(mark?.hasAttribute("data-hues")).toBe(false);
-    expect(mark?.getAttribute("style")).toBe(null);
+    /* The style carries the quote's fade and nothing of a wash — no `--hit-a`,
+       no hue. Since 2026-09-11 a quote writes `--quote-a`, so "no style at all"
+       stopped being the way to say "no wash". */
+    expect(mark?.getAttribute("style")).toBe("--quote-a:1.00");
   });
 
   it("gives a search hit a wash and no tier", () => {
@@ -786,10 +789,12 @@ describe("annotateHtml — a quote is drawn as a stroke, not a wash", () => {
        else's search look certain. */
     const out = annotateHtml(html, [
       { id: "h1", start: 3, end: 30, kind: "hit", strength: 0.4 },
-      { id: "q1", start: 3, end: 30, kind: "hit", quoteTier: 2 },
+      { id: "q1", start: 3, end: 30, kind: "hit", quoteStroke: { tier: 2, alpha: 1 } },
     ]);
     const mark = host(out).querySelector("mark.hit");
-    expect(mark?.getAttribute("style")).toBe("--hit-a:0.400");
+    /* The wash is the search's 0.4, untouched; the quote's own brightness sits
+       beside it in a property of its own and cannot reach it. */
+    expect(mark?.getAttribute("style")).toBe("--hit-a:0.400;--quote-a:1.00");
     expect(mark?.getAttribute("data-quote")).toBe("2");
     expect(mark?.hasAttribute("data-wash")).toBe(true);
   });
@@ -800,7 +805,7 @@ describe("annotateHtml — a quote is drawn as a stroke, not a wash", () => {
        the rules are drawn on every fragment and the inline end-caps only on the
        two carrying these, and the outline runs continuously across the joins.
        Without it, one sentence reads as three separate quotes. */
-    const out = annotateHtml(html, [{ id: "q1", start: 20, end: 50, kind: "hit", quoteTier: 1 }]);
+    const out = annotateHtml(html, [{ id: "q1", start: 20, end: 50, kind: "hit", quoteStroke: { tier: 1, alpha: 0.7 } }]);
     const marks = [...host(out).querySelectorAll("mark.hit")];
     expect(marks.length).toBe(3);
     expect(marks.map((m) => m.hasAttribute("data-quote-start"))).toEqual([true, false, false]);
@@ -811,7 +816,7 @@ describe("annotateHtml — a quote is drawn as a stroke, not a wash", () => {
   });
 
   it("caps both ends when a quote is a single run", () => {
-    const out = annotateHtml(html, [{ id: "q1", start: 3, end: 10, kind: "hit", quoteTier: 1 }]);
+    const out = annotateHtml(html, [{ id: "q1", start: 3, end: 10, kind: "hit", quoteStroke: { tier: 1, alpha: 0.7 } }]);
     const mark = host(out).querySelector("mark.hit");
     expect(mark?.hasAttribute("data-quote-start")).toBe(true);
     expect(mark?.hasAttribute("data-quote-end")).toBe(true);
@@ -842,8 +847,8 @@ describe("annotateHtml — a quote is drawn as a stroke, not a wash", () => {
        belt to that brace, because the drawing now leans on a property the
        artefact happens to hold rather than one this file enforces. */
     const out = annotateHtml(html, [
-      { id: "q1", start: 3, end: 30, kind: "hit", quoteTier: 1 },
-      { id: "q2", start: 3, end: 30, kind: "hit", quoteTier: 2 },
+      { id: "q1", start: 3, end: 30, kind: "hit", quoteStroke: { tier: 1, alpha: 0.7 } },
+      { id: "q2", start: 3, end: 30, kind: "hit", quoteStroke: { tier: 2, alpha: 1 } },
     ]);
     expect(host(out).querySelector("mark.hit")?.getAttribute("data-quote")).toBe("2");
   });

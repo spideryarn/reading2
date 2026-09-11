@@ -66,6 +66,7 @@ const ROUTES = [
   { name: "tweets", url: "/api/tweets/anything", stamp: "thread" },
   { name: "glossary", url: "/api/glossary/anything", stamp: "glossary" },
   { name: "ideas", url: "/api/ideas/anything", stamp: "ideas" },
+  { name: "quotes", url: "/api/quotes/anything", stamp: "quotes" },
 ] as const;
 
 /** What the store was asked, in the order it was asked. */
@@ -109,6 +110,7 @@ vi.mock("../src/store/index.js", async (importActual) => {
     loadTweets: "tweets",
     loadGlossary: "glossary",
     loadIdeas: "ideas",
+    loadQuotes: "quotes",
   } as const;
   const mocked: Record<string, unknown> = {};
   for (const [fn, route] of Object.entries(loaders)) {
@@ -266,5 +268,20 @@ describe.each(ROUTES)("$name and the reader's profile", ({ name, url, stamp }) =
 
     const { status } = await reply;
     expect(status).toBe(500);
+  });
+
+  it(`treats a deleted profile as ${name === "quotes" ? "changed for an appendable Quotes list" : "unchanged"}`, async () => {
+    const reply = call(url);
+    await settleQueue();
+    gates[name]!.settle(payloadFor(stamp));
+    profileGate.settle(null);
+
+    const { status, body } = await reply;
+    expect(status).toBe(200);
+    /* The shared rule deliberately does not nag readers to rewrite an artefact
+       after deleting their profile. Quotes is different because Find more can
+       append an unprofiled pass while retaining this stamp: its badge must say
+       "older profile", not "written for you". */
+    expect(body.profileChanged).toBe(name === "quotes");
   });
 });

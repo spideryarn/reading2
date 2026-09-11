@@ -184,11 +184,14 @@ says both does not work — and **eight of the ten preview pages did it**, while
 different face at a different size, and a row wrapped where production does not. The screenshots were
 wrong about the one thing a screenshot is for.
 
-All nine are fixed, and **[`tests/preview-pages.test.ts`](../../tests/preview-pages.test.ts) is what
-keeps them that way** — it fails on a `preview-*.tsx` that imports no stylesheet and on one that
-imports `styles.css` directly. So this is now a rule with a test behind it rather than a paragraph
-somebody has to have read, which is the difference that mattered: the advice was written down and
-wrong, and being written down is what made it spread.
+All nine were fixed, and for a week `tests/preview-pages.test.ts` kept them that way — it failed on
+a `preview-*.tsx` that imported no stylesheet and on one that imported `styles.css` directly. **The
+pages were deleted on 2026-09-11**, once their checks were done, as each one's header asked, and the
+test went with them, because a sweep of nothing proves nothing. So for the next throwaway page this
+is a paragraph again rather than a rule with a test behind it: import `./tailwind.css` alone, and
+prove it loaded with the four lines above. If preview pages come back as a habit, bring the test
+back from history with them — the advice was once written down and wrong, and being written down is
+what made it spread.
 
 **A preview page is not the page it previews**, and that is worth knowing before you measure
 anything on one. The real page may sit inside a container whose class carries rules the preview has

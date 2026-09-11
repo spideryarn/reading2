@@ -603,8 +603,8 @@ describe("orderFound", () => {
     long: "",
     at: 0,
     whole: false,
-    /* Not a quote. See `Found.quoteTier`. */
-    quoteTier: null,
+    /* Not a quote. See `Found.quoteStroke`. */
+    quoteStroke: null,
   });
 
   it("puts the article's own order first by default", () => {
@@ -666,8 +666,8 @@ describe("the prioritised threshold", () => {
     long: "",
     at: 0,
     whole: false,
-    /* Not a quote. See `Found.quoteTier`. */
-    quoteTier: null,
+    /* Not a quote. See `Found.quoteStroke`. */
+    quoteStroke: null,
   });
 
   it("keeps what survives the bar and drops what does not", () => {

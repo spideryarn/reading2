@@ -43,7 +43,7 @@ import { useQueryState } from "nuqs";
 
 import type { Block, Quote } from "../../types.js";
 import { barParam, quoteParam, rankParam } from "../params.js";
-import { effectiveRank, markedQuotes, quoteTier } from "../QuotesPanel.js";
+import { effectiveRank, markedQuotes, quoteStroke } from "../QuotesPanel.js";
 import { quoteMarkKey, resolveQuotes } from "../search-hits.js";
 import type { PassageSlot } from "./passages.js";
 
@@ -121,12 +121,12 @@ export function useQuoteMarks(
      rendered text. It is still on the artefact, because it is what
      `inDocumentOrder` sorts two quotes from one paragraph by.
 
-     The tier is attached here rather than inside `resolveQuotes`, so the
-     resolver stays a thing that turns text into spans and never learns what a
-     score is — and so `search-hits.ts`, which the node tests load, does not have
-     to import a React module to find `quoteTier`. */
+     The tier and the fade are attached here rather than inside
+     `resolveQuotes`, so the resolver stays a thing that turns text into spans
+     and never learns what a score is — and so `search-hits.ts`, which the node
+     tests load, does not have to import a React module to find `quoteStroke`. */
   const found = useMemo(
-    () => resolveQuotes(blocks, listed.map((quote) => ({ ...quote, tier: quoteTier(quote) }))),
+    () => resolveQuotes(blocks, listed.map((quote) => ({ ...quote, stroke: quoteStroke(quote) }))),
     [listed, blocks],
   );
 

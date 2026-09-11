@@ -293,6 +293,17 @@ mark.hit[data-wash] {
    the number of people who can meet it. */
 mark.hit[data-quote] {
   --quote-stroke-width: 1px;
+  /* **The fade** — `--quote-a`, 0.70 to 1.00 with priority, written by
+     `annotateHtml` into the style it already writes for `--hit-a`. Weight and
+     fade move the same way, so a heavier quote is also a brighter one and the
+     two never cancel; the floor is where "even low-priority quotes should still
+     be clearly visible" is kept (Greg, 2026-09-10), and it is checked against
+     `--page` in tests/quote-stroke-fade.test.ts. The fallback is the token's
+     own 0.95, so a mark without the property is drawn as every quote was before.
+     The pressed rule below overrides this whole colour, so the fade never dims
+     "you pressed this". `quoteAlpha` in QuotesPanel.tsx,
+     docs/plans/260911a-quotes-find-more-and-a-fade-that-carries-priority.md. */
+  --quote-stroke-color: rgb(var(--quote-stroke-rgb) / var(--quote-a, 0.95));
   --quote-edge-top: 0 calc(-1 * var(--quote-stroke-width)) 0 0 var(--quote-stroke-color);
   --quote-edge-bottom: 0 var(--quote-stroke-width) 0 0 var(--quote-stroke-color);
   /* **Inset**, so two abutting quotes stay two. Drawn outside, the facing caps

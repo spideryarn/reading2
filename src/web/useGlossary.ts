@@ -560,6 +560,18 @@ export interface UseGlossary {
   asked: AskedTermAnswer | null;
   /** Why the last one was refused, if it was. Carries a `[gl-ask-…]` code. */
   askFailed: string | null;
+  /**
+   * **The term the box's request was sent with**, as it was sent — trimmed and
+   * normalised by `parseAskedTerm` — for as long as that request's outcome is on
+   * screen. Null before any request, after `clearAsked`, and when the box's own
+   * guard refused without asking.
+   *
+   * Here, beside `askFailed`, rather than read back out of the input, because
+   * the question *Ask in chat* carries is about the word the article was
+   * searched for, not whatever is in the box by the time somebody presses it.
+   * docs/plans/260908f-prioritised-spideryarn-codebase-improvements.md § C.
+   */
+  askTerm: string | null;
   /** Put the box back to empty — the reader's dismiss. */
   clearAsked(): void;
 }
@@ -579,6 +591,7 @@ export function useGlossary(slug: string, read: GlossaryRead): UseGlossary {
   const [askDraft, setAskDraft] = useState<AskedTermDraft | null>(null);
   const [asked, setAsked] = useState<AskedTermAnswer | null>(null);
   const [askFailed, setAskFailed] = useState<string | null>(null);
+  const [askTerm, setAskTerm] = useState<string | null>(null);
 
   /**
    * Revalidate on mount, behind whatever is on screen.
@@ -824,6 +837,7 @@ export function useGlossary(slug: string, read: GlossaryRead): UseGlossary {
       if (!parsed.ok) {
         setAsked(null);
         setAskDraft(null);
+        setAskTerm(null);
         /* **The server's own sentence, from the file both halves import.** Not a
            second set of words for the same rule: a reader must not be told two
            different things by one check depending on which side caught it.
@@ -839,6 +853,7 @@ export function useGlossary(slug: string, read: GlossaryRead): UseGlossary {
       setAsked(null);
       setAskDraft(null);
       setAskFailed(null);
+      setAskTerm(parsed.term);
       try {
         const res = await apiFetch(`/api/glossary/${encodeURIComponent(slug)}/ask`, {
           method: "POST",
@@ -914,6 +929,7 @@ export function useGlossary(slug: string, read: GlossaryRead): UseGlossary {
     setAsked(null);
     setAskDraft(null);
     setAskFailed(null);
+    setAskTerm(null);
   }, []);
 
   /**
@@ -956,6 +972,7 @@ export function useGlossary(slug: string, read: GlossaryRead): UseGlossary {
     askDraft,
     asked,
     askFailed,
+    askTerm,
     clearAsked,
   };
 }

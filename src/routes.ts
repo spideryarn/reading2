@@ -5346,6 +5346,13 @@ async function withProfileChanged<R extends { profileChanged: boolean }>(
   slug: string,
   load: () => Promise<Omit<R, "profileChanged">>,
   stampOf: (found: Omit<R, "profileChanged">) => { profileHash?: string | null },
+  /**
+   * Quotes may append after the reader deletes their profile while deliberately
+   * keeping the first pass's profile stamp. For that artefact alone, deletion
+   * must keep the "older profile" badge up; the shared rule for artefacts that
+   * replace still treats deletion as no reason to rewrite them.
+   */
+  clearedCountsAsChanged = false,
 ): Promise<R> {
   /* Both started before either is awaited — that is the point of the thunk. */
   const artefact = load();
@@ -5356,9 +5363,13 @@ async function withProfileChanged<R extends { profileChanged: boolean }>(
 
   const found = await artefact;
   const now = await profile;
+  const recorded = stampOf(found).profileHash;
+  const nowHash = now ? hashProfile(now) : null;
   return {
     ...found,
-    profileChanged: profileIsStale(stampOf(found).profileHash, now ? hashProfile(now) : null),
+    profileChanged:
+      profileIsStale(recorded, nowHash) ||
+      (clearedCountsAsChanged && recorded != null && nowHash === null),
   } as R;
 }
 
@@ -8431,7 +8442,16 @@ export async function serveAuthenticatedApi(
         send(
           res,
           200,
-          await withProfileChanged<QuotesResponse>(at, () => loadQuotes(at), (found) => found.quotes),
+          await withProfileChanged<QuotesResponse>(
+            at,
+            () => loadQuotes(at),
+            (found) => found.quotes,
+            /* Unlike the other profiled artefacts, Find more appends. If the
+               profile was deleted, the next pass is unprofiled but the list
+               keeps its first-pass hash; calling that mixed list "written for
+               you" would be false. */
+            true,
+          ),
         );
       }
       return;

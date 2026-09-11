@@ -68,10 +68,9 @@ Then the residue, which is why this page exists:
 - **The band itself**: render it with
   [`ModeSurface`](../../src/web/ModeSurface.tsx), which owns the `<aside class="mode-band">`, its
   **required** `aria-label`, the optional `head` and `foot` slots, and nothing else. Do not
-  hand-write the `<aside>` — twelve panels did until 2026-09-07, and the four places that still do
+  hand-write the `<aside>` — twelve panels did until 2026-09-07, and the two places that still do
   are documented exceptions rather than precedents: `FeatureBoundary`'s fallback (a deliberate
-  circuit breaker — read the comment there before you touch it), the `/design` band specimen, and
-  the two demo shells in `preview-sketch.tsx` and `preview-chat-markdown.tsx`.
+  circuit breaker — read the comment there before you touch it) and the `/design` band specimen.
   **Decide whether your header row is meant to persist when it has nothing in it**, because
   `ModeSurface` renders no header element at all for an absent, `null` or boolean `head`:
   - a row that should **stay put while its contents come and go** — because something below it
