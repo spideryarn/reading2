@@ -166,11 +166,35 @@ describe("scrubSecrets", () => {
       "postgres://scrubbed@db.example:5432/app",
     );
     expect(scrubbedValue("HTTPS_PROXY", "http://u:p@proxy.example:3128")).toBe("http://scrubbed@proxy.example:3128/");
-    /* Nothing to take out: unchanged, and so not scrubbed or pinned at all. */
-    expect(scrubbedValue("HTTPS_PROXY", "http://proxy.example:3128")).toBeUndefined();
+    /* Even a credential-free URL gets a marker, so every secret-shaped name is changed and pinned. */
+    expect(scrubbedValue("HTTPS_PROXY", "http://proxy.example:3128")).toBe("http://scrubbed@proxy.example:3128/");
     expect(scrubbedValue("NO_PROXY", "localhost,127.0.0.1")).toBeUndefined();
     expect(scrubbedValue("SSH_AUTH_SOCK", "/tmp/ssh-x/agent.1")).toBe(SCRUBBED_SECRET);
     expect(scrubbedValue("GITHUB_TOKEN", "a:b")).toBe(SCRUBBED_SECRET);
+  });
+
+  it("does not mistake an unpinned sentinel-shaped value for one the scrubber wrote", () => {
+    const scalar: NodeJS.ProcessEnv = { OPENROUTER_API_KEY: SCRUBBED_SECRET };
+    const url: NodeJS.ProcessEnv = { DATABASE_URL: "postgres://scrubbed@db.example/app" };
+
+    expect(unscrubbedNames(scalar)).toEqual(["OPENROUTER_API_KEY"]);
+    expect(unscrubbedNames(url)).toEqual(["DATABASE_URL"]);
+
+    scrubSecrets(scalar);
+    scrubSecrets(url);
+    expect(unscrubbedNames(scalar)).toEqual([]);
+    expect(unscrubbedNames(url)).toEqual([]);
+  });
+
+  it("detects query-only credentials and remains idempotent after scrubbing them", () => {
+    const env: NodeJS.ProcessEnv = { DATABASE_URL: "postgres://db.example/app?password=fake" };
+    expect(unscrubbedNames(env)).toEqual(["DATABASE_URL"]);
+
+    scrubSecrets(env);
+    const once = env.DATABASE_URL;
+    scrubSecrets(env);
+    expect(env.DATABASE_URL === once, "scrubbing the URL twice changed it again").toBe(true);
+    expect(unscrubbedNames(env)).toEqual([]);
   });
 
   it("keeps a lane's names real only while both of the stack's URLs are on this machine", () => {
@@ -179,6 +203,7 @@ describe("scrubSecrets", () => {
     expect(keptOnlyIfLocal(local, names)).toEqual(names);
     expect(keptOnlyIfLocal({ ...local, SUPABASE_URL: "https://ref.supabase.co" }, names)).toEqual([]);
     expect(keptOnlyIfLocal({ ...local, DATABASE_URL: "postgres://p:p@db.ref.supabase.co/postgres" }, names)).toEqual([]);
+    expect(keptOnlyIfLocal({ ...local, SUPABASE_URL: "http://127.0.0.1:54361?host=remote.example" }, names)).toEqual([]);
     expect(keptOnlyIfLocal({ DATABASE_URL: local.DATABASE_URL }, names)).toEqual([]);
   });
 });

@@ -70,4 +70,18 @@ real `DATABASE_URL`.
     in the helper's header and in testing.md, and not fixed.
   - P3, keep only whichever public client key a test selects: not taken. Both are public keys for
     the local stack, and choosing between them belongs to the test.
-- **Code**: see the end-of-stage review below.
+- **Code**, GPT Sol (workspace-write, 2026-09-11, reviewing 5e13696b). No P0s. It fixed three
+  P1s in the stage:
+  - `unscrubbedNames` counted a value as scrubbed by its shape alone. It now also requires the
+    name to be pinned, so a real value that happens to look like the sentinel is not exempt. A URL
+    with no credentials now gets the `scrubbed` user and a pin as well, rather than being left
+    alone and unpinned.
+  - The two database-lane probes exempted the whole keep-list whether or not the stack was local.
+    They now ask `keptOnlyIfLocal` too.
+  - Two more assertions could print the value they were looking for: the private lane's
+    `DATABASE_URL === MINTED`, and stage2c's two `not.toContain` checks, over an error message and
+    over a child's stderr. All three now assert booleans.
+
+  Its audit of every writer of `SPIDERYARN_ENV_PINNED` in `tests/`, `scripts/` and `src/` found
+  that none replaces the scrub's names. Its sandbox could not spawn children, so I re-ran the nine
+  touched files and the shared lane: all green, and the output scan found no value.

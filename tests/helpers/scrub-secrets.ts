@@ -71,7 +71,10 @@ const SCRUBBED_USER = "scrubbed";
  * credential, and it matches `_PROXY` only by its spelling. Turning it into a sentinel would send
  * local traffic through whatever proxy is set.
  *
- * @returns the replacement, or `undefined` when the value holds nothing to scrub
+ * Even a URL with no credentials gets the scrubbed username. Besides making the replacement
+ * visible, that puts its name on the pin so a later `loadEnvLocal()` cannot restore a credential.
+ *
+ * @returns the replacement, or `undefined` for the deliberate `NO_PROXY` exception
  */
 export function scrubbedValue(name: string, value: string): string | undefined {
   if (/^no_proxy$/i.test(name)) return undefined;
@@ -84,14 +87,13 @@ export function scrubbedValue(name: string, value: string): string | undefined {
   /* Only a URL with an authority: `new URL("a:b")` parses too, and that is not a URL anybody
      meant. */
   if (!url.host) return SCRUBBED_SECRET;
-  const hadCredentials = url.username !== "" || url.password !== "";
-  /* Nothing to take out, so nothing to change: `toString()` would add a trailing slash to a
-     bare origin, and code that appends a path to it would then build `//rest`. */
-  if (!hadCredentials && url.search === "" && url.hash === "") return undefined;
-  url.username = hadCredentials ? SCRUBBED_USER : "";
+  url.username = SCRUBBED_USER;
   url.password = "";
   url.search = "";
   url.hash = "";
+  /* Some schemes parse with an authority but do not accept userinfo. A scalar sentinel is safer
+     than returning a URL whose value this function did not actually change. */
+  if (url.username !== SCRUBBED_USER) return SCRUBBED_SECRET;
   return url.toString();
 }
 
@@ -132,17 +134,22 @@ export function scrubSecrets(env: NodeJS.ProcessEnv, keep: readonly string[] = [
  * **The secret-named variables in `env` that still hold something real** — names only, for an
  * assertion to compare against a lane's keep-list.
  *
- * A value counts as scrubbed if it is the sentinel, a URL `scrubbedValue` has already emptied, or
- * one of `allowed`: the unit lane's poisons, which are URLs this repo wrote to point at nothing.
+ * A value counts as scrubbed if it has a safe replacement shape **and the name is pinned**. The
+ * pin is provenance: without it, a real scalar equal to the sentinel or a URL whose real username
+ * happens to be `scrubbed` is indistinguishable from output this helper wrote, and a later
+ * `loadEnvLocal()` can replace it. `NO_PROXY` needs no replacement; `allowed` is the unit lane's
+ * two pinned poison URLs.
  */
 export function unscrubbedNames(env: NodeJS.ProcessEnv, allowed: readonly string[] = []): string[] {
+  const pinned = pinnedNames(env[PINNED]);
   return Object.entries(env)
     .filter(([name, value]) => value !== undefined && isSecretName(name))
     .filter(([name, value]) => {
       const v = value as string;
-      if (allowed.includes(v) || v === SCRUBBED_SECRET) return false;
+      if (allowed.includes(v)) return !pinned.has(name);
       const replacement = scrubbedValue(name, v);
-      return replacement !== undefined && replacement !== v;
+      if (replacement === undefined) return false; // NO_PROXY
+      return replacement !== v || !pinned.has(name);
     })
     .map(([name]) => name);
 }

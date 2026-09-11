@@ -443,7 +443,7 @@ describe("the sentence a failure gives a person", () => {
     /* And never the value. This is the assertion the vacuous version could not
        make: the secret is one the test put there, so it is genuinely present to
        be leaked. */
-    expect(err.message).not.toContain(SECRET);
+    expect(err.message.includes(SECRET), "the error included SUPABASE_SERVICE_ROLE_KEY's value").toBe(false);
   });
 
   /** The other branch — a laptop with no container running is in it. */
@@ -837,8 +837,8 @@ describe("`npm run ingest` selects its blob store from the same environment the 
       expect(child.stderr).toMatch(
         new RegExp(String.raw`\[env\] \.env\.local overrode [^\n]*\b${target.name}\b`),
       );
-      /* Names only, never values — the warning is about credentials. */
-      expect(child.stderr).not.toContain(target.value);
+      /* Boolean subject: `not.toContain` would print stderr, including the value, if this failed. */
+      expect(child.stderr.includes(target.value), `the warning included ${target.name}'s value`).toBe(false);
     },
     120_000,
   );

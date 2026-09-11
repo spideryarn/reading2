@@ -36,7 +36,7 @@
 import { Client } from "pg";
 import { afterAll, describe, expect, it } from "vitest";
 
-import { SHARED_LANE_KEEPS, unscrubbedNames } from "./helpers/scrub-secrets.js";
+import { keptOnlyIfLocal, SHARED_LANE_KEEPS, unscrubbedNames } from "./helpers/scrub-secrets.js";
 
 import {
   archiveList,
@@ -835,8 +835,9 @@ live("the URL it hands back", () => {
  */
 describe("the shared lane's worker environment", () => {
   it("holds no real secret-named value outside SHARED_LANE_KEEPS", () => {
+    const allowed = keptOnlyIfLocal(process.env, SHARED_LANE_KEEPS);
     const extra = unscrubbedNames(process.env).filter(
-      (name) => !(SHARED_LANE_KEEPS as readonly string[]).includes(name),
+      (name) => !allowed.includes(name),
     );
     expect(extra, "secret-named variables holding a real value").toEqual([]);
   });
