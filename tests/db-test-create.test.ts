@@ -36,6 +36,8 @@
 import { Client } from "pg";
 import { afterAll, describe, expect, it } from "vitest";
 
+import { keptOnlyIfLocal, SHARED_LANE_KEEPS, unscrubbedNames } from "./helpers/scrub-secrets.js";
+
 import {
   archiveList,
   archiveProblems,
@@ -820,5 +822,23 @@ live("the URL it hands back", () => {
     const url = urlForDatabase("spideryarn_test_x");
     expect(new URL(url).pathname).toBe("/spideryarn_test_x");
     expect(new URL(url).host).toBe(new URL(baseUrl()).host);
+  });
+});
+
+/**
+ * **The shared lane's worker holds no real secret but the local stack's own.**
+ * tests/setup/shared-db.ts replaces every other secret-named value and pins the names, so that a
+ * failing assertion over this worker's environment has nothing real to print
+ * (docs/postmortems/260910d-an-assertion-over-a-whole-environment-prints-every-secret-when-it-fails.md).
+ * Here because this file is in the shared lane by contract rather than by circumstance; the unit
+ * lane's probe is tests/test-workers-hold-no-secrets.test.ts. Names only.
+ */
+describe("the shared lane's worker environment", () => {
+  it("holds no real secret-named value outside SHARED_LANE_KEEPS", () => {
+    const allowed = keptOnlyIfLocal(process.env, SHARED_LANE_KEEPS);
+    const extra = unscrubbedNames(process.env).filter(
+      (name) => !allowed.includes(name),
+    );
+    expect(extra, "secret-named variables holding a real value").toEqual([]);
   });
 });

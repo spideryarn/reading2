@@ -30,6 +30,8 @@
 import { Client } from "pg";
 import { afterAll, expect, it, vi } from "vitest";
 
+import { keptOnlyIfLocal, PRIVATE_LANE_KEEPS, unscrubbedNames } from "./helpers/scrub-secrets.js";
+
 /** The database this worker is supposed to be in, read before anything resets. */
 const MINTED = process.env.DATABASE_URL ?? "";
 
@@ -77,5 +79,27 @@ it("stays in the run's own database across vi.resetModules()", async () => {
       "development database. See src/env.ts § PINNED.",
   ).toBe(before);
 
-  expect(process.env.DATABASE_URL, "DATABASE_URL was rewritten by the reload").toBe(MINTED);
+  /* Boolean subject: either URL can contain a password, and a failed equality matcher would print
+     both. The database-name assertions above carry the useful detail without carrying credentials. */
+  expect(process.env.DATABASE_URL === MINTED, "DATABASE_URL was rewritten by the reload").toBe(true);
+});
+
+/**
+ * **Nor does a reload put back a secret the lane scrubbed.** tests/setup/private-db.ts replaces
+ * every secret-named value but `PRIVATE_LANE_KEEPS` and pins the names, so that a failing
+ * assertion over this worker's environment has nothing real to print
+ * (docs/postmortems/260910d-an-assertion-over-a-whole-environment-prints-every-secret-when-it-fails.md).
+ * The unit lane's probe is tests/test-workers-hold-no-secrets.test.ts; this is the private lane's,
+ * and it is here because a reset is the easiest way to lose the pin. Names only.
+ */
+it("holds no real secret but the lane's own, before and after vi.resetModules()", async () => {
+  const extra = (): string[] => {
+    const allowed = keptOnlyIfLocal(process.env, PRIVATE_LANE_KEEPS);
+    return unscrubbedNames(process.env).filter((name) => !allowed.includes(name));
+  };
+  expect(extra(), "secret-named variables holding a real value").toEqual([]);
+  vi.resetModules();
+  const { loadEnvLocal } = await import("../src/env.js");
+  loadEnvLocal();
+  expect(extra(), "put back by a reloaded loadEnvLocal()").toEqual([]);
 });
