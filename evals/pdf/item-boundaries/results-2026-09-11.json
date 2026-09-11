@@ -1,0 +1,1002 @@
+{
+  "at": "2026-09-11T12:29:53.038Z",
+  "LINE_BREAK": 0.7,
+  "results": [
+    {
+      "file": "evals/pdf/easy/source.pdf",
+      "sha": "5e0eba41258f",
+      "pages": 8,
+      "folioOffsetOld": 59,
+      "census": {
+        "kinds": {
+          "touching": 31,
+          "gap": 0,
+          "shift": 0,
+          "line-break": 0
+        },
+        "dyBins": {
+          "0.15-0.3": 0,
+          "0.3-0.5": 0,
+          "0.5-0.7": 0,
+          "0.7-1.0": 0,
+          "1.0-2.0": 0,
+          "2.0+": 0
+        },
+        "nearestBreak": null,
+        "largestShift": 0,
+        "lineBreakExamples": []
+      },
+      "headings": {
+        "both": [],
+        "oldOnly": [],
+        "newOnly": []
+      },
+      "stillDefused": [],
+      "text": {
+        "pagesChanged": 0,
+        "newlinesAdded": 0,
+        "wordsBefore": 3522,
+        "wordsAfter": 3522,
+        "furnitureAdded": [],
+        "furnitureRemoved": []
+      },
+      "refusals": {
+        "readings": 6,
+        "verdictChanged": [],
+        "controlVerdictChanged": 0,
+        "controlFailuresChanged": 0,
+        "failuresChanged": [],
+        "oldFailing": 1,
+        "newFailing": 1,
+        "invented": {
+          "oldOnly": [],
+          "newOnly": []
+        }
+      },
+      "adversarial": {
+        "candidates": 0,
+        "mutations": 0,
+        "caughtOld": 0,
+        "caughtNew": 0,
+        "confounded": [],
+        "missedOnlyByNew": [],
+        "missedOnlyByOld": [],
+        "missedByBoth": []
+      }
+    },
+    {
+      "file": "evals/pdf/harder/source.pdf",
+      "sha": "18d0d66a7f97",
+      "pages": 14,
+      "folioOffsetOld": null,
+      "census": {
+        "kinds": {
+          "touching": 62,
+          "gap": 0,
+          "shift": 51,
+          "line-break": 0
+        },
+        "dyBins": {
+          "0.15-0.3": 0,
+          "0.3-0.5": 49,
+          "0.5-0.7": 0,
+          "0.7-1.0": 0,
+          "1.0-2.0": 0,
+          "2.0+": 0
+        },
+        "nearestBreak": null,
+        "largestShift": 0.38,
+        "lineBreakExamples": []
+      },
+      "headings": {
+        "both": [],
+        "oldOnly": [],
+        "newOnly": []
+      },
+      "stillDefused": [],
+      "text": {
+        "pagesChanged": 0,
+        "newlinesAdded": 0,
+        "wordsBefore": 11937,
+        "wordsAfter": 11937,
+        "furnitureAdded": [],
+        "furnitureRemoved": []
+      },
+      "refusals": {
+        "readings": 15,
+        "verdictChanged": [],
+        "controlVerdictChanged": 0,
+        "controlFailuresChanged": 0,
+        "failuresChanged": [],
+        "oldFailing": 0,
+        "newFailing": 0,
+        "invented": {
+          "oldOnly": [],
+          "newOnly": []
+        }
+      },
+      "adversarial": {
+        "candidates": 0,
+        "mutations": 0,
+        "caughtOld": 0,
+        "caughtNew": 0,
+        "confounded": [],
+        "missedOnlyByNew": [],
+        "missedOnlyByOld": [],
+        "missedByBoth": []
+      }
+    },
+    {
+      "file": "evals/pdf/much-harder/source.pdf",
+      "sha": "dc66ec70acf8",
+      "pages": 17,
+      "folioOffsetOld": null,
+      "census": {
+        "kinds": {
+          "touching": 0,
+          "gap": 0,
+          "shift": 0,
+          "line-break": 0
+        },
+        "dyBins": {
+          "0.15-0.3": 0,
+          "0.3-0.5": 0,
+          "0.5-0.7": 0,
+          "0.7-1.0": 0,
+          "1.0-2.0": 0,
+          "2.0+": 0
+        },
+        "nearestBreak": null,
+        "largestShift": 0,
+        "lineBreakExamples": []
+      },
+      "headings": {
+        "both": [],
+        "oldOnly": [],
+        "newOnly": []
+      },
+      "stillDefused": [],
+      "text": {
+        "pagesChanged": 0,
+        "newlinesAdded": 0,
+        "wordsBefore": 95,
+        "wordsAfter": 95,
+        "furnitureAdded": [],
+        "furnitureRemoved": []
+      },
+      "refusals": {
+        "readings": 0,
+        "verdictChanged": [],
+        "controlVerdictChanged": 0,
+        "controlFailuresChanged": 0,
+        "failuresChanged": [],
+        "oldFailing": 0,
+        "newFailing": 0,
+        "invented": {
+          "oldOnly": [],
+          "newOnly": []
+        }
+      },
+      "adversarial": {
+        "candidates": 0,
+        "mutations": 0,
+        "caughtOld": 0,
+        "caughtNew": 0,
+        "confounded": [],
+        "missedOnlyByNew": [],
+        "missedOnlyByOld": [],
+        "missedByBoth": []
+      }
+    },
+    {
+      "file": "evals/pdf/titles/acl-conference-banner/source.pdf",
+      "sha": "3f09fe401261",
+      "pages": 3,
+      "folioOffsetOld": null,
+      "census": {
+        "kinds": {
+          "touching": 2,
+          "gap": 0,
+          "shift": 5,
+          "line-break": 3
+        },
+        "dyBins": {
+          "0.15-0.3": 0,
+          "0.3-0.5": 5,
+          "0.5-0.7": 0,
+          "0.7-1.0": 0,
+          "1.0-2.0": 2,
+          "2.0+": 1
+        },
+        "nearestBreak": 1.86,
+        "largestShift": 0.42,
+        "lineBreakExamples": [
+          "p1 xxxxxxxxxxx|xxxxxxxx dy=51.39",
+          "p2 xx|6665 dy=1.86",
+          "p3 3.|6666 dy=1.86"
+        ]
+      },
+      "headings": {
+        "both": [],
+        "oldOnly": [],
+        "newOnly": []
+      },
+      "stillDefused": [],
+      "text": {
+        "pagesChanged": 3,
+        "newlinesAdded": 3,
+        "wordsBefore": 2105,
+        "wordsAfter": 2108,
+        "furnitureAdded": [],
+        "furnitureRemoved": []
+      },
+      "refusals": {
+        "readings": 6,
+        "verdictChanged": [],
+        "controlVerdictChanged": 0,
+        "controlFailuresChanged": 0,
+        "failuresChanged": [],
+        "oldFailing": 0,
+        "newFailing": 0,
+        "invented": {
+          "oldOnly": [],
+          "newOnly": []
+        }
+      },
+      "adversarial": {
+        "candidates": 0,
+        "mutations": 0,
+        "caughtOld": 0,
+        "caughtNew": 0,
+        "confounded": [],
+        "missedOnlyByNew": [],
+        "missedOnlyByOld": [],
+        "missedByBoth": []
+      }
+    },
+    {
+      "file": "evals/pdf/titles/arxiv-arnn-eeg-stamp/source.pdf",
+      "sha": "4ff245681c6c",
+      "pages": 3,
+      "folioOffsetOld": 0,
+      "census": {
+        "kinds": {
+          "touching": 56,
+          "gap": 0,
+          "shift": 5,
+          "line-break": 2
+        },
+        "dyBins": {
+          "0.15-0.3": 0,
+          "0.3-0.5": 5,
+          "0.5-0.7": 0,
+          "0.7-1.0": 0,
+          "1.0-2.0": 0,
+          "2.0+": 2
+        },
+        "nearestBreak": 15.82,
+        "largestShift": 0.36,
+        "lineBreakExamples": [
+          "p2 xxxxxxxxxx|xxxxxx dy=19.05",
+          "p3 ...........|xxxxxx dy=15.82"
+        ]
+      },
+      "headings": {
+        "both": [],
+        "oldOnly": [],
+        "newOnly": []
+      },
+      "stillDefused": [],
+      "text": {
+        "pagesChanged": 2,
+        "newlinesAdded": 2,
+        "wordsBefore": 1998,
+        "wordsAfter": 2000,
+        "furnitureAdded": [],
+        "furnitureRemoved": []
+      },
+      "refusals": {
+        "readings": 6,
+        "verdictChanged": [],
+        "controlVerdictChanged": 4,
+        "controlFailuresChanged": 4,
+        "failuresChanged": [],
+        "oldFailing": 0,
+        "newFailing": 0,
+        "invented": {
+          "oldOnly": [],
+          "newOnly": []
+        }
+      },
+      "adversarial": {
+        "candidates": 0,
+        "mutations": 0,
+        "caughtOld": 0,
+        "caughtNew": 0,
+        "confounded": [],
+        "missedOnlyByNew": [],
+        "missedOnlyByOld": [],
+        "missedByBoth": []
+      }
+    },
+    {
+      "file": "evals/pdf/titles/arxiv-lattice-linear-badmeta/source.pdf",
+      "sha": "1b7f9ac256f2",
+      "pages": 3,
+      "folioOffsetOld": 0,
+      "census": {
+        "kinds": {
+          "touching": 17,
+          "gap": 0,
+          "shift": 6,
+          "line-break": 0
+        },
+        "dyBins": {
+          "0.15-0.3": 0,
+          "0.3-0.5": 6,
+          "0.5-0.7": 0,
+          "0.7-1.0": 0,
+          "1.0-2.0": 0,
+          "2.0+": 0
+        },
+        "nearestBreak": null,
+        "largestShift": 0.36,
+        "lineBreakExamples": []
+      },
+      "headings": {
+        "both": [],
+        "oldOnly": [],
+        "newOnly": []
+      },
+      "stillDefused": [],
+      "text": {
+        "pagesChanged": 0,
+        "newlinesAdded": 0,
+        "wordsBefore": 1364,
+        "wordsAfter": 1364,
+        "furnitureAdded": [],
+        "furnitureRemoved": []
+      },
+      "refusals": {
+        "readings": 6,
+        "verdictChanged": [],
+        "controlVerdictChanged": 0,
+        "controlFailuresChanged": 0,
+        "failuresChanged": [],
+        "oldFailing": 0,
+        "newFailing": 0,
+        "invented": {
+          "oldOnly": [],
+          "newOnly": []
+        }
+      },
+      "adversarial": {
+        "candidates": 6,
+        "mutations": 6,
+        "caughtOld": 0,
+        "caughtNew": 0,
+        "confounded": [],
+        "missedOnlyByNew": [],
+        "missedOnlyByOld": [],
+        "missedByBoth": [
+          "titles/arxiv-lattice-linear-badmeta/records-5837a306a4da-1.json p3 1",
+          "titles/arxiv-lattice-linear-badmeta/records-5837a306a4da-2.json p3 1",
+          "titles/arxiv-lattice-linear-badmeta/records-5837a306a4da-3.json p3 1",
+          "titles/arxiv-lattice-linear-badmeta/records-ee94ff70ea4a-1.json p3 1",
+          "titles/arxiv-lattice-linear-badmeta/records-ee94ff70ea4a-2.json p3 1",
+          "titles/arxiv-lattice-linear-badmeta/records-ee94ff70ea4a-3.json p3 1"
+        ]
+      }
+    },
+    {
+      "file": "evals/pdf/titles/copernicus-ball-lightning-title/source.pdf",
+      "sha": "0f9f5934d389",
+      "pages": 3,
+      "folioOffsetOld": null,
+      "census": {
+        "kinds": {
+          "touching": 10,
+          "gap": 0,
+          "shift": 9,
+          "line-break": 0
+        },
+        "dyBins": {
+          "0.15-0.3": 0,
+          "0.3-0.5": 9,
+          "0.5-0.7": 0,
+          "0.7-1.0": 0,
+          "1.0-2.0": 0,
+          "2.0+": 0
+        },
+        "nearestBreak": null,
+        "largestShift": 0.36,
+        "lineBreakExamples": []
+      },
+      "headings": {
+        "both": [],
+        "oldOnly": [],
+        "newOnly": []
+      },
+      "stillDefused": [],
+      "text": {
+        "pagesChanged": 0,
+        "newlinesAdded": 0,
+        "wordsBefore": 2478,
+        "wordsAfter": 2478,
+        "furnitureAdded": [],
+        "furnitureRemoved": []
+      },
+      "refusals": {
+        "readings": 6,
+        "verdictChanged": [],
+        "controlVerdictChanged": 0,
+        "controlFailuresChanged": 0,
+        "failuresChanged": [],
+        "oldFailing": 6,
+        "newFailing": 6,
+        "invented": {
+          "oldOnly": [],
+          "newOnly": []
+        }
+      },
+      "adversarial": {
+        "candidates": 0,
+        "mutations": 0,
+        "caughtOld": 0,
+        "caughtNew": 0,
+        "confounded": [],
+        "missedOnlyByNew": [],
+        "missedOnlyByOld": [],
+        "missedByBoth": []
+      }
+    },
+    {
+      "file": "evals/pdf/titles/frontiers-wrapped-title/source.pdf",
+      "sha": "cb77ee3bd88d",
+      "pages": 3,
+      "folioOffsetOld": null,
+      "census": {
+        "kinds": {
+          "touching": 76,
+          "gap": 0,
+          "shift": 4,
+          "line-break": 0
+        },
+        "dyBins": {
+          "0.15-0.3": 0,
+          "0.3-0.5": 4,
+          "0.5-0.7": 0,
+          "0.7-1.0": 0,
+          "1.0-2.0": 0,
+          "2.0+": 0
+        },
+        "nearestBreak": null,
+        "largestShift": 0.36,
+        "lineBreakExamples": []
+      },
+      "headings": {
+        "both": [],
+        "oldOnly": [],
+        "newOnly": []
+      },
+      "stillDefused": [],
+      "text": {
+        "pagesChanged": 0,
+        "newlinesAdded": 0,
+        "wordsBefore": 2705,
+        "wordsAfter": 2705,
+        "furnitureAdded": [],
+        "furnitureRemoved": []
+      },
+      "refusals": {
+        "readings": 6,
+        "verdictChanged": [],
+        "controlVerdictChanged": 0,
+        "controlFailuresChanged": 0,
+        "failuresChanged": [],
+        "oldFailing": 6,
+        "newFailing": 6,
+        "invented": {
+          "oldOnly": [],
+          "newOnly": []
+        }
+      },
+      "adversarial": {
+        "candidates": 0,
+        "mutations": 0,
+        "caughtOld": 0,
+        "caughtNew": 0,
+        "confounded": [],
+        "missedOnlyByNew": [],
+        "missedOnlyByOld": [],
+        "missedByBoth": []
+      }
+    },
+    {
+      "file": "evals/pdf/titles/injection-adversary/source.pdf",
+      "sha": "f409ad1bef1c",
+      "pages": 3,
+      "folioOffsetOld": null,
+      "census": {
+        "kinds": {
+          "touching": 0,
+          "gap": 0,
+          "shift": 0,
+          "line-break": 0
+        },
+        "dyBins": {
+          "0.15-0.3": 0,
+          "0.3-0.5": 0,
+          "0.5-0.7": 0,
+          "0.7-1.0": 0,
+          "1.0-2.0": 0,
+          "2.0+": 0
+        },
+        "nearestBreak": null,
+        "largestShift": 0,
+        "lineBreakExamples": []
+      },
+      "headings": {
+        "both": [],
+        "oldOnly": [],
+        "newOnly": []
+      },
+      "stillDefused": [],
+      "text": {
+        "pagesChanged": 0,
+        "newlinesAdded": 0,
+        "wordsBefore": 261,
+        "wordsAfter": 261,
+        "furnitureAdded": [],
+        "furnitureRemoved": []
+      },
+      "refusals": {
+        "readings": 6,
+        "verdictChanged": [],
+        "controlVerdictChanged": 0,
+        "controlFailuresChanged": 0,
+        "failuresChanged": [],
+        "oldFailing": 2,
+        "newFailing": 2,
+        "invented": {
+          "oldOnly": [],
+          "newOnly": []
+        }
+      },
+      "adversarial": {
+        "candidates": 0,
+        "mutations": 0,
+        "caughtOld": 0,
+        "caughtNew": 0,
+        "confounded": [],
+        "missedOnlyByNew": [],
+        "missedOnlyByOld": [],
+        "missedByBoth": []
+      }
+    },
+    {
+      "file": "evals/pdf/titles/kuhn-landscape-of-consciousness/source.pdf",
+      "sha": "075825552c2a",
+      "pages": 3,
+      "folioOffsetOld": null,
+      "census": {
+        "kinds": {
+          "touching": 310,
+          "gap": 0,
+          "shift": 9,
+          "line-break": 3
+        },
+        "dyBins": {
+          "0.15-0.3": 0,
+          "0.3-0.5": 9,
+          "0.5-0.7": 0,
+          "0.7-1.0": 0,
+          "1.0-2.0": 0,
+          "2.0+": 3
+        },
+        "nearestBreak": 42.04,
+        "largestShift": 0.45,
+        "lineBreakExamples": [
+          "p1 nc-nd/4.0/).|x dy=42.04",
+          "p2 29|xxx dy=87.98",
+          "p3 30|xxxxxxx dy=87.98"
+        ]
+      },
+      "headings": {
+        "both": [],
+        "oldOnly": [],
+        "newOnly": []
+      },
+      "stillDefused": [],
+      "text": {
+        "pagesChanged": 3,
+        "newlinesAdded": 3,
+        "wordsBefore": 3352,
+        "wordsAfter": 3355,
+        "furnitureAdded": [],
+        "furnitureRemoved": []
+      },
+      "refusals": {
+        "readings": 6,
+        "verdictChanged": [],
+        "controlVerdictChanged": 0,
+        "controlFailuresChanged": 5,
+        "failuresChanged": [
+          {
+            "source": "titles/kuhn-landscape-of-consciousness/records-5837a306a4da-1.json",
+            "oldOnly": [
+              "Pages 1, 2, 3: 1 number(s) or address(es) in the output are on none of these pages — http://creativecommons.org/licenses/by-nc-nd/4.0."
+            ],
+            "newOnly": []
+          },
+          {
+            "source": "titles/kuhn-landscape-of-consciousness/records-5837a306a4da-3.json",
+            "oldOnly": [
+              "Pages 1, 2, 3: 1 number(s) or address(es) in the output are on none of these pages — http://creativecommons.org/licenses/by-nc-nd/4.0."
+            ],
+            "newOnly": []
+          }
+        ],
+        "oldFailing": 6,
+        "newFailing": 6,
+        "invented": {
+          "oldOnly": [
+            "titles/kuhn-landscape-of-consciousness/records-5837a306a4da-1.json http://creativecommons.org/licenses/by-nc-nd/4.0",
+            "titles/kuhn-landscape-of-consciousness/records-5837a306a4da-3.json http://creativecommons.org/licenses/by-nc-nd/4.0"
+          ],
+          "newOnly": []
+        }
+      },
+      "adversarial": {
+        "candidates": 0,
+        "mutations": 0,
+        "caughtOld": 0,
+        "caughtNew": 0,
+        "confounded": [],
+        "missedOnlyByNew": [],
+        "missedOnlyByOld": [],
+        "missedByBoth": []
+      }
+    },
+    {
+      "file": "evals/pdf/titles/nasa-tm-interplanetary-streams/source.pdf",
+      "sha": "08bbf5e274c5",
+      "pages": 3,
+      "folioOffsetOld": null,
+      "census": {
+        "kinds": {
+          "touching": 10,
+          "gap": 0,
+          "shift": 1,
+          "line-break": 0
+        },
+        "dyBins": {
+          "0.15-0.3": 0,
+          "0.3-0.5": 1,
+          "0.5-0.7": 0,
+          "0.7-1.0": 0,
+          "1.0-2.0": 0,
+          "2.0+": 0
+        },
+        "nearestBreak": null,
+        "largestShift": 0.45,
+        "lineBreakExamples": []
+      },
+      "headings": {
+        "both": [],
+        "oldOnly": [],
+        "newOnly": []
+      },
+      "stillDefused": [],
+      "text": {
+        "pagesChanged": 0,
+        "newlinesAdded": 0,
+        "wordsBefore": 431,
+        "wordsAfter": 431,
+        "furnitureAdded": [],
+        "furnitureRemoved": []
+      },
+      "refusals": {
+        "readings": 6,
+        "verdictChanged": [],
+        "controlVerdictChanged": 0,
+        "controlFailuresChanged": 6,
+        "failuresChanged": [],
+        "oldFailing": 6,
+        "newFailing": 6,
+        "invented": {
+          "oldOnly": [],
+          "newOnly": []
+        }
+      },
+      "adversarial": {
+        "candidates": 0,
+        "mutations": 0,
+        "caughtOld": 0,
+        "caughtNew": 0,
+        "confounded": [],
+        "missedOnlyByNew": [],
+        "missedOnlyByOld": [],
+        "missedByBoth": []
+      }
+    },
+    {
+      "file": "evals/pdf/titles/unal-biotec-bilingual-title/source.pdf",
+      "sha": "473a5ab8079c",
+      "pages": 3,
+      "folioOffsetOld": null,
+      "census": {
+        "kinds": {
+          "touching": 67,
+          "gap": 0,
+          "shift": 2,
+          "line-break": 0
+        },
+        "dyBins": {
+          "0.15-0.3": 0,
+          "0.3-0.5": 2,
+          "0.5-0.7": 0,
+          "0.7-1.0": 0,
+          "1.0-2.0": 0,
+          "2.0+": 0
+        },
+        "nearestBreak": null,
+        "largestShift": 0.36,
+        "lineBreakExamples": []
+      },
+      "headings": {
+        "both": [],
+        "oldOnly": [],
+        "newOnly": []
+      },
+      "stillDefused": [],
+      "text": {
+        "pagesChanged": 0,
+        "newlinesAdded": 0,
+        "wordsBefore": 2117,
+        "wordsAfter": 2117,
+        "furnitureAdded": [],
+        "furnitureRemoved": []
+      },
+      "refusals": {
+        "readings": 6,
+        "verdictChanged": [],
+        "controlVerdictChanged": 0,
+        "controlFailuresChanged": 0,
+        "failuresChanged": [],
+        "oldFailing": 6,
+        "newFailing": 6,
+        "invented": {
+          "oldOnly": [],
+          "newOnly": []
+        }
+      },
+      "adversarial": {
+        "candidates": 0,
+        "mutations": 0,
+        "caughtOld": 0,
+        "caughtNew": 0,
+        "confounded": [],
+        "missedOnlyByNew": [],
+        "missedOnlyByOld": [],
+        "missedByBoth": []
+      }
+    },
+    {
+      "file": "evals/pdf/titles/wellcome-fowler-scan-title/source.pdf",
+      "sha": "4a6d41b08170",
+      "pages": 3,
+      "folioOffsetOld": null,
+      "census": {
+        "kinds": {
+          "touching": 0,
+          "gap": 0,
+          "shift": 0,
+          "line-break": 0
+        },
+        "dyBins": {
+          "0.15-0.3": 0,
+          "0.3-0.5": 0,
+          "0.5-0.7": 0,
+          "0.7-1.0": 0,
+          "1.0-2.0": 0,
+          "2.0+": 0
+        },
+        "nearestBreak": null,
+        "largestShift": 0,
+        "lineBreakExamples": []
+      },
+      "headings": {
+        "both": [],
+        "oldOnly": [],
+        "newOnly": []
+      },
+      "stillDefused": [],
+      "text": {
+        "pagesChanged": 0,
+        "newlinesAdded": 0,
+        "wordsBefore": 95,
+        "wordsAfter": 95,
+        "furnitureAdded": [],
+        "furnitureRemoved": []
+      },
+      "refusals": {
+        "readings": 6,
+        "verdictChanged": [],
+        "controlVerdictChanged": 0,
+        "controlFailuresChanged": 0,
+        "failuresChanged": [],
+        "oldFailing": 0,
+        "newFailing": 0,
+        "invented": {
+          "oldOnly": [],
+          "newOnly": []
+        }
+      },
+      "adversarial": {
+        "candidates": 0,
+        "mutations": 0,
+        "caughtOld": 0,
+        "caughtNew": 0,
+        "confounded": [],
+        "missedOnlyByNew": [],
+        "missedOnlyByOld": [],
+        "missedByBoth": []
+      }
+    },
+    {
+      "file": "logs/kuhn-full.pdf",
+      "sha": "0a74e33b25df",
+      "pages": 142,
+      "folioOffsetOld": 27,
+      "census": {
+        "kinds": {
+          "touching": 15205,
+          "gap": 0,
+          "shift": 93,
+          "line-break": 142
+        },
+        "dyBins": {
+          "0.15-0.3": 4,
+          "0.3-0.5": 89,
+          "0.5-0.7": 0,
+          "0.7-1.0": 0,
+          "1.0-2.0": 0,
+          "2.0+": 142
+        },
+        "nearestBreak": 19.19,
+        "largestShift": 0.45,
+        "lineBreakExamples": [
+          "p1 nc-nd/4.0/).|x dy=42.04",
+          "p2 29|xxx dy=87.98",
+          "p3 30|xxxxxxx dy=87.98",
+          "p4 31|2. dy=87.98",
+          "p5 32|xxxxxxxx dy=87.98",
+          "p6 33|xxxxxxxxxxx, dy=87.98",
+          "p7 34|xxxxxxxxxxx dy=34.12",
+          "p8 35|xxxxxxxxx dy=25.94",
+          "p9 36|xxxxxxxxxxxxx dy=19.19",
+          "p10 37|xxxxxx dy=23.1",
+          "p11 38|xxxxx dy=23.1",
+          "p12 39|x dy=24.17"
+        ]
+      },
+      "headings": {
+        "both": [
+          "p4 2",
+          "p25 9.2.12",
+          "p30 9.4.4",
+          "p37 9.5.10",
+          "p41 9.6.7",
+          "p56 9.10.4",
+          "p67 11.10",
+          "p70 12",
+          "p98 16.3",
+          "p109 17.7",
+          "p128 4"
+        ],
+        "oldOnly": [],
+        "newOnly": []
+      },
+      "stillDefused": [],
+      "text": {
+        "pagesChanged": 142,
+        "newlinesAdded": 142,
+        "wordsBefore": 174393,
+        "wordsAfter": 174535,
+        "furnitureAdded": [],
+        "furnitureRemoved": []
+      },
+      "refusals": {
+        "readings": 125,
+        "verdictChanged": [],
+        "controlVerdictChanged": 11,
+        "controlFailuresChanged": 11,
+        "failuresChanged": [],
+        "oldFailing": 1,
+        "newFailing": 1,
+        "invented": {
+          "oldOnly": [],
+          "newOnly": []
+        }
+      },
+      "adversarial": {
+        "candidates": 429,
+        "mutations": 429,
+        "caughtOld": 425,
+        "caughtNew": 425,
+        "confounded": [],
+        "missedOnlyByNew": [],
+        "missedOnlyByOld": [],
+        "missedByBoth": [
+          "db:m1-kuhn-spya-a2zrjb/34fb7acab6864938 p26 3",
+          "db:m1-kuhn-spya-a3rv5z/34fb7acab6864938 p26 3",
+          "db:m1-kuhn-spya-a3rv5z/609eabeb4716541a p61 1",
+          "db:m1-kuhn-spya-a3rv5z/b416839890a0d66c p122 2"
+        ]
+      }
+    },
+    {
+      "file": "Nagel_Bat.pdf",
+      "sha": "5daf2e809ea2",
+      "pages": 17,
+      "folioOffsetOld": null,
+      "census": {
+        "kinds": {
+          "touching": 0,
+          "gap": 0,
+          "shift": 0,
+          "line-break": 0
+        },
+        "dyBins": {
+          "0.15-0.3": 0,
+          "0.3-0.5": 0,
+          "0.5-0.7": 0,
+          "0.7-1.0": 0,
+          "1.0-2.0": 0,
+          "2.0+": 0
+        },
+        "nearestBreak": null,
+        "largestShift": 0,
+        "lineBreakExamples": []
+      },
+      "headings": {
+        "both": [],
+        "oldOnly": [],
+        "newOnly": []
+      },
+      "stillDefused": [],
+      "text": {
+        "pagesChanged": 0,
+        "newlinesAdded": 0,
+        "wordsBefore": 7008,
+        "wordsAfter": 7008,
+        "furnitureAdded": [],
+        "furnitureRemoved": []
+      },
+      "refusals": {
+        "readings": 0,
+        "verdictChanged": [],
+        "controlVerdictChanged": 0,
+        "controlFailuresChanged": 0,
+        "failuresChanged": [],
+        "oldFailing": 0,
+        "newFailing": 0,
+        "invented": {
+          "oldOnly": [],
+          "newOnly": []
+        }
+      },
+      "adversarial": {
+        "candidates": 0,
+        "mutations": 0,
+        "caughtOld": 0,
+        "caughtNew": 0,
+        "confounded": [],
+        "missedOnlyByNew": [],
+        "missedOnlyByOld": [],
+        "missedByBoth": []
+      }
+    }
+  ]
+}

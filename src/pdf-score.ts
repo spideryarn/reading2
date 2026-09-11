@@ -415,8 +415,12 @@ const NUMBERED_HEADING = /^\d+(?:\.\d+)*\.$/u;
  *   That is what tells a folio welded to a heading from a heading that merely
  *   opens with this page's number: folio 77 against `77.3.` leaves `.3.`, which
  *   is nothing, so a model that shortens that heading to `3.` is still caught.
+ *
+ * Exported, with `folioOf`, only so evals/pdf/item-boundaries/compare.mts can
+ * set what this recovers beside what the text-layer item boundary recovers —
+ * docs/plans/260911b-pdf-item-boundaries-evidence.md.
  */
-function defusedFolios(text: string, folio: string | null): string[] {
+export function defusedFolios(text: string, folio: string | null): string[] {
   if (folio === null) return [];
   const out: string[] = [];
   for (const line of text.normalize("NFKC").split("\n")) {
@@ -465,6 +469,11 @@ const folioOffsets = new WeakMap<Pass0, number | null>();
  * The stronger fix is upstream: `pass0` knows the text-layer item boundary
  * between the folio and the heading and throws it away. Keeping it would mean
  * none of this had to be inferred. src/pdf.ts § `pass0`, and the plan's stage 5.
+ * Measured 2026-09-11 (docs/plans/260911b-pdf-item-boundaries-evidence.md): the
+ * boundary recovers the same 11 headings on Kuhn with no vote, and a URL this
+ * cannot reach — but splitting on it also turns a stacked `1`/`2` into two
+ * tokens and forgives a dropped digit, so this stays until a narrower rule is
+ * proved (docs/plans/260911c-score-pdf-pages-at-the-line-breaks-pdfjs-did-not-mark.md).
  */
 function folioOffset(pass: Pass0): number | null {
   const known = folioOffsets.get(pass);
@@ -496,7 +505,7 @@ function folioOffset(pass: Pass0): number | null {
 }
 
 /** The page number printed on this page, as the text layer would hold it. */
-function folioOf(pass: Pass0, page: number): string | null {
+export function folioOf(pass: Pass0, page: number): string | null {
   const offset = folioOffset(pass);
   if (offset === null) return null;
   const folio = page + offset;
