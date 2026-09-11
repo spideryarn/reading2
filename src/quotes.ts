@@ -128,8 +128,18 @@ import type { ArtifactStore } from "./store/artifacts.js";
  * **the list keeps its older stamp**, because most of it still is the older
  * prompt's choosing — so it stays *outdated*, and says it includes such lines
  * (`existingFor`, `buildQuotes`). A stale list is replaced and stamped afresh.
+ *
+ * **`quotes/5`, 2026-09-11: one point, one quote.** Greg, SPIDERYARN-
+ * READING2-2X: *"slightly emphasise diversity (i.e. to avoid ending up with
+ * loads of quotes that say basically the same thing)"*. A short paragraph and
+ * one clause, in the two places a repeat can come from: `SYSTEM` asks for a
+ * line that says something the others do not, which is the first pass —
+ * `quotes/4`'s importance-first plus a larger count invites the thesis
+ * restated five ways — and Find more's taken list now rules out a taken line's
+ * point in other words as well as its sentence. Nothing mechanical can check this: `dedupeOverlaps`
+ * compares spans, and two sentences making one point share none.
  */
-export const PROMPT_VERSION = "quotes/4";
+export const PROMPT_VERSION = "quotes/5";
 
 /**
  * The most quotes one call may return — **one pass**, not the whole list.
@@ -1215,10 +1225,15 @@ WHAT DOES NOT
 - Anything under 30 characters or over 400. Below that it is a phrase; above it
   it is the paragraph, and both are thrown away.
 
-SPREAD THEM OUT
+SPREAD THEM OUT, AND DO NOT REPEAT A POINT
 
 Take them from across the whole piece. Three quotes from one paragraph and none
 from the second half is a list about the opening, not about the article.
+
+Each quote should say something the others do not. A piece often makes its
+central point several times in different words; keep the best statement of it
+and let the rest go. Five lines that all say the same thing are one quote and
+four repetitions.
 
 THE SCORES
 
@@ -1324,7 +1339,9 @@ export function renderPrompt(opts: {
   /* The glossary's FORBIDDEN checklist, cut down to what a quote can do wrong:
      it cannot be a synonym, but it can be the same sentence again, or a
      longer or shorter cut of one already taken — which `dedupeOverlaps` would
-     throw away anyway, so saying so up front saves the model the entry. */
+     throw away anyway, so saying so up front saves the model the entry. And
+     it can be a taken line's point in different words, which nothing
+     downstream catches, so only the prompt can (`quotes/5`). */
   const already =
     existing.length === 0
       ? ""
@@ -1332,8 +1349,9 @@ export function renderPrompt(opts: {
 === ALREADY ON THE LIST ===
 
 The reader already has these. Find up to ${count} MORE — lines that are not
-these, and do not overlap them: not the same sentence again, and not a longer or
-shorter cut of one of them. Every one of these is kept whatever you return.
+these, and do not overlap them: not the same sentence again, not a longer or
+shorter cut of one of them, and not a point one of them already makes, in other
+words. Every one of these is kept whatever you return.
 
 ${existing.map((q) => `- ${q.text}`).join("\n")}
 

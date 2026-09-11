@@ -81,6 +81,15 @@ beforeEach(() => {
   sent.length = 0;
 });
 
+describe("generateQuotes, on a first pass", () => {
+  it("asks for lines that do not repeat the same point", async () => {
+    answer = JSON.stringify({ quotes: [{ text: FIRST }] });
+    await generateQuotes({ article: ARTICLE, previous: null });
+    expect(sent[0]).toContain("Each quote should say something the others do not.");
+    expect(sent[0]).toContain("keep the best statement of it");
+  });
+});
+
 describe("generateQuotes, on a Find more", () => {
   it("appends to an unmoved list and keeps its id", async () => {
     answer = JSON.stringify({ quotes: [{ text: SECOND }] });
