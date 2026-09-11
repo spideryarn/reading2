@@ -907,6 +907,8 @@ const BAND_SAYS: Record<Mode, { where: string | null; says: string | null }> = {
      than the answer. When it becomes an artefact mode this row moves up beside
      `timeline`. */
   debate: { where: VISITOR_BAND, says: "Debate is for whoever added this article" },
+  /* Owners-only for v1, for Debate's reason — src/web/visitor.ts § POLICY.citations. */
+  citations: { where: VISITOR_BAND, says: "Citations is for whoever added this article" },
 };
 
 /**

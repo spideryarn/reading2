@@ -50,6 +50,8 @@ type StepAutoRunTarget = StepTarget<
   | "quotes"
   | "timeline"
   | "debate"
+  /* Every work the piece cites — docs/plans/260911g-citations-mode.md. */
+  | "citations"
   | "sketch"
   | "illustrated"
   /* The article as a numbered thread. Its own page rather than a band, so the

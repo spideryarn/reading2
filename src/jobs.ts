@@ -739,11 +739,14 @@ export const STEP_BUDGET_MS: Record<StepName, number> = {
      plan says so, and the first runs against the shelf are what will say
      whether the article-carrying pass is 20 s or 60 s. */
   debate: 120_000,
-  /* **A GUESS**, in `timeline`'s and `quotes`' family: one Messages call over
-     the whole article, notes and bibliography included, with an answer budget
-     sized for 80 works. Re-measure from the stage-1 runs
-     (docs/plans/260911g-citations-mode.md § Progress). */
-  citations: 240_000,
+  /* One Messages call over the whole article, notes and bibliography
+     included. **Measured 2026-09-11** on six local runs (ai_calls.duration_ms):
+     17 s for a blog post, 63–154 s for three long ones, the slowest writing
+     19,421 output tokens — about 126 tokens a second. The answer budget allows
+     ~28,400 for 80 works, which at that rate is ~225 s before the prompt, so
+     240 s was a timeout waiting for the first full-cap article. 360 s leaves
+     the headroom. docs/plans/260911g-citations-mode.md § Progress. */
+  citations: 360_000,
 };
 
 /**

@@ -137,6 +137,11 @@ export function selectPassages(mode: Mode, slots: PassageSlots): PassageSlot {
        would mark the whole article. */
     case "structure":
     case "debate":
+    /* Citations marks nothing in v1: a row's "first cited" is a jump to one
+       block, not a selection, and selecting a work to mark every passage that
+       cites it (`?cite=`, a `Found` producer) is deferred —
+       docs/plans/260911g-citations-mode.md § What is deliberately not built. */
+    case "citations":
       return NOTHING;
     default: {
       /* The compiler being made to say that every mode has been given an

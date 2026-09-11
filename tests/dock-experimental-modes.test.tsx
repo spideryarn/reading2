@@ -73,6 +73,9 @@ const BEHIND_THE_SWITCH: readonly Mode[] = [
   "referee",
   "remember",
   "debate",
+  /* 2026-09-11: a new mode on an unmeasured prompt —
+     docs/project/experimental-features.md. */
+  "citations",
   /* Structure was here from 2026-09-07 to 2026-09-10, hidden while Greg
      compared it with Hierarchy and Outline. It came out when it took Outline's
      list as its narrow face and Outline left the bar: Outline was on every

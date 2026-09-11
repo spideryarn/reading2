@@ -173,6 +173,9 @@ const MANIFEST = [
   "quotes.css",
   "timeline.css",
   "debate.css",
+  /* After the two `.gloss`-with-a-class-beside-it sheets it borrows from, and
+     setting nothing they set on the same element — citations.css's header. */
+  "citations.css",
   "quiz.css",
   "feedback.css",
   "site.css",

@@ -388,6 +388,30 @@ export const MODE_CATALOG: Record<Mode, ModeCatalogEntry> = {
     aliases: ["critiques", "reception", "responses"],
     experimental: true,
   },
+  citations: {
+    description: "The works this piece cites, each with a link — ranked by how much the piece leans on them",
+    /* **Checked against the source, claim by claim** (docs/project/new-mode.md §
+       The card on the button):
+       - "one model pass … written once and then stored": the `citations` step,
+         one messages-wire call over `articleWithIds`, written to the
+         `citations` column (src/citations.ts, src/pipeline.ts § STEPS).
+       - "every address … is one the article gave, found by code": `linkFor` in
+         src/citations.ts derives DOI → arXiv → a title-matching anchor → a
+         mention anchor from the article's own text and hrefs; a URL the model
+         writes is counted in `CitationDrops.modelUrls` and never read.
+       - "otherwise a Scholar search, marked as one": `linkFrom: "search"`,
+         labelled on the row (CitationsPanel.tsx § Source).
+       - "influence is the model's memory, not a count": `CitedWork.influence`
+         in src/types.ts; no citation database is consulted (deferred in the
+         plan).
+       Stage 3's *Find it on the web* will make the second sentence need a
+       clause; it is not built. docs/plans/260911g-citations-mode.md. */
+    how: "One model pass over the article, written once and then stored. Every address shown for a work is one the article itself gave — a DOI, an arXiv id or its own link, found by code rather than typed by the model — and where it gave none the row offers a Scholar search, marked as a search. How influential a work is comes from the model's memory, not from a citation count.",
+    /* `works cited` is two words on purpose: `canonical` collapses whitespace
+       and lower-cases, so it is stored already in the form a reader types. */
+    aliases: ["references", "bibliography", "sources", "works cited"],
+    experimental: true,
+  },
   structure: {
     /* **True of both faces**, since 2026-09-10: the two columns and the nested
        list each show every part and the sections of the one the reader is in.

@@ -104,6 +104,12 @@ const SILENT: Mode[] = [
   "remember",
   "structure",
   "debate",
+  /* Earned, not the cheap fix: v1's row has a "first cited" *jump* to one
+     block and no selection, so there is nothing to mark. Selecting a work and
+     marking every passage that cites it (`?cite=`) is deferred —
+     docs/plans/260911g-citations-mode.md § What is deliberately not built. When
+     it lands, this entry moves to PRODUCERS. */
+  "citations",
 ];
 
 describe("selectPassages", () => {

@@ -191,6 +191,17 @@ export const MODES = [
      there is not, and came out from behind the switch in Outline's place.
      Hierarchy stays. docs/plans/260910g-structure-mode-subsumes-outline.md. */
   "structure",
+  /* 2026-09-11: every work the piece cites, each with a link out, ranked the
+     way Glossary is — asked for through the Feedback button (SPIDERYARN-READING2-2Y).
+     The link is derived by code from the article, never written by the model,
+     which is the one safety property; behind the experimental switch and
+     owner-only for v1. **`citations` and not `references` or `sources`**:
+     the step and the column were already `citations` in stage 1, and
+     `references`/`sources` are aliases in `MODE_CATALOG`. The name does share
+     a word with chat's web citations (src/web/citations.ts, `Citation` in
+     src/types.ts) — which is why the stored type is `CitedWork`.
+     docs/plans/260911g-citations-mode.md, docs/project/citations.md. */
+  "citations",
 ] as const;
 export type Mode = (typeof MODES)[number];
 

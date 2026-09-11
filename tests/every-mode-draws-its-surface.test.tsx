@@ -88,6 +88,7 @@ import { MODE_LABEL } from "../src/title-text.js";
 import type {
   Article,
   ChatThread,
+  Citations,
   Debate,
   DebateCounts,
   DebateLosses,
@@ -258,6 +259,9 @@ const IDEA_NAME = "Instruments outrun explanation";
 const QUOTE_LINE = "before anybody could say what it would measure";
 const TIMELINE_LABEL = "The Vienna calibration";
 const DEBATE_APPLIES = "A replication in Leiden reached the opposite reading.";
+/* A work's title, which is what a row leads with — drawn from the artefact,
+   so a panel that drew its controls and no rows would not satisfy it. */
+const CITATION_TITLE = "Elements of Episodic Memory";
 const SKETCH_NODE = "The calibrated rig";
 const SEARCH_CRITERION = "wherever the piece leans on an unnamed source";
 const CRITERION_TEXT = "every claim that rests on a single study";
@@ -350,6 +354,34 @@ const TIMELINE: Timeline = {
     },
   ],
   orderConflicts: 0,
+  generatedAt: "2026-09-01T09:00:00.000Z",
+  elapsedMs: 1,
+};
+
+const CITATIONS: Citations = {
+  version: "test",
+  generator: "test",
+  slug: SLUG,
+  sourceHash: "hash",
+  citations: [
+    {
+      id: "spya-c7t2wd",
+      key: "work:elements of episodic memory|tulving|1983",
+      title: CITATION_TITLE,
+      authors: "Tulving",
+      year: "1983",
+      why: "The idea the piece tests.",
+      relevance: 0.9,
+      influence: 0.9,
+      mentions: [{ blockId: "spya-bbbbbb", quote: "The instrument was built", start: 0 }],
+      citedAt: ["spya-bbbbbb"],
+      firstCited: "spya-bbbbbb",
+      citedInBody: true,
+      url: "https://scholar.google.com/scholar?q=Elements",
+      linkFrom: "search",
+    },
+  ],
+  capped: false,
   generatedAt: "2026-09-01T09:00:00.000Z",
   elapsedMs: 1,
 };
@@ -614,6 +646,7 @@ const EVERY_TARGET: Record<AutoRunTarget, true> = {
   quotes: true,
   timeline: true,
   debate: true,
+  citations: true,
   sketch: true,
   illustrated: true,
   tweets: true,
@@ -644,6 +677,8 @@ function artefact(url: string): Response | null {
     return has ? json({ timeline: TIMELINE, stale: false, outdated: false }) : GONE();
   if (url.startsWith("/api/debate/"))
     return has ? json({ debate: DEBATE, stale: false, outdated: false }) : GONE();
+  if (url.startsWith("/api/citations/"))
+    return has ? json({ citations: CITATIONS, stale: false, outdated: false }) : GONE();
   if (url.startsWith("/api/sketch/"))
     return has || sketchDrawn
       ? json({ sketch: SKETCH, stale: false, outdated: false, profileChanged: false })
@@ -1021,6 +1056,8 @@ const SPENDS: Record<Mode, Spend> = {
   timeline: { kind: "posts", steps: ["timeline"] },
   /* The dearest press in the app — two calls out to the open web. */
   debate: { kind: "posts", steps: ["debate"] },
+  /* One model pass over the article, like the timeline. */
+  citations: { kind: "posts", steps: ["citations"] },
   /* **The one mode where the button and the target are not the same word**,
      and the one row where "what it costs" and "what it arms" are two questions.
 
@@ -1250,6 +1287,9 @@ const DRAWS: Record<Mode, Draws> = {
   /* What the found page is said to bear on — a row's body, not the group
      heading above it, which is a constant sentence. */
   debate: { kind: "band", where: ".mode-band.dbt", says: DEBATE_APPLIES },
+  /* A work's title — the row's own content, not the order buttons or the
+     foot's sentences, which are constants a panel with no rows still draws. */
+  citations: { kind: "band", where: ".mode-band.citations", says: CITATION_TITLE },
   /* A node **inside** the drawing, not the drawing's title: a title is drawn
      from the artefact's header and survives a scene that painted nothing. */
   diagram: { kind: "band", where: ".mode-band.diag", says: SKETCH_NODE },

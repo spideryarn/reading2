@@ -299,8 +299,11 @@ describe("what a visitor is told, mode by mode", () => {
        public projection its rows must not bypass, at which point it drops out
        with the glossary and the quotes and this line loses a word.
        src/web/visitor.ts § POLICY.debate. */
+    /* `citations` joined on 2026-09-11, owners-only for Debate's reason and
+       expected to leave the same way once a public projection exists —
+       src/web/visitor.ts § POLICY.citations. */
     expect([...markedModes(EVERYTHING_BUILT).keys()].sort()).toEqual(
-      ["chat", "debate", "referee", "remember"].sort(),
+      ["chat", "citations", "debate", "referee", "remember"].sort(),
     );
     /* And one at a time, so a mode reading the wrong flag shows up. */
     for (const built of ["glossary", "ideas", "quotes", "timeline"] as const) {

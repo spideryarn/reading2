@@ -222,6 +222,7 @@ const MODE_TARGET: Record<Mode, ModeActivation> = {
   quotes: { kind: "fixed", target: "quotes" },
   timeline: { kind: "fixed", target: "timeline" },
   debate: { kind: "fixed", target: "debate" },
+  citations: { kind: "fixed", target: "citations" },
 
   /* The one delegated row, and the reason the variant carries a function at
      all: the picture a Diagram press lands on is whatever `?diagram=` says, so

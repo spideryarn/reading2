@@ -537,6 +537,7 @@ const GENERATES: Record<Mode, boolean> = {
   timeline: true,
   debate: true,
   diagram: true,
+  citations: true,
 };
 
 /**

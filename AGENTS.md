@@ -47,6 +47,7 @@ listed here; the names under each are files in `docs/project/`.
   `ideas.md` (the propositions the piece assumes) ·
   `quotes.md` (the lines worth keeping) ·
   `timeline.md` (when the piece says these things happened) ·
+  `citations.md` (the works the piece cites, and where each link came from) ·
   `search.md` · `referee-mode.md` (helping a peer reviewer, without reading for them) ·
   `diagram.md` ·
   `comments.md` (bookmark or annotate a passage; the AI is a tick-box) ·

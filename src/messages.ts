@@ -4054,6 +4054,12 @@ export const OWNER_MODE_NOTE: Record<Mode, string> = {
   structure:
     "Those same headings and gists, arranged as two linked columns or, on a narrow screen, one " +
     "nested list — where there are gists.",
+  /* "The model found", because the list is its reading — a work cited only by
+     name in running text is on it only if the model noticed it — while the
+     links are not the model's: each is one the article gave, or a search that
+     says it is one (src/citations.ts § linkFor). */
+  citations:
+    "The works the model found this piece citing, with a link for each and why the piece uses it.",
 };
 
 /* ---------------------------------------------------------------- timeline --

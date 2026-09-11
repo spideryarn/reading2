@@ -1,0 +1,65 @@
+/* ------------------------------------------------------------ citations mode --
+   Every work the piece cites. `.citations` is `.gloss` with a class beside it,
+   like `.timeline`, so the band shell, the order buttons (`.gloss-sort`), the
+   threshold (`.gloss-gate`), the empty, stale and error states and the
+   scroller and list (`.tl-scroll`, `.tl-list`, `.tl-item`) all come from
+   glossary.css and timeline.css unchanged. What is here is only the inside of a
+   row: a title that is a link out, who wrote it, why the piece uses it, and one
+   quiet line saying where the link came from and where the piece first cites it.
+
+   Loaded after timeline.css and debate.css; it sets no property those two set
+   on the same element, so its place in the cascade decides nothing between
+   them. CitationsPanel.tsx, docs/project/citations.md. */
+
+.cite-item { padding: 0.45rem 0; }
+
+.cite-title {
+  margin: 0;
+  color: var(--ink);
+  font-weight: 600;
+  line-height: 1.3;
+}
+.cite-title a { color: inherit; text-decoration: underline; text-decoration-color: var(--rule-strong); text-underline-offset: 2px; }
+.cite-title a:hover { text-decoration-color: currentColor; }
+.cite-out { margin-left: 0.2rem; color: var(--ink-faint); vertical-align: baseline; }
+
+.cite-by {
+  margin: 0.1rem 0 0;
+  color: var(--ink-soft);
+  font-size: 0.83rem;
+}
+
+.cite-why {
+  margin: 0.2rem 0 0;
+  font-size: 0.88rem;
+  line-height: 1.4;
+}
+
+/* The provenance line. Wraps rather than truncating: at the band's narrowest
+   (288px, `MODE_MIN` in layout.ts) the three pieces each get a line. */
+.cite-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.15rem 0.6rem;
+  margin: 0.25rem 0 0;
+  color: var(--ink-faint);
+  font-family: var(--font-ui);
+  font-size: 0.77rem;
+}
+.cite-scores { font-variant-numeric: tabular-nums; }
+/* A search is not the work's address, and it should not look like one: the one
+   link on a searched row, in the faint ink of the line it sits on. */
+.cite-search { color: inherit; text-decoration: underline dotted; text-underline-offset: 2px; }
+.cite-search:hover { color: var(--ink); }
+
+/* A rule above it, so the two sentences read as being about the list rather
+   than as the last row's — the browser check read the capped sentence as the
+   last visible row's own, at both widths. */
+.cite-foot { padding: 0.4rem 0.7rem 0; border-top: 1px solid var(--rule); }
+.cite-note {
+  margin: 0 0 0.3rem;
+  color: var(--ink-faint);
+  font-size: 0.77rem;
+  line-height: 1.35;
+}

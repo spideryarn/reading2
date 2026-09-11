@@ -306,6 +306,18 @@ const POLICY: Record<Mode, VisitorPolicy> = {
    * ~$0.27 a run and rising with the length of the article.
    */
   debate: { kind: "owners-only" },
+  /**
+   * **`owners-only` for v1, and like Debate a staging decision.** The list is
+   * one artefact column and a visitor branch is "a projection away" — but that
+   * projection is `PUBLIC_PROJECTIONS`, the public DTO, and a `PublicArtefacts`
+   * flag, none of which exist yet, and the rows carry outbound URLs a public
+   * boundary should re-judge before a stranger is handed them. Until that is
+   * built a visitor meets the explanatory band rather than an empty one.
+   * docs/plans/260911g-citations-mode.md § What is deliberately not built.
+   *
+   * It spends: one model pass over the whole article.
+   */
+  citations: { kind: "owners-only" },
 };
 
 /**

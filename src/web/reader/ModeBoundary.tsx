@@ -85,6 +85,7 @@ export const MODE_CONTAINMENT: Record<Mode, Containment> = {
   timeline: BAND,
   debate: BAND,
   structure: BAND,
+  citations: BAND,
 };
 
 /**

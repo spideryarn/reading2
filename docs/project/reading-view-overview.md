@@ -108,6 +108,9 @@ readers never are.
   yet; the plan is the reference:
   [260905f](../plans/260905f-debate-mode-what-the-web-says-about-this-piece.md). Owner-only and
   behind the switch for now.
+- **[citations.md](citations.md)** — every work the piece cites, each with a link out, ordered and
+  thresholded the way the glossary is. Open it for the one safety property: every address a row
+  shows was in the article, and a search says it is one. Owner-only and behind the switch for now.
 
 The last two band modes — **chat** and **remember**, and the quiz that is remember's other half — are
 under the next heading instead, because what they are about is a passage rather than the whole piece.

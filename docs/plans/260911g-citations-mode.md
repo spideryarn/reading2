@@ -287,3 +287,32 @@ The reader's own article is not in the local database.
   **Default bar for prioritised `(2r + i) / 3`: 0.40.** On the `/1` runs the median was 0.37 on both
   long articles (p75 0.40–0.43) and 0.48 on the blog; 0.40 shows about half of a long list (23 of 57,
   39 of 80) and 6 of 8 on the short one; 0.50 would show 9, 13 and 4.
+- 2026-09-11 — **stage 1 committed and pushed, `85631f9b`.** Full suite: 1089 of 1097 files green;
+  the reds were `cold-start-lazy-imports`, `pdf-bundle-trace` and three fleet files (no build in a
+  fresh worktree), knip (the migration not yet committed — green after), and `doc-links` (an anchor in
+  this plan — fixed).
+
+- 2026-09-12 — **stage 2 built** (the mode, owner-only, behind the switch). Two departures from
+  this plan, both right: the URL keys are `?citeby=` / `?citebar=`, because `Reader` reads `?gate=`
+  in every mode and a shared key would carry a citations bar into the Glossary; and the row draws
+  relevance and influence as `ScoreBars`, not `rel·NN inf·NN`, because Greg asked on 2026-08-31 for
+  bars with the numbers in a tooltip in the Glossary *"and so on"*. The step's budget went from a
+  guessed 240 s to 360 s from the six measured runs (17–154 s; a full 80-work answer is ~225 s).
+  A browser check (Playwright, local, as the owner) passed all eight points — the button only with
+  the switch on, 20 of 80 shown at the 0.40 bar on spider silk, the four orders, 55 DOI / 11 article
+  / 14 search links with search rows' titles not linked, a DOI opening in a new tab, the first-cited
+  jump landing, the capped sentence only where capped, no horizontal scroll at 400px — and opening
+  the mode started no job. What it found a reader would trip on, and what was done:
+  - *the foot ran into the last row* — a rule above it;
+  - *"Find them again" was the largest control in the band* and the one that costs money — removed
+    from the ordinary foot, kept in the stale and outdated banners, as Greg did in Glossary and Quotes;
+  - *a title that is only a citation* ("Thompson et al 2020", then "Thompson et al · 2020") — left:
+    a prompt tweak, not worth a bump on its own;
+  - *"first cited p263u9" is a bare block id* — left: it is the house block-link form;
+  - *the bar filters only prioritised* — left: the Glossary's rule.
+
+### Owed reviews (GPT Sol held until 2026-09-15 01:23Z)
+
+| Stage | Commits | Status |
+|---|---|---|
+| 1 — artefact, step, route | `85631f9b` | owed |

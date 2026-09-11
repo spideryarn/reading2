@@ -81,6 +81,8 @@ export const REMEMBERED = [
   "rank", // quotes order
   "bar", // quotes threshold
   "name", // debate's identification threshold
+  "citeby", // citations order
+  "citebar", // citations threshold
   "term", // selected glossary term
   "idea", // selected idea
   "quote", // selected quote

@@ -184,6 +184,7 @@ import {
   TriangleAlert,
   X,
   Quote,
+  BookText,
 } from "lucide-react";
 /* The one name each mode has, and the one sentence about what it is — and the
    bar is one of four places that used to spell the name out for itself. Both
@@ -661,6 +662,18 @@ const MODES_UI = [
   {
     mode: "timeline",
     icon: Clock,
+  },
+  /* **After Timeline, at the end of the "one dimension of this piece pulled
+     out" group** — Glossary, Ideas, Quotes, Timeline — because its list is the
+     piece's own references rather than the web's (that is Debate, further
+     out). Greg has not set this one by hand; move it if it is wrong.
+
+     `BookText` — a closed book with lines on it, i.e. *a work*. `Library` was
+     the obvious glyph and is refused: it is the shelf's, on every page. `Quote`
+     is Quotes'. docs/plans/260911g-citations-mode.md. */
+  {
+    mode: "citations",
+    icon: BookText,
   },
   /* Search was **two** dimmed placeholders in the `SOON` list this file used to
      carry — `Search` and `Highlights`, side by side — and is one mode now. That

@@ -583,6 +583,57 @@ export const gateParam = createParser<number>({
   serialize: (v) => v.toFixed(2),
 }).withOptions({ history: "replace", limitUrlUpdates: debounce(200) });
 
+/* ---------------------------------------------------------- citations mode --
+   Two parameters, shaped exactly like the glossary's `sort` and `gate` above
+   and **named apart from them on purpose**. Every parameter survives a mode
+   switch (`withMode` in src/web/Dock.tsx rewrites only `mode`), and `Reader`
+   reads `?gate=` and `?sort=` in every mode to reveal a glossary term from the
+   prose (`gateToReveal`). So a citations bar written to `?gate=` would arrive in
+   the Glossary as its threshold — a `(2r + i) / 3` read as a `difficulty ×
+   centrality` — and lower or raise it behind the reader's back. Quotes made the
+   same call for the same reason (`rank`, `bar`). docs/project/citations.md. */
+
+/**
+ * How the list of cited works is ordered — `?citeby=`.
+ *
+ * `prioritised` is the default, as the glossary's is: the two scores decide
+ * only whether a work is shown, and what is shown stays in the order the piece
+ * first cites it. `document` is that order with nothing hidden — "first cited"
+ * on the button, and the artefact's own order. `relevance` and `influence` are
+ * the reader asking for the model's judgment, descending, unscored last.
+ * docs/plans/260911g-citations-mode.md § Scores, and the prioritised order.
+ *
+ * `push`, like `sort`: changing the order is a deliberate act on the view. An
+ * unknown value parses to the default, so a link written by a version with
+ * more orders still shows a list.
+ */
+export const CITE_ORDERS = ["prioritised", "document", "relevance", "influence"] as const;
+export type CiteOrder = (typeof CITE_ORDERS)[number];
+
+export const citeOrderParam = createParser<CiteOrder>({
+  parse: (v) => (CITE_ORDERS.includes(v as CiteOrder) ? (v as CiteOrder) : null),
+  serialize: (v) => v,
+})
+  .withDefault("prioritised")
+  .withOptions({ history: "push" });
+
+/**
+ * How high a work has to score to stay on screen in the prioritised order —
+ * `?citebar=`, `(2 × relevance + influence) / 3` on 0–1.
+ *
+ * **No default, deliberately**, for `gateParam`'s reason: absent means nobody
+ * has touched it, which the panel resolves to `CITATION_BAR_DEFAULT`
+ * (CitationsPanel.tsx), so the default stays one number in one file. `replace`
+ * and debounced, because a range input fires on every pixel of a drag.
+ */
+export const citeBarParam = createParser<number>({
+  parse: (v) => {
+    const n = Number.parseFloat(v);
+    return Number.isFinite(n) && n >= 0 && n <= 1 ? Math.round(n * 100) / 100 : null;
+  },
+  serialize: (v) => v.toFixed(2),
+}).withOptions({ history: "replace", limitUrlUpdates: debounce(200) });
+
 
 /* ------------------------------------------------------------- search mode --
    Four parameters, which is more than any other mode needs, and the reason is
