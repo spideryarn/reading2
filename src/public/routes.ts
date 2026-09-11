@@ -41,6 +41,7 @@
 
 import type { ServerResponse } from "node:http";
 
+import { sendBinary, sendBinaryHead } from "../binary-response.js";
 import { isSlug } from "../ingest.js";
 import {
   PUBLIC_ROUTE_NAMES,
@@ -127,13 +128,10 @@ function send(res: ServerResponse, status: number, body: unknown, method: string
  *
  * Its own function beside `send` rather than a branch inside it, because
  * everything about it is different: the body is not JSON, the length is the
- * buffer's rather than a string's, and it carries two headers `send` has no
- * business setting.
- *
- * **`X-Content-Type-Options: nosniff`.** These bytes are a publisher's file or
- * a picture cut out of a stranger's uploaded PDF, served from our own origin —
- * the one place a wrong content type becomes script. `sendSource` and
- * `sendPlate` in src/routes.ts set it for the same reason.
+ * buffer's rather than a string's, and it carries a header `send` has no
+ * business setting. The writing itself — status, `nosniff`, the byte length and
+ * the body — is src/binary-response.ts, shared with the owner's five binary
+ * routes; what is decided here is only the two policies below.
  *
  * **No `Cache-Control` here, and that is the decision rather than an
  * omission.** `serveApi` sets `no-store` on the whole namespace before it
@@ -148,20 +146,19 @@ function send(res: ServerResponse, status: number, body: unknown, method: string
  * docs/plans/260829b-hosting-the-articles-images.md § Two readers, two paths
  * weighed exactly this and chose the same way.
  *
- * The HEAD branch is `send`'s and for `send`'s reason: Node drops
- * `Content-Length` on a HEAD of its own accord, and an unfurler that HEADs a
- * URL to decide whether to fetch it learns nothing from a missing length.
+ * **HEAD is answered, and this is the only binary route that answers one** —
+ * `send`'s branch, for `send`'s reason: Node drops `Content-Length` on a HEAD
+ * of its own accord, and an unfurler that HEADs a URL to decide whether to
+ * fetch it learns nothing from a missing length. The choice is made here, by
+ * picking the writer; `sendBinaryHead` exists for this route alone.
  */
 function sendBytes(res: ServerResponse, asset: PublicAsset, method: string): void {
-  res.statusCode = 200;
-  res.setHeader("Content-Type", asset.contentType);
-  res.setHeader("Content-Length", String(asset.bytes.byteLength));
-  res.setHeader("X-Content-Type-Options", "nosniff");
+  const reply = { bytes: asset.bytes, contentType: asset.contentType };
   if (method === "HEAD") {
-    res.end();
+    sendBinaryHead(res, reply);
     return;
   }
-  res.end(Buffer.from(asset.bytes));
+  sendBinary(res, reply);
 }
 
 /**

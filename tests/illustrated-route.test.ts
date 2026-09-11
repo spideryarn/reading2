@@ -50,6 +50,7 @@ import {
 import type { OwnerId } from "../src/owner.js";
 import type { Sketch } from "../src/sketch-scene.js";
 import { acceptAny, AUTHED_HEADERS, TEST_OWNER } from "./helpers/authed.js";
+import { charCountDiffers, withMultibyteTail } from "./helpers/binary-response.js";
 import { pgReady } from "./helpers/pg-ready.js";
 
 loadEnvLocal();
@@ -109,11 +110,11 @@ interface Sent {
 
 async function get(
   urlPath: string,
-  options: { verify?: Verifier; headers?: Record<string, string> } = {},
+  options: { verify?: Verifier; headers?: Record<string, string>; method?: string } = {},
 ): Promise<Sent> {
   const { handleApi } = await import("../src/routes.js");
   const req = Object.assign((async function* () {})(), {
-    method: "GET",
+    method: options.method ?? "GET",
     url: urlPath,
     headers: options.headers ?? AUTHED_HEADERS,
   }) as unknown as IncomingMessage;
@@ -297,10 +298,14 @@ describe("the illustrated routes", { timeout: 30_000 }, () => {
        simultaneously an assertion that the extension in the URL is not
        decorative. `two` is left unread on purpose; the bytes only have to
        differ from `a`'s. */
-    const bytesB = new Uint8Array(24);
-    bytesB.set([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
-    new DataView(bytesB.buffer).setUint32(16, 848);
-    new DataView(bytesB.buffer).setUint32(20, 1264);
+    const headerB = new Uint8Array(24);
+    headerB.set([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
+    new DataView(headerB.buffer).setUint32(16, 848);
+    new DataView(headerB.buffer).setUint32(20, 1264);
+    /* With a multibyte tail: a 24-byte PNG header decodes to as many characters
+       as it has bytes, so on its own it could not tell a byte count from a
+       character count. tests/helpers/binary-response.ts. */
+    const bytesB = withMultibyteTail(headerB);
     stored.b = {
       bytes: bytesB,
       image: await storePlateImage({ image: bytesB, mediaType: "image/png" }),
@@ -429,5 +434,53 @@ describe("the illustrated routes", { timeout: 30_000 }, () => {
   it("404s an article that has never been painted", async () => {
     const sent = await get(`/api/illustrated/no-such-article-${RUN.slice(0, 8)}`);
     expect(sent.status).toBe(404);
+  });
+
+  /* ------------------------------------------ the whole response, cluster H */
+
+  /**
+   * **The plate's response, as three separate claims** — pinned before the six
+   * binary writers were folded into one
+   * (docs/plans/260911e-one-binary-response-writer.md).
+   *
+   * The headers as an exact set: `private, max-age=31536000, immutable` is this
+   * route's decision — the URL is its own contents' hash, and the article is
+   * one reader's — and a shared writer must neither change it nor add a
+   * disposition. The length off multibyte bytes. And HEAD, which the
+   * authenticated dispatcher does not answer.
+   */
+  it("carries exactly these headers, with its own year-long private cache", async () => {
+    const sent = await get(`/api/illustrated/${B.slug}/${stored.b.image.sha256}.png`);
+    expect(sent.status).toBe(200);
+    expect(sent.headers).toEqual({
+      "content-type": "image/png",
+      "content-length": String(stored.b.bytes.byteLength),
+      "x-content-type-options": "nosniff",
+      "cache-control": "private, max-age=31536000, immutable",
+    });
+  });
+
+  it("counts the bytes it sends, not the characters they decode to", async () => {
+    expect(charCountDiffers(stored.b.bytes), "the fixture must tell bytes from characters").toBe(
+      true,
+    );
+    const sent = await get(`/api/illustrated/${B.slug}/${stored.b.image.sha256}.png`);
+    expect(Buffer.compare(sent.body, Buffer.from(stored.b.bytes))).toBe(0);
+    expect(sent.headers["content-length"]).toBe(String(stored.b.bytes.byteLength));
+  });
+
+  it("names no disposition — a picture in the panel, not a download", async () => {
+    const sent = await get(`/api/illustrated/${A.slug}/${stored.a.image.sha256}.jpeg`);
+    expect(sent.status).toBe(200);
+    expect(sent.headers["content-disposition"]).toBeUndefined();
+  });
+
+  it("does not answer a HEAD", async () => {
+    const sent = await get(`/api/illustrated/${B.slug}/${stored.b.image.sha256}.png`, {
+      method: "HEAD",
+    });
+    expect(sent.status).toBe(404);
+    expect(sent.headers["content-type"]).not.toBe("image/png");
+    expect(sent.body.includes(Buffer.from(stored.b.bytes))).toBe(false);
   });
 });

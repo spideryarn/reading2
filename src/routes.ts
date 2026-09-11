@@ -211,6 +211,10 @@ import { blobStore, CONTENT_TYPE } from "./store/blobs.js";
    straight from the store, so this file adds no data model of its own. */
 import { articleBundle } from "./store/export-bundle.js";
 import { ArticleNotFound } from "./store/article-rows.js";
+/* The mechanics of every binary answer below — status, `nosniff`, a byte
+   length and the body — and none of their policies. GET only: this file never
+   imports the HEAD writer, because this dispatcher answers no HEAD. */
+import { sendBinary } from "./binary-response.js";
 import {
   adminStore,
   commentStore,
@@ -490,9 +494,9 @@ function send(res: ServerResponse, status: number, body: unknown): void {
  * the point. Raised by GPT Sol, 2026-08-31. That decision belongs to this route
  * rather than to `contentDisposition`, which is why the disposition is passed in
  * below: a download route wants `attachment` and must not inherit this one's
- * answer. And `X-Content-Type-Options: nosniff` because this is a stranger's
- * file being served from our origin — the one place a wrong content type
- * becomes script.
+ * answer. `X-Content-Type-Options: nosniff` — this is a stranger's file being
+ * served from our origin, the one place a wrong content type becomes script —
+ * is set by `sendBinary` (src/binary-response.ts) for every binary route alike.
  */
 async function sendSource(res: ServerResponse, slug: string): Promise<void> {
   /* **Ask the store whose article this is, before reading a byte.**
@@ -544,32 +548,31 @@ async function sendSource(res: ServerResponse, slug: string): Promise<void> {
   const source = await sourceStore.readPdf(slug);
   if (!source) throw httpError(404, "That article did not come from a PDF.");
 
-  res.statusCode = 200;
-  /* **A constant, never `raw_content_type`.** That column is the *origin's*
-     header, and plenty of perfectly good PDFs arrive as
-     `application/octet-stream` — which, served back with `nosniff` below, is a
-     document the browser will refuse to open and will not rescue. GPT Sol,
-     2026-08-31. It is a constant rather than a decision because `readPdf` can
-     only hand back a PDF: the narrowness of the store method is what makes one
-     literal here correct. */
-  res.setHeader("Content-Type", CONTENT_TYPE.pdf);
   res.setHeader(
     "Content-Disposition",
     contentDisposition(source.filename ?? `${slug}.pdf`, "inline"),
   );
-  res.setHeader("X-Content-Type-Options", "nosniff");
-  /* The bytes actually being written, not a stored count. They are the same
-     number whenever both exist, and the one that is true when they are not. */
-  res.setHeader("Content-Length", String(source.bytes.byteLength));
-  res.end(Buffer.from(source.bytes));
+  /* No `Cache-Control`, and that is this route's standing answer rather than
+     something the writer decides: tests/source-route.test.ts pins its absence. */
+  sendBinary(res, {
+    bytes: source.bytes,
+    /* **A constant, never `raw_content_type`.** That column is the *origin's*
+       header, and plenty of perfectly good PDFs arrive as
+       `application/octet-stream` — which, served back with `nosniff`, is a
+       document the browser will refuse to open and will not rescue. GPT Sol,
+       2026-08-31. It is a constant rather than a decision because `readPdf` can
+       only hand back a PDF: the narrowness of the store method is what makes
+       one literal here correct. */
+    contentType: CONTENT_TYPE.pdf,
+  });
 }
 
 /**
  * **One plate of an Illustrated diagram, as bytes** —
  * docs/project/diagram.md § Illustrated.
  *
- * The only binary route in this file besides `sendSource`, and it is the one
- * with a rule that has to be stated rather than followed by habit:
+ * One of five binary routes in this file, and the first with a rule that has
+ * to be stated rather than followed by habit:
  *
  * > **The key is rebuilt from the artefact, never taken from the path.**
  *
@@ -636,15 +639,8 @@ async function sendPlate(
     throw httpError(500, "That plate's picture could not be read back.");
   }
 
-  res.statusCode = 200;
-  res.setHeader("Content-Type", CONTENT_TYPE[image.ext]);
-  res.setHeader("Content-Length", String(bytes.byteLength));
-  /* A stranger's model drew these bytes and they are served from our origin —
-     the one place a wrong content type becomes script. Same reason
-     `sendSource` sets it. */
-  res.setHeader("X-Content-Type-Options", "nosniff");
   res.setHeader("Cache-Control", "private, max-age=31536000, immutable");
-  res.end(Buffer.from(bytes));
+  sendBinary(res, { bytes, contentType: CONTENT_TYPE[image.ext] });
 }
 
 /**
@@ -720,29 +716,26 @@ async function sendArticleAsset(
     throw httpError(500, "That image could not be read back.");
   }
 
-  res.statusCode = 200;
-  /* **From the entry, not from `CONTENT_TYPE[ext]`.** The manifest records what
-     the bytes were *sniffed* to be (src/assets.ts § `sniffImage`), which is the
-     whole discipline of this feature: a name that does not describe its
-     contents is the one thing content addressing must never store. The two
-     agree today; the entry is the one that stays true. */
-  res.setHeader("Content-Type", found.contentType);
-  res.setHeader("Content-Length", String(bytes.byteLength));
-  /* A publisher's file, or a picture cut out of a stranger's upload, served
-     from our origin — the one place a wrong content type becomes script. Same
-     reason `sendSource` sets it. */
-  res.setHeader("X-Content-Type-Options", "nosniff");
   res.setHeader("Cache-Control", "private, max-age=31536000, immutable");
-  res.end(Buffer.from(bytes));
+  sendBinary(res, {
+    bytes,
+    /* **From the entry, not from `CONTENT_TYPE[ext]`.** The manifest records what
+       the bytes were *sniffed* to be (src/assets.ts § `sniffImage`), which is the
+       whole discipline of this feature: a name that does not describe its
+       contents is the one thing content addressing must never store. The two
+       agree today; the entry is the one that stays true. */
+    contentType: found.contentType,
+  });
 }
 
 /**
  * **One article's data as a zip the reader downloads.**
  *
  * The bundle is built in [`src/store/export-bundle.ts`](store/export-bundle.ts)
- * and this function is only the HTTP half of it: a status, four headers and the
- * bytes. Two decisions live here rather than there, both because they are about
- * a response and not about a zip.
+ * and this function is only the HTTP half of it: a status, five headers and the
+ * bytes, written by `sendBinary` (src/binary-response.ts). Two decisions live
+ * here rather than there, both because they are about a response and not about
+ * a zip.
  *
  * **Ownership is not re-checked here, deliberately.** `articleBundle` →
  * `readArticleRows` predicates on `ownedSlug(slug)`, which is slug *and* the
@@ -790,17 +783,7 @@ async function sendExport(res: ServerResponse, slug: string): Promise<void> {
     );
   }
 
-  res.statusCode = 200;
-  /* A literal, and not a `CONTENT_TYPE` entry: that record is keyed by
-     `StoredKind` — the kinds the blob store holds — and a zip we assemble per
-     request is never stored, so widening it would put a type in the bucket's
-     vocabulary that nothing there can produce. */
-  res.setHeader("Content-Type", "application/zip");
   res.setHeader("Content-Disposition", contentDisposition(`${slug}.zip`, "attachment"));
-  /* A zip served from our own origin, holding the reader's own prose. `nosniff`
-     for the same reason `sendSource` sets it: the one place a wrong content
-     type becomes script. */
-  res.setHeader("X-Content-Type-Options", "nosniff");
   /* **The response least suited to sitting in a disk cache**, and the same
      reasoning as `/api/admin/users` above: one reader's entire article — prose,
      comments, notes, every conversation they had about it — in one file, on a
@@ -810,10 +793,16 @@ async function sendExport(res: ServerResponse, slug: string): Promise<void> {
      know that unless the response says so, and "our own cache has good manners"
      is not the guarantee to rest a whole article on. */
   res.setHeader("Cache-Control", "private, no-store");
-  /* The bytes actually being written. `bundle.byteLength` is the same number,
-     and this is the one that stays true if it ever is not. */
-  res.setHeader("Content-Length", String(bundle.bytes.byteLength));
-  res.end(Buffer.from(bundle.bytes));
+  sendBinary(res, {
+    /* The bytes, not `bundle.byteLength`: the writer measures what it writes,
+       and that is the number that stays true if the two ever disagree. */
+    bytes: bundle.bytes,
+    /* A literal, and not a `CONTENT_TYPE` entry: that record is keyed by
+       `StoredKind` — the kinds the blob store holds — and a zip we assemble per
+       request is never stored, so widening it would put a type in the bucket's
+       vocabulary that nothing there can produce. */
+    contentType: "application/zip",
+  });
 }
 
 /** The two things a `Content-Disposition` can ask a browser to do with a file. */
@@ -6910,20 +6899,19 @@ const AUTH_ROUTES: readonly AuthRoute[] = [
          the caller a thing it may do nothing with. */
       if (!bytes) throw httpError(404, "That report has no screenshot.");
 
-      res.statusCode = 200;
-      /* **A literal, and it is correct by construction rather than by trust.**
-         src/feedback-image.ts does not *check* an uploaded screenshot, it
-         rebuilds one: the stored bytes are a PNG signature and a chunk stream
-         this app wrote, with every ancillary chunk — text, EXIF, colour
-         profiles — dropped. So there is no stored content type to get wrong,
-         and nothing to sniff. */
-      res.setHeader("Content-Type", CONTENT_TYPE.png);
-      res.setHeader("X-Content-Type-Options", "nosniff");
+      /* Somebody else's screen, read across owners: `no-store`, as the report
+         itself is above. */
       res.setHeader("Cache-Control", "private, no-store");
-      /* The bytes being written, not a stored count — the same rule the PDF
-         route follows, and the one that stays true when the two disagree. */
-      res.setHeader("Content-Length", String(bytes.byteLength));
-      res.end(Buffer.from(bytes));
+      sendBinary(res, {
+        bytes,
+        /* **A literal, and it is correct by construction rather than by trust.**
+           src/feedback-image.ts does not *check* an uploaded screenshot, it
+           rebuilds one: the stored bytes are a PNG signature and a chunk stream
+           this app wrote, with every ancillary chunk — text, EXIF, colour
+           profiles — dropped. So there is no stored content type to get wrong,
+           and nothing to sniff. */
+        contentType: CONTENT_TYPE.png,
+      });
     },
   },
 

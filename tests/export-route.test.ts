@@ -70,6 +70,7 @@ import { mintId } from "../src/ids.js";
 import type { OwnerId } from "../src/owner.js";
 import { BUNDLE_BYTE_CAP, overBundleCap } from "../src/store/export-bundle.js";
 import { acceptAny, AUTHED_HEADERS, TEST_OWNER } from "./helpers/authed.js";
+import { charCountDiffers, withMultibyteTail } from "./helpers/binary-response.js";
 import { pgReady } from "./helpers/pg-ready.js";
 
 loadEnvLocal();
@@ -197,11 +198,11 @@ interface Sent {
  */
 async function get(
   path: string,
-  options: { verify?: Verifier; headers?: Record<string, string> } = {},
+  options: { verify?: Verifier; headers?: Record<string, string>; method?: string } = {},
 ): Promise<Sent> {
   const { handleApi } = await import("../src/routes.js");
   const req = Object.assign((async function* () {})(), {
-    method: "GET",
+    method: options.method ?? "GET",
     url: path,
     headers: options.headers ?? AUTHED_HEADERS,
   }) as unknown as IncomingMessage;
@@ -513,5 +514,57 @@ describe("downloading one article's data", { timeout: 20_000 }, () => {
     /* No status code, no byte count, no "413" — the reader did not come here to
        operate an HTTP server. docs/project/copy.md § Who is reading this. */
     expect(said).not.toMatch(/\d/);
+  });
+
+  /* ------------------------------------------ the whole response, cluster H */
+
+  /**
+   * **The download's response, as three separate claims** — pinned before the
+   * six binary writers were folded into one
+   * (docs/plans/260911e-one-binary-response-writer.md).
+   *
+   * The headers as an exact set, through the real bundle: `private, no-store`
+   * is this route's decision, the opposite of the pictures' year-long
+   * immutable, because this is one reader's whole article on a URL that is
+   * nothing but a slug. The length off multibyte bytes — the one place the
+   * bundle seam is used for something other than the 413, because a real zip
+   * is whatever the compressor made of it and cannot be relied on to hold a
+   * multibyte sequence. And HEAD, which the authenticated dispatcher does not
+   * answer.
+   */
+  it("carries exactly these headers, with no cache at all", async () => {
+    const { contentDisposition } = await import("../src/routes.js");
+    const sent = await get(`/api/export/${SLUG}`);
+    expect(sent.status).toBe(200);
+    expect(sent.headers).toEqual({
+      "content-type": "application/zip",
+      "content-length": String(sent.body.byteLength),
+      "content-disposition": contentDisposition(`${SLUG}.zip`, "attachment"),
+      "x-content-type-options": "nosniff",
+      "cache-control": "private, no-store",
+    });
+  });
+
+  it("counts the bytes it sends, not the characters they decode to", async () => {
+    const bytes = withMultibyteTail(new TextEncoder().encode("PK not really a zip"));
+    expect(charCountDiffers(bytes), "the fixture must tell bytes from characters").toBe(true);
+    seen.instead = async (slug: string) => ({
+      slug,
+      bytes,
+      byteLength: bytes.byteLength,
+      overCap: overBundleCap(bytes.byteLength),
+      entries: [],
+    });
+    const sent = await get(`/api/export/${SLUG}`);
+    expect(sent.status).toBe(200);
+    expect(Buffer.from(bytes).equals(sent.body)).toBe(true);
+    expect(sent.headers["content-length"]).toBe(String(bytes.byteLength));
+  });
+
+  it("does not answer a HEAD, and never builds the bundle for one", async () => {
+    const sent = await get(`/api/export/${SLUG}`, { method: "HEAD" });
+    expect(sent.status).toBe(404);
+    expect(sent.headers["content-type"]).not.toBe("application/zip");
+    expect(seen.calls).toEqual([]);
   });
 });

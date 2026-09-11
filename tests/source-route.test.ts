@@ -44,6 +44,7 @@ import type { IncomingMessage, ServerResponse } from "node:http";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { acceptAny, AUTHED_HEADERS } from "./helpers/authed.js";
+import { charCountDiffers, withMultibyteTail } from "./helpers/binary-response.js";
 
 /** Hoisted, because `vi.mock` is — a plain const would be `undefined` in the factory. */
 const seen = vi.hoisted(() => ({
@@ -89,10 +90,10 @@ interface Sent {
   headersAtFirstWrite: string[] | null;
 }
 
-async function get(slug: string): Promise<Sent> {
+async function get(slug: string, method = "GET"): Promise<Sent> {
   const req = Object.assign(
     (async function* () {})(),
-    { method: "GET", url: `/api/source/${slug}`, headers: AUTHED_HEADERS },
+    { method, url: `/api/source/${slug}`, headers: AUTHED_HEADERS },
   ) as unknown as IncomingMessage;
 
   const headers: Record<string, string> = {};
@@ -133,7 +134,9 @@ async function get(slug: string): Promise<Sent> {
   return { status, headers, body: Buffer.concat(chunks), headersAtFirstWrite };
 }
 
-const PDF = Buffer.from("%PDF-1.7\nthe reader's own paper\n");
+/* With a multibyte tail, so a `Content-Length` that counted characters rather
+   than bytes would be wrong about it — tests/helpers/binary-response.ts. */
+const PDF = Buffer.from(withMultibyteTail(Buffer.from("%PDF-1.7\nthe reader's own paper\n")));
 
 beforeEach(() => {
   seen.calls.length = 0;
@@ -287,5 +290,56 @@ describe("serving an article's original document", () => {
     expect(ok.headersAtFirstWrite).toEqual(
       expect.arrayContaining(["content-type", "content-length", "content-disposition"]),
     );
+  });
+});
+
+/**
+ * **The whole response, as three separate claims** — cluster H of
+ * docs/plans/260908f-prioritised-spideryarn-codebase-improvements.md, pinned
+ * before the six binary writers were folded into one
+ * (docs/plans/260911e-one-binary-response-writer.md).
+ *
+ * The headers as an exact set, so a header that appears is as red as one that
+ * changes: this route sets **no** `Cache-Control`, and a shared writer that
+ * supplied a default would be a policy this route never chose. The length off
+ * multibyte bytes. And HEAD, which the authenticated dispatcher does not answer
+ * at all — a writer that can suppress a body for the public route must not
+ * make this one start serving HEADs.
+ */
+describe("the original document's response, whole", () => {
+  it("carries exactly these headers, and no cache policy of its own", async () => {
+    const { contentDisposition } = await import("../src/routes.js");
+    seen.source = async () => ({ bytes: new Uint8Array(PDF), filename: "paper.pdf" });
+    const sent = await get("a-piece");
+    expect(sent.status).toBe(200);
+    expect(sent.headers).toEqual({
+      "content-type": "application/pdf",
+      "content-length": String(PDF.byteLength),
+      "content-disposition": contentDisposition("paper.pdf", "inline"),
+      "x-content-type-options": "nosniff",
+    });
+  });
+
+  it("counts the bytes it sends, not the characters they decode to", async () => {
+    expect(charCountDiffers(PDF), "the fixture must tell bytes from characters").toBe(true);
+    seen.source = async () => ({ bytes: new Uint8Array(PDF), filename: null });
+    const sent = await get("a-piece");
+    expect(sent.body.equals(PDF)).toBe(true);
+    expect(sent.headers["content-length"]).toBe(String(PDF.byteLength));
+  });
+
+  it("is inline, under the document's own name", async () => {
+    seen.source = async () => ({ bytes: new Uint8Array(PDF), filename: "paper.pdf" });
+    const sent = await get("a-piece");
+    expect(sent.headers["content-disposition"]).toMatch(/^inline; filename="paper\.pdf"/);
+  });
+
+  it("does not answer a HEAD, and never reads the document for one", async () => {
+    seen.source = async () => ({ bytes: new Uint8Array(PDF), filename: null });
+    const sent = await get("a-piece", "HEAD");
+    expect(sent.status).toBe(404);
+    expect(sent.headers["content-type"]).not.toBe("application/pdf");
+    expect(sent.body.includes(PDF)).toBe(false);
+    expect(seen.calls).toEqual([]);
   });
 });
