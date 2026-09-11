@@ -58,16 +58,22 @@
  * cache-compatible with the glossary (src/models.ts § ARTICLE_RENDERER —
  * compatible, and only a saving inside one job; see `cacheArticle` below).
  *
- * ## It replaces, it does not append
+ * ## It appends, since 2026-09-11 — and replaces only a list the article left
  *
- * The ideas' lifecycle, for the ideas' reason: a piece has a dozen quotable
- * lines rather than an encyclopaedia of terms, so there is nothing to paginate
- * and running the step again already *is* "find them again". That removes the
- * FORBIDDEN checklist, `existingFor`, "a stale list is not appended to", the
- * `passes` counter and the DELETE route at once. What it keeps is `idsByText`,
- * so a reader's `?quote=` links survive a rewrite.
+ * From 2026-08-31 it replaced, on the ideas' reasoning that a piece has a
+ * dozen quotable lines and running the step again already *is* "choose them
+ * again". Greg asked twice for the opposite — report 27, then SPIDERYARN-
+ * READING2-2W: *"Remove the "Choose them again" button, and add a "Find more"
+ * button"* — so a forced run on a list written from this same article now
+ * **extends** it: every quote the reader has keeps its words, its scores and
+ * its id, and the model is asked for more, with the taken lines listed. That is
+ * the glossary's shape (src/glossary.ts § existingFor), reused rather than
+ * reinvented, with one deliberate difference — see `existingFor` below. A list
+ * the article has moved out from under is still replaced, with `idsByText`
+ * carrying the reader's `?quote=` links across.
  *
- * See docs/plans/260831j-quotes-mode.md and docs/project/quotes.md.
+ * See docs/plans/260911a-quotes-find-more-and-a-fade-that-carries-priority.md,
+ * docs/plans/260831j-quotes-mode.md and docs/project/quotes.md.
  */
 
 import type Anthropic from "@anthropic-ai/sdk";
@@ -87,7 +93,16 @@ import { parseJsonAnswer, readJsonOrNull } from "./parse-json.js";
 import { articleText } from "./article-prompt.js";
 import { articleWordCounts, isBodyEvidence } from "./block-policy.js";
 import { PROFILE_RULES, hashProfile, profileSection } from "./profile.js";
-import type { Block, BlockId, Meta, Quote, QuoteDrops, Quotes, Tree } from "./types.js";
+import {
+  MAX_QUOTES_TOTAL,
+  type Block,
+  type BlockId,
+  type Meta,
+  type Quote,
+  type QuoteDrops,
+  type Quotes,
+  type Tree,
+} from "./types.js";
 import type { ArtifactStore } from "./store/artifacts.js";
 
 /**
@@ -104,11 +119,24 @@ import type { ArtifactStore } from "./store/artifacts.js";
  * an earlier version of the prompt"*, which is `outdated` and its own quiet
  * sentence, and deliberately not the `stale` banner next to it: nothing about
  * the article moved, so none of those lines has stopped being in it.
+ *
+ * **`quotes/4`, 2026-09-11: importance first, and more of them.** Greg,
+ * SPIDERYARN-READING2-2W: *"make a small tweak to the prompt to emphasise
+ * important rather than striking when highlighting them"* — and the count went
+ * from one per ~300 words to one per ~200. A list written before this keeps
+ * every line it has: a Find more on it appends lines chosen by this prompt, and
+ * **the list keeps its older stamp**, because most of it still is the older
+ * prompt's choosing — so it stays *outdated*, and says it includes such lines
+ * (`existingFor`, `buildQuotes`). A stale list is replaced and stamped afresh.
  */
-export const PROMPT_VERSION = "quotes/3";
+export const PROMPT_VERSION = "quotes/4";
 
 /**
- * The most quotes one call may return.
+ * The most quotes one call may return — **one pass**, not the whole list.
+ *
+ * **40 since 2026-09-11**, with the count (SPIDERYARN-READING2-2W: *"Try and
+ * find more quotes by default"*). The list as a whole is bounded by
+ * `MAX_QUOTES_TOTAL`, because Find more adds to it.
  *
  * **Doubled from 16 on 2026-09-05**, when the prose started marking every
  * visible quote rather than only the selected one. Greg asked for "many more"
@@ -120,7 +148,7 @@ export const PROMPT_VERSION = "quotes/3";
  * and not a budget: every row says *this line is worth carrying out of here*,
  * and the `?bar=` slider can hide a padded quote but cannot make it good.
  */
-export const MAX_QUOTES = 32;
+export const MAX_QUOTES = 40;
 
 /**
  * Shorter than this is a phrase, not a quotation.
@@ -143,7 +171,13 @@ export const MIN_QUOTE_CHARS = 30;
 export const MAX_QUOTE_CHARS = 400;
 
 /**
- * How many quotes to ask for — one per ~300 words, clamped to 8–32.
+ * How many quotes to ask for — one per ~200 words, clamped to 10–40.
+ *
+ * **One per ~300, clamped 8–32, from 2026-09-05 until 2026-09-11**, when Greg
+ * asked again for more by default (SPIDERYARN-READING2-2W). A 4,000-word piece
+ * now asks for 20 rather than 13. Still unmeasured in the sense that matters —
+ * nobody has read the tail of a 40-quote list and said it was worth having —
+ * and still affordable for the reason below: the bar hides the tail.
  *
  * **It was one per 600, clamped 4–16, until 2026-09-05**, which put it between
  * the glossary's density (one per 400, clamped 6–20: a term is a word the piece
@@ -161,7 +195,7 @@ export const MAX_QUOTE_CHARS = 400;
  * higher number affordable; it is not what makes a bad line good.
  */
 export function suggestedQuotes(words: number): number {
-  return Math.min(MAX_QUOTES, Math.max(8, Math.round(words / 300)));
+  return Math.min(MAX_QUOTES, Math.max(10, Math.round(words / 200)));
 }
 
 /**
@@ -607,11 +641,23 @@ export function place(
  * answered in. Touching but not overlapping — one ends exactly where the next
  * begins — is two quotes, not one.
  */
-export function dedupeOverlaps(placed: Placed[], dropped: Dropped): Placed[] {
+export function dedupeOverlaps(
+  placed: Placed[],
+  dropped: Dropped,
+  /**
+   * Spans already on the reader's list — an append's `takenSpans`. **They win
+   * every clash, whatever their length**: they are seeded as kept before the
+   * longest-first pass starts, so a new line can only ever be dropped against
+   * them, never the other way round. The reader's list must not change under
+   * them because they asked for more.
+   */
+  taken: readonly TakenSpan[] = [],
+): Placed[] {
   const byLength = [...placed]
     .map((p, i) => ({ p, i, len: p.span.end - p.span.start }))
     .sort((a, b) => (a.len === b.len ? a.i - b.i : b.len - a.len));
-  const kept: Placed[] = [];
+  const kept: TakenSpan[] = [...taken];
+  const out: Placed[] = [];
   for (const { p } of byLength) {
     const clash = kept.some(
       (k) => k.blockId === p.blockId && p.span.start < k.span.end && k.span.start < p.span.end,
@@ -620,9 +666,39 @@ export function dedupeOverlaps(placed: Placed[], dropped: Dropped): Placed[] {
       dropped.overlapping++;
       continue;
     }
-    kept.push(p);
+    kept.push({ blockId: p.blockId, span: p.span });
+    out.push(p);
   }
-  return kept;
+  return out;
+}
+
+/** Where a quote already on the list sits, in `locate`'s coordinates. */
+export interface TakenSpan {
+  blockId: BlockId;
+  span: Span;
+}
+
+/**
+ * The spans of the quotes an append is extending, for `dedupeOverlaps`.
+ *
+ * `start` is on every quote written since the stage began storing it; for one
+ * without, the stored text is the block's own slice (`place`), so its first
+ * occurrence in the block is where it is. A quote whose block the article no
+ * longer has cannot clash with anything and is simply absent here — but an
+ * append only happens against an unmoved article (`existingFor`), so that is
+ * a belt rather than a case.
+ */
+export function takenSpans(existing: readonly Quote[], blocks: readonly Block[]): TakenSpan[] {
+  const text = new Map(blocks.map((b) => [b.id, b.text] as const));
+  const out: TakenSpan[] = [];
+  for (const quote of existing) {
+    const body = text.get(quote.blockId);
+    if (body === undefined) continue;
+    const start = quote.start ?? body.indexOf(quote.text);
+    if (start < 0) continue;
+    out.push({ blockId: quote.blockId, span: { start, end: start + quote.text.length } });
+  }
+  return out;
 }
 
 /**
@@ -715,11 +791,57 @@ function inheritIds(fresh: Quote[], inherit: Map<string, string> | null): Quote[
 }
 
 /**
- * The artefact, from what the model said plus what we could verify of it.
+ * The list a forced run **appends to**, or null for a run that writes a list
+ * of its own — the glossary's `existingFor`, and one condition shorter.
  *
- * An empty result throws. Nothing to say is not a degenerate success — it is a
- * model call that produced nothing, and writing it would make the step report
- * done for ever after while the panel showed an empty band.
+ * **Only the article moving refuses an append.** A list whose `sourceHash` no
+ * longer matches holds block ids that may be gone and words that may no longer
+ * be in the piece, so extending it would add true lines to a list that is no
+ * longer true — that one is replaced, with `idsByText` carrying the reader's
+ * links across.
+ *
+ * **An older prompt version does not refuse, and that is the deliberate
+ * difference from the glossary.** There, appending across a version "certified
+ * rather than replaced" a `glossary/1` entry: its blended prose survived under
+ * a `glossary/2` label that described it falsely. A quote has no prose of ours
+ * to be false — its words are the author's, sliced out of the block and
+ * verified — and **the certification is avoided at the stamp instead**: an
+ * append keeps the list's own, older `version` (`buildQuotes`), so the list
+ * goes on saying it holds lines an earlier prompt chose. Keeping them is what
+ * the reader asked for — *"add a "Find more" button"*, in place of the one
+ * that threw the list away — and refusing would make the first Find more on
+ * every list written before `quotes/4` silently replace it.
+ *
+ * **Nor does a different profile.** Find more continues the list rather than
+ * choosing it for somebody else, and sends the list's own setting; the glossary
+ * refuses because its `difficulty` is relative to the reader, and a quote's
+ * words are not. The one state where two profiles' choices can meet in a list
+ * is the one where the badge is already warning about it — `buildQuotes` says
+ * why the old stamp is kept.
+ *
+ * GPT Sol objected to both on the plan, as provenance written falsely into a
+ * file; Fable arbitrated, 2026-09-11, for keeping the append and making the
+ * stamps honest about a mixed list rather than refusing to make one.
+ * docs/plans/260911a-quotes-find-more-and-a-fade-that-carries-priority.md.
+ */
+export function existingFor(onDisk: Quotes | null, sourceHash: string): Quotes | null {
+  if (!onDisk || onDisk.sourceHash !== sourceHash) return null;
+  return onDisk;
+}
+
+/**
+ * The artefact, from what the model said plus what we could verify of it —
+ * **and, on an append, the list it is extending**.
+ *
+ * An empty *fresh* result throws. Nothing to say is not a degenerate success —
+ * it is a model call that produced nothing, and writing it would make the step
+ * report done for ever after while the panel showed an empty band.
+ *
+ * **An append that adds nothing does not throw.** The prompt tells the model an
+ * empty list is a real answer, and it is: the piece has no more lines worth
+ * keeping. The list is written back with `lastAdded: 0`, and the panel says
+ * so — without that sentence a Find more that found nothing would look exactly
+ * like a button that did nothing (docs/reusable/silent-success.md).
  */
 export function buildQuotes(
   parsed: { quotes?: unknown },
@@ -732,6 +854,11 @@ export function buildQuotes(
     elapsedMs: number;
     /** Ids from the list this run is replacing — see `idsByText`. */
     inherit?: Map<string, string> | null;
+    /**
+     * The list this run is **appending to** — `existingFor`. Mutually exclusive
+     * with `inherit` in practice: `generateQuotes` computes one or the other.
+     */
+    existing?: Quotes | null;
     dropped: Dropped;
     /**
      * The scores the model did not give us — `QuoteScoreDrops`, mutated in
@@ -743,16 +870,22 @@ export function buildQuotes(
     scores?: QuoteScoreDrops;
   },
 ): Quotes {
+  const previous = opts.existing?.quotes ?? [];
   const placed = dedupeOverlaps(
     /* `undefined` falls through to `place`'s own default, so the one place a
        fresh set is minted stays in one place. */
     place(parsed.quotes, opts.blocks, opts.dropped, opts.scores),
     opts.dropped,
+    takenSpans(previous, opts.blocks),
   );
 
   /* Ids already spent, so a fresh quote cannot be minted onto an id the
-     inheritance is about to hand to a different one. */
-  const taken = new Set<string>(opts.inherit?.values() ?? []);
+     inheritance is about to hand to a different one — or onto one the list
+     being extended already uses. */
+  const taken = new Set<string>([
+    ...(opts.inherit?.values() ?? []),
+    ...previous.map((q) => q.id),
+  ]);
   const minted: Quote[] = placed.map((p) => ({
     id: mintUniqueId(taken),
     blockId: p.blockId,
@@ -770,30 +903,71 @@ export function buildQuotes(
      way, which is what makes the choice checkable rather than a preference. */
   const ordered = inDocumentOrder(inheritIds(minted, opts.inherit ?? null), opts.blocks);
   if (ordered.length > MAX_QUOTES) opts.dropped.overCap += ordered.length - MAX_QUOTES;
-  const quotes = ordered.slice(0, MAX_QUOTES);
+  /* **The total ceiling cuts only new lines**, in document order for the same
+     reason the per-pass cap does, and never a quote the reader already has. */
+  const room = Math.max(0, MAX_QUOTES_TOTAL - previous.length);
+  const pass = ordered.slice(0, MAX_QUOTES);
+  if (pass.length > room) opts.dropped.overCap += pass.length - room;
+  const added = pass.slice(0, room);
 
-  if (quotes.length === 0) {
+  if (previous.length === 0 && added.length === 0) {
     throw new Error("The model returned no quotes we could find in the article. Nothing to write.");
   }
 
+  /* The drop counts and the time accumulate across passes, as the glossary's
+     time does: `discarded` is a fact about the list on the screen — that it is
+     shorter than what was produced — and after two passes that is both passes. */
+  const before = opts.existing?.discarded;
+  const discarded: QuoteDrops = { ...opts.dropped };
+  if (before) {
+    for (const key of Object.keys(discarded) as (keyof QuoteDrops)[]) {
+      discarded[key] += before[key] ?? 0;
+    }
+  }
+
   return {
-    version: PROMPT_VERSION,
+    /* **On an append, the list keeps the version it had.** `version` says which
+       prompt chose these lines, and after a Find more on a `quotes/3` list most
+       of them still were — restamping it `quotes/4` would clear the *outdated*
+       banner over lines the current prompt never chose, and would do it even
+       when the pass added nothing. Versions only move forwards, so the kept
+       one is the oldest in the list, and *outdated* stays true, and the banner
+       says *"These include lines chosen by an earlier version"*, which is true
+       whether some or all of them were. GPT Sol on the plan; Fable arbitrated
+       the shape, 2026-09-11. `generator` is the model, which has one value. */
+    version: opts.existing ? opts.existing.version : PROMPT_VERSION,
     generator: CAPABLE_MODEL,
     slug: opts.slug,
     sourceHash: opts.sourceHash,
     /* `null`, never absent. Absent means "written before this existed"; `null`
        means "written deliberately without a profile", and the panel needs to
        tell those two apart to decide whether its checkbox starts ticked.
-       src/profile.ts § profileIsStale. */
-    profileHash: opts.profile ? hashProfile(opts.profile) : null,
-    quotes,
+       src/profile.ts § profileIsStale.
+
+       **On an append, the list's own stamp is kept** — the pass that started
+       it — and the panel sends the list's own setting, so the stamp is exact
+       except in one state: the reader has changed or deleted their profile
+       since. That is precisely the state in which the badge already says
+       *"Written for a profile you have changed since"*, and keeping the old
+       stamp keeps that warning up over a list that is now partly the old
+       profile's; restamping would take it down. `existingFor` has the rest.
+       `?? null` so that a list written before the field existed is stamped as
+       what it was: chosen for nobody in particular. */
+    profileHash: opts.existing
+      ? (opts.existing.profileHash ?? null)
+      : opts.profile
+        ? hashProfile(opts.profile)
+        : null,
+    quotes: opts.existing ? inDocumentOrder([...previous, ...added], opts.blocks) : added,
     /* A copy, not the live object. `dropped` is threaded through by reference
        so the counters accumulate across `place` and `dedupeOverlaps`, and
        storing the reference would let a later mutation edit an artefact that
        has already been built. */
-    discarded: { ...opts.dropped },
+    discarded,
+    passes: (opts.existing?.passes ?? (opts.existing ? 1 : 0)) + 1,
+    lastAdded: added.length,
     generatedAt: new Date().toISOString(),
-    elapsedMs: opts.elapsedMs,
+    elapsedMs: (opts.existing?.elapsedMs ?? 0) + opts.elapsedMs,
   };
 }
 
@@ -918,7 +1092,8 @@ export interface QuotesRun {
 }
 
 const SYSTEM = `You are choosing the QUOTES worth keeping from this article: the
-lines a reader would want to carry out of it.
+lines that matter most to what it is saying, which a reader would want to carry
+out of it.
 
 THE ABSOLUTE RULE
 
@@ -935,18 +1110,21 @@ gains nothing.
 
 WHAT EARNS A QUOTE
 
-A line earns its place for one of two reasons, and either one alone is enough.
+A line earns its place for one of two reasons, and IMPORTANCE COMES FIRST.
 
 - It CARRIES THE ARGUMENT. The sentence the piece turns on; the claim the rest
   is spent defending; the objection stated in the author's own voice; the
-  distinction everything after it depends on.
+  distinction everything after it depends on. These are what the list is for:
+  a reader skimming only the lines you choose should come away with the
+  piece's argument.
 - It IS WELL PUT. The line you would repeat to somebody. Memorable, exact,
   surprising, funny, or simply better written than the sentences around it.
 
-The best quotes are both. Many good ones are only one, and a line that is only
-one is still worth having — do not pass over the piece's central claim because
-it is plainly written, and do not pass over its best-written sentence because
-the argument would survive without it.
+The best quotes are both. When choosing, look for the important lines first
+and do not pass over one because it is plainly written. A line that is only
+well put still earns a place, but only when it is exceptionally so — a
+striking sentence on a side point is worth less here than a plain one the
+argument rests on.
 
 WHAT DOES NOT
 
@@ -1050,8 +1228,18 @@ export function renderPrompt(opts: {
    * breakpoint on it, and this changes between readers.
    */
   profile: string | null;
+  /**
+   * The quotes already on the list, on a Find more — `existingFor` — or empty
+   * for a list of its own.
+   *
+   * **Here, in the user message, and never in `system`.** The article is the
+   * cached system block, and it has to be byte-identical between a first pass
+   * and every append after it or each pass pays for it again. The glossary
+   * learnt that the expensive way (its `renderPrompt`).
+   */
+  existing: readonly Quote[];
 }): string {
-  const { tree, count } = opts;
+  const { tree, count, existing } = opts;
   const skeleton = partsOf(tree)
     .map((p, i) => `PART ${i + 1}: ${p.title}\n  ${p.gist ?? "(no gist)"}`)
     .join("\n\n");
@@ -1061,9 +1249,34 @@ export function renderPrompt(opts: {
      prompt is about. src/profile.ts § PROFILE_RULES. */
   const who = profileSection(opts.profile);
 
-  return `Choose up to ${count} quotes. Fewer is fine — a short piece has few
-lines worth keeping, and a list padded to a number is worse than a short list.
-${who ? `\n${who}\n` : ""}
+  /* The glossary's FORBIDDEN checklist, cut down to what a quote can do wrong:
+     it cannot be a synonym, but it can be the same sentence again, or a
+     longer or shorter cut of one already taken — which `dedupeOverlaps` would
+     throw away anyway, so saying so up front saves the model the entry. */
+  const already =
+    existing.length === 0
+      ? ""
+      : `
+=== ALREADY ON THE LIST ===
+
+The reader already has these. Find up to ${count} MORE — lines that are not
+these, and do not overlap them: not the same sentence again, and not a longer or
+shorter cut of one of them. Every one of these is kept whatever you return.
+
+${existing.map((q) => `- ${q.text}`).join("\n")}
+
+If there are genuinely no more lines worth keeping, return {"quotes": []}. That
+is a real answer and a better one than padding.
+`;
+
+  const ask =
+    existing.length === 0
+      ? `Choose up to ${count} quotes. Fewer is fine — a short piece has few
+lines worth keeping, and a list padded to a number is worse than a short list.`
+      : `Choose up to ${count} MORE quotes. Fewer is fine, and none is fine.`;
+
+  return `${ask}
+${who ? `\n${who}\n` : ""}${already}
 === ITS SHAPE ===
 
 ${skeleton}`;
@@ -1088,9 +1301,9 @@ function parseJson(raw: string): { quotes?: unknown } {
  * see the note in `generateSketch` (src/sketch.ts). The pipeline step returns it
  * as `parts` and the store writes it.
  *
- * **It replaces.** There is no append path and therefore no `existing`, no
- * FORBIDDEN list and no "a stale list is not appended to" rule — see the header.
- * `previous` is read for its ids and for nothing else.
+ * **It appends to a list written from this same article, and replaces one the
+ * article has left** — `existingFor`, and the header. `previous` is read to
+ * decide which, for the taken list the prompt carries, and for the ids.
  *
  * Exported because two callers run this stage and they must not drift —
  * `main()` below, and the ingest queue in the server process (src/pipeline.ts).
@@ -1151,10 +1364,18 @@ export async function generateQuotes(opts: {
 
   const sourceHash = inputFingerprint(blocks, tree, meta);
   const onDisk = opts.previous;
-  /* Ids come across only when the article has not moved. A quote inherited
-     across a re-extraction would carry a reader's `?quote=` link onto words
-     from a different version of the piece. */
-  const inherit = onDisk && onDisk.sourceHash === sourceHash ? idsByText(onDisk) : null;
+  /* **Append** to a list written from this same article — Find more. That is
+     every previous list `existingFor` does not refuse, and it refuses only a
+     moved article. */
+  const existing = existingFor(onDisk, sourceHash);
+  /* **No ids are inherited any more, and a stale replace mints every one
+     fresh.** Ids came across only on a replace of an unmoved list, and since
+     2026-09-11 an unmoved list is always appended to — so the one replace left
+     is of a list the article moved out from under, where inheriting would
+     carry a reader's `?quote=` link onto words from a different version of the
+     piece. GPT Sol, on the plan, which had got this backwards. `idsByText`
+     and `buildQuotes`' `inherit` stay, tested, for the day a same-article
+     rewrite comes back; nothing in production passes one today. */
 
   /* **The argument, not the apparatus** — the same filter every article-reading
      stage applies at its call site rather than inside the prompt builders.
@@ -1165,8 +1386,42 @@ export async function generateQuotes(opts: {
      would resolve to a real block and look verified. src/block-policy.ts. */
   const evidence = blocks.filter(isBodyEvidence);
   const words = articleWordCounts(blocks).body;
-  const count = suggestedQuotes(words);
+  /* **Never ask for more than the list has room for.** The answer's token
+     allowance scales with `count`, so a Find more on a list one short of
+     `MAX_QUOTES_TOTAL` would otherwise pay for forty lines and keep one. GPT
+     Sol, on the plan. */
+  const room = existing ? MAX_QUOTES_TOTAL - existing.quotes.length : MAX_QUOTES_TOTAL;
+  const count = Math.min(suggestedQuotes(words), room);
   const started = Date.now();
+
+  /* **At the ceiling there is nothing to ask**, so no call is made. The panel
+     does not offer Find more there; this is for a request that arrives anyway —
+     a second tab, a hand-written POST — and it answers the way a pass that
+     found nothing does, so the reader is told the same true thing. */
+  if (existing && count <= 0) {
+    const dropped = noneDropped();
+    return {
+      quotes: buildQuotes({ quotes: [] }, {
+        slug: tree.slug,
+        blocks: evidence,
+        sourceHash,
+        profile: opts.profile ?? null,
+        elapsedMs: 0,
+        existing,
+        dropped,
+      }),
+      blocks: blocks.length,
+      words,
+      dropped,
+      scores: noQuoteScoreDrops(),
+      model: CAPABLE_MODEL,
+      inputTokens: 0,
+      outputTokens: 0,
+      cacheReadTokens: 0,
+      cacheWriteTokens: 0,
+      elapsedMs: 0,
+    };
+  }
 
   /* Bounded by `count`, which is bounded by MAX_QUOTES. Each quote is up to
      MAX_QUOTE_CHARS of prose plus a short reason and two numbers — call it 180
@@ -1205,7 +1460,12 @@ export async function generateQuotes(opts: {
         messages: [
           {
             role: "user",
-            content: renderPrompt({ tree, count, profile: opts.profile ?? null }),
+            content: renderPrompt({
+              tree,
+              count,
+              profile: opts.profile ?? null,
+              existing: existing?.quotes ?? [],
+            }),
           },
         ],
       },
@@ -1223,7 +1483,9 @@ export async function generateQuotes(opts: {
         const now = Date.now();
         if (now - last < 500) return;
         last = now;
-        report(`up to ${count} quotes, ${Math.round(chars / 1000)}k characters so far`);
+        report(
+          `up to ${count} ${existing ? "more " : ""}quotes, ${Math.round(chars / 1000)}k characters so far`,
+        );
       });
     }
 
@@ -1269,7 +1531,7 @@ export async function generateQuotes(opts: {
     sourceHash,
     profile: opts.profile ?? null,
     elapsedMs: Date.now() - started,
-    inherit,
+    existing,
     dropped,
     scores,
   });

@@ -36,7 +36,7 @@
 import { termPattern, termSpans } from "../term-match.js";
 import { PALETTE_SLOTS } from "./hit-colours.js";
 import type { ValenceDirection } from "./valence.js";
-import type { Block, BlockId, QuoteTier } from "../types.js";
+import type { Block, BlockId, QuoteStroke } from "../types.js";
 import { costOn, leafClock, noteCost } from "./annotation-cost.js";
 
 /**
@@ -221,7 +221,9 @@ interface MarkBase {
    */
   slot?: number | null;
   /**
-   * How heavily to **outline** these words — a quote, and `hit` marks only.
+   * How to **outline** these words — how heavily and how brightly: a quote,
+   * and `hit` marks only. One `QuoteStroke` (src/types.ts), never a weight and
+   * a brightness as two fields that could arrive one without the other.
    *
    * The counterpart of `strength`, and exclusive with it **by convention rather
    * than by type** — both are optional here, so nothing stops a caller setting
@@ -239,9 +241,10 @@ interface MarkBase {
    * same block, which is what stops two nested outlines reading as one heavier
    * mark — a priority neither quote has. The `Math.max` here is the belt to
    * that brace, because the drawing now depends on a property the artefact
-   * happens to hold rather than one this file enforces.
+   * happens to hold rather than one this file enforces. The brightness takes the
+   * maximum beside it, for the same can-not-arise reason.
    */
-  quoteTier?: QuoteTier;
+  quoteStroke?: QuoteStroke;
 }
 
 /** A comment's stored anchor, before it has been matched against the block. */
@@ -428,8 +431,8 @@ function annotate(html: string, marks: readonly Mark[]): string {
            its bottom padding off. Before it, those were unconditional on
            `mark.hit` — so a quote arrived wearing a fill, which is the opposite
            of what a quote is supposed to look like. */
-        const washes = hits.filter((m) => m.quoteTier === undefined);
-        const quoted = hits.filter((m) => m.quoteTier !== undefined);
+        const washes = hits.filter((m) => m.quoteStroke === undefined);
+        const quoted = hits.filter((m) => m.quoteStroke !== undefined);
         const style: string[] = [];
         if (washes.length > 0) {
           el.setAttribute("data-wash", "");
@@ -450,10 +453,19 @@ function annotate(html: string, marks: readonly Mark[]): string {
           const strength = Math.max(...washes.map((m) => clamp(m.strength ?? 1, 0, 1)));
           style.push(`--hit-a:${strength.toFixed(3)}`);
         }
-        /* Heaviest wins — see `quoteTier` on Mark, and why it cannot arise. */
+        /* Heaviest and brightest win — see `quoteStroke` on Mark, and why it
+           cannot arise. */
         if (quoted.length > 0) {
-          const tier = Math.max(...quoted.map((m) => m.quoteTier ?? 1));
+          const strokes = quoted.flatMap((m) => (m.quoteStroke ? [m.quoteStroke] : []));
+          const tier = Math.max(...strokes.map((q) => q.tier));
           el.setAttribute("data-quote", String(tier));
+          /* **The fade, as a number in the style this element already carries**
+             — the `--hit-a` pattern, and for its reason: the colour is the
+             token's, the brightness is the quote's priority. No new attribute,
+             so nothing new for the sanitiser to reserve: an article's own
+             `style` is stripped before this runs (src/sanitize-policy.ts). */
+          const alpha = Math.max(...strokes.map((q) => q.alpha));
+          style.push(`--quote-a:${clamp(alpha, 0, 1).toFixed(2)}`);
         }
         /* And which searches found these words, as one rule each stacked under
            the wash — Greg's call on 2026-08-26, over blending the washes

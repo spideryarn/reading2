@@ -421,9 +421,11 @@ export const FORCE_ONLY_WHEN_NAMED: ReadonlySet<StepName> = new Set<StepName>([
   "tweets",
   "glossary",
   /* It reads `blocks.json` and `tree.json` and nothing reads what it writes, so
-     the positional cascade would buy a model call for nothing. Like `ideas` and
-     unlike the glossary, forcing it cannot silently lengthen anything — it
-     replaces rather than appends. */
+     the positional cascade would buy a model call for nothing. **And since
+     2026-09-11 there is the glossary's second reason too**: forcing it appends
+     to an unmoved list (Find more, src/quotes.ts § existingFor), so a force that
+     arrived by cascade rather than by name would silently lengthen a reader's
+     list and spend the call doing it. */
   "quotes",
   /* Same two reasons as the three above: it reads `blocks.json` and
      `tree.json`, nothing reads what it writes, so the positional cascade would
@@ -3166,10 +3168,19 @@ export const STEPS: { [K in StepName]: PipelineStep<K> } = {
         cacheArticle: ctx.cacheArticle,
       });
       const total = run.quotes.quotes.length;
+      /* **This pass, not the list.** On a Find more the artefact is the old
+         list plus what this pass added, and `run.dropped` is this pass's alone
+         while `run.quotes.discarded` is the whole list's — the log below reads
+         the first, because a prompt that has started paraphrasing shows up in
+         the pass that did it, not averaged into every pass before. */
+      const added = run.quotes.lastAdded ?? total;
+      const appended = (run.quotes.passes ?? 1) > 1;
       plog.info(
         {
           slug: ctx.slug,
           step: "quotes",
+          added,
+          passes: run.quotes.passes ?? 1,
           model: run.model,
           inputTokens: run.inputTokens,
           outputTokens: run.outputTokens,
@@ -3202,11 +3213,15 @@ export const STEPS: { [K in StepName]: PipelineStep<K> } = {
              words about themselves. docs/project/logging.md. */
           profileChars: ctx.profile?.length ?? 0,
         },
-        `quotes ${ctx.slug}: ${total} quotes (${run.dropped.unfound} not found)`,
+        appended
+          ? `quotes ${ctx.slug}: ${added} more, ${total} in all (${run.dropped.unfound} not found)`
+          : `quotes ${ctx.slug}: ${total} quotes (${run.dropped.unfound} not found)`,
       );
       return {
         parts: { quotes: run.quotes },
-        detail: `${total} ${total === 1 ? "quote" : "quotes"}`,
+        detail: appended
+          ? `${added} more, ${total} in all`
+          : `${total} ${total === 1 ? "quote" : "quotes"}`,
       };
     },
   },

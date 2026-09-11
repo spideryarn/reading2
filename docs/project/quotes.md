@@ -92,7 +92,12 @@ Code: [`src/quotes.ts`](../../src/quotes.ts) (stage 5h — the prompt, the call,
 [`src/web/styles/quotes.css`](../../src/web/styles/quotes.css). Tests:
 [`tests/quotes.test.ts`](../../tests/quotes.test.ts) (the stage),
 [`tests/quotes-panel.test.ts`](../../tests/quotes-panel.test.ts) (the orders and the bar),
-[`tests/quote-marks.test.ts`](../../tests/quote-marks.test.ts) (what the prose marks).
+[`tests/quote-marks.test.ts`](../../tests/quote-marks.test.ts) (what the prose marks),
+[`tests/quote-stroke-fade.test.ts`](../../tests/quote-stroke-fade.test.ts) (the fade and its floor),
+[`tests/quotes-find-more.test.ts`](../../tests/quotes-find-more.test.ts),
+[`tests/quotes-find-more-stage.test.ts`](../../tests/quotes-find-more-stage.test.ts) and
+[`tests/quotes-find-more-panel.test.tsx`](../../tests/quotes-find-more-panel.test.tsx) (Find more:
+the merge, the stage with its model stubbed, and the panel).
 
 ## The one safety property
 
@@ -304,14 +309,14 @@ Three consequences worth knowing before changing anything here:
   and an activation owner up there could spend a Quotes press after the reader had left the band.
 - **A quote is the one mark a tap may fall through.** `NOT_A_BLOCK_SELECTION` in
   [TableView.tsx](../../src/web/TableView.tsx) excludes every `<mark>` because a tap on one already
-  means something — except a quote, which nothing acts on. With up to 32 of them on the page in
+  means something — except a quote, which nothing acts on. With dozens of them on the page in
   Plain, a blanket exclusion would make the best sentences in the piece the ones a finger cannot
   select, and therefore cannot annotate ([touch.md](touch.md)).
 
 **What is still open** is the density: the default `?rank=` is `document`, where `rankQuotes` returns
 the whole list and the bar does nothing, so a reader who has never touched the controls meets all of
 them. The bar is the control and it survives a mode change, but it is only reachable from inside
-quotes mode. Nobody has yet looked at 32 marks at once. See § *An article's quotes are capped*.
+quotes mode. Nobody has yet looked at a full list of them at once — 40 from one pass, up to 120 after Find more (§ Find more appends).
 
 Since 2026-09-05 the whole shown list is marked rather than only the *selected* one — until then the
 mode drew nothing at all on the
@@ -378,6 +383,28 @@ a quote that is merely *striking* clears the bar, so it must also draw heavy.
 **A quote with no score at all is light, and still drawn.** It has earned no emphasis, but a quote
 scored on neither axis survives every position of the bar (§ The bar hides what is below it), so
 leaving it unmarked would be a row in the panel with nothing in the prose.
+
+**And a fade, since 2026-09-11 — the fine channel on top of the coarse one.** Greg, in
+SPIDERYARN-READING2-2W:
+
+> perhaps slightly fade the border based on the priority-score (but even low-priority quotes should
+> still be clearly visible)
+
+`quoteAlpha` (beside `quoteTier`) runs the stroke's alpha from **0.70** at `priorityOf` 0.5 and below
+— and for the unscored — to **1.00** at 1.0, linearly. Weight and fade **move the same way**, so a
+heavier quote is always also a brighter one and the two can never cancel; the weight keeps the
+two-step split the blind test allowed and the fade adds the continuous impression nobody has to
+identify pairwise. It spends the finding of 260907c's own acceptance pass, that priority *"does help
+skimming — but through brightness more than thickness"*.
+
+**"Clearly visible" is kept by the floor, and the floor is tested, not felt.**
+[tests/quote-stroke-fade.test.ts](../../tests/quote-stroke-fade.test.ts) composites the 1px stroke at
+`QUOTE_ALPHA_FLOOR` over the page colour read out of `styles/tokens.css` and requires more than 4.5:1
+— WCAG's non-text floor is 3:1, and a 1px line wants the margin. It travels as `--quote-a` in the
+inline style `annotateHtml` already writes for `--hit-a`, so there is no new attribute for the
+sanitiser to reserve, and a mark without it falls back to the token's old 0.95. The pressed white
+stroke overrides the whole colour, so the fade never dims *you pressed this*.
+[260911a](../plans/260911a-quotes-find-more-and-a-fade-that-carries-priority.md) § 1.
 
 **Two tiers and not three, and that is a measurement rather than a preference.** Blind pairwise on
 the box, 2026-09-07: three tiers at 1/2/3px scored **13/20, which is chance**, with answers
@@ -515,8 +542,9 @@ The loop that made Greg choose a button in the first place —
 — is closed structurally: one automatic attempt per `(slug, step)` per tab session, claimed before
 the request goes out. The two verbs exist for the same reason: `ensure` is unforced and is what
 **both** the automatic run and the empty state's button call, because `work_key` is computed from the
-request and two keys are two paid jobs; `regenerate` is forced and is the *Choose them again* button beside a
-result that is already there. [`src/web/useAutoRun.ts`](../../src/web/useAutoRun.ts).
+request and two keys are two paid jobs; `regenerate` is forced and is **Find more** beside a
+result that is already there — and, on a stale one, *Choose them again* (§ Find more appends).
+[`src/web/useAutoRun.ts`](../../src/web/useAutoRun.ts).
 
 An automatic run has nobody to ask about the reader's profile, so it uses it and the panel says so —
 *Using your profile* — rather than showing a tickbox it has disabled.
@@ -527,17 +555,55 @@ An automatic run has nobody to ask about the reader's profile, so it uses it and
 returns it as `parts`. A step that wrote `<dir>/quotes.json` inside `run`
 works on a laptop and cannot work through a store that puts the artefact in a Postgres column.
 
-### It replaces. It does not append.
+### Find more appends. Only a stale list is replaced.
 
-The ideas' rule for the ideas' reason: a piece has a dozen quotable lines, not an encyclopaedia, so
-running the step again already *is* "choose them again". That removes the FORBIDDEN checklist,
-`existingFor`, "a stale list is not appended to", `passes` and the `DELETE` route at once.
+**Since 2026-09-11.** Until then it replaced, on the ideas' reasoning that a piece has a dozen
+quotable lines and running the step again already *is* "choose them again". Greg asked for the
+opposite twice — [report 27](../user-feedback/260905_2052-a-button-to-find-more-quotes.md), where
+the answer was a bigger count, and then SPIDERYARN-READING2-2W:
 
-What it keeps is **id inheritance**: `idsByText` gives a fresh quote the id the old artefact used for
-the same words, keyed on a normalised form, so `?quote=` links survive a rewrite. Deliberately
-conservative — a sentence returned with one more clause is a different key and gets a new id. A dead
-`?quote=` opens the list; a wrongly inherited one opens somebody else's words wearing the reader's
-bookmark.
+> Remove the "Choose them again" button, and add a "Find more" button
+
+So a forced run is now the glossary's shape: **the state of the previous list decides whether it
+appends or replaces**, and `existingFor` in [src/quotes.ts](../../src/quotes.ts) is that decision.
+
+| previous list | a forced run |
+|---|---|
+| none | writes a list of its own |
+| written from this same article | **appends**: every quote keeps its words, scores and id; the model gets the taken lines as *already on the list* and is asked for up to `count` more; a new line overlapping an existing one is dropped, whatever its length |
+| the article has moved since | **replaces**, and mints every id fresh — an id carried across would point a reader's `?quote=` link at words from a different version of the piece |
+
+**Two conditions the glossary has and this does not, both deliberate, and both made honest at the
+stamp rather than by refusing.** A list from an **older prompt version** is appended to — refusing
+would make the first Find more on every list written before `quotes/4` silently replace it — and
+**keeps its older `version`**, because most of it still is the older prompt's choosing. So it stays
+*outdated*, and the banner says *"These include lines chosen by an earlier version of the prompt"*,
+true whether some or all of them were. A **different profile** is appended to as well: Find more
+sends the list's own profile setting and the artefact keeps the `profileHash` of the pass that
+started it, so the only way two profiles' choices meet in one list is a reader who changed theirs
+since — the one state where the badge already says *"Written for a profile you have changed
+since"*, and the kept stamp keeps it saying so. GPT Sol objected to both as provenance written
+falsely; Fable arbitrated for this shape. [260911a](../plans/260911a-quotes-find-more-and-a-fade-that-carries-priority.md)
+§ What the plan review changed.
+
+**An append that adds nothing is written, not thrown.** `lastAdded: 0` on the artefact, and the foot
+says *"Nothing more worth keeping turned up."* — without it, a Find more that found nothing looks
+exactly like a button that did nothing ([silent-success.md](../reusable/silent-success.md)). `passes`
+counts the runs; `discarded` and `elapsedMs` accumulate across them. The list is capped at
+`MAX_QUOTES_TOTAL` (120) in [types.ts](../../src/types.ts); a pass never asks for more than the room
+left, at the ceiling no call is made, and the foot says so instead of offering the button.
+
+**What the reader gave up** is a whole rewrite of a current list, including one for a new profile —
+*Choose them again* was the only way to throw a current list away. It survives on the **stale**
+banner alone, the one state where extending is impossible and a list of its own is the honest
+action.
+
+**Id inheritance has no production caller any more.** `idsByText` gave a fresh quote the id the old
+artefact used for the same words — but only on a rewrite of an *unmoved* list, and an unmoved list is
+now always appended to, which keeps every id outright. It stays in `buildQuotes`, tested, for the day
+a same-article rewrite returns. Deliberately conservative when it does run — a sentence returned with
+one more clause is a different key and gets a new id. A dead `?quote=` opens the list; a wrongly
+inherited one opens somebody else's words wearing the reader's bookmark.
 
 ### Freshness
 
@@ -609,12 +675,19 @@ wrong — but worth knowing.
 - **One article is one article.** `0.80` and `medium` effort both rest on that single run.
   `data/writes/quotes.json` still does not exist, so `quotes.json` is off `GATE_FIXTURES`
   and the filesystem-to-Postgres round trip is still asserting that an absent artefact stays absent.
-- **The count doubled on the strength of an argument, not a measurement.** `suggestedQuotes` asks
-  for one per ~300 words clamped 8–32, up from one per ~600 clamped 4–16, because the list became
-  the marks you skim by and Greg asked for "many more". Nobody has yet read a 32-quote list and said
-  whether the tail is worth having; the bar hides it, which is what makes the number affordable and
-  not what makes it right. `STEP_BUDGET_MS.quotes` went to 180s with it, also unmeasured — the one
-  timing there has ever been is 11.9 seconds for five quotes.
+- **The count has risen twice on the strength of an argument, not a measurement.**
+  `suggestedQuotes` asks for one per ~200 words clamped 10–40 since 2026-09-11 (*"Try and find more
+  quotes by default"*), after one per ~300 clamped 8–32 from 2026-09-05 and one per ~600 clamped
+  4–16 before that. Nobody has yet read a 40-quote list and said whether the tail is worth having;
+  the bar hides it, which is what makes the number affordable and not what makes it right.
+  `STEP_BUDGET_MS.quotes` is 240s with it, also unmeasured — the one timing there has ever been is
+  11.9 seconds for five quotes.
+- **`quotes/4` leads with importance** (*"emphasise important rather than striking when
+  highlighting them"*): the prompt still takes either reason, and `max` still combines the scores,
+  but it tells the model to look for the lines the argument rests on first and to keep a merely
+  well-put one only when it is exceptionally so. Whether the lists actually shifted is unmeasured.
+- **The density with Find more is unlooked-at.** The default rank marks every quote in Plain, and a
+  list can now grow to 120.
 - **`validateHits` (search) and `validateOccurrences` (ideas) have the same two bugs** this stage was
   fixed for: both call `findQuote` with the forgiving pass and both store the model's string. Their
   quotes are shown in a results list rather than presented as the author's chosen lines, so the harm
@@ -632,8 +705,8 @@ wrong — but worth knowing.
 
 - [glossary.md](glossary.md) — the mode this took its shape from: the prioritised order, the
   threshold slider, and the condition attached to keeping model scores
-- [ideas.md](ideas.md) — the mode this took its lifecycle from: replaces rather than appends, one
-  verb, no DELETE
+- [ideas.md](ideas.md) — the mode this took its lifecycle from until 2026-09-11: replaces rather
+  than appends, one verb, no DELETE. Find more swapped the first for the glossary's append
 - [search.md](search.md) — where `Found`, the wash and the rail lane come from
 - [block-ids.md](block-ids.md) — why a passage is a block id and never an offset
 - [url-state.md](url-state.md) — `?mode=quotes`, `?quote=`, `?rank=`, `?bar=`

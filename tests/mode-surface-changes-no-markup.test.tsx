@@ -584,8 +584,8 @@ const HIT: Found = {
   long: "…the utility of phrenology…",
   at: 0.3,
   whole: false,
-  /* Not a quote. See `Found.quoteTier`. */
-  quoteTier: null,
+  /* Not a quote. See `Found.quoteStroke`. */
+  quoteStroke: null,
 };
 
 async function mountSearch(): Promise<void> {
@@ -1029,7 +1029,7 @@ const QUOTES: Quotes = {
       /* **0–1, not 0–100.** These were 90 and 80, which `score()` in
          src/quotes.ts refuses outright — the fixture is hand-built and so
          bypasses `place`, and nothing downstream read the numbers, so it sat
-         here looking plausible. It is read now: `quoteTier` drives how heavily
+         here looking plausible. It is read now: `quoteStroke` drives how heavily
          the passage is outlined in the prose, and 90 would have made this
          fixture claim a priority no real quote can have. */
       importance: 0.9,

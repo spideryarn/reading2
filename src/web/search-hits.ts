@@ -34,7 +34,7 @@ import type {
   Block,
   BlockId,
   IdeaOccurrence,
-  QuoteTier,
+  QuoteStroke,
   SearchHit,
   TimelineOccurrence,
 } from "../types.js";
@@ -161,7 +161,7 @@ export interface Found {
   readonly whole: boolean;
   /**
    * **`null` at every source but Quotes**, and that is the whole meaning of it:
-   * a passage carrying a tier is drawn as an outline, and one carrying `null`
+   * a passage carrying a stroke is drawn as an outline, and one carrying `null`
    * is drawn as a search hit's wash.
    *
    * This is the field that lets quotes have their own visual language without a
@@ -169,7 +169,7 @@ export interface Found {
    * per-quote identity still lives in `key`. Written out at every call site
    * rather than defaulted, for the reason `valence` gives above.
    */
-  readonly quoteTier: QuoteTier | null;
+  readonly quoteStroke: QuoteStroke | null;
 }
 
 /**
@@ -356,8 +356,8 @@ export function findLiteral(blocks: Block[], find: string | null): Found[] {
         long: snippet(text, span, LONG_SNIPPET),
         at: placeOf(scale, index, span.start),
         whole: false,
-        /* Not a quote. See `Found.quoteTier`. */
-        quoteTier: null,
+        /* Not a quote. See `Found.quoteStroke`. */
+        quoteStroke: null,
       });
     }
   });
@@ -513,8 +513,8 @@ function resolveOne(
      */
     valence: number | null;
     reasoning: string | null;
-    /** See `Found.quoteTier`. `null` everywhere but `resolveQuotes`. */
-    quoteTier: QuoteTier | null;
+    /** See `Found.quoteStroke`. `null` everywhere but `resolveQuotes`. */
+    quoteStroke: QuoteStroke | null;
   },
 ): Found | null {
   const i = at.index.get(spec.blockId);
@@ -552,7 +552,7 @@ function resolveOne(
        source meant is exactly what we do not know. */
     at: placeOf(at.scale, i, span.start),
     whole,
-    quoteTier: spec.quoteTier,
+    quoteStroke: spec.quoteStroke,
   };
 }
 
@@ -602,8 +602,8 @@ export function resolveIdea(
          Nothing here judges it. */
       valence: null,
       reasoning: o.reasoning,
-      /* Not a quote. See `Found.quoteTier`. */
-      quoteTier: null,
+      /* Not a quote. See `Found.quoteStroke`. */
+      quoteStroke: null,
     });
     if (one) out.push(one);
   }
@@ -687,18 +687,19 @@ export function resolveQuotes(
    */
   /**
    * **The tier arrives already computed**, rather than this function taking a
-   * `Quote` and working it out. `quoteTier` lives beside `priorityOf` in
+   * `Quote` and working it out. `quoteStroke` lives beside `priorityOf` in
    * QuotesPanel.tsx because that is where the thresholds belong, and this file
    * has no business knowing what a score is — it resolves text to spans. It is
    * also the import direction that keeps React out of a module the node tests
-   * load.
+   * load. The same goes for its brightness since 2026-09-11: `stroke` is the
+   * whole `QuoteStroke`, weight and fade together, from `quoteStroke`.
    */
   quotes: readonly {
     id: string;
     blockId: BlockId;
     text: string;
     reason?: string;
-    tier: QuoteTier;
+    stroke: QuoteStroke;
   }[],
 ): Found[] {
   const at = page(blocks);
@@ -715,7 +716,7 @@ export function resolveQuotes(
          one with two ends. */
       valence: null,
       reasoning: quote.reason ?? "",
-      quoteTier: quote.tier,
+      quoteStroke: quote.stroke,
     });
     if (one) out.push(one);
   }
@@ -795,8 +796,8 @@ export function resolveTimelineEvent(
       /* When the piece says a thing happened. There is no direction in a date. */
       valence: null,
       reasoning: null,
-      /* Not a quote. See `Found.quoteTier`. */
-      quoteTier: null,
+      /* Not a quote. See `Found.quoteStroke`. */
+      quoteStroke: null,
     });
     if (one) out.push(one);
   }
@@ -884,8 +885,8 @@ export function resolveCriterion(
          says what the model actually returned. */
       valence: r.kind === "diverging" ? r.valence : null,
       reasoning: r.reasoning,
-      /* Not a quote. See `Found.quoteTier`. */
-      quoteTier: null,
+      /* Not a quote. See `Found.quoteStroke`. */
+      quoteStroke: null,
     });
     if (one) out.push(one);
   }
@@ -953,8 +954,8 @@ export function resolveClaim(
          and a claim mark wears its claim's own hue. */
       valence: null,
       reasoning: p.reasoning,
-      /* Not a quote. See `Found.quoteTier`. */
-      quoteTier: null,
+      /* Not a quote. See `Found.quoteStroke`. */
+      quoteStroke: null,
     });
     if (one) out.push(one);
   }
@@ -991,8 +992,8 @@ export function resolveHits(blocks: Block[], runs: ActiveRun[]): Found[] {
            already carries. It never answers *is this good*. */
         valence: null,
         reasoning: hit.reasoning,
-        /* Not a quote. See `Found.quoteTier`. */
-        quoteTier: null,
+        /* Not a quote. See `Found.quoteStroke`. */
+        quoteStroke: null,
       });
       if (one) found.push(one);
     }
@@ -1247,7 +1248,7 @@ function baseMarks(
       f.valence !== null && f.slot !== null
         ? { slot: f.slot, hue: valenceRgbToken(scale, f.valence), dir: valenceDirection(f.valence) }
         : { slot: f.slot };
-    /* **A quote carries a tier and no strength; everything else the reverse.**
+    /* **A quote carries a stroke and no strength; everything else the reverse.**
        `strength` is what `annotateHtml` turns into the confidence wash, and it
        takes the *maximum* over every mark covering a run. While a quote was a
        `strength: 1` hit, a quote lying over a 0.4-confidence search hit repainted
@@ -1256,7 +1257,7 @@ function baseMarks(
        drawn identically. Splitting the two here is what makes "search fills,
        quotes outline" true rather than merely intended.
        docs/plans/260907c-quotes-drawn-as-a-stroke-in-the-prose-with-weight-carrying-priority.md */
-    const quoted = f.quoteTier !== null;
+    const quoted = f.quoteStroke !== null;
     list.push({
       id: f.key,
       start: f.start,
@@ -1264,7 +1265,7 @@ function baseMarks(
       kind: "hit",
       ...painted,
       ...(quoted
-        ? { quoteTier: f.quoteTier }
+        ? { quoteStroke: f.quoteStroke }
         : {
             strength:
               f.confidence === null

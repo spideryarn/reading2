@@ -1274,18 +1274,23 @@ export const SPECIMEN_MARKS: { label: string; marks: Mark[] }[] = [
     marks: [{ id: "h", start: 25, end: 49, kind: "hit", strength: 0.45, slot: 0 }],
   },
   {
-    label: "A quote below the bar — the light stroke",
-    marks: [{ id: "q", start: 25, end: 65, kind: "hit", quoteTier: 1 }],
+    /* **The faintest a quote is ever drawn** — light, and at the fade's floor
+       (`QUOTE_ALPHA_FLOOR`). Since 2026-09-11 a quote's brightness moves with
+       its priority as well as its weight; this is the bottom of both, and
+       "even low-priority quotes should still be clearly visible" (Greg,
+       SPIDERYARN-READING2-2W) is a claim about this specimen. */
+    label: "A low-priority quote — the light stroke, at the faintest the fade goes",
+    marks: [{ id: "q", start: 25, end: 65, kind: "hit", quoteStroke: { tier: 1, alpha: 0.7 } }],
   },
   {
-    label: "A quote above the bar — the heavy stroke, and the same three fragments",
-    marks: [{ id: "q", start: 25, end: 65, kind: "hit", quoteTier: 2 }],
+    label: "A top-priority quote — the heavy stroke at full strength, and the same three fragments",
+    marks: [{ id: "q", start: 25, end: 65, kind: "hit", quoteStroke: { tier: 2, alpha: 1 } }],
   },
   {
     label: "Two abutting quotes — the caps are inset so they stay two",
     marks: [
-      { id: "q1", start: 0, end: 19, kind: "hit", quoteTier: 2 },
-      { id: "q2", start: 19, end: 65, kind: "hit", quoteTier: 1 },
+      { id: "q1", start: 0, end: 19, kind: "hit", quoteStroke: { tier: 2, alpha: 1 } },
+      { id: "q2", start: 19, end: 65, kind: "hit", quoteStroke: { tier: 1, alpha: 0.7 } },
     ],
   },
   {
@@ -1305,21 +1310,21 @@ export const SPECIMEN_MARKS: { label: string; marks: Mark[] }[] = [
     label: "A quote over a search hit — both channels drawn, but see the 2px step in the lower rule",
     marks: [
       { id: "h", start: 33, end: 78, kind: "hit", strength: 0.45, slot: 0 },
-      { id: "q", start: 25, end: 65, kind: "hit", quoteTier: 2 },
+      { id: "q", start: 25, end: 65, kind: "hit", quoteStroke: { tier: 2, alpha: 1 } },
     ],
   },
   {
     label: "The quote the reader pressed — a white stroke and a momentary wash",
-    marks: [{ id: "q", start: 25, end: 65, kind: "hit", quoteTier: 2, open: true }],
+    marks: [{ id: "q", start: 25, end: 65, kind: "hit", quoteStroke: { tier: 2, alpha: 1 }, open: true }],
   },
 ];
 
 /** `annotateHtml(SPECIMEN_HTML, marks)` for each of the above, in the same order. */
 export const SPECIMEN_OUT: string[] = [
   '<p>He rejects the idea that <mark class="hit" data-hit="h" data-wash="" data-hues="1" style="--hit-a:0.450;--h0:var(--cat-0-rgb)">mind is </mark><em><mark class="hit" data-hit="h" data-wash="" data-hues="1" style="--hit-a:0.450;--h0:var(--cat-0-rgb)">software</mark></em><mark class="hit" data-hit="h" data-wash="" data-hues="1" style="--hit-a:0.450;--h0:var(--cat-0-rgb)"> running</mark> on wet hardware, and says so in the first paragraph.</p>',
-  '<p>He rejects the idea that <mark class="hit" data-hit="q" data-quote="1" data-quote-start="">mind is </mark><em><mark class="hit" data-hit="q" data-quote="1">software</mark></em><mark class="hit" data-hit="q" data-quote="1" data-quote-end=""> running on wet hardware</mark>, and says so in the first paragraph.</p>',
-  '<p>He rejects the idea that <mark class="hit" data-hit="q" data-quote="2" data-quote-start="">mind is </mark><em><mark class="hit" data-hit="q" data-quote="2">software</mark></em><mark class="hit" data-hit="q" data-quote="2" data-quote-end=""> running on wet hardware</mark>, and says so in the first paragraph.</p>',
-  '<p><mark class="hit" data-hit="q1" data-quote="2" data-quote-start="" data-quote-end="">He rejects the idea</mark><mark class="hit" data-hit="q2" data-quote="1" data-quote-start=""> that mind is </mark><em><mark class="hit" data-hit="q2" data-quote="1">software</mark></em><mark class="hit" data-hit="q2" data-quote="1" data-quote-end=""> running on wet hardware</mark>, and says so in the first paragraph.</p>',
-  '<p>He rejects the idea that <mark class="hit" data-hit="q" data-quote="2" data-quote-start="">mind is </mark><em><mark class="hit" data-hit="h q" data-wash="" data-quote="2" data-hues="1" style="--hit-a:0.450;--h0:var(--cat-0-rgb)">software</mark></em><mark class="hit" data-hit="h q" data-wash="" data-quote="2" data-hues="1" style="--hit-a:0.450;--h0:var(--cat-0-rgb)" data-quote-end=""> running on wet hardware</mark><mark class="hit" data-hit="h" data-wash="" data-hues="1" style="--hit-a:0.450;--h0:var(--cat-0-rgb)">, and says so</mark> in the first paragraph.</p>',
-  '<p>He rejects the idea that <mark class="hit" data-hit="q" data-quote="2" data-quote-start="" data-hit-open="">mind is </mark><em><mark class="hit" data-hit="q" data-quote="2" data-hit-open="">software</mark></em><mark class="hit" data-hit="q" data-quote="2" data-quote-end="" data-hit-open=""> running on wet hardware</mark>, and says so in the first paragraph.</p>',
+  '<p>He rejects the idea that <mark class="hit" data-hit="q" data-quote="1" style="--quote-a:0.70" data-quote-start="">mind is </mark><em><mark class="hit" data-hit="q" data-quote="1" style="--quote-a:0.70">software</mark></em><mark class="hit" data-hit="q" data-quote="1" style="--quote-a:0.70" data-quote-end=""> running on wet hardware</mark>, and says so in the first paragraph.</p>',
+  '<p>He rejects the idea that <mark class="hit" data-hit="q" data-quote="2" style="--quote-a:1.00" data-quote-start="">mind is </mark><em><mark class="hit" data-hit="q" data-quote="2" style="--quote-a:1.00">software</mark></em><mark class="hit" data-hit="q" data-quote="2" style="--quote-a:1.00" data-quote-end=""> running on wet hardware</mark>, and says so in the first paragraph.</p>',
+  '<p><mark class="hit" data-hit="q1" data-quote="2" style="--quote-a:1.00" data-quote-start="" data-quote-end="">He rejects the idea</mark><mark class="hit" data-hit="q2" data-quote="1" style="--quote-a:0.70" data-quote-start=""> that mind is </mark><em><mark class="hit" data-hit="q2" data-quote="1" style="--quote-a:0.70">software</mark></em><mark class="hit" data-hit="q2" data-quote="1" style="--quote-a:0.70" data-quote-end=""> running on wet hardware</mark>, and says so in the first paragraph.</p>',
+  '<p>He rejects the idea that <mark class="hit" data-hit="q" data-quote="2" style="--quote-a:1.00" data-quote-start="">mind is </mark><em><mark class="hit" data-hit="h q" data-wash="" data-quote="2" data-hues="1" style="--hit-a:0.450;--quote-a:1.00;--h0:var(--cat-0-rgb)">software</mark></em><mark class="hit" data-hit="h q" data-wash="" data-quote="2" data-hues="1" style="--hit-a:0.450;--quote-a:1.00;--h0:var(--cat-0-rgb)" data-quote-end=""> running on wet hardware</mark><mark class="hit" data-hit="h" data-wash="" data-hues="1" style="--hit-a:0.450;--h0:var(--cat-0-rgb)">, and says so</mark> in the first paragraph.</p>',
+  '<p>He rejects the idea that <mark class="hit" data-hit="q" data-quote="2" style="--quote-a:1.00" data-quote-start="" data-hit-open="">mind is </mark><em><mark class="hit" data-hit="q" data-quote="2" style="--quote-a:1.00" data-hit-open="">software</mark></em><mark class="hit" data-hit="q" data-quote="2" style="--quote-a:1.00" data-quote-end="" data-hit-open=""> running on wet hardware</mark>, and says so in the first paragraph.</p>',
 ];
