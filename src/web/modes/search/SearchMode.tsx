@@ -86,7 +86,7 @@ export function SearchBand({
   onOpenHit(next: string | null): void;
 }) {
   useRenderCount("SearchBand");
-  const { runs, loaded, loadFailed, ask, retry, remove, recolour, error } = useSearch(slug);
+  const { runs, loaded, loadError, ask, retry, remove, recolour, error } = useSearch(slug);
   const { panel, setActive } = useSearchMode({
     runs,
     blocks,
@@ -103,7 +103,7 @@ export function SearchBand({
       access={{
         kind: "owner",
         loaded,
-        loadFailed,
+        loadError,
         error,
         onAsk: (criterion) => {
           /* `ask` mints the id, so `?runs=` can name the search before the

@@ -1041,7 +1041,7 @@ cannot:
 
 - [`SearchPanel`](../../src/web/SearchPanel.tsx) takes a `SearchAccess` union whose visitor arm
   carries **none of the four verbs**. There is no `onDelete` to call, rather than a disabled button.
-  The three fetch flags — `loaded`, `loadFailed`, `error` — are on the owner's arm too, because they
+  The three fetch fields — `loaded`, `loadError`, `error` — are on the owner's arm too, because they
   are facts about a request a visitor never makes.
 - `?match=` is **pinned** to `meaning` in `useSearchMode`
   ([`SearchMode.tsx`](../../src/web/modes/search/SearchMode.tsx)),

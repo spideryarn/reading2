@@ -92,11 +92,18 @@ export interface SearchApi {
    * the article that the spinner was added to stop. Found by GPT Sol reviewing
    * the equivalent fix in chat, 2026-08-27.
    *
-   * Not `error !== null`: `error` also carries a failed retry or delete, long
-   * after the list arrived, and is cleared when one succeeds. Only the effect
-   * below ever sets this.
+   * Not `error !== null`: `error` is the writes' — a failed search, retry or
+   * delete, long after the list arrived — and is cleared when one starts. This
+   * is `loadError !== null`, and only the effect below ever sets that.
    */
   loadFailed: boolean;
+  /**
+   * Why that first fetch failed — **kept until a new load**, which today means
+   * a reload or another article. It used to share `error`, so the reader's next
+   * search cleared it and they saw that search alone with nothing to say their
+   * saved ones had not loaded. Plan 260908f § A.
+   */
+  loadError: string | null;
   /** Run a new meaning-search. Returns the id it minted, so `?runs=` can name it. */
   ask(criterion: string): string;
   /** The same criterion again — for a run whose model call failed. */
@@ -104,7 +111,10 @@ export interface SearchApi {
   remove(id: string): void;
   /** Pin a saved search to a palette slot — `null` puts it back on the hash. */
   recolour(id: string, colour: number | null): void;
-  /** A failure of the *transport*, not of the model. Model failures live on the run. */
+  /**
+   * A failure of the *transport* on a write, not of the model. Model failures
+   * live on the run; the opening load's is `loadError`.
+   */
   error: string | null;
 }
 
@@ -124,7 +134,7 @@ function withChoice(run: SearchRun, colour: number | null | undefined): SearchRu
 export function useSearch(slug: string): SearchApi {
   const [runs, setRuns] = useState<SearchRun[]>([]);
   const [loaded, setLoaded] = useState(false);
-  const [loadFailed, setLoadFailed] = useState(false);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   /**
@@ -204,7 +214,7 @@ export function useSearch(slug: string): SearchApi {
        back to not-knowing, and leaving this true would show the *previous*
        article's emptiness as though it were this one's. */
     setLoaded(false);
-    setLoadFailed(false);
+    setLoadError(null);
     setFingerprint(null);
     /* With a deadline, because `loaded` is what lets the reader press Find —
        see `loaded` above and src/web/lib/opening-read.ts. */
@@ -218,8 +228,7 @@ export function useSearch(slug: string): SearchApi {
            is — there are no runs in it, and "nothing searched for yet" read off
            it is the same false claim. */
         if (body.error) {
-          setError(body.error);
-          setLoadFailed(true);
+          setLoadError(body.error);
         } else {
           setRuns(body.runs ?? []);
           /* **Guarded, and here that guard is load-bearing** — unlike in
@@ -251,8 +260,7 @@ export function useSearch(slug: string): SearchApi {
       })
       .catch((e: Error) => {
         if (!live) return;
-        setError(describeFetchFailure(e));
-        setLoadFailed(true);
+        setLoadError(describeFetchFailure(e));
         setLoaded(true);
       });
     return () => {
@@ -528,5 +536,15 @@ export function useSearch(slug: string): SearchApi {
     [runs, fingerprint],
   );
 
-  return { runs: decided, loaded, loadFailed, ask, retry, remove, recolour, error };
+  return {
+    runs: decided,
+    loaded,
+    loadFailed: loadError !== null,
+    loadError,
+    ask,
+    retry,
+    remove,
+    recolour,
+    error,
+  };
 }

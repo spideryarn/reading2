@@ -53,7 +53,7 @@ async function mount(runs: SavedSearch[] = RUNS): Promise<void> {
         access={{
           kind: "owner",
           loaded: true,
-          loadFailed: false,
+          loadError: null,
           error: null,
           onAsk: () => {},
           onRetry: () => {},

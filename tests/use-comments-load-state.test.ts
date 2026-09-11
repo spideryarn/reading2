@@ -159,7 +159,11 @@ describe("useComments, on the fetch that fills the list", () => {
     await settle();
     expect(latest?.loaded).toBe(true);
     expect(latest?.loadFailed).toBe(true);
-    expect(latest?.error).not.toBeNull();
+    /* In `loadError`, not `error`: `error` is the writes', and a write clears
+       it — which is how a failed load used to vanish behind the next comment
+       saved (plan 260908f § A). */
+    expect(latest?.loadError).toContain("network down");
+    expect(latest?.error).toBeNull();
   });
 
   /* A 200 carrying `{ error }` has no comments in it either. Reading "nothing

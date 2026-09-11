@@ -49,8 +49,15 @@ export interface CriteriaApi {
    * **Run waits for it**, for the reason given there.
    */
   loaded: boolean;
-  /** Did that first fetch fail? The half `loaded` cannot carry. */
+  /** Did that first fetch fail? The half `loaded` cannot carry. `loadError !== null`. */
   loadFailed: boolean;
+  /**
+   * Why that first fetch failed — **kept until a new load**, which today means
+   * a reload or another article. Not `error`, which a new run clears: sharing
+   * it left a referee looking at the criterion they had just run with nothing
+   * to say the earlier ones had not loaded. Plan 260908f § A.
+   */
+  loadError: string | null;
   /** Run a new criterion. Returns the id it minted, so `?crits=` can name it. */
   ask(criterion: string, config: RefereeCriterionConfig): string;
   /** The same criterion again — for one whose model call failed. */
@@ -58,7 +65,10 @@ export interface CriteriaApi {
   remove(id: string): void;
   /** Pin a criterion to a palette slot — `null` puts it back on the hash. */
   recolour(id: string, colour: number | null): void;
-  /** A failure of the *transport*. Model failures live on the row. */
+  /**
+   * A failure of the *transport* on a run, retry, delete or recolour. Model
+   * failures live on the row; the opening load's is `loadError`.
+   */
   error: string | null;
 }
 
@@ -74,7 +84,7 @@ const one = (slug: string, id: string) => `${url(slug)}/${encodeURIComponent(id)
 export function useCriteria(slug: string): CriteriaApi {
   const [rows, setRows] = useState<SavedCriterion[]>([]);
   const [loaded, setLoaded] = useState(false);
-  const [loadFailed, setLoadFailed] = useState(false);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   /**
@@ -114,7 +124,7 @@ export function useCriteria(slug: string): CriteriaApi {
     let live = true;
     setRows([]);
     setLoaded(false);
-    setLoadFailed(false);
+    setLoadError(null);
     setFingerprint(null);
     /* With a deadline, because `loaded` is what lets the referee press Run —
        see `loaded` above and src/web/lib/opening-read.ts. */
@@ -125,8 +135,7 @@ export function useCriteria(slug: string): CriteriaApi {
       .then((body) => {
         if (!live) return;
         if (body.error) {
-          setError(body.error);
-          setLoadFailed(true);
+          setLoadError(body.error);
         } else {
           setRows(body.criteria ?? []);
           /* **Unconditionally, including when the field is missing.** A reply
@@ -145,8 +154,7 @@ export function useCriteria(slug: string): CriteriaApi {
       })
       .catch((e: Error) => {
         if (!live) return;
-        setError(describeFetchFailure(e));
-        setLoadFailed(true);
+        setLoadError(describeFetchFailure(e));
         setLoaded(true);
       });
     return () => {
@@ -380,5 +388,15 @@ export function useCriteria(slug: string): CriteriaApi {
     [rows, fingerprint],
   );
 
-  return { criteria: decided, loaded, loadFailed, ask, retry, remove, recolour, error };
+  return {
+    criteria: decided,
+    loaded,
+    loadFailed: loadError !== null,
+    loadError,
+    ask,
+    retry,
+    remove,
+    recolour,
+    error,
+  };
 }

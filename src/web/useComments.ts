@@ -131,12 +131,22 @@ export interface CommentsApi {
    * nothing" the moment the request gives up — the identical false claim, one
    * beat later. GPT Sol, reviewing the first fix, 2026-08-27.
    *
-   * Not `error !== null`, which is a different question. `error` carries any
-   * transport failure, including a retry or a delete that failed long after the
-   * list arrived, and it is cleared when one succeeds. This one is about the
-   * one fetch that fills the list, and nothing else ever sets it.
+   * Not `error !== null`, which is a different question. `error` carries the
+   * writes' failures — a retry or a delete that failed long after the list
+   * arrived — and it is cleared when one starts. This one is about the one
+   * fetch that fills the list: it is `loadError !== null`, and nothing else
+   * ever sets that.
    */
   loadFailed: boolean;
+  /**
+   * Why that fetch failed — **kept until a new load**, which today means a
+   * reload or another article. It used to arrive in `error`, where the next
+   * comment saved cleared it — so the drawer showed the new comment alone with
+   * nothing to say the earlier ones had not loaded — and where it forced the
+   * drawer to hide every write failure while `loadFailed` was set, to avoid
+   * calling a failed load a failed save. Plan 260908f § A.
+   */
+  loadError: string | null;
   /* **No `ask`.** Selecting text used to create a comment and spend a model
      call on the spot; since 2026-08-26 it opens a conversation instead
      (docs/plans/260826ab-chat-as-gateway.md), so nothing creates a new explanation and
@@ -185,7 +195,10 @@ export interface CommentsApi {
    */
   deepen(id: string): void;
   remove(id: string): void;
-  /** A failure of the *transport*, not of the model. Model failures live on the comment. */
+  /**
+   * A failure of the *transport* on a write, not of the model. Model failures
+   * live on the comment; the opening load's is `loadError`.
+   */
   error: string | null;
 }
 
@@ -220,7 +233,7 @@ function markFields(mark: Mark | undefined): { criterionId?: string; valence?: n
 export function useComments(slug: string): CommentsApi {
   const [comments, setComments] = useState<ClientComment[]>([]);
   const [loaded, setLoaded] = useState(false);
-  const [loadFailed, setLoadFailed] = useState(false);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   /**
@@ -303,7 +316,7 @@ export function useComments(slug: string): CommentsApi {
     /* Both cleared alongside the comments, not left over from the last article
        — the whole point of them is that they describe *this* slug's fetch. */
     setLoaded(false);
-    setLoadFailed(false);
+    setLoadError(null);
     /* With a deadline, because `loaded` is what lets `AnnotateDialog` save —
        see `loaded` in CommentsApi and src/web/lib/opening-read.ts. */
     const read = openingRead<{ comments?: Comment[]; error?: string }>(
@@ -315,16 +328,13 @@ export function useComments(slug: string): CommentsApi {
         /* A body with an `error` in it is a failed load as much as a thrown
            one is: there are no comments in it, and drawing "nothing asked yet"
            off it is the same false claim. */
-        if (body.error) {
-          setError(body.error);
-          setLoadFailed(true);
-        } else setComments(body.comments ?? []);
+        if (body.error) setLoadError(body.error);
+        else setComments(body.comments ?? []);
         setLoaded(true);
       })
       .catch((e: Error) => {
         if (!live) return;
-        setError(describeFetchFailure(e));
-        setLoadFailed(true);
+        setLoadError(describeFetchFailure(e));
         /* `loaded` on the failure path too. Otherwise a drawer opened while the
            network is down waits for ever, spinner turning, next to an error
            message — one of them lying. See `loaded` in CommentsApi. */
@@ -785,7 +795,8 @@ export function useComments(slug: string): CommentsApi {
   return {
     comments,
     loaded,
-    loadFailed,
+    loadFailed: loadError !== null,
+    loadError,
     create,
     edit,
     place,

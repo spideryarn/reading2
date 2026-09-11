@@ -130,12 +130,13 @@ import { useSlow } from "./useSlow.js";
  * a `readOnly` boolean leaves every button in the tree with a disabled
  * attribute somebody can delete, while an absent function cannot be called.
  *
- * **The three fetch flags are on the owner's arm too**, which is the part worth
- * noticing. `loaded`, `loadFailed` and `error` are facts about a *request* —
- * `useSearch` fetching `/api/search/:slug` — and a visitor makes none: their
- * list arrived inside the page. Modelling them as props on both arms would have
- * meant the visitor band inventing `loaded={true}` every render, which is a
- * true value standing for a question nobody asked.
+ * **The three request fields are on the owner's arm too**, which is the part
+ * worth noticing. `loaded` and `loadError` describe `useSearch` fetching
+ * `/api/search/:slug`; `error` describes one of its writes. A visitor makes
+ * none of those requests: their list arrived inside the page. Modelling the
+ * fields on both arms would have meant the visitor band inventing
+ * `loaded={true}` every render, which is a true value standing for a question
+ * nobody asked.
  * docs/plans/260904c-more-modes-on-a-shared-link.md § Stage 4.
  */
 export type SearchAccess =
@@ -143,9 +144,12 @@ export type SearchAccess =
       kind: "owner";
       /** False until the first fetch has answered, either way — `SearchApi.loaded`. */
       loaded: boolean;
-      /** …and whether it answered by failing. `SearchApi.loadFailed`. */
-      loadFailed: boolean;
-      /** A transport failure. Model failures live on the run that failed. */
+      /**
+       * …and why it failed, if it did — `SearchApi.loadError`. Kept until a
+       * reload, so a search run afterwards does not wipe it.
+       */
+      loadError: string | null;
+      /** A transport failure on a write. Model failures live on the run that failed. */
       error: string | null;
       onAsk(criterion: string): void;
       onRetry(id: string): void;
@@ -250,7 +254,7 @@ export function SearchPanel({
      to take the flag as a prop each, and this is the seam where the union turns
      back into the booleans they were written against. */
   const loaded = own === null || own.loaded;
-  const loadFailed = own !== null && own.loadFailed;
+  const loadFailed = own !== null && own.loadError !== null;
   /**
    * The draft question, lifted out of `Box`.
    *
@@ -308,6 +312,9 @@ export function SearchPanel({
         />
       )}
 
+      {/* Two slots, because a search clears only the second — useSearch.ts §
+          `loadError`, plan 260908f § A. */}
+      {own?.loadError && <p className="srch-error">{own.loadError}</p>}
       {own?.error && <p className="srch-error">{own.error}</p>}
 
       {/* The saved list and the results are on screen together now, rather than
@@ -727,13 +734,12 @@ function Saved({
      claim about the article, arrived at from the other side. GPT Sol found it
      in the equivalent chat fix, 2026-08-27. The error itself is printed above
      by `srch-error`; this only refuses to make the claim. */
-  if (loadFailed && sorted.length === 0) {
-    return (
-      <div className="srch-empty">
-        <p>Couldn't load your saved searches. Reload to try again.</p>
-      </div>
-    );
-  }
+  const couldNotLoad = loadFailed && (
+    <div className="srch-empty">
+      <p>Couldn't load your saved searches. Reload to try again.</p>
+    </div>
+  );
+  if (couldNotLoad && sorted.length === 0) return couldNotLoad;
 
   if (sorted.length === 0) {
     /* **Two empty states, because the owner's is an instruction a visitor
@@ -775,6 +781,10 @@ function Saved({
 
   return (
     <div className="srch-saved-wrap">
+      {/* **Over the list too, not only in place of an empty one**: a search run
+          after a failed load is a list of one, and without this it read as the
+          whole of what the reader had saved. Plan 260908f § A. */}
+      {couldNotLoad}
       <AllBox count={sorted.length} on={on} onToggleAll={onToggleAll} />
       <ul className="srch-saved">
         {sorted.map((run) => {

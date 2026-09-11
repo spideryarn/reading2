@@ -382,20 +382,22 @@ interface Props {
     /**
      * Has the comments fetch come back, and did it work? `CommentsApi`.
      *
-     * Only the empty state needs these, and it needs both: an empty list is
-     * what this panel holds *before* the request lands, *after* it came back
-     * with nothing, and *after* it failed — and only the middle one of those is
-     * "nothing asked yet".
-     * docs/project/web-client.md § Empty is not the same as not asked yet.
+     * The empty state needs both: an empty list is what this panel holds
+     * *before* the request lands, *after* it came back with nothing, and
+     * *after* it failed — and only the middle one of those is "nothing asked
+     * yet". docs/project/web-client.md § Empty is not the same as not asked yet.
+     * A failed load is also said over a list that is not empty, because a
+     * comment saved since is not all the reader had (plan 260908f § A).
      */
     loaded: boolean;
     loadFailed: boolean;
     /**
      * **A refused write, retry or delete** — `useComments`'s `error`, and it is
      * a different fact from `loadFailed` beside it. `loadFailed` is about the
-     * one fetch that fills the list and is only ever drawn when the list is
-     * empty; this carries every *change* that did not land, including one whose
-     * row has already scrolled off the reader's screen.
+     * one fetch that fills the list and is drawn by `Questions`; this carries
+     * every *change* that did not land, including one whose row has already
+     * scrolled off the reader's screen — and, since 2026-09-11, one made after
+     * a failed load, which the load no longer shares a field with.
      *
      * **It is here because the controls bar stopped existing.** It was a chip
      * in `.controls` on the reading view until 2026-09-08 — and that bar is now
@@ -1252,21 +1254,17 @@ export function Dock({
    * button, and the `error` field's own note on `Props`. Only the owner writes,
    * so `own` is the only arm that can carry one.
    *
-   * **`loadFailed` disqualifies it, and that is not defensiveness.**
-   * `useComments` sets `error` **and** `loadFailed` together when the opening
-   * GET fails (useComments.ts § the load), so a load failure arrives here
-   * carrying a perfectly good `error` string — and the first version of this
-   * announced *"a change to your comments didn't save"* over a reader who had
-   * not changed anything, with the drawer then saying it twice, in two
-   * different voices. GPT Sol's P1 reviewing the built code.
-   *
-   * A failed load already has its own answer and does not need this one:
-   * `Questions` draws it from `loadFailed`, which is the flag that exists to
-   * separate *nothing asked yet* from *we could not find out*
-   * (docs/project/web-client.md § Empty is not the same as not asked yet). So
-   * this narrows to what its own doc-comment claims — a refused **write**.
+   * **`error` is a refused write and nothing else.** Until 2026-09-11 a failed
+   * opening GET arrived in it too, so this line dropped `error` whenever
+   * `loadFailed` was set — which kept a failed load from being announced as
+   * *"a change to your comments didn't save"* (GPT Sol's P1 on the first
+   * version), and also hid every change that really did not save after a
+   * failed load. `useComments` now keeps the load's failure in `loadError`, so
+   * the filter went: a failed load is `Questions`' to say, from `loadFailed`
+   * (docs/project/web-client.md § Empty is not the same as not asked yet), and
+   * a failed write is this one's. Plan 260908f § A.
    */
-  const commentError = own && !own.loadFailed ? own.error : null;
+  const commentError = own ? own.error : null;
 
   /**
    * The view state the bar's links carry across, so leaving the article to look
@@ -3360,23 +3358,27 @@ function Questions({
 
      Failed: the first version of this fix set `loaded` on the failure path too
      and fell straight through to the same sentence, which is the identical lie
-     one beat later. GPT Sol caught it, 2026-08-27. The transport error itself
-     is printed in the reading view's status line, which is *behind this
-     drawer's scrim* — so saying nothing here would have left the reader with a
-     denial and no way to see the reason. */
+     one beat later. GPT Sol caught it, 2026-08-27. This drawer has to say the
+     failure itself: unlike Search and Criteria, comments have no panel-level
+     load-error line. The old shared error was not a substitute — Dock suppressed
+     it whenever `loadFailed` was true, to avoid calling a failed load a failed
+     save. */
   if (comments.length === 0 && !loaded) {
     return <QuestionsLoading />;
   }
 
   /* Owner-only by construction: `loadFailed` is `false` on the visitor arm,
-     because there was no request. */
-  if (comments.length === 0 && loadFailed) {
-    return (
-      <p className="dock-empty">
-        Couldn't load your comments. Reload to try again.
-      </p>
-    );
-  }
+     because there was no request.
+
+     **Over the list too, not only in place of an empty one**: a comment saved
+     after a failed load is a list of one, and without this it read as the
+     whole of what the reader had marked. Plan 260908f § A. */
+  const couldNotLoad = loadFailed && (
+    <p className="dock-empty">
+      Couldn't load your comments. Reload to try again.
+    </p>
+  );
+  if (couldNotLoad && comments.length === 0) return couldNotLoad;
 
   if (comments.length === 0) {
     /* **Two sentences, because the second half of the owner's is an
@@ -3400,29 +3402,32 @@ function Questions({
     );
   }
   return (
-    <ol className="dock-questions">
-      {comments.map((c) => (
-        <li key={c.id}>
-          <button type="button" className="dock-question" onClick={() => onOpen(c.id)}>
-            <span className="dock-question-quote">{c.quote}</span>
-            {/* **The reader's own words beat the model's**, which is the whole
-                ordering principle of this feature — and the list read as broken
-                without it: a comment somebody had written showed only the
-                sentence it was about, so scanning the list told you where you
-                had stopped but not what you had thought. Found in the browser
-                pass, 2026-08-28.
+    <>
+      {couldNotLoad}
+      <ol className="dock-questions">
+        {comments.map((c) => (
+          <li key={c.id}>
+            <button type="button" className="dock-question" onClick={() => onOpen(c.id)}>
+              <span className="dock-question-quote">{c.quote}</span>
+              {/* **The reader's own words beat the model's**, which is the whole
+                  ordering principle of this feature — and the list read as broken
+                  without it: a comment somebody had written showed only the
+                  sentence it was about, so scanning the list told you where you
+                  had stopped but not what you had thought. Found in the browser
+                  pass, 2026-08-28.
 
-                A bare bookmark has genuinely nothing to preview, and gets no
-                line rather than an empty one — the quote is the whole of it. */}
-            {previewOf(c) && (
-              <span className={`dock-question-state ${c.status}${c.body ? " own" : ""}`}>
-                {previewOf(c)}
-              </span>
-            )}
-          </button>
-        </li>
-      ))}
-    </ol>
+                  A bare bookmark has genuinely nothing to preview, and gets no
+                  line rather than an empty one — the quote is the whole of it. */}
+              {previewOf(c) && (
+                <span className={`dock-question-state ${c.status}${c.body ? " own" : ""}`}>
+                  {previewOf(c)}
+                </span>
+              )}
+            </button>
+          </li>
+        ))}
+      </ol>
+    </>
   );
 }
 

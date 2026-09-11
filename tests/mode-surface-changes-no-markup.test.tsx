@@ -595,7 +595,7 @@ async function mountSearch(): Promise<void> {
         access: {
           kind: "owner" as const,
           loaded: true,
-          loadFailed: false,
+          loadError: null,
           error: null,
           onAsk: () => {},
           onRetry: () => {},

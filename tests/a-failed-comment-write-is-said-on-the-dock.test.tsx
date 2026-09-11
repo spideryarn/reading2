@@ -147,22 +147,33 @@ describe("a comment write that failed", () => {
   });
 
   /**
-   * **A load that failed is not a write that failed**, and `useComments` makes
-   * them arrive together: the opening GET's failure path sets `error` *and*
-   * `loadFailed` (useComments.ts § the load), so this state is reachable and is
-   * not a fixture invented to be awkward.
+   * **A load that failed is not a write that failed.** Announcing one here
+   * would tell a reader who has changed nothing that a change of theirs did not
+   * save, and then say it twice in the drawer — once in this voice and once in
+   * `Questions`', which draws its own from `loadFailed`. GPT Sol's P1 on the
+   * first built version, which did exactly that.
    *
-   * Announcing it here would tell a reader who has changed nothing that a
-   * change of theirs did not save, and then say it twice in the drawer — once
-   * in this voice and once in `Questions`', which draws its own from
-   * `loadFailed`. GPT Sol's P1 on the built code; the first version did exactly
-   * that.
+   * It used to be kept apart here, by dropping `error` whenever `loadFailed`
+   * was set, because the hook put the load's failure in `error` too. Since
+   * 2026-09-11 it keeps that in `loadError` (useComments.ts), so a failed load
+   * alone arrives as `loadFailed` with `error: null` — the state below.
    */
   it("says nothing about saving when it was the load that failed", () => {
-    paint("Couldn't reach the server.", { panel: "questions", loadFailed: true });
+    paint(null, { panel: "questions", loadFailed: true });
     expect(host.querySelector(".dock-count.failed")).toBeNull();
     expect(host.querySelector(".dock-drawer-error")).toBeNull();
     expect(commentsButton()?.getAttribute("aria-describedby")).toBeNull();
+    expect(host.textContent).toContain("Couldn't load your comments");
+  });
+
+  /* …and the filter it replaced hid a real one: a change that did not save,
+     made after the load failed. Both are true, so both are said. Plan 260908f
+     § A. */
+  it("says a failed change even after the load failed, beside the load's own sentence", () => {
+    paint(REFUSED, { panel: "questions", loadFailed: true });
+    expect(host.querySelector(".dock-count.failed")).not.toBeNull();
+    expect(host.querySelector(".dock-drawer-error")?.textContent).toBe(REFUSED);
+    expect(host.textContent).toContain("Couldn't load your comments");
   });
 
   /**

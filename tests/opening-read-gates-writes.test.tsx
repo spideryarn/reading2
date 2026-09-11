@@ -25,10 +25,13 @@
  *   Requiring A as well as B is what rejects the tempting wrong fix — dropping
  *   the opening snapshot whenever a write begins — which leaves B alone and
  *   loses every row saved before today.
- * - **After it fails**, its error is shown and the action works. The existing
- *   shared error slot is cleared when the write starts, so retaining the load
- *   warning beside later rows is wider follow-up work rather than a claim made
- *   by these cases.
+ * - **After it fails**, its error is shown and the action works — **and the
+ *   panel goes on saying the list did not load once the new row is there.**
+ *   Until the follow-up the same day, a load error and a write's error shared
+ *   one slot and the write cleared it, so the reader saw their new row alone
+ *   with nothing to say the older ones were missing. Each hook now keeps the
+ *   load's failure in `loadError`, which only a new load resets, and `error`
+ *   is the writes' alone.
  * - **After the deadline**, the action works, B is made, and then the late GET
  *   is released carrying A: B must survive it. That is the ordering the
  *   deadline has to get right — invalidate the snapshot *before* enabling
@@ -110,6 +113,8 @@ const { AnnotateDialog } = await import("../src/web/AnnotateDialog.js");
 const { NO_MARK } = await import("../src/web/PlaceOnCriterion.js");
 const { useComments } = await import("../src/web/useComments.js");
 const { OPENING_READ_DEADLINE_MS } = await import("../src/web/lib/opening-read.js");
+const { Dock } = await import("../src/web/Dock.js");
+const { EXPERIMENTAL_OFF } = await import("./helpers/experimental-fixtures.js");
 
 const SLUG = "a-paper";
 const BLOCK = "spya-k3m9qt" as BlockId;
@@ -351,6 +356,24 @@ describe("Criteria: Run waits for the opening read", () => {
     expect(host.textContent).toContain(NEW_CRITERION);
   });
 
+  it("goes on saying the list did not load after a new criterion is run", async () => {
+    const { get, posted } = criteriaServer();
+    mountCriteria();
+    await flush();
+    type(critText(), NEW_CRITERION);
+    get.release(json({ error: "The database is busy. [db-busy]" }, 503));
+    await flush();
+
+    click(critRun());
+    await flush();
+    expect(posted).toHaveLength(1);
+    expect(host.textContent).toContain(NEW_CRITERION);
+    expect(host.textContent, "the run cleared the load's error").toContain("[db-busy]");
+    expect(host.textContent, "nothing says the earlier criteria are missing").toContain(
+      "Couldn't load your criteria",
+    );
+  });
+
   it("gives up at the deadline, releases Run, and a late answer cannot erase the new row", async () => {
     fakeClock();
     honourAbort = false;
@@ -374,10 +397,10 @@ describe("Criteria: Run waits for the opening read", () => {
       NEW_CRITERION,
     );
     /* And it did not sneak the old row in either: the read was given up on,
-       so its answer has no right to commit anything at all. (The timeout's
-       sentence is gone by now, and that is not this change — a new run clears
-       the panel's transport error, as it always has after a failed load.) */
+       so its answer has no right to commit anything at all. The timeout's
+       sentence is still there, because the old rows are still not. */
     expect(host.textContent).not.toContain(OLD_CRITERION);
+    expect(host.textContent).toContain("[rd-timeout]");
   });
 
   it("holds under StrictMode too", async () => {
@@ -496,6 +519,24 @@ describe("Search: Find waits for the opening read", () => {
     expect(host.textContent).toContain(NEW_QUESTION);
   });
 
+  it("goes on saying the list did not load after a new search is run", async () => {
+    const { get, posted } = searchServer();
+    mountSearch();
+    await flush();
+    type(searchBox(), NEW_QUESTION);
+    get.release(json({ error: "The database is busy. [db-busy]" }, 503));
+    await flush();
+
+    click(findButton());
+    await flush();
+    expect(posted).toHaveLength(1);
+    expect(host.textContent).toContain(NEW_QUESTION);
+    expect(host.textContent, "the search cleared the load's error").toContain("[db-busy]");
+    expect(host.textContent, "nothing says the earlier searches are missing").toContain(
+      "Couldn't load your saved searches",
+    );
+  });
+
   it("gives up at the deadline, releases Find, and a late answer cannot erase the new run", async () => {
     fakeClock();
     honourAbort = false;
@@ -518,6 +559,7 @@ describe("Search: Find waits for the opening read", () => {
       NEW_QUESTION,
     );
     expect(host.textContent, "the abandoned read committed after all").not.toContain(OLD_QUESTION);
+    expect(host.textContent).toContain("[rd-timeout]");
   });
 
   it("holds under StrictMode too", async () => {
@@ -590,6 +632,7 @@ function CommentsHarness() {
       { className: "listed" },
       comments.comments.map((c) => createElement("li", { key: c.id }, c.body ?? c.quote)),
     ),
+    comments.loadError && createElement("p", { className: "listed-error" }, comments.loadError),
     comments.error && createElement("p", { className: "listed-error" }, comments.error),
     open &&
       createElement(AnnotateDialog, {
@@ -614,6 +657,63 @@ function CommentsHarness() {
 
 function mountComments(): void {
   render(createElement(CommentsHarness));
+}
+
+/** The hook the drawer case is driving, so it can make a second write. */
+let drawerApi: ReturnType<typeof useComments> | undefined;
+
+/**
+ * The same hook and dialog, with the **real Dock drawer** as the list — joined
+ * as `Reader` joins them (`drawer={{ loaded, loadFailed, error, … }}`), because
+ * the drawer is where a reader learns both that the list did not load and that
+ * a change did not save, and `CommentsHarness` above prints the hook's fields
+ * rather than the app's sentences.
+ */
+function DrawerHarness() {
+  const comments = useComments(SLUG);
+  drawerApi = comments;
+  const [open, setOpen] = useState(true);
+  const [panel, setPanel] = useState<"questions" | null>(null);
+  return createElement(
+    "div",
+    null,
+    createElement(Dock, {
+      slug: SLUG,
+      view: "article" as const,
+      experimental: EXPERIMENTAL_OFF,
+      drawer: {
+        comments: comments.comments,
+        loaded: comments.loaded,
+        loadFailed: comments.loadFailed,
+        error: comments.error,
+        panel,
+        onPanel: setPanel,
+        onOpenComment: () => {},
+      },
+    }),
+    open &&
+      createElement(AnnotateDialog, {
+        anchor: ANCHOR,
+        placing: false,
+        loaded: comments.loaded,
+        onCancel: () => setOpen(false),
+        onSave: (id: string, body: string, _ask: boolean, mark: typeof NO_MARK) => {
+          setOpen(false);
+          /* Open the drawer only after the dialog closes. Keeping it open
+             underneath the dialog lets jsdom click through a scrim that a
+             reader cannot click through. */
+          setPanel("questions");
+          void comments.create({
+            id,
+            blockId: ANCHOR.blockId,
+            quote: ANCHOR.quote,
+            start: ANCHOR.start,
+            ...(body ? { body } : {}),
+            mark,
+          });
+        },
+      }),
+  );
 }
 
 const commentBox = () => must<HTMLTextAreaElement>('textarea[aria-label="Your comment on this passage"]');
@@ -675,6 +775,37 @@ describe("Comments: Save waits for the opening read", () => {
     expect(listed()).toContain(NEW_BODY);
   });
 
+  it("goes on saying the list did not load after a comment is saved, and says a failed change too", async () => {
+    const { get, posted } = commentsServer();
+    render(createElement(DrawerHarness));
+    await flush();
+    type(commentBox(), NEW_BODY);
+    get.release(json({ error: "The database is busy. [db-busy]" }, 503));
+    await flush();
+
+    click(saveButton());
+    await flush();
+    expect(posted).toHaveLength(1);
+    expect(host.querySelector(".dock-questions")?.textContent).toContain(NEW_BODY);
+    expect(host.textContent, "nothing says the earlier comments are missing").toContain(
+      "Couldn't load your comments",
+    );
+
+    /* A change that does not save, after that failed load: the drawer used to
+       drop every write error while `loadFailed` was set, because the load's
+       failure arrived in the same field. */
+    const saved = posted[0]!;
+    answer = () => Promise.resolve(json({ error: "Could not save that. [db-write]" }, 500));
+    await act(async () => {
+      await drawerApi!.edit(saved, "changed my mind");
+    });
+    await flush();
+    expect(host.querySelector(".dock-drawer-error")?.textContent, "the failed change was hidden").toContain(
+      "[db-write]",
+    );
+    expect(host.textContent).toContain("Couldn't load your comments");
+  });
+
   it("gives up at the deadline, releases Save, and a late answer cannot erase the new comment", async () => {
     fakeClock();
     honourAbort = false;
@@ -695,6 +826,7 @@ describe("Comments: Save waits for the opening read", () => {
     await flush();
     expect(listed(), "the abandoned read erased the comment saved after it").toContain(NEW_BODY);
     expect(listed(), "the abandoned read committed after all").not.toContain(OLD_BODY);
+    expect(host.textContent).toContain("[rd-timeout]");
   });
 
   it("holds under StrictMode too", async () => {

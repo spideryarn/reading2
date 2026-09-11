@@ -383,9 +383,18 @@ function CriteriaView({
         onAsk={(criterion, config) => onShow(api.ask(criterion, config))}
       />
 
+      {/* Two slots, because they are two facts: the load's failure stays until
+          a reload, and a run clears only the second. They shared one until
+          2026-09-11, so a referee's first run after a failed load left that
+          run on screen alone with nothing to say the earlier ones were
+          missing — plan 260908f § A. */}
+      {api.loadError && <p className="crit-error">{api.loadError}</p>}
       {api.error && <p className="crit-error">{api.error}</p>}
 
       {!api.loaded && <p className="gloss-quiet">Loading your criteria…</p>}
+      {api.loadFailed && (
+        <p className="gloss-quiet">Couldn't load your criteria. Reload to try again.</p>
+      )}
       {api.loaded && !api.loadFailed && api.criteria.length === 0 && (
         <p className="gloss-quiet">
           Nothing yet. Write what you have been asked to judge this paper against, and it becomes a

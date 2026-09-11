@@ -1984,9 +1984,9 @@ export function Reader({
               chrome and pushed the article down mid-read. **Not deleted** — GPT
               Sol's G3 on 260905g refused that, because `error` is not the
               drawer's `loadFailed`: that one is about the fetch that fills the
-              list and is only drawn when the list is empty, while this carries
-              every failed *change*, including one whose row has scrolled off.
-              Dock.tsx § the Comments button. */}
+              list, while this carries every failed *change*, including one
+              whose row has scrolled off. The load warning stays above a later
+              saved comment too — Dock.tsx § Questions. */}
           {/* **The tree's version sat here, in a dashed monospace chip, on every
               article.** It went on 2026-09-05 with the glossary's and the
               quotes' provenance lines, which are the same fact in the same voice

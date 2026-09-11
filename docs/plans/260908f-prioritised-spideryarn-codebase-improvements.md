@@ -231,6 +231,12 @@ tests leaned on the abort; the timeout copy promised more than a timed-out read 
 Open, for Greg: after a failed or timed-out load, the first new write clears the load's error, so
 the panel shows only new rows with nothing saying older ones did not load — true before this
 change for failed loads too, and separating load from action errors is its own small stage.
+**Follow-up built 2026-09-11** (Overseer, under Greg's "use your judgment"): each hook keeps the
+load's failure in `loadError` (`loadFailed` = `loadError !== null`, reset only by a new load) and
+`error` is writes-only; Search, Criteria and the Comments drawer say "Couldn't load your …" above a
+non-empty list too, and Dock no longer hides write errors after a failed load. One red case per
+surface in `tests/opening-read-gates-writes.test.tsx`, five mutations red, Sol review (two P2s
+fixed, no P0/P1), Playwright pass at 1280/400 with the GETs failed; reload stays the recovery.
 
 - [x] Write one mounted-UI red witness per surface: hold the opening GET containing old row A,
   type the input, and show that today's enabled action can create/complete B before GET A erases it.

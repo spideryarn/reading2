@@ -536,7 +536,8 @@ spells it three ways and all three are fine:
   third value — `useShelf`, `useProfile`, `useAdminUsers`,
   [`ProfilePage.tsx`](../../src/web/ProfilePage.tsx)'s two local fetches;
 - a pair of booleans, `loaded` and `loadFailed` — [`useChat`](../../src/web/useChat.ts),
-  [`useSearch`](../../src/web/useSearch.ts), [`useComments`](../../src/web/useComments.ts).
+  [`useSearch`](../../src/web/useSearch.ts), [`useCriteria`](../../src/web/useCriteria.ts),
+  [`useComments`](../../src/web/useComments.ts).
 
 **In the pair, `loaded` means *we have asked*, not *it worked*.** It is set on
 the failure path on purpose, so a reader whose server is down can still open a
@@ -546,13 +547,24 @@ never resolves. That is exactly why `loadFailed` has to exist beside it: with
 beat later. Both fixes were needed and the second was missed the first time
 round — GPT Sol found it, 2026-08-27.
 
-**`loadFailed` is not `error !== null`.** `error` in these hooks carries any
-transport failure — a retry, a delete, an answer that would not start — long
-after the list arrived, and the three hooks do not even agree about when it goes
+**`loadFailed` is not `error !== null`.** `error` carries the failures of the
+writes — a retry, a delete, an answer that would not start — long after the
+list arrived (in `useChat` it carries the load's failure too; in the other three
+that is `loadError`, below), and the hooks do not even agree about when it goes
 away (`useComments` and `useSearch` clear it when a retry *starts*; `useChat`
 never clears it at all). `loadFailed` is about the one fetch that fills the list,
 and only the mount effect sets or clears it. A body that comes back
 `200 { error }` counts as a failed load too: there are no rows in it.
+
+**And the load's failure is not in `error` either.** `useSearch`, `useCriteria`
+and `useComments` keep it in `loadError` (`loadFailed` is `loadError !== null`),
+which only a new load clears. It shared `error` until 2026-09-11, so the first
+row the reader added after a failed load cleared it, and the panel showed that
+row alone with nothing to say the earlier ones had not loaded; the Dock, for its
+part, dropped every write error while `loadFailed` was set, to avoid calling a
+failed load a failed save. Each panel now says *couldn't load your …* over a
+list that is not empty as well as in place of an empty one, and the write
+errors beside it — plan 260908f § A.
 
 **Guard the result with a per-run flag, not with the slug.** `React.StrictMode`
 mounts, unmounts and mounts again, so two fetches for the *same* article are in
