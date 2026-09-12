@@ -698,3 +698,21 @@ citations-sol-review, whose scope it is. Session closed.
 Citations and the quotes-diversity change) from Vercel's deploy list, on dev at 803b9198; Sol
 corrected 9 of 24 items and asked two regroups, applied. The public `/changelog` shows them after
 the next deploy.
+
+## 2026-09-12 10:15 UTC — Citations mode's owed review is paid; one product default, one proposal
+
+The review ran on Sol itself: one P0 (the *Find it on the web* button was a billed web search with
+no rate limit, so one row could be pressed and billed forever), fixed with the existing per-owner
+limiter and one small migration that rides the next deploy with the other three; one P1 (the 80-work
+cap ran before duplicates were merged), fixed; and the `models.test.ts` red on dev, fixed. All at
+f391929b and 26413e70; worktree removed; session closed.
+
+**Assumption pending Greg (F12).** A review page whose title repeats a work's title could be kept
+as the work's own page if the model picks it against its instructions. Sol's fix (keep only DOI or
+arXiv results) would drop publisher pages, author copies and PDFs. Default taken: **leave it as
+built for v1**, since the row already shows the host; the plan sets out the three options.
+
+**Queued.** F14 (a late Find can overwrite a DOI on screen until reload; the one-line fix needs a
+test first) as qi-jd6xwmme, XS. And the finding outside the stage, **the glossary's ask and lookup
+routes have no rate limit at all**, as qi-rnythcwm — a defence, so it is a proposal for Greg
+rather than a job I dispatch; the fix is the same limiter Citations now uses.
