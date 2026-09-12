@@ -703,8 +703,9 @@ function looksLikeBranch(branch: string): boolean {
  * Step 2 is `worktree:sweep -- remove`, which re-runs every guard including a
  * fresh fetch, so a verdict from ten minutes ago cannot cascade. Two of its
  * refusals are worth knowing before somebody reports them as bugs: it will not
- * remove a worktree touched in the last 24 hours however merged it looks, and
- * it will not remove one whose branch is not an ancestor of `origin/dev`.
+ * remove a worktree whose session is still alive, that a process is running in,
+ * or whose liveness could not be checked, however merged it looks; and it will
+ * not remove one whose branch is not an ancestor of `origin/dev`.
  * **A refusal from either step is the system working**, not a failure to route
  * around.
  */
