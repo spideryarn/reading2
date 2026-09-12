@@ -198,9 +198,13 @@ arc's own POST pokes, and a mount wake would add a request per later quiet mount
 ## Deferred, named
 
 - **The external-link hover card's subscription** (Sol F3). On touch, a card stays open after the
-  first tap, and while it is open its `useJobs()` holds the idle cadence. Quiet until an add is
-  actually sending or queued is a two-line change in `ProseHoverCard.tsx`, but it changes the card's
-  state logic and the card is not what the report was about.
+  first tap, and while it is open its `useJobs("watches-queue")` holds the idle cadence. Sol's
+  stage-2 review found the cheaper fix: it can probably be `"quiet"` **throughout**, not merely
+  until an add is pending. Before a press the card has no job id to find in another tab's queue
+  anyway; a press makes `queue.add()` leave a reconciliation obligation, and the job it creates is
+  busy, which polls every second whoever is subscribed. It is a one-word change, but it changes
+  behaviour the stages here promised to keep, so it wants its own red test first — a card left open
+  at rest polls nothing, and an add pressed from it still reaches done.
 - **Confirmation on the device.** Nothing here proves the iPad's battery. The check is Greg's and
   takes a minute: open an article with `?perf=1` added, leave it on screen for a minute, and run
   `__perf.report()` in the Web Inspector (Safari on a Mac, *Develop → iPad*) — `topFetches` should
@@ -273,10 +277,12 @@ arc's own POST pokes, and a mount wake would add a request per later quiet mount
 - 2026-09-12 — **stage 2 built.** `QueueCadence = "watches-queue" | "quiet"`, a required first
   argument to `useJobs` and a required fourth to `useStepJob`, mapped to the engine's two stable
   subscribe methods through an exhaustive `switch` with a `never` arm. All sixteen call sites checked
-  by hand against the source, not the diff's list: fifteen watch the queue (the shelf, the add page,
-  the hover card's add-to-shelf, the Metadata rerun rows, `Tweets`, and every mode band's hook,
-  including the merged `useCitations`), and `useArc` alone is quiet — so no caller's behaviour
-  changed. `tests/queue-cadence-is-a-required-choice.test.ts` holds it at the type level: four
+  by hand against the source, not the diff's list: of the fifteen external callers, fourteen watch
+  the queue (the shelf, the add page, the hover card's add-to-shelf, the Metadata rerun rows,
+  `Tweets`, and every mode band's hook, including the merged `useCitations`), and `useArc` alone is
+  quiet — so no caller's behaviour changed. The sixteenth source occurrence is `useStepJob`'s
+  forwarding call to `useJobs`; it carries the caller's choice rather than making one of its own.
+  `tests/queue-cadence-is-a-required-choice.test.ts` holds the contract at the type level: four
   `@ts-expect-error` calls, which fail the typecheck as unused the moment the argument becomes
   optional. Mutation, run by the builder: a default of `"watches-queue"` turned the tests-project
   typecheck red on exactly those lines. The postmortem's long-term section now says done, and why
@@ -298,6 +304,23 @@ arc's own POST pokes, and a mount wake would add a request per later quiet mount
   the fleet tests red before this stage for the environment (no `tools/fleet/web/dist`, and
   `process.exit(2)` in the `server.ts` wiring case). `models.test.ts`, red on the stage-1 run, is
   green since the merge of `dev`. The four rewritten mocks pass inside the full run as well.
+- 2026-09-12 — stage 2 committed, `b9a0b71d`. Its message says "fifteen watch the queue"; the right
+  count is the one above — fourteen of fifteen external callers watch — corrected here rather than by
+  rewriting the commit.
+- 2026-09-12 — **stage 2 code review, GPT Sol, round 1**, write-capable
+  ([260912a-ipad-battery-drain-stage2-code-review-sol.md](260912a-ipad-battery-drain-stage2-code-review-sol.md)).
+  Exit 0, answer present; its one "could not start" line is about the sandbox refusing `npm test` its
+  Postgres port, not a nested-process fallback, so this was an independent review. **Accepted, no P0
+  or P1.** Sol found every caller independently, re-ran the mutation on *both* hooks (each default
+  turned the typecheck red), and confirmed `useSyncExternalStore` keeps a stable subscribe per choice.
+
+  | ID | Finding | Disposition |
+  |---|---|---|
+  | F13 | P3: the log counted fifteen watchers; it is fourteen of fifteen external callers, the sixteenth hit being `useStepJob`'s forwarding call | Fixed by Sol, in the entry above |
+
+  And on my question about the hover card (F3): watching is right for this stage, whose rule is no
+  behaviour change — but the follow-up is cheaper than "quiet until an add is pending". See
+  § Deferred, named.
 - 2026-09-12 — **the mutation, re-run by me rather than taken from the builder's report**:
   `cadence: QueueCadence = "watches-queue"` in `useJobs` turns `npm run typecheck` to exit 1, on
   `tests/queue-cadence-is-a-required-choice.test.ts` line 27 (an unused `@ts-expect-error` — `jobs()`
