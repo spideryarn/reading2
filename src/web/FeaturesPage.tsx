@@ -101,11 +101,15 @@ export function FeaturesPage({ signedIn }: { signedIn: boolean }) {
           nearby sections — a semantic fisheye lens.
         </Showcase>
         {/* Greg, 2026-08-24, the granularity-zoom brief, compressed; the last
-            sentence is docs/project/vision.md § Principles 1. */}
+            sentence is docs/project/vision.md § Principles 1. The closing
+            clause since 2026-09-12, when Hierarchy went behind the switch
+            (docs/project/experimental-features.md): without it this caption
+            sends a new reader looking for a button their bar does not draw. */}
         <Showcase shot={SHOTS.zoom} title="Zoom, in Hierarchy mode." offset under>
           The article at several levels of detail at once: scroll right for more, down to progress
           through it. Scan through quickly to get a sense of the landscape, or burrow deeply — and
-          the full text is always there beside it.
+          the full text is always there beside it. This is one of the Experimental Features;
+          signed-in readers can turn those on from the bar or their profile.
         </Showcase>
         {/* Alone rather than in a Gallery: one portrait in a three-column grid
             sits in the left third with two empty cells beside it, which reads as

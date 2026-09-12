@@ -1,8 +1,8 @@
 // @vitest-environment jsdom
 /**
  * **Some modes are only drawn for a reader who asked for them**, and which ones
- * is `BEHIND_THE_SWITCH` below. Four of them today; the membership has moved
- * three times since 2026-09-03 and the reason for each is in
+ * is `BEHIND_THE_SWITCH` below. Its membership has moved several times since
+ * 2026-09-03, and the reason for each is in
  * docs/project/experimental-features.md, which owns that argument
  * (docs/plans/260903c-gate-unpolished-modes-behind-experimental-features.md is
  * where it started).
@@ -76,6 +76,13 @@ const BEHIND_THE_SWITCH: readonly Mode[] = [
   /* 2026-09-11: a new mode on an unmeasured prompt —
      docs/project/experimental-features.md. */
   "citations",
+  /* 2026-09-12, at Greg's request (SPIDERYARN-READING2-35): Structure is the
+     structural view everybody gets, and Hierarchy's columns are for readers
+     who have asked for the extra modes. Only the Dock entry points are gated
+     — the button and the command-bar row; the tree it draws is the one
+     Structure and Summary read, and `?mode=hierarchy` still opens it.
+     docs/project/experimental-features.md. */
+  "hierarchy",
   /* Structure was here from 2026-09-07 to 2026-09-10, hidden while Greg
      compared it with Hierarchy and Outline. It came out when it took Outline's
      list as its narrow face and Outline left the bar: Outline was on every

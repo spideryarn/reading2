@@ -426,10 +426,13 @@ describe("the keyboard contract", () => {
     const onMode = vi.fn();
     reading({ onMode });
     openBar();
-    type("toc");
-    expect(listed()).toEqual([MODE_LABEL.hierarchy]);
+    /* Structure rather than Hierarchy since 2026-09-12, when Hierarchy went
+       behind the experimental switch and out of this default bar: the test is
+       about the keyboard, so it wants a mode every reader is offered. */
+    type("structure");
+    expect(listed()).toEqual([MODE_LABEL.structure]);
     press("Enter");
-    expect(onMode).toHaveBeenCalledWith("hierarchy");
+    expect(onMode).toHaveBeenCalledWith("structure");
     expect(dialog().open).toBe(false);
     /* The draft does not survive a close — 260906h § Deliberately deferred. */
     openBar();
@@ -440,9 +443,9 @@ describe("the keyboard contract", () => {
     const onMode = vi.fn();
     reading({ onMode });
     openBar();
-    type("toc");
+    type("structure");
     act(() => rows()[0]?.click());
-    expect(onMode).toHaveBeenCalledWith("hierarchy");
+    expect(onMode).toHaveBeenCalledWith("structure");
     expect(dialog().open).toBe(false);
   });
 });
@@ -950,7 +953,10 @@ describe("the changelog command", () => {
   it("leaves the address alone when a mode row is taken", () => {
     reading({ onMode: () => {} });
     openBar();
-    type("toc");
+    /* An always-visible mode: Hierarchy's `toc` alias is absent from the
+       default bar now, and would make this pass without taking any row. */
+    type("structure");
+    expect(listed()).toEqual([MODE_LABEL.structure]);
     press("Enter");
     expect(wentTo()).toBeNull();
   });
