@@ -1457,7 +1457,7 @@ async function createFree(slug: string, body: unknown): Promise<Comment> {
        stored, or with its delimited TeX as the reader saw it drawn — because a
        selection across a formula quotes its symbols. The same helper
        `checkAnchor` uses. src/quote-in-block.ts. */
-    const placed = await placeQuoteInBlock(block.text, { quote: anchor.quote, start: anchor.start });
+    const placed = await placeQuoteInBlock(block, { quote: anchor.quote, start: anchor.start });
     if (placed === "past-end") throw httpError(400, "start is past the end of that block");
     if (placed === "not-found") throw httpError(400, "quote is not in that block");
   }
@@ -3865,7 +3865,7 @@ async function checkAnchor(anchor: ChatAnchor, blocks: Block[]): Promise<void> {
      them literally rejected perfectly good selections — and accepted in the
      rendered-maths form too, because a selection across a formula quotes its
      symbols rather than its TeX. src/quote-in-block.ts. */
-  const placed = await placeQuoteInBlock(block.text, anchor);
+  const placed = await placeQuoteInBlock(block, anchor);
   if (placed === "past-end") throw httpError(400, "anchor.start is past the end of that block");
   if (placed === "not-found") throw httpError(400, "anchor.quote is not in that block");
 }

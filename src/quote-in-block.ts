@@ -16,12 +16,12 @@
  * The source form first, and it is the whole of the check for every block
  * without a delimited span, so every other article behaves exactly as it did.
  * Only when that fails **and** the block has a span is the rendered form
- * computed — `renderedMathsText` in src/maths-tex.ts, the same span finder,
- * the same bounded temml and the same acceptance rule the browser used, so the
- * server agrees with what the reader saw (tests/maths-parity.test.ts proves it
- * character for character). Either form is accepted deliberately: a span the
- * browser left as source — too long, refused, split across elements — is still
- * selected as its source.
+ * computed. The block's html is walked one text node at a time, with the same
+ * excluded elements as the browser; each node goes through `renderedMathsText`
+ * in src/maths-tex.ts, with the same bounded temml and acceptance rule. That
+ * per-node boundary matters: one formula can render while another whose
+ * delimiters straddle `<em>` stays source. Either whole-block form is accepted
+ * deliberately, including that mixed form.
  *
  * ## temml, only when needed
  *
@@ -41,7 +41,15 @@
  */
 
 import { log } from "./log.js";
-import { findMathSpans, renderedMathsText, temmlRenderer, type RenderTex } from "./maths-tex.js";
+import {
+  findMathSpans,
+  MATHS_SKIP_TAGS,
+  renderedMathsText,
+  temmlRenderer,
+  type RenderTex,
+} from "./maths-tex.js";
+import { jsdom } from "./jsdom-lazy.js";
+import type { Block } from "./types.js";
 
 /**
  * Collapse runs of whitespace, for comparing a selection against a block.
@@ -59,17 +67,18 @@ export const foldSpace = (t: string): string => t.replace(/\s+/g, " ").trim();
 export type QuotePlacement = "ok" | "past-end" | "not-found";
 
 /**
- * Where `anchor` stands against `blockText`.
+ * Where `anchor` stands against `block`'s source or rendered text.
  *
  * `"past-end"` is answered before `"not-found"`, which is the order both route
  * checks already reported in. `load` is injectable so a test can count whether
  * the slow path was taken.
  */
 export async function placeQuoteInBlock(
-  blockText: string,
+  block: Pick<Block, "text" | "html">,
   anchor: { quote: string; start: number },
   load: () => Promise<RenderTex> = loadTemmlOnServer,
 ): Promise<QuotePlacement> {
+  const blockText = block.text;
   const source = foldSpace(blockText);
   const quote = foldSpace(anchor.quote);
   const fitsSource = anchor.start <= blockText.length;
@@ -93,9 +102,44 @@ export async function placeQuoteInBlock(
     return fitsSource ? "not-found" : "past-end";
   }
 
-  const rendered = renderedMathsText(blockText, render);
+  const rendered = renderedBlockMathsText(block.html, render);
   if (anchor.start > Math.max(blockText.length, rendered.length)) return "past-end";
   return source.includes(quote) || foldSpace(rendered).includes(quote) ? "ok" : "not-found";
+}
+
+/** Elements whose text the browser renderer deliberately leaves as source. */
+const SKIP_MATHS_IN = new Set<string>(MATHS_SKIP_TAGS);
+
+/**
+ * `block.html` as the browser sees it after drawing eligible formulae.
+ *
+ * Parsing is confined to the already-slow path, after temml has loaded. Walking
+ * text nodes is load-bearing: the browser scans each text node separately, so
+ * a delimiter split by `<em>` stays source while another complete formula in
+ * the same block may render. Reconstructing from `block.text` cannot represent
+ * that mixed form and was both accepting unseen symbols and refusing real
+ * selections across the two formulae.
+ */
+function renderedBlockMathsText(html: string, render: RenderTex): string {
+  const root = jsdom().JSDOM.fragment(html);
+  const texts: Text[] = [];
+  const visit = (node: Node, skipped: boolean): void => {
+    const element = node.nodeType === node.ELEMENT_NODE ? (node as Element) : null;
+    /* `localName`, not `tagName`: HTML elements report uppercase tag names in
+       jsdom, while SVG and MathML report lowercase. The browser's `closest`
+       selector is namespace-agnostic here, so normalising the local name is
+       how this walk gives the same answer for all three namespaces. */
+    const nextSkipped =
+      skipped || (element !== null && SKIP_MATHS_IN.has(element.localName.toLowerCase()));
+    if (node.nodeType === node.TEXT_NODE) {
+      if (!nextSkipped) texts.push(node as Text);
+      return;
+    }
+    for (const child of node.childNodes) visit(child, nextSkipped);
+  };
+  visit(root, false);
+  for (const text of texts) text.data = renderedMathsText(text.data, render);
+  return root.textContent ?? "";
 }
 
 /** temml for the server, loaded on first use. See the header's second section. */

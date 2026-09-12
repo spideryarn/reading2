@@ -66,20 +66,19 @@
  * not an error and nothing in the console.
  */
 
-import { findMathSpans, temmlRenderer, type RenderTex } from "../maths-tex.js";
+import { findMathSpans, MATHS_SKIP_TAGS, temmlRenderer, type RenderTex } from "../maths-tex.js";
 import type { Article, Block } from "../types.js";
 import { openExternalLinksInNewTab } from "./external-links.js";
 import { sanitizeBlockHtml } from "./sanitize.js";
 
 /**
- * **The class every formula we drew carries**, and the one `rendersMaths`
- * looks for.
+ * Browser-only provenance attached to a block whose TeX this module drew.
  *
- * A publisher could write it into their own MathML. The cost of that is their
- * block's comments losing the offset as a tie-breaker, which is the safe
- * direction, so it is not reserved in the sanitiser.
+ * A symbol cannot arrive in article JSON or authored HTML. It is enumerable so
+ * `rehostImages`' object spreads carry it into both later draws, while it never
+ * serialises or alters the stored `Block` shape.
  */
-export const MATHS_CLASS = "rendered-maths";
+const RENDERED_MATHS = Symbol("spideryarn-rendered-maths");
 
 /**
  * temml's code, its stylesheet and — through the stylesheet — its font, in one
@@ -98,7 +97,7 @@ async function loadTemml(): Promise<RenderTex> {
 }
 
 /** Text inside these is never maths of ours: code, an existing formula, a script. */
-const SKIP = "code, pre, kbd, samp, math, svg, script, style, textarea";
+const SKIP = MATHS_SKIP_TAGS.join(", ");
 
 /**
  * The cheap gate before the parser, for the reason `mightNeedRehosting` gives:
@@ -165,7 +164,6 @@ function mathElement(markup: string | null, doc: Document): Element | null {
       if (ADDRESSES.has(attr.localName) || attr.name === "xlink:href") return null;
     }
   }
-  math.classList.add(MATHS_CLASS);
   return math;
 }
 
@@ -206,20 +204,17 @@ export function renderBlockMaths(html: string, render: RenderTex): string {
   return out;
 }
 
-/** A formula of ours: a `<math>` whose class list carries `MATHS_CLASS`. */
-const OURS = new RegExp(`<math\\b[^>]*\\sclass="[^"]*\\b${MATHS_CLASS}\\b`);
-
 /**
- * **Did this block's html have maths drawn into it here?** — which is to say,
+ * **Did this block have maths drawn into it here?** — which is to say,
  * is an offset recorded against its source still to be believed (F2).
  *
- * Read off the html rather than kept in a set of blocks, because a block object
- * does not survive the trip: `rehostImages` spreads a block into a new object
- * when it puts a picture in, and the html goes with it where a membership would
- * not.
+ * Read from provenance rather than a CSS class the article can forge. The
+ * symbol is copied by the same object spread `rehostImages` uses when it puts a
+ * picture in, so it reaches both draws without a side table keyed to an object
+ * that does not survive that trip.
  */
-export function rendersMaths(html: string): boolean {
-  return html.includes(MATHS_CLASS) && OURS.test(html);
+export function rendersMaths(block: Block): boolean {
+  return RENDERED_MATHS in block;
 }
 
 /**
@@ -253,7 +248,11 @@ export async function renderArticleMaths(
     const rendered = renderBlockMaths(b.html, render);
     if (rendered === b.html) return b;
     changed = true;
-    return { ...b, html: openExternalLinksInNewTab(sanitizeBlockHtml(rendered)) };
+    return {
+      ...b,
+      html: openExternalLinksInNewTab(sanitizeBlockHtml(rendered)),
+      [RENDERED_MATHS]: true,
+    };
   });
   return changed ? { ...article, blocks } : article;
 }

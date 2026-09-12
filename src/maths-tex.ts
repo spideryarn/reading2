@@ -32,6 +32,19 @@ export interface MathSpan {
   display: boolean;
 }
 
+/** Element names whose text is source/code/foreign content rather than TeX of ours. */
+export const MATHS_SKIP_TAGS = [
+  "code",
+  "pre",
+  "kbd",
+  "samp",
+  "math",
+  "svg",
+  "script",
+  "style",
+  "textarea",
+] as const;
+
 /**
  * TeX → one `<math>` element's markup, or `null` for *leave the source*.
  *

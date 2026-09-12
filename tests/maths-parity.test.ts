@@ -43,7 +43,7 @@ const real = temmlRenderer(temml);
 const esc = (s: string) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 
 /** What the reader's browser shows for `text` in a paragraph, and the html it drew. */
-async function client(text: string): Promise<{ text: string; html: string }> {
+async function client(text: string): Promise<{ text: string; html: string; rendered: boolean }> {
   const article = {
     slug: "parity",
     title: "parity",
@@ -51,7 +51,7 @@ async function client(text: string): Promise<{ text: string; html: string }> {
   } as unknown as Article;
   const out = await renderArticleMaths(sanitizeArticle(article), { load: async () => real });
   const html = out.blocks[0]!.html;
-  return { html, text: renderedText(html) };
+  return { html, text: renderedText(html), rendered: rendersMaths(out.blocks[0]!) };
 }
 
 let bomb = String.raw`\def\z{xx}`;
@@ -113,7 +113,7 @@ describe("the server's acceptance rule agrees with the client's", () => {
       const span = spans[0]!;
       const markup = real(span.tex, span.display);
       const serverAccepts = markup !== null && acceptsMarkup(markup);
-      expect(serverAccepts).toBe(rendersMaths((await client(text)).html));
+      expect(serverAccepts).toBe((await client(text)).rendered);
     });
   }
 

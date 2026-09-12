@@ -80,11 +80,13 @@ box the ceiling's size, not the source.
 **A selection across a formula saves** — as a comment and as a chat's anchor. The reader selects the
 formula's symbols while `block.text` holds its TeX, so both server checks accept a quote found in
 either form: the stored text first, unchanged for every block without a span, and only then the text
-with its maths drawn, computed with the same span finder, renderer and acceptance rule the reading
-view used (`src/quote-in-block.ts` § `placeQuoteInBlock`, `src/maths-tex.ts` §
-`renderedMathsText`). `tests/maths-parity.test.ts` proves the server's reading of a formula equals the
-browser's, character for character. temml is loaded on the server only when that second form is
-needed, so it is not on the API's cold start.
+with its maths drawn. The server parses `block.html` and walks the same eligible text nodes as the
+browser, then applies the shared span finder, renderer and acceptance rule to each one
+(`src/quote-in-block.ts` § `placeQuoteInBlock`, `src/maths-tex.ts` § `renderedMathsText`). This is
+per node deliberately: a complete formula may render while another whose delimiters straddle
+`<em>` stays source, and the mixed selection still saves. `tests/maths-parity.test.ts` proves the
+server's reading of a rendered formula equals the browser's, character for character. temml is
+loaded on the server only when that second form is needed, so it is not on the API's cold start.
 
 What still costs something, because a formula's symbols are shorter than its source and everything
 after it in the paragraph moves. In a block that had maths drawn into it (`src/web/maths.ts` §
@@ -92,8 +94,13 @@ after it in the paragraph moves. In a block that had maths drawn into it (`src/w
 
 - a comment whose words occur **twice** in the paragraph draws no mark, because its recorded offset
   can no longer choose between them (`src/web/annotate.ts` § `resolveMark`, `offsetTrusted`);
+- a model-backed search, idea, timeline or referee passage whose words occur **twice** falls back to
+  its whole block for the same reason. A unique occurrence is still marked exactly. Generated Quotes
+  carry no source offset and retain their existing first-occurrence rule;
 - a comment made before maths was drawn, whose words **included TeX source**, draws no mark, and so
   does a search hit or a quote whose model-quoted words include TeX from `block.text`.
 
-In both cases the mark disappears rather than landing on the wrong words, and it stays in the Dock's
-list. Only blocks that drew maths are affected.
+Glossary terms and literal search do not need this fallback: their offsets are found directly in the
+rendered text. In every ambiguous case a mark disappears or covers its block rather than landing on
+the wrong words, and the item stays in its panel. Only blocks that this render pass itself changed
+are affected; provenance is an internal symbol on the block, not a class the article can forge.

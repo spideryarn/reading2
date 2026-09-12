@@ -135,7 +135,13 @@ painted prose. What changes, **in a block that renders maths**:
   source and its symbols differ in length, so it can no longer choose between two occurrences of the
   same quote. In a rendered-maths block the offset is not trusted: one occurrence resolves, two or
   more draw no mark. A mark disappears rather than moving to the wrong words;
+- a model-backed search, idea, timeline or referee passage follows the same rule: a unique quote is
+  marked exactly, while a repeated quote falls back to its whole block. Generated Quotes have no
+  stored offset and retain their first-occurrence rule;
 - a search hit or a quote whose model-quoted words include TeX from `block.text` does not resolve.
+
+Glossary terms and literal search derive their offsets from the rendered text itself, so their
+offsets remain in the right space.
 
 All confined to blocks that render maths.
 
@@ -199,15 +205,16 @@ letters. The fix for his article is then a re-import after stage 2.
 - Undelimited TeX, and bare `$x$` — only with a real specimen in hand.
 - Maths in the side panels (quotes, ideas, glossary cards, search snippets), which show
   model-written or `block.text` strings rather than block html, and so still show TeX.
-- Normalising `block.text` against the rendered text so search hits, quotes and ambiguous comment
-  anchors resolve inside maths blocks.
+- Mapping occurrences between `block.text` and rendered text, if real ambiguous anchors justify it.
+  Stage 1 fails safe instead: comments draw no ambiguous mark and model-backed passages cover their
+  block rather than using an offset from the wrong string space.
 - Re-extracting maths-bearing PDFs already on the shelf.
 
 ## Stage 1, done means
 
 `src/web/maths.ts` + `tests/maths.test.ts` (delimiter rules red-first, including the F8 negatives;
 the sanitiser round-trip and the new-tab links kept, F3; `data-spya-*` untouched and F6's `\label`
-rejected; F5's huge `\rule` rejected; code/pre untouched; temml never loaded when nothing matched;
+rejected; F5's huge `\rule` clamped; code/pre untouched; temml never loaded when nothing matched;
 F2's two-identical-phrases regression; F10's fallback); wired in `access.ts`; the CSS; a browser
 check of a maths block — and of F11's hostile outputs — on the local dev server; the doc line.
 GPT Sol code review. `npm test`, `npm run typecheck`. Then the note, `overseer-queue done`, push.
@@ -239,3 +246,12 @@ GPT Sol code review. `npm test`, `npm run typecheck`. Then the note, `overseer-q
   caught. Browser: a comment across an inline formula and a chat across a display equation both save
   and survive a reload. Long inline formulas overflowing a phone column by a few pixels are left as
   known — temml's `wrap` works only in Firefox.
+- 2026-09-12 — stage-1 code review found three P1s. F12 made the server derive the rendered form
+  from whole-block `block.text`, although the browser renders individual eligible text nodes; it
+  could accept symbols hidden by split delimiters or foreign content and refuse the real mixed form.
+  The server now walks `block.html` with the browser's shared exclusion list. F13 let a model's
+  source-space offset choose the wrong repeated words after a long formula shrank; those resolvers
+  now require a unique rendered occurrence or fall back to the block. F14 let authored
+  `class="rendered-maths"` impersonate renderer provenance and suppress an otherwise exact repeated
+  comment/chat mark; provenance is now an internal enumerable symbol that survives rehosting's
+  block spreads but cannot arrive in article markup or JSON.

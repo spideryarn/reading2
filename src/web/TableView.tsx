@@ -259,7 +259,7 @@ function resolveAnchors(
        could otherwise move to a repeat of its words. maths.ts § What it costs a
        comment. */
     const found = resolveMark(renderedText(block.html), c, {
-      offsetTrusted: !rendersMaths(block.html),
+      offsetTrusted: !rendersMaths(block),
     });
     if (!found) continue;
     push(c.blockId, { id: c.id, ...found });
@@ -268,7 +268,7 @@ function resolveAnchors(
     const block = byId.get(t.anchor.blockId);
     if (!block) continue;
     const found = resolveMark(renderedText(block.html), t.anchor, {
-      offsetTrusted: !rendersMaths(block.html),
+      offsetTrusted: !rendersMaths(block),
     });
     if (!found) continue;
     push(t.anchor.blockId, { id: t.id, ...found, kind: "chat" });

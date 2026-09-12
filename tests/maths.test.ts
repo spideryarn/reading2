@@ -32,7 +32,6 @@ import {
   type RenderTex,
 } from "../src/maths-tex.js";
 import {
-  MATHS_CLASS,
   renderArticleMaths,
   renderBlockMaths,
   rendersMaths,
@@ -134,7 +133,7 @@ describe("findMathSpans — which text is maths", () => {
 describe("renderBlockMaths — the DOM edit", () => {
   it("replaces a span inside a <p>", () => {
     const out = renderBlockMaths(String.raw`<p>so \(x^2\) holds</p>`, FAKE);
-    expect(out).toBe(`<p>so <math class="${MATHS_CLASS}"><mi>x</mi></math> holds</p>`);
+    expect(out).toBe("<p>so <math><mi>x</mi></math> holds</p>");
   });
 
   for (const [name, html] of [
@@ -164,7 +163,7 @@ describe("renderBlockMaths — the DOM edit", () => {
       `<p id="spya-k3m9qt" data-spya-src="p1">A <strong>b</strong> ` +
       String.raw`\(x^2\)` +
       ` c <a href="/x" data-spya-was-id="n1">d</a>.</p>`;
-    const want = html.replace(String.raw`\(x^2\)`, `<math class="${MATHS_CLASS}"><mi>x</mi></math>`);
+    const want = html.replace(String.raw`\(x^2\)`, "<math><mi>x</mi></math>");
     expect(renderBlockMaths(html, FAKE)).toBe(want);
   });
 
@@ -320,10 +319,12 @@ describe("renderArticleMaths — the article, at ingress", () => {
     expect(out.blocks[1]).toBe(a.blocks[1]);
     expect(out.blocks[0]!.html).toContain("<math");
     expect(out.blocks[0]!.id).toBe("spya-aaaaaa");
-    /* What TableView reads is the html after the second sanitise, so the marker
-       F2 hangs off has to survive it. */
-    expect(rendersMaths(out.blocks[0]!.html)).toBe(true);
-    expect(rendersMaths(out.blocks[1]!.html)).toBe(false);
+    /* What TableView reads is the block after the second sanitise, so the
+       provenance F2 hangs off has to survive it. */
+    expect(rendersMaths(out.blocks[0]!)).toBe(true);
+    expect(rendersMaths(out.blocks[1]!)).toBe(false);
+    /* rehostImages rebuilds changed blocks with this shape. */
+    expect(rendersMaths({ ...out.blocks[0]!, html: out.blocks[0]!.html })).toBe(true);
   });
 
   it("a failed load is the article unchanged, and quiet", async () => {
@@ -350,24 +351,41 @@ describe("renderArticleMaths — the article, at ingress", () => {
 });
 
 describe("an offset recorded before the render is not trusted after it (F2)", () => {
-  it("draws no mark rather than moving to the second of two identical phrases", () => {
+  it("draws no mark rather than moving to the second of two identical phrases", async () => {
     const html = `<p>Consider \\[${LONG}\\] where the cat sat on the mat, and again the cat sat on the mat.</p>`;
     const before = renderedText(html);
     const anchor = { quote: "the cat sat", start: before.indexOf("the cat sat") };
 
-    const rendered = renderBlockMaths(html, real);
+    const renderedBlock = (await renderArticleMaths(articleOf(block("spya-aaaaaa", html)), {
+      load: async () => real,
+    })).blocks[0]!;
+    const rendered = renderedBlock.html;
     const after = renderedText(rendered);
     /* The hazard, demonstrated: the formula's symbols are far shorter than its
        source, so the old offset is now nearer the SECOND phrase, and the
        ordinary rule would move the mark there. */
     expect(resolveMark(after, anchor)?.start).toBe(after.lastIndexOf("the cat sat"));
 
-    expect(rendersMaths(rendered)).toBe(true);
-    expect(resolveMark(after, anchor, { offsetTrusted: !rendersMaths(rendered) })).toBeNull();
+    expect(rendersMaths(renderedBlock)).toBe(true);
+    expect(resolveMark(after, anchor, { offsetTrusted: !rendersMaths(renderedBlock) })).toBeNull();
   });
 
   it("a block with no rendered maths is not flagged, so it keeps the ordinary rule", () => {
-    expect(rendersMaths("<p>the cat sat</p>")).toBe(false);
-    expect(rendersMaths("<p><math><mi>x</mi></math></p>")).toBe(false);
+    expect(rendersMaths(block("spya-aaaaaa", "<p>the cat sat</p>"))).toBe(false);
+    expect(rendersMaths(block("spya-aaaaaa", "<p><math><mi>x</mi></math></p>"))).toBe(false);
+  });
+
+  it("does not let an article forge the marker that makes offsets untrusted", () => {
+    const forged = block(
+      "spya-aaaaaa",
+      '<p><math class="rendered-maths"><mi>x</mi></math> first; first</p>',
+    );
+    const text = "x first; first";
+    const anchor = { quote: "first", start: text.lastIndexOf("first") };
+    expect(rendersMaths(forged)).toBe(false);
+    expect(resolveMark(text, anchor, { offsetTrusted: !rendersMaths(forged) })).toEqual({
+      start: anchor.start,
+      end: anchor.start + anchor.quote.length,
+    });
   });
 });
