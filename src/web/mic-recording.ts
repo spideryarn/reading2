@@ -145,11 +145,30 @@ export interface Attempt {
  * probe to ask and no second encoder to fall back to — which is what makes
  * proving it at runtime the design rather than a stopgap.
  */
+const AAC = "audio/mp4;codecs=mp4a.40.2";
 const ATTEMPTS: Attempt[] = [
-  { type: "audio/mp4;codecs=mp4a.40.2" },
+  { type: AAC },
   { type: "audio/webm;codecs=opus", audioBitsPerSecond: 32_000 },
   { type: "audio/webm", audioBitsPerSecond: 32_000 },
 ];
+/**
+ * **The hint AAC gets on WebKit, and only there** — see {@link takesAacBitrate}.
+ *
+ * WebKit records at **192 kbps** when a page gives no `audioBitsPerSecond`
+ * (`LargeAudioBitRate` in its `MediaRecorderPrivate.cpp`, read 2026-09-12), so
+ * the "no hint" above — right for Chromium, whose encoder throws on one — made
+ * every iPad dictation ~24 KB/s, several times what speech needs. On a weak
+ * connection that was most of the wait: 41 seconds of speech at that size took
+ * 10.8 s to upload at 1 Mbps, against ~2 s to transcribe
+ * (docs/plans/260912b-dictation-slow-on-weak-wifi.md).
+ *
+ * 48k rather than 32k because **a value Core Audio refuses does not fail** — it
+ * falls back to 192k in silence — and 48k is the more ordinary rate for AAC-LC.
+ * Whether it was taken is visible only in production: the `dictation
+ * transcribed` log line carries `kbps`, from the provider's own measure of the
+ * audio's length.
+ */
+const WEBKIT_AAC_BPS = 48_000;
 /** A chunk a second, so a stop mid-second still has the second before it. */
 const TIMESLICE_MS = 1000;
 /**
@@ -179,10 +198,15 @@ const MAX_MS = 5 * 60_000;
  * in [src/transcribe.ts](../transcribe.ts) is 3 MB of base64, so this is the
  * raw-byte figure that fits inside it with room for the JSON around it.
  *
- * Deliberately the *lower* of the two guards: at the measured AAC rate of
+ * Deliberately the *lower* of the two guards: at Chrome's measured AAC rate of
  * ~14 KB/s this bites at about two and a half minutes, well before `MAX_MS`.
  * That is the point — the cap that fires should be the one whose consequences
  * are understood, not whichever the encoder's bitrate happens to reach first.
+ *
+ * **On an iPad it bit at about 87 seconds** until 2026-09-12, because WebKit
+ * recorded at 192 kbps (~24 KB/s) with no hint — which nobody had worked out,
+ * because every rate here was measured in Chrome. With
+ * {@link WEBKIT_AAC_BPS} it records at ~6 KB/s and `MAX_MS` fires first.
  */
 const MAX_BYTES = 2_100_000;
 /**
@@ -204,8 +228,30 @@ const FLUSH_TIMEOUT_MS = 3000;
  */
 export function supportedAttempts(
   supported: (type: string) => boolean = isSupported,
+  webkit: boolean = takesAacBitrate(),
 ): Attempt[] {
-  return ATTEMPTS.filter((a) => supported(a.type));
+  return ATTEMPTS.filter((a) => supported(a.type)).map((a) =>
+    webkit && a.type === AAC ? { ...a, audioBitsPerSecond: WEBKIT_AAC_BPS } : a,
+  );
+}
+
+/**
+ * **Whether this page's AAC encoder is WebKit's**, which takes a bitrate hint —
+ * and Chromium's, which throws on one, is not.
+ *
+ * `navigator.vendor` is `"Apple Computer, Inc."` in Safari and in every browser
+ * on an iPad or iPhone (they are all WebKit underneath), `"Google Inc."` in
+ * Chromium, and empty in Firefox — which never reaches the AAC attempt anyway.
+ *
+ * **A positive check, and deliberately not `useDictation`'s `probeIsSafe`.**
+ * That one asks "is this Chromium?" and is built so its mistake is harmless for
+ * the probe. Here the mistakes are the other way round: a hint sent to an
+ * encoder that throws starts the next recorder ~380 ms late and loses the
+ * reader's first word, while no hint is only what the app did before 2026-09-12.
+ * So this says yes only to the one string it recognises.
+ */
+export function takesAacBitrate(): boolean {
+  return typeof navigator !== "undefined" && navigator?.vendor === "Apple Computer, Inc.";
 }
 
 /** The best container this browser will give us, or undefined to let it choose. */

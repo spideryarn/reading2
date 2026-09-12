@@ -508,6 +508,27 @@ export async function transcribeWith(
       // might be. What these catch is a pass that stops working: audio going up
       // and nothing coming back reads as a broken microphone from the client.
       audioKb: Math.round((audio.length * 3) / 4 / 1024),
+      /* **The container, beside the size**, because together they are the only
+         view this app has of what a reader's browser actually records. An iPad
+         records at 192 kbps unless told otherwise — read from WebKit's source,
+         not measured, because nothing here can run Safari — and a size with no
+         container cannot say whether a slow dictation was an iPad's AAC or
+         somebody talking for three minutes. A closed set (`isAudioFormat`), so
+         nothing a caller wrote reaches the log.
+         docs/plans/260912b-dictation-slow-on-weak-wifi.md. */
+      format,
+      /* **The rate the browser actually recorded at**, which is the fact the
+         iPad fix rests on and the one thing nothing on the box can measure:
+         WebKit takes a bitrate hint on AAC and falls back to 192 kbps in
+         silence when Core Audio refuses it. ~48 says the hint was honoured,
+         ~192 that it was refused, ~128 that an older WebKit rounded it up.
+         Absent when the provider does not report a duration. */
+      ...(call.seconds
+        ? {
+            audioSeconds: Math.round(call.seconds * 10) / 10,
+            kbps: Math.round((audio.length * 3 * 8) / 4 / 1000 / call.seconds),
+          }
+        : {}),
       chars: cleaned.length,
       /* **Whether the stripper fired**, as a count of characters and never a
          word of it. A filler pass that quietly stopped matching would return a

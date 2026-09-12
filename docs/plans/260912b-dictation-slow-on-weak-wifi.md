@@ -192,6 +192,15 @@ sibling — so it is its own stage with its own review, and it can be dropped wi
      clamped it.
    - `dictation.md § The sizes`, and the `MAX_BYTES` comment, which says the cap "bites at about two
      and a half minutes" and is at ~87 seconds on an iPad today.
+   **Built.** `takesAacBitrate()` and `WEBKIT_AAC_BPS` in `mic-recording.ts`; `seconds` on
+   `TranscriptionCall`; `format`, `audioSeconds` and `kbps` on the log line. Red first: the three
+   WebKit tests failed before the change (`takesAacBitrate is not a function`, the hint `undefined`).
+   Mutated after: forcing `takesAacBitrate()` to `true` reds three tests including the older Chromium
+   one, and forcing `seconds` to `null` reds its test. **`usage.seconds` is real** — one dictation
+   through `scripts/spike-dictation-browser.ts` logged `"audioSeconds":9,"kbps":127` for an
+   8.8-second clip (that script asks Chrome for bare `audio/mp4` with no hint, hence 127). It looks
+   rounded to whole seconds, so `kbps` is a few per cent out on a short clip — enough to tell 48
+   from 192, which is all it is for.
 3. **The raw body** — see above; reviewed on its own.
 
 Each stage ends with GPT Sol's code review, `npm test` and `npm run typecheck`.

@@ -1882,6 +1882,18 @@ export interface TranscriptionCall {
   text: string;
   answeredBy: string | null;
   generationId: string | null;
+  /**
+   * **How long the recording was, by the provider's own measure** —
+   * `usage.seconds` — or null when the reply did not say.
+   *
+   * The server has no other way to know: the browser sends bytes, not a
+   * duration, and bytes ÷ seconds is the one number that says whether a
+   * browser recorded at the bitrate it was asked for. WebKit falls back to
+   * 192 kbps *silently* when Core Audio refuses a hint, so without this the
+   * iPad fix in docs/plans/260912b-dictation-slow-on-weak-wifi.md could stop
+   * working and nothing would say so.
+   */
+  seconds: number | null;
 }
 
 /**
@@ -2076,10 +2088,15 @@ export async function openRouterTranscription(
       outcome = "error";
       throw new ProviderRefused(response.status, text, response.headers);
     }
+    const usage = isRecord(record?.usage) ? record.usage : {};
     return {
       text: readTranscript(record),
       answeredBy: meter.answeredBy,
       generationId: meter.generationId,
+      seconds:
+        typeof usage.seconds === "number" && Number.isFinite(usage.seconds) && usage.seconds > 0
+          ? usage.seconds
+          : null,
     };
   } catch (err) {
     if (outcome === "ok")
