@@ -508,6 +508,22 @@ export const STORE_MIGRATION: Readonly<Record<string, StoreEntry>> = {
       "the stubbed model call records.",
   },
   /**
+   * **Written 2026-09-12 (fb30 stage 1b), after the witness ran**, so
+   * `static-only` for the ordinary reason the header gives. Its request harness
+   * is `chat-anchor-route.test.ts`'s and it reaches what that file reaches, by
+   * the same two doors.
+   */
+  "tests/maths-quote-route.test.ts": {
+    category: "shared-mechanism-collateral",
+    mechanisms: ["ledger-redirect", "fixture-loader"],
+    evidence: "static-only",
+    reason:
+      "A quote across a rendered formula, at both anchor checks: a comment created and a chat " +
+      "anchored on a paragraph whose `block.text` holds TeX. It seeds through " +
+      "`scratchArticleInPg` with a `mutate` that puts the formula in; what it still reaches is " +
+      "the seeder's copy step and the ledger row the stubbed model call records.",
+  },
+  /**
    * **Written 2026-09-05.** A pure prompt-wording test, and it reaches a
    * condemned module only by naming `src/converse.js` in an `import` — the same
    * shape as `help-prompt.test.ts` below and as `tree-redundant-rung.test.ts` at
@@ -2682,6 +2698,11 @@ export const TEST_LANES: Readonly<Record<string, TestLane>> = {
   "tests/link-summary-stream-lifetime.test.ts": "private-postgres",
   "tests/load-article-serialisation.test.ts": "private-postgres",
   "tests/lock-lifecycle.test.ts": "private-postgres",
+  /* New on 2026-09-12 (fb30 stage 1b). It seeds its own throwaway article with
+     a TeX paragraph through `scratchArticleInPg` and writes a comment and a
+     conversation against it; the model is stubbed. Nothing it asserts is state
+     only the shared stack has. */
+  "tests/maths-quote-route.test.ts": "private-postgres",
   "tests/migration-reconciliations.test.ts": "private-postgres",
   /* New on 2026-09-06. Nothing it asserts is about state the shared stack has:
      it seeds its own throwaway article per run and reads back one column. */

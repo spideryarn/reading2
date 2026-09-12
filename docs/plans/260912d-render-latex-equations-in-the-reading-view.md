@@ -226,3 +226,16 @@ GPT Sol code review. `npm test`, `npm run typecheck`. Then the note, `overseer-q
   the browser's default anyway; F4 showed that is false in Safari and Firefox.)
 - 2026-09-12 — GPT Sol's plan review: refused on F1 (P0, established). Stage 2 deferred with F1, F7,
   F9 as its requirements; F2–F6, F8, F10, F11 folded into stage 1. No finding overruled.
+- 2026-09-12 — stage 1b. The stage-1 browser check found that a comment or chat on a selection
+  across a formula was refused with a 400: both route checks compared the quote with `block.text`,
+  which holds the TeX, while the selection holds the symbols. Fixed rather than documented. The pure
+  half of `src/web/maths.ts` moved to `src/maths-tex.ts`, which adds `renderedMathsText` and a string
+  reading of the acceptance rule; `src/quote-in-block.ts` gives both checks one answer — the stored
+  text first, unchanged for every block without a span, then the rendered form, with temml loaded on
+  the server only in that slow path (off the cold start; the tracer still ships `temml.mjs`). The
+  offset bound in the slow path is the longer of the two forms, because a user macro can render
+  longer than its source. `tests/maths-parity.test.ts` proves server and browser agree character for
+  character over 26 cases, hostile ones included; both route tests were seen red; five mutations each
+  caught. Browser: a comment across an inline formula and a chat across a display equation both save
+  and survive a reload. Long inline formulas overflowing a phone column by a few pixels are left as
+  known — temml's `wrap` works only in Firefox.

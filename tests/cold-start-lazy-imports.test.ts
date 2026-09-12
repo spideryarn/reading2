@@ -51,6 +51,10 @@ const MUST_NOT_BE_STATIC: Record<string, string> = {
   /* 4.6 MB of WASM, needed only to draw a PDF figure that is vector art —
      docs/plans/260912a-figure-2-vector-figures-from-a-pdf.md. */
   "@embedpdf/pdfium": "`loadPdfium` in src/pdf-figure-render.ts",
+  /* The TeX renderer, needed only when a comment or chat quotes across a
+     formula in a block whose text holds TeX — the slow path of the quote
+     check. fb30 stage 1b; docs/project/maths.md. */
+  temml: "`loadTemmlOnServer` in src/quote-in-block.ts",
 };
 
 /** Every bare specifier the bundle imports at module scope. */

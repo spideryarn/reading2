@@ -22,8 +22,8 @@ the code is `src/web/maths.ts`, and its header is the detail behind every line b
 - Never inside `code`, `pre`, `kbd`, `samp`, an existing `<math>`, or an `<svg>`. `\$` is never a
   delimiter; an unclosed or empty span is prose.
 
-`src/web/maths.ts` § `findMathSpans` is the rule, and `tests/maths.test.ts` holds every negative
-case it was written against.
+`src/maths-tex.ts` § `findMathSpans` is the rule, shared by the reading view and the server, and
+`tests/maths.test.ts` holds every negative case it was written against.
 
 ## What stays as source
 
@@ -62,21 +62,38 @@ A load that fails leaves the TeX exactly as it was. The stylesheet is needed, no
 what lays display maths out as a block in Safari and Firefox. Display maths scrolls sideways inside
 its own box at phone width, like a code block ([narrow-windows.md](narrow-windows.md)).
 
+**Known: a very long *inline* formula can be a little wider than a phone-width column.** Measured at
+400px, a 60-character inline sum ran 20px past its paragraph. There is no clean fix yet. Chromium and
+Safari do not break MathML across lines — temml's own `wrap` option says in its source that its soft
+breaks work only in Firefox — and giving inline maths `inline-block` to make it scroll takes it out
+of MathML layout. Display maths, where long formulas usually are, is not affected.
+
 ## The limits on one formula
 
 A source-length ceiling, a largest dimension and a macro-expansion budget, each a named constant with
-its measurement beside it: `src/web/maths.ts` § `MAX_TEX_CHARS`, `MAX_SIZE_EM`, `MAX_EXPAND`. temml
+its measurement beside it: `src/maths-tex.ts` § `MAX_TEX_CHARS`, `MAX_SIZE_EM`, `MAX_EXPAND`. temml
 **clamps** an over-large dimension rather than refusing it, so `\rule{1000000em}{1000000em}` draws a
 box the ceiling's size, not the source.
 
-## What it costs a comment in that paragraph
+## What it means for a comment in that paragraph
 
-A formula's symbols are shorter than its source, so everything after it in the paragraph moves. In a
-block that had maths drawn into it (`src/web/maths.ts` § `rendersMaths`):
+**A selection across a formula saves** — as a comment and as a chat's anchor. The reader selects the
+formula's symbols while `block.text` holds its TeX, so both server checks accept a quote found in
+either form: the stored text first, unchanged for every block without a span, and only then the text
+with its maths drawn, computed with the same span finder, renderer and acceptance rule the reading
+view used (`src/quote-in-block.ts` § `placeQuoteInBlock`, `src/maths-tex.ts` §
+`renderedMathsText`). `tests/maths-parity.test.ts` proves the server's reading of a formula equals the
+browser's, character for character. temml is loaded on the server only when that second form is
+needed, so it is not on the API's cold start.
+
+What still costs something, because a formula's symbols are shorter than its source and everything
+after it in the paragraph moves. In a block that had maths drawn into it (`src/web/maths.ts` §
+`rendersMaths`):
 
 - a comment whose words occur **twice** in the paragraph draws no mark, because its recorded offset
   can no longer choose between them (`src/web/annotate.ts` § `resolveMark`, `offsetTrusted`);
-- a comment, search hit or quote whose words **included TeX source** draws no mark.
+- a comment made before maths was drawn, whose words **included TeX source**, draws no mark, and so
+  does a search hit or a quote whose model-quoted words include TeX from `block.text`.
 
 In both cases the mark disappears rather than landing on the wrong words, and it stays in the Dock's
 list. Only blocks that drew maths are affected.

@@ -345,6 +345,7 @@ import {
   type UploadRecord,
 } from "./upload-records.js";
 import { errorFields, log, since } from "./log.js";
+import { placeQuoteInBlock } from "./quote-in-block.js";
 import { processSingleton } from "./process-state.js";
 import { captureFailure, setMonitoringUser } from "./monitoring.js";
 import { isStepName, type StepName } from "./pipeline.js";
@@ -1452,13 +1453,13 @@ async function createFree(slug: string, body: unknown): Promise<Comment> {
   const block = article.blocks.find((b) => b.id === blockId);
   if (!block) throw httpError(400, "blockId is not a block of this article");
   if (anchor.quote !== undefined) {
-    if (anchor.start > block.text.length) throw httpError(400, "start is past the end of that block");
-    /* Folded, because `quote` came from a DOM selection and `block.text` from
-       the extractor, and the two disagree about runs of whitespace — the same
-       fold `checkAnchor` uses, for the same reason. */
-    if (!foldSpace(block.text).includes(foldSpace(anchor.quote))) {
-      throw httpError(400, "quote is not in that block");
-    }
+    /* Whitespace-folded, and accepted in either of two forms: `block.text` as
+       stored, or with its delimited TeX as the reader saw it drawn — because a
+       selection across a formula quotes its symbols. The same helper
+       `checkAnchor` uses. src/quote-in-block.ts. */
+    const placed = await placeQuoteInBlock(block.text, { quote: anchor.quote, start: anchor.start });
+    if (placed === "past-end") throw httpError(400, "start is past the end of that block");
+    if (placed === "not-found") throw httpError(400, "quote is not in that block");
   }
 
   /* After the anchor checks, so a request that is wrong about the passage does
@@ -1477,17 +1478,6 @@ async function createFree(slug: string, body: unknown): Promise<Comment> {
 
 /** A selection, not an essay. Long enough for a run-on sentence and no more. */
 const MAX_QUOTE_CHARS = 2000;
-
-/**
- * Collapse runs of whitespace, for comparing a selection against a block.
- *
- * **One of these, used by both anchor checks.** A quote comes from a DOM
- * selection and `block.text` comes from the extractor, and the two disagree
- * about runs of whitespace — see the note in src/blocks.ts. `checkAnchor` had
- * its own copy of this line; two copies of a normaliser is how a chat anchor
- * and a comment anchor end up disagreeing about the same passage.
- */
-const foldSpace = (t: string) => t.replace(/\s+/g, " ").trim();
 
 /**
  * Answer a **legacy explanation** a few words at a time, and store the answer.
@@ -2685,7 +2675,7 @@ async function streamChat(slug: string, body: unknown, res: ServerResponse): Pro
      the end of the block through, and the foreign key only catches the first of
      those. This is where the rest is caught — and it is done after
      `loadArticle` because it needs the blocks. */
-  if (wanted) checkAnchor(wanted, article.blocks);
+  if (wanted) await checkAnchor(wanted, article.blocks);
 
   /* Deciding and writing the turn happen together, under the conversation's
      turn order — see `inTurnOrder`. Everything after it is one answer streaming
@@ -3866,19 +3856,18 @@ function sameAnchor(stored: ChatAnchor | undefined, wanted: ChatAnchor): boolean
  *    that is not in the block **at all**, which is the case that means the
  *    client is anchoring to something else entirely.
  */
-function checkAnchor(anchor: ChatAnchor, blocks: Block[]): void {
+async function checkAnchor(anchor: ChatAnchor, blocks: Block[]): Promise<void> {
   const block = blocks.find((b) => b.id === anchor.blockId);
   if (!block) throw httpError(400, "anchor.blockId is not a block of this article");
   if (!("quote" in anchor)) return;
-  if (anchor.start > block.text.length) {
-    throw httpError(400, "anchor.start is past the end of that block");
-  }
   /* Whitespace-folded on both sides, because the rendered text the client
-     measured collapses runs of space that `block.text` may keep. Comparing them
-     literally rejected perfectly good selections. */
-  if (!foldSpace(block.text).includes(foldSpace(anchor.quote))) {
-    throw httpError(400, "anchor.quote is not in that block");
-  }
+     measured collapses runs of space that `block.text` may keep — comparing
+     them literally rejected perfectly good selections — and accepted in the
+     rendered-maths form too, because a selection across a formula quotes its
+     symbols rather than its TeX. src/quote-in-block.ts. */
+  const placed = await placeQuoteInBlock(block.text, anchor);
+  if (placed === "past-end") throw httpError(400, "anchor.start is past the end of that block");
+  if (placed === "not-found") throw httpError(400, "anchor.quote is not in that block");
 }
 
 /* --------------------------------------------------------------- search --

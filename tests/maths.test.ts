@@ -25,15 +25,17 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { renderedText, resolveMark } from "../src/web/annotate.js";
 import {
   findMathSpans,
-  MATHS_CLASS,
   MAX_SIZE_EM,
   MAX_SIZE_PT,
   MAX_TEX_CHARS,
+  temmlRenderer,
+  type RenderTex,
+} from "../src/maths-tex.js";
+import {
+  MATHS_CLASS,
   renderArticleMaths,
   renderBlockMaths,
   rendersMaths,
-  temmlRenderer,
-  type RenderTex,
 } from "../src/web/maths.js";
 import { sanitizeArticle, sanitizeBlockHtml } from "../src/web/sanitize.js";
 import type { Article, Block } from "../src/types.js";

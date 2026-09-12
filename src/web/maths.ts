@@ -13,6 +13,12 @@
  * reasoning and GPT Sol's review, whose findings (F2–F6, F8, F10) are cited
  * below where each one decided a line.
  *
+ * **This is the DOM half.** Which text is a formula, the limits, the options
+ * temml is called with and the string form of the acceptance rule are in
+ * src/maths-tex.ts, shared with the server — which has to agree with what this
+ * file draws, because a comment on a selection across a formula quotes its
+ * symbols (src/quote-in-block.ts).
+ *
  * ## Where it runs, and why there
  *
  * In `resolveAccess` (article/access.ts), **after** `sanitizeArticle` and
@@ -41,7 +47,7 @@
  *    `<a href>`. A fragment carrying `id`, `name`, `href` or `xlink:href`, or
  *    that is not exactly one `<math>`, is refused and its source stays.
  *    Cross-references between separately rendered spans could not work anyway;
- *  - **grow without bound** (F5) — see `MAX_SIZE_EM` and its neighbours.
+ *  - **grow without bound** (F5) — src/maths-tex.ts § `MAX_SIZE_EM`.
  *
  * ## What it costs a comment
  *
@@ -60,92 +66,10 @@
  * not an error and nothing in the console.
  */
 
-import type { Options as TemmlOptions } from "temml";
+import { findMathSpans, temmlRenderer, type RenderTex } from "../maths-tex.js";
 import type { Article, Block } from "../types.js";
 import { openExternalLinksInNewTab } from "./external-links.js";
 import { sanitizeBlockHtml } from "./sanitize.js";
-
-/** One delimited formula in a string, delimiters included in `start`–`end`. */
-export interface MathSpan {
-  start: number;
-  /** Exclusive. */
-  end: number;
-  /** The TeX between the delimiters. */
-  tex: string;
-  display: boolean;
-}
-
-/**
- * TeX → one `<math>` element's markup, or `null` for *leave the source*.
- *
- * A function passed in rather than temml called directly, so the DOM half is
- * pure and synchronous and a test can pin it without the library.
- */
-export type RenderTex = (tex: string, display: boolean) => string | null;
-
-/** The one thing used from temml, so a test can hand in the real module. */
-export interface TemmlLike {
-  renderToString(tex: string, options: TemmlOptions): string;
-}
-
-/**
- * **The longest span we will hand temml**, in characters of source.
- *
- * The longest displayed equation in the Newman et al. paper behind the report
- * is well under this; `tests/maths.test.ts` renders a 761-character six-row
- * `aligned` derivation of the same kind. 4,000 is five times that, and a span
- * longer than it is far likelier to be two formulas with a delimiter missing
- * between them than one formula. It also caps what the size limits below can
- * multiply: at about sixteen characters per `\rule{10em}{10em}`, a span can
- * draw a few hundred bounded boxes, which is what plain HTML can do with a few
- * hundred `<br>`s.
- */
-export const MAX_TEX_CHARS = 4000;
-
-/**
- * **The largest dimension a formula may write**, in em and in pt.
- *
- * temml's default is infinity, and `\rule{1000000em}{1000000em}` then becomes a
- * million-em box the policy lets through (F5). Real papers space with `\quad`
- * (1em), `\qquad` (2em), `\hspace{1cm}` (28pt) and `\vspace{2ex}`; 10em and
- * 100pt are five times the largest of those, and a 10em box is well under half
- * a phone-width column.
- *
- * **temml clamps to these rather than refusing**, so a huge `\rule` draws a
- * box of the ceiling's size, not the source. That is the bound F5 asked for;
- * refusing instead would mean second-guessing temml's arithmetic after the
- * fact, for input no real paper contains.
- */
-export const MAX_SIZE_EM = 10;
-export const MAX_SIZE_PT = 100;
-
-/**
- * **How many macro expansions one span may take.** temml's default is 1,000.
- *
- * Measured with temml 0.13.5: the 761-character `aligned` derivation above
- * needs 7, and a 291-character `pmatrix` with `\cdots` and `\vdots` needs 21 —
- * about 0.07 per character, so 400 covers a span of `MAX_TEX_CHARS` that dense
- * with room over. Below the default on purpose: nine `\def` doublings (512
- * copies) need 511 and are refused here, where the default would draw them.
- */
-export const MAX_EXPAND = 400;
-
-/**
- * Every option temml is called with.
- *
- * `throwOnError`, so a span temml cannot parse throws and stays source rather
- * than being drawn in red. `trust: false`, so `\href`, `\url`, `\style`,
- * `\class`, `\id` and `\data` throw too. `strict: false`, so nothing is written
- * to the console. `annotate` stays off: it would put the TeX source into the
- * formula's text, and so into the offset space a comment is anchored in.
- */
-const TEMML_OPTIONS = {
-  throwOnError: true,
-  trust: false,
-  strict: false,
-  maxSize: [MAX_SIZE_EM, MAX_SIZE_PT],
-  maxExpand: MAX_EXPAND,
-} satisfies TemmlOptions;
 
 /**
  * **The class every formula we drew carries**, and the one `rendersMaths`
@@ -156,104 +80,6 @@ const TEMML_OPTIONS = {
  * direction, so it is not reserved in the sanitiser.
  */
 export const MATHS_CLASS = "rendered-maths";
-
-/** A `$…$` body that is unmistakably TeX: a control word, a brace or a script. */
-const TEX_SIGNAL = /\\[A-Za-z]|[{}^_]/;
-
-/**
- * Every delimited formula in `text`, left to right, never overlapping.
- *
- * `\[…\]` and `$$…$$` are display; `\(…\)` is inline. **`$…$` is inline only
- * under pandoc's rules** — the opening `$` followed by a non-space, the first
- * unescaped `$` after it closing, preceded by a non-space and not followed by
- * a digit — **and only with a TeX signal inside** (F8). Pandoc's rules alone
- * read *"Set $x=$y"* and *"$PATH/$HOME"* as maths and temml parses both; the
- * signal is what keeps a shell variable and a price as prose, at the cost of a
- * bare `$x$` being missed on purpose.
- *
- * `\$` is never a delimiter, and a backslash escapes whatever follows it. An
- * unclosed or empty span is prose.
- */
-export function findMathSpans(text: string): MathSpan[] {
-  const spans: MathSpan[] = [];
-  let i = 0;
-  while (i < text.length) {
-    const span = spanAt(text, i);
-    if (span) {
-      spans.push(span);
-      i = span.end;
-    } else {
-      /* A backslash escapes the character after it — so `\$` is prose and the
-         `$` is not looked at again — and an unmatched `$$` is passed over whole
-         rather than re-read as a single `$`. */
-      i += text[i] === "\\" || text.startsWith("$$", i) ? 2 : 1;
-    }
-  }
-  return spans;
-}
-
-/** The span that opens at `i`, if one does. */
-function spanAt(text: string, i: number): MathSpan | null {
-  if (text[i] === "\\") {
-    const next = text[i + 1];
-    if (next !== "(" && next !== "[") return null;
-    return enclosed(text, i, next === "(" ? "\\)" : "\\]", next === "[");
-  }
-  if (text.startsWith("$$", i)) return enclosed(text, i, "$$", true);
-  if (text[i] !== "$") return null;
-  const end = closingDollar(text, i);
-  const tex = end === -1 ? "" : text.slice(i + 1, end);
-  return TEX_SIGNAL.test(tex) ? { start: i, end: end + 1, tex, display: false } : null;
-}
-
-/** A two-character opener at `i`, closed by `close`, with something in between. */
-function enclosed(text: string, i: number, close: string, display: boolean): MathSpan | null {
-  const end = text.indexOf(close, i + 2);
-  if (end === -1) return null;
-  const tex = text.slice(i + 2, end);
-  return tex.trim() === "" ? null : { start: i, end: end + close.length, tex, display };
-}
-
-/**
- * Where the `$` opened at `open` closes, by pandoc's rule, or -1.
- *
- * **The first unescaped `$` is the only candidate.** If it fails — a space
- * before it, a digit after it — there is no span, rather than a search on for
- * a later one: *"$5 and $10"* must not become a formula that swallows the
- * sentence up to some third dollar.
- */
-function closingDollar(text: string, open: number): number {
-  const first = text[open + 1];
-  if (first === undefined || /\s/.test(first)) return -1;
-  for (let j = open + 1; j < text.length; j++) {
-    if (text[j] === "\\") {
-      j++;
-      continue;
-    }
-    if (text[j] !== "$") continue;
-    const before = text[j - 1] ?? "";
-    const after = text[j + 1] ?? "";
-    return /\s/.test(before) || /[0-9]/.test(after) ? -1 : j;
-  }
-  return -1;
-}
-
-/**
- * temml, bounded. A span over `MAX_TEX_CHARS`, or one temml refuses, is `null`.
- *
- * Exported so a test can build the real renderer from a statically imported
- * temml; the reading view reaches it only through `loadTemml`.
- */
-export function temmlRenderer(temml: TemmlLike): RenderTex {
-  return (tex, display) => {
-    if (tex.length > MAX_TEX_CHARS) return null;
-    try {
-      return temml.renderToString(tex, { ...TEMML_OPTIONS, displayMode: display });
-    } catch {
-      return null;
-    }
-  };
-}
 
 /**
  * temml's code, its stylesheet and — through the stylesheet — its font, in one
@@ -322,7 +148,9 @@ const ADDRESSES = new Set(["id", "name", "href"]);
  * span keeps its source.
  *
  * Parsed in a `<template>` of the inert document, so the check reads the tree
- * the reading view will get rather than the string temml wrote.
+ * the reading view will get rather than the string temml wrote. The server
+ * reads the same rule off the string (src/maths-tex.ts § `acceptsMarkup`), and
+ * tests/maths-parity.test.ts is what says the two agree.
  */
 function mathElement(markup: string | null, doc: Document): Element | null {
   if (markup === null) return null;
