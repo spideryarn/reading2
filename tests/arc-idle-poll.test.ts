@@ -7,8 +7,9 @@
  * the tab-level engine on its eight-second idle cadence (src/web/jobEngine.ts
  * § When it polls), so from 2026-08-29 an owner's reading view asked
  * `GET /api/jobs` every eight seconds for as long as it was open, with nothing
- * running — about 480 requests an hour per tab, each one waking an iPad's
- * radio. docs/plans/260912a-ipad-battery-drain-the-reading-view-polls-the-job-queue-every-eight-seconds-at-rest.md.
+ * running — about 450 requests an hour per tab, each one the device still has
+ * to answer. What that costs an iPad was not measured; see
+ * docs/plans/260912a-ipad-battery-drain-the-reading-view-polls-the-job-queue-every-eight-seconds-at-rest.md.
  *
  * This is the hook-level half. The class guard — the whole reading view,
  * through `App` — is `an owner's reading view, left alone` in

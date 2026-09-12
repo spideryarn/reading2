@@ -251,3 +251,30 @@ arc's own POST pokes, and a mount wake would add a request per later quiet mount
     worktree), `fleet-decisions-route` and `fleet-reports-route` (`process.exit(2)` in their
     `server.ts` wiring case), `models.test.ts` (an override variable unset). Each still red when run
     alone, and none of the four imports or names anything this change touches.
+- 2026-09-12 — stage 1 committed, `44504398`.
+- 2026-09-12 — **code review, GPT Sol, round 1**, write-capable
+  ([260912a-ipad-battery-drain-code-review-sol.md](260912a-ipad-battery-drain-code-review-sol.md)).
+  Exit 0, answer present, no self-review provenance line. Its fixes were read and re-run (15 files,
+  150/150; typecheck exit 0) before committing.
+
+  | ID | Finding | Disposition |
+  |---|---|---|
+  | F8 | P1: a failed session-start poll strands a job left by a reload or another tab when every subscriber is quiet | Fixed by Sol: `start()` owes a reconciliation |
+  | F9 | P2: closing the last watching band leaves one trailing idle poll | Fixed by Sol |
+  | F10 | P1: a list poll in flight when `/advance` 401s overwrites the auth error | Fixed by Sol: `pollWasOvertaken` on both continuations |
+  | F11 | P1: the obligation was paid before `apply(jobs)` ran | Fixed by Sol: paid only after apply |
+  | F12 | P2: the default still bundles the cadence into every `useJobs()`; the guard covers Plain and Summary, not the class | **Taken as stage 2**, and it overrules the postmortem's "wait for a third quiet caller" |
+
+  Sol confirmed both trace-fixture edits are the intended effect, not a regression papered over.
+  The pattern across F1, F8, F10 and F11 is worth one sentence: **the courtesy poll was silently
+  retrying everything a failed request missed**, so declining it exposed each of those at once.
+
+## Stage 2 — every caller says whether it watches the queue (Sol F12)
+
+`useJobs` and `useStepJob` take the choice as a required argument, so the compiler refuses a caller
+that has not made it: the fourteen that watch a queue (the shelf, the add page, each mode band, the
+Metadata rerun rows, the hover card's add-to-shelf) say so, and the arc says it does not. The class
+in the postmortem — a cost bought by default by whoever forgot to decline it — then cannot recur
+silently at any call site, not only at the top of the reading view the whole-`App` guard watches.
+Chosen over flipping the default to quiet, because a quiet default would make the *opposite* mistake
+silent: a new band that forgot to ask would stop showing another tab's run and look broken.

@@ -11,7 +11,8 @@
  * ## Why the whole file exists, which is the half that was missing
  *
  * The detection was built and the pause was not, and GPT Sol's review of the
- * built code named three holes in it — each of which has a case below:
+ * built code named three holes in it, and the quiet-subscription review found
+ * the fourth — each has a case below:
  *
  *  1. `poll()` had no guard of its own. A `poke` arriving while the poll that
  *     was *about* to 401 was still in flight set `again`, and the `finally`
@@ -24,6 +25,9 @@
  *     fixed it, until the reader pressed something or reloaded.
  *  3. An action's status was dropped on the floor, so the one refusal that
  *     means "stop asking" was the one this path could not see.
+ *  4. A status poll already in flight when an advance returned 401 could land
+ *     successfully afterwards, clear the error, and leave `authFailed` true:
+ *     the same silently stopped engine through the opposite ordering.
  *
  * Everything is injected. A 401 against the real dev server is not reproducible
  * on demand, and what is being tested is the client's *reaction*, not the
@@ -49,6 +53,9 @@ let advances = 0;
 let pending: { ok: (jobs: Job[]) => void; no: (err: unknown) => void }[] = [];
 /** What the next `/advance` does. */
 let advanceRefuses = false;
+/** Hold an advance open so a status poll can overlap it. */
+let holdAdvance = false;
+let rejectAdvance: ((err: unknown) => void) | null = null;
 
 const deps: JobEngineDeps = {
   listJobs: () => {
@@ -59,6 +66,11 @@ const deps: JobEngineDeps = {
   },
   advance: async (id): Promise<Advanced> => {
     advances += 1;
+    if (holdAdvance) {
+      return await new Promise<Advanced>((_resolve, reject) => {
+        rejectAdvance = reject;
+      });
+    }
     if (advanceRefuses) throw refusal(401, EXPIRED);
     return { job: job(id, "running"), ran: null, busy: true, done: false };
   },
@@ -74,6 +86,8 @@ beforeEach(() => {
   advances = 0;
   pending = [];
   advanceRefuses = false;
+  holdAdvance = false;
+  rejectAdvance = null;
   vi.useFakeTimers();
 });
 
@@ -196,5 +210,50 @@ describe("a final 401 on anything else", () => {
 
     await settle(10 * 60_000);
     expect({ polls, advances }).toEqual({ polls: 1, advances: 1 });
+  });
+
+  it("keeps the 401 visible when an older status poll succeeds afterwards", async () => {
+    const engine = createJobEngine(deps);
+    holdAdvance = true;
+    engine.start("reader-1");
+    await settle();
+    pending.shift()?.ok([job("j1", "running")]);
+    await settle();
+    expect(advances).toBe(1);
+
+    /* Let the busy cadence start a second list request, then make the concurrent
+       driver fail first. The list began before the authentication pause and is
+       therefore not allowed to clear the sentence that explains the pause. */
+    await settle(1_000);
+    expect(polls).toBe(2);
+    rejectAdvance?.(refusal(401, EXPIRED));
+    await settle();
+    expect(engine.getSnapshot()).toMatchObject({ authFailed: true, error: EXPIRED });
+
+    pending.shift()?.ok([job("j1", "running")]);
+    await settle();
+
+    expect(engine.getSnapshot()).toMatchObject({ authFailed: true, error: EXPIRED });
+    engine.stop();
+  });
+
+  it("keeps the 401 visible when an older status poll fails afterwards", async () => {
+    const engine = createJobEngine(deps);
+    holdAdvance = true;
+    engine.start("reader-1");
+    await settle();
+    pending.shift()?.ok([job("j1", "running")]);
+    await settle();
+
+    await settle(1_000);
+    rejectAdvance?.(refusal(401, EXPIRED));
+    await settle();
+    expect(engine.getSnapshot()).toMatchObject({ authFailed: true, error: EXPIRED });
+
+    pending.shift()?.no(new Error("the older list request also failed"));
+    await settle();
+
+    expect(engine.getSnapshot()).toMatchObject({ authFailed: true, error: EXPIRED });
+    engine.stop();
   });
 });

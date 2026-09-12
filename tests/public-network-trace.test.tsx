@@ -2855,7 +2855,8 @@ describe("the same address, as the owner", () => {
  * tab-level engine polling every eight seconds (src/web/jobEngine.ts § When it
  * polls), and the reading view had one from 2026-08-29 to 2026-09-12 without
  * anybody noticing: `useArc` in `OwnedReader`, through `useStepJob`. That is
- * 480 requests an hour per open tab, each one waking an iPad's radio.
+ * about 450 requests an hour per open tab, each one the device has to answer;
+ * what that costs an iPad was not measured.
  * `ArticlePage.tsx` already said, of glossary and quotes, that a subscriber
  * mounted there *"would hold the job engine to its idle cadence for every reader
  * of every article"* — and nothing enforced it, because every test of the

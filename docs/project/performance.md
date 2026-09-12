@@ -1384,9 +1384,10 @@ the class: [the postmortem](../postmortems/260912a-a-budget-a-comment-keeps-is-s
 
 **Not done, and next if the battery still drains:** scrolling costs 55–60% of a desktop core on a
 production build, of which script is about 9%, style about 8% and layout under 1%. The remaining
-~40 points are the unattributed bucket [above](#what-is-left-and-it-is-not-script) — paint,
-compositing, hit-testing — and on an iPad that is GPU. Finding it needs a trace with paint
-rectangles; `LayerTree.layerPainted` does not fire under headless.
+~40 points are Chromium's unattributed bucket [above](#what-is-left-and-it-is-not-script) — paint,
+compositing, hit-testing — and only a device trace can say what the corresponding work costs an
+iPad's CPU or GPU. Finding it needs a trace with paint rectangles; `LayerTree.layerPainted` does
+not fire under headless.
 
 ## Where the pieces are
 

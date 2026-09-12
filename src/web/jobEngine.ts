@@ -350,15 +350,18 @@ export function createJobEngine(deps: JobEngineDeps): JobEngine {
   let again = false;
 
   /**
-   * **An action owes a successful poll**, and a failed one does not pay it.
+   * **A required reconciliation is owed until a poll succeeds.**
    *
    * Once the idle cadence became something a subscriber can decline, an
    * action's poke was the only thing that would find the job it had just made —
    * and if that one poll failed, `schedule` saw nothing busy and nobody asking
    * and armed nothing, so the job sat undriven until the reader refocused the
    * tab. A failed action counts too: a failed request does not prove the server
-   * did not commit it. Counters rather than a flag, so a poll that began before
-   * the action cannot discharge it. GPT Sol, 2026-09-12, F1.
+   * did not commit it. The session's opening poll is required for the same
+   * reason: it is what finds a durable job left by a reload or another tab, so
+   * one transient failure must not strand that job on a quiet reading view.
+   * Counters rather than a flag, so a poll that began before an action cannot
+   * discharge it. GPT Sol, 2026-09-12, F1; code review F8.
    */
   let reconciliationRequested = 0;
   let reconciliationCompleted = 0;
@@ -522,14 +525,22 @@ export function createJobEngine(deps: JobEngineDeps): JobEngine {
     }
   };
 
+  /** A list reply may belong to this session and still have been overtaken by
+   *  an authentication pause raised by a concurrent action or driver. */
+  const pollWasOvertaken = (mine: number) => mine !== generation || snapshot.authFailed;
+
   const poll = async (): Promise<void> => {
-    /* **The guard belongs here and not only at the callers.** `poke`, `wake`
+    /* **The guards belong here and around the await, not only at the callers.** `poke`, `wake`
        and `schedule` each check the pause, and it was still reachable: a poke
        that arrives while the poll that is *about* to 401 is in flight sets
        `again`, and the `finally` below then starts one more poll on the way
        out. If that one succeeded it cleared `error` and left `authFailed` true
        — an engine that has stopped and says nothing, which is the exact shape
-       docs/reusable/silent-success.md is about. GPT Sol, 2026-09-01. */
+       docs/reusable/silent-success.md is about. The second guard covers the
+       other ordering: an `/advance` can set the pause while this list request
+       is already in flight, and its later success or failure must not replace
+       the error.
+       GPT Sol, 2026-09-01; code review F10, 2026-09-12. */
     if (snapshot.authFailed) return;
     if (inFlight) {
       again = true;
@@ -540,12 +551,15 @@ export function createJobEngine(deps: JobEngineDeps): JobEngine {
     inFlight = true;
     try {
       const jobs = await deps.listJobs();
-      if (mine !== generation) return;
-      reconciliationCompleted = Math.max(reconciliationCompleted, requestedAtStart);
+      if (pollWasOvertaken(mine)) return;
       apply(jobs);
+      /* A 200 whose body cannot be applied did not reconcile anything. Mark it
+         paid only after `apply`, so its throw reaches the retry path while the
+         obligation is still live. */
+      reconciliationCompleted = Math.max(reconciliationCompleted, requestedAtStart);
       schedule(isBusy(jobs) ? BUSY_MS : IDLE_MS);
     } catch (err) {
-      if (mine !== generation) return;
+      if (pollWasOvertaken(mine)) return;
       if (statusOf(err) === 401) {
         noteAuthFailure(readable(err));
         return;
@@ -723,6 +737,19 @@ export function createJobEngine(deps: JobEngineDeps): JobEngine {
     if (wakes) wake();
     return () => {
       into.delete(onChange);
+      /* A successful idle poll may already have armed the next courtesy tick.
+         Once the last paying subscriber leaves, cancel that tick now rather
+         than charging the quiet page one trailing request. Never cancel work:
+         busy jobs and required reconciliations keep their timer. */
+      if (
+        into === subscribers &&
+        subscribers.size === 0 &&
+        !isBusy(snapshot.jobs) &&
+        !reconciliationOwed()
+      ) {
+        clearTimeout(timer);
+        timer = undefined;
+      }
       if (!awake()) {
         clearTimeout(timer);
         timer = undefined;
@@ -738,6 +765,10 @@ export function createJobEngine(deps: JobEngineDeps): JobEngine {
       sessionKey = key;
       started = true;
       listen();
+      /* The first list is not a courtesy poll: it reconciles durable work this
+         tab is responsible for driving. Keep that obligation through a
+         transient failure even when every mounted subscriber is quiet. */
+      reconciliationRequested += 1;
       void poll();
     },
     stop() {
