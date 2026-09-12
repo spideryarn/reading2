@@ -181,7 +181,25 @@ app onto it. That is a sweep across forty-odd buttons, and this report is about 
 - [x] Lint on the touched files: the same four `noDescendingSpecificity` warnings as before the
   change, at the same rules (checked by linting the pre-change file), plus the existing complexity
   warning on `ChatPanel.tsx`. None is new.
-- [ ] `npm test`, the full suite
+- [x] `npm test`, the full suite
+  - 📔 First run, in tmux: **1106 files passed, 5 failed, 1 skipped.** All five fail for the same
+    reason, a build this fresh worktree does not have, and each says so in its own error rather
+    than by inference: `cold-start-lazy-imports` and `pdf-bundle-trace` report
+    `api-dist/vercel.js is missing — run npm run build`, and `fleet-composed-access`,
+    `fleet-decisions-route` and `fleet-reports-route` report
+    `✗ no built client at …/tools/fleet/web/dist — run npm run build:fleet first`. The three fleet
+    files fail the same way run on their own, so it is not database contention. None touches the
+    composer.
+  - 📔 **Then proved:** `npm run build && npm run build:fleet` exited 0, and the five re-run
+    together passed, **5 of 5 files, 112 tests**. The build also showed the change reaches
+    production CSS: the built `main-*.css` carries `.chat-send{width:var(--control-h);…padding:0;
+    flex:none…}` and `--control-h:2.25rem`.
+- [x] See the hardened test fail: a duplicate `.chat-send` rule must turn it red
+  - 📔 A temporary `.chat-send { background: red; }` at the end of `chat-actions.css` turned
+    **three of the five cases red**, each for the right reason: `expected one rule for .chat-send,
+    found 2` twice, and the selector inventory counting 8 against the reviewed 7. Edited back out
+    by hand, the file is byte-identical to the commit (`git diff HEAD` empty), and the test is 5 of
+    5 green again.
 - [x] GPT Sol code review, which fixes what it finds
   - 📔 No P0. **P1, fixed by Sol:** a disabled Send showing the spinner kept it orange, because
     `.cmt-spinner` sets its colour on the SVG itself and so beats the grey the button passes down.
