@@ -51,6 +51,7 @@ import {
   blockIdentities,
   chatThreads,
   checkpoints,
+  citationFinds,
   comments,
   glossaryLookups,
   ingestEvents,
@@ -894,6 +895,18 @@ describe("destroying an article", () => {
           searches: 0,
           model: "test/model",
           at: now,
+        }),
+      citation_finds: () =>
+        db.insert(citationFinds).values({
+          articleId: GONE_ARTICLE,
+          entryId: mintId(),
+          ownerId: owner,
+          url: "https://example.org/a-cited-paper",
+          title: "A cited paper",
+          host: "example.org",
+          searches: 1,
+          model: "test/model",
+          foundAt: now,
         }),
       ingest_events: () =>
         db.insert(ingestEvents).values({ ownerId: owner, articleId: GONE_ARTICLE, slug: GONE_SLUG }),

@@ -329,6 +329,12 @@ The reader's own article is not in the local database.
   call — and belongs to [ai-gateway.md](../project/ai-gateway.md), not to this mode. Named for the
   owed code review.
 
+- 2026-09-12 — **stage 3's full suite found four reds its focused run did not**: the new
+  `SPIDERYARN_CITATIONS_FIND_MODEL` was in no environment door (`env-names-are-inventoried`,
+  `env-reads-are-literal`) — removed, `citations-find` has no override, like `citations`; and the new
+  table was missing from `db-schema-drift`'s pinned list and count and from `store-shelf-pg`'s
+  every-foreign-key seed. All four green after; the other reds were the fresh-worktree five.
+
 ### Owed reviews (GPT Sol held until 2026-09-15 01:23Z)
 
 | Stage | Commits | Status |

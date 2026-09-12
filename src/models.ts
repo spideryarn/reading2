@@ -1048,11 +1048,13 @@ export const MODEL_ENV_VAR: Record<Task, string | null> = {
   illustrated: null,
   quiz: null,
   citations: null,
-  /* It has one because it is on the chat wire, where every other task does,
-     and because the question somebody will ask of it — does a cheaper model
-     pick the right page as often — is answered by running the real feature
-     against another model, not by editing the tier table. */
-  "citations-find": "SPIDERYARN_CITATIONS_FIND_MODEL",
+  /* **No override**, like `citations` above. It had one in first draft,
+     `SPIDERYARN_CITATIONS_FIND_MODEL`, and nothing asked for it: a new name here
+     is a new door every environment has to account for
+     (tests/env-names-are-inventoried.test.ts), and the question it was for —
+     does a cheaper model pick the right page as often — can still be answered
+     by adding one the day somebody asks it. */
+  "citations-find": null,
   explain: "SPIDERYARN_EXPLAIN_MODEL",
   chat: "SPIDERYARN_CHAT_MODEL",
   "quiz-mark": "SPIDERYARN_QUIZ_MARK_MODEL",
