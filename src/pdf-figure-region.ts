@@ -83,6 +83,8 @@ export interface PageLayout {
    * operator list does not give us.
    */
   readonly shadings: number;
+  /** Paint whose visible bounds the layout reader could not prove. */
+  readonly unmeasuredPaint: number;
 }
 
 export interface DrawnFigureInput {
@@ -97,6 +99,8 @@ export interface DrawnFigureInput {
    * visible (src/pdf-figure-read.ts § 1). Read with pdf-lib, by the caller.
    */
   imageInResources: boolean;
+  /** Resource paint that pdf.js does not expose as paths, so ownership cannot measure it. */
+  unmeasuredPaint: boolean;
   /** `ownsBand`'s switch. Production passes nothing and gets `ADMIT_DISCONNECTED_DRAWINGS`. */
   admitDisconnected?: boolean;
 }
@@ -107,6 +111,7 @@ export type NotEligible =
   | "several-captions"
   | "image-op"
   | "image-resource"
+  | "unmeasured-paint"
   | "rotated"
   | "offset-view-box";
 
@@ -301,9 +306,9 @@ export function bandFor(
   /* 1b. And exactly one *printed* figure-caption opening, which is not the same
      claim: the marker is the transcription's reading of the page, and a caption
      it missed is still a caption whose drawing the band rule could take. Sol
-     F13. Counted over every line, upright or not — and only where the number
-     is followed by a delimiter, so "Figure 2." and "Fig. 3:" count and a body
-     line that begins "Figure 2 shows…" does not. */
+     F13. Counted over every line, upright or not, and broad enough to include
+     an unpunctuated caption; a line-start body reference is conservatively a
+     second possible caption too. */
   if (lines.filter((l) => PRINTED_CAPTION_START.test(l.text.normalize("NFKD").trim())).length !== 1) {
     return notEligible("several-captions");
   }
@@ -311,6 +316,7 @@ export function bandFor(
      an image the bitmap route declined is never handed to a second decoder. */
   if (layout.imageOps > 0) return notEligible("image-op");
   if (input.imageInResources) return notEligible("image-resource");
+  if (input.unmeasuredPaint) return notEligible("unmeasured-paint");
   /* 3. An ordinary geometry. Anything else is refused rather than reconciled
      across two coordinate engines (Sol F7); the renderer checks PDFium's page
      size against this view box as the third half of the same rule. */
@@ -324,7 +330,7 @@ export function bandFor(
   const page: Page = { width: vx1 - vx0, height: vy1 - vy0, top: vy1, bottom: vy0 };
 
   /* Paint whose extent we do not know cannot be proved to be anybody's. */
-  if (layout.shadings > 0) return notLocated("unbounded-ink");
+  if (layout.shadings > 0 || layout.unmeasuredPaint > 0) return notLocated("unbounded-ink");
   /* Rule 3, second half: a border or a watermark refuses the page. */
   if (
     layout.ink.some(
@@ -369,7 +375,12 @@ export function bandFor(
     bandInk.push(box);
   }
   const bandText = others
-    .filter((l) => l.box.y1 > captionTop + EPS_PT && l.box.y0 < ceiling - EPS_PT)
+    .filter(
+      (l) =>
+        l.box.y1 > captionTop + EPS_PT &&
+        l.box.y0 < ceiling - EPS_PT &&
+        !inFurnitureMargin(l.box, page),
+    )
     .map((l) => ({ box: l.box, label: !isProse(l) && !isCaptionLike(l) }));
 
   return {
@@ -379,7 +390,10 @@ export function bandFor(
       ink: bandInk,
       text: bandText,
     },
-    prose: others.filter((l) => isProse(l) || isCaptionLike(l)).map((l) => l.box),
+    prose: [
+      ...captionLines.map((l) => l.box),
+      ...others.filter((l) => isProse(l) || isCaptionLike(l)).map((l) => l.box),
+    ],
   };
 }
 
@@ -402,12 +416,12 @@ interface Page {
 
 /**
  * A printed figure-caption opening, as Sol's F13 asks it to be counted:
- * "Figure 3.", "Fig. 3:", "Figure 3a —" at the start of a line — the number
- * **followed by a delimiter**, which is what separates a caption from a
- * sentence about it. The three real captions this was checked against open
- * "Figure 2." (MDPI) and "Figure 1:" / "Figure 2:" (arXiv).
+ * "Figure 3.", "Fig. 3:", or an unpunctuated "Figure 3 The …" at the
+ * start of a line. This is deliberately broad: typography is not available
+ * here, so a line-start body reference is refused rather than letting a real
+ * unpunctuated second caption bypass the one-caption rule.
  */
-const PRINTED_CAPTION_START = /^(fig(ure)?\.?)\s*\d+[a-z]?\s*[.:|—–-]/i;
+const PRINTED_CAPTION_START = /^(fig(ure)?\.?)\s*\d+[a-z]?\b/i;
 /** The plan's ceiling test: any caption, figure or table, however punctuated. */
 const ANY_CAPTION_START = /^\s*(figure|fig\.?|table)\s*\d/i;
 
@@ -430,10 +444,13 @@ export interface BandContents {
 
 /** One separate drawing in the band: ink chained by touching, and the labels that touch it. */
 export interface InkComponent {
+  /** The drawing alone, before any touching text labels enlarge its extent. */
+  inkBox: PageBox;
+  /** The drawing and its touching labels, for measuring the eventual crop. */
   box: PageBox;
   ink: InkBox[];
   labels: number;
-  /** One closed axis-aligned rectangle — however many times painted — with text inside it. */
+  /** One closed rectangle — however transformed or many times painted — with text inside it. */
   boxedText: boolean;
 }
 
@@ -460,11 +477,10 @@ export type Ownership = { ok: true; region: PageBox } | { ok: false; detail: Not
  *    callout (Sol F11). Fable's ruling: the three things "a separate drawing
  *    beside the figure" most often is when it is not part of it.
  * 4. A short line of text touching one of the figure's drawings is its label,
- *    and joins it. **Any other line of text inside the padded crop refuses the
- *    page** (Sol F12): a `DRAFT` watermark between two panels, an equation —
- *    text PDFium would draw into the picture. Text outside the crop, such as
- *    the other column's prose beside a half-width figure, is not in the
- *    picture and refuses nothing.
+ *    and joins it. **Any other line of text in the band refuses the page**
+ *    (Sol F12): a `DRAFT` watermark between two panels, an equation, or prose
+ *    wrapping beside a half-width drawing. Those layouts are outside the
+ *    narrow single-float case this route can prove.
  */
 export function ownsBand(
   band: BandContents,
@@ -488,7 +504,7 @@ export function ownsBand(
   const components = inkComponents(band);
   if (!options.admitDisconnected && components.length > 1) return { ok: false, detail: "disconnected" };
   if (components.length > MAX_INK_COMPONENTS) return { ok: false, detail: "too-many-components" };
-  if (components.some((k) => width(k.box) < MIN_REGION_SIDE_PT || height(k.box) < MIN_REGION_SIDE_PT)) {
+  if (components.some((k) => width(k.inkBox) < MIN_REGION_SIDE_PT || height(k.inkBox) < MIN_REGION_SIDE_PT)) {
     return { ok: false, detail: "small-component" };
   }
   if (components.some((k) => k.boxedText)) return { ok: false, detail: "boxed-text" };
@@ -497,12 +513,9 @@ export function ownsBand(
   const labels = band.text.filter((t) => t.label && ink.some((b) => touches(b, t.box)));
   for (const label of labels) region = union(region, label.box);
 
-  /* Sol F12: text that is not the figure's label and that PDFium would draw
-     into the picture. Text beside the region but outside the crop — the other
-     column's prose, a running header — is not in the picture and claims
-     nothing; foreign *ink* anywhere in the band was refused above. */
-  const crop = padded(region);
-  if (band.text.some((line) => !labels.includes(line) && intersects(crop, line.box))) {
+  /* Sol F12: every line in the band is either a touching label or evidence
+     this is not the single-float layout the ownership rule admits. */
+  if (band.text.some((line) => !labels.includes(line))) {
     return { ok: false, detail: "foreign-text" };
   }
   return { ok: true, region };
@@ -541,7 +554,8 @@ export function inkComponents(band: BandContents, gap: number = TOUCH_GAP_PT): I
     groups.push(members);
   }
   return groups.map((members) => {
-    let box = members.reduce<PageBox>((acc, b) => union(acc, b), members[0] as InkBox);
+    const inkBox = members.reduce<PageBox>((acc, b) => union(acc, b), members[0] as InkBox);
+    let box = inkBox;
     let labels = 0;
     for (const line of band.text) {
       if (line.label && members.some((b) => touches(b, line.box, gap))) {
@@ -549,13 +563,13 @@ export function inkComponents(band: BandContents, gap: number = TOUCH_GAP_PT): I
         labels += 1;
       }
     }
-    return { box, ink: members, labels, boxedText: isBoxedText(members, band.text) };
+    return { inkBox, box, ink: members, labels, boxedText: isBoxedText(members, band.text) };
   });
 }
 
 /**
- * One closed axis-aligned rectangle — painted once, or filled and stroked as
- * two paths over the same corners — with a line of text inside it.
+ * One closed rectangle — painted once, or filled and stroked as two paths over
+ * the same corners — with a line of text inside its conservative page box.
  */
 function isBoxedText(members: readonly InkBox[], text: BandContents["text"]): boolean {
   const first = members[0];
@@ -741,6 +755,11 @@ function withoutFurniture(ink: readonly InkBox[], page: Page): InkBox[] {
   const rest = ink.filter((b) => !ruleShaped(b));
   const furniture = new Set(rules.filter((r) => !rest.some((b) => touches(r, b))));
   return ink.filter((b) => !furniture.has(b));
+}
+
+function inFurnitureMargin(box: PageBox, page: Page): boolean {
+  const margin = FURNITURE_MARGIN_FRACTION * page.height;
+  return box.y0 >= page.top - margin || box.y1 <= page.bottom + margin;
 }
 
 /* ------------------------------------------------------------------ *

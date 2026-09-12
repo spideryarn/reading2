@@ -8,8 +8,8 @@ or any file in `docs/project/security-map.md` § Where the defences physically l
 
 ## The candidate
 
-- Base: **`831e42c3`**. Stage 1 is the single commit **`STAGE1_SHA`** on top of it:
-  `git show --stat STAGE1_SHA` lists every changed path; `git diff 831e42c3 STAGE1_SHA` is the diff.
+- Base: **`831e42c3`**. Stage 1 is the single commit **`52d8d47a`** on top of it:
+  `git show --stat 52d8d47a` lists every changed path; `git diff 831e42c3 52d8d47a` is the diff.
   Start with these, and it does not limit where you read:
   - new: `src/pdf-figure-region.ts` (pure rules), `src/pdf-figure-layout.ts` (pdf.js page read),
     `src/pdf-figure-page.ts` (pdf-lib one-page cut + image walk), `src/pdf-figure-render.ts`
@@ -32,7 +32,7 @@ or any file in `docs/project/security-map.md` § Where the defences physically l
 **Run the tests yourself**: `npx vitest run tests/pdf-figure-region.test.ts
 tests/pdf-figure-render.test.ts tests/pdf-figure-page.test.ts tests/collect-pdf-figures.test.ts`.
 They need no database or network. `tests/collect-assets.test.ts` may need Postgres; if it cannot run
-in your sandbox, say so rather than skipping it silently — my run of it is `EVIDENCE_FILE`.
+in your sandbox, say so rather than skipping it silently — my own run of it is in the section "My gate results" at the end of this prompt.
 
 ## What I want
 
@@ -76,3 +76,19 @@ or **not ready** (IDs).
 - The caption match and the one-printed-caption count (F13) on real caption punctuation.
 - Whether the foreign-text rule (F12) is scoped to the crop rectangle and nothing wider.
 - Whether a label that touches two components can make disconnected drawings look owned.
+
+## My gate results, on 52d8d47a (raw, 2026-09-12, local Postgres up)
+
+```
+$ npm run typecheck
+TYPECHECK_EXIT=0
+
+$ npx vitest run tests/pdf-figure-region.test.ts tests/pdf-figure-render.test.ts tests/pdf-figure-page.test.ts tests/collect-pdf-figures.test.ts tests/collect-assets.test.ts tests/pdf-figure-read.test.ts tests/pdf-figures.test.ts tests/fixture-ids.test.ts
+ Test Files  8 passed (8)
+      Tests  206 passed (206)
+VITEST_EXIT=0
+```
+
+The real step, run on the report page (the fixture, page 1) with the real caption, stored
+`{"status":"stored","ext":"png","bytes":48753,"width":1045,"height":852}` and the PNG, looked at, is
+exactly both lattices with every label and no caption, header or body text.

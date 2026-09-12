@@ -8,9 +8,22 @@ reported 2026-09-12 08:05 UTC · kind: problem · from an admin (Greg) · on an 
 Slug `entropy-24-00930-spya-bmvfyb`, block `spya-d8tgkx`. The paper is MDPI *Entropy* 2022, 24, 930;
 the slug is the PDF's own filename.
 
-**Status: plan, revised after GPT Sol's review** (`ad65edb2` was the first draft; the review is
+**Status: stage 1 built and committed (`52d8d47a`), under GPT Sol's code review; stage 2 under
+way.** The plan was revised after Sol's review (`ad65edb2` was the first draft; the review is
 [260912a-…-plan-review-sol.md](260912a-figure-2-vector-figures-from-a-pdf-plan-review-sol.md), and
-§ The review, and what it changed says what was taken). Nothing built yet.
+§ The review, and what it changed says what was taken).
+
+On `52d8d47a`, on my own run: typecheck exit 0; 206 tests in 8 files green; the real step on the
+report's page stored Figure 2 as a 1045 × 852 PNG that is exactly both lattices with every label;
+arXiv p2 Figure 1 1039 × 694 and p3 Figure 2 1585 × 571. `npm run build` exit 0, and the bundle
+reaches `@embedpdf/pdfium` only through `await import(…)` and a `createRequire(…).resolve` of its
+wasm; `tests/cold-start-lazy-imports.test.ts` and `tests/pdf-bundle-trace.test.ts` both green with
+PDFium added to them. **The trace was checked directly, not only through the test's own list**:
+`nodeFileTrace` on `api-dist/vercel.js` collects 2,950 files, four of them `@embedpdf/pdfium`'s —
+`package.json`, `dist/index.js`, `dist/index.cjs` and **`dist/pdfium.wasm`**. So the tracer sees the
+wasm through `createRequire(…).resolve`, and `vercel.json`'s `includeFiles` needs no change. Its one
+pdfium warning is the "Failed to parse … as script" nft prints for every ES module it then traces
+as a module, which the trace test already excludes for that reason.
 
 ## The answer to the question
 
@@ -200,6 +213,18 @@ What bounds it, and what does not:
 
 Flagged to Greg all the same, because it changes a stated protection.
 
+**The security-map row is a proposal, not an edit.** Sol's F8 asks for the eligibility code to be
+listed among the defences, and it is right that it now is one. But
+[security-map.md](../project/security-map.md) is one of the seven entry points, and a row in *Where
+the defences physically live* is wording that tells an agent "you are editing a defence" — so it
+goes to Greg under [edit-important-docs.md](../reusable/edit-important-docs.md) rather than in by an
+unattended run. The row proposed, to go after `src/injection-scan.ts`:
+
+> | [`src/pdf-figure-page.ts`](../../src/pdf-figure-page.ts) | **what keeps an image away from the second decoder.** `onePageHasImage` walks the cut page's resources and content — XObjects, inline images, patterns, Type 3 glyphs, soft masks — and every doubt counts as an image, so a page the bitmap route refused for an image's size or kind never reaches PDFium. With `locateDrawnFigure`'s operator ceilings in [`src/pdf-figure-region.ts`](../../src/pdf-figure-region.ts), which are guards and not a bound. [security.md](security.md) § the PDF |
+
+[security.md](../project/security.md) itself — the deep dive, not an entry point — is updated in
+stage 2.
+
 ## The review, and what it changed
 
 GPT Sol, 2026-09-12, on `ad65edb2`: **do not proceed** — three established P1s. All ten findings
@@ -259,6 +284,38 @@ carries the caption, so alt text would be the same sentence announced twice"*), 
 the icon that opens that page of the PDF. So the only assertion the app makes is *this picture sits
 under this caption*, which is exactly what the rendered region is. Writing a sentence into the `alt`
 would add a claim, not narrow one, and undo an accessibility decision taken for its own reasons.
+
+## Stage 1 code review: GPT Sol, reviewer-fixer
+
+On `52d8d47a` ([prompt](260912a-figure-2-vector-figures-from-a-pdf-code-review-prompt.md),
+[answer](260912a-figure-2-vector-figures-from-a-pdf-code-review-sol.md)), write-capable in the
+worktree. It fixed eighteen findings red-first and reported two; **not ready (F33)**. Its fixes were
+re-run on my side before being committed: typecheck exit 0, 232 tests in the same 8 files green.
+
+| | | |
+|---|---|---|
+| F15 | P1 · NUL-delimited inline image escaped the scan | fixed |
+| F16 | P1 · Type 3 glyphs paint vectors pdf.js never lists | fixed — a reachable Type 3 font refuses the drawn route |
+| F17 | P1 · a clipped path could bridge two drawings | fixed — rectangular clips applied, others refuse |
+| F18 | P1 · invisible or white-on-white paint as an ownership bridge | fixed |
+| F19 | P1 · thick strokes and acute mitres past the 4 pt padding | fixed |
+| F20 | P1 · a rotated rectangle lost its boxed-text flag | fixed |
+| F21 | P1 · a big label inflating a sub-36 pt drawing past Fable's floor | fixed — component size is ink only |
+| F22 | P1 · an unpunctuated second caption, `Figure 4 The…`, missed | fixed — **and it reverses my own relay to the builder**, which asked for a delimiter so that a body line starting "Figure 2 shows…" would not count. Sol's is the conservative side of the rule (it refuses more, never shows a wrong picture), so it stands |
+| F23 | P1 · crop padding could take in the caption itself | fixed |
+| F24 | P1 · stray text checked only inside the crop, not the whole band | fixed — **also a reversal of my relay**, and here Sol was following this plan's own round-two table, which says *any text in the band*. It refuses a half-width figure beside the other column's prose; conservative, so it stands |
+| F25 | P1 · drawn-page analysis could starve the bitmap figures of their clock | fixed — bitmaps finish first |
+| F26 | P1 · a failed `FillRect` could pass uncleared memory as a figure | fixed |
+| F27 | P2 · one throwing destructor skipped the rest | fixed |
+| F28 | P1 · an unclassifiable XObject was skipped, not counted | fixed — fail closed |
+| F29 | P2 · a `BI` split across `/Contents` streams | fixed |
+| F30–F32 | P2 · mutations the suite did not notice — caption forwarding, the render's y-flip, freshness scoping, byte caps, abort | fixed — each now red under its mutation |
+| F33 | P1 · reasoned · pdf.js runs forgiving, so it can omit malformed paint that PDFium then draws into the crop | **taken, round two** — a strict second operator-list pass on candidate pages only, refusing unless strict and forgiving agree. Sound here where it was not before: the empty strict list the builder hit came from pdf.js removing an image, and a candidate page has none |
+| F34 | P2 · complexity 147 and 83 in the layout interpreter and the resource walk | **taken, round two** — split into small pure helpers, each tested |
+
+The two reversals leave a figure beside another column's prose, or on a page where a body line
+begins "Figure N", caption-only. Widening either is deferred until a real page shows the refusal
+costs something.
 
 ## The simpler options passed over
 

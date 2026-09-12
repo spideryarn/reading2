@@ -20,6 +20,7 @@
 import { describe, expect, it } from "vitest";
 import { readFile } from "node:fs/promises";
 import { inflateSync } from "node:zlib";
+import { PDFDocument, StandardFonts } from "pdf-lib";
 
 import {
   collectPdfFigures,
@@ -100,6 +101,7 @@ describe("a real paper with four figures and a masthead", () => {
     expect(entry.contentType).toBe("image/png");
     expect(entry.sha256).toMatch(/^[0-9a-f]{64}$/);
     expect(run.stored).toBe(1);
+    expect(run.drawn).toBe(0);
     /* **The measurement the downscale exists for, pinned so it cannot quietly
        stop being true.** This figure is photographic RGB and encoded to
        9,355,050 bytes at full resolution — the number that forced the byte cap
@@ -284,6 +286,25 @@ describe("every marker gets an entry, whatever went wrong", () => {
  * ------------------------------------------------------------------ */
 
 describe("the step's own deadline", () => {
+  it("stores an already-decoded bitmap before slow drawn-page work can stop the run", async () => {
+    const stop = new AbortController();
+    const drawn = marker(2);
+    const bitmap = marker(3);
+    const run = await collectPdfFigures({
+      markers: [drawn, bitmap],
+      pdf: await bytes(HARDER),
+      blobs: fakeBlobs(),
+      captions: new Map([[drawn.ref, "Figure 1. A caption that turns the drawn route on."]]),
+      signal: stop.signal,
+      readLayouts: async () => {
+        stop.abort();
+        throw new Error("layout work stopped");
+      },
+    });
+    expect(run.entries[0]).toMatchObject({ ref: drawn.ref, status: "failed", reason: "out-of-time" });
+    expect(run.entries[1]).toMatchObject({ ref: bitmap.ref, status: "stored" });
+  }, 60_000);
+
   /**
    * **The test the two abort tests above could not be.**
    *
@@ -492,6 +513,7 @@ describe("a figure drawn rather than pictured", () => {
     expect(pixels.data.some((byte) => byte !== 255), "a figure that draws nothing").toBe(true);
     /* Not the bitmap route's picture: this page has no bitmap at all. */
     expect(pixels.channels).toBe(3);
+    expect(run.drawn).toBe(1);
   }, 60_000);
 
   it("draws both figures of the arXiv paper, each from its own page", async () => {
@@ -514,6 +536,7 @@ describe("a figure drawn rather than pictured", () => {
       ]),
     });
     expect(run.entries.map((e) => e.status)).toEqual(["stored", "stored"]);
+    expect(run.drawn).toBe(2);
     const [first, second] = run.entries;
     if (first?.status !== "stored" || second?.status !== "stored") return;
     /* 338 × 224 pt and 520 × 182 pt, measured on the pages and checked by eye
@@ -542,6 +565,68 @@ describe("a figure drawn rather than pictured", () => {
     ]);
     expect(blobs.objects.size).toBe(0);
   }, 60_000);
+
+  it("uses the same per-figure and article byte caps as the bitmap route", async () => {
+    const figure = marker(1);
+    const options = {
+      markers: [figure],
+      pdf: await bytes(MDPI_P8),
+      captions: new Map([
+        [
+          figure.ref,
+          "Figure 2. Partial information lattices. On the left is the lattice for two predictor variables, and on the right is the lattice for three predictor variables.",
+        ],
+      ]),
+    };
+    const perFigure = await collectPdfFigures({ ...options, blobs: fakeBlobs(), maxBytes: 1 });
+    expect(perFigure.entries[0]).toMatchObject({ status: "failed", reason: "too-many-pixels" });
+    const article = await collectPdfFigures({ ...options, blobs: fakeBlobs(), maxArticleBytes: 1 });
+    expect(article.entries[0]).toMatchObject({ status: "failed", reason: "budget" });
+  }, 60_000);
+
+  it("does not let a drawn-route storage straggler rewrite the returned run", async () => {
+    const figure = marker(1);
+    const stop = new AbortController();
+    const blobs = fakeBlobs();
+    let finishPut: (() => void) | undefined;
+    blobs.putIfAbsent = async (key, value) => {
+      stop.abort();
+      await new Promise<void>((resolve) => {
+        finishPut = resolve;
+      });
+      blobs.objects.set(key, value);
+      return "stored";
+    };
+    const run = await collectPdfFigures({
+      markers: [figure],
+      pdf: await bytes(MDPI_P8),
+      blobs,
+      signal: stop.signal,
+      captions: new Map([
+        [
+          figure.ref,
+          "Figure 2. Partial information lattices. On the left is the lattice for two predictor variables, and on the right is the lattice for three predictor variables.",
+        ],
+      ]),
+    });
+    expect(finishPut, "the drawn figure has to reach storage").toBeTypeOf("function");
+    expect(run.entries[0]).toMatchObject({ status: "failed", reason: "out-of-time" });
+    expect({ stored: run.stored, drawn: run.drawn, failed: run.failed, bytes: run.bytes }).toEqual({
+      stored: 0,
+      drawn: 0,
+      failed: 1,
+      bytes: 0,
+    });
+    finishPut?.();
+    await new Promise((resolve) => setTimeout(resolve, 100));
+    expect(run.entries[0]).toMatchObject({ status: "failed", reason: "out-of-time" });
+    expect({ stored: run.stored, drawn: run.drawn, failed: run.failed, bytes: run.bytes }).toEqual({
+      stored: 0,
+      drawn: 0,
+      failed: 1,
+      bytes: 0,
+    });
+  }, 60_000);
 });
 
 /* ------------------------------------------------------------------ *
@@ -559,6 +644,22 @@ function figureBlock(ref: string): Block {
     html: `<figure data-spya-pdf-figure="${ref}"><figcaption>Fig 1</figcaption></figure>`,
     gistable: true,
   };
+}
+
+function figureBlockWithCaption(ref: string, caption: string): Block {
+  return {
+    ...figureBlock(ref),
+    text: caption,
+    html: `<figure data-spya-pdf-figure="${ref}"><figcaption>${caption}</figcaption></figure>`,
+  };
+}
+
+async function captionOnlyPdf(caption: string): Promise<Uint8Array> {
+  const doc = await PDFDocument.create();
+  const font = await doc.embedFont(StandardFonts.Helvetica);
+  const page = doc.addPage([595, 842]);
+  page.drawText(caption, { x: 72, y: 400, size: 9, font });
+  return doc.save();
 }
 
 const CTX = {
@@ -602,6 +703,22 @@ describe("recoverPdfFigures", () => {
        stay distinguishable from *we looked and could not*. src/assets.ts. */
     const store = memoryArtefacts();
     expect(await recoverPdfFigures(CTX, store, [])).toBeUndefined();
+  });
+
+  it("forwards the marker's own caption into the drawn route", async () => {
+    /* A caption-only PDF deliberately gets as far as the locator's `no-ink`.
+       If `recoverPdfFigures` drops the extracted captions, the drawn route is
+       never entered and the bitmap route's `no-raster` survives instead. */
+    const figure = marker(1);
+    const caption = "Figure 1. A caption whose page deliberately contains no drawing.";
+    const store = memoryArtefacts();
+    store.plant("a", "fetch", "raw", { file: "raw.pdf", kind: "pdf", storedSha256: "f".repeat(64) });
+    const run = await recoverPdfFigures(CTX, store, [figureBlockWithCaption(figure.ref, caption)], {
+      readBytes: async () => captionOnlyPdf(caption),
+    });
+    expect(run?.entries).toEqual([
+      expect.objectContaining({ ref: figure.ref, status: "failed", reason: "not-located" }),
+    ]);
   });
 
   /**

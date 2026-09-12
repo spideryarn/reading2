@@ -50,12 +50,13 @@ function layout(parts: Partial<PageLayout> = {}): PageLayout {
     paths: 40,
     imageOps: 0,
     shadings: 0,
+    unmeasuredPaint: 0,
     ...parts,
   };
 }
 
 function input(page: PageLayout, caption: string, extra: Partial<DrawnFigureInput> = {}): DrawnFigureInput {
-  return { layout: page, caption, markersOnPage: 1, imageInResources: false, ...extra };
+  return { layout: page, caption, markersOnPage: 1, imageInResources: false, unmeasuredPaint: false, ...extra };
 }
 
 /* ------------------------------------------------------------------ *
@@ -129,6 +130,17 @@ describe("which pages are eligible", () => {
     });
   });
 
+  it("counts an unpunctuated Figure N opening as a second printed caption", () => {
+    const page = ordinaryPage({
+      text: [PROSE_ABOVE, LABEL, ...CAPTION_LINES, text("Figure 4 The second apparatus on this page", 72, 200)],
+    });
+    expect(locateDrawnFigure(input(page, CAPTION))).toEqual({
+      ok: false,
+      reason: "not-eligible",
+      detail: "several-captions",
+    });
+  });
+
   it("refuses a page whose operator list paints any image at all", () => {
     expect(locateDrawnFigure(input(ordinaryPage({ imageOps: 1 }), CAPTION))).toMatchObject({
       ok: false,
@@ -143,6 +155,22 @@ describe("which pages are eligible", () => {
       ok: false,
       reason: "not-eligible",
       detail: "image-resource",
+    });
+  });
+
+  it("refuses resource paint that pdf.js did not expose as paths", () => {
+    expect(locateDrawnFigure(input(ordinaryPage(), CAPTION, { unmeasuredPaint: true }))).toEqual({
+      ok: false,
+      reason: "not-eligible",
+      detail: "unmeasured-paint",
+    });
+  });
+
+  it("refuses layout paint whose bounds could not be measured", () => {
+    expect(locateDrawnFigure(input(ordinaryPage({ unmeasuredPaint: 1 }), CAPTION))).toEqual({
+      ok: false,
+      reason: "not-located",
+      detail: "unbounded-ink",
     });
   });
 
@@ -200,10 +228,10 @@ describe("finding the caption", () => {
     });
   });
 
-  it("does not count a body line that begins with the figure's number as a second caption", () => {
-    /* F13 counts a printed caption only where the number is followed by a
-       delimiter — "Figure 2." / "Figure 2:" — so "Figure 2 shows…" at the start
-       of a line is prose, not a caption. */
+  it("conservatively refuses a line-start body reference as a possible second caption", () => {
+    /* Text alone cannot distinguish an unpunctuated caption from "Figure 2
+       shows…" at the start of body prose. The safe answer is a false refusal,
+       not allowing an unpunctuated second caption to attach its drawing. */
     const page = layout({
       ink: drawing,
       text: [
@@ -215,8 +243,9 @@ describe("finding the caption", () => {
       ],
     });
     expect(locateDrawnFigure(input(page, caption))).toEqual({
-      ok: true,
-      region: { x0: 100, y0: 430, x1: 500, y1: 650 },
+      ok: false,
+      reason: "not-eligible",
+      detail: "several-captions",
     });
   });
 
@@ -308,15 +337,14 @@ describe("proving the drawing belongs to this caption", () => {
       });
     });
 
-    it("takes a half-width figure with the other column's prose beside it in the band", () => {
-      /* F12 is about text PDFium would draw *into the picture*: foreign text
-         refuses only inside the padded crop. The other column's prose is
-         outside it, so it is not a claim on the figure. Foreign *ink* in the
-         band still refuses (above). */
+    it("refuses a half-width figure with the other column's prose in the band", () => {
+      /* F12 is deliberately band-wide: a text-wrapped layout is outside the
+         narrow single-float case even when that prose would miss the crop. */
       const page = layout({ ink: [figure], text: [...leftColumn, ...rightColumn] });
       expect(locateDrawnFigure(input(page, caption))).toEqual({
-        ok: true,
-        region: { x0: 60, y0: 420, x1: 280, y1: 600 },
+        ok: false,
+        reason: "not-located",
+        detail: "foreign-text",
       });
     });
   });
@@ -336,6 +364,15 @@ describe("proving the drawing belongs to this caption", () => {
     expect(locateDrawnFigure(input(layout({ ...page, text: [PROSE_ABOVE, ...CAPTION_LINES] }), CAPTION)).ok).toBe(
       true,
     );
+  });
+
+  it("refuses a crop whose renderer padding would include the matched caption", () => {
+    const nearCaption = ordinaryPage({ ink: [ink(100, 411, 500, 650)] });
+    expect(locateDrawnFigure(input(nearCaption, CAPTION))).toEqual({
+      ok: false,
+      reason: "not-located",
+      detail: "prose-in-region",
+    });
   });
 
   it("does not count the running header's rule or text as part of the figure", () => {
@@ -405,6 +442,18 @@ describe("a figure made of drawings that do not touch", () => {
 
   it("refuses a component smaller than the smallest figure — an ornament, a logo, a stray mark", () => {
     const page = ordinaryPage({ ink: [...DRAWING, ink(470, 670, 490, 690)] });
+    expect(locateDrawnFigure(input(page, CAPTION))).toEqual({
+      ok: false,
+      reason: "not-located",
+      detail: "small-component",
+    });
+  });
+
+  it("does not let a touching label enlarge a too-small drawing past the component minimum", () => {
+    const page = layout({
+      ink: [ink(100, 430, 120, 450), ink(160, 430, 180, 450)],
+      text: [PROSE_ABOVE, text("shared label", 115, 425, { size: 50, width: 50 }), ...CAPTION_LINES],
+    });
     expect(locateDrawnFigure(input(page, CAPTION))).toEqual({
       ok: false,
       reason: "not-located",

@@ -1417,9 +1417,14 @@ describe("assetsInputHash", () => {
         .slice(0, 16);
     const web = [img("https://cdn.test/a.png")];
     expect(assetsInputHash(web)).toBe(legacyHash(["https://cdn.test/a.png"], []));
+    expect(assetsInputHash([])).toBe(legacyHash([], []));
+    expect(assetsInputHash([block("<p>Only prose.</p>")])).toBe(legacyHash([], []));
     const pdf = [figure(3)];
     expect(assetsInputHash(pdf)).not.toBe(
       legacyHash([], [`pdffig1-${"0123456789abcdef".repeat(2)}.3.1`]),
+    );
+    expect(assetsInputHash([...web, ...pdf])).not.toBe(
+      legacyHash(["https://cdn.test/a.png"], [`pdffig1-${"0123456789abcdef".repeat(2)}.3.1`]),
     );
   });
 

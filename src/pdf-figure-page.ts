@@ -49,11 +49,14 @@ export const MAX_RESOURCE_DEPTH = 8;
 export const MAX_CONTENT_SCAN_BYTES = 32 * 1024 * 1024;
 
 /**
- * The inline-image operator as a token: `BI` after whitespace or a delimiter,
- * before whitespace or the `/` of its first key. Loose on purpose — a string
- * that happens to spell ` BI ` is a refused page, never a missed image.
+ * The inline-image operator as a token: `BI` between PDF whitespace or
+ * delimiters. PDF whitespace includes NUL, which JavaScript's `\s` does not;
+ * omitting it lets a valid NUL-delimited inline image pass this refusal. Loose
+ * on purpose — a string that happens to spell ` BI ` is a refused page, never
+ * a missed image.
  */
-const INLINE_IMAGE = /(?:^|[\s\]>)}])BI(?=[\s/])/;
+const PDF_TOKEN_BOUNDARY = String.raw`[\x00\x09\x0a\x0c\x0d\x20()[\]{}<>/%]`;
+const INLINE_IMAGE = new RegExp(`(?:^|${PDF_TOKEN_BOUNDARY})BI(?=${PDF_TOKEN_BOUNDARY})`);
 
 export interface FigurePage {
   /** A one-page PDF of this page alone. */
@@ -64,6 +67,8 @@ export interface FigurePage {
    * eligible*.
    */
   imageInResources: boolean;
+  /** Reachable paint (currently a Type 3 glyph program) absent from pdf.js's path list. */
+  unmeasuredPaint: boolean;
 }
 
 export interface FigurePages {
@@ -77,7 +82,7 @@ export async function openFigurePages(source: Uint8Array): Promise<FigurePages> 
   return {
     async cut(page) {
       const bytes = await cuts.cut([page]);
-      return { bytes, imageInResources: await onePageHasImage(bytes) };
+      return { bytes, ...(await inspectOnePage(bytes)) };
     },
   };
 }
@@ -93,6 +98,12 @@ export async function openFigurePages(source: Uint8Array): Promise<FigurePages> 
  * proves the page has no image, so none of them may let it through.
  */
 export async function onePageHasImage(onePage: Uint8Array): Promise<boolean> {
+  return (await inspectOnePage(onePage)).imageInResources;
+}
+
+async function inspectOnePage(
+  onePage: Uint8Array,
+): Promise<Pick<FigurePage, "imageInResources" | "unmeasuredPaint">> {
   /* Lazy, for the reason `openPdfCuts` gives: pdf-lib is not a cost any
      request should pay unless it cuts a page. Node caches the module. */
   const { PDFArray, PDFDocument, PDFDict, PDFName, PDFRawStream, PDFStream, decodePDFRawStream } = await import(
@@ -100,10 +111,11 @@ export async function onePageHasImage(onePage: Uint8Array): Promise<boolean> {
   );
   try {
     const doc = await PDFDocument.load(onePage);
-    if (doc.getPageCount() !== 1) return true;
+    if (doc.getPageCount() !== 1) return { imageInResources: true, unmeasuredPaint: true };
     const context = doc.context;
     const name = (n: string) => PDFName.of(n);
     const seen = new Set<unknown>();
+    let unmeasuredPaint = false;
     const resolve = (value: unknown) => context.lookup(value as Parameters<typeof context.lookup>[0]);
 
     /** The dictionary of a stream, or the dictionary itself, or nothing. */
@@ -114,14 +126,29 @@ export async function onePageHasImage(onePage: Uint8Array): Promise<boolean> {
       return undefined;
     };
 
-    /** Does this content stream contain an inline image? Unreadable is a yes. */
-    const paintsInline = (value: unknown): boolean => {
-      const stream = resolve(value);
-      if (!(stream instanceof PDFRawStream)) return true;
-      const decoded = decodePDFRawStream(stream).getBytes(MAX_CONTENT_SCAN_BYTES + 1);
-      if (decoded.length > MAX_CONTENT_SCAN_BYTES) return true;
-      return INLINE_IMAGE.test(Buffer.from(decoded.buffer, decoded.byteOffset, decoded.byteLength).toString("latin1"));
+    /**
+     * Does this logical content stream contain an inline image? A page's
+     * `/Contents` array is concatenated by PDF readers, so scan it as one byte
+     * sequence too: recovery parsers can recognise a token split at an invalid
+     * stream boundary, and doubt must still refuse the page. Unreadable or over
+     * the cap is a yes.
+     */
+    const paintsInlineSequence = (values: readonly unknown[]): boolean => {
+      const chunks: Buffer[] = [];
+      let total = 0;
+      for (const value of values) {
+        const stream = resolve(value);
+        if (!(stream instanceof PDFRawStream)) return true;
+        const remaining = MAX_CONTENT_SCAN_BYTES - total;
+        const decoded = decodePDFRawStream(stream).getBytes(remaining + 1);
+        if (decoded.length > remaining) return true;
+        const chunk = Buffer.from(decoded.buffer, decoded.byteOffset, decoded.byteLength);
+        chunks.push(chunk);
+        total += chunk.byteLength;
+      }
+      return INLINE_IMAGE.test(Buffer.concat(chunks, total).toString("latin1"));
     };
+    const paintsInline = (value: unknown): boolean => paintsInlineSequence([value]);
 
     const walk = (resources: PdfDict | undefined, depth: number): boolean => {
       if (!resources) return false;
@@ -135,7 +162,7 @@ export async function onePageHasImage(onePage: Uint8Array): Promise<boolean> {
         if (!dict) return true;
         const subtype = dict.lookupMaybe(name("Subtype"), PDFName);
         if (subtype === name("Image")) return true;
-        if (subtype !== name("Form")) continue;
+        if (subtype !== name("Form")) return true;
         if (paintsInline(value)) return true;
         if (walk(dict.lookupMaybe(name("Resources"), PDFDict), depth + 1)) return true;
       }
@@ -144,7 +171,7 @@ export async function onePageHasImage(onePage: Uint8Array): Promise<boolean> {
       const patterns = resources.lookupMaybe(name("Pattern"), PDFDict);
       for (const value of patterns?.asMap().values() ?? []) {
         const resolved = resolve(value);
-        if (!(resolved instanceof PDFStream)) continue;
+        if (!(resolved instanceof PDFStream)) return true;
         if (paintsInline(value)) return true;
         if (walk(resolved.dict.lookupMaybe(name("Resources"), PDFDict), depth + 1)) return true;
       }
@@ -153,7 +180,14 @@ export async function onePageHasImage(onePage: Uint8Array): Promise<boolean> {
       const fonts = resources.lookupMaybe(name("Font"), PDFDict);
       for (const value of fonts?.asMap().values() ?? []) {
         const dict = dictOf(value);
-        if (dict?.lookupMaybe(name("Subtype"), PDFName) !== name("Type3")) continue;
+        if (!dict) return true;
+        const subtype = dict.lookupMaybe(name("Subtype"), PDFName);
+        if (!subtype) return true;
+        if (subtype !== name("Type3")) continue;
+        /* pdf.js renders a Type 3 CharProc internally but does not put its
+           vector paths in the page's operator list. PDFium would therefore
+           draw ink the ownership and complexity rules never measured. */
+        unmeasuredPaint = true;
         const glyphs = dict.lookupMaybe(name("CharProcs"), PDFDict);
         for (const glyph of glyphs?.asMap().values() ?? []) if (paintsInline(glyph)) return true;
         if (walk(dict.lookupMaybe(name("Resources"), PDFDict), depth + 1)) return true;
@@ -163,10 +197,14 @@ export async function onePageHasImage(onePage: Uint8Array): Promise<boolean> {
       const states = resources.lookupMaybe(name("ExtGState"), PDFDict);
       for (const value of states?.asMap().values() ?? []) {
         const state = dictOf(value);
-        const smask = state && dictOf(state.get(name("SMask")));
+        if (!state) return true;
+        const smaskValue = state.get(name("SMask"));
+        if (!smaskValue || resolve(smaskValue) === name("None")) continue;
+        const smask = dictOf(smaskValue);
+        if (!smask) return true;
         const groupRef = smask?.get(name("G"));
         const group = groupRef && dictOf(groupRef);
-        if (!group) continue;
+        if (!groupRef || !group) return true;
         if (paintsInline(groupRef)) return true;
         if (walk(group.lookupMaybe(name("Resources"), PDFDict), depth + 1)) return true;
       }
@@ -176,9 +214,9 @@ export async function onePageHasImage(onePage: Uint8Array): Promise<boolean> {
     const page = doc.getPage(0).node;
     const contents = page.Contents();
     const streams = contents instanceof PDFArray ? contents.asArray() : contents ? [contents] : [];
-    for (const stream of streams) if (paintsInline(stream)) return true;
-    return walk(page.Resources(), 0);
+    const imageInResources = paintsInlineSequence(streams) || walk(page.Resources(), 0);
+    return { imageInResources, unmeasuredPaint };
   } catch {
-    return true;
+    return { imageInResources: true, unmeasuredPaint: true };
   }
 }

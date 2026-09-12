@@ -252,7 +252,7 @@ function drawRegion(P: Pdfium, input: RenderRegionInput): RenderResult {
 
     bitmap = P.FPDFBitmap_CreateEx(width, height, BITMAP_BGRA, 0, 0);
     if (!bitmap) return fail("render");
-    P.FPDFBitmap_FillRect(bitmap, 0, 0, width, height, OPAQUE_WHITE);
+    if (!P.FPDFBitmap_FillRect(bitmap, 0, 0, width, height, OPAQUE_WHITE)) return fail("render");
     /* The whole page laid out at `scale`, shifted so the region's top-left
        corner lands on the bitmap's origin; PDFium draws only what falls inside
        the bitmap. PDF's y runs up the page and the bitmap's runs down it, hence
@@ -299,9 +299,23 @@ function drawRegion(P: Pdfium, input: RenderRegionInput): RenderResult {
   } finally {
     /* Reverse order of acquisition, each only if it was acquired. The document
        reads from `buffer` until it is closed, so the `free` is last. */
-    if (bitmap) P.FPDFBitmap_Destroy(bitmap);
-    if (page) P.FPDF_ClosePage(page);
-    if (doc) P.FPDF_CloseDocument(doc);
-    if (buffer) P.pdfium._free(buffer);
+    try {
+      if (bitmap) P.FPDFBitmap_Destroy(bitmap);
+    } finally {
+      try {
+        if (page) P.FPDF_ClosePage(page);
+      } finally {
+        try {
+          if (doc) P.FPDF_CloseDocument(doc);
+        } finally {
+          if (buffer) P.pdfium._free(buffer);
+        }
+      }
+    }
   }
+}
+
+/** The synchronous C-handle seam, exported only so failure cleanup can be tested without WASM. */
+export function drawPdfRegionForTests(pdfium: unknown, input: RenderRegionInput): RenderResult {
+  return drawRegion(pdfium as Pdfium, input);
 }

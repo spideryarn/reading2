@@ -246,6 +246,8 @@ export interface CollectPdfFiguresOptions {
   maxFigures?: number;
   maxArticleBytes?: number;
   budgetMs?: number;
+  /** Page-layout reader injection for deterministic deadline tests. */
+  readLayouts?: typeof readPdfPageLayouts;
 }
 
 export interface PdfFiguresRun {
@@ -372,37 +374,42 @@ export async function collectPdfFigures(
         ? [outcome.marker]
         : [],
     );
-    const drawn = candidates.length > 0 ? await drawnRoute(candidates, options, signal) : null;
 
+    /* Preserve the bitmap route's outputs: everything it already decided is
+       stored or recorded before the new layout/render work starts. Otherwise a
+       slow drawn page can spend the clock and turn an unrelated decoded bitmap
+       into `out-of-time`. Final assembly below restores marker order. */
     for (const outcome of outcomes) {
       if (outcome.status === "refused") {
-        if (!candidates.includes(outcome.marker)) {
-          fail(outcome.marker, pdfFigureFailure(outcome.reason));
-          continue;
-        }
-        /* The layout read did not come back. The same rule as `read === null`
-           above: an abort claims nothing and leaves the marker to the
-           finaliser; anything else leaves the bitmap route's answer standing. */
-        if (!drawn) {
-          if (!signal.aborted) fail(outcome.marker, "no-raster");
-          continue;
-        }
-        if (signal.aborted) return;
-        const result = await drawn.draw(outcome.marker);
-        if (result.status === "stopped") return;
-        if (result.status === "refused") {
-          fail(outcome.marker, result.reason);
-          continue;
-        }
-        if (signal.aborted) return;
-        await storeOne(outcome.marker, result.raster, limits, signal, book, record, at);
-        if (book.entries.get(outcome.marker.ref)?.status === "stored") book.drawn += 1;
+        if (!candidates.includes(outcome.marker)) fail(outcome.marker, pdfFigureFailure(outcome.reason));
         continue;
       }
       /* Stop rather than record: every marker left is finalised below, which is
          the one place that decides what an unfinished run says. */
       if (signal.aborted) return;
       await storeOne(outcome.marker, outcome.raster, limits, signal, book, record, at);
+    }
+
+    if (signal.aborted || candidates.length === 0) return;
+    const drawn = await drawnRoute(candidates, options, signal);
+    /* The layout read did not come back. An abort claims nothing and leaves the
+       markers to the finaliser; anything else leaves the bitmap route's answer
+       standing. */
+    if (!drawn) {
+      if (!signal.aborted) for (const marker of candidates) fail(marker, "no-raster");
+      return;
+    }
+    for (const marker of candidates) {
+      if (signal.aborted) return;
+      const result = await drawn.draw(marker);
+      if (result.status === "stopped") return;
+      if (result.status === "refused") {
+        fail(marker, result.reason);
+        continue;
+      }
+      if (signal.aborted) return;
+      await storeOne(marker, result.raster, limits, signal, book, record, at);
+      if (book.entries.get(marker.ref)?.status === "stored") book.drawn += 1;
     }
   };
 
@@ -644,7 +651,11 @@ async function drawnRoute(
 ): Promise<{ draw(marker: PdfFigureMarker): Promise<DrawnResult> } | null> {
   let layouts: Map<number, PageLayout | null>;
   try {
-    layouts = await readPdfPageLayouts({ data: options.pdf, pages: candidates.map((m) => m.page), signal });
+    layouts = await (options.readLayouts ?? readPdfPageLayouts)({
+      data: options.pdf,
+      pages: candidates.map((m) => m.page),
+      signal,
+    });
   } catch {
     return null;
   }
@@ -666,7 +677,7 @@ async function drawnRoute(
       };
       /* Once without the resource walk, which needs pdf-lib and a cut: nearly
          every refusal is decided here, for the price of arithmetic… */
-      const first = locateDrawnFigure({ ...base, imageInResources: false });
+      const first = locateDrawnFigure({ ...base, imageInResources: false, unmeasuredPaint: false });
       if (!first.ok) return { status: "refused", reason: verdictFailure(first) };
 
       let page: FigurePage;
@@ -678,7 +689,11 @@ async function drawnRoute(
       }
       /* …and again with it, so that the rule lives in one place and the walk's
          answer is decided by the same function as everything else. */
-      const verdict = locateDrawnFigure({ ...base, imageInResources: page.imageInResources });
+      const verdict = locateDrawnFigure({
+        ...base,
+        imageInResources: page.imageInResources,
+        unmeasuredPaint: page.unmeasuredPaint,
+      });
       if (!verdict.ok) return { status: "refused", reason: verdictFailure(verdict) };
 
       if (signal.aborted) return { status: "stopped" };
