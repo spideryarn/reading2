@@ -46,6 +46,7 @@
 import { readFile } from "node:fs/promises";
 import { createRequire } from "node:module";
 
+import { type Containment, type ContainmentBox, measureContainment } from "./pdf-figure-containment.js";
 import { CROP_PAD_PT, type PageBox } from "./pdf-figure-region.js";
 import { classifyRaster, type DecodedRaster, MAX_FIGURE_EDGE, PDFJS_RGB_24BPP } from "./pdf-figures.js";
 
@@ -95,9 +96,22 @@ export type RenderFailure =
   /** A bitmap could not be made, or PDFium threw while drawing. */
   | "render"
   /** Every pixel is white: the region draws nothing we could show. */
-  | "blank";
+  | "blank"
+  /**
+   * PDFium drew a pixel outside everything the locator measured — paint pdf.js
+   * skipped, which the ownership rules never saw. GPT Sol F35;
+   * src/pdf-figure-containment.ts.
+   */
+  | "unmeasured-paint";
 
-export type RenderResult = { ok: true; raster: DecodedRaster } | { ok: false; failure: RenderFailure };
+export type RenderResult =
+  | {
+      ok: true;
+      raster: DecodedRaster;
+      /** How the drawn pixels sat against the measured boxes: none outside, by construction. */
+      paint: Containment;
+    }
+  | { ok: false; failure: RenderFailure };
 
 export interface RenderRegionInput {
   /** A PDF of exactly one page. */
@@ -106,6 +120,11 @@ export interface RenderRegionInput {
   region: PageBox;
   /** pdf.js's view box, as a width and height. Its origin is already known to be (0, 0). */
   view: { width: number; height: number };
+  /**
+   * The boxes the locator measured, which every drawn pixel must fall inside —
+   * the verdict's own, carried here rather than recomputed.
+   */
+  containment: readonly ContainmentBox[];
 }
 
 /**
@@ -271,31 +290,35 @@ function drawRegion(P: Pdfium, input: RenderRegionInput): RenderResult {
     const stride = P.FPDFBitmap_GetStride(bitmap);
     const pointer = P.FPDFBitmap_GetBuffer(bitmap);
     if (!pointer || stride < width * 4) return fail("render");
-    const heap = P.pdfium.HEAPU8;
-    const rgb = new Uint8Array(width * height * 3);
-    let blank = true;
-    for (let y = 0; y < height; y++) {
-      const row = pointer + y * stride;
-      for (let x = 0; x < width; x++) {
-        const from = row + x * 4;
-        const to = (y * width + x) * 3;
-        const r = heap[from] as number;
-        const g = heap[from + 1] as number;
-        const b = heap[from + 2] as number;
-        rgb[to] = r;
-        rgb[to + 1] = g;
-        rgb[to + 2] = b;
-        if (blank && (r !== 255 || g !== 255 || b !== 255)) blank = false;
-      }
-    }
+    const { rgb, blank } = readRgb(P.pdfium.HEAPU8, pointer, stride, width, height);
     /* Exactly white, no tolerance — the rule src/pdf-figures.ts keeps for
        blankness and for the same reason: a faint grid is still a figure. */
     if (blank) return fail("blank");
 
+    /* **Everything PDFium drew must be something the locator measured.** GPT
+       Sol F35: pdf.js can skip paint PDFium draws — forgiving by design, and at
+       an operator-list chunk boundary even when strict — and two pdf.js reads
+       cannot see what pdf.js itself skipped. The picture can. The frame is the
+       render's own: the same scale, and the same rounded offsets it was drawn
+       at. src/pdf-figure-containment.ts. */
+    const paint = measureContainment(
+      rgb,
+      {
+        scale,
+        offsetX: Math.round(x0 * scale),
+        offsetY: Math.round((pageHeight - y1) * scale),
+        pageHeight,
+        width,
+        height,
+      },
+      input.containment,
+    );
+    if (paint.outside > 0) return fail("unmeasured-paint");
+
     /* Through the one door every `DecodedRaster` comes through, so nothing
        downstream has a second kind of raster to trust. */
     const verdict = classifyRaster({ page: 1, key: "drawn", width, height, kind: PDFJS_RGB_24BPP, data: rgb });
-    return verdict.status === "usable" ? { ok: true, raster: verdict.raster } : fail("render");
+    return verdict.status === "usable" ? { ok: true, raster: verdict.raster, paint } : fail("render");
   } finally {
     /* Reverse order of acquisition, each only if it was acquired. The document
        reads from `buffer` until it is closed, so the `free` is last. */
@@ -313,6 +336,33 @@ function drawRegion(P: Pdfium, input: RenderRegionInput): RenderResult {
       }
     }
   }
+}
+
+/**
+ * PDFium's RGBA bitmap, row by row past its stride, as tightly packed RGB —
+ * and whether every pixel of it is exactly white.
+ */
+function readRgb(
+  heap: Uint8Array,
+  pointer: number,
+  stride: number,
+  width: number,
+  height: number,
+): { rgb: Uint8Array; blank: boolean } {
+  const rgb = new Uint8Array(width * height * 3);
+  let blank = true;
+  for (let y = 0; y < height; y++) {
+    const row = pointer + y * stride;
+    for (let x = 0; x < width; x++) {
+      const from = row + x * 4;
+      const to = (y * width + x) * 3;
+      rgb[to] = heap[from] as number;
+      rgb[to + 1] = heap[from + 1] as number;
+      rgb[to + 2] = heap[from + 2] as number;
+      if (blank && (rgb[to] !== 255 || rgb[to + 1] !== 255 || rgb[to + 2] !== 255)) blank = false;
+    }
+  }
+  return { rgb, blank };
 }
 
 /** The synchronous C-handle seam, exported only so failure cleanup can be tested without WASM. */

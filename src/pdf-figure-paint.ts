@@ -434,10 +434,11 @@ function recordPaint(run: Run, paint: unknown, box: PageBox, rect: boolean, buff
   const fillIsUsed = fills(paint, codes);
   const strokeIsUsed = strokes(paint, codes);
   const visible = isVisible(state, fillIsUsed, strokeIsUsed);
-  if (visible && strokeIsUsed && strokeReach(state, buffer) > CROP_PAD_PT) run.unmeasuredPaint += 1;
-  if (visible) pushClipped(run.ink, state.clip, box, rect);
+  const reach = visible && strokeIsUsed ? strokeReach(state, buffer) : 0;
+  if (reach > CROP_PAD_PT) run.unmeasuredPaint += 1;
+  if (visible) pushClipped(run.ink, state.clip, box, rect, reach);
   else if ((fillIsUsed || strokeIsUsed) && state.fillColor !== "transparent" && state.strokeColor !== "transparent") {
-    pushClipped(run.whitePaint, state.clip, box, rect);
+    pushClipped(run.whitePaint, state.clip, box, rect, 0);
   }
 }
 
@@ -457,9 +458,15 @@ export function strokeReach(state: GraphicsState, buffer: unknown): number {
   return radius * strokeExtentFactor(buffer, state.lineJoin, state.miterLimit);
 }
 
-function pushClipped(list: InkBox[], clip: PageBox | null, box: PageBox, rect: boolean): void {
+/**
+ * The visible part of a painted box, with its rectangle flag and — for a
+ * visible stroke — how far past the box the stroke can paint, which the
+ * render's containment check grows the box by.
+ */
+function pushClipped(list: InkBox[], clip: PageBox | null, box: PageBox, rect: boolean, reach: number): void {
   const visible = intersectBox(clip, box);
-  if (visible) list.push(rect ? { ...visible, rect: true } : visible);
+  if (!visible) return;
+  list.push({ ...visible, ...(rect ? { rect: true } : {}), ...(reach > 0 ? { reach } : {}) });
 }
 
 /**
@@ -472,7 +479,9 @@ function pushClipped(list: InkBox[], clip: PageBox | null, box: PageBox, rect: b
  */
 export function admitWhiteArtboards(ink: InkBox[], whitePaint: readonly InkBox[]): void {
   for (const white of whitePaint) {
-    if (ink.filter((box) => contains(white, box)).length >= 2) ink.push(white);
+    /* Flagged, because it paints nothing visible: the render's containment
+       check must not let an artboard's box excuse paint inside it. */
+    if (ink.filter((box) => contains(white, box)).length >= 2) ink.push({ ...white, white: true });
   }
 }
 

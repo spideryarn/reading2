@@ -30,6 +30,8 @@
  * nothing to teach a rule.
  */
 
+import type { ContainmentBox } from "./pdf-figure-containment.js";
+
 /** A rectangle in PDF points, origin at the bottom left of the page. */
 export interface PageBox {
   readonly x0: number;
@@ -45,6 +47,17 @@ export interface PageBox {
  */
 export interface InkBox extends PageBox {
   readonly rect?: boolean;
+  /**
+   * How far a stroke can paint past the box, in points — present only for a
+   * visible stroked path. The render's containment check grows the box by it.
+   */
+  readonly reach?: number;
+  /**
+   * A white artboard admitted as ownership geometry (src/pdf-figure-paint.ts,
+   * `admitWhiteArtboards`). It paints nothing visible, so it is never part of
+   * the area the render's paint must fall inside.
+   */
+  readonly white?: boolean;
 }
 
 /**
@@ -158,7 +171,12 @@ type Refusal =
   | { ok: false; reason: "too-complex"; detail: TooComplex }
   | { ok: false; reason: "not-located"; detail: NotLocated };
 
-export type DrawnFigureVerdict = { ok: true; region: PageBox } | Refusal;
+/**
+ * A located figure: its region, and the boxes the render's paint must fall
+ * inside — carried from here to the renderer rather than recomputed there, so
+ * the check is against exactly what the locator measured.
+ */
+export type DrawnFigureVerdict = { ok: true; region: PageBox; containment: ContainmentBox[] } | Refusal;
 
 /* ------------------------------------------------------------------ *
  * The numbers
@@ -295,7 +313,7 @@ export function locateDrawnFigure(input: DrawnFigureInput): DrawnFigureVerdict {
   }
   const crop = padded(region);
   if (read.prose.some((box) => intersects(crop, box))) return notLocated("prose-in-region");
-  return { ok: true, region };
+  return { ok: true, region, containment: owned.containment };
 }
 
 /**
@@ -468,7 +486,32 @@ export interface InkComponent {
   boxedText: boolean;
 }
 
-export type Ownership = { ok: true; region: PageBox } | { ok: false; detail: NotOwned };
+export type Ownership =
+  | { ok: true; region: PageBox; containment: ContainmentBox[] }
+  | { ok: false; detail: NotOwned };
+
+/**
+ * Room round a label's text box for what its glyphs paint beyond it, as a
+ * fraction of the line's height: pdf.js's box runs from the baseline up one
+ * font size, so descenders (≈ 0.2 em), accents and the tops of braces and
+ * parentheses (≈ 0.1 em past the size) and an italic overhang all fall outside
+ * it. 0.3 em covers each with room; MDPI's brace labels are the tallest glyphs
+ * in the three real figures.
+ */
+export const LABEL_ALLOWANCE_EM = 0.3;
+
+/**
+ * The boxes the render's paint must fall inside (src/pdf-figure-containment.ts):
+ * every visible drawing grown by its stroke's reach, and every label grown by
+ * `LABEL_ALLOWANCE_EM`. A white artboard is left out — it paints nothing, and
+ * its box would excuse anything drawn inside it.
+ */
+function containmentFor(ink: readonly InkBox[], labels: readonly { box: PageBox }[]): ContainmentBox[] {
+  return [
+    ...ink.filter((b) => !b.white).map((b) => ({ box: b, allowance: b.reach ?? 0 })),
+    ...labels.map(({ box }) => ({ box, allowance: LABEL_ALLOWANCE_EM * height(box) })),
+  ];
+}
 
 /**
  * **Is everything in the band this one figure — and if so, where is it?**
@@ -532,7 +575,7 @@ export function ownsBand(
   if (band.text.some((line) => !labels.includes(line))) {
     return { ok: false, detail: "foreign-text" };
   }
-  return { ok: true, region };
+  return { ok: true, region, containment: containmentFor(ink, labels) };
 }
 
 /**

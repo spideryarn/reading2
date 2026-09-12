@@ -700,6 +700,9 @@ async function drawnRoute(
       const rendered = await renderPdfRegion({
         onePagePdf: page.bytes,
         region: verdict.region,
+        /* What the locator measured, carried rather than recomputed: the
+           render's paint must fall inside it (Sol F35). */
+        containment: verdict.containment,
         view: { width: layout.view[2] - layout.view[0], height: layout.view[3] - layout.view[1] },
       });
       return rendered.ok
@@ -745,6 +748,7 @@ function renderFailure(failure: RenderFailure): PdfFigureFailure {
     case "geometry-mismatch":
       return "no-raster";
     case "blank":
+    case "unmeasured-paint":
       return "not-located";
     default: {
       const never: never = failure;

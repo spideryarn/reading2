@@ -93,7 +93,7 @@ function ordinaryPage(parts: Partial<PageLayout> = {}): PageLayout {
 describe("the plain case", () => {
   it("takes everything drawn between the caption and the prose above it", () => {
     const verdict = locateDrawnFigure(input(ordinaryPage(), CAPTION));
-    expect(verdict).toEqual({ ok: true, region: { x0: 100, y0: 430, x1: 500, y1: 650 } });
+    expect(verdict).toMatchObject({ ok: true, region: { x0: 100, y0: 430, x1: 500, y1: 650 } });
   });
 
   it("stops at the prose above, and leaves a drawing beyond it alone", () => {
@@ -223,7 +223,7 @@ describe("finding the caption", () => {
         captionLine,
       ],
     });
-    expect(locateDrawnFigure(input(page, caption))).toEqual({
+    expect(locateDrawnFigure(input(page, caption))).toMatchObject({
       ok: true,
       region: { x0: 100, y0: 430, x1: 500, y1: 650 },
     });
@@ -305,7 +305,7 @@ describe("proving the drawing belongs to this caption", () => {
       ink: [ink(80, 430, 245, 600), ink(250, 430, 345, 600), ink(350, 430, 515, 600)],
       text: [PROSE_ABOVE, text(caption, 260, 400, { width: 90 }), PROSE_BELOW],
     });
-    expect(locateDrawnFigure(input(page, caption))).toEqual({
+    expect(locateDrawnFigure(input(page, caption))).toMatchObject({
       ok: true,
       region: { x0: 80, y0: 430, x1: 515, y1: 600 },
     });
@@ -383,7 +383,7 @@ describe("proving the drawing belongs to this caption", () => {
       ink: [ink(100, 430, 500, 700), ink(40, 780, 555, 780.4)],
       text: [text("Journal 2022, 24, 930", 40, 790, { size: 8 }), ...CAPTION_LINES, PROSE_BELOW],
     });
-    expect(locateDrawnFigure(input(page, CAPTION))).toEqual({
+    expect(locateDrawnFigure(input(page, CAPTION))).toMatchObject({
       ok: true,
       region: { x0: 100, y0: 430, x1: 500, y1: 700 },
     });
@@ -408,7 +408,7 @@ describe("a figure made of drawings that do not touch", () => {
 
   it("is admitted by default, as ruled", () => {
     expect(ADMIT_DISCONNECTED_DRAWINGS).toBe(true);
-    expect(locateDrawnFigure(input(twoLattices, CAPTION))).toEqual({
+    expect(locateDrawnFigure(input(twoLattices, CAPTION))).toMatchObject({
       ok: true,
       region: { x0: 100, y0: 430, x1: 500, y1: 650 },
     });

@@ -24,6 +24,12 @@ const MDPI_P8 = "tests/fixtures/pdf-vector-figure/entropy-24-00930-p8.pdf";
 const VIEW = { width: 595.276, height: 841.89 };
 /** Both lattices and their labels, as the locator finds them. */
 const LATTICES = { x0: 169, y0: 470.6, x1: 509.2, y1: 746.5 };
+/**
+ * Paint allowed anywhere on the page. These tests are about drawing and the
+ * handle lifecycle; the containment check has its own tests in
+ * tests/pdf-figure-containment.test.ts, with the locator's real boxes.
+ */
+const EVERYTHING = [{ box: { x0: 0, y0: 0, x1: VIEW.width, y1: VIEW.height }, allowance: 0 }];
 
 async function page(): Promise<Uint8Array> {
   return new Uint8Array(await readFile(MDPI_P8));
@@ -61,6 +67,7 @@ describe("renderPdfRegion", () => {
         onePagePdf: Uint8Array.of(1),
         region: { x0: 10, y0: 10, x1: 90, y1: 90 },
         view: { width: 100, height: 100 },
+        containment: [],
       }),
     ).toEqual({ ok: false, failure: "render" });
     expect(rendered).toBe(false);
@@ -97,13 +104,14 @@ describe("renderPdfRegion", () => {
         onePagePdf: Uint8Array.of(1),
         region: { x0: 10, y0: 10, x1: 90, y1: 90 },
         view: { width: 100, height: 100 },
+        containment: [],
       }),
     ).toThrow("destroy failed");
     expect(released).toEqual(["bitmap", "page", "document", "buffer"]);
   });
 
   it("draws the region onto white, at the scale its size allows", async () => {
-    const result = await renderPdfRegion({ onePagePdf: await page(), region: LATTICES, view: VIEW });
+    const result = await renderPdfRegion({ onePagePdf: await page(), region: LATTICES, view: VIEW, containment: EVERYTHING });
     expect(result.ok).toBe(true);
     if (!result.ok) return;
     const { raster } = result;
@@ -128,6 +136,7 @@ describe("renderPdfRegion", () => {
       onePagePdf: await page(),
       region: LATTICES,
       view: { width: VIEW.width, height: VIEW.height + 2 },
+      containment: EVERYTHING,
     });
     expect(result).toEqual({ ok: false, failure: "geometry-mismatch" });
   }, 60_000);
@@ -145,10 +154,10 @@ describe("renderPdfRegion", () => {
       const kind = i % 3;
       const result =
         kind === 0
-          ? await renderPdfRegion({ onePagePdf: good, region: LATTICES, view: VIEW })
+          ? await renderPdfRegion({ onePagePdf: good, region: LATTICES, view: VIEW, containment: EVERYTHING })
           : kind === 1
-            ? await renderPdfRegion({ onePagePdf: good, region: offPage, view: VIEW })
-            : await renderPdfRegion({ onePagePdf: corrupt, region: LATTICES, view: VIEW });
+            ? await renderPdfRegion({ onePagePdf: good, region: offPage, view: VIEW, containment: EVERYTHING })
+            : await renderPdfRegion({ onePagePdf: corrupt, region: LATTICES, view: VIEW, containment: EVERYTHING });
       outcomes.push(result.ok ? "ok" : result.failure);
       if (i === 2) warm = pdfiumHeapBytes();
     }
