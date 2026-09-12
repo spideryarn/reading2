@@ -8,8 +8,12 @@ reported 2026-09-12 08:05 UTC · kind: problem · from an admin (Greg) · on an 
 Slug `entropy-24-00930-spya-bmvfyb`, block `spya-d8tgkx`. The paper is MDPI *Entropy* 2022, 24, 930;
 the slug is the PDF's own filename.
 
-**Status: stage 1 built and committed (`52d8d47a`), under GPT Sol's code review; stage 2 under
-way.** The plan was revised after Sol's review (`ad65edb2` was the first draft; the review is
+**Status: both stages built, reviewed and committed; the review chain is closed (F35 closed on
+`b8c761e0`), and the worktree merged `dev` at `aeb9f59a`.** Stage 1 is `52d8d47a`, with Sol's fixes
+`7d3303ab`, round two `0201fdfc`, the containment check `a4bcb82b` and the policy bump `b8c761e0`;
+stage 2 is `12f659d9` and the env-sweep pin `77a1f744`. **Not deployed** — production is Greg's —
+and the reported article gets its figure only when its `assets` step runs again after a deploy
+(§ The rest of the shape, *Freshness*). The plan was revised after Sol's review (`ad65edb2` was the first draft; the review is
 [260912a-…-plan-review-sol.md](260912a-figure-2-vector-figures-from-a-pdf-plan-review-sol.md), and
 § The review, and what it changed says what was taken).
 
