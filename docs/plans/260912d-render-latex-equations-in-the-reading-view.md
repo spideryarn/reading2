@@ -26,6 +26,13 @@ is the finding.** The prompt at Greg's build (`607b57a0`) is byte-identical to H
   `I(X;Y) := ∑` / `x∈X` / `y∈Y` / `P(x, y)log2` / `P(x|y)` / `P(x)` / `(1)` — and equation (4)'s
   `≠` as `6=`, the glyph pdf.js reads off the page. 24 of 105 blocks carry maths of this kind.
 
+**To reproduce it** (stage 2 will want the same comparison): MDPI's own `/pdf` link answers a script
+with 403, and Europe PMC's render endpoint errors; this mirror served the PDF (2,138,371 bytes,
+19 pages) on 2026-09-12:
+`https://mdpi-res.com/d_attachment/entropy/entropy-24-00930/article_deploy/entropy-24-00930.pdf`,
+then `npx tsx src/pdf-read.ts <file> entropy-24-00930`, in tmux. It is a paid run of a few cents.
+The artefacts of the run above were not kept — the numbers that matter are in this doc.
+
 So there are **two failure modes, and the model chooses between them per run**:
 
 1. It breaks prompt rule 8 (*"No HTML, no markdown, no LaTeX … Plain text only"*) and writes LaTeX —
