@@ -7,6 +7,7 @@
 import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { MODE_CATALOG } from "../src/mode-catalog.js";
 import type { BlockId, Citations, CitedWork } from "../src/types.js";
 import type { UseCitations } from "../src/web/useCitations.js";
 
@@ -221,6 +222,27 @@ describe("CitationsPanel", () => {
     expect(links).toHaveLength(1);
     expect(links[0]?.textContent).toContain("search Scholar");
     expect(links[0]?.getAttribute("href")).toBe("https://scholar.google.com/scholar?q=Searched");
+  });
+
+  /* GPT Sol F17 (second code review): the copy promised "one web search", and
+     nothing bounds how many searches the provider runs inside the one call
+     (the plan's F1). So it promises no count — in plain words, because a reader
+     should not meet "model call". */
+  it("promises no search count the provider controls, in plain words", async () => {
+    const searched = work({
+      id: "spya-e2f3g4",
+      title: "Searched",
+      relevance: 0.9,
+      influence: 0.9,
+      url: "https://scholar.google.com/scholar?q=Searched",
+      linkFrom: "search",
+    });
+    await draw(owner({ citations: artefact([searched, PASSING]) }));
+    const button = row(searched.id).querySelector<HTMLButtonElement>(".cite-find");
+    for (const copy of [button?.title ?? "", MODE_CATALOG.citations.how]) {
+      expect(copy).toMatch(/searches the web for (this|the) work/i);
+      expect(copy).not.toMatch(/one web search|model call/i);
+    }
   });
 
   it("starts the bar at the default, hides what is under it, and says how many", async () => {
