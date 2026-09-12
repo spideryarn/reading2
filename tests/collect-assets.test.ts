@@ -1402,7 +1402,7 @@ describe("assetsInputHash", () => {
    * **The drawn-figure route changes what the step would decide for a PDF, and
    * nothing it would decide for a web page.** So every PDF article's manifest
    * has to read stale — or the new route never runs on an article that already
-   * has one (GPT Sol F4, docs/plans/260912a-…) — and no web article's may, or
+   * has one (GPT Sol F4, docs/plans/260912a-figure-2-vector-figures-from-a-pdf.md) — and no web article's may, or
    * the whole library re-fetches its images to buy nothing.
    *
    * Both halves are measured against the canonical form as it was before the

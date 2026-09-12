@@ -220,7 +220,10 @@ the defences physically live* is wording that tells an agent "you are editing a 
 goes to Greg under [edit-important-docs.md](../reusable/edit-important-docs.md) rather than in by an
 unattended run. The row proposed, to go after `src/injection-scan.ts`:
 
-> | [`src/pdf-figure-page.ts`](../../src/pdf-figure-page.ts) | **what keeps an image away from the second decoder.** `onePageHasImage` walks the cut page's resources and content — XObjects, inline images, patterns, Type 3 glyphs, soft masks — and every doubt counts as an image, so a page the bitmap route refused for an image's size or kind never reaches PDFium. With `locateDrawnFigure`'s operator ceilings in [`src/pdf-figure-region.ts`](../../src/pdf-figure-region.ts), which are guards and not a bound. [security.md](security.md) § the PDF |
+> | [`src/pdf-figure-page.ts`](../../src/pdf-figure-page.ts) | **what keeps an image away from the second decoder.** `onePageHasImage` walks the cut page's resources and content — XObjects, inline images, patterns, Type 3 glyphs, soft masks — and every doubt counts as an image, so a page the bitmap route refused for an image's size or kind never reaches PDFium. With `locateDrawnFigure`'s operator ceilings in [`src/pdf-figure-region.ts`](../../src/pdf-figure-region.ts), which are guards and not a bound. [security.md](../project/security.md) § the PDF |
+
+(The row's links are written relative to this plan so they resolve here; moved into
+`docs/project/security-map.md` they become `security.md` and `../../src/…` unchanged.)
 
 [security.md](../project/security.md) itself — the deep dive, not an entry point — is updated in
 stage 2.

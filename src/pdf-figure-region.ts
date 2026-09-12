@@ -5,7 +5,7 @@
  *
  * docs/plans/260912a-figure-2-vector-figures-from-a-pdf.md, § Which pages are
  * eligible and § Finding the rectangle, with GPT Sol's follow-up
- * (260912a-…-f1-question-sol.md, F11–F13) and Fable's ruling on it folded in.
+ * (docs/plans/260912a-figure-2-vector-figures-from-a-pdf-f1-question-sol.md, F11–F13) and Fable's ruling on it folded in.
  * Its governing rule is 260906a's, and every doubt below resolves the same way:
  *
  * > A missing figure is visible; a wrong one is not.
@@ -85,6 +85,14 @@ export interface PageLayout {
   readonly shadings: number;
   /** Paint whose visible bounds the layout reader could not prove. */
   readonly unmeasuredPaint: number;
+  /**
+   * **Whether a second, strict read of the page — pdf.js with `stopAtErrors` —
+   * came out exactly the same.** pdf.js is run forgiving, so a malformed paint
+   * operator can vanish from the forgiving read while PDFium still draws it
+   * into the crop; a page whose reads disagree is refused. GPT Sol F33;
+   * src/pdf-figure-layout.ts says what is compared.
+   */
+  readonly strictAgrees: boolean;
 }
 
 export interface DrawnFigureInput {
@@ -130,6 +138,8 @@ export type NotOwned =
 
 /** Why no region could be proved to be this caption's. */
 export type NotLocated =
+  /** The forgiving and strict reads of the page disagree — `PageLayout.strictAgrees`. */
+  | "strict-mismatch"
   | "empty-caption"
   | "caption-not-found"
   | "caption-ambiguous"
@@ -329,6 +339,10 @@ export function bandFor(
 
   const page: Page = { width: vx1 - vx0, height: vy1 - vy0, top: vy1, bottom: vy0 };
 
+  /* The forgiving read the rules use must be the whole page: a second, strict
+     read that came out differently means pdf.js skipped something PDFium may
+     still draw. Sol F33. */
+  if (!layout.strictAgrees) return notLocated("strict-mismatch");
   /* Paint whose extent we do not know cannot be proved to be anybody's. */
   if (layout.shadings > 0 || layout.unmeasuredPaint > 0) return notLocated("unbounded-ink");
   /* Rule 3, second half: a border or a watermark refuses the page. */

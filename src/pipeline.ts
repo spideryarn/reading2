@@ -2855,7 +2855,7 @@ export const STEPS: { [K in StepName]: PipelineStep<K> } = {
                 figures: figures.entries.length,
                 figuresStored: figures.stored,
                 /* How many of those were drawn from a page rather than decoded
-                   from a bitmap — docs/plans/260912a-…. */
+                   from a bitmap — docs/plans/260912a-figure-2-vector-figures-from-a-pdf.md. */
                 figuresDrawn: figures.drawn,
                 figuresMs: figures.elapsedMs,
                 ...(figures.storageErrors.length

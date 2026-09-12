@@ -9,7 +9,7 @@
  * the heap is measured across a run that mixes successes with the two
  * failures a real document can produce, and must stop growing once warm.
  *
- * The fixture is the report's page (docs/plans/260912a-…): already a one-page
+ * The fixture is the report's page (docs/plans/260912a-figure-2-vector-figures-from-a-pdf.md): already a one-page
  * PDF, cut with pdf-lib, which is exactly what the renderer is handed in
  * production.
  */

@@ -51,6 +51,7 @@ function layout(parts: Partial<PageLayout> = {}): PageLayout {
     imageOps: 0,
     shadings: 0,
     unmeasuredPaint: 0,
+    strictAgrees: true,
     ...parts,
   };
 }

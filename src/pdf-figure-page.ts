@@ -21,24 +21,32 @@
  *    image — `BI … ID … EI` — in any content stream the page paints, which is
  *    the one kind the resources cannot show.
  *
+ * **The rules of that walk are src/pdf-figure-resources.ts**, pure, over a lazy
+ * tree; this file is only the adapter that reads pdf-lib's dictionaries into
+ * it (GPT Sol F34). Every read is a function the walk calls when it gets there,
+ * so the first doubt still answers and nothing after it is read.
+ *
  * The walk reads the **cut** page rather than the source's. `copyPages` moves a
  * page's inherited resources onto the page itself, so the cut's `/Resources`
  * is everything the page can paint — and it is exactly the thing PDFium will be
  * handed, which is the property that matters.
  */
 
-/* Type-only, so it is erased: pdf-lib itself is imported lazily below. */
-import type { PDFDict as PdfDict } from "pdf-lib";
+/* Type-only, so they are erased: pdf-lib itself is imported lazily below. */
+import type { PDFContext, PDFDict as PdfDict } from "pdf-lib";
 
+import {
+  type Content,
+  type FontEntry,
+  inspectPageTree,
+  type PageInspection,
+  type PaintedEntry,
+  type ResourceNode,
+  type XObjectEntry,
+} from "./pdf-figure-resources.js";
 import { openPdfCuts } from "./pdf-read.js";
 
-/**
- * How deep the walk follows Form XObjects, tiling patterns, Type 3 fonts and
- * soft masks inside one another. A real figure nests two or three deep; past
- * this, the answer is "an image may be in there", because the walk could not
- * prove otherwise.
- */
-export const MAX_RESOURCE_DEPTH = 8;
+export { MAX_RESOURCE_DEPTH } from "./pdf-figure-resources.js";
 
 /**
  * The most decoded bytes of one content stream the inline-image scan will read.
@@ -47,16 +55,6 @@ export const MAX_RESOURCE_DEPTH = 8;
  * inflates past it is answered "may hold an image" rather than read to the end.
  */
 export const MAX_CONTENT_SCAN_BYTES = 32 * 1024 * 1024;
-
-/**
- * The inline-image operator as a token: `BI` between PDF whitespace or
- * delimiters. PDF whitespace includes NUL, which JavaScript's `\s` does not;
- * omitting it lets a valid NUL-delimited inline image pass this refusal. Loose
- * on purpose — a string that happens to spell ` BI ` is a refused page, never
- * a missed image.
- */
-const PDF_TOKEN_BOUNDARY = String.raw`[\x00\x09\x0a\x0c\x0d\x20()[\]{}<>/%]`;
-const INLINE_IMAGE = new RegExp(`(?:^|${PDF_TOKEN_BOUNDARY})BI(?=${PDF_TOKEN_BOUNDARY})`);
 
 export interface FigurePage {
   /** A one-page PDF of this page alone. */
@@ -101,122 +99,126 @@ export async function onePageHasImage(onePage: Uint8Array): Promise<boolean> {
   return (await inspectOnePage(onePage)).imageInResources;
 }
 
-async function inspectOnePage(
-  onePage: Uint8Array,
-): Promise<Pick<FigurePage, "imageInResources" | "unmeasuredPaint">> {
+const DOUBT: PageInspection = { imageInResources: true, unmeasuredPaint: true };
+
+async function inspectOnePage(onePage: Uint8Array): Promise<PageInspection> {
   /* Lazy, for the reason `openPdfCuts` gives: pdf-lib is not a cost any
      request should pay unless it cuts a page. Node caches the module. */
-  const { PDFArray, PDFDocument, PDFDict, PDFName, PDFRawStream, PDFStream, decodePDFRawStream } = await import(
-    "pdf-lib"
-  );
+  const lib = await import("pdf-lib");
   try {
-    const doc = await PDFDocument.load(onePage);
-    if (doc.getPageCount() !== 1) return { imageInResources: true, unmeasuredPaint: true };
-    const context = doc.context;
-    const name = (n: string) => PDFName.of(n);
-    const seen = new Set<unknown>();
-    let unmeasuredPaint = false;
-    const resolve = (value: unknown) => context.lookup(value as Parameters<typeof context.lookup>[0]);
-
-    /** The dictionary of a stream, or the dictionary itself, or nothing. */
-    const dictOf = (value: unknown): PdfDict | undefined => {
-      const resolved = resolve(value);
-      if (resolved instanceof PDFStream) return resolved.dict;
-      if (resolved instanceof PDFDict) return resolved;
-      return undefined;
-    };
-
-    /**
-     * Does this logical content stream contain an inline image? A page's
-     * `/Contents` array is concatenated by PDF readers, so scan it as one byte
-     * sequence too: recovery parsers can recognise a token split at an invalid
-     * stream boundary, and doubt must still refuse the page. Unreadable or over
-     * the cap is a yes.
-     */
-    const paintsInlineSequence = (values: readonly unknown[]): boolean => {
-      const chunks: Buffer[] = [];
-      let total = 0;
-      for (const value of values) {
-        const stream = resolve(value);
-        if (!(stream instanceof PDFRawStream)) return true;
-        const remaining = MAX_CONTENT_SCAN_BYTES - total;
-        const decoded = decodePDFRawStream(stream).getBytes(remaining + 1);
-        if (decoded.length > remaining) return true;
-        const chunk = Buffer.from(decoded.buffer, decoded.byteOffset, decoded.byteLength);
-        chunks.push(chunk);
-        total += chunk.byteLength;
-      }
-      return INLINE_IMAGE.test(Buffer.concat(chunks, total).toString("latin1"));
-    };
-    const paintsInline = (value: unknown): boolean => paintsInlineSequence([value]);
-
-    const walk = (resources: PdfDict | undefined, depth: number): boolean => {
-      if (!resources) return false;
-      if (depth > MAX_RESOURCE_DEPTH) return true;
-      if (seen.has(resources)) return false;
-      seen.add(resources);
-
-      const xobjects = resources.lookupMaybe(name("XObject"), PDFDict);
-      for (const value of xobjects?.asMap().values() ?? []) {
-        const dict = dictOf(value);
-        if (!dict) return true;
-        const subtype = dict.lookupMaybe(name("Subtype"), PDFName);
-        if (subtype === name("Image")) return true;
-        if (subtype !== name("Form")) return true;
-        if (paintsInline(value)) return true;
-        if (walk(dict.lookupMaybe(name("Resources"), PDFDict), depth + 1)) return true;
-      }
-
-      /* A tiling pattern is a little content stream of its own, and can paint an image. */
-      const patterns = resources.lookupMaybe(name("Pattern"), PDFDict);
-      for (const value of patterns?.asMap().values() ?? []) {
-        const resolved = resolve(value);
-        if (!(resolved instanceof PDFStream)) return true;
-        if (paintsInline(value)) return true;
-        if (walk(resolved.dict.lookupMaybe(name("Resources"), PDFDict), depth + 1)) return true;
-      }
-
-      /* So is every glyph of a Type 3 font. */
-      const fonts = resources.lookupMaybe(name("Font"), PDFDict);
-      for (const value of fonts?.asMap().values() ?? []) {
-        const dict = dictOf(value);
-        if (!dict) return true;
-        const subtype = dict.lookupMaybe(name("Subtype"), PDFName);
-        if (!subtype) return true;
-        if (subtype !== name("Type3")) continue;
-        /* pdf.js renders a Type 3 CharProc internally but does not put its
-           vector paths in the page's operator list. PDFium would therefore
-           draw ink the ownership and complexity rules never measured. */
-        unmeasuredPaint = true;
-        const glyphs = dict.lookupMaybe(name("CharProcs"), PDFDict);
-        for (const glyph of glyphs?.asMap().values() ?? []) if (paintsInline(glyph)) return true;
-        if (walk(dict.lookupMaybe(name("Resources"), PDFDict), depth + 1)) return true;
-      }
-
-      /* And a soft mask is a Form XObject painted as a mask. */
-      const states = resources.lookupMaybe(name("ExtGState"), PDFDict);
-      for (const value of states?.asMap().values() ?? []) {
-        const state = dictOf(value);
-        if (!state) return true;
-        const smaskValue = state.get(name("SMask"));
-        if (!smaskValue || resolve(smaskValue) === name("None")) continue;
-        const smask = dictOf(smaskValue);
-        if (!smask) return true;
-        const groupRef = smask?.get(name("G"));
-        const group = groupRef && dictOf(groupRef);
-        if (!groupRef || !group) return true;
-        if (paintsInline(groupRef)) return true;
-        if (walk(group.lookupMaybe(name("Resources"), PDFDict), depth + 1)) return true;
-      }
-      return false;
-    };
-
+    const doc = await lib.PDFDocument.load(onePage);
+    if (doc.getPageCount() !== 1) return DOUBT;
+    const reader = pdfLibReader(lib, doc.context);
     const page = doc.getPage(0).node;
-    const contents = page.Contents();
-    const streams = contents instanceof PDFArray ? contents.asArray() : contents ? [contents] : [];
-    const imageInResources = paintsInlineSequence(streams) || walk(page.Resources(), 0);
-    return { imageInResources, unmeasuredPaint };
+    return inspectPageTree({
+      contents: () => reader.decodeSequence(reader.contentStreams(page.Contents())),
+      resources: () => reader.node(page.Resources()),
+    });
   } catch {
-    return { imageInResources: true, unmeasuredPaint: true };
+    /* A throw anywhere in the reading — a dictionary of the wrong type, a
+       filter pdf-lib cannot decode — proves nothing about the page. */
+    return DOUBT;
   }
+}
+
+type PdfLib = typeof import("pdf-lib");
+
+/** pdf-lib's objects, read into the walk's lazy tree. */
+function pdfLibReader(lib: PdfLib, context: PDFContext) {
+  const { PDFArray, PDFDict, PDFName, PDFRawStream, PDFStream, decodePDFRawStream } = lib;
+  const name = (n: string) => PDFName.of(n);
+  const resolve = (value: unknown) => context.lookup(value as Parameters<typeof context.lookup>[0]);
+
+  /** The dictionary of a stream, or the dictionary itself, or nothing. */
+  const dictOf = (value: unknown): PdfDict | undefined => {
+    const resolved = resolve(value);
+    if (resolved instanceof PDFStream) return resolved.dict;
+    if (resolved instanceof PDFDict) return resolved;
+    return undefined;
+  };
+
+  /**
+   * One logical content stream's decoded bytes, or `null` when a part is not a
+   * stream or the whole runs past `MAX_CONTENT_SCAN_BYTES`. A page's
+   * `/Contents` array is concatenated by PDF readers, so it is decoded as one
+   * byte sequence: a token split at a stream boundary is still found.
+   */
+  const decodeSequence = (values: readonly unknown[]): Uint8Array | null => {
+    const chunks: Buffer[] = [];
+    let total = 0;
+    for (const value of values) {
+      const stream = resolve(value);
+      if (!(stream instanceof PDFRawStream)) return null;
+      const remaining = MAX_CONTENT_SCAN_BYTES - total;
+      const decoded = decodePDFRawStream(stream).getBytes(remaining + 1);
+      if (decoded.length > remaining) return null;
+      chunks.push(Buffer.from(decoded.buffer, decoded.byteOffset, decoded.byteLength));
+      total += decoded.byteLength;
+    }
+    return Buffer.concat(chunks, total);
+  };
+  const content = (value: unknown): Content => () => decodeSequence([value]);
+
+  const contentStreams = (contents: unknown): unknown[] =>
+    contents instanceof PDFArray ? contents.asArray() : contents ? [contents] : [];
+
+  const entriesOf = (resources: PdfDict, key: string): unknown[] => [
+    ...(resources.lookupMaybe(name(key), PDFDict)?.asMap().values() ?? []),
+  ];
+  const resourcesOf = (dict: PdfDict) => (): ResourceNode | undefined =>
+    node(dict.lookupMaybe(name("Resources"), PDFDict));
+
+  const xobjectEntry = (value: unknown): XObjectEntry => {
+    const dict = dictOf(value);
+    if (!dict) return { kind: "unclassified" };
+    const subtype = dict.lookupMaybe(name("Subtype"), PDFName);
+    if (subtype === name("Image")) return { kind: "image" };
+    if (subtype !== name("Form")) return { kind: "unclassified" };
+    return { kind: "form", content: content(value), resources: resourcesOf(dict) };
+  };
+
+  /* A tiling pattern is a little content stream of its own, and can paint an image. */
+  const patternEntry = (value: unknown): PaintedEntry => {
+    const resolved = resolve(value);
+    if (!(resolved instanceof PDFStream)) return { kind: "unreadable" };
+    return { kind: "painted", content: content(value), resources: resourcesOf(resolved.dict) };
+  };
+
+  /* So is every glyph of a Type 3 font. */
+  const fontEntry = (value: unknown): FontEntry => {
+    const dict = dictOf(value);
+    if (!dict) return { kind: "unclassified" };
+    const subtype = dict.lookupMaybe(name("Subtype"), PDFName);
+    if (!subtype) return { kind: "unclassified" };
+    if (subtype !== name("Type3")) return { kind: "other" };
+    return {
+      kind: "type3",
+      glyphs: () => [...(dict.lookupMaybe(name("CharProcs"), PDFDict)?.asMap().values() ?? [])].map(content),
+      resources: resourcesOf(dict),
+    };
+  };
+
+  /* And a soft mask is a Form XObject painted as a mask. */
+  const softMaskEntry = (value: unknown): PaintedEntry => {
+    const state = dictOf(value);
+    if (!state) return { kind: "unreadable" };
+    const smaskValue = state.get(name("SMask"));
+    if (!smaskValue || resolve(smaskValue) === name("None")) return { kind: "none" };
+    const smask = dictOf(smaskValue);
+    const groupRef = smask?.get(name("G"));
+    const group = groupRef && dictOf(groupRef);
+    if (!groupRef || !group) return { kind: "unreadable" };
+    return { kind: "painted", content: content(groupRef), resources: resourcesOf(group) };
+  };
+
+  const node = (resources: PdfDict | undefined): ResourceNode | undefined =>
+    resources && {
+      id: resources,
+      xobjects: () => entriesOf(resources, "XObject").map((value) => () => xobjectEntry(value)),
+      patterns: () => entriesOf(resources, "Pattern").map((value) => () => patternEntry(value)),
+      fonts: () => entriesOf(resources, "Font").map((value) => () => fontEntry(value)),
+      softMasks: () => entriesOf(resources, "ExtGState").map((value) => () => softMaskEntry(value)),
+    };
+
+  return { decodeSequence, contentStreams, node };
 }

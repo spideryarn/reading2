@@ -385,7 +385,7 @@ export function pdfFigureMarkersIn(blocks: readonly Block[]): PdfFigureMarker[] 
  *
  * What the drawn-figure route matches against the page's text layer to find
  * *this* caption rather than a sentence that mentions it (src/pdf-figure-region.ts,
- * docs/plans/260912a-…). The same walk as `pdfFigureMarkersIn` above, and only
+ * docs/plans/260912a-figure-2-vector-figures-from-a-pdf.md). The same walk as `pdfFigureMarkersIn` above, and only
  * the refs *it* hands back, so a ref two blocks carry gets no caption either.
  * A marker whose element has no caption is simply absent: the route is then
  * never tried for it, and it keeps the bitmap route's answer.
