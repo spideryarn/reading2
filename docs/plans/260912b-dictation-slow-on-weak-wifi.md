@@ -126,17 +126,27 @@ latency, against 1.43 s measured.
 
 ## What to change, and the version passed over
 
-**Ask for a speech bitrate on the engines that honour one, and keep the container.** In
-`mic-recording.ts`, the AAC-in-MP4 attempt carries `audioBitsPerSecond: 48_000` everywhere except
-Chromium — decided by the same `Chromium`-brand check `useDictation`'s probe already makes, moved to
-one place so there are not two engine checks. An iPad goes from ~24 KB/s to ~6 KB/s, and a 30-second
-dictation's upload on the weak-Wi-Fi profile from ~8 s to ~2 s. Chrome is untouched.
+**Ask for a speech bitrate on the engine that honours one, and keep the container.** In
+`mic-recording.ts`, the AAC-in-MP4 attempt carries `audioBitsPerSecond: 48_000` **on WebKit only** —
+`navigator.vendor === "Apple Computer, Inc."`, which Safari and every browser on an iPad or iPhone
+report and Chromium does not (`"Google Inc."`). An iPad goes from ~24 KB/s to ~6 KB/s, and a
+30-second dictation's upload on the weak-Wi-Fi profile from ~8 s to ~2 s. Chrome is untouched.
 
-Why the engine check rather than a hint everywhere: **Chromium's AAC encoder throws on a hint** and
+Why an engine check rather than a hint everywhere: **Chromium's AAC encoder throws on a hint** and
 nothing can ask it first (the `ATTEMPTS` comment has the measurements), and the ladder's recovery
 starts the next recorder ~380 ms later — which eats the reader's first word. So a hint may only go
-where the encoder is known to take it. Firefox has no AAC recording and never reaches the attempt;
-Chrome on an iPad is WebKit, has no `userAgentData`, and correctly gets the hint.
+where the encoder is known to take it, and WebKit's source says it does (it hands the value to Core
+Audio, and a refused value falls back rather than throwing).
+
+**A positive WebKit check, not "not Chromium" — and not a reuse of the check `useDictation` already
+has.** The first draft of this plan moved `probeIsSafe()`'s `Chromium`-brand test here to avoid two
+engine checks. It would have been the wrong way round: that test is built so its mistake is harmless
+*for the probe* — a Chromium it fails to recognise merely skips a question. Reused for the hint, the
+same mistake sends a hint to a Chromium AAC encoder, which throws, and the reader loses their first
+word. For the hint the harmless default is *no hint* (today's behaviour), so the predicate has to say
+yes only to what it positively recognises. Two predicates, because they fail in opposite directions;
+and `useDictation` and the fleet's pinned import list stay untouched. Firefox has no AAC recording
+and never reaches the attempt either way.
 
 Why 48 kbps: AAC-LC needs a little more than Opus for the same speech, and a value Core Audio refuses
 does not fail — it falls back to 192 kbps silently. 48k is a common rate; 32k was tempting and is
@@ -171,9 +181,9 @@ sibling — so it is its own stage with its own review, and it can be dropped wi
 
 1. **The measurement** — `scripts/spike-dictation-latency.ts`, its results file, this plan. Done.
 2. **The bitrate hint, and production saying whether it was taken.**
-   - `mic-recording.ts`: the engine check moves here as `isChromium()` (`useDictation`'s
-     `probeIsSafe` calls it); `supportedAttempts` takes it and puts the hint on AAC off Chromium.
-     Red-first tests in `tests/mic-recording.test.ts`.
+   - `mic-recording.ts`: a new `takesAacBitrate()` — WebKit, recognised positively by
+     `navigator.vendor` — and `supportedAttempts` puts the hint on the AAC attempt when it says yes.
+     `useDictation` is not touched. Red-first tests in `tests/mic-recording.test.ts`.
    - **The achieved rate, logged.** OpenRouter's transcription reply carries `usage.seconds` — the
      provider's own measure of the audio's length — so `openRouterTranscription` returns it and the
      `dictation transcribed` line logs `format`, `audioKb`, `audioSeconds` and `kbps`. No client or
