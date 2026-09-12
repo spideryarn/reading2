@@ -296,6 +296,28 @@ export interface RemoveOptions {
   dryRun?: boolean;
   /** The asking process, injected so ancestry can be arranged in a test. */
   pid?: number;
+  /**
+   * The liveness read, injected so a test can make a peer arrive BETWEEN the two
+   * reads — an interleaving real processes in a single-threaded test cannot make.
+   * Production leaves it unset.
+   */
+  liveness?: (worktreePath: string, lockReason: string | undefined) => Liveness;
+}
+
+/** Why a liveness answer forbids removal, or `null` when it is `idle`. */
+function livenessRefusal(live: Liveness): string[] | null {
+  switch (live.inUse.kind) {
+    case "in-use":
+      return ["refused: this worktree is in use", ...live.inUse.reasons.map((r) => `  ${r}`)];
+    case "unknown":
+      return ["refused: could not tell whether anything is using this worktree", ...live.inUse.why.map((w) => `  ${w}`)];
+    case "idle":
+      return null;
+    default: {
+      const unreachable: never = live.inUse;
+      throw new Error(`unhandled liveness ${JSON.stringify(unreachable)}`);
+    }
+  }
 }
 
 export interface RemoveOutcome {
@@ -664,24 +686,11 @@ export function removeWorktree(cwd: string, wanted: string | undefined, opts: Re
      The same question for the owner and for anyone else. An unknown refuses
      for both: there is no longer a floor for it to fall back to, and "could not
      tell whether a session is in there" is not an answer to remove on. */
-  const live = liveness(entry.path, entry.lockReason, opts.pid ?? process.pid);
-  switch (live.inUse.kind) {
-    case "in-use":
-      return refuse(steps, "refused: this worktree is in use", ...live.inUse.reasons.map((r) => `  ${r}`));
-    case "unknown":
-      return refuse(
-        steps,
-        "refused: could not tell whether anything is using this worktree",
-        ...live.inUse.why.map((w) => `  ${w}`),
-      );
-    case "idle":
-      for (const n of live.inUse.notes) steps.push(`ok   ${n}`);
-      break;
-    default: {
-      const unreachable: never = live.inUse;
-      throw new Error(`unhandled liveness ${JSON.stringify(unreachable)}`);
-    }
-  }
+  const readLiveness = opts.liveness ?? ((p: string, r: string | undefined) => liveness(p, r, opts.pid ?? process.pid));
+  const live = readLiveness(entry.path, entry.lockReason);
+  const notLive = livenessRefusal(live);
+  if (notLive !== null) return refuse(steps, ...notLive);
+  if (live.inUse.kind === "idle") for (const n of live.inUse.notes) steps.push(`ok   ${n}`);
 
   /* --- THE PROOF, COMPLETED BEFORE ANYTHING IS DESTROYED --------------- */
   const oids = reachableOids(primary, branch, entry.path);
@@ -707,6 +716,22 @@ export function removeWorktree(cwd: string, wanted: string | undefined, opts: Re
     steps.push(`would remove ${entry.path}`);
     steps.push(branch === undefined ? "  detached HEAD — there would be no branch to delete" : `  and would delete branch ${branch}`);
     return { ok: true, steps };
+  }
+
+  /* --- the lock we are about to lift must be the lock we judged ---------
+     A peer that resumed this tree since the listing may have re-locked it under
+     its own live session. Unlocking would take that lock off, and the late
+     liveness read below would then be asked about the old, stale owner. So the
+     registration is read again, and any change to the lock refuses untouched.
+     GPT Sol, the namespace-fix review of 260912a. */
+  const now = listWorktrees(primary).find((e) => path.resolve(e.path) === path.resolve(entry.path));
+  if (now === undefined || now.locked !== entry.locked || now.lockReason !== entry.lockReason) {
+    return refuse(
+      steps,
+      "refused: the worktree's lock changed since it was read — somebody may have come back to it",
+      `  was: ${entry.locked ? (entry.lockReason ?? "(locked, no reason)") : "(unlocked)"}`,
+      `  now: ${now === undefined ? "(no longer registered)" : now.locked ? (now.lockReason ?? "(locked, no reason)") : "(unlocked)"}`,
+    );
   }
 
   /* --- unlock, stopping if we cannot ----------------------------------- */
@@ -736,6 +761,21 @@ export function removeWorktree(cwd: string, wanted: string | undefined, opts: Re
   if (again.kind !== "ok" || stillLanded === null || stillLanded.kind !== "landed") {
     steps.push("refused: this tree changed between the first proof and the removal");
     steps.push(`  ${again.kind === "ok" ? (stillLanded?.kind === "not-landed" ? `${stillLanded.count} commits are not on the trunk now` : "the proof could not be retaken") : again.why}`);
+    if (entry.locked) relock(primary, entry.path, originalLock, steps);
+    return { ok: false, steps };
+  }
+
+  /* --- and liveness again, for the same reason -------------------------
+     One read is not a lease: a peer can resume a clean, landed tree with a stale
+     lock after the first read, and without this it was unlocked and removed with
+     the peer inside (GPT Sol's P1 on the namespace-fix review of 260912a). Read
+     after the unlock, so a peer that locks from here on is refused by git itself
+     — `git worktree remove` will not remove a locked tree. What is left is a peer
+     that enters WITHOUT locking in the gap between this read and the removal:
+     closing that needs an exclusion shared with EnterWorktree, which is not ours. */
+  const lateRefusal = livenessRefusal(readLiveness(entry.path, originalLock));
+  if (lateRefusal !== null) {
+    steps.push(lateRefusal[0] === undefined ? "refused" : `${lateRefusal[0]} (read again, just before the removal)`, ...lateRefusal.slice(1));
     if (entry.locked) relock(primary, entry.path, originalLock, steps);
     return { ok: false, steps };
   }
