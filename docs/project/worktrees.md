@@ -325,6 +325,14 @@ of the box, so the live pid in a peer's lock is simply absent — it read as *st
 `4026531836`; any other namespace, or a link that cannot be read, is an `unknown`, and an unknown
 refuses. Run from a sandbox, `worktree:remove` now says so instead of agreeing.
 
+**And it is read twice, because one read is not a lease.** Sol's review of that fix found the next
+hole: a peer resuming a clean, landed tree with a stale lock *after* the liveness read had its tree
+unlocked and removed from under it. So the removal re-reads the registration before it unlocks — a
+lock that changed since it was judged refuses untouched — and reads liveness again after the unlock,
+just before `git worktree remove`, which itself refuses a tree a peer has locked in the meantime. What
+remains is a peer that enters *without* locking in the milliseconds between that last read and the
+removal; closing it needs an exclusion shared with `EnterWorktree`, which is not ours to build.
+
 **The ownership proof is still here, and it grants nothing.** `claude --worktree` writes the owning
 session's pid *and start time* into the worktree lock. A live pid in the lock refuses anybody else —
 that is what keeps a peer's five-minute-old tree safe — and without the proof it would refuse the

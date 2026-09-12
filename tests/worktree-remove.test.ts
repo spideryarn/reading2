@@ -31,6 +31,7 @@ import {
   deleteRefIfUnmoved,
   gitRemoveWorktree,
   landedProof,
+  type Liveness,
   liveness,
   proveAndDeleteBranch,
   reachableOids,
@@ -637,6 +638,75 @@ describe("liveness, from inside a private PID namespace", () => {
     const why = live.inUse.kind === "unknown" ? live.inUse.why.join(" ") : "";
     expect(why).not.toContain("PID namespace");
     expect(live.inUse.kind).not.toBe("in-use");
+  });
+});
+
+describe("liveness is read again after the unlock, not only once", () => {
+  /* GPT Sol's P1 on the namespace-fix review of 260912a: one liveness read is not
+     a lease. A peer can resume a clean, landed tree with a stale lock after that
+     read, and the removal then unlocked it and removed it with the peer inside.
+     These fake only the liveness answer, per call, to arrange a peer arriving
+     between the two reads — the interleaving a single-threaded test cannot make
+     with real processes. Everything else, git's refusals included, is real. */
+  const STALE = "claude session gone (pid 999999 start 1)";
+  const idle = (): Liveness => ({ standing: { kind: "unlocked" }, inUse: { kind: "idle", notes: ["nobody"] } });
+  const inUse = (): Liveness => ({ standing: { kind: "unlocked" }, inUse: { kind: "in-use", reasons: ["a peer came in"] } });
+
+  it("REFUSES, and puts the lock back, when somebody enters after the first read", () => {
+    const wt = landedWorktree("worktree-late-entry");
+    git(["worktree", "lock", "--reason", STALE, wt], primary);
+    let calls = 0;
+
+    const out = removeWorktree(primary, "worktree-late-entry", {
+      liveness: () => (++calls === 1 ? idle() : inUse()),
+    });
+
+    expect(out.ok).toBe(false);
+    expect(out.steps.join("\n")).toContain("a peer came in");
+    expect(existsSync(wt)).toBe(true);
+    expect(listWorktrees(primary).find((e) => e.path === wt)?.lockReason).toBe(STALE);
+  });
+
+  it("REFUSES without unlocking when the lock changed after the first read", () => {
+    /* A peer that resumed the tree re-locked it under its own session. Our
+       unlock would have taken the peer's lock off. */
+    const wt = landedWorktree("worktree-relocked");
+    git(["worktree", "lock", "--reason", STALE, wt], primary);
+    const PEER = "claude session peer (pid 999998 start 2)";
+    let calls = 0;
+
+    const out = removeWorktree(primary, "worktree-relocked", {
+      liveness: () => {
+        calls += 1;
+        if (calls === 1) {
+          git(["worktree", "unlock", wt], primary);
+          git(["worktree", "lock", "--reason", PEER, wt], primary);
+        }
+        return idle();
+      },
+    });
+
+    expect(out.ok).toBe(false);
+    expect(out.steps.join("\n")).toContain("lock changed");
+    expect(existsSync(wt)).toBe(true);
+    expect(listWorktrees(primary).find((e) => e.path === wt)?.lockReason).toBe(PEER);
+  });
+
+  it("control: the same fake saying idle both times lets it through", () => {
+    const wt = landedWorktree("worktree-idle-twice");
+    git(["worktree", "lock", "--reason", STALE, wt], primary);
+    let calls = 0;
+
+    const out = removeWorktree(primary, "worktree-idle-twice", {
+      liveness: () => {
+        calls += 1;
+        return idle();
+      },
+    });
+
+    expect(out.ok).toBe(true);
+    expect(calls).toBe(2);
+    expect(existsSync(wt)).toBe(false);
   });
 });
 
