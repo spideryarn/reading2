@@ -219,6 +219,47 @@ proposed, with one amendment.
 | F9 | P2 · `render-failed` conflation | **Taken.** `too-complex` separate |
 | F10 | P3 · licence | **Taken.** |
 
+### Round two: the one departure, put back to Sol, then to Fable
+
+The amendment to F1 was the one place this plan overrode Sol, so it went back to Sol as a narrow
+question ([prompt](260912a-figure-2-vector-figures-from-a-pdf-f1-question-prompt.md),
+[answer](260912a-figure-2-vector-figures-from-a-pdf-f1-question-sol.md)): **sound with changes**.
+
+| | | |
+|---|---|---|
+| F11 | P1 · a foreign drawing inside the caption's span is absorbed, not refused | **Residual, accepted** — Fable, below |
+| F12 | P1 · text is not ink, so a stray word inside the crop passes | **Taken.** Any text in the band that is not a label touching the region refuses the page |
+| F13 | P1 · one extracted marker is not one printed caption | **Taken.** Exactly one printed `Figure|Fig. N` opening on the page, as well as one marker |
+| F14 | P1 · no geometry-only rule can prove that disconnected drawings belong together | **True, and not built around** — Fable, below |
+
+Sol's "smallest sound" answer to F14 was an exception keyed to this one PDF's digest. Not taken, and
+the page carries no other ownership signal — neither PDF has tagged structure (no `StructTreeRoot`,
+checked with pdf.js). So it went to **Fable**, 2026-09-12, as a product call between *connected
+drawings only* (safe, and refuses Greg's Figure 2) and *admit disconnected drawings with every fixable
+refusal*:
+
+> **Call: B** […] Not C — a digest-keyed exception is a test fixture wearing a feature's clothes; it
+> fixes one reader's one article and teaches the code nothing. Not A — multi-panel is the *normal*
+> shape of a drawn figure in ML and physics papers […] B's residual is *addition*: the crop is,
+> literally and provably, the region printed directly above this caption on this page. The true
+> figure is always in it. […] the code does not need to claim ownership. It needs to claim only
+> what it can prove.
+
+So disconnected drawings are admitted, with Fable's three further refusals: a component that is one
+closed rectangle with text inside it (a boxed equation, a sidebar); any component under 36 pt on a
+side (evidence of an ornament, not absorbed into the region); more than six components. Each is
+measured against the three real figures before it is trusted. Fable also noted that the F11 layout —
+a foreign drawing set beside a half-width figure over a full-width caption — is one a LaTeX float
+cannot produce, and that F12 already refuses text-wrapped layouts.
+
+**Fable's wording point** — say *"the drawing above this caption on page N"*, not *"Figure N"* — turns
+out to need no change, because the reading view makes no textual claim to reword. A recovered figure
+is inserted with `alt=""`, deliberately (`src/web/rehost.ts`, *"The visible `<figcaption>` beside it
+carries the caption, so alt text would be the same sentence announced twice"*), and beside it sits
+the icon that opens that page of the PDF. So the only assertion the app makes is *this picture sits
+under this caption*, which is exactly what the rendered region is. Writing a sentence into the `alt`
+would add a claim, not narrow one, and undo an accessibility decision taken for its own reasons.
+
 ## The simpler options passed over
 
 1. **Say why, and do not show it.** Tell the reader of a bitmapless page that the figure is drawn and

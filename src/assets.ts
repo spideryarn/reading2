@@ -194,8 +194,11 @@ export interface Assets {
  * Why a figure marker ended up with no picture.
  *
  * The first seven are `PdfFigureFailure` in src/pdf-figures.ts, which decides
- * them on bytes; the last six are this step's, and cannot be decided there
- * because that module never encodes, stores, reads a bucket or watches a clock.
+ * them on bytes; the rest are this step's, and cannot be decided there because
+ * that module never encodes, stores, reads a bucket or watches a clock. Three
+ * of those — `not-located`, `too-complex`, `render-failed` — belong to the
+ * route for a figure that is drawn rather than pictured
+ * (docs/plans/260912a-figure-2-vector-figures-from-a-pdf.md).
  *
  * **The six are six because folding them together loses the fix.** Until
  * 2026-09-06 four of them were spelled `out-of-time` — a missing object, a
@@ -225,6 +228,33 @@ export type PdfFigureFailure =
   | "bad-dimensions"
   | "too-many-pixels"
   | "byte-count-mismatch"
+  /**
+   * **The page was the narrow case the drawn-figure route exists for, and no
+   * drawing on it could be proved to be this caption's.** One figure marker,
+   * no image of any kind, an ordinary geometry — and then the caption was not
+   * found, or something else was drawn beside the figure, or the region failed
+   * a sanity bound. Refused rather than guessed, because a missing figure is
+   * visible and a wrong one is not. src/pdf-figure-region.ts.
+   *
+   * Its own word rather than `no-raster`, which keeps meaning *this page was not
+   * the narrow case at all*: the two are what the route will be tuned by.
+   */
+  | "not-located"
+  /**
+   * **An eligible page over the operator ceiling, never handed to the
+   * renderer.** A deliberate refusal, kept apart from `render-failed` so that
+   * the two can be told apart while the ceilings are being calibrated — GPT
+   * Sol F9. `MAX_PAGE_OPERATORS`, src/pdf-figure-region.ts.
+   */
+  | "too-complex"
+  /**
+   * **The renderer refused, threw, or could not be loaded.** A fault in our
+   * machinery or in the document's page, never a judgement about the figure.
+   * A WASM file missing from the deployed function lands here too, which is
+   * what makes that failure safe: caption-only, never a wrong picture.
+   * src/pdf-figure-render.ts.
+   */
+  | "render-failed"
   /** The raster was fine and turning it into a PNG was not. */
   | "encode-failed"
   /**

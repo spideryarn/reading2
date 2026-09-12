@@ -19,6 +19,7 @@
  */
 import { describe, expect, it } from "vitest";
 import { readFile } from "node:fs/promises";
+import { inflateSync } from "node:zlib";
 
 import {
   collectPdfFigures,
@@ -416,6 +417,130 @@ describe("the article's shared byte budget", () => {
     expect(run.entries[1]).toMatchObject({ status: "failed", reason: "budget" });
     expect(run.stored).toBe(1);
     expect(blobs.objects.size).toBe(1);
+  }, 60_000);
+});
+
+/* ------------------------------------------------------------------ *
+ * A figure drawn rather than pictured
+ * ------------------------------------------------------------------ */
+
+/** Page 8 of the MDPI paper the report was about, cut to one page. */
+const MDPI_P8 = "tests/fixtures/pdf-vector-figure/entropy-24-00930-p8.pdf";
+const ARXIV = "evals/pdf/titles/arxiv-arnn-eeg-stamp/source.pdf";
+
+/**
+ * Every pixel of a filter-0 PNG as written by `encodeFigurePng`: the IDAT
+ * chunks inflated, the one filter byte at the front of each row dropped.
+ * Enough to ask whether a stored figure draws anything; not a general reader.
+ */
+function pngPixels(png: Uint8Array): { width: number; height: number; channels: number; data: Uint8Array } {
+  const view = Buffer.from(png.buffer, png.byteOffset, png.byteLength);
+  const width = view.readUInt32BE(16);
+  const height = view.readUInt32BE(20);
+  const channels = view[25] === 6 ? 4 : 3;
+  const idat: Buffer[] = [];
+  for (let at = 8; at < view.length; ) {
+    const length = view.readUInt32BE(at);
+    const type = view.toString("latin1", at + 4, at + 8);
+    if (type === "IDAT") idat.push(view.subarray(at + 8, at + 8 + length));
+    at += 12 + length;
+  }
+  const raw = inflateSync(Buffer.concat(idat));
+  const stride = width * channels;
+  const data = new Uint8Array(width * height * channels);
+  for (let y = 0; y < height; y++) data.set(raw.subarray(y * (stride + 1) + 1, (y + 1) * (stride + 1)), y * stride);
+  return { width, height, channels, data };
+}
+
+async function storedPng(
+  blobs: ReturnType<typeof fakeBlobs>,
+  entry: { status: string; sha256?: string },
+): Promise<Uint8Array> {
+  const found = [...blobs.objects.entries()].find(([key]) => entry.sha256 && key.includes(entry.sha256));
+  if (!found) throw new Error("the stored figure is not in the bucket");
+  return found[1];
+}
+
+describe("a figure drawn rather than pictured", () => {
+  it("draws Figure 2 of the report's page — both lattices, and not the page", async () => {
+    const figure = marker(1);
+    const blobs = fakeBlobs();
+    const run = await collectPdfFigures({
+      markers: [figure],
+      pdf: await bytes(MDPI_P8),
+      blobs,
+      captions: new Map([
+        [
+          figure.ref,
+          "Figure 2. Partial information lattices. On the left is the lattice for two predictor variables, and on the right is the lattice for three predictor variables.",
+        ],
+      ]),
+    });
+    const entry = run.entries[0]!;
+    expect(entry).toMatchObject({ status: "stored", ext: "png" });
+    if (entry.status !== "stored") return;
+    /* The drawing spans x ≈ 166–515 pt and y ≈ 465–755 pt on this page: both
+       lattices and their labels, and neither the caption below nor the
+       running header above. Its shape is wider than tall; a whole A4 page is
+       taller than wide, so the ratio alone tells the two apart. */
+    const ratio = entry.width / entry.height;
+    expect(ratio).toBeGreaterThan(349 / 290 - 0.12);
+    expect(ratio).toBeLessThan(349 / 290 + 0.12);
+    expect(Math.max(entry.width, entry.height)).toBeLessThanOrEqual(MAX_FIGURE_EDGE);
+    const pixels = pngPixels(await storedPng(blobs, entry));
+    expect([pixels.width, pixels.height]).toEqual([entry.width, entry.height]);
+    expect(pixels.data.some((byte) => byte !== 255), "a figure that draws nothing").toBe(true);
+    /* Not the bitmap route's picture: this page has no bitmap at all. */
+    expect(pixels.channels).toBe(3);
+  }, 60_000);
+
+  it("draws both figures of the arXiv paper, each from its own page", async () => {
+    const one = marker(2);
+    const two = marker(3);
+    const blobs = fakeBlobs();
+    const run = await collectPdfFigures({
+      markers: [one, two],
+      pdf: await bytes(ARXIV),
+      blobs,
+      captions: new Map([
+        [
+          one.ref,
+          "Figure 1: Comprehensive illustration of the Attentive recurrent neural network (ARNN) architecture. The architecture begins by segmenting multi-channel input EEG signals into number of local windows.",
+        ],
+        [
+          two.ref,
+          "Figure 2: An illustration of sequence processing by RNN, ViT and ARNN cell. In contrast to sequential processing by RNN and parallel processing by ViT, ARNN cell operates sequentially.",
+        ],
+      ]),
+    });
+    expect(run.entries.map((e) => e.status)).toEqual(["stored", "stored"]);
+    const [first, second] = run.entries;
+    if (first?.status !== "stored" || second?.status !== "stored") return;
+    /* 338 × 224 pt and 520 × 182 pt, measured on the pages and checked by eye
+       in the plan's prototype. */
+    expect(first.width / first.height).toBeGreaterThan(338 / 224 - 0.15);
+    expect(first.width / first.height).toBeLessThan(338 / 224 + 0.15);
+    expect(second.width / second.height).toBeGreaterThan(520 / 182 - 0.25);
+    expect(second.width / second.height).toBeLessThan(520 / 182 + 0.25);
+    for (const entry of [first, second]) {
+      const pixels = pngPixels(await storedPng(blobs, entry));
+      expect(pixels.data.some((byte) => byte !== 255)).toBe(true);
+    }
+  }, 60_000);
+
+  it("stores nothing for a caption the page does not print", async () => {
+    const figure = marker(1);
+    const blobs = fakeBlobs();
+    const run = await collectPdfFigures({
+      markers: [figure],
+      pdf: await bytes(MDPI_P8),
+      blobs,
+      captions: new Map([[figure.ref, "Figure 9. A caption that this page does not print anywhere at all."]]),
+    });
+    expect(run.entries).toEqual([
+      expect.objectContaining({ status: "failed", reason: "not-located", page: 1 }),
+    ]);
+    expect(blobs.objects.size).toBe(0);
   }, 60_000);
 });
 

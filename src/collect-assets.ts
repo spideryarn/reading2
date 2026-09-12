@@ -76,7 +76,9 @@ import {
   type Assets,
   type ImageCandidate,
   imageCandidatesIn,
+  PDF_FIGURE_SELECTOR,
   type PdfFigureMarker,
+  parsePdfFigureMarker,
   /* Aliased because this module exports the *blocks* walk under that name and
      the two would collide. Same distinction as `imageSourcesIn` (a root) and
      `imageUrlsIn` (an article) above it. */
@@ -378,6 +380,48 @@ export function pdfFigureMarkersIn(blocks: readonly Block[]): PdfFigureMarker[] 
 }
 
 /**
+ * **Each PDF figure's caption, keyed by its marker's ref** — the text of the
+ * marker element's own `<figcaption>`, whitespace collapsed.
+ *
+ * What the drawn-figure route matches against the page's text layer to find
+ * *this* caption rather than a sentence that mentions it (src/pdf-figure-region.ts,
+ * docs/plans/260912a-…). The same walk as `pdfFigureMarkersIn` above, and only
+ * the refs *it* hands back, so a ref two blocks carry gets no caption either.
+ * A marker whose element has no caption is simply absent: the route is then
+ * never tried for it, and it keeps the bitmap route's answer.
+ */
+export function pdfFigureCaptionsIn(blocks: readonly Block[]): Map<string, string> {
+  const captions = new Map<string, string>();
+  const wanted = new Set(pdfFigureMarkersIn(blocks).map((m) => m.ref));
+  if (wanted.size === 0) return captions;
+  const { JSDOM } = jsdom();
+  const dom = new JSDOM("<!doctype html><template></template>");
+  const template = dom.window.document.querySelector("template");
+  if (!template) return captions;
+  for (const block of blocks) {
+    if (!block.html || !MARKER_IN_HTML.test(block.html)) continue;
+    template.innerHTML = block.html;
+    for (const element of template.content.querySelectorAll(PDF_FIGURE_SELECTOR)) {
+      const marker = parsePdfFigureMarker(element.getAttribute(RESERVED_ATTRS.pdfFigure) ?? "");
+      if (!marker || !wanted.has(marker.ref)) continue;
+      const text = element.querySelector(":scope > figcaption")?.textContent?.replace(/\s+/g, " ").trim();
+      if (text) captions.set(marker.ref, text);
+    }
+  }
+  return captions;
+}
+
+/**
+ * **The version of what the PDF half of this step decides**, folded into
+ * `assetsInputHash` only for an article that has PDF figure markers — see the
+ * last section of that function's comment. Bump it when the PDF half would
+ * decide differently for the same markers; `pdf-figures/2` is the drawn-figure
+ * route (docs/plans/260912a-figure-2-vector-figures-from-a-pdf.md), and `1`
+ * was the bitmap route alone, which never needed spelling.
+ */
+export const PDF_FIGURE_RECOVERY_POLICY = "pdf-figures/2";
+
+/**
  * The cheap look before the parse — built once, from the registered name rather
  * than from a copy of it (src/reserved.ts is the only file allowed to spell one,
  * and tests/reserved.test.ts scans this one to be sure).
@@ -443,16 +487,39 @@ const MARKER_IN_HTML = new RegExp(RESERVED_ATTRS.pdfFigure, "i");
  * stale, including the ones the step would rewrite identically. A two-element
  * and a three-element array cannot serialise alike, so the framing needs no
  * new prefix. docs/plans/260911a-figures-with-enough-resolution-to-read.md.
+ *
+ * ## The PDF recovery policy is a fourth — and only when there are markers
+ *
+ * `PDF_FIGURE_RECOVERY_POLICY`, the same shape and the same reasoning as the
+ * preferred candidates above. Since 2026-09-12 the PDF half draws a figure
+ * that is drawn rather than pictured, so for the *same* markers it can now
+ * decide `stored` where it used to decide `no-raster` — and an unchanged hash
+ * would let every existing PDF article's manifest report itself current and
+ * the new route never run on it. GPT Sol F4,
+ * docs/plans/260912a-figure-2-vector-figures-from-a-pdf.md.
+ *
+ * - an article with no markers — every web article — hashes exactly as before;
+ * - an article with markers hashes differently, so its manifest reads *not
+ *   current* and the next run of this step on it tries the drawn route. Nothing
+ *   runs it on its own (docs/project/cron-scheduler.md): this changes what the
+ *   cache *claims*, not what runs.
+ *
+ * The caption the route matches on is **not** added: every ref already folds
+ * in a digest of it (src/pdf-figures.ts § `pdfFigureRef`). A string can never
+ * serialise like the preferred list's array, so the two optional elements
+ * cannot be mistaken for each other in either order of absence.
  */
 export function assetsInputHash(blocks: readonly Block[]): string {
   const images = imagesIn(blocks);
   const preferred = images.flatMap((image) =>
     image.preferred === null ? [] : [[image.src, image.preferred]],
   );
+  const markers = pdfFigureMarkersIn(blocks).map((m) => m.ref);
   const canonical = `spya-assets/1\n${JSON.stringify([
     images.map((image) => image.src),
-    pdfFigureMarkersIn(blocks).map((m) => m.ref),
+    markers,
     ...(preferred.length > 0 ? [preferred] : []),
+    ...(markers.length > 0 ? [PDF_FIGURE_RECOVERY_POLICY] : []),
   ])}`;
   return createHash("sha256").update(canonical, "utf8").digest("hex").slice(0, 16);
 }

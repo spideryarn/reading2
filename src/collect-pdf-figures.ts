@@ -73,15 +73,35 @@
  * the reading view was never going to render, in `storeOne` below, immediately
  * before the encode. The cap stays as a backstop, and `MAX_FIGURE_BYTES` has
  * the measurements and the arithmetic that now put it out of reach.
+ *
+ * ## 4. A figure drawn rather than pictured gets a second route
+ *
+ * docs/plans/260912a-figure-2-vector-figures-from-a-pdf.md. A marker the bitmap
+ * route refused `no-raster` — and only that refusal — is handed to it, when the
+ * article supplied the marker's caption. Three more files, each owning one
+ * thing: src/pdf-figure-layout.ts reads what is drawn where,
+ * src/pdf-figure-region.ts decides which of it is this caption's (or, mostly,
+ * that none is), and src/pdf-figure-render.ts draws that rectangle with PDFium.
+ * src/pdf-figure-page.ts cuts the page PDFium is handed and walks its resources
+ * for an image pdf.js may have dropped.
+ *
+ * What comes out is a raster like any other, and it is stored by the same
+ * `storeOne` — the same downscale, caps, article budget and clock. What does
+ * not come out keeps a word: `no-raster` when the page was not the narrow case
+ * at all, `not-located`, `too-complex` or `render-failed` when it was.
  */
 
 import type { PdfFigureEntry, PdfFigureFailure, PdfFigureMarker } from "./assets.js";
 import { imageDimensions, sniffImage } from "./assets.js";
 import { describeStorageFailure } from "./collect-assets.js";
+import { readPdfPageLayouts } from "./pdf-figure-layout.js";
+import { type FigurePage, type FigurePages, openFigurePages } from "./pdf-figure-page.js";
+import { type DrawnFigureVerdict, locateDrawnFigure, type PageLayout } from "./pdf-figure-region.js";
+import { type RenderFailure, renderPdfRegion } from "./pdf-figure-render.js";
 import {
+  type DecodedRaster,
   downscaleRaster,
   encodeFigurePng,
-  type FigureOutcome,
   MAX_FIGURE_PIXELS,
   pairPageFigures,
   type PdfFigureFailure as PairingFailure,
@@ -200,6 +220,14 @@ export interface CollectPdfFiguresOptions {
   markers: readonly PdfFigureMarker[];
   /** The whole PDF. Copied before pdf.js sees it, by `readPdfRasters`. */
   pdf: Uint8Array;
+  /**
+   * Each marker's `<figcaption>` text, by ref — `pdfFigureCaptionsIn`,
+   * src/collect-assets.ts. **What turns the drawn-figure route on**: a marker
+   * with no caption here is never tried by it and keeps the bitmap route's
+   * answer, so a caller that passes none gets exactly the behaviour this
+   * module had before the route existed.
+   */
+  captions?: ReadonlyMap<string, string>;
   blobs?: RawSourceStore;
   signal?: AbortSignal;
   now?: () => Date;
@@ -224,6 +252,8 @@ export interface PdfFiguresRun {
   /** One per marker, in the order the markers arrived. Never shorter. */
   entries: PdfFigureEntry[];
   stored: number;
+  /** How many of `stored` were drawn from the page rather than decoded from a bitmap. */
+  drawn: number;
   failed: number;
   /** Stored bytes that were already ours — two revisions of the same paper. */
   deduped: number;
@@ -274,6 +304,7 @@ export async function collectPdfFigures(
   const book: Ledger = {
     entries: new Map(),
     stored: 0,
+    drawn: 0,
     failed: 0,
     deduped: 0,
     bytes: 0,
@@ -334,15 +365,44 @@ export async function collectPdfFigures(
     }
 
     const { outcomes } = pairPageFigures({ markers: looked, candidates: read });
+    /* The drawn route's candidates: refused `no-raster` by the bitmap route,
+       and captioned by the article. Everything else is decided above. */
+    const candidates = outcomes.flatMap((outcome) =>
+      outcome.status === "refused" && outcome.reason === "no-raster" && options.captions?.has(outcome.marker.ref)
+        ? [outcome.marker]
+        : [],
+    );
+    const drawn = candidates.length > 0 ? await drawnRoute(candidates, options, signal) : null;
+
     for (const outcome of outcomes) {
       if (outcome.status === "refused") {
-        fail(outcome.marker, pdfFigureFailure(outcome.reason));
+        if (!candidates.includes(outcome.marker)) {
+          fail(outcome.marker, pdfFigureFailure(outcome.reason));
+          continue;
+        }
+        /* The layout read did not come back. The same rule as `read === null`
+           above: an abort claims nothing and leaves the marker to the
+           finaliser; anything else leaves the bitmap route's answer standing. */
+        if (!drawn) {
+          if (!signal.aborted) fail(outcome.marker, "no-raster");
+          continue;
+        }
+        if (signal.aborted) return;
+        const result = await drawn.draw(outcome.marker);
+        if (result.status === "stopped") return;
+        if (result.status === "refused") {
+          fail(outcome.marker, result.reason);
+          continue;
+        }
+        if (signal.aborted) return;
+        await storeOne(outcome.marker, result.raster, limits, signal, book, record, at);
+        if (book.entries.get(outcome.marker.ref)?.status === "stored") book.drawn += 1;
         continue;
       }
       /* Stop rather than record: every marker left is finalised below, which is
          the one place that decides what an unfinished run says. */
       if (signal.aborted) return;
-      await storeOne(outcome, limits, signal, book, record, at);
+      await storeOne(outcome.marker, outcome.raster, limits, signal, book, record, at);
     }
   };
 
@@ -388,6 +448,7 @@ export async function collectPdfFigures(
   return {
     entries,
     stored: book.stored,
+    drawn: book.drawn,
     failed: book.failed,
     deduped: book.deduped,
     bytes: book.bytes,
@@ -417,6 +478,7 @@ interface Limits {
 interface Ledger {
   entries: Map<string, PdfFigureEntry>;
   stored: number;
+  drawn: number;
   failed: number;
   deduped: number;
   bytes: number;
@@ -424,7 +486,7 @@ interface Ledger {
 }
 
 /**
- * One paired raster: encode it, check it, store it.
+ * One raster, from either route: encode it, check it, store it.
  *
  * **The PNG is sniffed and measured after encoding rather than trusted**, and
  * not only as a formality — `encodeFigurePng` already checks its own output
@@ -435,14 +497,14 @@ interface Ledger {
  * name we store is a promise about the file.
  */
 async function storeOne(
-  outcome: Extract<FigureOutcome, { status: "paired" }>,
+  marker: PdfFigureMarker,
+  raster: DecodedRaster,
   limits: Limits,
   signal: AbortSignal,
   book: Ledger,
   record: (entry: PdfFigureEntry) => void,
   at: () => string,
 ): Promise<void> {
-  const marker = outcome.marker;
   const fail = (reason: PdfFigureFailure): void => {
     record({ ref: marker.ref, page: marker.page, status: "failed", reason, at: at() });
   };
@@ -461,7 +523,7 @@ async function storeOne(
        image a reader is actually served rather than the raster pdf.js decoded.
        The raster's own dimensions stay pinned in tests/pdf-figure-read.test.ts,
        which is where a claim about the document belongs. */
-    png = await encodeFigurePng(downscaleRaster(outcome.raster));
+    png = await encodeFigurePng(downscaleRaster(raster));
   } catch {
     /* Nothing of the error is kept. It can only be our own writer disagreeing
        with our own reader — `encodeFigurePng` is the only thing that throws —
@@ -552,6 +614,127 @@ async function readRasters(
     return read.candidates;
   } catch {
     return null;
+  }
+}
+
+/* ------------------------------------------------------------------ *
+ * The drawn route
+ * ------------------------------------------------------------------ */
+
+/** What became of one candidate on the drawn route. */
+type DrawnResult =
+  | { status: "drawn"; raster: DecodedRaster }
+  | { status: "refused"; reason: PdfFigureFailure }
+  /** The signal fired first. Nothing is claimed; the finaliser decides. */
+  | { status: "stopped" };
+
+/**
+ * The drawn route for these candidates, or `null` when their pages' layouts
+ * could not be read at all — `null` for the same reason `readRasters` returns
+ * one, and handled the same way by the caller.
+ *
+ * The layouts are read once, up front, for every candidate page: they are
+ * boxes and text, a few kilobytes a page. The pdf-lib parse the cut needs is
+ * paid only when some page gets as far as needing one, and only once.
+ */
+async function drawnRoute(
+  candidates: readonly PdfFigureMarker[],
+  options: CollectPdfFiguresOptions,
+  signal: AbortSignal,
+): Promise<{ draw(marker: PdfFigureMarker): Promise<DrawnResult> } | null> {
+  let layouts: Map<number, PageLayout | null>;
+  try {
+    layouts = await readPdfPageLayouts({ data: options.pdf, pages: candidates.map((m) => m.page), signal });
+  } catch {
+    return null;
+  }
+  /* The article's claim about each page, counted over **every** marker it has —
+     not just the candidates, and not just the ones inside the runaway guard. */
+  const markersOnPage = new Map<number, number>();
+  for (const marker of options.markers) markersOnPage.set(marker.page, (markersOnPage.get(marker.page) ?? 0) + 1);
+  let pages: Promise<FigurePages> | null = null;
+
+  return {
+    async draw(marker) {
+      const layout = layouts.get(marker.page);
+      /* A page we could not read is a page we cannot show is eligible. */
+      if (!layout) return { status: "refused", reason: "no-raster" };
+      const base = {
+        layout,
+        caption: options.captions?.get(marker.ref) ?? "",
+        markersOnPage: markersOnPage.get(marker.page) ?? 0,
+      };
+      /* Once without the resource walk, which needs pdf-lib and a cut: nearly
+         every refusal is decided here, for the price of arithmetic… */
+      const first = locateDrawnFigure({ ...base, imageInResources: false });
+      if (!first.ok) return { status: "refused", reason: verdictFailure(first) };
+
+      let page: FigurePage;
+      try {
+        pages ??= openFigurePages(options.pdf);
+        page = await (await pages).cut(marker.page);
+      } catch {
+        return { status: "refused", reason: "render-failed" };
+      }
+      /* …and again with it, so that the rule lives in one place and the walk's
+         answer is decided by the same function as everything else. */
+      const verdict = locateDrawnFigure({ ...base, imageInResources: page.imageInResources });
+      if (!verdict.ok) return { status: "refused", reason: verdictFailure(verdict) };
+
+      if (signal.aborted) return { status: "stopped" };
+      const rendered = await renderPdfRegion({
+        onePagePdf: page.bytes,
+        region: verdict.region,
+        view: { width: layout.view[2] - layout.view[0], height: layout.view[3] - layout.view[1] },
+      });
+      return rendered.ok
+        ? { status: "drawn", raster: rendered.raster }
+        : { status: "refused", reason: renderFailure(rendered.failure) };
+    },
+  };
+}
+
+/**
+ * The locator's refusal, as the manifest's word. `not-eligible` keeps the
+ * bitmap route's `no-raster`: the page was not the narrow case at all, which is
+ * exactly what `no-raster` has always said.
+ */
+function verdictFailure(verdict: Exclude<DrawnFigureVerdict, { ok: true }>): PdfFigureFailure {
+  switch (verdict.reason) {
+    case "not-eligible":
+      return "no-raster";
+    case "too-complex":
+      return "too-complex";
+    case "not-located":
+      return "not-located";
+    default: {
+      const never: never = verdict;
+      throw new Error(`collect-pdf-figures: unmapped locator verdict ${String(never)}`);
+    }
+  }
+}
+
+/**
+ * The renderer's refusal, as the manifest's word. Two of them are not faults in
+ * the renderer: a page whose size the two engines disagree about fails
+ * eligibility rule 3, so it is `no-raster` like every other ineligible page;
+ * and a region that draws nothing is a region we could not stand behind.
+ */
+function renderFailure(failure: RenderFailure): PdfFigureFailure {
+  switch (failure) {
+    case "init":
+    case "load":
+    case "region":
+    case "render":
+      return "render-failed";
+    case "geometry-mismatch":
+      return "no-raster";
+    case "blank":
+      return "not-located";
+    default: {
+      const never: never = failure;
+      throw new Error(`collect-pdf-figures: unmapped render failure ${String(never)}`);
+    }
   }
 }
 

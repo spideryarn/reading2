@@ -1398,6 +1398,31 @@ describe("assetsInputHash", () => {
     expect(assetsInputHash([one])).toBe(assetsInputHash([two]));
   });
 
+  /**
+   * **The drawn-figure route changes what the step would decide for a PDF, and
+   * nothing it would decide for a web page.** So every PDF article's manifest
+   * has to read stale — or the new route never runs on an article that already
+   * has one (GPT Sol F4, docs/plans/260912a-…) — and no web article's may, or
+   * the whole library re-fetches its images to buy nothing.
+   *
+   * Both halves are measured against the canonical form as it was before the
+   * route existed, spelled out here, because that is the hash every stored
+   * manifest carries.
+   */
+  it("reads a PDF article's manifest stale for the drawn route, and a web article's not", () => {
+    const legacyHash = (srcs: string[], refs: string[]): string =>
+      createHash("sha256")
+        .update(`spya-assets/1\n${JSON.stringify([srcs, refs])}`, "utf8")
+        .digest("hex")
+        .slice(0, 16);
+    const web = [img("https://cdn.test/a.png")];
+    expect(assetsInputHash(web)).toBe(legacyHash(["https://cdn.test/a.png"], []));
+    const pdf = [figure(3)];
+    expect(assetsInputHash(pdf)).not.toBe(
+      legacyHash([], [`pdffig1-${"0123456789abcdef".repeat(2)}.3.1`]),
+    );
+  });
+
   it("cannot be fooled by an image URL that spells a marker", () => {
     /* The framing prefix and the JSON, doing their job: two lists of strings
        concatenated without one would let an article with a URL in one position
