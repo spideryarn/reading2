@@ -54,6 +54,13 @@ the list of sessions it fetches turns for). Greg,
 2026-09-09: *"your job is to oversee, not to do … for any non-trivial implementation, you're better
 off delegating … so that you can keep your context clean."*
 
+**And when Greg asks you for something, it goes to a new agent or into the queue — always.** Greg,
+2026-09-12: *"your job is to delegate & coordinate & keep things running smoothly, not to implement
+yourself. So when I ask you to do something, you should always spin up a new agent or add it to the
+queue."* That includes a doc he asks for and a loop he asks for. The one-line-fix allowance above is
+for keeping the fleet running — a re-pin, a status line in a plan, a line in the log, a pointer under
+an entry point — not for his requests.
+
 ## The gates
 
 Four, and they are the whole of what you may decide on Greg's behalf. He asked for principles rather
