@@ -22,8 +22,13 @@ reader can read the whole thing back a week later. That is the requirement every
 
 ## The controls must say what is happening
 
-The Live button starts a conversation from Chat's list or resumes the open thread. Its tooltip
-explains two-way speech. The session shows connecting, listening, thinking/tool work and speaking;
+The Live button starts a conversation from Chat's list or carries on the open thread out loud. **Its
+label is Live either way, never "Resume"**: beside a thread that had only been typed in, "Resume"
+read as picking up a call the reader had never made (Greg, 2026-09-12, SPIDERYARN-READING2-3G). The
+difference is in its accessible name and tooltip — "Continue this conversation live" or "Start a
+live conversation" —
+[260912d](../plans/260912d-live-button-label-says-resume-on-a-thread-with-no-live-history.md). Its
+tooltip explains two-way speech. The session shows connecting, listening, thinking/tool work and speaking;
 connecting can be cancelled. Hang up releases the microphone and saves the final exchange before
 the typed path continues. Transcript display starts on; hiding it does not stop transcription or
 saving.
@@ -56,7 +61,7 @@ conversations start in Chat.
 | [`src/web/live/exchanges.ts`](../../src/web/live/exchanges.ts) | Turns a stream of events into conversation turns. Read its header before touching anything about ordering. |
 | [`src/web/live/wiring.ts`](../../src/web/live/wiring.ts) | The two requests a session makes of our own server *before* it has anything to write, behind one seam. |
 | [`src/web/live/mic-placement.ts`](../../src/web/live/mic-placement.ts) | Where the microphone is, which is what noise reduction wants to know. |
-| [`src/web/live/LiveButton.tsx`](../../src/web/live/LiveButton.tsx) | Start, resume, cancel, hangup and microphone placement. |
+| [`src/web/live/LiveButton.tsx`](../../src/web/live/LiveButton.tsx) | Start or continue, cancel, hangup and microphone placement. |
 | [`src/web/live/LiveStatus.tsx`](../../src/web/live/LiveStatus.tsx) | Streaming words, input level and device choice, session state, and recovery actions in the real composer. |
 | [`src/web/live/tool-responses.ts`](../../src/web/live/tool-responses.ts) | One continuation after a response's tool results settle; a newer spoken turn supersedes the old continuation. |
 | [`src/web/PassageLinks.tsx`](../../src/web/PassageLinks.tsx) | Shared live and saved passage references, using stable block ids. |

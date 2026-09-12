@@ -250,6 +250,54 @@ describe("where the button is offered", () => {
   });
 });
 
+describe("what the button says", () => {
+  /* **Not "Resume" on a thread that has only been typed in.** It read as
+     picking up an earlier call, which the reader had never made — Greg,
+     SPIDERYARN-READING2-3G. The click continues this thread out loud; say that.
+     docs/plans/260912d-live-button-label-says-resume-on-a-thread-with-no-live-history.md */
+  const label = () => host.querySelector(".chat-live-label")?.textContent;
+  const name = () => host.querySelector(".chat-live-btn")?.getAttribute("aria-label");
+
+  it("offers to continue a conversation that has messages, without calling it a resume", () => {
+    const { api } = fakeLive("idle");
+    paint(api);
+    expect(label()).toBe("Live");
+    expect(name()).toBe("Continue this conversation live");
+  });
+
+  it("offers to start one from the list", () => {
+    const { api } = fakeLive("idle");
+    paint(api, null);
+    expect(label()).toBe("Live");
+    expect(name()).toBe("Start a live conversation");
+  });
+
+  it("says Hang up while the call is on, whatever the thread holds", () => {
+    const { api } = fakeLive("live");
+    paint(api);
+    expect(label()).toBe("Hang up");
+    expect(name()).toBe("Hang up");
+  });
+
+  it.each([
+    ["connecting", "Cancel", "Cancel"],
+    ["closing", "Finishing…", "Finishing…"],
+    ["failed", "Live", "Continue this conversation live"],
+  ] as const)("names the %s action truthfully", (phase, visible, accessible) => {
+    const { api } = fakeLive(phase);
+    paint(api);
+    expect(label()).toBe(visible);
+    expect(name()).toBe(accessible);
+  });
+
+  it("keeps Remember's larger visible label while naming the continuation", () => {
+    const { api } = fakeLive("idle");
+    paint(api, THREAD.id, [{ ...THREAD, kind: "remember" }]);
+    expect(label()).toBe("Live conversation");
+    expect(name()).toBe("Continue this conversation live");
+  });
+});
+
 describe("the live session in the shipping chat composer", () => {
   it("shows an actionable failure and allows typing in the same conversation", async () => {
     const { api } = fakeLive("failed");
@@ -409,6 +457,8 @@ describe("the live session in the shipping chat composer", () => {
     await act(async () => { button!.focus(); });
     const tooltip = document.querySelector('[role="tooltip"]');
     expect(tooltip?.textContent).toContain("Talk about the article");
+    expect(tooltip?.textContent).toContain("recent completed turns");
+    expect(tooltip?.textContent).not.toContain("everything said here so far");
     expect(tooltip?.textContent).toContain("same conversation");
     expect(button?.hasAttribute("title")).toBe(false);
   });

@@ -1173,7 +1173,7 @@ export function Conversation({
         {...(onStance ? { onStance } : {})}
         {...(live ? { live } : {})}
         {...(onStartLive ? { onStartLive } : {})}
-        resumeLive={thread.messages.length > 0}
+        continuesLive={thread.messages.length > 0}
         blocks={blocks}
         onJump={onJump}
       />
@@ -1828,7 +1828,7 @@ export function Composer({
   onStance,
   live,
   onStartLive,
-  resumeLive,
+  continuesLive,
   blocks,
   onJump,
 }: {
@@ -1869,7 +1869,7 @@ export function Composer({
   live?: LiveApi | undefined;
   /** Begin one. The panel supplies or creates the conversation. */
   onStartLive?: (() => void) | undefined;
-  resumeLive?: boolean | undefined;
+  continuesLive?: boolean | undefined;
   blocks?: ReadonlyMap<string, string> | undefined;
   onJump?: ((id: BlockId) => void) | undefined;
 }) {
@@ -2132,7 +2132,7 @@ export function Composer({
           onStart={onStartLive}
           disabled={busy || dictate.readOnly}
           labelled={remember}
-          resume={resumeLive}
+          continues={continuesLive}
         />
       )}
       {remember && onStance && (
