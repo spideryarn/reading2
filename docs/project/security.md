@@ -639,8 +639,32 @@ the fetched bytes to get the text layer. That is a parser with a long CVE histor
 hostile input inside the server. [`src/pdf-read.ts`](../../src/pdf-read.ts) then loads the *whole* hostile file again with `pdf-lib`,
 once per chunk, to cut the page ranges out of it — a second unsandboxed parser, which an earlier
 version of this section did not mention. What protects us is that neither is asked for anything but
-text, coordinates and bytes: we never render, execute or follow anything the file asks for — and that the file has already passed stage 1's
-size cap. **What does not protect us is `isEvalSupported: false`**, which was in this code and looked
+text, coordinates and bytes: we never execute or follow anything the file asks for — and that the file has already passed stage 1's
+size cap.
+
+**Since 2026-09-12 there is a third parser, and it renders.** A figure drawn as vector art has no
+picture to lift, so on one narrow kind of page — one figure caption, **no image of any kind**, ink
+that is all the caption's own — [`src/pdf-figure-render.ts`](../../src/pdf-figure-render.ts) hands
+PDFium, compiled to WebAssembly, that one page cut out alone with pdf-lib, and has it draw one
+rectangle ([260912a](../plans/260912a-figure-2-vector-figures-from-a-pdf.md), § Security). The
+sentence this paragraph used to end on — *we never render* — was the protection, and it is no longer
+true. What replaces it, and what does not:
+
+- **Memory integrity, not availability.** A memory-safety bug inside PDFium corrupts its own WASM
+  linear memory and reaches nothing it was not handed; its filesystem is Emscripten's in-memory
+  `MEMFS` and nothing else (checked in the package, not assumed). WASM does **not** bound CPU or the
+  process's memory.
+- **The only hard time bound is the platform's.** A render is synchronous: no timer of ours runs
+  while it holds the event loop. `MAX_PAGE_OPERATORS` and `MAX_PAGE_PATHS`
+  ([`src/pdf-figure-region.ts`](../../src/pdf-figure-region.ts)) refuse the obvious runaway before
+  PDFium is called and are **guards, not a boundary** — one operator can still be expensive. An
+  interruptible worker is deferred, and it is the same position this doc already records for
+  pdf.js's own synchronous parse steps.
+- **What narrows the input** is the eligibility, not the figure marker: a marker comes from the
+  model's reading of the file, and a hostile PDF can print "Figure 1." The rule that matters is that
+  no image reaches PDFium at all — [`src/pdf-figure-page.ts`](../../src/pdf-figure-page.ts)'s walk,
+  where every doubt counts as an image — so an image the bitmap route refused for its size or kind is
+  never handed to a second decoder (GPT Sol F2, F3, F8). **What does not protect us is `isEvalSupported: false`**, which was in this code and looked
 exactly like the line that should be: pdf.js 6 removed the option, so it did nothing at all while
 reading as a precaution. It is gone, with a comment saying why. Sandboxing the parse is on the gap
 list below.

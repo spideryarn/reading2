@@ -49,6 +49,15 @@
  * indistinguishable from a figure that was never a bitmap (the plan § Two of
  * Sol's P0s). "This figure is vector art" would be a confident guess. What we
  * can say is that we looked and could not get it, so that is what it says.
+ *
+ * **Since 2026-09-12 a figure that *is* vector art is often recovered** — drawn
+ * from the page itself on one narrow kind of page
+ * (docs/plans/260912a-figure-2-vector-figures-from-a-pdf.md) — and the ones it
+ * refuses (`not-located`, `too-complex`, `render-failed`) get this same
+ * sentence. The eligibility check does now know when a page holds no image at
+ * all, so naming the cause for those is possible; it is deferred in that plan
+ * rather than done here, because a reason under a figure is a claim the reader
+ * will quote back to us.
  */
 
 import { FileText } from "lucide-react";

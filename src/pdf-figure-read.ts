@@ -91,7 +91,11 @@
  *
  * Inline images (`paintInlineImageXObject`) and the repeat operator
  * (`paintImageXObjectRepeat`) are out of scope for v1, along with every
- * vector-drawn figure, which this route cannot reach at all. Sol SP-2 asks that
+ * vector-drawn figure, which this route cannot reach at all. **A vector-drawn
+ * figure has a route of its own since 2026-09-12** — src/pdf-figure-region.ts,
+ * src/pdf-figure-render.ts — on one narrow kind of page, and only when this
+ * route found no usable raster: docs/plans/260912a-figure-2-vector-figures-from-a-pdf.md.
+ * This file still reads bitmaps and nothing else. Sol SP-2 asks that
  * this be recorded explicitly rather than presented as general PDF figure
  * recovery, so an operator we saw and did not read comes back in `unread` with
  * its reason, and the copy must not promise more than "where the figure is a

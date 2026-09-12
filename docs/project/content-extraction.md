@@ -159,7 +159,11 @@ The differences that matter to a reader:
   puts a muted line under the caption when nothing was recovered.
   [article-images.md](article-images.md) owns all of that. Until 2026-09-06 a PDF figure was a
   caption and a blank space, on purpose and by v1's design, which Greg reasonably read as a bug —
-  [260906a](../plans/260906a-figures-from-a-pdf-are-placeholders-with-no-image.md).
+  [260906a](../plans/260906a-figures-from-a-pdf-are-placeholders-with-no-image.md). A figure drawn
+  as vector art rather than embedded as a picture was still caption-only until 2026-09-12, and is
+  now drawn from the page itself on the narrow kind of page
+  [article-images.md](article-images.md) describes —
+  [260912a](../plans/260912a-figure-2-vector-figures-from-a-pdf.md).
 - **A figure with no caption produces no element at all.** `renderHtml` returns early on empty text,
   before it builds the `<figure>` — so there is no block to mark and no picture to recover. Worth
   knowing before assuming every image in the PDF has somewhere to land.
