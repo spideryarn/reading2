@@ -1,0 +1,396 @@
+{
+  "readme": "Written by scripts/spike-dictation-latency.ts. Chrome's encoders on the Hetzner box, synthetic speech, Chrome's network throttle. See docs/plans/260912b-dictation-slow-on-weak-wifi.md.",
+  "at": "2026-09-12T12:38:34.741Z",
+  "chrome": "152.0.7977.75",
+  "seconds": 41.21585416666667,
+  "clips": [
+    "site-terms",
+    "fowler-names",
+    "noema-glossary",
+    "constitution-mixed"
+  ],
+  "recorded": [
+    {
+      "label": "aac-default",
+      "asked": "audio/mp4;codecs=mp4a.40.2",
+      "bps": null,
+      "supported": false,
+      "mimeType": "",
+      "bytes": 0,
+      "encodeMs": 0,
+      "stopMs": null,
+      "error": null,
+      "base64Chars": 0
+    },
+    {
+      "label": "aac-64k",
+      "asked": "audio/mp4;codecs=mp4a.40.2",
+      "bps": 64000,
+      "supported": false,
+      "mimeType": "",
+      "bytes": 0,
+      "encodeMs": 0,
+      "stopMs": null,
+      "error": null,
+      "base64Chars": 0
+    },
+    {
+      "label": "aac-32k",
+      "asked": "audio/mp4;codecs=mp4a.40.2",
+      "bps": 32000,
+      "supported": false,
+      "mimeType": "",
+      "bytes": 0,
+      "encodeMs": 0,
+      "stopMs": null,
+      "error": null,
+      "base64Chars": 0
+    },
+    {
+      "label": "aac-24k",
+      "asked": "audio/mp4;codecs=mp4a.40.2",
+      "bps": 24000,
+      "supported": false,
+      "mimeType": "",
+      "bytes": 0,
+      "encodeMs": 0,
+      "stopMs": null,
+      "error": null,
+      "base64Chars": 0
+    },
+    {
+      "label": "opus-webm-32k",
+      "asked": "audio/webm;codecs=opus",
+      "bps": 32000,
+      "supported": true,
+      "mimeType": "audio/webm;codecs=opus",
+      "bytes": 155555,
+      "encodeMs": 24.200000047683716,
+      "stopMs": 3.5999999046325684,
+      "error": null,
+      "base64Chars": 207408
+    },
+    {
+      "label": "opus-webm-24k",
+      "asked": "audio/webm;codecs=opus",
+      "bps": 24000,
+      "supported": true,
+      "mimeType": "audio/webm;codecs=opus",
+      "bytes": 118148,
+      "encodeMs": 14.600000023841858,
+      "stopMs": 2.399999976158142,
+      "error": null,
+      "base64Chars": 157532
+    },
+    {
+      "label": "opus-webm-16k",
+      "asked": "audio/webm;codecs=opus",
+      "bps": 16000,
+      "supported": true,
+      "mimeType": "audio/webm;codecs=opus",
+      "bytes": 80656,
+      "encodeMs": 15,
+      "stopMs": 1.899999976158142,
+      "error": null,
+      "base64Chars": 107544
+    },
+    {
+      "label": "opus-mp4-24k",
+      "asked": "audio/mp4;codecs=opus",
+      "bps": 24000,
+      "supported": true,
+      "mimeType": "audio/mp4;codecs=opus",
+      "bytes": 122821,
+      "encodeMs": 13,
+      "stopMs": 1.399999976158142,
+      "error": null,
+      "base64Chars": 163764
+    },
+    {
+      "label": "ipad-sized-192k",
+      "asked": "audio/webm;codecs=opus",
+      "bps": 192000,
+      "supported": true,
+      "mimeType": "audio/webm;codecs=opus",
+      "bytes": 992283,
+      "encodeMs": 112.80000007152557,
+      "stopMs": 0.8999999761581421,
+      "error": null,
+      "base64Chars": 1323044
+    }
+  ],
+  "uploads": [
+    {
+      "profile": "unthrottled",
+      "label": "ipad-sized-192k",
+      "body": "json",
+      "ms": 185.20000004768372,
+      "bytes": 1323101
+    },
+    {
+      "profile": "unthrottled",
+      "label": "opus-webm-32k",
+      "body": "json",
+      "ms": 37.700000047683716,
+      "bytes": 207465
+    },
+    {
+      "profile": "unthrottled",
+      "label": "opus-webm-24k",
+      "body": "json",
+      "ms": 22,
+      "bytes": 157589
+    },
+    {
+      "profile": "unthrottled",
+      "label": "opus-webm-16k",
+      "body": "json",
+      "ms": 22.600000023841858,
+      "bytes": 107601
+    },
+    {
+      "profile": "unthrottled",
+      "label": "ipad-sized-192k",
+      "body": "raw",
+      "ms": 8.5,
+      "bytes": 992283
+    },
+    {
+      "profile": "unthrottled",
+      "label": "opus-webm-24k",
+      "body": "raw",
+      "ms": 4.900000095367432,
+      "bytes": 118148
+    },
+    {
+      "profile": "weak-wifi",
+      "label": "ipad-sized-192k",
+      "body": "json",
+      "ms": 10799,
+      "bytes": 1323101
+    },
+    {
+      "profile": "weak-wifi",
+      "label": "opus-webm-32k",
+      "body": "json",
+      "ms": 1840.6999999284744,
+      "bytes": 207465
+    },
+    {
+      "profile": "weak-wifi",
+      "label": "opus-webm-24k",
+      "body": "json",
+      "ms": 1432.2999999523163,
+      "bytes": 157589
+    },
+    {
+      "profile": "weak-wifi",
+      "label": "opus-webm-16k",
+      "body": "json",
+      "ms": 1028.2999999523163,
+      "bytes": 107601
+    },
+    {
+      "profile": "weak-wifi",
+      "label": "ipad-sized-192k",
+      "body": "raw",
+      "ms": 8096.199999928474,
+      "bytes": 992283
+    },
+    {
+      "profile": "weak-wifi",
+      "label": "opus-webm-24k",
+      "body": "raw",
+      "ms": 1100.2000000476837,
+      "bytes": 118148
+    },
+    {
+      "profile": "fast-3g",
+      "label": "ipad-sized-192k",
+      "body": "json",
+      "ms": 14749.900000095367,
+      "bytes": 1323101
+    },
+    {
+      "profile": "fast-3g",
+      "label": "opus-webm-32k",
+      "body": "json",
+      "ms": 2795.2000000476837,
+      "bytes": 207465
+    },
+    {
+      "profile": "fast-3g",
+      "label": "opus-webm-24k",
+      "body": "json",
+      "ms": 2270.5,
+      "bytes": 157589
+    },
+    {
+      "profile": "fast-3g",
+      "label": "opus-webm-16k",
+      "body": "json",
+      "ms": 1720.8000000715256,
+      "bytes": 107601
+    },
+    {
+      "profile": "fast-3g",
+      "label": "ipad-sized-192k",
+      "body": "raw",
+      "ms": 11153.899999976158,
+      "bytes": 992283
+    },
+    {
+      "profile": "fast-3g",
+      "label": "opus-webm-24k",
+      "body": "raw",
+      "ms": 1830.6000000238419,
+      "bytes": 118148
+    },
+    {
+      "profile": "slow-3g",
+      "label": "ipad-sized-192k",
+      "body": "json",
+      "ms": 28559.5,
+      "bytes": 1323101
+    },
+    {
+      "profile": "slow-3g",
+      "label": "opus-webm-32k",
+      "body": "json",
+      "ms": 6192.300000071526,
+      "bytes": 207465
+    },
+    {
+      "profile": "slow-3g",
+      "label": "opus-webm-24k",
+      "body": "json",
+      "ms": 5184.100000023842,
+      "bytes": 157589
+    },
+    {
+      "profile": "slow-3g",
+      "label": "opus-webm-16k",
+      "body": "json",
+      "ms": 4165.100000023842,
+      "bytes": 107601
+    },
+    {
+      "profile": "slow-3g",
+      "label": "ipad-sized-192k",
+      "body": "raw",
+      "ms": 21865.899999976158,
+      "bytes": 992283
+    },
+    {
+      "profile": "slow-3g",
+      "label": "opus-webm-24k",
+      "body": "raw",
+      "ms": 4375.799999952316,
+      "bytes": 118148
+    }
+  ],
+  "vocab": [
+    {
+      "where": "profile",
+      "ms": 66.07206099998439,
+      "terms": 11
+    },
+    {
+      "where": "profile",
+      "ms": 2.4514889999991283,
+      "terms": 11
+    }
+  ],
+  "transcribed": [
+    {
+      "label": "opus-webm-32k",
+      "run": 1,
+      "ms": 2241.2329029999964,
+      "wer": 0,
+      "hardHit": 21,
+      "hardOf": 21,
+      "text": "Add this to Spideryarn, please. The granularity zoom is fine, but the gist column should follow the block id, which here is spya-k3m9qt. Alimentiveness barely gets a mention, but phrenology as a whole rests on it. Spurzheim was more careful than Gall, and Elliotson was not careful at all. The Müller-Lyer illusion does not show what he thinks it shows here. Predictive processing is doing all the work, and pareidolia is a separate claim about computational functionalism. Corrigibility and the disposition dial are in tension. Anthropic wants Claude to be a transparent conscientious objector and also broadly safe, and sandbagging is the failure mode nobody has priced in."
+    },
+    {
+      "label": "opus-webm-32k",
+      "run": 2,
+      "ms": 2003.1521429999848,
+      "wer": 0,
+      "hardHit": 21,
+      "hardOf": 21,
+      "text": "Add this to Spideryarn please. The granularity zoom is fine, but the gist column should follow the block id, which here is spya-k3m9qt. Alimentiveness barely gets a mention, but phrenology as a whole rests on it. Spurzheim was more careful than Gall, and Elliotson was not careful at all. The Müller-Lyer illusion does not show what he thinks it shows here. Predictive processing is doing all the work, and pareidolia is a separate claim about computational functionalism. Corrigibility and the disposition dial are in tension. Anthropic wants Claude to be a transparent conscientious objector and also broadly safe, and sandbagging is the failure mode nobody has priced in."
+    },
+    {
+      "label": "opus-webm-24k",
+      "run": 1,
+      "ms": 2054.460167000012,
+      "wer": 0,
+      "hardHit": 21,
+      "hardOf": 21,
+      "text": "Add this to Spideryarn, please. The granularity zoom is fine, but the gist column should follow the block id, which here is spya-k3m9qt. Alimentiveness barely gets a mention, but phrenology as a whole rests on it. Spurzheim was more careful than Gall, and Elliotson was not careful at all. The Müller-Lyer illusion does not show what he thinks it shows here. Predictive processing is doing all the work, and pareidolia is a separate claim about computational functionalism. Corrigibility and the disposition dial are in tension. Anthropic wants Claude to be a transparent conscientious objector and also broadly safe, and sandbagging is the failure mode nobody has priced in."
+    },
+    {
+      "label": "opus-webm-24k",
+      "run": 2,
+      "ms": 2648.036389999994,
+      "wer": 0,
+      "hardHit": 21,
+      "hardOf": 21,
+      "text": "Add this to Spideryarn, please. The granularity zoom is fine, but the gist column should follow the block id, which here is spya-k3m9qt. Alimentiveness barely gets a mention, but phrenology as a whole rests on it. Spurzheim was more careful than Gall, and Elliotson was not careful at all. The Müller-Lyer illusion does not show what he thinks it shows here. Predictive processing is doing all the work, and pareidolia is a separate claim about computational functionalism. Corrigibility and the disposition dial are in tension. Anthropic wants Claude to be a transparent conscientious objector and also broadly safe, and sandbagging is the failure mode nobody has priced in."
+    },
+    {
+      "label": "opus-webm-16k",
+      "run": 1,
+      "ms": 1713.6278340000135,
+      "wer": 0,
+      "hardHit": 21,
+      "hardOf": 21,
+      "text": "Add this to Spideryarn, please. The granularity zoom is fine, but the gist column should follow the block id, which here is spya-k3m9qt. Alimentiveness barely gets a mention, but phrenology as a whole rests on it. Spurzheim was more careful than Gall, and Elliotson was not careful at all. The Müller-Lyer illusion does not show what he thinks it shows here. Predictive processing is doing all the work, and pareidolia is a separate claim about computational functionalism. Corrigibility and the disposition dial are in tension. Anthropic wants Claude to be a transparent conscientious objector and also broadly safe, and sandbagging is the failure mode nobody has priced in."
+    },
+    {
+      "label": "opus-webm-16k",
+      "run": 2,
+      "ms": 1591.9125040000072,
+      "wer": 0,
+      "hardHit": 21,
+      "hardOf": 21,
+      "text": "Add this to Spideryarn, please. The granularity zoom is fine, but the gist column should follow the block id, which here is spya-k3m9qt. Alimentiveness barely gets a mention, but phrenology as a whole rests on it. Spurzheim was more careful than Gall, and Elliotson was not careful at all. The Müller-Lyer illusion does not show what he thinks it shows here. Predictive processing is doing all the work, and pareidolia is a separate claim about computational functionalism. Corrigibility and the disposition dial are in tension. Anthropic wants Claude to be a transparent conscientious objector and also broadly safe, and sandbagging is the failure mode nobody has priced in."
+    },
+    {
+      "label": "opus-mp4-24k",
+      "run": 1,
+      "ms": 1761.4969580000034,
+      "wer": 0,
+      "hardHit": 21,
+      "hardOf": 21,
+      "text": "Add this to Spideryarn, please. The granularity zoom is fine, but the gist column should follow the block id, which here is spya-k3m9qt. Alimentiveness barely gets a mention, but phrenology as a whole rests on it. Spurzheim was more careful than Gall, and Elliotson was not careful at all. The Müller-Lyer illusion does not show what he thinks it shows here. Predictive processing is doing all the work, and pareidolia is a separate claim about computational functionalism. Corrigibility and the disposition dial are in tension. Anthropic wants Claude to be a transparent conscientious objector and also broadly safe, and sandbagging is the failure mode nobody has priced in."
+    },
+    {
+      "label": "opus-mp4-24k",
+      "run": 2,
+      "ms": 1694.3973719999776,
+      "wer": 0,
+      "hardHit": 21,
+      "hardOf": 21,
+      "text": "Add this to Spideryarn, please. The granularity zoom is fine, but the gist column should follow the block id, which here is spya-k3m9qt. Alimentiveness barely gets a mention, but phrenology as a whole rests on it. Spurzheim was more careful than Gall, and Elliotson was not careful at all. The Müller-Lyer illusion does not show what he thinks it shows here. Predictive processing is doing all the work, and pareidolia is a separate claim about computational functionalism. Corrigibility and the disposition dial are in tension. Anthropic wants Claude to be a transparent conscientious objector and also broadly safe, and sandbagging is the failure mode nobody has priced in."
+    },
+    {
+      "label": "ipad-sized-192k",
+      "run": 1,
+      "ms": 2001.5100969999912,
+      "wer": 0,
+      "hardHit": 21,
+      "hardOf": 21,
+      "text": "Add this to Spideryarn, please. The granularity zoom is fine, but the gist column should follow the block id, which here is spya-k3m9qt. Alimentiveness barely gets a mention, but phrenology as a whole rests on it. Spurzheim was more careful than Gall, and Elliotson was not careful at all. The Müller-Lyer illusion does not show what he thinks it shows here. Predictive processing is doing all the work, and pareidolia is a separate claim about computational functionalism. Corrigibility and the disposition dial are in tension. Anthropic wants Claude to be a transparent conscientious objector and also broadly safe, and sandbagging is the failure mode nobody has priced in."
+    },
+    {
+      "label": "ipad-sized-192k",
+      "run": 2,
+      "ms": 2047.196517000004,
+      "wer": 0,
+      "hardHit": 21,
+      "hardOf": 21,
+      "text": "Add this to Spideryarn, please. The granularity zoom is fine, but the gist column should follow the block id, which here is spya-k3m9qt. Alimentiveness barely gets a mention, but phrenology as a whole rests on it. Spurzheim was more careful than Gall, and Elliotson was not careful at all. The Müller-Lyer illusion does not show what he thinks it shows here. Predictive processing is doing all the work, and pareidolia is a separate claim about computational functionalism. Corrigibility and the disposition dial are in tension. Anthropic wants Claude to be a transparent conscientious objector and also broadly safe, and sandbagging is the failure mode nobody has priced in."
+    }
+  ]
+}

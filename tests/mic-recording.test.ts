@@ -25,6 +25,7 @@ import {
   recordTrack,
   recordingFilename,
   supportedAttempts,
+  takesAacBitrate,
 } from "../src/web/mic-recording.js";
 
 /* ------------------------------------------------------------- the fake -- */
@@ -110,6 +111,11 @@ beforeEach(() => {
   FakeRecorder.supported = new Set();
   vi.stubGlobal("MediaStream", class {});
   vi.stubGlobal("MediaRecorder", FakeRecorder);
+  /* **Chromium's vendor string, by default, and it has to be said.** jsdom
+     reports `navigator.vendor` as `"Apple Computer, Inc."` — Safari's — so
+     without this line every test below would silently be the WebKit case and
+     get a bitrate hint on AAC. The WebKit tests set it themselves. */
+  vi.stubGlobal("navigator", { vendor: "Google Inc." });
   vi.useFakeTimers();
   vi.setSystemTime(new Date("2026-08-27T14:32:05"));
 });
@@ -176,6 +182,71 @@ describe("m:ss", () => {
 
   it("never shows a negative, however the clocks disagree", () => {
     expect(formatDuration(-5_000)).toBe("0:00");
+  });
+});
+
+/* ------------------------------------------- the bitrate, by engine --- */
+
+/**
+ * **An iPad records at 192 kbps unless it is told otherwise** — WebKit's
+ * `LargeAudioBitRate`, read from its source — which is several times what
+ * speech needs and, on a weak connection, most of the wait. A hint goes only
+ * where the encoder is known to take it: Chromium's AAC throws on one (the
+ * section below), and the ladder's recovery costs the reader's first word.
+ * docs/plans/260912b-dictation-slow-on-weak-wifi.md.
+ */
+describe("the bitrate hint on AAC, and which engine gets it", () => {
+  const all = () => true;
+
+  it("gives WebKit's AAC a speech bitrate, because WebKit honours one", () => {
+    const [first] = supportedAttempts(all, true);
+    expect(first?.type).toBe("audio/mp4;codecs=mp4a.40.2");
+    expect(first?.audioBitsPerSecond).toBe(48_000);
+  });
+
+  it("gives Chromium's AAC none, because Chromium's encoder throws on one", () => {
+    const [first] = supportedAttempts(all, false);
+    expect(first?.type).toBe("audio/mp4;codecs=mp4a.40.2");
+    expect(first?.audioBitsPerSecond).toBeUndefined();
+  });
+
+  it("leaves the webm attempts as they were, on either engine", () => {
+    for (const webkit of [true, false]) {
+      const webm = supportedAttempts((t) => t.startsWith("audio/webm"), webkit)[0];
+      expect(webm?.type).toBe("audio/webm;codecs=opus");
+      expect(webm?.audioBitsPerSecond).toBe(32_000);
+    }
+  });
+
+  /* A positive check, on purpose: the harmless mistake here is *no* hint,
+     which is what the app did before — so only a vendor string it recognises
+     gets one, and anything unknown gets today's behaviour. */
+  it("recognises WebKit by its vendor string, and says no to everything else", () => {
+    vi.stubGlobal("navigator", { vendor: "Apple Computer, Inc." });
+    expect(takesAacBitrate()).toBe(true);
+    vi.stubGlobal("navigator", { vendor: "Google Inc." });
+    expect(takesAacBitrate()).toBe(false);
+    vi.stubGlobal("navigator", { vendor: "" }); // Firefox
+    expect(takesAacBitrate()).toBe(false);
+    vi.stubGlobal("navigator", {});
+    expect(takesAacBitrate()).toBe(false);
+    vi.stubGlobal("navigator", undefined);
+    expect(takesAacBitrate()).toBe(false);
+  });
+
+  it("puts the hint on the recorder it builds when the page is WebKit", () => {
+    vi.stubGlobal("navigator", { vendor: "Apple Computer, Inc." });
+    FakeRecorder.supported = new Set(["audio/mp4;codecs=mp4a.40.2"]);
+    recordTrack(track);
+    expect(latest().opts.mimeType).toBe("audio/mp4;codecs=mp4a.40.2");
+    expect(latest().opts.audioBitsPerSecond).toBe(48_000);
+  });
+
+  it("and leaves it off when the page is Chromium", () => {
+    FakeRecorder.supported = new Set(["audio/mp4;codecs=mp4a.40.2"]);
+    recordTrack(track);
+    expect(latest().opts.mimeType).toBe("audio/mp4;codecs=mp4a.40.2");
+    expect(latest().opts.audioBitsPerSecond).toBeUndefined();
   });
 });
 

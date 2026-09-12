@@ -39,7 +39,24 @@
  * tick. Each has either been rewritten against the shape that goes out today or
  * deleted with a note saying so; the notes are at the sites.
  */
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { logLinesWhile } from "./helpers/log-capture.js";
+
+/* **`LOG_LEVEL` before the imports**, because src/log.ts reads it once when the
+   module loads and the server logger is silent under Vitest otherwise. Without
+   this, a test of what the log carries captures nothing and passes — which is
+   what the console-spy test below did until GPT Sol's code review of 260912b
+   (F1) found it: Pino writes to fd 1, never through `console`.
+   tests/helpers/log-capture.ts. */
+const HOISTED = vi.hoisted(() => {
+  const previousLevel = process.env.LOG_LEVEL;
+  process.env.LOG_LEVEL = "info";
+  return { previousLevel };
+});
+afterAll(() => {
+  if (HOISTED.previousLevel === undefined) delete process.env.LOG_LEVEL;
+  else process.env.LOG_LEVEL = HOISTED.previousLevel;
+});
 
 const sent: { url: string; body: Record<string, unknown> }[] = [];
 /** What the transcription endpoint answers: `{text}`, and nothing to unwrap. */
@@ -618,18 +635,20 @@ describe("the answer", () => {
      request back, and the request carries a reader's voice, their article's
      vocabulary and possibly a transcript of what they just said. The status
      tells a 400 from a 429 and the status is ours. */
+  /* **Read from the real log, and the positive assertion is what makes it a
+     test.** This spied on `console.log` until 2026-09-12, which the server's
+     Pino logger never calls — so it captured nothing and passed whatever the
+     log said. GPT Sol's code review of 260912b, F1. */
   it("repeats nothing the provider said, to anyone", async () => {
-    const logged: unknown[] = [];
-    const spy = vi.spyOn(console, "log").mockImplementation((...a) => logged.push(...a));
-    const spyErr = vi.spyOn(console, "error").mockImplementation((...a) => logged.push(...a));
     status = 429;
     reply = { error: { message: "rate limited: account 12345 over quota" } };
-    await expect(transcribe(AUDIO, "webm", { kind: "profile" })).rejects.toThrow(
-      /^(?!.*12345).*$/s,
-    );
-    expect(JSON.stringify(logged)).not.toContain("12345");
-    spy.mockRestore();
-    spyErr.mockRestore();
+    const logged = await logLinesWhile(async () => {
+      await expect(transcribe(AUDIO, "webm", { kind: "profile" })).rejects.toThrow(
+        /^(?!.*12345).*$/s,
+      );
+    });
+    expect(logged).toContain("dictation service refused");
+    expect(logged).not.toContain("12345");
   });
 
   /* Nothing is sent at all below the floor: a stab at the button is a quarter
@@ -639,6 +658,66 @@ describe("the answer", () => {
     const out = await transcribe("AAAA", "webm", { kind: "profile" });
     expect(out.text).toBe("");
     expect(sent).toHaveLength(0);
+  });
+});
+
+/**
+ * **The one line that says what a reader's browser actually recorded.**
+ *
+ * `format`, `audioSeconds` and `kbps` are how a production log search tells
+ * whether an iPad honoured the 48 kbps hint or silently fell back to 192
+ * (docs/plans/260912b-dictation-slow-on-weak-wifi.md) — and this line sits one
+ * variable name away from the reader's recording, their transcript and their
+ * article's vocabulary. So it is read from the real log, and each of those
+ * three is a sentinel that must not appear.
+ */
+describe("the line it logs when a dictation succeeds", () => {
+  /* 3,400 base64 characters: past the 2,000 floor, and a known size — 2,550
+     bytes, so 20.4 kilobits. */
+  const AUDIO_MARK = "ZZAUDIOSENTINELZZ".repeat(200);
+
+  async function transcribedLine(): Promise<{ line: Record<string, unknown>; raw: string }> {
+    const raw = await logLinesWhile(async () => {
+      await transcribeWith(AUDIO_MARK, "webm", ["VOCABSENTINEL"]);
+    });
+    const found = raw
+      .split("\n")
+      .filter(Boolean)
+      .map((l) => {
+        try {
+          return JSON.parse(l) as Record<string, unknown>;
+        } catch {
+          return null;
+        }
+      })
+      .find((l) => l?.msg === "dictation transcribed");
+    if (!found) throw new Error(`no "dictation transcribed" line was captured:\n${raw.slice(0, 400)}`);
+    return { line: found, raw };
+  }
+
+  it("says the container, the length and the rate", async () => {
+    reply = { text: "TRANSCRIPTSENTINEL spoken", usage: { seconds: 2, cost: 0 } };
+    const { line } = await transcribedLine();
+    expect(line.format).toBe("webm");
+    expect(line.audioSeconds).toBe(2);
+    /* Worked by hand rather than by the code's own formula: 20.4 kilobits over
+       2 seconds is 10.2. */
+    expect(line.kbps).toBe(10);
+  });
+
+  it("writes null, not nothing, when the provider gives no duration", async () => {
+    reply = { text: "TRANSCRIPTSENTINEL spoken" };
+    const { line } = await transcribedLine();
+    expect(line).toHaveProperty("audioSeconds", null);
+    expect(line).toHaveProperty("kbps", null);
+  });
+
+  it("carries none of the recording, the words or the vocabulary", async () => {
+    reply = { text: "TRANSCRIPTSENTINEL spoken", usage: { seconds: 2, cost: 0 } };
+    const { raw } = await transcribedLine();
+    expect(raw).not.toContain("ZZAUDIOSENTINELZZ");
+    expect(raw).not.toContain("TRANSCRIPTSENTINEL");
+    expect(raw).not.toContain("VOCABSENTINEL");
   });
 });
 

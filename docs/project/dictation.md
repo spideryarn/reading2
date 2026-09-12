@@ -427,7 +427,21 @@ all, because the hint is what made the encoder throw. Its measured rate is ~14 K
 minutes was ~5.6 MB.
 
 The recorder now stops at 2.1 MB of audio, and the request refuses above 3 MB of base64, so the
-ordinary case is a dictation that ends by itself rather than one that is rejected. **Hitting the
+ordinary case is a dictation that ends by itself rather than one that is rejected.
+
+**The size is also the wait, and an iPad was the heavy one.** Measured 2026-09-12 after Greg reported
+dictation as slow on an iPad on weak Wi-Fi: 41 seconds of speech at an iPad's size took **10.8 s to
+upload** on a modelled 1 Mbps link, against 1.6–2.7 s to transcribe in the same run — two calls per
+file showed no size penalty, though too few to establish that there is none. So request size is the
+strongest lever, not a proven cause of any one slow dictation. WebKit
+records at **192 kbps** when a page gives no bitrate (`LargeAudioBitRate`, read from its source), and
+the AAC attempt gave none because Chromium's encoder throws on one. So since that day the AAC attempt
+carries **48 kbps on WebKit only**, recognised positively by `navigator.vendor` (`takesAacBitrate` in
+[`mic-recording.ts`](../../src/web/mic-recording.ts)), and the cap that used to bite an iPad at about
+87 seconds now sits past the five-minute one. Whether the hint is honoured is not visible from the
+box, which cannot run Safari: the `dictation transcribed` log line carries `format`, `audioSeconds`
+and `kbps`, from the provider's own `usage.seconds`, and ~48 on an `m4a` row is the answer.
+[260912b](../plans/260912b-dictation-slow-on-weak-wifi.md), with the spike that measured it. **Hitting the
 cap ends the dictation**, which it did not used to: recording stopping while dictation carried on
 was fine for a souvenir and wrong for a source, because the words after the cap would be
 transcribed from audio that does not contain them and the result would replace the whole of what
