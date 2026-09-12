@@ -214,6 +214,12 @@ agrees with it.
 - [`src/web/CommentDialog.tsx`](../../src/web/CommentDialog.tsx) — `X` to close, `ChevronLeft` /
   `ChevronRight` to step between comments, and `Globe` — struck through by a composed diagonal when
   the model didn't search — for whether it went to the web ([comments.md](comments.md)).
+- [`src/web/ChatPanel.tsx`](../../src/web/ChatPanel.tsx) `Composer` — `SendHorizontal` at 18 and
+  `Square` at 14 in the 36px Send/Stop box, the app's one icon-only send button, shared by chat and
+  a comment's conversation. **On Greg's iPad the send icon has been reported missing, and it has not
+  been reproduced off the device**: Chromium and WebKit both draw it. The suspects, and the five
+  Web Inspector checks that would settle it, are in
+  [260912c](../plans/260912c-send-button-icon-and-primary-style.md#what-gpt-sol-added-to-the-diagnosis).
 
 ## See also
 

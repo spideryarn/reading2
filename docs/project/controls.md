@@ -134,6 +134,13 @@ list page now agree, and agreeing is the whole of it:
 | the view toggle's two halves | 24px (`size-6`) inside the 28px box | `rounded-sm` (6px) = outer 8 − 2px padding |
 | shadcn `size="sm"` | 32px | `rounded-md` |
 | shadcn `size="default"`, and the inputs beside it | 36px | `rounded-md` |
+| chat's Send, beside its one-line box | 36px, **`var(--control-h)`** | `var(--radius)`, the box's own |
+
+**`--control-h` is the first of these with a token behind it**, added 2026-09-12 in
+[`styles/tokens.css`](../../styles/tokens.css) when Greg asked for Send to be bigger
+([260912c](../plans/260912c-send-button-icon-and-primary-style.md)). The other rows are still
+utility classes; reach for the token when a hand-rolled control has to agree with the 36px row, and
+add its siblings when a second row needs one.
 
 The chip is stated as a **height**, not as padding, in `chipClass` in
 [`lib/DataTable.tsx`](../../src/web/lib/DataTable.tsx) — that is what lets an icon-only control in

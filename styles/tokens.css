@@ -198,6 +198,9 @@
 
     /* ---- shape ------------------------------------------------------- */
     --radius: 0.625rem;
+    /* The default control height: shadcn's size="default", and the one-line input beside it.
+       docs/project/controls.md § The numbers has the 28px and 32px rows, which have no token yet. */
+    --control-h: 2.25rem;
     --header-height: 4rem;
 
     /* ---- type -------------------------------------------------------- */

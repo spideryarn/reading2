@@ -2083,7 +2083,7 @@ export function Composer({
           already spoken for by a control that could not be pressed. */}
       {onStop ? (
         <button type="button" className="chat-send stop" onClick={onStop} title="Stop (Esc)">
-          <Square size={12} fill="currentColor" />
+          <Square size={14} fill="currentColor" />
         </button>
       ) : (
         <button
@@ -2095,7 +2095,9 @@ export function Composer({
           disabled={busy || dictate.readOnly || dictate.dictation.armed || value.trim() === ""}
           title="Send (Enter)"
         >
-          {busy ? <LoaderCircle className="cmt-spinner" size={14} /> : <SendHorizontal size={14} />}
+          {/* 18 in the 36px box (--control-h); the stroke stays the house 1.75.
+              docs/plans/260912c-send-button-icon-and-primary-style.md. */}
+          {busy ? <LoaderCircle className="cmt-spinner" size={18} /> : <SendHorizontal size={18} />}
         </button>
       )}
       {dictate.dictation.supported &&

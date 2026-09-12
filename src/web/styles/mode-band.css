@@ -671,20 +671,57 @@
   resize: none;
 }
 .chat-input:focus-visible { outline: 2px solid var(--highlight); outline-offset: 1px; }
+/* **Send is the primary control in its row** — Greg, 2026-09-12: *"it sort of
+   should be bigger and maybe have some kind of outline to indicate that it's
+   probably the most important button in that little area."* So it is the one
+   orange thing here: filled when it can be pressed, outlined when it cannot.
+   docs/plans/260912c-send-button-icon-and-primary-style.md.
+
+   `padding: 0` and `flex: none` because the square is ours, not the browser's —
+   a UA button keeps its own padding, and a flex row may squeeze an item that
+   does not refuse. The microphone beside it has always set `padding: 0`. */
 .chat-send {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 2rem;
-  height: 2rem;
-  border: 1px solid var(--rule-strong);
+  flex: none;
+  width: var(--control-h);
+  height: var(--control-h);
+  padding: 0;
+  border: 1px solid var(--highlight);
   border-radius: var(--radius);
-  background: var(--surface-raised);
+  background: transparent;
   color: var(--ink);
   cursor: pointer;
 }
-.chat-send:disabled { opacity: 0.45; cursor: default; }
-.chat-send:not(:disabled):hover { border-color: var(--highlight); color: var(--highlight-ink); }
+/* "Not yet" said with colour, and **not with `opacity`**. The orange border
+   keeps it recognisably the primary control; the grey icon says it has nothing
+   to send. The icon's colour is the microphone's, a path known to render on an
+   iPad — the old `opacity: .45` on a disabled button is GPT Sol's leading
+   suspect for the icon going missing there, unproven (see the plan). */
+.chat-send:disabled {
+  background: transparent;
+  color: var(--ink-faint);
+  cursor: default;
+}
+/* `.cmt-spinner` normally states the working orange on the SVG itself, so the
+   parent's disabled grey cannot reach it through inheritance. This branch is
+   still a disabled Send, and keeps the same quiet icon as every other reason
+   Send cannot be pressed. */
+.chat-send:disabled .cmt-spinner { color: inherit; }
+/* Send only — `[type="submit"]`, because Stop takes Send's place while an
+   answer arrives and is an *enabled* button with the same class. A bare
+   `:not(:disabled)` filled it orange too (GPT Sol, plan review P1). The tokens
+   are shadcn's `default` variant's, as on the shelf's Add (controls.md). */
+.chat-send[type="submit"]:not(:disabled) {
+  background: var(--primary);
+  border-color: var(--primary);
+  color: var(--primary-foreground);
+}
+/* Brightness, not a colour: an orange fill composited toward the page goes
+   darker on this ground (controls.md § Two hover languages). */
+.chat-send[type="submit"]:not(:disabled):hover { filter: brightness(1.1); }
+.chat-send:focus-visible { outline: 2px solid var(--highlight); outline-offset: 2px; }
 
 /* ---- Remember mode's composer ----
    Same component as chat's, two differences on screen: the box is a place to
@@ -906,4 +943,3 @@
   letter-spacing: 0.02em;
   color: var(--ink-faint);
 }
-
