@@ -90,9 +90,9 @@
  *
  * **No removal, and no `--all`.** Removal is `scripts/worktree-sweep.ts`, which
  * is guarded and per-branch, and reading across every tree is its job too —
- * including the age floor that keeps it off a live worktree, which would be
- * wrong here: this command answers for the tree you are standing in, and you
- * are standing in it.
+ * including whether some other process is in a tree, which would be wrong here:
+ * this command answers for the tree you are standing in, and you are standing
+ * in it.
  */
 
 import { spawnSync } from "node:child_process";

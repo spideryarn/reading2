@@ -26,6 +26,8 @@ import {
   parseLockOwner,
   parseStat,
   type ProcId,
+  classifyPidNamespace,
+  INIT_PID_NAMESPACE_INODE,
   type ProcTable,
 } from "../scripts/worktree-inuse.js";
 
@@ -71,10 +73,30 @@ function fakeProc(table: Record<number, FakeProc>, self = 1000): ProcTable {
     command: (pid) => table[pid]?.command ?? "some-command",
     comm: (pid) => table[pid]?.comm ?? "bash",
     self: () => self,
+    pidNamespace: () => `pid:[${INIT_PID_NAMESPACE_INODE}]`,
   };
 }
 
 const TREE = "/home/greg/code/spideryarn2/.claude/worktrees/demo";
+
+/* ------------------------------------------------------- pid namespace -- */
+
+describe("classifyPidNamespace", () => {
+  it("accepts the host's initial PID namespace, whose inode the kernel fixes", () => {
+    expect(classifyPidNamespace("pid:[4026531836]").kind).toBe("host");
+  });
+
+  it("REFUSES any other namespace: its /proc is a subset that looks complete", () => {
+    /* GPT Sol, 2026-09-12: inside the Codex sandbox the live owner named in a
+       lock was absent from /proc, so it read as stale and the tree as idle. */
+    expect(classifyPidNamespace("pid:[4026532999]").kind).toBe("private");
+  });
+
+  it("says cannot-tell when the link could not be read or parsed", () => {
+    expect(classifyPidNamespace(null).kind).toBe("cannot-tell");
+    expect(classifyPidNamespace("something else").kind).toBe("cannot-tell");
+  });
+});
 
 /* ------------------------------------------------------------------ parsing -- */
 
@@ -161,6 +183,16 @@ describe("ownerStanding", () => {
     const standing = ownerStanding(proc, reason, ancestry(proc, 90));
     expect(standing.kind).toBe("stale");
     if (standing.kind === "stale") expect(standing.why).toContain("reused");
+  });
+
+  it("REFUSES via unknown when the owner's pid exists but its stat line cannot be parsed", () => {
+    const proc = fakeProc({ 500: { start: 777 }, 90: { ppid: 1, start: 9 } });
+    proc.stat = (pid) => (pid === 500 ? "a truncated stat line" : fakeProc({ 90: { ppid: 1, start: 9 } }).stat(pid));
+
+    const standing = ownerStanding(proc, reason, ancestry(proc, 90));
+
+    expect(standing.kind).toBe("unreadable");
+    expect(composeInUse(standing, { kind: "checked", found: [], ambient: 0, unplaceable: [] }).kind).toBe("unknown");
   });
 
   it("does NOT mistake a recycled pid in the ancestor chain for the owner", () => {

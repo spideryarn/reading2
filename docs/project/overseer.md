@@ -487,7 +487,11 @@ its worktree — the check in gate 3 first. **Removing it is yours, not Greg's.*
 that needs to be pushed has been pushed, then you are authorised to remove them without asking me."*
 So a worktree whose work is finished and pushed, and whose `npm run worktree:check` says safe, goes
 without a question; one whose check names anything you cannot account for, or whose branch is the
-only copy of something, stays and is logged.
+only copy of something, stays and is logged. **And it goes at once:** Greg, 2026-09-12, *"If they are
+finished successfully and safe to remove, it's fine to do so immediately"* — there is no age floor on
+`npm run worktree:remove` any more, only a refusal while its session is alive, something runs in it,
+or liveness cannot be checked
+([worktrees.md § Removing one](worktrees.md#removing-one)).
 
 ## Things that will catch you
 

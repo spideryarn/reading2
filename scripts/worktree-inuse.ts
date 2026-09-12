@@ -6,18 +6,21 @@
  * *lose* anything. This asks whether deleting it would *interrupt* anybody — and,
  * separately, whether the session that owns it is the one asking.
  *
- * ## The proof, and why a proxy was there instead
+ * ## The proof, and the proxy it outlived
  *
- * `scripts/worktree-sweep.ts` has a 24-hour age floor, and its docstring says
- * what it is standing in for: a sibling repo's sweep removed live worktrees,
- * because a brand-new tree whose tip equals the trunk passes every mechanical
- * check trivially. The floor is a proxy for "is somebody still using this", and
- * it is wrong in exactly one direction — it refuses the owner who has just
- * finished, which on 2026-09-08 was every tree on the box.
+ * There was a 24-hour age floor in front of every third-party removal, standing
+ * in for "is somebody still using this": a sibling repo's sweep removed live
+ * worktrees, because a brand-new tree whose tip equals the trunk passes every
+ * mechanical check trivially. This file was written beside it, to let a tree's
+ * own session past it. On 2026-09-12 the floor went — Greg: *"If they are
+ * finished successfully and safe to remove, it's fine to do so immediately"* —
+ * and the two signals below are now the whole answer to that question, for
+ * everybody. docs/plans/260912a-drop-the-worktree-removal-age-floor.md.
  *
- * It is not replaced here. A **proof** is added beside it, and the proof waives
- * it. `claude --worktree` writes the owning session's pid *and start time* into
- * the worktree lock:
+ * The ownership proof stays, and grants nothing any more. Its one job is to stop
+ * signal A vetoing the owner itself: a session removing its own tree is alive
+ * and named in the lock. `claude --worktree` writes the owning session's pid
+ * *and start time* into the worktree lock:
  *
  * ```
  * locked claude session 260908k-worktree-removal (pid 1097274 start 73180403)
@@ -35,9 +38,11 @@
  * naming it; nothing here would tell the difference. It raises the bar from "any
  * agent may delete any tree" to "an agent must deliberately forge a lock", which
  * is the useful part, and it is not a security boundary. In the other direction a
- * legitimate owner can *miss* authorisation — a pid namespace, or a supervisor
- * that detached the session from this process tree — and then it waits out the
- * age floor like anyone else. GPT Sol, 2026-09-09.
+ * legitimate owner can *miss* recognition — a supervisor that detached the
+ * session from this process tree leaves its own live pid as a veto, until it
+ * leaves the tree and asks from outside. A PID namespace is worse: it can hide
+ * the live pid altogether, so it is refused up front — `classifyPidNamespace`.
+ * GPT Sol, 2026-09-09 and 2026-09-12.
  *
  * ## Vetoes, never permissions
  *
@@ -51,17 +56,18 @@
  *   ancestors. Catches what A cannot: measured 2026-09-08, two live processes sat
  *   in `dock-last-titles`, a worktree that had already been removed.
  *
- * Neither ever *grants* a removal. "No live process" is not "finished": an agent
- * can land an intermediate commit, schedule a continuation for an hour's time and
- * exit because the box is loaded, leaving a tree that is clean, landed, and still
- * wanted. `/proc` cannot see intent, and this file does not pretend to.
+ * "No live process" is still not "finished": an agent can land an intermediate
+ * commit, schedule a continuation and exit, leaving a tree that is clean, landed,
+ * and still wanted. `/proc` cannot see intent. Since 2026-09-12 that tree is
+ * removable anyway, by Greg's decision — nothing in it is lost, because
+ * `worktree:check` and the landed proof have already said so.
  *
  * ## The composition is three-valued and fails closed
  *
- * Active → refuse. Otherwise **unknown → the age floor still applies**. Clear only
- * when both applicable signals are conclusively clear. "One signal is unknown and
- * the other found nothing" is not clear — that was the shape of the first draft,
- * and it failed open.
+ * Active → refuse. Otherwise **unknown → refuse**. Clear only when both
+ * applicable signals are conclusively clear. "One signal is unknown and the other
+ * found nothing" is not clear — that was the shape of the first draft, and it
+ * failed open.
  *
  * ## Signal B was built once, measured, and thrown away — on purpose
  *
@@ -80,7 +86,10 @@
  * three outcomes rather than two — a foreign uid is ignored, an exited process is
  * an absence, and a same-uid process the kernel will not let us inspect is
  * counted and printed. `cwdUsersUnder` carries the count that settles the last
- * one.
+ * one. All of it assumes `/proc` is the host's process table: a caller in a PID
+ * namespace sees a tidy, internally consistent subset and would mistake an owner
+ * outside it for a dead pid. `classifyPidNamespace` is the positive control, and
+ * anything but the host's namespace is an `unknown`.
  */
 
 import { readdirSync, readFileSync, readlinkSync, statSync } from "node:fs";
@@ -133,6 +142,58 @@ export interface ProcTable {
   comm(pid: number): string | null;
   /** The uid this process runs as. */
   self(): number;
+  /**
+   * `readlink /proc/self/ns/pid` — `pid:[4026531836]` in the host's namespace —
+   * or `null` if it could not be read. See `classifyPidNamespace`.
+   */
+  pidNamespace(): string | null;
+}
+
+/* --------------------------------------------------------- pid namespace -- */
+
+/**
+ * The inode of the kernel's initial PID namespace. Fixed, not allocated:
+ * `PROC_PID_INIT_INO` in `include/linux/proc_ns.h` since Linux 3.8, so
+ * `pid:[4026531836]` is the host on every box this runs on. Measured on the
+ * Hetzner box, 2026-09-12.
+ */
+export const INIT_PID_NAMESPACE_INODE = 4026531836;
+
+export type PidScope =
+  /** `/proc` is the whole box's process table. */
+  | { kind: "host" }
+  /** A private namespace: `/proc` is a subset that looks complete. */
+  | { kind: "private"; link: string; why: string }
+  | { kind: "cannot-tell"; why: string };
+
+/**
+ * **Is the `/proc` we are about to believe the whole box?** The positive control
+ * both signals below need, and did not have until GPT Sol's review of 260912a.
+ *
+ * Inside a private PID namespace — Sol's own Codex sandbox, measured 2026-09-12 —
+ * `/proc` lists the namespace's handful of processes and nothing else. A live
+ * session outside it is not *unreadable*, it is *absent*: its pid in the lock
+ * reads as gone, so the lock reads as stale, and no process sits in the tree.
+ * Every answer is internally consistent and wrong, which is the one kind of
+ * wrong the three-valued composition cannot see. While the age floor stood
+ * behind it that cost nothing; without it, it removes a live tree.
+ *
+ * So the namespace is asked first, and anything but the host's is `unknown`.
+ */
+export function classifyPidNamespace(link: string | null): PidScope {
+  if (link === null) {
+    return { kind: "cannot-tell", why: "could not read which PID namespace this process is in, so /proc may not be the whole box" };
+  }
+  const m = /^pid:\[(\d+)\]$/.exec(link.trim());
+  if (m?.[1] === undefined) {
+    return { kind: "cannot-tell", why: `/proc/self/ns/pid reads ${link}, which is not a PID namespace link` };
+  }
+  if (Number.parseInt(m[1], 10) === INIT_PID_NAMESPACE_INODE) return { kind: "host" };
+  return {
+    kind: "private",
+    link,
+    why: `this process is in a private PID namespace (${link}), whose /proc can hide a live session outside it — run this from the host session`,
+  };
 }
 
 /* --------------------------------------------------------------- parsing -- */
@@ -235,17 +296,17 @@ export type OwnerStanding =
   | { kind: "unrecognised"; reason: string }
   /** The lock's pid is gone, or was recycled — the session that wrote it is over. */
   | { kind: "stale"; owner: LockOwner; why: string }
+  /** The pid exists, but its identity could not be read. Never evidence of exit. */
+  | { kind: "unreadable"; owner: LockOwner; why: string }
   /** The owner is alive, and it is not the process asking. */
   | { kind: "alive"; owner: LockOwner; command: string }
   /** The owner is alive AND is an ancestor of the asker: the owner is asking. */
   | { kind: "asking"; owner: LockOwner };
 
 /**
- * Who holds the lock, and whether they are still here.
- *
- * The `asking` case is the only thing in this file that grants anything, and it
- * grants on evidence rather than on a flag: the exact `(pid,start)` in the lock is
- * in the caller's own ancestor chain, which no other session can arrange.
+ * Who holds the lock, and whether they are still here. `asking` only exempts the
+ * owner from its own signal-A veto: it grants no removal and skips no other
+ * check.
  */
 export function ownerStanding(proc: ProcTable, lockReason: string | undefined, chain: readonly ProcId[]): OwnerStanding {
   if (lockReason === undefined) return { kind: "unlocked" };
@@ -255,7 +316,7 @@ export function ownerStanding(proc: ProcTable, lockReason: string | undefined, c
   const line = proc.stat(owner.pid);
   if (line === null) return { kind: "stale", owner, why: `pid ${owner.pid} is gone` };
   const parsed = parseStat(line);
-  if (parsed === null) return { kind: "stale", owner, why: `pid ${owner.pid} has an unreadable stat line` };
+  if (parsed === null) return { kind: "unreadable", owner, why: `pid ${owner.pid} has an unreadable stat line` };
   if (parsed.start !== owner.start) {
     /* The pid exists but is a different process. This is the case the start time
        is in the lock for, and treating it as "alive" would refuse for ever. */
@@ -280,8 +341,8 @@ export interface CwdUser {
  *
  * **This list is the whole reason the scan is usable, and the whole reason it is
  * still safe.** Blocking on every opaque process is operationally impossible:
- * measured on the box, six are opaque on every single run, so the owner waiver —
- * the point of the feature — would never fire. But "they are all daemons" is not
+ * measured on the box, six are opaque on every single run, so no live tree could
+ * ever be removed. But "they are all daemons" is not
  * a fact about opaqueness, it is a fact about *this box on that afternoon*. GPT
  * Sol disproved the general claim by construction: a same-uid Python process
  * chdir'd into a worktree, called `prctl(PR_SET_DUMPABLE, 0)`, and its cwd went
@@ -289,7 +350,7 @@ export interface CwdUser {
  *
  * So the shape is the one `worktree-check.ts` already uses for gitignored paths:
  * **the known ones are named, and anything else is a blocker.** An opaque process
- * called `python3` is an unknown and costs you the age floor; an opaque `sshd` is
+ * called `python3` is an unknown and refuses the removal; an opaque `sshd` is
  * counted and printed. Adding a name here is a decision somebody makes on
  * purpose, not a default.
  */
@@ -334,15 +395,15 @@ export type CwdScan =
  * `systemd --user`, `(sd-pam)`, two `sshd`, two `postgrest`**. Every one is a
  * daemon whose credentials or dumpable flag make the kernel refuse, none of them
  * has ever been in a worktree, and they are there on every run. Treating them as
- * an unknown made the scan report one every single time, which took the owner
- * waiver with it — an alarm that can never be cleared, which is precisely the
+ * an unknown made the scan report one every single time — an alarm that can
+ * never be cleared, which is precisely the
  * `/logs/` mistake `worktree-check.ts` already tells at length.
  *
  * So they are **counted and printed**, not blocked on. GPT Sol argued the other
  * way (its fifth finding, 2026-09-09: *"a stable same-UID PID whose cwd is
  * unreadable is an unknown"*) and the argument is right in general; the count is
  * what settles it here. What remains genuinely unknown — no `/proc` at all, or a
- * listing that failed — is still `cannot-tell`, and still costs you the floor.
+ * listing that failed — is still `cannot-tell`, and still refuses.
  */
 export function cwdUsersUnder(
   proc: ProcTable,
@@ -376,8 +437,8 @@ export function cwdUsersUnder(
     const cwd = proc.cwd(pid);
     /* Exited between the listing and here. An absence, not a hole: a process
        that no longer exists is not using this directory. Counting it as an
-       unknown made the scan report one on almost every run — measured, and it
-       took the owner waiver with it. */
+       unknown made the scan report one on almost every run — measured, and
+       would have refused nearly every removal. */
     if (cwd.kind === "gone") continue;
     if (cwd.kind === "opaque") {
       /* Named ambient daemon, or a hole. `comm` is readable when cwd is not. */
@@ -400,13 +461,8 @@ export type InUse =
   | { kind: "in-use"; reasons: string[] }
   /** Nobody is, and both signals were conclusive. */
   | { kind: "idle"; notes: string[] }
-  /** At least one signal could not answer. The age floor still applies. */
+  /** At least one signal could not answer. Refuses, whoever is asking. */
   | { kind: "unknown"; why: string[] };
-
-/** Did the owner itself ask for this? Separate from `InUse` because it grants. */
-export function ownerIsAsking(standing: OwnerStanding): boolean {
-  return standing.kind === "asking";
-}
 
 /**
  * The two signals, composed so that no combination of them can fail open.
@@ -427,6 +483,9 @@ export function composeInUse(standing: OwnerStanding, scan: CwdScan): InUse {
       break;
     case "unrecognised":
       unknowns.push(`the worktree lock was not written by \`claude --worktree\` and says: ${standing.reason}`);
+      break;
+    case "unreadable":
+      unknowns.push(`the worktree lock names ${standing.why}`);
       break;
     case "stale":
       notes.push(`the lock is stale: ${standing.why}`);
@@ -466,8 +525,8 @@ export function composeInUse(standing: OwnerStanding, scan: CwdScan): InUse {
  * `/proc`, or the honest absence of it.
  *
  * `null` on anything that is not Linux — the Mac has no `/proc`, so every signal
- * here is permanently unavailable there and the caller falls back to the age
- * floor, which is exactly today's behaviour.
+ * here is permanently unavailable there, and a live tree on the Mac is never
+ * removable by `worktree:remove`.
  */
 export function procTable(): ProcTable | null {
   try {
@@ -522,5 +581,12 @@ export function procTable(): ProcTable | null {
       return raw === null ? null : raw.trim();
     },
     self: () => process.getuid?.() ?? -1,
+    pidNamespace: () => {
+      try {
+        return readlinkSync("/proc/self/ns/pid", "utf8");
+      } catch {
+        return null;
+      }
+    },
   };
 }
