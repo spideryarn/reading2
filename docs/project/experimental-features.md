@@ -163,8 +163,8 @@ is a column rather than something in the browser's `localStorage`.
 **The modes in the table below**, and **four of Diagram's five pictures**. Greg picked the first
 four on 2026-09-03
 ([260903c](../plans/260903c-gate-unpolished-modes-behind-experimental-features.md)), Debate joined
-them on 2026-09-05, Quotes came out on 2026-09-06, and Structure, which went in on 2026-09-06, came
-out on 2026-09-10; each row is a required
+them on 2026-09-05, Quotes came out on 2026-09-06, Structure, which went in on 2026-09-06, came
+out on 2026-09-10, Citations joined on 2026-09-11, and Hierarchy went in on 2026-09-12; each row is a required
 `experimental: boolean` in `MODE_CATALOG` ([`mode-catalog.ts`](../../src/mode-catalog.ts) — it was
 on the `MODES_UI` row in [`Dock.tsx`](../../src/web/Dock.tsx) until 2026-09-07), so mode fifteen
 cannot be added without somebody deciding which side of the line it is on.
@@ -181,6 +181,7 @@ Everything a mode is *not* is derivable from `MODES` ([`src/modes.ts`](../../src
 | [Referee](referee-mode.md) | **Not because it is unfinished** — its own doc opens by saying all four sub-modes are built and working. It is the newest mode and by far the narrowest: it is for somebody who has been *asked to peer-review* the piece, which most readers never are. Greg's call, and the one row here that is about audience rather than readiness. |
 | [Remember](remember-mode.md) | The name suggests saved notes and spaced repetition, neither of which exists; the quiz half is newer still. |
 | [Citations](citations.md) | A new mode on an unmeasured prompt: four local runs so far, and on a long bibliography the list is capped at 80 and chosen by the model. The links are safe by construction — each is one the article gave, or a search that says it is one — but which works make the list, and the two scores, have not been checked against a reader's judgment. |
+| [Hierarchy](granularity-zoom.md) | **Not because it is unfinished.** Greg moved it on 2026-09-12, making Structure the one structural view everybody is given. Only its Dock entry points are gated — see [Hierarchy went in on 2026-09-12](#hierarchy-went-in-on-2026-09-12) for what that does and does not take with it. |
 | [Debate](../plans/260905f-debate-mode-what-the-web-says-about-this-piece.md) | Two metered web searches a run, up to ~$0.27 and rising with article length — the dearest mode press in the bar — and no live run has happened yet, so nothing about what a real list looks like is known. Its content is also the only thing in the band that is not in the article at all, and what the panel can prove about a row stops well short of what a reader will read into it. |
 
 **Everything else is what everybody sees**, a signed-out visitor included.
@@ -206,6 +207,25 @@ Structure was kept, with Outline's nested list as its narrow face; Outline was r
 the switch to do this, because Outline was on every reader's bar — retiring it with Structure still
 hidden would have taken the nested list away from everybody who had not ticked the switch.
 [260910g](../plans/260910g-structure-mode-subsumes-outline.md).
+
+### Hierarchy went in on 2026-09-12
+
+Greg, from an iPad two days after the Structure decision above:
+
+> Hierarchy mode should be one of the Experimental Features.
+>
+> Structure mode should be a non-Experimental Feature, ie shown to everyone
+>
+> — Greg, 2026-09-12, feedback SPIDERYARN-READING2-35
+
+The second sentence was already true. Hierarchy and the granularity-zoom tree are
+[one structure](granularity-zoom.md#the-tree), so it is worth saying exactly what moved. **Only its
+two Dock entry points did: the mode button and the command-bar row.** The pipeline still builds the
+tree for every article, Structure and Summary still read it, and `?mode=hierarchy` still opens the
+columns for anybody. The last view can restore it too, because that is another saved URL. What a
+reader with the switch off loses, while in another mode, is a button that reaches the **zoom
+columns**, because those are drawn only in Hierarchy mode. That was Greg's call, not a side effect.
+[260912e](../plans/260912e-hierarchy-behind-the-experimental-switch.md).
 
 The half of the old paragraph that survives is the arithmetic: because nothing here or in the tests
 counts the modes, adding a third structural mode and then retiring one needed no number changed

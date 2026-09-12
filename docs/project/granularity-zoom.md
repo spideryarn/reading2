@@ -59,6 +59,10 @@ That deeply-nested table of contents and this tree are **the same structure**, n
 [architecture.md § Pipeline](architecture.md#pipeline). Hierarchy is it rendered as navigation; the
 zoom view is it rendered as text.
 
+**Since 2026-09-12 the Hierarchy button and command-bar row are behind the experimental switch** —
+the tree is not, and nor is `?mode=hierarchy`.
+[experimental-features.md § Hierarchy went in on 2026-09-12](experimental-features.md#hierarchy-went-in-on-2026-09-12).
+
 The article is a flat sequence of blocks with stable ids (`spya-k3m9qt…`) — see
 [block-ids.md](block-ids.md) for the format and
 [architecture.md § What a block is](architecture.md#what-a-block-is) for what counts as one. Over

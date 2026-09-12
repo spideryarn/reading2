@@ -257,7 +257,14 @@ export const MODE_CATALOG: Record<Mode, ModeCatalogEntry> = {
        adjacent buttons are two names for one thing. An alias that is another
        mode's actual name is the loose alias this table refuses. */
     aliases: ["toc", "contents"],
-    experimental: false,
+    /* **Behind the switch since 2026-09-12**, the day Structure became the
+       structural view everybody is given. Greg (SPIDERYARN-READING2-35):
+       "Hierarchy mode should be one of the Experimental Features." Only its
+       Dock entry points go — the button and the command-bar row: the tree is
+       the one Structure and Summary read, the pipeline still builds it, and
+       `?mode=hierarchy` still opens the columns.
+       docs/project/experimental-features.md. */
+    experimental: true,
   },
   chat: {
     description: "Ask about this article — answers point back at the paragraphs they came from",

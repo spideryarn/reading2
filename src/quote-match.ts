@@ -265,6 +265,21 @@ export function findQuote(
 }
 
 /**
+ * Find a quote only when it occurs once in the selected comparison space.
+ *
+ * Used when an offset from another string space cannot disambiguate repeats:
+ * one match is safe, two matches are no answer. The careful whitespace pass
+ * still gets priority; the forgiving pass is tried only when it found none.
+ */
+export function findOnlyQuote(
+  text: string,
+  quote: string,
+  passes: "forgiving" | "spaced" = "forgiving",
+): Span | null {
+  return quoteFinderWithMultiplicity(text, passes)(quote);
+}
+
+/**
  * **The same search with the haystack prepared once** — for a caller asking one
  * string many questions.
  *
@@ -322,6 +337,38 @@ export function quoteFinder(
   };
 }
 
+/** The unique-match counterpart to `quoteFinder`, kept private until a second bulk caller exists. */
+function quoteFinderWithMultiplicity(
+  text: string,
+  passes: "forgiving" | "spaced",
+): (quote: string) => Span | null {
+  let spaced: Reduced | null = null;
+  let squashed: Reduced | null = null;
+  const hayFor = (keepSpaces: boolean): Reduced => {
+    if (keepSpaces) {
+      if (spaced === null) spaced = reduce(text, true);
+      return spaced;
+    }
+    if (squashed === null) squashed = reduce(text, false);
+    return squashed;
+  };
+  return (quote) => {
+    if (quote.trim() === "" || text === "") return null;
+    for (const keepSpaces of passes === "spaced" ? [true] : [true, false]) {
+      const hay = hayFor(keepSpaces);
+      const needle = reduce(quote, keepSpaces);
+      if (needle.value === "") continue;
+      const first = hay.value.indexOf(needle.value);
+      if (first === -1) continue;
+      if (hay.value.indexOf(needle.value, first + 1) !== -1) return null;
+      const start = hay.starts[first];
+      if (start === undefined) continue;
+      return { start, end: endOf(hay, first + needle.value.length - 1) };
+    }
+    return null;
+  };
+}
+
 /**
  * The occurrence of `needle` in `hay` nearest to `near` in the *original*
  * offset space, or the first one when there is no hint.
@@ -332,12 +379,12 @@ export function quoteFinder(
  * against an original offset is the silent-wrongness this file exists to avoid.
  *
  * **`near` must be an offset into the same string as `hay`.** That is not a
- * nicety and it has been got wrong: `resolveOne` in src/web/search-hits.ts
- * passes an offset measured in `block.text` while searching the *rendered*
- * text, which are different strings of different lengths — so the hint points
- * somewhere arbitrary and picks the wrong repeat. There is nothing this
- * function can do about that; the caller has to hold the two spaces apart.
- * GPT Sol, 2026-08-31.
+ * nicety and it has been got wrong: the model-backed passage resolvers in
+ * src/web/search-hits.ts receive offsets measured in `block.text` while they
+ * search the *rendered* text. They now call `findOnlyQuote` when maths changed
+ * that space; passing the offset here picked an arbitrary repeat. There is
+ * nothing this function can do about mismatched spaces — the caller has to
+ * hold them apart. GPT Sol, 2026-08-31; F13, 2026-09-12.
  */
 function nearestIndex(hay: string, needle: string, near: number | undefined, map: number[]): number {
   const first = hay.indexOf(needle);

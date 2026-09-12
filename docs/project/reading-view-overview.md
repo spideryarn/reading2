@@ -53,6 +53,8 @@ of compression, down the page for position and across for detail. Read that firs
   the tabular view, the spine, the arc, columns that will not fit, and what would make the idea fail.
 - **[column-context.md](column-context.md)** — why a coarse column is 80% blank mid-article, and the
   centred fisheye that fixed it.
+- **[maths.md](maths.md)** — TeX in an article drawn as maths: which delimiters count and why a
+  price never does, the limits on one formula, and what it costs a comment in that paragraph.
 
 ### The modes in the band
 

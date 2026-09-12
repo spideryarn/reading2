@@ -27,7 +27,8 @@ import {
   resolveHits,
   type Found,
 } from "../src/web/search-hits.js";
-import type { Block, SearchHit } from "../src/types.js";
+import type { Article, Block, SearchHit } from "../src/types.js";
+import { renderArticleMaths } from "../src/web/maths.js";
 
 /**
  * One switched-on search, wrapping a bare list of hits.
@@ -181,6 +182,47 @@ describe("resolveHits", () => {
   it("carries the model's reasoning through untouched", () => {
     const [found] = resolveHits(BLOCKS, one([hit({ reasoning: "States the position rejected." })]));
     expect(found!.reasoning).toBe("States the position rejected.");
+  });
+
+  it("does not let a pre-render maths offset choose the wrong repeated words", async () => {
+    const source = String.raw`\[${"x+".repeat(250)}x\] the same words, then the same words.`;
+    const article = {
+      slug: "maths",
+      title: "Maths",
+      blocks: [block("spya-k3m9qt", `<p>${source}</p>`, source)],
+    } as unknown as Article;
+    const blocks = (
+      await renderArticleMaths(
+        article,
+        { load: async () => () => "<math><mi>x</mi></math>" },
+      )
+    ).blocks;
+    const second = "x the same words, then ".length;
+    const [found] = resolveHits(
+      blocks,
+      one([hit({ quote: "the same words", start: blocks[0]!.text.indexOf("the same words") })]),
+    );
+    expect(found).toMatchObject({ start: 0, whole: true });
+    expect(found!.start).not.toBe(second);
+  });
+
+  it("still marks a unique quote exactly when maths made its stored offset stale", async () => {
+    const source = String.raw`\[${"x+".repeat(250)}x\] the only words here.`;
+    const article = {
+      slug: "maths",
+      title: "Maths",
+      blocks: [block("spya-k3m9qt", `<p>${source}</p>`, source)],
+    } as unknown as Article;
+    const blocks = (
+      await renderArticleMaths(article, {
+        load: async () => () => "<math><mi>x</mi></math>",
+      })
+    ).blocks;
+    const [found] = resolveHits(
+      blocks,
+      one([hit({ quote: "the only words", start: blocks[0]!.text.indexOf("the only words") })]),
+    );
+    expect(found).toMatchObject({ start: "x ".length, whole: false });
   });
 });
 

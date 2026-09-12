@@ -47,6 +47,7 @@ import {
   type TermSelection,
 } from "./annotate.js";
 import { readSelection, type SelectionAnchor } from "./selection.js";
+import { rendersMaths } from "./maths-provenance.js";
 import { internalTarget } from "./internal-links.js";
 import {
   markReturnPath,
@@ -253,14 +254,22 @@ function resolveAnchors(
     if (c.quote === undefined) continue;
     const block = byId.get(c.blockId);
     if (!block) continue;
-    const found = resolveMark(renderedText(block.html), c);
+    /* **Not the offset, in a block that had maths drawn into it** — a formula's
+       symbols are shorter than its source, so an anchor made before the render
+       could otherwise move to a repeat of its words. maths.ts § What it costs a
+       comment. */
+    const found = resolveMark(renderedText(block.html), c, {
+      offsetTrusted: !rendersMaths(block),
+    });
     if (!found) continue;
     push(c.blockId, { id: c.id, ...found });
   }
   for (const t of chats) {
     const block = byId.get(t.anchor.blockId);
     if (!block) continue;
-    const found = resolveMark(renderedText(block.html), t.anchor);
+    const found = resolveMark(renderedText(block.html), t.anchor, {
+      offsetTrusted: !rendersMaths(block),
+    });
     if (!found) continue;
     push(t.anchor.blockId, { id: t.id, ...found, kind: "chat" });
   }

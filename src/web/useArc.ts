@@ -28,10 +28,11 @@
  * >
  * > — Greg, 2026-08-29 (the mode is called Hierarchy now)
  *
- * **On the owner opening the article, not on entering the mode.** Hierarchy is
- * the default mode, so in practice these are the same moment for almost every
- * reader — and the mode lives below the capability seam in `App.tsx`, so keying
- * off it would mean lifting `mode` above `OwnedReader` to buy nothing.
+ * **On the owner opening the article, not on entering the mode.** Hierarchy
+ * stopped being the default on 2026-08-31, but the arc is also read by
+ * Structure's narrow face. It remains article-level work, and the mode lives
+ * below the capability seam in `App.tsx`, so keying the run off either view
+ * would mean lifting `mode` above `OwnedReader` and would make the other wait.
  *
  * **The ref is not belt-and-braces.** `<StrictMode>` runs every effect twice in
  * development, so without it every article opened would POST two arc jobs. The

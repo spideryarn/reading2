@@ -63,6 +63,14 @@ const MUST_SHIP = [
      docs/plans/260912a-figure-2-vector-figures-from-a-pdf.md. */
   "node_modules/@embedpdf/pdfium/dist/index.js",
   "node_modules/@embedpdf/pdfium/dist/pdfium.wasm",
+  /* temml, the TeX renderer, which the quote check loads with a literal
+     `await import("temml")` only when a quote across a formula needs the
+     rendered form (`loadTemmlOnServer`, src/quote-in-block.ts). Left external
+     by vite.api.config.ts like every package, so it ships only if the tracer
+     follows that import. If it does not, a selection across an equation falls
+     back to the source-only check and is refused — a 400, not an outage, and
+     silent in exactly the way this list exists to catch. fb30 stage 1b. */
+  "node_modules/temml/dist/temml.mjs",
 ];
 
 /**

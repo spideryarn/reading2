@@ -19,6 +19,7 @@ import type { SavedSearch } from "../useSearch.js";
 import { apiFetch, readJson } from "../lib/api.js";
 import { loadPublicArticle } from "../public-api.js";
 import { beginArticleLoad, rehostImages, type ArticleLoad } from "../rehost.js";
+import { renderArticleMaths } from "../maths.js";
 import type {
   PublicArtefactSet,
   PublicArtefacts,
@@ -300,7 +301,9 @@ interface ResolvedAccess {
 /** Nothing of ours to draw on this one, so there is no second draw. */
 const NO_SECOND_ANSWER: Promise<ArticleAccess | null> = Promise.resolve(null);
 
-async function resolveAccess(
+/* Exported for tests/maths-access.test.ts, which drives the fallback below; the
+   hook above is its only caller in the app. */
+export async function resolveAccess(
   slug: string,
   signedIn: boolean,
   load: ArticleLoad,
@@ -332,10 +335,23 @@ async function resolveAccess(
      prose must not wait for a hundred pictures, and the publisher's URL must
      not be in the markup while we fetch ours, because by the time we swapped it
      the reader would already have been counted. rehost.ts § The images are
-     blanked before the prose draws. */
-  const clean = sanitizeArticle(found.article);
+     blanked before the prose draws.
+
+     **And maths is drawn between the two** (maths.ts): after the sanitiser, so
+     temml's markup is written onto html the policy has already passed — and
+     then maths.ts puts each changed block back through that same policy, and
+     puts the new-tab links back on, because the markup arrived after the pass
+     the reading view relies on. Here rather than in the prose so that
+     `renderedText`, `annotateHtml` and the live DOM all read the same html.
+
+     **One object, `presentable`, reaches both draws and the fallback** — the
+     plan's F10. Were the fallback a separate, unrendered local, an image that
+     failed to arrive would put raw TeX back on the page. */
+  const presentable = await renderArticleMaths(sanitizeArticle(found.article), {
+    signal: load.signal,
+  });
   const rehosted = await rehostImages(
-    clean,
+    presentable,
     slug,
     found.kind === "owned" ? "owned" : "public",
     load,
@@ -371,22 +387,22 @@ async function resolveAccess(
 
   return {
     access: accessWith(rehosted.article),
-    /* **`catch`, and it falls back to `clean` rather than to `null`.** The
-       second draw is decoration on an article the reader already has, so a
+    /* **`catch`, and it falls back to `presentable` rather than to `null`.**
+       The second draw is decoration on an article the reader already has, so a
        rejection must not turn a successful load into an error page. But `null`
        would leave the *first* draw standing — and that draw deliberately has
        every stored image's `src` removed, so an unexpected throw would leave
-       blank boxes for ever rather than losing only the pictures. `clean` is the
-       sanitised article with the publishers' own URLs still in it, which is
-       exactly what a reader saw before any of this existed. GPT Sol,
-       2026-09-06. */
+       blank boxes for ever rather than losing only the pictures. `presentable`
+       is the sanitised article, maths drawn, with the publishers' own URLs
+       still in it, which is exactly what a reader saw before the pictures were
+       ours. GPT Sol, 2026-09-06. */
     withImages: rehosted.images
       /* `null` is *no second draw was ever coming*, which `rehostImages` only
          says when it blanked nothing — so there is nothing to put right and the
-         first draw stands. Mapping it to `clean` here would drop a PDF's
+         first draw stands. Mapping it to `presentable` here would drop a PDF's
          figures back out of an article that had just been given them. */
       .then((article) => (article ? accessWith(article) : null))
-      .catch(() => accessWith(clean)),
+      .catch(() => accessWith(presentable)),
   };
 }
 /**
