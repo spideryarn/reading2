@@ -354,6 +354,22 @@ comparison stays as a second line. What it cannot see, named: skipped paint that
 inside a box the locator did measure. That goes back to Sol as one more narrow check; if it is still
 open after that, it goes to Fable or Greg before landing, not past them.
 
+**F35's fix, checked narrowly** ([prompt](260912a-figure-2-vector-figures-from-a-pdf-f35-check-prompt.md),
+[answer](260912a-figure-2-vector-figures-from-a-pdf-f35-check-sol.md)), on `a4bcb82b`: the render
+path is **sound** — Sol transplanted both refusal tests onto `0201fdfc` and watched them fail there,
+reproduced the in-padding fractions (5.32%, 4.47%, 3.61%), and ran 35 of 35 — but **F35 still open
+on F36, P1, established**: the recovery policy was left at `pdf-figures/2`, so a drawn figure stored
+by the pre-containment code reads *current* and is served without ever passing the check. This
+worktree made exactly such a manifest, in the local run recorded above. The fix is the version bump
+`PDF_FIGURE_RECOVERY_POLICY` exists for: `pdf-figures/3`, and every PDF manifest made before
+containment reads stale. Nothing outside this worktree holds one — `0201fdfc` was never pushed — so
+the bump is about the rule, not about a manifest in the wild.
+
+Proved on that very manifest: after the bump, `npx tsx scripts/stage.ts assets
+entropy-24-00930-spya-pywwkq` **without** `--force` ran — the `pdf-figures/2` manifest read stale —
+and finished `figures: 4, figuresStored: 4, figuresDrawn: 1`, the drawn one now through containment.
+typecheck exit 0; 157 tests in the seven freshness and figure files green.
+
 The two reversals leave a figure beside another column's prose, or on a page where a body line
 begins "Figure N", caption-only. Widening either is deferred until a real page shows the refusal
 costs something.

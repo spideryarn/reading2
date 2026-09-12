@@ -415,11 +415,15 @@ export function pdfFigureCaptionsIn(blocks: readonly Block[]): Map<string, strin
  * **The version of what the PDF half of this step decides**, folded into
  * `assetsInputHash` only for an article that has PDF figure markers — see the
  * last section of that function's comment. Bump it when the PDF half would
- * decide differently for the same markers; `pdf-figures/2` is the drawn-figure
- * route (docs/plans/260912a-figure-2-vector-figures-from-a-pdf.md), and `1`
- * was the bitmap route alone, which never needed spelling.
+ * decide differently for the same markers. `1` was the bitmap route alone,
+ * which never needed spelling; `2` added the drawn-figure route
+ * (docs/plans/260912a-figure-2-vector-figures-from-a-pdf.md); **`3` is the
+ * render-side containment check** — every pixel PDFium draws must lie inside
+ * ink the locator measured — and it had to be a bump, not a quiet change: a
+ * drawn figure stored under `2` would otherwise read current and go on being
+ * served without ever passing the check (GPT Sol, F36).
  */
-export const PDF_FIGURE_RECOVERY_POLICY = "pdf-figures/2";
+export const PDF_FIGURE_RECOVERY_POLICY = "pdf-figures/3";
 
 /**
  * The cheap look before the parse — built once, from the registered name rather
