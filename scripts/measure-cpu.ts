@@ -1187,6 +1187,26 @@ async function main(): Promise<void> {
     });
     if (renders.result.value) console.log(`renders: ${renders.result.value}`);
 
+    /* And the requests, beside the renders. A page at rest that asks the server
+       something every eight seconds costs almost no CPU — 0.9% of a core — so
+       no percentage on this page shows it, and it went unseen for two weeks
+       while it asked about 450 times an hour on every owner's open article
+       (docs/plans/260912a-ipad-battery-drain-the-reading-view-polls-the-job-queue-every-eight-seconds-at-rest.md).
+       Per minute of the visible bucket, so an idle run and a scroll run read the
+       same way; `none` is printed rather than nothing, because a silent line is
+       what a probe that never started looks like too. */
+    const fetches = await cdp.send<{ result: { value: string } }>("Runtime.evaluate", {
+      expression: `(() => {
+        const p = window.__perf; if (!p) return '';
+        const r = p.report();
+        const per = r.visible && r.visible.perMinute ? r.visible.perMinute.fetches : 0;
+        const top = (r.topFetches || []).slice(0, 5).map(x => x[0] + '=' + x[1]).join(' ');
+        return per + '/min' + (top ? ' — ' + top : ' — none');
+      })()`,
+      returnByValue: true,
+    });
+    if (fetches.result.value) console.log(`fetches: ${fetches.result.value}`);
+
     if (modeClicks) reportModeClicks(modeClicks, modeList);
 
     const second = await read();

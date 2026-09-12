@@ -623,8 +623,16 @@ type Shape = { url: string; method: string; auth: string | null };
  * Nothing else is touched: not the ordering, not the query strings, not `auth`.
  * The **first** `/api/jobs` entry in each list below is a collapse: under
  * `<StrictMode>` the engine's subscription runs twice and polls twice in a row.
- * The second is not — it comes after the article and the record-open POST, and
- * losing it would be a real change.
+ *
+ * **There used to be a second, and losing it was the fix.** Until 2026-09-12 a
+ * `/api/jobs` came after the article and before the record-open POST: that was
+ * `useArc`'s job subscription polling as it mounted, on every owner's reading
+ * view — the same subscription that then kept the engine polling every eight
+ * seconds for ever. It subscribes quietly now and does not poll on arrival, so
+ * the queue is asked once per session and no more
+ * (docs/plans/260912a-ipad-battery-drain-the-reading-view-polls-the-job-queue-every-eight-seconds-at-rest.md).
+ * A `/api/jobs` reappearing between the article and the POST means something at
+ * the top of the reading view is subscribing the ordinary way again.
  */
 function normalise(raw: { url: string; method: string; auth: string | null }[]): Entry[] {
   const out: Entry[] = [];
@@ -678,7 +686,8 @@ const ARRIVAL: Shape[] = [
   GET("/api/jobs"),
   GET(`/api/article/${SLUG}`),
   GET(`/api/article/${SLUG}`),
-  GET("/api/jobs"),
+  // No `/api/jobs` here since 2026-09-12: the arc's subscription is quiet. See
+  // `normalise` above.
   POST(`/api/library/${SLUG}/open`),
 ];
 
@@ -718,9 +727,16 @@ const PLAIN: Shape[] = [...ARRIVAL, ...READING_VIEW, GET("/api/reader")];
 /**
  * The same, then the Ideas band twice over: the reader's per-article row and
  * the ideas artefact, in that order, once per effect pass.
+ *
+ * **The `/api/jobs` in front of them is the band's job subscription**, which is
+ * an ordinary one — a band somebody opened is watching the queue, and pays the
+ * eight-second cadence for it. Until 2026-09-12 this poll did not show here
+ * because the arc's subscription had already woken the engine on arrival;
+ * now the band is the first thing that asks, so its arrival is visible.
  */
 const IDEAS: Shape[] = [
   ...PLAIN,
+  GET("/api/jobs"),
   GET(`/api/reader?slug=${SLUG}`),
   GET(`/api/ideas/${SLUG}`),
   GET(`/api/reader?slug=${SLUG}`),

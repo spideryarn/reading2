@@ -330,11 +330,17 @@ function writesStep(job: Job, step: StepName): boolean {
  *   see `job` above. Closing the band stops the idle poll
  *   again — src/web/jobEngine.ts § When it polls — and never stops a job that
  *   is actually running.
+ *
+ *   **Unless you pass `{ idle: false }`**, which is `useJobs`'s quiet form: the
+ *   same job, progress and completion, and no idle poll — so no cross-tab run
+ *   noticed until something else polls. Only for a caller mounted where nobody
+ *   has opened anything, which today is `useArc`; a mode's band should pay.
  */
 export function useStepJob<S extends StepName>(
   slug: string,
   step: S,
   onFinished: () => void,
+  options?: { idle?: boolean },
 ): StepJob<S> {
   /**
    * Ids this mount has already announced through `onFinished`.
@@ -354,7 +360,7 @@ export function useStepJob<S extends StepName>(
     },
     [slug, step, onFinished],
   );
-  const queue = useJobs(announce);
+  const queue = useJobs(announce, options);
 
   /**
    * **The job this panel is about**: the one running this step on this article,

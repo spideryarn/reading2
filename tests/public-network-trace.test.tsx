@@ -72,7 +72,7 @@ import { createRoot, type Root } from "react-dom/client";
 import { enableHistorySync, NuqsAdapter } from "nuqs/adapters/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { SHARED_WITH_YOU } from "../src/messages.js";
-import type { Article, ChatThread, ThreadSummary } from "../src/types.js";
+import type { Arc, Article, ChatThread, ThreadSummary } from "../src/types.js";
 import type { PublicArticle, PublicSketch, PublicTweets } from "../src/public-types.js";
 /* The vocabulary itself, so the sweeps below cannot fall behind it — src/modes.ts
    imports nothing, which is why the server can read it too. */
@@ -2843,5 +2843,104 @@ describe("the same address, as the owner", () => {
     expect(trace.filter((r) => r.url.startsWith("/api/public/"))).toEqual([]);
     // The other half of the capability check — see the visitor test above.
     expect(host.textContent).not.toContain("View only");
+  });
+});
+
+/**
+ * **An owner reading an article with nothing running asks for their queue once,
+ * and then nothing.**
+ *
+ * The class guard for "a job subscriber mounted at the top of the reading view
+ * holds the engine on its idle cadence". Any `useJobs` subscriber keeps the
+ * tab-level engine polling every eight seconds (src/web/jobEngine.ts § When it
+ * polls), and the reading view had one from 2026-08-29 to 2026-09-12 without
+ * anybody noticing: `useArc` in `OwnedReader`, through `useStepJob`. That is
+ * 480 requests an hour per open tab, each one waking an iPad's radio.
+ * `ArticlePage.tsx` already said, of glossary and quotes, that a subscriber
+ * mounted there *"would hold the job engine to its idle cadence for every reader
+ * of every article"* — and nothing enforced it, because every test of the
+ * cadence looked at the engine or at a visitor, never at an owner at rest.
+ * docs/plans/260912a-ipad-battery-drain-the-reading-view-polls-the-job-queue-every-eight-seconds-at-rest.md.
+ *
+ * **Through the real `App`**, not `useArc` mounted alone
+ * (tests/arc-idle-poll.test.ts does that), because the class is about whatever
+ * the reading view mounts, and the next one will not be the arc.
+ *
+ * ## Fake timers from before the render, not after it
+ *
+ * The obvious move — let the page settle on real timers, then switch — leaves
+ * the engine's next poll armed on a *real* eight-second timer that no fake
+ * minute can fire, so the at-rest case would pass over the bug and only the
+ * control would notice. So the clock is faked before `open()`, with
+ * `shouldAdvanceTime` so that `settle()`'s zero-length waits still resolve on
+ * their own, and only the four timer functions: faking `setImmediate` would
+ * stall React's scheduler.
+ *
+ * ## The control is a band that subscribes the ordinary way
+ *
+ * Glossary's band mounts `useStepJob` down in the band, which is where the
+ * idle courtesy is meant to be bought — a reader watching a mode's progress
+ * wants to see a run another tab started. Same harness, same owner, and it must
+ * be seen polling, or the silence in the first case proves only that the clock
+ * was not moving.
+ */
+describe("an owner's reading view, left alone", () => {
+  beforeEach(() => {
+    vi.useFakeTimers({
+      toFake: ["setTimeout", "clearTimeout", "setInterval", "clearInterval"],
+      shouldAdvanceTime: true,
+    });
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  /** The job-list GETs in the next fake minute, starting from a clean trace. */
+  async function jobPollsInAMinute(): Promise<number> {
+    trace.length = 0;
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(60_000);
+    });
+    return trace.filter((r) => r.method === "GET" && r.url === "/api/jobs").length;
+  }
+
+  /* A real arc in the payload, matching the fixture's one child node, so `useArc`
+     is on its ordinary path — ready, no read, no job — rather than taking the
+     catch-all `{}` for an arc. GPT Sol, 2026-09-12, F4. */
+  const OWNED_ARC: Arc = {
+    version: "test",
+    generator: "test",
+    slug: SLUG,
+    sourceHash: "owner-at-rest-fixture",
+    entries: [{ range: ["spya-bbbbbb", "spya-cccccc"], text: "Where the piece goes." }],
+  };
+
+  /* Two modes, because a subscriber mounted only inside Summary would pass a
+     Plain-only guard. */
+  it.each(["plain", "summary"] as const)("asks for the job list once, then nothing for a minute, in %s", async (mode) => {
+    session.user = { id: "owner-1", email: "greg@example.com" };
+    owned = () => json({ ...OWNED, arc: OWNED_ARC });
+    await open(`?mode=${mode}`);
+
+    /* The preconditions, so a zero below is about the cadence: the owner's
+       page really rendered, and the session's one reconciliation really went
+       out. Without the second, an engine that never started would pass. */
+    expect(host.textContent, "the owner's copy must be on screen").toContain(
+      "as its owner renamed it",
+    );
+    expect(
+      trace.filter((r) => r.method === "GET" && r.url === "/api/jobs").length,
+      "the session's first poll",
+    ).toBeGreaterThan(0);
+
+    expect(await jobPollsInAMinute(), "job-list polls in a minute at rest").toBe(0);
+  });
+
+  it("does poll again with a band open that watches the queue", async () => {
+    session.user = { id: "owner-1", email: "greg@example.com" };
+    await open("?mode=glossary");
+
+    expect(await jobPollsInAMinute(), "job-list polls in a minute with Glossary open").toBeGreaterThan(3);
   });
 });

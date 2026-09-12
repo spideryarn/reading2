@@ -224,9 +224,22 @@ export function useJobSession(readerId: string | null, accessToken: string | nul
  *   instant its last step succeeds, with no reload and no "it'll show up
  *   eventually". A job that was already done when this hook arrived is never
  *   announced.
+ * @param options.idle whether being mounted keeps the engine's eight-second
+ *   idle poll going. Defaults to yes, which is right for a surface somebody is
+ *   *watching* the queue on — the shelf, a mode's band. `false` for one mounted
+ *   everywhere that only needs its own job: it still sees every change and every
+ *   completion, and a running job is still polled every second, but at rest it
+ *   costs nothing. `jobEngine.subscribeQuietly`; the arc is why it exists.
  */
-export function useJobs(onFinished?: (job: Job) => void): UseJobs {
-  const snapshot = useSyncExternalStore(jobEngine.subscribe, jobEngine.getSnapshot);
+export function useJobs(
+  onFinished?: (job: Job) => void,
+  options: { idle?: boolean } = {},
+): UseJobs {
+  /* Two stable method references, never an arrow built here: a fresh function
+     per render makes `useSyncExternalStore` unsubscribe and resubscribe on
+     every render. */
+  const subscribe = options.idle === false ? jobEngine.subscribeQuietly : jobEngine.subscribe;
+  const snapshot = useSyncExternalStore(subscribe, jobEngine.getSnapshot);
 
   /**
    * **Where this subscriber started watching, captured during its first
