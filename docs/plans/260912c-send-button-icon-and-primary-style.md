@@ -56,6 +56,37 @@ ending for that half is to ask Greg to look on the iPad after the next deploy. I
 missing, Safari's Web Inspector on his Mac (Develop ▸ his iPad) can read the computed styles of
 the `<svg>`, which is the one piece of evidence this box cannot get.
 
+### What GPT Sol added to the diagnosis
+
+Sol agreed that "not reproduced off the device" is fair
+([its answer](#appendix-gpt-sols-plan-review)), and said two claims above are too strong: the
+microphone does not rule out colour, because it is normally *enabled* while Send is normally
+*disabled*; and production's markup is not the live DOM in Greg's tab until someone inspects it.
+
+**Its leading suspect is the disabled path.** Send is disabled whenever the box is empty, so the
+button Greg looks at most is disabled, and it is dimmed with `opacity: .45`. That combination goes
+through iOS's native button painting, and WebKit has had bugs in this family: disabled-control
+painting that `getComputedStyle` does not show
+([218798](https://bugs.webkit.org/show_bug.cgi?id=218798)), and a button compositing regression
+involving `opacity < 1`, flex layout and a radius
+([238088](https://bugs.webkit.org/show_bug.cgi?id=238088)). Neither matches exactly. Its second
+suspect is SVG `currentColor` failing to paint: `SendHorizontal` is stroke-only with `fill="none"`,
+so a failed stroke leaves a genuinely empty box.
+
+The checks that would settle it on the iPad, in Safari's Web Inspector on the Mac, in order:
+
+1. Type one character. If the icon appears, it is the disabled path.
+2. Untick `opacity`. If that restores it, it is compositing.
+3. Set `-webkit-appearance: none`. If that alone restores it, it is the native control renderer.
+4. Force `stroke: #0f0 !important` on the `<svg>`. If it appears, the geometry is fine and the
+   `currentColor` chain is at fault.
+5. If the `<button>` has no `<svg>` child at all, it is not CSS: look at the loaded JS and the
+   console.
+
+**What this changes in the build:** the new disabled state is said with colour, not `opacity`
+(see Key decisions). That removes the leading suspect from the state Greg sees most, which may make
+the symptom go away, but it is still not a proven cause.
+
 ## References
 
 - [controls.md](../project/controls.md): the control heights (28/32/36px) and the radius. The 36px
@@ -73,8 +104,8 @@ the `<svg>`, which is the one piece of evidence this box cannot get.
 
 ## Key decisions
 
-- **Filled orange when it can be pressed, an orange outline when it cannot.** An empty box or an
-  answer in flight disables Send. A filled orange button that cannot be pressed invites a press that
+- **Filled orange when it can be pressed, an orange outline when it cannot.** An empty box, or a
+  microphone that is still listening or transcribing, disables Send. A filled orange button that cannot be pressed invites a press that
   does nothing, while a grey one loses the "most important" reading Greg asked for. The outline keeps
   it recognisably *the* control while saying "not yet". The fill uses the same tokens shadcn's
   `default` variant uses (`--primary`, `--primary-foreground`), and controls.md already made **Add**
@@ -87,11 +118,22 @@ the `<svg>`, which is the one piece of evidence this box cannot get.
 - **`padding: 0` and `flex: none` on the button.** The box's geometry should be ours and not the
   browser's; the microphone beside it already sets `padding: 0`. Not claimed as the icon fix, per
   the diagnosis above.
-- **Stop keeps the outline.** Stop replaces Send while an answer is arriving; it is not the primary
-  action at that moment, and the orange outline it already has now matches Send's disabled shape at
-  the new size.
-- **The spinner stays orange on a transparent ground**: busy is a disabled state, so it gets the
-  outline and not the fill, and an orange spinner on an orange fill would vanish.
+- **The fill is `.chat-send[type="submit"]:not(:disabled)`, so it never reaches Stop.** Stop
+  replaces Send while an answer is arriving, and it is an *enabled* `type="button"` carrying the same
+  class, so a bare `:not(:disabled)` would have filled it orange too (GPT Sol, P1). Stop keeps its
+  orange outline, gains an explicit `background: transparent`, and now matches Send's disabled
+  shape at the new size.
+- **Disabled is said with colour, not `opacity`.** The old state was `opacity: .45`. The new one is
+  a transparent ground with an orange border and icon, which already reads as "not yet" without
+  dimming. This takes Sol's leading iOS suspect (a disabled button at `opacity < 1`) out of the
+  state Greg sees most. It is a design choice that happens to remove a suspect, not a proven fix.
+- **The spinner branch is left alone.** `busy` without `onStop` draws a disabled `LoaderCircle`,
+  but no caller produces that state in practice: an arriving answer supplies `onStop`, so Stop
+  replaces Send (GPT Sol, P2; an earlier draft of this plan said otherwise). It inherits the
+  disabled outline, so an orange spinner never sits on an orange fill.
+- **Remember's row is measured, not assumed.** Its comment says the row once had 4px to spare and
+  stranded Send alone on a second line, and 36px adds exactly 4px (GPT Sol, P1). So its lines are
+  measured at eleven widths before and after, in both engines.
 
 **The simpler option passed over: only make the button bigger** (36px, 18px icon, keep the grey).
 That is one line, but it answers neither of Greg's words "outline" or "most important": a bigger grey
@@ -106,19 +148,53 @@ app onto it. That is a sweep across forty-odd buttons, and this report is about 
 
 - [x] Reproduce in Chromium as an iPad and in real WebKit, at 12 widths (the table above)
 - [x] Rule out production, the layers, Lucide, the UA padding and the colour
-- [ ] GPT Sol reviews this plan, and is asked separately for iOS-only causes the table has not ruled
+- [x] GPT Sol reviews this plan, and is asked separately for iOS-only causes the table has not ruled
   out
+  - 📔 No P0. Two P1s and two P2s, all accepted, in the appendix. The iOS answer is in
+    [What GPT Sol added to the diagnosis](#what-gpt-sol-added-to-the-diagnosis).
 
 ### Stage: the primary style
 
-- [ ] Test first: mount `Composer` and require the send icon at 18px, and require `.chat-send` to
+- [x] Test first: mount `Composer` and require the send icon at 18px, and require `.chat-send` to
   take its size from `--control-h` (red before)
-- [ ] `--control-h` in `styles/tokens.css`; `.chat-send` restyled; `SendHorizontal size={18}`
-- [ ] Screenshots in Chromium and in WebKit, idle, typed, busy and stop, and in Remember's composer
-- [ ] `npm test`, `npm run typecheck`, lint on the touched files
+  - 📔 Red for the right reasons: `expected '14' to be '18'`, and no `--control-h` in the tokens.
+    Widened after Sol's review to pin the Send-only fill, Stop's transparent ground, `flex: none`,
+    and a disabled state with no `opacity`.
+- [x] Remember's row measured at eleven widths before the change
+- [x] `--control-h` in `styles/tokens.css`; `.chat-send` restyled; `SendHorizontal size={18}`,
+  and Stop's square 12 → 14 to keep its proportion in the bigger box
+  - 📔 The disabled icon is `var(--ink-faint)`, not a `color-mix()` of the orange as first drafted.
+    Sol's second iOS suspect is an SVG stroke failing through `currentColor`, so the state Greg
+    sees most now uses the microphone's colour path, which is known to render on his iPad.
+- [x] Screenshots in Chromium and in WebKit: empty, typed, in flight (Stop, held by stalling the
+  chat request so no model call is made) and Remember's composer
+  - 📔 Every state is 36×36 with its icon (Send 18, Stop 14) and `opacity: 1`. Empty is an orange
+    border and a grey icon, typed is the orange fill with a near-black icon, Stop is transparent.
+  - 📔 **Remember's rows:** unchanged at all eleven widths in Chromium. In WebKit, unchanged except
+    at 744px, where a row that fitted on one line now takes three: talk, live, then send with the
+    stance. That is the shape it already had at 834px before the change, and Send is never alone
+    on a line where it was not before (it already was at WebKit's 551px, before and after).
+- [x] The new test green (4 of 4), `npm run typecheck` exits 0
+- [ ] `npm test`, the full suite, and lint on the touched files
 - [ ] GPT Sol code review, which fixes what it finds
 
 ### Stage: land
 
 - [ ] controls.md gains the token row; icons.md's "Where they're used" gains Send
 - [ ] Feedback note under `docs/user-feedback/`, the queue item done, push to `dev`
+
+## Appendix: GPT Sol's plan review
+
+`gpt-5.6-sol`, effort high, read-only sandbox, 2026-09-12. It exited 0, wrote its answer, and its
+log shows no fallback to a self-review. No P0.
+
+| | Finding | What we did |
+|---|---|---|
+| P1 | The planned `.chat-send:not(:disabled)` fill also matches Stop, which is an enabled `type="button"` with the same class, and `.chat-send.stop` sets no background | The fill selector is `.chat-send[type="submit"]:not(:disabled)`, and Stop gets `background: transparent`. Both are pinned by the test |
+| P1 | 36px adds exactly the 4px Remember's row once lacked, when Send was stranded alone on a second line | Remember's lines measured at eleven widths in both engines, before and after |
+| P2 | The plan said "an answer in flight disables Send". In practice an arriving answer supplies `onStop`, so Stop replaces Send, and the disabled spinner branch has no normal caller | The plan is corrected; the branch is left as it is |
+| P2 | The test was red for the right reasons but checked neither Stop, `flex: none`, nor the disabled state | Widened to cover all three |
+
+Its answer to the iOS question is summarised in
+[What GPT Sol added to the diagnosis](#what-gpt-sol-added-to-the-diagnosis), with the WebKit bugs it
+cited.

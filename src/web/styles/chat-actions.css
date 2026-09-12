@@ -162,8 +162,11 @@
   font-size: 0.84rem;
 }
 
+/* Outlined, never filled: Stop is not the primary action, and the transparent
+   ground is stated rather than inherited so no fill rule can reach it. */
 .chat-send.stop {
   border-color: var(--highlight);
+  background: transparent;
   color: var(--highlight-ink);
 }
 
