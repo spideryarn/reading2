@@ -37,6 +37,7 @@ import { getDb } from "../db/client.js";
 import {
   articleRevisions,
   articles,
+  citationFinds,
   comments as commentsTable,
   glossaryLookups,
   revisionBlocks,
@@ -70,6 +71,7 @@ import {
   PROMPT_VERSION as DEBATE_PROMPT_VERSION,
 } from "../debate.js";
 import {
+  attachFinds,
   inputFingerprint as citationsFingerprint,
   isStale as citationsAreStale,
   PROMPT_VERSION as CITATIONS_PROMPT_VERSION,
@@ -3279,10 +3281,35 @@ const rawPgArticleReader: ArticleReader = {
         { status: 404 },
       );
     }
-    const blocks = await blockHashInputs(found.revision.id);
+    /* **Finds are attached HERE, at the read seam** — `loadGlossary`'s rule for
+       its lookups, and for its reason: forgetting it would not fail, it would
+       quietly drop every page *Find it* kept while the list looked correct.
+       Together with the block read, since both need only ids already in hand.
+       `attachFinds` upgrades only `search` rows: a link the article gave always
+       wins over one we went looking for. docs/plans/260911g-citations-mode.md
+       § Stage 3. */
+    const [blocks, stored] = await Promise.all([
+      blockHashInputs(found.revision.id),
+      getDb().select().from(citationFinds).where(eq(citationFinds.articleId, found.article.id)),
+    ]);
+    const finds = new Map(
+      stored.map((row) => [
+        row.entryId,
+        {
+          url: row.url,
+          ...(row.title ? { title: row.title } : {}),
+          host: row.host,
+          searches: row.searches,
+          model: row.model,
+          at: row.foundAt.toISOString(),
+        },
+      ]),
+    );
     const tree = found.revision.tree as Tree | null;
     return {
-      citations,
+      citations: attachFinds(citations, finds),
+      /* Judged on the artefact as stored — `sourceHash` is the article's, and
+         a find changes nothing about which article the list describes. */
       stale:
         !tree ||
         citationsAreStale(citations, blocks, tree, citedMetaFingerprintOf(found.revision)),

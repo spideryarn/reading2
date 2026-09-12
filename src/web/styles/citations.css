@@ -52,6 +52,18 @@
    link on a searched row, in the faint ink of the line it sits on. */
 .cite-search { color: inherit; text-decoration: underline dotted; text-underline-offset: 2px; }
 .cite-search:hover { color: var(--ink); }
+/* *Find it* — the glossary's `.gloss-btn`, sized down to the quiet line it
+   sits on. */
+.cite-find { font-size: 0.74rem; }
+/* What a *Find it* that kept nothing said, under its own row: a result in the
+   line's faint ink, a failure in the error colour the band already uses. */
+.cite-find-note {
+  margin: 0.2rem 0 0;
+  color: var(--ink-faint);
+  font-size: 0.77rem;
+  line-height: 1.35;
+}
+.cite-find-note.failed { color: var(--highlight-ink); }
 
 /* A rule above it, so the two sentences read as being about the list rather
    than as the last row's — the browser check read the capped sentence as the

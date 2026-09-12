@@ -1,6 +1,6 @@
 /**
  * The works the piece cites, as the reading view sees them: the list, whether
- * it still describes the article, and the one thing you can ask for.
+ * it still describes the article, and the things you can ask for.
  *
  * `useTimeline`'s shape exactly, because the artefact's contract is the
  * timeline's: one model pass over the article, stored once, **replaced** on a
@@ -11,7 +11,13 @@
  * (docs/project/ingest-queue.md). The ordering of reads is
  * src/web/useOrderedRead.ts's, the job is src/web/useStepJob.ts's, and pressing
  * the mode with nothing there starts it through src/web/useAutoRun.ts — so this
- * file is only the parse, the 404 branch and the two verbs.
+ * file is only the parse, the 404 branch and the verbs.
+ *
+ * The third verb is **`find`**, stage 3's *Find it on the web*: one POST for one
+ * searched row, `POST /api/citations/:slug/:id/find` (src/citation-find.ts).
+ * Not a job — a reader-triggered call answering in seconds, like the glossary's
+ * *Check the web* — and **one at a time**, so a second press cannot start a
+ * second paid search while the first is out.
  *
  * Mounted by `CitationsBand` alone, never hoisted: nothing outside the band
  * reads the list (no marks in the prose in v1), and `useAutoRun`'s owner has to
@@ -20,14 +26,25 @@
  *
  * docs/project/citations.md, docs/plans/260911g-citations-mode.md.
  */
-import { useCallback, useEffect, useState } from "react";
-import type { Citations, CitationsResponse, Job } from "../types.js";
+import { useCallback, useEffect, useRef, useState } from "react";
+import type { Citations, CitationsResponse, FindCitationResponse, Job } from "../types.js";
 import { useOrderedRead } from "./useOrderedRead.js";
 import { type StepFailure, useStepJob } from "./useStepJob.js";
 import { useAutoRun } from "./useAutoRun.js";
 import { apiFetch, readJson } from "./lib/api.js";
 
 type CitationsStatus = "loading" | "none" | "ready" | "error";
+
+/**
+ * What the last *Find it* said, on the row it was pressed on, when it did not
+ * end in a found page. `no-match` is a result, drawn quietly; `failed` is the
+ * server's failure sentence (src/messages.ts), drawn as an error.
+ */
+export interface FindNote {
+  id: string;
+  kind: "no-match" | "failed";
+  message: string;
+}
 
 export interface UseCitations {
   status: CitationsStatus;
@@ -55,13 +72,23 @@ export interface UseCitations {
    */
   ensure(): Promise<void>;
   /**
-   * The forced run — the stale banner's button and the foot's. It replaces the
+   * The forced run — the stale and outdated banners' button. It replaces the
    * list, keeping each work's id where its dedupe key still matches.
    * `citations` is in FORCE_ONLY_WHEN_NAMED (src/pipeline.ts), so forcing it
    * does not sweep in the steps before it.
    */
   regenerate(): Promise<void>;
   cancel(id: string): void;
+  /** The work whose *Find it* is running, or null. One at a time. */
+  finding: string | null;
+  /** What the last *Find it* that found nothing, or failed, said — and on which row. */
+  findNote: FindNote | null;
+  /**
+   * **Look for one searched work's own page on the web.** A found page is
+   * patched onto that row — its link fields only — and is stored on the
+   * server, so a reload shows it too. src/citation-find.ts.
+   */
+  find(id: string): Promise<void>;
 }
 
 export function useCitations(slug: string): UseCitations {
@@ -70,6 +97,15 @@ export function useCitations(slug: string): UseCitations {
   const [stale, setStale] = useState(false);
   const [outdated, setOutdated] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [finding, setFinding] = useState<string | null>(null);
+  const [findNote, setFindNote] = useState<FindNote | null>(null);
+  /* Admission for `find`, as a ref so two presses in one render cannot both
+     get past it. State would let both see `null`. */
+  const findLive = useRef(false);
+  /* The slug a reply belongs to. A find that returns after the reader has moved
+     to another article must not patch that article's list. */
+  const slugNow = useRef(slug);
+  slugNow.current = slug;
 
   /**
    * The read itself. `current()` after every `await`, before any state is set:
@@ -130,6 +166,52 @@ export function useCitations(slug: string): UseCitations {
     await queue.start({ force: true });
   }, [queue]);
 
+  const find = useCallback(
+    async (id: string) => {
+      if (findLive.current) return;
+      findLive.current = true;
+      const asked = slug;
+      setFinding(id);
+      setFindNote(null);
+      try {
+        const res = await apiFetch(
+          `/api/citations/${encodeURIComponent(asked)}/${encodeURIComponent(id)}/find`,
+          { method: "POST" },
+        );
+        /* The 404, the 409 and every failed call are JSON errors, and
+           `readJson` throws their sentence. */
+        const answer = await readJson<FindCitationResponse>(res);
+        if (slugNow.current !== asked) return;
+        if (answer.outcome === "no-match") {
+          setFindNote({ id, kind: "no-match", message: answer.message });
+          return;
+        }
+        /* **The link fields only**, never the whole work that came back: it
+           is a snapshot taken before a model call, and a list replaced in the
+           meantime must not have a stale row merged back into it —
+           useGlossary.ts § patchEntry is the same lesson. */
+        const { url, linkFrom, found } = answer.work;
+        setCitations((current) =>
+          current
+            ? {
+                ...current,
+                citations: current.citations.map((w) =>
+                  w.id === id ? { ...w, url, linkFrom, ...(found ? { found } : {}) } : w,
+                ),
+              }
+            : current,
+        );
+      } catch (err) {
+        if (slugNow.current !== asked) return;
+        setFindNote({ id, kind: "failed", message: (err as Error).message });
+      } finally {
+        findLive.current = false;
+        setFinding(null);
+      }
+    },
+    [slug],
+  );
+
   /* `reload` is the way out of a failed read — useAutoRun.ts § A failed read
      is not an answer. */
   const auto = useAutoRun(slug, "citations", status, ensure, reload);
@@ -149,5 +231,8 @@ export function useCitations(slug: string): UseCitations {
     ensure,
     regenerate,
     cancel: queue.cancel,
+    finding,
+    findNote,
+    find,
   };
 }

@@ -154,6 +154,7 @@ describe("every Postgres store, asked for the seam it was guarded under", () => 
     ["../src/store/pg-referee-criteria.js", "pgRefereeCriteriaStore", "referee-criteria"],
     ["../src/store/pg-referee-claims.js", "pgRefereeClaimsStore", "referee-claims"],
     ["../src/store/pg-lookups.js", "pgGlossaryLookupStore", "glossary-lookup"],
+    ["../src/store/pg-citation-finds.js", "pgCitationFindStore", "citation-finds"],
     ["../src/store/pg-admin.js", "pgAdminStore", "admin"],
     ["../src/store/pg-visibility.js", "pgVisibilityStore", "visibility"],
     ["../src/store/pg-feedback.js", "pgFeedbackStore", "feedback"],
@@ -336,6 +337,7 @@ describe("no Postgres store is selected without a guard", () => {
       "pgAdminStore",
       "pgArticleReader",
       "pgChatStore",
+      "pgCitationFindStore",
       "pgCommentStore",
       "pgFeedbackStore",
       /* The link preview's two, 2026-09-05. Worth one line of why they are

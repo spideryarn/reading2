@@ -404,9 +404,17 @@ export const MODE_CATALOG: Record<Mode, ModeCatalogEntry> = {
        - "influence is the model's memory, not a count": `CitedWork.influence`
          in src/types.ts; no citation database is consulted (deferred in the
          plan).
-       Stage 3's *Find it on the web* will make the second sentence need a
-       clause; it is not built. docs/plans/260911g-citations-mode.md. */
-    how: "One model pass over the article, written once and then stored. Every address shown for a work is one the article itself gave — a DOI, an arXiv id or its own link, found by code rather than typed by the model — and where it gave none the row offers a Scholar search, marked as a search. How influential a work is comes from the model's memory, not from a citation count.",
+       - "*Find it* runs one web search … kept only if a result is plainly the
+         work's own page … marked as found": src/citation-find.ts —
+         `openrouter:web_search` on Exa; `readFind` keeps a URL only if it is
+         one of the call's own annotations and `pageNamesTitle` says the result
+         names the work; stored in `citation_finds` and drawn as `linkFrom:
+         "web"`, "found on the web" (CitationsPanel.tsx § Source). A row the
+         article gave a link for never offers it (`attachFinds`).
+       The sentence is about the mode, not the press: *Find it* is on a row,
+       owner-only, and nothing here claims a visitor can press it. No price —
+       new-mode.md § The card on the button. docs/plans/260911g-citations-mode.md. */
+    how: "One model pass over the article, written once and then stored. Every address shown for a work is one the article itself gave — a DOI, an arXiv id or its own link, found by code rather than typed by the model — and where it gave none the row offers a Scholar search, marked as a search, and a Find it that runs one web search and keeps a page only if a result is plainly the work's own, marked as found on the web. How influential a work is comes from the model's memory, not from a citation count.",
     /* `works cited` is two words on purpose: `canonical` collapses whitespace
        and lower-cases, so it is stored already in the form a reader types. */
     aliases: ["references", "bibliography", "sources", "works cited"],

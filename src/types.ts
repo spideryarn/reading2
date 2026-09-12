@@ -3408,7 +3408,41 @@ export interface CitedWork {
   citedInBody: boolean;
   url: string;
   linkFrom: CitationLinkFrom;
+  /**
+   * **Stage 3's find, when `linkFrom` is `web`** — attached at read time from
+   * `citation_finds`, never stored in the artefact. `title` is the search
+   * result's own, not the model's. Absent on every other row.
+   */
+  found?: CitationFound;
 }
+
+/** What *Find it on the web* kept for one work. src/citation-find.ts. */
+export interface CitationFound {
+  /** The search result's own title, if it gave one. */
+  title?: string;
+  host: string;
+  /** Billed searches the call reported; `null` when the provider did not say. */
+  searches: number | null;
+  model: string;
+  /** ISO 8601 — a found page is a fact about the web on that day. */
+  at: string;
+}
+
+/** One stored find: the page's address, plus what the row shows about it. */
+export interface CitationFind extends CitationFound {
+  /** The search result's own URL — one of the call's annotations, never the model's. */
+  url: string;
+}
+
+/**
+ * `POST /api/citations/:slug/:id/find`. **Two outcomes, and neither is an
+ * error**: a page that matched and was kept (the work comes back upgraded to
+ * `linkFrom: "web"`), or nothing that matched — stored nowhere, and the row's
+ * Scholar search stays. A failed call is an HTTP error, not a third outcome.
+ */
+export type FindCitationResponse =
+  | { outcome: "found"; work: CitedWork }
+  | { outcome: "no-match"; message: string };
 
 /**
  * What was thrown away. Counts only — never a title, a quote or a URL. Logged by

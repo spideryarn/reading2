@@ -515,6 +515,9 @@ function augmentationFiles(rows: ArticleRows): Map<string, string> {
   if (rows.glossaryLookups.length) {
     at("glossary-lookups.json", { lookups: rows.glossaryLookups.map((row) => rowJson(row)) });
   }
+  if (rows.citationFinds.length) {
+    at("citation-finds.json", { finds: rows.citationFinds.map((row) => rowJson(row)) });
+  }
   return out;
 }
 
@@ -568,6 +571,7 @@ one thing that will make the rest of these files make sense.
                            each node carries its own gist at each level of granularity.
       glossary.json        Terms the article assumes you know, and what they mean here.
       glossary-lookups.json Web lookups you asked for on a glossary term.
+      citation-finds.json  Pages found on the web for cited works you asked about.
       ideas.json           Propositions the article takes as given.
       quotes.json          Lines worth keeping.
       timeline.json        When the article says things happened.
@@ -744,6 +748,7 @@ const FILE_NOTES: Readonly<Record<string, string>> = {
   "augmentations/tree.json": "The hierarchy and the summaries — one nested structure, a gist on every node.",
   "augmentations/glossary.json": "Terms the article assumes you know, and what they mean here.",
   "augmentations/glossary-lookups.json": "Web lookups you asked for on a glossary term.",
+  "augmentations/citation-finds.json": "Pages found on the web for cited works you asked about.",
   "augmentations/ideas.json": "Propositions the article takes as given.",
   "augmentations/quotes.json": "Lines worth keeping.",
   "augmentations/timeline.json": "When the article says things happened.",
@@ -871,6 +876,7 @@ function bundleCounts(rows: ArticleRows): { readonly label: string; readonly n: 
     { label: "searches", n: rows.searchRuns.length },
     { label: "referee criteria", n: rows.refereeCriteria.length },
     { label: "glossary lookups", n: rows.glossaryLookups.length },
+    { label: "cited works found on the web", n: rows.citationFinds.length },
     { label: "block ids ever minted", n: rows.blockIdentities.length },
   ];
   return all.filter((count) => count.n > 0);

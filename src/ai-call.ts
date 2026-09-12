@@ -581,6 +581,18 @@ export const AI_JOB_ROUTE: Record<RoutedJob, Route> = {
     wire: "chat",
     provider: { require_parameters: true },
   },
+  /* **Find one cited work's own page** (src/citation-find.ts). `debate`'s
+     policy and its reason: the request sends `openrouter:web_search`, and a
+     fallback that silently dropped the tool leaves a model answering from
+     memory. Here that is caught rather than shown — no annotation, nothing
+     kept — but the reader would be told "no page matched" for a search that
+     never ran, which `require_parameters` is what prevents. `order` for
+     consistency with this wire; there is no `cache_control` to keep. */
+  "citations-find": {
+    path: "/v1/chat/completions",
+    wire: "chat",
+    provider: { order: ["anthropic"], require_parameters: true },
+  },
   /* **The one job with no `provider` block, and it used to be the one job whose
      `provider` block mattered most.**
 

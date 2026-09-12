@@ -4784,3 +4784,27 @@ export const NOTHING_TO_MANAGE: ReaderFacingFailure = {
     "button on your profile page is where that starts. Everything you have already added stays " +
     "exactly where it is, and reading is never limited. [pay-none]",
 };
+
+/* ------------------------------------------------ citations: find it --
+   Citations mode's *Find it on the web*, one searched row at a time —
+   src/citation-find.ts, docs/plans/260911g-citations-mode.md § Stage 3. A
+   failed call uses the house failures above (`providerHttpFailure`,
+   `tookTooLong`, `PROVIDER_UNREADABLE`); these two are the outcomes that are
+   not failures. */
+
+/**
+ * **A search ran and nothing it returned was plainly this work's own page.** A
+ * negative result, not a fault — so it is quiet, it says nothing was kept, and
+ * it points at what is still there. It does not say the work is not online:
+ * one search not finding it is all we know.
+ */
+export const CITATION_NO_MATCH =
+  "No page the search found was clearly this work's own, so nothing was kept. The Scholar search is still there.";
+
+/**
+ * The row already has a link — one the article gave, or a page found before.
+ * The panel never offers *Find it* on such a row, so this is a stale tab or a
+ * hand-made request, and asking again gets the same answer.
+ */
+export const CITATION_ALREADY_LINKED =
+  "This work already has a link, so there is nothing to look for. Reload to see it.";

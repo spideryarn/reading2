@@ -788,6 +788,23 @@ export async function exportArticle(
     await put("glossary_lookups", "glossary-lookups.json", { lookups });
   }
 
+  /* Keyed by entry id like the lookups above, and for their reason: the find
+     is attached to its work at read time, by that id. */
+  if (rows.citationFinds.length) {
+    const finds: Record<string, unknown> = {};
+    for (const row of rows.citationFinds) {
+      finds[row.entryId] = {
+        url: row.url,
+        title: row.title,
+        host: row.host,
+        searches: row.searches,
+        model: row.model,
+        at: row.foundAt.toISOString(),
+      };
+    }
+    await put("citation_finds", "citation-finds.json", { finds });
+  }
+
   logger.info({ slug, files: written.length, tables: wroteFrom.size }, "article exported");
   return { slug, files: written, tables: [...wroteFrom] };
 }

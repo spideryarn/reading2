@@ -33,10 +33,10 @@
  * not a citation count.
  */
 import { ScoreBars } from "./ScoreBars.js";
-import { BookText, ExternalLink, RotateCcw, TriangleAlert } from "lucide-react";
+import { BookText, ExternalLink, RotateCcw, Search, TriangleAlert } from "lucide-react";
 import { MAX_CITATIONS, type BlockId, type CitedWork } from "../types.js";
 import type { CiteOrder } from "./params.js";
-import type { UseCitations } from "./useCitations.js";
+import type { FindNote, UseCitations } from "./useCitations.js";
 import { BlockRef } from "./BlockRef.js";
 import { floorToGateStep, GATE_STEP } from "./GlossaryPanel.js";
 import { JobProgress } from "./JobProgress.js";
@@ -209,8 +209,9 @@ export function sourceOf(work: CitedWork): Source {
       return { kind: "address", url: work.url, host: hostOf(work.url), how: "arXiv id in the article" };
     case "article":
       return { kind: "address", url: work.url, host: hostOf(work.url), how: "linked in the article" };
-    /* Stage 3, *Find it on the web* — not written by anything yet. Drawn as
-       found rather than given, because it was. */
+    /* Stage 3, *Find it on the web* — a search result code checked names the
+       work (src/citation-find.ts), attached at read time. Drawn as found
+       rather than given, because it was. */
     case "web":
       return { kind: "address", url: work.url, host: hostOf(work.url), how: "found on the web" };
     case "search":
@@ -373,6 +374,9 @@ export function CitationsPanel({ owner, order: chosenOrder, onOrder, bar: chosen
                     work={work}
                     unscored={order === "prioritised" && priorityOf(work) === undefined}
                     onJump={onJump}
+                    finding={owner.finding}
+                    note={owner.findNote?.id === work.id ? owner.findNote : null}
+                    onFind={owner.find}
                   />
                 ))}
               </ol>
@@ -512,14 +516,25 @@ function WorkRow({
   work,
   unscored,
   onJump,
+  finding,
+  note,
+  onFind,
 }: {
   work: CitedWork;
   unscored: boolean;
   onJump(id: BlockId): void;
+  /** The work whose *Find it* is running anywhere in the list, or null. */
+  finding: string | null;
+  /** What this row's last *Find it* said, when it found nothing or failed. */
+  note: FindNote | null;
+  onFind(id: string): Promise<void>;
 }) {
   const source = sourceOf(work);
   const scores = scoresOf(work);
   const by = [work.authors, work.year].filter(Boolean).join(" · ");
+  /* The found page's own title, in the tooltip: the search result's words,
+     never the model's (src/citation-find.ts). */
+  const foundAs = work.found?.title ? ` — “${work.found.title}”` : "";
 
   return (
     <li
@@ -535,7 +550,7 @@ function WorkRow({
             href={source.url}
             target="_blank"
             rel="noreferrer noopener"
-            title={`${source.how} — opens ${source.host} in a new tab`}
+            title={`${source.how}${foundAs} — opens ${source.host} in a new tab`}
           >
             {work.title}
             <ExternalLink size={11} aria-hidden="true" className="cite-out" />
@@ -563,11 +578,32 @@ function WorkRow({
             search Scholar ↗
           </a>
         )}
+        {/* Stage 3, on a searched row only. Disabled while any row's find
+            runs, not just this one — each is a paid search, and a list that
+            fires five because five were clicked spends money on a mis-click
+            (GlossaryPanel.tsx § Check the web makes the same call). */}
+        {source.kind === "search" && (
+          <button
+            type="button"
+            className="gloss-btn cite-find"
+            disabled={finding !== null}
+            title="Runs one web search for this work, and keeps a page only if a search result is plainly its own. A few seconds; kept afterwards."
+            onClick={() => void onFind(work.id)}
+          >
+            <Search size={11} aria-hidden="true" />
+            {finding === work.id ? "Looking…" : "Find it"}
+          </button>
+        )}
         <span className="cite-first">
           {work.citedInBody ? "first cited" : "only in the references"}{" "}
           <BlockRef id={work.firstCited} onJump={onJump} />
         </span>
       </p>
+      {note && (
+        <p className={`cite-find-note${note.kind === "failed" ? " failed" : ""}`} role="status">
+          {note.message}
+        </p>
+      )}
     </li>
   );
 }

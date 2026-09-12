@@ -54,6 +54,36 @@ parameter survives a mode switch, and `Reader` reads `?gate=` in every mode to r
 term from the prose, so a shared key would carry a citations bar into the Glossary as its threshold.
 [url-state.md](url-state.md) has the rows.
 
+## Find it on the web
+
+A row whose article gave no link offers **Find it** beside its Scholar search — owner-only, one row
+at a time, a few seconds. `POST /api/citations/:slug/:id/find` makes one chat-wire call with
+`openrouter:web_search` (Exa, `max_total_results: 5`) and a short prompt asking for one search for
+this one work and a JSON answer naming which result, if any, is its own page
+([`src/citation-find.ts`](../../src/citation-find.ts)). JSON, not streamed: the answer is a link.
+
+**What is kept is decided by code, and the model is only a pointer into the result set** — the
+plan's [§ Stage 3](../plans/260911g-citations-mode.md#stage-3-find-it-on-the-web) and review
+finding F4:
+
+- the URL must be an exact key among the call's own `url_citation` annotations — a URL the model
+  typed is refused however right it looks;
+- what is stored is the **annotation's** URL and title, never the model's;
+- the result must name the work: its title matches (`namesTitle`), or its excerpt carries the
+  title's words as a run (`pageNamesTitle` in [`src/citations.ts`](../../src/citations.ts)).
+
+Anything else stores nothing, the row says no page was clearly the work's own, and the Scholar
+search stays. A kept page is a row in `citation_finds`, keyed `(article, entry id)` like the
+glossary's lookups and attached at read time by `loadCitations` (`attachFinds`), so it survives the
+list being found again. It is drawn as `linkFrom: "web"`, *found on the web*, with the host — and
+only a `search` row is ever upgraded, so a link the article gave always wins.
+
+**It is one call, not one search.** Nothing in the request bounds how many searches the provider
+runs, and searches are what is billed ([ai-gateway.md § The four things that fail
+silently](ai-gateway.md#the-four-things-that-fail-silently)). The bounds are the prompt, the small
+result cap and a 60-second deadline; the count is the alarm — `webSearches` on the ledger row, and
+`searches` / `searchesFrom` on the `citation find` log line.
+
 ## Who sees it
 
 Owner-only, and behind the [experimental switch](experimental-features.md). A visitor gets the
@@ -61,10 +91,9 @@ explanatory band — the public projection its rows' URLs would pass through is 
 
 ## Deferred
 
-*Find it on the web* for a searched row (the plan's stage 3); selecting a work to mark every passage
-that cites it (`?cite=`); *Find more* past the cap; real influence from a citation database; a
-visitor's list; marks in the prose. Each is in the plan's list of what is deliberately not built,
-with the reason.
+Selecting a work to mark every passage that cites it (`?cite=`); *Find more* past the cap; real
+influence from a citation database; searching every unlinked row at once; a visitor's list; marks
+in the prose. Each is in the plan's list of what is deliberately not built, with the reason.
 
 ## The code
 

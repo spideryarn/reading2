@@ -273,6 +273,7 @@ const HOMES: Record<string, string> = {
      requires it back out of this file. See `COVERED_BY_ANOTHER_TEST`. */
   "referee-claims.json": "referee_claims (one row per article, claims stay JSONB)",
   "glossary-lookups.json": "glossary_lookups",
+  "citation-finds.json": "citation_finds",
   /* Reader state, and the one exception to "never on a revision" being stated
      as a positive: these four ARE on `articles` rather than on a table of their
      own. There is exactly one row per article and it is per-owner state on a
@@ -503,6 +504,15 @@ const COVERED_BY_ANOTHER_TEST: Record<string, Unexampled> = {
     evidence: {
       file: "tests/store-export-covers-tables.test.ts",
       contains: "referee_claims",
+    },
+  },
+  /* The same arrangement: tests/store-export-covers-tables.test.ts inserts a
+     sentinel `citation_finds` row and requires it back out of both exports. */
+  "citation-finds.json": {
+    why: "no committed article carries a found citation page; a sentinel row is inserted and required back out of this filename",
+    evidence: {
+      file: "tests/store-export-covers-tables.test.ts",
+      contains: "citation_finds",
     },
   },
 };

@@ -1810,6 +1810,18 @@ export const STORE_MIGRATION: Readonly<Record<string, StoreEntry>> = {
       "condemned modules is the seeder's copy step and the spend ledger, as for " +
       "`tests/glossary-asked-term-stream-route.test.ts`. Read off the graph, not re-witnessed.",
   },
+  "tests/citation-find-route.test.ts": {
+    category: "shared-mechanism-collateral",
+    mechanisms: ["ledger-redirect", "fixture-loader"],
+    evidence: "static-only",
+    reason:
+      "Arrived after the witness ran, with Citations mode's stage 3 (2026-09-12). It seeds one " +
+      "article with `scratchArticleInPg`, writes a citations artefact onto its revision, and " +
+      "drives `POST /api/citations/:slug/:id/find` through `handleApi` against a stubbed " +
+      "provider, reading the stored find back through the citations GET — entirely Postgres. " +
+      "Its reach into the condemned modules is the seeder's copy step and the spend ledger, as " +
+      "for `tests/glossary-lookup-stream-route.test.ts`. Read off the graph, not re-witnessed.",
+  },
   "tests/glossary-delete-then-rebuild.test.ts": {
     category: "shared-mechanism-collateral",
     mechanisms: ["step-context-paths"],
@@ -2548,6 +2560,9 @@ export const TEST_LANES: Readonly<Record<string, TestLane>> = {
   /* Seeds two articles, writes lookups and deletes one article mid-stream;
      the provider is a stubbed `fetch`. */
   "tests/glossary-lookup-stream-route.test.ts": "private-postgres",
+  /* Seeds one article, writes a citations artefact and one find row, and
+     drives *Find it* through the route; the provider is a stubbed `fetch`. */
+  "tests/citation-find-route.test.ts": "private-postgres",
   /* Written 2026-09-11 for the last slice of the `AUTH_ROUTES` migration. Seeds
      one article and deletes only its own entry's lookup row; no model is called. */
   "tests/glossary-stream-lifetime.test.ts": "private-postgres",

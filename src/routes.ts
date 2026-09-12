@@ -140,6 +140,7 @@ import {
   loadQuiz,
   loadDebate,
   loadCitations,
+  findCitation,
   loadTimeline,
   loadTweets,
 } from "./store/index.js";
@@ -7550,6 +7551,35 @@ const AUTH_ROUTES: readonly AuthRoute[] = [
          not written for a profile, so there is no third staleness fact.
          `CitationsResponse` in src/types.ts has two fields. */
       send(res, 200, await loadCitations(slugPart(captures, 1)));
+    },
+  },
+
+  /* **Find one searched work's own page on the web** — Citations mode's *Find
+     it*, docs/plans/260911g-citations-mode.md § Stage 3. The citations' one
+     POST, and the glossary `lookup`'s shape: one reader-triggered model call
+     for one entry, owner-only because `loadCitations` joins through
+     `ownedSlug`, stored per `(article, entry id)`. **JSON, not SSE**: the
+     answer is a link, not prose to start reading. Nothing is read off the body
+     — the work is found server-side by id, so this cannot be made to search
+     for text of the caller's choosing.
+
+     **No rate limit, and there is none to reuse** — the same as `lookup`, and
+     stated there at length. What bounds one press is the deadline and the
+     prompt; `webSearches` on the ledger row is the alarm.
+     src/citation-find.ts. */
+  {
+    kind: "pattern",
+    method: "POST",
+    pattern: /^\/api\/citations\/([\w.%-]+)\/([\w.%-]+)\/find$/,
+    handler: async ({ request: { res } }, captures) => {
+      const at = slugPart(captures, 1);
+      send(
+        res,
+        200,
+        await withSpendAttribution({ articleSlug: at }, () =>
+          findCitation(at, slugPart(captures, 2)),
+        ),
+      );
     },
   },
 

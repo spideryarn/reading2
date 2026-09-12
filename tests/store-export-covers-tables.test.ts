@@ -472,6 +472,20 @@ function fixtures(): Record<RollbackTable | BundledTable, Fixture> {
         at: new Date(),
       });
     },
+    /* The sentinel goes in `title`: `url` has to be http(s) by CHECK. */
+    citation_finds: async () => {
+      await db.insert(schema.citationFinds).values({
+        articleId: ARTICLE_ID,
+        entryId: "spya-fnd234",
+        ownerId: owner(),
+        url: "https://example.org/a-cited-paper",
+        title: sentinel("citation_finds"),
+        host: "example.org",
+        searches: 1,
+        model: "test",
+        foundAt: new Date(),
+      });
+    },
   };
 }
 
@@ -566,6 +580,7 @@ const COLUMNS_LEFT_OUT: Record<BundledTable, Readonly<Record<string, string>>> =
   referee_criteria: {},
   referee_claims: {},
   glossary_lookups: {},
+  citation_finds: {},
 };
 
 /** A property of `value`, or `undefined` if it is not an object. */
@@ -601,6 +616,7 @@ const ROWS_IN: Record<BundledTable, (parsed: unknown) => unknown[]> = {
   referee_criteria: (parsed) => listAt(parsed, "criteria"),
   referee_claims: (parsed) => [at(parsed, "run")],
   glossary_lookups: (parsed) => listAt(parsed, "lookups"),
+  citation_finds: (parsed) => listAt(parsed, "finds"),
 };
 
 /** Every key any of these rows carries. */
@@ -638,6 +654,7 @@ await pgReady({
     "spideryarn.referee_criteria",
     "spideryarn.referee_claims",
     "spideryarn.glossary_lookups",
+    "spideryarn.citation_finds",
   ],
 });
 
