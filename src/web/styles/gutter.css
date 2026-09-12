@@ -742,6 +742,20 @@ td.text.kind-heading .blk-gutter {
   opacity: 1;
   pointer-events: auto;
 }
+/* **Except the "…" itself.** The rule above is every child, and until
+   2026-09-12 that included the button that opened the column, so the panel
+   ended in a second "…" — Greg, on an iPad: *"it has yet more three dots, but I
+   don't know what that does."* It closed the panel, and said so only in a
+   `title`, which a finger never sees; a press anywhere else already closes it,
+   and so do Escape and choosing any control (BlockGutter.tsx). An ✕ in its place
+   was weighed and passed over: a fifth icon in a column whose job is to be
+   small, for a fourth way to close. SPIDERYARN-READING2-38,
+   docs/plans/260912c-gutter-bookmark-button-and-the-second-ellipsis.md.
+
+   Here, after the container queries, because their `.blk-gutter[data-controls=
+   "…"] > .blk-more` rules are the same (0,3,0) and turn it on — source order is
+   what decides it, and tests/gutter-target-size.test.ts checks the order. */
+.blk-gutter[data-open] > .blk-more { display: none; }
 /* A heading's box is bottom-aligned and starts at the top of the cell, so
    without this the panel unfolds *upward* over the paragraph before it — Sol's
    sixth finding again, and the reason the two anchors are written out rather

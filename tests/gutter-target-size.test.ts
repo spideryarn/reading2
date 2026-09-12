@@ -363,6 +363,43 @@ describe("the column shows as many controls as the row has room for", () => {
     expect(css).toContain(".blk-gutter[data-open] > * {");
   });
 
+  it('does not draw its own "…" inside the column it has unfolded', () => {
+    /* SPIDERYARN-READING2-38, Greg on an iPad, 2026-09-12: *"when I click on
+       the three dots, it actually includes three dots within the menu that
+       expands out … I don't think it does anything."* It was the same button:
+       `.blk-gutter[data-open] > *` draws every child, the "…" included, so the
+       panel ended in the control that opened it — a toggle whose only label is
+       a `title`, which a finger never sees.
+
+       **After the open rule, and after every container query**, because the
+       count selectors that turn the "…" on are (0,3,0), the same as this one —
+       source order is what decides it. Read the whole imported stylesheet set,
+       not only gutter.css, so this stays the final `display` decision even if
+       another sheet later starts naming `.blk-more`.
+       docs/plans/260912c-gutter-bookmark-button-and-the-second-ellipsis.md. */
+    const hide = ".blk-gutter[data-open] > .blk-more { display: none; }";
+    expect(css).toContain(hide);
+    const hideAt = css.indexOf(hide);
+    const displayRulesThatReachMore = [...css.matchAll(/([^{}]+)\{([^{}]*)\}/g)].filter((match) => {
+      if (!/(?:^|;)\s*display\s*:/.test(match[2] ?? "")) return false;
+      return (match[1] ?? "")
+        .split(",")
+        .map((selector) => selector.replace(/\s+/g, " ").trim())
+        .some(
+          (selector) =>
+            selector.includes(".blk-more") ||
+            /^\.blk-gutter(?:\[[^\]]+\])? > \*$/.test(selector),
+        );
+    });
+    expect(displayRulesThatReachMore.length).toBeGreaterThan(1);
+    for (const competing of displayRulesThatReachMore) {
+      if (competing[0].replace(/\s+/g, " ").trim() === hide) continue;
+      expect(competing.index, `a later display rule can reach .blk-more: ${competing[1]?.trim()}`).toBeLessThan(
+        hideAt,
+      );
+    }
+  });
+
   it("is an affordance: hidden at rest, revealed on hover and on focus", () => {
     /* The gutter's grammar, and the reason this is asserted rather than left to
        the eye: at rest the gutter shows *state*, on hover it shows

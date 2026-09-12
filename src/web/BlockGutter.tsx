@@ -721,7 +721,16 @@ export function BlockGutter({
           because what it opens is these same controls, in the same order, at
           the same addresses in the DOM. There is one copy of the chat button in
           this component and one set of handlers; a second panel would be a
-          second place for them to drift apart. */}
+          second place for them to drift apart.
+
+          **The open column does not draw it**, since 2026-09-12 — gutter.css §
+          What "…" opens. It used to sit at the foot of the panel it had opened,
+          a second "…" whose only label was a `title` (SPIDERYARN-READING2-38).
+          So it is a way *in*, and the ways out are the three the panel already
+          had: Escape, which brings the focus back here once it is drawn again;
+          choosing a control; and a press anywhere else. The toggle below still
+          flips both ways so a programmatic activation while it is hidden is
+          harmless, without making behaviour depend on the CSS that draws it. */}
       {controls > 1 && (
         <button
           type="button"
