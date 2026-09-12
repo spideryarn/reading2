@@ -235,6 +235,59 @@ describe("the schema keeps the promises the plan makes", () => {
     });
   });
 
+  it("a comment anchor is either a selection pair or a free whole-block bookmark", async () => {
+    await inRollback(async (c) => {
+      await seed(c);
+      await c.query(
+        "insert into spideryarn.block_identities (article_id, block_id) values ($1,'spya-k3m9qt')",
+        [ART_1],
+      );
+
+      /* The new value itself: both nullable columns absent, and `none` says no
+         model call was ever attempted. */
+      await c.query(
+        `insert into spideryarn.comments
+           (article_id, id, owner_id, block_id, status)
+         values ($1,'whole',$2,'spya-k3m9qt','none')`,
+        [ART_1, OWNER],
+      );
+      const { rows } = await c.query(
+        "select quote, start from spideryarn.comments where article_id=$1 and id='whole'",
+        [ART_1],
+      );
+      expect(rows[0]).toEqual({ quote: null, start: null });
+
+      /* Each half is refused independently. Otherwise one direction could be
+         wired correctly while the other still admitted a mark that cannot be
+         resolved. */
+      await expectViolation(c, /comments_anchor_pair/, () =>
+        c.query(
+          `insert into spideryarn.comments
+             (article_id, id, owner_id, block_id, quote, status)
+           values ($1,'half-quote',$2,'spya-k3m9qt','hello','none')`,
+          [ART_1, OWNER],
+        ),
+      );
+      await expectViolation(c, /comments_anchor_pair/, () =>
+        c.query(
+          `insert into spideryarn.comments
+             (article_id, id, owner_id, block_id, start, status)
+           values ($1,'half-start',$2,'spya-k3m9qt',0,'none')`,
+          [ART_1, OWNER],
+        ),
+      );
+
+      await expectViolation(c, /comments_whole_block_is_free/, () =>
+        c.query(
+          `insert into spideryarn.comments
+             (article_id, id, owner_id, block_id, status)
+           values ($1,'whole-pending',$2,'spya-k3m9qt','pending')`,
+          [ART_1, OWNER],
+        ),
+      );
+    });
+  });
+
   it("an article cannot point at another article's revision", async () => {
     await inRollback(async (c) => {
       await seed(c);

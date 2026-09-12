@@ -583,6 +583,7 @@ one thing that will make the rest of these files make sense.
       tweets.json          Short extracts.
       labels.json          Section labels.
       comments.json        Your comments, bookmarks and notes, each anchored to a block.
+                           A bookmark on a whole paragraph has \`quote\` and \`start\` null.
       chat.json            Your conversations about the article: threads, and every message
                            nested inside the thread it belongs to.
       searches.json        Meaning-searches you ran, and what they matched.

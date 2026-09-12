@@ -159,6 +159,20 @@ describe("what goes in", () => {
     expect(input.comments[0]?.quote).toBe("randomised");
   });
 
+  it("uses the block text as the passage for a whole-block note", () => {
+    /* A bare whole-block bookmark is skipped above. If the reader later writes
+       on it, Mirror needs real article words rather than an absent quote. */
+    const whole: Comment = {
+      id: "spya-whole1",
+      blockId: "spya-aaaaaa" as BlockId,
+      createdAt: "2026-09-12T10:00:00.000Z",
+      body: "The allocation method is worth checking.",
+      status: "none",
+    };
+    const input = mirrorInput([whole], blocks);
+    expect(input.comments[0]).toMatchObject({ quote: METHODS, passage: METHODS });
+  });
+
   it("skips a comment whose block this revision no longer has, and counts it", () => {
     const orphan = comment({ blockId: "spya-zzzzzz" as BlockId });
     const input = mirrorInput([orphan, comment()], blocks);

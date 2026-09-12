@@ -20,6 +20,7 @@ import { useEffect, useRef, useState } from "react";
 import { ChevronLeft, ChevronRight, Globe, LoaderCircle, X } from "lucide-react";
 import { PROVIDER_UNREADABLE, worthRetrying } from "../messages.js";
 import type { ClientComment } from "./useComments.js";
+import { passageOf } from "./comment-nav.js";
 import { DictationButton, DictationStrip } from "./DictationStrip.js";
 import { type Mark, PlaceOnCriterion } from "./PlaceOnCriterion.js";
 import { Tooltip } from "./Tooltip.js";
@@ -78,6 +79,12 @@ export type CommentAccess =
 
 interface Props {
   comment: ClientComment;
+  /**
+   * The text of the comment's block, for a whole-block bookmark to show the
+   * opening of — it has no quote of its own. `undefined` when the block is gone
+   * from this version of the article. `passageOf` in comment-nav.ts.
+   */
+  paragraph?: string | undefined;
   access: CommentAccess;
   /** 1-based position in reading order, and how many there are. */
   position: number;
@@ -100,6 +107,7 @@ interface Props {
 
 export function CommentDialog({
   comment,
+  paragraph,
   access,
   position,
   total,
@@ -350,7 +358,23 @@ export function CommentDialog({
       {/* The reader's own selection, quoted back. Without it the panel is an
           answer to a question you can no longer see, once the page has scrolled
           or you have stepped to a comment somewhere else entirely. */}
-      <blockquote className="cmt-quote">{comment.quote}</blockquote>
+      {/* A whole-block bookmark has no selection to quote back, so it names
+          what it is and shows the paragraph's opening — which is also what
+          tells two of them apart. `passageOf`. */}
+      {(() => {
+        const passage = passageOf(comment, paragraph);
+        return (
+          <blockquote className="cmt-quote">
+            {passage.whole ? (
+              <>
+                <em>Whole paragraph</em> — {passage.text}
+              </>
+            ) : (
+              passage.text
+            )}
+          </blockquote>
+        );
+      })()}
 
       {/* **The reader's own words, above the model's.** Whose panel this is
           shows in the order: what they wrote comes first, and an explanation —

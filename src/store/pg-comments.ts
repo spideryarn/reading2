@@ -87,8 +87,10 @@ function toComment(row: typeof commentsTable.$inferSelect): Comment {
   return {
     id: row.id,
     blockId: row.blockId,
-    quote: row.quote,
-    start: row.start,
+    /* Both or neither — a whole-block bookmark has no quote and no offset, and
+       `comments_anchor_pair` refuses half of one. Absent rather than null, like
+       the rest of this function. `CommentAnchor` in src/types.ts. */
+    ...(row.quote === null || row.start === null ? {} : { quote: row.quote, start: row.start }),
     createdAt: row.createdAt.toISOString(),
     /* Absent, not `null`, for all three of these — `exactOptionalPropertyTypes`
        is on and tests/store-roundtrip.test.ts compares the two stores
@@ -196,8 +198,11 @@ const rawPgCommentStore: CommentStore = {
        call, and `status: "none"` is the field that says so. */
     const fields = {
       blockId: input.blockId,
-      quote: input.quote,
-      start: input.start,
+      /* Null together on a whole-block bookmark. The same-Save comparison below
+         then compares two absent quotes, which are equal, so a double-pressed
+         gutter bookmark is harmless exactly as a double-clicked Save is. */
+      quote: input.quote ?? null,
+      start: input.start ?? null,
       body: input.body ?? null,
       /* The referee's own mark. Null when there is none, so the row says
          "ordinary reading note" rather than leaving it to a default — and

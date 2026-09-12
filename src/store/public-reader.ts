@@ -759,8 +759,11 @@ export const pgPublicReader: PublicArticleReader = {
         comments: commentRows.map((row) => ({
           id: row.id,
           blockId: row.blockId,
-          quote: row.quote,
-          start: row.start,
+          /* Both or neither, and absent rather than null — a whole-block
+             bookmark. `comments_anchor_pair` keeps the two in step. */
+          ...(row.quote === null || row.start === null
+            ? {}
+            : { quote: row.quote, start: row.start }),
           createdAt: row.createdAt.toISOString(),
           ...(row.body === null ? {} : { body: row.body }),
           ...(row.answer === null ? {} : { answer: row.answer }),

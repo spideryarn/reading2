@@ -195,6 +195,7 @@ import {
 import { MODE_CATALOG } from "../mode-catalog.js";
 import { MODE_LABEL } from "../title-text.js";
 import type { Comment } from "../types.js";
+import { passageOf } from "./comment-nav.js";
 import { armActivationForMode, armActivationForTweets } from "./activation.js";
 /* **This direction only.** `CommandBar` deliberately imports nothing from this
    file — the visible list and the one activation callback go down as props —
@@ -381,6 +382,11 @@ interface Props {
     /** Comments in reading order — App already sorts them, see comment-nav.ts. */
     comments: Comment[];
     /**
+     * Each block's text, so a whole-block bookmark can show the paragraph's
+     * opening in the list — it has no quote of its own. `passageOf`.
+     */
+    paragraphs: ReadonlyMap<string, string>;
+    /**
      * Has the comments fetch come back, and did it work? `CommentsApi`.
      *
      * The empty state needs both: an empty list is what this panel holds
@@ -444,6 +450,8 @@ interface Props {
     visitor: true;
     /** The owner's, read-only, in reading order. `visitorComments` derives them. */
     comments: Comment[];
+    /** As the owner's arm: for a whole-block bookmark's opening words. */
+    paragraphs: ReadonlyMap<string, string>;
     panel: Panel | null;
     onPanel(next: Panel | null): void;
     /** Open one, exactly as the owner's arm does. Reading is the whole verb. */
@@ -1558,6 +1566,7 @@ export function Dock({
             {drawer && (
               <Questions
                 comments={drawer.comments}
+                paragraphs={drawer.paragraphs}
                 onOpen={drawer.onOpenComment}
                 access={
                   own
@@ -3351,10 +3360,12 @@ type QuestionsAccess =
 
 function Questions({
   comments,
+  paragraphs,
   access,
   onOpen,
 }: {
   comments: Comment[];
+  paragraphs: ReadonlyMap<string, string>;
   access: QuestionsAccess;
   onOpen(id: string): void;
 }) {
@@ -3429,7 +3440,20 @@ function Questions({
         {comments.map((c) => (
           <li key={c.id}>
             <button type="button" className="dock-question" onClick={() => onOpen(c.id)}>
-              <span className="dock-question-quote">{c.quote}</span>
+              {/* A whole-block bookmark has no quote: it says what it is, and
+                  shows the paragraph's opening so several can be told apart. */}
+              <span className="dock-question-quote">
+                {(() => {
+                  const passage = passageOf(c, paragraphs.get(c.blockId));
+                  return passage.whole ? (
+                    <>
+                      <em>Whole paragraph</em> — {passage.text}
+                    </>
+                  ) : (
+                    passage.text
+                  );
+                })()}
+              </span>
               {/* **The reader's own words beat the model's**, which is the whole
                   ordering principle of this feature — and the list read as broken
                   without it: a comment somebody had written showed only the

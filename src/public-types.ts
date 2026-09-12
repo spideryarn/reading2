@@ -62,6 +62,7 @@ import type {
   BlockContext,
   BlockId,
   BlockKind,
+  CommentAnchor,
   GlossaryKind,
   Idea,
   NavLabelStatus,
@@ -480,13 +481,17 @@ export interface PublicSketch {
  * are ours; the third would say *"edited"* on a screen with nothing to compare
  * it against.
  */
-export interface PublicComment {
+export type PublicComment = PublicCommentFields & CommentAnchor;
+
+/**
+ * Everything but the anchor. The anchor is `CommentAnchor`: the article's own
+ * characters at the offsets the mark was made against — or, on a whole-block
+ * bookmark, neither, and the visitor sees the gutter mark alone.
+ */
+interface PublicCommentFields {
   /** Stable identity, so `?comment=` and the gutter mark agree. */
   id: string;
   blockId: BlockId;
-  /** The article's own characters, at the offsets the mark was made against. */
-  quote: string;
-  start: number;
   createdAt: string;
   /** The reader's own words. Absent on a bare bookmark, never `""`. */
   body?: string;

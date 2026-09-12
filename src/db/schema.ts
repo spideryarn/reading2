@@ -1543,9 +1543,10 @@ export const refereeClaims = spideryarn.table(
 /**
  * A reader's question about a stretch of prose, and the model's answer.
  *
- * Anchored to the block IDENTITY, not to the current revision's rows. The
- * anchor is `blockId` plus the exact `quote`; `start` only picks between
- * repeats of the same words inside one block. An offset alone would drift
+ * Anchored to the block IDENTITY, not to the current revision's rows. A
+ * selection anchor is `blockId` plus the exact `quote`; `start` only picks
+ * between repeats of the same words inside one block. A whole-block bookmark
+ * has the `blockId` and neither of the other two. An offset alone would drift
  * silently the moment the paragraph changed.
  *
  * `id` is client-minted so that creating one is idempotent on retry.
@@ -1562,8 +1563,15 @@ export const comments = spideryarn.table(
     /** `auth.users(id)`. FK in the custom migration. */
     ownerId: uuid("owner_id").notNull(),
     blockId: text("block_id").notNull(),
-    quote: text("quote").notNull(),
-    start: integer("start").notNull(),
+    /**
+     * The words the comment is about, and where in the block they sat. **Both
+     * null on a whole-block bookmark** — the reader bookmarked the paragraph
+     * from the gutter rather than selecting words in it (2026-09-12,
+     * `CommentAnchor` in src/types.ts). `comments_anchor_pair` keeps them null
+     * together; `comments_whole_block_is_free` keeps such a row a bookmark.
+     */
+    quote: text("quote"),
+    start: integer("start"),
     /**
      * The reader's own words. Null on a bare bookmark and on every explanation
      * made before 2026-08-28. `comments_body_nonempty` below is what keeps
@@ -1638,6 +1646,18 @@ export const comments = spideryarn.table(
      */
     check("comments_status", sql`${t.status} in ('none','pending','done','error')`),
     check("comments_start", sql`${t.start} >= 0`),
+    /**
+     * A quote and its offset are one anchor: both, or — on a whole-block
+     * bookmark — neither. Half of one draws a mark in the wrong place, which
+     * reads as a styling glitch rather than as bad data (`ChatAnchor`'s note).
+     */
+    check("comments_anchor_pair", sql`(${t.quote} is null) = (${t.start} is null)`),
+    /**
+     * A whole-block row is only ever a bookmark. The legacy answer path, its
+     * sweep and `linkThread` all read the quote, and `status = 'none'` is what
+     * keeps every one of them away from a row that has none.
+     */
+    check("comments_whole_block_is_free", sql`${t.quote} is not null or ${t.status} = 'none'`),
     /**
      * An empty body is a different value to no body, and the client cannot be
      * trusted to keep that straight across two stores and an archive

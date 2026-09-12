@@ -112,6 +112,7 @@ import { markedModes, visitorGap } from "../visitor.js";
 import { SharedNotice, ViewOnlyChip, VisitorBand } from "../PublicChrome.js";
 import { SmallScreenHint } from "../SmallScreenHint.js";
 import { useRenderCount } from "../perf.js";
+import { makeBlockBookmarker } from "../block-bookmark.js";
 import { FEEDBACK_BLOCK_IDS, setFeedbackArticleContext } from "../feedback-context.js";
 import { useWindowWidth, useRootFontPx } from "./measure.js";
 import { useReadingPosition } from "./useReadingPosition.js";
@@ -1299,6 +1300,39 @@ export function Reader({
     [blockText, chatSummaries, setNote, setThread],
   );
 
+  /**
+   * **One press, and the paragraph is bookmarked** — the gutter's bookmark
+   * button. Greg, 2026-09-12: *"so you could just say, that would just somehow,
+   * yeah, bookmark that block as being really interesting."*
+   *
+   * A whole-block comment: no quote, so no mark in the prose, and the gutter
+   * mark is the whole of it (`CommentAnchor` in src/types.ts). Free, and
+   * optimistic like every comment save — `create` removes the row again if the
+   * server refuses. Resolves to whether it was stored, so the gutter's live
+   * region says what happened.
+   *
+   * **Handed to the table only once the opening read has landed, and landed
+   * well** — at the prop, below. Before that `comments` is `[]` for every block,
+   * so every paragraph would offer the button: a press could be erased by the
+   * list arriving, or bookmark a paragraph that already had a note nobody had
+   * fetched yet. GPT Sol, reviewing the plan, 2026-09-12; `AnnotateDialog`'s
+   * Save waits on the same flag for the same reason.
+   *
+   * **The id survives an uncertain response.** A POST can commit and lose its
+   * response; `create` then removes the optimistic row and this button returns.
+   * `makeBlockBookmarker` reuses that id on the next press, which is what lets
+   * the store recognise the retry instead of saving a second row. It also
+   * coalesces two presses while the first write is live.
+   *
+   * Memoised on `create`, which is stable for one slug, so the retry memory and
+   * callback survive renders without making memoised `TableView` redraw.
+   */
+  const createComment = owner?.comments.create;
+  const bookmarkBlock = useMemo(
+    () => (createComment ? makeBlockBookmarker(createComment) : undefined),
+    [createComment],
+  );
+
   const selectProse = useCallback(
     /* Always a real anchor since 2026-09-05: `readSelection` now distinguishes
        a drag it refused from no drag at all, and TableView stops on the first
@@ -2069,6 +2103,13 @@ export function Reader({
            article. Gated on `owner` for the reason above; the two doors are one
            capability. */
         onHelp={owner ? helpAboutBlock : undefined}
+        /* The owner's, and only once the opening read has landed without error
+           — `bookmarkBlock` says why. */
+        onBookmark={
+          owner && bookmarkBlock && owner.comments.loaded && owner.comments.loadError === null
+            ? bookmarkBlock
+            : undefined
+        }
         terms={termSelections}
         openTerm={term?.id ?? null}
         hitMarks={hitMarks}
@@ -2198,6 +2239,7 @@ export function Reader({
       {!owner && !overlay && openComment && (
         <CommentDialog
           comment={openComment}
+          paragraph={blockText.get(openComment.blockId)}
           access={{ kind: "visitor" }}
           position={positionOf(ordered, note)}
           total={ordered.length}
@@ -2211,6 +2253,7 @@ export function Reader({
       {owner && !overlay && openComment && (
         <CommentDialog
           comment={openComment}
+          paragraph={blockText.get(openComment.blockId)}
           position={positionOf(ordered, note)}
           total={ordered.length}
           hasPrev={stepComment(ordered, note, -1) !== null}
@@ -2259,14 +2302,20 @@ export function Reader({
                not quite ask for, which is the whole thing this change is about.
 
                The dialog closes on the way through: one panel in the slot. */
+            /* A whole-block bookmark hands chat the whole-block anchor, which
+               is `ChatAnchor`'s other arm — and the paragraph as the opening,
+               because there are no selected words to quote. */
             setChatDraft({
               kind: "draft",
-              anchor: {
-                blockId: openComment.blockId,
-                quote: openComment.quote,
-                start: openComment.start,
-              },
-              opening: openComment.quote,
+              anchor:
+                openComment.quote === undefined
+                  ? { blockId: openComment.blockId }
+                  : {
+                      blockId: openComment.blockId,
+                      quote: openComment.quote,
+                      start: openComment.start,
+                    },
+              opening: openComment.quote ?? blockText.get(openComment.blockId) ?? "",
               question,
             });
               void setNote(null);
@@ -2414,6 +2463,7 @@ export function Reader({
           owner
             ? {
                 comments: ordered,
+                paragraphs: blockText,
                 loaded: owner.comments.loaded,
                 loadError: owner.comments.loadError,
                 /* A refused write, retry or delete. It was a chip in the
@@ -2444,6 +2494,7 @@ export function Reader({
               {
                 visitor: true,
                 comments: ordered,
+                paragraphs: blockText,
                 panel,
                 onPanel: (next) => void setPanel(next),
                 onOpenComment: (id) => {

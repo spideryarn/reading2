@@ -896,10 +896,13 @@ const KIND_HOW: Record<RefereeCriterionKind, string> = {
  * beside the model's number, and a `?? 0` reaching for the missing half would
  * print *"counts neither way"* over a judgement nobody made.
  */
-interface Placement extends Comment {
+/* An intersection rather than `interface … extends Comment`, since `Comment`
+   became a union over its anchor on 2026-09-12 and an interface cannot extend
+   one. */
+type Placement = Comment & {
   criterionId: string;
   valence: number;
-}
+};
 
 /**
  * **Which of the referee's comments are placements on this criterion.**

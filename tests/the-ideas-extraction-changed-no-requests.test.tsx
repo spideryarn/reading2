@@ -712,12 +712,12 @@ const ARRIVAL: Shape[] = [
  * orderings in `CHAT` below.
  */
 const READING_VIEW: Shape[] = [
-  GET(`/api/comments/${SLUG}`),
+  GET(`/api/comments/${SLUG}?anchors=whole-block`),
   GET(`/api/chat/${SLUG}?summary=1`),
   GET(`/api/glossary/${SLUG}`),
   GET(`/api/quotes/${SLUG}`),
   GET(`/api/arc/${SLUG}`),
-  GET(`/api/comments/${SLUG}`),
+  GET(`/api/comments/${SLUG}?anchors=whole-block`),
   GET(`/api/chat/${SLUG}?summary=1`),
 ];
 
@@ -754,13 +754,13 @@ const IDEAS: Shape[] = [
 const CHAT: Shape[] = [
   ...ARRIVAL,
   GET(`/api/chat/${SLUG}`),
-  GET(`/api/comments/${SLUG}`),
+  GET(`/api/comments/${SLUG}?anchors=whole-block`),
   GET(`/api/chat/${SLUG}?summary=1`),
   GET(`/api/glossary/${SLUG}`),
   GET(`/api/quotes/${SLUG}`),
   GET(`/api/arc/${SLUG}`),
   GET(`/api/chat/${SLUG}`),
-  GET(`/api/comments/${SLUG}`),
+  GET(`/api/comments/${SLUG}?anchors=whole-block`),
   GET(`/api/chat/${SLUG}?summary=1`),
   GET(`/api/reader?slug=${SLUG}`),
   GET(`/api/reader?slug=${SLUG}`),

@@ -56,6 +56,7 @@ function DrawerHarness() {
       experimental={EXPERIMENTAL_OFF}
       drawer={{
         comments: [],
+        paragraphs: new Map(),
         loaded: true,
         loadError: null,
         error: null, // nothing has failed to save; this file is about focus

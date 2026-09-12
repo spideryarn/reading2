@@ -45,6 +45,14 @@ const BOOKMARK: Comment = {
   status: "none",
 };
 
+/** The gutter's one-press bookmark: the block is the whole anchor. */
+const WHOLE_BLOCK: Comment = {
+  id: "spya-whole1",
+  blockId: "spya-k3m9qt",
+  createdAt: "2026-09-12T10:00:00.000Z",
+  status: "none",
+};
+
 const ASKED: Comment = {
   id: "cmt-1",
   blockId: "spya-k3m9qt",
@@ -59,7 +67,12 @@ let host: HTMLDivElement;
 let root: Root;
 
 /** The bar with its Questions drawer open. */
-function paint(comments: Comment[], loaded: boolean, loadFailed = false): void {
+function paint(
+  comments: Comment[],
+  loaded: boolean,
+  loadFailed = false,
+  paragraphs: ReadonlyMap<string, string> = new Map(),
+): void {
   act(() => {
     root.render(
       createElement(Dock, {
@@ -71,6 +84,7 @@ function paint(comments: Comment[], loaded: boolean, loadFailed = false): void {
         experimental: EXPERIMENTAL_OFF,
         drawer: {
           comments,
+          paragraphs,
           loaded,
           loadError: loadFailed ? "Couldn't reach the server. [net-down]" : null,
           /* **`null` even when the load failed**, because that is what the real
@@ -187,5 +201,18 @@ describe("the questions drawer while the fetch is out", () => {
     waitOutTheFlickerWindow();
     expect(host.textContent).toContain("a passage worth returning to");
     expect(host.querySelector(".dock-question-state")).toBeNull();
+  });
+
+  it("names a whole paragraph and shows its opening words", () => {
+    paint(
+      [WHOLE_BLOCK],
+      true,
+      false,
+      new Map([[WHOLE_BLOCK.blockId, "The opening words that distinguish this paragraph from another."]]),
+    );
+    waitOutTheFlickerWindow();
+    expect(host.querySelector(".dock-question-quote")?.textContent).toBe(
+      "Whole paragraph — The opening words that distinguish this paragraph from another.",
+    );
   });
 });

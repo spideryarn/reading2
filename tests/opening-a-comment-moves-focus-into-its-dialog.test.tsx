@@ -102,6 +102,7 @@ function Harness() {
         experimental={EXPERIMENTAL_OFF}
         drawer={{
           comments: [COMMENT],
+          paragraphs: new Map(),
           loaded: true,
           loadError: null,
           error: null, // nothing has failed to save; this file is about focus
@@ -284,6 +285,7 @@ function GutterHarness({ initial }: { initial: ClientComment[] }) {
         experimental={EXPERIMENTAL_OFF}
         drawer={{
           comments,
+          paragraphs: new Map(),
           loaded: true,
           loadError: null,
           error: null, // nothing has failed to save; this file is about focus

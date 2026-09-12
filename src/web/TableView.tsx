@@ -208,7 +208,13 @@ function sameInputs(
 function anchorKey(comments: readonly Comment[], chats: readonly AnchoredThread[]): string {
   const parts: string[] = [];
   for (const c of comments) {
-    parts.push(`c\n${c.id}\n${c.blockId}\n${c.start}\n${c.quote.length}\n${c.quote}`);
+    /* A whole-block bookmark has no words to find, and `-` cannot be a length,
+       so it cannot spell a quoted record. */
+    parts.push(
+      c.quote === undefined
+        ? `c\n${c.id}\n${c.blockId}\n-`
+        : `c\n${c.id}\n${c.blockId}\n${c.start}\n${c.quote.length}\n${c.quote}`,
+    );
   }
   for (const t of chats) {
     const a = t.anchor;
@@ -240,6 +246,11 @@ function resolveAnchors(
     byBlock.set(blockId, list);
   };
   for (const c of comments) {
+    /* **A whole-block bookmark draws no mark**, and that is the design rather
+       than a gap: underlining every word would make every tap in the paragraph
+       open the note. Its gutter mark is the whole of it — `commentsByBlock`
+       groups on `blockId` alone, so it is still counted there. */
+    if (c.quote === undefined) continue;
     const block = byId.get(c.blockId);
     if (!block) continue;
     const found = resolveMark(renderedText(block.html), c);
@@ -565,6 +576,12 @@ interface Props {
    */
   onHelp?: ((blockId: BlockId) => void) | undefined;
   /**
+   * The reader pressed the bookmark button beside a paragraph — resolves to
+   * whether it was stored. Absent for a visitor, passed the same way as the two
+   * above; BlockGutter.tsx has the argument.
+   */
+  onBookmark?: ((blockId: BlockId) => Promise<boolean>) | undefined;
+  /**
    * Every glossary term this article has, so every one can be underlined.
    *
    * **A list since 2026-08-26, and it used to be the one the reader had
@@ -697,6 +714,7 @@ function TableViewInner({
   onOpenChat,
   onChatAbout,
   onHelp,
+  onBookmark,
   terms,
   openTerm,
   hitMarks,
@@ -1720,6 +1738,7 @@ function TableViewInner({
                   onOpenComment={onOpenComment}
                   onChatAbout={onChatAbout}
                   onHelp={onHelp}
+                  onBookmark={onBookmark}
                   onJump={onJump}
                   announce={announce}
                 />

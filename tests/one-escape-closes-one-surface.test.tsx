@@ -765,6 +765,7 @@ function drawer(): ReactNode {
       experimental={EXPERIMENTAL_OFF}
       drawer={{
         comments: [] as Comment[],
+        paragraphs: new Map(),
         loaded: true,
         loadError: null,
         error: null, // nothing has failed to save; this file is about Escape

@@ -102,6 +102,8 @@ const DEPARTED_BLOCK = "spya-bng234";
 const THREAD_ID = "spya-bnt234";
 const MESSAGE_ID = "spya-bnu234";
 const COMMENT_ID = "spya-bnm234";
+/** The gutter bookmark whose SQL anchor is the null pair. */
+const WHOLE_BLOCK_COMMENT_ID = "spya-bnp234";
 
 /** The second fixture, for the bucket half — see that describe. */
 const NO_BUCKET_SLUG = "store-export-bundle-nobucket";
@@ -334,6 +336,15 @@ describe("the bundle is the faithful projection", () => {
       quote: "a stretch of prose that has since gone",
       start: 0,
       body: "still worth keeping",
+      status: "none",
+    });
+    await db.insert(schema.comments).values({
+      articleId: ARTICLE_ID,
+      id: WHOLE_BLOCK_COMMENT_ID,
+      ownerId: owner(),
+      blockId: BLOCKS[0],
+      quote: null,
+      start: null,
       status: "none",
     });
 
@@ -578,6 +589,26 @@ describe("the bundle is the faithful projection", () => {
     const comments = parsed("augmentations/comments.json").comments as { blockId: string }[];
     expect(comments[0]?.blockId).toBe(DEPARTED_BLOCK);
     expect(ids).not.toContain("spya-nobody");
+  });
+
+  it("keeps the SQL null pair in the raw bundle and omits it from the rollback shape", async () => {
+    /* These formats make opposite, deliberate promises: the downloadable
+       bundle is raw rows; `db:export` recreates the old comments.json shape. */
+    const bundledComments = parsed("augmentations/comments.json").comments as Record<
+      string,
+      unknown
+    >[];
+    expect(bundledComments.find((c) => c.id === WHOLE_BLOCK_COMMENT_ID)).toMatchObject({
+      quote: null,
+      start: null,
+    });
+
+    const rollback = JSON.parse(await readFile(path.join(out, SLUG, "comments.json"), "utf8")) as {
+      comments: Record<string, unknown>[];
+    };
+    const whole = rollback.comments.find((c) => c.id === WHOLE_BLOCK_COMMENT_ID);
+    expect(whole && "quote" in whole).toBe(false);
+    expect(whole && "start" in whole).toBe(false);
   });
 
   /* --------------------------------------------------------------- the size -- */

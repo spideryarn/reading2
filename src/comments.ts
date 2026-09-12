@@ -15,7 +15,7 @@
  */
 import { readFile } from "node:fs/promises";
 import path from "node:path";
-import type { Comment } from "./types.js";
+import type { Comment, CommentAnchor } from "./types.js";
 import { errorFields, log } from "./log.js";
 import { parseJsonFrom } from "./parse-json.js";
 import { assertSlug } from "./slug.js";
@@ -59,10 +59,15 @@ export async function loadComments(slug: string): Promise<Comment[]> {
   }
 }
 
-export interface NewComment {
+/**
+ * A free comment as the route hands it to the store: words in a block, or —
+ * with no `quote` and no `start` — the whole block. `CommentAnchor` in
+ * src/types.ts.
+ */
+export type NewComment = NewCommentFields & CommentAnchor;
+
+interface NewCommentFields {
   blockId: string;
-  quote: string;
-  start: number;
   /**
    * The reader's own words, already trimmed by the route.
    *

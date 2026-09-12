@@ -683,6 +683,7 @@ function DrawerHarness() {
       experimental: EXPERIMENTAL_OFF,
       drawer: {
         comments: comments.comments,
+        paragraphs: new Map(),
         loaded: comments.loaded,
         loadError: comments.loadError,
         error: comments.error,
@@ -859,5 +860,19 @@ describe("Comments: Save waits for the opening read", () => {
     const end = source.indexOf("onSave=", start);
     expect(start, "Reader no longer mounts AnnotateDialog").toBeGreaterThan(-1);
     expect(source.slice(start, end)).toContain("loaded={owner.comments.loaded}");
+  });
+
+  it("withholds the gutter's bookmark button until the opening read has landed, and landed well", () => {
+    /* Before the list arrives every block looks unmarked, so the button would be
+       offered everywhere: a press could be erased by the arriving list, or add a
+       second mark to a paragraph whose note nobody had fetched. The callback is
+       the capability (BlockGutter.tsx), so gating the callback is gating the
+       button. GPT Sol, reviewing plan 260912c. */
+    const source = readFileSync("src/web/reader/Reader.tsx", "utf8");
+    const at = source.indexOf("onBookmark={");
+    expect(at, "Reader no longer hands the table a bookmark callback").toBeGreaterThan(-1);
+    const prop = source.slice(at, source.indexOf("}\n", at) + 1);
+    expect(prop).toContain("owner.comments.loaded");
+    expect(prop).toContain("owner.comments.loadError === null");
   });
 });

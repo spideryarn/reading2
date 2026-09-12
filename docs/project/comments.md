@@ -31,6 +31,43 @@ Three independent properties, and a comment may have any combination of them:
    the placement optional — `criterionId` + `valence`, and only in Referee mode.
 ```
 
+### The whole-block bookmark <a id="the-whole-block-bookmark"></a>
+
+**Since 2026-09-12 the mark can be the whole paragraph, with no quote at all.** The gutter has a
+bookmark button beside every unmarked paragraph, and one press stores a comment with `blockId` and
+nothing else. Greg, on an iPad:
+
+> The issue is I thought we were going to add a sort of bookmark icon as well, sort of a fourth one,
+> so you could just say, that would just somehow, yeah, bookmark that block as being really
+> interesting. I thought maybe it was going to be represented as an empty comment […]
+>
+> — Greg, 2026-09-12 (SPIDERYARN-READING2-37)
+
+It **draws nothing in the prose**, and that is the point rather than a gap: storing the whole
+paragraph as the quote would underline every word of it and make every tap inside it open the note,
+which on an iPad is how a reader selects the block. The gutter mark is the whole of it, exactly as a
+whole-block conversation is only its gutter chip — `CommentAnchor` in
+[`src/types.ts`](../../src/types.ts) is `ChatAnchor`'s two arms again, with the block arm made strict
+(`quote?: never; start?: never`) so half an anchor is not a value.
+
+Four rules hold it, and each is written where it bites:
+
+- **Both or neither**, in the route (`createFree`) and in the database (`comments_anchor_pair`).
+- **Only ever a bookmark**: `comments_whole_block_is_free` keeps a quote-less row at `status: none`,
+  so the legacy answer path, its sweep and `linkThread` — all of which read the quote — cannot reach
+  one. `linkThread` stays selection-only on purpose.
+- **Offered only once the opening read has landed without error** — before it, every paragraph
+  looks unmarked, so a press could be erased by the list arriving or duplicate a note nobody had
+  fetched. `bookmarkBlock` in [`reader/Reader.tsx`](../../src/web/reader/Reader.tsx).
+- **Sent only to a client that asks** (`GET …?anchors=whole-block`): a tab still running code from
+  before that day reads `c.quote.length` and would lose its reading view. Delete the filter once no
+  client can be that old.
+
+The dialog and the drawer show *Whole paragraph —* and the paragraph's opening words (`passageOf` in
+[`comment-nav.ts`](../../src/web/comment-nav.ts)); it sorts first in its block. Un-bookmarking is
+pressing the mark and deleting, as for any comment.
+[260912c](../plans/260912c-gutter-bookmark-button-and-the-second-ellipsis.md).
+
 `status` says **how the model call went, and nothing else**. Every comment made from 2026-08-28
 carries `none`: no call was ever attempted. That is also what keeps a bookmark invisible to
 `sweepOrphaned`, which turns an abandoned `pending` row into an error — a bookmark is not an answer

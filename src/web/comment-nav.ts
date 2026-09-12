@@ -28,13 +28,41 @@ import type { BlockId, Comment } from "../types.js";
 export function orderComments(comments: Comment[], blocks: { id: BlockId }[]): Comment[] {
   const index = new Map(blocks.map((b, i) => [b.id, i]));
   const rank = (c: Comment) => index.get(c.blockId) ?? Number.POSITIVE_INFINITY;
+  /* A whole-block bookmark comes first in its block: it is about the paragraph,
+     so it precedes anything about part of it. `CommentAnchor`. */
+  const at = (c: Comment) => c.start ?? -1;
   return [...comments].sort(
     (a, b) =>
       rank(a) - rank(b) ||
-      a.start - b.start ||
+      at(a) - at(b) ||
       a.createdAt.localeCompare(b.createdAt) ||
       a.id.localeCompare(b.id),
   );
+}
+
+/** How much of a paragraph a whole-block bookmark shows before it is cut. */
+const OPENING_CHARS = 120;
+
+/**
+ * What to show for the passage a comment is about.
+ *
+ * Its quote — or, on a whole-block bookmark (`CommentAnchor`), the opening of
+ * the paragraph, so a drawer holding several of them can still be scanned. A
+ * paragraph that has gone from this version of the article leaves the bookmark
+ * with nothing of its own to show, and it says so rather than showing a blank.
+ * GPT Sol's plan review of 260912c.
+ */
+export function passageOf(
+  c: Comment,
+  paragraph: string | undefined,
+): { whole: boolean; text: string } {
+  if (c.quote !== undefined) return { whole: false, text: c.quote };
+  if (paragraph === undefined) return { whole: true, text: "no longer in this version of the article" };
+  const flat = paragraph.replace(/\s+/g, " ").trim();
+  return {
+    whole: true,
+    text: flat.length > OPENING_CHARS ? `${flat.slice(0, OPENING_CHARS).trimEnd()}…` : flat,
+  };
 }
 
 /**

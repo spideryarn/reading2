@@ -6,7 +6,13 @@
  */
 import { describe, expect, it } from "vitest";
 import type { Comment } from "../src/types.js";
-import { commentsByBlock, orderComments, positionOf, stepComment } from "../src/web/comment-nav.js";
+import {
+  commentsByBlock,
+  orderComments,
+  passageOf,
+  positionOf,
+  stepComment,
+} from "../src/web/comment-nav.js";
 
 /** Document order is the array order, exactly as in blocks.json. */
 const blocks = [
@@ -70,6 +76,25 @@ describe("orderComments", () => {
     ]);
   });
 
+  it("puts a whole-paragraph bookmark first in its block", () => {
+    /* SPIDERYARN-READING2-37: the gutter's bookmark has no offset, because it is
+       about the paragraph rather than some words in it — so it comes before
+       anything about part of it, and not at an arbitrary place among them. */
+    const whole: Comment = {
+      id: "spya-whole1",
+      blockId: "spya-bbbbbb",
+      createdAt: "2026-08-25T12:00:00Z",
+      status: "none",
+    };
+    const part = comment("spya-part01", "spya-bbbbbb", 0, "2026-08-25T09:00:00Z");
+    const before = comment("spya-befor1", "spya-aaaaaa", 50);
+    expect(orderComments([part, whole, before], blocks).map((c) => c.id)).toEqual([
+      "spya-befor1",
+      "spya-whole1",
+      "spya-part01",
+    ]);
+  });
+
   it("does not mutate the array it was given", () => {
     const list = [comment("spya-000002", "spya-cccccc", 0), comment("spya-000001", "spya-aaaaaa", 0)];
     orderComments(list, blocks);
@@ -123,6 +148,40 @@ describe("positionOf", () => {
 
   it("is 0 when nothing is open", () => {
     expect(positionOf(ordered, null)).toBe(0);
+  });
+});
+
+describe("passageOf", () => {
+  const whole: Comment = {
+    id: "spya-whole1",
+    blockId: "spya-bbbbbb",
+    createdAt: "2026-08-25T12:00:00Z",
+    status: "none",
+  };
+
+  it("is the quote when there is one", () => {
+    expect(passageOf(comment("spya-000001", "spya-aaaaaa", 0), "anything")).toEqual({
+      whole: false,
+      text: "q",
+    });
+  });
+
+  it("is the opening of the paragraph for a whole-block bookmark, cut and marked", () => {
+    const long = `${"word ".repeat(60)}end`;
+    const got = passageOf(whole, long);
+    expect(got.whole).toBe(true);
+    expect(got.text.endsWith("…")).toBe(true);
+    expect(got.text.length).toBeLessThanOrEqual(121);
+    expect(passageOf(whole, "  A short\n paragraph. ")).toEqual({ whole: true, text: "A short paragraph." });
+  });
+
+  it("says the paragraph is gone rather than showing a blank", () => {
+    // The comment survives its block (block-ids.md), and a quote-less one then
+    // has no words of its own to show.
+    expect(passageOf(whole, undefined)).toEqual({
+      whole: true,
+      text: "no longer in this version of the article",
+    });
   });
 });
 

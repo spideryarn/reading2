@@ -486,6 +486,89 @@ td.text.kind-heading .blk-gutter {
   .blk-gutter[data-controls="4"] > .blk-more { display: none; }
 }
 
+/* **One slot and a mark: they share it**, since 2026-09-12. On a one-line
+   paragraph the row has room for one 24px target, and the "…" took it and the
+   mark was folded behind it — the walk-back of Greg's *"promote the mark"*
+   written down below. That was bearable while every note also underlined its
+   words in the prose; a whole-paragraph bookmark underlines nothing, so on a
+   one-line paragraph it was invisible at rest, and pressing the bookmark button
+   made the button vanish with nothing in its place. The browser pass on
+   docs/plans/260912c-gutter-bookmark-button-and-the-second-ellipsis.md found it.
+
+   So the mark sits in the slot at rest, as state does, and the "…" is placed in
+   the same cell on top of it. At rest the "…" is `opacity: 0; pointer-events:
+   none` like every affordance, so a press lands on the mark and opens the note.
+   When the "…" is revealed — the row hovered, the row selected on a finger, or
+   the "…" itself focused — the mark gives way to it.
+
+   **Nothing here is `display: none`**, which is what sank Fable's version of
+   this on 2026-09-05: both controls stay in the tab order and reachable by a
+   finger, and the count arithmetic above is untouched.
+
+   **Only on a one-slot row, by the query rather than by undoing it.** The
+   negated condition means none of this exists on a taller row, where the mark
+   has its own slot — so no rule here has to be restated at a higher
+   specificity to switch it off, which is this file's recorded failure mode. A
+   browser without container queries skips the block and keeps the collapsed
+   default. And not while open: the unfolded column is auto-placed, and a
+   control pinned to the first cell would sit on another. */
+@container not ((min-height: 48px) and (min-height: 3rem)) {
+  .blk-gutter[data-marked]:not([data-open]) > .blk-cmt { display: inline-flex; }
+  .blk-gutter[data-marked]:not([data-open]) > .blk-cmt,
+  .blk-gutter[data-marked]:not([data-open]) > .blk-more { grid-area: 1 / 1; }
+  /* **On top by position, not by source order.** Anything with an opacity
+     below 1 is painted above its ordinary neighbours, so on a desktop hover the
+     mark at 0 was painted over the "…" at 1 and took the click — the visible
+     "…" opened the note instead of the column — and a focused "…" had the mark
+     at 0.75 painted over its patch. Touch passed only because the "…" is 0.705
+     there. The 260912c browser recheck found it; a later-sibling rule cannot
+     win a paint order that opacity has already decided. */
+  .blk-gutter[data-marked]:not([data-open]) > .blk-more { position: relative; z-index: 1; }
+
+  /* The "…" focused from the keyboard on a row nobody is hovering: the cell is
+     transparent over `--page` there, so painting `--page` covers the mark
+     exactly. No `:has()` — this section keeps none (§ the count, above). */
+  .blk-gutter[data-marked]:not([data-open]) > .blk-more:focus-visible {
+    background: var(--page);
+  }
+  /* An opaque block paints `--muted` (prose.css), so the focus patch has to
+     paint that same ground rather than leave a dark square around the dots. */
+  td.text.opaque .blk-gutter[data-marked]:not([data-open]) > .blk-more:focus-visible {
+    background: var(--muted);
+  }
+
+  @media (hover: hover) {
+    /* `:where()` keeps this below the focused mark below. A mouse can remain
+       over the row while its reader switches to the keyboard; focus must not
+       then be left on a mark this rule has made invisible. */
+    :where(tr:hover) .blk-gutter[data-marked]:not([data-open]) > .blk-cmt {
+      opacity: 0;
+      pointer-events: none;
+    }
+  }
+  @media (hover: none) {
+    /* `pointer-events` travels with the opacity, as this file's rule says:
+       an invisible mark must not be the thing a press lands on. */
+    :where(tr.row-active) .blk-gutter[data-marked]:not([data-open]) > .blk-cmt {
+      opacity: 0;
+      pointer-events: none;
+    }
+  }
+
+  /* The mark is earlier in the DOM, so the overlapping "…" normally paints
+     above it. While keyboard focus is on the mark, keep the mark visible and
+     make that later sibling neither paint nor take a pointer press. On the
+     next Tab the mark loses focus and the ordinary reveal rules resume. */
+  .blk-gutter[data-marked]:not([data-open]) > .blk-cmt:focus-visible {
+    opacity: 1;
+    pointer-events: auto;
+  }
+  .blk-gutter[data-marked]:not([data-open]) > .blk-cmt:focus-visible ~ .blk-more {
+    opacity: 0;
+    pointer-events: none;
+  }
+}
+
 /* **State is visible; an affordance waits to be asked for.** The permalink and
    an unused chat button are hidden until the pointer is on the row; a comment
    marker, and a chat button on a block that already has conversations, are
@@ -498,6 +581,7 @@ td.text.kind-heading .blk-gutter {
    opacity, or an invisible target grows in the gutter and eats the clicks. */
 .blk-permalink,
 .block-chat,
+.blk-bookmark,
 .blk-help,
 .blk-more {
   opacity: 0;
@@ -505,6 +589,7 @@ td.text.kind-heading .blk-gutter {
 }
 .blk-permalink:focus-visible,
 .block-chat:focus-visible,
+.blk-bookmark:focus-visible,
 .blk-help:focus-visible,
 .blk-more:focus-visible,
 .block-chat.has {
@@ -530,6 +615,7 @@ td.text.kind-heading .blk-gutter {
    same class of reason — a control unreachable, or unavoidable, on a finger.) */
 @media (hover: hover) {
   tr:hover .block-chat,
+  tr:hover .blk-bookmark,
   tr:hover .blk-help,
   tr:hover .blk-more {
     opacity: 1;
@@ -662,6 +748,7 @@ td.text.kind-heading .blk-gutter {
 @media (hover: none) {
   :where(tr.row-active) .blk-permalink,
   :where(tr.row-active) .block-chat,
+  :where(tr.row-active) .blk-bookmark,
   :where(tr.row-active) .blk-help,
   :where(tr.row-active) .blk-more {
     opacity: 0.705;
@@ -742,20 +829,15 @@ td.text.kind-heading .blk-gutter {
   opacity: 1;
   pointer-events: auto;
 }
-/* **Except the "…" itself.** The rule above is every child, and until
-   2026-09-12 that included the button that opened the column, so the panel
-   ended in a second "…" — Greg, on an iPad: *"it has yet more three dots, but I
-   don't know what that does."* It closed the panel, and said so only in a
-   `title`, which a finger never sees; a press anywhere else already closes it,
-   and so do Escape and choosing any control (BlockGutter.tsx). An ✕ in its place
-   was weighed and passed over: a fifth icon in a column whose job is to be
-   small, for a fourth way to close. SPIDERYARN-READING2-38,
-   docs/plans/260912c-gutter-bookmark-button-and-the-second-ellipsis.md.
-
-   Here, after the container queries, because their `.blk-gutter[data-controls=
-   "…"] > .blk-more` rules are the same (0,3,0) and turn it on — source order is
-   what decides it, and tests/gutter-target-size.test.ts checks the order. */
-.blk-gutter[data-open] > .blk-more { display: none; }
+/* **The rule above includes the button that opened the column**, and that is
+   on purpose: it stays, at the foot, as the way to close it — but drawn as an
+   ✕ rather than a second "…" (BlockGutter.tsx). Until 2026-09-12 it kept its
+   three dots, and Greg, on an iPad: *"it has yet more three dots, but I don't
+   know what that does."* It was hidden instead for one commit; GPT Sol's plan
+   review preferred the ✕, because hiding it takes the disclosure and its
+   `aria-expanded` out of the accessibility tree and leaves the focus to the
+   browser's fix-up on Safari. SPIDERYARN-READING2-38,
+   docs/plans/260912c-gutter-bookmark-button-and-the-second-ellipsis.md. */
 /* A heading's box is bottom-aligned and starts at the top of the cell, so
    without this the panel unfolds *upward* over the paragraph before it — Sol's
    sixth finding again, and the reason the two anchors are written out rather
@@ -806,4 +888,3 @@ td.text.kind-heading .blk-gutter[data-open] {
    that a conversation *exists*, which is the one thing in this column that is
    about what the machine has produced rather than what the reader has done. */
 .blk-help:hover { color: var(--highlight); }
-

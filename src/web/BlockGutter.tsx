@@ -25,8 +25,9 @@
  *     mark        only when you have made a note on this paragraph
  *     permalink   every block, on hover
  *     chat        on hover; always where there are conversations
+ *     bookmark    on hover, and only where there is no mark yet (2026-09-12)
  *     "?"         on hover
- *     "…"         only when the row has no room for the rest of them
+ *     "…"         only when the row has no room for the rest; an ✕ once open
  *
  * **How many of those are drawn is decided by the row, not by this file.** A
  * one-line paragraph has room for one 24px target beside it, a two-line one for
@@ -125,6 +126,7 @@ import {
   Link2,
   MessageSquare,
   TriangleAlert,
+  X,
 } from "lucide-react";
 import type { BlockId, Comment } from "../types.js";
 import { blockHref, blockPermalink, shortBlockId } from "./BlockRef.js";
@@ -189,6 +191,19 @@ interface Props {
    */
   onHelp?: ((id: BlockId) => void) | undefined;
   /**
+   * Bookmark this whole paragraph in one press — **and its absence is what says
+   * the reader may not.** Greg, 2026-09-12 (SPIDERYARN-READING2-37): *"so you
+   * could just say, that would just somehow, yeah, bookmark that block as being
+   * really interesting."*
+   *
+   * Resolves to whether it was stored, so the live region says what happened
+   * rather than what was hoped for — the tick on the permalink waits for its
+   * promise for the same reason. Optional and `| undefined` for the reasons
+   * `onChatAbout` gives: a visitor has no marks of their own to make.
+   * docs/plans/260912c-gutter-bookmark-button-and-the-second-ellipsis.md.
+   */
+  onBookmark?: ((id: BlockId) => Promise<boolean>) | undefined;
+  /**
    * Go to this block without a page load, writing `?at=` as it goes — App's
    * own jump, the one every gist cell and arrow key uses.
    *
@@ -227,6 +242,7 @@ export function BlockGutter({
   onOpenComment,
   onChatAbout,
   onHelp,
+  onBookmark,
   onJump,
   announce,
 }: Props) {
@@ -243,6 +259,8 @@ export function BlockGutter({
    * dropped.
    */
   const op = useRef(0);
+  /** The bookmark button's own press token — see its `onClick`. */
+  const marking = useRef(0);
   const settle = useRef<ReturnType<typeof setTimeout> | null>(null);
   const alive = useRef(true);
   useEffect(() => {
@@ -491,8 +509,14 @@ export function BlockGutter({
    * The right question is the arithmetic one: is there more here than the row
    * can draw? The count answers it for every combination, and the stylesheet
    * needs no `:has()` to guess.
+   *
+   * **The mark and the bookmark button are one slot, never two**, since
+   * 2026-09-12: a paragraph with a note shows the mark, and one without shows
+   * the button that makes one. So an owner's gutter is still at most four, and
+   * the slot arithmetic in gutter.css did not change.
    */
-  const controls = 1 + (first ? 1 : 0) + (onChatAbout ? 1 : 0) + (onHelp ? 1 : 0);
+  const marks = first ? 1 : onBookmark ? 1 : 0;
+  const controls = 1 + marks + (onChatAbout ? 1 : 0) + (onHelp ? 1 : 0);
 
   return (
     <div
@@ -500,6 +524,10 @@ export function BlockGutter({
       ref={box}
       data-controls={controls}
       {...(open ? { "data-open": "" } : {})}
+      /* Whether the reader has a mark on this paragraph. On a one-line row the
+         stylesheet lets the mark share the only slot with the "…" rather than
+         fold behind it — gutter.css § One slot and a mark. */
+      {...(first ? { "data-marked": "" } : {})}
     >
       {/* The reader's mark on this paragraph, and it is *state*, so it is
           visible whether or not you are on the row.
@@ -676,6 +704,48 @@ export function BlockGutter({
           the amount of grey per row is what decides whether the gutter reads as
           quiet. No count beside it — a conversation is a conversation, and the
           chat button next door already carries that number. */}
+      {/* **The button that makes the mark**, on a paragraph that has none yet —
+          one press, no box, nothing bought. Greg, 2026-09-12: *"a sort of
+          bookmark icon as well, sort of a fourth one"*.
+
+          **Third, after the address and the chat door and before the "?"**, which
+          is Greg's order for what folds away first (260905c): *"always permalink
+          and chat; the '?' and the mark are the ones that may be folded away."*
+          It is an affordance, so it waits to be asked for like its neighbours;
+          the mark it becomes is state, and leads the column. So pressing it moves
+          the bookmark from here to the head of the column, in `--highlight` —
+          and that move is the feedback.
+
+          What it stores is a whole-block bookmark: a comment with no quote, which
+          draws nothing in the prose, exactly as a whole-block conversation draws
+          only its gutter chip. comments.md § The whole-block bookmark. */}
+      {!first && onBookmark && (
+        <button
+          type="button"
+          className="blk-bookmark"
+          onClick={(e) => {
+            e.stopPropagation();
+            setOpen(false);
+            /* Its own token, not the permalink's `op`: sharing one would let a
+               bookmark press silently drop a copy result still in flight, and
+               the reverse. Only the newest press speaks, and nothing speaks
+               after unmount. */
+            const mine = ++marking.current;
+            void onBookmark(id).then((stored) => {
+              if (!alive.current || mine !== marking.current) return;
+              /* Failure includes an answer lost after the server committed, so
+                 claim only what this tab knows. The retry keeps the same id
+                 (`makeBlockBookmarker`) and lets the store settle the truth. */
+              announce(stored ? "Bookmarked this paragraph." : "Bookmark not confirmed.");
+            });
+          }}
+          title="Bookmark this paragraph"
+          aria-label="Bookmark this paragraph"
+        >
+          <Bookmark size={12} aria-hidden="true" />
+        </button>
+      )}
+
       {onHelp && (
         <button
           type="button"
@@ -723,14 +793,16 @@ export function BlockGutter({
           this component and one set of handlers; a second panel would be a
           second place for them to drift apart.
 
-          **The open column does not draw it**, since 2026-09-12 — gutter.css §
-          What "…" opens. It used to sit at the foot of the panel it had opened,
-          a second "…" whose only label was a `title` (SPIDERYARN-READING2-38).
-          So it is a way *in*, and the ways out are the three the panel already
-          had: Escape, which brings the focus back here once it is drawn again;
-          choosing a control; and a press anywhere else. The toggle below still
-          flips both ways so a programmatic activation while it is hidden is
-          harmless, without making behaviour depend on the CSS that draws it. */}
+          **Open, it is an ✕**, since 2026-09-12. It sits at the foot of the
+          column it opened, and until then it was a second "…" there whose only
+          label was a `title` — Greg, on an iPad: *"it has yet more three dots,
+          but I don't know what that does"* (SPIDERYARN-READING2-38). It was
+          hidden instead for one commit; GPT Sol's plan review preferred this,
+          because hiding the disclosure takes it and its `aria-expanded` out of
+          the accessibility tree and leaves the focus to the browser's fix-up.
+          So the glyph and the name say what a press does in each state, and
+          the element, its focus and its state stay put. gutter.css § What "…"
+          opens. */}
       {controls > 1 && (
         <button
           type="button"
@@ -745,10 +817,10 @@ export function BlockGutter({
             if (e.detail === 0) goTo.current = open ? "more" : "head";
             setOpen((was) => !was);
           }}
-          title={open ? "Fewer" : "More for this paragraph"}
-          aria-label={open ? "Fewer" : "More for this paragraph"}
+          title={open ? "Close paragraph controls" : "More for this paragraph"}
+          aria-label={open ? "Close paragraph controls" : "More for this paragraph"}
         >
-          <Ellipsis size={12} aria-hidden="true" />
+          {open ? <X size={12} aria-hidden="true" /> : <Ellipsis size={12} aria-hidden="true" />}
         </button>
       )}
     </div>

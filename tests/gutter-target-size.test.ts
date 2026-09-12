@@ -322,7 +322,19 @@ describe("the column shows as many controls as the row has room for", () => {
        The mark is first: Greg's call, 2026-09-05, so a note never disappears
        because its paragraph is short. The price is that adding one pushes chat
        and the "?" down a slot, which is the guarantee the 2 x 2 pad bought. */
-    expect(css).not.toContain("grid-area:");
+    /* **With one scoped exception since 2026-09-12**: on a one-slot row a mark
+       and the "…" share the only cell (gutter.css § One slot and a mark), and
+       that is the one place a `grid-area` may appear. Everywhere else the
+       source order is still the placement. */
+    const oneSlot = css.indexOf("@container not ((min-height: 48px) and (min-height: 3rem))");
+    const oneSlotEnd = css.indexOf("\n}\n", oneSlot);
+    for (const m of css.matchAll(/grid-area:/g)) {
+      const p = m.index ?? -1;
+      expect(
+        oneSlot > -1 && p > oneSlot && p < oneSlotEnd,
+        "a `grid-area` outside the one-slot mark block — auto-placement is the rule",
+      ).toBe(true);
+    }
     expect(css).toContain(".blk-gutter > :nth-child(1) { display: inline-flex; }");
     expect(css).toContain(".blk-gutter > :nth-child(-n + 2) { display: inline-flex; }");
   });
@@ -363,7 +375,7 @@ describe("the column shows as many controls as the row has room for", () => {
     expect(css).toContain(".blk-gutter[data-open] > * {");
   });
 
-  it('does not draw its own "…" inside the column it has unfolded', () => {
+  it('keeps its own control in the column it has unfolded, as the way to close it', () => {
     /* SPIDERYARN-READING2-38, Greg on an iPad, 2026-09-12: *"when I click on
        the three dots, it actually includes three dots within the menu that
        expands out … I don't think it does anything."* It was the same button:
@@ -377,26 +389,78 @@ describe("the column shows as many controls as the row has room for", () => {
        not only gutter.css, so this stays the final `display` decision even if
        another sheet later starts naming `.blk-more`.
        docs/plans/260912c-gutter-bookmark-button-and-the-second-ellipsis.md. */
-    const hide = ".blk-gutter[data-open] > .blk-more { display: none; }";
-    expect(css).toContain(hide);
-    const hideAt = css.indexOf(hide);
-    const displayRulesThatReachMore = [...css.matchAll(/([^{}]+)\{([^{}]*)\}/g)].filter((match) => {
-      if (!/(?:^|;)\s*display\s*:/.test(match[2] ?? "")) return false;
-      return (match[1] ?? "")
-        .split(",")
-        .map((selector) => selector.replace(/\s+/g, " ").trim())
-        .some(
-          (selector) =>
-            selector.includes(".blk-more") ||
-            /^\.blk-gutter(?:\[[^\]]+\])? > \*$/.test(selector),
-        );
-    });
-    expect(displayRulesThatReachMore.length).toBeGreaterThan(1);
-    for (const competing of displayRulesThatReachMore) {
-      if (competing[0].replace(/\s+/g, " ").trim() === hide) continue;
-      expect(competing.index, `a later display rule can reach .blk-more: ${competing[1]?.trim()}`).toBeLessThan(
-        hideAt,
+    /* **Replaced, not hidden.** Stage 1 hid it with a `display: none` here;
+       GPT Sol's plan review preferred an ✕ — hiding took the disclosure and its
+       `aria-expanded` out of the accessibility tree. So the opposite is pinned:
+       nothing in the open column takes it away, and tests/block-gutter.test.tsx
+       § the "…" checks that it draws an ✕ and says "Close". */
+    const hidesIt = [...css.matchAll(/([^{}]+)\{([^{}]*)\}/g)].filter(
+      (match) =>
+        /(?:^|;)\s*display\s*:\s*none/.test(match[2] ?? "") &&
+        (match[1] ?? "").includes("[data-open]") &&
+        (match[1] ?? "").includes(".blk-more"),
+    );
+    expect(hidesIt.map((m) => m[1]?.trim())).toEqual([]);
+  });
+
+  it('lets a mark share a one-line row\'s only slot with the "…", rather than fold behind it', () => {
+    /* A whole-paragraph bookmark underlines nothing in the prose, so on a
+       one-line paragraph a folded mark was invisible at rest — the 260912c
+       browser pass found the bookmark button vanish with nothing in its place.
+       The mark and the "…" now share the cell; the "…" is drawn over it only
+       when revealed. */
+    const at = css.indexOf("@container not ((min-height: 48px) and (min-height: 3rem))");
+    expect(at, "no one-slot block for a marked gutter").toBeGreaterThan(-1);
+    const end = css.indexOf("\n}\n", at);
+    const block = css.slice(at, end);
+    expect(block).toContain(
+      ".blk-gutter[data-marked]:not([data-open]) > .blk-cmt { display: inline-flex; }",
+    );
+    expect(block).toContain("grid-area: 1 / 1");
+    /* A pointer can remain over the row while its reader switches to the
+       keyboard. The focused mark must then beat the row-hover concealment,
+       and the later-painted "…" must stop painting and taking presses while
+       focus is on the mark. */
+    const esc = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    const marked = esc(".blk-gutter[data-marked]:not([data-open]) > ");
+    expect(block).toMatch(
+      new RegExp(`${marked}\\.blk-cmt:focus-visible \\{\\s*opacity: 1;\\s*pointer-events: auto;`),
+    );
+    /* Hidden is not pressable either — `pointer-events` travels with the
+       opacity, this file's own rule. Without it the invisible mark took the
+       press meant for the "…" on a desktop hover (260912c browser recheck). */
+    for (const prefix of [":where(tr:hover) ", ":where(tr.row-active) "]) {
+      expect(block).toMatch(
+        new RegExp(`${esc(prefix)}${marked}\\.blk-cmt \\{\\s*opacity: 0;\\s*pointer-events: none;`),
       );
+    }
+    /* **On top by position.** An element below opacity 1 is painted above its
+       ordinary neighbours, so source order alone let the hidden mark paint over
+       — and take the clicks of — the visible "…". */
+    expect(block).toContain(
+      ".blk-gutter[data-marked]:not([data-open]) > .blk-more { position: relative; z-index: 1; }",
+    );
+    expect(block).toContain(
+      ".blk-gutter[data-marked]:not([data-open]) > .blk-cmt:focus-visible ~ .blk-more {\n" +
+        "    opacity: 0;\n" +
+        "    pointer-events: none;",
+    );
+    /* The focus patch must match the cell it covers: an opaque row is
+       `--muted`, not the ordinary `--page`. */
+    expect(block).toContain(
+      "td.text.opaque .blk-gutter[data-marked]:not([data-open]) > .blk-more:focus-visible",
+    );
+    expect(block).toContain("background: var(--muted);");
+    /* What sank the 2026-09-05 version of this: a `display: none` control is
+       not in the tab order and cannot be tapped. Both must stay reachable. */
+    expect(block).not.toMatch(/display:\s*none/);
+    // This section keeps no `:has()` (§ the count).
+    expect(block).not.toContain(":has(");
+    /* Scoped by the query, not undone later: nothing on a taller row may pin a
+       control to the first cell. */
+    for (const m of css.matchAll(/grid-area:\s*1\s*\/\s*1/g)) {
+      const p = m.index ?? -1;
+      expect(p > at && p < end, "a `grid-area: 1 / 1` outside the one-slot block").toBe(true);
     }
   });
 
@@ -524,7 +588,10 @@ describe("the column shows as many controls as the row has room for", () => {
        check below, and both other files green — while a plain chat button stays
        at `opacity: 0; pointer-events: none` on the selected row, which is the
        shut door on an iPad that started all of this. GPT Sol, 2026-09-08. */
-    const AFFORDANCES = [".blk-permalink", ".block-chat", ".blk-help", ".blk-more"];
+    /* `.blk-bookmark` since 2026-09-12: the button that makes a mark is an
+       affordance like its neighbours, and on an iPad the selected row is the
+       only way it is ever shown. docs/plans/260912c-…. */
+    const AFFORDANCES = [".blk-permalink", ".block-chat", ".blk-bookmark", ".blk-help", ".blk-more"];
     expect(selectorsIn(touch).sort()).toEqual(
       AFFORDANCES.map((c) => `:where(tr.row-active) ${c}`).sort(),
     );

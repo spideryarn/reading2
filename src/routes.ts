@@ -41,8 +41,10 @@
  *   POST   /api/quiz/:slug/mark  one answer, marked against one question — SSE, stateless
  *   GET    /api/quotes/:slug     the lines worth keeping, in the article's own words, and staleness
  *   GET    /api/arc/:slug        one sentence per part, and whether it still fits the article
- *   GET    /api/comments/:slug   every stored comment for the article
- *   POST   /api/comments/:slug   { blockId, quote, start, body?, criterionId?, valence? }
+ *   GET    /api/comments/:slug   selection-anchored comments for compatibility;
+ *                                `?anchors=whole-block` opts the current client into every comment
+ *   POST   /api/comments/:slug   { blockId, quote, start, body?, criterionId?, valence? }, or
+ *                                { blockId } for a whole-block bookmark
  *                                → the stored comment. `criterionId` + `valence` are the referee's
  *                                  own placement of the passage — `tidyMark`
  *   PATCH  /api/comments/:slug/:id        { body } — the reader's words, `null` clears them.
@@ -414,6 +416,7 @@ import {
    with the client's picker so a fifth stance cannot be accepted here and
    missing from the menu. src/types.ts § REMEMBER_STANCES. */
 import { REMEMBER_STANCES } from "./types.js";
+import type { CommentAnchor } from "./types.js";
 
 /** Big enough for any selection, small enough that nothing can wedge the server. */
 const MAX_BODY_BYTES = 64 * 1024;
@@ -1413,19 +1416,33 @@ async function createFree(slug: string, body: unknown): Promise<Comment> {
   const raw = (body ?? {}) as Record<string, unknown>;
   const { id, blockId, quote, start, body: text } = raw;
 
-  if (typeof blockId !== "string" || typeof quote !== "string" || typeof start !== "number") {
-    throw httpError(400, "Expected { blockId, quote, start }");
+  if (typeof blockId !== "string") throw httpError(400, "Expected { blockId, quote, start }");
+  /* **Both, or neither.** Neither is a whole-block bookmark — the gutter's
+     bookmark button, 2026-09-12 (`CommentAnchor` in src/types.ts). One without
+     the other is refused: half an anchor draws a mark in the wrong place, and
+     reads as a styling glitch rather than as bad data.
+     docs/plans/260912c-gutter-bookmark-button-and-the-second-ellipsis.md. */
+  const anchor: CommentAnchor | null =
+    quote === undefined && start === undefined
+      ? {}
+      : typeof quote === "string" && typeof start === "number"
+        ? { quote, start }
+        : null;
+  if (anchor === null) {
+    throw httpError(400, "Expected { blockId, quote, start }, or { blockId } alone for the whole paragraph");
   }
   if (!isSpideryarnId(blockId)) throw httpError(400, "blockId must be a block id");
   if (id !== undefined && (typeof id !== "string" || !isSpideryarnId(id))) {
     throw httpError(400, "id must be a block id");
   }
-  if (!quote.trim()) throw httpError(400, "quote must not be empty");
-  if (quote.length > MAX_QUOTE_CHARS) {
-    throw httpError(400, `A quote can be at most ${MAX_QUOTE_CHARS} characters [cmt-quote]`);
-  }
-  if (!Number.isInteger(start) || start < 0) {
-    throw httpError(400, `start must be a non-negative integer, got ${start}`);
+  if (anchor.quote !== undefined) {
+    if (!anchor.quote.trim()) throw httpError(400, "quote must not be empty");
+    if (anchor.quote.length > MAX_QUOTE_CHARS) {
+      throw httpError(400, `A quote can be at most ${MAX_QUOTE_CHARS} characters [cmt-quote]`);
+    }
+    if (!Number.isInteger(anchor.start) || anchor.start < 0) {
+      throw httpError(400, `start must be a non-negative integer, got ${anchor.start}`);
+    }
   }
   const tidied = tidyBody(text);
 
@@ -1434,12 +1451,14 @@ async function createFree(slug: string, body: unknown): Promise<Comment> {
   const article = await loadArticle(slug);
   const block = article.blocks.find((b) => b.id === blockId);
   if (!block) throw httpError(400, "blockId is not a block of this article");
-  if (start > block.text.length) throw httpError(400, "start is past the end of that block");
-  /* Folded, because `quote` came from a DOM selection and `block.text` from the
-     extractor, and the two disagree about runs of whitespace — the same fold
-     `checkAnchor` uses, for the same reason. */
-  if (!foldSpace(block.text).includes(foldSpace(quote))) {
-    throw httpError(400, "quote is not in that block");
+  if (anchor.quote !== undefined) {
+    if (anchor.start > block.text.length) throw httpError(400, "start is past the end of that block");
+    /* Folded, because `quote` came from a DOM selection and `block.text` from
+       the extractor, and the two disagree about runs of whitespace — the same
+       fold `checkAnchor` uses, for the same reason. */
+    if (!foldSpace(block.text).includes(foldSpace(anchor.quote))) {
+      throw httpError(400, "quote is not in that block");
+    }
   }
 
   /* After the anchor checks, so a request that is wrong about the passage does
@@ -1449,8 +1468,7 @@ async function createFree(slug: string, body: unknown): Promise<Comment> {
 
   return commentStore.create(slug, {
     blockId,
-    quote,
-    start,
+    ...anchor,
     ...(tidied === null ? {} : { body: tidied }),
     ...(typeof id === "string" ? { id } : {}),
     ...mark,
@@ -1547,6 +1565,12 @@ async function answer(
      back off the stored row — the request never gets to name one. */
   const { comment, attempt } = await commentStore.beginAnswer(slug, id);
   const { blockId, quote } = comment;
+  /* **Unreachable, and written as a guard rather than a `!`.** `beginAnswer`
+     refuses a `status: "none"` row, and `comments_whole_block_is_free` keeps
+     every quote-less row at `none` — so a whole-block bookmark cannot get here.
+     If either of those ever changes, this says so instead of asking the model
+     about the empty string. */
+  if (quote === undefined) throw httpError(409, "A whole-block bookmark was never a question");
   const key = `${slug}/${comment.id}`;
   const release = beganAnswering(key);
 
@@ -2879,8 +2903,8 @@ async function streamChat(slug: string, body: unknown, res: ServerResponse): Pro
         /* **The anchor goes with it**, so the store can refuse a
            `sourceCommentId` that names one of this reader's *other* comments —
            a stale id from another tab, or a made-up one. Only a selection
-           anchor can carry a link: a block-only chat has no passage to match,
-           and a comment always has one. */
+           anchor can carry a link: a block-only chat has no selected passage
+           to match, and the linked comment on this path must have one. */
         await commentStore.linkThread(slug, sourceCommentId, thread.id, {
           blockId: wanted.blockId,
           quote: wanted.quote,
@@ -7819,9 +7843,21 @@ const AUTH_ROUTES: readonly AuthRoute[] = [
     kind: "pattern",
     method: "GET",
     pattern: COMMENTS_PATTERN,
-    handler: async ({ request: { res } }, captures) => {
+    handler: async ({ request: { req, res } }, captures) => {
       const slug = slugPart(captures, 1);
-      send(res, 200, { comments: await sweepOrphaned(slug) });
+      const comments = await sweepOrphaned(slug);
+      /* **Whole-block bookmarks go only to a client that asks for them.** A tab
+         still running the code from before 2026-09-12 builds TableView's anchor
+         key from `c.quote.length`, so one quote-less row would take its reading
+         view down — and an iPad home-screen tab can stay on old code for days.
+         Such a tab simply does not see the bookmark until it reloads; the row is
+         untouched. GPT Sol's plan review of 260912c. Delete the filter once no
+         client can be older than the parameter. */
+      const wholeBlock =
+        new URL(req.url ?? "/", "http://local").searchParams.get("anchors") === "whole-block";
+      send(res, 200, {
+        comments: wholeBlock ? comments : comments.filter((c) => c.quote !== undefined),
+      });
     },
   },
 

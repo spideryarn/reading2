@@ -2329,13 +2329,57 @@ export interface ToolRun {
  * repeats of the same words within the block. That ordering matters: an offset
  * alone would silently drift the moment the paragraph changed, which is the
  * failure random block ids exist to prevent (docs/project/block-ids.md).
+ *
+ * **Or no quote at all, since 2026-09-12: a bookmark on the whole paragraph.**
+ * `CommentAnchor` below.
  */
-export interface Comment {
+export type Comment = CommentFields & CommentAnchor;
+
+/**
+ * Where a comment is anchored: some words in the block, or the whole block.
+ *
+ * **The whole-block arm is a bookmark made from the gutter** — Greg,
+ * 2026-09-12: *"so you could just say … bookmark that block as being really
+ * interesting."* It carries no quote, so it draws nothing in the prose — the
+ * gutter mark is the whole of it, exactly as a whole-block conversation shows
+ * only its gutter chip. That is `ChatAnchor`'s `{ blockId }` arm, for the same
+ * reason: underlining every word of a paragraph would make every tap in it open
+ * the note, which on an iPad is how a reader selects the block.
+ *
+ * **A union rather than two optionals**, so "a quote with no offset" is not a
+ * value the type can hold — the argument `ChatAnchor` makes. Narrow on
+ * `quote !== undefined` and `start` comes with it.
+ *
+ * **Only ever a bookmark**: the database refuses a quote-less row whose
+ * `status` is not `none` (`comments_whole_block_is_free`), so nothing that
+ * answers, retries or links a conversation can reach one.
+ * docs/plans/260912c-gutter-bookmark-button-and-the-second-ellipsis.md.
+ */
+export type CommentAnchor =
+  | {
+      quote: string;
+      /** Where `quote` sat in the block's rendered text when the comment was made. */
+      start: number;
+    }
+  | { quote?: never; start?: never };
+
+/** A whole-block comment — the reader bookmarked the paragraph, not some words in it. */
+export function isWholeBlock(c: CommentAnchor): c is { quote?: never; start?: never } {
+  return c.quote === undefined;
+}
+
+/**
+ * Just the anchor, ready to spread into a comment or a request body: both
+ * fields, or neither. Never `quote: undefined` — `exactOptionalPropertyTypes`
+ * is on, and the stores compare comments structurally.
+ */
+export function anchorFields(c: CommentAnchor): CommentAnchor {
+  return c.quote === undefined ? {} : { quote: c.quote, start: c.start };
+}
+
+interface CommentFields {
   id: string;
   blockId: BlockId;
-  quote: string;
-  /** Where `quote` sat in the block's rendered text when the comment was made. */
-  start: number;
   createdAt: string;
 
   /**

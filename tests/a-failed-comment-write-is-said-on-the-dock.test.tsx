@@ -75,6 +75,7 @@ function paint(
         experimental: EXPERIMENTAL_OFF,
         drawer: {
           comments: [MARKED],
+          paragraphs: new Map(),
           loaded: true,
           loadError: loadFailed ? "Couldn't reach the server. [net-down]" : null,
           error,

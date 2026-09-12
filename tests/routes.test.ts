@@ -188,6 +188,9 @@ afterEach(async () => {
 /** A comment as a route answers with it — the fields these tests read off one. */
 interface ReplyComment {
   id: string;
+  blockId?: string;
+  quote?: string;
+  start?: number;
   status: string;
   error?: string;
   /** The reader's own words. Absent on a bare bookmark. */
@@ -1077,9 +1080,14 @@ describe("what a failure is reported as", () => {
     expect(r.status).toBe(413);
   });
 
-  it("calls a missing field 400", async () => {
-    const r = await call("POST", `/api/comments/${SLUG}`, { blockId: "spya-k3m9qt" });
+  it("calls half an anchor 400", async () => {
+    /* `{ blockId }` alone is a whole-block bookmark since 2026-09-12, so the
+       missing field worth refusing is half of the pair — a quote with no offset
+       draws a mark in the wrong place. */
+    const r = await call("POST", `/api/comments/${SLUG}`, { blockId: "spya-k3m9qt", quote: "q" });
     expect(r.status).toBe(400);
+    const s = await call("POST", `/api/comments/${SLUG}`, { blockId: "spya-k3m9qt", start: 0 });
+    expect(s.status).toBe(400);
   });
 
   it("calls an unknown /api/ route 404, rather than letting Vite answer it", async () => {
@@ -1360,6 +1368,61 @@ describe("making a comment costs nothing", () => {
     });
     expect(r.status).toBe(201);
     expect(await commentsOn(SLUG)).toHaveLength(1);
+  });
+
+  it("bookmarks a whole paragraph from the gutter — no quote, no offset, read back the same", async () => {
+    /* SPIDERYARN-READING2-37: the gutter's one-press bookmark. Through the real
+       route and back off the store, because the anchor is two nullable columns
+       and a `null` that crossed as a key would compare unequal to an absent
+       one. docs/plans/260912c-gutter-bookmark-button-and-the-second-ellipsis.md. */
+    const r = await call("POST", `/api/comments/${SLUG}`, { blockId: BLOCK });
+    expect(r.status).toBe(201);
+    expect(r.body.comment?.status).toBe("none");
+    const stored = (await commentsOn(SLUG))[0]!;
+    expect(stored.blockId).toBe(BLOCK);
+    expect("quote" in stored).toBe(false);
+    expect("start" in stored).toBe(false);
+  });
+
+  it("is idempotent on a whole-paragraph bookmark pressed twice under one id", async () => {
+    // The same-Save comparison meets two absent quotes, which must be equal.
+    // Minted rather than typed: a hand-written id that misses the alphabet is a
+    // 400 for a reason that has nothing to do with this test.
+    const { mintId } = await import("../src/ids.js");
+    const id = mintId();
+    const first = await call("POST", `/api/comments/${SLUG}`, { id, blockId: BLOCK });
+    const again = await call("POST", `/api/comments/${SLUG}`, { id, blockId: BLOCK });
+    expect(first.status).toBe(201);
+    expect(again.status).toBe(201);
+    expect(await commentsOn(SLUG)).toHaveLength(1);
+  });
+
+  it("refuses a whole-paragraph bookmark on a block that is not in the article", async () => {
+    const r = await call("POST", `/api/comments/${SLUG}`, { blockId: "spya-zzzzzz" });
+    expect(r.status).toBe(400);
+    expect(await commentsOn(SLUG)).toHaveLength(0);
+  });
+
+  it("shows whole-block bookmarks only to a client that opts into their anchor shape", async () => {
+    /* An old open tab reads `c.quote.length`, so the default response must stay
+       selection-only. The new client asks explicitly and must not have its own
+       bookmark filtered out. GPT Sol's plan review of 260912c. */
+    await call("POST", `/api/comments/${SLUG}`, { blockId: BLOCK });
+    await call("POST", `/api/comments/${SLUG}`, {
+      blockId: BLOCK,
+      quote: QUOTE,
+      start: AT,
+    });
+
+    const oldClient = await call("GET", `/api/comments/${SLUG}`);
+    expect(oldClient.body.comments).toHaveLength(1);
+    expect(oldClient.body.comments?.[0]).toMatchObject({ quote: QUOTE, start: AT });
+
+    const newClient = await call("GET", `/api/comments/${SLUG}?anchors=whole-block`);
+    expect(newClient.body.comments).toHaveLength(2);
+    const whole = newClient.body.comments?.find((c) => !("quote" in c));
+    expect(whole?.blockId).toBe(BLOCK);
+    expect(whole && "start" in whole).toBe(false);
   });
 
   it("refuses a quote that is not in the block it names", async () => {

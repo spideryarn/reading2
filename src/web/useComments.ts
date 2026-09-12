@@ -16,7 +16,7 @@
  * finished comment, so there is nothing to poll.
  */
 import { useCallback, useEffect, useRef, useState } from "react";
-import type { BlockId, Comment } from "../types.js";
+import { anchorFields, type BlockId, type Comment, type CommentAnchor } from "../types.js";
 import { readEvents, StreamStalled, STREAM_STALL_MS } from "./lib/sse.js";
 import { wentQuiet } from "../messages.js";
 import { apiFetch, failure, fetchOk, readJson } from "./lib/api.js";
@@ -65,15 +65,18 @@ export function describeFetchFailure(error: Error): string {
  * from named fields (src/store/pg-comments.ts), so there is nowhere for it to
  * leak to even if it were sent.
  */
-export interface ClientComment extends Comment {
+export type ClientComment = Comment & {
   replacing?: true;
-}
+};
 
-/** What a selection knows about the passage it is marking. */
-export interface NewCommentInput {
+/**
+ * What a selection knows about the passage it is marking — or, from the
+ * gutter's bookmark button, only the block (`CommentAnchor`).
+ */
+export type NewCommentInput = NewCommentInputFields & CommentAnchor;
+
+interface NewCommentInputFields {
   blockId: BlockId;
-  quote: string;
-  start: number;
   /** The reader's words, or nothing at all for a bare bookmark. */
   body?: string;
   /**
@@ -319,8 +322,13 @@ export function useComments(slug: string): CommentsApi {
     setLoadError(null);
     /* With a deadline, because `loaded` is what lets `AnnotateDialog` save —
        see `loaded` in CommentsApi and src/web/lib/opening-read.ts. */
+    /* `?anchors=whole-block` says this client can draw a comment with no quote.
+       The route leaves those out for a client that does not say so, which is
+       every tab still running the code from before 2026-09-12 — that code reads
+       `c.quote.length` and would take the reading view down. GPT Sol's plan
+       review; the route's handler has the rest. */
     const read = openingRead<{ comments?: Comment[]; error?: string }>(
-      `/api/comments/${encodeURIComponent(slug)}`,
+      `/api/comments/${encodeURIComponent(slug)}?anchors=whole-block`,
     );
     read.body
       .then((body) => {
@@ -547,11 +555,13 @@ export function useComments(slug: string): CommentsApi {
   /**
    * Make a free comment.
    *
-   * **The id is minted here**, so the mark can be drawn and the dialog opened
-   * in the same frame the reader lets go of the mouse. The server takes it as
-   * given unless it is malformed or already used — and "already used by a
-   * different comment" is a 409 rather than an overwrite, which is what stops a
-   * collision from quietly eating somebody else's note.
+   * **The caller mints the id once for the act it is saving**, so the mark can
+   * be drawn and the dialog opened in the same frame the reader lets go of the
+   * mouse. For a draft that is once per draft; for the gutter it survives an
+   * uncertain retry (`makeBlockBookmarker`). The server takes it as given
+   * unless it is malformed or already used — and "already used by a different
+   * comment" is a 409 rather than an overwrite, which is what stops a collision
+   * from quietly eating somebody else's note.
    *
    * The optimistic row is **removed again** if the request fails. A bookmark
    * that stays on screen after the server refused it is worse than one that
@@ -564,8 +574,7 @@ export function useComments(slug: string): CommentsApi {
       const optimistic: ClientComment = {
         id,
         blockId: input.blockId,
-        quote: input.quote,
-        start: input.start,
+        ...anchorFields(input),
         createdAt: new Date().toISOString(),
         ...(input.body ? { body: input.body } : {}),
         /* The placement goes on the optimistic row too, so the dialog that
@@ -594,8 +603,9 @@ export function useComments(slug: string): CommentsApi {
           body: JSON.stringify({
             id,
             blockId: input.blockId,
-            quote: input.quote,
-            start: input.start,
+            /* No `quote` and no `start` is a whole-block bookmark; the route
+               refuses one without the other. */
+            ...anchorFields(input),
             ...(input.body ? { body: input.body } : {}),
             ...markFields(input.mark),
           }),

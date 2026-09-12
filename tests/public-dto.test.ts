@@ -1103,6 +1103,26 @@ describe("the artefacts a shared link carries", () => {
    * projection which spread its argument would fail here rather than pass for
    * want of anything to leak.
    */
+  it("carries a whole-paragraph bookmark with no anchor keys at all", () => {
+    /* SPIDERYARN-READING2-37's gutter bookmark: no quote, no offset. It must
+       cross with neither key rather than `undefined` ones — a key that is there
+       and empty is a different shape to a visitor's client and to the
+       structural comparisons. */
+    const built = publicArticle({
+      ...ARTICLE_BASE,
+      ...NO_ARTEFACTS,
+      comments: [
+        {
+          id: "spya-cmt222",
+          blockId: "spya-k3m9qt",
+          createdAt: "2026-09-12T09:00:00.000Z",
+          status: "none",
+        },
+      ],
+    });
+    expect(keyPaths(built.comments)).toEqual(["[].blockId", "[].createdAt", "[].id"].sort());
+  });
+
   it("carries a comment's words and none of the machinery around them", () => {
     const built = publicArticle({
       ...ARTICLE_BASE,

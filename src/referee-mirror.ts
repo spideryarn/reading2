@@ -525,14 +525,14 @@ function passageWindows(
  * be tested without a network. Four things happen here and each is a decision:
  *
  *  - **A comment with no body is skipped, unless it carries a placement.**
- *    `Comment.body` is the optional field — the anchor never is (`blockId`,
- *    `quote` and `start` are all required on every comment ever stored) — so
- *    "this comment is not anchored" is not a state that exists and is not
- *    checked for. What does exist is a bookmark: the referee marked the words
- *    and wrote nothing, and there is no claim of theirs to remark on. **The
- *    exception is a comment carrying a `valence`**, where the placement *is*
- *    the claim: −80 on "are the controls adequate?" with nothing written under
- *    it says something strong about the paper and gives the author nothing.
+ *    A selection anchor has `quote` and `start`; a whole-block bookmark has
+ *    neither, and both still have the permanent `blockId`. What decides whether
+ *    there is a claim to remark on is the reader's `body`, not which anchor arm
+ *    it uses. A body on a whole-block row uses the block text as its passage
+ *    below. **The exception is a comment carrying a `valence`**, where the
+ *    placement *is* the claim: −80 on "are the controls adequate?" with nothing
+ *    written under it says something strong about the paper and gives the
+ *    author nothing.
  *  - **Those placements come out into a list of their own**, and it is not the
  *    list that goes to the model. Everything a `placement` remark says is in
  *    the row, so `mintPlacements` writes it and the comment is never sent. Two
@@ -611,11 +611,13 @@ export function mirrorInput(
     const criterionId = c.criterionId ?? undefined;
     const criterion = criterionId === undefined ? undefined : criterionText.get(criterionId);
     if (body && wasClipped(body, MAX_BODY_CHARS)) clippedBodies++;
-    const quote = clip(c.quote, MAX_QUOTE_CHARS);
+    /* A whole-block note is about the whole paragraph, so the paragraph is its
+       passage and it starts at the top. `CommentAnchor` in src/types.ts. */
+    const quote = clip(c.quote ?? block.text, MAX_QUOTE_CHARS);
     /* Clamped rather than trusted: `start` is a disambiguator recorded when the
        mark was made, and a block that has been re-extracted since can be
        shorter than it was. block-ids.md § the offsets are hints. */
-    const start = Math.min(Math.max(c.start, 0), block.text.length);
+    const start = Math.min(Math.max(c.start ?? 0, 0), block.text.length);
     (body ? kept : placements).push({
       at,
       start,

@@ -112,3 +112,33 @@ describe("the Search the web button", () => {
     expect(await deepenOffered("pending")).toBe(false);
   });
 });
+
+describe("a whole-paragraph bookmark", () => {
+  it("names the whole paragraph and quotes its opening rather than rendering a blank", async () => {
+    const whole: ClientComment = {
+      id: "spya-p7w2dn",
+      blockId: BLOCK,
+      createdAt: "2026-09-12T10:00:00.000Z",
+      status: "none",
+    };
+    await act(async () => {
+      root.render(
+        createElement(CommentDialog, {
+          comment: whole,
+          paragraph: "The opening words that distinguish this paragraph from another.",
+          position: 1,
+          total: 1,
+          hasPrev: false,
+          hasNext: false,
+          onPrev: () => {},
+          onNext: () => {},
+          onClose: () => {},
+          access: { kind: "visitor" as const },
+        }),
+      );
+    });
+    expect(container.querySelector(".cmt-quote")?.textContent).toBe(
+      "Whole paragraph — The opening words that distinguish this paragraph from another.",
+    );
+  });
+});

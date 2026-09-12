@@ -123,6 +123,17 @@ afterEach(async () => {
 });
 
 describe("useComments, on the fetch that fills the list", () => {
+  it("opts into whole-block anchors", async () => {
+    const asked: string[] = [];
+    answer = (url) => {
+      asked.push(url);
+      return Promise.resolve(json({ comments: [] }));
+    };
+    await show("a-piece");
+    await settle();
+    expect(asked).toEqual(["/api/comments/a-piece?anchors=whole-block"]);
+  });
+
   it("starts not knowing", async () => {
     const held = deferred<Response>();
     answer = () => held.promise;

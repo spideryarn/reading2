@@ -76,6 +76,7 @@ import type {
   Tweet,
   TweetThread,
 } from "../types.js";
+import { anchorFields } from "../types.js";
 import type {
   PublicArticle,
   PublicBlock,
@@ -449,8 +450,9 @@ function publicComments(comments: readonly Comment[]): PublicComment[] {
     (comment): PublicComment => ({
       id: comment.id,
       blockId: comment.blockId,
-      quote: comment.quote,
-      start: comment.start,
+      /* Both or neither: a whole-block bookmark crosses with no anchor keys at
+         all rather than `undefined` ones. */
+      ...anchorFields(comment),
       createdAt: comment.createdAt,
       ...opt(comment, "body"),
       ...opt(comment, "answer"),

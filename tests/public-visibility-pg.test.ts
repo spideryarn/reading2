@@ -925,6 +925,32 @@ describe("sharing one article", { timeout: 60_000 }, () => {
     expect(r.text, "the neighbour's note").not.toContain(NEIGHBOUR_NOTE);
   });
 
+  it("serves a whole-block bookmark with neither anchor key", async () => {
+    /* The public reader has its own SQL query and row mapper, so the DTO unit
+       test cannot prove a nullable database row crosses this seam. Unlike the
+       owner GET, this payload has no old-tab opt-in; the plan accepts that
+       smaller navigation-only compatibility risk explicitly. */
+    const id = "spya-cmt27z";
+    const db = getDb();
+    await db.insert(comments).values({
+      articleId: ARTICLE_ID,
+      id,
+      ownerId: OWNER,
+      blockId: BLOCK_ID,
+      quote: null,
+      start: null,
+      status: "none",
+    });
+    try {
+      const r = await call("GET", `/api/public/article/${SLUG}`);
+      const body = r.body as { comments: Record<string, unknown>[] };
+      const whole = body.comments.find((c) => c.id === id);
+      expect(whole).toEqual({ id, blockId: BLOCK_ID, createdAt: expect.any(String) });
+    } finally {
+      await db.delete(comments).where(and(eq(comments.articleId, ARTICLE_ID), eq(comments.id, id)));
+    }
+  });
+
   /**
    * **The owner's saved searches, and the two run states that must not cross.**
    *

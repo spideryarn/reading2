@@ -187,12 +187,94 @@ BlockGutter.tsx headers list five things in the column.
   this as an open question since 260828a.
 - **An in-panel way to close the column other than Escape and a press elsewhere**, if a keyboard
   reader turns out to want one.
+- **On a desktop, a one-line row's mark is two clicks from its note.** The gutter sits inside the
+  row, so pointing at the mark hovers the row, and the hover reveals the "…" over the mark: the click
+  opens the column, and the mark at its head opens the note. Found by the third browser pass after
+  stage 2b. **Not a regression** — before 2b the mark was folded behind the "…" on every one-line row
+  at all times, so the note was already two clicks away and the bookmark invisible besides — and a
+  finger is unaffected, because a tap on the mark does not select the row. The option the pass
+  suggested, revealing the "…" on the prose's hover but keeping the mark while the pointer is on the
+  gutter, needs a way to reach the "…" by mouse that does not exist yet.
 - **Focus after choosing a folded control from the keyboard.** GPT Sol's stage 1 review, P2, and
   older than this change: a keyboard reader who opens the column and activates a control the row
   normally folds away — the permalink, which opens nothing — has the column close under them, the
   control go back to `display: none`, and the focus fall to `body`. The controls that open a dialog
   move focus there and are unaffected. Fix when someone touches the disclosure's focus handling:
   on close, send focus to the "…" if the focused element is no longer drawn.
+
+## What the plan review changed
+
+GPT Sol, [260912c-gutter-bookmark-plan-review-sol.md](260912c-gutter-bookmark-plan-review-sol.md):
+**B is the right product choice over A**, and the slot arithmetic is coherent. No P0; four P1s, all
+taken:
+
+1. **The union must be strict** — the block arm is `{ quote?: never; start?: never }`, not
+   `ChatAnchor`'s looser `{ blockId }`, and `ClientComment`/`Placement` become intersections because
+   an interface cannot extend a union. `PublicComment` takes the same anchor.
+2. **The button must wait for the opening read.** Before the list lands every paragraph looks
+   unmarked, so a press could be erased by the arriving list, or duplicate a note nobody had fetched.
+   Reader withholds `onBookmark` until `loaded && loadError === null` — the gate `AnnotateDialog`'s
+   Save already has, for the same race.
+3. **An old open tab crashes on a quote-less row** (`TableView`'s `c.quote.length`), and an iPad
+   home-screen tab can stay on old code for days — Greg's own iPad seeing a bookmark made on the
+   laptop is the realistic case. So the owner's `GET /api/comments/:slug` sends whole-block rows only
+   when the client asks (`?anchors=whole-block`); the new client asks. **Not done for the public
+   read**: a visitor's page brings its comments in its own payload on load, so an old visitor tab
+   only meets one by navigating inside an already-open shared page. Accepted, and named here.
+4. **The consumer list was incomplete** — the seeder, the route test that called `{ blockId }`
+   invalid, the public DTO key set, both export formats. All handled; the downloadable bundle keeps
+   raw rows, so a whole-block bookmark there has `quote` and `start` null, and its README says so.
+
+Two P2s taken: the dialog and drawer show *Whole paragraph —* and the opening words, with a line for
+a paragraph that has gone (`passageOf`); and **the "…" becomes an ✕ while open rather than being
+hidden** — hiding took the disclosure and its `aria-expanded` out of the accessibility tree and left
+the focus to Chrome's fix-up on an iPad that runs Safari. That reverses stage 1's `display: none`,
+and § 38's "passed over" paragraph above is now the choice. The P2 against widening `linkThread` was
+already true: it is unchanged.
+
+## Stage 2 — built and reviewed
+
+GPT Sol, [260912c-gutter-bookmark-stage2-review-sol.md](260912c-gutter-bookmark-stage2-review-sol.md):
+no P0. Its P1 was that a press whose response was lost minted a *new* id on the next press, so a row
+the server had stored could be joined by a second: it added
+[`block-bookmark.ts`](../../src/web/block-bookmark.ts), which keeps one id per block until a write is
+confirmed and folds two presses in flight into one. Three P2s — the failure announcement now says
+"not confirmed" rather than claiming it failed, the request-trace test learned the new comments URL, and
+direct witnesses for the database constraints, the public mapping, both export shapes, the dialog and
+drawer JSX and the mirror. Its sandbox could not reach the database; those files were run outside it:
+14 files, 532 tests, green.
+
+**The browser pass found one thing no test could**, at iPad and desktop widths: every other point
+passed — the ✕, the order, the store, no underline, the drawer and dialog, persistence, delete — but
+**a bookmark on a one-line paragraph was invisible at rest.** A one-line row has one slot, the "…"
+takes it and folds the mark behind it, and the "…" itself only shows on a hovered or selected row. The
+file had accepted that for the rare orphaned note, whose words are also gone from the prose; a
+whole-paragraph bookmark underlines nothing, so on a one-line paragraph pressing the button made it
+vanish with nothing in its place — which is the very kind of block Greg was on.
+
+**Stage 2b: the mark and the "…" share the slot.** gutter.css § One slot and a mark: on a one-slot row
+only (a negated container query, so no rule is undone on a taller one), a marked gutter shows the mark
+at rest with the "…" in the same cell on top, invisible and not taking presses until it is revealed —
+then the mark gives way. Nothing is `display: none`, which is what sank the 2026-09-05 version of this,
+so both stay reachable by keyboard and finger. Reviewed separately:
+[260912c-gutter-bookmark-stage2b-review-sol.md](260912c-gutter-bookmark-stage2b-review-sol.md) — no
+P0; it fixed a P1 in place (with a mouse resting over the row, Tab to the mark left the focus on an
+invisible element, because the hover rule outranked `.blk-cmt:focus-visible` and the "…" painted over
+it — the hover prefix is `:where()`-wrapped now, and a focused mark switches the "…" above it off) and
+a P2 (the focused "…" patched `--page` over an opaque row's `--muted`). Its one wider P2 is the
+deferred focus-after-a-folded-control item above.
+
+**And a browser recheck found what neither review could: paint order.** On touch every point passed;
+on a desktop hover a real click on the visible "…" opened the *note*. An element with an opacity below
+1 is painted above its ordinary neighbours, so the mark at 0 was painted over the "…" at 1 and took
+the press — and a focused "…" had the mark at 0.75 showing through its patch. Touch passed only
+because the "…" is 0.705 there. The subagent confirmed the cause by changing inline styles rather
+than by reasoning about them: `pointer-events: none` on the mark, `position: relative` on the "…",
+or the "…" at 0.99 each moved the element under the pointer. The fix is the second and the first
+together — the "…" is `position: relative; z-index: 1` in the shared cell, and both rules that hide
+the mark take its `pointer-events` with its opacity. **This is the class worth remembering**: a
+stacking rule argued from source order is only true until something in the pair drops below opacity 1,
+and no stylesheet test can see it — only a real pointer in a real browser.
 
 ## Stage 1 — built and reviewed
 

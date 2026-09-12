@@ -214,8 +214,9 @@ export async function seedCommentsFromFiles(slug: string): Promise<SeededComment
         id: c.id,
         ownerId,
         blockId: c.blockId,
-        quote: c.quote,
-        start: c.start,
+        /* Null together on a whole-block bookmark (`CommentAnchor`). */
+        quote: c.quote ?? null,
+        start: c.start ?? null,
         /* `?? null` on each of the optional ones: absent on disk and null in
            the column are the same fact, and leaving `undefined` here would let
            the column default decide instead of the file. */

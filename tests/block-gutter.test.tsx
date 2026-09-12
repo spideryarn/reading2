@@ -66,9 +66,9 @@ afterEach(() => {
 function paint(
   comments?: Comment[],
   chatCount = 0,
-  slots: { chat?: boolean; help?: boolean } = {},
+  slots: { chat?: boolean; help?: boolean; bookmark?: (id: BlockId) => Promise<boolean> } = {},
 ): void {
-  const { chat = true, help = true } = slots;
+  const { chat = true, help = true, bookmark } = slots;
   act(() => {
     root.render(
       <BlockGutter
@@ -79,6 +79,7 @@ function paint(
         onOpenComment={(id) => opened.push(id)}
         {...(chat ? { onChatAbout: (id: BlockId) => chatted.push(id) } : {})}
         {...(help ? { onHelp: (id: BlockId) => helped.push(id) } : {})}
+        {...(bookmark ? { onBookmark: bookmark } : {})}
         onJump={(id) => jumped.push(id)}
         announce={(s) => said.push(s)}
       />,
@@ -245,6 +246,15 @@ describe("the permalink", () => {
 });
 
 describe("the comment marker", () => {
+  it("marks the gutter itself when the paragraph has a mark, which the one-slot rules key on", () => {
+    // gutter.css § One slot and a mark: on a one-line row the mark shares the
+    // only slot with the "…" rather than fold behind it.
+    paint([comment("c1", 5)]);
+    expect(host.querySelector(".blk-gutter")?.hasAttribute("data-marked")).toBe(true);
+    paint();
+    expect(host.querySelector(".blk-gutter")?.hasAttribute("data-marked")).toBe(false);
+  });
+
   it("is absent on a block with no comments", () => {
     paint();
     expect(host.querySelector(".blk-cmt")).toBeNull();
@@ -543,6 +553,84 @@ describe("the column at every combination of the three props", () => {
  * every way it closes. Those are the parts that would otherwise be checked by
  * hand once and then never again.
  */
+describe("the bookmark button", () => {
+  /* SPIDERYARN-READING2-37, Greg, 2026-09-12: *"a sort of bookmark icon as
+     well, sort of a fourth one, so you could just say … bookmark that block"*.
+     docs/plans/260912c-gutter-bookmark-button-and-the-second-ellipsis.md. */
+  const stored = (answer: boolean) => {
+    const asked: BlockId[] = [];
+    const fn = (id: BlockId) => {
+      asked.push(id);
+      return Promise.resolve(answer);
+    };
+    return { asked, fn };
+  };
+  const button = () => host.querySelector<HTMLButtonElement>(".blk-bookmark");
+
+  it("is drawn only where the callback is — a visitor gets none", () => {
+    paint();
+    expect(button()).toBeNull();
+    paint(undefined, 0, { bookmark: stored(true).fn });
+    expect(button()).not.toBeNull();
+  });
+
+  it("gives way to the mark on a paragraph that already has a note", () => {
+    // One slot, never two: the mark is the state, and pressing it opens the
+    // note — which is also where un-bookmarking lives.
+    paint([comment("c1", 5)], 0, { bookmark: stored(true).fn });
+    expect(button()).toBeNull();
+    expect(host.querySelector(".blk-cmt")).not.toBeNull();
+    expect(host.querySelector(".blk-gutter")?.getAttribute("data-controls")).toBe("4");
+  });
+
+  it("sits third, after the address and the chat door, before the \"?\"", () => {
+    // Greg's order for what folds away first, 260905c: permalink and chat stay.
+    paint(undefined, 0, { bookmark: stored(true).fn });
+    const gutter = host.querySelector(".blk-gutter") as HTMLDivElement;
+    const classes = [...gutter.children].map((el) => el.className.split(" ")[0]);
+    expect(classes).toEqual(["blk-permalink", "block-chat", "blk-bookmark", "blk-help", "blk-more"]);
+    expect(gutter.getAttribute("data-controls")).toBe("4");
+  });
+
+  it("bookmarks THIS block in one press, and says so once it is stored", async () => {
+    const { asked, fn } = stored(true);
+    paint(undefined, 0, { bookmark: fn });
+    click(button() as HTMLButtonElement);
+    expect(asked).toEqual([ID]);
+    // Nothing is announced before the store has answered.
+    expect(said).toEqual([]);
+    await settle();
+    expect(said).toEqual(["Bookmarked this paragraph."]);
+  });
+
+  it("says only what it knows when storage was not confirmed", async () => {
+    paint(undefined, 0, { bookmark: stored(false).fn });
+    click(button() as HTMLButtonElement);
+    await settle();
+    /* `false` can also mean the POST committed and its response was lost, so
+       the announcement may not claim the server did nothing. */
+    expect(said).toEqual(["Bookmark not confirmed."]);
+  });
+
+  it("keeps the press out of the row's own handler, and folds the column", () => {
+    // On `document.body`, as the "?" test above does: `host` is the React root,
+    // and a listener on the root's own node is not something React's
+    // `stopPropagation` can keep out.
+    paint(undefined, 0, { bookmark: stored(true).fn });
+    act(() => (host.querySelector(".blk-more") as HTMLButtonElement).click());
+    let bubbled = 0;
+    const spy = () => bubbled++;
+    document.body.addEventListener("click", spy);
+    try {
+      click(button() as HTMLButtonElement);
+    } finally {
+      document.body.removeEventListener("click", spy);
+    }
+    expect(bubbled).toBe(0);
+    expect(host.querySelector(".blk-gutter")?.hasAttribute("data-open")).toBe(false);
+  });
+});
+
 describe('the "…"', () => {
   it("is drawn where there is more than one control, and nowhere else", () => {
     /* Not "the reader can chat", which is what the row floor keyed on and what
@@ -569,6 +657,24 @@ describe('the "…"', () => {
     expect(host.querySelector(".blk-gutter")?.hasAttribute("data-open")).toBe(true);
     act(() => more.click());
     expect(host.querySelector(".blk-gutter")?.hasAttribute("data-open")).toBe(false);
+  });
+
+  it("draws an ✕ and says Close while it is open, not a second \"…\"", () => {
+    /* SPIDERYARN-READING2-38, Greg on an iPad, 2026-09-12: *"it has yet more
+       three dots, but I don't know what that does."* The open column ends in
+       the button that opened it; the glyph and the name are what say that
+       pressing it closes, since a `title` never shows on a finger. */
+    paint();
+    const more = host.querySelector(".blk-more") as HTMLButtonElement;
+    const glyph = () => more.querySelector("svg")?.getAttribute("class") ?? "";
+    expect(glyph()).toContain("lucide-ellipsis");
+    act(() => more.click());
+    expect(glyph()).toContain("lucide-x");
+    expect(glyph()).not.toContain("lucide-ellipsis");
+    expect(more.getAttribute("aria-label")).toBe("Close paragraph controls");
+    act(() => more.click());
+    expect(glyph()).toContain("lucide-ellipsis");
+    expect(more.getAttribute("aria-label")).toBe("More for this paragraph");
   });
 
   it("closes on Escape, and puts the focus back where it came from", () => {
