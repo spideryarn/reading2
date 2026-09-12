@@ -9,7 +9,9 @@
 >
 > — Greg, 2026-09-12, from the Feedback dialog on an iPad (SPIDERYARN-READING2-39)
 
-**Status: measuring.** The feedback note is
+**Status: stages 1 and 2 built, plan-reviewed; stage 2 in code review; stage 3 deferred. Not
+deployed.** What is left needs Greg: one iPad dictation after the next deploy (F1 below), and an
+answer on Opus/WebM-first. The feedback note is
 [260912_0818-dictation-slow-on-weak-wifi.md](../user-feedback/260912_0818-dictation-slow-on-weak-wifi.md).
 
 ## The question, and the order it asks for things
@@ -93,8 +95,13 @@ had worked out that the iPad is the heavy one.
 `scripts/spike-dictation-latency.ts`, 2026-09-12, 41.2 s of speech; the full output is
 [`evals/dictation/results-latency.json`](../../evals/dictation/results-latency.json).
 
-**It is the upload, by about five to one.** The same 41 seconds of speech, recorded at an iPad's
-rate and at a speech rate, as the app's own JSON body:
+**On a 1 Mbps uplink, the upload dominates by about five to one** — and that is a claim about a
+*modelled* link, not about Greg's. Nobody measured his Wi-Fi, and at 5 Mbps up the iPad-sized request
+would take ~2 s, comparable to the transcriber rather than five times it (GPT Sol's plan review, F2).
+So what this establishes is that **request size is the strongest lever available**, not that the
+upload caused that particular incident; an established diagnosis would need the base64 time, the
+fetch time and the server's returned `ms` from the reporting iPad. The same 41 seconds of speech,
+recorded at an iPad's rate and at a speech rate, as the app's own JSON body:
 
 | profile (up, latency) | iPad-sized, 192 kbps — 1,292 KB | Opus 32 kbps — 203 KB | Opus 24 kbps — 154 KB |
 |---|---|---|---|
@@ -102,9 +109,10 @@ rate and at a speech rate, as the app's own JSON body:
 | weak Wi-Fi (1 Mbps, 150 ms) | **10.80 s** | 1.84 s | 1.43 s |
 | DevTools Fast 3G (750 kbps, 562 ms) | **14.75 s** | 2.80 s | 2.27 s |
 
-Against which the **transcriber takes 1.6–2.7 s** for the same 41 seconds, at every bitrate —
-**including the iPad-sized file, at 2.00 and 2.05 s**, so a big recording costs nothing extra once it
-has left the reader's device — and the
+Against which the **transcriber takes 1.6–2.7 s** for the same 41 seconds, at every bitrate. Across
+two calls per file no size penalty was visible — the iPad-sized file took 2.00 and 2.05 s, inside the
+run's 1.59–2.65 s range — though two calls are too few to establish that transcription time is
+*independent* of size (Sol, F4). And the
 **vocabulary 66 ms cold, 3 ms warm** (locally — production reads Supabase from Vercel and was not
 measurable from here). The throttle is doing what it says: 154 KB over 125 KB/s is 1.23 s, plus the
 latency, against 1.43 s measured.
@@ -161,10 +169,17 @@ double-click — `.webm` does not, nor in an iPad's Files app. The failure file 
 every dictation, so the reorder may well be the right trade; **but it is Greg's trade**, and it is put
 to him in the feedback note as one question rather than made here. Fable's arbitration, 2026-09-12.
 
-**Stage 3, if stage 2 lands cleanly — send the recording as the body, not as base64 in JSON.** A third
-off every upload on every engine (8.10 s against 10.80 s for the iPad-sized row). It changes the
-route's contract — the format and the context move to the query string, `readBody` gains a raw
-sibling — so it is its own stage with its own review, and it can be dropped without undoing stage 2.
+**Stage 3 was going to be the raw body, and it is deferred — send the recording as the body, not as
+base64 in JSON.** About a quarter off the current JSON upload — 8.10 s rather than 10.80 s for the
+iPad-sized row — because base64 makes the raw payload one third larger (the first draft said "a
+third off", which is the same fact measured from the wrong end; Sol, F5). **Why not now:** it was
+worth a quarter of *ten* seconds; after stage 2 it is worth a quarter of *two*. A 30-second iPad
+dictation at 48 kbps is ~240 KB of JSON, ~2 s at 1 Mbps, and the raw body would take ~0.5 s off that
+— for a new contract on a route that seven test files post JSON to (the format and the context move
+to the query string, `readBody` gains a raw sibling). Fable recommended it when the upload was still
+the iPad's 192 kbps; the arithmetic that justified it moved with stage 2. **Build it when the
+production `kbps` shows stage 2 held and dictation still feels slow** — Chrome desktop, still at
+~14 KB/s, is where it would earn most.
 
 **Deferred, and named so nobody re-derives it:**
 
@@ -201,9 +216,23 @@ sibling — so it is its own stage with its own review, and it can be dropped wi
    8.8-second clip (that script asks Chrome for bare `audio/mp4` with no hint, hence 127). It looks
    rounded to whole seconds, so `kbps` is a few per cent out on a short clip — enough to tell 48
    from 192, which is all it is for.
-3. **The raw body** — see above; reviewed on its own.
+3. **The raw body** — deferred; see above for why and for what would bring it back.
 
 Each stage ends with GPT Sol's code review, `npm test` and `npm run typecheck`.
+
+## What GPT Sol's plan review changed
+
+[The review](260912b-dictation-slow-on-weak-wifi-sol-plan-review.md), of `5512a127` and `de555fcf`.
+No established P0 or P1; six findings, all taken.
+
+| ID | Finding | Disposition |
+|---|---|---|
+| F1 | P1, reasoned — 48 kbps AAC has no quality evidence; every accuracy row was Opus | **Taken as an acceptance check, after deploy** — the box has no AAC encoder, so it cannot be done here. On the iPad: the same passage at the old default and at 48 kbps; the hinted file non-empty, playable, ~4× smaller, no recorder fallback, no worse transcript. The `kbps` log alone says the hint was *taken*, not that the words survived it. |
+| F2 | P2 — the spike establishes leverage, not the cause of Greg's incident | Taken: the headline and the feedback note now say "on a modelled 1 Mbps link" and "the strongest lever", not "it is the upload". |
+| F3 | P2 — the telemetry can vanish silently | Already built with the parsing and a red-first test; the log now writes `audioSeconds` and `kbps` as `null` rather than omitting them, so their disappearance is searchable. |
+| F4 | P3 — "independent of file size" overstated from two calls | Taken, reworded. |
+| F5 | P3 — raw body saves a quarter, not a third | Taken, reworded — and then stage 3 deferred, above. |
+| F6 | P3 — the prompt's candidate list was wrong and held a SHA placeholder | Taken: it names `de555fcf` and five paths. |
 
 ## Open questions for Greg
 

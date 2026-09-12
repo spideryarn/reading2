@@ -522,13 +522,15 @@ export async function transcribeWith(
          WebKit takes a bitrate hint on AAC and falls back to 192 kbps in
          silence when Core Audio refuses it. ~48 says the hint was honoured,
          ~192 that it was refused, ~128 that an older WebKit rounded it up.
-         Absent when the provider does not report a duration. */
-      ...(call.seconds
-        ? {
-            audioSeconds: Math.round(call.seconds * 10) / 10,
-            kbps: Math.round((audio.length * 3 * 8) / 4 / 1000 / call.seconds),
-          }
-        : {}),
+         **`null`, not absent, when the provider does not report a duration** —
+         so a search for `kbps:null` finds the day `usage.seconds` stops
+         arriving, rather than the evidence simply not being there (GPT Sol's
+         plan review, F3). */
+      audioSeconds: call.seconds === null ? null : Math.round(call.seconds * 10) / 10,
+      kbps:
+        call.seconds === null
+          ? null
+          : Math.round((audio.length * 3 * 8) / 4 / 1000 / call.seconds),
       chars: cleaned.length,
       /* **Whether the stripper fired**, as a count of characters and never a
          word of it. A filler pass that quietly stopped matching would return a

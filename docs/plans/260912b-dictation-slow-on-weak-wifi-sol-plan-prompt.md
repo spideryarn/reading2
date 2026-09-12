@@ -6,8 +6,8 @@ server, `tsx` to run scripts, vitest.
 
 ## The candidate
 
-Committed: `5512a127` (the measurement) and the commit after it that revises the plan — together,
-exactly `git log --oneline origin/dev..HEAD` (two commits; I will record the second SHA here).
+Committed: `5512a127` (the measurement) and `de555fcf`, which revises the plan and adds this prompt
+— together, exactly `git log --oneline 5512a127^..de555fcf` (two commits, five paths).
   git diff origin/dev...HEAD --stat
   changed paths: docs/plans/260912b-dictation-slow-on-weak-wifi.md,
                  docs/user-feedback/260912_0818-dictation-slow-on-weak-wifi.md,
