@@ -769,9 +769,11 @@ export function removeWorktree(cwd: string, wanted: string | undefined, opts: Re
      One read is not a lease: a peer can resume a clean, landed tree with a stale
      lock after the first read, and without this it was unlocked and removed with
      the peer inside (GPT Sol's P1 on the namespace-fix review of 260912a). Read
-     after the unlock, so a peer that locks from here on is refused by git itself
-     — `git worktree remove` will not remove a locked tree. What is left is a peer
-     that enters WITHOUT locking in the gap between this read and the removal:
+     after the unlock. Git refuses a peer lock it observes before its own lock
+     check, but that check is not a lease either: the lease review of c87ceec8
+     reproduced a lock succeeding after `git worktree remove` started while the
+     removal also succeeded. What is left is any peer that enters after the last
+     observation here, whether its lock loses that race or it enters without one;
      closing that needs an exclusion shared with EnterWorktree, which is not ours. */
   const lateRefusal = livenessRefusal(readLiveness(entry.path, originalLock));
   if (lateRefusal !== null) {

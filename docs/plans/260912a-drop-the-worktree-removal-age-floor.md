@@ -126,3 +126,36 @@ Verdict *REFUSE*, but not on the namespace fix.
   stale. Not reachable on this box as it stands: `/proc` is mounted without `hidepid`, and every agent
   runs as `greg` (checked by both of us). The fix when it matters is `kill(pid, 0)` telling `ESRCH` from
   `EPERM`, as `tools/overseer/launch-artefacts.ts` already does.
+
+## The lease fix, back to Sol
+
+`c87ceec8` went to GPT Sol on its own the same day, `--sandbox workspace-write`, the last link of this
+chain — dispatched by the Overseer under Greg's instruction to get Sol reviews on anything tricky.
+Prompt: [`…-lease-review-prompt.md`](260912a-drop-the-worktree-removal-age-floor-lease-review-prompt.md);
+findings, written before any edit:
+[`…-lease-review-findings.md`](260912a-drop-the-worktree-removal-age-floor-lease-review-findings.md);
+answer: [`…-lease-review-sol.md`](260912a-drop-the-worktree-removal-age-floor-lease-review-sol.md).
+Verdict *REFUSE* — on the conclusion, not on the fix. The two reads do what they say; the claim that
+they leave only one gap was too strong.
+
+- **P1, not fixable here: git's own lock check is not a lease either.** `c87ceec8` said a peer that
+  locks after the late read is refused by git. Sol reproduced otherwise — a 30,000-file tree, `git
+  worktree remove` started, `git worktree lock` 20 ms later: both exited 0 and the tree was gone. The
+  session reproduced it independently on the box, three trials of three. So the named gap is wider
+  than "enters without locking": it is any peer that enters after the last read, locked or not. It
+  still needs an exclusion shared with `EnterWorktree`; Sol corrected the comment in
+  `scripts/worktree-remove.ts`, and the session corrected the same claim in
+  [worktrees.md](../project/worktrees.md).
+- **P2, older than this change: a renamed live tree reads as a ghost**, and the ghost path asks no
+  liveness. This is finding 2 of the first review above, reproduced again with a live process inside
+  the moved directory. Still left for its own change — but it means "a live tree is safe bar one gap"
+  is two gaps, not one.
+- **P3, fixed by Sol: two reachable failure paths had no test** — a late `unknown`, and a peer lock
+  git sees before its own check (where restoring our stale lock fails, honestly, and the peer's lock
+  stays). Both tests pass; with the late read mutated away, the session watched all four late-read
+  tests go red and the changed-lock test stay green (the re-list holds it).
+- **Confirmed:** `EnterWorktree({path})` does not lock and leaves a stale lock as it is, so that route
+  rests on the cwd scan; a named-worktree resume rewrites the lock with its own pid and start, which the
+  re-list catches; passing the judged lock to the late read is right; self-removal is unaffected.
+
+Landed as the commit that adds this section.
