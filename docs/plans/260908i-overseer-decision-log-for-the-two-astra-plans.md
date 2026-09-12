@@ -679,3 +679,22 @@ standing prompt now says in so many words: never arm a waiter and stop; wait in 
 The loop itself is unchanged. Also this tick: the 09:12Z feedback sweep queued and dispatched all
 17 of Greg's morning reports as 13 jobs in seven waves; the Citations Sol review and the
 worktree-floor removal are both in their full-suite gates; load 9.
+
+## 2026-09-12 10:00 UTC — the floor is gone, nine trees with it; the changelog caught up
+
+**Worktree floor** (Greg's instruction of 09:05Z): landed at 1203d2ff, merged as 89cc9096, plan
+260912a. The rule now: anybody may remove a tree at once when `worktree:check` says safe, every
+commit it names is on a fresh origin/dev, and nobody is in it (no live pid in its lock, no process
+with its cwd inside); any *unknown* refuses. Sol refused the first draft on a real High — inside a
+private PID namespace `/proc` hides a live owner, so a peer's tree would have read idle — and the
+session fixed it (the asker must be in the host namespace or it refuses), test red first; that fix
+has not been back to Sol, so a narrow re-check is queued as qi-3bmkw2ft, authorised under the same
+instruction. Nine trees removed by the session, none of the five in use. Three finished product
+trees still refuse over an ignored path with no second copy (qi-hwnjakqt, lull). The session also
+found `tests/models.test.ts` red on dev from the Citations stage 3 series; routed to
+citations-sol-review, whose scope it is. Session closed.
+
+**Changelog**: the resume run wrote two versions (2026-09-11: 8 entries; 2026-09-12: 2 entries,
+Citations and the quotes-diversity change) from Vercel's deploy list, on dev at 803b9198; Sol
+corrected 9 of 24 items and asked two regroups, applied. The public `/changelog` shows them after
+the next deploy.
