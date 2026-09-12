@@ -431,7 +431,9 @@ ordinary case is a dictation that ends by itself rather than one that is rejecte
 
 **The size is also the wait, and an iPad was the heavy one.** Measured 2026-09-12 after Greg reported
 dictation as slow on an iPad on weak Wi-Fi: 41 seconds of speech at an iPad's size took **10.8 s to
-upload** at 1 Mbps, against ~2 s to transcribe at any size — the upload, by five to one. WebKit
+upload** on a modelled 1 Mbps link, against 1.6–2.7 s to transcribe in the same run — two calls per
+file showed no size penalty, though too few to establish that there is none. So request size is the
+strongest lever, not a proven cause of any one slow dictation. WebKit
 records at **192 kbps** when a page gives no bitrate (`LargeAudioBitRate`, read from its source), and
 the AAC attempt gave none because Chromium's encoder throws on one. So since that day the AAC attempt
 carries **48 kbps on WebKit only**, recognised positively by `navigator.vendor` (`takesAacBitrate` in

@@ -234,6 +234,18 @@ No established P0 or P1; six findings, all taken.
 | F5 | P3 — raw body saves a quarter, not a third | Taken, reworded — and then stage 3 deferred, above. |
 | F6 | P3 — the prompt's candidate list was wrong and held a SHA placeholder | Taken: it names `de555fcf` and five paths. |
 
+## What GPT Sol's code review of stage 2 changed
+
+[The review](260912b-dictation-slow-on-weak-wifi-sol-code-review.md), of `705553da` and `154f2f9a`,
+**read-only** rather than the house default — the full `npm test` was running in the same worktree,
+and a reviewer's edit mid-suite would have reddened it for nobody's reason. No established P0 or P1;
+the recorder and spend-ledger contracts judged preserved. Two findings:
+
+| ID | Finding | Disposition |
+|---|---|---|
+| F1 | P2, established — the new log fields had no effective test, and the existing "repeats nothing … to the log" test spied on `console`, which the Pino logger never touches: `format: audio` would have put the recording in production logs with every test green | **Fixed.** `tests/transcribe.test.ts` now sets `LOG_LEVEL` in a hoisted block and reads the real log through `tests/helpers/log-capture.ts`: the success line's exact `format`, `audioSeconds` and `kbps`; `null`s when there is no duration; no audio, transcript or vocabulary sentinel anywhere in it. The old console-spy test is rewritten the same way, with a positive assertion that the refusal line *was* captured, so it can no longer pass by capturing nothing. |
+| F2 | P3 — `dictation.md` kept the "at any size" claim the plan review had retracted | Fixed. |
+
 ## Open questions for Greg
 
 - **Opus/WebM first on every browser?** Roughly 3.5× smaller uploads on Chrome and on iPads running

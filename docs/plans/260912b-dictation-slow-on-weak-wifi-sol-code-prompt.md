@@ -45,9 +45,10 @@ Out of scope: the raw-body upload (a later stage), and Opus/WebM-first (a produc
 
 ## What you can and cannot run, and what you may change
 
-You may edit this worktree. Fix what is inside this stage — each finding red-first, with the test
-that reproduces it — and leave everything wider as a finding for me to decide. Do not commit. List
-every file you changed at the end.
+**The tree is read-only for this pass**, which is a departure from the house default and deliberate:
+the full `npm test` is running against this same worktree while you review, and an edit mid-suite
+would turn it red for reasons that are nobody's bug. So report, do not fix — give each finding's
+reproducing test in (a) and the change in (b), and I will apply them red-first myself.
 
 You can run one test file at a time (`npx vitest run tests/<one>.test.ts`) and a script
 (`node --import tsx <script>`). You have no network, not even loopback, so anything needing Postgres,
