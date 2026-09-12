@@ -645,3 +645,13 @@ findings-first brief: one combined review, fix P0/P1 in a worktree, gates, push,
 owed-reviews table, remove the worktree. Closed `qi-vjw28q7p` (cluster A follow-up), which landed
 at 48d1dc3f and 2aa16ee7 on 2026-09-12 03:50Z but was still marked running. Per-stage rationing is
 off until the reading passes 85% again.
+
+## 2026-09-12 08:55 UTC — the changelog becomes a standing job
+
+Greg: *"run a changelog.md at some point in the next few hours if you haven't recently - make sure
+that's part of your regularly scheduled things you do."* The last run was 2026-09-11 10:55Z
+(eb966c4b). Started `changelog-loop` (tmux job `changelog-loop-0951-3356603`, six-hourly, the
+feedback sweep's shape: `run-claude --mcp` under the default login for the Vercel MCP); its first
+run began 08:51Z. The prompt now says a run with no new production deploy writes nothing, so the
+loop is cheap between deploys. One bullet added to overseer.md § The standing jobs under Greg's
+instruction. Standing-jobs digest for overseer.md is not pinned, so no re-pin.

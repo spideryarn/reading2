@@ -292,6 +292,12 @@ recurring form.
   The default login is the only one signed in to Sentry, and that is by decision: Greg, 2026-09-11,
   *"we do not want to use the Mindstone account for Sentry or any other hosting/services"*, so pool
   accounts run report sessions and never the sweep.
+- **[changelog.md](changelog.md)**, every six hours, since 2026-09-12 — Greg: *"run a changelog.md at
+  some point in the next few hours if you haven't recently - make sure that's part of your regularly
+  scheduled things you do"*. The same shape as the feedback sweep: a tmux loop (`changelog-loop`)
+  running one `run-claude --mcp` job under the default login, which is where the Vercel MCP is signed
+  in. A run with no new production deploy writes nothing and says so; the lines it does write ship
+  with the next deploy, with no human gate ([§ 2](#2-answer-facts-route-judgement-default-the-product-call)).
 - **[improve-the-codebase.md](../reusable/improve-the-codebase.md)**, every week or so, ending in an
   umbrella plan; then fan the clusters out to separate agents, **staggered, with non-overlapping file
   sets**.
