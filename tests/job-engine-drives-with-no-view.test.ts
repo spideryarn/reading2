@@ -49,6 +49,10 @@ const job = (id: string, status: Job["status"]): Job =>
 interface Server {
   jobs: Job[];
   polls: number;
+  /** How many list requests fail before the fake server answers. */
+  pollFailures: number;
+  /** How many list requests return a body the client cannot apply. */
+  malformedPolls: number;
   advances: string[];
   /** How many more advances answer "not done yet". */
   stepsLeft: number;
@@ -66,6 +70,14 @@ function deps(): JobEngineDeps {
   return {
     listJobs: async () => {
       server.polls += 1;
+      if (server.pollFailures > 0) {
+        server.pollFailures -= 1;
+        throw new Error("a transient list failure");
+      }
+      if (server.malformedPolls > 0) {
+        server.malformedPolls -= 1;
+        return undefined as unknown as Job[];
+      }
       return server.jobs;
     },
     advance: async (id): Promise<Advanced> => {
@@ -97,6 +109,8 @@ beforeEach(() => {
   server = {
     jobs: [],
     polls: 0,
+    pollFailures: 0,
+    malformedPolls: 0,
     advances: [],
     stepsLeft: 0,
     busy: false,
@@ -122,6 +136,40 @@ describe("the job engine, with nothing rendered", () => {
     /* Five advances: four steps and the one that answers `done`. Nothing was
        mounted, and nothing needed to be. */
     expect(server.advances).toEqual(["j1", "j1", "j1", "j1", "j1"]);
+    expect(engine.getSnapshot().loaded).toBe(true);
+  });
+
+  it("retries a failed session-start poll and drives the job it then finds", async () => {
+    /* A queued job can predate this page load: the reader reloaded, returned
+       after signing in, or another tab started it. On a quiet reading view no
+       mounted subscriber buys the idle cadence, so the session's own first
+       reconciliation has to survive a transient failure by itself. */
+    server.jobs = [job("j1", "running")];
+    server.pollFailures = 1;
+    server.stepsLeft = 1;
+
+    const engine = createJobEngine(deps());
+    engine.start("reader-1");
+    await settle(30_000);
+
+    expect(server.polls, "the failed opening poll was retried").toBeGreaterThan(1);
+    expect(server.advances, "the pre-existing job was discovered and driven").toContain("j1");
+    expect(engine.getSnapshot().loaded).toBe(true);
+  });
+
+  it("does not discharge reconciliation until the returned job list was applied", async () => {
+    /* A 200 with a malformed body is not a successful reconciliation. During
+       a rolling client/server change, treating it as one would stop a quiet
+       page with the durable job still undiscovered. */
+    server.jobs = [job("j1", "running")];
+    server.malformedPolls = 1;
+
+    const engine = createJobEngine(deps());
+    engine.start("reader-1");
+    await settle(30_000);
+
+    expect(server.polls, "the unusable list response was retried").toBeGreaterThan(1);
+    expect(server.advances, "the job in the next valid list was driven").toContain("j1");
     expect(engine.getSnapshot().loaded).toBe(true);
   });
 

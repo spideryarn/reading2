@@ -762,7 +762,11 @@ function WithAddToShelf({
   url: string;
   children: (add: AddToShelf) => ReactElement;
 }) {
-  const queue = useJobs();
+  /* Watches the queue even at rest, so a card left open on touch holds the idle
+     poll. Quiet until an add is pending is deferred (Sol F3):
+     docs/plans/260912a-ipad-battery-drain-the-reading-view-polls-the-job-queue-every-eight-seconds-at-rest.md
+     § Deferred, named. */
+  const queue = useJobs("watches-queue");
   const [, bump] = useReducer((n: number) => n + 1, 0);
   const key = urlKey(url);
   const state = asked.get(key);
@@ -788,7 +792,7 @@ function WithAddToShelf({
   }, [state]);
 
   /* **By job id, out of the engine's own snapshot** — never by slug, and never
-     from a completion callback. `useJobs(onFinished)` announces only jobs that
+     from a completion callback. `useJobs`'s `onFinished` announces only jobs that
      finish while it is mounted, and this component's whole problem is that it
      usually is not: the reader presses, moves the pointer away, and the card is
      gone long before the ingest is. Reading the terminal status off the list

@@ -156,7 +156,7 @@ export function useTimeline(slug: string): UseTimeline {
   /* The job half — the poll, the running job, and what a refused or dead run
      says to the reader — is src/web/useStepJob.ts, shared with the glossary,
      the summaries and the ideas. */
-  const queue = useStepJob(slug, "timeline", refresh);
+  const queue = useStepJob(slug, "timeline", refresh, "watches-queue");
 
   /* Two verbs, split on `force`. See the interface above, and useIdeas.ts. */
   const ensure = useCallback(async () => {

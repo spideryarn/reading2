@@ -97,7 +97,7 @@ afterEach(() => {
 });
 
 function Probe(): null {
-  const step = useStepJob("an-article", "sketch", () => undefined);
+  const step = useStepJob("an-article", "sketch", () => undefined, "watches-queue");
   seen = { stalled: step.stalled, job: step.job, failed: step.failed };
   press = () => step.start();
   return null;

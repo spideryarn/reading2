@@ -108,7 +108,7 @@ const ARRIVAL_POLL_MS = 3000;
 const UPLOAD_WAIT_CODE = codeOfMessage(UPLOAD_STILL_ARRIVING.message);
 
 export function AddPage({ source: origin }: { source: AddSource }) {
-  const queue = useJobs();
+  const queue = useJobs("watches-queue");
   const [started, setStarted] = useState<string | null>(null);
   const url = origin.kind === "url" ? origin.url : "";
   /**

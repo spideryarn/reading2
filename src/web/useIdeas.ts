@@ -186,7 +186,7 @@ export function useIdeas(slug: string): UseIdeas {
   /* The job half — the poll, the running job, and what a refused or dead run
      says to the reader — is src/web/useStepJob.ts, shared with the glossary and
      the summaries. It carries the reasoning that used to be copied here. */
-  const queue = useStepJob(slug, "ideas", refresh);
+  const queue = useStepJob(slug, "ideas", refresh, "watches-queue");
 
   /* Two verbs where there was one. See `ensure` and `regenerate` on the
      interface above for why the difference is the identity of the request

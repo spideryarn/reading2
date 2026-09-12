@@ -163,7 +163,7 @@ vi.mock("../src/web/lib/api.js", () => {
 let onFinished: ((job: { slug: string; status: string; steps: { name: string }[] }) => void) | null =
   null;
 vi.mock("../src/web/useJobs.js", () => ({
-  useJobs: (cb?: (job: never) => void) => {
+  useJobs: (_cadence: unknown, cb?: (job: never) => void) => {
     onFinished = (cb ?? null) as typeof onFinished;
     return {
       jobs: [],

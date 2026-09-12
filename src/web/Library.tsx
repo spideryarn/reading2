@@ -282,7 +282,7 @@ export function Library({
   // Reload the shelf the moment a job finishes, rather than telling the reader
   // to reload the page — they just watched the five steps go green, and an
   // empty shelf underneath would read as a failure.
-  const queue = useJobs(reload);
+  const queue = useJobs("watches-queue", reload);
 
   // Matcher two: the passages inside the articles, from the server.
   const passages = useLibrarySearch(query);

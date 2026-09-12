@@ -482,6 +482,7 @@ shows the model you actually set and marks the row *set in the environment*. Rem
 | `SPIDERYARN_REFEREE_CLAIMS_MODEL` | Claims, pulling what the paper claims about itself |
 | `SPIDERYARN_REFEREE_CANDIDATES_MODEL` | Candidates, the editor's conversation about who could review the paper |
 | `SPIDERYARN_LINK_SUMMARY_MODEL` | how a hovered link's destination stands to the piece being read — one of the **two jobs on the quick tier**, so this is a variable for asking whether the cheap model is good enough |
+| `SPIDERYARN_CITATIONS_FIND_MODEL` | Citations mode's *Find it*, the one call with web search for a cited work and picks which result, if any, is its own page ([citations.md](citations.md#find-it-on-the-web)) |
 | `SPIDERYARN_QUIZ_VERDICT_MODEL` | whether the reader got a quiz question right, judged from the finished mark and shown to nobody ([quiz.md](quiz.md#whether-the-reader-got-it-right-is-asked-somewhere-else)) — the other quick-tier job. `evals/quiz.ts` prints the verdict beside a hand label on all eight marking cases, so this is the variable for asking the same question with evidence |
 | `SPIDERYARN_PIPELINE_EFFORT` | all three article-reading stages' effort at once |
 

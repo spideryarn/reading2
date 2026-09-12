@@ -41,13 +41,22 @@
  * owner from polling for ever on a page that has nothing to do with the queue:
  *
  * - **while any job is active** — every second, wherever the reader is;
- * - **otherwise, while at least one `useJobs` subscriber is mounted** — every
- *   eight seconds, which is the shelf and the bands, exactly as before;
+ * - **otherwise, while at least one subscriber that asked for the idle cadence
+ *   is mounted** — every eight seconds, which is the shelf and the bands. Every
+ *   `useJobs` caller must say whether it is one (`QueueCadence`, no default), so
+ *   nobody buys this by forgetting to decline it;
  * - **otherwise nothing**, until something pokes it.
  *
  * So an owner reading an article with nothing running costs one poll at session
- * start and then silence. `tests/public-network-trace.test.tsx` pins that, and
+ * start and then silence. That sentence was false from 2026-08-29 to
+ * 2026-09-12: `useArc`, mounted on every owned reading view, subscribed the
+ * ordinary way and so bought the eight-second poll for ever — about 450
+ * requests an hour per open tab. `subscribeQuietly` is the fix,
+ * and what keeps the sentence true is a test, not this comment: `an owner's
+ * reading view, left alone` in tests/public-network-trace.test.tsx watches the
+ * whole reading view for a fake minute, whatever it mounts next. The same file
  * pins the half that did not change: a signed-out visitor polls nothing at all.
+ * docs/plans/260912a-ipad-battery-drain-the-reading-view-polls-the-job-queue-every-eight-seconds-at-rest.md.
  *
  * **`start()` is the only thing that wakes the engine**, and a subscriber alone
  * cannot. It used to be `started || subscribers.size > 0`, which made the
@@ -191,6 +200,13 @@ export interface JobEngine {
   stop(): void;
   /** `useSyncExternalStore`'s two halves. Stable references, both of them. */
   subscribe(onChange: () => void): () => void;
+  /**
+   * `subscribe`, without buying the idle cadence: the same notifications and
+   * snapshot, but it does not keep the eight-second poll going and does not
+   * poll on arrival. For a surface mounted everywhere that only needs to see
+   * its own job — the arc. See § When it polls.
+   */
+  subscribeQuietly(onChange: () => void): () => void;
   getSnapshot(): JobsSnapshot;
   /**
    * Reconcile now.
@@ -309,7 +325,10 @@ export function createJobEngine(deps: JobEngineDeps): JobEngine {
    */
   let generation = 0;
 
+  /** Subscribers that asked for the idle cadence — see `schedule`. */
   const subscribers = new Set<() => void>();
+  /** Subscribers that did not. Told everything; they buy no polls. */
+  const quietSubscribers = new Set<() => void>();
   /**
    * Which job ids this tab is driving, and **which loop is driving each**.
    *
@@ -331,6 +350,24 @@ export function createJobEngine(deps: JobEngineDeps): JobEngine {
      answer over a newer one. */
   let inFlight = false;
   let again = false;
+
+  /**
+   * **A required reconciliation is owed until a poll succeeds.**
+   *
+   * Once the idle cadence became something a subscriber can decline, an
+   * action's poke was the only thing that would find the job it had just made —
+   * and if that one poll failed, `schedule` saw nothing busy and nobody asking
+   * and armed nothing, so the job sat undriven until the reader refocused the
+   * tab. A failed action counts too: a failed request does not prove the server
+   * did not commit it. The session's opening poll is required for the same
+   * reason: it is what finds a durable job left by a reload or another tab, so
+   * one transient failure must not strand that job on a quiet reading view.
+   * Counters rather than a flag, so a poll that began before an action cannot
+   * discharge it. GPT Sol, 2026-09-12, F1; code review F8.
+   */
+  let reconciliationRequested = 0;
+  let reconciliationCompleted = 0;
+  const reconciliationOwed = () => reconciliationCompleted < reconciliationRequested;
 
   /** Whether the engine's first job list has landed — the baseline, not news. */
   let seeded = false;
@@ -354,7 +391,7 @@ export function createJobEngine(deps: JobEngineDeps): JobEngine {
   const awake = () => started;
 
   const emit = () => {
-    for (const fn of [...subscribers]) fn();
+    for (const fn of [...subscribers, ...quietSubscribers]) fn();
   };
 
   const set = (next: Partial<JobsSnapshot>) => {
@@ -407,8 +444,10 @@ export function createJobEngine(deps: JobEngineDeps): JobEngine {
     /* The idle poll is a courtesy to whoever is *looking* at the queue. With
        nothing running and nobody watching, it is a request per eight seconds
        for ever on a reading view, which is what the engine would otherwise
-       have cost every owner the moment it stopped being route-scoped. */
-    if (!isBusy(snapshot.jobs) && subscribers.size === 0) return;
+       have cost every owner the moment it stopped being route-scoped. A quiet
+       subscriber is not watching in this sense; the busy cadence above needs
+       nobody at all, and neither does an action still owed its poll. */
+    if (!isBusy(snapshot.jobs) && subscribers.size === 0 && !reconciliationOwed()) return;
     timer = setTimeout(() => {
       timer = undefined;
       void poll();
@@ -488,28 +527,41 @@ export function createJobEngine(deps: JobEngineDeps): JobEngine {
     }
   };
 
+  /** A list reply may belong to this session and still have been overtaken by
+   *  an authentication pause raised by a concurrent action or driver. */
+  const pollWasOvertaken = (mine: number) => mine !== generation || snapshot.authFailed;
+
   const poll = async (): Promise<void> => {
-    /* **The guard belongs here and not only at the callers.** `poke`, `wake`
+    /* **The guards belong here and around the await, not only at the callers.** `poke`, `wake`
        and `schedule` each check the pause, and it was still reachable: a poke
        that arrives while the poll that is *about* to 401 is in flight sets
        `again`, and the `finally` below then starts one more poll on the way
        out. If that one succeeded it cleared `error` and left `authFailed` true
        — an engine that has stopped and says nothing, which is the exact shape
-       docs/reusable/silent-success.md is about. GPT Sol, 2026-09-01. */
+       docs/reusable/silent-success.md is about. The second guard covers the
+       other ordering: an `/advance` can set the pause while this list request
+       is already in flight, and its later success or failure must not replace
+       the error.
+       GPT Sol, 2026-09-01; code review F10, 2026-09-12. */
     if (snapshot.authFailed) return;
     if (inFlight) {
       again = true;
       return;
     }
     const mine = generation;
+    const requestedAtStart = reconciliationRequested;
     inFlight = true;
     try {
       const jobs = await deps.listJobs();
-      if (mine !== generation) return;
+      if (pollWasOvertaken(mine)) return;
       apply(jobs);
+      /* A 200 whose body cannot be applied did not reconcile anything. Mark it
+         paid only after `apply`, so its throw reaches the retry path while the
+         obligation is still live. */
+      reconciliationCompleted = Math.max(reconciliationCompleted, requestedAtStart);
       schedule(isBusy(jobs) ? BUSY_MS : IDLE_MS);
     } catch (err) {
-      if (mine !== generation) return;
+      if (pollWasOvertaken(mine)) return;
       if (statusOf(err) === 401) {
         noteAuthFailure(readable(err));
         return;
@@ -658,6 +710,8 @@ export function createJobEngine(deps: JobEngineDeps): JobEngine {
        the old session can never be met by a new session's event. Only the
        events themselves go. */
     completions = [];
+    reconciliationRequested = 0;
+    reconciliationCompleted = 0;
     if (!awake()) unlisten();
     snapshot = EMPTY;
     emit();
@@ -679,6 +733,33 @@ export function createJobEngine(deps: JobEngineDeps): JobEngine {
     void poll();
   };
 
+  /** Either kind of subscription. They differ only in which set `schedule` counts. */
+  const join = (into: Set<() => void>, onChange: () => void, wakes: boolean) => {
+    into.add(onChange);
+    if (wakes) wake();
+    return () => {
+      into.delete(onChange);
+      /* A successful idle poll may already have armed the next courtesy tick.
+         Once the last paying subscriber leaves, cancel that tick now rather
+         than charging the quiet page one trailing request. Never cancel work:
+         busy jobs and required reconciliations keep their timer. */
+      if (
+        into === subscribers &&
+        subscribers.size === 0 &&
+        !isBusy(snapshot.jobs) &&
+        !reconciliationOwed()
+      ) {
+        clearTimeout(timer);
+        timer = undefined;
+      }
+      if (!awake()) {
+        clearTimeout(timer);
+        timer = undefined;
+        unlisten();
+      }
+    };
+  };
+
   return {
     start(key) {
       if (started && sessionKey === key) return;
@@ -686,6 +767,10 @@ export function createJobEngine(deps: JobEngineDeps): JobEngine {
       sessionKey = key;
       started = true;
       listen();
+      /* The first list is not a courtesy poll: it reconciles durable work this
+         tab is responsible for driving. Keep that obligation through a
+         transient failure even when every mounted subscriber is quiet. */
+      reconciliationRequested += 1;
       void poll();
     },
     stop() {
@@ -694,18 +779,16 @@ export function createJobEngine(deps: JobEngineDeps): JobEngine {
       sessionKey = null;
       teardown();
     },
-    subscribe(onChange) {
-      subscribers.add(onChange);
-      wake();
-      return () => {
-        subscribers.delete(onChange);
-        if (!awake()) {
-          clearTimeout(timer);
-          timer = undefined;
-          unlisten();
-        }
-      };
-    },
+    subscribe: (onChange) => join(subscribers, onChange, true),
+    /* **No `wake()` on arrival, deliberately.** At rest no timer is armed, so
+       waking would poll every time — one GET per article opened, for a
+       snapshot `start()` already seeded. The job the arc starts itself is
+       found by its action's poke, which `reconciliationOwed` then carries past
+       a failed poll. What this gives up is noticing, at mount, a job another
+       tab started since the last poll — the trade a closed band already makes,
+       and tests/arc-idle-poll.test.ts states it as a case. GPT Sol agreed,
+       2026-09-12. */
+    subscribeQuietly: (onChange) => join(quietSubscribers, onChange, false),
     getSnapshot: () => snapshot,
     poke,
     completionCursor: () => sequence,
@@ -722,11 +805,13 @@ export function createJobEngine(deps: JobEngineDeps): JobEngine {
         noteAuthFailure(message);
         return;
       }
+      reconciliationRequested += 1;
       set({ error: message });
       poke();
     },
     actionSucceeded(epoch) {
       if (epoch !== generation) return;
+      reconciliationRequested += 1;
       set({ error: null, authFailed: false });
       poke();
     },

@@ -218,6 +218,45 @@ export function useJobSession(readerId: string | null, accessToken: string | nul
 }
 
 /**
+ * **Whether being mounted keeps the engine's eight-second idle poll going.**
+ *
+ * - `"watches-queue"` — a surface somebody is *looking at* the queue on: the
+ *   shelf, the add page, a mode's band. It pays a small request every eight
+ *   seconds while the tab is visible, and in return a run started in another
+ *   tab shows up as progress.
+ * - `"quiet"` — one mounted where nobody has asked for anything, that only
+ *   needs its own job: the arc. It still sees every change and completion, and
+ *   a running job is still polled every second, but at rest it costs nothing
+ *   (`jobEngine.subscribeQuietly`).
+ *
+ * **Required, with no default, on purpose.** It defaulted to watching until
+ * 2026-09-12, and `useArc` bought the poll for ever on every owned article
+ * because nobody declined it. A quiet default would make the opposite mistake
+ * just as silently: a new band that forgot to ask would stop showing another
+ * tab's run and look broken. So every caller says which, and the compiler
+ * refuses one that has not. See
+ * docs/postmortems/260912a-a-budget-a-comment-keeps-is-spent-by-the-next-call-site.md.
+ */
+export type QueueCadence = "watches-queue" | "quiet";
+
+/* Stable method references, never an arrow built per call: a fresh function per
+   render makes `useSyncExternalStore` unsubscribe and resubscribe every render. */
+function subscriberFor(cadence: QueueCadence): (onChange: () => void) => () => void {
+  switch (cadence) {
+    case "watches-queue":
+      return jobEngine.subscribe;
+    case "quiet":
+      return jobEngine.subscribeQuietly;
+    default: {
+      const unreachable: never = cadence;
+      throw new Error(`Unknown queue cadence: ${String(unreachable)}`);
+    }
+  }
+}
+
+/**
+ * @param cadence whether this mount keeps the idle poll going — see
+ *   `QueueCadence`. First, so it cannot be left off.
  * @param onFinished called once per job that reaches `done` **after this
  *   subscriber began observing**, so the caller can reload whatever that job
  *   changed. The library list, in practice: an article appears on the shelf the
@@ -225,8 +264,8 @@ export function useJobSession(readerId: string | null, accessToken: string | nul
  *   eventually". A job that was already done when this hook arrived is never
  *   announced.
  */
-export function useJobs(onFinished?: (job: Job) => void): UseJobs {
-  const snapshot = useSyncExternalStore(jobEngine.subscribe, jobEngine.getSnapshot);
+export function useJobs(cadence: QueueCadence, onFinished?: (job: Job) => void): UseJobs {
+  const snapshot = useSyncExternalStore(subscriberFor(cadence), jobEngine.getSnapshot);
 
   /**
    * **Where this subscriber started watching, captured during its first

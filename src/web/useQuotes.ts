@@ -291,7 +291,7 @@ export function useQuotes(slug: string, read: QuotesRead): UseQuotes {
      `refresh`, not `reload`: a finished job has just written a new list, and a
      request already in flight read the old one. `QuotesRead.refresh` has the
      sequence this gets wrong the other way. */
-  const queue = useStepJob(slug, "quotes", refresh);
+  const queue = useStepJob(slug, "quotes", refresh, "watches-queue");
 
   /* Two verbs, split on `force`. See the interface above, and useIdeas.ts. */
   const ensure = useCallback(

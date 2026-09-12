@@ -148,7 +148,11 @@ export function useArc(slug: string, fromPayload: Arc | undefined): UseArc {
     void reload();
   }, [fromPayload, reload]);
 
-  const queue = useStepJob(slug, "arc", refresh);
+  /* Quiet: this is mounted on every owned article, so watching the queue would
+     keep the engine's eight-second poll going for as long as one is open — and
+     from 2026-08-29 to 2026-09-12 it did. The one caller that declines. See the
+     comment on `useArc` in ArticlePage.tsx. */
+  const queue = useStepJob(slug, "arc", refresh, "quiet");
 
   /* Ask for one, once, per article. `started` is keyed on the slug rather than
      being a boolean, so opening a second article in the same mount asks again

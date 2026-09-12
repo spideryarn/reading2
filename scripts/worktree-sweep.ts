@@ -23,19 +23,21 @@
  * that classified ten minutes ago cannot cascade ten removals off one stale
  * answer; each one re-earns its verdict.
  *
- * **A worktree active in the last 24 hours is never removable**, however merged
- * it looks. Their version without this guard was retired for removing live
- * worktrees: a brand-new one whose tip equals the trunk passes the merged check
- * trivially. **That is now the normal state of a fresh worktree here** —
- * `worktree:setup` merges `origin/dev`, so five minutes after creation a
- * worktree is clean, contains the trunk, and has landed nothing. Without the age
- * guard the sweep would delete an agent's tree while it was reading its first
- * file. See scripts/worktree-freshen.ts for the merge that causes it.
+ * **A tree somebody is still in is never removable**, however merged it looks.
+ * Their version without such a guard was retired for removing live worktrees: a
+ * brand-new one whose tip equals the trunk passes the merged check trivially.
+ * **That is the normal state of a fresh worktree here** — `worktree:setup` merges
+ * `origin/dev`, so five minutes after creation a worktree is clean, contains the
+ * trunk, and has landed nothing. See scripts/worktree-freshen.ts for the merge.
  *
- * And activity is **not** the last commit's date. A fast-forward merge writes no
- * commit, so a worktree created this minute can have a HEAD dated last week.
- * `lastActivity` takes the branch's reflog top entry too — that moves when the
- * branch is created and on every merge — and uses whichever is later.
+ * Until 2026-09-12 the guard was a 24-hour age floor, a proxy for "somebody is
+ * using this". It is now the thing itself: `liveness()` from worktree-remove.ts,
+ * which refuses when the session named in the lock is alive or a process has its
+ * cwd inside, and when an individual read fails. A private PID namespace can
+ * instead return a plausible partial answer; worktree-inuse.ts names that
+ * current limit. Greg: *"If they are finished successfully and safe to remove,
+ * it's fine to do so immediately."* The plan is
+ * docs/plans/260912a-drop-the-worktree-removal-age-floor.md.
  *
  * ## What makes "merged" answerable at all
  *
@@ -63,9 +65,10 @@
  * hoisted (below) it saved nothing anyway.
  *
  * What stays here is what that file's one-tree contract has no business
- * holding: enumerating every worktree, ghosts, "you are standing in it", the age
- * floor, and the removal itself. `worktree:check` saying "not safe" inside a
- * three-hour-old landed tree would be false for the person standing in it.
+ * holding: enumerating every worktree, ghosts, "you are standing in it", and
+ * whether anybody else is in it. `worktree:check` saying "not safe" inside a
+ * landed tree because a shell is in it would be false for the person standing
+ * there — the shell is theirs.
  *
  * ## One fetch, not one per tree
  *
@@ -78,18 +81,13 @@
  * becomes `trunk: unknown` for every tree, which `blockers()` already treats as
  * unsafe, so failing closed survives the optimisation.
  *
- * ## What the age floor is actually for
+ * ## `REMOVABLE` means the removal command would accept it
  *
- * **It belongs to this report, not to a removal.** Its job is to stop the list
- * below handing a third party a paste-ready command that would delete a peer's
- * five-minute-old tree — so a clean, landed, too-young tree prints as `young`
- * rather than `REMOVABLE`, with no command offered. Print them as one word and
- * `REMOVABLE` quietly comes to mean "old enough to advertise" rather than "the
- * removal command would accept it".
- *
- * On a deliberate, singular, explicitly-named removal the floor was never the
- * right guard, and `worktree:remove` applies it only to a third party — the tree's
- * own session proves ownership out of the worktree lock and is let past.
+ * So the report asks the same liveness question the removal asks, rather than
+ * leaving it to the removal to refuse. Without it, a peer's five-minute-old tree
+ * would print as `REMOVABLE` with a paste-ready command beside it, and a report
+ * whose headline word the removal disagrees with is one an operator learns to
+ * read past.
  */
 
 import { spawnSync } from "node:child_process";
@@ -100,20 +98,13 @@ import { listWorktrees, type WorktreeEntry } from "./worktree-admin.js";
 /* `gather` is aliased: this file has one of its own, and two functions of the
    same name at one seam is how the wrong one gets called. */
 import { blockers, type CheckFacts, fetchTrunkSha, gather as checkGather, type TrunkSha } from "./worktree-check.js";
-/* The age floor, the activity signals and the removal itself all live in
-   worktree-remove.ts now. This file classifies; that one removes. Re-exported so
-   the sweep's own tests and callers keep their import site. */
-import {
-  type Activity,
-  classifyRegistration,
-  describeIdle,
-  lastActivityAt,
-  MIN_IDLE_HOURS,
-  removeWorktree,
-  type RemoveOutcome,
-} from "./worktree-remove.js";
+import type { InUse } from "./worktree-inuse.js";
+/* The liveness question and the removal itself live in worktree-remove.ts. This
+   file classifies; that one removes. `RemoveOutcome` is re-exported so the
+   sweep's own tests and callers keep their import site. */
+import { classifyRegistration, liveness, removeWorktree, type RemoveOutcome } from "./worktree-remove.js";
 
-export { type Activity, MIN_IDLE_HOURS, type RemoveOutcome };
+export type { RemoveOutcome };
 
 /** Everything the classifier is allowed to look at, gathered by `gatherAll()`. */
 export interface SweepFacts {
@@ -121,8 +112,13 @@ export interface SweepFacts {
   /** `entry.branch` without its `refs/heads/` prefix, which is how git's
       porcelain spells it and is not what anyone types on a command line. */
   branch: string | undefined;
-  /** The latest of the activity signals, and which one it was. `null` = none read. */
-  lastActivity: Activity | null;
+  /**
+   * Is anybody else in it — the session named in its lock, or a process with its
+   * cwd inside? The same question `worktree:remove` asks, so the report and the
+   * removal cannot disagree about a live tree. `null` for a tree that was not
+   * judged at all (the primary, a ghost, a failed fetch).
+   */
+  inUse: InUse | null;
   /** Are we standing in it? */
   current: boolean;
   /**
@@ -142,11 +138,6 @@ export type Verdict =
   | { kind: "ghost" }
   /** Every guard passed. */
   | { kind: "removable" }
-  /**
-   * Nothing is wrong with it, and it is under the age floor. Its own session may
-   * remove it now with `npm run worktree:remove`; nobody else may.
-   */
-  | { kind: "young"; why: string }
   /** Keep it, and here is each reason. */
   | { kind: "keep"; reasons: string[] }
   /**
@@ -155,12 +146,6 @@ export type Verdict =
    * where success is the absence of something.
    */
   | { kind: "unjudgeable"; why: string };
-
-export interface ClassifyOptions {
-  /** Unix seconds. Injected so the age guard is testable. */
-  now: number;
-  minIdleHours?: number;
-}
 
 /**
  * One worktree's verdict, from facts alone.
@@ -172,10 +157,7 @@ export interface ClassifyOptions {
  * Everything after that is a reason to keep, and they accumulate rather than
  * short-circuit — an agent reading the output wants all of them, not the first.
  */
-export function classifyOne(f: SweepFacts, opts: ClassifyOptions): Verdict {
-  const minIdle = opts.minIdleHours ?? MIN_IDLE_HOURS;
-  let young: string | null = null;
-
+export function classifyOne(f: SweepFacts): Verdict {
   /* `classifyRegistration` rather than a test here, so this file and the removal
      agree on what a ghost is. It is an ABSENT directory: a *present* one that is
      prunable has a broken admin link over what may be a full tree, and a ghost is
@@ -192,30 +174,15 @@ export function classifyOne(f: SweepFacts, opts: ClassifyOptions): Verdict {
 
   if (f.current) reasons.push("you are standing in it");
 
-  if (f.lastActivity === null) reasons.push("could not tell when it was last active");
-  else {
-    const idleHours = (opts.now - f.lastActivity.at) / 3600;
-    if (idleHours < minIdle) {
-      /* Naming the signal, not just the verdict. "active 1 min ago" was read on
-         eighteen worktrees without suspicion while it meant "we just ran git in
-         here"; "git was last run here 1 min ago" beside a five-day-old HEAD is
-         read as wrong by the first person to see it. */
-      young = `${f.lastActivity.signal} ${describeIdle(idleHours)} ago — under the ${minIdle}h floor`;
-    }
+  /* The removal's own liveness question, so `REMOVABLE` cannot advertise a tree
+     the removal would refuse. An unknown keeps it, as it refuses there. */
+  if (f.inUse === null) reasons.push("could not tell whether anybody is in it");
+  else if (f.inUse.kind === "in-use") reasons.push(...f.inUse.reasons);
+  else if (f.inUse.kind === "unknown") {
+    for (const w of f.inUse.why) reasons.push(`could not tell whether anybody is in it — ${w}`);
   }
 
-  if (reasons.length > 0) {
-    /* The floor joins the other reasons only when something else already keeps
-       it, so a plain `keep` never means "young" on its own. */
-    if (young !== null) reasons.push(young);
-    return { kind: "keep", reasons };
-  }
-  /* Clean, landed, nobody standing in it — and too young for this report to
-     advertise. `REMOVABLE` would then mean "old enough to advertise" rather than
-     "the removal primitive would accept it", and printing both as one word is how
-     an operator comes to read past the difference. Its own session may remove it
-     now; nobody else may, and no paste-ready command is offered for it. */
-  if (young !== null) return { kind: "young", why: young };
+  if (reasons.length > 0) return { kind: "keep", reasons };
   return { kind: "removable" };
 }
 
@@ -243,14 +210,16 @@ export function shortBranch(ref: string | undefined): string | undefined {
 /**
  * Facts for every registered worktree, against one trunk sha fetched once.
  *
- * `checkFor` is injected so the awkward cases — a tree whose gather throws —
- * can be arranged in a test without corrupting a real repository.
+ * `checkFor` and `inUseFor` are injected so the awkward cases — a tree whose
+ * gather throws, a process that hides its cwd — can be arranged in a test
+ * without corrupting a real repository or racing real processes.
  */
 export function gatherAll(
   cwd: string,
   entries: readonly WorktreeEntry[],
   trunk: TrunkSha,
   checkFor: (root: string, trunkSha: string) => CheckFacts = checkGather,
+  inUseFor: (entry: WorktreeEntry) => InUse = (e) => liveness(e.path, e.lockReason).inUse,
 ): SweepFacts[] {
   const here = currentToplevel(cwd);
 
@@ -260,10 +229,10 @@ export function gatherAll(
     const base = { entry, branch, current };
 
     if (entry.main || entry.bare || !entry.present) {
-      return { ...base, lastActivity: null, check: { error: "not a live worktree" } };
+      return { ...base, inUse: null, check: { error: "not a live worktree" } };
     }
     if (trunk.kind === "failed") {
-      return { ...base, lastActivity: lastActivityAt(entry.path, branch), check: { error: trunk.why } };
+      return { ...base, inUse: null, check: { error: trunk.why } };
     }
 
     /* One tree's failure must not cost the operator the other twenty-nine
@@ -275,7 +244,7 @@ export function gatherAll(
     } catch (err) {
       check = { error: `worktree:check could not judge this tree: ${(err as Error).message}` };
     }
-    return { ...base, lastActivity: lastActivityAt(entry.path, branch), check };
+    return { ...base, inUse: inUseFor(entry), check };
   });
 }
 
@@ -284,16 +253,11 @@ export interface Classified {
   verdict: Verdict;
 }
 
-export function classifyAll(cwd: string, opts?: { now?: number; minIdleHours?: number }): Classified[] {
+export function classifyAll(cwd: string): Classified[] {
   /* Once, for the whole sweep. See the header: `gather()` fetches for itself,
      which across thirty worktrees is one shared ref fetched thirty times. */
   const trunk = fetchTrunkSha(cwd);
-  const facts = gatherAll(cwd, listWorktrees(cwd), trunk);
-  const now = opts?.now ?? Math.floor(Date.now() / 1000);
-  return facts.map((f) => ({
-    facts: f,
-    verdict: classifyOne(f, { now, ...(opts?.minIdleHours === undefined ? {} : { minIdleHours: opts.minIdleHours }) }),
-  }));
+  return gatherAll(cwd, listWorktrees(cwd), trunk).map((f) => ({ facts: f, verdict: classifyOne(f) }));
 }
 
 /* ------------------------------------------------------------------ */
@@ -308,18 +272,9 @@ export function classifyAll(cwd: string, opts?: { now?: number; minIdleHours?: n
  * safety judgement is the shape whose disagreements are invisible by
  * construction, which is the same argument the header already makes for why this
  * file has no `dirty` or `merged` check of its own.
- *
- * **The 24h age floor stays here, in `classifyOne`**, because its job is deciding
- * what this file's *report* advertises — it must never hand an agent a
- * paste-ready command that would delete a peer's five-minute-old tree. It was
- * never the right guard on a deliberate, singular, explicitly-named removal, and
- * `worktree:remove` applies it there only to a third party.
  */
-export function removeOne(cwd: string, branch: string, opts?: { dryRun?: boolean; now?: number }): RemoveOutcome {
-  return removeWorktree(cwd, branch, {
-    ...(opts?.dryRun === undefined ? {} : { dryRun: opts.dryRun }),
-    ...(opts?.now === undefined ? {} : { now: opts.now }),
-  });
+export function removeOne(cwd: string, branch: string, opts?: { dryRun?: boolean }): RemoveOutcome {
+  return removeWorktree(cwd, branch, opts?.dryRun === undefined ? {} : { dryRun: opts.dryRun });
 }
 
 /* ------------------------------------------------------------------ */
@@ -339,12 +294,6 @@ export function renderClassification(rows: readonly Classified[]): string {
         break;
       case "removable":
         lines.push(`  REMOVABLE ${name}`);
-        break;
-      /* Deliberately not `keep` and deliberately not `REMOVABLE`: nothing is
-         wrong with it, and it is not this report's to hand to a third party. */
-      case "young":
-        lines.push(`  young     ${name} — safe, but its own session may remove it; nobody else yet`);
-        lines.push(`              ${verdict.why}`);
         break;
       case "keep":
         lines.push(`  keep      ${name}`);

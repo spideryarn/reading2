@@ -547,6 +547,35 @@ describe("the cap", () => {
     expect(over.rows.map((r) => r.title)).not.toContain("Work 0");
     expect(over.rows.map((r) => r.title)).toContain(`Work ${MAX_CITATIONS}`);
   });
+
+  it("folds duplicates BEFORE the cut, so copies of one work cannot crowd out another", () => {
+    /* GPT Sol F13, 2026-09-12: the cut ran on the model's raw rows, before
+       either fold, so eighty copies of one work took the whole allowance and
+       the list said "capped" over two works. */
+    const body = block("spya-body3x", "Repeated (2019) and Distinct (2020).");
+    const copy = {
+      title: "Repeated Work",
+      authors: "Smith",
+      year: "2019",
+      why: "a",
+      relevance: 0.9,
+      influence: 0.5,
+      mentions: [{ block: body.id, quote: "Repeated (2019)" }],
+    };
+    const distinct = {
+      title: "Distinct Work",
+      authors: "Jones",
+      year: "2020",
+      why: "b",
+      relevance: 0.2,
+      influence: 0.5,
+      mentions: [{ block: body.id, quote: "Distinct (2020)" }],
+    };
+    const out = build([...Array.from({ length: MAX_CITATIONS }, () => copy), distinct], [body]);
+    expect(out.rows.map((r) => r.title).sort()).toEqual(["Distinct Work", "Repeated Work"]);
+    expect(out.drops.overCap).toBe(0);
+    expect(out.citations.capped).toBe(false);
+  });
 });
 
 describe("placeholders the model writes instead of leaving a field out", () => {

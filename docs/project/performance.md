@@ -1343,6 +1343,52 @@ still measure the whole article on every mode switch.
   hundreds — but "the flat controls prove the page was live" was a weaker statement than it looked,
   because a gesture that never reaches the app is also flat.
 
+## At rest again, 2026-09-12 — the cost was requests, not CPU
+
+> It is still draining the battery on my iPad really fast for  some reason
+>
+> — Greg, 2026-09-12, Sentry SPIDERYARN-READING2-36
+
+**Every owner's open article asked `GET /api/jobs` every eight seconds, for ever**, with nothing
+running: `useArc`, mounted in `OwnedReader` for every owner since 2026-08-29, subscribed to the job
+engine the ordinary way, and an ordinary subscriber holds the engine on its idle cadence. About 450
+requests an hour per open tab. It never showed on this page because at rest it costs **0.5% of a
+core** — the measurements here were all CPU, and CPU was fine.
+
+| 60 s at rest, production build | before | after |
+|---|---|---|
+| Summary, the reported state | `fetches: 8/min — /api/jobs=8` | `fetches: 0/min — none` |
+| Plain | 8/min | 0/min |
+| Glossary band open (the control: it should poll) | 8/min | 8/min |
+
+The fix is a quiet subscription — `useJobs("quiet", onFinished)`, the same notifications without
+the cadence, and a choice every caller now has to make — and an owner's whole reading view is now held to "one poll at session start,
+then silence" by a test rather than a comment. The reasoning, the method and what is deferred:
+[260912a](../plans/260912a-ipad-battery-drain-the-reading-view-polls-the-job-queue-every-eight-seconds-at-rest.md);
+the class: [the postmortem](../postmortems/260912a-a-budget-a-comment-keeps-is-spent-by-the-next-call-site.md).
+
+**Three things this changes about how to measure here.**
+
+1. **Read the `fetches:` line as well as the percentage.** `measure-cpu.ts` prints it beside
+   `renders:` on any `?perf=1` run — requests per minute of visible time, and the top paths. A phone's
+   radio does not show up in a CPU profile; a request every eight seconds does show up here.
+2. **`/proc` sees what `ProcessTime` cannot.** Headless Chrome reports `ProcessTime` as 0, so the
+   whole-renderer figure is missing from `measure-cpu.ts`. Summing `utime + stime` from
+   `/proc/<pid>/stat` over the browser's child processes gives it — 3.2% of a core at rest where the
+   main thread read 0.9%, and 95–98% plus 25–35% in a second process while scrolling under iPad
+   emulation. The spike that did it was a Playwright script in a scratchpad, not a committed tool.
+3. **Safari cannot be measured on the box.** Playwright's WebKit is installed but will not launch:
+   about twenty system libraries are missing, and adding them is a change to the box. Everything
+   here is Chromium, some of it emulating an iPad (touch, `hover: none`, DPR 2). It shows what the
+   page asks for, not what an iPad pays.
+
+**Not done, and next if the battery still drains:** scrolling costs 55–60% of a desktop core on a
+production build, of which script is about 9%, style about 8% and layout under 1%. The remaining
+~40 points are Chromium's unattributed bucket [above](#what-is-left-and-it-is-not-script) — paint,
+compositing, hit-testing — and only a device trace can say what the corresponding work costs an
+iPad's CPU or GPU. Finding it needs a trace with paint rectangles; `LayerTree.layerPainted` does
+not fire under headless.
+
 ## Where the pieces are
 
 **The instruments**
@@ -1365,6 +1411,13 @@ still measure the whole article on every mode switch.
 
 - [`tests/idle-work.test.ts`](../../tests/idle-work.test.ts) — nothing polls while the tab is hidden,
   and a failed advance still recovers
+- [`tests/public-network-trace.test.tsx`](../../tests/public-network-trace.test.tsx) § *an owner's
+  reading view, left alone* — the whole `App`, signed in as the owner, Plain and Summary: one
+  `/api/jobs` at session start and then none for a fake minute, with a Glossary band as the control
+  that must still poll. The fake clock goes on **before** the page opens: switched on after it
+  settles, the next poll is already waiting on a real timer and the test passes over the bug
+- [`tests/arc-idle-poll.test.ts`](../../tests/arc-idle-poll.test.ts) — the arc at rest asks nothing,
+  and still finds, drives and announces the job it starts, past a failed first poll
 - [`tests/spine-scroll.test.ts`](../../tests/spine-scroll.test.ts) — scrolling moves the rail without
   re-rendering it. Also the worked example of driving a React component in jsdom here: mock
   `perf.js` to count renders, stub `ResizeObserver`, shim `requestAnimationFrame`, set

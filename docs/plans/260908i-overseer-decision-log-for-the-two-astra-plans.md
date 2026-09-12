@@ -667,3 +667,85 @@ sweep run from the primary over the nine trees that have been waiting it out. Th
 in use are named in the brief as not to be removed. Also this morning: production was found at
 d358f773 (built 08:01Z), so every product change since 2026-09-10 is live; the changelog loop's
 first run is writing them up; `debrief-overseer.md` added to docs/reusable at Greg's request.
+
+## 2026-09-12 09:35 UTC — the first scheduled changelog run stopped to wait for a waiter that could not wake it
+
+The 08:51Z changelog run did steps 1–3 and started its three Sol reviews, then ended its turn
+"with a waiter armed" — a one-shot `run-claude` process exits when its turn ends, so nothing came
+back, and the run reported exit 0 with three finished reviews on disk and no line written. The class
+is the one in the Overseer's memory as *subagents end turns while their jobs run*, now seen in a
+scheduled job. A resume run was dispatched from the on-disk state (`changelog-resume`), and the
+standing prompt now says in so many words: never arm a waiter and stop; wait in the foreground.
+The loop itself is unchanged. Also this tick: the 09:12Z feedback sweep queued and dispatched all
+17 of Greg's morning reports as 13 jobs in seven waves; the Citations Sol review and the
+worktree-floor removal are both in their full-suite gates; load 9.
+
+## 2026-09-12 10:00 UTC — the floor is gone, nine trees with it; the changelog caught up
+
+**Worktree floor** (Greg's instruction of 09:05Z): landed at 1203d2ff, merged as 89cc9096, plan
+260912a. The rule now: anybody may remove a tree at once when `worktree:check` says safe, every
+commit it names is on a fresh origin/dev, and nobody is in it (no live pid in its lock, no process
+with its cwd inside); any *unknown* refuses. Sol refused the first draft on a real High — inside a
+private PID namespace `/proc` hides a live owner, so a peer's tree would have read idle — and the
+session fixed it (the asker must be in the host namespace or it refuses), test red first; that fix
+has not been back to Sol, so a narrow re-check is queued as qi-3bmkw2ft, authorised under the same
+instruction. Nine trees removed by the session, none of the five in use. Three finished product
+trees still refuse over an ignored path with no second copy (qi-hwnjakqt, lull). The session also
+found `tests/models.test.ts` red on dev from the Citations stage 3 series; routed to
+citations-sol-review, whose scope it is. Session closed.
+
+**Changelog**: the resume run wrote two versions (2026-09-11: 8 entries; 2026-09-12: 2 entries,
+Citations and the quotes-diversity change) from Vercel's deploy list, on dev at 803b9198; Sol
+corrected 9 of 24 items and asked two regroups, applied. The public `/changelog` shows them after
+the next deploy.
+
+## 2026-09-12 10:15 UTC — Citations mode's owed review is paid; one product default, one proposal
+
+The review ran on Sol itself: one P0 (the *Find it on the web* button was a billed web search with
+no rate limit, so one row could be pressed and billed forever), fixed with the existing per-owner
+limiter and one small migration that rides the next deploy with the other three; one P1 (the 80-work
+cap ran before duplicates were merged), fixed; and the `models.test.ts` red on dev, fixed. All at
+f391929b and 26413e70; worktree removed; session closed.
+
+**Assumption pending Greg (F12).** A review page whose title repeats a work's title could be kept
+as the work's own page if the model picks it against its instructions. Sol's fix (keep only DOI or
+arXiv results) would drop publisher pages, author copies and PDFs. Default taken: **leave it as
+built for v1**, since the row already shows the host; the plan sets out the three options.
+
+**Queued.** F14 (a late Find can overwrite a DOI on screen until reload; the one-line fix needs a
+test first) as qi-jd6xwmme, XS. And the finding outside the stage, **the glossary's ask and lookup
+routes have no rate limit at all**, as qi-rnythcwm — a defence, so it is a proposal for Greg
+rather than a job I dispatch; the fix is the same limiter Citations now uses.
+
+## 2026-09-12 10:55 UTC — the floor removal's second review: the namespace fix holds, and a lease was missing
+
+Sol confirmed the PID-namespace check by running it inside its own sandbox (a private namespace:
+the check returned *unknown* and named it; with the check removed, *idle*). It found one P1: the
+removal read a tree's liveness once, so a peer resuming a clean, landed tree after that read would
+have had it unlocked and removed from under it. Fixed at c87ceec8 (re-read the lock before unlock
+and refuse if changed; read liveness again just before `git worktree remove`), tests red first;
+dev at b4256542. One gap is named in the code and the doc: a peer that enters without locking in
+the last milliseconds, which needs an exclusion shared with EnterWorktree and is not ours to build.
+A P2 (a `/proc` mounted with `hidepid`, or an owner under another uid) was left because neither
+holds on this box. The fix itself had not been back to Sol; under Greg's *"make sure we're getting
+GPT Sol reviews"* the last link went out as `floor-fix-sol-recheck-2`, with Sol fixing in place so
+the chain ends there.
+
+## 2026-09-12 11:35 UTC — Citations mode is cleared by Sol; the floor chain ends with its gaps named
+
+**Citations** (Greg, 10:30Z: *"Get GPT Sol review for Citations mode if possible"*): the second
+review ran on the subscription and said, in its words, *"Safe after the fixes applied here"* — safe to
+sit on dev behind the experimental switch and ride the next deploy with its four migrations, which
+Sol also checked against a live database. Nothing new above P3; F14 (a late Find overwriting a DOI on
+screen) fixed with a reproducing test at ba7b6f48; F17 (a tooltip promising "one web search") at
+1f3bb486; merged as 64c466d8. F12 stays Greg's, default *leave as built*; Sol says it does not
+change the verdict. The plan's ledger is current; the worktree is gone.
+
+**The floor removal**, third and last link (6d559234): Sol's REFUSE was on a *claim*, not the code —
+c87ceec8 said git itself refuses a peer who locks after the last liveness read, and it does not
+(Sol and the session each removed a tree under a 20 ms-late peer lock, three of three). The comment
+and worktrees.md now say so. Two gaps stand, both named in the doc: a peer entering in the
+milliseconds after the last read (closable only with a lock shared with Claude Code's
+EnterWorktree, which is not ours), and a live tree whose directory was renamed reading as abandoned
+(older than this change; queued qi-8p2kf24s). Decision: stop the chain here. The rule Greg asked for
+is in force and the remaining risk is a window of milliseconds against a peer who is mid-entry.

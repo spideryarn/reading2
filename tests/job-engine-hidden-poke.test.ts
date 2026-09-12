@@ -172,3 +172,22 @@ describe("two mounted subscribers", () => {
     alone.stop();
   });
 });
+
+describe("the last idle-cadence subscriber leaving", () => {
+  it("cancels an idle poll that was already armed", async () => {
+    const engine = createJobEngine(deps);
+    engine.start("reader-1");
+    const unsubscribe = engine.subscribe(() => {});
+    await vi.advanceTimersByTimeAsync(0);
+    expect(polls).toBe(1);
+
+    /* Closing a band returns the reading view to its quiet state. The poll
+       scheduled by the last successful response must not survive that
+       unmount and charge the now-idle page one trailing request. */
+    unsubscribe();
+    await vi.advanceTimersByTimeAsync(60_000);
+
+    expect(polls).toBe(1);
+    engine.stop();
+  });
+});

@@ -335,10 +335,95 @@ The reader's own article is not in the local database.
   table was missing from `db-schema-drift`'s pinned list and count and from `store-shelf-pg`'s
   every-foreign-key seed. All four green after; the other reds were the fresh-worktree five.
 
-### Owed reviews (GPT Sol held until 2026-09-15 01:23Z)
+### Owed reviews (GPT Sol held until 2026-09-15 01:23Z; the window reset early, 2026-09-12)
+
+One combined findings-only review over all four commits, 2026-09-12 (queue `qi-jggq8dkw`):
+prompt [260911g-citations-mode-code-review-prompt.md](260911g-citations-mode-code-review-prompt.md),
+answer [260911g-citations-mode-code-review-sol.md](260911g-citations-mode-code-review-sol.md)
+(`gpt-5.6-sol`, high, `--sandbox review`, on the subscription — not a fallback self-review), the
+tests it was handed [260911g-citations-mode-owed-review-test-results.txt](260911g-citations-mode-owed-review-test-results.txt)
+(10 files, 551 tests, green against the local database). Verdict *do not ship*, on F11–F14.
 
 | Stage | Commits | Status |
 |---|---|---|
-| 1 — artefact, step, route | `85631f9b` | owed |
-| 2 — the mode (client) | `abde65f7` | owed |
-| 3 — Find it on the web | `1e54a7f8`, `8d523739` | owed |
+| 1 — artefact, step, route | `85631f9b` | reviewed twice — F13 fixed, F15 open (P2) |
+| 2 — the mode (client) | `abde65f7` | reviewed twice — F14 fixed (`ba7b6f48`), F17 fixed |
+| 3 — Find it on the web | `1e54a7f8`, `8d523739` | reviewed twice — F11 fixed, F12 for Greg, F16 open (P2) |
+
+The first review's fixes are one commit on `dev`, **`f391929b`** — F11, F13, and the
+`models.test.ts` red below. The second review is
+[§ Second code review](#second-code-review).
+
+### Code-review ledger — GPT Sol, 2026-09-12 (findings-only; IDs continue the plan review's)
+
+| ID | Sev (Sol → ours) | Finding | Outcome |
+|---|---|---|---|
+| F11 | P0 → P0 | the paid POST has no admission control; a no-match stores nothing, so one row can be pressed for ever | **Fixed.** Checked: true, and the route's *"there is none to reuse"* was stale — `fetchAllowanceStore` has spent money for `link-summary-fill` since 2026-09-05. New `citation-find` bucket (migration `20260912091147_citation_find_rate_bucket`, widening the CHECK), `FIND_RATE_POLICY` 2 at once / 20 an hour / 60 a day / 600 global a day, taken after the 404 and 409, `finish` in `finally`, 429 / 429 / 503 in three sentences. Red first: five tests in `tests/citation-find.test.ts`. The numbers are guesses, like `SUMMARY_RATE_POLICY`'s |
+| F12 | P1 → **for Greg** | a review page passes as the work's own page: `pageNamesTitle` accepts a result whose title approximately names the work, or whose excerpt carries the title as a run | **Not fixed — a product trade-off.** The finding is true (Sol's harness keeps `blog.example/review` titled *"Scaling Laws … — a review"* when the model picks it; the prompt forbids that pick, code does not). Sol's fix — accept only `doi.org` / `arxiv.org` results — gives up the publisher pages, author copies and PDFs the prompt asks for and the plan's F4 (Sol's own) accepted. What the reader sees today is honest about provenance: *found on the web · host*. The choice between them is below, under *For Greg* |
+| F13 | P1 → P1 | the 80-work cap ran before the two dedupe passes, so duplicates could crowd distinct works out and the foot claim *"these are the 80"* over fewer | **Fixed.** Confirmed with Sol's case (80 copies + one distinct → one row, `capped: true`). The cut moved from `toDrafts` to `keepLeanedOnMost`, after both folds. Red first: `tests/citations.test.ts` § the cap. The copy change Sol proposed is not needed once the count is of works |
+| F14 | P1 → P2 | a find is not fenced to the snapshot it searched: a re-run landing mid-find leaves a `citation_finds` row for a row that is now a DOI, and the client overwrites that DOI with the web page until reload | **Client half fixed, `ba7b6f48`** (2026-09-12, queue `qi-jd6xwmme`): `find` patches only a row that is still `search`. Red first: `tests/citations-find-late-reply.test.tsx` holds the find's reply, lands the re-run through `onFinished`, and saw `web` where `doi` belonged; its sibling keeps a still-searched row patched. **Server half left as it is, and the second review agrees:** `attachFinds` upgrades only `search` rows, and a search → DOI → search round trip does not keep one id, because the dedupe key goes `work:…` → `doi:…` → `work:…`, so a stale find does not come back on its own |
+| F15 | P2 → P2 | link-producing HTML is not in the freshness fingerprint, so an href-only edit leaves an old link marked fresh | **Open, P2.** Already recorded as a gap in the source; the fix is a hash over each block's external URL attributes in `sourceHash` |
+| F16 | P2 → P2 | `citation_finds.owner_id` is not tied to the article's owner; reads join on article only | **Open, P2, latent.** There is no ownership transfer; `glossary_lookups` has the same shape. If one is ever built, a composite FK to `articles(id, owner_id)` or an explicit move of the finds in the same transaction |
+
+**A red on `dev` the review did not name, fixed with it:** `tests/models.test.ts` (*"has an
+override variable decided for every task"*) failed on `dev` alone since `8d523739`, reported by the
+Overseer. That commit quieted `env-names-are-inventoried` by setting `citations-find`'s override to
+`null`, but every chat-wire task must have one (`REQUEST_PATH_TASKS` is derived from `TASK_WIRE`;
+`debate` has one on the same grounds). `SPIDERYARN_CITATIONS_FIND_MODEL` is restored, allowlisted in
+the inventory's group of comparison-run names, and given its row in
+[setup-dev.md](../project/setup-dev.md). Stage 3's full-suite note above missed it because the
+suite's reds were read as the fresh-worktree set.
+
+**Wider, noticed and not fixed here:** the glossary's `ask` route's header in `src/routes.ts`
+still says *"No rate limit, and there is none to reuse"*, and that it and its sibling `lookup` both
+drive paid calls unbounded. The second half of that sentence has been false since 2026-09-05; the
+same bucket-and-policy shape would bound both. Outside this mode, so left for whoever owns them.
+
+### Second code review
+
+GPT Sol, 2026-09-12, write-capable. Asked for by Greg, 2026-09-12 10:30Z: *"Get GPT Sol review for Citations mode if possible."* Over
+the whole mode as it stands on `dev` — the six commits `85631f9b` … `ba7b6f48` and the four
+migrations — with the question put as a conclusion: *is it safe to sit on `dev` behind the
+experimental switch and ride the next deploy?* Prompt
+[260911g-citations-mode-code-review-2-prompt.md](260911g-citations-mode-code-review-2-prompt.md),
+answer [260911g-citations-mode-code-review-2-sol.md](260911g-citations-mode-code-review-2-sol.md)
+(`gpt-5.6-sol`, high, `--sandbox workspace-write`, on the subscription), the tests it was handed
+[260911g-citations-mode-code-review-2-test-results.txt](260911g-citations-mode-code-review-2-test-results.txt)
+(14 files, 595 tests, green against the local database at `ba7b6f48`).
+
+**Verdict: safe after the fixes applied here** — *"the deciding point is that F11 is genuinely
+closed: no Citations paid call can begin without an atomic, bounded per-owner and global
+allowance."* It also checked the four migrations for a populated production database: a nullable
+column, new tables, and two CHECKs widened to strict supersets of their old values, applied in one
+transaction; the owner FK lands while `citation_finds` is empty.
+
+| ID | Sev | Finding | Outcome |
+|---|---|---|---|
+| F17 | P3 | the *Find it* tooltip and the mode card promised *"one web search"*; the bound is one call, and the provider may search several times inside it (the plan's F1) | **Fixed.** Sol reworded both to *"one search-backed model call"*, red first; we kept the finding and replaced the words with plain ones a reader can follow — *"Searches the web for this work …"*, no count promised — and made its test refuse both the count and *"model call"*. Two internal notes with the same claim (`src/store/index.ts`, setup-dev.md) corrected with it |
+| F11 | — | re-checked | Fixed correctly: every paid call takes the allowance before `callOnce`; the `finally` releases the lease after a provider error, the 60 s abort and a client disconnect; bucket name agrees in code, CHECK, snapshot and tests |
+| F12 | — | re-checked | Still true, and **does not change the verdict**: the URL is always one of the call's own annotations, never model-written, and the host is on the row. Stays Greg's, default unchanged |
+| F13 | — | re-checked | Fixed correctly |
+| F14 | — | re-checked | Fixed sufficiently (client, `ba7b6f48`); a conditional server write would be tidying, not safety |
+| F15 | — | re-checked | Rightly open at P2 — not a migration, ownership, spend or deploy blocker |
+| F16 | — | re-checked | Rightly latent at P2 — every read and write finds the article through the signed-in owner; no production ownership transfer exists |
+
+**Wider, reported not fixed:** the glossary's `ask` and `lookup` routes still have no spend limit —
+already known (above), outside this mode, and not made worse by this deploy.
+
+### For Greg — F12, what counts as a work's own page
+
+*Find it* runs one web search for a work the article gave no link for, and keeps a result if the
+model picked it **and** code sees the result's title (or opening text) naming the work. A review
+or a reading-list page whose title repeats the work's title passes that check if the model picks
+it, though the prompt tells it not to. The row would then say *found on the web · blog.example*
+and link to the review.
+
+- **Keep it as it is.** Publisher pages, author copies and PDFs all stay findable. A wrong pick is
+  possible, shown with its host, and needs the model to disobey the prompt.
+- **Only DOI and arXiv results** (Sol's fix). Nothing but a work's canonical address is ever kept,
+  and far fewer works are found — most books, reports and blog-published work have neither.
+- **In between:** drop the opening-text match and keep the title match, so a page that only quotes
+  the title in its text is refused. Narrows the hole without closing it.
+
+Recommendation: keep it for v1 — it is behind the experimental switch and owner-only, and the host
+is on the row — and revisit with real finds in the ledger.

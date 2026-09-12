@@ -338,14 +338,6 @@ export const lookUpTerm = makeLookUpTerm({
 export const citationFindStore: CitationFindStore = guarded("citation-finds", pgCitationFindStore);
 
 /**
- * Citations mode's *Find it*: one web search for one cited work, kept only when
- * a search result is plainly that work's own page. Built here out of the
- * parts, as `lookUpTerm` is — the reader seam decides ownership (a stranger's
- * slug is a 404), and src/citation-find.ts decides what is kept.
- */
-export const findCitation = makeFindCitation({ reader, finds: citationFindStore });
-
-/**
  * Explaining a term the reader typed into the glossary's box.
  *
  * **The same parts as `lookUpTerm` above, minus the store**, because nothing is
@@ -515,6 +507,20 @@ export const fetchAllowanceStore: FetchAllowanceStore = guarded(
   "fetch-allowance",
   pgFetchAllowanceStore,
 );
+
+/**
+ * Citations mode's *Find it*: one web-search call for one cited work, kept only when
+ * a search result is plainly that work's own page. Built here out of the
+ * parts, as `lookUpTerm` is — the reader seam decides ownership (a stranger's
+ * slug is a 404), the allowance bounds the presses, and src/citation-find.ts
+ * decides what is kept. **Below `fetchAllowanceStore`**, because it is read when
+ * this line runs.
+ */
+export const findCitation = makeFindCitation({
+  reader,
+  finds: citationFindStore,
+  allowance: fetchAllowanceStore,
+});
 
 /* -------------------------------------------------------- the AI ledger -- */
 

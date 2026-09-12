@@ -2,32 +2,27 @@
  * The sweep, and the case that retired the version before it.
  *
  * A brand-new worktree is clean and contains the trunk, so every mechanical
- * check except the age guard says "removable". That is not an edge case here:
- * `worktree:setup` merges `origin/dev`, so it is the state of every worktree for
- * its first day. The first test creates exactly that worktree and asserts the
- * sweep keeps it — a test that used an old, landed worktree would pass against a
- * sweep with no age guard at all and prove nothing.
+ * check says "removable". That is not an edge case here: `worktree:setup` merges
+ * `origin/dev`, so it is the state of every worktree for its first day. Until
+ * 2026-09-12 a 24-hour age floor kept such a tree off the list; now the question
+ * is asked directly — is its session alive, is anything running in it — so the
+ * tests below create exactly that fresh tree three times: with nobody in it
+ * (removable), with a live session named in its lock, and with a process
+ * standing in it (both kept).
  *
  * The removal tests run against real git, because the guard that matters most is
  * git's own refusal to remove a dirty tree, and a mocked git cannot refuse.
  */
-import { execFileSync } from "node:child_process";
-import { existsSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { execFileSync, spawn } from "node:child_process";
+import { existsSync, mkdtempSync, readFileSync, readlinkSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import { blockers, type CheckFacts } from "../scripts/worktree-check.js";
-import {
-  classifyAll,
-  classifyOne,
-  gatherAll,
-  MIN_IDLE_HOURS,
-  removeOne,
-  type SweepFacts,
-  type Verdict,
-} from "../scripts/worktree-sweep.js";
+import { parseStat } from "../scripts/worktree-inuse.js";
+import { classifyAll, classifyOne, gatherAll, removeOne, type SweepFacts, type Verdict } from "../scripts/worktree-sweep.js";
 import { listWorktrees } from "../scripts/worktree-admin.js";
 
 let root: string;
@@ -44,27 +39,46 @@ function commit(cwd: string, file: string, body: string, message: string): void 
   git(["commit", "--quiet", "-m", message], cwd);
 }
 
+const spawned: number[] = [];
+
 /**
- * The same, dated `agoSeconds` in the past.
- *
- * **Age the fixture; do not move the clock.** Every other test in this file
- * pushes `now` forward instead, and that is why none of them could see the bug
- * of 2026-09-07: the sweep was reading a timestamp it had stamped itself a
- * moment earlier, and activity stamped at the real now still reads as a day idle
- * against a `now` a day in the future. An injectable clock looks like the
- * testable design and is the one thing that cannot catch a signal stuck to the
- * present. A backdated commit can.
+ * A live process that is not this one's ancestor, standing in `cwd` — a peer's
+ * session, as far as `/proc` can tell. Detached, so it has a process group of its
+ * own: the cwd scan excludes the asker's group, and a plain child would be
+ * excluded along with it.
  */
-function commitAged(cwd: string, file: string, body: string, message: string, agoSeconds: number): void {
-  writeFileSync(path.join(cwd, file), body);
-  git(["add", "--", file], cwd);
-  const when = new Date((Date.now() - agoSeconds * 1000)).toISOString();
-  execFileSync("git", ["commit", "--quiet", "-m", message], {
-    cwd,
-    encoding: "utf8",
-    env: { ...process.env, GIT_AUTHOR_DATE: when, GIT_COMMITTER_DATE: when },
-  });
+function liveProcess(cwd: string): { pid: number; start: number } {
+  const child = spawn("sleep", ["120"], { cwd, detached: true, stdio: "ignore" });
+  if (child.pid === undefined) throw new Error("could not spawn sleep");
+  spawned.push(child.pid);
+  const mine = parseStat(readFileSync(`/proc/${process.pid}/stat`, "utf8"));
+  if (mine === null) throw new Error("could not read this process's group");
+
+  const deadline = Date.now() + 5000;
+  while (Date.now() < deadline) {
+    try {
+      const stat = parseStat(readFileSync(`/proc/${child.pid}/stat`, "utf8"));
+      const childCwd = readlinkSync(`/proc/${child.pid}/cwd`);
+      if (stat !== null && childCwd === path.resolve(cwd) && stat.pgrp !== mine.pgrp) {
+        return { pid: child.pid, start: stat.start };
+      }
+    } catch {
+      /* Still starting, or exited; the deadline turns either into a hard fail. */
+    }
+    Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 20);
+  }
+  throw new Error("sleep never became a detached process in the requested cwd");
 }
+
+afterEach(() => {
+  for (const pid of spawned.splice(0)) {
+    try {
+      process.kill(pid);
+    } catch {
+      /* Already gone. */
+    }
+  }
+});
 
 beforeEach(() => {
   root = mkdtempSync(path.join(tmpdir(), "spideryarn-sweep-"));
@@ -116,39 +130,46 @@ function rowFor(rows: ReturnType<typeof classifyAll>, branch: string) {
   return row;
 }
 
-const HOUR = 3600;
-const now = () => Math.floor(Date.now() / 1000);
-
 describe("classifyAll, against real worktrees", () => {
-  it("does NOT advertise a brand-new worktree, which passes every check but the age floor", () => {
-    freshWorktree("brand-new");
-
-    const row = rowFor(classifyAll(primary), "worktree-brand-new");
-
-    /* `young` since 2026-09-09, not `keep`: nothing is wrong with it, and the
-       report still must not hand a third party a paste-ready removal. Printing it
-       as `REMOVABLE` is what this guard exists to prevent, so that is the
-       assertion that matters. */
-    expect(row.verdict.kind).toBe("young");
-    expect(row.verdict.kind).not.toBe("removable");
-    if (row.verdict.kind !== "young") throw new Error("unreachable");
-    expect(row.verdict.why).toContain(`${MIN_IDLE_HOURS}h floor`);
-    expect(row.facts.check).not.toHaveProperty("error");
+  it("advertises a brand-new landed tree that nobody owns or is in as REMOVABLE — there is no age floor", () => {
+    freshWorktree("fresh-and-done");
+    const row = rowFor(classifyAll(primary), "worktree-fresh-and-done");
+    expect(row.verdict.kind).toBe("removable");
   });
 
-  it("reports a worktree as removable once it is landed, clean and idle", () => {
-    freshWorktree("landed");
+  it("does NOT advertise a brand-new worktree whose session is still alive", () => {
+    /* The case that retired the sibling repo's sweep, and the one the age floor
+       used to catch. Every mechanical check passes; only liveness keeps it. The
+       session is a live process that is not our ancestor, named in the lock the
+       way `claude --worktree` names one, with its cwd outside the tree. */
+    const wt = freshWorktree("peer-alive");
+    const peer = liveProcess(root);
+    git(["worktree", "lock", "--reason", `claude session peer (pid ${peer.pid} start ${peer.start})`, wt], primary);
 
-    const rows = classifyAll(primary, { now: now() + (MIN_IDLE_HOURS + 1) * HOUR });
+    const row = rowFor(classifyAll(primary), "worktree-peer-alive");
 
-    expect(rowFor(rows, "worktree-landed").verdict.kind).toBe("removable");
+    expect(row.facts.check).not.toHaveProperty("error");
+    expect(row.verdict.kind).toBe("keep");
+    if (row.verdict.kind !== "keep") throw new Error("unreachable");
+    expect(row.verdict.reasons.join(" ")).toContain("still running");
+  });
+
+  it("does NOT advertise a brand-new worktree a process is running inside", () => {
+    const wt = freshWorktree("occupied");
+    liveProcess(wt);
+
+    const row = rowFor(classifyAll(primary), "worktree-occupied");
+
+    expect(row.verdict.kind).toBe("keep");
+    if (row.verdict.kind !== "keep") throw new Error("unreachable");
+    expect(row.verdict.reasons.join(" ")).toContain("running inside it");
   });
 
   it("keeps a worktree whose commits have not landed on the trunk", () => {
     const wt = freshWorktree("unlanded");
     commit(wt, "mine.txt", "work\n", "work nobody has pushed");
 
-    const row = rowFor(classifyAll(primary, { now: now() + 999 * HOUR }), "worktree-unlanded");
+    const row = rowFor(classifyAll(primary), "worktree-unlanded");
 
     expect(row.verdict.kind).toBe("keep");
     if (row.verdict.kind !== "keep") throw new Error("unreachable");
@@ -159,84 +180,15 @@ describe("classifyAll, against real worktrees", () => {
     const wt = freshWorktree("untracked");
     writeFileSync(path.join(wt, "notes.md"), "half an idea\n");
 
-    const row = rowFor(classifyAll(primary, { now: now() + 999 * HOUR }), "worktree-untracked");
+    const row = rowFor(classifyAll(primary), "worktree-untracked");
 
     expect(row.verdict.kind).toBe("keep");
     if (row.verdict.kind !== "keep") throw new Error("unreachable");
     expectRelaysEveryBlocker(row);
   });
 
-  /**
-   * The trap: a worktree created just now, sitting on a commit made days ago.
-   * A fast-forward merge writes no commit of its own, so HEAD's date is whatever
-   * the trunk commit was dated, and a brand-new tree can be born looking
-   * abandoned. It must still be held.
-   *
-   * **The previous version of this test proved nothing, twice over**, and both
-   * ways are worth keeping in view:
-   *
-   *   - its comment said "backdate the trunk commit far past the floor", and the
-   *     code backdated nothing — the `beforeEach` commits at real-now, so the
-   *     "old" commit was a second old and the trap could not arise;
-   *   - its assertion was `lastActivity >= headTime` where `lastActivity` is
-   *     `Math.max(headTime, …)` over that same number. `max(x, …) >= x` holds
-   *     for every input, so it could not fail.
-   *
-   * The commit is now genuinely aged, and the assertion is on the quantity that
-   * matters: how idle this tree looks against the **real** clock.
-   */
-  it("holds a worktree created just now on a commit made days ago", () => {
-    const OLD = 5 * 24 * HOUR;
-    commitAged(primary, "ancient.txt", "old\n", "a commit from days ago", OLD);
-
-    const wt = path.join(root, "ff");
-    git(["worktree", "add", "--quiet", "-b", "worktree-ff", wt, "HEAD"], primary);
-
-    const row = rowFor(classifyAll(primary), "worktree-ff");
-
-    /* Not `>= headTime`: that is the vacuous form. The tree was made moments
-       ago, so its activity must be recent in absolute terms, whatever HEAD says. */
-    expect(row.facts.lastActivity).not.toBeNull();
-    expect(now() - (row.facts.lastActivity?.at ?? 0)).toBeLessThan(HOUR);
-    expect(row.verdict.kind).toBe("keep");
-  });
-
-  /**
-   * The sweep must not be able to keep a worktree alive by looking at it.
-   *
-   * This is asserted by classifying twice rather than by pinning `lastActivity`
-   * to a known instant, because the failure it exists for is *drift*: the
-   * classification runs `git status` inside each worktree, which rewrites that
-   * worktree's index and so bumps its admin directory's mtime, and
-   * `lastActivityAt` read that mtime back as evidence the tree was alive. Every
-   * worktree on the box therefore reported "active 1 min ago" — one of them had
-   * not been touched for five days — and `worktree:sweep` printed "nothing to
-   * remove", which is also what a healthy tree prints.
-   *
-   * The rest of this file could not catch it, and the reason is worth keeping:
-   * these tests move `now` **forward** (`now() + 25 * HOUR`) rather than moving
-   * the worktree's activity back, so activity stamped at the real now still
-   * reads as a day idle. The clock was the wrong axis.
-   *
-   * The sleep is real and it is the point — the stamp only shows up once the
-   * second hand has moved, since these are whole-second timestamps.
-   */
-  it("does not count its own reading of a worktree as activity", async () => {
-    freshWorktree("read-twice");
-
-    const first = rowFor(classifyAll(primary), "worktree-read-twice").facts.lastActivity;
-    await new Promise((resolve) => setTimeout(resolve, 1100));
-    const second = rowFor(classifyAll(primary), "worktree-read-twice").facts.lastActivity;
-
-    /* Vacuity guard: two nulls compare equal while measuring nothing at all, and
-       "could not tell when it was last active" is itself a keep, so the sweep
-       would look fine either way. */
-    expect(first).not.toBeNull();
-    expect(second).toEqual(first);
-  });
-
   it("never offers the primary checkout", () => {
-    const rows = classifyAll(primary, { now: now() + 999 * HOUR });
+    const rows = classifyAll(primary);
     const main = rows.find((r) => r.facts.entry.main);
     expect(main?.verdict.kind).toBe("skip");
   });
@@ -270,30 +222,51 @@ describe("classifyOne, on facts alone", () => {
       main: false,
       present: true,
     },
-    lastActivity: { at: 0, signal: "HEAD last moved" },
+    inUse: { kind: "idle", notes: [] },
     current: false,
     check: clean,
     ...over,
   });
 
+  it("control: clean, landed, nobody in it — removable", () => {
+    expect(classifyOne(base({})).kind).toBe("removable");
+  });
+
+  it("keeps a tree somebody is in, and says who", () => {
+    const v = classifyOne(base({ inUse: { kind: "in-use", reasons: ["its Claude session is still running — x"] } }));
+    expect(v.kind).toBe("keep");
+    if (v.kind !== "keep") throw new Error("unreachable");
+    expect(v.reasons).toContain("its Claude session is still running — x");
+  });
+
+  it("keeps a tree when it could not tell whether anybody is in it", () => {
+    /* The removal refuses on this, so the report must not advertise it. */
+    const v = classifyOne(base({ inUse: { kind: "unknown", why: ["pid 9 (python3) hides its working directory"] } }));
+    expect(v.kind).toBe("keep");
+    if (v.kind !== "keep") throw new Error("unreachable");
+    expect(v.reasons.join(" ")).toContain("could not tell whether anybody is in it");
+  });
+
+  it("keeps a tree whose liveness was never read", () => {
+    expect(classifyOne(base({ inUse: null })).kind).toBe("keep");
+  });
+
   it("says UNJUDGEABLE, never removable, when the tree could not be read", () => {
-    const v = classifyOne(base({ check: { error: "EACCES walking data/" } }), { now: 999 * HOUR });
+    const v = classifyOne(base({ check: { error: "EACCES walking data/" } }));
     expect(v.kind).toBe("unjudgeable");
     if (v.kind !== "unjudgeable") throw new Error("unreachable");
     expect(v.why).toContain("EACCES");
   });
 
   it("keeps the worktree you are standing in, however landed", () => {
-    const v = classifyOne(base({ current: true }), { now: 999 * HOUR });
+    const v = classifyOne(base({ current: true }));
     expect(v.kind).toBe("keep");
     if (v.kind !== "keep") throw new Error("unreachable");
     expect(v.reasons.join(" ")).toContain("standing in it");
   });
 
   it("treats an unknown trunk standing as a keep, not as landed", () => {
-    const v = classifyOne(base({ check: { ...clean, trunk: { kind: "unknown", why: "fetch failed" } } }), {
-      now: 999 * HOUR,
-    });
+    const v = classifyOne(base({ check: { ...clean, trunk: { kind: "unknown", why: "fetch failed" } } }));
     expect(v.kind).toBe("keep");
   });
 
@@ -301,7 +274,7 @@ describe("classifyOne, on facts alone", () => {
     /* `dirty` is empty and the trunk is landed: every signal the old sweep had
        says removable. Only the ignored-state check disagrees. */
     const stray: CheckFacts = { ...clean, unexplained: ["data/some-article/"] };
-    const v = classifyOne(base({ check: stray }), { now: 999 * HOUR });
+    const v = classifyOne(base({ check: stray }));
     expect(v.kind).toBe("keep");
     if (v.kind !== "keep") throw new Error("unreachable");
     /* Whatever worktree-check calls it — the point is that the sweep says the
@@ -310,14 +283,16 @@ describe("classifyOne, on facts alone", () => {
   });
 
   it("calls a registration with no directory a ghost, even when nothing could be read", () => {
-    const v = classifyOne(base({ entry: { ...base({}).entry, present: false }, check: { error: "gone" } }), { now: 0 });
+    const v = classifyOne(base({ entry: { ...base({}).entry, present: false }, check: { error: "gone" } }));
     expect(v.kind).toBe("ghost");
   });
 
   it("gives every reason at once rather than the first", () => {
     const v = classifyOne(
-      base({ check: { ...clean, dirty: ["M x"], trunk: { kind: "ahead", commits: ["abc one"] } }, lastActivity: { at: 999 * HOUR, signal: "HEAD last moved" } }),
-      { now: 999 * HOUR },
+      base({
+        check: { ...clean, dirty: ["M x"], trunk: { kind: "ahead", commits: ["abc one"] } },
+        inUse: { kind: "in-use", reasons: ["a process is running inside it — pid 9 (sleep)"] },
+      }),
     );
     if (v.kind !== "keep") throw new Error("unreachable");
     expect(v.reasons.length).toBeGreaterThanOrEqual(3);
@@ -347,7 +322,7 @@ describe("gatherAll", () => {
     const facts = gatherAll(primary, listWorktrees(primary), { kind: "failed", why: "offline" });
     const row = facts.find((f) => f.branch === "worktree-no-trunk");
     expect(row?.check).toEqual({ error: "offline" });
-    expect(classifyOne(row!, { now: now() + 999 * HOUR }).kind).toBe("unjudgeable");
+    expect(classifyOne(row!).kind).toBe("unjudgeable");
   });
 });
 
@@ -355,7 +330,7 @@ describe("removeOne", () => {
   it("removes a landed worktree and deletes its branch", () => {
     const wt = freshWorktree("done");
 
-    const out = removeOne(primary, "worktree-done", { now: now() + 999 * HOUR });
+    const out = removeOne(primary, "worktree-done");
 
     expect(out.ok).toBe(true);
     expect(existsSync(wt)).toBe(false);
@@ -365,12 +340,12 @@ describe("removeOne", () => {
   it("re-runs the guards itself, so a stale verdict cannot be handed to it", () => {
     const wt = freshWorktree("changed-its-mind");
     /* Classified removable a moment ago; now the agent working in it saves a file. */
-    expect(rowFor(classifyAll(primary, { now: now() + 999 * HOUR }), "worktree-changed-its-mind").verdict.kind).toBe(
+    expect(rowFor(classifyAll(primary), "worktree-changed-its-mind").verdict.kind).toBe(
       "removable",
     );
     writeFileSync(path.join(wt, "in-progress.ts"), "half a change\n");
 
-    const out = removeOne(primary, "worktree-changed-its-mind", { now: now() + 999 * HOUR });
+    const out = removeOne(primary, "worktree-changed-its-mind");
 
     expect(out.ok).toBe(false);
     expect(out.steps.length).toBeGreaterThan(1);
@@ -381,7 +356,7 @@ describe("removeOne", () => {
     const wt = freshWorktree("unlanded");
     commit(wt, "mine.txt", "work\n", "not pushed");
 
-    const out = removeOne(primary, "worktree-unlanded", { now: now() + 999 * HOUR });
+    const out = removeOne(primary, "worktree-unlanded");
 
     expect(out.ok).toBe(false);
     expect(out.steps.length).toBeGreaterThan(1);
@@ -391,7 +366,7 @@ describe("removeOne", () => {
   it("--dry-run says what it would do and does none of it", () => {
     const wt = freshWorktree("dry");
 
-    const out = removeOne(primary, "worktree-dry", { dryRun: true, now: now() + 999 * HOUR });
+    const out = removeOne(primary, "worktree-dry", { dryRun: true });
 
     expect(out.ok).toBe(true);
     expect(out.steps.join(" ")).toContain("would remove");
@@ -403,7 +378,7 @@ describe("removeOne", () => {
     const wt = freshWorktree("ghosted");
     rmSync(wt, { recursive: true, force: true });
 
-    const out = removeOne(primary, "worktree-ghosted", { now: now() + 999 * HOUR });
+    const out = removeOne(primary, "worktree-ghosted");
 
     expect(out.ok).toBe(true);
     expect(git(["worktree", "list", "--porcelain"], primary)).not.toContain(wt);
@@ -421,7 +396,7 @@ describe("removeOne", () => {
     commit(wt, "mine.txt", "work\n", "unlanded work on the branch");
     rmSync(wt, { recursive: true, force: true });
 
-    const out = removeOne(primary, "worktree-ghosted-unlanded", { now: now() + 999 * HOUR });
+    const out = removeOne(primary, "worktree-ghosted-unlanded");
 
     expect(out.ok).toBe(false);
     expect(git(["worktree", "list", "--porcelain"], primary)).toContain(wt);
@@ -433,9 +408,14 @@ describe("removeOne", () => {
        real worktree on this box is locked, so an untested unlock would mean the
        removal never worked outside these tests. */
     const wt = path.join(root, "locked");
-    git(["worktree", "add", "--lock", "--reason", "as claude --worktree does", "--quiet", "-b", "worktree-locked", wt, "HEAD"], primary);
+    /* In the shape `claude --worktree` writes, naming a session that is gone: an
+       unrecognised reason is an unknown, and an unknown refuses. */
+    git(
+      ["worktree", "add", "--lock", "--reason", "claude session x (pid 999999 start 1)", "--quiet", "-b", "worktree-locked", wt, "HEAD"],
+      primary,
+    );
 
-    const out = removeOne(primary, "worktree-locked", { now: now() + 999 * HOUR });
+    const out = removeOne(primary, "worktree-locked");
 
     expect(out.ok).toBe(true);
     expect(out.steps.join(" ")).toContain("unlocked");
@@ -444,7 +424,7 @@ describe("removeOne", () => {
   });
 
   it("says so when no worktree is on that branch", () => {
-    const out = removeOne(primary, "worktree-imaginary", { now: now() });
+    const out = removeOne(primary, "worktree-imaginary");
     expect(out.ok).toBe(false);
     expect(out.steps.join(" ")).toContain("no worktree is on branch");
   });
