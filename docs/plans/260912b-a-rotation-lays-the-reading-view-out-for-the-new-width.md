@@ -86,11 +86,12 @@ is a separate bug with its own guard (narrow-windows.md § the check).
 **One reader changes: `useWindowWidth`** ([reader/measure.ts](../../src/web/reader/measure.ts)), the
 width the whole reading view is laid out from.
 
-**And a guard, because this is a class, not a line.** `tests/layout-viewport-width.test.tsx` scans
-`src/web` for `innerWidth` in code (comments stripped) and fails outside an allowlist that gives each
-file's reason for wanting the browser's own answer; a second test fails on an allowlisted file that
-has stopped reading it. The next person to write `window.innerWidth` into a layout decision is told
-why at test time.
+**And a guard, because this is a class, not a line.** `tests/layout-viewport-width.test.tsx` parses
+`src/web` and fails on an `innerWidth` read outside an allowlist that gives each file's reason for
+wanting the browser's own answer; it pins the reviewed number of reads in each allowed file too, so a
+new read cannot hide beside an old one. Parsing matters here: comment markers inside strings must not
+hide code, and a URL or template that mentions the property is not a read. The next person to write
+`window.innerWidth` into a layout decision is told why at test time.
 
 ### What the plan review changed (GPT Sol, 2026-09-12, BUILD WITH CHANGES)
 
@@ -114,10 +115,14 @@ The first draft also moved two other readers and policed `innerHeight`. All thre
    of the hook and the guard (`tests/layout-viewport-width.test.tsx`); narrow-windows.md gains a
    paragraph; a postmortem in `docs/postmortems/`. Sol code review.
 2. **The probe hears a rotation.** `?probe=1` records only visual-viewport events today, so a
-   rotation is invisible to it. Rename its events so their source is in the name — `vv-resize`,
-   `vv-scroll`, `window-resize`, `orientationchange` (Sol F4: one `resize` for both would make "zoom
-   fired one and not the other" unprovable) — install the window listeners even where there is no
-   `visualViewport`, and add a `lay` field: `[root clientWidth, the width the reader laid out for]`.
+   rotation is invisible to it. Give the window's events names of their own — `window-resize`,
+   `orientationchange`, and `laid-out` for the reader re-rendering (Sol F4: one `resize` for both
+   would make "zoom fired one and not the other" unprovable) — install the window listeners even
+   where there is no `visualViewport`, and add a `lay` field: `[root clientWidth, the width the
+   reader laid out for]`. **The plan first said to rename `resize`/`scroll` to `vv-resize`/
+   `vv-scroll`; that was not done**, because `scripts/viewport-trace.ts` validates `ev` against a
+   fixed list and every trace already taken uses the old names. They keep their meaning — the
+   visual viewport's — and the reader's list learns the three new ones.
    The helper's answer is not recorded, because it is `max` of two numbers the trace already has; the
    reader's stored state is not reconstructable, so it is. A trace off Greg's iPad then shows the
    zoomed `innerWidth` beside the layout width, or shows that something else is going on. Sol code

@@ -15,9 +15,9 @@
 **Ending: Shipped** — on `dev`, not deployed. Resolve both -33 and -34.
 
 What we did: the reading view laid itself out from `window.innerWidth`, which on iPad Safari is the
-*zoomed* (visual) width, and a zoom survives a rotation without firing any event — so a zoomed-in
-rotation laid out for a window about two-thirds the real size until something else resized it. It
-now lays out for the layout width, and `?probe=1` records rotations so a trace off the iPad can
-confirm it. [260912b-a-rotation-lays-the-reading-view-out-for-the-new-width.md](../plans/260912b-a-rotation-lays-the-reading-view-out-for-the-new-width.md);
+*zoomed* (visual) width. A zoom survives a rotation, and zooming back out fires no window `resize`,
+so a zoomed-in rotation laid out for a window about two-thirds the real size until something else
+resized it. It now lays out for the layout width, and `?probe=1` records rotations so a trace off the
+iPad can confirm it. [260912b-a-rotation-lays-the-reading-view-out-for-the-new-width.md](../plans/260912b-a-rotation-lays-the-reading-view-out-for-the-new-width.md);
 the postmortem is
 [260912b-a-layout-read-from-a-number-that-means-a-different-viewport-on-ios.md](../postmortems/260912b-a-layout-read-from-a-number-that-means-a-different-viewport-on-ios.md).
