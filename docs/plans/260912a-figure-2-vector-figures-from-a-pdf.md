@@ -25,6 +25,27 @@ wasm through `createRequire(…).resolve`, and `vercel.json`'s `includeFiles` ne
 pdfium warning is the "Failed to parse … as script" nft prints for every ES module it then traces
 as a module, which the trace test already excludes for that reason.
 
+**End to end, through the real queue, on the reported article's own PDF** (ingested locally as
+`entropy-24-00930-spya-pywwkq`, on `0201fdfc`): `npx tsx scripts/stage.ts assets <slug>`, **without**
+`--force` — the new policy element in `assetsInputHash` is what made the old manifest read stale —
+finished `0 images stored, 4 figures recovered`, and the newest revision's manifest records page 8 as
+`stored`, 1045 × 852, 48,753 bytes: the same bytes the direct run produced. Figures 1, 3 and 4 are
+unchanged, byte for byte.
+
+One thing tripped on the way, and it is the queue's documented behaviour rather than this change: a
+terminal ingest leaves the article's `labels` job queued with nobody driving it, and `claim` refuses
+while an older job holds the article, so the `assets` run waited behind it (`BUSY_GIVE_UP_MS`,
+scripts/stage.ts). `npm run labels -- <slug>` cleared it and the waiting run then finished on its
+own. Worth knowing before re-running Greg's article on production, where a browser drives the
+queue and this does not arise.
+
+**Seen in a browser** (a subagent, Playwright against system Chrome, this worktree's own server,
+signed in as the dev admin, `/read/entropy-24-00930-spya-pywwkq`): Figure 2's `<figure>` now holds an
+`<img>` — natural size 1045 × 852, a `blob:` source, loaded, 659 × 540 on screen — both lattices drawn
+above the caption, between the paragraph before it and the heading *4.3. Choosing a Redundancy
+Measure*, with the ⤢ in its corner; and no *"We couldn't recover this figure from the PDF."* line
+anywhere on the page. Figure 1, the bitmap control, is unchanged at 1503 × 1067.
+
 ## The answer to the question
 
 **Figure 2 is drawn, not pictured.** Page 8 of the PDF carries no bitmap at all: the two lattices
@@ -315,6 +336,23 @@ re-run on my side before being committed: typecheck exit 0, 232 tests in the sam
 | F30–F32 | P2 · mutations the suite did not notice — caption forwarding, the render's y-flip, freshness scoping, byte caps, abort | fixed — each now red under its mutation |
 | F33 | P1 · reasoned · pdf.js runs forgiving, so it can omit malformed paint that PDFium then draws into the crop | **taken, round two** — a strict second operator-list pass on candidate pages only, refusing unless strict and forgiving agree. Sound here where it was not before: the empty strict list the builder hit came from pdf.js removing an image, and a candidate page has none |
 | F34 | P2 · complexity 147 and 83 in the layout interpreter and the resource walk | **taken, round two** — split into small pure helpers, each tested |
+
+**F33's fix, checked narrowly** ([prompt](260912a-figure-2-vector-figures-from-a-pdf-f33-check-prompt.md),
+[answer](260912a-figure-2-vector-figures-from-a-pdf-f33-check-sol.md)): **still open, F35 — P1,
+established by a probe.** pdf.js with `stopAtErrors` can resolve the operator list it had already
+flushed before its rejection is observed, so a malformed operator at a chunk boundary is missing from
+*both* reads alike: an eligible page with 480 `q/Q` pairs before the test's bad `/Sh0 sh` gave 995
+operators both ways, `strictAgrees: true`, and passed the locator. Everything else held — a strict
+throw or abort fails closed, and the red test is genuine.
+
+**So the check moves to the renderer's side.** Two pdf.js reads cannot see what pdf.js itself
+skipped, however they are compared; the picture PDFium draws can. After the render, **every
+non-white pixel must fall inside the ink and the labels the locator measured** — padded for
+anti-aliasing and stroke — or the page is refused `not-located` / `unmeasured-paint`. That closes the
+whole class, whatever the reason pdf.js skipped the paint, not only the chunk boundary. The strict
+comparison stays as a second line. What it cannot see, named: skipped paint that lands entirely
+inside a box the locator did measure. That goes back to Sol as one more narrow check; if it is still
+open after that, it goes to Fable or Greg before landing, not past them.
 
 The two reversals leave a figure beside another column's prose, or on a page where a body line
 begins "Figure N", caption-only. Widening either is deferred until a real page shows the refusal

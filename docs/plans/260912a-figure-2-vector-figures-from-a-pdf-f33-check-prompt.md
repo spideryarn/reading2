@@ -9,7 +9,7 @@ measured it. You proposed a strict second operator-list pass on drawn candidates
 strict and permissive reads prove the same complete paint set. That was taken, and built after your
 review, so nothing has checked it.
 
-The fix is the single commit **`F33_SHA`** on top of `7d3303ab`; `git show F33_SHA` is the whole of
+The fix is the single commit **`0201fdfc`** on top of `7d3303ab`; `git show 0201fdfc` is the whole of
 it. It also carries F34, a behaviour-preserving split of the layout interpreter and the resource walk
 into smaller helpers — read that only as far as it bears on F33.
 
