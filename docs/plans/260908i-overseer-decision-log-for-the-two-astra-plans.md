@@ -627,3 +627,21 @@ and [260908f-overseer-and-fleet-improvement-roadmap.md](260908f-overseer-and-fle
 **2026-09-12 01:05Z — Citations mode shipped to dev, 6cfc0c2b, experimental and owner-only.** Greg's 2Y suggestion, in and out in under four hours: stage 1 the artefact, step and migration (85631f9b), stage 2 the mode with four orders and a threshold bar (abde65f7), stage 3 "Find it on the web" with a `citation_finds` table (1e54a7f8, 8d523739); three additive migrations ride the next deploy; note under docs/user-feedback/, ending shipped, Sentry write left to the sweep. The Sol code reviews are owed and the queue entry qi-jggq8dkw now names the exact shas. One observation queued for a lull (authorised, XS): every Exa-searching chat call records upstream "OpenAI" for a Claude model despite the anthropic-only order, which is either a wrong provenance field or a real routing difference, and either matters for cost and for what ai-gateway.md promises. Session closed.
 
 **2026-09-12 07:00Z — feedback-reports.md says who writes the Sentry status now.** The 03:33Z sweep had queued qi-a38gypaj: the doc said each report session marks its own issue in Sentry, but report sessions run on a pool account with no Sentry sign-in, so every sweep since Thursday has been closing issues on the sessions' behalf. Two endings: write the reality into the doc, or give the pool config a Sentry server. The second is already ruled out by Greg (2026-09-11: no services on mindstone). So one sentence went into § Into the Overseer's queue, the section written on Greg's instruction on Thursday: the Sentry status write is the sweep's, the session writes only its note naming the ending, and "if you can" still holds for a session that can. The daemon's document digest for its sweep job re-pinned beside it; its behaviour hash stays unauthorised on purpose until Greg signs the run specs. qi-a38gypaj done.
+
+## 2026-09-12 08:50 UTC — the Codex hold lifts early, and the owed Citations review goes out
+
+The ChatGPT subscription's weekly reading, 93% since 2026-09-11 18:54Z with a reset due
+2026-09-15 01:23Z, read **0% from 08:14Z today** on six consecutive five-minute readings, with a
+reset time that slides to "now plus seven days" on each read (the shape of a window nothing has
+used). I did not take the reading on trust: one trivial `codex exec` call to gpt-5.6-sol answered,
+and the count stayed at 0%. Why it reset three days early I cannot see from here (the two reset
+credits are still both unspent); Greg may know. Treated as real under the two-readings rule.
+
+**Actions.** Hold lifted. `qi-jggq8dkw` (the owed Sol code reviews for Citations mode, stages
+85631f9b, abde65f7, 1e54a7f8+8d523739) had lapsed its authorisation when I added the shas to its
+text after authorising it; re-authorised at revision 1 on the same footing (a review owed by a plan
+for an idea Greg dictated) and dispatched as `citations-sol-review` on mindstone with a
+findings-first brief: one combined review, fix P0/P1 in a worktree, gates, push, update the plan's
+owed-reviews table, remove the worktree. Closed `qi-vjw28q7p` (cluster A follow-up), which landed
+at 48d1dc3f and 2aa16ee7 on 2026-09-12 03:50Z but was still marked running. Per-stage rationing is
+off until the reading passes 85% again.
