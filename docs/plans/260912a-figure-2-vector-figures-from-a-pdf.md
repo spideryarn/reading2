@@ -370,6 +370,14 @@ entropy-24-00930-spya-pywwkq` **without** `--force` ran — the `pdf-figures/2` 
 and finished `figures: 4, figuresStored: 4, figuresDrawn: 1`, the drawn one now through containment.
 typecheck exit 0; 157 tests in the seven freshness and figure files green.
 
+**The bump, checked narrowly** ([prompt](260912a-figure-2-vector-figures-from-a-pdf-f36-check-prompt.md),
+[answer](260912a-figure-2-vector-figures-from-a-pdf-f36-check-sol.md)), on `b8c761e0`: **F35 closed.**
+Both freshness checks read the one `assetsInputHash`, so a carried `/2` manifest reads stale against
+`/3`; an article with no PDF markers hashes exactly as before; and serving needs the current manifest
+to name the blob, so with the one `/2` manifest regenerated and the pre-containment code never
+deployed, no drawn figure from before containment is reachable. That was the last open P1 on the
+chain.
+
 The two reversals leave a figure beside another column's prose, or on a page where a body line
 begins "Figure N", caption-only. Widening either is deferred until a real page shows the refusal
 costs something.

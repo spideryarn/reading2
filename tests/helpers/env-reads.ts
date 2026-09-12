@@ -374,7 +374,9 @@ const PINS: Pin[] = [
     name: "node:module",
     checksum: "8fbb118a9c00eeed",
     yields: [],
-    why: "the only legitimate createRequire in the tree: a static import of jsdom bundles the package",
+    why:
+      "one of two legitimate createRequires in the tree, with src/pdf-figure-render.ts's below: a " +
+      "static import of jsdom bundles the package",
   },
   {
     file: "src/jsdom-lazy.ts",
@@ -393,6 +395,27 @@ const PINS: Pin[] = [
     why:
       "the one call of that require function. Pinned separately because pinning only the binding " +
       'left `nodeRequire("std-env").env.X` in an unpinned function passing — Sol, round 2',
+  },
+  {
+    file: "src/pdf-figure-render.ts",
+    kind: "import",
+    name: "node:module",
+    checksum: "8fbb118a9c00eeed",
+    yields: [],
+    why:
+      "the second legitimate createRequire: PDFium's .wasm is read by path, and `import.meta.resolve` " +
+      "is not traced by @vercel/nft in an ESM bundle, so the file would silently not ship " +
+      "(docs/plans/260912a-figure-2-vector-figures-from-a-pdf.md)",
+  },
+  {
+    file: "src/pdf-figure-render.ts",
+    kind: "function",
+    name: "loadPdfium",
+    checksum: "99428c5c3a741ec3",
+    yields: [],
+    why:
+      "the one call of that createRequire, and it only resolves `@embedpdf/pdfium/pdfium.wasm` — " +
+      "pinned as a function for the reason the jsdom pin above gives",
   },
 ];
 
