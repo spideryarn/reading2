@@ -189,14 +189,20 @@ export function useCitations(slug: string): UseCitations {
         /* **The link fields only**, never the whole work that came back: it
            is a snapshot taken before a model call, and a list replaced in the
            meantime must not have a stale row merged back into it —
-           useGlossary.ts § patchEntry is the same lesson. */
+           useGlossary.ts § patchEntry is the same lesson.
+           **And only a row that is still a search** — the server's rule
+           (`attachFinds`). A re-run landing inside the find can give the same
+           id a link the article gave, and that always wins (GPT Sol F14;
+           tests/citations-find-late-reply.test.tsx). */
         const { url, linkFrom, found } = answer.work;
         setCitations((current) =>
           current
             ? {
                 ...current,
                 citations: current.citations.map((w) =>
-                  w.id === id ? { ...w, url, linkFrom, ...(found ? { found } : {}) } : w,
+                  w.id === id && w.linkFrom === "search"
+                    ? { ...w, url, linkFrom, ...(found ? { found } : {}) }
+                    : w,
                 ),
               }
             : current,
