@@ -716,3 +716,17 @@ built for v1**, since the row already shows the host; the plan sets out the thre
 test first) as qi-jd6xwmme, XS. And the finding outside the stage, **the glossary's ask and lookup
 routes have no rate limit at all**, as qi-rnythcwm — a defence, so it is a proposal for Greg
 rather than a job I dispatch; the fix is the same limiter Citations now uses.
+
+## 2026-09-12 10:55 UTC — the floor removal's second review: the namespace fix holds, and a lease was missing
+
+Sol confirmed the PID-namespace check by running it inside its own sandbox (a private namespace:
+the check returned *unknown* and named it; with the check removed, *idle*). It found one P1: the
+removal read a tree's liveness once, so a peer resuming a clean, landed tree after that read would
+have had it unlocked and removed from under it. Fixed at c87ceec8 (re-read the lock before unlock
+and refuse if changed; read liveness again just before `git worktree remove`), tests red first;
+dev at b4256542. One gap is named in the code and the doc: a peer that enters without locking in
+the last milliseconds, which needs an exclusion shared with EnterWorktree and is not ours to build.
+A P2 (a `/proc` mounted with `hidepid`, or an owner under another uid) was left because neither
+holds on this box. The fix itself had not been back to Sol; under Greg's *"make sure we're getting
+GPT Sol reviews"* the last link went out as `floor-fix-sol-recheck-2`, with Sol fixing in place so
+the chain ends there.
