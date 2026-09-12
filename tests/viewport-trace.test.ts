@@ -256,6 +256,29 @@ describe("settled, not sliding", () => {
     expect(motion.bottomRuleSuffices).toBe(true);
   });
 
+  /**
+   * The three rotation/layout events added by 260912b are observations, not
+   * evidence that the visual viewport is in motion. Before they existed,
+   * `ev !== "mark"` happened to mean the visual viewport's `resize`/`scroll`;
+   * accepting the new names must not make that old shorthand lie.
+   */
+  it("does not call rotation or layout samples keyboard-sliding frames", () => {
+    for (const ev of ["orientationchange", "window-resize", "laid-out"] as const) {
+      const observed = sample({
+        t: 200,
+        ev,
+        vv: [390, 600, 120, 0, 1],
+        rect: {
+          band: [0, 44, 390, 760],
+          head: [0, 44, 390, 36],
+          composer: [0, 600, 390, 60],
+        },
+      });
+      const { motion } = analyse([sample({ t: 0, ev: "mark" }), observed, open(400, 336)]);
+      expect(motion.transientClipping, ev).toBe(false);
+    }
+  });
+
   it("is inconclusive when the viewport moved but nobody marked the settled state", () => {
     const { verdict } = analyse([sample({ t: 0, ev: "mark" }), open(400, 336, { ev: "scroll" })]);
     expect(verdict.which).toBe("inconclusive");

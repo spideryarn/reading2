@@ -1,6 +1,6 @@
 # A rotation lays the reading view out for the new width
 
-**Status:** in progress, 2026-09-12. From SPIDERYARN-READING2-33 and -34 (Greg, an iPad, production,
+**Status:** built, 2026-09-12 — both stages on `dev`, not deployed; § What landed. From SPIDERYARN-READING2-33 and -34 (Greg, an iPad, production,
 build `607b57a0`) — the queue entry `qi-jamh3n2h`.
 
 > On this landscape iPad I think there's room to show two columns in Structure mode
@@ -152,3 +152,26 @@ The first draft also moved two other readers and policed `innerHeight`. All thre
 - The feedback diagnostics field above.
 - Confirmation on the device: Greg, on the iPad, after the next deploy — open a Structure article
   with `?probe=1`, zoom in, rotate, and copy the trace.
+
+## What landed
+
+- **Stage 1** — `2a1b7594`: `layoutViewportWidth()` and `useWindowWidth` on it; the hook test (red
+  on the old code, 787 where 1180 was due); the guard, mutation-checked on a planted read.
+  **Sol's code review** (LAND WITH MY FIXES), `1095d91d`: S1-F1 (P1) the guard parses the source
+  with `@babel/parser` rather than stripping comments by regex, which could hide a read between
+  comment markers inside strings; S1-F2 (P1) each allowed file pins its reviewed read count, so a new
+  read cannot hide beside an old one; S1-F3 (P2) the feedback note's wording on which event fires.
+  Sol judged the fix itself sound, including the lazy initialiser and React's bail-out.
+- **Stage 2** — `5e2d4ff6`: the probe's window events, `laid-out`, and `lay`; the trace reader
+  accepts the new names. Both tests mutation-checked. **Sol's code review** (LAND WITH MY FIXES):
+  **S2-F1 (P0)** — the trace reader's `classify` treated every non-`mark` sample as keyboard
+  sliding, so the three new kinds could have produced a false "SLIDING" verdict on a keyboard trace;
+  it now counts only the visual viewport's `resize`/`scroll`, with a red-then-green test. That one
+  was mine, and exactly the spot the review prompt pointed at. S2-F2 (P2) `lay` in the trace legend.
+  S2-F3 (P3), reported and accepted without change: in a real browser `laid-out` can fall between
+  `orientationchange` and `window-resize`, since they may arrive in separate tasks; the trace keeps
+  the browser's own order, and the guarantee is per row, not per sequence.
+- **Gates:** `npm test` and `npm run typecheck`, results in the commit that lands this.
+
+**Discovery closed after one round per stage**: neither stage had a P0 or P1 left open whose fix
+was not in the reviewed snapshot — S2-F1's fix *is* the reviewer's own, with its own red test.

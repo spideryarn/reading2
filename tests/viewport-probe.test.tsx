@@ -23,7 +23,7 @@
  * the same shape for the same reason: counting listeners rather than recording
  * them, so a leak is a number that never returns to zero.
  */
-import { act, createElement } from "react";
+import { act, createElement, StrictMode } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
@@ -79,6 +79,14 @@ function noViewport(): void {
   Object.defineProperty(window, "visualViewport", { configurable: true, value: undefined });
 }
 
+function setWidths(inner: number, client: number): void {
+  Object.defineProperty(window, "innerWidth", { configurable: true, value: inner });
+  Object.defineProperty(document.documentElement, "clientWidth", {
+    configurable: true,
+    value: client,
+  });
+}
+
 /** The flag is read from `location` at mount, so the address is the switch. */
 function address(search: string): void {
   history.replaceState(null, "", `/read/a-piece${search}`);
@@ -99,6 +107,7 @@ afterEach(() => {
   act(() => root.unmount());
   host.remove();
   noViewport();
+  setWidths(1024, 0);
   address("");
 });
 
@@ -302,9 +311,11 @@ describe("what it survives", () => {
   it("records a rotation, and the width the reader laid out for after it", () => {
     noViewport();
     address("?probe=1");
+    setWidths(820, 820);
     act(() => {
       root.render(createElement(ViewportProbe, { laidOutWidth: 820 }));
     });
+    setWidths(787, 1180);
     act(() => {
       window.dispatchEvent(new Event("orientationchange"));
       window.dispatchEvent(new Event("resize"));
@@ -314,7 +325,12 @@ describe("what it survives", () => {
     });
 
     const out = trace() as unknown as {
-      samples: { ev: string; lay: [number, number | null] }[];
+      head: { legend: Record<string, string> };
+      samples: {
+        ev: string;
+        win: [number, number, number, number];
+        lay: [number, number | null];
+      }[];
     };
     expect(out.samples.map((s) => s.ev)).toEqual([
       "start",
@@ -322,7 +338,32 @@ describe("what it survives", () => {
       "window-resize",
       "laid-out",
     ]);
+    expect(out.samples.map((s) => s.win[0])).toEqual([820, 787, 787, 787]);
+    expect(out.samples.map((s) => s.lay[0])).toEqual([820, 1180, 1180, 1180]);
     expect(out.samples.map((s) => s.lay[1])).toEqual([820, 820, 820, 1180]);
+    expect(out.head.legend.lay).toBe("root clientWidth, reader width from useWindowWidth");
+  });
+
+  /** `main.tsx` mounts the reader under Strict Mode. Its effect rehearsal may
+   * repeat setup work, but a single prop change is still one layout fact. */
+  it("records one laid-out row for one width change under Strict Mode", () => {
+    noViewport();
+    address("?probe=1");
+    act(() => {
+      root.render(
+        createElement(StrictMode, null, createElement(ViewportProbe, { laidOutWidth: 820 })),
+      );
+    });
+    act(() => {
+      root.render(
+        createElement(StrictMode, null, createElement(ViewportProbe, { laidOutWidth: 1180 })),
+      );
+    });
+
+    const out = trace() as unknown as {
+      samples: { ev: string; lay: [number, number | null] }[];
+    };
+    expect(out.samples.filter((s) => s.ev === "laid-out").map((s) => s.lay[1])).toEqual([1180]);
   });
 
   /** Zeros everywhere and no computed lengths — the shape has to survive both. */

@@ -77,8 +77,10 @@ export type Box = readonly [number, number, number, number];
 /** `[width, height, offsetTop, offsetLeft, scale]`. */
 export type VV = readonly [number, number, number, number, number];
 
-/** The events the deployed probe emits. Anything else is a trace we do not understand. */
 /**
+ * The events the deployed probe emits. Anything else is a trace we do not
+ * understand.
+ *
  * `resize` and `scroll` are the visual viewport's. The three after them were
  * added on 2026-09-12 so a rotation shows up in a trace (the window's own
  * events, and the reader re-laying-out), and are listed here so a trace that
@@ -489,7 +491,11 @@ function motionOf(closed: Reading, open: Reading): Motion {
 export function classify(chron: Chronology): Classification {
   const settled = chron.cycles.filter((c) => c.settled !== null);
   const transientClipping = chron.cycles.some((c) =>
-    c.open.some((r) => r.sample.ev !== "mark" && (hiddenFor(r, "head", "above") ?? 0) > 0),
+    c.open.some(
+      (r) =>
+        (r.sample.ev === "resize" || r.sample.ev === "scroll") &&
+        (hiddenFor(r, "head", "above") ?? 0) > 0,
+    ),
   );
   if (settled.length === 0) {
     return {

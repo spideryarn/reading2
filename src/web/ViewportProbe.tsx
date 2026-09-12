@@ -459,6 +459,7 @@ function ProbePanel({ laidOutWidth }: { laidOutWidth: number | null }) {
       legend: {
         win: "innerWidth, innerHeight, scrollX, scrollY",
         vv: "visualViewport width, height, offsetTop, offsetLeft, scale",
+        lay: "root clientWidth, reader width from useWindowWidth",
         rect: "x, y, width, height from getBoundingClientRect",
         vis: "gone = not rendered, off = rendered but not covering, on = on screen",
       },
