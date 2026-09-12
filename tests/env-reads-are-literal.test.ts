@@ -147,6 +147,8 @@ describe("every environment read under src/ is literal", () => {
         "src/jsdom-lazy.ts import node:module →",
         "src/jsdom-lazy.ts variable nodeRequire →",
         "src/models.ts function resolveModel →",
+        "src/pdf-figure-render.ts function loadPdfium →",
+        "src/pdf-figure-render.ts import node:module →",
         "src/sanitize-policy.ts function ownOrigins → SPIDERYARN_ORIGINS, VERCEL_PROJECT_PRODUCTION_URL, VERCEL_URL",
         "src/vercel-health.ts function value →",
       ];

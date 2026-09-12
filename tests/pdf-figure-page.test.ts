@@ -1,0 +1,320 @@
+/**
+ * The two reads that decide whether a page may be drawn at all — eligibility
+ * rule 2 of docs/plans/260912a-figure-2-vector-figures-from-a-pdf.md, *no image
+ * of any kind on the page* — against real documents and against small PDFs
+ * built here for the shapes no fixture has.
+ *
+ * Both are refusals that would fail silently if they stopped working: a walk
+ * that never finds an image and a layout read that never notices one both look
+ * exactly like a page of vector drawings. So each is asked about a page that
+ * has an image as well as one that does not.
+ *
+ * **Why the walk has to find inline images too.** pdf.js removes an image over
+ * `maxImageSize` from the operator list before decoding it, and the layout
+ * read sets that cap at one pixel so that nothing is ever decoded there — which
+ * means the operator list cannot see an image at all. An image XObject is still
+ * visible in the resources; an inline image (`BI … ID … EI`) lives in the
+ * content stream and is visible nowhere else.
+ */
+import { readFile } from "node:fs/promises";
+import { PDFDocument, PDFName } from "pdf-lib";
+import { describe, expect, it } from "vitest";
+
+import { readPdfPageLayouts } from "../src/pdf-figure-layout.js";
+import { onePageHasImage, openFigurePages } from "../src/pdf-figure-page.js";
+
+const MDPI_P8 = "tests/fixtures/pdf-vector-figure/entropy-24-00930-p8.pdf";
+/** The ball-lightning paper: page 3 carries a 2067 × 1741 photographic figure. */
+const HARDER = "evals/pdf/harder/source.pdf";
+
+async function bytes(file: string): Promise<Uint8Array> {
+  return new Uint8Array(await readFile(file));
+}
+
+/** A 2 × 2 grey inline image, as a content-stream fragment. */
+const INLINE_IMAGE = "BI /W 2 /H 2 /CS /G /BPC 8 ID \x00\x00\x00\x00 EI";
+
+/** A one-page PDF whose page content is `content`, with a form `/Fm0` whose own content is `form`. */
+async function onePage(content: string, form?: string): Promise<Uint8Array> {
+  const doc = await PDFDocument.create();
+  const page = doc.addPage([200, 200]);
+  if (form !== undefined) {
+    const stream = doc.context.stream(Buffer.from(form, "latin1"), {
+      Type: "XObject",
+      Subtype: "Form",
+      BBox: [0, 0, 100, 100],
+    });
+    page.node.newXObject("Fm0", doc.context.register(stream));
+  }
+  page.node.set(PDFName.of("Contents"), doc.context.register(doc.context.stream(Buffer.from(content, "latin1"))));
+  return doc.save();
+}
+
+async function onePageStreams(contents: readonly string[]): Promise<Uint8Array> {
+  const doc = await PDFDocument.create();
+  const page = doc.addPage([200, 200]);
+  const streams = contents.map((content) => doc.context.register(doc.context.stream(Buffer.from(content, "latin1"))));
+  page.node.set(PDFName.of("Contents"), doc.context.obj(streams));
+  return doc.save();
+}
+
+async function type3VectorGlyphPage(): Promise<Uint8Array> {
+  const doc = await PDFDocument.create();
+  const page = doc.addPage([200, 200]);
+  const c = doc.context;
+  const glyph = c.register(c.stream(Buffer.from("0 0 1000 1000 re f")));
+  const font = c.register(
+    c.obj({
+      Type: "Font",
+      Subtype: "Type3",
+      FontBBox: [0, 0, 1000, 1000],
+      FontMatrix: [0.001, 0, 0, 0.001, 0, 0],
+      CharProcs: { A: glyph },
+      Encoding: { Type: "Encoding", Differences: [65, "A"] },
+      FirstChar: 65,
+      LastChar: 65,
+      Widths: [1000],
+      Resources: {},
+    }),
+  );
+  page.node.set(PDFName.of("Resources"), c.obj({ Font: { F0: font } }));
+  page.node.set(
+    PDFName.of("Contents"),
+    c.register(c.stream(Buffer.from("BT /F0 100 Tf 50 50 Td (A) Tj ET"))),
+  );
+  return doc.save({ useObjectStreams: false });
+}
+
+async function transparentBridgePage(): Promise<Uint8Array> {
+  const doc = await PDFDocument.create();
+  const page = doc.addPage([200, 200]);
+  const c = doc.context;
+  const state = c.register(c.obj({ Type: "ExtGState", CA: 0, ca: 0 }));
+  page.node.set(PDFName.of("Resources"), c.obj({ ExtGState: { GS0: state } }));
+  page.node.set(
+    PDFName.of("Contents"),
+    c.register(c.stream(Buffer.from("50 50 50 100 re S q /GS0 gs 95 90 70 10 re f Q 160 50 30 100 re S"))),
+  );
+  return doc.save({ useObjectStreams: false });
+}
+
+async function imageInNestedResource(
+  kind: "form" | "pattern" | "type3" | "soft-mask",
+): Promise<Uint8Array> {
+  const doc = await PDFDocument.create();
+  const page = doc.addPage([200, 200]);
+  const c = doc.context;
+  const image = c.register(
+    c.stream(Uint8Array.of(0), {
+      Type: "XObject",
+      Subtype: "Image",
+      Width: 1,
+      Height: 1,
+      ColorSpace: "DeviceGray",
+      BitsPerComponent: 8,
+    }),
+  );
+  const imageResources = { XObject: { Im0: image } };
+  let resources = c.obj({});
+  if (kind === "form") {
+    const inner = c.register(
+      c.stream(Buffer.from("/Im0 Do"), { Type: "XObject", Subtype: "Form", BBox: [0, 0, 1, 1], Resources: imageResources }),
+    );
+    const outer = c.register(
+      c.stream(Buffer.from("/Inner Do"), { Type: "XObject", Subtype: "Form", BBox: [0, 0, 1, 1], Resources: { XObject: { Inner: inner } } }),
+    );
+    resources = c.obj({ XObject: { Outer: outer } });
+  } else if (kind === "pattern") {
+    const pattern = c.register(
+      c.stream(Buffer.from("/Im0 Do"), {
+        Type: "Pattern",
+        PatternType: 1,
+        PaintType: 1,
+        TilingType: 1,
+        BBox: [0, 0, 1, 1],
+        XStep: 1,
+        YStep: 1,
+        Resources: imageResources,
+      }),
+    );
+    resources = c.obj({ Pattern: { P0: pattern } });
+  } else if (kind === "type3") {
+    const glyph = c.register(c.stream(Buffer.from("/Im0 Do")));
+    const font = c.register(
+      c.obj({
+        Type: "Font",
+        Subtype: "Type3",
+        FontBBox: [0, 0, 1, 1],
+        FontMatrix: [1, 0, 0, 1, 0, 0],
+        CharProcs: { A: glyph },
+        Encoding: { Type: "Encoding", Differences: [65, "A"] },
+        FirstChar: 65,
+        LastChar: 65,
+        Widths: [1],
+        Resources: imageResources,
+      }),
+    );
+    resources = c.obj({ Font: { F0: font } });
+  } else {
+    const group = c.register(
+      c.stream(Buffer.from("/Im0 Do"), { Type: "XObject", Subtype: "Form", BBox: [0, 0, 1, 1], Resources: imageResources }),
+    );
+    const mask = c.register(c.obj({ S: "Luminosity", G: group }));
+    const state = c.register(c.obj({ Type: "ExtGState", SMask: mask }));
+    resources = c.obj({ ExtGState: { GS0: state } });
+  }
+  page.node.set(PDFName.of("Resources"), resources);
+  page.node.set(PDFName.of("Contents"), c.register(c.stream(Buffer.from("q Q"))));
+  return doc.save({ useObjectStreams: false });
+}
+
+async function pageWithMalformedXObject(): Promise<Uint8Array> {
+  const doc = await PDFDocument.create();
+  const page = doc.addPage([200, 200]);
+  const c = doc.context;
+  const unknown = c.register(c.stream(Buffer.from("not safely classifiable"), { Type: "XObject" }));
+  page.node.set(PDFName.of("Resources"), c.obj({ XObject: { Mystery: unknown } }));
+  page.node.set(PDFName.of("Contents"), c.register(c.stream(Buffer.from("/Mystery Do"))));
+  return doc.save({ useObjectStreams: false });
+}
+
+describe("the resource walk", () => {
+  it("finds no image on the report's page, which has none", async () => {
+    expect(await onePageHasImage(await bytes(MDPI_P8))).toBe(false);
+  }, 60_000);
+
+  it("finds the image on a page that has one, through the one-page cut", async () => {
+    const pages = await openFigurePages(await bytes(HARDER));
+    const page = await pages.cut(3);
+    expect(page.imageInResources).toBe(true);
+  }, 60_000);
+
+  it("finds an inline image in the page's own content", async () => {
+    expect(await onePageHasImage(await onePage(`q 10 0 0 10 50 50 cm ${INLINE_IMAGE} Q`))).toBe(true);
+  });
+
+  it("finds an inline image delimited by PDF NUL whitespace", async () => {
+    const nulDelimited = "BI\0/W 2 /H 2 /CS /G /BPC 8 ID\0\0\0\0\0 EI";
+    expect(await onePageHasImage(await onePage(`q 10 0 0 10 50 50 cm\0${nulDelimited} Q`))).toBe(true);
+  });
+
+  it("finds an inline-image token split across the page's content streams", async () => {
+    const split = await onePageStreams([
+      "q 10 0 0 10 50 50 cm B",
+      "I /W 2 /H 2 /CS /G /BPC 8 ID \0\0\0\0 EI Q",
+    ]);
+    expect(await onePageHasImage(split)).toBe(true);
+  });
+
+  it("finds an inline image inside a form the page paints", async () => {
+    expect(await onePageHasImage(await onePage("q /Fm0 Do Q", `q 10 0 0 10 0 0 cm ${INLINE_IMAGE} Q`))).toBe(
+      true,
+    );
+  });
+
+  it("finds nothing in a page of paths, form included", async () => {
+    /* The control for the two above: the same PDFs with a path where the image
+       was. Without it, a walk that answered `true` to everything would pass. */
+    expect(await onePageHasImage(await onePage("q 0 0 m 100 100 l S Q /Fm0 Do", "0 0 m 10 10 l S"))).toBe(false);
+  });
+
+  it.each(["form", "pattern", "type3", "soft-mask"] as const)(
+    "finds an image reached through a nested %s resource",
+    async (kind) => {
+      expect(await onePageHasImage(await imageInNestedResource(kind))).toBe(true);
+    },
+  );
+
+  it("fails closed when an XObject cannot be classified", async () => {
+    expect(await onePageHasImage(await pageWithMalformedXObject())).toBe(true);
+  });
+
+  it("marks Type 3 vector glyph paint that the operator list cannot measure", async () => {
+    const pdf = await type3VectorGlyphPage();
+    const layout = (await readPdfPageLayouts({ data: pdf, pages: [1] })).get(1);
+    expect(layout?.paths).toBe(0);
+    expect(layout?.ink).toEqual([]);
+    const page = await (await openFigurePages(pdf)).cut(1);
+    expect((page as { unmeasuredPaint?: boolean }).unmeasuredPaint).toBe(true);
+  });
+
+  it("treats a file it cannot read as one that may hold an image", async () => {
+    expect(await onePageHasImage(new TextEncoder().encode("not a pdf"))).toBe(true);
+  });
+});
+
+describe("the page layout read", () => {
+  it("reads the report's page: its paths, no image, an ordinary geometry", async () => {
+    const layouts = await readPdfPageLayouts({ data: await bytes(MDPI_P8), pages: [1] });
+    const layout = layouts.get(1);
+    expect(layout).not.toBeNull();
+    if (!layout) return;
+    /* 59 `constructPath` operators, one of them the clip-only `endPath` —
+       measured with pdf.js 6 on 2026-09-12. */
+    expect(layout.paths).toBe(59);
+    expect(layout.ink).toHaveLength(58);
+    expect(layout.imageOps).toBe(0);
+    expect(layout.rotate).toBe(0);
+    expect(layout.view[0]).toBe(0);
+    expect(layout.view[1]).toBe(0);
+  }, 60_000);
+
+  it("keeps the rest of the page when it drops an image, rather than an empty list", async () => {
+    /* **The silent success this file was written to catch.** With
+       `stopAtErrors`, pdf.js answered a page carrying an oversized image with an
+       *empty* operator list — 0 operators on this page, measured 2026-09-12 —
+       and resolved, not rejected. A list cut short looks exactly like a page
+       with less ink on it. Without `stopAtErrors` the image is dropped before
+       it is decoded and everything else on the page is still there. The image
+       itself is the walk's to find (above), never this read's. */
+    const layouts = await readPdfPageLayouts({ data: await bytes(HARDER), pages: [3] });
+    const layout = layouts.get(3);
+    expect(layout).not.toBeNull();
+    expect(layout?.operators).toBeGreaterThan(100);
+    expect(layout?.imageOps).toBe(0);
+  }, 60_000);
+
+  it("keeps the closed-box flag through a rotated affine transform", async () => {
+    const pdf = await onePage("q .707 .707 -.707 .707 120 40 cm 0 0 100 100 re S Q");
+    const layout = (await readPdfPageLayouts({ data: pdf, pages: [1] })).get(1);
+    expect(layout?.ink).toHaveLength(1);
+    expect(layout?.ink[0]?.rect).toBe(true);
+  });
+
+  it("intersects painted path bounds with a rectangular clip", async () => {
+    const pdf = await onePage("50 50 50 100 re S q 0 0 110 200 re W n 95 50 70 100 re S Q 160 50 30 100 re S");
+    const layout = (await readPdfPageLayouts({ data: pdf, pages: [1] })).get(1);
+    expect(layout?.ink).toEqual([
+      expect.objectContaining({ x0: 50, y0: 50, x1: 100, y1: 150 }),
+      expect.objectContaining({ x0: 95, y0: 50, x1: 110, y1: 150 }),
+      expect.objectContaining({ x0: 160, y0: 50, x1: 190, y1: 150 }),
+    ]);
+  });
+
+  it("refuses ownership geometry affected by fully transparent paint", async () => {
+    const layout = (await readPdfPageLayouts({ data: await transparentBridgePage(), pages: [1] })).get(1);
+    expect(layout?.unmeasuredPaint).toBeGreaterThan(0);
+  });
+
+  it("refuses a stroke wider than the renderer's fixed crop padding", async () => {
+    const layout = (await readPdfPageLayouts({ data: await onePage("20 w 50 50 100 100 re S"), pages: [1] })).get(1);
+    expect(layout?.unmeasuredPaint).toBeGreaterThan(0);
+  });
+
+  it("refuses an acute miter join that extends beyond the crop padding", async () => {
+    const triangle = "1 w 89 50 m 111 50 l 100 150 l h S";
+    const layout = (await readPdfPageLayouts({ data: await onePage(triangle), pages: [1] })).get(1);
+    expect(layout?.unmeasuredPaint).toBeGreaterThan(0);
+  });
+
+  it("does not count white-on-white paint as ownership ink", async () => {
+    const layout = (await readPdfPageLayouts({ data: await onePage("1 g 50 50 100 100 re f"), pages: [1] })).get(1);
+    expect(layout?.ink).toEqual([]);
+  });
+
+  it("does not let a skinny white path bridge visible ownership components", async () => {
+    const pdf = await onePage("0 g 20 50 30 100 re f 150 50 30 100 re f 1 g 45 95 110 10 re f");
+    const layout = (await readPdfPageLayouts({ data: pdf, pages: [1] })).get(1);
+    expect(layout?.ink).toHaveLength(2);
+  });
+});

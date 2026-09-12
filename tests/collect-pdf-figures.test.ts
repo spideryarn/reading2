@@ -19,6 +19,8 @@
  */
 import { describe, expect, it } from "vitest";
 import { readFile } from "node:fs/promises";
+import { inflateSync } from "node:zlib";
+import { PDFDocument, StandardFonts } from "pdf-lib";
 
 import {
   collectPdfFigures,
@@ -99,6 +101,7 @@ describe("a real paper with four figures and a masthead", () => {
     expect(entry.contentType).toBe("image/png");
     expect(entry.sha256).toMatch(/^[0-9a-f]{64}$/);
     expect(run.stored).toBe(1);
+    expect(run.drawn).toBe(0);
     /* **The measurement the downscale exists for, pinned so it cannot quietly
        stop being true.** This figure is photographic RGB and encoded to
        9,355,050 bytes at full resolution — the number that forced the byte cap
@@ -283,6 +286,25 @@ describe("every marker gets an entry, whatever went wrong", () => {
  * ------------------------------------------------------------------ */
 
 describe("the step's own deadline", () => {
+  it("stores an already-decoded bitmap before slow drawn-page work can stop the run", async () => {
+    const stop = new AbortController();
+    const drawn = marker(2);
+    const bitmap = marker(3);
+    const run = await collectPdfFigures({
+      markers: [drawn, bitmap],
+      pdf: await bytes(HARDER),
+      blobs: fakeBlobs(),
+      captions: new Map([[drawn.ref, "Figure 1. A caption that turns the drawn route on."]]),
+      signal: stop.signal,
+      readLayouts: async () => {
+        stop.abort();
+        throw new Error("layout work stopped");
+      },
+    });
+    expect(run.entries[0]).toMatchObject({ ref: drawn.ref, status: "failed", reason: "out-of-time" });
+    expect(run.entries[1]).toMatchObject({ ref: bitmap.ref, status: "stored" });
+  }, 60_000);
+
   /**
    * **The test the two abort tests above could not be.**
    *
@@ -420,6 +442,194 @@ describe("the article's shared byte budget", () => {
 });
 
 /* ------------------------------------------------------------------ *
+ * A figure drawn rather than pictured
+ * ------------------------------------------------------------------ */
+
+/** Page 8 of the MDPI paper the report was about, cut to one page. */
+const MDPI_P8 = "tests/fixtures/pdf-vector-figure/entropy-24-00930-p8.pdf";
+const ARXIV = "evals/pdf/titles/arxiv-arnn-eeg-stamp/source.pdf";
+
+/**
+ * Every pixel of a filter-0 PNG as written by `encodeFigurePng`: the IDAT
+ * chunks inflated, the one filter byte at the front of each row dropped.
+ * Enough to ask whether a stored figure draws anything; not a general reader.
+ */
+function pngPixels(png: Uint8Array): { width: number; height: number; channels: number; data: Uint8Array } {
+  const view = Buffer.from(png.buffer, png.byteOffset, png.byteLength);
+  const width = view.readUInt32BE(16);
+  const height = view.readUInt32BE(20);
+  const channels = view[25] === 6 ? 4 : 3;
+  const idat: Buffer[] = [];
+  for (let at = 8; at < view.length; ) {
+    const length = view.readUInt32BE(at);
+    const type = view.toString("latin1", at + 4, at + 8);
+    if (type === "IDAT") idat.push(view.subarray(at + 8, at + 8 + length));
+    at += 12 + length;
+  }
+  const raw = inflateSync(Buffer.concat(idat));
+  const stride = width * channels;
+  const data = new Uint8Array(width * height * channels);
+  for (let y = 0; y < height; y++) data.set(raw.subarray(y * (stride + 1) + 1, (y + 1) * (stride + 1)), y * stride);
+  return { width, height, channels, data };
+}
+
+async function storedPng(
+  blobs: ReturnType<typeof fakeBlobs>,
+  entry: { status: string; sha256?: string },
+): Promise<Uint8Array> {
+  const found = [...blobs.objects.entries()].find(([key]) => entry.sha256 && key.includes(entry.sha256));
+  if (!found) throw new Error("the stored figure is not in the bucket");
+  return found[1];
+}
+
+describe("a figure drawn rather than pictured", () => {
+  it("draws Figure 2 of the report's page — both lattices, and not the page", async () => {
+    const figure = marker(1);
+    const blobs = fakeBlobs();
+    const run = await collectPdfFigures({
+      markers: [figure],
+      pdf: await bytes(MDPI_P8),
+      blobs,
+      captions: new Map([
+        [
+          figure.ref,
+          "Figure 2. Partial information lattices. On the left is the lattice for two predictor variables, and on the right is the lattice for three predictor variables.",
+        ],
+      ]),
+    });
+    const entry = run.entries[0]!;
+    expect(entry).toMatchObject({ status: "stored", ext: "png" });
+    if (entry.status !== "stored") return;
+    /* The drawing spans x ≈ 166–515 pt and y ≈ 465–755 pt on this page: both
+       lattices and their labels, and neither the caption below nor the
+       running header above. Its shape is wider than tall; a whole A4 page is
+       taller than wide, so the ratio alone tells the two apart. */
+    const ratio = entry.width / entry.height;
+    expect(ratio).toBeGreaterThan(349 / 290 - 0.12);
+    expect(ratio).toBeLessThan(349 / 290 + 0.12);
+    expect(Math.max(entry.width, entry.height)).toBeLessThanOrEqual(MAX_FIGURE_EDGE);
+    const pixels = pngPixels(await storedPng(blobs, entry));
+    expect([pixels.width, pixels.height]).toEqual([entry.width, entry.height]);
+    expect(pixels.data.some((byte) => byte !== 255), "a figure that draws nothing").toBe(true);
+    /* Not the bitmap route's picture: this page has no bitmap at all. */
+    expect(pixels.channels).toBe(3);
+    expect(run.drawn).toBe(1);
+  }, 60_000);
+
+  it("draws both figures of the arXiv paper, each from its own page", async () => {
+    const one = marker(2);
+    const two = marker(3);
+    const blobs = fakeBlobs();
+    const run = await collectPdfFigures({
+      markers: [one, two],
+      pdf: await bytes(ARXIV),
+      blobs,
+      captions: new Map([
+        [
+          one.ref,
+          "Figure 1: Comprehensive illustration of the Attentive recurrent neural network (ARNN) architecture. The architecture begins by segmenting multi-channel input EEG signals into number of local windows.",
+        ],
+        [
+          two.ref,
+          "Figure 2: An illustration of sequence processing by RNN, ViT and ARNN cell. In contrast to sequential processing by RNN and parallel processing by ViT, ARNN cell operates sequentially.",
+        ],
+      ]),
+    });
+    expect(run.entries.map((e) => e.status)).toEqual(["stored", "stored"]);
+    expect(run.drawn).toBe(2);
+    const [first, second] = run.entries;
+    if (first?.status !== "stored" || second?.status !== "stored") return;
+    /* 338 × 224 pt and 520 × 182 pt, measured on the pages and checked by eye
+       in the plan's prototype. */
+    expect(first.width / first.height).toBeGreaterThan(338 / 224 - 0.15);
+    expect(first.width / first.height).toBeLessThan(338 / 224 + 0.15);
+    expect(second.width / second.height).toBeGreaterThan(520 / 182 - 0.25);
+    expect(second.width / second.height).toBeLessThan(520 / 182 + 0.25);
+    for (const entry of [first, second]) {
+      const pixels = pngPixels(await storedPng(blobs, entry));
+      expect(pixels.data.some((byte) => byte !== 255)).toBe(true);
+    }
+  }, 60_000);
+
+  it("stores nothing for a caption the page does not print", async () => {
+    const figure = marker(1);
+    const blobs = fakeBlobs();
+    const run = await collectPdfFigures({
+      markers: [figure],
+      pdf: await bytes(MDPI_P8),
+      blobs,
+      captions: new Map([[figure.ref, "Figure 9. A caption that this page does not print anywhere at all."]]),
+    });
+    expect(run.entries).toEqual([
+      expect.objectContaining({ status: "failed", reason: "not-located", page: 1 }),
+    ]);
+    expect(blobs.objects.size).toBe(0);
+  }, 60_000);
+
+  it("uses the same per-figure and article byte caps as the bitmap route", async () => {
+    const figure = marker(1);
+    const options = {
+      markers: [figure],
+      pdf: await bytes(MDPI_P8),
+      captions: new Map([
+        [
+          figure.ref,
+          "Figure 2. Partial information lattices. On the left is the lattice for two predictor variables, and on the right is the lattice for three predictor variables.",
+        ],
+      ]),
+    };
+    const perFigure = await collectPdfFigures({ ...options, blobs: fakeBlobs(), maxBytes: 1 });
+    expect(perFigure.entries[0]).toMatchObject({ status: "failed", reason: "too-many-pixels" });
+    const article = await collectPdfFigures({ ...options, blobs: fakeBlobs(), maxArticleBytes: 1 });
+    expect(article.entries[0]).toMatchObject({ status: "failed", reason: "budget" });
+  }, 60_000);
+
+  it("does not let a drawn-route storage straggler rewrite the returned run", async () => {
+    const figure = marker(1);
+    const stop = new AbortController();
+    const blobs = fakeBlobs();
+    let finishPut: (() => void) | undefined;
+    blobs.putIfAbsent = async (key, value) => {
+      stop.abort();
+      await new Promise<void>((resolve) => {
+        finishPut = resolve;
+      });
+      blobs.objects.set(key, value);
+      return "stored";
+    };
+    const run = await collectPdfFigures({
+      markers: [figure],
+      pdf: await bytes(MDPI_P8),
+      blobs,
+      signal: stop.signal,
+      captions: new Map([
+        [
+          figure.ref,
+          "Figure 2. Partial information lattices. On the left is the lattice for two predictor variables, and on the right is the lattice for three predictor variables.",
+        ],
+      ]),
+    });
+    expect(finishPut, "the drawn figure has to reach storage").toBeTypeOf("function");
+    expect(run.entries[0]).toMatchObject({ status: "failed", reason: "out-of-time" });
+    expect({ stored: run.stored, drawn: run.drawn, failed: run.failed, bytes: run.bytes }).toEqual({
+      stored: 0,
+      drawn: 0,
+      failed: 1,
+      bytes: 0,
+    });
+    finishPut?.();
+    await new Promise((resolve) => setTimeout(resolve, 100));
+    expect(run.entries[0]).toMatchObject({ status: "failed", reason: "out-of-time" });
+    expect({ stored: run.stored, drawn: run.drawn, failed: run.failed, bytes: run.bytes }).toEqual({
+      stored: 0,
+      drawn: 0,
+      failed: 1,
+      bytes: 0,
+    });
+  }, 60_000);
+});
+
+/* ------------------------------------------------------------------ *
  * The pipeline's half — finding the document to look in
  * ------------------------------------------------------------------ */
 
@@ -434,6 +644,22 @@ function figureBlock(ref: string): Block {
     html: `<figure data-spya-pdf-figure="${ref}"><figcaption>Fig 1</figcaption></figure>`,
     gistable: true,
   };
+}
+
+function figureBlockWithCaption(ref: string, caption: string): Block {
+  return {
+    ...figureBlock(ref),
+    text: caption,
+    html: `<figure data-spya-pdf-figure="${ref}"><figcaption>${caption}</figcaption></figure>`,
+  };
+}
+
+async function captionOnlyPdf(caption: string): Promise<Uint8Array> {
+  const doc = await PDFDocument.create();
+  const font = await doc.embedFont(StandardFonts.Helvetica);
+  const page = doc.addPage([595, 842]);
+  page.drawText(caption, { x: 72, y: 400, size: 9, font });
+  return doc.save();
 }
 
 const CTX = {
@@ -477,6 +703,22 @@ describe("recoverPdfFigures", () => {
        stay distinguishable from *we looked and could not*. src/assets.ts. */
     const store = memoryArtefacts();
     expect(await recoverPdfFigures(CTX, store, [])).toBeUndefined();
+  });
+
+  it("forwards the marker's own caption into the drawn route", async () => {
+    /* A caption-only PDF deliberately gets as far as the locator's `no-ink`.
+       If `recoverPdfFigures` drops the extracted captions, the drawn route is
+       never entered and the bitmap route's `no-raster` survives instead. */
+    const figure = marker(1);
+    const caption = "Figure 1. A caption whose page deliberately contains no drawing.";
+    const store = memoryArtefacts();
+    store.plant("a", "fetch", "raw", { file: "raw.pdf", kind: "pdf", storedSha256: "f".repeat(64) });
+    const run = await recoverPdfFigures(CTX, store, [figureBlockWithCaption(figure.ref, caption)], {
+      readBytes: async () => captionOnlyPdf(caption),
+    });
+    expect(run?.entries).toEqual([
+      expect.objectContaining({ ref: figure.ref, status: "failed", reason: "not-located" }),
+    ]);
   });
 
   /**

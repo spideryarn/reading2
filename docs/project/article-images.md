@@ -234,6 +234,22 @@ the whole defence. [silent-success.md](../reusable/silent-success.md) is the fam
   `storage`, `budget` and `out-of-time` say *whose* problem it is, for the reason `AssetFailure`
   keeps `storage` apart from `network`: the two need different people. All four were once spelled
   `out-of-time` (GPT Sol, C-4).
+- **Since 2026-09-12 a PDF figure that is drawn rather than pictured can be recovered too — on one
+  narrow kind of page.** The bitmap route above lifts embedded images and nothing else, so a figure
+  made of vector paths and text was caption-only by construction; a reader asked why
+  ([260912a](../plans/260912a-figure-2-vector-figures-from-a-pdf.md)). The second route takes a
+  page with exactly one figure marker and one printed caption, **no image of any kind** (pdf-lib reads
+  the page's resources and content for one, because pdf.js drops an oversized image without saying
+  so), and ink that is provably all the caption's own; finds the rectangle between the caption and
+  the prose above it (`locateDrawnFigure`, [`src/pdf-figure-region.ts`](../../src/pdf-figure-region.ts),
+  pure); cuts the page out alone ([`src/pdf-figure-page.ts`](../../src/pdf-figure-page.ts)); and has
+  PDFium, compiled to WebAssembly, draw only that rectangle
+  ([`src/pdf-figure-render.ts`](../../src/pdf-figure-render.ts)). The PNG goes through the same
+  `storeOne` as a bitmap, so everything below the manifest is unchanged. **Everything outside that
+  case stays caption-only**, and the three new failure words — `not-located`, `too-complex`,
+  `render-failed` — say which rule refused it. Two figures on one page, a page mixing a bitmap
+  with a drawing, and a caption above its figure are all deferred, because ownership there would be
+  inferred rather than shown (GPT Sol F1, F14; Fable's ruling is in the plan).
 - **A figure ref carried by two elements refuses both.** The manifest is keyed by ref, so one entry
   is all there is; keeping the first meant the same picture appeared under two different captions —
   a fabricated claim about the paper the reader cannot detect. Both `pdfFigureMarkersIn` walks now
@@ -247,7 +263,8 @@ the whole defence. [silent-success.md](../reusable/silent-success.md) is the fam
 
 `assets` is one of the stages fingerprinted on a content hash, and its hash input is **the image
 URLs and the PDF figure refs in the blocks — plus, only when there are any, the preferred `srcset`
-candidates — and nothing else** — `assetsInputHash` in
+candidates, and, only when there are PDF figure markers, the version of the PDF recovery policy —
+and nothing else** — `assetsInputHash` in
 [`src/collect-assets.ts`](../../src/collect-assets.ts).
 [architecture.md § Conventions](architecture.md#conventions).
 

@@ -48,6 +48,9 @@ const MUST_NOT_BE_STATIC: Record<string, string> = {
   jsdom: "src/jsdom-lazy.ts",
   "pdf-lib": "`openPdfCuts` in src/pdf-read.ts",
   stripe: "`stripeClient()` in src/billing/stripe.ts",
+  /* 4.6 MB of WASM, needed only to draw a PDF figure that is vector art —
+     docs/plans/260912a-figure-2-vector-figures-from-a-pdf.md. */
+  "@embedpdf/pdfium": "`loadPdfium` in src/pdf-figure-render.ts",
 };
 
 /** Every bare specifier the bundle imports at module scope. */

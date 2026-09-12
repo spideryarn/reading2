@@ -41,6 +41,7 @@ import {
   assetsInputHash,
   collectAssets,
   describeStorageFailure,
+  pdfFigureCaptionsIn,
   pdfFigureMarkersIn,
 } from "./collect-assets.js";
 import { collectPdfFigures, type PdfFiguresRun } from "./collect-pdf-figures.js";
@@ -1729,6 +1730,7 @@ export async function recoverPdfFigures(
     return {
       entries,
       stored: 0,
+      drawn: 0,
       failed: entries.length,
       deduped: 0,
       bytes: 0,
@@ -1789,7 +1791,9 @@ export async function recoverPdfFigures(
     );
     return allFailed(ours ? "no-source" : "storage");
   }
-  return collectPdfFigures({ markers, pdf, signal: ctx.signal });
+  /* The captions are what turn the drawn-figure route on — a marker without
+     one keeps the bitmap route's answer (src/collect-pdf-figures.ts § 4). */
+  return collectPdfFigures({ markers, pdf, signal: ctx.signal, captions: pdfFigureCaptionsIn(blocks) });
 }
 
 /**
@@ -2850,6 +2854,9 @@ export const STEPS: { [K in StepName]: PipelineStep<K> } = {
             ? {
                 figures: figures.entries.length,
                 figuresStored: figures.stored,
+                /* How many of those were drawn from a page rather than decoded
+                   from a bitmap — docs/plans/260912a-figure-2-vector-figures-from-a-pdf.md. */
+                figuresDrawn: figures.drawn,
                 figuresMs: figures.elapsedMs,
                 ...(figures.storageErrors.length
                   ? { figureStorageErrors: figures.storageErrors }

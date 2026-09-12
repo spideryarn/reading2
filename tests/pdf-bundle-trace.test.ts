@@ -54,6 +54,15 @@ const MUST_SHIP = [
   "node_modules/jsdom/lib/api.js",
   "node_modules/pdf-lib/cjs/index.js",
   "node_modules/stripe/esm/stripe.esm.node.js",
+  /* PDFium, which draws a PDF figure that is vector art. The module is imported
+     lazily, and the WASM is read by path — `createRequire(…).resolve(
+     "@embedpdf/pdfium/pdfium.wasm")` in src/pdf-figure-render.ts — so both have
+     to be seen by the tracer rather than assumed. A WASM that does not ship is
+     not an outage: every drawn figure becomes `render-failed`, caption-only —
+     which is exactly the silent shape this list exists to catch.
+     docs/plans/260912a-figure-2-vector-figures-from-a-pdf.md. */
+  "node_modules/@embedpdf/pdfium/dist/index.js",
+  "node_modules/@embedpdf/pdfium/dist/pdfium.wasm",
 ];
 
 /**

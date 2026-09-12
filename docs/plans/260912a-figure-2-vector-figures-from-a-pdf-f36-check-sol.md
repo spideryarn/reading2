@@ -1,0 +1,3 @@
+The bump closes the cache bypass. Both freshness checks use the shared `assetsInputHash`; carried manifests retain their `/2` hash and therefore read stale against `/3`. Articles without PDF markers retain the identical hash. Serving requires the current manifest to name the blob, so after the known `/2` manifest was regenerated—and with the pre-containment producer never deployed—no old drawn figure remains reachable.
+
+**F35 closed.**

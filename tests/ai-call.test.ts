@@ -1272,6 +1272,22 @@ describe("what the transcription wire had to be told twice", () => {
   });
 
   /**
+   * **The recording's length, by the provider's measure** — the only way the
+   * server can turn bytes into a bitrate, and so the only evidence that an iPad
+   * took the bitrate hint rather than falling back to 192 kbps in silence
+   * (docs/plans/260912b-dictation-slow-on-weak-wifi.md). Measured present on a
+   * real call, 2026-09-12: `usage.seconds` 9 for an 8.8-second clip.
+   */
+  it("hands back usage.seconds, and null for anything that is not a real duration", async () => {
+    stubTransport(() => transcribed({ text: "hello", usage: { seconds: 41.2, cost: 0 } }));
+    expect((await ask()).seconds).toBe(41.2);
+    for (const usage of [undefined, {}, { seconds: 0 }, { seconds: -3 }, { seconds: "41" }, "x"]) {
+      stubTransport(() => transcribed({ text: "hello", usage }));
+      expect((await ask()).seconds).toBeNull();
+    }
+  });
+
+  /**
    * **Except a BYOK zero, which is a real price with the amount somewhere else.**
    *
    * `normaliseByokUpstream` only stores `cost_details.upstream_inference_cost`
