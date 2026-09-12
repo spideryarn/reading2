@@ -180,8 +180,10 @@ app onto it. That is a sweep across forty-odd buttons, and this report is about 
 
 ### Stage: land
 
-- [ ] controls.md gains the token row; icons.md's "Where they're used" gains Send
-- [ ] Feedback note under `docs/user-feedback/`, the queue item done, push to `dev`
+- [x] controls.md gains the token row; icons.md's "Where they're used" gains Send
+- [x] Feedback note under `docs/user-feedback/`, ending **Shipped**, and a row in
+  awaiting-approval.md's list of shipped reports that still want Greg: the iPad check
+- [ ] The queue item done, push to `dev`
 
 ## Appendix: GPT Sol's plan review
 
