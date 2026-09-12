@@ -19,6 +19,7 @@ import { readFileSync } from "node:fs";
 import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { readerCssNoComments } from "./helpers/stylesheets.js";
 
 vi.mock("../src/web/useDictationField.js", () => ({
   useDictationField: () => ({
@@ -44,12 +45,24 @@ vi.mock("../src/web/lib/api.js", () => ({
 
 const { Composer } = await import("../src/web/ChatPanel.js");
 
-/** The declarations of the first rule whose selector is exactly `selector`. */
-function rule(css: string, selector: string): string {
+const css = readerCssNoComments();
+
+/** The declarations of the one rule whose selector is exactly `selector`. */
+function rule(selector: string): string {
   const escaped = selector.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-  const m = css.match(new RegExp(`(?:^|\\n)${escaped}\\s*\\{([^}]*)\\}`));
-  if (!m?.[1]) throw new Error(`no rule for ${selector}`);
-  return m[1];
+  const found = [...css.matchAll(new RegExp(`^[\\t ]*${escaped}\\s*\\{([^}]*)\\}`, "gm"))];
+  expect(found.length, `expected one rule for ${selector}, found ${found.length}`).toBe(1);
+  return found[0]?.[1] ?? "";
+}
+
+/** Every simple rule that can match `.chat-send`, in cascade order. */
+function chatSendSelectors(): string[] {
+  const found: string[] = [];
+  for (const match of css.matchAll(/(?:^|[{}])\s*([^@{}][^{}]*\.chat-send[^{}]*)\s*\{/g)) {
+    const selector = (match[1] ?? "").replace(/\s+/g, " ").trim();
+    if (selector) found.push(selector);
+  }
+  return found;
 }
 
 describe("the send button", () => {
@@ -89,8 +102,7 @@ describe("the send button", () => {
     const tokens = readFileSync("styles/tokens.css", "utf8");
     expect(tokens).toMatch(/--control-h:\s*2\.25rem/);
 
-    const css = readFileSync("src/web/styles/mode-band.css", "utf8");
-    const base = rule(css, ".chat-send");
+    const base = rule(".chat-send");
     expect(base).toMatch(/width:\s*var\(--control-h\)/);
     expect(base).toMatch(/height:\s*var\(--control-h\)/);
     expect(base).toMatch(/padding:\s*0/);
@@ -101,21 +113,44 @@ describe("the send button", () => {
      same class, so `.chat-send:not(:disabled)` would have filled it orange too —
      GPT Sol's plan review, P1. */
   it("fills with the primary colour only when Send can be pressed, and never fills Stop", () => {
-    const css = readFileSync("src/web/styles/mode-band.css", "utf8");
-    const pressable = rule(css, '.chat-send[type="submit"]:not(:disabled)');
+    const base = rule(".chat-send");
+    expect(base).toMatch(/border:\s*1px solid var\(--highlight\)/);
+    expect(base).toMatch(/background:\s*transparent/);
+
+    const pressable = rule('.chat-send[type="submit"]:not(:disabled)');
     expect(pressable).toMatch(/background:\s*var\(--primary\)/);
+    expect(pressable).toMatch(/border-color:\s*var\(--primary\)/);
     expect(pressable).toMatch(/color:\s*var\(--primary-foreground\)/);
 
-    const stop = rule(readFileSync("src/web/styles/chat-actions.css", "utf8"), ".chat-send.stop");
+    const stop = rule(".chat-send.stop");
     expect(stop).toMatch(/background:\s*transparent/);
+    expect(stop).toMatch(/color:\s*var\(--highlight-ink\)/);
   });
 
   /* The disabled look is said with colour, not `opacity`. Sol's leading iOS
      suspect for the missing icon is a disabled button drawn at opacity < 1; this
      does not prove that was the cause, but the new state has no need of it. */
   it("says 'not yet' with colour rather than opacity", () => {
-    const disabled = rule(readFileSync("src/web/styles/mode-band.css", "utf8"), ".chat-send:disabled");
+    const disabled = rule(".chat-send:disabled");
     expect(disabled).not.toMatch(/opacity/);
     expect(disabled).toMatch(/background:\s*transparent/);
+    expect(disabled).toMatch(/color:\s*var\(--ink-faint\)/);
+
+    /* `.cmt-spinner` sets orange on the SVG itself, which otherwise beats the
+       grey inherited from the disabled button. */
+    expect(rule(".chat-send:disabled .cmt-spinner")).toMatch(/color:\s*inherit/);
+  });
+
+  it("keeps every matching selector inside the reviewed state matrix", () => {
+    expect(chatSendSelectors()).toEqual([
+      ".chat-send",
+      ".chat-send:disabled",
+      ".chat-send:disabled .cmt-spinner",
+      '.chat-send[type="submit"]:not(:disabled)',
+      '.chat-send[type="submit"]:not(:disabled):hover',
+      ".chat-send:focus-visible",
+      ".remember .chat-send",
+      ".chat-send.stop",
+    ]);
   });
 });

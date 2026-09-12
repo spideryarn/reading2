@@ -704,6 +704,11 @@
   color: var(--ink-faint);
   cursor: default;
 }
+/* `.cmt-spinner` normally states the working orange on the SVG itself, so the
+   parent's disabled grey cannot reach it through inheritance. This branch is
+   still a disabled Send, and keeps the same quiet icon as every other reason
+   Send cannot be pressed. */
+.chat-send:disabled .cmt-spinner { color: inherit; }
 /* Send only — `[type="submit"]`, because Stop takes Send's place while an
    answer arrives and is an *enabled* button with the same class. A bare
    `:not(:disabled)` filled it orange too (GPT Sol, plan review P1). The tokens
@@ -938,4 +943,3 @@
   letter-spacing: 0.02em;
   color: var(--ink-faint);
 }
-

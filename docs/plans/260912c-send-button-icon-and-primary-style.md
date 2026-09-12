@@ -1,7 +1,10 @@
 # The send button: its missing icon, and making it the primary control in its row
 
-*Status as of 2026-09-12: decided, not built. Evidence: `.chat-send` in
-[`mode-band.css`](../../src/web/styles/mode-band.css) is still the 32px grey box described below.*
+*Status as of 2026-09-12: built, on `dev`, not deployed. Evidence: `.chat-send` in
+[`mode-band.css`](../../src/web/styles/mode-band.css) takes its square from `var(--control-h)`, and
+[`tests/chat-send-is-the-primary-control.test.tsx`](../../tests/chat-send-is-the-primary-control.test.tsx)
+pins it. **Why the icon went missing on Greg's iPad is still not known**: it rests on a check on the
+device (below).*
 
 ## Goal, context
 
@@ -175,8 +178,27 @@ app onto it. That is a sweep across forty-odd buttons, and this report is about 
     stance. That is the shape it already had at 834px before the change, and Send is never alone
     on a line where it was not before (it already was at WebKit's 551px, before and after).
 - [x] The new test green (4 of 4), `npm run typecheck` exits 0
-- [ ] `npm test`, the full suite, and lint on the touched files
-- [ ] GPT Sol code review, which fixes what it finds
+- [x] Lint on the touched files: the same four `noDescendingSpecificity` warnings as before the
+  change, at the same rules (checked by linting the pre-change file), plus the existing complexity
+  warning on `ChatPanel.tsx`. None is new.
+- [ ] `npm test`, the full suite
+- [x] GPT Sol code review, which fixes what it finds
+  - 📔 No P0. **P1, fixed by Sol:** a disabled Send showing the spinner kept it orange, because
+    `.cmt-spinner` sets its colour on the SVG itself and so beats the grey the button passes down.
+    `.chat-send:disabled .cmt-spinner { color: inherit }` makes it the same quiet grey as every
+    other reason Send cannot be pressed. That departs from icons.md's orange spinner, and the branch
+    has no normal caller, so it is recorded rather than argued over.
+  - 📔 **P2, fixed by Sol:** the test read one file and took the first matching rule, so a later
+    `.chat-send { background: red }` elsewhere would have left it green over a broken design. It now
+    reads the whole reader stylesheet (`readerCssNoComments`), requires each selector exactly once,
+    and holds an exact list of every selector that can match `.chat-send`, so a new state cannot
+    arrive unreviewed.
+  - 📔 Sol confirmed the cascade: only an enabled Send is filled, every disabled Send is outlined
+    with a grey icon, Stop is transparent with an orange square, and the base layer's button reset
+    loses to the app layer. The focus ring's 2px offset leaves a dark gap around the fill and is
+    not clipped, including in the chat dialog. After its changes: the new test 5 of 5, doc-links
+    14 of 14, typecheck exit 0.
+- [ ] See the hardened test fail: a duplicate `.chat-send` rule must turn it red
 
 ### Stage: land
 
