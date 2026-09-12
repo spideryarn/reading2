@@ -8,7 +8,9 @@ reported 2026-09-12 08:05 UTC · kind: problem · from an admin (Greg) · on an 
 Slug `entropy-24-00930-spya-bmvfyb`, block `spya-d8tgkx`. The paper is MDPI *Entropy* 2022, 24, 930;
 the slug is the PDF's own filename.
 
-**Status: plan, before review.** Nothing built yet.
+**Status: plan, revised after GPT Sol's review** (`ad65edb2` was the first draft; the review is
+[260912a-…-plan-review-sol.md](260912a-figure-2-vector-figures-from-a-pdf-plan-review-sol.md), and
+§ The review, and what it changed says what was taken). Nothing built yet.
 
 ## The answer to the question
 
@@ -48,15 +50,18 @@ count matches the report; nothing here read production.
 
 **It is not rare.** The same operator survey over the committed eval PDFs:
 `evals/pdf/titles/arxiv-arnn-eeg-stamp` has its figures on p2 and p3 with **zero** images and 553 and
-458 paths. A LaTeX paper with matplotlib or TikZ figures — a large share of what gets uploaded —
-produces exactly this. The ball-lightning paper's four figures are all bitmaps.
+458 paths. A LaTeX paper with matplotlib or TikZ figures produces exactly this. The ball-lightning
+paper's four figures are all bitmaps.
 
-## The fix
+## The fix, narrowed
 
-**A second route for a figure whose page offered no usable bitmap: find where the figure sits on the
-page, render that rectangle, and store the pixels as a PNG exactly as the bitmap route stores its
+**A second route, for one narrow and common case: a page with exactly one figure caption, no image
+of any kind, and a drawing that unambiguously belongs to that caption. Find the drawing's rectangle,
+render only that rectangle, and store the pixels as a PNG exactly as the bitmap route stores its
 own.** Everything downstream is unchanged — a `stored` manifest entry, `GET /api/asset/…` and its
-public twin, `rehost.ts`, the lightbox, the page link.
+public twin, `rehost.ts`, the lightbox, the page link. **Anything outside the narrow case stays
+caption-only, as today** — the rule 260906a was built on, that a missing figure is visible and a
+wrong one is not.
 
 ### Rendering it: PDFium, compiled to WebAssembly
 
@@ -75,82 +80,144 @@ to WASM needs no native addon at all.
 | memory | ~+70 MB RSS per full page rendered, and a WASM heap never shrinks — so render **only the clipped region**, never the page |
 | native addon / network | none / none (a throwing `fetch` did not stop it) |
 | how it finds the wasm | pass the bytes in (`init({ wasmBinary })`); its own default reads a path next to its module, which a bundler can break |
-| licence | MIT wrapper; PDFium BSD-3 |
+| licence | the wrapper is MIT; the bundled PDFium binary is Apache-2.0 per the package's documentation (it also ships PDFium's BSD-style `LICENSE.pdfium`). Both permissive; we run it in our own function and redistribute nothing to readers |
 
 **This is a new dependency, named here so Greg decides it rather than inherits it.** It is a library
 in the sense `pdf-lib` is, not a framework, so it is not a third exception to *prefer boring*
 ([vision.md § Principles](../project/vision.md#principles)) — but it is 4.6 MB added to the API
-function, and it is the first thing on the server that *renders* a stranger's document (§ Security).
+function (Vercel's limit is 250 MiB), and it is the first thing on the server that *renders* a
+stranger's document (§ Security).
 
-### Finding the rectangle: the band above the caption
+**PDFium is handed one page, not the document.** The page is cut out with pdf-lib — already a
+dependency, already how stage 2 cuts page ranges (`openPdfCuts`, src/pdf-read.ts) — so the second
+parser sees only that page and the resources it references, and its WASM heap is bounded by one page
+rather than by a 50 MiB upload. The committed fixture below was made exactly that way and renders
+correctly.
 
-A pure function over what pdf.js already hands back for a page — the box of every path and image in
-page coordinates (each `constructPath`'s own `minMax` carried through the current transform), and the
-text lines — so no rendering is needed to decide *where*:
+### Which pages are eligible — all of these, or the figure stays caption-only
 
-1. **Find the caption on the page**: the first text line whose normalised text starts with the
-   normalised opening of the block's own `<figcaption>`. Not found → refuse.
+1. **Exactly one figure marker on the page.** Two captions on one page is deferred: Sol's F1 shows
+   side-by-side figures over stacked captions defeating any band rule.
+2. **No image of any kind on the page**, which is stronger than today's `no-raster`: no
+   `paintImageXObject`, inline image, repeated image or image mask in pdf.js's operator list, **and**
+   no image XObject in the page's resources — read with pdf-lib, walking Form XObjects to a bounded
+   depth — because pdf.js *silently drops* an image over `maxImageSize` from the operator list
+   (`src/pdf-figure-read.ts` header § 1). So an image the bitmap route declined for size, kind or
+   shape is never handed to a second decoder. Sol F2.
+3. **An ordinary page geometry**: `rotate` is 0, pdf.js's view box starts at the origin, and PDFium's
+   page width and height agree with pdf.js's to half a point. Anything else is refused rather than
+   reconciled across two coordinate engines. Sol F7.
+4. **Not too heavy to try**: an operator count and a path count under fixed ceilings, checked on the
+   operator list pdf.js has already built. A guard against the obvious runaway, **not a security
+   boundary** — one operator can still be expensive (Sol F3; § Security).
+
+### Finding the rectangle, and proving it belongs to the caption
+
+A pure function over what pdf.js already hands back for the page — the box of every *painted* path
+(each `constructPath`'s `minMax` carried through the current transform, including nested Form
+XObject matrices; a path that only sets a clip paints nothing and is not ink) and the text lines:
+
+1. **Find the caption, not a mention of it.** The page's text lines, joined in reading order, must
+   contain the normalised opening of the block's own `<figcaption>` — up to 60 characters, not merely
+   "Figure 2" — so a body sentence beginning "Figure 2 shows…" does not match, and a caption split
+   across text runs or lines still does. No match, or more than one → refuse.
 2. **The ceiling**: the lowest line *above* the caption, overlapping its column, that is prose (≥ 8
    words and ≥ 30% of the page width) or another caption (`Figure|Fig.|Table N`); failing that, the
-   top of the body, with the running header and footer excluded.
-3. **The region**: the union of the ink in that band that overlaps the caption's column, then the
-   text lines in the band that touch it (the labels).
-4. **Trim page furniture**: a running header's rule sits inside the band on MDPI pages (y = 771 on
-   p8) and must not stretch the region to the page's edges.
+   top of the body.
+3. **Page furniture is not ink**: a thin horizontal rule in the top or bottom 12% of the page (the
+   running header's rule sits inside the band on MDPI pages, at y = 771 on p8). A path covering most
+   of the page in both directions — a border, a watermark, a background — **refuses the page**
+   rather than being trimmed.
+4. **The region**: the ink in the band that overlaps the caption's column, grown by ink in the band
+   touching it, then the short text lines in the band that touch it (the labels).
+5. **Ownership, stated as a refusal**: if there is any other ink in the band — beside the region, in
+   another column — the page is refused. So a figure is taken only when *everything drawn* between
+   its caption and the prose above it is the one region. That admits a multi-panel figure like
+   Figure 2's two lattices, which a one-connected-component rule would refuse, and it refuses a
+   sidebar, an ornament, or a neighbouring column's table rules.
+6. **Sanity bounds**: the region is at least 36 pt on each side, at most three quarters of the page,
+   and no prose line intersects it.
 
-Refused, and left caption-only as today, when: the caption is not on the page; the band holds no ink;
-the region is below a size floor; or two captions' regions overlap.
-
-**Prototyped on three real figures and every crop checked by eye**: MDPI p8 Figure 2 (both lattices,
-once the band replaced a first draft that grew by proximity and lost the left lattice), arXiv p2
-Figure 1 (a 338 × 224 pt architecture diagram) and arXiv p3 Figure 2 (a 520 × 182 pt, three-panel
-figure with its (a)/(b)/(c) labels).
-
-**Why this does not break Fable's rule** — *a picture under the wrong caption is a fabricated claim
-about the paper*. The region is derived from this caption's own position on its own page and bounded
-above by prose; it can reach another figure only if two figures share a band, and that case is
-refused. The bitmap route's *one marker, one raster* gate is untouched.
-
-**Which markers take this route**: every marker on a page with **zero usable rasters** — today's
-`no-raster`, and `ambiguous` where the page's ambiguity is several captions and no bitmap, since each
-caption finds its own band. A page with a bitmap keeps today's route exactly.
-
-**The caption text has to reach the step.** A marker carries a ref, a page and an ordinal and not
-the caption (`pdfFigureMarkersIn` says so on purpose). A server-side helper beside it reads each
-marker's `<figcaption>` text by ref; `PdfFigureMarker` itself, which the browser shares, is unchanged.
+**Prototyped on three real figures and every crop checked by eye**: MDPI p8 Figure 2 (both lattices),
+arXiv p2 Figure 1 (a 338 × 224 pt architecture diagram) and arXiv p3 Figure 2 (a 520 × 182 pt,
+three-panel figure with its (a)/(b)/(c) labels). All three are single-caption pages with no image.
 
 ### The rest of the shape
 
 - **Scale**: the longest side at most `MAX_FIGURE_EDGE` (1600 px) and at most 3× (216 dpi), rendered
-  onto white, stored as RGB through the existing `encodeFigurePng` and `storeOne` — the same bytes,
-  size caps, article budget and clock as a recovered bitmap.
-- **A complexity guard before PDFium is called.** pdf.js has already built the page's operator list,
-  so a page with an absurd number of operations is refused before a synchronous render that nothing
-  can interrupt is started.
-- **Two new failure words** in `PdfFigureFailure` (src/assets.ts, and the mapping in
-  src/collect-pdf-figures.ts): `not-located` — no bitmap, and no drawing we could place — and
-  `render-failed` — PDFium refused, threw, or the page was too heavy to try. The reader's note is the
-  same for every failure, so neither changes a word they see; they exist so the next person can
-  measure the route rather than find it hiding under `no-raster`.
-- **Freshness.** `assetsInputHash` does not change, so no existing article re-runs. Greg's article
-  gets its figure only when its `assets` step runs again: after a deploy,
-  `npx tsx scripts/stage.ts assets entropy-24-00930-spya-bmvfyb --force` against production. That is
-  a production write, so it is Greg's to run. `ASSETS_VERSION` is not bumped: nothing re-runs a stale
-  manifest on its own anyway ([cron-scheduler.md](../project/cron-scheduler.md)).
+  onto white, stored as RGB through the existing `encodeFigurePng` and `storeOne` — the same size
+  caps, article budget and clock as a recovered bitmap.
+- **Lifecycle** (Sol F5): one cached initialisation promise per process; every PDFium document, page
+  and bitmap and every `malloc` freed in `finally`, on the failure paths too; renders one at a time.
+  A test renders repeatedly, success and failure mixed, and checks the WASM heap does not grow.
+- **Failure words** (Sol F9), in `PdfFigureFailure` (src/assets.ts) and the exhaustive mapping in
+  src/collect-pdf-figures.ts. The reader's note is the same for all of them; they exist so the route
+  can be measured rather than hide under `no-raster`:
+  - `not-located` — an eligible page, and no region we could prove was this caption's;
+  - `too-complex` — eligible, and over the operator ceiling, so never handed to PDFium;
+  - `render-failed` — PDFium refused, threw, or could not be loaded.
+  - `no-raster` keeps its meaning for a page that is not eligible — an image we could not use, more
+    than one caption, an odd geometry.
+- **Freshness** (Sol F4): `assetsInputHash` gains a PDF-recovery policy version **only when the
+  article has PDF figure markers**, so every PDF article's manifest reads stale and no web article's
+  does. Nothing re-runs a stale manifest on its own ([cron-scheduler.md](../project/cron-scheduler.md)),
+  so this changes what the cache *claims*, not what runs: Greg's article gets its figure when its
+  `assets` step next runs — after a deploy, `npx tsx scripts/stage.ts assets
+  entropy-24-00930-spya-bmvfyb` against production, a production write and so Greg's to run. The
+  caption text is not added to the hash: every ref already folds a digest of it in.
+- **Shipping** (Sol F6): the file tracer is the single authority — the wasm goes in
+  `tests/pdf-bundle-trace.test.ts`'s `MUST_SHIP` as `node_modules/@embedpdf/pdfium/dist/pdfium.wasm`
+  (the package exports it as `@embedpdf/pdfium/pdfium.wasm`), and `vercel.json`'s `includeFiles` is
+  used only if the tracer cannot see it, keeping `certs/**`. A wasm that is somehow missing in
+  production **fails safe**: `render-failed`, caption-only, never a wrong picture.
+  `@embedpdf/pdfium` joins `tests/cold-start-lazy-imports.test.ts`, so no request pays for it
+  unless it renders.
 
 ### Security
 
 [security.md](../project/security.md) § the PDF says what protects us from a stranger's PDF is that
 the two parsers are *"never asked for anything but text, coordinates and bytes: we never render"*.
-**This makes that sentence false**, and the doc will say so rather than keep it.
+**This makes that sentence false**, and the doc will say so rather than keep it. PDFium is a third
+parser of a hostile document.
 
-What bounds the new exposure: PDFium runs as WASM, so a memory-safety bug corrupts its own linear
-memory and reaches nothing it was not handed (to be checked: that the Node build is given no
-filesystem); it runs only on pages that already passed the page cap and carry a figure marker, and
-only when that page has no bitmap; the complexity guard above bounds the one step that cannot be
-interrupted. None of the files in
-[security-map.md § Where the defences physically live](../project/security-map.md#where-the-defences-physically-live)
-is edited. Flagged to Greg all the same, because it changes a stated protection.
+What bounds it, and what does not:
+
+- **Memory integrity, not availability.** PDFium runs as WASM, so a memory-safety bug corrupts its
+  own linear memory and reaches nothing it was not handed. **Its filesystem is in-memory only**,
+  checked in the package rather than assumed: `dist/index.js` mounts `MEMFS` (46 references) and
+  names neither `NODEFS` nor `NODERAWFS`. The one `readFileSync` in the glue is the loader fetching
+  its own `.wasm` when not handed the bytes, and we hand it the bytes. WASM does **not** isolate CPU
+  or process memory (Sol F3).
+- **The only hard time bound is the platform's.** A render is synchronous; no timer of ours can run
+  while it holds the event loop. The operator ceiling and the one-page cut make a runaway less
+  likely, and are described as that and nothing more. An interruptible worker is deferred, and named
+  below — the same position `security.md` already records for pdf.js's own synchronous parse steps.
+- **Reachability is not a defence.** A figure marker comes from the model's reading of the PDF, and a
+  hostile PDF can print "Figure 1." (Sol F8). What narrows the input is the eligibility rules above —
+  in particular that no image reaches PDFium at all — and that code is added to
+  [security-map.md § Where the defences physically live](../project/security-map.md#where-the-defences-physically-live)
+  as a new row. No existing defence file is edited.
+
+Flagged to Greg all the same, because it changes a stated protection.
+
+## The review, and what it changed
+
+GPT Sol, 2026-09-12, on `ad65edb2`: **do not proceed** — three established P1s. All ten findings
+were checked against the code; the verdict was right and the plan above is the narrowed version it
+proposed, with one amendment.
+
+| | | |
+|---|---|---|
+| F1 | P1 · the band rule can attach another drawing | **Taken.** One caption per page, and the ownership rule in step 5. *Amended*: Sol proposed "one exclusive drawing component"; Figure 2 is two disconnected lattices, so that rule would refuse the figure this report is about. Ownership is instead *all the ink in the band is the region*, which refuses the same adversarial layouts |
+| F2 | P1 · zero usable rasters bypasses raster refusals | **Taken.** Eligibility 2 — no image of any kind, including those pdf.js drops silently |
+| F3 | P1 · no bound on a synchronous render | **Taken in part.** Described honestly; the one-page cut added; the worker **deferred** and named |
+| F4 | P1 · existing articles read falsely fresh | **Taken.** Policy version in `assetsInputHash` when markers exist; caption not added (already in the ref) |
+| F5 | P1 · lifecycle and peak memory | **Taken.** One-page input, cached init, `finally` everywhere, serial, a heap test |
+| F6 | P1 · bundle check can pass without shipping | **Taken in part.** One authority (the tracer), fail-safe on a missing wasm. A packaged-artifact test without `node_modules` is not built: deploys are Greg's and the tracer is what Vercel ships from |
+| F7 | P1 · two coordinate engines | **Taken.** Rotation and non-origin boxes refused; page sizes cross-checked; split-caption and body-reference cases tested |
+| F8 | P2 · security account | **Taken.** § Security rewritten; a security-map row |
+| F9 | P2 · `render-failed` conflation | **Taken.** `too-complex` separate |
+| F10 | P3 · licence | **Taken.** |
 
 ## The simpler options passed over
 
@@ -166,25 +233,29 @@ is edited. Flagged to Greg all the same, because it changes a stated protection.
 
 ## Stages
 
-**Stage 1 — the route, tested.** The region finder as a pure module with adversarial tests; the page
-layout read beside `readPdfRasters`; the renderer behind a lazy import; the wiring in
-`collectPdfFigures`; the two reasons. Fixtures: MDPI page 8 cut to a one-page PDF with pdf-lib (CC BY
-4.0, attributed), and the committed arXiv eval PDF. Red first. `npm test`, `npm run typecheck`. GPT
-Sol code review, write-capable. Commit.
+**Stage 1 — the route, tested.** The eligibility and region rules as a pure module with adversarial
+tests (Sol's layouts: side-by-side figures, a watermark, a narrow caption under a wide figure, a
+neighbouring column's drawing, a body reference, a split caption, a rotated page); the page layout
+read beside `readPdfRasters`; the one-page cut; the renderer behind a lazy import; the wiring in
+`collectPdfFigures`; the failure words; the freshness policy version. Fixtures: MDPI page 8 as a
+one-page PDF (CC BY 4.0, attributed, `tests/fixtures/pdf-vector-figure/`) and the committed arXiv eval
+PDF. Red first. `npm test`, `npm run typecheck`. GPT Sol code review, write-capable. Commit.
 
-**Stage 2 — shipping, and proof on the real article.** `@embedpdf/pdfium` in
-`tests/cold-start-lazy-imports.test.ts` and the wasm in `tests/pdf-bundle-trace.test.ts`'s `MUST_SHIP`
-(`includeFiles` in `vercel.json` if the tracer cannot see it); docs — article-images.md,
-content-extraction.md, security.md, the `pdf-figure-read.ts` header § 3, the `PdfFigureNote.tsx`
-comment; the local article's `assets` re-run and Figure 2 seen in a browser; the feedback note and
-the queue. GPT Sol review. Push to `dev`.
+**Stage 2 — shipping, and proof on the real article.** The bundle-trace and cold-start guards; docs —
+article-images.md, content-extraction.md, security.md, a security-map.md row, the
+`pdf-figure-read.ts` header § 3, the `PdfFigureNote.tsx` comment; the local article's `assets` re-run
+and Figure 2 seen in a browser; the feedback note and the queue. GPT Sol review. Push to `dev`.
 
 ## Deferred, and named
 
-- A page carrying both a bitmap figure and a drawn one keeps today's `ambiguous`.
-- Captions *above* a figure, or beside it, are not looked for; the band is above the caption only.
+- **Two or more captions on one page**, and a page carrying both a bitmap figure and a drawn one.
+  Both need ownership *demonstrated* rather than inferred (Sol F1).
+- **An interruptible worker** around PDFium, with a parent-held deadline (Sol F3).
+- Captions *above* a figure, or beside it; the band is above the caption only.
 - Rendering *every* figure, bitmaps included, which would also pick up labels a publisher set as text
   over a bitmap.
+- A note that says *why* when a drawn figure is refused — the eligibility rules now make "this page
+  has no image at all" a claim we can stand behind, which the note's header says it could not.
 - A backfill of the library. Nothing re-runs `assets` on its own; Greg's article needs the command
   above, and any other would too.
 - Whether *View the original*'s `#page=N` lands on the right page in iPad Safari. Not testable from
