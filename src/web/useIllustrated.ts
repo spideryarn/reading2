@@ -279,7 +279,7 @@ export function useIllustrated(slug: string, blocks: readonly Block[]): UseIllus
     void reload();
   }, [reload]);
 
-  const queue = useStepJob(slug, "illustrated", refresh);
+  const queue = useStepJob(slug, "illustrated", refresh, "watches-queue");
 
   const ensure = useCallback(async () => {
     await queue.start();

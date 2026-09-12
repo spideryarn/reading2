@@ -144,7 +144,7 @@ const ArcFromNothingProbe = () => {
 };
 
 const JobsProbe = () => {
-  useJobs();
+  useJobs("watches-queue");
   return null;
 };
 

@@ -444,7 +444,7 @@ function OwnedReader({
    * **And its job subscription is quiet**, which is the exception to the rule
    * the Quotes comment above states: a subscriber mounted here holds the engine
    * to its idle cadence, and from 2026-08-29 this one did — a `GET /api/jobs`
-   * every eight seconds on every owner's article, for ever. `{ idle: false }`
+   * every eight seconds on every owner's article, for ever. `"quiet"`
    * in useArc.ts keeps the job it starts, not the poll.
    * tests/public-network-trace.test.tsx § an owner's reading view, left alone.
    */

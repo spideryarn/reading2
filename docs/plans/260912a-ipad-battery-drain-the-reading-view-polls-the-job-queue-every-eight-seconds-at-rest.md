@@ -266,6 +266,43 @@ arc's own POST pokes, and a mount wake would add a request per later quiet mount
   | F12 | P2: the default still bundles the cadence into every `useJobs()`; the guard covers Plain and Summary, not the class | **Taken as stage 2**, and it overrules the postmortem's "wait for a third quiet caller" |
 
   Sol confirmed both trace-fixture edits are the intended effect, not a regression papered over.
+  Committed as `2099d6da`.
+- 2026-09-12 — merged `origin/dev` as `46259459`, clean: its 16 commits touch none of this change's
+  files. It did change `src/web/useCitations.ts`, a `useStepJob` caller, so stage 2 covers the
+  merged version.
+- 2026-09-12 — **stage 2 built.** `QueueCadence = "watches-queue" | "quiet"`, a required first
+  argument to `useJobs` and a required fourth to `useStepJob`, mapped to the engine's two stable
+  subscribe methods through an exhaustive `switch` with a `never` arm. All sixteen call sites checked
+  by hand against the source, not the diff's list: fifteen watch the queue (the shelf, the add page,
+  the hover card's add-to-shelf, the Metadata rerun rows, `Tweets`, and every mode band's hook,
+  including the merged `useCitations`), and `useArc` alone is quiet — so no caller's behaviour
+  changed. `tests/queue-cadence-is-a-required-choice.test.ts` holds it at the type level: four
+  `@ts-expect-error` calls, which fail the typecheck as unused the moment the argument becomes
+  optional. Mutation, run by the builder: a default of `"watches-queue"` turned the tests-project
+  typecheck red on exactly those lines. The postmortem's long-term section now says done, and why
+  a required choice beat a quiet default.
+
+  **The builder's own test run is not counted as evidence.** It launched a 79-file vitest run in tmux
+  and ended its turn; that session's log stayed at 0 bytes with a blank pane for several minutes,
+  and it then reported `EXIT=0` with no `Test Files` or `Tests` line in it. An exit code with no sign
+  that any test ran is the shape docs/reusable/silent-success.md is about, so the stage-2 gate is a
+  fresh full `npm test` in a session of mine instead.
+
+  **Four mocks had to change with the signature**, found by that builder's first run (12 failures):
+  `artefact-read-race`, `background-reload-keeps-the-list`, `citations-find-late-reply` and
+  `glossary-one-fetch` mocked `useJobs` and read the completion callback as its first argument,
+  which is now the cadence. They read the second now. Their fix landed at 12:27, while my full run
+  was starting, so that run may have read either version of them; re-run alone with the new type
+  test afterwards, 5 files, 26/26.
+- 2026-09-12 — **stage 2's full `npm test`**: 3 files red of 1,103 (2 tests of 23,946), all three
+  the fleet tests red before this stage for the environment (no `tools/fleet/web/dist`, and
+  `process.exit(2)` in the `server.ts` wiring case). `models.test.ts`, red on the stage-1 run, is
+  green since the merge of `dev`. The four rewritten mocks pass inside the full run as well.
+- 2026-09-12 — **the mutation, re-run by me rather than taken from the builder's report**:
+  `cadence: QueueCadence = "watches-queue"` in `useJobs` turns `npm run typecheck` to exit 1, on
+  `tests/queue-cadence-is-a-required-choice.test.ts` line 27 (an unused `@ts-expect-error` — `jobs()`
+  now compiles) and line 45 (the `expectTypeOf` on the parameter, which now admits `undefined`).
+  Reverted, and the typecheck re-run.
   The pattern across F1, F8, F10 and F11 is worth one sentence: **the courtesy poll was silently
   retrying everything a failed request missed**, so declining it exposed each of those at once.
 

@@ -90,7 +90,7 @@ let heard2: string[] = [];
 let duringRender: (() => void) | null = null;
 
 function Probe({ heard }: { heard: string[] }): ReactElement | null {
-  useJobs((finished) => heard.push(finished.id));
+  useJobs("watches-queue", (finished) => heard.push(finished.id));
   return null;
 }
 

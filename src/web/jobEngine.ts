@@ -42,7 +42,9 @@
  *
  * - **while any job is active** — every second, wherever the reader is;
  * - **otherwise, while at least one subscriber that asked for the idle cadence
- *   is mounted** — every eight seconds, which is the shelf and the bands;
+ *   is mounted** — every eight seconds, which is the shelf and the bands. Every
+ *   `useJobs` caller must say whether it is one (`QueueCadence`, no default), so
+ *   nobody buys this by forgetting to decline it;
  * - **otherwise nothing**, until something pokes it.
  *
  * So an owner reading an article with nothing running costs one poll at session

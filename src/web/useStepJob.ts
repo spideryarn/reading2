@@ -79,7 +79,7 @@ import { worthRetrying } from "../messages.js";
    src/step-order.ts § `StepBefore`. */
 import type { StepBefore } from "../step-order.js";
 import type { Job, StepName } from "../types.js";
-import { useJobs } from "./useJobs.js";
+import { type QueueCadence, useJobs } from "./useJobs.js";
 
 /**
  * What a surface can vary about one run. Everything else is the step's own.
@@ -322,25 +322,26 @@ function writesStep(job: Job, step: StepName): boolean {
  *   shelf when the mode was opened — so opening a band does not refetch once
  *   per historical job.
  *
- *   **The cost, said out loud:** subscribing puts the shared engine on its idle
- *   cadence, so sitting in one of these modes is one small request every eight
- *   seconds while the tab is visible. What it buys is that a run started in
- *   another tab shows up here as progress rather than as a button that appears
- *   to do nothing — and **not** a CLI run, which writes no job record at all:
- *   see `job` above. Closing the band stops the idle poll
- *   again — src/web/jobEngine.ts § When it polls — and never stops a job that
- *   is actually running.
+ * @param cadence `useJobs`'s `QueueCadence`, and required for the same reason.
  *
- *   **Unless you pass `{ idle: false }`**, which is `useJobs`'s quiet form: the
- *   same job, progress and completion, and no idle poll — so no cross-tab run
- *   noticed until something else polls. Only for a caller mounted where nobody
- *   has opened anything, which today is `useArc`; a mode's band should pay.
+ *   **The cost, said out loud:** `"watches-queue"` puts the shared engine on
+ *   its idle cadence, so sitting in one of these modes is one small request
+ *   every eight seconds while the tab is visible. What it buys is that a run
+ *   started in another tab shows up here as progress rather than as a button
+ *   that appears to do nothing — and **not** a CLI run, which writes no job
+ *   record at all: see `job` above. Closing the band stops the idle poll
+ *   again — src/web/jobEngine.ts § When it polls — and never stops a job that
+ *   is actually running. A mode's band should pay it.
+ *
+ *   `"quiet"` is the same job, progress and completion with no idle poll — so
+ *   no cross-tab run noticed until something else polls. Only for a caller
+ *   mounted where nobody has opened anything, which today is `useArc`.
  */
 export function useStepJob<S extends StepName>(
   slug: string,
   step: S,
   onFinished: () => void,
-  options?: { idle?: boolean },
+  cadence: QueueCadence,
 ): StepJob<S> {
   /**
    * Ids this mount has already announced through `onFinished`.
@@ -360,7 +361,7 @@ export function useStepJob<S extends StepName>(
     },
     [slug, step, onFinished],
   );
-  const queue = useJobs(announce, options);
+  const queue = useJobs(cadence, announce);
 
   /**
    * **The job this panel is about**: the one running this step on this article,

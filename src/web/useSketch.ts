@@ -182,7 +182,7 @@ export function useSketch(slug: string, blockOrder: readonly BlockId[]): UseSket
     void reload();
   }, [reload]);
 
-  const queue = useStepJob(slug, "sketch", refresh);
+  const queue = useStepJob(slug, "sketch", refresh, "watches-queue");
 
   /* Two verbs, split on `force`. See the interface above, and useIdeas.ts. */
   const ensure = useCallback(

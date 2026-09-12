@@ -99,8 +99,9 @@ mode bands, the shelf, the add page and the metadata page, where somebody is loo
    charges it.** A habit, and it is aimed at the class: if the sentence says "an owner reading an
    article", the test mounts an owner reading an article. It belongs next to the engine's rule in
    its header, which the plan rewrites.
-4. **Make the idle cadence something a caller asks for, not something it gets by default.** This is
-   the long-term fix below. It costs touching every call site, and it closes the class at the source.
+4. **Make the idle cadence something a caller chooses, not something it gets by default.** It
+   costs touching every call site, and it closes the class at the source. **Done in stage 2**, as a
+   required argument rather than a quiet default — see below.
 5. **Slow the idle poll to sixty seconds.** Rejected. It is still an unbounded loop on a page that
    has asked for nothing (`schedule`'s own docstring: the clock *"stops rather than slowing"*), and
    it would slow every mode band's cross-tab progress, which is what the cadence is for.
@@ -109,8 +110,9 @@ mode bands, the shelf, the add page and the metadata page, where somebody is loo
 
 ## The fix that is right for the long term
 
-**The fix, stage 1 of the plan**, adds a quiet subscription, `jobEngine.subscribeQuietly`, exposed as
-`useJobs(onFinished, { idle: false })`. It gets the same snapshot and notifications, but it does not
+**The fix, stage 1 of the plan**, adds a quiet subscription, `jobEngine.subscribeQuietly` — exposed
+first as `useJobs(onFinished, { idle: false })`, and since stage 2 as `useJobs("quiet", …)`. It
+gets the same snapshot and notifications, but it does not
 count towards `subscribers.size`. `useArc` uses it, and busy polling still carries the arc's own job
 to done. Together with item 1 that closes this instance, and item 1 catches the next one. On a
 production build at rest, Summary and Plain went from 8 `/api/jobs` a minute to none; a Glossary band
@@ -122,12 +124,18 @@ failed nothing would arm another. So an action now leaves a versioned obligation
 *successful* poll discharges. Worth knowing for the next change here: taking away a courtesy poll
 also takes away whatever it was silently retrying.
 
-It leaves the default where it was: a new `useJobs()` still buys the cadence unless its author knows
-to decline it. The right long-term shape is the inverse. A subscription is quiet by default, and the
-surfaces that *display* a queue (the shelf, the add page, a mode band) ask for the idle cadence by
-name. The cost is then bought by the one caller that wants it, not by every caller that forgot to
-refuse it. That is worth doing when a third quiet caller appears. Until then, the owner-at-rest test
-is what holds the line.
+Stage 1 left the default where it was: a new `useJobs()` still bought the cadence unless its author
+knew to decline it. **Stage 2 removed the default** (GPT Sol, code review F12). `useJobs` and
+`useStepJob` now take a `QueueCadence` — `"watches-queue"` or `"quiet"` — as a required argument,
+so the compiler refuses a caller that has not chosen. The shelf, the add page, every mode band, the
+Metadata rerun rows and the hover card's add-to-shelf say they watch; the arc says it does not.
+`tests/queue-cadence-is-a-required-choice.test.ts` fails to typecheck if the argument becomes
+optional again.
+
+A required choice, not a quiet default: a quiet default makes the opposite mistake just as silent.
+A new band that forgot to ask would stop showing another tab's run and look broken, and nothing
+would say why. With no default, both mistakes are a compile error at the call site. The
+owner-at-rest test still watches the whole reading view; this closes the class everywhere else.
 
 ## The thing I would tell myself
 

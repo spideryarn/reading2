@@ -621,7 +621,7 @@ export function useGlossary(slug: string, read: GlossaryRead): UseGlossary {
      one thing the copies did *not* agree about — none of the others had a
      trailing fetch to reach for — until 2026-09-02, when all eight moved onto
      src/web/useOrderedRead.ts and all eight now pass `refresh` here. */
-  const queue = useStepJob(slug, "glossary", refresh);
+  const queue = useStepJob(slug, "glossary", refresh, "watches-queue");
 
   const run = useCallback(
     (force: boolean, useProfile = true) => queue.start({ force, useProfile }),

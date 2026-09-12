@@ -1361,8 +1361,8 @@ core** — the measurements here were all CPU, and CPU was fine.
 | Plain | 8/min | 0/min |
 | Glossary band open (the control: it should poll) | 8/min | 8/min |
 
-The fix is a quiet subscription — `useJobs(onFinished, { idle: false })`, the same notifications
-without the cadence — and an owner's whole reading view is now held to "one poll at session start,
+The fix is a quiet subscription — `useJobs("quiet", onFinished)`, the same notifications without
+the cadence, and a choice every caller now has to make — and an owner's whole reading view is now held to "one poll at session start,
 then silence" by a test rather than a comment. The reasoning, the method and what is deferred:
 [260912a](../plans/260912a-ipad-battery-drain-the-reading-view-polls-the-job-queue-every-eight-seconds-at-rest.md);
 the class: [the postmortem](../postmortems/260912a-a-budget-a-comment-keeps-is-spent-by-the-next-call-site.md).

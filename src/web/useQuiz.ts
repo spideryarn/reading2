@@ -297,7 +297,7 @@ export function useQuiz(slug: string): UseQuiz {
   /* The job half — the poll, the running job, and what a refused or dead run
      says to the reader — is src/web/useStepJob.ts, shared with the glossary,
      the summaries, the ideas and the timeline. */
-  const queue = useStepJob(slug, "quiz", refresh);
+  const queue = useStepJob(slug, "quiz", refresh, "watches-queue");
 
   /* **The unforced one.** Two callers, and they must be the same request: the
      automatic run below, and the button under the empty state (`QuizPanel` §

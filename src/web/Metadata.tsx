@@ -1443,7 +1443,12 @@ function RerunRow({
   done: boolean | undefined;
   onFinished: () => void;
 }) {
-  const { job, failed, stalled, starting, start, cancel } = useStepJob(slug, step, onFinished);
+  const { job, failed, stalled, starting, start, cancel } = useStepJob(
+    slug,
+    step,
+    onFinished,
+    "watches-queue",
+  );
   /**
    * **Which press the confirm is standing in front of**, or null for no confirm.
    *

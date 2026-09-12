@@ -130,7 +130,7 @@ async function mount(): Promise<void> {
   document.body.append(host);
   root = createRoot(host);
   const Probe = () => {
-    useJobs();
+    useJobs("watches-queue");
     return null;
   };
   await act(async () => {

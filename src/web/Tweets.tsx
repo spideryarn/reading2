@@ -227,7 +227,7 @@ export function Tweets({ slug, article }: { slug: string; article: Article }) {
    * `tests/refused-job-reason-survives.test.tsx` mounts this page whole and
    * drives that sequence with the polls held.
    */
-  const queue = useStepJob(slug, "tweets", refresh);
+  const queue = useStepJob(slug, "tweets", refresh, "watches-queue");
   /* Destructured because the four surfaces below took `job` and `failed` as
      props long before the hook existed, and threading `queue` through them
      would be a rename of this file's whole render for no gain. `cancel` stays

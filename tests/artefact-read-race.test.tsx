@@ -201,7 +201,7 @@ vi.mock("../src/web/lib/api.js", () => ({
 let announce: ((job: { slug: string; status: string; steps: { name: string }[] }) => void) | null =
   null;
 vi.mock("../src/web/useJobs.js", () => ({
-  useJobs: (cb?: (job: never) => void) => {
+  useJobs: (_cadence: unknown, cb?: (job: never) => void) => {
     announce = (cb ?? null) as typeof announce;
     return {
       jobs: [],

@@ -151,7 +151,7 @@ export function useDebate(slug: string): UseDebate {
 
   /* The job half — the poll, the running job, and what a refused or dead run
      says to the reader — is src/web/useStepJob.ts. */
-  const queue = useStepJob(slug, "debate", refresh);
+  const queue = useStepJob(slug, "debate", refresh, "watches-queue");
 
   /* Two verbs, split on `force`. See the interface above. */
   const ensure = useCallback(async () => {

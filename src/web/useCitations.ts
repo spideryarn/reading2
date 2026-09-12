@@ -156,7 +156,7 @@ export function useCitations(slug: string): UseCitations {
 
   /* `refresh`, not `reload`: a finished job has just written a new list, and a
      request already in flight read the old one. */
-  const queue = useStepJob(slug, "citations", refresh);
+  const queue = useStepJob(slug, "citations", refresh, "watches-queue");
 
   /* Two verbs, split on `force`. useIdeas.ts has why. */
   const ensure = useCallback(async () => {
