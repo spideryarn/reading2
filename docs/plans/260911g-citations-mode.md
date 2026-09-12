@@ -350,7 +350,7 @@ tests it was handed [260911g-citations-mode-owed-review-test-results.txt](260911
 | 2 — the mode (client) | `abde65f7` | reviewed 2026-09-12 — F14's client half open (P2) |
 | 3 — Find it on the web | `1e54a7f8`, `8d523739` | reviewed 2026-09-12 — F11 fixed, F12 for Greg, F16 open (P2) |
 
-The fixes are one commit on `dev`, recorded below once it lands.
+The fixes are one commit on `dev`, **`f391929b`** — F11, F13, and the `models.test.ts` red below.
 
 ### Code-review ledger — GPT Sol, 2026-09-12 (findings-only; IDs continue the plan review's)
 
