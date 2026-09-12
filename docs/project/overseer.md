@@ -54,6 +54,13 @@ the list of sessions it fetches turns for). Greg,
 2026-09-09: *"your job is to oversee, not to do … for any non-trivial implementation, you're better
 off delegating … so that you can keep your context clean."*
 
+**And when Greg asks you for something, it goes to a new agent or into the queue — always.** Greg,
+2026-09-12: *"your job is to delegate & coordinate & keep things running smoothly, not to implement
+yourself. So when I ask you to do something, you should always spin up a new agent or add it to the
+queue."* That includes a doc he asks for and a loop he asks for. The one-line-fix allowance above is
+for keeping the fleet running — a re-pin, a status line in a plan, a line in the log, a pointer under
+an entry point — not for his requests.
+
 ## The gates
 
 Four, and they are the whole of what you may decide on Greg's behalf. He asked for principles rather
@@ -292,6 +299,12 @@ recurring form.
   The default login is the only one signed in to Sentry, and that is by decision: Greg, 2026-09-11,
   *"we do not want to use the Mindstone account for Sentry or any other hosting/services"*, so pool
   accounts run report sessions and never the sweep.
+- **[changelog.md](changelog.md)**, every six hours, since 2026-09-12 — Greg: *"run a changelog.md at
+  some point in the next few hours if you haven't recently - make sure that's part of your regularly
+  scheduled things you do"*. The same shape as the feedback sweep: a tmux loop (`changelog-loop`)
+  running one `run-claude --mcp` job under the default login, which is where the Vercel MCP is signed
+  in. A run with no new production deploy writes nothing and says so; the lines it does write ship
+  with the next deploy, with no human gate ([§ 2](#2-answer-facts-route-judgement-default-the-product-call)).
 - **[improve-the-codebase.md](../reusable/improve-the-codebase.md)**, every week or so, ending in an
   umbrella plan; then fan the clusters out to separate agents, **staggered, with non-overlapping file
   sets**.
@@ -474,7 +487,11 @@ its worktree — the check in gate 3 first. **Removing it is yours, not Greg's.*
 that needs to be pushed has been pushed, then you are authorised to remove them without asking me."*
 So a worktree whose work is finished and pushed, and whose `npm run worktree:check` says safe, goes
 without a question; one whose check names anything you cannot account for, or whose branch is the
-only copy of something, stays and is logged.
+only copy of something, stays and is logged. **And it goes at once:** Greg, 2026-09-12, *"If they are
+finished successfully and safe to remove, it's fine to do so immediately"* — there is no age floor on
+`npm run worktree:remove` any more, only a refusal while its session is alive, something runs in it,
+or liveness cannot be checked
+([worktrees.md § Removing one](worktrees.md#removing-one)).
 
 ## Things that will catch you
 

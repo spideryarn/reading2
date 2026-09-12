@@ -26,6 +26,7 @@ inventing a process.
 | [generate-mermaid-diagram.md](generate-mermaid-diagram.md) | authoring `.mermaid` files and rendering them to SVG, plus the house style |
 | [write-planning-doc.md](write-planning-doc.md) | starting a piece of work — the doc that holds the decisions and the stages, and what to call it |
 | [debrief-progress.md](debrief-progress.md) | reporting where a piece of work stands: what's done, what's left, whether it's still worth it |
+| [debrief-overseer.md](debrief-overseer.md) | sitting back down with a long-running orchestrator — the eight questions, in order, and what reached the user rather than what was committed |
 | [improve-the-codebase.md](improve-the-codebase.md) | the periodic sweep — find the rework worth doing across the whole tree, cluster and prioritise it, and land the clusters that fit |
 | [design-a-screen.md](design-a-screen.md) | redesigning a screen, or somebody has called one hard to scan — say what questions the reader arrives with before you touch a stylesheet, then the checklist, then how you'd know it worked |
 | [write-tutorial.md](write-tutorial.md) | explaining how something works to somebody who has never read the code — mental models first, spiral passes, diagrams you actually look at |

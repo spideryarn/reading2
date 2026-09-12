@@ -16,19 +16,19 @@
  * plan, the measurements and GPT Sol's review of them are in
  * docs/plans/260908k-a-deterministic-worktree-removal-command-and-a-ban-on-hand-typed-branch-deletion.md.
  *
- * ## Why hand-typed git was the only thing left
+ * ## Anybody may remove a finished tree, on the same evidence
  *
- * `worktree:sweep -- remove` re-runs `classifyAll`, so it re-earns the 24-hour
- * age floor. Measured that night: **nine worktrees, nine refusals, "nothing to
- * remove."** The floor is a proxy for *is somebody still using this*, and it is
- * wrong in exactly one direction — it refuses the owner who has just finished.
+ * > If they are finished successfully and safe to remove, it's fine to do so
+ * > immediately. — Greg, 2026-09-12
  *
- * So the floor is not weakened. A **proof** is added beside it:
- * `scripts/worktree-inuse.ts` reads the owning session's `(pid, start)` out of the
- * worktree lock and looks for that exact pair in this process's ancestor chain.
- * When it is there, the owner itself is asking, and the floor is waived. When it
- * is not, the floor stands — because *no live process* is not the same fact as
- * *finished*, and `/proc` cannot see intent.
+ * There was a 24-hour age floor here for third parties, waived only for the
+ * tree's own session, and it went on 2026-09-12. What it stood in for — *is
+ * somebody still using this?* — is asked directly by `scripts/worktree-inuse.ts`:
+ * a live session named in the lock, or a process with its cwd inside, refuses,
+ * and a question it cannot answer refuses too. The ownership proof survives for
+ * one reason only: without it, a session removing its own tree would be vetoed
+ * by its own live pid in the lock. Plan, and what the floor's removal gives up:
+ * docs/plans/260912a-drop-the-worktree-removal-age-floor.md.
  *
  * ## Three things this file does that hand-typed git does not
  *
@@ -75,7 +75,7 @@
  */
 
 import { spawnSync } from "node:child_process";
-import { readdirSync, readFileSync, statSync } from "node:fs";
+import { readdirSync, readFileSync } from "node:fs";
 import path from "node:path";
 
 import { TRUNK_BRANCH } from "./deploy-checks.js";
@@ -83,89 +83,19 @@ import { listWorktrees, type WorktreeEntry } from "./worktree-admin.js";
 import { blockers, fetchTrunkSha, gather as checkGather, primaryRoot } from "./worktree-check.js";
 import {
   ancestry,
+  classifyPidNamespace,
   composeInUse,
   cwdUsersUnder,
   type InUse,
-  ownerIsAsking,
   type OwnerStanding,
   ownerStanding,
+  type ProcTable,
   procTable,
 } from "./worktree-inuse.js";
-
-/** A worktree is never removable by a third party while it has been touched this recently. */
-export const MIN_IDLE_HOURS = 24;
-
-/* --------------------------------------------------------------- activity -- */
-
-/** Which signal decided `lastActivity`, so a verdict can name its evidence. */
-export interface Activity {
-  at: number;
-  /** Human-readable: "HEAD last moved", "git was last run here". */
-  signal: string;
-}
 
 function tryGit(args: string[], cwd?: string): string | null {
   const r = spawnSync("git", args, { cwd, encoding: "utf8" });
   return r.status === 0 ? `${r.stdout ?? ""}`.trim() : null;
-}
-
-/**
- * The reflog **entry's own timestamp**, in unix seconds — `null` if there is none.
- *
- * `git log -g --format=%ct` looks like the way to ask this and is not: `%ct` is
- * the *committer date of the commit the entry points at*. On a worktree created
- * this second from a month-old commit it returns the month-old date. `%gd` with
- * `--date=unix` prints `HEAD@{1788807113}`, which is the entry's own time.
- */
-function reflogEntryAt(wt: string, ref: string): number | null {
-  const out = tryGit(["log", "-g", "-1", "--date=unix", "--format=%gd", ref], wt);
-  const at = out === null ? null : /@\{(\d+)\}/.exec(out);
-  if (at?.[1] === undefined) return null;
-  const n = Number.parseInt(at[1], 10);
-  return Number.isFinite(n) ? n : null;
-}
-
-/**
- * When this tree was last touched: the **latest** of three independent signals,
- * because each one alone reports a live worktree as long idle.
- *
- * - **The HEAD reflog entry** — the only one that moves on a fast-forward, which
- *   writes no commit.
- * - **The branch reflog entry**, which `git update-ref` from elsewhere moves
- *   without touching this worktree's HEAD reflog.
- * - **The admin directory's mtime** — crude, and kept because it is crude and
- *   independent: a reflog entry inherits `GIT_COMMITTER_DATE` and can be
- *   backdated; an mtime cannot.
- *
- * `null` only when all three fail, which is itself a keep.
- */
-export function lastActivityAt(wt: string, branch: string | undefined): Activity | null {
-  const seen: Activity[] = [];
-
-  const head = reflogEntryAt(wt, "HEAD");
-  if (head !== null) seen.push({ at: head, signal: "HEAD last moved" });
-
-  if (branch !== undefined) {
-    const onBranch = reflogEntryAt(wt, branch);
-    if (onBranch !== null) seen.push({ at: onBranch, signal: `${branch} last moved` });
-  }
-
-  const adminDir = tryGit(["rev-parse", "--absolute-git-dir"], wt);
-  if (adminDir !== null) {
-    try {
-      seen.push({ at: Math.floor(statSync(adminDir).mtimeMs / 1000), signal: "git was last run here" });
-    } catch {
-      /* Gone or unreadable; the other signals stand, and no signal is a keep. */
-    }
-  }
-
-  return seen.reduce<Activity | null>((best, s) => (best === null || s.at > best.at ? s : best), null);
-}
-
-export function describeIdle(hours: number): string {
-  if (hours < 0) return "in the future";
-  if (hours < 1) return `${Math.max(1, Math.round(hours * 60))} min`;
-  return `${hours.toFixed(1)} h`;
 }
 
 /* ------------------------------------------------------------ registration -- */
@@ -319,57 +249,51 @@ export function deleteRefIfUnmoved(cwd: string, branch: string, expected: string
 export interface Liveness {
   standing: OwnerStanding;
   inUse: InUse;
-  /** The owner itself asked for this, proved by its `(pid,start)` in our ancestry. */
-  authorised: boolean;
 }
 
 /**
- * The two signals, read for one tree.
+ * The two signals, read for one tree — and, when `/proc` is the host process
+ * table, the whole of what stands between a peer's five-minute-old tree and a
+ * removal now that there is no age floor.
  *
  * `pid` is injected so a test can arrange an ancestor chain; in production it is
- * this process. No `/proc` at all — the Mac — is an `unknown`, which costs the
- * caller the age floor and is exactly today's behaviour there.
+ * this process. The owner's `(pid,start)` in that chain is what makes its own
+ * live lock read as `asking` rather than as a live session in the way.
+ *
+ * No `/proc` at all — the Mac — is an `unknown`, and an unknown refuses: on the
+ * Mac this command removes ghosts and orphaned branches, never a live tree. So
+ * is a `/proc` that is not the whole box — a private PID namespace, where a live
+ * owner is not unreadable but absent, and would read as stale
+ * (`classifyPidNamespace`; GPT Sol's first finding on 260912a).
+ *
+ * `proc` is injectable so a test can arrange a namespace; an unprivileged
+ * `unshare` is refused on the box.
  */
-export function liveness(worktreePath: string, lockReason: string | undefined, pid = process.pid): Liveness {
-  const proc = procTable();
-  if (proc === null) {
+export function liveness(
+  worktreePath: string,
+  lockReason: string | undefined,
+  pid = process.pid,
+  proc: ProcTable | null = procTable(),
+): Liveness {
+  const unmeasured = (why: string): Liveness => {
     const standing: OwnerStanding =
       lockReason === undefined ? { kind: "unlocked" } : { kind: "unrecognised", reason: lockReason };
-    return {
-      standing,
-      inUse: { kind: "unknown", why: ["this platform has no /proc, so nothing could be checked for running processes"] },
-      authorised: false,
-    };
-  }
+    return { standing, inUse: { kind: "unknown", why: [why] } };
+  };
+  if (proc === null) return unmeasured("this platform has no /proc, so nothing could be checked for running processes");
+  const scope = classifyPidNamespace(proc.pidNamespace());
+  if (scope.kind !== "host") return unmeasured(scope.why);
+
   const chain = ancestry(proc, pid);
   const standing = ownerStanding(proc, lockReason, chain);
   const scan = cwdUsersUnder(proc, worktreePath, new Set(chain.map((a) => a.pid)), pid);
-  return { standing, inUse: composeInUse(standing, scan), authorised: ownerIsAsking(standing) };
-}
-
-/**
- * **May this caller skip the 24-hour floor?**
- *
- * Only when the owner is asking *and* both liveness signals were conclusive.
- * Authorisation alone is not enough: an owner beside a same-uid process whose cwd
- * would not be read is an `unknown`, and an unknown must cost you the floor —
- * otherwise the one branch that skips the floor is also the one that swallows
- * every uncertainty, which is failing open for exactly the caller most likely to
- * be in a hurry. GPT Sol's fifth finding on the code, 2026-09-09.
- *
- * Its own function so it can be tested without arranging an unreadable process.
- */
-export function shouldWaiveFloor(live: Liveness): boolean {
-  return live.authorised && live.inUse.kind === "idle";
+  return { standing, inUse: composeInUse(standing, scan) };
 }
 
 /* --------------------------------------------------------------- removal -- */
 
 export interface RemoveOptions {
   dryRun?: boolean;
-  /** Unix seconds. Injected so the age floor is testable. */
-  now?: number;
-  minIdleHours?: number;
   /** The asking process, injected so ancestry can be arranged in a test. */
   pid?: number;
 }
@@ -736,29 +660,27 @@ export function removeWorktree(cwd: string, wanted: string | undefined, opts: Re
   }
   steps.push("ok   nothing here that is not also on the trunk (npm run worktree:check's whole judgement)");
 
-  /* --- is anybody using it, and did its owner ask? --------------------- */
+  /* --- is anybody using it? ------------------------------------------- *
+     The same question for the owner and for anyone else. An unknown refuses
+     for both: there is no longer a floor for it to fall back to, and "could not
+     tell whether a session is in there" is not an answer to remove on. */
   const live = liveness(entry.path, entry.lockReason, opts.pid ?? process.pid);
-  if (live.inUse.kind === "in-use") {
-    steps.push("refused: this worktree is in use");
-    for (const r of live.inUse.reasons) steps.push(`  ${r}`);
-    return { ok: false, steps };
-  }
-
-  /* **Authorised is not enough on its own.** The floor is waived only when the
-     owner is asking AND both liveness signals were conclusive. An owner beside a
-     same-uid process whose cwd would not be read is an unknown, and an unknown
-     costs you the floor — otherwise `unknown` fails open for exactly the caller
-     most likely to be in a hurry. GPT Sol's fifth finding on the code. */
-  const waived = shouldWaiveFloor(live);
-  if (waived) steps.push("ok   its own session is asking, and nothing else is in it — the 24h floor does not apply");
-  else if (live.inUse.kind === "idle") for (const n of live.inUse.notes) steps.push(`ok   ${n}`);
-
-  if (!waived) {
-    if (live.inUse.kind === "unknown") for (const w of live.inUse.why) steps.push(`·    could not check: ${w}`);
-    if (live.authorised) steps.push("·    its own session is asking, but something could not be checked, so the floor still applies");
-    const floor = ageFloor(entry.path, branch, opts);
-    if (floor !== null) return refuse(steps, ...floor);
-    steps.push(`ok   ${idleLine(entry.path, branch, opts)}`);
+  switch (live.inUse.kind) {
+    case "in-use":
+      return refuse(steps, "refused: this worktree is in use", ...live.inUse.reasons.map((r) => `  ${r}`));
+    case "unknown":
+      return refuse(
+        steps,
+        "refused: could not tell whether anything is using this worktree",
+        ...live.inUse.why.map((w) => `  ${w}`),
+      );
+    case "idle":
+      for (const n of live.inUse.notes) steps.push(`ok   ${n}`);
+      break;
+    default: {
+      const unreachable: never = live.inUse;
+      throw new Error(`unhandled liveness ${JSON.stringify(unreachable)}`);
+    }
   }
 
   /* --- THE PROOF, COMPLETED BEFORE ANYTHING IS DESTROYED --------------- */
@@ -848,28 +770,6 @@ export function relock(primary: string, worktreePath: string, reason: string | u
   const args = reason === undefined ? ["worktree", "lock", worktreePath] : ["worktree", "lock", "--reason", reason, worktreePath];
   const re = spawnSync("git", args, { cwd: primary, encoding: "utf8" });
   steps.push(re.status === 0 ? "restored the lock" : `could NOT restore the lock: ${`${re.stderr ?? ""}`.trim()}`);
-}
-
-/** The refusal lines when a third party is under the floor, or `null` if it is clear. */
-function ageFloor(worktreePath: string, branch: string | undefined, opts: RemoveOptions): string[] | null {
-  const minIdle = opts.minIdleHours ?? MIN_IDLE_HOURS;
-  const activity = lastActivityAt(worktreePath, branch);
-  if (activity === null) return ["refused: could not tell when this tree was last active"];
-  const idleHours = ((opts.now ?? Math.floor(Date.now() / 1000)) - activity.at) / 3600;
-  if (idleHours >= minIdle) return null;
-  return [
-    `refused: ${activity.signal} ${describeIdle(idleHours)} ago — under the ${minIdle}h floor`,
-    "  nothing running in it is not the same as finished. Either its own session removes it,",
-    "  or it waits out the floor. See docs/project/worktrees.md § Removing one.",
-  ];
-}
-
-function idleLine(worktreePath: string, branch: string | undefined, opts: RemoveOptions): string {
-  const minIdle = opts.minIdleHours ?? MIN_IDLE_HOURS;
-  const activity = lastActivityAt(worktreePath, branch);
-  if (activity === null) return "idle for an unknown time";
-  const idleHours = ((opts.now ?? Math.floor(Date.now() / 1000)) - activity.at) / 3600;
-  return `${activity.signal} ${describeIdle(idleHours)} ago — over the ${minIdle}h floor`;
 }
 
 /* ------------------------------------------------------------------- cli -- */

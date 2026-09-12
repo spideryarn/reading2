@@ -645,3 +645,56 @@ findings-first brief: one combined review, fix P0/P1 in a worktree, gates, push,
 owed-reviews table, remove the worktree. Closed `qi-vjw28q7p` (cluster A follow-up), which landed
 at 48d1dc3f and 2aa16ee7 on 2026-09-12 03:50Z but was still marked running. Per-stage rationing is
 off until the reading passes 85% again.
+
+## 2026-09-12 08:55 UTC — the changelog becomes a standing job
+
+Greg: *"run a changelog.md at some point in the next few hours if you haven't recently - make sure
+that's part of your regularly scheduled things you do."* The last run was 2026-09-11 10:55Z
+(eb966c4b). Started `changelog-loop` (tmux job `changelog-loop-0951-3356603`, six-hourly, the
+feedback sweep's shape: `run-claude --mcp` under the default login for the Vercel MCP); its first
+run began 08:51Z. The prompt now says a run with no new production deploy writes nothing, so the
+loop is cheap between deploys. One bullet added to overseer.md § The standing jobs under Greg's
+instruction. Standing-jobs digest for overseer.md is not pinned, so no re-pin.
+
+## 2026-09-12 09:10 UTC — Greg removes the 24h worktree floor; the job is dispatched, not done here
+
+Greg: *"Get rid of the 24h worktree-removal floor. If they are finished successfully and safe to
+remove, it's fine to do so immediately. Consider this approved, and push."* This is code in
+`scripts/worktree-remove.ts` and a rule paragraph in worktrees.md, so it went to an agent
+(`remove-worktree-floor`, mindstone) rather than being done in the Overseer's own hands: a plan doc,
+a failing test first, the floor deleted rather than switched off, one Sol review, push, then the
+sweep run from the primary over the nine trees that have been waiting it out. The five trees still
+in use are named in the brief as not to be removed. Also this morning: production was found at
+d358f773 (built 08:01Z), so every product change since 2026-09-10 is live; the changelog loop's
+first run is writing them up; `debrief-overseer.md` added to docs/reusable at Greg's request.
+
+## 2026-09-12 09:35 UTC — the first scheduled changelog run stopped to wait for a waiter that could not wake it
+
+The 08:51Z changelog run did steps 1–3 and started its three Sol reviews, then ended its turn
+"with a waiter armed" — a one-shot `run-claude` process exits when its turn ends, so nothing came
+back, and the run reported exit 0 with three finished reviews on disk and no line written. The class
+is the one in the Overseer's memory as *subagents end turns while their jobs run*, now seen in a
+scheduled job. A resume run was dispatched from the on-disk state (`changelog-resume`), and the
+standing prompt now says in so many words: never arm a waiter and stop; wait in the foreground.
+The loop itself is unchanged. Also this tick: the 09:12Z feedback sweep queued and dispatched all
+17 of Greg's morning reports as 13 jobs in seven waves; the Citations Sol review and the
+worktree-floor removal are both in their full-suite gates; load 9.
+
+## 2026-09-12 10:00 UTC — the floor is gone, nine trees with it; the changelog caught up
+
+**Worktree floor** (Greg's instruction of 09:05Z): landed at 1203d2ff, merged as 89cc9096, plan
+260912a. The rule now: anybody may remove a tree at once when `worktree:check` says safe, every
+commit it names is on a fresh origin/dev, and nobody is in it (no live pid in its lock, no process
+with its cwd inside); any *unknown* refuses. Sol refused the first draft on a real High — inside a
+private PID namespace `/proc` hides a live owner, so a peer's tree would have read idle — and the
+session fixed it (the asker must be in the host namespace or it refuses), test red first; that fix
+has not been back to Sol, so a narrow re-check is queued as qi-3bmkw2ft, authorised under the same
+instruction. Nine trees removed by the session, none of the five in use. Three finished product
+trees still refuse over an ignored path with no second copy (qi-hwnjakqt, lull). The session also
+found `tests/models.test.ts` red on dev from the Citations stage 3 series; routed to
+citations-sol-review, whose scope it is. Session closed.
+
+**Changelog**: the resume run wrote two versions (2026-09-11: 8 entries; 2026-09-12: 2 entries,
+Citations and the quotes-diversity change) from Vercel's deploy list, on dev at 803b9198; Sol
+corrected 9 of 24 items and asked two regroups, applied. The public `/changelog` shows them after
+the next deploy.

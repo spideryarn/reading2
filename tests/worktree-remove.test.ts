@@ -7,37 +7,35 @@
  * point of it is that git compares, and a fake that returns "ok" proves the
  * opposite of what is wanted.
  *
- * Two things are faked, and only two, because neither can be *arranged*:
- *
- * - the **ancestor chain**, via `opts.pid` — a test cannot make the worktree lock
- *   name one of its own ancestors without spawning and locking around it;
- * - the **clock**, via `opts.now` — but note the sweep's lesson, kept here: where
- *   a signal could be stuck to the present, the fixture is aged rather than the
- *   clock moved.
+ * One thing is faked, because it cannot be *arranged*: the **ancestor chain**,
+ * via `opts.pid` — a test cannot make the worktree lock name one of its own
+ * ancestors without spawning and locking around it. Everything else is real,
+ * down to live `sleep` processes standing in for a peer's session. There is no
+ * clock to fake since 2026-09-12, when the age floor went.
  *
  * Every refusal is confirmed by watching it refuse. Every one has a control that
  * differs in exactly the thing being tested, because a command that refuses
  * everything passes the same assertions as one that works.
  */
-import { execFileSync, spawnSync } from "node:child_process";
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, renameSync, rmSync, writeFileSync } from "node:fs";
+import { execFileSync, spawn, spawnSync } from "node:child_process";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, readlinkSync, renameSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import { listWorktrees } from "../scripts/worktree-admin.js";
-import { parseStat } from "../scripts/worktree-inuse.js";
+import { classifyPidNamespace, parseStat, type ProcTable, procTable } from "../scripts/worktree-inuse.js";
 import {
   classifyRegistration,
   deleteRefIfUnmoved,
   gitRemoveWorktree,
   landedProof,
+  liveness,
   proveAndDeleteBranch,
   reachableOids,
   relock,
   removeWorktree,
-  shouldWaiveFloor,
 } from "../scripts/worktree-remove.js";
 
 let root: string;
@@ -72,8 +70,93 @@ function landedWorktree(name: string): string {
   return wt;
 }
 
-/** Old enough to clear the age floor without waiting: age the admin dir + reflogs. */
-const LONG_AGO = { now: Math.floor(Date.now() / 1000) + 40 * 3600 };
+const spawned: number[] = [];
+
+/**
+ * A live process that is not this one's ancestor, standing in `cwd`.
+ *
+ * **Detached, so it is in a process group of its own** — the cwd scan excludes
+ * the asker's own group, so a plain child would be invisible to it and a test
+ * of "a process is running inside it" would pass by excluding the very process
+ * it arranged. The helper waits for that state below; `spawn()` returning alone
+ * does not prove it.
+ */
+function liveProcess(cwd: string): { pid: number; start: number } {
+  const child = spawn("sleep", ["120"], { cwd, detached: true, stdio: "ignore" });
+  if (child.pid === undefined) throw new Error("could not spawn sleep");
+  spawned.push(child.pid);
+  const mine = parseStat(readFileSync(`/proc/${process.pid}/stat`, "utf8"));
+  if (mine === null) throw new Error("could not read this process's group");
+
+  /* `spawn()` returning only means the child has a pid. Wait for the two facts
+     this fixture promises, rather than racing the child's cwd/process-group
+     setup and letting the test pass on some unrelated process. */
+  const deadline = Date.now() + 5000;
+  while (Date.now() < deadline) {
+    try {
+      const stat = parseStat(readFileSync(`/proc/${child.pid}/stat`, "utf8"));
+      const childCwd = readlinkSync(`/proc/${child.pid}/cwd`);
+      if (stat !== null && childCwd === path.resolve(cwd) && stat.pgrp !== mine.pgrp) {
+        return { pid: child.pid, start: stat.start };
+      }
+    } catch {
+      /* Still starting, or exited; the deadline turns either into a hard fail. */
+    }
+    Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 20);
+  }
+  throw new Error("sleep never became a detached process in the requested cwd");
+}
+
+/**
+ * A live process in `cwd` whose cwd **we cannot read** — `prctl(PR_SET_DUMPABLE,
+ * 0)`, the construction GPT Sol used on 260908k to disprove "every opaque process
+ * is a daemon". Waits until the kernel actually hides it, because python has to
+ * start before it can make the call, and a test that raced ahead of it would be
+ * testing an ordinary visible process.
+ */
+function hiddenProcess(cwd: string): number {
+  const script = "import ctypes, time; ctypes.CDLL(None).prctl(4, 0, 0, 0, 0); time.sleep(120)";
+  const child = spawn("python3", ["-c", script], { cwd, detached: true, stdio: "ignore" });
+  if (child.pid === undefined) throw new Error("could not spawn python3");
+  spawned.push(child.pid);
+  const deadline = Date.now() + 5000;
+  while (Date.now() < deadline) {
+    try {
+      readlinkSync(`/proc/${child.pid}/cwd`);
+    } catch (err) {
+      const code = (err as NodeJS.ErrnoException).code;
+      /* ENOENT is an exited child, not proof that prctl hid a live one. Require
+         the exact kernel refusal the production scan classifies as opaque. */
+      if ((code === "EACCES" || code === "EPERM") && readFileSync(`/proc/${child.pid}/comm`, "utf8").trim() === "python3") {
+        return child.pid;
+      }
+      if (code === "ENOENT" || code === "ESRCH") throw new Error("python3 exited before it hid its cwd");
+    }
+    Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 20);
+  }
+  throw new Error("python3 never hid its cwd, so this test could not be arranged");
+}
+
+/**
+ * Kill every fixture process **and wait until it has left /proc**. A SIGTERM
+ * that returns is not an exit, and a hidden-cwd python still dying when the next
+ * test reads /proc makes that test's liveness an honest `unknown` — measured,
+ * it turned an unrelated control red.
+ */
+afterEach(() => {
+  const pids = spawned.splice(0);
+  for (const pid of pids) {
+    try {
+      process.kill(pid, "SIGKILL");
+    } catch {
+      /* Already gone. */
+    }
+  }
+  const deadline = Date.now() + 5000;
+  while (pids.some((pid) => existsSync(`/proc/${pid}/cwd`)) && Date.now() < deadline) {
+    Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 20);
+  }
+});
 
 beforeEach(() => {
   root = mkdtempSync(path.join(tmpdir(), "spideryarn-wtremove-"));
@@ -231,7 +314,7 @@ describe("removeWorktree", () => {
     const wt = landedWorktree("worktree-dirty");
     writeFileSync(path.join(wt, "scratch.txt"), "not committed");
 
-    const out = removeWorktree(primary, "worktree-dirty", LONG_AGO);
+    const out = removeWorktree(primary, "worktree-dirty");
     expect(out.ok).toBe(false);
     expect(out.steps.join("\n")).toContain("refused");
     expect(existsSync(wt)).toBe(true);
@@ -248,7 +331,7 @@ describe("removeWorktree", () => {
     mkdirSync(path.join(wt, "paid-run"));
     writeFileSync(path.join(wt, "paid-run", "results.json"), "{}");
 
-    const out = removeWorktree(primary, "worktree-ignored", LONG_AGO);
+    const out = removeWorktree(primary, "worktree-ignored");
     expect(out.ok).toBe(false);
     expect(existsSync(path.join(wt, "paid-run", "results.json"))).toBe(true);
   });
@@ -258,25 +341,47 @@ describe("removeWorktree", () => {
     git(["worktree", "add", "--quiet", "-b", "worktree-unlanded", wt], primary);
     commit(wt, "mine.txt", "not pushed anywhere", "unlanded work");
 
-    const out = removeWorktree(primary, "worktree-unlanded", LONG_AGO);
+    const out = removeWorktree(primary, "worktree-unlanded");
     expect(out.ok).toBe(false);
     expect(existsSync(wt)).toBe(true);
   });
 
-  it("REFUSES a young tree when a third party asks", () => {
-    landedWorktree("worktree-young");
-    const out = removeWorktree(primary, "worktree-young", {});
-    expect(out.ok).toBe(false);
-    expect(out.steps.join("\n")).toContain("floor");
-  });
-
-  it("control: the same tree, once it is over the floor, is removed", () => {
-    const wt = landedWorktree("worktree-old-enough");
-    const out = removeWorktree(primary, "worktree-old-enough", LONG_AGO);
+  it("a third party removes a landed, clean, process-free tree made seconds ago — there is no age floor", () => {
+    /* Greg, 2026-09-12: "If they are finished successfully and safe to remove,
+       it's fine to do so immediately." No clock is moved: the tree is as young as
+       a tree can be, and nobody owns it or is in it. */
+    const wt = landedWorktree("worktree-fresh-and-done");
+    const out = removeWorktree(primary, "worktree-fresh-and-done", {});
+    expect(out.steps.join("\n")).not.toContain("floor");
     expect(out.ok).toBe(true);
     expect(existsSync(wt)).toBe(false);
-    const branch = spawnSync("git", ["rev-parse", "--verify", "refs/heads/worktree-old-enough"], { cwd: primary });
+    const branch = spawnSync("git", ["rev-parse", "--verify", "refs/heads/worktree-fresh-and-done"], { cwd: primary });
     expect(branch.status).not.toBe(0);
+  });
+
+  it("REFUSES the same tree while the session named in its lock is still alive", () => {
+    /* What stands between a peer's five-minute-old tree and this command now that
+       the floor is gone. The owner is a live process that is NOT our ancestor, and
+       its cwd is outside the tree, so only signal A can see it. */
+    const wt = landedWorktree("worktree-owner-alive");
+    const owner = liveProcess(root);
+    git(["worktree", "lock", "--reason", `claude session peer (pid ${owner.pid} start ${owner.start})`, wt], primary);
+
+    const out = removeWorktree(primary, "worktree-owner-alive", {});
+    expect(out.ok).toBe(false);
+    expect(out.steps.join("\n")).toContain("still running");
+    expect(existsSync(wt)).toBe(true);
+  });
+
+  it("REFUSES the same tree while a process is running inside it", () => {
+    /* Unlocked, so signal A has nothing to say; only the cwd scan can see this. */
+    const wt = landedWorktree("worktree-occupied");
+    liveProcess(wt);
+
+    const out = removeWorktree(primary, "worktree-occupied", {});
+    expect(out.ok).toBe(false);
+    expect(out.steps.join("\n")).toContain("running inside it");
+    expect(existsSync(wt)).toBe(true);
   });
 
   it("REFUSES a prunable registration whose directory is still full of files", () => {
@@ -295,21 +400,21 @@ describe("removeWorktree", () => {
     mkdirSync(wt);
     writeFileSync(path.join(wt, "somebody-elses-file.txt"), "the only copy");
 
-    const out = removeWorktree(primary, "worktree-broken-link", LONG_AGO);
+    const out = removeWorktree(primary, "worktree-broken-link");
     expect(out.ok).toBe(false);
     expect(out.steps.join("\n")).toContain("repair");
     expect(existsSync(path.join(wt, "somebody-elses-file.txt"))).toBe(true);
   });
 
   it("REFUSES to touch the primary checkout", () => {
-    const out = removeWorktree(primary, "dev", LONG_AGO);
+    const out = removeWorktree(primary, "dev");
     expect(out.ok).toBe(false);
     expect(existsSync(path.join(primary, "README.md"))).toBe(true);
   });
 
   it("a --dry-run removes nothing and says what it would do", () => {
     const wt = landedWorktree("worktree-dry");
-    const out = removeWorktree(primary, "worktree-dry", { ...LONG_AGO, dryRun: true });
+    const out = removeWorktree(primary, "worktree-dry", { dryRun: true });
     expect(out.ok).toBe(true);
     expect(out.steps.join("\n")).toContain("would remove");
     expect(existsSync(wt)).toBe(true);
@@ -320,7 +425,7 @@ describe("removeWorktree", () => {
     const wt = landedWorktree("worktree-locked");
     git(["worktree", "lock", "--reason", "claude session locked (pid 999999 start 1)", wt], primary);
 
-    const out = removeWorktree(primary, "worktree-locked", LONG_AGO);
+    const out = removeWorktree(primary, "worktree-locked");
     expect(out.ok).toBe(true);
     expect(out.steps.join("\n")).toContain("unlocked");
     expect(existsSync(wt)).toBe(false);
@@ -328,8 +433,8 @@ describe("removeWorktree", () => {
 
   it("REFUSES when the lock was written by hand and cannot be read", () => {
     /* Somebody locked it deliberately for a reason we cannot parse. That is an
-       unknown, and an unknown costs the caller the age floor rather than being
-       treated as an absent owner. Under the floor, that refuses. */
+       unknown, not an absent owner, and an unknown refuses — there is no floor
+       for it to fall back to. */
     const wt = landedWorktree("worktree-handlocked");
     git(["worktree", "lock", "--reason", "mid-migration, do not touch", wt], primary);
 
@@ -342,7 +447,7 @@ describe("removeWorktree", () => {
     const wt = landedWorktree("worktree-ghost");
     rmSync(wt, { recursive: true, force: true });
 
-    const out = removeWorktree(primary, "worktree-ghost", LONG_AGO);
+    const out = removeWorktree(primary, "worktree-ghost");
     expect(out.ok).toBe(true);
     expect(out.steps.join("\n")).toContain("left branch worktree-ghost alone");
     expect(git(["rev-parse", "--verify", "refs/heads/worktree-ghost"], primary)).not.toBe("");
@@ -354,7 +459,7 @@ describe("removeWorktree", () => {
     git(["worktree", "remove", wt], primary);
     expect(git(["rev-parse", "--verify", "refs/heads/worktree-orphan"], primary)).not.toBe("");
 
-    const out = removeWorktree(primary, "worktree-orphan", LONG_AGO);
+    const out = removeWorktree(primary, "worktree-orphan");
     expect(out.ok).toBe(true);
     const branch = spawnSync("git", ["rev-parse", "--verify", "refs/heads/worktree-orphan"], { cwd: primary });
     expect(branch.status).not.toBe(0);
@@ -366,13 +471,13 @@ describe("removeWorktree", () => {
     commit(wt, "mine.txt", "never pushed", "unlanded");
     git(["worktree", "remove", "--force", wt], primary);
 
-    const out = removeWorktree(primary, "worktree-orphan-unlanded", LONG_AGO);
+    const out = removeWorktree(primary, "worktree-orphan-unlanded");
     expect(out.ok).toBe(false);
     expect(git(["rev-parse", "--verify", "refs/heads/worktree-orphan-unlanded"], primary)).not.toBe("");
   });
 
   it("says so, rather than failing obscurely, when the branch does not exist at all", () => {
-    const out = removeWorktree(primary, "worktree-never-existed", LONG_AGO);
+    const out = removeWorktree(primary, "worktree-never-existed");
     expect(out.ok).toBe(false);
     expect(out.steps.join("\n")).toContain("no such branch");
   });
@@ -395,7 +500,7 @@ describe("removeWorktree", () => {
     const stray = git(["rev-parse", "HEAD"], wt);
     git(["checkout", "--quiet", "worktree-detached-work"], wt);
 
-    const out = removeWorktree(primary, "worktree-detached-work", LONG_AGO);
+    const out = removeWorktree(primary, "worktree-detached-work");
 
     expect(out.ok).toBe(false);
     expect(existsSync(wt)).toBe(true);
@@ -415,7 +520,7 @@ describe("removeWorktree", () => {
 
     /* Named by path is not supported, so drive it the way a session would: from
        inside the tree, with no --branch. */
-    const out = removeWorktree(wt, undefined, LONG_AGO);
+    const out = removeWorktree(wt, undefined);
     expect(out.ok).toBe(false);
     expect(existsSync(wt)).toBe(true);
   });
@@ -428,22 +533,21 @@ describe("removeWorktree", () => {
     commit(wt, "u.txt", "unlanded", "unlanded");
     git(["reset", "--hard", "--quiet", landed], wt);
 
-    const out = removeWorktree(primary, "worktree-dry-unlanded", { ...LONG_AGO, dryRun: true });
+    const out = removeWorktree(primary, "worktree-dry-unlanded", { dryRun: true });
     expect(out.ok).toBe(false);
     expect(out.steps.join("\n")).not.toContain("would remove");
   });
 
-  it("the OWNER removes its own tree under the floor — the whole point of the command", () => {
-    /* The one path no other test reached: `opts.pid` unused meant the ownership
-       proof was never exercised end to end. The lock names THIS process, with its
-       real start time out of /proc, so `ancestry` finds it and the floor lifts. */
+  it("the OWNER removes its own tree, its own live lock notwithstanding", () => {
+    /* What the ownership proof is still for. The lock names THIS process, alive,
+       with its real start time out of /proc — which is exactly what signal A
+       refuses on for anybody else. `ancestry` finds it, so it reads as the owner
+       asking rather than as a live session in the way. */
     const wt = landedWorktree("worktree-owned");
     const mine = parseStat(readFileSync(`/proc/${process.pid}/stat`, "utf8"));
     if (mine === null) throw new Error("could not read this process's start time");
     git(["worktree", "lock", "--reason", `claude session owned (pid ${process.pid} start ${mine.start})`, wt], primary);
 
-    /* No LONG_AGO: this tree was made seconds ago and a third party would be
-       refused. The control below proves that. */
     const out = removeWorktree(primary, "worktree-owned", { pid: process.pid });
 
     expect(out.steps.join("\n")).toContain("its own session is asking");
@@ -451,42 +555,88 @@ describe("removeWorktree", () => {
     expect(existsSync(wt)).toBe(false);
   });
 
-  it("control: the same young tree, asked for by anyone else, is refused", () => {
-    const wt = landedWorktree("worktree-not-owned");
+  it("control: the same lock, asked about by a process it is NOT an ancestor of, refuses", () => {
+    /* `pid: 1` has no ancestors, so the live pid in the lock is somebody else's
+       session — the case that stops a peer's fresh tree being taken. */
+    const wt = landedWorktree("worktree-owned-elsewhere");
+    const mine = parseStat(readFileSync(`/proc/${process.pid}/stat`, "utf8"));
+    if (mine === null) throw new Error("could not read this process's start time");
+    git(["worktree", "lock", "--reason", `claude session owned (pid ${process.pid} start ${mine.start})`, wt], primary);
+
+    const out = removeWorktree(primary, "worktree-owned-elsewhere", { pid: 1 });
+
+    expect(out.ok).toBe(false);
+    expect(out.steps.join("\n")).toContain("still running");
+    expect(existsSync(wt)).toBe(true);
+  });
+
+  it("a lock naming a session that is gone does not hold a finished tree", () => {
+    /* The ordinary leftover: a session that was killed, or resumed elsewhere. */
+    const wt = landedWorktree("worktree-stale-lock");
     git(["worktree", "lock", "--reason", "claude session other (pid 999999 start 1)", wt], primary);
 
-    const out = removeWorktree(primary, "worktree-not-owned", {});
+    const out = removeWorktree(primary, "worktree-stale-lock", {});
+    expect(out.steps.join("\n")).toContain("the lock is stale");
+    expect(out.ok).toBe(true);
+    expect(existsSync(wt)).toBe(false);
+  });
+
+  it("REFUSES the OWNER too when something could not be checked", () => {
+    /* GPT Sol's fifth finding on 260908k, kept: an owner beside a same-uid
+       process whose cwd will not be read is an unknown, and the owner's own
+       authority must not swallow it. Arranged for real — a python process in the
+       tree that has made itself non-dumpable, which hides its cwd from us. */
+    const wt = landedWorktree("worktree-owner-beside-a-hole");
+    const mine = parseStat(readFileSync(`/proc/${process.pid}/stat`, "utf8"));
+    if (mine === null) throw new Error("could not read this process's start time");
+    git(["worktree", "lock", "--reason", `claude session owned (pid ${process.pid} start ${mine.start})`, wt], primary);
+    const hidden = hiddenProcess(wt);
+
+    const out = removeWorktree(primary, "worktree-owner-beside-a-hole", { pid: process.pid });
+
     expect(out.ok).toBe(false);
-    expect(out.steps.join("\n")).toContain("floor");
+    expect(out.steps.join("\n")).toContain("could not tell whether anything is using");
+    expect(out.steps.join("\n")).toContain(`pid ${hidden} (python3)`);
     expect(existsSync(wt)).toBe(true);
   });
 });
 
-describe("shouldWaiveFloor", () => {
-  const owner = { session: "x", pid: 1, start: 1 };
+describe("liveness, from inside a private PID namespace", () => {
+  it("REFUSES: a live owner outside the namespace would look dead, and the tree idle", () => {
+    /* GPT Sol's first finding on 260912a, reproduced in its Codex sandbox: that
+       /proc omitted the live host pid named in the lock and every host process
+       in the tree, so the lock read as stale and the tree as idle — a tidy,
+       plausible, wrong answer. An unprivileged `unshare` is refused on this box,
+       so the namespace is injected: the real /proc, reporting a namespace that
+       is not the host's. The lock names a pid this view cannot see. */
+    const wt = landedWorktree("worktree-namespaced");
+    const real = procTable();
+    if (real === null) throw new Error("this test needs /proc");
+    const namespaced: ProcTable = { ...real, pidNamespace: () => "pid:[4026532999]" };
+    const reason = "claude session peer (pid 999999 start 1)";
 
-  it("REFUSES to waive when the owner is asking but something could not be checked", () => {
-    /* Authorisation alone was enough in the first version, so the one branch that
-       skips the floor also swallowed every uncertainty. */
-    expect(
-      shouldWaiveFloor({
-        standing: { kind: "asking", owner },
-        inUse: { kind: "unknown", why: ["a process would not say where it is"] },
-        authorised: true,
-      }),
-    ).toBe(false);
+    const live = liveness(wt, reason, process.pid, namespaced);
+
+    expect(live.inUse.kind).toBe("unknown");
+    if (live.inUse.kind === "unknown") expect(live.inUse.why.join(" ")).toContain("PID namespace");
   });
 
-  it("control: waives when the owner is asking and both signals were conclusive", () => {
-    expect(
-      shouldWaiveFloor({ standing: { kind: "asking", owner }, inUse: { kind: "idle", notes: [] }, authorised: true }),
-    ).toBe(true);
-  });
+  it("control: from the host's namespace, the gate does not fire", () => {
+    /* Asserted on the gate, not on `idle`: the real /proc is the whole box, and
+       any process of ours anywhere that hides its cwd — a peer's, or this very
+       suite's hidden-process fixture running in parallel — makes an honest
+       `unknown`. Measured: this control went red once that way. What must hold
+       is that the namespace is the host's and is never the reason given. */
+    const wt = landedWorktree("worktree-host-view");
+    const real = procTable();
+    if (real === null) throw new Error("this test needs /proc");
+    expect(classifyPidNamespace(real.pidNamespace()).kind).toBe("host");
 
-  it("never waives for a third party, however idle the tree looks", () => {
-    expect(
-      shouldWaiveFloor({ standing: { kind: "unlocked" }, inUse: { kind: "idle", notes: [] }, authorised: false }),
-    ).toBe(false);
+    const live = liveness(wt, "claude session peer (pid 999999 start 1)", process.pid, real);
+
+    const why = live.inUse.kind === "unknown" ? live.inUse.why.join(" ") : "";
+    expect(why).not.toContain("PID namespace");
+    expect(live.inUse.kind).not.toBe("in-use");
   });
 });
 
@@ -525,7 +675,7 @@ describe("the ghost path", () => {
     /* ...and back before the removal acts. */
     renameSync(`${wt}-away`, wt);
 
-    const out = removeWorktree(primary, "worktree-comes-back", LONG_AGO);
+    const out = removeWorktree(primary, "worktree-comes-back");
 
     expect(existsSync(path.join(wt, "only-copy.json"))).toBe(true);
     expect(out.ok).toBe(false);
@@ -548,7 +698,7 @@ describe("the ghost path", () => {
     rmSync(a, { recursive: true, force: true });
     renameSync(b, `${b}-away`);
 
-    const out = removeWorktree(primary, "worktree-ghost-a", LONG_AGO);
+    const out = removeWorktree(primary, "worktree-ghost-a");
     expect(out.ok).toBe(true);
 
     /* B is still a ghost, and its reflog still names the commit. */
@@ -566,7 +716,7 @@ describe("the ghost path", () => {
     git(["checkout", "--quiet", "worktree-ghost-unlanded"], wt);
     rmSync(wt, { recursive: true, force: true });
 
-    const out = removeWorktree(primary, "worktree-ghost-unlanded", LONG_AGO);
+    const out = removeWorktree(primary, "worktree-ghost-unlanded");
 
     expect(out.ok).toBe(false);
     expect(listWorktrees(primary).some((e) => e.path === wt)).toBe(true);
@@ -578,7 +728,7 @@ describe("the ghost path", () => {
     const wt = landedWorktree("worktree-really-gone");
     rmSync(wt, { recursive: true, force: true });
 
-    const out = removeWorktree(primary, "worktree-really-gone", LONG_AGO);
+    const out = removeWorktree(primary, "worktree-really-gone");
     expect(out.ok).toBe(true);
     expect(listWorktrees(primary).some((e) => e.path === wt)).toBe(false);
   });
@@ -593,7 +743,7 @@ describe("the ghost path", () => {
     git(["worktree", "lock", "--reason", "claude session x (pid 999999 start 1)", wt], primary);
     rmSync(wt, { recursive: true, force: true });
 
-    const out = removeWorktree(primary, "worktree-locked-ghost", LONG_AGO);
+    const out = removeWorktree(primary, "worktree-locked-ghost");
     expect(out.ok).toBe(true);
     expect(listWorktrees(primary).some((e) => e.path === wt)).toBe(false);
     /* And its branch is not this command's to judge. */
