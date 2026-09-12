@@ -114,7 +114,7 @@ Verdict *REFUSE*, but not on the namespace fix.
 - **P1, fixed: one liveness read is not a lease.** A peer resuming a clean, landed tree with a stale
   lock after the read had it unlocked and removed from under it. Now the registration is re-read before
   the unlock (a changed lock refuses untouched), and liveness is read again after it, just before
-  `git worktree remove` — which refuses by itself a tree re-locked in between. Red first, through an
+  `git worktree remove` — which refuses by itself a tree re-locked in between (`c87ceec8`). Red first, through an
   injected per-call liveness (`RemoveOptions.liveness`), because the interleaving cannot be made with
   real processes in a single-threaded test; two refusals and a control. The residual — a peer entering
   *without* locking between the last read and the removal — needs an exclusion shared with
