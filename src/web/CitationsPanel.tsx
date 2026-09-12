@@ -587,7 +587,7 @@ function WorkRow({
             type="button"
             className="gloss-btn cite-find"
             disabled={finding !== null}
-            title="Runs one web search for this work, and keeps a page only if a search result is plainly its own. A few seconds; kept afterwards."
+            title="Searches the web for this work, and keeps a page only if a search result is plainly its own. A few seconds; kept afterwards."
             onClick={() => void onFind(work.id)}
           >
             <Search size={11} aria-hidden="true" />

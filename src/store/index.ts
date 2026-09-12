@@ -509,7 +509,7 @@ export const fetchAllowanceStore: FetchAllowanceStore = guarded(
 );
 
 /**
- * Citations mode's *Find it*: one web search for one cited work, kept only when
+ * Citations mode's *Find it*: one web-search call for one cited work, kept only when
  * a search result is plainly that work's own page. Built here out of the
  * parts, as `lookUpTerm` is — the reader seam decides ownership (a stranger's
  * slug is a 404), the allowance bounds the presses, and src/citation-find.ts

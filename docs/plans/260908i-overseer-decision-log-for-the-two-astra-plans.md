@@ -730,3 +730,22 @@ A P2 (a `/proc` mounted with `hidepid`, or an owner under another uid) was left 
 holds on this box. The fix itself had not been back to Sol; under Greg's *"make sure we're getting
 GPT Sol reviews"* the last link went out as `floor-fix-sol-recheck-2`, with Sol fixing in place so
 the chain ends there.
+
+## 2026-09-12 11:35 UTC — Citations mode is cleared by Sol; the floor chain ends with its gaps named
+
+**Citations** (Greg, 10:30Z: *"Get GPT Sol review for Citations mode if possible"*): the second
+review ran on the subscription and said, in its words, *"Safe after the fixes applied here"* — safe to
+sit on dev behind the experimental switch and ride the next deploy with its four migrations, which
+Sol also checked against a live database. Nothing new above P3; F14 (a late Find overwriting a DOI on
+screen) fixed with a reproducing test at ba7b6f48; F17 (a tooltip promising "one web search") at
+1f3bb486; merged as 64c466d8. F12 stays Greg's, default *leave as built*; Sol says it does not
+change the verdict. The plan's ledger is current; the worktree is gone.
+
+**The floor removal**, third and last link (6d559234): Sol's REFUSE was on a *claim*, not the code —
+c87ceec8 said git itself refuses a peer who locks after the last liveness read, and it does not
+(Sol and the session each removed a tree under a 20 ms-late peer lock, three of three). The comment
+and worktrees.md now say so. Two gaps stand, both named in the doc: a peer entering in the
+milliseconds after the last read (closable only with a lock shared with Claude Code's
+EnterWorktree, which is not ours), and a live tree whose directory was renamed reading as abandoned
+(older than this change; queued qi-8p2kf24s). Decision: stop the chain here. The rule Greg asked for
+is in force and the remaining risk is a window of milliseconds against a peer who is mid-entry.

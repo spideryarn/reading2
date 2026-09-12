@@ -329,9 +329,13 @@ refuses. Run from a sandbox, `worktree:remove` now says so instead of agreeing.
 hole: a peer resuming a clean, landed tree with a stale lock *after* the liveness read had its tree
 unlocked and removed from under it. So the removal re-reads the registration before it unlocks — a
 lock that changed since it was judged refuses untouched — and reads liveness again after the unlock,
-just before `git worktree remove`, which itself refuses a tree a peer has locked in the meantime. What
-remains is a peer that enters *without* locking in the milliseconds between that last read and the
-removal; closing it needs an exclusion shared with `EnterWorktree`, which is not ours to build.
+just before `git worktree remove`. Git refuses a lock it sees before its own check, but **that check
+is not a lease either**: Sol's third review, reproduced here too, had a peer's `git worktree lock`
+succeed *after* the removal started, and the removal succeed as well, tree gone. So what remains is
+any peer that enters after that last read — whether it locks and loses the race, or never locks.
+Closing it needs an exclusion shared with `EnterWorktree`, which is not ours to build. The other gap,
+older than any of this: a live tree whose directory was *renamed* reads as a ghost, and the ghost
+path asks no liveness at all.
 
 **The ownership proof is still here, and it grants nothing.** `claude --worktree` writes the owning
 session's pid *and start time* into the worktree lock. A live pid in the lock refuses anybody else —
