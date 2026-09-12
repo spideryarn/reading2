@@ -28,9 +28,12 @@ import { DEFAULT_ROOT_PX } from "../layout.js";
  *
  * `orientationchange` as well as `resize`, because the insets swap sides on
  * rotation and iOS has historically fired the two in either order.
+ *
+ * **And the layout viewport's width, not `innerWidth` itself** —
+ * `layoutViewportWidth` below says why.
  */
 export function useWindowWidth(): number {
-  const measure = () => window.innerWidth - horizontalInset(safeAreaInsets());
+  const measure = () => layoutViewportWidth() - horizontalInset(safeAreaInsets());
   const [w, setW] = useState(measure);
   useEffect(() => {
     const on = () => setW(measure());
@@ -42,6 +45,35 @@ export function useWindowWidth(): number {
     };
   }, []);
   return w;
+}
+
+/**
+ * **The width the stylesheet lays out in** — the layout viewport, which every
+ * `@media (max-width)` and every `100vw` is measured against.
+ *
+ * **Not `innerWidth` alone, because on iOS that is the *visual* viewport.**
+ * WebKit derives it from the unobscured content rect in page coordinates, so
+ * at zoom ×1.5 it is two-thirds of the screen. A zoom survives a rotation and a
+ * later zoom change fires no window `resize`, so a reader who rotated an iPad
+ * while zoomed in was laid out for a window two-thirds the size of theirs until
+ * something else resized it — Structure's one column on a landscape iPad,
+ * SPIDERYARN-READING2-33/-34, and
+ * docs/postmortems/260912b-a-layout-read-from-a-number-that-means-a-different-viewport-on-ios.md.
+ *
+ * **Not the root's `clientWidth` alone either**, because that excludes a
+ * desktop's classic scrollbar and the media queries include it — 15px in which
+ * layout.ts and narrow-window.css would disagree again. So the larger of the
+ * two: in this standards-mode top-level document the root's `clientWidth` is
+ * the layout viewport (CSSOM View's special case for the root), never inflated
+ * by the root's own width or by overflow, so it only wins where `innerWidth`
+ * has fallen below the layout — which on the browsers we support means iOS
+ * zoomed in. Everywhere else the answer is exactly `innerWidth`, as it was.
+ *
+ * `tests/layout-viewport-width.test.tsx` fails on a raw `innerWidth` elsewhere in
+ * `src/web`, and lists the files that want the browser's own answer.
+ */
+export function layoutViewportWidth(): number {
+  return Math.max(window.innerWidth, document.documentElement.clientWidth);
 }
 
 /**

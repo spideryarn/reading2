@@ -123,6 +123,17 @@ Three things worth carrying to whatever is built next:
   instead. **Do not tie the document's height to the moving one** — a page that grows and shrinks
   under the finger scrolling it is worse than a bar in the way.
 
+**The width layout.ts divides is the layout viewport's, not `innerWidth`.** On iPad Safari
+`innerWidth` is the *visual* viewport and shrinks when the page is zoomed in, while every media query
+and `100vw` above is the layout viewport. A zoom survives a rotation and a later zoom change fires no
+window `resize`, so a reader who rotated zoomed-in was laid out for a window two-thirds of theirs
+until something else resized it — Structure's one column on a landscape iPad, 2026-09-12. So the
+reading view reads `layoutViewportWidth()` in [`src/web/reader/measure.ts`](../../src/web/reader/measure.ts),
+and `tests/layout-viewport-width.test.tsx` fails on a raw `innerWidth` anywhere else in `src/web`
+unless the file is on its list with a reason.
+[260912b](../plans/260912b-a-rotation-lays-the-reading-view-out-for-the-new-width.md); the class is
+[the postmortem](../postmortems/260912b-a-layout-read-from-a-number-that-means-a-different-viewport-on-ios.md).
+
 The full account, including what the measuring harness cannot see, is
 [docs/plans/260827t-mobile-reading-view.md](../plans/260827t-mobile-reading-view.md).
 
