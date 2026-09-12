@@ -98,3 +98,64 @@ GPT Sol, 2026-09-12, verdict *REFUSE* on the first draft — and it was right to
    `stale`. It is now `unreadable` → `unknown`.
 4. **Low, fixed by Sol:** the real-process fixtures now wait for the child's cwd and process group, and
    the hidden-process test asserts the refusal names that exact pid.
+
+## The namespace fix, back to Sol
+
+The fix above went to GPT Sol on its own, findings-only, the same day — dispatched by the Overseer as a
+review debt (queue item `qi-3bmkw2ft`). Prompt:
+[…-namespace-review-prompt.md](260912a-drop-the-worktree-removal-age-floor-namespace-review-prompt.md);
+answer: [`…-namespace-review-sol.md`](260912a-drop-the-worktree-removal-age-floor-namespace-review-sol.md).
+Verdict *REFUSE*, but not on the namespace fix.
+
+- **The namespace fix holds.** Sol ran `liveness()` for real inside its sandbox (`pid:[4026533427]`)
+  and got `unknown` naming the namespace; without the gate the same inputs composed to `idle`, so the
+  test is a real one. `4026531836` is the reserved initial-namespace inode, dynamic ones come from a
+  separate range, and a mismatched procfs fails closed either way round.
+- **P1, fixed: one liveness read is not a lease.** A peer resuming a clean, landed tree with a stale
+  lock after the read had it unlocked and removed from under it. Now the registration is re-read before
+  the unlock (a changed lock refuses untouched), and liveness is read again after it, just before
+  `git worktree remove` — which refuses by itself a tree re-locked in between (`c87ceec8`). Red first, through an
+  injected per-call liveness (`RemoveOptions.liveness`), because the interleaving cannot be made with
+  real processes in a single-threaded test; two refusals and a control. The residual — a peer entering
+  *without* locking between the last read and the removal — needs an exclusion shared with
+  `EnterWorktree`, and is left named in the code and in [worktrees.md](../project/worktrees.md).
+  The sweep's matching drift (a row printed `REMOVABLE` whose tree a peer entered while the report was
+  being built) is left: the report destroys nothing, and the removal re-reads twice.
+- **P2, not fixed: the host namespace does not prove an unrestricted `/proc`.** Under `hidepid`, or for
+  an owner running as another uid, a live owner's stat reads as absent, which `ownerStanding` calls
+  stale. Not reachable on this box as it stands: `/proc` is mounted without `hidepid`, and every agent
+  runs as `greg` (checked by both of us). The fix when it matters is `kill(pid, 0)` telling `ESRCH` from
+  `EPERM`, as `tools/overseer/launch-artefacts.ts` already does.
+
+## The lease fix, back to Sol
+
+`c87ceec8` went to GPT Sol on its own the same day, `--sandbox workspace-write`, the last link of this
+chain — dispatched by the Overseer under Greg's instruction to get Sol reviews on anything tricky.
+Prompt: [`…-lease-review-prompt.md`](260912a-drop-the-worktree-removal-age-floor-lease-review-prompt.md);
+findings, written before any edit:
+[`…-lease-review-findings.md`](260912a-drop-the-worktree-removal-age-floor-lease-review-findings.md);
+answer: [`…-lease-review-sol.md`](260912a-drop-the-worktree-removal-age-floor-lease-review-sol.md).
+Verdict *REFUSE* — on the conclusion, not on the fix. The two reads do what they say; the claim that
+they leave only one gap was too strong.
+
+- **P1, not fixable here: git's own lock check is not a lease either.** `c87ceec8` said a peer that
+  locks after the late read is refused by git. Sol reproduced otherwise — a 30,000-file tree, `git
+  worktree remove` started, `git worktree lock` 20 ms later: both exited 0 and the tree was gone. The
+  session reproduced it independently on the box, three trials of three. So the named gap is wider
+  than "enters without locking": it is any peer that enters after the last read, locked or not. It
+  still needs an exclusion shared with `EnterWorktree`; Sol corrected the comment in
+  `scripts/worktree-remove.ts`, and the session corrected the same claim in
+  [worktrees.md](../project/worktrees.md).
+- **P2, older than this change: a renamed live tree reads as a ghost**, and the ghost path asks no
+  liveness. This is finding 2 of the first review above, reproduced again with a live process inside
+  the moved directory. Still left for its own change — but it means "a live tree is safe bar one gap"
+  is two gaps, not one.
+- **P3, fixed by Sol: two reachable failure paths had no test** — a late `unknown`, and a peer lock
+  git sees before its own check (where restoring our stale lock fails, honestly, and the peer's lock
+  stays). Both tests pass; with the late read mutated away, the session watched all four late-read
+  tests go red and the changed-lock test stay green (the re-list holds it).
+- **Confirmed:** `EnterWorktree({path})` does not lock and leaves a stale lock as it is, so that route
+  rests on the cwd scan; a named-worktree resume rewrites the lock with its own pid and start, which the
+  re-list catches; passing the judged lock to the late read is right; self-removal is unaffected.
+
+Landed as the commit that adds this section.
