@@ -84,6 +84,12 @@ silently](ai-gateway.md#the-four-things-that-fail-silently)). The bounds are the
 result cap and a 60-second deadline; the count is the alarm — `webSearches` on the ledger row, and
 `searches` / `searchesFrom` on the `citation find` log line.
 
+**And the presses are bounded**, since each one is billed and a no-match stores nothing to stop the
+same row being pressed again: the `citation-find` bucket of the shared per-owner allowance
+(`FIND_RATE_POLICY` — two at once, twenty an hour, sixty a day, and a global daily fuse), taken
+after the checks that refuse for free. The numbers are guesses, written as such. Added by the owed
+code review, GPT Sol F11.
+
 ## Who sees it
 
 Owner-only, and behind the [experimental switch](experimental-features.md). A visitor gets the

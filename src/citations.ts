@@ -318,21 +318,35 @@ export function toDrafts(
     const draft = readDraft(item, byId, drops, scores);
     if (draft) out.push(draft);
   }
-  if (out.length <= MAX_CITATIONS) return out;
-  /* **Past the cap, keep the works the piece leans on most** — the prompt's own
-     instruction, which the model does not always obey: spider silk came back
-     with 100 rows on the stage-1 run. Highest `relevance` first (an unscored
-     work last), the model's order as the tie-break, and the kept rows stay in
-     the model's order. */
-  drops.overCap += out.length - MAX_CITATIONS;
+  /* **No cut here.** The cap counts works, and these are still rows — the
+     shorthand cite and its full entry are two of them until `buildCitations`
+     folds them. `keepLeanedOnMost` cuts after both folds. GPT Sol F13. */
+  return out;
+}
+
+/**
+ * **Past the cap, keep the works the piece leans on most** — the prompt's own
+ * instruction, which the model does not always obey: spider silk came back with
+ * 100 rows on the stage-1 run. Highest `relevance` first (an unscored work
+ * last), the model's order as the tie-break, and the kept rows stay in the
+ * model's order.
+ *
+ * **Run on works, after both folds**, never on the raw rows: cut first and
+ * eighty copies of one work take the whole allowance, the distinct work behind
+ * them is gone, and the foot says "these are the 80" over one row. GPT Sol F13,
+ * 2026-09-12.
+ */
+function keepLeanedOnMost<T extends { draft: Draft }>(items: T[], drops: CitationDrops): T[] {
+  if (items.length <= MAX_CITATIONS) return items;
+  drops.overCap += items.length - MAX_CITATIONS;
   const kept = new Set(
-    out
-      .map((d, i) => ({ r: d.relevance ?? -1, i }))
+    items
+      .map((w, i) => ({ r: w.draft.relevance ?? -1, i }))
       .sort((a, b) => b.r - a.r || a.i - b.i)
       .slice(0, MAX_CITATIONS)
       .map((x) => x.i),
   );
-  return out.filter((_, i) => kept.has(i));
+  return items.filter((_, i) => kept.has(i));
 }
 
 /** What a model writes when it should have left a field out. */
@@ -998,7 +1012,7 @@ export function buildCitations(
   /* 3 — fold again on the identifier: two rows the article links to one DOI or
      one address are one work. The better-evidenced link is kept. */
   const RANK: Record<CitationLinkFrom, number> = { doi: 0, arxiv: 1, article: 2, web: 3, search: 4 };
-  const works = mergeBy(
+  const folded = mergeBy(
     linked,
     (w) => keysOf({ ...w.draft, url: w.url, linkFrom: w.linkFrom }).idKey,
     drops,
@@ -1009,6 +1023,9 @@ export function buildCitations(
         : { url: a.url, linkFrom: a.linkFrom }),
     }),
   );
+
+  /* 3½ — the cap, on works rather than rows, now that both folds are done. */
+  const works = keepLeanedOnMost(folded, drops);
 
   if (works.length === 0 && parsed.works.length > 0) {
     const d = drops;

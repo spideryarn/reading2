@@ -4808,3 +4808,15 @@ export const CITATION_NO_MATCH =
  */
 export const CITATION_ALREADY_LINKED =
   "This work already has a link, so there is nothing to look for. Reload to see it.";
+
+/**
+ * *Find it* refused by its allowance (src/citation-find.ts § `FIND_RATE_POLICY`)
+ * — one sentence per reason, because each tells the reader something different
+ * to do. Each press is a billed web search, which is why there is a limit.
+ */
+export const CITATION_FIND_BUSY =
+  "Another Find it is still running. Wait for it to finish, then try this one.";
+export const CITATION_FIND_LIMITED =
+  "You have looked up a lot of works recently. Try again in a while — the Scholar search is still there.";
+export const CITATION_FIND_RESTING =
+  "Find it has done as many searches as it can for today. Try again tomorrow — the Scholar search is still there.";

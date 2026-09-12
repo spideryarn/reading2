@@ -2106,15 +2106,17 @@ export type PreviewClaim =
 /* ------------------------------------------------------- fetch allowance -- */
 
 /**
- * The two allowances there are. A closed set, matching the table's CHECK.
+ * The allowances there are. A closed set, matching the table's CHECK.
  *
  * They are separate buckets rather than one, because they bound different
  * things: `link-preview-fetch` bounds how much of somebody else's server a
  * reader's pointer may ask for, and `link-summary-fill` bounds how much money it
  * may spend. A reader who has hovered a hundred cold links has done nothing
- * wrong by the second measure.
+ * wrong by the second measure. `citation-find` is money too — Citations mode's
+ * *Find it*, a billed web search per press (src/citation-find.ts) — and its own
+ * bucket because a reader summarising links has not spent any of it.
  */
-export type RateBucket = "link-preview-fetch" | "link-summary-fill";
+export type RateBucket = "link-preview-fetch" | "link-summary-fill" | "citation-find";
 
 /**
  * **How many outbound fetches one reader's pointer may cause.**

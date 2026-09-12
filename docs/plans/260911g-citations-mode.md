@@ -335,10 +335,62 @@ The reader's own article is not in the local database.
   table was missing from `db-schema-drift`'s pinned list and count and from `store-shelf-pg`'s
   every-foreign-key seed. All four green after; the other reds were the fresh-worktree five.
 
-### Owed reviews (GPT Sol held until 2026-09-15 01:23Z)
+### Owed reviews (GPT Sol held until 2026-09-15 01:23Z; the window reset early, 2026-09-12)
+
+One combined findings-only review over all four commits, 2026-09-12 (queue `qi-jggq8dkw`):
+prompt [260911g-citations-mode-code-review-prompt.md](260911g-citations-mode-code-review-prompt.md),
+answer [260911g-citations-mode-code-review-sol.md](260911g-citations-mode-code-review-sol.md)
+(`gpt-5.6-sol`, high, `--sandbox review`, on the subscription — not a fallback self-review), the
+tests it was handed [260911g-citations-mode-owed-review-test-results.txt](260911g-citations-mode-owed-review-test-results.txt)
+(10 files, 551 tests, green against the local database). Verdict *do not ship*, on F11–F14.
 
 | Stage | Commits | Status |
 |---|---|---|
-| 1 — artefact, step, route | `85631f9b` | owed |
-| 2 — the mode (client) | `abde65f7` | owed |
-| 3 — Find it on the web | `1e54a7f8`, `8d523739` | owed |
+| 1 — artefact, step, route | `85631f9b` | reviewed 2026-09-12 — F13 fixed, F15 open (P2) |
+| 2 — the mode (client) | `abde65f7` | reviewed 2026-09-12 — F14's client half open (P2) |
+| 3 — Find it on the web | `1e54a7f8`, `8d523739` | reviewed 2026-09-12 — F11 fixed, F12 for Greg, F16 open (P2) |
+
+The fixes are one commit on `dev`, recorded below once it lands.
+
+### Code-review ledger — GPT Sol, 2026-09-12 (findings-only; IDs continue the plan review's)
+
+| ID | Sev (Sol → ours) | Finding | Outcome |
+|---|---|---|---|
+| F11 | P0 → P0 | the paid POST has no admission control; a no-match stores nothing, so one row can be pressed for ever | **Fixed.** Checked: true, and the route's *"there is none to reuse"* was stale — `fetchAllowanceStore` has spent money for `link-summary-fill` since 2026-09-05. New `citation-find` bucket (migration `20260912091147_citation_find_rate_bucket`, widening the CHECK), `FIND_RATE_POLICY` 2 at once / 20 an hour / 60 a day / 600 global a day, taken after the 404 and 409, `finish` in `finally`, 429 / 429 / 503 in three sentences. Red first: five tests in `tests/citation-find.test.ts`. The numbers are guesses, like `SUMMARY_RATE_POLICY`'s |
+| F12 | P1 → **for Greg** | a review page passes as the work's own page: `pageNamesTitle` accepts a result whose title approximately names the work, or whose excerpt carries the title as a run | **Not fixed — a product trade-off.** The finding is true (Sol's harness keeps `blog.example/review` titled *"Scaling Laws … — a review"* when the model picks it; the prompt forbids that pick, code does not). Sol's fix — accept only `doi.org` / `arxiv.org` results — gives up the publisher pages, author copies and PDFs the prompt asks for and the plan's F4 (Sol's own) accepted. What the reader sees today is honest about provenance: *found on the web · host*. The choice between them is below, under *For Greg* |
+| F13 | P1 → P1 | the 80-work cap ran before the two dedupe passes, so duplicates could crowd distinct works out and the foot claim *"these are the 80"* over fewer | **Fixed.** Confirmed with Sol's case (80 copies + one distinct → one row, `capped: true`). The cut moved from `toDrafts` to `keepLeanedOnMost`, after both folds. Red first: `tests/citations.test.ts` § the cap. The copy change Sol proposed is not needed once the count is of works |
+| F14 | P1 → P2 | a find is not fenced to the snapshot it searched: a re-run landing mid-find leaves a `citation_finds` row for a row that is now a DOI, and the client overwrites that DOI with the web page until reload | **Open, P2.** The server half is already safe: `attachFinds` upgrades only `search` rows, so the stored row is never drawn over a DOI. The client half is real but needs a re-run to finish inside one find's 60 s, and lasts until reload. One-line fix for later: in `useCitations.ts`'s `find`, map only `w.id === id && w.linkFrom === "search"`. Left unfixed because no test drives the hook's `find` to watch it go red |
+| F15 | P2 → P2 | link-producing HTML is not in the freshness fingerprint, so an href-only edit leaves an old link marked fresh | **Open, P2.** Already recorded as a gap in the source; the fix is a hash over each block's external URL attributes in `sourceHash` |
+| F16 | P2 → P2 | `citation_finds.owner_id` is not tied to the article's owner; reads join on article only | **Open, P2, latent.** There is no ownership transfer; `glossary_lookups` has the same shape. If one is ever built, a composite FK to `articles(id, owner_id)` or an explicit move of the finds in the same transaction |
+
+**A red on `dev` the review did not name, fixed with it:** `tests/models.test.ts` (*"has an
+override variable decided for every task"*) failed on `dev` alone since `8d523739`, reported by the
+Overseer. That commit quieted `env-names-are-inventoried` by setting `citations-find`'s override to
+`null`, but every chat-wire task must have one (`REQUEST_PATH_TASKS` is derived from `TASK_WIRE`;
+`debate` has one on the same grounds). `SPIDERYARN_CITATIONS_FIND_MODEL` is restored, allowlisted in
+the inventory's group of comparison-run names, and given its row in
+[setup-dev.md](../project/setup-dev.md). Stage 3's full-suite note above missed it because the
+suite's reds were read as the fresh-worktree set.
+
+**Wider, noticed and not fixed here:** the glossary's `ask` route's header in `src/routes.ts`
+still says *"No rate limit, and there is none to reuse"*, and that it and its sibling `lookup` both
+drive paid calls unbounded. The second half of that sentence has been false since 2026-09-05; the
+same bucket-and-policy shape would bound both. Outside this mode, so left for whoever owns them.
+
+### For Greg — F12, what counts as a work's own page
+
+*Find it* runs one web search for a work the article gave no link for, and keeps a result if the
+model picked it **and** code sees the result's title (or opening text) naming the work. A review
+or a reading-list page whose title repeats the work's title passes that check if the model picks
+it, though the prompt tells it not to. The row would then say *found on the web · blog.example*
+and link to the review.
+
+- **Keep it as it is.** Publisher pages, author copies and PDFs all stay findable. A wrong pick is
+  possible, shown with its host, and needs the model to disobey the prompt.
+- **Only DOI and arXiv results** (Sol's fix). Nothing but a work's canonical address is ever kept,
+  and far fewer works are found — most books, reports and blog-published work have neither.
+- **In between:** drop the opening-text match and keep the title match, so a page that only quotes
+  the title in its text is refused. Narrows the hole without closing it.
+
+Recommendation: keep it for v1 — it is behind the experimental switch and owner-only, and the host
+is on the row — and revisit with real finds in the ledger.

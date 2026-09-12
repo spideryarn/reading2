@@ -1,0 +1,199 @@
+
+ RUN  v4.1.11 /home/greg/code/spideryarn2/.claude/worktrees/citations-owed-review
+
+  [private lane] spideryarn_test_260912084642_604fccfd043344beb747455999893059 in 5.0s, leased as spideryarn-test-lease-3337999, priced reader/researcher
+ ✓  unit  tests/pipeline-artifact-store.test.ts (67 tests) 836ms
+ ✓  unit  tests/store-artefact-manifest.test.ts (5 tests) 49ms
+ ✓  unit  tests/authenticated-api-route-contract.test.ts (329 tests) 304ms
+ ✓  unit  tests/citation-find.test.ts (27 tests) 70ms
+ ✓  unit  tests/citations.test.ts (31 tests) 1215ms
+     ✓ rule 1: one DOI in the reference, URL-encoded in the href, becomes doi.org  1110ms
+(node:3338980) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+stderr | tests/citations-panel.test.tsx > the prioritised score > is two parts relevance to one part influence, and needs both
+The current testing environment is not configured to support act(...)
+
+stderr | tests/citations-panel.test.tsx > the prioritised score > hides what is under the bar, keeps first-cited order, and never hides an unscored work
+The current testing environment is not configured to support act(...)
+
+stderr | tests/citations-panel.test.tsx > the prioritised score > is inclusive at the bar
+The current testing environment is not configured to support act(...)
+
+stderr | tests/citations-panel.test.tsx > the prioritised score > falls back to first cited when no position of the bar would hide anything
+The current testing environment is not configured to support act(...)
+
+stderr | tests/citations-panel.test.tsx > the score orders > sort descending, with a work missing that score last
+The current testing environment is not configured to support act(...)
+
+stderr | tests/citations-panel.test.tsx > the score orders > break ties in first-cited order
+The current testing environment is not configured to support act(...)
+
+stderr | tests/citations-panel.test.tsx > the score orders > first cited is the artefact's own order, untouched
+The current testing environment is not configured to support act(...)
+
+stderr | tests/citations-panel.test.tsx > a row's numbers and its source > draws the two raw scores and never the combination
+The current testing environment is not configured to support act(...)
+
+stderr | tests/citations-panel.test.tsx > a row's numbers and its source > tells an address the article gave from a search we built
+The current testing environment is not configured to support act(...)
+
+stderr | tests/citations-panel.test.tsx > CitationsPanel > links the title to the article's address, in a new tab
+The current testing environment is not configured to support act(...)
+
+stderr | tests/citations-panel.test.tsx > CitationsPanel > links the title to the article's address, in a new tab
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+
+stderr | tests/citations-panel.test.tsx > CitationsPanel > links the title to the article's address, in a new tab
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+
+stderr | tests/citations-panel.test.tsx > CitationsPanel > draws a search as a search: the title is not a link, and the one link says so
+The current testing environment is not configured to support act(...)
+
+stderr | tests/citations-panel.test.tsx > CitationsPanel > draws a search as a search: the title is not a link, and the one link says so
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+
+stderr | tests/citations-panel.test.tsx > CitationsPanel > draws a search as a search: the title is not a link, and the one link says so
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+
+stderr | tests/citations-panel.test.tsx > CitationsPanel > starts the bar at the default, hides what is under it, and says how many
+The current testing environment is not configured to support act(...)
+
+stderr | tests/citations-panel.test.tsx > CitationsPanel > starts the bar at the default, hides what is under it, and says how many
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+
+stderr | tests/citations-panel.test.tsx > CitationsPanel > starts the bar at the default, hides what is under it, and says how many
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+
+stderr | tests/citations-panel.test.tsx > CitationsPanel > draws the raw scores on a row, and not the number it was barred on
+The current testing environment is not configured to support act(...)
+
+stderr | tests/citations-panel.test.tsx > CitationsPanel > draws the raw scores on a row, and not the number it was barred on
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+
+stderr | tests/citations-panel.test.tsx > CitationsPanel > draws the raw scores on a row, and not the number it was barred on
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+
+stderr | tests/citations-panel.test.tsx > CitationsPanel > offers no re-run under a fresh list — only a stale or outdated one asks again
+The current testing environment is not configured to support act(...)
+
+stderr | tests/citations-panel.test.tsx > CitationsPanel > offers no re-run under a fresh list — only a stale or outdated one asks again
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+
+stderr | tests/citations-panel.test.tsx > CitationsPanel > offers no re-run under a fresh list — only a stale or outdated one asks again
+The current testing environment is not configured to support act(...)
+
+stderr | tests/citations-panel.test.tsx > CitationsPanel > offers no re-run under a fresh list — only a stale or outdated one asks again
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+
+stderr | tests/citations-panel.test.tsx > CitationsPanel > says the list was capped only when the model said so
+The current testing environment is not configured to support act(...)
+
+stderr | tests/citations-panel.test.tsx > CitationsPanel > says the list was capped only when the model said so
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+
+stderr | tests/citations-panel.test.tsx > CitationsPanel > says the list was capped only when the model said so
+The current testing environment is not configured to support act(...)
+
+stderr | tests/citations-panel.test.tsx > CitationsPanel > says the list was capped only when the model said so
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+
+stderr | tests/citations-panel.test.tsx > CitationsPanel > treats a piece that cites nothing as an answer, with no retry
+The current testing environment is not configured to support act(...)
+
+stderr | tests/citations-panel.test.tsx > CitationsPanel > treats a piece that cites nothing as an answer, with no retry
+The current testing environment is not configured to support act(...)
+
+stderr | tests/citations-panel.test.tsx > CitationsPanel > offers to find them when nobody has
+The current testing environment is not configured to support act(...)
+
+stderr | tests/citations-panel.test.tsx > CitationsPanel > offers to find them when nobody has
+The current testing environment is not configured to support act(...)
+
+stderr | tests/citations-panel.test.tsx > CitationsPanel > jumps to where a work is first cited, or says it is only in the references
+The current testing environment is not configured to support act(...)
+
+stderr | tests/citations-panel.test.tsx > CitationsPanel > jumps to where a work is first cited, or says it is only in the references
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+
+stderr | tests/citations-panel.test.tsx > CitationsPanel > jumps to where a work is first cited, or says it is only in the references
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+
+ ✓  unit  tests/citations-panel.test.tsx (18 tests) 375ms
+ ✓  private-postgres  tests/store-shelf-pg.test.ts (35 tests) 2014ms
+       ✓ states `public` and `private` on the article payload, never omits either  898ms
+ ✓  private-postgres  tests/store-export-covers-tables.test.ts (13 tests) 1165ms
+ ✓  private-postgres  tests/db-schema-drift.test.ts (20 tests) 318ms
+ ✓  private-postgres  tests/citation-find-route.test.ts (6 tests) 743ms
+
+ Test Files  10 passed (10)
+      Tests  551 passed (551)
+   Start at  09:46:41
+   Duration  37.27s (transform 13.14s, setup 1.55s, import 27.87s, tests 7.09s, environment 1.32s)
+
+  [private lane] dropped spideryarn_test_260912084642_604fccfd043344beb747455999893059
+EXIT=0
