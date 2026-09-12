@@ -651,6 +651,7 @@ describe("liveness is read again after the unlock, not only once", () => {
   const STALE = "claude session gone (pid 999999 start 1)";
   const idle = (): Liveness => ({ standing: { kind: "unlocked" }, inUse: { kind: "idle", notes: ["nobody"] } });
   const inUse = (): Liveness => ({ standing: { kind: "unlocked" }, inUse: { kind: "in-use", reasons: ["a peer came in"] } });
+  const unknown = (): Liveness => ({ standing: { kind: "unlocked" }, inUse: { kind: "unknown", why: ["the process table went opaque"] } });
 
   it("REFUSES, and puts the lock back, when somebody enters after the first read", () => {
     const wt = landedWorktree("worktree-late-entry");
@@ -688,6 +689,45 @@ describe("liveness is read again after the unlock, not only once", () => {
 
     expect(out.ok).toBe(false);
     expect(out.steps.join("\n")).toContain("lock changed");
+    expect(existsSync(wt)).toBe(true);
+    expect(listWorktrees(primary).find((e) => e.path === wt)?.lockReason).toBe(PEER);
+  });
+
+  it("REFUSES, and puts the lock back, when the late read cannot tell", () => {
+    const wt = landedWorktree("worktree-late-unknown");
+    git(["worktree", "lock", "--reason", STALE, wt], primary);
+    let calls = 0;
+
+    const out = removeWorktree(primary, "worktree-late-unknown", {
+      liveness: () => (++calls === 1 ? idle() : unknown()),
+    });
+
+    expect(out.ok).toBe(false);
+    expect(out.steps.join("\n")).toContain("the process table went opaque");
+    expect(existsSync(wt)).toBe(true);
+    expect(listWorktrees(primary).find((e) => e.path === wt)?.lockReason).toBe(STALE);
+  });
+
+  it("keeps a peer's newer lock when git refuses after the late read", () => {
+    /* The peer locks while the injected late read is returning. Git sees that
+       lock and refuses. Restoring our stale lock then fails honestly because
+       the peer's stronger, current lock is already protecting the tree. */
+    const wt = landedWorktree("worktree-locked-after-late-read");
+    git(["worktree", "lock", "--reason", STALE, wt], primary);
+    const PEER = "claude session peer (pid 999998 start 2)";
+    let calls = 0;
+
+    const out = removeWorktree(primary, "worktree-locked-after-late-read", {
+      liveness: () => {
+        calls += 1;
+        if (calls === 2) git(["worktree", "lock", "--reason", PEER, wt], primary);
+        return idle();
+      },
+    });
+
+    expect(out.ok).toBe(false);
+    expect(out.steps.join("\n")).toContain("refused by git");
+    expect(out.steps.join("\n")).toContain("could NOT restore the lock");
     expect(existsSync(wt)).toBe(true);
     expect(listWorktrees(primary).find((e) => e.path === wt)?.lockReason).toBe(PEER);
   });
