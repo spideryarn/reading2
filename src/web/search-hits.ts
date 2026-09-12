@@ -23,11 +23,14 @@
  * different string of a different length (annotate.ts § Why the offsets are DOM
  * offsets). The stored hits arrive measured in `block.text`, because that is
  * the string the server can see, so **their quote is re-found here rather than
- * trusted** — text first, offsets only as a tie-break, exactly as a comment's
- * anchor is resolved.
+ * trusted**. The offset is a tie-break only while the two spaces still agree.
+ * Once this ingress has drawn maths, one occurrence resolves and a repeated
+ * quote falls back to its whole block; an old source offset must not choose
+ * between positions in a shorter rendered string (F13).
  */
 import { renderedText, type Mark } from "./annotate.js";
-import { findQuote, snippet } from "../quote-match.js";
+import { findOnlyQuote, findQuote, snippet } from "../quote-match.js";
+import { rendersMaths } from "./maths-provenance.js";
 import type { ClaimPassage } from "../referee-claims.js";
 import type { DivergingScale, RefereeResult } from "../referee-criteria.js";
 import type {
@@ -413,6 +416,8 @@ interface Page {
   readonly index: ReadonlyMap<BlockId, number>;
   readonly texts: readonly string[];
   readonly scale: Ruler;
+  /** False where drawing maths moved offsets away from `block.text`'s space. */
+  readonly offsetsTrusted: readonly boolean[];
 }
 
 /**
@@ -475,6 +480,7 @@ function page(blocks: Block[]): Page {
     index: new Map(blocks.map((b, i) => [b.id, i])),
     texts,
     scale: ruler(texts),
+    offsetsTrusted: blocks.map((b) => !rendersMaths(b)),
   };
   pages.set(blocks, built);
   return built;
@@ -520,15 +526,23 @@ function resolveOne(
   const i = at.index.get(spec.blockId);
   if (i === undefined) return null;
   const text = at.texts[i] ?? "";
-  /* `whole` comes from whether `findQuote` found anything, and from nothing
+  /* `whole` comes from whether quote placement found anything, and from nothing
      else. The first version of this inferred it — a span covering the entire
      block, plus the quote not equalling the block's text — and real data broke
      it within the hour: a quote that genuinely *is* the whole block produces
      exactly the shape the fallback produces, and the model had retyped a line
      break as a space, so a perfect match was labelled "the exact words have
      moved". A derived fact that usually agrees with a known one is the shape of
-     most of docs/reusable/silent-success.md. */
-  const located = findQuote(text, spec.quote, spec.start);
+     most of docs/reusable/silent-success.md.
+
+     A model-supplied `start` is in `block.text`'s space. When maths was drawn,
+     that offset cannot disambiguate repeated words in the rendered space, so
+     only a unique quote is safe. Callers without `start` deliberately retain
+     their existing first-occurrence rule. */
+  const located =
+    spec.start !== undefined && at.offsetsTrusted[i] === false
+      ? findOnlyQuote(text, spec.quote)
+      : findQuote(text, spec.quote, spec.start);
   const whole = located === null;
   const span = located ?? { start: 0, end: text.length };
   return {

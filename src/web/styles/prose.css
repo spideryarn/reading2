@@ -585,6 +585,16 @@ td.text.kind-callout .prose::before {
   border-collapse: collapse;
   font-size: 0.9em;
 }
+/* Display maths (src/web/maths.ts) is the third thing that cannot reflow: an
+   equation is as wide as its widest row. It scrolls in its own box like the two
+   above. temml's own stylesheet, loaded lazily with the renderer, already makes
+   it `display: block; width: 100%` — this adds the scroll and some room above
+   and below, and is ours rather than the vendor's. */
+.prose math.tml-display {
+  max-width: 100%;
+  overflow-x: auto;
+  margin-block: 0.6em;
+}
 /* **`border` in full, and it used to be defensive.** The bare `td` rule gave
    every cell in the app a right border in --rule-strong, so naming only the
    sides this wanted would have let the zoom table's column grid through into an

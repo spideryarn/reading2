@@ -127,6 +127,16 @@ const SHARED = new Set([
      It imports nothing, and must go on importing nothing.
      See src/document-origin.ts. */
   "document-origin.js",
+  /* The pure half of drawing TeX as maths: where a delimited formula is, the
+     bounds temml is called with, and the text a drawn formula reads as. On the
+     list because both sides must give one answer — the browser draws the
+     formula (src/web/maths.ts) and the server checks a quote across it
+     (src/quote-in-block.ts), and a second copy of the span rules would let a
+     reader select symbols the server says are not there. Its only import is a
+     type from `temml`, a package the client already bundles, which is the
+     dompurify case below rather than a dependency on ours; temml itself is
+     passed in, never imported. See docs/project/maths.md. */
+  "maths-tex.js",
   /* How big a dictation may be, and what containers we can transcribe. On the
      list for the reason the header gives rather than for convenience: it
      imports nothing at all, and the alternative is two copies of one number.
