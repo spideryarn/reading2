@@ -9,7 +9,7 @@
 >
 > — Greg, 2026-09-12, from the Feedback dialog on an iPad (SPIDERYARN-READING2-39)
 
-**Status: stages 1 and 2 built, plan-reviewed; stage 2 in code review; stage 3 deferred. Not
+**Status: stages 1 and 2 built, plan-reviewed and code-reviewed, on `dev`; stage 3 deferred. Not
 deployed.** What is left needs Greg: one iPad dictation after the next deploy (F1 below), and an
 answer on Opus/WebM-first. The feedback note is
 [260912_0818-dictation-slow-on-weak-wifi.md](../user-feedback/260912_0818-dictation-slow-on-weak-wifi.md).
@@ -233,6 +233,18 @@ No established P0 or P1; six findings, all taken.
 | F4 | P3 — "independent of file size" overstated from two calls | Taken, reworded. |
 | F5 | P3 — raw body saves a quarter, not a third | Taken, reworded — and then stage 3 deferred, above. |
 | F6 | P3 — the prompt's candidate list was wrong and held a SHA placeholder | Taken: it names `de555fcf` and five paths. |
+
+## The gates
+
+- `npm run typecheck`: exit 0, after every stage and after the review fixes.
+- `npm test`, the full suite, on `705553da`'s tree: **1,097 files green, 5 red, 1 skipped.** All five
+  were a fresh worktree with nothing built — `cold-start-lazy-imports` and `pdf-bundle-trace` want
+  `npm run build`, and the three fleet files (`fleet-composed-access`, `fleet-decisions-route`,
+  `fleet-reports-route`) want `npm run build:fleet`: the fleet server refuses to start without its
+  client (`tools/fleet/server.ts`, exit 2) and one test scans `tools/fleet/web/dist/assets`. After
+  both builds, **all five green, 112/112**. None of this change touches `tools/fleet/` or `server.ts`.
+- The files touched after that run — `tests/transcribe.test.ts`, `src/transcribe.ts` — green on
+  their own (49/49), with the mutation described below.
 
 ## What GPT Sol's code review of stage 2 changed
 
