@@ -422,10 +422,10 @@ export function barNote(hidden: number, total: number): string {
  * a fact about *this* list: the model offered words that are not in the piece.
  * GPT Sol asked for it in review, 2026-08-31.
  *
- * Only `unfound` and `otherVoice` are said out loud. The other three —
- * a fragment, a whole paragraph, an overlap, a list past the cap — are editorial
- * rules of ours that the reader has no stake in, and naming them would turn an
- * honest disclosure into a changelog.
+ * Only `unfound` and `otherVoice` are said out loud. The other four —
+ * a length outside the bounds, an overlap, a list past the cap, a malformed
+ * entry — are editorial rules or internal failures the reader has no stake in,
+ * and naming them would turn an honest disclosure into a changelog.
  */
 export function discardedNote(drops: QuoteDrops | undefined): string | null {
   if (!drops) return null;

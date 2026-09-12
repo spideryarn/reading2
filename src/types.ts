@@ -978,12 +978,14 @@ export interface Quote {
   /** The block the words were found in. Ours, from `findQuote` — see above. */
   blockId: BlockId;
   /**
-   * The exact words, as the model returned them.
+   * The article's own words, sliced out of the block where `place` found them
+   * — **never the model's string**.
    *
-   * Stored as the model typed them rather than as the article spells them, and
-   * the difference is real: `findQuote` folds curly quotes and dashes to match,
-   * so a quote located by pass one may differ from `block.text` by a character
-   * or two. `start` plus this string's length is **not** a span — the client
+   * `findQuote` folds curly quotes and dashes to match, so what the model typed
+   * can differ from `block.text` by a character or two; storing its typing put
+   * words in the author's mouth on every fold, which is why the slice is stored
+   * instead (docs/project/quotes.md § What is stored is the article's
+   * characters). `start` plus this string's length is **not** a span — the client
    * re-finds the words in the rendered text, which is a third offset space
    * again. src/web/search-hits.ts § the header.
    */
@@ -1083,7 +1085,7 @@ export interface QuoteDrops {
    * fault at all; a run with a high `unfound` is a prompt that has drifted.
    */
   otherVoice: number;
-  /** Outside `MIN_QUOTE_CHARS`–`MAX_QUOTE_CHARS`. A phrase, or a whole paragraph. */
+  /** Outside `MIN_QUOTE_CHARS`–`MAX_QUOTE_CHARS`. A phrase, or more than a reader will read as one quote. */
   wrongLength: number;
   /** Located, but overlapping a span already kept — see `dedupeOverlaps`. */
   overlapping: number;

@@ -198,7 +198,7 @@ describe("place", () => {
     expect(dropped.unfound).toBe(1);
   });
 
-  it("drops a phrase and a whole paragraph, at the two ends", () => {
+  it("drops a phrase and a passage past the ceiling, at the two ends", () => {
     const dropped = drops();
     const long = "x".repeat(MAX_QUOTE_CHARS + 1);
     place([{ text: "too short" }, { text: long }], BLOCKS, dropped);

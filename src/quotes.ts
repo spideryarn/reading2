@@ -138,8 +138,17 @@ import type { ArtifactStore } from "./store/artifacts.js";
  * restated five ways — and Find more's taken list now rules out a taken line's
  * point in other words as well as its sentence. Nothing mechanical can check this: `dedupeOverlaps`
  * compares spans, and two sentences making one point share none.
+ *
+ * **`quotes/6`, 2026-09-12: long enough to stand on their own.** Greg,
+ * SPIDERYARN-READING2-3C: a quote that *"only has real meaning in the context of
+ * the wider block that it's part of"* is too short, and one *"could almost be an
+ * entire block if the whole block is really, really good"*. The prompt's own
+ * `LONG ENOUGH TO STAND ALONE` section makes that the test, and
+ * `MAX_QUOTE_CHARS` went from 400 to 1,200 with it — the prompt alone could not
+ * have done it, because three paragraphs in four of the article he was reading
+ * were longer than 400. docs/plans/260912e-quotes-long-enough-to-stand-on-their-own.md.
  */
-export const PROMPT_VERSION = "quotes/5";
+export const PROMPT_VERSION = "quotes/6";
 
 /**
  * The most quotes one call may return — **one pass**, not the whole list.
@@ -172,13 +181,57 @@ export const MAX_QUOTES = 40;
 export const MIN_QUOTE_CHARS = 30;
 
 /**
- * Longer than this is the paragraph, not a line out of it.
+ * Longer than this is more than a reader will read as one quote in a list —
+ * about 200 words, a long paragraph.
+ *
+ * **1,200 since 2026-09-12; 400 before**, when the docstring here said *"longer
+ * than this is the paragraph, not a line out of it"* and the prompt said the
+ * same. That was the rule Greg asked to be undone (SPIDERYARN-READING2-3C): a
+ * quote should stand on its own, and may be the whole paragraph when the whole
+ * paragraph is that good. Measured that day, 53 of the 69 paragraphs in the
+ * article he was reading were over 400, and the model had learnt to stay far
+ * below it — median 148 characters, a sixth of the paragraph each came from.
+ * Counted over exactly what this stage chooses from (`isBodyEvidence`), 1,200
+ * covers all 141 blocks of the noema fixture and 89 of the entropy paper's 99 —
+ * an editorial ceiling, not a promise that every good block can be quoted
+ * whole. It is a guess at where a quote stops being one, and the prompt reads it
+ * from here.
  *
  * Dropped rather than truncated, and that is the rule this stage cannot bend:
  * an ellipsis inside quotation marks attributed to a named author is a claim
  * about what they wrote.
+ *
+ * **The answer's token allowance is computed from this** (`answerTokensFor`),
+ * because undersizing that does not degrade — it loses the whole pass.
+ * docs/plans/260912e-quotes-long-enough-to-stand-on-their-own.md.
  */
-export const MAX_QUOTE_CHARS = 400;
+export const MAX_QUOTE_CHARS = 1200;
+
+/**
+ * The tokens one pass's answer may need, for `count` quotes — what
+ * `generateQuotes` hands `budgetFor`.
+ *
+ * **Per quote, from `MAX_QUOTE_CHARS`**, so the two cannot come apart: it was
+ * `500 + count * 220` while quotes were at most 400 characters, and raising the
+ * ceiling without this would have let a pass of long quotes run out of room.
+ * Undersizing does not degrade — `truncationFailure` throws and the reader loses
+ * the whole pass. So **one token per character of quote**, which no ordinary
+ * text comes near: English runs about four characters a token. A paper's maths
+ * and symbols are what can push a stretch towards one — a ratio
+ * of three was the first draft, and GPT Sol showed it was not a safe bound for
+ * exactly the articles this change is for. 100 more covers the reason, the two
+ * scores and the JSON around them. Even this is a corpus bound rather than a
+ * guarantee: a rare symbol can cost several tokens.
+ *
+ * `max_tokens` is a ceiling and not a charge, so the generosity costs nothing
+ * unless the model uses it: forty maximum-length quotes come to 52,500, inside
+ * what one call may ask for with the 40,000 of thinking headroom on top
+ * (src/token-budget.ts). The model reads the whole piece and thinks inside
+ * `budgetFor`'s headroom, not inside this.
+ */
+export function answerTokensFor(count: number): number {
+  return 500 + count * (MAX_QUOTE_CHARS + 100);
+}
 
 /**
  * How many quotes to ask for — one per ~200 words, clamped to 10–40.
@@ -1170,60 +1223,100 @@ export interface QuotesRun {
   elapsedMs: number;
 }
 
-const SYSTEM = `You are choosing the QUOTES worth keeping from this article: the
-lines that matter most to what it is saying, which a reader would want to carry
-out of it.
+/* Exported for tests/quotes-stand-alone.test.ts, which holds that the length
+   rule the model is told is the one `place` enforces. Both said 400 from the
+   day the stage was built, as two separate literals nothing tied together. */
+export const SYSTEM = `You are choosing the QUOTES worth keeping from this article: the
+passages that matter most to what it is saying, which a reader would want to
+carry out of it. A quote is a passage, not a line: one sentence, several
+sentences, or a whole paragraph — as much as it takes to make sense on its own.
 
 THE ABSOLUTE RULE
 
 Every quote must be copied from the article VERBATIM — character for character,
 exactly as it appears there. Not paraphrased, not tidied, not shortened with an
-ellipsis, not stitched together from two places. If you cannot copy a line
+ellipsis, not stitched together from two places. If you cannot copy a passage
 exactly, leave it out.
 
 This is not a style preference. Everything you return is shown to the reader in
-quotation marks, attributed to the author, beside the real text. A line that is
-nearly what they wrote is a false claim about a real person. Anything we cannot
-find in the article is thrown away, so an approximation costs you the entry and
-gains nothing.
+quotation marks, attributed to the author, beside the real text. A passage that
+is nearly what they wrote is a false claim about a real person. Anything we
+cannot find in the article is thrown away, so an approximation costs you the
+entry and gains nothing.
 
 WHAT EARNS A QUOTE
 
-A line earns its place for one of two reasons, and IMPORTANCE COMES FIRST.
+A passage earns its place for one of two reasons, and IMPORTANCE COMES FIRST.
 
-- It CARRIES THE ARGUMENT. The sentence the piece turns on; the claim the rest
-  is spent defending; the objection stated in the author's own voice; the
-  distinction everything after it depends on. These are what the list is for:
-  a reader skimming only the lines you choose should come away with the
-  piece's argument.
-- It IS WELL PUT. The line you would repeat to somebody. Memorable, exact,
+- It CARRIES THE ARGUMENT. The point the piece turns on; the claim the rest is
+  spent defending; the finding and what it shows; the objection stated in the
+  author's own voice; the distinction everything after it depends on. These are
+  what the list is for: a reader skimming only the quotes you choose should come
+  away with the piece's argument.
+- It IS WELL PUT. The passage you would repeat to somebody. Memorable, exact,
   surprising, funny, or simply better written than the sentences around it.
 
-The best quotes are both. When choosing, look for the important lines first
-and do not pass over one because it is plainly written. A line that is only
-well put still earns a place, but only when it is exceptionally so — a
-striking sentence on a side point is worth less here than a plain one the
-argument rests on.
+The best quotes are both. When choosing, look for the important passages first
+and do not pass over one because it is plainly written. A passage that is only
+well put still earns a place, but only when it is exceptionally so — a striking
+sentence on a side point is worth less here than a plain one the argument rests
+on.
+
+LONG ENOUGH TO STAND ALONE
+
+This matters as much as choosing well. Each quote is read on its own, in a
+list, with nothing around it — the reader has not got the article open. A quote
+that only makes sense once they go back to the paragraph it came from has
+failed, however good the paragraph is.
+
+The commonest way it fails is stopping too soon: taking the sentence that sets
+something up and leaving the payoff in the next one. An opening question
+without its answer; a problem without what the piece says about it; a result
+without the comparison or the consequence that makes it a result. Keep reading
+past your first sentence, and take the quote as far as its point goes.
+
+  BAD  — "The study set out to answer a simple question."
+         The set-up. The answer is in the next sentence, so that is where the
+         quote ends.
+  GOOD — "The study set out to answer a simple question: do people who sleep
+         less remember less? They do, but only for faces — for words and
+         places, a short night made no measurable difference."
+
+Before you keep a quote, read it as if you had never seen the article. If you
+would ask "and so?" or "which is what?", the answer is in the sentences after
+it — take them too. If it leans on what came before ("This is why it fails"),
+start earlier or choose another.
+
+So expect many quotes to run to two or three sentences, and some to a whole
+paragraph. Take the whole paragraph when all of it earns its place — when it is
+the argument stated whole, and cutting it anywhere would lose something the
+reader needs. Do not take one just because it is there: when a paragraph's point
+is complete in one of its sentences, that sentence is the quote, and every
+sentence added to it is one more the reader has to get through.
 
 WHAT DOES NOT
 
 - Scaffolding. "In this essay I will argue that ...", "But first, some
-  background", "Let us turn to the second objection."
-- A sentence that needs the paragraph around it to mean anything. A quote is
-  shown on its own, so a line beginning "This is why it fails" is useless.
+  background", "Let us turn to the second objection." That includes a
+  sentence about what the piece itself is or is not trying to do — its scope,
+  its audience, what it will cover — however complete it sounds on its own.
+  Standing alone is necessary, not sufficient: the quote still has to say
+  something about the subject, not about the article.
 - A piece cut out of the middle of a sentence. Start where a sentence starts
-  (or a clause that reads as one), so the line has its own subject — "are more
-  pious in church than in the family" is half a thought, however true.
+  (or a clause that reads as one), so the quote has its own subject — "are more
+  pious in church than in the family" is half a thought, however true — and end
+  where a sentence ends.
 - A statement of fact with nothing of the author in it. A date, a figure, a
   definition anyone would write the same way.
-- A line the piece is QUOTING rather than saying. Anything inside quotation
+- A passage the piece is QUOTING rather than saying. Anything inside quotation
   marks, and anything in an indented block quote, belongs to whoever it was
   taken from. Skip it, however good it is — those are thrown away anyway, so
   offering one costs you the entry and gains nothing.
-- Two overlapping versions of one line. Pick the form that stands alone best;
-  one of them will be thrown away anyway.
-- Anything under 30 characters or over 400. Below that it is a phrase; above it
-  it is the paragraph, and both are thrown away.
+- Two overlapping versions of one passage. Pick the form that stands alone
+  best; one of them will be thrown away anyway.
+- Anything under ${MIN_QUOTE_CHARS} characters or over ${MAX_QUOTE_CHARS}. Under that
+  it is a phrase; over it, it is more than a reader will read as one quote. Both
+  are thrown away.
 
 SPREAD THEM OUT, AND DO NOT REPEAT A POINT
 
@@ -1514,13 +1607,11 @@ export async function generateQuotes(opts: {
     };
   }
 
-  /* Bounded by `count`, which is bounded by MAX_QUOTES. Each quote is up to
-     MAX_QUOTE_CHARS of prose plus a short reason and two numbers — call it 180
-     tokens — and the allowance still scales with the article because the model
-     reads the whole piece and thinks about it inside this same number. See
-     src/token-budget.ts. Undersizing this does not degrade: it throws
+  /* Bounded by `count`, which is bounded by MAX_QUOTES — and per quote by
+     MAX_QUOTE_CHARS, which is the whole reason it is a function
+     (`answerTokensFor`). Undersizing this does not degrade: it throws
      `truncationFailure` and loses the whole pass. */
-  const answerTokens = 500 + count * 220;
+  const answerTokens = answerTokensFor(count);
   const maxTokens = budgetFor("quotes", answerTokens);
 
   /* The request itself, wrapped: a 429/401/etc from the SDK is not caught

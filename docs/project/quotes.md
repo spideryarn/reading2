@@ -197,8 +197,9 @@ quote looks exactly like a line the model chose not to offer
 
 They ride on the **artefact** (`Quotes.discarded`), not only in the log, and the panel says the two
 the reader has a stake in: *"2 suggestions were dropped because the words are not in the article."*
-A count in a log is invisible to the person the drop happened to. The other three are editorial rules
-of ours that the reader has no stake in, and naming them would turn a disclosure into a changelog.
+A count in a log is invisible to the person the drop happened to. The other four are internal
+rejection details the reader has no stake in, and naming them would turn a disclosure into a
+changelog.
 
 **`discarded` crosses to a visitor too**, which is the one pipeline-shaped field
 [public-types.ts](../../src/public-types.ts) lets through. It is not a fact about our pipeline — it is
@@ -683,8 +684,8 @@ wrong — but worth knowing.
   quotes by default"*), after one per ~300 clamped 8–32 from 2026-09-05 and one per ~600 clamped
   4–16 before that. Nobody has yet read a 40-quote list and said whether the tail is worth having;
   the bar hides it, which is what makes the number affordable and not what makes it right.
-  `STEP_BUDGET_MS.quotes` is 240s with it, also unmeasured — the one timing there has ever been is
-  11.9 seconds for five quotes.
+  `STEP_BUDGET_MS.quotes` is 240s with it, also unmeasured as a scheduling budget — paid passes have
+  taken 11.9 seconds for five quotes and 14–27 seconds for 15–22 quotes.
 - **`quotes/4` leads with importance** (*"emphasise important rather than striking when
   highlighting them"*): the prompt still takes either reason, and `max` still combines the scores,
   but it tells the model to look for the lines the argument rests on first and to keep a merely
@@ -694,6 +695,22 @@ wrong — but worth knowing.
   list now rules out a taken line's point in other words, not only its sentence. Prompt only —
   spans cannot see a restatement. Also unmeasured;
   [260911e](../plans/260911e-quotes-prompt-asks-for-diverse-lines.md).
+- **`quotes/6` asks for quotes that stand on their own** (*"the quote is not self-sufficient. It only
+  has real meaning in the context of the wider block that it's part of"*). A quote is a **passage, not
+  a line** — one sentence, several, or the whole paragraph — from the prompt's first sentence; `LONG
+  ENOUGH TO STAND ALONE` follows straight after what earns a quote; and `MAX_QUOTE_CHARS` went from 400
+  to 1,200. **Neither half works alone**, and that was measured: most paragraphs in a paper are over
+  400, and a first wording that only added a section near the bottom left the model choosing single
+  sentences (median 148 → 169). The reframing took it to 202–255 over two samples, with whole
+  paragraphs still rare. The prompt states the constants rather than its own numbers, and the answer's
+  token allowance is computed from the ceiling at one token a character (`answerTokensFor`). **Old
+  lists keep their short quotes**: Find more's taken spans win every overlap, so it cannot lengthen
+  them — whether to offer an outdated list a rewrite is Greg's
+  ([awaiting-approval.md](../user-feedback/awaiting-approval.md)). One article, three samples;
+  [260912e](../plans/260912e-quotes-long-enough-to-stand-on-their-own.md). **Longer quotes mark more
+  of the prose**, which makes the density point below more pressing — and make the known gap likelier:
+  text inside `<svg>` or `<math>` is counted but not wrapped (`annotateHtml`), so a quote crossing a
+  formula has a break in its outline, and one that starts or ends inside one can lose an end cap.
 - **The density with Find more is unlooked-at.** The default rank marks every quote in Plain, and a
   list can now grow to 120.
 - **`validateHits` (search) and `validateOccurrences` (ideas) have the same two bugs** this stage was
