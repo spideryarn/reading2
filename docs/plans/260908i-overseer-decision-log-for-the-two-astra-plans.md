@@ -667,3 +667,15 @@ sweep run from the primary over the nine trees that have been waiting it out. Th
 in use are named in the brief as not to be removed. Also this morning: production was found at
 d358f773 (built 08:01Z), so every product change since 2026-09-10 is live; the changelog loop's
 first run is writing them up; `debrief-overseer.md` added to docs/reusable at Greg's request.
+
+## 2026-09-12 09:35 UTC — the first scheduled changelog run stopped to wait for a waiter that could not wake it
+
+The 08:51Z changelog run did steps 1–3 and started its three Sol reviews, then ended its turn
+"with a waiter armed" — a one-shot `run-claude` process exits when its turn ends, so nothing came
+back, and the run reported exit 0 with three finished reviews on disk and no line written. The class
+is the one in the Overseer's memory as *subagents end turns while their jobs run*, now seen in a
+scheduled job. A resume run was dispatched from the on-disk state (`changelog-resume`), and the
+standing prompt now says in so many words: never arm a waiter and stop; wait in the foreground.
+The loop itself is unchanged. Also this tick: the 09:12Z feedback sweep queued and dispatched all
+17 of Greg's morning reports as 13 jobs in seven waves; the Citations Sol review and the
+worktree-floor removal are both in their full-suite gates; load 9.
