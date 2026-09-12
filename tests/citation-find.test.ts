@@ -25,6 +25,7 @@ import {
 } from "../src/citation-find.js";
 import { attachFinds, pageNamesTitle } from "../src/citations.js";
 import { CITATION_ALREADY_LINKED, CITATION_NO_MATCH, providerHttpFailure } from "../src/messages.js";
+import type { AllowanceTaken, RatePolicy } from "../src/store/contracts.js";
 import type { Article, CitationFind, Citations, CitationsFound, CitedWork, BlockId } from "../src/types.js";
 
 /* Real ids: `ID_PATTERN` rejects `1`, `i`, `l` and `o`. */
@@ -108,9 +109,15 @@ const A_REVIEW = {
 };
 
 /** The harness: a fake reader, a store that records, a model that answers `reply`. */
-function harness(reply: unknown | Error, works: CitedWork[] = [work()]) {
+function harness(
+  reply: unknown | Error,
+  works: CitedWork[] = [work()],
+  allowed: AllowanceTaken = { kind: "allowed", id: "lease-1" },
+) {
   const saved: { slug: string; entryId: string; find: CitationFind }[] = [];
   const sent: AiRequestBody[] = [];
+  const taken: { bucket: string; policy: RatePolicy }[] = [];
+  const finished: string[] = [];
   const findCitation = makeFindCitation({
     reader: {
       loadCitations: async () => ({ citations: list(works), stale: false, outdated: false }) as CitationsFound,
@@ -121,6 +128,15 @@ function harness(reply: unknown | Error, works: CitedWork[] = [work()]) {
         saved.push({ slug, entryId, find });
       },
     },
+    allowance: {
+      async take(bucket, policy) {
+        taken.push({ bucket, policy });
+        return allowed;
+      },
+      async finish(id) {
+        finished.push(id);
+      },
+    },
     call: async (body): Promise<JsonCall> => {
       sent.push(body);
       if (reply instanceof Error) throw reply;
@@ -128,8 +144,47 @@ function harness(reply: unknown | Error, works: CitedWork[] = [work()]) {
     },
     now: () => "2026-09-12T10:00:00.000Z",
   });
-  return { findCitation, saved, sent };
+  return { findCitation, saved, sent, taken, finished };
 }
+
+/* ------------------------------------------------------------- the allowance -- */
+
+describe("the allowance — every press is billed, so presses are bounded (Sol F11)", () => {
+  it("takes one fill from the citation-find bucket before the call, and finishes it after", async () => {
+    const { findCitation, taken, finished, sent } = harness(answer({ results: [THE_PAPER] }));
+    await findCitation("a-piece", WORK_ID);
+    expect(taken.map((t) => t.bucket)).toEqual(["citation-find"]);
+    expect(taken[0]!.policy.daily?.globalFills).toBeGreaterThan(0);
+    expect(sent).toHaveLength(1);
+    expect(finished).toEqual(["lease-1"]);
+  });
+
+  it("finishes the lease when the call fails, too", async () => {
+    const { findCitation, finished } = harness(new ProviderRefused(429, "busy", new Headers()));
+    await expect(findCitation("a-piece", WORK_ID)).rejects.toMatchObject({ status: 502 });
+    expect(finished).toEqual(["lease-1"]);
+  });
+
+  it.each([
+    ["rate", 429],
+    ["concurrency", 429],
+    ["global", 503],
+  ] as const)("a %s refusal is a %i, and nothing is called or stored", async (kind, status) => {
+    const { findCitation, sent, saved, finished } = harness(answer({ results: [THE_PAPER] }), [work()], { kind });
+    await expect(findCitation("a-piece", WORK_ID)).rejects.toMatchObject({ status });
+    expect(sent).toEqual([]);
+    expect(saved).toEqual([]);
+    expect(finished).toEqual([]);
+  });
+
+  it("spends no allowance on a 404 or a 409 — the checks come first", async () => {
+    const linked = work({ id: LINKED_ID, url: "https://doi.org/10.1000/x", linkFrom: "doi" });
+    const { findCitation, taken } = harness(answer({ results: [THE_PAPER] }), [work(), linked]);
+    await expect(findCitation("a-piece", "spya-n2t3h4")).rejects.toMatchObject({ status: 404 });
+    await expect(findCitation("a-piece", LINKED_ID)).rejects.toMatchObject({ status: 409 });
+    expect(taken).toEqual([]);
+  });
+});
 
 /* --------------------------------------------------------------- readFind -- */
 
@@ -294,6 +349,7 @@ describe("findCitation — what is stored", () => {
 
   it("passes a stranger's 404 through before any call — ownership is the read", async () => {
     const sent: AiRequestBody[] = [];
+    const taken: string[] = [];
     const findCitation = makeFindCitation({
       reader: {
         loadCitations: async () => {
@@ -302,6 +358,13 @@ describe("findCitation — what is stored", () => {
         loadArticle: async () => ARTICLE,
       },
       finds: { save: async () => {} },
+      allowance: {
+        async take(bucket) {
+          taken.push(bucket);
+          return { kind: "allowed", id: "lease-1" };
+        },
+        async finish() {},
+      },
       call: async (body) => {
         sent.push(body);
         return { json: null, answeredBy: null, generationId: null };
@@ -309,6 +372,8 @@ describe("findCitation — what is stored", () => {
     });
     await expect(findCitation("a-piece", WORK_ID)).rejects.toMatchObject({ status: 404 });
     expect(sent).toEqual([]);
+    // A stranger's slug spends none of the caller's allowance either.
+    expect(taken).toEqual([]);
   });
 
   it("reports a refused call in the house copy, and stores nothing", async () => {

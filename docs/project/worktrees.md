@@ -25,7 +25,7 @@ What is built:
 | [`scripts/worktree-admin.ts`](../../scripts/worktree-admin.ts) | Forced removal of a throwaway worktree, a `--porcelain -z` parser, and `ghosts()`, which the sweep now uses. |
 | [`scripts/worktree-remove.ts`](../../scripts/worktree-remove.ts) | `npm run worktree:remove` — **the** way a worktree is removed. Re-runs every guard, proves the branch landed before deleting it, and refuses with a reason otherwise. See [Removing one](#removing-one). |
 | [`scripts/worktree-inuse.ts`](../../scripts/worktree-inuse.ts) | Is anybody still in this tree, and is its **owner** the one asking? Reads the `(pid, start)` out of the worktree lock and looks for that pair in the caller's ancestor chain. See [Removing one](#removing-one). |
-| [`scripts/worktree-sweep.ts`](../../scripts/worktree-sweep.ts) | `npm run worktree:sweep`, run in the **primary**: which trees have landed. Owns only what one tree cannot see — enumeration, ghosts, the 24h age floor — and asks `worktree:check` everything else. Its `remove` verb now forwards to `worktree:remove`. See [Sweeping them up](#sweeping-them-up). |
+| [`scripts/worktree-sweep.ts`](../../scripts/worktree-sweep.ts) | `npm run worktree:sweep`, run in the **primary**: which trees have landed. Owns only what one tree cannot see — enumeration, ghosts, whether anybody else is in a tree — and asks `worktree:check` everything else. Its `remove` verb now forwards to `worktree:remove`. See [Sweeping them up](#sweeping-them-up). |
 | [`scripts/deploy-checks.ts`](../../scripts/deploy-checks.ts) | `DEPLOY_SOURCE_BRANCHES` and `deployBranchProblem` — `npm run deploy` accepts **`dev` alone** since the flip, and refuses `main` and any `worktree-*` branch by name. Plus `trunkGap`, below. |
 | the `level with origin/dev` gate | **Being on the trunk is not being level with it.** `preflight` only ever compared against `origin/main`, which proves the candidate contains current *production* and says nothing about current *trunk* — so a stale `dev` could promote code missing commits that had landed, and report success. The gate requires the captured sha to equal a freshly fetched `origin/dev`, and fails closed if the trunk cannot be read. Forcible as `--force-gate='level with origin/dev'`. |
 | [`vercel.json`](../../vercel.json) | `git.deploymentEnabled` is default-deny — `{"**": false, "main": true}` — so only production builds. |
@@ -303,35 +303,63 @@ Node rather than through a shell, so it is out of the hook's reach without needi
 simply gone, and no amount of care reconstructs it. What the command actually checks is the tip and
 the reflogs it can read, and it says which — a failed read is a refusal, not an empty history.
 
-**Its own session may remove a tree the moment it is done; nobody else may, for 24 hours.** That is
-not a courtesy, it is the one thing `/proc` can prove. `claude --worktree` writes the owning session's
-pid *and start time* into the worktree lock, and when that exact pair is in the ancestor chain of the
-process asking, the owner itself is asking. A third party gets the age floor instead, because
-**nothing running in it is not the same fact as finished** — an agent can land an intermediate commit,
-schedule a continuation for an hour's time and exit because the box is loaded, leaving a tree that is
-clean, landed, unlocked by a dead pid, and still wanted.
+**A finished tree may be removed at once, by anybody.** Greg, 2026-09-12:
+
+> Get rid of the 24h worktree-removal floor. If they are finished successfully and safe to remove,
+> it's fine to do so immediately.
+
+So the tree's own session and a third party need the same evidence, and none of it is a clock:
+`worktree:check` says safe, every commit the tree names is on `origin/dev`, and **nobody is in it** —
+no live session named in its lock, and no process of ours with its cwd inside. Anything that could
+not be checked refuses. Until that day a third party also had to wait out a 24-hour age floor, a proxy
+for "somebody is still using this" that the two liveness checks now answer directly — measured, a
+session that entered its tree with `EnterWorktree` trips both, because its `claude` process's cwd is
+the tree and the lock names it. What the floor's removal gives up, and the options passed over, are in
+[260912a](../plans/260912a-drop-the-worktree-removal-age-floor.md).
+
+**That evidence is only evidence from the host's `/proc`, so it is checked first.** GPT Sol found
+the hole on 2026-09-12, from inside its own Codex sandbox: a private PID namespace sees a tidy subset
+of the box, so the live pid in a peer's lock is simply absent — it read as *stale*, and the tree as
+*idle*. With the floor gone nothing else stood behind that answer. So before either signal is read,
+`/proc/self/ns/pid` must name the host's initial PID namespace, whose inode the kernel fixes at
+`4026531836`; any other namespace, or a link that cannot be read, is an `unknown`, and an unknown
+refuses. Run from a sandbox, `worktree:remove` now says so instead of agreeing.
+
+**And it is read twice, because one read is not a lease.** Sol's review of that fix found the next
+hole: a peer resuming a clean, landed tree with a stale lock *after* the liveness read had its tree
+unlocked and removed from under it. So the removal re-reads the registration before it unlocks — a
+lock that changed since it was judged refuses untouched — and reads liveness again after the unlock,
+just before `git worktree remove`, which itself refuses a tree a peer has locked in the meantime. What
+remains is a peer that enters *without* locking in the milliseconds between that last read and the
+removal; closing it needs an exclusion shared with `EnterWorktree`, which is not ours to build.
+
+**The ownership proof is still here, and it grants nothing.** `claude --worktree` writes the owning
+session's pid *and start time* into the worktree lock. A live pid in the lock refuses anybody else —
+that is what keeps a peer's five-minute-old tree safe — and without the proof it would refuse the
+owner too. So when that exact pair is in the ancestor chain of the process asking, the owner itself is
+asking, its own live pid does not count against it, and it then needs exactly what anybody else needs.
 
 It is **cooperative evidence, not an unforgeable capability**: another same-uid session could read a
-common ancestor's pid out of `/proc` and write a lock reason naming it. It raises the bar from *any
-agent may delete any tree* to *an agent must deliberately forge a lock*, which is the useful part.
+common ancestor's pid out of `/proc` and write a lock reason naming it, and so hide a live owner from
+the check. It raises the bar to *an agent must deliberately forge a lock*, which is the useful part.
 And it can fail the other way — a supervisor that detached the session from this process tree leaves
-a legitimate owner unauthorised, and waiting out the floor like anybody else.
+a legitimate owner refused by its own live pid, until it leaves the tree and asks from outside.
 
-**Run it from inside the tree, before you leave.** That order is not a preference:
+**Run it from inside the tree, or from the primary once you have left — either works now.**
 
 ```
-npm run worktree:remove          # inside the worktree. Its lock proves you own it.
+npm run worktree:remove          # inside the worktree. Its lock says you are the owner.
 ExitWorktree({action: "keep"})   # and now get the session out
 ```
 
-**`ExitWorktree({action: "keep"})` releases the worktree lock**, and the lock is the entire evidence
-for "its own session is asking". Leave first and you become a third party to your own tree, and the
-24h floor refuses you — measured, on this doc's own worktree, which then had to wait out the floor
-like anybody else. **`EnterWorktree({path})` does not put the lock back**, so there is no undo.
+`ExitWorktree({action: "keep"})` releases the worktree lock and moves the session's cwd out of the
+tree, so afterwards `npm run worktree:remove -- --branch <name>` from the primary finds nobody in it
+and accepts it. Until 2026-09-12 that order cost you the tree for a day, because the lock was the only
+thing that let you past the floor.
 
 Removing the directory you are standing in leaves your shell in one that no longer exists; the
-command says so and names the primary to `cd` to. That is a smaller problem than losing the proof,
-and `ExitWorktree({action: "keep"})` afterwards puts the session back where it belongs.
+command says so and names the primary to `cd` to, and `ExitWorktree({action: "keep"})` afterwards
+puts the session back where it belongs.
 
 **An orphaned branch is a target too.** `--branch <name>` with no worktree on it runs the same proof
 and the same compare-and-swap deletion, so a removal whose branch deletion failed is not a stuck
@@ -498,20 +526,16 @@ knowing because both read as alarming and neither means what it appears to.
   If HEAD is *not* an ancestor, stop — that is the real version of this warning.
 - **"this session is not the owner of the worktree …"** — the standard case when you resumed somebody
   else's abandoned tree, which is how most overnight jobs start. Nothing is wrong and there is nothing
-  to check. `npm run worktree:remove` from inside it, then `ExitWorktree({action: "keep"})` — that
-  order, for the reason below. (A tree you resumed was locked by the session that made it, so its
-  lock names a pid that is gone: the lock reads as stale, you are a third party, and the 24h floor
-  applies. That is usually fine, because an abandoned tree is normally well over it.)
+  to check. `npm run worktree:remove` from inside it, then `ExitWorktree({action: "keep"})`. (A tree
+  you resumed was locked by the session that made it, so its lock names a pid that is gone: the lock
+  reads as stale, and you need what anybody needs — which, since 2026-09-12, involves no waiting.)
 
 And what `ExitWorktree` will not tell you: it removes gitignored files without a prompt, and it counts
 untracked ones in a single line ("Discarded 854 commits and 44 uncommitted files"). Those 44 were once
 somebody's *paid* eval results.
 
-**So `ExitWorktree` is for leaving a worktree, not for removing one** — and `action: "keep"` is the
-**second** half of the flow above, never the first. It **releases the worktree lock**, which is the
-whole evidence `worktree:remove` reads to know that a tree's own session is asking; leave first and
-you are a third party to your own tree, under the 24h floor, with `EnterWorktree({path})` offering no
-way to put the lock back. Measured the hard way, on the worktree this section was written in.
+**So `ExitWorktree` is for leaving a worktree, not for removing one** — `action: "keep"` to leave,
+and `npm run worktree:remove` to remove, before or after.
 
 `discard_changes: true` is the one path in this repo that bypasses every guard described here.
 Nothing can intercept it: it is Claude Code's own tool, and a wrapper that half-worked would be a
@@ -529,13 +553,11 @@ npm run worktree:sweep                                    # read-only. Deletes n
 because a cheaper copy of a safety judgement is one whose disagreements with the real one are
 invisible by construction.
 
-**Read `young` as a verdict about the report, not about the tree.** A tree that is clean, landed and
-under the age floor prints as `young — safe, but its own session may remove it; nobody else yet`, and
-no paste-ready command is offered for it. That is the floor's actual job: **stopping this report from
-handing a third party a command that would delete a peer's five-minute-old tree.** If `REMOVABLE` and
-`young` were printed as one word, `REMOVABLE` would quietly come to mean "old enough to advertise"
-rather than "the removal command would accept it", and that is the kind of drift an operator reads
-straight past.
+**`REMOVABLE` means the removal command would accept it**, so the sweep asks the removal's liveness
+question for every tree rather than leaving the removal to refuse. A peer's fresh tree is clean and
+landed by construction; it prints as `keep` with *its Claude session is still running* beside it, and
+no paste-ready command is offered for it. (Until 2026-09-12 that tree printed as `young`, the word
+the age floor needed.)
 
 Three things the sweep owns that `worktree:check` deliberately does not, because they need the
 primary's vantage point or would be wrong inside a single tree:
@@ -569,12 +591,12 @@ primary's vantage point or would be wrong inside a single tree:
   is always locked; unlocking a registration whose directory is gone cannot lose anything, and the
   lock goes back if the removal then fails.
 - **You are standing in it.**
-- **The 24-hour age floor.** A worktree touched this recently is never removable, however landed. This
-  is not caution, it is the bug that retired the sibling repo's sweep: a fresh tree whose tip equals
-  the trunk passes the merged check trivially, and since `worktree:setup` merges `origin/dev` that is
-  the *normal* state of every worktree here for its first day. `worktree:check` has no age floor and
-  should not — asked inside a three-hour-old landed tree it is right to say "safe", because the person
-  standing in it knows whether they are done.
+- **Somebody else is in it** — its lock names a live session, or a process has its cwd inside. A tree
+  like that is never removable, however landed. This is not caution, it is the bug that retired the
+  sibling repo's sweep: a fresh tree whose tip equals the trunk passes the merged check trivially, and
+  since `worktree:setup` merges `origin/dev` that is the *normal* state of every worktree here for its
+  first day. `worktree:check` does not ask this and should not — asked inside a tree, the shell in it
+  is your own.
 
 Two things worth knowing about how it is wired:
 
@@ -1014,14 +1036,9 @@ moment that flipped. Either spelling lands on `dev` today.
   cleanup, so run it first.
 - **Age of the last commit is the wrong clock** for deciding a worktree is abandoned: one created ten
   minutes ago from a month-old commit passes that test immediately, and so does one that merged the
-  trunk by fast-forward, which writes no commit at all. Solved without the recorded creation timestamp
-  this trap used to ask for: `lastActivityAt` in
-  [`scripts/worktree-sweep.ts`](../../scripts/worktree-sweep.ts) takes the **branch reflog's** top
-  entry too — that moves when the branch is created and on every merge — and the mtime of the
-  worktree's own `.git/worktrees/<name>`, which is the only one of the three a **detached** worktree
-  has. Without that third signal a detached tree checked out from an old commit is born looking
-  abandoned, which is this same trap arriving through the one door the reflog does not cover. Latest
-  of the three wins.
+  trunk by fast-forward, which writes no commit at all. The sweep read three activity signals to get
+  round this until 2026-09-12, when the age floor went and with it any clock at all: whether a tree is
+  abandoned is now asked of `/proc` — [Removing one](#removing-one).
 - **`git diff origin/dev..HEAD` in a worktree shows other agents' landed commits as your deletions.**
   Two dots is a live comparison against wherever `origin/dev` has reached, so every commit it has that
   you do not reads as a deletion on your side. Use `git diff origin/dev...HEAD`, three dots, which

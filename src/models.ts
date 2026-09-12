@@ -1048,13 +1048,15 @@ export const MODEL_ENV_VAR: Record<Task, string | null> = {
   illustrated: null,
   quiz: null,
   citations: null,
-  /* **No override**, like `citations` above. It had one in first draft,
-     `SPIDERYARN_CITATIONS_FIND_MODEL`, and nothing asked for it: a new name here
-     is a new door every environment has to account for
-     (tests/env-names-are-inventoried.test.ts), and the question it was for —
-     does a cheaper model pick the right page as often — can still be answered
-     by adding one the day somebody asks it. */
-  "citations-find": null,
+  /* It has one because it is on the chat wire, and every chat-wire task does —
+     `REQUEST_PATH_TASKS` is derived from `TASK_WIRE`, and tests/models.test.ts
+     holds each of them to an override, `debate` included. 8d523739 took it out
+     to quiet the environment inventory and turned this test red on `dev`
+     instead; the inventory's answer is its group of comparison-run names, where
+     it now sits (tests/env-names-are-inventoried.test.ts). The question it is
+     for — does a cheaper model pick the right page as often — is answered by
+     running the real feature against another model. */
+  "citations-find": "SPIDERYARN_CITATIONS_FIND_MODEL",
   explain: "SPIDERYARN_EXPLAIN_MODEL",
   chat: "SPIDERYARN_CHAT_MODEL",
   "quiz-mark": "SPIDERYARN_QUIZ_MARK_MODEL",

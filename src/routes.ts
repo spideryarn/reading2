@@ -7563,10 +7563,11 @@ const AUTH_ROUTES: readonly AuthRoute[] = [
      — the work is found server-side by id, so this cannot be made to search
      for text of the caller's choosing.
 
-     **No rate limit, and there is none to reuse** — the same as `lookup`, and
-     stated there at length. What bounds one press is the deadline and the
-     prompt; `webSearches` on the ledger row is the alarm.
-     src/citation-find.ts. */
+     **Rate-limited per owner**, on `fetchAllowanceStore`'s `citation-find`
+     bucket — the limiter `link-summary-fill` spends money through, taken after
+     the 404 and 409 so a refusal for free costs nothing (GPT Sol F11). What
+     bounds one press is the deadline and the prompt; `webSearches` on the
+     ledger row is the alarm. src/citation-find.ts § `FIND_RATE_POLICY`. */
   {
     kind: "pattern",
     method: "POST",

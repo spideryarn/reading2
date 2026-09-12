@@ -58,6 +58,9 @@ import { pageNamesTitle } from "./citations.js";
 import { errorFields, log, since } from "./log.js";
 import {
   CITATION_ALREADY_LINKED,
+  CITATION_FIND_BUSY,
+  CITATION_FIND_LIMITED,
+  CITATION_FIND_RESTING,
   CITATION_NO_MATCH,
   PROVIDER_UNREADABLE,
   providerHttpFailure,
@@ -71,7 +74,7 @@ import {
   whereSearchCountCameFrom,
 } from "./openrouter-stream.js";
 import { parseJsonAnswer } from "./parse-json.js";
-import type { CitationFindStore } from "./store/contracts.js";
+import type { AllowanceTaken, CitationFindStore, FetchAllowanceStore, RatePolicy } from "./store/contracts.js";
 import type {
   Article,
   CitationFind,
@@ -101,6 +104,46 @@ const ANSWER_TOKENS = 400;
  * past it a reader waiting on a button is better told than kept waiting.
  */
 export const FIND_TIMEOUT_MS = 60_000;
+
+/**
+ * **How many presses of *Find it* one owner may make** — the other bound on
+ * spend, on the count of calls where the deadline bounds each one. GPT Sol F11,
+ * 2026-09-12: nothing limited it, and a no-match stores nothing, so the same row
+ * could be pressed for ever.
+ *
+ * The numbers are **guesses**, as `SUMMARY_RATE_POLICY`'s are and for its
+ * reason (src/store/contracts.ts § `RatePolicy`): nothing has measured how many
+ * works a reader looks up. Twenty an hour is most of a long bibliography's
+ * searched rows pressed one after another; the panel runs one at a time, so a
+ * concurrency of two is a second tab, not a second reader. The global fuse is
+ * a day's worst case in money, at a few cents a press, that nobody would
+ * notice until the bill.
+ */
+export const FIND_RATE_POLICY: RatePolicy = {
+  fills: 20,
+  windowMs: 60 * 60 * 1000,
+  concurrency: 2,
+  /* The deadline plus a margin: a process that dies mid-call frees its slot
+     soon after the call itself could have ended. */
+  leaseMs: FIND_TIMEOUT_MS + 30_000,
+  daily: { fills: 60, globalFills: 600, windowMs: 24 * 60 * 60 * 1000 },
+};
+
+/** A refused allowance as the route's error: 429 for this reader, 503 for everyone. */
+function refusedBy(kind: Exclude<AllowanceTaken["kind"], "allowed">): Error {
+  switch (kind) {
+    case "concurrency":
+      return httpError(429, CITATION_FIND_BUSY);
+    case "rate":
+      return httpError(429, CITATION_FIND_LIMITED);
+    case "global":
+      return httpError(503, CITATION_FIND_RESTING);
+    default: {
+      const never: never = kind;
+      return never;
+    }
+  }
+}
 
 /** The reference entry as the article gives it, capped — enough to disambiguate. */
 const REFERENCE_CAP = 500;
@@ -251,6 +294,12 @@ export interface FindCitationDeps {
   };
   /** Where a kept find goes. */
   readonly finds: CitationFindStore;
+  /**
+   * **The bound on presses** — required, so a caller cannot build this without
+   * one. Each press is a billed web search, and ownership says *which* article,
+   * not *how many* times. GPT Sol F11, 2026-09-12.
+   */
+  readonly allowance: Pick<FetchAllowanceStore, "take" | "finish">;
   /** The model call. Overridable so a test can drive every outcome without a network. */
   readonly call?: (body: AiRequestBody, options: { signal: AbortSignal }) => Promise<JsonCall>;
   readonly now?: () => string;
@@ -320,8 +369,23 @@ export function makeFindCitation(
 
     const model = modelFor("citations-find");
     const line = log("model").child({ slug, entryId });
+
+    /* **The allowance, after every check that can refuse for free** — a 404 or
+       a 409 spends none of it — and before the one thing that costs. */
+    const allowance = await deps.allowance.take("citation-find", FIND_RATE_POLICY);
+    if (allowance.kind !== "allowed") {
+      line.warn({ why: allowance.kind }, "citation find: allowance spent");
+      throw refusedBy(allowance.kind);
+    }
+
     const started = Date.now();
-    const call = await callOnce(send, findRequest(work, reference, model), { timeoutMs, line, model, started });
+    let call: JsonCall;
+    try {
+      call = await callOnce(send, findRequest(work, reference, model), { timeoutMs, line, model, started });
+    } finally {
+      /* Frees the concurrency slot whatever happened; the fill still counts. */
+      await deps.allowance.finish(allowance.id);
+    }
 
     const used = call.answeredBy ?? model;
     const reading = readFind(call.json, work.title);
