@@ -412,6 +412,18 @@ describe("the file on disk is not a type", () => {
     expect(p.rejected).toHaveLength(0);
     expect(p.samples[0]?.win[1]).toBe(844);
   });
+
+  /* Since 2026-09-12 the probe records the window's events and the reader
+     re-laying-out, so a trace taken across a rotation carries three more names.
+     A reader that rejected them would refuse the very trace 260912b asks Greg
+     to take. */
+  it("reads a trace that caught a rotation", () => {
+    const evs = ["start", "orientationchange", "window-resize", "laid-out"] as const;
+    const p = parseTrace(file(evs.map((ev, i) => sample({ t: i * 10, ev }))));
+    expect(p.fatal).toBeNull();
+    expect(p.rejected).toHaveLength(0);
+    expect(p.samples.map((s) => s.ev)).toEqual([...evs]);
+  });
 });
 
 describe("the anchor premise, checked rather than cited", () => {

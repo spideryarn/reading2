@@ -290,6 +290,41 @@ describe("what it survives", () => {
     expect(out.samples[0]?.ev).toBe("start");
   });
 
+  /**
+   * **A rotation is the window's news**, so it is recorded where there is no
+   * visual viewport too — the listeners must not sit behind the early return
+   * for a missing one (GPT Sol F4). Then the `laid-out` row: the width the
+   * reader re-rendered with, the half of a rotation trace nothing else in it
+   * can reconstruct. The window's rows carry the width from *before* the
+   * reader re-rendered, which is the pair the question needs.
+   * docs/plans/260912b-a-rotation-lays-the-reading-view-out-for-the-new-width.md.
+   */
+  it("records a rotation, and the width the reader laid out for after it", () => {
+    noViewport();
+    address("?probe=1");
+    act(() => {
+      root.render(createElement(ViewportProbe, { laidOutWidth: 820 }));
+    });
+    act(() => {
+      window.dispatchEvent(new Event("orientationchange"));
+      window.dispatchEvent(new Event("resize"));
+    });
+    act(() => {
+      root.render(createElement(ViewportProbe, { laidOutWidth: 1180 }));
+    });
+
+    const out = trace() as unknown as {
+      samples: { ev: string; lay: [number, number | null] }[];
+    };
+    expect(out.samples.map((s) => s.ev)).toEqual([
+      "start",
+      "orientationchange",
+      "window-resize",
+      "laid-out",
+    ]);
+    expect(out.samples.map((s) => s.lay[1])).toEqual([820, 820, 820, 1180]);
+  });
+
   /** Zeros everywhere and no computed lengths — the shape has to survive both. */
   it("records a rectangle key for every element even when nothing is there", () => {
     fakeViewport();

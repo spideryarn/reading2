@@ -101,11 +101,38 @@ type Box = [number, number, number, number];
 interface Sample {
   /** Milliseconds since the probe started. */
   readonly t: number;
-  readonly ev: "start" | "resize" | "scroll" | "mark";
+  /**
+   * **What fired.** `resize` and `scroll` are the *visual viewport's* — the
+   * names predate the window's events being recorded at all, and they stay so
+   * that scripts/viewport-trace.ts and every trace already taken still read.
+   * `window-resize` and `orientationchange` are the window's, and `laid-out` is
+   * the reader re-rendering with a new width. One `resize` for both would make
+   * the claim a rotation trace exists to test — *a zoom fired the visual
+   * viewport's resize and not the window's* — unprovable. GPT Sol F4,
+   * 2026-09-12.
+   */
+  readonly ev:
+    | "start"
+    | "resize"
+    | "scroll"
+    | "window-resize"
+    | "orientationchange"
+    | "laid-out"
+    | "mark";
   /** `[innerWidth, innerHeight, scrollX, scrollY]`. */
   readonly win: Box;
   /** `[width, height, offsetTop, offsetLeft, scale]`, or `null` where there is no `visualViewport`. */
   readonly vv: [number, number, number, number, number] | null;
+  /**
+   * `[root clientWidth, the width the reader laid out for]`. Beside `win`'s
+   * `innerWidth` this is the whole of a rotation question: on iPad Safari a
+   * zoom shrinks `innerWidth` and not the root's `clientWidth`
+   * (docs/plans/260912b-a-rotation-lays-the-reading-view-out-for-the-new-width.md),
+   * and the third number says which one the layout believed. `layoutViewportWidth()`
+   * is not recorded because it is the `max` of two numbers already here; the
+   * reader's stored width is not reconstructable, so it is.
+   */
+  readonly lay: [number, number | null];
   /** The occlusion tokens, resolved to pixels — see the note above on how. */
   readonly tok: Readonly<Record<string, number | null>>;
   readonly rect: Readonly<Record<string, Box | null>>;
@@ -265,6 +292,7 @@ function take(
   t: number,
   spanA: HTMLElement | null,
   spanB: HTMLElement | null,
+  laidOutWidth: number | null,
 ): Sample {
   const vv = window.visualViewport ?? null;
   const band = document.querySelector(".mode-band");
@@ -290,6 +318,7 @@ function take(
     vv: vv
       ? [round(vv.width), round(vv.height), round(vv.offsetTop), round(vv.offsetLeft), vv.scale]
       : null,
+    lay: [round(document.documentElement.clientWidth), laidOutWidth],
     tok: tokensFrom(spanA, spanB),
     rect: {
       /* `controlsBar()` rather than a bare query, for the reason it gives:
@@ -334,13 +363,18 @@ function serialise(samples: readonly Sample[], head: Record<string, unknown>): s
  * it. Everything else lives in the child, which is not mounted when the flag is
  * off — so there is nothing in the DOM and no listener anywhere.
  */
-export function ViewportProbe() {
+export function ViewportProbe({
+  laidOutWidth,
+}: {
+  /** `useWindowWidth`'s answer — the width the reader actually laid out for. */
+  laidOutWidth?: number;
+}) {
   const [on] = useState(currentProbe);
   if (!on) return null;
-  return <ProbePanel />;
+  return <ProbePanel laidOutWidth={laidOutWidth ?? null} />;
 }
 
-function ProbePanel() {
+function ProbePanel({ laidOutWidth }: { laidOutWidth: number | null }) {
   const spanA = useRef<HTMLSpanElement>(null);
   const spanB = useRef<HTMLSpanElement>(null);
   /* **The samples live in a ref and only the count is state.** iOS fires
@@ -363,25 +397,50 @@ function ProbePanel() {
        happened to run for. A trace is read as an offset from the tap. */
     const now = performance.now();
     if (since.current === 0) since.current = now;
-    samples.current.push(take(ev, now - since.current, spanA.current, spanB.current));
+    samples.current.push(
+      take(ev, now - since.current, spanA.current, spanB.current, laidOut.current),
+    );
     setCount(samples.current.length);
   }, []);
+
+  /* **The reader's width, through a ref**, so `record` can stay stable. A
+     window event's row therefore carries the width *before* the reader has
+     re-rendered for it, and the `laid-out` row below carries the width after —
+     which is the pair a rotation trace needs. */
+  const laidOut = useRef(laidOutWidth);
 
   useEffect(() => {
     /* One sample before anything moves, so every trace has a keyboard-closed
        row to compare the rest against. */
     record("start");
+    /* **The window's events, installed whether or not there is a visual
+       viewport** — a rotation is the window's news, and an early return for a
+       missing `visualViewport` would drop it (Sol F4). */
+    const onWindowResize = () => record("window-resize");
+    const onOrientation = () => record("orientationchange");
+    window.addEventListener("resize", onWindowResize);
+    window.addEventListener("orientationchange", onOrientation);
     const vv = window.visualViewport;
-    if (!vv) return;
     const onResize = () => record("resize");
     const onScroll = () => record("scroll");
-    vv.addEventListener("resize", onResize);
-    vv.addEventListener("scroll", onScroll);
+    vv?.addEventListener("resize", onResize);
+    vv?.addEventListener("scroll", onScroll);
     return () => {
-      vv.removeEventListener("resize", onResize);
-      vv.removeEventListener("scroll", onScroll);
+      window.removeEventListener("resize", onWindowResize);
+      window.removeEventListener("orientationchange", onOrientation);
+      vv?.removeEventListener("resize", onResize);
+      vv?.removeEventListener("scroll", onScroll);
     };
   }, [record]);
+
+  /* A `laid-out` row each time the reader's stored width changes, after the
+     render that used it. Compared with the last width seen rather than skipped
+     on first run, so Strict Mode's second effect pass records nothing. */
+  useEffect(() => {
+    if (laidOut.current === laidOutWidth) return;
+    laidOut.current = laidOutWidth;
+    record("laid-out");
+  }, [laidOutWidth, record]);
 
   const trace = useCallback(() => {
     const head = {

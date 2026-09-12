@@ -2460,7 +2460,7 @@ export function Reader({
           exists to get a measurement from. Inside `.reader` because that is
           where `--mode-w` and `--spine-w` resolve, and after the `Dock` so it
           is over the bars it is measuring. ViewportProbe.tsx. */}
-      <ViewportProbe />
+      <ViewportProbe laidOutWidth={windowWidth} />
     </div>
   );
 }

@@ -78,7 +78,22 @@ export type Box = readonly [number, number, number, number];
 export type VV = readonly [number, number, number, number, number];
 
 /** The events the deployed probe emits. Anything else is a trace we do not understand. */
-export const EVENTS = ["start", "resize", "scroll", "mark"] as const;
+/**
+ * `resize` and `scroll` are the visual viewport's. The three after them were
+ * added on 2026-09-12 so a rotation shows up in a trace (the window's own
+ * events, and the reader re-laying-out), and are listed here so a trace that
+ * contains one still reads —
+ * docs/plans/260912b-a-rotation-lays-the-reading-view-out-for-the-new-width.md.
+ */
+export const EVENTS = [
+  "start",
+  "resize",
+  "scroll",
+  "window-resize",
+  "orientationchange",
+  "laid-out",
+  "mark",
+] as const;
 export type Ev = (typeof EVENTS)[number];
 
 export interface Sample {
