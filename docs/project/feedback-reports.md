@@ -157,7 +157,12 @@ it costs the reader who hit it. Two reports that are one bug are one entry; one 
 three things may be three. This doc is Greg's standing authorisation for that work, so the sweep
 runs `authorize --by greg` on each entry with this doc as the source — the four endings in § Who
 sent it still belong to the agent, and "write it up and wait" is still the ending a reader's
-suggestion usually gets. `done` when the report reaches one of its three endings.
+suggestion usually gets. `done` when the report reaches one of its three endings. **The Sentry
+status write is the sweep's, not the report session's**, since 2026-09-11: report sessions run on a
+pool account, and Greg (2026-09-11) keeps Sentry and every other service sign-in off pool accounts,
+so a session writes only its note, naming the ending, and the next sweep marks the issue in Sentry
+from that note at the start of its run. "Mark it as resolved in Sentry if you can" above still
+holds for a session that can.
 
 ## The run
 
