@@ -655,3 +655,15 @@ feedback sweep's shape: `run-claude --mcp` under the default login for the Verce
 run began 08:51Z. The prompt now says a run with no new production deploy writes nothing, so the
 loop is cheap between deploys. One bullet added to overseer.md § The standing jobs under Greg's
 instruction. Standing-jobs digest for overseer.md is not pinned, so no re-pin.
+
+## 2026-09-12 09:10 UTC — Greg removes the 24h worktree floor; the job is dispatched, not done here
+
+Greg: *"Get rid of the 24h worktree-removal floor. If they are finished successfully and safe to
+remove, it's fine to do so immediately. Consider this approved, and push."* This is code in
+`scripts/worktree-remove.ts` and a rule paragraph in worktrees.md, so it went to an agent
+(`remove-worktree-floor`, mindstone) rather than being done in the Overseer's own hands: a plan doc,
+a failing test first, the floor deleted rather than switched off, one Sol review, push, then the
+sweep run from the primary over the nine trees that have been waiting it out. The five trees still
+in use are named in the brief as not to be removed. Also this morning: production was found at
+d358f773 (built 08:01Z), so every product change since 2026-09-10 is live; the changelog loop's
+first run is writing them up; `debrief-overseer.md` added to docs/reusable at Greg's request.
