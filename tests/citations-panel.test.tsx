@@ -167,6 +167,9 @@ function owner(over: Partial<UseCitations> = {}): UseCitations {
     ensure: async () => {},
     regenerate: async () => {},
     cancel: () => {},
+    finding: null,
+    findNote: null,
+    find: async () => {},
     ...over,
   };
 }

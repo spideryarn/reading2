@@ -547,6 +547,15 @@ export type Task =
    * links are code's, but relevance is a reading of the whole argument.
    */
   | "citations"
+  /**
+   * **One cited work's own page, found on the web** — Citations mode's *Find
+   * it*, src/citation-find.ts. Chat wire because `openrouter:web_search` is a
+   * server tool there and nowhere else; its own job rather than `citations`'
+   * because that one is a Messages-wire pipeline step over a whole article and
+   * this is one reader-triggered search for one work, whose cost is billed
+   * per search — folding them would hide the searches in the step's line.
+   */
+  | "citations-find"
   | "link-summary";
 
 /**
@@ -758,6 +767,11 @@ export const TASK_TIER: Record<Task, Tier> = {
      src/debate.ts exists to refuse. */
   debate: "capable",
   citations: "capable",
+  /* Capable, for `debate`'s reason: the whole job is weighing a handful of
+     search results against one cited work and saying which, if any, is its
+     own page. A shallow pick costs little here — code refuses a page whose
+     title does not match — but a refusal is a work the reader goes without. */
+  "citations-find": "capable",
   /**
    * **The first `quick` row in this table**, and the one place its two
    * unmeasured caveats got measured. `openai/gpt-5.6-luna` at roughly a tenth
@@ -948,6 +962,9 @@ export const TASK_WIRE: Record<Task, Wire> = {
      above, and src/pdf-read.ts for the precedent. */
   debate: "chat",
   citations: "messages",
+  /* Chat, because `openrouter:web_search` is a server tool on chat/completions
+     and does not exist on the Messages shape — `debate`'s reason. */
+  "citations-find": "chat",
   /* Chat, and for this one task the wire is not a free choice: it is the only
      one `QUICK_MODEL_OPENROUTER` is served on, which is what the throw at the
      bottom of this file is about. A reader is watching it stream, so it would
@@ -1031,6 +1048,11 @@ export const MODEL_ENV_VAR: Record<Task, string | null> = {
   illustrated: null,
   quiz: null,
   citations: null,
+  /* It has one because it is on the chat wire, where every other task does,
+     and because the question somebody will ask of it — does a cheaper model
+     pick the right page as often — is answered by running the real feature
+     against another model, not by editing the tier table. */
+  "citations-find": "SPIDERYARN_CITATIONS_FIND_MODEL",
   explain: "SPIDERYARN_EXPLAIN_MODEL",
   chat: "SPIDERYARN_CHAT_MODEL",
   "quiz-mark": "SPIDERYARN_QUIZ_MARK_MODEL",

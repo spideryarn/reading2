@@ -3411,6 +3411,56 @@ export const glossaryLookups = spideryarn.table(
   ],
 );
 
+/**
+ * **A cited work's own page, found on the web** — Citations mode's *Find it*,
+ * docs/plans/260911g-citations-mode.md § Stage 3. `glossary_lookups`' shape
+ * exactly: reader state, one row per `(article, entry)`, apart from the
+ * artefact and attached to the entry at read time (src/store/pg.ts §
+ * `loadCitations`), keyed on the entry id that stage 1 inherits across re-runs
+ * by dedupe key — so a page found once survives the list being found again.
+ *
+ * **Only a kept find is a row.** A search that matched nothing stores nothing;
+ * the row's Scholar search stays. And every column but `searches` and `model`
+ * is the *search result's*, never the model's: `url` is one of the call's own
+ * `url_citation` annotations and `title` is what that result called itself
+ * (src/citation-find.ts § `readFind`).
+ */
+export const citationFinds = spideryarn.table(
+  "citation_finds",
+  {
+    articleId: uuid("article_id")
+      .notNull()
+      .references(() => articles.id, { onDelete: "cascade" }),
+    /** A `CitedWork.id`, minted by `mintUniqueId` and inherited across re-runs. */
+    entryId: text("entry_id").notNull(),
+    /** `auth.users(id)`. FK in the custom migration, as `glossary_lookups`. */
+    ownerId: uuid("owner_id").notNull(),
+    /** The annotation's URL, exactly as the search returned it. http(s) only. */
+    url: text("url").notNull(),
+    /** The annotation's own title, when it had one. */
+    title: text("title"),
+    /** `url`'s host, without `www.` — what the row prints. */
+    host: text("host").notNull(),
+    /**
+     * Billed web searches the call reported — **nullable, and null is not
+     * zero**: it is "the provider's usage said nothing", which
+     * `whereSearchCountCameFrom` distinguishes and a `0` would erase.
+     */
+    searches: integer("searches"),
+    model: text("model").notNull(),
+    foundAt: timestamp("found_at", { withTimezone: true }).notNull(),
+  },
+  (t) => [
+    primaryKey({ columns: [t.articleId, t.entryId] }),
+    check(
+      "citation_finds_entry_id_format",
+      sql`${t.entryId} ~ ${sql.raw(`'${SPIDERYARN_ID_REGEX}'`)}`,
+    ),
+    check("citation_finds_searches", sql`${t.searches} is null or ${t.searches} >= 0`),
+    check("citation_finds_url_scheme", sql`${t.url} ~ '^https?://'`),
+  ],
+);
+
 /* -------------------------------------------------------- reader profile -- */
 
 /**

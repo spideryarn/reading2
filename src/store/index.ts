@@ -64,11 +64,13 @@
    to sit at it again. */
 
 import { log } from "../log.js";
+import { makeFindCitation } from "../citation-find.js";
 import { makeAskAboutTerm, makeLookUpTerm } from "../term-lookup.js";
 import type {
   AdminStore,
   ArticleReader,
   ChatStore,
+  CitationFindStore,
   CommentStore,
   FeedbackStore,
   FetchAllowanceStore,
@@ -98,6 +100,7 @@ import { pgLinkPreviewStore } from "./pg-link-previews.js";
 import { pgLinkSummaryStore } from "./pg-link-summaries.js";
 import { pgFetchAllowanceStore } from "./pg-rate-limit.js";
 import { pgGlossaryLookupStore } from "./pg-lookups.js";
+import { pgCitationFindStore } from "./pg-citation-finds.js";
 import { pgReaderStore } from "./pg-reader.js";
 import { pgRefereeClaimsStore } from "./pg-referee-claims.js";
 import { pgRefereeCriteriaStore } from "./pg-referee-criteria.js";
@@ -331,6 +334,16 @@ export const lookUpTerm = makeLookUpTerm({
   reader,
   lookups: glossaryLookupStore,
 });
+
+export const citationFindStore: CitationFindStore = guarded("citation-finds", pgCitationFindStore);
+
+/**
+ * Citations mode's *Find it*: one web search for one cited work, kept only when
+ * a search result is plainly that work's own page. Built here out of the
+ * parts, as `lookUpTerm` is — the reader seam decides ownership (a stranger's
+ * slug is a 404), and src/citation-find.ts decides what is kept.
+ */
+export const findCitation = makeFindCitation({ reader, finds: citationFindStore });
 
 /**
  * Explaining a term the reader typed into the glossary's box.

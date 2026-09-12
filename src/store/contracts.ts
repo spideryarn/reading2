@@ -69,6 +69,7 @@ import type {
   FeedbackEnvironment,
   FeedbackKind,
   GlossaryLookup,
+  CitationFind,
   GlossaryFound,
   QuotesFound,
   LibraryEntry,
@@ -1199,6 +1200,16 @@ export interface RefereeClaimsStore {
  * term into the same map and one reader's answer vanishes with both writes
  * reporting success. A row per term cannot do that.
  */
+/**
+ * Where Citations mode's *Find it* keeps a page it found — one row per
+ * `(article, entry id)`, the glossary lookups' shape and for their reason.
+ * Only a kept find is saved; the read half is `loadCitations`, which attaches
+ * each row to its entry. src/citation-find.ts, src/store/pg-citation-finds.ts.
+ */
+export interface CitationFindStore {
+  save(slug: string, entryId: string, find: CitationFind): Promise<void>;
+}
+
 export interface GlossaryLookupStore {
   load(slug: string): Promise<LookupsByTerm>;
   save(slug: string, termId: string, lookup: GlossaryLookup): Promise<LookupsByTerm>;

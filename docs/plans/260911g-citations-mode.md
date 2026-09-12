@@ -311,8 +311,27 @@ The reader's own article is not in the local database.
   - *"first cited p263u9" is a bare block id* — left: it is the house block-link form;
   - *the bar filters only prioritised* — left: the Glossary's rule.
 
+- 2026-09-12 — **stage 3 built: Find it on the web.** `POST /api/citations/:slug/:id/find`, job
+  `citations-find`, chat wire, Exa, `max_total_results: 5`, a one-search prompt, a 60 s deadline;
+  kept only when the model's pick is one of the call's own result URLs and that result names the
+  work; the stored url and title are the result's. Table `citation_finds` (two additive migrations,
+  the owner foreign key by hand), read back onto `search` rows only, in both exports. Only a
+  `search` row can be looked up (409 otherwise); a no-match is not stored. One real call, spider
+  silk, Knight & Vollrath 1999: 5.8 s, **1 billed search**, $0.0216, kept
+  `doi.org/10.1098/rspb.1999.0667`; `web_searches: 1` on the ledger row. Fourteen tests went red when
+  the rules were broken on purpose.
+
+  **Observed, not chased: the ledger says `upstream: "OpenAI"`** for that call's
+  `anthropic/claude-sonnet-5`, under `order: ["anthropic"], require_parameters: true`. It is not new:
+  every local `debate` row (11) and `referee-candidates` row (9) says the same, and those are the
+  other two jobs that search with Exa, while every non-Exa chat-wire Claude row says `Anthropic`. So
+  it follows the Exa engine rather than this route — how OpenRouter reports or routes an Exa-backed
+  call — and belongs to [ai-gateway.md](../project/ai-gateway.md), not to this mode. Named for the
+  owed code review.
+
 ### Owed reviews (GPT Sol held until 2026-09-15 01:23Z)
 
 | Stage | Commits | Status |
 |---|---|---|
 | 1 — artefact, step, route | `85631f9b` | owed |
+| 2 — the mode (client) | `abde65f7` | owed |

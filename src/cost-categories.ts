@@ -191,6 +191,9 @@ export const JOB_DISPOSITION: Record<AiJob, JobDisposition> = {
      says how it stands to the piece being read — docs/project/links.md. It is
      request-scope, reader-triggered, and was in no category at all. */
   "link-summary": "interactive request work",
+  /* Citations mode's *Find it*: one owner-pressed web search for one cited
+     work, in request scope — src/citation-find.ts. */
+  "citations-find": "interactive request work",
   /* Marking an answer the reader just typed. */
   "quiz-mark": "interactive request work",
   /* The word that decides how hard the reader's next question is, judged from

@@ -30,6 +30,7 @@ import {
   blockIdentities,
   chatMessages,
   chatThreads,
+  citationFinds,
   comments as commentsTable,
   glossaryLookups,
   refereeClaims,
@@ -172,6 +173,13 @@ export const ARTICLE_TABLE_COVERAGE = {
   glossary_lookups: {
     rollback: { exported: true, into: "glossary-lookups.json" },
     bundle: { exported: true, into: "augmentations/glossary-lookups.json" },
+  },
+  /* Citations mode's *Find it* — the pages found for searched works, reader
+     state beside the `citations` artefact exactly as `glossary_lookups` sits
+     beside the glossary. docs/plans/260911g-citations-mode.md § Stage 3. */
+  citation_finds: {
+    rollback: { exported: true, into: "citation-finds.json" },
+    bundle: { exported: true, into: "augmentations/citation-finds.json" },
   },
 
   /** The one table the two projections disagree about — see `TableCoverage`. */
@@ -500,6 +508,7 @@ export interface ArticleRows {
    */
   readonly refereeClaims: readonly (typeof refereeClaims.$inferSelect)[];
   readonly glossaryLookups: readonly (typeof glossaryLookups.$inferSelect)[];
+  readonly citationFinds: readonly (typeof citationFinds.$inferSelect)[];
 }
 
 /**
@@ -692,6 +701,11 @@ async function walk(tx: Tx, slug: string): Promise<ArticleRows> {
     .from(glossaryLookups)
     .where(eq(glossaryLookups.articleId, article.id))
     .orderBy(asc(glossaryLookups.entryId));
+  const finds = await tx
+    .select()
+    .from(citationFinds)
+    .where(eq(citationFinds.articleId, article.id))
+    .orderBy(asc(citationFinds.entryId));
 
   return {
     article,
@@ -705,6 +719,7 @@ async function walk(tx: Tx, slug: string): Promise<ArticleRows> {
     refereeCriteria: criteria,
     refereeClaims: claims,
     glossaryLookups: lookups,
+    citationFinds: finds,
   };
 }
 

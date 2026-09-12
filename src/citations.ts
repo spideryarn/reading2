@@ -64,6 +64,7 @@ import {
   type BlockId,
   type CitedWork,
   type CitationDrops,
+  type CitationFind,
   type CitationLinkFrom,
   type CitationPlace,
   type Citations,
@@ -614,6 +615,50 @@ export function labelNamesTitle(label: string, title: string): boolean {
   if (t.size === 0) return false;
   const shared = new Set(wordsOf(label).filter((w) => t.has(w))).size;
   return shared >= Math.min(2, t.size) && shared >= Math.ceil(0.8 * t.size);
+}
+
+/**
+ * **Does a search result name this work?** Stage 3's third rule
+ * (src/citation-find.ts): a URL the search returned can still be the wrong
+ * work — a review of it, a page about its author — so a found page is kept only
+ * if its own title names the work (`namesTitle`, both directions) or its
+ * excerpt carries the work's title words **as a run**, in order.
+ *
+ * The excerpt test is a phrase, not a bag of words, because an excerpt is a
+ * whole page's opening and a bag would find "language", "models" and "few"
+ * scattered through almost anything. A title of one significant word never
+ * matches by excerpt — too common to be evidence — only by the page's title.
+ */
+export function pageNamesTitle(page: { title?: string; excerpt?: string }, title: string): boolean {
+  if (page.title && namesTitle(page.title, title)) return true;
+  if (!page.excerpt) return false;
+  const want = wordsOf(title);
+  if (want.length < 2) return false;
+  const have = wordsOf(page.excerpt);
+  for (let i = 0; i + want.length <= have.length; i++) {
+    if (want.every((w, j) => have[i + j] === w)) return true;
+  }
+  return false;
+}
+
+/**
+ * **Put stage 3's kept finds onto the list, at read time.** Only a row whose
+ * link is a `search` is upgraded — to the found page, `linkFrom: "web"` — so a
+ * link the article gave always wins over one we went looking for, even if a
+ * find for that id is stored (a re-run can turn a searched row into a DOI row
+ * and inherit its id). The artefact itself is never changed.
+ */
+export function attachFinds(citations: Citations, finds: ReadonlyMap<string, CitationFind>): Citations {
+  if (finds.size === 0) return citations;
+  let changed = false;
+  const works = citations.citations.map((work) => {
+    const find = finds.get(work.id);
+    if (!find || work.linkFrom !== "search") return work;
+    changed = true;
+    const { url, ...found } = find;
+    return { ...work, url, linkFrom: "web" as const, found };
+  });
+  return changed ? { ...citations, citations: works } : citations;
 }
 
 /** Anchor text that says nothing about which work it is. */
