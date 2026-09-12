@@ -125,6 +125,39 @@ describe("resolveMark", () => {
   });
 });
 
+/* In a block whose maths was rendered at ingress (src/web/maths.ts), an offset
+   recorded before the render no longer points at the same words, so it may not
+   choose between repeats: one occurrence resolves, two draw nothing. The plan's
+   F2, docs/plans/260912d-render-latex-equations-in-the-reading-view.md. */
+describe("resolveMark with an offset that is not trusted", () => {
+  const text = "the hard problem, and later the hard problem again";
+  const untrusted = { offsetTrusted: false };
+
+  it("resolves the one occurrence, wherever the offset says", () => {
+    expect(resolveMark("a hard problem here", { quote: "hard problem", start: 40 }, untrusted)).toEqual({
+      start: 2,
+      end: 14,
+    });
+  });
+
+  it("draws nothing when the quote is gone", () => {
+    expect(resolveMark(text, { quote: "easy problem", start: 4 }, untrusted)).toBeNull();
+  });
+
+  it("draws nothing between two occurrences, even with the offset exactly on one", () => {
+    expect(resolveMark(text, { quote: "hard problem", start: 4 }, untrusted)).toBeNull();
+    expect(resolveMark(text, { quote: "hard problem", start: 32 }, untrusted)).toBeNull();
+  });
+
+  it("the default is the ordinary rule, unchanged", () => {
+    expect(resolveMark(text, { quote: "hard problem", start: 32 })).toEqual({ start: 32, end: 44 });
+    expect(resolveMark(text, { quote: "hard problem", start: 32 }, { offsetTrusted: true })).toEqual({
+      start: 32,
+      end: 44,
+    });
+  });
+});
+
 describe("resolveMark refuses nonsense offsets", () => {
   // `startsWith` clamps a negative position to 0 and matches happily, and the
   // fast path used to return the negative start unchanged — a mark drawn to the

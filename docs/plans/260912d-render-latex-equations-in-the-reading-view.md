@@ -162,6 +162,9 @@ Worth doing, because failure mode (2) is the common one. Its requirements, from 
 
 When it lands, re-importing a maths-bearing PDF gives maths stage 1 renders.
 
+**Filed as a proposal in the Overseer's queue, `qi-njx3xh37`**, 2026-09-12 — born unauthorised, so it
+goes out only when Greg says yes to it.
+
 ## The options passed over, and why
 
 - **The simplest: stage 1 alone** — what this run ships, after the review showed stage 2 costs more

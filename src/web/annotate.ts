@@ -274,16 +274,35 @@ export function renderedText(html: string): string {
  * used to be. Returns `null` when the quote is gone, which is the honest
  * outcome: the paragraph was edited, and highlighting the wrong words would be
  * worse than highlighting none.
+ *
+ * **`offsetTrusted: false`** is for a block whose text changed length under the
+ * anchor without the paragraph being edited — today, one that had maths drawn
+ * into it at ingress (src/web/maths.ts § `rendersMaths`). Its offset may then be
+ * nearer the wrong one of two repeats, so it is not asked: one occurrence
+ * resolves, two or more draw nothing. The same rule as above, applied to a
+ * tie-breaker that has stopped being one.
  */
-export function resolveMark(text: string, anchor: Anchor): { start: number; end: number } | null {
+export function resolveMark(
+  text: string,
+  anchor: Anchor,
+  opts: { offsetTrusted?: boolean } = {},
+): { start: number; end: number } | null {
   /* The measurement wraps the worker rather than sitting in front of each of
      its three `return`s, so a fourth one added later cannot escape being
      counted — annotation-cost.ts § the header. */
   const counting = costOn();
   const t0 = leafClock();
-  const found = findQuote(text, anchor);
+  const found = opts.offsetTrusted === false ? findOnlyQuote(text, anchor) : findQuote(text, anchor);
   if (counting) noteCost("resolveMark", t0);
   return found;
+}
+
+/** The quote's one occurrence, or `null` for none and for more than one. */
+function findOnlyQuote(text: string, anchor: Anchor): { start: number; end: number } | null {
+  if (anchor.quote.length === 0) return null;
+  const first = text.indexOf(anchor.quote);
+  if (first === -1 || text.indexOf(anchor.quote, first + 1) !== -1) return null;
+  return { start: first, end: first + anchor.quote.length };
 }
 
 /** `resolveMark` without the stopwatch — the whole of the real work. */

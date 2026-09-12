@@ -43,7 +43,8 @@ listed here; the names under each are files in `docs/project/`.
   sees: the spine, the prose, and the band the modes take turns in.
   <br>↳ `web-client.md` (where the client code is) · `new-mode.md` (the checklist) ·
   `granularity-zoom.md` ·
-  `column-context.md` (the gist column's fisheye) · `glossary.md` · `summaries.md` ·
+  `column-context.md` (the gist column's fisheye) ·
+  `maths.md` (TeX in the prose, drawn as maths) · `glossary.md` · `summaries.md` ·
   `ideas.md` (the propositions the piece assumes) ·
   `quotes.md` (the lines worth keeping) ·
   `timeline.md` (when the piece says these things happened) ·
