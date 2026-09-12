@@ -341,4 +341,4 @@ The reader's own article is not in the local database.
 |---|---|---|
 | 1 — artefact, step, route | `85631f9b` | owed |
 | 2 — the mode (client) | `abde65f7` | owed |
-| 3 — Find it on the web | `1e54a7f8` | owed |
+| 3 — Find it on the web | `1e54a7f8`, `8d523739` | owed |
