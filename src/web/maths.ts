@@ -71,14 +71,12 @@ import type { Article, Block } from "../types.js";
 import { openExternalLinksInNewTab } from "./external-links.js";
 import { sanitizeBlockHtml } from "./sanitize.js";
 
-/**
- * Browser-only provenance attached to a block whose TeX this module drew.
- *
- * A symbol cannot arrive in article JSON or authored HTML. It is enumerable so
- * `rehostImages`' object spreads carry it into both later draws, while it never
- * serialises or alters the stored `Block` shape.
- */
-const RENDERED_MATHS = Symbol("spideryarn-rendered-maths");
+/* The provenance mark this module writes onto a block it drew maths into, and
+   the one question anybody else asks of it — in a module of their own, so a
+   reader of the mark does not load the sanitiser (maths-provenance.ts says
+   why). Re-exported so the renderer's tests keep one import. */
+import { RENDERED_MATHS } from "./maths-provenance.js";
+export { rendersMaths } from "./maths-provenance.js";
 
 /**
  * temml's code, its stylesheet and — through the stylesheet — its font, in one
@@ -202,19 +200,6 @@ export function renderBlockMaths(html: string, render: RenderTex): string {
   const out = changed ? root.innerHTML : html;
   root.textContent = ""; // don't hold an article's DOM alive between loads
   return out;
-}
-
-/**
- * **Did this block have maths drawn into it here?** — which is to say,
- * is an offset recorded against its source still to be believed (F2).
- *
- * Read from provenance rather than a CSS class the article can forge. The
- * symbol is copied by the same object spread `rehostImages` uses when it puts a
- * picture in, so it reaches both draws without a side table keyed to an object
- * that does not survive that trip.
- */
-export function rendersMaths(block: Block): boolean {
-  return RENDERED_MATHS in block;
 }
 
 /**

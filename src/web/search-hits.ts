@@ -30,7 +30,7 @@
  */
 import { renderedText, type Mark } from "./annotate.js";
 import { findOnlyQuote, findQuote, snippet } from "../quote-match.js";
-import { rendersMaths } from "./maths.js";
+import { rendersMaths } from "./maths-provenance.js";
 import type { ClaimPassage } from "../referee-claims.js";
 import type { DivergingScale, RefereeResult } from "../referee-criteria.js";
 import type {

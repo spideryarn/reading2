@@ -255,3 +255,12 @@ GPT Sol code review. `npm test`, `npm run typecheck`. Then the note, `overseer-q
   `class="rendered-maths"` impersonate renderer provenance and suppress an otherwise exact repeated
   comment/chat mark; provenance is now an internal enumerable symbol that survives rehosting's
   block spreads but cannot arrive in article markup or JSON.
+- 2026-09-12 — GPT Sol's round 2, read-only and narrow (discovery closed): F12, F13 and F14 each
+  closed by its fix, no new findings ([260912d-stage1-review2-sol.md](260912d-stage1-review2-sol.md)).
+  The full suite then found two things the scoped runs had not, both fixed: `src/maths-tex.ts` was
+  not on `tests/client-imports.test.ts`'s shared list (it qualifies — its only import is a type from
+  temml, which the client bundles — so it is registered with its reason); and F13's fix made
+  `search-hits.ts` import `maths.ts`, which pulls in the sanitiser's module-scope
+  `DOMPurify(window)`, so `tests/quotes-marked-in-every-mode.test.ts` could not load it. The mark
+  and `rendersMaths` moved to `src/web/maths-provenance.ts`, which imports nothing. The three
+  `fleet-*` failures in the same run are this fresh worktree having no fleet build, not this change.

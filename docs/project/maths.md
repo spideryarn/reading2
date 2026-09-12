@@ -89,8 +89,9 @@ server's reading of a rendered formula equals the browser's, character for chara
 loaded on the server only when that second form is needed, so it is not on the API's cold start.
 
 What still costs something, because a formula's symbols are shorter than its source and everything
-after it in the paragraph moves. In a block that had maths drawn into it (`src/web/maths.ts` §
-`rendersMaths`):
+after it in the paragraph moves. In a block that had maths drawn into it
+(`src/web/maths-provenance.ts` § `rendersMaths` — a mark of its own, so reading it does not load the
+renderer or the sanitiser):
 
 - a comment whose words occur **twice** in the paragraph draws no mark, because its recorded offset
   can no longer choose between them (`src/web/annotate.ts` § `resolveMark`, `offsetTrusted`);

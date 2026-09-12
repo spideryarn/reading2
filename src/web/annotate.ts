@@ -277,7 +277,7 @@ export function renderedText(html: string): string {
  *
  * **`offsetTrusted: false`** is for a block whose text changed length under the
  * anchor without the paragraph being edited — today, one that had maths drawn
- * into it at ingress (src/web/maths.ts § `rendersMaths`). Its offset may then be
+ * into it at ingress (src/web/maths-provenance.ts § `rendersMaths`). Its offset may then be
  * nearer the wrong one of two repeats, so it is not asked: one occurrence
  * resolves, two or more draw nothing. The same rule as above, applied to a
  * tie-breaker that has stopped being one.

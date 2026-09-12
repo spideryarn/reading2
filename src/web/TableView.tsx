@@ -47,7 +47,7 @@ import {
   type TermSelection,
 } from "./annotate.js";
 import { readSelection, type SelectionAnchor } from "./selection.js";
-import { rendersMaths } from "./maths.js";
+import { rendersMaths } from "./maths-provenance.js";
 import { internalTarget } from "./internal-links.js";
 import {
   markReturnPath,
