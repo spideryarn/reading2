@@ -319,6 +319,27 @@ outlives an erasure cannot leave out a copy this change makes); a plan filename 
 lines of a JSX comment, which was the doc-links gate's last failure (S2-4); and pins for the
 "own articles", size and Sentry-only clauses (S2-5).
 
+**The full suite found one thing the focused runs could not**: stage 2 had added a sentence to
+`docs/project/feedback-reports.md`, and that file is the feedback sweep's one authorised document —
+`FEEDBACK_SWEEP_DOCS` in tools/overseer/standing-jobs.ts, pinned by sha256. So the edit quietly
+de-authorised the unattended sweep, which `tests/overseer-standing-jobs.test.ts` caught. Re-pinning
+is Greg's authorisation, not a run's, so the sentence came back out and the file is byte-for-byte
+the pinned version again (its sha256 checked against the pin). Nothing is lost for the sweep:
+`feedback.md § The reader's own article` says the same thing, one link away. The other five failures
+in that run were the fresh worktree having no `api-dist/` and no fleet build — both named by their
+own error messages.
+
 ## Open questions for Greg
 
 1. **Visitors on public articles** — § Deferred. `none` until you say otherwise.
+2. **A line for the feedback sweep's doc, if you want it** — it needs your re-pin of
+   `FEEDBACK_SWEEP_DOCS`, which is why it is not in. Proposed, after *"…is the block they were
+   looking at."* in `docs/project/feedback-reports.md § Where the queue lives`:
+
+   > Read `source_file` and `article_json` independently: when either says `attached`, that
+   > attachment is on the event, and when both do, the original file and the page's payload are
+   > both there, so you can reproduce from Sentry alone (feedback.md § The reader's own article).
+
+   In the doc itself that last parenthesis would be a link to
+   `feedback.md#the-readers-own-article-since-2026-09-13`; it is plain text here because a relative
+   link from this directory would point at a file that is not there.
