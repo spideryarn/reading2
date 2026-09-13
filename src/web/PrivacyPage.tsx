@@ -461,7 +461,16 @@ export function PrivacyPage() {
           docs/project/privacy.md § What a bug report carries is the reasoning,
           and src/db/schema.ts is where the two consents are actually enforced —
           one by a CHECK, one by the fact that you have to paste a picture for
-          there to be one. */}
+          there to be one.
+
+          **The last paragraph used to promise that a report never carries the
+          article's text.** Since 2026-09-13 the tick-box can send the reader's
+          own article — its source file and `article.json` — to Sentry, on a
+          page of an article they own and within a size cap, so the promise went
+          and the paragraph says what does and does not go instead. The wording
+          and why each clause hedges: docs/plans/260913a-send-the-source-file-
+          and-the-article-with-extra-diagnostics.md § The proposed reader-facing
+          wording. */}
       <Section title="If you send us a bug report">
         <p>
           The Feedback button sends us what you write, your email address, the build you were
@@ -481,8 +490,13 @@ export function PrivacyPage() {
           our database refuses to store them.
         </p>
         <p>
-          What a bug report never carries is the text of the article you were reading, or your notes
-          on it. The diagnostics name paragraphs by their id, not by their words.
+          If you tick “send extra diagnostics” on a page of one of your own articles, the report may
+          also carry that article: the file it was made from and our copy of its text, with the
+          headings and summaries we made for it, up to a size limit. That goes to Sentry with the
+          rest of the report, so that we can reproduce what went wrong. Otherwise we don’t attach
+          the article’s text — though a screenshot you add will show whatever was on your screen. A
+          bug report never carries your notes, comments, highlights or chats, or what you’ve written
+          about yourself and why you’re reading.
         </p>
       </Section>
 

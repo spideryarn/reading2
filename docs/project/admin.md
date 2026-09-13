@@ -206,8 +206,11 @@ Two things that boundary is honest about, rather than quiet about:
   else*, the reporter's consent is not that owner's. That is accepted as narrowly-scoped support
   processing, and it is written down here rather than hidden inside the word "consent".
 - **The `slug` travels whether or not the diagnostics box is ticked**, while the dialog's tick-box
-  copy talks about "which article and passages" as the *extra* thing. Those two do not quite
-  agree, and the copy is the half that should change. Open, 2026-09-02.
+  copy talked about "which article and passages" as the *extra* thing. Those two did not quite
+  agree, and the copy was the half that should change. Closed 2026-09-13: the sentence no longer
+  names them, because ticked it now may send the reader's own article to Sentry — never to these
+  pages, which read only the Postgres row
+  ([plan 260913a](../plans/260913a-send-the-source-file-and-the-article-with-extra-diagnostics.md)).
 
 The rule is written in three places — here,
 [`src/store/pg-admin-feedback.ts`](../../src/store/pg-admin-feedback.ts) and

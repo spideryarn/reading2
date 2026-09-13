@@ -1006,9 +1006,10 @@ export function FeedbackDialog({ open, onClose, where }: Props) {
             />
             <span>
               <strong>Send extra diagnostics.</strong> The last few requests this page made to us and
-              how they went, the names of any errors, which article and passages you were looking at,
-              and facts about your browser and screen size. <em>Never</em> the article's text, your
-              notes, or anything you have typed into a search box.
+              how they went, the names of any errors, and facts about your browser and screen size.
+              On one of your own articles, it may also send the file the article was made from and
+              our copy of its text, within a size limit, so we can reproduce the problem.{" "}
+              <em>Never</em> your notes, comments or chats, or what you've told us about yourself.
             </span>
           </label>
 

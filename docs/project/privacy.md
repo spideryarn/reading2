@@ -133,6 +133,17 @@ not covered by it**, deliberately: pasting a picture in *is* the consent for tha
 picture, and gating it on the tick-box would refuse a report a reader knowingly
 assembled. The page had these merged in its first draft and GPT Sol caught it.
 
+**The tick-box can also bring the reader's own article, since 2026-09-13.** Ticked, on a page of an
+article the reporter owns, the Sentry copy carries the original file (up to 10 MiB) and
+`article.json` — the text, tree, headings and summaries the page loaded, up to 5 MiB, with the
+reader's profile and purpose left out. Owner-only, because nobody can consent for somebody else's
+article; read on the server, so nothing new leaves the browser; Sentry only, never our database.
+That made the page's old last sentence — *"What a bug report never carries is the text of the
+article you were reading"* — false, so it went. Its replacement hedges ("may", "a page of", a size
+limit, the screenshot) for reasons
+[plan 260913a § The proposed reader-facing wording](../plans/260913a-send-the-source-file-and-the-article-with-extra-diagnostics.md#the-proposed-reader-facing-wording)
+gives clause by clause.
+
 **And the whole address reaches Sentry**, not just our own database. Asked and
 answered, 2026-09-02: Greg chose the full URL everywhere over a path-only copy.
 It is the one place on the page where a reader is told something that another
@@ -320,7 +331,9 @@ with the article pointer set to null: `ai_calls` (the spend ledger outlives ever
 no content), `ingest_events` (the billing slot is **not** refunded — deleting does not give a slot
 back, [billing.md](billing.md)), `article_visibility_changes` (takedown evidence about a document we
 no longer serve, changed from `cascade` to `set null` *for* this feature), and `feedback` rows
-naming the slug. None of them holds the article's text.
+naming the slug. None of them holds the article's text — though the Sentry copy of a consented bug
+report may, until Sentry's own retention ages it out (§ What a bug report carries); the page's *"our
+providers' own logs take a little longer to age out"* is the sentence that covers it.
 
 **And the honest limit: a copy already on a device cannot be recalled.** The control says so in
 those words, and so must this page. Two of those copies are ours to name because we put them there —
@@ -431,7 +444,10 @@ these moves:
   start doing more than reading that mailbox by hand
 - **payments** go live, which changes decision 4
 - **what a bug report carries** — the section above; the two consents are a
-  schema `CHECK` and a browser gesture respectively, and neither is a preference
+  schema `CHECK` and a browser gesture respectively, and neither is a preference. Since 2026-09-13
+  the key clauses of its last paragraph — that a report may carry the reader's own article, and the
+  screenshot caveat — are pinned in `tests/privacy-page.test.ts`, as is the absence of the old
+  "never carries the text of the article" promise; the rest of the section is still prose to re-read
 - what the **browser** keeps — the page names the session, a few preferences, and the offline
   IndexedDB cache of article bodies in [`src/web/lib/offline-store.ts`](../../src/web/lib/offline-store.ts),
   which is dropped for that account on sign-out. The first draft claimed the session was the only

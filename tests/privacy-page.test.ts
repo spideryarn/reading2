@@ -93,6 +93,18 @@ describe("the privacy page", () => {
     expect(ids.filter((id) => !PAGE.includes(id))).toEqual([]);
   });
 
+  it("says a bug report may carry the reader's own article, and no longer that it never does", () => {
+    /* Plan 260913a. The section's last paragraph used to promise that a report
+       never carries the article's text; since the tick-box can attach the
+       reader's own article to the Sentry copy, that sentence would be false.
+       Whitespace is collapsed because the JSX wraps its lines. */
+    const prose = PAGE.replace(/\s+/g, " ");
+    expect(prose).toContain("the report may also carry that article");
+    expect(prose).toContain("though a screenshot you add will show whatever was on your screen");
+    expect(prose).toContain("A bug report never carries your notes");
+    expect(prose).not.toContain("never carries is the text of the article");
+  });
+
   it("gives the one contact address rather than spelling one of its own", () => {
     /* docs/project/website-text.md: one address, in src/site-text.ts. A page
        that typed it out would be the second copy that goes stale after a

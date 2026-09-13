@@ -348,6 +348,22 @@ describe("the feedback dialog", () => {
     expect(sent.diagnostics).not.toBeNull();
   });
 
+  it("says the tick-box may send the reader's own article, and never their profile", () => {
+    /* Plan 260913a: ticked, on one of the reader's own articles, the Sentry
+       copy may carry the source file and `article.json`. The sentence beside
+       the box is the consent for that, so it has to say so — and the old
+       promise, "Never the article's text", has to be gone rather than sitting
+       beside the new one. Whitespace is collapsed because JSX wraps lines. */
+    mount();
+    const words = (host.querySelector(".fb-consent")?.textContent ?? "").replace(/\s+/g, " ");
+    expect(words).toContain("Send extra diagnostics.");
+    expect(words).toContain("may also send the file the article was made from");
+    expect(words).toContain("within a size limit");
+    expect(words).toContain("what you've told us about yourself");
+    expect(words).not.toContain("the article's text, your notes");
+    expect(words).not.toContain("typed into a search box");
+  });
+
   it("files one report for two clicks in the same frame", async () => {
     mount();
     type("Pressed the button twice.");

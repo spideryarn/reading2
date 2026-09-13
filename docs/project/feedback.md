@@ -306,6 +306,7 @@ which *is* the verified account id.
 | the store, the idempotency and the rate cap | [`src/store/pg-feedback.ts`](../../src/store/pg-feedback.ts) |
 | the Sentry mirror | [`src/feedback.ts`](../../src/feedback.ts) |
 | the guard on the final Sentry envelope | [`src/feedback-envelope.ts`](../../src/feedback-envelope.ts) |
+| the reader's own article — source file and `article.json` — gathered for a consented report | [`src/feedback-article.ts`](../../src/feedback-article.ts) |
 | the screenshot, taken apart and written again | [`src/feedback-image.ts`](../../src/feedback-image.ts) |
 | the table | [`src/db/schema.ts`](../../src/db/schema.ts), § feedback |
 | the reader-facing sentences | [`src/messages.ts`](../../src/messages.ts), § feedback |
@@ -335,6 +336,15 @@ the rule widened and the price is written into it: the reader has to be *told*, 
 address appears in [privacy.md § What a bug report carries](privacy.md) and in the hover card on
 the button ([tooltips.md](tooltips.md)). A field that nobody is told about does not qualify, and
 that is the whole of the difference between this clause and "it is probably fine".
+
+**The reader's own article is something a report can carry, since 2026-09-13**, and it gets in
+under the third clause and no other. The reader ticked a box whose sentence says it *"may also send
+the file the article was made from and our copy of its text"*, and `/privacy` says it again. Two
+limits keep it inside the clause: it is only ever **the reporter's own** article, read through the
+owner-filtered store, because nobody can consent for somebody else's piece; and its metadata is
+**picked field by field, not copied**, because the reader's profile and purpose are text the
+sentence promises stays behind. The build and its reasons are in
+[plan 260913a](../plans/260913a-send-the-source-file-and-the-article-with-extra-diagnostics.md).
 
 `kind` is the second sort: two values and a null, `FEEDBACK_KINDS` in
 [`src/types.ts`](../../src/types.ts). It rides to Sentry as a tag, and **as no tag at all when the
@@ -378,13 +388,41 @@ Default false, as Greg asked. Ticked, it adds:
 - **The names of recent client errors.**
 - **Which article and which passages** — ids, never prose. [block-ids.md](block-ids.md) is why an id
   is enough: every feature already addresses text that way, and we have the text in our own Postgres.
+  The dialog's sentence stopped naming these on 2026-09-13, because the article below subsumes them;
+  the blob still carries them.
 - **Facts about the browser and the screen.** These are behind the tick-box rather than always-on
   because they are facts about *the reader* rather than about the application, and together they
   fingerprint.
+- **On one of the reader's own articles, the article itself** — below.
 
 Untick it and the collector is never called at all. Three separate things enforce that — the client,
 the route (`[fb-consent]`), and a CHECK on the table — and the client's is the only one that stops
 the collection happening rather than merely refusing the result.
+
+### The reader's own article, since 2026-09-13
+
+> Send up more diagnostic information including attaching source file when the user chooses Send
+> extra diagnostics to help with debugging. Change the Feedback dialog message re extra diagnostics
+> accordingly.
+>
+> — Greg, 2026-09-12 (SPIDERYARN-READING2-32)
+
+Agents working reports have no production database or bucket access, so until then a report named
+the piece and nothing in it. Now, when the box is ticked, the report names a slug, **and the
+reporter owns that article**, the Sentry copy gets two attachments, read server-side from what we
+already hold — nothing new leaves the browser and the Postgres row is unchanged:
+
+- **`source.pdf` or `source.html`** — the original document, up to **10 MiB**, which keeps the
+  whole event under Sentry's 20 MB envelope limit so a big file cannot cost the reader's words.
+- **`article.json`** — the payload the reading page loaded plus a field-by-field pick of its
+  metadata, up to **5 MiB of UTF-8**. Never the reader's profile or purpose.
+
+Two tags, each a closed vocabulary, say what happened — `source_file` and `article_json`, each
+`attached`, `too_large`, `none` or `failed`. `none` deliberately cannot tell "not yours" from "no
+such slug", or the tag would say whether somebody else's article exists. Unticked, the gatherer is
+not called at all. It is the *"relevant article contents"* of Greg's first request, above, twelve
+days on. The numbers, the envelope nonce, and the options passed over are in
+[plan 260913a](../plans/260913a-send-the-source-file-and-the-article-with-extra-diagnostics.md).
 
 ### The console is not scraped, and that is a correction to the request
 
