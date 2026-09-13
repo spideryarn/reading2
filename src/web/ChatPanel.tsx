@@ -1586,7 +1586,7 @@ export function WebSources({ citations }: { citations: Citation[] | undefined })
         {web.map((c) => (
           <li key={c.url}>
             <a href={c.url} target="_blank" rel="noreferrer noopener">
-              {c.title ?? hostOf(c.url)}
+              {c.title?.trim() || hostOf(c.url)}
             </a>
           </li>
         ))}

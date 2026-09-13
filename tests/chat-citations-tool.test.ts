@@ -7,15 +7,17 @@
  * Two halves. **The formatter** (`citationRows`, `citationsOutcome`) is
  * arithmetic over an artefact and tested as such, the way `articleLinks` is in
  * tests/chat-tools.test.ts. **The load** goes through `runTool` with the store's
- * `loadCitations` replaced, because the four ways it can answer — a list, a
- * 404, some other failure, a stale list — are what the plan's review said the
- * first draft would have got wrong, and none of them needs Postgres to show.
+ * `loadCitations` replaced, because the ways it can answer — a list, the
+ * store's typed missing-list 404, another failure (including another 404), or
+ * a stale list — are what the plan's review said the first draft would have got
+ * wrong, and none of them needs Postgres to show.
  *
  * The ones worth reading twice:
  *
- *  - **Only a 404 is "there is no list".** Any other failure says the list
- *    could not be read. `readGlossary`'s catch-all is the thing not to copy
- *    (Sol F7): it turns a database outage into a confident false statement.
+ *  - **Only the typed missing-list 404 is "there is no list".** Any other
+ *    failure says the list could not be read. `readGlossary`'s catch-all is the
+ *    thing not to copy (Sol F7): it turns a database outage into a confident
+ *    false statement.
  *  - **A stale list emits no rows.** It describes an older article (Sol F5).
  *  - **`capped` changes what the count means.** N is the stored list's size,
  *    never the article's total (Sol F5).
@@ -54,6 +56,7 @@ import {
   runTool,
 } from "../src/chat-tools.js";
 import type { Block, CitedWork, Citations, Meta } from "../src/types.js";
+import { CitationsListNotFound } from "../src/store/citations-list-not-found.js";
 
 const work = (over: Partial<CitedWork> = {}): CitedWork => ({
   id: "cw-default",
@@ -225,10 +228,22 @@ describe("citationRows — the formatter, as arithmetic", () => {
     for (const r of out.rows) expect(r).toContain("spya-cit001");
   });
 
-  it("always lets one row out, however long", () => {
+  it("keeps the first row inside the character cap too", () => {
     const out = citationRows(list([work({ why: "y".repeat(CITATIONS_CHARS * 2) })]));
     expect(out.rows).toHaveLength(1);
+    expect(out.rows.join("\n\n").length).toBeLessThanOrEqual(CITATIONS_CHARS);
+    expect(out.rows[0]).toContain("spya-cit001");
     expect(out.cut).toBe(false);
+  });
+
+  it("does not call an internally inconsistent body citation references-only", () => {
+    const row = citationRows(
+      list([work({ citedInBody: true, citedAt: [], firstCited: "spya-cit001" })]),
+    ).rows[0] ?? "";
+    expect(row).toContain("cited in the text");
+    expect(row).toContain("stored text locations are missing");
+    expect(row).toContain("spya-cit001");
+    expect(row).not.toContain("only in the references");
   });
 });
 
@@ -291,6 +306,21 @@ describe("citationsOutcome — what goes back to the model", () => {
     expect(out.content).not.toMatch(/has been made for this article/);
   });
 
+  it("an empty capped list still says the model reported omitted works", () => {
+    const out = citationsOutcome(found(list([], { capped: true })), "");
+    expect(out.content).toMatch(/said the article cites more than it kept/);
+    expect(out.content).toMatch(/0 is the number in the stored list/);
+    expect(out.content).not.toMatch(/made and found none/);
+  });
+
+  it("an outdated list is announced even when there are no rows to show", () => {
+    const empty = citationsOutcome(found(list([]), { outdated: true }), "");
+    expect(empty.content).toMatch(/older version of the citations step/);
+
+    const noMatch = citationsOutcome(found(list(THREE), { outdated: true }), "bicycles");
+    expect(noMatch.content).toMatch(/older version of the citations step/);
+  });
+
   it("a stale list emits no rows (Sol F5)", () => {
     const out = citationsOutcome(found(list(THREE), { stale: true }), "");
     expect(out.content).toMatch(/older version of the article/);
@@ -327,15 +357,26 @@ describe("runTool(\"article_citations\") — the load, and its four answers", ()
     expect(out.content).not.toContain("Minds, Brains");
   });
 
-  it("a 404 says no list has been made, and does not pretend to have read one", async () => {
+  it("the missing-list 404 says no list was made, and does not pretend to have read one", async () => {
     store.loadCitations = async () => {
-      throw Object.assign(new Error("No citations for \"piece\" yet."), { status: 404 });
+      throw new CitationsListNotFound();
     };
     const out = await runTool("article_citations", {}, ctx);
     expect(out.content).toContain("citations list has been made for this article");
     expect(out.content).toContain("complete answer, not an error");
     expect(out.content).toMatch(/do not pretend to have read one/);
     expect(out.detail).toBe("none yet");
+  });
+
+  it("a different 404 is a read failure, not proof that no citations list was made", async () => {
+    store.loadCitations = async () => {
+      throw Object.assign(new Error("article disappeared"), { status: 404 });
+    };
+    const out = await runTool("article_citations", {}, ctx);
+    expect(out.content).toMatch(/could not be read/);
+    expect(out.content).toMatch(/does not mean there is none/);
+    expect(out.content).not.toContain("has been made for this article");
+    expect(out.detail).toBe("could not read it");
   });
 
   it("any other failure says the list could not be read — never that it is absent (Sol F7)", async () => {

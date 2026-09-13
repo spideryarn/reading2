@@ -210,9 +210,11 @@ arithmetic ([`tests/chat-citations-tool.test.ts`](../../tests/chat-citations-too
 Four decisions, each from GPT Sol's plan review
 ([260913b](../plans/260913b-chat-and-comment-questions-reach-for-the-web-and-the-citations-list.md)):
 
-- **Only a 404 means "there is no list".** Any other failure says the list *could not be read* —
-  the glossary tool's catch-all, which calls every database error "no glossary", is the thing not
-  copied.
+- **Only the store's `CitationsListNotFound` means "there is no list".** Any other failure — a
+  dropped connection, or a 404 because the article itself has gone — says the list *could not be
+  read*. A bare `status === 404` could not tell those apart, which the code review reproduced (Sol
+  F13); the glossary tool's catch-all, which calls every database error "no glossary", is the thing
+  not copied.
 - **A stale list shows no rows**, because it describes an older version of the article; an
   outdated one is announced above them; a `capped` one is counted as *the stored list*, never as the
   article's total.

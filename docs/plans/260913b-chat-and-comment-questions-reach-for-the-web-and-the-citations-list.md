@@ -135,11 +135,12 @@ The eighth tool in `CHAT_TOOLS` ([`src/chat-tools.ts`](../../src/chat-tools.ts))
 
 - **Reads the stored citations list and never makes one.** `loadCitations(slug)` returns
   `{ citations, stale, outdated }`, and all three are read (Sol F5):
-  - **a 404** (the step is off `DEFAULT_INGEST_STEPS`, so most articles have none) is the ordinary
-    answer, said as `nothing(…)`. **Only** `status === 404` means that — any other load error is
-    logged (tool, slug, error class) and returned as an ordinary outcome saying the list *could not
-    be read*, never that it does not exist (Sol F7; the glossary tool's catch-all is the thing not
-    to copy);
+  - **no list** (the step is off `DEFAULT_INGEST_STEPS`, so most articles have none) is the ordinary
+    answer, said as `nothing(…)`. **Only** the store's typed `CitationsListNotFound` means that — as
+    built, the check was `status === 404`, and the code review showed a missing *article* is a 404
+    too (Sol F13). Any other load error is logged (tool, slug, error class) and returned as an
+    ordinary outcome saying the list *could not be read*, never that it does not exist (Sol F7; the
+    glossary tool's catch-all is the thing not to copy);
   - **`stale`** — the list describes an older version of the article — returns a non-error outcome
     saying so, and emits no rows as current citations;
   - **`outdated`** (an older prompt version) is announced above the rows;
@@ -203,6 +204,13 @@ machinery reused, and it already is; a second prompt is the drift 260905c warned
 - **Citation URLs into a `read_web_page` allowlist.** The allowlist is still the right fix for the
   trickle exfiltration chat-tools.md describes, and this list is one of the sets it would use. Not
   here: it changes a defence.
+- **An evidence ledger and post-generation validation** (Sol F12) — the only thing that could make
+  provenance *enforced* rather than likely: record the block ids, URLs and library titles the turn
+  produced, and check each factual sentence against them before it is shown. Needs Greg's decision
+  on streaming versus buffering and on failing closed. The cheaper first step, which Fable
+  suggested: log a per-turn count of prose paragraphs with neither a block id, a link nor an origin
+  marker, beside `rounds / tools / searches`, so production measures what the eval measured. In
+  [awaiting-approval.md](../user-feedback/awaiting-approval.md).
 - **A render-side cue for uncited prose** — a paragraph with neither a block id nor a link drawn as
   *not cited to the article*. The only option that needs no compliance from the model, and the
   natural next step if the reminder is not enough; deferred because *"no chip"* is not *"not from
@@ -264,6 +272,67 @@ machinery reused, and it already is; a second prompt is the drift 260905c warned
   none of the 30.** So the provenance section moved the link count (the "since" answers) and did
   little else observable. What is good: `unknownIds` is empty in all 30 — no invented block ids —
   and the controls read exactly as they did before.
+- 2026-09-13, **code review** — GPT Sol, write-capable, over `aed9d820..d861f4df`
+  ([prompt](260913b-chat-and-comment-questions-reach-for-the-web-and-the-citations-list-code-review-1-prompt.md),
+  [answer](260913b-chat-and-comment-questions-reach-for-the-web-and-the-citations-list-code-review-1-sol.md)).
+  Verdict *stop: F12*. It confirmed `helpSection` byte-identical, the help/ordinary cached prefix
+  identical, the existing search pins intact, the repaired `WEB_LINKS` test still proving what it was
+  for, and no defence touched. Ledger:
+
+  | ID | Finding | Disposition |
+  |---|---|---|
+  | F12 | P1: a prompt cannot make "an answer cannot present a web or remembered fact as the article's" true — the reminder eval still has unlinked quotes and one mixed sentence | **Fact accepted; mechanism overruled** — below |
+  | F13 | P1: a missing *article* is a 404 too, and the tool called it "no list" | Fixed by Sol: typed `CitationsListNotFound` in `src/store/citations-list-not-found.ts`, thrown by `loadCitations` for an existing article with no list; checked by me — `currentRevision` is empty only when the article is, so the common case still reads "no list"; the client keys on the 404 status, unchanged |
+  | F14 | P1: one oversized first row walked through the character cap (12,205 chars against 6,000) | Fixed by Sol: each stored field bounded (`boundedCitationField`) |
+  | F15 | P2: `citedInBody` with no `citedAt` was described as "only in the references" | Fixed by Sol |
+  | F16 | P2: an empty capped list lost its cap | Fixed by Sol |
+  | F17 | P2: `outdated` vanished on the early returns | Fixed by Sol |
+  | F18 | P2: a whitespace source title drew a blank link under *From the web* | Fixed by Sol: trim, fall back to the host |
+  | F19 | P2: the reminder named three origins, not five | Fixed by Sol: all five named |
+  | F20 | P3: the docs still said any 404 means "no list" | Fixed by me, here and in chat-tools.md |
+
+  Sol's fixes are unreviewed code by someone else; I read every hunk, and the gates after them:
+  234 tests across the nine touched files, 415 across the five citations read-path files, typecheck
+  0.
+
+  **Sol still objects to F12; the fact is accepted and the guarantee restated at its measured
+  strength** — the prompt makes marking far more likely (*"?"* answers marked 0 / 6 → 6 / 6; *"since"*
+  answers linked in the text 1 / 6 → 6 / 6; wider-debate questions search 6 / 6 against 0 / 6), not
+  certain. **Overruled on the mechanism**, because an evidence ledger with buffered, fail-closed
+  validation changes what the reader gets (answers arrive all at once, or not at all), breaks the
+  rule that any call a person waits on streams, adds a model call per turn, and is far larger than
+  this report — a product call for Greg. Arbitrated by Fable, 2026-09-13, who confirmed the unlinked
+  claims in the eval and judged the overrule sound; the word *cannot* was in the review prompt, not
+  in the plan's stages, and it is withdrawn.
+- 2026-09-13, **full suite** (`npm test`, in tmux, started at `713fcc99` and running across the
+  next two commits): 24,179 passed, 7 failed in 6 files. Triaged, each one re-run or traced rather
+  than waved through:
+  - `chat-search-triggers` ×3 — the file ran while its pins and `SYSTEM` were being changed under
+    it; **16 / 16 alone**. A snapshot of a tree mid-edit, not a break.
+  - `cold-start-lazy-imports`, `pdf-bundle-trace` — "has a build to inspect"; a fresh worktree has
+    no `api-dist/`. Environment, and known.
+  - `fleet-composed-access` — fails rather than skips without a build, by design (its line 168); no
+    `dist/` here. Environment. `fleet-decisions-route`, `fleet-reports-route` — re-run alone, both
+    exit 2 with *"no built client at tools/fleet/web/dist — run `npm run build:fleet` first"*.
+    Environment. None of the six files is touched by this work.
+- 2026-09-13, **eval of `d861f4df`** (`provenanceLine`; `…-after-reminder-2026-09-13T04-18-44.json`,
+  three runs). Answers that mark something as not from the article, across the three after-runs:
+
+  | case | first after-run | + background origin | + the reminder |
+  |---|---|---|---|
+  | "?" press | 0 / 6 | 3 / 6 | **6 / 6** |
+  | "what has happened since?" | 0 / 6 | 0 / 6 | **4 / 6** |
+  | "wider debate?" | 2 / 6 | 3 / 6 | 2 / 6 |
+  | "what does this paragraph mean?" (control) | 0 / 6 | 0 / 6 | 1 / 6 |
+  | "does it use the word X?" (control) | 0 / 6 | 0 / 6 | 0 / 6 |
+
+  Searches: "wider debate?" 3 / 3 and 3 / 3, with 1–5 links in every answer; "?" 0 / 3 and 0 / 3;
+  controls 0 throughout. No invented block id in any of the ninety answers across the three runs.
+  **The reminder is what moved the "?" answers**, which are the ones made of recalled background.
+  "Wider debate" did not move on this count because its answers carry their outside half as links
+  rather than as marked sentences — which is the other half of the rule, and the better one. One
+  control answer now marks something as not from the article; that is the rule applied, not a
+  search, and it is the cost to watch. Two answers (one Seth "?", one Seth "since") cite no block id.
 - 2026-09-13, **`provenanceLine` built**, and three existing tests had to change with it — each read
   first, each kept to its intent. `tests/article-prompt.test.ts` pinned a chat turn's whole final
   message as `"why?"` to prove a missing profile leaves no trace; it now checks for no profile header

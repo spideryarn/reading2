@@ -8,8 +8,9 @@
  * (docs/plans/260913b-chat-and-comment-questions-reach-for-the-web-and-the-citations-list.md
  * § Progress). Recency is the cheapest lever, so one line points back at the
  * section from the final user message — below the `cache_control` breakpoint,
- * where it costs no cache write — and does not restate it, so the rule still
- * has one owner. Fable's recommendation, 2026-09-13.
+ * where it costs no cache write — as a compact five-origin checklist. The
+ * system section still owns the meanings and rationale. Fable's recommendation,
+ * 2026-09-13.
  *
  * Chat only: Remember has its own prompt and its own idea of what an answer is.
  */
@@ -60,10 +61,12 @@ describe("the provenance reminder", () => {
     expect(text.endsWith(base.question)).toBe(true);
   });
 
-  it("names the three marks and the rule for a specific fact", () => {
+  it("keeps all five origins distinct, and the rule for a specific fact", () => {
     const text = finalUser(buildConverseMessages(base));
     expect(text).toContain("a block id for the article");
+    expect(text).toContain("name the saved article");
     expect(text).toContain("The article doesn't say so, but");
+    expect(text).toContain("My inference");
     expect(text).toContain("called unverified");
   });
 

@@ -58,6 +58,11 @@ describe("the sources under an answer", () => {
     ]);
   });
 
+  it("uses the host when an older stored source has an empty title", () => {
+    paint([{ url: "https://evidence.example/paper", title: "   " }]);
+    expect(host.querySelector(".chat-sources a")?.textContent).toBe("evidence.example");
+  });
+
   it.each([
     ["undefined", undefined],
     ["an empty list", []],

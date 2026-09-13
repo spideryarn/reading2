@@ -147,6 +147,7 @@ import type {
 import { hierarchyCurrency, metaRawSha256, sameStamp } from "./artifacts.js";
 import type { ArtifactMap } from "./artifacts.js";
 import type { ArticleReader, RawSource } from "./contracts.js";
+import { CitationsListNotFound } from "./citations-list-not-found.js";
 import { guardDbStore } from "./db-errors.js";
 import { postgresBlobStore } from "./blobs.js";
 import { readRawDocument } from "./raw-document.js";
@@ -3274,13 +3275,7 @@ const rawPgArticleReader: ArticleReader = {
     if (!found) throw notFound(slug);
     const citations = found.revision.citations as Citations | null;
     if (!citations || !Array.isArray(citations.citations)) {
-      throw Object.assign(
-        new Error(
-          `No citations for "${slug}" yet. Build them with ` +
-            `POST /api/jobs { "slug": "${slug}", "steps": ["citations"] }.`,
-        ),
-        { status: 404 },
-      );
+      throw new CitationsListNotFound();
     }
     /* **Finds are attached HERE, at the read seam** — `loadGlossary`'s rule for
        its lookups, and for its reason: forgetting it would not fail, it would

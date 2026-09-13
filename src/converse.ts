@@ -1239,11 +1239,13 @@ ${articleWithIds(opts.meta, opts.blocks)}`,
  * § Progress). The failure is compliance when the answer is written, not
  * ignorance of the rule, and recency is the cheapest lever there is.
  *
- * **It points, it does not restate**, so `SYSTEM` still owns the rule and the two
- * cannot drift. It sits below the `cache_control` breakpoint like everything else
- * in this message, so it costs no cache write. It is its own part rather than a
- * line in `helpSection`, which stays byte-for-byte what it was (GPT Sol F1) —
- * and it avoids the words *search*, *web*, *look it up* and *tool*, which
+ * **A checklist, not a second explanation.** `SYSTEM` still owns what each
+ * origin means and why; this line names all five marks so recency does not
+ * collapse the library, recalled background and inference into "elsewhere".
+ * It sits below the `cache_control` breakpoint like everything else in this
+ * message, so it costs no cache write. It is its own part rather than a line in
+ * `helpSection`, which stays byte-for-byte what it was (GPT Sol F1) — and it
+ * avoids the words *search*, *web*, *look it up* and *tool*, which
  * tests/help-prompt.test.ts forbids anywhere in a help turn's final message.
  *
  * Chat only: Remember has its own prompt and its own idea of what an answer is
@@ -1251,7 +1253,7 @@ ${articleWithIds(opts.meta, opts.blocks)}`,
  */
 function provenanceLine(kind: ThreadKind): string {
   if (kind !== "chat") return "";
-  return `Mark where each claim came from, as WHERE EACH CLAIM CAME FROM says: a block id for the article, a link for a page you found this turn, and "The article doesn't say so, but…" for anything you know from elsewhere. A specific fact from elsewhere is linked or called unverified.`;
+  return `Mark where each claim came from, as WHERE EACH CLAIM CAME FROM says: a block id for the article; a link for a page you found this turn; name the saved article for the reader's library; "The article doesn't say so, but…" for remembered background; and "My inference is…" for your reasoning. A specific fact from elsewhere is linked or called unverified.`;
 }
 
 /**
