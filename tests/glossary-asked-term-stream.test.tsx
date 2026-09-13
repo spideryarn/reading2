@@ -98,8 +98,6 @@ vi.mock("../src/web/useJobs.js", () => ({
   }),
 }));
 
-vi.mock("../src/web/useProfile.js", () => ({ useHasProfile: () => false }));
-
 const { useGlossary, useGlossaryRead } = await import("../src/web/useGlossary.js");
 
 let band: UseGlossary | null = null;

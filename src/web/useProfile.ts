@@ -194,48 +194,10 @@ export function useProfile(): UseProfile {
   return { profile, draft, setDraft, flush, error, saving };
 }
 
-/**
- * **Does this reader have a profile at all** — the one question every profile
- * control asks before rendering anything.
- *
- * One shared hook rather than a field on each artefact response, and the
- * reason is the states where there *is* no artefact. The glossary's empty
- * state is exactly where the checkbox matters most — it is the run that has not
- * happened yet — and chat and explain have no artefact response at all. A field
- * on the three responses would have answered three of the six places and left
- * the other three to a second mechanism, and two mechanisms for one boolean is
- * how they come to disagree.
- *
- * It fetches `/api/reader` and reads only whether the answer is non-empty. The
- * text never reaches these panels: they have no use for it, and the less of the
- * reader's own words the client scatters around, the better.
- *
- * Defaults to **false** while loading, so nothing flashes into existence and
- * then out again on a slow connection. The cost of being wrong that way round
- * is a control appearing a moment late; the other way round it is a control
- * that appears and vanishes.
+/*
+ * `useHasProfile(slug)` lived here until 2026-09-13: it asked
+ * `/api/reader?slug=` whether this reader had a profile, so a panel knew
+ * whether to draw the *Use your profile* checkbox. The checkbox and its row went
+ * on Greg's request, and nothing asked the question any more.
+ * docs/plans/260913a-drop-the-use-your-profile-checkbox.md.
  */
-export function useHasProfile(slug?: string): boolean {
-  const [has, setHas] = useState(false);
-  useEffect(() => {
-    let live = true;
-    /* **With the slug, because there are two boxes.** A reader who has written
-       only "why you're reading this one" has a profile as far as every prompt
-       is concerned — `renderProfile` joins the two halves — and asking about
-       the global box alone would hide every control that offers to turn it off.
-       The server resolves it exactly as the prompts do, so the answer here and
-       the answer the model gets cannot disagree. */
-    const at = slug ? `?slug=${encodeURIComponent(slug)}` : "";
-    apiFetch(`/api/reader${at}`)
-      .then((r) => readJson<{ hasProfile: boolean }>(r))
-      .then((body) => live && setHas(body.hasProfile))
-      // A reader whose profile could not be read is a reader with no profile as
-      // far as this is concerned. There is nothing useful to say about it here,
-      // and /profile will report the failure properly if they go and look.
-      .catch(() => undefined);
-    return () => {
-      live = false;
-    };
-  }, [slug]);
-  return has;
-}

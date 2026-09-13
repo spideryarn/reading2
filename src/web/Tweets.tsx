@@ -85,8 +85,7 @@ import { useAutoRun } from "./useAutoRun.js";
 import { useSlow } from "./useSlow.js";
 import { apiFetch, readJson } from "./lib/api.js";
 import { JobProgress } from "./JobProgress.js";
-import { UseProfile, WrittenForYou } from "./WrittenForYou.js";
-import { useHasProfile } from "./useProfile.js";
+import { WrittenForYou } from "./WrittenForYou.js";
 import { useExperimental } from "./useExperimental.js";
 import { howLong } from "./relative-time.js";
 
@@ -247,8 +246,8 @@ export function Tweets({ slug, article }: { slug: string; article: Article }) {
    * reader says "I know, do it anyway", and `StepRun.force` in useStepJob.ts is
    * what that turns into.
    */
-  async function write(force = false, useProfile = true) {
-    await queue.start({ force, useProfile });
+  async function write(force = false) {
+    await queue.start({ force });
   }
 
   /**
@@ -279,14 +278,14 @@ export function Tweets({ slug, article }: { slug: string; article: Article }) {
    * page needs that way out, because its `error` branch draws a sentence and no
    * run button at all, so the bar is the only control left.
    *
-   * **The return value is dropped**, alone among the callers, and that is right:
-   * `automatic` exists so a panel can say *Using your profile* instead of
-   * drawing a tickbox it has already decided, and this page's empty state has no
-   * tickbox to replace — it never offered one. What the thread was written with
-   * is stated afterwards by `<WrittenForYou>`, out of the artefact itself, which
-   * is a stronger claim than a note about the run.
+   * **The return value is dropped.** `automatic` was there so a panel could say
+   * *Using your profile* instead of drawing a tickbox it had already decided —
+   * until the tickbox and the sentence were both removed on 2026-09-13. The
+   * glossary, ideas, quotes and sketch hooks now drop it too. What this thread
+   * was written with is stated afterwards by `<WrittenForYou>`, out of the
+   * artefact itself.
    */
-  useAutoRun(slug, "tweets", loaded.status, () => write(false, true), reload);
+  useAutoRun(slug, "tweets", loaded.status, () => write(false), reload);
 
   const backHref = readHref(slug, carriedSearch(location.search), "article");
 
@@ -469,13 +468,9 @@ function Thread({
   job: Job | null;
   failed: StepFailure | null;
   stalled: boolean;
-  onWrite(force?: boolean, useProfile?: boolean): Promise<void>;
+  onWrite(force?: boolean): Promise<void>;
   onCancel(id: string): void;
 }) {
-  const hasProfile = useHasProfile(thread.slug);
-  // Seeded from what the thread on screen was written with; the artefact is
-  // the memory, so nothing here has to be.
-  const [withProfile, setWithProfile] = useState(thread.profileHash != null);
   return (
     <>
       <ThreadCounts thread={thread} article={article}>
@@ -505,18 +500,11 @@ function Thread({
             may quote something that is no longer there.
           </p>
           <div className="gloss-run">
-            <UseProfile
-              checked={withProfile}
-              onChange={setWithProfile}
-              hasProfile={hasProfile}
-              slug={thread.slug}
-              disabled={job !== null}
-            />
             <Progress
               job={job}
               failed={failed}
                 stalled={stalled}
-              onWrite={() => onWrite(false, withProfile)}
+              onWrite={() => onWrite(false)}
               onCancel={onCancel}
               label="Write it again"
             />
@@ -540,23 +528,12 @@ function Thread({
             two of them would be one too many, and the wrong one is the one
             further from the reason. */}
         {!stale && (
-          <>
-            {/* Beside the deliberate rewrite, which is where the spend already
-                has a confirmation of its own. src/web/WrittenForYou.tsx. */}
-            <UseProfile
-              checked={withProfile}
-              onChange={setWithProfile}
-              hasProfile={hasProfile}
-              slug={thread.slug}
-              disabled={job !== null}
-            />
-            <Rewrite
-              job={job}
-              failed={failed}
-              onWrite={(force) => onWrite(force, withProfile)}
-              onCancel={onCancel}
-            />
-          </>
+          <Rewrite
+            job={job}
+            failed={failed}
+            onWrite={(force) => onWrite(force)}
+            onCancel={onCancel}
+          />
         )}
       </div>
     </>

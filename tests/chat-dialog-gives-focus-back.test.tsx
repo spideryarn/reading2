@@ -49,7 +49,6 @@ import type { BlockId } from "../src/types.js";
    the same reason: a mounted dialog reads a profile and a thread list over a
    network jsdom has not got. Nothing here sends anything. */
 vi.mock("../src/web/useProfile.js", () => ({
-  useHasProfile: () => false,
   useProfile: () => ({ profile: null, loaded: true, save: () => {}, error: null }),
 }));
 /**

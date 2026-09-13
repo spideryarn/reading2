@@ -17,11 +17,8 @@
  */
 import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import type { ChatThread, RememberStance } from "../src/types.js";
-
-/* The profile hook fetches on mount, and none of this is about the profile. */
-vi.mock("../src/web/useProfile.js", () => ({ useHasProfile: () => false }));
 
 const { ChatPanel } = await import("../src/web/ChatPanel.js");
 

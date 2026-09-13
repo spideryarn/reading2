@@ -1,8 +1,10 @@
 /**
  * "What am I being written for?" — answered where the question is asked.
  *
- * A small popover, raised from beside the *Use your profile* checkbox and from
- * the *written for you* badge, that says what a profile does, shows both boxes
+ * A small popover, raised from the *written for you* badge (WrittenForYou.tsx)
+ * — and, until 2026-09-13, from a button beside the *Use your profile*
+ * checkbox, which went with the checkbox — that says what a profile does, shows
+ * both boxes
  * as the reader currently has them, and carries a working link to each editor.
  * docs/plans/260830c-profile-panel.md, docs/project/reader-profile.md.
  *
@@ -38,18 +40,17 @@
  * ## Why it fetches for itself, and what that argument is NOT
  *
  * It fetches `/api/reader?slug=` when it is **opened**, rather than taking the
- * text as props from the five hooks that already call `useHasProfile`. That
- * keeps this component's data in one place and leaves `useHasProfile` — and the
- * nine test files that mock it — alone.
+ * text as props from somewhere that fetched it at page load. That keeps this
+ * component's data in one place.
  *
  * **The reason this file first gave was wrong, and the correction is worth
  * keeping.** It claimed the panel fetched separately so that the reader's
- * profile would not be sent five times a page. It is: `/api/reader` has carried
- * `profile` since it was written, all five hooks fetch it, and `purpose` now
- * rides beside it. So this request is a *sixth*, not a substitute for five, and
- * consolidating them into one shared read is real work still worth doing —
- * costing an update to those nine mocks. Deferred deliberately rather than
- * unnoticed. GPT Sol's review of the built code, 2026-08-30.
+ * profile would not be sent repeatedly on a page. It was: six callers used
+ * `useHasProfile`, which fetched `/api/reader` — `profile` and `purpose`
+ * included — for a boolean, so this request was another fetch, not a substitute
+ * for theirs. GPT Sol's review of the built code, 2026-08-30. Those callers went
+ * with the *Use your profile* checkbox on 2026-09-13; this panel's read, made
+ * only when it is opened, is now the only one made for the profile panel.
  *
  * What the fetch-on-open does buy is that the panel shows what the server holds
  * *now* rather than what it held when the page mounted. That is only true
@@ -81,7 +82,7 @@ import { PROFILE_HREF, carriedSearch, readHref } from "./router.js";
  *
  * `hasProfile` is on the response and deliberately unused here: this panel is
  * about the two boxes, and whether they add up to something the prompts count
- * is a question the checkbox already asks through `useHasProfile`.
+ * is not a question it needs answered.
  */
 interface ReaderProfile {
   /** "About you", the same on every article. `null` for never written. */
@@ -116,20 +117,17 @@ type Load =
   | { state: "failed" };
 
 /**
- * The panel, and whatever button raises it.
+ * The panel, and the provenance badge that raises it.
  *
  * **The trigger's looks are the caller's, its behaviour is this component's.**
- * Two very different things open this: a bare `👤` beside the checkbox, and the
- * `written for you` pill, which has its own shape and its own two states. Both
- * are the same *act* — ask what this was written for — so they share the
- * popover and nothing else. `className` and `children` are the whole of the
- * difference, which keeps one implementation of focus, dismissal and the fetch
- * rather than two that drift.
+ * `WrittenForYou` supplies the `written for you` pill and its changed-profile
+ * state; this component owns the shared act underneath — ask what this was
+ * written for. `className` and `children` keep the trigger's appearance out of
+ * the implementation of focus, dismissal and the fetch.
  *
- * **It does not hide itself when the reader has no profile.** That is the state
- * where the explanation matters most, and where the two links are the only way
- * a first profile ever gets written — the caller hides the *checkbox*, never
- * this.
+ * It is mounted only for an artefact that was written with a profile. A reader
+ * making their first profile now enters through `/profile` or the Command bar;
+ * the pre-generation trigger went with the checkbox on 2026-09-13.
  */
 export function ProfilePanel({
   slug,

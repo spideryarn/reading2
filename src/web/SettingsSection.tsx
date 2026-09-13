@@ -27,11 +27,12 @@
  * ## A checkbox, and the tooltip beside it rather than around it
  *
  * A checkbox in a `<label>` is what every other boolean in this app is
- * (AccessSharing.tsx, WrittenForYou.tsx, SearchPanel.tsx), and a settings page
- * is the last place to invent a second kind. The tooltip's trigger sits
- * *outside* the label for the reason WrittenForYou.tsx gives: a `<label>` turns
- * every click inside it into a toggle, so an info icon within one is a control
- * that flips the switch when a touch reader taps it to read the explanation.
+ * (AccessSharing.tsx, SearchPanel.tsx — and WrittenForYou.tsx's *Use your
+ * profile* until it was removed on 2026-09-13), and a settings page is the last
+ * place to invent a second kind. The tooltip's trigger sits *outside* the label
+ * for the reason that checkbox's panel button did: a `<label>` turns every
+ * click inside it into a toggle, so an info icon within one is a control that
+ * flips the switch when a touch reader taps it to read the explanation.
  */
 import { FlaskConical, Info, TriangleAlert } from "lucide-react";
 

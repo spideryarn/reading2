@@ -11,7 +11,6 @@ import { useLiveConversation, type LiveApi } from "../src/web/live/useLiveConver
 import type { LiveTicket, LiveWiring } from "../src/web/live/wiring.js";
 import type { UseDictationField } from "../src/web/useDictationField.js";
 
-vi.mock("../src/web/useProfile.js", () => ({ useHasProfile: () => false }));
 vi.mock("../src/web/useDictationField.js", () => ({
   useDictationField(): UseDictationField {
     const [armed, setArmed] = useState(false);

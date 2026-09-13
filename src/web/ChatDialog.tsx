@@ -745,7 +745,7 @@ export function ChatDialog({
             onJump={onJump}
             recovering={recovering}
             blocks={blocks}
-            onSend={(question, useProfile) => send(thread.id, question, at, { useProfile })}
+            onSend={(question) => send(thread.id, question, at)}
             onRetry={(messageId) => retry(thread.id, messageId)}
             onEdit={(messageId, question) => edit(thread.id, messageId, question, at)}
             onStop={(messageId) => stop(thread.id, messageId)}

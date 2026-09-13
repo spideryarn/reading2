@@ -100,8 +100,12 @@ export type ArtefactStatus = "loading" | "none" | "ready" | "error";
  * @param reread the panel's own artefact GET, for the one case the press cannot
  *   be answered from what is on screen: a read that failed. Held in a ref for
  *   the same reason. See § A failed read is not an answer.
- * @returns whether this mount made the automatic attempt, so the panel can say
- *   *Using your profile* instead of offering a tickbox it has already decided.
+ * @returns whether this mount made the automatic attempt. The glossary, ideas,
+ *   quotes and sketch panels used it to say *Using your profile* instead of
+ *   offering a tickbox the run had already decided; both pieces of UI went on
+ *   2026-09-13 and those four hooks now ignore the return. Tweets ignores it
+ *   too. Timeline, citations, debate and illustrated still carry it as
+ *   `automatic` for their own consumers.
  */
 export function useAutoRun(
   slug: string,

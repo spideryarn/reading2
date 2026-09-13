@@ -260,8 +260,9 @@ the request goes out. The two verbs exist for the same reason: `ensure` is unfor
 request and two keys are two paid jobs; `regenerate` is forced and is the *Find them again* button beside a
 result that is already there. [`src/web/useAutoRun.ts`](../../src/web/useAutoRun.ts).
 
-An automatic run has nobody to ask about the reader's profile, so it uses it and the panel says so —
-*Using your profile* — rather than showing a tickbox it has disabled.
+An automatic run uses the reader's profile, as every ideas run does. The *Use your profile* checkbox,
+and the *Using your profile* sentence an automatic run showed in its place, were removed on
+2026-09-13 ([reader-profile.md § No control, one label](reader-profile.md#no-control-one-label)).
 
 
 **Ids are still inherited across a regeneration, and the promise is weaker than the glossary's.**

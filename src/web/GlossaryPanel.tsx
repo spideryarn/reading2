@@ -105,7 +105,7 @@ import { builtButEmpty, codeOfMessage } from "../messages.js";
 import { MAX_ASKED_TERM } from "../asked-term.js";
 import { JobProgress } from "./JobProgress.js";
 import { ModeSurface } from "./ModeSurface.js";
-import { UseProfile, WrittenForYou } from "./WrittenForYou.js";
+import { WrittenForYou } from "./WrittenForYou.js";
 import { useRenderCount } from "./perf.js";
 
 /**
@@ -246,20 +246,6 @@ export function GlossaryPanel({
   const shown = glossary ? sortEntries(all, order, gate) : [];
   const orphanedLookup = keptWithoutEntry(owner, all);
 
-  /**
-   * Whether the next run should use the profile.
-   *
-   * Seeded from what the list on screen was written with — `profiled` — so the
-   * box is already in the state the reader last chose and nothing has to
-   * remember it between visits: the artefact does. `useState`'s initialiser
-   * rather than an effect, because it is the starting value and re-seeding it
-   * every time a poll returns would fight a reader who had just unticked it.
-   *
-   * With no glossary yet, `profiled` is false and the default is `true` — the
-   * profiled run is the one this app now offers.
-   */
-  const [withProfile, setWithProfile] = useState(() => (glossary ? (owner?.profiled ?? false) : true));
-
   return (
     <ModeSurface
       label="Glossary"
@@ -305,12 +291,16 @@ export function GlossaryPanel({
             job={owner.job}
             starting={owner.starting}
             failed={owner.failed}
-            onMore={owner.more}
+            /* **In the list's own recorded setting**, not the current profile.
+               `existingFor` refuses to append across a profile difference, so
+               asking a plain list's Find more for the profile would *rewrite*
+               it — dropping every term the model did not return again — under
+               a button that says "more". The *Use your profile* checkbox used
+               to carry this, seeded from the list; since it went on 2026-09-13
+               the list's `profiled` is passed directly. useGlossary.ts § `more`;
+               tests/glossary-find-more-keeps-the-lists-profile.test.tsx. */
+            onMore={() => owner.more(owner.profiled)}
             onCancel={owner.cancel}
-            withProfile={withProfile}
-            onWithProfile={setWithProfile}
-            hasProfile={owner.hasProfile}
-            slug={owner.slug}
           />
         ) : null
       }
@@ -372,24 +362,12 @@ export function GlossaryPanel({
             kept — you will not be asked again unless the article changes.
           </p>
           <div className="gloss-run">
-            {/* Beside the button that spends, not in the head with the label.
-                Unticking this and pressing Find is exactly "check/uncheck and
-                it regenerates without this prompt" — it just does not pretend
-                to be free. src/web/WrittenForYou.tsx. */}
-            <UseProfile
-              checked={withProfile}
-              onChange={setWithProfile}
-              hasProfile={owner.hasProfile}
-              slug={owner.slug}
-              disabled={owner.job !== null}
-              automatic={owner.automatic}
-            />
             <Progress
               job={owner.job}
               starting={owner.starting}
               failed={owner.failed}
               stalled={owner.stalled}
-              onRun={() => owner.find(withProfile)}
+              onRun={() => owner.find()}
               onCancel={owner.cancel}
               label="Find the terms"
             />
@@ -426,20 +404,12 @@ export function GlossaryPanel({
                 These terms describe an older version of the article.
               </p>
               <div className="gloss-run">
-                <UseProfile
-                  checked={withProfile}
-                  onChange={setWithProfile}
-                  hasProfile={owner.hasProfile}
-                  slug={owner.slug}
-                  disabled={owner.job !== null}
-                  automatic={owner.automatic}
-                />
                 <Progress
                   job={owner.job}
                   starting={owner.starting}
                   failed={owner.failed}
                       stalled={owner.stalled}
-                  onRun={() => owner.find(withProfile)}
+                  onRun={() => owner.find()}
                   onCancel={owner.cancel}
                   label="Find them again"
                 />
@@ -453,20 +423,12 @@ export function GlossaryPanel({
                 again splits each one into what the article means and what the model knows.
               </p>
               <div className="gloss-run">
-                <UseProfile
-                  checked={withProfile}
-                  onChange={setWithProfile}
-                  hasProfile={owner.hasProfile}
-                  slug={owner.slug}
-                  disabled={owner.job !== null}
-                  automatic={owner.automatic}
-                />
                 <Progress
                   job={owner.job}
                   starting={owner.starting}
                   failed={owner.failed}
                       stalled={owner.stalled}
-                  onRun={() => owner.find(withProfile)}
+                  onRun={() => owner.find()}
                   onCancel={owner.cancel}
                   label="Find them again"
                 />
@@ -1941,7 +1903,7 @@ function LookupAnswer({ lookup }: { lookup: GlossaryLookup }) {
  * model call (docs/plans/260903c-threshold-sliders-hide-below-threshold-items.md).
  * And the list is still recoverable without it: `existingFor` refuses to append
  * when the source, the prompt version or the profile differs, so an edit, a
- * prompt bump or the checkbox below rewrites the list — and inherits the ids,
+ * prompt bump or a changed profile rewrites the list — and inherits the ids,
  * so the reader's `?term=` links survive it.
  *
  * The cost was paid on every visit — a destructive button, an inline confirm
@@ -1963,10 +1925,6 @@ function Foot({
   starting,
   failed,
   onMore,
-  withProfile,
-  onWithProfile,
-  hasProfile,
-  slug,
   onCancel,
 }: {
   job: Job | null;
@@ -1975,20 +1933,16 @@ function Foot({
    * § `starting`, which exists for exactly the gap this foot used to fall into.
    *
    * Without it the branch below was `if (job)`, so between the press and the
-   * job appearing the foot drew *Find more* again, enabled, next to a live
-   * checkbox. Pressing twice deduplicates server-side, but **toggling the
-   * checkbox in that gap does not**: the profile flag is part of the work key,
-   * so the second press is a differently-keyed job and a second paid call.
-   * The empty state above has always passed this; the foot never did. ⟨Sol⟩
+   * job appearing the foot drew *Find more* again, enabled. Pressing twice
+   * deduplicates server-side — but while the foot also carried the *Use your
+   * profile* checkbox (until 2026-09-13), **toggling it in that gap did not**:
+   * the profile flag is part of the work key, so the second press was a
+   * differently-keyed job and a second paid call. The empty state above has
+   * always passed this; the foot never did. ⟨Sol⟩
    */
   starting: boolean;
   failed: StepFailure | null;
-  onMore(useProfile?: boolean): Promise<void>;
-  withProfile: boolean;
-  onWithProfile(next: boolean): void;
-  hasProfile: boolean;
-  /** For the profile panel's per-article half. src/web/ProfilePanel.tsx. */
-  slug: string;
+  onMore(): Promise<void>;
   onCancel(id: string): void;
 }) {
   if (job || starting) {
@@ -2002,7 +1956,7 @@ function Foot({
              has stopped advancing, and the surface that warns about it is the
              shelf card — useStepJob.ts § `stalled`. */
           stalled={false}
-          onRun={() => onMore(withProfile)}
+          onRun={() => onMore()}
           onCancel={onCancel}
           label="Find more"
         />
@@ -2013,22 +1967,11 @@ function Foot({
   return (
     <div className="gloss-foot">
       <div className="gloss-actions">
-        {/* **The common case, and the first version missed it.** The checkbox
-            was on the empty state and the two stale banners, so a reader with
-            a perfectly current glossary — which is most readers, most of the
-            time — never saw it at all. Found in a browser, not by a test.
-            src/web/WrittenForYou.tsx. */}
-        <UseProfile
-          checked={withProfile}
-          onChange={onWithProfile}
-          hasProfile={hasProfile}
-          slug={slug}
-        />
         <button
           type="button"
           className="gloss-btn"
           title="Another model call, told what it has already found, looking for the quieter terms"
-          onClick={() => void onMore(withProfile)}
+          onClick={() => void onMore()}
         >
           <Search size={12} />
           Find more

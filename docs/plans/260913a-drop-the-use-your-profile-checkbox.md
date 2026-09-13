@@ -1,0 +1,188 @@
+# Drop the "Use your profile" checkbox, and always use the profile
+
+Feedback [SPIDERYARN-READING2-3B](https://greg-detre.sentry.io/issues/SPIDERYARN-READING2-3B), queue
+item `qi-r4vaqx33`. Owning doc: [reader-profile.md](../project/reader-profile.md).
+
+> All the places where it has a little checkbox saying "use your profile", and remove that from the
+> UI. Just always have it as on. So just assume that we're always going to use the profile, and we
+> don't need to include it in the UI to ask them. So the UI is a bit tidier and more compact.
+>
+> — Greg, 2026-09-12, from an iPad, reading an article in summary mode
+
+## What there is today
+
+One component, `<UseProfile>` in [`src/web/WrittenForYou.tsx`](../../src/web/WrittenForYou.tsx),
+draws a row beside every button that spends a model call:
+
+```
+  with a profile:     ☑ Use your profile  👤        ← checkbox + the button that opens ProfilePanel
+  a self-started run:   Using your profile  👤        ← `automatic`: a sentence instead of the box
+  no profile at all:                     👤 Your profile
+```
+
+It is used in seven places: the glossary (four rows — Find, Find them again, the two in-list rows,
+and the foot's Find more), quotes, ideas, tweets, sketch, and the chat composer (which is also the
+Remember panel's composer). The summaries panel no longer has one, although reader-profile.md's
+table still says it does. Explain has never had one.
+
+The tick is **not stored anywhere**. Each panel seeds it from the artefact on screen
+(`profileHash != null` → ticked; a plain artefact → unticked), and chat holds it in component state
+for the session. Unticked, the client sends `useProfile: false`; ticked, it sends nothing, and the
+server reads absent as yes.
+
+## What we are building
+
+> **Superseded in two places by GPT Sol's plan review, below:** no `<ProfileButton>` — the whole
+> row goes — and Find more keeps the list's own setting. This section is the plan as first written.
+
+**Client only.** The checkbox goes, and the `automatic` sentence goes with it. The row becomes the
+one button that opens the profile panel, labelled the way the no-profile row already is:
+
+```
+  every state:                           👤 Your profile
+```
+
+That keeps the way into `ProfilePanel` — what your profile says, and the links to edit both halves —
+which GPT Sol's review of 260830c insisted on for the reader with no profile, and which is how a
+first profile gets written. It is shorter than any of today's three rows.
+
+- `<UseProfile>` becomes a component with only `slug`, renamed for what it now is (`<ProfileButton>`),
+  and the rename is swept across code, tests and docs.
+- Every client path that could send `useProfile: false` from a checkbox stops being able to: the
+  `useProfile` parameter comes off `find`/`more`/`ensure`/`regenerate`/`write` in `useGlossary`,
+  `useQuotes`, `useIdeas`, `useSketch`, `Tweets`, off `StepRun` in `useStepJob`, and off
+  `ChatPanel`'s `onSend`/`onSendNew` and their callers in `ConversationModes.tsx` and
+  `ChatDialog.tsx`. The panels' `withProfile` state goes.
+- **`useChat`'s `opts.useProfile` stays.** `CandidatesPanel` sends `useProfile: false` on purpose —
+  it is not a checkbox, it is a feature that must not be pitched at the reader — and that is the one
+  remaining client caller.
+- `useHasProfile` and the `hasProfile` fields on the hooks go if nothing reads them once the
+  checkbox has gone (the button's label no longer depends on it). The server's `hasProfile` on
+  `GET /api/reader` is left alone.
+- CSS: `.prof-use` and `.prof-said` go; `.prof-row` and `.prof-open` stay.
+
+**The server is untouched.** `useProfile` stays on the API with "absent means yes", because
+`CandidatesPanel` depends on it, jobs' `sameWork` keys on it, and an API that still accepts `false`
+from a client that no longer sends it costs nothing.
+
+## The reader who has it OFF today
+
+Turning it on for them is a decision, so here it is plainly. There is no stored "off" to migrate,
+because the tick was never stored — so the question is what each such reader sees next:
+
+- **Their plain artefacts stay exactly as they are.** A plain artefact carries `profileHash: null`,
+  and `null` is never stale ([reader-profile.md § Provenance](../project/reader-profile.md#provenance-what-was-this-written-with-and-is-it-still-true)),
+  so nothing lights up, nothing regenerates, and no badge appears.
+- **The next rewrite they ask for is written for their profile.** "Find them again", "Write it
+  again", Find more — each now sends no `useProfile`, so the server resolves the profile. The
+  badge then reads *written for you*.
+- **One edge of that:** the glossary's Find more on a plain list now asks for *profiled* terms, and
+  `existingFor` refuses to merge a profiled top-up into an unprofiled list — so Find more on a plain
+  glossary rewrites it rather than appending. That is the existing, correct behaviour for a
+  profile mismatch (reader-profile.md § `existingFor`), and the reader keeps their `?term=` links;
+  it is named here because the button's label still says "more".
+- **Chat** is per-session state, so a reader who unticked it gets the profile from their next
+  question after this deploys (and already did after any reload).
+- **The way to not be profiled is now to empty both boxes.** That is a real loss of control, and
+  it is the one Greg asked for.
+
+How many readers are in that state is not measured: this session has no production database access,
+and a `null` stamp cannot tell "unticked" from "had no profile when it was written" anyway.
+
+## Stages
+
+1. **Remove it.** The component, every call site, the client parameters, `useHasProfile` if
+   orphaned, the CSS, and the tests that asserted the checkbox or the sentence — rewritten to assert
+   the new row (the button present with its label, in both the profile and no-profile states; no
+   checkbox anywhere; a generate request sends no `useProfile`). Docs in the same stage:
+   reader-profile.md (§ The two controls, the table, § The client says whether, the
+   `null`-never-stale rationale that cites the checkbox), glossary.md's two mentions,
+   web-client.md, and the ProfilePanel/api.ts comments that name the checkbox. GPT Sol code review.
+
+That is the whole job; it is one stage because every piece of it is the same removal.
+
+## The simpler option passed over
+
+**Hide the checkbox and leave the plumbing** — drop the `<label>` from `<UseProfile>` and change
+nothing else. Five lines. Passed over because it leaves `useProfile` parameters on nine hooks and
+callbacks that nothing can now set to `false`, `withProfile` state in five panels that nothing can
+change, and a `hasProfile` fetch per panel whose only reader is gone: a control removed from the
+screen but not from the code, which the next reader of any of those files has to reverse-engineer.
+
+## Also passed over
+
+- **Removing `useProfile` from the API as well.** More work, and wrong: `CandidatesPanel` needs it.
+- **An icon-only button for a reader with a profile.** Tighter still, but 260830c measured a bare
+  glyph in a row as saying nothing, and a single label in every state is simpler than two.
+
+## GPT Sol's plan review, and what changed
+
+[The review](260913a-drop-the-use-your-profile-checkbox-review-sol.md), against `c222c9a4`, said
+*rethink*. The removal was sound; the transition was not. All four findings taken:
+
+- **F1 (P1), quotes.** Find more already sends the list's own setting (`regenerate(owner.profiled)`),
+  and `src/quotes.ts` appends across a profile difference while keeping the first pass's stamp. So
+  always-profile there would have put profiled quotes into a list stamped `null`, with no badge.
+  **Kept**: `useQuotes.regenerate` keeps its parameter for that one caller.
+- **F2 (P1), glossary.** The bullet above was wrong. A profiled Find more on a plain list does
+  rewrite — and `?term=` links survive only for terms the rewrite returns again; the rest disappear,
+  under a button still labelled "more". **Changed**: the glossary's Find more now does what the
+  quotes' does and continues in the list's recorded setting (`more(owner.profiled)`), so a plain list
+  gets plain additions and nothing is replaced. The rule, one sentence: **writing a list uses the
+  profile; adding to one continues whatever the list was written with.** `StepRun.useProfile` stays.
+- **F3 (P2), the button.** A labelled "👤 Your profile" row kept the chat and Remember composers and
+  the glossary foot exactly as tall as before, which is not what "more compact" asked for; and since
+  260830c the Command bar has a Profile row, so the reason for a way-in on every panel is weaker.
+  **Changed**: the whole row goes. `<WrittenForYou>` — the badge, which still opens the profile
+  panel — stays. This supersedes § What we are building's `<ProfileButton>`.
+- **F4 (P2).** The `automatic` fields on four hooks only fed the removed sentence. **Removed** too.
+
+So § "The reader who has it OFF today" now reads: plain artefacts stay plain and unflagged; a
+rewrite ("Find them again", "Choose them again", "Write it again") is written for the profile; Find
+more on a plain list stays plain.
+
+## What landed (stage 1)
+
+- `<UseProfile>` deleted with every call site (glossary ×4, quotes, ideas, tweets, sketch, chat and
+  Remember's composer), each panel's `withProfile` state, `useHasProfile` and the hooks'
+  `hasProfile`, the `automatic` field on glossary/ideas/quotes/sketch, and the `.prof-row`,
+  `.prof-open`, `.prof-use`, `.prof-said` CSS with the three placement rules. The chat composer's
+  `flex-wrap` moved to `mode-band.css`, and the dictation strip now takes a full line
+  (`.chat-composer .prof-listening`), a job the removed full-width row used to do by accident.
+- `useQuotes.regenerate(useProfile?)` and `useGlossary.more(useProfile?)` keep their parameter, for
+  Find more only; everything else lost it. `StepRun.useProfile` stays, and so does `useChat`'s
+  `opts.useProfile` for `CandidatesPanel`.
+- Two new tests, both seen red first: `tests/glossary-find-more-keeps-the-lists-profile.test.tsx` and
+  `tests/no-profile-row-beside-paid-buttons.test.tsx`. `tests/automatic-run-says-what-it-used.test.tsx`
+  deleted (its subject is gone); `profile-panel.test.tsx` now enters through the badge.
+- **A consequence to know:** a reader with no profile has no way into the profile panel from a
+  reading view any more — the badge only appears on text written for a profile. `/profile` and the
+  Command bar's Profile row are the ways to a first profile. That is F3's trade, taken knowingly.
+- `automatic` still exists on the timeline, citations, debate and illustrated hooks — outside this
+  job, read by `modes-that-start-themselves` only.
+
+## GPT Sol's code review of stage 1
+
+[The review](260913a-drop-the-use-your-profile-checkbox-code-review-sol.md), write-capable, against
+`dc375787`: **ready after fixes**, and it confirmed the conclusion it was asked to check — every
+client generate request omits `useProfile` except Find more on glossary and quotes (the list's
+recorded setting) and the candidates chat (`false`).
+
+- **F5 (P1), fixed by Sol.** `tests/the-ideas-extraction-changed-no-requests.test.tsx` still expected
+  the six `/api/reader?slug=` reads `useHasProfile` used to make; red 2/3, then green. The full suite
+  would have caught it; the implementer's scoped run did not include that file.
+- **F6 (P3) and F7 (P2), fixed by Sol.** Comments and docs still describing the checkbox, and an
+  empty fragment left in `Tweets.tsx`.
+- **F8 (P3), reported and fixed by us.** Three server comments (`routes.ts`, `jobs.ts` ×2) gave the
+  unticked box as the reason for `useProfile: false`; they now name Find more and the candidates
+  chat. Comments only — the server code is untouched.
+
+I read Sol's diff and re-ran the three test files it edited, including the Postgres-backed
+`tests/jobs.test.ts` its sandbox could not reach: 132 passed. No second round: the one P1 was a test
+expectation, fixed by the reviewer and seen red then green, and nothing else was behavioural.
+
+## Deferred
+
+- The server's `hasProfile` on `GET /api/reader`, if nothing reads it afterwards.
+- "Written for you" stays the only statement of what an artefact used; nothing new replaces the
+  `automatic` sentence during a self-started run.

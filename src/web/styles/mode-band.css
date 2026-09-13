@@ -633,11 +633,22 @@
 /* ---- the composer ---- */
 .chat-composer {
   display: flex;
+  /* **Wraps**, so a crowded row drops to a second line instead of crushing
+     the textarea — see `min-width` on `.chat-input` below. This rule lived in
+     profile.css beside the *Use your profile* row, which it also served, until
+     that row went on 2026-09-13. */
+  flex-wrap: wrap;
   align-items: flex-end;
   gap: 0.4rem;
   padding: 0.5rem;
   border-top: 1px solid var(--rule);
 }
+/* **The dictation strip gets a line of its own.** Until 2026-09-13 the
+   full-width *Use your profile* row sat before it in the DOM and forced every
+   later item onto the next line; with that row gone the strip would otherwise
+   join the textarea's line and squeeze it. `.chat-live-status` below does the
+   same for itself. */
+.chat-composer .prof-listening { flex-basis: 100%; }
 .chat-input {
   flex: 1;
   /**
@@ -651,9 +662,9 @@
    * line: nothing overflowed, nothing wrapped, and it read as broken.
    *
    * 7rem is about eight characters, which is the width at which the box still
-   * looks like somewhere to type. Below that the row wraps — `flex-wrap` is
-   * already on for the profile checkbox — and two clean lines beat one cramped
-   * one. Found in a browser pass at 320px, 2026-08-31.
+   * looks like somewhere to type. Below that the row wraps — `flex-wrap` is on
+   * `.chat-composer` above — and two clean lines beat one cramped one. Found in
+   * a browser pass at 320px, 2026-08-31.
    */
   min-width: 7rem;
   /* Height is set inline by the component as the content grows; this is the
@@ -768,7 +779,6 @@
 .remember .chat-live { order: 2; }
 .remember .chat-stance { order: 3; }
 .remember .chat-send { order: 4; }
-.remember .prof-row { order: 5; }
 .remember .prof-listening { order: 6; }
 
 .chat-talk {

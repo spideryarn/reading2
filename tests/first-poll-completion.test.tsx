@@ -103,8 +103,6 @@ vi.mock("../src/web/lib/api.js", () => ({
   statusOf: () => null,
 }));
 
-vi.mock("../src/web/useProfile.js", () => ({ useHasProfile: () => false }));
-
 const { useIdeas } = await import("../src/web/useIdeas.js");
 const { jobEngine } = await import("../src/web/jobEngine.js");
 

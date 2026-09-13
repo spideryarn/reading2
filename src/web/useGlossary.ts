@@ -44,7 +44,6 @@ import { useOrderedRead } from "./useOrderedRead.js";
 import { type StepFailure, useStepJob } from "./useStepJob.js";
 import { apiFetch, readJson } from "./lib/api.js";
 import { readEvents, STREAM_STALL_MS, StreamStalled } from "./lib/sse.js";
-import { useHasProfile } from "./useProfile.js";
 
 type GlossaryStatus = "loading" | "none" | "ready" | "error";
 
@@ -475,18 +474,10 @@ export interface UseGlossary {
   profiled: boolean;
   profileChanged: boolean;
   /**
-   * The reader has a profile that applies to **this article** — either half.
-   *
-   * Resolved here rather than in the panel because the slug is here, and the
-   * question needs it: a reader who has written only "why you're reading this
-   * one" has a profile as far as every prompt is concerned. src/web/useProfile.ts.
-   */
-  hasProfile: boolean;
-  /**
-   * The article this band is about — carried alongside `hasProfile` because
-   * the same question needs it. The profile panel shows the *per-article* half
-   * ("why you're reading this one") and links to the page that edits it, and
-   * neither is possible without knowing which article. docs/plans/260830c-profile-panel.md.
+   * The article this band is about. The profile panel shows the *per-article*
+   * half ("why you're reading this one") and links to the page that edits it,
+   * and neither is possible without knowing which article.
+   * docs/plans/260830c-profile-panel.md.
    */
   slug: string;
   /** A read failure, or the reason the last request could not be started. */
@@ -504,17 +495,24 @@ export interface UseGlossary {
   stalled: boolean;
   /** The POST has gone and the queue has not seen it yet. `StepJob.starting`. */
   starting: boolean;
-  /** The run in flight was started automatically. `UseIdeas.automatic`. */
-  automatic: boolean;
   /**
-   * Write the list. `useProfile` defaults to true; pass false for a plain one.
-   *
-   * The flag rides on the *action* rather than being panel state, because it is
-   * a property of the run and the artefact records what it was run with —
-   * `profileHash`, src/profile.ts. Nothing has to remember the reader's choice:
-   * the next visit reads it off the file.
+   * Write the list — always for the reader's profile, if they have one. The
+   * *Use your profile* checkbox that could ask for a plain list was removed on
+   * 2026-09-13 (docs/plans/260913a-drop-the-use-your-profile-checkbox.md). The
+   * artefact still records what it was run with: `profileHash`, src/profile.ts.
    */
-  find(useProfile?: boolean): Promise<void>;
+  find(): Promise<void>;
+  /**
+   * Top the list up — the forced run, which **appends** to a list written with
+   * the same source, prompt and profile (src/glossary.ts § existingFor).
+   *
+   * @param useProfile defaults to true. **Find more passes the list's own
+   *   `profiled`**, so a plain list is topped up plainly. Asked with the
+   *   profile instead, `existingFor` would refuse the append and the run would
+   *   *rewrite* the list — dropping every term the model did not happen to
+   *   return again — under a button that says "more". GPT Sol's review of
+   *   260913a.
+   */
   more(useProfile?: boolean): Promise<void>;
   cancel(id: string): void;
   /** Check one term on the web. Resolves when the answer is in `glossary`. */
@@ -584,7 +582,6 @@ export interface UseGlossary {
  */
 export function useGlossary(slug: string, read: GlossaryRead): UseGlossary {
   const { status, glossary, stale, outdated, profiled, profileChanged, error } = read;
-  const hasProfile = useHasProfile(slug);
   const [looking, setLooking] = useState<string | null>(null);
   const [lookFailed, setLookFailed] = useState<LookFailure | null>(null);
   const [asking, setAsking] = useState(false);
@@ -638,13 +635,13 @@ export function useGlossary(slug: string, read: GlossaryRead): UseGlossary {
    * nowhere else. The automatic run below therefore posts the identical request
    * this button does, without anything having to be changed to make it true.
    */
-  const find = useCallback((useProfile = true) => run(false, useProfile), [run]);
+  const find = useCallback(() => run(false), [run]);
   const more = useCallback((useProfile = true) => run(true, useProfile), [run]);
 
   /* `reload` rather than `refresh`: the way out of a failed read is to read
      again, and `reload` joins a request already in flight rather than making a
      second one. useAutoRun.ts § A failed read is not an answer. */
-  const auto = useAutoRun(slug, "glossary", status, find, reload);
+  useAutoRun(slug, "glossary", status, find, reload);
 
   /**
    * Check one term on the web — the panel's "check this" button.
@@ -951,14 +948,12 @@ export function useGlossary(slug: string, read: GlossaryRead): UseGlossary {
     outdated,
     profiled,
     profileChanged,
-    hasProfile,
     slug,
     error,
     job: queue.job,
     failed: queue.failed,
     stalled: queue.stalled,
     starting: queue.starting,
-    automatic: auto && (queue.job !== null || queue.starting),
     find,
     more,
     cancel: queue.cancel,

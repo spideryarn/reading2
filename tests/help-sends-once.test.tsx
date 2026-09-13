@@ -39,9 +39,6 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { ChatAnchor, ChatThread, ThreadSummary } from "../src/types.js";
 
-/* The dialog's other hooks reach for things jsdom has not got, and none of them
-   is what is under test. */
-vi.mock("../src/web/useProfile.js", () => ({ useHasProfile: () => false }));
 vi.mock("../src/web/Tooltip.js", () => ({
   Tooltip: ({ children }: { children: unknown }) => children,
   TooltipGroup: ({ children }: { children: unknown }) => children,

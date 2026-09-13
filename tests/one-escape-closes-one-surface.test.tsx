@@ -62,10 +62,11 @@ import { TitleEditor } from "../src/web/TitleEditor.js";
    `useChat` is where it does it. The stand-in is tests/help-sends-once.test.tsx's,
    trimmed to the fields a mounted dialog reads — nothing here sends anything.
 
-   `useProfile` for the same reason: the composer inside `ChatDialog` asks
-   whether the reader has one, over a network jsdom has not got. */
+   `useProfile` for the same reason: the composer inside `ChatDialog` asked
+   whether the reader had one, over a network jsdom has not got, until its
+   *Use your profile* checkbox went on 2026-09-13. The stand-in is kept
+   because it costs nothing and nothing here is about the profile. */
 vi.mock("../src/web/useProfile.js", () => ({
-  useHasProfile: () => false,
   useProfile: () => ({ profile: null, loaded: true, save: () => {}, error: null }),
 }));
 vi.mock("../src/web/useChat.js", () => ({

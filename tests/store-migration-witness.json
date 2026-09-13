@@ -527,7 +527,6 @@
     "tests/auth-users-fence.test.ts",
     "tests/auth-verify.test.ts",
     "tests/auth.test.ts",
-    "tests/automatic-run-says-what-it-used.test.tsx",
     "tests/backfill-manifest.test.ts",
     "tests/background-reload-keeps-the-list.test.tsx",
     "tests/bar-visibility.test.ts",

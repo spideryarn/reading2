@@ -723,9 +723,10 @@ function saving(
          — so a purpose saved on the metadata page left a cached reader record
          still describing the old one. Offline, `apiFetch` then serves that
          stale body as a synthetic 200 and nothing on screen looks wrong: the
-         profile panel presents last week's sentence as current, and
-         `hasProfile` can go on saying `false` to a reader who has just written
-         their first purpose, hiding every "Use your profile" tick from them.
+         profile panel presents last week's sentence as current. (It also let
+         `hasProfile` go on saying `false` to a reader who had just written
+         their first purpose, hiding every "Use your profile" tick from them —
+         until that checkbox was removed on 2026-09-13.)
 
          Not fixable inside `resourceOf`, which maps a URL to *its own*
          resource and is right to: this is a second resource the write affects,

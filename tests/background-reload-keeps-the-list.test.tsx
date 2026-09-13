@@ -175,9 +175,6 @@ vi.mock("../src/web/useJobs.js", () => ({
   },
 }));
 
-/* Needs a session and a slug; the answer changes nothing under test here. */
-vi.mock("../src/web/useProfile.js", () => ({ useHasProfile: () => false }));
-
 /* The thread page's bottom bar reaches Supabase and the whole visitor layer,
    and none of it is what this file is about. */
 vi.mock("../src/web/Dock.js", () => ({ Dock: () => null }));

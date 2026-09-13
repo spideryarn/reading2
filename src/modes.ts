@@ -86,8 +86,8 @@ export const MODES = [
 
      There is deliberately no `?stance=` beside `?thread=` below. The stance
      governs the next answer and changes nothing on screen, which is the rule
-     this file keeps — the closest existing thing is chat's profile checkbox,
-     which is component state for the same reason.
+     this file keeps. It therefore belongs to the composer session rather than
+     to a shareable address.
 
      Renamed `review` → `remember` on 2026-09-01, at Greg's request, and the
      reason is worth keeping straight because it is *not* the reason he gave.

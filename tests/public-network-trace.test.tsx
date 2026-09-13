@@ -1627,7 +1627,7 @@ describe("a signed-out browser on a shared document", () => {
       ),
       "the Draw button",
     ).toBe(false);
-    /* The profile tickbox goes with it — it is an input to a job. */
+    /* The owner's paid run row goes with it. */
     expect(host.querySelector(".sk-run"), "the run row").toBeNull();
 
     expect(trace.filter((r) => r.method !== "GET")).toEqual([]);

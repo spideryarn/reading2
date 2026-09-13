@@ -12,10 +12,12 @@
  * `/api/reader` was the obvious host — it is already *the route about the
  * reader* — and it is the wrong one for two reasons:
  *
- * - **It is fetched on every article page.** `useHasProfile` (src/web/useProfile.ts)
- *   asks it with a `?slug=` from six hooks, so a billing field on it would put a
- *   `billing_accounts` read and an `ingest_events` aggregate on the path of
- *   opening an article, for data only `/profile` draws.
+ * - **It is fetched on every article page.** When this was decided,
+ *   `useHasProfile` asked it with a `?slug=` from six callers (they went with the
+ *   *Use your profile* checkbox, 2026-09-13), and src/web/experimental-store.ts
+ *   still reads it — so a billing field on it would put a `billing_accounts`
+ *   read and an `ingest_events` aggregate on the path of opening an article,
+ *   for data only `/profile` draws.
  * - **It answers a different question.** That route is about the reader's own
  *   words — the profile text and the per-article purpose — and this is about
  *   what they may do.

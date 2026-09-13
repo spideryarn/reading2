@@ -69,11 +69,15 @@ export interface UseTimeline {
   /** The POST has gone and the queue has not seen it yet. `StepJob.starting`. */
   starting: boolean;
   /**
-   * The run in flight was started automatically. `UseIdeas.automatic`.
+   * The run in flight was started automatically — `useAutoRun`'s answer,
+   * narrowed to *and something is running*.
    *
    * Nothing draws it on this panel — the reader profile is deliberately not in
-   * this stage's stamp, so there is no tickbox here to replace — and it is on
-   * the interface so that the five hooks answer the same questions. See
+   * this stage's stamp, so there was never a tickbox here to replace. It was on
+   * the interface so the hooks answered the same questions; the glossary,
+   * ideas, quotes and sketch hooks dropped theirs on 2026-09-13, when the
+   * *Using your profile* sentence it fed went (docs/plans/260913a-drop-the-use-your-profile-checkbox.md).
+   * tests/modes-that-start-themselves.test.tsx still reads this one. See
    * § Two staleness facts, not three above.
    */
   automatic: boolean;
