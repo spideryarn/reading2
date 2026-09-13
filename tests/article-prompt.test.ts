@@ -454,7 +454,13 @@ describe("the reader profile rides after the breakpoint", () => {
       profile: null,
     });
     expect(empty[empty.length - 1]!.content).toBe(none[none.length - 1]!.content);
-    expect(none[none.length - 1]!.content as string).toBe("why?");
+    /* Was `toBe("why?")`, which pinned the whole final message rather than the
+       profile's absence — and a chat turn's final message now also carries
+       `provenanceLine` (src/converse.ts). What this test is for is that no
+       trace of a profile is left: no header, and the question still last. */
+    const last = none[none.length - 1]!.content as string;
+    expect(last).not.toContain("WHO IS READING THIS");
+    expect(last.endsWith("why?")).toBe(true);
   });
 });
 

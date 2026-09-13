@@ -40,8 +40,17 @@ describe("the rule about linking to the web", () => {
   });
 
   it("is the same text in both, because it is one constant", () => {
-    const clip = (prompt: string) =>
-      prompt.slice(prompt.indexOf("LINKING TO THE WEB")).split("\n\n").slice(0, 3).join("\n\n");
+    /* Anchored on the HEADING — the words followed by a blank line — because
+       chat's WHERE EACH CLAIM CAME FROM refers to this section by name ("as
+       LINKING TO THE WEB says"), earlier in the prompt than the section itself,
+       and a bare indexOf found that mention and compared two different places.
+       docs/plans/260913b-chat-and-comment-questions-reach-for-the-web-and-the-citations-list.md. */
+    const heading = "LINKING TO THE WEB\n\n";
+    const clip = (prompt: string) => {
+      const at = prompt.indexOf(heading);
+      expect(at, "no LINKING TO THE WEB heading in the prompt").toBeGreaterThanOrEqual(0);
+      return prompt.slice(at).split("\n\n").slice(0, 3).join("\n\n");
+    };
     expect(clip(system("remember"))).toBe(clip(system("chat")));
   });
 

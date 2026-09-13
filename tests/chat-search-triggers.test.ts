@@ -162,7 +162,11 @@ describe("where each claim came from", () => {
 
   it("is a section of the system prompt, above the cache breakpoint", () => {
     expect(where, "no WHERE EACH CLAIM CAME FROM section in SYSTEM").not.toBe("");
-    expect(finalUser).not.toContain("WHERE EACH CLAIM CAME FROM");
+    /* The final message may NAME the section — `provenanceLine` points at it
+       by its title, which is the point of it — but the rule's body must not
+       move below the breakpoint, or there would be two copies to drift apart. */
+    expect(finalUser).not.toContain("The reader must be able to tell, sentence by sentence");
+    expect(finalUser).not.toContain("Background knowledge is never left unmarked");
   });
 
   it("names all five origins, the library and background knowledge included", () => {

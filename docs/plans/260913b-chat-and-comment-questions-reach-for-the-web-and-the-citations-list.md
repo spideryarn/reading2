@@ -203,6 +203,11 @@ machinery reused, and it already is; a second prompt is the drift 260905c warned
 - **Citation URLs into a `read_web_page` allowlist.** The allowlist is still the right fix for the
   trickle exfiltration chat-tools.md describes, and this list is one of the sets it would use. Not
   here: it changes a defence.
+- **A render-side cue for uncited prose** — a paragraph with neither a block id nor a link drawn as
+  *not cited to the article*. The only option that needs no compliance from the model, and the
+  natural next step if the reminder is not enough; deferred because *"no chip"* is not *"not from
+  the article"* (a paragraph explaining the passage in the model's words would be flagged), because
+  sentences are not nodes the renderer has, and because it is a visible change Greg should see first.
 - **A per-answer source tally** (*"3 passages from the article · 2 web pages"*) as a UI line. Maybe
   later; the heading and the prompt rule are the smaller version.
 - **Checking the production turn.** Whoever next has production read access can read
@@ -250,6 +255,60 @@ machinery reused, and it already is; a second prompt is the drift 260905c warned
   in the text of the "since" answers went from 1 in 6 to 6 in 6**, and every answer still cites
   block ids. The bare "?" missed its threshold; what was done about that is the next entry, not a
   quiet change to the threshold.
+- 2026-09-13, **hand-read of the after-run** (Sonnet, read-only, all 30 answers against the rule
+  text). The third acceptance criterion **failed**, and this is the result the counts above hide:
+  of the 12 answers that searched, **2 fully pass** — the other 10 state at least one outside fact
+  unlinked, and three put a web claim in a sentence that cites a block. All six "?" answers state
+  specific checkable facts from memory, unmarked (*"a ferret's optic nerve is rerouted into what
+  would normally become auditory cortex…"*). **The strings "My inference" and "unverified" appear in
+  none of the 30.** So the provenance section moved the link count (the "since" answers) and did
+  little else observable. What is good: `unknownIds` is empty in all 30 — no invented block ids —
+  and the controls read exactly as they did before.
+- 2026-09-13, **`provenanceLine` built**, and three existing tests had to change with it — each read
+  first, each kept to its intent. `tests/article-prompt.test.ts` pinned a chat turn's whole final
+  message as `"why?"` to prove a missing profile leaves no trace; it now checks for no profile header
+  and the question last. `tests/chat-search-triggers.test.ts` forbade the section's *title* in the
+  final message; it now forbids the section's *body*, since the reminder names it on purpose.
+
+  **And one was a Stage 1 break nobody had run**: `tests/chat-web-links-prompt.test.ts`, which proves
+  `WEB_LINKS` is one constant in both prompts, found the section by `indexOf("LINKING TO THE WEB")` —
+  and Stage 1's WHERE EACH CLAIM CAME FROM mentions it by name earlier in the prompt (*"as LINKING
+  TO THE WEB says"*), so it compared two different places and went red from `ae260da5`. Stage 1's
+  gate list was hand-picked from the files it edited, and this file drives the same prompt without
+  being one of them. Anchored on the heading now. The full suite is what catches this class.
+- 2026-09-13, **re-run of `90f86c5e`** (the background origin; `…-after-background-2026-09-13T04-05-48.json`,
+  three runs). Searches: "wider debate?" **3 / 3 and 3 / 3**; "?" 0 / 3 and 1 / 3; controls 0
+  throughout. And a count of answers that mark something as not from the article (*doesn't say so*,
+  *outside this piece*, *my inference*, *unverified*, *the article does not say*):
+
+  | case | first after-run | this run |
+  |---|---|---|
+  | "?" press | 0 / 6 | **3 / 6** |
+  | "wider debate?" | 2 / 6 | **3 / 6** |
+  | "since" | 0 / 6 | 0 / 6 — these link instead |
+  | controls | 0 / 12 | 0 / 12 |
+
+  Better, and half. One Gwern "?" answer reached for `article_citations` on its own. Two Seth "since"
+  answers cite no block id at all — reasonable for a question about the world, and also what the
+  *nothing from the web in a block-id sentence* rule could push towards; the next run watches it.
+- 2026-09-13, **what to do about a rule the model does not follow** — asked of Fable, read-only.
+  Its recommendation, taken: **a one-line reminder in the final user message**, chat only, beside
+  `helpSection` and never inside it, pointing at the `SYSTEM` section rather than restating it —
+  below the cache breakpoint, so no cache write, and one owner for the rule still. The failure is
+  compliance at generation time, not ignorance: the one thing the section did move was the thing it
+  named most concretely. The line avoids *search*, *web*, *look it up* and *tool*, so
+  `tests/help-prompt.test.ts`'s absence checks hold; `tests/chat-provenance-line.test.ts` pins it,
+  and was seen red first (4 of 7; the 3 that passed are the absences, which should).
+  Set aside: a worked example in `SYSTEM` (the fallback if this does not move the numbers — it
+  rewrites the prefix and lengthens a prompt whose length is the problem); a structured
+  *From the article / Beyond the article* format (changes the product); a post-hoc check (latency,
+  and it cannot tell reasoning from recall).
+
+  **And a finding about the label**: several answers that searched carry `sources: 0`. That is the
+  default search engine, which returns no `url_citation` annotations — measured on 2026-09-01 and
+  recorded at `webSearchTool` in `src/converse.ts`. So the *From the web* list is often empty on a
+  typed chat turn, and the links **in the prose** are what carry the web half. The label is still
+  right when there are sources; it is not the mechanism.
 - 2026-09-13, **the "?" miss, arbitrated by Fable** (read-only, reading every help answer). Kept as
   measured, and the threshold was wrong rather than the prompt — Fable's words:
 

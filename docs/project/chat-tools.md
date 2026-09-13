@@ -479,7 +479,16 @@ FROM** section in place of the one-line *"say where something came from"*: four 
 block id, web → link, library → named by title, own reasoning → *"My inference is…"*), no unlinked
 general knowledge, and no web claim in a sentence that carries a block id. `WEB_LINKS` now links a
 page once per run of claims rather than once per answer, and the list under an answer is headed
-*From the web*. `helpSection` is untouched — `SYSTEM` still owns every rule about sources. Pinned by
+*From the web*. `helpSection` is untouched — `SYSTEM` still owns every rule about sources.
+
+**A rule in `SYSTEM` was not enough on its own.** A hand-read of thirty answers written under it
+found links where there had been none, and little else: outside facts still stated unmarked, and
+*"My inference"* nowhere. So background knowledge became an origin of its own, and a one-line
+reminder pointing at the section rides in the final user message beside the question
+(`provenanceLine`), below the cache breakpoint. It avoids the words *search*, *web* and *tool*, so the
+"?" addendum's absence checks still hold. And the *From the web* list is often empty on an ordinary
+chat turn — the default search engine returns no `url_citation` annotations (see `webSearchTool`) —
+so the links **in the prose** are what carry the web half. Pinned by
 `tests/chat-search-triggers.test.ts` and `tests/chat-sources-from-the-web.test.tsx`; the reasoning
 and the before-and-after numbers are in
 [260913b](../plans/260913b-chat-and-comment-questions-reach-for-the-web-and-the-citations-list.md).

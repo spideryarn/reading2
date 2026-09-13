@@ -1197,6 +1197,7 @@ export function buildConverseMessages(opts: {
      is about how the model reads it rather than about what it costs. */
   const teach = helpSection(opts.help ?? false);
   const how = stanceLine(kind, opts.stance);
+  const marked = provenanceLine(kind);
   return [
     { role: "system", content: systemFor(kind) },
     {
@@ -1221,11 +1222,36 @@ ${articleWithIds(opts.meta, opts.blocks)}`,
          reading it, and a question buried above three lines of framing is a
          question the model answers less well. */
       role: "user",
-      content: [position, who, about, teach, how, opts.question]
+      content: [position, who, about, teach, how, marked, opts.question]
         .filter(Boolean)
         .join("\n\n"),
     },
   ];
+}
+
+/**
+ * **One line, beside the question, pointing back at WHERE EACH CLAIM CAME FROM.**
+ *
+ * The rule lives in `SYSTEM`, ninety lines in and ahead of a whole article, and
+ * a hand-read of thirty answers written under it found it largely unfollowed:
+ * outside facts stated unmarked, and "My inference" nowhere
+ * (docs/plans/260913b-chat-and-comment-questions-reach-for-the-web-and-the-citations-list.md
+ * § Progress). The failure is compliance when the answer is written, not
+ * ignorance of the rule, and recency is the cheapest lever there is.
+ *
+ * **It points, it does not restate**, so `SYSTEM` still owns the rule and the two
+ * cannot drift. It sits below the `cache_control` breakpoint like everything else
+ * in this message, so it costs no cache write. It is its own part rather than a
+ * line in `helpSection`, which stays byte-for-byte what it was (GPT Sol F1) —
+ * and it avoids the words *search*, *web*, *look it up* and *tool*, which
+ * tests/help-prompt.test.ts forbids anywhere in a help turn's final message.
+ *
+ * Chat only: Remember has its own prompt and its own idea of what an answer is
+ * for. tests/chat-provenance-line.test.ts.
+ */
+function provenanceLine(kind: ThreadKind): string {
+  if (kind !== "chat") return "";
+  return `Mark where each claim came from, as WHERE EACH CLAIM CAME FROM says: a block id for the article, a link for a page you found this turn, and "The article doesn't say so, but…" for anything you know from elsewhere. A specific fact from elsewhere is linked or called unverified.`;
 }
 
 /**
