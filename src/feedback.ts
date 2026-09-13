@@ -68,6 +68,20 @@
  * nothing; that is exactly how the first two versions of this design got it
  * wrong, one after the other.
  *
+ * ## The article, when the reader ticked the box on their own
+ *
+ * Since 2026-09-13 a consented report that names an article also carries the
+ * file it was made from and the page's own payload, read here on the server —
+ * src/feedback-article.ts, which says what goes, what is capped and why. It is
+ * **not called at all** without a client, consent and a slug, so an unticked
+ * report reads nothing rather than reading and dropping. The two attachments
+ * are registered with the guard like the others, so they ride the same seam.
+ *
+ * That made the guard's key matter more than it had: a registration is found
+ * by a **nonce minted here**, not by the report id, which the browser mints and
+ * two owners can share. src/feedback-envelope.ts § A registration is found by a
+ * nonce.
+ *
  * ## It cannot throw, and it cannot fail the request
  *
  * Rule 2 of src/monitoring.ts. The row is already written and the reader has
@@ -101,11 +115,15 @@
  * this and awaits it on the far side of `send` — so it costs a warm function and
  * never a spinner.
  */
+import { randomUUID } from "node:crypto";
+
 import type { TransportMakeRequestResponse } from "@sentry/core";
 import { captureFeedback, getClient, Scope, withIsolationScope } from "@sentry/node-core/light";
 
+import { type FeedbackArticle, gatherFeedbackArticle } from "./feedback-article.js";
 import {
   expectFeedbackEnvelope,
+  FEEDBACK_NONCE_TAG,
   installFeedbackEnvelopeGuard,
   type AllowedAttachment,
   type FeedbackTagKey,
@@ -156,11 +174,21 @@ function message(report: FeedbackReport): string {
   return report.body;
 }
 
+/** An attachment's size in bytes, for the log — its length, never its content. */
+function byteLengthOf(attachment: AllowedAttachment): number {
+  return typeof attachment.data === "string"
+    ? Buffer.byteLength(attachment.data)
+    : attachment.data.byteLength;
+}
+
 /**
  * What the issue list may be filtered by. **Ours, every one of them.**
  *
  * Not the reader's words: a validated address, a validated slug, a build stamp,
- * and three facts about the report's own shape. The first of those used to be a
+ * and facts about the report's own shape — among them what became of the
+ * article, `source_file` and `article_json`, on **every** report, `none` when it
+ * was not gathered, so a missing file is a value to filter on rather than a tag
+ * that is sometimes absent. The first of those used to be a
  * route kind from a closed vocabulary, and this comment went on saying so after
  * Greg's call of 2026-09-02 to store the whole URL — the address is checked by
  * `isWebUrl` and capped rather than enumerated, and the reader is told it goes
@@ -176,8 +204,11 @@ function message(report: FeedbackReport): string {
 function tagsFor(
   report: FeedbackReport,
   screenshot: FeedbackScreenshot | null,
+  article: Pick<FeedbackArticle, "sourceFile" | "articleJson">,
 ): Partial<Record<Exclude<FeedbackTagKey, "report_id">, FeedbackTagValue>> {
   return {
+    source_file: article.sourceFile,
+    article_json: article.articleJson,
     /* `?? ""` rather than dropping the tag: a tag that is sometimes absent is
        a Sentry search that silently misses rows, and an empty string is a
        visible "we did not get one" — a report from a bundle older than
@@ -218,6 +249,17 @@ export async function mirrorFeedback(input: FeedbackMirrorInput): Promise<void> 
        is installed here rather than in `initMonitoring`. */
     installFeedbackEnvelopeGuard(client);
 
+    /* **Only with consent and a slug, and otherwise not called** — so an
+       unticked report reads nothing, rather than reading and dropping it.
+       Ownership is the reads' own question: they are owner-filtered and the
+       reporter's owner box is still open (src/feedback-article.ts). It never
+       throws; and it runs before the acknowledgement timer below starts, so a
+       slow bucket cannot eat the two seconds Sentry has to answer. */
+    const article: FeedbackArticle =
+      report.consented && report.slug !== null
+        ? await gatherFeedbackArticle(report.slug)
+        : { attachments: [], sourceFile: "none", articleJson: "none" };
+
     /* The blob and the picture ride as envelope attachment items, which
        `client.sendEvent` appends from `hint.attachments` — verified against the
        installed SDK, from Node, not only from a browser. The same array is
@@ -243,16 +285,23 @@ export async function mirrorFeedback(input: FeedbackMirrorInput): Promise<void> 
               contentType: screenshot.contentType,
             },
           ]),
+      ...article.attachments,
     ];
 
     const tags: Partial<Record<FeedbackTagKey, FeedbackTagValue>> = {
       report_id: report.id,
-      ...tagsFor(report, screenshot),
+      ...tagsFor(report, screenshot, article),
     };
     /* Everything the envelope may contain, said **before** it is built, so the
        guard writes it rather than inspects it. Forgotten again in `finally`
-       however this ends. */
-    const forget = expectFeedbackEnvelope(report.id, {
+       however this ends.
+
+       **Under a nonce minted here, not under the report id**: the browser mints
+       the id and it is unique only per owner, so two readers' concurrent
+       reports could otherwise find each other's registration.
+       src/feedback-envelope.ts § A registration is found by a nonce. */
+    const nonce = randomUUID();
+    const forget = expectFeedbackEnvelope(nonce, {
       message: message(report),
       contactEmail: user.email,
       source: "spideryarn",
@@ -299,6 +348,9 @@ export async function mirrorFeedback(input: FeedbackMirrorInput): Promise<void> 
         scope.setUser({ id: user.id, email: user.email });
         /* So a Sentry item and a Postgres row name each other. */
         scope.setTag("report_id", report.id);
+        /* What the guard finds this capture's registration by. Read and
+           dropped there; it never reaches Sentry. */
+        scope.setTag(FEEDBACK_NONCE_TAG, nonce);
         return captureFeedback(
           {
             message: message(report),
@@ -307,7 +359,7 @@ export async function mirrorFeedback(input: FeedbackMirrorInput): Promise<void> 
                from the one on `user`. Both are set, from the same gate. */
             email: user.email,
             source: "spideryarn",
-            tags: tagsFor(report, screenshot),
+            tags: tagsFor(report, screenshot, article),
           },
           { attachments },
           scope,
@@ -327,7 +379,13 @@ export async function mirrorFeedback(input: FeedbackMirrorInput): Promise<void> 
            `mirror_attempted_at is not null and mirrored_at is null`, and it only
            means anything because of this branch. */
         logger.warn(
-          { id: report.id, status: status ?? null },
+          {
+            id: report.id,
+            status: status ?? null,
+            sourceFile: article.sourceFile,
+            articleJson: article.articleJson,
+            attachmentBytes: attachments.map(byteLengthOf),
+          },
           "feedback report was not acknowledged by sentry",
         );
         return;
@@ -335,12 +393,17 @@ export async function mirrorFeedback(input: FeedbackMirrorInput): Promise<void> 
       const marked = await feedbackStore.markMirrored(report.id, eventId ?? null);
       /* Lengths and ids, never text — docs/project/logging.md. The three answers
          are in the event, which the reader consented to; they are not in this
-         log, which they did not. */
+         log, which they did not. The article's two outcomes and every
+         attachment's size are here because a report that is too big for Sentry
+         is dropped whole, and this line is how that would be seen. */
       logger.info(
         {
           id: report.id,
           sentryEventId: eventId ?? null,
           attachments: attachments.length,
+          attachmentBytes: attachments.map(byteLengthOf),
+          sourceFile: article.sourceFile,
+          articleJson: article.articleJson,
           marked,
         },
         "feedback report mirrored to sentry",

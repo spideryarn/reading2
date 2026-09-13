@@ -57,9 +57,14 @@ import { createHash } from "node:crypto";
 import { describe, expect, it } from "vitest";
 
 import type { RawSourceStore } from "../src/store/blobs.js";
-import { CorruptRawObject, MissingRawObject, readRawDocument } from "../src/store/raw-document.js";
+import {
+  CorruptRawObject,
+  MissingRawObject,
+  RawObjectTooLarge,
+  readRawDocument,
+} from "../src/store/raw-document.js";
 import { contentDisposition } from "../src/routes.js";
-import { canonicalKey } from "../src/source.js";
+import { canonicalKey, MAX_UPLOAD_BYTES } from "../src/source.js";
 
 const PDF = new TextEncoder().encode("%PDF-1.7\nnot really a pdf, but bytes are bytes\n");
 const SHA = createHash("sha256").update(PDF).digest("hex");
@@ -142,6 +147,76 @@ describe("the raw document a source download resolves to", () => {
        no `status` becomes a 500 in routes.ts, which is what an outage should
        look like. */
     await expect(readRawDocument("a-slug", REFERENCING, broken)).rejects.toThrow("Storage said 503");
+  });
+});
+
+/**
+ * **A caller's own cap, tighter than the store's** — the bug-report mirror's
+ * 10 MiB (src/feedback-article.ts).
+ *
+ * Both adapters refuse an object over `maxBytes` with an ordinary `Error`, and
+ * the mirror has to tell *too large* from *the store failed* — one is a tag
+ * saying the file was left off, the other a tag saying the read broke. So the
+ * refusal is followed by asking the store how big the object is, the way
+ * `overlongObject` in src/fetch.ts tells an over-long object from an outage,
+ * and never by reading the adapter's sentence.
+ */
+describe("the raw document, read under a caller's cap", () => {
+  /** A bucket whose `get` refuses over `maxBytes` as both real adapters do. */
+  function capped(contents: Record<string, Uint8Array>): RawSourceStore {
+    return {
+      ...bucket(contents),
+      get: async (key, options) => {
+        const bytes = contents[key] ?? null;
+        if (bytes && options?.maxBytes !== undefined && bytes.byteLength > options.maxBytes) {
+          throw new Error(`That object is ${bytes.byteLength} bytes and the limit is ${options.maxBytes}.`);
+        }
+        return bytes;
+      },
+    };
+  }
+
+  it("says too large, with the size, when the object is over the cap", async () => {
+    const store = capped({ [canonicalKey(SHA, "pdf")]: PDF });
+    const read = readRawDocument("a-slug", REFERENCING, store, { maxBytes: PDF.byteLength - 1 });
+    await expect(read).rejects.toThrow(RawObjectTooLarge);
+    await expect(
+      readRawDocument("a-slug", REFERENCING, store, { maxBytes: PDF.byteLength - 1 }),
+    ).rejects.toMatchObject({ kind: "pdf", bytes: PDF.byteLength, limit: PDF.byteLength - 1 });
+  });
+
+  it("hands the object back when it is exactly at the cap", async () => {
+    const store = capped({ [canonicalKey(SHA, "pdf")]: PDF });
+    const got = await readRawDocument("a-slug", REFERENCING, store, { maxBytes: PDF.byteLength });
+    expect(got?.bytes).toEqual(PDF);
+  });
+
+  it("does not call a store failure too large", async () => {
+    /* The object is small; the store is down. A catch-all would call this too
+       large and the report would say the file was left off on purpose. */
+    const broken: RawSourceStore = {
+      ...bucket({ [canonicalKey(SHA, "pdf")]: PDF }),
+      get: async () => {
+        throw new Error("Storage said 503");
+      },
+    };
+    const read = readRawDocument("a-slug", REFERENCING, broken, { maxBytes: PDF.byteLength + 100 });
+    await expect(read).rejects.toThrow("Storage said 503");
+  });
+
+  it("never raises the store's own ceiling", async () => {
+    /* A cap above `MAX_UPLOAD_BYTES` is not a licence to read more than an
+       upload could ever be. */
+    let asked: number | undefined;
+    const store: RawSourceStore = {
+      ...bucket({ [canonicalKey(SHA, "pdf")]: PDF }),
+      get: async (key, options) => {
+        asked = options?.maxBytes;
+        return key === canonicalKey(SHA, "pdf") ? PDF : null;
+      },
+    };
+    await readRawDocument("a-slug", REFERENCING, store, { maxBytes: Number.MAX_SAFE_INTEGER });
+    expect(asked).toBe(MAX_UPLOAD_BYTES);
   });
 });
 

@@ -36,19 +36,52 @@ import {
 } from "@sentry/node-core/light";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { guardFeedbackEnvelope } from "../src/feedback-envelope.js";
+import {
+  expectFeedbackEnvelope,
+  FEEDBACK_NONCE_TAG,
+  guardFeedbackEnvelope,
+} from "../src/feedback-envelope.js";
 import { buildSafeEvent } from "../src/monitoring.js";
-import type { FeedbackReport } from "../src/store/contracts.js";
+import type { FeedbackReport, RawSource } from "../src/store/contracts.js";
+import { RawObjectTooLarge } from "../src/store/raw-document.js";
+import type { ArticleMetadata } from "../src/types.js";
 
 /** Every markMirrored the mirror made — an acknowledgement Sentry actually gave. */
 let mirrored: { id: string; sentryEventId: string | null }[] = [];
 /** Every markMirrorAttempted — what we knew at the moment we handed it over. */
 let attempted: string[] = [];
 
+/**
+ * **The three article reads, faked, and counted.** "Unticked, nothing is read at
+ * all" is a claim about a count, so the count is what the tests read — a fake
+ * that returned nothing would agree with a mirror that read everything and
+ * dropped it. Each fake is reset to *not yours* (a 404, the owner-filtered
+ * reads' answer for a stranger's slug) before every test.
+ */
+let reads = { source: 0, article: 0, metadata: 0 };
+/** The options each source read was handed — where the 10 MiB cap is visible. */
+let sourceOptions: ({ maxBytes?: number } | undefined)[] = [];
+let fakeSource: (slug: string, options?: { maxBytes?: number }) => Promise<RawSource | null>;
+let fakeArticle: (slug: string) => Promise<unknown>;
+let fakeMetadata: (slug: string) => Promise<ArticleMetadata>;
+
 vi.mock("../src/store/index.js", async (importActual) => {
   const actual = await importActual<typeof import("../src/store/index.js")>();
   return {
     ...actual,
+    loadSource: async (slug: string, options?: { maxBytes?: number }) => {
+      reads.source += 1;
+      sourceOptions.push(options);
+      return fakeSource(slug, options);
+    },
+    loadArticle: async (slug: string) => {
+      reads.article += 1;
+      return fakeArticle(slug);
+    },
+    articleMetadata: async (slug: string) => {
+      reads.metadata += 1;
+      return fakeMetadata(slug);
+    },
     feedbackStore: {
       submit: async () => {
         throw new Error("not used here");
@@ -196,10 +229,34 @@ function feedbackEvent(envelope: Envelope): Record<string, unknown> {
   return item[1] as Record<string, unknown>;
 }
 
+/** A 404 tagged the way the owner-filtered reads tag one (src/store/pg.ts `notFound`). */
+function notYours(slug: string): Error {
+  return Object.assign(new Error(`No article artefacts for "${slug}".`), { status: 404 });
+}
+
+/**
+ * Held by the event processor the concurrency test adds. `Scope.clear()` keeps
+ * event processors, so the processor stays on the global scope for the rest of
+ * the file and this is what keeps it inert there.
+ */
+let processorDelayMs = 0;
+
 beforeEach(() => {
   envelopes = [];
   mirrored = [];
   attempted = [];
+  reads = { source: 0, article: 0, metadata: 0 };
+  sourceOptions = [];
+  fakeSource = async (slug) => {
+    throw notYours(slug);
+  };
+  fakeArticle = async (slug) => {
+    throw notYours(slug);
+  };
+  fakeMetadata = async (slug) => {
+    throw notYours(slug);
+  };
+  processorDelayMs = 0;
   getGlobalScope().clear();
   getIsolationScope().clear();
   getCurrentScope().clear();
@@ -434,5 +491,465 @@ describe("the Sentry mirror", () => {
     /* Not even an attempt. Nothing was handed to anybody, so a row saying we
        tried would be as untrue as one saying we succeeded. */
     expect(attempted).toHaveLength(0);
+    /* And not a read. A ticked report on a laptop is going nowhere, so nobody
+       pays for ten megabytes of bucket to be thrown away. */
+    expect(reads).toEqual({ source: 0, article: 0, metadata: 0 });
+  });
+});
+
+/* ------------------------------------------------ the article, attached -- */
+
+const PDF_BYTES = new TextEncoder().encode("%PDF-1.7\nSOURCE_BYTES_MARKER\n");
+const MIB = 1024 * 1024;
+
+/**
+ * An `ArticleMetadata` as the store answers one, **with the reader's own words
+ * in it** — `profile` and `purpose` are the "about you" and "why this one"
+ * boxes, and the mirror must build its pick rather than copy this object.
+ */
+function metadataFor(slug: string): ArticleMetadata {
+  return {
+    slug,
+    dir: "db",
+    stages: [
+      {
+        step: "fetch",
+        label: "Fetching the page",
+        outputs: ["article_revisions.raw_source_sha256", "raw_sources"],
+        done: true,
+        ranAt: "2026-09-12T08:00:02.000Z",
+        startedAt: "2026-09-12T08:00:00.000Z",
+        bytes: null,
+      },
+    ],
+    comments: 3,
+    profile: "PROFILE_SENTINEL a physicist who reads slowly",
+    purpose: "PURPOSE_SENTINEL for the thesis chapter due Friday",
+    archivedAt: null,
+    sharing: { visibility: "private", publicAt: null, personalised: ["glossary"] },
+  };
+}
+
+/** An article payload, marked so a test can tell whose it is. */
+function articleFor(slug: string, marker: string): unknown {
+  return {
+    meta: { slug, title: `${marker} title` },
+    blocks: [{ id: "spya-aaaaaa", kind: "p", text: `${marker} paragraph` }],
+    tree: { id: "root", children: [] },
+    navLabelStatus: "ready",
+  };
+}
+
+/**
+ * The source read as the real one behaves: it honours the cap it is handed by
+ * refusing with `RawObjectTooLarge`, which is what src/store/raw-document.ts
+ * throws when the bucket's object is over it.
+ */
+function sourceOf(bytes: Uint8Array, kind: RawSource["kind"]) {
+  return async (slug: string, options?: { maxBytes?: number }): Promise<RawSource> => {
+    if (options?.maxBytes !== undefined && bytes.byteLength > options.maxBytes) {
+      throw new RawObjectTooLarge(slug, kind, bytes.byteLength, options.maxBytes);
+    }
+    return { bytes, kind, filename: "UPLOADED_FILENAME_MARKER.pdf" };
+  };
+}
+
+/** The reporter's own article: a PDF, an article payload, and the metadata above. */
+function ownArticle(marker = "ARTICLE_MARKER"): void {
+  fakeSource = sourceOf(PDF_BYTES, "pdf");
+  fakeArticle = async (slug) => articleFor(slug, marker);
+  fakeMetadata = async (slug) => metadataFor(slug);
+}
+
+/** Every attachment item, in order. */
+function attachmentItems(envelope: Envelope): [Record<string, unknown>, unknown][] {
+  return envelope[1].filter(([header]) => header.type === "attachment");
+}
+
+/** One attachment's bytes, by filename. */
+function attachmentBytes(envelope: Envelope, filename: string): Uint8Array {
+  const item = attachmentItems(envelope).find(([header]) => header.filename === filename);
+  if (!item) throw new Error(`no ${filename} in the envelope`);
+  return item[1] as Uint8Array;
+}
+
+/**
+ * The whole envelope as text, **attachments decoded** — `JSON.stringify` of a
+ * `Uint8Array` is a list of numbers, which no sentinel search can see into.
+ */
+function everything(envelope: Envelope): string {
+  return JSON.stringify(envelope, (_key, value: unknown) =>
+    value instanceof Uint8Array ? new TextDecoder().decode(value) : value,
+  );
+}
+
+function tagsOf(envelope: Envelope): Record<string, unknown> {
+  return feedbackEvent(envelope).tags as Record<string, unknown>;
+}
+
+describe("the article, sent with extra diagnostics", () => {
+  it("attaches the source and article.json when the box is ticked on the reader's own article", async () => {
+    ownArticle();
+    startSentry();
+    await mirrorFeedback({ report: REPORT, user: USER, screenshot: null });
+
+    const envelope = envelopes[0]!;
+    expect(attachmentItems(envelope).map(([header]) => header.filename)).toEqual([
+      "diagnostics.json",
+      "source.pdf",
+      "article.json",
+    ]);
+    /* The exact bytes — a PDF that was re-encoded or truncated on the way is
+       a PDF that reproduces a different bug. */
+    expect(attachmentBytes(envelope, "source.pdf")).toEqual(PDF_BYTES);
+    const source = attachmentItems(envelope).find(([header]) => header.filename === "source.pdf")!;
+    expect(source[0].content_type).toBe("application/pdf");
+    /* And the cap was handed to the read, which is where it is enforced. */
+    expect(sourceOptions).toEqual([{ maxBytes: 10 * MIB }]);
+
+    const json = JSON.parse(new TextDecoder().decode(attachmentBytes(envelope, "article.json")));
+    expect(json.version).toBe(1);
+    expect(json.article.meta.title).toBe("ARTICLE_MARKER title");
+    /* **The pick, pinned.** A field added to `ArticleMetadata` does not ride
+       along until somebody decides it should. */
+    expect(Object.keys(json).sort()).toEqual(["article", "metadata", "source", "version"]);
+    expect(Object.keys(json.metadata).sort()).toEqual(
+      ["archivedAt", "comments", "sharing", "slug", "stages"].sort(),
+    );
+    expect(json.metadata.stages).toEqual([
+      {
+        step: "fetch",
+        done: true,
+        ranAt: "2026-09-12T08:00:02.000Z",
+        startedAt: "2026-09-12T08:00:00.000Z",
+        bytes: null,
+      },
+    ]);
+    expect(json.source).toEqual({ kind: "pdf", bytes: PDF_BYTES.byteLength });
+    expect(json.metadata.sharing).toEqual({
+      visibility: "private",
+      publicAt: null,
+      personalised: ["glossary"],
+    });
+
+    const tags = tagsOf(envelope);
+    expect(tags.source_file).toBe("attached");
+    expect(tags.article_json).toBe("attached");
+  });
+
+  it("sends an HTML source as text/plain, so nothing that opens it renders it", async () => {
+    const html = new TextEncoder().encode("<html><script>SOURCE_HTML_MARKER()</script></html>");
+    ownArticle();
+    fakeSource = sourceOf(html, "html");
+    startSentry();
+    await mirrorFeedback({ report: REPORT, user: USER, screenshot: null });
+
+    const envelope = envelopes[0]!;
+    const item = attachmentItems(envelope).find(([header]) => header.filename === "source.html");
+    expect(item?.[0].content_type).toBe("text/plain");
+    expect(attachmentBytes(envelope, "source.html")).toEqual(html);
+    expect(tagsOf(envelope).source_file).toBe("attached");
+  });
+
+  it("reads nothing at all when the box is not ticked, and says none", async () => {
+    ownArticle();
+    startSentry();
+    /* `diagnostics: null` with it, as the CHECK on the row requires. */
+    await mirrorFeedback({
+      report: { ...REPORT, consented: false, diagnostics: null },
+      user: USER,
+      screenshot: null,
+    });
+
+    expect(reads).toEqual({ source: 0, article: 0, metadata: 0 });
+    const envelope = envelopes[0]!;
+    expect(attachmentItems(envelope)).toEqual([]);
+    /* **On every report**, so "reports without the file" is a filter on a
+       value rather than on a tag being missing. */
+    expect(tagsOf(envelope).source_file).toBe("none");
+    expect(tagsOf(envelope).article_json).toBe("none");
+  });
+
+  it("reads nothing when the report names no article", async () => {
+    ownArticle();
+    startSentry();
+    await mirrorFeedback({ report: { ...REPORT, slug: null }, user: USER, screenshot: null });
+
+    expect(reads).toEqual({ source: 0, article: 0, metadata: 0 });
+    expect(tagsOf(envelopes[0]!).source_file).toBe("none");
+    expect(tagsOf(envelopes[0]!).article_json).toBe("none");
+  });
+
+  it("sends nothing for an article that is not the reporter's", async () => {
+    /* The default fakes: every read answers 404, as the owner-filtered reads
+       do for a stranger's slug, a forged one, or one that does not exist. */
+    startSentry();
+    await mirrorFeedback({ report: REPORT, user: USER, screenshot: null });
+
+    const envelope = envelopes[0]!;
+    expect(attachmentItems(envelope).map(([header]) => header.filename)).toEqual(["diagnostics.json"]);
+    /* `none`, not `failed`: a tag that told *not yours* apart from *nothing
+       held* would say whether somebody else's slug exists. */
+    expect(tagsOf(envelope).source_file).toBe("none");
+    expect(tagsOf(envelope).article_json).toBe("none");
+  });
+
+  it("leaves the source off, and says so, when it is over 10 MiB", async () => {
+    ownArticle();
+    fakeSource = sourceOf(new Uint8Array(10 * MIB + 1), "pdf");
+    startSentry();
+    await mirrorFeedback({ report: REPORT, user: USER, screenshot: null });
+
+    const envelope = envelopes[0]!;
+    expect(attachmentItems(envelope).map(([header]) => header.filename)).toEqual([
+      "diagnostics.json",
+      "article.json",
+    ]);
+    expect(tagsOf(envelope).source_file).toBe("too_large");
+    expect(tagsOf(envelope).article_json).toBe("attached");
+    /* The size still reaches the report, which is what a too-large file is
+       worth to whoever reads it. */
+    const json = JSON.parse(new TextDecoder().decode(attachmentBytes(envelope, "article.json")));
+    expect(json.source).toEqual({ kind: "pdf", bytes: 10 * MIB + 1 });
+  });
+
+  it("refuses an oversized source even from a read that ignored the cap", async () => {
+    /* Belt and braces: the cap is the gatherer's promise, not only the
+       store's, so a read that handed back too much is still left off. */
+    ownArticle();
+    const big = new Uint8Array(10 * MIB + 1);
+    fakeSource = async () => ({ bytes: big, kind: "pdf", filename: null });
+    startSentry();
+    await mirrorFeedback({ report: REPORT, user: USER, screenshot: null });
+
+    expect(tagsOf(envelopes[0]!).source_file).toBe("too_large");
+    expect(
+      attachmentItems(envelopes[0]!).some(([header]) => header.filename === "source.pdf"),
+    ).toBe(false);
+  });
+
+  it("measures article.json in UTF-8 bytes, not string length", async () => {
+    /* Three bytes each in UTF-8 and one UTF-16 unit each in `.length`, so this
+       is under 5 MiB by `.length` and over it by what actually goes out. */
+    const text = "中".repeat(2 * MIB);
+    ownArticle();
+    fakeArticle = async (slug) => ({ ...(articleFor(slug, "ARTICLE_MARKER") as object), wide: text });
+    expect(JSON.stringify(text).length).toBeLessThan(5 * MIB);
+    expect(new TextEncoder().encode(JSON.stringify(text)).byteLength).toBeGreaterThan(5 * MIB);
+    startSentry();
+    await mirrorFeedback({ report: REPORT, user: USER, screenshot: null });
+
+    const envelope = envelopes[0]!;
+    expect(tagsOf(envelope).article_json).toBe("too_large");
+    expect(tagsOf(envelope).source_file).toBe("attached");
+    expect(attachmentItems(envelope).map(([header]) => header.filename)).toEqual([
+      "diagnostics.json",
+      "source.pdf",
+    ]);
+  });
+
+  it("says failed when a read throws, and still files the report", async () => {
+    ownArticle();
+    fakeSource = async () => {
+      throw new Error("Storage said 503");
+    };
+    /* `throw null` is legal, and a bare `.status` on it would throw from
+       inside the code deciding what a throw means. */
+    fakeMetadata = async () => {
+      throw null;
+    };
+    startSentry();
+    await mirrorFeedback({ report: REPORT, user: USER, screenshot: null });
+
+    const envelope = envelopes[0]!;
+    expect(tagsOf(envelope).source_file).toBe("failed");
+    expect(tagsOf(envelope).article_json).toBe("failed");
+    const feedback = (feedbackEvent(envelope).contexts as { feedback: Record<string, unknown> }).feedback;
+    expect(feedback.message).toBe(REPORT.body);
+    expect(attachmentItems(envelope).map(([header]) => header.filename)).toEqual(["diagnostics.json"]);
+    expect(attempted).toEqual([REPORT.id]);
+    expect(mirrored).toHaveLength(1);
+  });
+
+  it("never sends the reader's profile, purpose or upload filename", async () => {
+    ownArticle();
+    startSentry();
+    await mirrorFeedback({ report: REPORT, user: USER, screenshot: null });
+
+    const whole = everything(envelopes[0]!);
+    /* Not vacuous: the article did go. */
+    expect(whole).toContain("ARTICLE_MARKER title");
+    expect(whole).not.toContain("PROFILE_SENTINEL");
+    expect(whole).not.toContain("PURPOSE_SENTINEL");
+    expect(whole).not.toContain("UPLOADED_FILENAME_MARKER");
+  });
+
+  /**
+   * **The id is the browser's, and unique only per owner** — `(owner_id, id)`
+   * is the key (src/db/schema.ts). So two readers can file the same id at the
+   * same moment, and a guard that found registrations by it would write one
+   * reader's message, address and article into the other's envelope.
+   *
+   * The event processor is what makes the two overlap: it holds each event
+   * after capture, as any async processor would, so both registrations exist
+   * before either envelope reaches the guard.
+   */
+  it("keeps two readers' reports apart when their browsers minted the same id", async () => {
+    const USER_B = { id: "99999999-8888-7777-6666-555555555555", email: "other@example.com" };
+    const REPORT_A: FeedbackReport = { ...REPORT, slug: "article-a", body: "WORDS_OF_READER_A" };
+    const REPORT_B: FeedbackReport = {
+      ...REPORT,
+      reporterEmail: USER_B.email,
+      slug: "article-b",
+      body: "WORDS_OF_READER_B",
+    };
+    const MARKERS: Record<string, string> = { "article-a": "MARKER_A", "article-b": "MARKER_B" };
+    fakeSource = async (slug) => ({
+      bytes: new TextEncoder().encode(`%PDF SOURCE_${MARKERS[slug]}`),
+      kind: "pdf",
+      filename: null,
+    });
+    fakeArticle = async (slug) => articleFor(slug, MARKERS[slug]!);
+    fakeMetadata = async (slug) => metadataFor(slug);
+
+    startSentry();
+    getGlobalScope().addEventProcessor((event) =>
+      processorDelayMs === 0
+        ? event
+        : new Promise((resolve) => setTimeout(() => resolve(event), processorDelayMs)),
+    );
+    processorDelayMs = 30;
+
+    await Promise.all([
+      mirrorFeedback({ report: REPORT_A, user: USER, screenshot: null }),
+      mirrorFeedback({ report: REPORT_B, user: USER_B, screenshot: null }),
+    ]);
+
+    expect(envelopes).toHaveLength(2);
+    const byUser = new Map(
+      envelopes.map((envelope) => [(feedbackEvent(envelope).user as { id: string }).id, envelope]),
+    );
+    for (const [user, mine, theirs] of [
+      [USER, "A", "B"],
+      [USER_B, "B", "A"],
+    ] as const) {
+      const envelope = byUser.get(user.id);
+      expect(envelope).toBeDefined();
+      const feedback = (feedbackEvent(envelope!).contexts as { feedback: Record<string, unknown> })
+        .feedback;
+      expect(feedback.message).toBe(`WORDS_OF_READER_${mine}`);
+      expect(feedback.contact_email).toBe(user.email);
+      const whole = everything(envelope!);
+      expect(whole).toContain(`SOURCE_MARKER_${mine}`);
+      expect(whole).toContain(`MARKER_${mine} title`);
+      expect(whole).not.toContain(`MARKER_${theirs}`);
+      expect(whole).not.toContain(`WORDS_OF_READER_${theirs}`);
+    }
+  });
+
+  it("puts a nonce on the captured event and never writes it into the envelope", async () => {
+    startSentry();
+    /* A client processor runs after every scope is merged and before the
+       envelope is built, so it sees the event as the guard will receive it. */
+    const seen: Record<string, unknown>[] = [];
+    getClient()?.addEventProcessor((event) => {
+      seen.push({ ...event.tags });
+      return event;
+    });
+    await mirrorFeedback({ report: REPORT, user: USER, screenshot: null });
+
+    const nonce = seen[0]?.[FEEDBACK_NONCE_TAG];
+    /* Not vacuous: there was one to leak. */
+    expect(typeof nonce).toBe("string");
+    expect((nonce as string).length).toBeGreaterThanOrEqual(32);
+    expect(everything(envelopes[0]!)).not.toContain(nonce as string);
+    expect(FEEDBACK_NONCE_TAG in tagsOf(envelopes[0]!)).toBe(false);
+  });
+
+  it("empties an envelope whose report id is registered but which carries no nonce", () => {
+    /* The report id is the browser's; being able to name one is not being the
+       one who registered it. */
+    const forget = expectFeedbackEnvelope(REPORT.id, {
+      message: "REGISTERED_MESSAGE",
+      contactEmail: USER.email,
+      source: "spideryarn",
+      user: USER,
+      tags: { report_id: REPORT.id },
+      attachments: [],
+    });
+    try {
+      const envelope: Envelope = [
+        { event_id: "0".repeat(32) },
+        [[{ type: "feedback" }, { tags: { report_id: REPORT.id } }]],
+      ];
+      guardFeedbackEnvelope(envelope);
+      expect(envelope[1]).toEqual([]);
+    } finally {
+      forget();
+    }
+  });
+
+  it("empties an envelope carrying a registered nonce under another report's id", () => {
+    /* The nonce makes the registration this capture's; the id agreeing is the
+       guarantee the guard had before it, kept. A processor that rewrote the id
+       must not get one report sent under another's name. */
+    const forget = expectFeedbackEnvelope("a-server-minted-nonce-for-the-id-check", {
+      message: "REGISTERED_MESSAGE",
+      contactEmail: USER.email,
+      source: "spideryarn",
+      user: USER,
+      tags: { report_id: REPORT.id },
+      attachments: [],
+    });
+    try {
+      const envelope: Envelope = [
+        { event_id: "0".repeat(32) },
+        [
+          [
+            { type: "feedback" },
+            {
+              tags: {
+                report_id: "spya-zzzzzz",
+                [FEEDBACK_NONCE_TAG]: "a-server-minted-nonce-for-the-id-check",
+              },
+            },
+          ],
+        ],
+      ];
+      guardFeedbackEnvelope(envelope);
+      expect(envelope[1]).toEqual([]);
+    } finally {
+      forget();
+    }
+  });
+
+  it("rebuilds an envelope carrying a registered nonce, and drops the nonce", () => {
+    const forget = expectFeedbackEnvelope("a-server-minted-nonce-0123456789ab", {
+      message: "REGISTERED_MESSAGE",
+      contactEmail: USER.email,
+      source: "spideryarn",
+      user: USER,
+      tags: { report_id: REPORT.id },
+      attachments: [],
+    });
+    try {
+      const envelope: Envelope = [
+        { event_id: "0".repeat(32) },
+        [
+          [
+            { type: "feedback" },
+            {
+              tags: { report_id: REPORT.id, [FEEDBACK_NONCE_TAG]: "a-server-minted-nonce-0123456789ab" },
+            },
+          ],
+        ],
+      ];
+      guardFeedbackEnvelope(envelope);
+      expect(envelope[1]).toHaveLength(1);
+      expect(everything(envelope)).toContain("REGISTERED_MESSAGE");
+      expect(everything(envelope)).not.toContain("a-server-minted-nonce");
+    } finally {
+      forget();
+    }
   });
 });

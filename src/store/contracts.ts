@@ -148,8 +148,14 @@ export interface ArticleReader {
    * was dropped on 2026-09-01.) A Postgres deployment
    * reaching for a local file is how this feature spent its life 404ing on
    * Vercel while working on a laptop.
+   *
+   * **`maxBytes` is a caller's tighter cap**, and there is one: the bug-report
+   * mirror, which sends the document to Sentry only under 10 MiB
+   * (src/feedback-article.ts). Over it the read throws `RawObjectTooLarge`
+   * (src/store/raw-document.ts) instead of downloading the object to refuse
+   * it. It can only lower the store's own ceiling, never raise it.
    */
-  loadSource(slug: string): Promise<RawSource | null>;
+  loadSource(slug: string, options?: { maxBytes?: number }): Promise<RawSource | null>;
 
   /**
    * The shelf. Never throws for an empty library — that is `[]`, not a fault.

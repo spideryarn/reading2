@@ -223,9 +223,15 @@ GPT Sol, 2026-09-13, on 9c79abc — *BUILD WITH CHANGES*, five findings, all tak
   `currentRevisionQuery`'s unconditional `ownedSlug` (src/store/pg.ts ~1214) and throw a 404 for a
   slug that is not the caller's. No public or admin bypass. The gatherer maps that 404 to `none`.
 - **Size before bytes.** `get(key, { maxBytes })` *throws* on an oversized object rather than
-  truncating (src/store/blobs.ts ~73), and `raw_sources.bytes` holds every object's length, keyed on
-  the same `(sha256, kind)` the revision carries — so the cap is checked with a primary-key read and
-  a 50 MiB PDF is never downloaded to be refused.
+  truncating (src/store/blobs.ts ~73), and Supabase's adapter refuses on `Content-Length` before
+  buffering. So the cap rides into the existing read: `loadSource(slug, { maxBytes })` →
+  `readRawDocument` → `get`, and a 50 MiB PDF is never downloaded to be refused. *(This bullet first
+  said the cap would be a `raw_sources.bytes` lookup. The build did not take that route: reaching
+  that column needs the revision's reference outside `loadSource`, which is the second resolver R5
+  forbade. Both blob stores refuse with a plain `Error`, so to tell "too large" from "broken",
+  `readRawDocument` asks `head()` for the size after a refusal under a caller's cap and throws
+  `RawObjectTooLarge` (413) only when it really is over — the shape `overlongObject` in
+  src/fetch.ts already uses.)*
 - **Nothing pins the two sentences being changed** — no test asserts either the tick-box text or
   the `/privacy` paragraph; stage 2 adds pins for the new ones.
 

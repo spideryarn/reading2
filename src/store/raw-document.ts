@@ -69,6 +69,30 @@ export class CorruptRawObject extends Error {
 }
 
 /**
+ * Refused: the object is larger than the cap **the caller** asked for.
+ *
+ * Only ever thrown when a caller passes its own `maxBytes` — the bug-report
+ * mirror, whose 10 MiB is about what fits in a Sentry envelope rather than
+ * about what an upload can be. Its own type because that caller has to tell
+ * *too large to send* from *the store failed*, and both adapters refuse an
+ * oversized object with an ordinary `Error`. A numeric `status`, so it passes
+ * `guardDbStore`'s scrubber with its class intact (src/store/db-errors.ts §
+ * `mayPassThrough`); 413 because no route asks for a cap, so none answers one.
+ */
+export class RawObjectTooLarge extends Error {
+  readonly status = 413;
+  constructor(
+    slug: string,
+    readonly kind: DocumentKind,
+    readonly bytes: number,
+    readonly limit: number,
+  ) {
+    super(`"${slug}": its source document is ${bytes} bytes and the limit asked for is ${limit}.`);
+    this.name = "RawObjectTooLarge";
+  }
+}
+
+/**
  * The document itself, out of the object store this revision names.
  *
  * **One era now.** Until docs/plans/260827aa-delete-the-importer.md § C6 the payload was
@@ -112,10 +136,20 @@ export async function readRawDocument(
     rawSourceKind: string | null;
   },
   sources: RawSourceStore,
+  /**
+   * A tighter ceiling than the store's own, for a caller with a reason of its
+   * own — the bug-report mirror (src/feedback-article.ts). **Never a looser
+   * one**: it is clamped to `MAX_UPLOAD_BYTES` below. Over it, the read throws
+   * `RawObjectTooLarge` rather than returning a prefix, and Supabase's adapter
+   * refuses on the `Content-Length` before it downloads anything.
+   */
+  options: { maxBytes?: number } = {},
 ): Promise<{ bytes: Uint8Array; kind: DocumentKind; storedSha256: string } | null> {
   if (revision.rawSourceSha256 && revision.rawSourceKind) {
     const kind = revision.rawSourceKind as DocumentKind;
     const key = canonicalKey(revision.rawSourceSha256, kind);
+    const capped = options.maxBytes !== undefined && options.maxBytes < MAX_UPLOAD_BYTES;
+    const limit = capped ? (options.maxBytes as number) : MAX_UPLOAD_BYTES;
     /* **Bounded, not merely trusted.** `get` treats `maxBytes` as a refusal
        rather than a truncation, and Supabase's adapter can decline on the
        `Content-Length` before it buffers anything. Without it, an oversized
@@ -126,7 +160,25 @@ export async function readRawDocument(
        object that can legitimately be under a canonical key: uploads stop
        there, and anything we fetched stopped at src/fetch.ts's own 32 MiB.
        GPT Sol asked for the bound twice, 2026-08-31. */
-    const bytes = await sources.get(key, { maxBytes: MAX_UPLOAD_BYTES });
+    let bytes: Uint8Array | null;
+    try {
+      bytes = await sources.get(key, { maxBytes: limit });
+    } catch (err) {
+      /* **Too large or broken, told apart by asking the store how big the
+         object is** — never by reading the adapter's sentence, which is the
+         rule `overlongObject` in src/fetch.ts follows for the same two
+         outcomes. Only under a caller's cap: at the store's own ceiling an
+         oversized object is corruption, and that stays the ordinary throw it
+         always was. A `head` that fails too says nothing, so the original
+         error goes. */
+      if (capped) {
+        const head = await sources.head(key).catch(() => null);
+        if (head !== null && head.bytes > limit) {
+          throw new RawObjectTooLarge(slug, kind, head.bytes, limit);
+        }
+      }
+      throw err;
+    }
     /* **Throw, never answer `null`.** A dangling reference and an article with
        no source document are different facts, and the whole point of the
        reference is that the row asserts the object exists. Quietly returning

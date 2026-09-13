@@ -59,10 +59,28 @@
  * would not have managed, since a filename is whatever the thing that added it
  * decided to call itself.
  *
- * A feedback envelope carrying a `report_id` nothing registered is **emptied**,
- * not repaired: it is not ours, and there is no version of "clean it up a bit"
- * that is safe here. An empty envelope makes `createTransport` resolve `{}`
- * without sending, which is also what stops `mirrored_at` being written for it.
+ * ## A registration is found by a nonce we minted, never by the report id
+ *
+ * It was the report id until 2026-09-13, and that was a hole: the id is minted
+ * by the browser and unique only **per owner** — `(owner_id, id)` is the key in
+ * src/db/schema.ts — so two readers filing the same id at the same moment would
+ * each find the other's registration, and the guard would faithfully write one
+ * reader's message, address and (since the same day) article into the other's
+ * envelope. GPT Sol's plan review, R2, on
+ * docs/plans/260913a-send-the-source-file-and-the-article-with-extra-diagnostics.md.
+ *
+ * So `mirrorFeedback` mints a random nonce per capture, registers under it, and
+ * puts it on the captured event as the `FEEDBACK_NONCE_TAG` tag. The guard
+ * reads it, consumes the registration, and **never writes it back**: it is not
+ * in `FEEDBACK_TAG_KEYS`, so `tags()` below cannot copy it, and a compile-time
+ * check under the list keeps it out.
+ *
+ * A feedback envelope whose nonce nothing registered — or with no nonce, or
+ * with a registered one but another `report_id` than it was registered with —
+ * is **emptied**, not repaired: it is not ours, and there is no version of
+ * "clean it up a bit" that is safe here. An empty envelope makes
+ * `createTransport` resolve `{}` without sending, which is also what stops
+ * `mirrored_at` being written for it.
  *
  * Envelopes with no feedback item — every error `safeEvent` has already built —
  * are not touched at all.
@@ -100,9 +118,24 @@ export const FEEDBACK_TAG_KEYS = [
   "build_commit",
   "vercel_id",
   "diagnostics_version",
+  /* What happened to the article the reader was on, when they ticked the box —
+     a closed vocabulary, `FeedbackArticleOutcome` in src/feedback-article.ts. */
+  "source_file",
+  "article_json",
 ] as const;
 
 export type FeedbackTagKey = (typeof FEEDBACK_TAG_KEYS)[number];
+
+/**
+ * **The tag a registration is found by, and never a tag the envelope carries.**
+ * See the header: it is read off the captured event and not written back.
+ */
+export const FEEDBACK_NONCE_TAG = "feedback_nonce";
+
+/* If the nonce is ever added to `FEEDBACK_TAG_KEYS`, `tags()` would copy it into
+   every envelope. This line stops compiling first. */
+const nonceIsNotATag: typeof FEEDBACK_NONCE_TAG extends FeedbackTagKey ? never : true = true;
+void nonceIsNotATag;
 
 /** A tag value. Anything else is not a tag we set. */
 export type FeedbackTagValue = string | number | boolean;
@@ -123,7 +156,8 @@ export interface FeedbackExpectation {
 }
 
 /**
- * What is expected to go out, by report id.
+ * What is expected to go out, by the nonce `mirrorFeedback` minted for it —
+ * not by report id, which two owners can share (see the header).
  *
  * Module state, and bounded: an entry is deleted the moment its envelope is
  * seen, and `mirrorFeedback` deletes its own in a `finally` whatever happens.
@@ -134,11 +168,12 @@ const expectations = new Map<string, FeedbackExpectation>();
 const MAX_EXPECTATIONS = 32;
 
 /**
- * Say what one report is allowed to send, and get back the function that
- * forgets it.
+ * Say what one capture is allowed to send, under a nonce the caller minted and
+ * will put on the event as `FEEDBACK_NONCE_TAG`, and get back the function
+ * that forgets it.
  */
 export function expectFeedbackEnvelope(
-  reportId: string,
+  nonce: string,
   expectation: FeedbackExpectation,
 ): () => void {
   while (expectations.size >= MAX_EXPECTATIONS) {
@@ -147,8 +182,8 @@ export function expectFeedbackEnvelope(
     if (oldest.done) break;
     expectations.delete(oldest.value);
   }
-  expectations.set(reportId, expectation);
-  return () => expectations.delete(reportId);
+  expectations.set(nonce, expectation);
+  return () => expectations.delete(nonce);
 }
 
 /** Clients this guard is already on. A `WeakSet` so a client can be collected. */
@@ -221,11 +256,15 @@ export function guardFeedbackEnvelope(envelope: RawEnvelope): void {
   if (!feedback) return;
 
   const event = object(feedback[1]);
-  const reportId = event ? object(event.tags)?.report_id : undefined;
-  const expected = typeof reportId === "string" ? expectations.get(reportId) : undefined;
-  if (typeof reportId === "string") expectations.delete(reportId);
+  const eventTags = event ? object(event.tags) : undefined;
+  const nonce = eventTags?.[FEEDBACK_NONCE_TAG];
+  const expected = typeof nonce === "string" ? expectations.get(nonce) : undefined;
+  if (typeof nonce === "string") expectations.delete(nonce);
 
-  if (!event || !expected) {
+  /* The report id is checked as well as the nonce. The nonce is what makes the
+     registration this capture's own; the id agreeing is the old guarantee kept,
+     so a processor that rewrote it cannot send one report under another's. */
+  if (!event || !expected || eventTags?.report_id !== expected.tags.report_id) {
     /* Nothing registered this. It is not ours, so nothing goes: emptied rather
        than repaired, and an envelope with no items is never sent. */
     items.length = 0;
@@ -314,7 +353,10 @@ function rebuildEvent(
   });
 }
 
-/** The eight tag keys, and nothing else, with values coerced to what a tag is. */
+/**
+ * The keys in `FEEDBACK_TAG_KEYS`, and nothing else, with values coerced to
+ * what a tag is. So the nonce, which is not among them, never goes out.
+ */
 function tags(source: Partial<Record<FeedbackTagKey, FeedbackTagValue>>): Record<string, string> {
   const out: Record<string, string> = {};
   for (const key of FEEDBACK_TAG_KEYS) {

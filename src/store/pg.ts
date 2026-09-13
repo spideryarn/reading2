@@ -2365,7 +2365,7 @@ const rawPgArticleReader: ArticleReader = {
    * same 404 every other read here gives. There is no second ownership question
    * to get wrong.
    */
-  async loadSource(slug: string): Promise<RawSource | null> {
+  async loadSource(slug: string, options: { maxBytes?: number } = {}): Promise<RawSource | null> {
     requireSlug(slug);
     const found = await currentRevision(slug, "rawSource");
     if (!found) throw notFound(slug);
@@ -2373,6 +2373,7 @@ const rawPgArticleReader: ArticleReader = {
       slug,
       found.revision,
       postgresBlobStore("the Postgres store serves an article's source document"),
+      options,
     );
     if (!document) return null;
     return { bytes: document.bytes, kind: document.kind, filename: found.revision.rawFilename };
