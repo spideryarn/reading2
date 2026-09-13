@@ -115,7 +115,7 @@ interface Props {
   /** The open conversation, or null for the thread list. From `?thread=`. */
   threadId: string | null;
   onThread(id: string | null): void;
-  /** The article, so the profile controls can ask about *this* one. */
+  /** The article, so dictation can be primed with this one's vocabulary. */
   slug: string;
   /**
    * Whether the conversations have been asked for and answered.
@@ -967,7 +967,7 @@ export function Conversation({
   live,
   onStartLive,
 }: {
-  /** The article, so the composer's profile control can ask about *this* one. */
+  /** The article, so the composer's dictation can be primed with its vocabulary. */
   slug: string;
   thread: ChatThread;
   onJump(id: BlockId): void;

@@ -278,12 +278,12 @@ export function Tweets({ slug, article }: { slug: string; article: Article }) {
    * page needs that way out, because its `error` branch draws a sentence and no
    * run button at all, so the bar is the only control left.
    *
-   * **The return value is dropped**, alone among the callers. `automatic` was
-   * there so a panel could say *Using your profile* instead of drawing a
-   * tickbox it had already decided — until the tickbox and the sentence were
-   * both removed on 2026-09-13 — and this page's empty state never offered
-   * one. What the thread was written with is stated afterwards by
-   * `<WrittenForYou>`, out of the artefact itself.
+   * **The return value is dropped.** `automatic` was there so a panel could say
+   * *Using your profile* instead of drawing a tickbox it had already decided —
+   * until the tickbox and the sentence were both removed on 2026-09-13. The
+   * glossary, ideas, quotes and sketch hooks now drop it too. What this thread
+   * was written with is stated afterwards by `<WrittenForYou>`, out of the
+   * artefact itself.
    */
   useAutoRun(slug, "tweets", loaded.status, () => write(false), reload);
 
@@ -528,14 +528,12 @@ function Thread({
             two of them would be one too many, and the wrong one is the one
             further from the reason. */}
         {!stale && (
-          <>
-            <Rewrite
-              job={job}
-              failed={failed}
-              onWrite={(force) => onWrite(force)}
-              onCancel={onCancel}
-            />
-          </>
+          <Rewrite
+            job={job}
+            failed={failed}
+            onWrite={(force) => onWrite(force)}
+            onCancel={onCancel}
+          />
         )}
       </div>
     </>

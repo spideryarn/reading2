@@ -725,8 +725,9 @@ const READING_VIEW: Shape[] = [
 const PLAIN: Shape[] = [...ARRIVAL, ...READING_VIEW, GET("/api/reader")];
 
 /**
- * The same, then the Ideas band twice over: the reader's per-article row and
- * the ideas artefact, in that order, once per effect pass.
+ * The same, then the Ideas artefact twice over — once per StrictMode effect
+ * pass. The `/api/reader?slug=` request that used to precede each read went
+ * with `useHasProfile` and the profile checkbox on 2026-09-13.
  *
  * **The `/api/jobs` in front of them is the band's job subscription**, which is
  * an ordinary one — a band somebody opened is watching the queue, and pays the
@@ -737,19 +738,17 @@ const PLAIN: Shape[] = [...ARRIVAL, ...READING_VIEW, GET("/api/reader")];
 const IDEAS: Shape[] = [
   ...PLAIN,
   GET("/api/jobs"),
-  GET(`/api/reader?slug=${SLUG}`),
   GET(`/api/ideas/${SLUG}`),
-  GET(`/api/reader?slug=${SLUG}`),
   GET(`/api/ideas/${SLUG}`),
 ];
 
 /**
- * Chat, arrived at by URL. Two orderings differ from Plain's and Ideas', both
- * properties of arriving at the mode rather than pressing into it: the panel's
- * full thread fetch lands **before** the reading view's `?summary=1` one, in
- * each pass, and the two `/api/reader?slug=` reads come out together ahead of
- * the bare `/api/reader` rather than straddling it. Recorded here rather than
- * sorted away — the ordering is part of what is being held still.
+ * Chat, arrived at by URL. The panel's full thread fetch lands **before** the
+ * reading view's `?summary=1` one, in each pass — a property of arriving at the
+ * mode rather than pressing into it. The four `/api/reader?slug=` reads from
+ * `useHasProfile` went with the profile checkbox on 2026-09-13; the bare
+ * `/api/reader` belongs to the still-present experimental switch. Recorded
+ * here rather than sorted away — the ordering is part of what is held still.
  */
 const CHAT: Shape[] = [
   ...ARRIVAL,
@@ -762,12 +761,6 @@ const CHAT: Shape[] = [
   GET(`/api/chat/${SLUG}`),
   GET(`/api/comments/${SLUG}?anchors=whole-block`),
   GET(`/api/chat/${SLUG}?summary=1`),
-  GET(`/api/reader?slug=${SLUG}`),
-  GET(`/api/reader?slug=${SLUG}`),
-  // The loaded empty Chat list now offers its composer, including Live. Its
-  // profile checkbox reads once per StrictMode effect pass too (260906f).
-  GET(`/api/reader?slug=${SLUG}`),
-  GET(`/api/reader?slug=${SLUG}`),
   GET("/api/reader"),
 ];
 

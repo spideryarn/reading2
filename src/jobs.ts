@@ -2914,7 +2914,8 @@ export interface EnqueueRequest {
    * profiles and stamped with whichever finished last.
    *
    * Absent means "run without a profile", which is a real answer — the reader
-   * unticked the box — and the artefacts record it as `profileHash: null`.
+   * has none, or a Find more is continuing a list that was written without
+   * one — and the artefacts record it as `profileHash: null`.
    */
   profile?: string;
   /**
@@ -3503,11 +3504,11 @@ export function sameWork(
    * piece of work — src/ingest.ts § `urlKey`. */
   if ((job.url ? urlKey(job.url) : "") !== (url ? urlKey(url) : "")) return false;
   /* And the profile, for the identical reason one field up — plus a sharper
-     one. Unticking "use your profile" and pressing the button again is a
-     request for a *different artefact*, not a retry of the one already
-     running. Without this line the reader is handed the profiled job, it
-     succeeds, and the panel shows a glossary stamped with the profile they had
-     just asked it not to use. */
+     one. A run without the profile — a Find more continuing a plain list, or
+     (until 2026-09-13) an unticked *Use your profile* box — is a request for a
+     *different artefact*, not a retry of a profiled one already running.
+     Without this line it is handed the profiled job, which succeeds, and the
+     panel shows a list stamped with a profile it was asked not to use. */
   if ((job.profile ?? "") !== (profile ?? "")) return false;
   return job.steps.every(
     (s, i) => s.name === names[i] && (s.force === true) === forced.has(s.name),

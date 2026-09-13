@@ -48,13 +48,12 @@ import { UserRound } from "lucide-react";
 import { ProfilePanel } from "./ProfilePanel.js";
 
 /**
- * Whether this reader has a profile at all — the one question both controls
- * ask before rendering anything.
+ * The two provenance facts the badge needs before rendering anything.
  *
  * Answered by the *presence* of a profile rather than by a fetch of its text:
  * every artefact response already carries `profileChanged`, and the panels know
- * whether the artefact was written with one. A second fetch of `/api/reader`
- * per panel would be three more requests for a boolean.
+ * whether the artefact was written with one. Fetching `/api/reader` here as
+ * well would add one request per mounted caller merely to recover a boolean.
  */
 export interface ProfileState {
   /** The artefact on screen was written from a profile. `false` for a plain one. */
@@ -87,4 +86,3 @@ export function WrittenForYou({ written, changed, slug }: ProfileState & { slug:
     </ProfilePanel>
   );
 }
-

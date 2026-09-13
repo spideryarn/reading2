@@ -545,8 +545,8 @@ export function ConversationBand({
    * The stance the next Remember answer will be asked for.
    *
    * **Not in the URL**, for the rule url-state.md keeps: it changes nothing on
-   * screen, only what the next answer is asked for. The closest existing thing
-   * is chat's profile checkbox, which is component state for the same reason.
+   * screen, only what the next answer is asked for. It belongs to this composer
+   * session rather than to an address somebody can share.
    *
    * **Seeded from the last answer in the open conversation**, so a reader who
    * chose Socratic and comes back tomorrow finds it still on Socratic — the

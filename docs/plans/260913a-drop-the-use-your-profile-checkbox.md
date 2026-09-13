@@ -161,6 +161,26 @@ more on a plain list stays plain.
 - `automatic` still exists on the timeline, citations, debate and illustrated hooks — outside this
   job, read by `modes-that-start-themselves` only.
 
+## GPT Sol's code review of stage 1
+
+[The review](260913a-drop-the-use-your-profile-checkbox-code-review-sol.md), write-capable, against
+`dc375787`: **ready after fixes**, and it confirmed the conclusion it was asked to check — every
+client generate request omits `useProfile` except Find more on glossary and quotes (the list's
+recorded setting) and the candidates chat (`false`).
+
+- **F5 (P1), fixed by Sol.** `tests/the-ideas-extraction-changed-no-requests.test.tsx` still expected
+  the six `/api/reader?slug=` reads `useHasProfile` used to make; red 2/3, then green. The full suite
+  would have caught it; the implementer's scoped run did not include that file.
+- **F6 (P3) and F7 (P2), fixed by Sol.** Comments and docs still describing the checkbox, and an
+  empty fragment left in `Tweets.tsx`.
+- **F8 (P3), reported and fixed by us.** Three server comments (`routes.ts`, `jobs.ts` ×2) gave the
+  unticked box as the reason for `useProfile: false`; they now name Find more and the candidates
+  chat. Comments only — the server code is untouched.
+
+I read Sol's diff and re-ran the three test files it edited, including the Postgres-backed
+`tests/jobs.test.ts` its sandbox could not reach: 132 passed. No second round: the one P1 was a test
+expectation, fixed by the reviewer and seen red then green, and nothing else was behavioural.
+
 ## Deferred
 
 - The server's `hasProfile` on `GET /api/reader`, if nothing reads it afterwards.

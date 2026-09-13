@@ -839,9 +839,9 @@ describe("the work key", () => {
      `sameWork` and `workKeyFor` to the same answer, which catches one of them
      reading a field the other ignores — and passes cleanly if *neither* reads
      it. So the one field this change touched gets a direct assertion too:
-     unticking "use your profile" and pressing the button again is a request for
-     a different artefact, and being handed the running job would refresh the
-     panel with something stamped from the profile the reader just declined.
+     requests with and without a profile are for different artefacts, and
+     collapsing one onto the other's running job would return an artefact with
+     the wrong provenance stamp.
      GPT Sol's review of the built code, 2026-08-30. */
   it("counts two different profiles as two different pieces of work", () => {
     const physicist = workKeyFor(["glossary"], new Set(), "a physicist");

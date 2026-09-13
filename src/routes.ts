@@ -2492,9 +2492,10 @@ async function streamChat(slug: string, body: unknown, res: ServerResponse): Pro
   }
   const wantedKind = kind as ThreadKind | undefined;
   /* Absent means yes, as it does everywhere the profile is offered. Per turn
-     rather than per thread, because the composer's checkbox is per turn — a
-     reader may reasonably want one answer written plainly in the middle of a
-     conversation that is otherwise theirs. */
+     rather than per thread. The composer's *Use your profile* checkbox that set
+     it went on 2026-09-13 (docs/plans/260913a-drop-the-use-your-profile-checkbox.md),
+     so the reader's chat always sends nothing; `false` now comes only from
+     CandidatesPanel, whose turns must not be pitched at the reader. */
   const wantsProfile = useProfile !== false;
   /* Three ways to start a turn, one endpoint, one stream.
 

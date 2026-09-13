@@ -422,11 +422,11 @@ have flushed it need never fire. Greg chose read-only knowing that, 2026-08-30.
 
 **It fetches when it is opened.** The justification first written here was
 wrong and the correction is the useful part: it claimed the separate fetch
-avoided sending the profile five times a page. It did not. Five hooks called
+avoided sending the profile repeatedly on a page. It did not. Six callers used
 `useHasProfile`, which fetched `/api/reader` — `profile` and `purpose` included
-— for a boolean, so the panel's request was a **sixth**, not a substitute for
-five (GPT Sol's review of the built code, 2026-08-30). Those five fetches went
-with the *Use your profile* checkbox they served, on 2026-09-13.
+— for a boolean, so the panel's request was another fetch, not a substitute for
+theirs (GPT Sol's review of the built code, 2026-08-30). Those callers went with
+the *Use your profile* checkbox they served, on 2026-09-13.
 
 **And "always fresh" was only true after a one-line fix.** `apiFetch` caches
 `/api/reader` offline, and a `PATCH /api/library/<slug>` — which is how a
