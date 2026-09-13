@@ -134,9 +134,9 @@ picture, and gating it on the tick-box would refuse a report a reader knowingly
 assembled. The page had these merged in its first draft and GPT Sol caught it.
 
 **The tick-box can also bring the reader's own article, since 2026-09-13.** Ticked, on a page of an
-article the reporter owns, the Sentry copy carries the original file (up to 10 MiB) and
-`article.json` — the text, tree, headings and summaries the page loaded, up to 5 MiB, with the
-reader's profile and purpose left out. Owner-only, because nobody can consent for somebody else's
+article the reporter owns, the Sentry copy may carry the original file, when one is held and it is
+no more than 10 MiB, and `article.json` — the text, tree, headings and summaries the page loaded —
+when that is no more than 5 MiB. The reader's profile and purpose are left out. Owner-only, because nobody can consent for somebody else's
 article; read on the server, so nothing new leaves the browser; Sentry only, never our database.
 That made the page's old last sentence — *"What a bug report never carries is the text of the
 article you were reading"* — false, so it went. Its replacement hedges ("may", "a page of", a size
@@ -332,8 +332,9 @@ no content), `ingest_events` (the billing slot is **not** refunded — deleting 
 back, [billing.md](billing.md)), `article_visibility_changes` (takedown evidence about a document we
 no longer serve, changed from `cascade` to `set null` *for* this feature), and `feedback` rows
 naming the slug. None of them holds the article's text — though the Sentry copy of a consented bug
-report may, until Sentry's own retention ages it out (§ What a bug report carries); the page's *"our
-providers' own logs take a little longer to age out"* is the sentence that covers it.
+report may, until Sentry's own retention ages it out (§ What a bug report carries). The page names
+that copy on its own, as the fourth thing an erasure cannot reach, rather than leaving it inside
+"our providers' own logs" — a whole article is not a log line. GPT Sol, 2026-09-13.
 
 **And the honest limit: a copy already on a device cannot be recalled.** The control says so in
 those words, and so must this page. Two of those copies are ours to name because we put them there —

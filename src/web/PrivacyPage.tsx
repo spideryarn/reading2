@@ -468,9 +468,9 @@ export function PrivacyPage() {
           own article — its source file and `article.json` — to Sentry, on a
           page of an article they own and within a size cap, so the promise went
           and the paragraph says what does and does not go instead. The wording
-          and why each clause hedges: docs/plans/260913a-send-the-source-file-
-          and-the-article-with-extra-diagnostics.md § The proposed reader-facing
-          wording. */}
+          and why each clause hedges are in:
+          docs/plans/260913a-send-the-source-file-and-the-article-with-extra-diagnostics.md
+          § The proposed reader-facing wording. */}
       <Section title="If you send us a bug report">
         <p>
           The Feedback button sends us what you write, your email address, the build you were
@@ -494,9 +494,9 @@ export function PrivacyPage() {
           also carry that article: the file it was made from and our copy of its text, with the
           headings and summaries we made for it, up to a size limit. That goes to Sentry with the
           rest of the report, so that we can reproduce what went wrong. Otherwise we don’t attach
-          the article’s text — though a screenshot you add will show whatever was on your screen. A
-          bug report never carries your notes, comments, highlights or chats, or what you’ve written
-          about yourself and why you’re reading.
+          the article’s text — though a screenshot you add will show whatever was on your screen.
+          The extra diagnostics never include your notes, comments, highlights or chats, or what
+          you’ve written about yourself and why you’re reading.
         </p>
       </Section>
 
@@ -527,7 +527,7 @@ export function PrivacyPage() {
           the beta we do this by hand, and we’ll get to it within a month.
         </p>
         <p>
-          Three kinds of thing outlive an erasure, and it is worth saying which. We keep the
+          Four kinds of thing outlive an erasure, and it is worth saying which. We keep the
           <strong className="tw:text-foreground"> record of what our model calls cost</strong>,
           which is how we know what running this costs — it holds the job, the model and the price,
           not what was said. We keep a
@@ -536,7 +536,10 @@ export function PrivacyPage() {
           keep the <strong className="tw:text-foreground">original downloaded file</strong>, stored
           under a fingerprint of its own contents rather than under your name, so that if somebody
           else added the same document it is the same file and deleting your copy cannot take
-          theirs. Backups and our providers’ own logs take a little longer to age out.
+          theirs. And if you sent the article with a bug report, the copy attached to that
+          report stays in <strong className="tw:text-foreground">Sentry</strong> until Sentry’s
+          own retention ages it out. Backups and our providers’ own logs take a little longer to age
+          out.
         </p>
       </Section>
 

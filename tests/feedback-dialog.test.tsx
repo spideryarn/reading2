@@ -357,9 +357,13 @@ describe("the feedback dialog", () => {
     mount();
     const words = (host.querySelector(".fb-consent")?.textContent ?? "").replace(/\s+/g, " ");
     expect(words).toContain("Send extra diagnostics.");
+    expect(words).toContain("On one of your own articles");
     expect(words).toContain("may also send the file the article was made from");
     expect(words).toContain("within a size limit");
     expect(words).toContain("what you've told us about yourself");
+    /* "Never" is about the diagnostics, not the whole report: the reader can type
+       anything, and a screenshot can show anything. GPT Sol, S2-1. */
+    expect(words).toContain("extra diagnostics never include your notes");
     expect(words).not.toContain("the article's text, your notes");
     expect(words).not.toContain("typed into a search box");
   });

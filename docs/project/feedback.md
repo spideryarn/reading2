@@ -409,8 +409,9 @@ the collection happening rather than merely refusing the result.
 
 Agents working reports have no production database or bucket access, so until then a report named
 the piece and nothing in it. Now, when the box is ticked, the report names a slug, **and the
-reporter owns that article**, the Sentry copy gets two attachments, read server-side from what we
-already hold — nothing new leaves the browser and the Postgres row is unchanged:
+reporter owns that article**, the Sentry copy may get up to two attachments — each independently,
+so either can be missing while the other arrives — read server-side from what we already hold.
+Nothing new leaves the browser and the Postgres row is unchanged:
 
 - **`source.pdf` or `source.html`** — the original document, up to **10 MiB**, which keeps the
   whole event under Sentry's 20 MB envelope limit so a big file cannot cost the reader's words.

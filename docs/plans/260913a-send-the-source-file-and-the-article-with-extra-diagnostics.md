@@ -132,8 +132,8 @@ Proposed:
 > **Send extra diagnostics.** The last few requests this page made to us and how they went, the
 > names of any errors, and facts about your browser and screen size. On one of your own articles,
 > it may also send the file the article was made from and our copy of its text, within a size
-> limit, so we can reproduce the problem. *Never* your notes, comments or chats, or what you've
-> told us about yourself.
+> limit, so we can reproduce the problem. These extra diagnostics *never* include your notes,
+> comments or chats, or what you've told us about yourself.
 
 Two things dropped on purpose: *"which article and passages you were looking at"* is subsumed by
 the article itself; *"anything you have typed into a search box"* is removed because it was only
@@ -153,8 +153,21 @@ Proposed:
 > carry that article: the file it was made from and our copy of its text, with the headings and
 > summaries we made for it, up to a size limit. That goes to Sentry with the rest of the report, so
 > that we can reproduce what went wrong. Otherwise we don't attach the article's text — though a
-> screenshot you add will show whatever was on your screen. A bug report never carries your notes,
-> comments, highlights or chats, or what you've written about yourself and why you're reading.
+> screenshot you add will show whatever was on your screen. The extra diagnostics never include
+> your notes, comments, highlights or chats, or what you've written about yourself and why you're
+> reading.
+
+**3a. `/privacy`, § Deleting things** — the paragraph listing what outlives an erasure said
+*"Three kinds of thing"* and folded everything at our providers into *"our providers' own logs"*.
+A whole article in Sentry is not a log line, so it becomes four, with this sentence added before
+the one about backups:
+
+> And if you sent the article with a bug report, the copy attached to that report stays in Sentry
+> until Sentry's own retention ages it out.
+
+**"Never" is scoped to the diagnostics** since the stage 2 review (S2-1): the first version said a
+*report* never carries notes, which is false — the reader can type anything into the box, and a
+screenshot shows whatever was on screen. What we can promise is what we gather.
 
 **Why "may", "a page of", and the screenshot clause** — GPT Sol's plan review (R3): the slug rides
 from the article's metadata and tweets pages as well as the reading page, so "send it from any other
@@ -218,4 +231,38 @@ GPT Sol, 2026-09-13, on 9c79abc — *BUILD WITH CHANGES*, five findings, all tak
 
 ## What happened
 
-*(Filled in at the end of each stage.)*
+The two stages ran **in parallel**, because their files do not overlap — stage 1 is server code and
+`tests/feedback-mirror.test.ts`, stage 2 is the two pages, their tests and the docs.
+
+**Stage 2 — words, 7c09f719.** Both sentences went in word for word as § The proposed reader-facing
+wording has them, each pinned by a test that was watched red against the old text first
+(`tests/feedback-dialog.test.tsx`, `tests/privacy-page.test.ts`), including a pin that the old
+"never carries the text of the article" promise is gone. `feedback.md` gained § The reader's own
+article and a paragraph under § The one rule; `privacy.md`, `admin.md` (an open item from
+2026-09-02 about the tick-box naming "which article and passages", now closed) and
+`feedback-reports.md` (agents can reproduce from Sentry alone when the tags say `attached`)
+followed. One claim the builder added — *"until Sentry's 30 days age it out"* — had no source in the
+repo and came out as "Sentry's own retention"; a number nobody checked does not go into a privacy
+doc. Its GPT Sol review ran read-only, because stage 1 was still being written in the same tree.
+
+Three of the builder's own notes on the wording, kept as questions rather than changes:
+
+- The dialog names notes, comments and chats but not highlights; `/privacy` names all four. True
+  as it stands — `loadArticle` carries no highlights — so it is brevity, not a gap.
+- *"What you've told us about yourself"* is the profile; the per-article purpose is spelled out
+  only on `/privacy` (*"and why you're reading"*).
+- A reader who deletes an article after sending it with a report is told only that "our providers'
+  own logs take a little longer to age out". That now includes a Sentry copy of the article, which
+  is a stronger thing than a log line. § Open questions for Greg.
+
+**Stage 2's GPT Sol review** (read-only, on 7c09f719): five findings, all taken — "never" scoped to
+the diagnostics rather than the report (S2-1, P0); three docs that implied both attachments always
+arrive, when each is independent (S2-2); the erasure paragraph on `/privacy`, which now names the
+Sentry copy (S2-3, which settled what had been open question 1 here — a page that lists what
+outlives an erasure cannot leave out a copy this change makes); a plan filename split across two
+lines of a JSX comment, which was the doc-links gate's last failure (S2-4); and pins for the
+"own articles", size and Sentry-only clauses (S2-5).
+
+## Open questions for Greg
+
+1. **Visitors on public articles** — § Deferred. `none` until you say otherwise.

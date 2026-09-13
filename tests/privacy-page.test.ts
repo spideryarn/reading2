@@ -99,9 +99,17 @@ describe("the privacy page", () => {
        reader's own article to the Sentry copy, that sentence would be false.
        Whitespace is collapsed because the JSX wraps its lines. */
     const prose = PAGE.replace(/\s+/g, " ");
+    expect(prose).toContain(
+      "If you tick “send extra diagnostics” on a page of one of your own articles",
+    );
     expect(prose).toContain("the report may also carry that article");
+    expect(prose).toContain("up to a size limit");
+    expect(prose).toContain("That goes to Sentry with the rest of the report");
     expect(prose).toContain("though a screenshot you add will show whatever was on your screen");
-    expect(prose).toContain("A bug report never carries your notes");
+    /* Scoped to the diagnostics, not the report: a reader can type anything into
+       the box and a screenshot can show anything. GPT Sol, stage 2 review, S2-1. */
+    expect(prose).toContain("The extra diagnostics never include your notes");
+    expect(prose).not.toContain("A bug report never carries your notes");
     expect(prose).not.toContain("never carries is the text of the article");
   });
 

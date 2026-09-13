@@ -27,8 +27,9 @@ mcp__sentry__search_issues(
 Then `get_sentry_resource` per issue for the full text. The reader's own words are in
 `### Additional Context → feedback → message`; the `url`, `slug`, `kind` and `build_commit` tags say
 where they were standing when they wrote it, and `at=spya-…` in the URL is the block they were
-looking at. When the `source_file` or `article_json` tag says `attached`, the reader's own article
-is on the event — the original file and the page's payload — so you can reproduce from Sentry alone
+looking at. Read `source_file` and `article_json` independently: when either says `attached`, that
+attachment is on the event, and when both do, the original file and the page's payload are both
+there, so you can reproduce from Sentry alone
 ([feedback.md § The reader's own article](feedback.md#the-readers-own-article-since-2026-09-13)).
 
 **`is:unresolved` is the whole of the bookkeeping.** An issue still open is a report nobody has
