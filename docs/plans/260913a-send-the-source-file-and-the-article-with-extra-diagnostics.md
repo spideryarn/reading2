@@ -240,6 +240,56 @@ GPT Sol, 2026-09-13, on 9c79abc — *BUILD WITH CHANGES*, five findings, all tak
 The two stages ran **in parallel**, because their files do not overlap — stage 1 is server code and
 `tests/feedback-mirror.test.ts`, stage 2 is the two pages, their tests and the docs.
 
+**Stage 1 — server, 6c5945ff.** `src/feedback-article.ts` is the gatherer; `mirrorFeedback` calls it
+only with a client, consent and a slug; the envelope guard finds registrations by a server nonce
+and still checks the report id beside it. Three things came out differently from the plan:
+
+- **The size cap rides the existing read** — `loadSource(slug, { maxBytes })` into
+  `readRawDocument` into the bucket — rather than a `raw_sources.bytes` lookup, which would have
+  been the second resolver R5 forbade. `RawObjectTooLarge` (413) tells too large from broken by
+  asking `head()` after a refusal. § Facts checked is corrected.
+- **`article.json` is `{ version, article, metadata, source }`**, with the source's kind and size
+  at the top level: `ArticleMetadata` does not carry them (each stage's `bytes` is always null under
+  Postgres), so they come from the source read — present even when the file was too large to send,
+  which is when its size is most worth knowing. The metadata pick is `slug`, `comments`,
+  `archivedAt`, `sharing` without `available`, and `stages` reduced to step, done and the three
+  timings; left out are `profile`, `purpose`, `dir`, each stage's `label` and `outputs`, and **the
+  reader's upload filename**, which is their own text.
+- **HTML goes as `text/plain`**, so nothing that opens the attachment renders a page fetched from
+  somebody else's site.
+
+Red first for every behaviour test (fifteen failures on the first run, each for the reason named);
+ten deliberate mutations, nine caught by a test and the tenth — the nonce added to
+`FEEDBACK_TAG_KEYS` — caught by a compile-time line instead. One gap the builder named and did not
+fix: **no timeout on the gathering**, so a hung bucket read would hold the capture until the
+function itself died and the report would never reach Sentry — worse than before this change.
+Handed to the stage review as a fix to make.
+
+**Stage 1's GPT Sol review** (write-capable, on 6c5945ff) fixed three things, each red → green, and
+reported nothing else open:
+
+- **S1-1 (P0), the timeout.** A ceiling on the gathering, with the source and the article reads
+  started together and timed separately, so a hung source costs only `source_file=failed` and the
+  finished `article.json` still goes. Sol set it at two seconds; **I raised it to ten** —
+  `ARTICLE_GATHER_MS` in src/feedback.ts says why: the reports this is for are mostly bad PDFs, a
+  10 MiB bucket read is the one most likely to need more than two seconds, and the wait happens
+  after the reader has been answered in a function allowed 800 s. The test drives the constant
+  itself on fake timers rather than a copy of its value.
+- **S1-2 (P0), `Meta.filename`.** `article.json` copied the `Article` payload whole, and
+  `loadArticle` puts **the reader's exact upload filename** in `meta` — the same text the builder had
+  carefully kept off the source attachment. So the article is now picked field by field too, typed
+  as `Omit<Meta, "filename">` so that a new `Meta` field is a compile error rather than a new leak.
+  The fixture had been hiding it: it was not production-shaped until Sol made it so. The lesson is
+  the plan's own rule applied one level further down — *build, don't copy* has to reach every
+  object that goes out, not only the one somebody already suspected.
+- **S1-3 (P1), before the response.** `fileFeedback` calls `mirrorFeedback`, then `send`, then
+  awaits — but an async function runs synchronously up to its first `await`, so the first store read
+  started *before* `res.end`. One `await Promise.resolve()` at the top puts every read on the far
+  side of the reader's answer; a test records the order.
+
+It also traced every slug resolution to `currentRevision`'s `ownedSlug` and found no unfiltered
+query, and re-ran four of the builder's mutations, each caught.
+
 **Stage 2 — words, 7c09f719.** Both sentences went in word for word as § The proposed reader-facing
 wording has them, each pinned by a test that was watched red against the old text first
 (`tests/feedback-dialog.test.tsx`, `tests/privacy-page.test.ts`), including a pin that the old

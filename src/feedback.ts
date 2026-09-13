@@ -148,6 +148,23 @@ const logger = log("http");
  */
 const MIRROR_ACK_MS = 2000;
 
+/**
+ * How long the source and article store reads may hold a report before each
+ * unfinished outcome becomes `failed`. Separate from `MIRROR_ACK_MS`: gathering
+ * happens before capture, while that timer measures Sentry's acknowledgement.
+ *
+ * **Ten seconds, not two.** GPT Sol's stage review added the ceiling at two, to
+ * match `MIRROR_ACK_MS`; but the reports this exists for are mostly "this PDF
+ * extracted badly", and a 10 MiB source out of the bucket is exactly the read
+ * most likely to need longer — so two seconds would have marked the useful
+ * reports `failed`. What the ceiling buys is only that a *hung* read cannot hold
+ * the report until the function dies, and for that ten is as good as two: the
+ * reader was answered before this starts (src/routes.ts, `fileFeedback`) and
+ * the function may run 800 s (vercel.json), so the wait costs a warm function
+ * and never a spinner. Exported for the test that drives it on fake timers.
+ */
+export const ARTICLE_GATHER_MS = 10_000;
+
 export interface FeedbackMirrorInput {
   /** The report as it was **stored** — never the request body. */
   report: FeedbackReport;
@@ -237,6 +254,10 @@ function tagsFor(
  * boolean the caller can forget.
  */
 export async function mirrorFeedback(input: FeedbackMirrorInput): Promise<void> {
+  /* `fileFeedback` starts this promise, calls `send`, then awaits it. Yield once
+     before even checking the client so every store read and Sentry action is
+     on the far side of `res.end`, not merely its final await. */
+  await Promise.resolve();
   const { report, user, screenshot } = input;
   try {
     /* No client, nothing to mirror, and **nothing to record** — not even an
@@ -257,7 +278,7 @@ export async function mirrorFeedback(input: FeedbackMirrorInput): Promise<void> 
        slow bucket cannot eat the two seconds Sentry has to answer. */
     const article: FeedbackArticle =
       report.consented && report.slug !== null
-        ? await gatherFeedbackArticle(report.slug)
+        ? await gatherFeedbackArticle(report.slug, ARTICLE_GATHER_MS)
         : { attachments: [], sourceFile: "none", articleJson: "none" };
 
     /* The blob and the picture ride as envelope attachment items, which

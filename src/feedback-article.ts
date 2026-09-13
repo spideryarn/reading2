@@ -99,7 +99,15 @@ interface SourceFacts {
  */
 interface ArticleJson {
   version: 1;
-  article: Article;
+  article: {
+    meta: Omit<Article["meta"], "filename">;
+    blocks: Article["blocks"];
+    tree: Article["tree"];
+    arc?: Article["arc"];
+    assets: Article["assets"];
+    navLabelStatus: Article["navLabelStatus"];
+    visibility?: Article["visibility"];
+  };
   metadata: {
     slug: string;
     stages: {
@@ -126,14 +134,50 @@ type Gathered =
   | { outcome: "attached"; attachment: AllowedAttachment }
   | { outcome: Exclude<FeedbackArticleOutcome, "attached"> };
 
+/** The two store reads needed before `article.json` can be built. */
+type ArticleRead =
+  | { outcome: "ready"; article: Article; metadata: ArticleMetadata }
+  | { outcome: "none" | "failed" };
+
+/**
+ * Resolve one outcome inside the mirror's gathering budget. The underlying
+ * store operation may not be abortable, but it can no longer hold the report:
+ * a late result is ignored and the caller gets its explicit fallback.
+ */
+async function within<T>(read: Promise<T>, timeoutMs: number, fallback: T): Promise<T> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  try {
+    return await Promise.race([
+      read.catch(() => fallback),
+      new Promise<T>((resolve) => {
+        timer = setTimeout(() => resolve(fallback), timeoutMs);
+        timer.unref?.();
+      }),
+    ]);
+  } finally {
+    if (timer !== undefined) clearTimeout(timer);
+  }
+}
+
 /**
  * Read what a consented report may carry about `slug`. **Never throws**; every
- * failure is an outcome.
+ * failure is an outcome. Source and article reads start together and share the
+ * same ceiling, so one hung store operation cannot hold the report or discard
+ * the other attachment when it did finish.
  */
-export async function gatherFeedbackArticle(slug: string): Promise<FeedbackArticle> {
+export async function gatherFeedbackArticle(slug: string, timeoutMs: number): Promise<FeedbackArticle> {
   try {
-    const source = await readSource(slug);
-    const json = await readArticleJson(slug, source.facts);
+    const [source, article] = await Promise.all([
+      within(readSource(slug), timeoutMs, {
+        gathered: { outcome: "failed" },
+        facts: null,
+      }),
+      within(readArticle(slug), timeoutMs, { outcome: "failed" }),
+    ]);
+    const json =
+      article.outcome === "ready"
+        ? articleJson(article.article, article.metadata, source.facts)
+        : { outcome: article.outcome };
     return {
       attachments: [source.gathered, json].flatMap((one) =>
         one.outcome === "attached" ? [one.attachment] : [],
@@ -178,11 +222,11 @@ async function readSource(slug: string): Promise<{ gathered: Gathered; facts: So
 }
 
 /**
- * `article.json`: the reading page's payload and a pick from the metadata,
- * encoded once, capped on the bytes, and **those bytes** attached — so the
- * guard sends exactly what was measured.
+ * The two owner-filtered reads behind `article.json`. Kept separate from its
+ * encoding so the source and article outcomes can be timed concurrently and a
+ * hung source does not throw away an article payload that finished.
  */
-async function readArticleJson(slug: string, source: SourceFacts | null): Promise<Gathered> {
+async function readArticle(slug: string): Promise<ArticleRead> {
   try {
     /* Settled rather than `all`, so that when one read says *not yours* and the
        other fails, the answer is `none` whichever of the two lost the race. */
@@ -192,10 +236,22 @@ async function readArticleJson(slug: string, source: SourceFacts | null): Promis
       return { outcome: reasons.some((reason) => outcomeOfThrow(reason) === "none") ? "none" : "failed" };
     }
 
+    return { outcome: "ready", article: article.value, metadata: metadata.value };
+  } catch {
+    return { outcome: "failed" };
+  }
+}
+
+/**
+ * `article.json`, encoded once, capped on the bytes, and **those bytes**
+ * attached — so the guard sends exactly what was measured.
+ */
+function articleJson(article: Article, metadata: ArticleMetadata, source: SourceFacts | null): Gathered {
+  try {
     const payload: ArticleJson = {
       version: 1,
-      article: article.value,
-      metadata: pickMetadata(metadata.value),
+      article: pickArticle(article),
+      metadata: pickMetadata(metadata),
       source,
     };
     const bytes = new TextEncoder().encode(JSON.stringify(payload));
@@ -207,6 +263,43 @@ async function readArticleJson(slug: string, source: SourceFacts | null): Promis
   } catch {
     return { outcome: "failed" };
   }
+}
+
+/**
+ * The reading payload without `Meta.filename`, the reader's exact uploaded
+ * filename. Named field by field so another field on `Article` or `Meta` does
+ * not silently become third-party diagnostics.
+ */
+function pickArticle(article: Article): ArticleJson["article"] {
+  const { meta } = article;
+  return {
+    meta: {
+      slug: meta.slug,
+      title: meta.title,
+      ...(meta.byline === undefined ? {} : { byline: meta.byline }),
+      ...(meta.siteName === undefined ? {} : { siteName: meta.siteName }),
+      ...(meta.lang === undefined ? {} : { lang: meta.lang }),
+      ...(meta.url === undefined ? {} : { url: meta.url }),
+      ...(meta.fetchedAt === undefined ? {} : { fetchedAt: meta.fetchedAt }),
+      ...(meta.publishedAt === undefined ? {} : { publishedAt: meta.publishedAt }),
+      ...(meta.excerpt === undefined ? {} : { excerpt: meta.excerpt }),
+      ...(meta.note === undefined ? {} : { note: meta.note }),
+      ...(meta.source === undefined ? {} : { source: meta.source }),
+      ...(meta.method === undefined ? {} : { method: meta.method }),
+      ...(meta.pages === undefined ? {} : { pages: meta.pages }),
+      ...(meta.rawSha256 === undefined ? {} : { rawSha256: meta.rawSha256 }),
+      ...(meta.unverified === undefined ? {} : { unverified: meta.unverified }),
+      ...(meta.recall === undefined ? {} : { recall: meta.recall }),
+      ...(meta.pagesChecked === undefined ? {} : { pagesChecked: meta.pagesChecked }),
+      ...(meta.quality === undefined ? {} : { quality: [...meta.quality] }),
+    },
+    blocks: article.blocks,
+    tree: article.tree,
+    ...(article.arc === undefined ? {} : { arc: article.arc }),
+    assets: article.assets,
+    navLabelStatus: article.navLabelStatus,
+    ...(article.visibility === undefined ? {} : { visibility: article.visibility }),
+  };
 }
 
 /** The pick. See `ArticleJson` for what is left out and why. */

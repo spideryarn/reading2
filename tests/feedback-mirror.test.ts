@@ -98,7 +98,7 @@ vi.mock("../src/store/index.js", async (importActual) => {
   };
 });
 
-const { mirrorFeedback } = await import("../src/feedback.js");
+const { ARTICLE_GATHER_MS, mirrorFeedback } = await import("../src/feedback.js");
 
 /* The envelope, as loosely as this file needs to read one: a header, then a
    list of `[itemHeader, payload]` pairs. */
@@ -445,7 +445,16 @@ describe("the Sentry mirror", () => {
     const envelope: [Record<string, unknown>, [Record<string, unknown>, unknown][]] = [
       { event_id: "0".repeat(32) },
       [
-        [{ type: "feedback" }, { tags: { report_id: "spya-zzzzzz" }, extra: { prose: "PROSE" } }],
+        [
+          { type: "feedback" },
+          {
+            tags: {
+              report_id: "spya-zzzzzz",
+              [FEEDBACK_NONCE_TAG]: "an-unknown-server-nonce-0123456789",
+            },
+            extra: { prose: "PROSE" },
+          },
+        ],
         [{ type: "attachment", filename: "x.txt" }, new TextEncoder().encode("PROSE")],
       ],
     ];
@@ -533,7 +542,10 @@ function metadataFor(slug: string): ArticleMetadata {
 /** An article payload, marked so a test can tell whose it is. */
 function articleFor(slug: string, marker: string): unknown {
   return {
-    meta: { slug, title: `${marker} title` },
+    /* `loadArticle` puts the reader's exact uploaded filename in `Meta`; the
+       diagnostics attachment must remove it rather than relying on the source
+       attachment's separately reduced shape. */
+    meta: { slug, title: `${marker} title`, filename: "UPLOADED_FILENAME_MARKER.pdf" },
     blocks: [{ id: "spya-aaaaaa", kind: "p", text: `${marker} paragraph` }],
     tree: { id: "root", children: [] },
     navLabelStatus: "ready",
@@ -588,6 +600,26 @@ function tagsOf(envelope: Envelope): Record<string, unknown> {
 }
 
 describe("the article, sent with extra diagnostics", () => {
+  it("does not start article reads until its caller has sent the response", async () => {
+    ownArticle();
+    const source = fakeSource;
+    const order: string[] = [];
+    fakeSource = async (...args) => {
+      order.push("read");
+      return source(...args);
+    };
+    startSentry();
+
+    /* This is fileFeedback's shape: call the async mirror, synchronously send
+       the response, then await it. Work before mirrorFeedback's first await
+       would otherwise start the database read before `res.end`. */
+    const mirror = mirrorFeedback({ report: REPORT, user: USER, screenshot: null });
+    order.push("response");
+    await mirror;
+
+    expect(order).toEqual(["response", "read"]);
+  });
+
   it("attaches the source and article.json when the box is ticked on the reader's own article", async () => {
     ownArticle();
     startSentry();
@@ -733,7 +765,10 @@ describe("the article, sent with extra diagnostics", () => {
        is under 5 MiB by `.length` and over it by what actually goes out. */
     const text = "中".repeat(2 * MIB);
     ownArticle();
-    fakeArticle = async (slug) => ({ ...(articleFor(slug, "ARTICLE_MARKER") as object), wide: text });
+    fakeArticle = async (slug) => ({
+      ...(articleFor(slug, "ARTICLE_MARKER") as object),
+      blocks: [{ id: "spya-aaaaaa", kind: "p", text }],
+    });
     expect(JSON.stringify(text).length).toBeLessThan(5 * MIB);
     expect(new TextEncoder().encode(JSON.stringify(text)).byteLength).toBeGreaterThan(5 * MIB);
     startSentry();
@@ -747,6 +782,39 @@ describe("the article, sent with extra diagnostics", () => {
       "source.pdf",
     ]);
   });
+
+  it("still files the report when one article loader never settles", async () => {
+    ownArticle();
+    fakeSource = async () => new Promise<RawSource | null>(() => {});
+    startSentry();
+    vi.useFakeTimers();
+
+    try {
+      const mirror = mirrorFeedback({ report: REPORT, user: USER, screenshot: null });
+      /* The ceiling itself, not a copy of its value: a number typed here would
+         go on passing after the constant moved, or stop the test proving it. */
+      await vi.advanceTimersByTimeAsync(ARTICLE_GATHER_MS);
+      await mirror;
+
+      const envelope = envelopes[0]!;
+      /* Only the unfinished outcome is failed. The article reads finished, so
+         their attachment still reaches Sentry rather than being discarded by
+         a timeout around the gatherer as a whole. */
+      expect(tagsOf(envelope).source_file).toBe("failed");
+      expect(tagsOf(envelope).article_json).toBe("attached");
+      expect(attachmentItems(envelope).map(([header]) => header.filename)).toEqual([
+        "diagnostics.json",
+        "article.json",
+      ]);
+      const json = JSON.parse(new TextDecoder().decode(attachmentBytes(envelope, "article.json")));
+      expect(json.article.meta.title).toBe("ARTICLE_MARKER title");
+      expect(json.source).toBeNull();
+      expect(attempted).toEqual([REPORT.id]);
+      expect(mirrored).toHaveLength(1);
+    } finally {
+      vi.useRealTimers();
+    }
+  }, 1_000);
 
   it("says failed when a read throws, and still files the report", async () => {
     ownArticle();
