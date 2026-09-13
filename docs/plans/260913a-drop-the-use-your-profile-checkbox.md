@@ -32,6 +32,9 @@ server reads absent as yes.
 
 ## What we are building
 
+> **Superseded in two places by GPT Sol's plan review, below:** no `<ProfileButton>` — the whole
+> row goes — and Find more keeps the list's own setting. This section is the plan as first written.
+
 **Client only.** The checkbox goes, and the `automatic` sentence goes with it. The row becomes the
 one button that opens the profile panel, labelled the way the no-profile row already is:
 
@@ -111,6 +114,52 @@ screen but not from the code, which the next reader of any of those files has to
 - **Removing `useProfile` from the API as well.** More work, and wrong: `CandidatesPanel` needs it.
 - **An icon-only button for a reader with a profile.** Tighter still, but 260830c measured a bare
   glyph in a row as saying nothing, and a single label in every state is simpler than two.
+
+## GPT Sol's plan review, and what changed
+
+[The review](260913a-drop-the-use-your-profile-checkbox-review-sol.md), against `c222c9a4`, said
+*rethink*. The removal was sound; the transition was not. All four findings taken:
+
+- **F1 (P1), quotes.** Find more already sends the list's own setting (`regenerate(owner.profiled)`),
+  and `src/quotes.ts` appends across a profile difference while keeping the first pass's stamp. So
+  always-profile there would have put profiled quotes into a list stamped `null`, with no badge.
+  **Kept**: `useQuotes.regenerate` keeps its parameter for that one caller.
+- **F2 (P1), glossary.** The bullet above was wrong. A profiled Find more on a plain list does
+  rewrite — and `?term=` links survive only for terms the rewrite returns again; the rest disappear,
+  under a button still labelled "more". **Changed**: the glossary's Find more now does what the
+  quotes' does and continues in the list's recorded setting (`more(owner.profiled)`), so a plain list
+  gets plain additions and nothing is replaced. The rule, one sentence: **writing a list uses the
+  profile; adding to one continues whatever the list was written with.** `StepRun.useProfile` stays.
+- **F3 (P2), the button.** A labelled "👤 Your profile" row kept the chat and Remember composers and
+  the glossary foot exactly as tall as before, which is not what "more compact" asked for; and since
+  260830c the Command bar has a Profile row, so the reason for a way-in on every panel is weaker.
+  **Changed**: the whole row goes. `<WrittenForYou>` — the badge, which still opens the profile
+  panel — stays. This supersedes § What we are building's `<ProfileButton>`.
+- **F4 (P2).** The `automatic` fields on four hooks only fed the removed sentence. **Removed** too.
+
+So § "The reader who has it OFF today" now reads: plain artefacts stay plain and unflagged; a
+rewrite ("Find them again", "Choose them again", "Write it again") is written for the profile; Find
+more on a plain list stays plain.
+
+## What landed (stage 1)
+
+- `<UseProfile>` deleted with every call site (glossary ×4, quotes, ideas, tweets, sketch, chat and
+  Remember's composer), each panel's `withProfile` state, `useHasProfile` and the hooks'
+  `hasProfile`, the `automatic` field on glossary/ideas/quotes/sketch, and the `.prof-row`,
+  `.prof-open`, `.prof-use`, `.prof-said` CSS with the three placement rules. The chat composer's
+  `flex-wrap` moved to `mode-band.css`, and the dictation strip now takes a full line
+  (`.chat-composer .prof-listening`), a job the removed full-width row used to do by accident.
+- `useQuotes.regenerate(useProfile?)` and `useGlossary.more(useProfile?)` keep their parameter, for
+  Find more only; everything else lost it. `StepRun.useProfile` stays, and so does `useChat`'s
+  `opts.useProfile` for `CandidatesPanel`.
+- Two new tests, both seen red first: `tests/glossary-find-more-keeps-the-lists-profile.test.tsx` and
+  `tests/no-profile-row-beside-paid-buttons.test.tsx`. `tests/automatic-run-says-what-it-used.test.tsx`
+  deleted (its subject is gone); `profile-panel.test.tsx` now enters through the badge.
+- **A consequence to know:** a reader with no profile has no way into the profile panel from a
+  reading view any more — the badge only appears on text written for a profile. `/profile` and the
+  Command bar's Profile row are the ways to a first profile. That is F3's trade, taken knowingly.
+- `automatic` still exists on the timeline, citations, debate and illustrated hooks — outside this
+  job, read by `modes-that-start-themselves` only.
 
 ## Deferred
 

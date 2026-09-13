@@ -504,9 +504,11 @@ the sync fixes both at once.
 with the wire shape and the words in the pure [`src/billing-plan.ts`](../../src/billing-plan.ts).
 Three decisions worth knowing:
 
-- **A route of its own, not a field on `GET /api/reader`.** That route is fetched from every article
-  page by `useHasProfile`, so a billing field on it would put a `billing_accounts` read and an
-  `ingest_events` aggregate on the path of opening an article, for data only `/profile` draws.
+- **A route of its own, not a field on `GET /api/reader`.** That route was fetched from every article
+  page by `useHasProfile` when this was decided — the hook went with the *Use your profile* checkbox
+  on 2026-09-13, and the experimental switch's store still reads it — so a billing field on it would
+  put a `billing_accounts` read and an `ingest_events` aggregate on the path of opening an article,
+  for data only `/profile` draws.
 - **A GET, unlike the other three billing routes**, which are POSTs because each *creates a Stripe
   object*. This creates nothing and touches no network.
 - **It never resyncs from Stripe.** Admission does, once, because it has to decide something. A read

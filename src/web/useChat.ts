@@ -108,13 +108,14 @@ export interface SpokenExchange {
  */
 export interface SendOptions {
   /**
-   * Whether this answer should be written for the reader's profile.
+   * Whether this answer should be written for the reader's profile. Absent
+   * means yes.
    *
-   * Per turn, not per thread, and composer-only: a chat answer is not an
-   * artefact anybody rewrites, so there is nothing to store a preference
-   * against and nothing to flip back to. A reader may reasonably want one
-   * plain answer in the middle of a conversation that is otherwise theirs.
-   * Absent means yes. docs/project/reader-profile.md.
+   * **The one client that sends `false` is CandidatesPanel**, on purpose: its
+   * list of articles to read next must not be pitched at the reader. The chat
+   * composer's *Use your profile* checkbox also set this per turn until it was
+   * removed on 2026-09-13; every composer turn now sends nothing.
+   * docs/project/reader-profile.md.
    */
   useProfile?: boolean;
   /**

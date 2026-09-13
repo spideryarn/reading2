@@ -40,7 +40,6 @@ vi.mock("../src/web/lib/api.js", () => ({
    is about the card below it. */
 vi.mock("../src/web/useProfile.js", () => ({
   useProfile: () => ({ profile: "", saving: false, save: () => {}, error: null }),
-  useHasProfile: () => false,
 }));
 vi.mock("../src/web/ProfileBox.js", () => ({ ProfileBox: () => null }));
 vi.mock("../src/web/AccountSection.js", () => ({ AccountSection: () => null }));

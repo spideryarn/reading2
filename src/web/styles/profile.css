@@ -381,42 +381,11 @@
 }
 
 
-/* The checkbox and its panel button, on one line. The row exists so the button
-   can sit OUTSIDE the `<label>`: a label turns every click inside it into a
-   toggle, and one target doing two things is decided by which pixel. */
-.prof-row {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.3rem;
-}
-
-/* The way in to "what am I being written for". Shown whether or not there is a
-   profile, and never disabled — see src/web/WrittenForYou.tsx for both. */
-.prof-open {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  /* A word rides along when the checkbox is absent (WrittenForYou.tsx), so the
-     gap and the type are here rather than only the icon's padding. */
-  gap: 0.3rem;
-  padding: 0.12rem 0.25rem;
-  font-family: var(--font-ui);
-  font-size: 0.79rem;
-  background: none;
-  border: 1px solid transparent;
-  border-radius: 3px;
-  color: var(--ink-faint);
-  cursor: pointer;
-}
-.prof-open:hover,
-.prof-open.open {
-  border-color: var(--rule-strong);
-  color: var(--ink);
-}
-.prof-open:focus-visible {
-  outline: 2px solid var(--highlight);
-  outline-offset: 1px;
-}
+/* `.prof-row` and `.prof-open` lived here until 2026-09-13: the row beside
+   every paid button that held the *Use your profile* checkbox and a button into
+   the profile panel. The whole row went on Greg's request; the badge above is
+   now the only way into the panel from a reading view.
+   docs/plans/260913a-drop-the-use-your-profile-checkbox.md. */
 
 /* ------------------------------------------------- profile: the panel --
    What your profile currently says, and a working link to each of the two
@@ -500,54 +469,14 @@
   color: var(--ink-faint);
 }
 
-/* The checkbox, wherever a run is about to be paid for. */
-.prof-use {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.35rem;
-  color: var(--ink-faint);
-  font-family: var(--font-ui);
-  font-size: 0.79rem;
-  cursor: pointer;
-  user-select: none;
-}
-.prof-use input { accent-color: var(--highlight); cursor: pointer; }
-.prof-use:hover { color: var(--ink); }
-.prof-use input:disabled { cursor: default; }
-.prof-use:has(input:disabled) { opacity: 0.5; cursor: default; }
-
-/* The same row, saying what an automatic run chose rather than asking. It is a
-   statement, so it takes none of the checkbox's affordances — no pointer, no
-   hover, and not the greyed-out `opacity` a disabled tick gets, which is the
-   whole point of it not being one. src/web/WrittenForYou.tsx § `automatic`. */
-.prof-use.prof-said { cursor: default; }
-.prof-use.prof-said:hover { color: var(--ink-faint); }
-
-/* The checkbox and the run button, on one line — glossary's empty state and
-   its two stale banners. `wrap` because the band is 400px and "Use your
-   profile" beside "Find them again" is close to the limit. */
+/* The run button and whatever the job says beside it, on one line — the
+   glossary's empty state and its two stale banners, and the ideas' and tweets'
+   run rows. `wrap` because the band is 400px. It held the *Use your profile*
+   checkbox too until 2026-09-13. */
 .gloss-run {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
   gap: 0.5rem 0.75rem;
-}
-/* And in the foot, where "Find more" sits. The checkbox goes on its own line
-   above it rather than in the row, and it still should now that "Start again"
-   has gone from beside it (2026-09-05): the checkbox describes what the button
-   below would do rather than being a second thing to press, and a full-width
-   label reads that way. `.gloss-actions` is already `flex-wrap: wrap`, so the
-   basis is all it takes. */
-.gloss-actions .prof-row { flex-basis: 100%; }
-
-/* In the chat composer the checkbox sits on its own line under the input. The
-   composer is `display: flex` with `align-items: flex-end`, so a third item
-   would sit beside the textarea and squeeze it; `flex-wrap` plus a full-width
-   basis puts it on the next row instead, where it reads as a note about the
-   question rather than as part of the input. */
-.chat-composer { flex-wrap: wrap; }
-.chat-composer .prof-row {
-  flex-basis: 100%;
-  margin-top: 0.1rem;
 }
 

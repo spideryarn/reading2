@@ -1048,9 +1048,10 @@ wrong". Three things had made that argument weaker than it reads.
   than grouping — one gesture, no model call
   ([260903c](../plans/260903c-threshold-sliders-hide-below-threshold-items.md)).
 - **Some recovery survives**, because `existingFor` refuses to append when the source hash, the
-  prompt version or the profile differs. An edit, a prompt bump or the *use my profile* checkbox
-  therefore rewrites rather than appends — and `idsByTerm` inherits the ids, so the reader's
-  `?term=` links survive it.
+  prompt version or the profile differs. An edit, a prompt bump or a changed profile therefore
+  rewrites rather than appends — and `idsByTerm` inherits the ids, so the reader's `?term=` links
+  survive it. (This listed the *use my profile* checkbox too, until the checkbox was removed on
+  2026-09-13 — [reader-profile.md](reader-profile.md#no-control-one-label).)
 
 Against that, a destructive button, an inline confirm and a `danger` style sat in a band meant to
 stay quiet, on every visit, for an action used roughly never. ⟨Fable, 2026-09-05⟩
@@ -1059,7 +1060,8 @@ stay quiet, on every visit, for an action used roughly never. ⟨Fable, 2026-09-
 cross-family review said so. Recovery now needs an *input* to change. A bad glossary under the same
 article, the same prompt and the same profile cannot be rewritten at all: *Find more* keeps every
 existing entry and is forbidden from returning close replacements, the threshold can hide a noisy
-entry but cannot correct a wrong definition, and a reader with no profile has no checkbox to flip.
+entry but cannot correct a wrong definition, and — since the *use my profile* checkbox went on
+2026-09-13 — no reader has a checkbox to flip.
 Editing the article or waiting for a prompt bump is not an affordance. This is an **accepted loss**,
 not an equivalent path — the judgment is that the case is rare enough not to be worth permanent
 destructive chrome in the reading band, and the route below is what a future Metadata action would

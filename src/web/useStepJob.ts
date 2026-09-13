@@ -126,9 +126,10 @@ interface StepRun<S extends StepName> {
    * it has always been and absent goes on meaning yes — the server reads it the
    * same way, src/routes.ts § `parseJobRequest`.
    *
-   * It rides on the run rather than being panel state because the artefact
-   * records what it was run with (`profileHash`, src/profile.ts), so the next
-   * visit reads the reader's choice off the file instead of remembering it.
+   * **Only Find more sets it now**, passing the list's own recorded setting so
+   * a top-up is asked the way the list was written (useGlossary.ts § `more`,
+   * useQuotes.ts § `regenerate`). The *Use your profile* checkbox that set it
+   * everywhere else went on 2026-09-13.
    */
   useProfile?: boolean;
   /**

@@ -97,8 +97,6 @@ import { TooltipGroup } from "./Tooltip.js";
 import { exactly, timeAgo } from "./relative-time.js";
 import { useNow } from "./useNow.js";
 import { useSlow } from "./useSlow.js";
-import { UseProfile } from "./WrittenForYou.js";
-import { useHasProfile } from "./useProfile.js";
 import { useRenderCount } from "./perf.js";
 
 interface Props {
@@ -144,7 +142,7 @@ interface Props {
    * the same wrong claim the spinner was added to stop. GPT Sol, 2026-08-27.
    */
   loadFailed: boolean;
-  onSend(question: string, useProfile: boolean): void;
+  onSend(question: string): void;
   onNew(): void;
   /**
    * The first question of a conversation that does not exist yet — the box
@@ -159,7 +157,7 @@ interface Props {
    * reader's question to a stored conversation under a placeholder promising a
    * new one; GPT-5.6 found it, 2026-08-27. This one always mints.
    */
-  onSendNew(question: string, useProfile: boolean): void;
+  onSendNew(question: string): void;
   /**
    * Forget a conversation nobody ever said anything in.
    *
@@ -976,7 +974,7 @@ export function Conversation({
   /** See `recovering` in Props. */
   recovering: Set<string>;
   blocks: Map<string, string>;
-  onSend(question: string, useProfile: boolean): void;
+  onSend(question: string): void;
   onRetry(messageId: string): void;
   onEdit(messageId: string, question: string): void;
   onStop(messageId: string): void;
@@ -1094,7 +1092,7 @@ export function Conversation({
         }}
       >
         {thread.messages.length === 0 &&
-          (kind === "remember" ? <RememberInvitation /> : <Suggestions onAsk={(q) => onSend(q, true)} />)}
+          (kind === "remember" ? <RememberInvitation /> : <Suggestions onAsk={(q) => onSend(q)} />)}
         {thread.messages.map((m, i) => (
           <Turn
             key={m.id}
@@ -1833,7 +1831,7 @@ export function Composer({
   onJump,
 }: {
   slug: string;
-  onSend(question: string, useProfile: boolean): void;
+  onSend(question: string): void;
   busy: boolean;
   /** Present only while an answer is arriving. */
   onStop?: (() => void) | undefined;
@@ -1879,14 +1877,6 @@ export function Composer({
   const [value, setValue] = useState(draft);
   const remember = kind === "remember";
   const box = useRef<HTMLTextAreaElement>(null);
-  const hasProfile = useHasProfile(slug);
-  /* Per turn, and it stays where the reader left it for the rest of the
-     session rather than resetting after each question — an answer written
-     plainly is usually followed by another. There is nothing to seed it from:
-     a chat answer is not an artefact anybody rewrites, so unlike the glossary
-     and the summaries there is no file recording what the last one was written
-     with. src/web/WrittenForYou.tsx. */
-  const [withProfile, setWithProfile] = useState(true);
 
   /**
    * Take focus when a new conversation has just been started.
@@ -1998,7 +1988,7 @@ export function Composer({
     setValue("");
     onDraft("");
     if (live && live.phase !== "idle" && live.phase !== "failed") await live.stop();
-    onSend(question, withProfile);
+    onSend(question);
   };
 
   return (
@@ -2163,17 +2153,6 @@ export function Composer({
           </select>
         </label>
       )}
-      {/* Composer-only, and absent for a reader with no profile. Chat has no
-          rewrite, so there is nothing here for a label to describe and nothing
-          to flip back to — the checkbox governs the next answer and that is
-          all it claims. */}
-      <UseProfile
-        checked={withProfile}
-        onChange={setWithProfile}
-        hasProfile={hasProfile}
-        slug={slug}
-        disabled={busy}
-      />
       <DictationStrip dictation={dictate.dictation} />
       {live && onStartLive && <LiveStatus
         live={live}

@@ -547,8 +547,10 @@ request and two keys are two paid jobs; `regenerate` is forced and is **Find mor
 result that is already there — and, on a stale one, *Choose them again* (§ Find more appends).
 [`src/web/useAutoRun.ts`](../../src/web/useAutoRun.ts).
 
-An automatic run has nobody to ask about the reader's profile, so it uses it and the panel says so —
-*Using your profile* — rather than showing a tickbox it has disabled.
+An automatic run uses the reader's profile, as does *Choose them again*; only **Find more** asks in
+the list's own recorded setting (§ Find more appends, below). The *Use your profile* checkbox, and
+the *Using your profile* sentence an automatic run showed in its place, were removed on 2026-09-13
+([reader-profile.md § No control, one label](reader-profile.md#no-control-one-label)).
 
 
 **It is a converted step**, like `sketch` and unlike its eight other neighbours:

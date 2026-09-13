@@ -37,7 +37,6 @@
  * reason `SearchBand` does — see the comment there, and note in particular that
  * ideas must not share search's `found` state.
  */
-import { useState } from "react";
 import { Lightbulb, TriangleAlert } from "lucide-react";
 import type { Idea } from "../types.js";
 import type { UseIdeas } from "./useIdeas.js";
@@ -47,7 +46,7 @@ import { BlockRef } from "./BlockRef.js";
 import { builtButEmpty } from "../messages.js";
 import { JobProgress } from "./JobProgress.js";
 import { ModeSurface } from "./ModeSurface.js";
-import { UseProfile, WrittenForYou } from "./WrittenForYou.js";
+import { WrittenForYou } from "./WrittenForYou.js";
 import type { BlockId } from "../types.js";
 import { useRenderCount } from "./perf.js";
 
@@ -123,16 +122,10 @@ export function IdeasPanel({
   useRenderCount("IdeasPanel");
   const owner = access.kind === "owner" ? access.owner : null;
   const ideas = access.ideas;
-  /* Seeded from what the list on screen was written with, so the box is already
-     in the state the reader last chose and nothing has to remember it between
-     visits: the artefact does. `useState`'s initialiser rather than an effect,
-     because re-seeding on every poll would fight a reader who just unticked it. */
-  const [withProfile, setWithProfile] = useState(() => (ideas ? (owner?.profiled ?? false) : true));
-
   const all = ideas?.ideas ?? [];
   /* **Returns nothing for a visitor**, which is what makes every call site
-     below one line rather than a conditional: this whole block is a profile
-     tick and a button that spends a model call, and a visitor has neither. */
+     below one line rather than a conditional: this whole block is a button that
+     spends a model call, and a visitor has none. */
   /**
    * @param again whether this is the button offered **beside a list that is
    *   already there**, which is the whole of the difference between the two
@@ -144,20 +137,12 @@ export function IdeasPanel({
   const run = (label: string, again = false) =>
     owner && (
       <div className="gloss-run">
-        <UseProfile
-          checked={withProfile}
-          onChange={setWithProfile}
-          hasProfile={owner.hasProfile}
-          slug={owner.slug}
-          disabled={owner.job !== null}
-          automatic={owner.automatic}
-        />
         <JobProgress
           job={owner.job}
           starting={owner.starting}
           failed={owner.failed}
           stalled={owner.stalled}
-          onRun={() => (again ? owner.regenerate(withProfile) : owner.ensure(withProfile))}
+          onRun={() => (again ? owner.regenerate() : owner.ensure())}
           onCancel={owner.cancel}
           label={label}
           step="ideas"

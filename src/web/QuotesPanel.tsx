@@ -60,7 +60,7 @@ import { Tooltip } from "./Tooltip.js";
 import { builtButEmpty } from "../messages.js";
 import { JobProgress } from "./JobProgress.js";
 import { ModeSurface } from "./ModeSurface.js";
-import { UseProfile, WrittenForYou } from "./WrittenForYou.js";
+import { WrittenForYou } from "./WrittenForYou.js";
 import { useRenderCount } from "./perf.js";
 import { applyThreshold, hiddenNote, type ThresholdResult } from "./threshold.js";
 
@@ -586,12 +586,6 @@ export function QuotesPanel({
      true for whoever happens to own the article. */
   const discarded = discardedNote(quotes?.discarded);
 
-  /* Seeded from what the list on screen was chosen with, so the box is already
-     in the state the reader last picked and nothing has to remember it between
-     visits: the artefact does. `useState`'s initialiser rather than an effect,
-     because re-seeding on every poll would fight a reader who just unticked it. */
-  const [withProfile, setWithProfile] = useState(() => (quotes ? (owner?.profiled ?? false) : true));
-
   /**
    * @param again beside a list that is already there, so the run must be
    *   forced. The empty state's button must **not** be: it has to make the
@@ -600,23 +594,12 @@ export function QuotesPanel({
    */
   const rerun = (label: string, again = false) => (
     <div className="quotes-run">
-      <UseProfile
-        checked={withProfile}
-        onChange={setWithProfile}
-        hasProfile={owner?.hasProfile ?? false}
-        slug={owner?.slug ?? ""}
-        disabled={owner?.job !== null}
-        automatic={owner?.automatic ?? false}
-      />
       <Progress
         job={owner?.job ?? null}
         starting={owner?.starting ?? false}
         failed={owner?.failed ?? null}
         stalled={owner?.stalled ?? false}
-        onRun={() =>
-          (again ? owner?.regenerate(withProfile) : owner?.ensure(withProfile)) ??
-          Promise.resolve()
-        }
+        onRun={() => (again ? owner?.regenerate() : owner?.ensure()) ?? Promise.resolve()}
         onCancel={(id) => owner?.cancel(id)}
         label={label}
       />
@@ -629,10 +612,15 @@ export function QuotesPanel({
    * 2026-09-10: *"Remove the "Choose them again" button, and add a "Find more"
    * button"*.
    *
-   * **No profile checkbox**, unlike `rerun`: Find more continues the list the
-   * reader has rather than choosing it for somebody else, so it sends the
-   * list's own setting and the artefact keeps the stamp of the pass that
-   * started it. The box belongs beside a button that writes a list of its own.
+   * **In the list's own recorded setting, not the current profile**, unlike
+   * `rerun`, which always uses the profile: Find more continues the list the
+   * reader has rather than choosing it for somebody else, and an append keeps
+   * the stamp of the pass that started the list (src/quotes.ts §
+   * existingFor), so a profiled pass onto a plain list would sit under a stamp
+   * that says it was not. That held when there was a *Use your profile*
+   * checkbox beside `rerun`, and it still holds now that there is not
+   * (docs/plans/260913a-drop-the-use-your-profile-checkbox.md, GPT Sol's
+   * review).
    */
   const findMore = (
     <div className="quotes-run">

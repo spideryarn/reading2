@@ -185,9 +185,6 @@ vi.mock("../src/web/useJobs.js", () => ({
   },
 }));
 
-/* Needs a session and a slug; the answer does not affect the count. */
-vi.mock("../src/web/useProfile.js", () => ({ useHasProfile: () => false }));
-
 const { useGlossary, useGlossaryRead } = await import("../src/web/useGlossary.js");
 
 /** What `GlossaryBand` does: the jobs and the verbs, over `Reader`'s read. */

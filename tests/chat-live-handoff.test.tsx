@@ -26,9 +26,6 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { ChatMessage, ChatThread } from "../src/types.js";
 import type { LiveApi } from "../src/web/live/useLiveConversation.js";
 
-/* The profile hook fetches on mount, and this test is about a textarea. */
-vi.mock("../src/web/useProfile.js", () => ({ useHasProfile: () => false }));
-
 const { ChatPanel } = await import("../src/web/ChatPanel.js");
 
 const AT = "2026-08-31T12:00:00.000Z";

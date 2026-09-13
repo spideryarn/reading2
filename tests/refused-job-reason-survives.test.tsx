@@ -72,8 +72,6 @@ vi.mock("../src/web/lib/supabase.js", () => ({
   },
 }));
 
-vi.mock("../src/web/useProfile.js", () => ({ useHasProfile: () => false }));
-
 /* The thread page's bottom bar reaches Supabase and the whole visitor layer,
    and none of it is what this file is about. Same reason as
    tests/background-reload-keeps-the-list.test.tsx. */

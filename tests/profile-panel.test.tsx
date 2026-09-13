@@ -2,8 +2,16 @@
 /**
  * **The panel that says what you are being written for.**
  *
- * Six things, and they are the six a reader hits that no other test covers.
- * Every one of them was watched fail first, against a mutation aimed at it.
+ * The things a reader hits that no other test covers. Each was watched fail
+ * first, against a mutation aimed at it.
+ *
+ * Opened through the real *written for you* badge (`WrittenForYou`), which has
+ * been the only way into it from a reading view since 2026-09-13, when the
+ * *Use your profile* row beside every paid button — checkbox, and a *Your
+ * profile* button — was removed on Greg's request
+ * (docs/plans/260913a-drop-the-use-your-profile-checkbox.md). Until then these
+ * tests went in through that row's button, which also served a reader with no
+ * profile; the badge appears only on text that was written for one.
  *
  * ## What this file deliberately does NOT test
  *
@@ -55,29 +63,19 @@ vi.mock("../src/web/lib/api.js", () => ({
   readJson: async (res: Response) => res.json(),
 }));
 
-const { UseProfile } = await import("../src/web/WrittenForYou.js");
+const { WrittenForYou } = await import("../src/web/WrittenForYou.js");
 
 let host: HTMLDivElement;
 let root: Root;
 
-/** The real `UseProfile`, in the state named — never the panel on its own.
- *
- *  Mounting `ProfilePanel` directly would let every test below pass while a
- *  reader could not reach it: the state that matters most here is the one
- *  where `hasProfile` is false, and until 2026-08-30 that state rendered
- *  nothing at all. Going in through the owner's surface is what makes these
- *  assertions about something a person can get to.
- */
-function render(opts: { hasProfile: boolean; disabled?: boolean }) {
+/** The real badge, on text written for a profile — never the panel on its own,
+ *  so every assertion below is about something a reader can get to. */
+function render(opts: { changed?: boolean } = {}) {
   act(() => {
     root.render(
-      createElement(UseProfile, {
-        checked: true,
-        onChange: () => {},
-        hasProfile: opts.hasProfile,
-        // Spread rather than passed as `undefined`: `exactOptionalPropertyTypes`
-        // is on, so an explicit undefined is not the same as an absent prop.
-        ...(opts.disabled === undefined ? {} : { disabled: opts.disabled }),
+      createElement(WrittenForYou, {
+        written: true,
+        changed: opts.changed ?? false,
         slug: "some-article",
       }),
     );
@@ -86,7 +84,7 @@ function render(opts: { hasProfile: boolean; disabled?: boolean }) {
 
 /** Open it the way a reader does, and let the fetch settle. */
 async function open() {
-  const trigger = host.querySelector<HTMLButtonElement>("button.prof-open");
+  const trigger = host.querySelector<HTMLButtonElement>("button.prof-badge");
   if (!trigger) throw new Error("no way in to the profile panel");
   await act(async () => {
     trigger.click();
@@ -118,13 +116,12 @@ afterEach(() => {
 });
 
 describe("the profile panel", () => {
-  /* The state the whole feature turns on. `UseProfile` used to return `null`
-     here, so a reader with no profile got no checkbox, no badge and no way to
-     discover what "your profile" meant — and the panel's links are precisely
-     how a first profile gets written. GPT Sol's review of the plan, 2026-08-30. */
-  it("is reachable by a reader who has no profile, where the checkbox is not", async () => {
-    render({ hasProfile: false });
-    expect(host.querySelector("input[type=checkbox]")).toBeNull();
+  /* The badge is provenance about the text, and it goes on describing an
+     artefact written for a profile the reader has since cleared — so the
+     panel must say plainly that there is nothing in either box now, rather than
+     showing two empty headings. */
+  it("says both boxes are empty when the reader has cleared them since", async () => {
+    render({ changed: true });
     const panel = await open();
     expect(panel.textContent).toContain("You haven't said anything about yourself yet");
     expect(panel.textContent).toContain("You haven't said why you're reading this one");
@@ -134,7 +131,7 @@ describe("the profile panel", () => {
      must carry the slug: a link to somebody else's metadata page, or to none,
      is worse than no link. */
   it("links to both halves, and the article's link names the article", async () => {
-    render({ hasProfile: true });
+    render();
     const panel = await open();
     const hrefs = [...panel.querySelectorAll("a")].map((a) => a.getAttribute("href"));
     expect(hrefs).toContain("/profile");
@@ -147,7 +144,7 @@ describe("the profile panel", () => {
      write it again, and nothing on screen will have looked wrong. */
   it("says it could not read a profile, rather than that there is none", async () => {
     server.fails = true;
-    render({ hasProfile: true });
+    render();
     const panel = await open();
     expect(panel.textContent).toContain("We couldn't read this just now");
     expect(panel.textContent).not.toContain("haven't said anything about yourself");
@@ -163,7 +160,7 @@ describe("the profile panel", () => {
   it("tells the two halves apart when only the article's half could not be read", async () => {
     server.profile = "A physicist.";
     server.purposeFailed = true;
-    render({ hasProfile: true });
+    render();
     const panel = await open();
     // The half that worked still says what it says…
     expect(panel.textContent).toContain("A physicist.");
@@ -172,27 +169,14 @@ describe("the profile panel", () => {
     expect(panel.textContent).not.toContain("You haven't said why you're reading this one");
   });
 
-  /* The checkbox is rightly dead while a job runs — the profile is frozen onto
-     the job at its start, so the tick can no longer change anything. But "what
-     am I being written for" is a question a reader asks MOST while they are
-     waiting for the answer. */
-  it("still opens while a job is running, though the checkbox is disabled", async () => {
-    render({ hasProfile: true, disabled: true });
-    expect(host.querySelector<HTMLInputElement>("input[type=checkbox]")?.disabled).toBe(true);
-    const trigger = host.querySelector<HTMLButtonElement>("button.prof-open");
-    expect(trigger?.disabled).toBe(false);
-    expect((await open()).textContent).toBeTruthy();
-  });
-
-  /* Not a cache and not a page-load fetch: five hooks already ask
-     `/api/reader?slug=` for a boolean on every reading view, and the text is
-     wanted by one component that is usually closed. Asking on open is also what
-     keeps it fresh — a reader who edits their profile on /profile and comes
-     back must not be shown the old words by the panel whose job is to say what
-     the current ones are. */
+  /* Not a cache and not a page-load fetch: the text is wanted by one component
+     that is usually closed. Asking on open is also what keeps it fresh — a
+     reader who edits their profile on /profile and comes back must not be
+     shown the old words by the panel whose job is to say what the current ones
+     are. */
   it("asks for nothing until it is opened, and asks again next time", async () => {
     server.profile = "A physicist.";
-    render({ hasProfile: true });
+    render();
     expect(asked).toEqual([]);
 
     await open();
@@ -221,7 +205,7 @@ describe("the profile panel", () => {
      needs two presses. Same reason, same shape, as
      tests/block-gutter.test.tsx § "closes on a press anywhere else". */
   it("closes when the reader presses somewhere else on the page", async () => {
-    render({ hasProfile: true });
+    render();
     await open();
     await act(async () => {
       document.body.dispatchEvent(new Event("pointerdown", { bubbles: true }));
@@ -237,7 +221,7 @@ describe("the profile panel", () => {
      floating element and a native containment check — and what is pinned here
      is the behaviour, not either mechanism. */
   it("stays open when the press lands inside the panel itself", async () => {
-    render({ hasProfile: true });
+    render();
     const panel = await open();
     const inside = panel.querySelector(".prof-panel-lede");
     if (!inside) throw new Error("the panel rendered without its lede");

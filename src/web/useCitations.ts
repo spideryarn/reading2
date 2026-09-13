@@ -63,7 +63,7 @@ export interface UseCitations {
   stalled: boolean;
   /** `StepJob.starting`: the POST has gone and the queue has not seen it yet. */
   starting: boolean;
-  /** The run in flight was started automatically. `UseIdeas.automatic`. */
+  /** The run in flight was started automatically. `UseTimeline.automatic`. */
   automatic: boolean;
   /**
    * **Find them if nobody has** — unforced, for the automatic run and for the

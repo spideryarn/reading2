@@ -114,8 +114,6 @@ vi.mock("../src/web/lib/api.js", () => ({
   failure: async (res: Response) => new Error(String(res.status)),
 }));
 
-vi.mock("../src/web/useProfile.js", () => ({ useHasProfile: () => true }));
-
 /** Whether `run` refuses, so the automatic attempt can be made to fail. */
 let postRefuses = false;
 let nextJobId = 0;
@@ -164,15 +162,17 @@ const { jobEngine } = await import("../src/web/jobEngine.js");
 
 /**
  * The band, reduced to the three facts this file is about: it calls the real
- * hook, it says whether the run under way started itself, and it offers the
- * verb the empty state's button calls.
+ * hook, it says whether a run is starting, and it offers the verb the empty
+ * state's button calls. (It said whether the run had started *itself* until
+ * 2026-09-13, when `useIdeas` dropped `automatic`; the timeline, debate and
+ * illustrated bands below still can.)
  */
 function IdeasBand({ slug }: { slug: string }): ReactElement {
   const view = useIdeas(slug);
   return createElement(
     "div",
     { "data-band": "ideas" },
-    view.automatic ? "auto" : view.starting ? "starting" : view.status,
+    view.starting ? "starting" : view.status,
     createElement("button", { type: "button", onClick: () => void view.ensure() }, "Find them"),
   );
 }
@@ -220,7 +220,7 @@ function QuotesBand({ slug }: { slug: string }): ReactElement {
   return createElement(
     "div",
     { "data-band": "quotes" },
-    view.automatic ? "auto" : view.starting ? "starting" : view.status,
+    view.starting ? "starting" : view.status,
   );
 }
 
@@ -264,7 +264,7 @@ function SketchBand({ slug }: { slug: string }): ReactElement {
   return createElement(
     "div",
     { "data-band": "sketch" },
-    view.automatic ? "auto" : view.starting ? "starting" : view.status,
+    view.starting ? "starting" : view.status,
   );
 }
 
@@ -492,10 +492,10 @@ describe("a press", () => {
     await open("plain");
     await press("Ideas");
     await settle();
-    /* `automatic` wins the label here — it is the more specific fact, and both
-       are true. What matters is that neither is `none`, which is what draws the
-       run button. */
-    expect(bandSays()).toContain("auto");
+    /* `starting` rather than `none`, which is what draws the run button. (This
+       said `auto` until 2026-09-13, when `useIdeas` dropped its `automatic`
+       field along with the *Using your profile* sentence it fed.) */
+    expect(bandSays()).toContain("starting");
   });
 
   it("does not run it a second time, however many times it is pressed", async () => {

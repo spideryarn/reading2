@@ -84,7 +84,6 @@ import { JobProgress } from "./JobProgress.js";
 import { ControlTip, Tooltip, TooltipGroup } from "./Tooltip.js";
 import { SKETCH_PRICE, SKETCH_WAIT } from "./sketch-cost.js";
 import { useSketch } from "./useSketch.js";
-import { UseProfile } from "./WrittenForYou.js";
 
 /** One drawing primitive as an element. Nothing here knows a colour. */
 function Shape({ p }: { p: Prim }) {
@@ -198,9 +197,6 @@ function OwnerSketch({
 }) {
   const blockOrder = useMemo(() => blocks.map((b) => b.id), [blocks]);
   const view = useSketch(slug, blockOrder);
-  /* Whether to draw it for this reader in particular. Owner-only state, because
-     it is an input to a job only an owner can start. */
-  const [useProfile, setUseProfile] = useState(true);
 
   if (view.status === "loading") {
     return (
@@ -229,14 +225,6 @@ function OwnerSketch({
           it is never drawn until you ask.
         </p>
         <div className="sk-run">
-          <UseProfile
-            checked={useProfile}
-            onChange={setUseProfile}
-            hasProfile={view.hasProfile}
-            slug={slug}
-            disabled={view.job !== null}
-            automatic={view.automatic}
-          />
           {/* **`ensure`, not `regenerate`.** There is no picture — that is what
               this state means — so the freshness check will agree, and it has
               to be the identical request the automatic run makes: a forced
@@ -248,7 +236,7 @@ function OwnerSketch({
             starting={view.starting}
             failed={view.failed}
             stalled={view.stalled}
-            onRun={() => view.ensure(useProfile)}
+            onRun={() => view.ensure()}
             onCancel={view.cancel}
             label="Draw the argument"
             step="sketch"

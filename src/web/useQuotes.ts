@@ -48,7 +48,6 @@ import { useOrderedRead } from "./useOrderedRead.js";
 import { type StepFailure, useStepJob } from "./useStepJob.js";
 import { useAutoRun } from "./useAutoRun.js";
 import { apiFetch, readJson } from "./lib/api.js";
-import { useHasProfile } from "./useProfile.js";
 
 type QuotesStatus = "loading" | "none" | "ready" | "error";
 
@@ -143,8 +142,7 @@ export interface UseQuotes {
   profiled: boolean;
   /** ...and that profile is no longer the reader's. */
   profileChanged: boolean;
-  hasProfile: boolean;
-  /** The article this band is about — carried alongside `hasProfile`, as the ideas do. */
+  /** The article this band is about, for the profile panel — as the ideas do. */
   slug: string;
   error: string | null;
   /** The job choosing this article's quotes, if one is. */
@@ -160,15 +158,13 @@ export interface UseQuotes {
   stalled: boolean;
   /** The POST has gone and the queue has not seen it yet. `StepJob.starting`. */
   starting: boolean;
-  /** The run in flight was started automatically. `UseIdeas.automatic`. */
-  automatic: boolean;
   /**
    * **Choose the quotes if none have been** — unforced, for the automatic run
    * and for the button beside the empty state. They have to be the same
    * request, or their `work_key`s differ and the reader pays twice:
    * useIdeas.ts § `ensure`.
    */
-  ensure(useProfile?: boolean): Promise<void>;
+  ensure(): Promise<void>;
   /**
    * **The forced run, and the stage decides what it does** — the glossary's
    * `more`, one verb for two buttons since 2026-09-11. On a list written from
@@ -177,6 +173,13 @@ export interface UseQuotes {
    * stale banner, the one place that label survives). src/quotes.ts §
    * existingFor. Forced because an unforced run on a current list would skip;
    * `quotes` is in FORCE_ONLY_WHEN_NAMED with `useStepJob` naming the step.
+   *
+   * @param useProfile defaults to true. **Find more passes the list's own
+   *   `profiled`**, so an append is asked the way the list was written — an
+   *   append keeps the first pass's stamp, and a profiled pass under a plain
+   *   stamp would be provenance written falsely. *Choose them again* passes
+   *   nothing: it writes a list of its own, and every list is now written for
+   *   the profile (the *Use your profile* checkbox went on 2026-09-13).
    */
   regenerate(useProfile?: boolean): Promise<void>;
   cancel(id: string): void;
@@ -264,7 +267,6 @@ export function useQuotesRead(slug: string): QuotesRead {
  */
 export function useQuotes(slug: string, read: QuotesRead): UseQuotes {
   const { status, quotes, stale, outdated, profiled, profileChanged, error, reload, refresh } = read;
-  const hasProfile = useHasProfile(slug);
 
   /**
    * Revalidate on mount, behind whatever is on screen.
@@ -295,8 +297,8 @@ export function useQuotes(slug: string, read: QuotesRead): UseQuotes {
 
   /* Two verbs, split on `force`. See the interface above, and useIdeas.ts. */
   const ensure = useCallback(
-    async (useProfile = true) => {
-      await queue.start({ useProfile });
+    async () => {
+      await queue.start();
     },
     [queue],
   );
@@ -309,7 +311,7 @@ export function useQuotes(slug: string, read: QuotesRead): UseQuotes {
 
   /* `reload` is the way out of a failed read — useAutoRun.ts § A failed read is
      not an answer, and useIdeas.ts says why it is `reload` and not `load`. */
-  const auto = useAutoRun(slug, "quotes", status, ensure, reload);
+  useAutoRun(slug, "quotes", status, ensure, reload);
 
   return {
     status,
@@ -318,14 +320,12 @@ export function useQuotes(slug: string, read: QuotesRead): UseQuotes {
     outdated,
     profiled,
     profileChanged,
-    hasProfile,
     slug,
     error,
     job: queue.job,
     failed: queue.failed,
     stalled: queue.stalled,
     starting: queue.starting,
-    automatic: auto && (queue.job !== null || queue.starting),
     ensure,
     regenerate,
     cancel: queue.cancel,

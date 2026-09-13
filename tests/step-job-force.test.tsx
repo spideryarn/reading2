@@ -80,8 +80,6 @@ vi.mock("../src/web/useJobs.js", () => ({
   }),
 }));
 
-vi.mock("../src/web/useProfile.js", () => ({ useHasProfile: () => false }));
-
 const { useIdeas } = await import("../src/web/useIdeas.js");
 const { useGlossary } = await import("../src/web/useGlossary.js");
 const { useQuotes } = await import("../src/web/useQuotes.js");
@@ -180,16 +178,59 @@ describe("ideas", () => {
     expect(forcedByPipeline(request).has("ideas")).toBe(true);
   });
 
-  it("sends `useProfile` only when it is false", async () => {
+  /* Absent means yes on the server, and since the *Use your profile* checkbox
+     went on 2026-09-13 no panel run sends anything else — neither verb has a
+     way to ask for a plain artefact. */
+  it("never sends `useProfile`, from either verb", async () => {
     await act(async () => {
       await ideas?.regenerate();
     });
     expect(only()).not.toHaveProperty("useProfile");
     posted.length = 0;
     await act(async () => {
-      await ideas?.regenerate(false);
+      await ideas?.ensure();
+    });
+    expect(only()).not.toHaveProperty("useProfile");
+  });
+});
+
+/**
+ * **Find more is the one run that may still ask for a plain artefact**, and it
+ * asks only when the list it continues was plain: an append across a profile
+ * difference would rewrite the glossary (src/glossary.ts § existingFor) or
+ * stamp quotes falsely (src/quotes.ts § existingFor). The panels' half — that
+ * Find more passes the list's own `profiled` — is
+ * tests/glossary-find-more-keeps-the-lists-profile.test.tsx and
+ * tests/quotes-find-more-panel.test.tsx.
+ */
+describe("`useProfile` on the wire", () => {
+  it("is sent as false only when Find more is asked for a plain list", async () => {
+    await act(async () => {
+      await glossary?.more(false);
     });
     expect(only().useProfile).toBe(false);
+    posted.length = 0;
+    await act(async () => {
+      await quotes?.regenerate(false);
+    });
+    expect(only().useProfile).toBe(false);
+  });
+
+  it("is absent — meaning yes — everywhere else", async () => {
+    await act(async () => {
+      await glossary?.more();
+    });
+    expect(only()).not.toHaveProperty("useProfile");
+    posted.length = 0;
+    await act(async () => {
+      await glossary?.find();
+    });
+    expect(only()).not.toHaveProperty("useProfile");
+    posted.length = 0;
+    await act(async () => {
+      await quotes?.regenerate();
+    });
+    expect(only()).not.toHaveProperty("useProfile");
   });
 });
 

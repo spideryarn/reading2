@@ -23,10 +23,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { QuotesOwner } from "../src/web/QuotesPanel.js";
 import { MAX_QUOTES_TOTAL, type Quote, type Quotes } from "../src/types.js";
 
-/* The same two stubs tests/mode-surface-changes-no-markup.test.tsx installs, for
-   its reasons: the profile hook fetches on mount, and src/web/lib/api.ts reaches
-   supabase at module scope. */
-vi.mock("../src/web/useProfile.js", () => ({ useHasProfile: () => false }));
+/* src/web/lib/api.ts reaches supabase at module scope — the stub
+   tests/mode-surface-changes-no-markup.test.tsx installs. */
 vi.mock("../src/web/lib/supabase.js", () => ({
   supabase: {
     auth: {
@@ -72,14 +70,12 @@ function owner(quotes: Quotes, over: Partial<QuotesOwner> = {}): QuotesOwner {
     outdated: false,
     profiled: false,
     profileChanged: false,
-    hasProfile: false,
     slug: "writes",
     error: null,
     job: null,
     failed: null,
     stalled: false,
     starting: false,
-    automatic: false,
     ensure: async () => {},
     regenerate: async () => {},
     cancel: noop,
@@ -135,12 +131,22 @@ describe("the foot", () => {
        src/quotes.ts § existingFor keeps the first pass's stamp, so the pass
        has to be asked the way the list was. */
     const regenerate = vi.fn(async () => {});
-    await mount(owner(list({ profileHash: "p" }), { profiled: true, hasProfile: true, regenerate }));
+    await mount(owner(list({ profileHash: "p" }), { profiled: true, regenerate }));
     expect(foot()?.querySelector('input[type="checkbox"]')).toBeNull();
     const find = [...(foot()?.querySelectorAll("button") ?? [])].find((b) => /find more/i.test(b.textContent ?? ""));
     expect(find).toBeDefined();
     await act(async () => find?.click());
     expect(regenerate).toHaveBeenCalledWith(true);
+    /* And nothing about the profile beside it, since 2026-09-13. */
+    expect(host.querySelector(".prof-row")).toBeNull();
+  });
+
+  it("sends a plain list's Find more plainly", async () => {
+    const regenerate = vi.fn(async () => {});
+    await mount(owner(list(), { profiled: false, regenerate }));
+    const find = [...(foot()?.querySelectorAll("button") ?? [])].find((b) => /find more/i.test(b.textContent ?? ""));
+    await act(async () => find?.click());
+    expect(regenerate.mock.calls).toEqual([[false]]);
   });
 
   it("says so when the last Find more added nothing, rather than looking like a dead button", async () => {
@@ -176,12 +182,25 @@ describe("the banners", () => {
     expect(buttons().some((b) => /find more/i.test(b))).toBe(false);
   });
 
+  it("Choose them again writes a list of its own, for the profile, whatever the old list was", async () => {
+    /* No argument, so `useProfile` defaults to yes: this replaces the list
+       rather than continuing it, and since the *Use your profile* checkbox went
+       on 2026-09-13 every new list is written for the profile. */
+    const regenerate = vi.fn(async () => {});
+    await mount(owner(list(), { stale: true, profiled: false, regenerate }));
+    const again = [...(banner()?.querySelectorAll("button") ?? [])].find((b) =>
+      /choose them again/i.test(b.textContent ?? ""),
+    );
+    if (!again) throw new Error("no Choose them again on the stale banner");
+    await act(async () => again.click());
+    expect(regenerate.mock.calls).toEqual([[]]);
+  });
+
   it("labels a profiled list whose profile was deleted as older, not written for you", async () => {
     await mount(
       owner(list({ profileHash: "the-first-pass" }), {
         profiled: true,
         profileChanged: true,
-        hasProfile: false,
       }),
     );
     const badge = host.querySelector(".prof-badge");

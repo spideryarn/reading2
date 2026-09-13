@@ -183,10 +183,6 @@ import type {
   Timeline,
 } from "../src/types.js";
 
-/* The profile hook fetches on mount and none of this is about the profile —
-   the same stub tests/remember-panel.test.tsx uses to mount `ChatPanel`. */
-vi.mock("../src/web/useProfile.js", () => ({ useHasProfile: () => false }));
-
 /* ------------------------------------------------- the reader, for Referee --
 
    Referee's band is the one this file cannot mount as a component, so the last
@@ -1277,14 +1273,12 @@ function glossaryOwner(glossary: Glossary | null): GlossaryOwner {
     outdated: false,
     profiled: false,
     profileChanged: false,
-    hasProfile: false,
     slug: SLUG,
     error: null,
     job: null,
     failed: null,
     stalled: false,
     starting: false,
-    automatic: false,
     find: async () => {},
     more: async () => {},
     cancel: () => {},
@@ -1311,14 +1305,12 @@ function ideasOwner(ideas: Ideas | null): IdeasOwner {
     outdated: false,
     profiled: false,
     profileChanged: false,
-    hasProfile: false,
     slug: SLUG,
     error: null,
     job: null,
     failed: null,
     stalled: false,
     starting: false,
-    automatic: false,
     ensure: async () => {},
     regenerate: async () => {},
     cancel: () => {},
@@ -1333,14 +1325,12 @@ function quotesOwner(quotes: Quotes | null): QuotesOwner {
     outdated: false,
     profiled: false,
     profileChanged: false,
-    hasProfile: false,
     slug: SLUG,
     error: null,
     job: null,
     failed: null,
     stalled: false,
     starting: false,
-    automatic: false,
     ensure: async () => {},
     regenerate: async () => {},
     cancel: () => {},

@@ -176,10 +176,12 @@ profileHash?: string | null;
 | `null` | written deliberately *without* a profile | **no** |
 | a hash | written from that profile | only if it differs from now |
 
-**`null` is never stale**, and that line is the whole design. A reader who unticked the box and paid
-for a plain glossary must not then be told it is out of date — that would be a control whose result
-the app immediately complains about. `undefined` is never stale for a gentler reason: nobody's
-existing artefacts should light up about a profile they never had.
+**`null` is never stale**, and that line is the whole design. A plain artefact was written on
+purpose: until 2026-09-13 by a reader who unticked the *Use your profile* box and paid for it, and
+since then by a reader with no profile, or by a Find more continuing a list that was already plain
+(§ [No control, one label](#no-control-one-label)). Telling them it is out of date would be the app
+complaining about its own result. `undefined` is never stale for a gentler reason: nobody's existing
+artefacts should light up about a profile they never had.
 
 **Clearing your profile marks nothing stale — but only if you clear *both* boxes.** `profileIsStale`
 compares against the *rendered* profile, and that is the join of the global half and the article's
@@ -265,93 +267,118 @@ The API takes `useProfile: boolean`, never the profile text. Absent means **yes*
 offered. A client that could supply the text would be a way to spend tokens on a string of its
 choosing and a way to put arbitrary text into a prompt that writes an artefact.
 
+**Since 2026-09-13 the client sends `false` in exactly two places**, neither of them a control:
+*Find more* on a plain glossary or quotes list, continuing it in its own recorded setting
+(§ [No control, one label](#no-control-one-label)); and `CandidatesPanel`, whose list of articles to
+read next must not be pitched at the reader. Every other request sends nothing. The API still takes
+`false` from anyone, because both of those need it and jobs' `sameWork` keys on it.
+
 Note this is the mirror of `deep` on explain, and the asymmetry is on purpose: deep search is an
 extra you ask for, so absent means no; the profile is the default this app now writes with.
 
-## The two controls, and why one of them is not a control
+## No control, one label
 
-Greg asked for *"a checkbox (default-true, with fully-explanatory tooltip) in
-all the places where we're taking into account that we have done so"*. Fable's
-review objected that a checkbox reads as something to *set* when what it records
-is something that *happened* — the shape the glossary already solved with
+> All the places where it has a little checkbox saying "use your profile", and remove that from the
+> UI. Just always have it as on. So just assume that we're always going to use the profile, and we
+> don't need to include it in the UI to ask them. So the UI is a bit tidier and more compact.
+>
+> — Greg, 2026-09-12, from an iPad, reading an article in summary mode
+
+**Every new run uses the profile, and nothing in a reading view offers to change that.** The one
+thing on screen about the profile is a *label* on the text — *written for you*, or *older profile*
+([`src/web/WrittenForYou.tsx`](../../src/web/WrittenForYou.tsx)) — and it opens the profile panel
+below. The profile itself is edited on `/profile` (the Command bar's Profile row reaches it) and, for
+the per-article half, on the metadata page. The way to not be profiled is to empty both boxes; that
+is a real loss of control, and it is the one Greg asked for.
+
+```
+  ┌─ GLOSSARY ─────────────────────────── ✓ written for you ─┐   ← the LABEL, which
+  │  Threshold ▁▂▃▅▇                                          │     opens THE PANEL
+  │  ⚠ These terms describe an older version of the article.   │
+  │                                   [ Find them again ]      │   ← nothing beside
+  └────────────────────────────────────────────────────────────┘     the spend
+```
+
+### Find more continues the list in its own setting
+
+**The one exception is Find more**, on the glossary and on the quotes, and it is not a control
+either: it passes the list's own recorded setting (`profiled`, from `profileHash != null`), so a
+plain list is topped up plainly and a profiled one for the profile. Always sending the profile would
+have been simpler and wrong, for a different reason on each stage (GPT Sol's review of
+[260913a](../plans/260913a-drop-the-use-your-profile-checkbox.md)):
+
+- **Glossary** — `existingFor` refuses to append across a profile difference, so a profiled Find
+  more on a plain list would **rewrite** it, dropping every term the model did not return again,
+  under a button that says "more".
+- **Quotes** — an append keeps the stamp of the pass that started the list
+  ([quotes.md § Find more appends](quotes.md)), so a profiled pass onto a plain list would sit under
+  a stamp saying it was not profiled.
+
+*Find them again*, *Choose them again*, *Write it again* and every first run write a list of their
+own, and those always use the profile.
+
+### What was here before, and why it went
+
+From 2026-08-26 to 2026-09-13 there were **two** things, and the split was the design. Greg had asked
+for *"a checkbox (default-true, with fully-explanatory tooltip) in all the places where we're taking
+into account that we have done so"*. Fable's review objected that a checkbox reads as something to
+*set* when what it records is something that *happened* — the shape the glossary already solved with
 [a label instead of a warning triangle](glossary.md) — and that flipping it means
-regenerate-and-wait, which is a model call hidden behind the lightest control in
-the interface.
+regenerate-and-wait, a model call hidden behind the lightest control in the interface. So the label
+went on the text, and a row reading *☑ Use your profile 👤* went beside every button that spends —
+the glossary's Find / Find them again / Find more, quotes, ideas, tweets, sketch, and the chat and
+Remember composer. The checkbox was seeded from the artefact on screen, so it needed no storage; it
+was absent for a reader with no profile; the 👤 button beside it opened the panel and, alone, read
+*Your profile*, because that reader most needed to know what "your profile" meant (2026-08-30). A run
+that had started itself showed *Using your profile* in the checkbox's place (2026-08-31).
 
-So the two jobs are separated ([`src/web/WrittenForYou.tsx`](../../src/web/WrittenForYou.tsx)):
-
-```
-  ┌─ GLOSSARY ─────────────────────────── ✓ written for you ─┐   ← a LABEL
-  │  Threshold ▁▂▃▅▇                                          │
-  │  ⚠ You changed your profile since these were written.      │
-  │  ┌──────────────────────────────────────────────────────┐ │
-  │  │  ☑ Use your profile 👤      [ Find them again ]       │ │   ← the CHECKBOX,
-  │  └──────────────────────────────────────────────────────┘ │      beside the spend
-  └────────────────────────────────────────────────────────────┘
-                          ↑
-              both of these open THE PANEL — below
-```
-
-Unticking the box and pressing the button is exactly the "check/uncheck and it
-regenerates without this prompt" that was asked for. It just does not pretend to
-be free.
-
-**The checkbox needs no storage of its own.** It is seeded from what the
-artefact on screen was written with (`profileHash != null`), so the reader's
-last choice comes back off the file rather than out of a preference that could
-disagree with it. With no artefact yet, it starts ticked.
-
-**With no profile written, the checkbox is absent** — not disabled, not unchecked. "Written" means
-*either* box, resolved the way the prompts resolve it: a reader with only an article purpose has a
-profile as far as every prompt is concerned, and hiding the control from them would mean they could
-not opt out of something they could not see. `useHasProfile(slug)` asks the server that exact
-question rather than checking the global box alone.
-
-The **panel button beside it stays**, and that is the one thing here that is not symmetrical. Until
-2026-08-30 the whole component vanished for a reader with no profile, so the person who most needed
-to know what "your profile" meant was the one person the app never told. It now reads *Your profile*
-in that state, because a bare icon alone in a row says nothing — measured in a browser rather than
-guessed.
+**All of that row is gone**, not only the checkbox: an explanation of a choice nobody is offered is
+clutter, and Greg's reason was a tidier, more compact interface. The label's half of Fable's split
+still stands. What is lost with the row is the way into the panel for a reader with **no** profile —
+the badge appears only on text written for one — so a first profile is now found through `/profile`
+and the Command bar, not from beside a button. `useHasProfile`, the hook that asked whether to draw
+the checkbox, went with it.
 
 One thing the label does **not** do: it goes on describing an artefact that was written for a profile
 after the reader clears theirs. That is deliberate — it *was* written for you, and the badge is about
-the text rather than about the current state of the world. The checkbox disappears; the label stays
-until the artefact is rewritten.
+the text rather than about the current state of the world. The label stays until the artefact is
+rewritten.
 
-Where each one is:
+Where the label is:
 
-| Surface | Label | Checkbox | Panel |
-|---|---|---|---|
-| glossary | on the head line | beside Find / Find them again | from both |
-| summaries | on the head line | beside Write them again | from both |
-| ideas | on the head line | beside Find them | from both |
-| tweets | beside the counts | beside Write it again | from both |
-| chat | — | in the composer, per turn | from the checkbox |
-| explain | — | — | — |
+| Surface | Label |
+|---|---|
+| glossary | on the head line |
+| ideas | on the head line |
+| quotes | on the head line |
+| tweets | beside the counts |
+| sketch, summaries, chat, Remember, explain | — |
 
-**Chat gets the checkbox and no label**, and the asymmetry is the point: an
-answer is not an artefact anybody rewrites, so there is nothing for a label to
-describe and nothing to flip back to. The checkbox governs the next answer and
-claims nothing more.
+(The summaries panel lost its label and its checkbox before this; the table said otherwise until
+2026-09-13.)
 
-**Explain gets neither, deliberately.** It has no pre-flight moment — the call
-fires when you select a sentence — so a checkbox in the dialog could only affect
-a *re-ask*, which is a control that appears after the thing it would have
-governed. And it is the call the profile helps most: a wrong pitch wastes the
-whole answer, where a wrong pitch in a glossary wastes one entry. Explain always
+**Chat gets no label**, because an answer is not an artefact anybody rewrites, so there is nothing
+for a label to describe. Every answer uses the profile, except the reading-candidates list
+(`CandidatesPanel`), which asks for none on purpose.
+
+**Explain never had a control, deliberately.** It has no pre-flight moment — the call fires when you
+select a sentence — so a checkbox in the dialog could only have affected a *re-ask*, a control that
+appears after the thing it would have governed. And it is the call the profile helps most: a wrong
+pitch wastes the whole answer, where a wrong pitch in a glossary wastes one entry. Explain always
 uses the profile.
 
 ### And the third thing, which is where the two boxes are actually shown
 
-Both controls above are also the way in to a **profile panel** — what your
+The label above is also the way in to a **profile panel** — what your
 profile currently says, and a working link to each of the two pages that edit
 it ([`src/web/ProfilePanel.tsx`](../../src/web/ProfilePanel.tsx), built
-2026-08-30 from [the plan](../plans/260830c-profile-panel.md)).
+2026-08-30 from [the plan](../plans/260830c-profile-panel.md)). Until
+2026-09-13 the 👤 button in the *Use your profile* row opened it too.
 
 ```
-  ☑ Use your profile 👤      [ Find the terms ]
-                      │ click
-                      ▼
+  ✓ written for you
+          │ click
+          ▼
   ┌─────────────────────────────────────────┐
   │ What the glossary, summaries, chat  [×] │
   │ and explanations are written for. It    │
@@ -393,21 +420,20 @@ only after stopping, throws away all of them. Save-on-blur has the matching
 hole: the outside `pointerdown` unmounts the textarea, so the blur that would
 have flushed it need never fire. Greg chose read-only knowing that, 2026-08-30.
 
-**It fetches when it is opened**, and `useHasProfile` is untouched — which
-leaves the nine test files that mock it alone. The justification first written
-here was wrong and the correction is the useful part: it claimed the separate
-fetch avoided sending the profile five times a page. It does not. `/api/reader`
-has carried `profile` since it was written, all five hooks fetch it, and
-`purpose` now rides beside it — so the panel's request is a **sixth**, not a
-substitute for five. Folding them into one shared read is real work still worth
-doing, and its price is those nine mocks. Deferred deliberately rather than
-unnoticed (GPT Sol's review of the built code, 2026-08-30).
+**It fetches when it is opened.** The justification first written here was
+wrong and the correction is the useful part: it claimed the separate fetch
+avoided sending the profile five times a page. It did not. Five hooks called
+`useHasProfile`, which fetched `/api/reader` — `profile` and `purpose` included
+— for a boolean, so the panel's request was a **sixth**, not a substitute for
+five (GPT Sol's review of the built code, 2026-08-30). Those five fetches went
+with the *Use your profile* checkbox they served, on 2026-09-13.
 
 **And "always fresh" was only true after a one-line fix.** `apiFetch` caches
 `/api/reader` offline, and a `PATCH /api/library/<slug>` — which is how a
 purpose is saved — invalidated only its own prefix. So the panel could serve
-last week's sentence as current, and `hasProfile` could go on saying `false` to
-a reader who had just written their first purpose, hiding every tick from them.
+last week's sentence as current (and, while the checkbox existed, `hasProfile`
+could go on saying `false` to a reader who had just written their first
+purpose, hiding every tick from them).
 `resourceOf` maps a URL to *its own* resource and is right to; a write that
 makes a *second* resource wrong has to name it, and now does
 ([`lib/api.ts` § `saving`](../../src/web/lib/api.ts)).
@@ -663,8 +689,9 @@ The measurements, both reviews and the two bugs the tests found after the review
   answer — which is the *right* absence for now, because a badge there would
   start lying the moment the profile changed. Adding the field to those three is
   the next piece.
-- **Instant switching between a profiled and a plain artefact** is not built. Flipping the checkbox
-  and pressing "Write them again" is the whole feature minus the instant part; storing both copies is
+- **Instant switching between a profiled and a plain artefact** is not built, and since the checkbox
+  went on 2026-09-13 there is no way to ask for a plain artefact at all short of emptying both boxes;
+  storing both copies is
   [deferred with reasons](../plans/260826t-reader-profile.md#storing-both-copies-is-deferred-and-the-deferral-now-has-teeth).
 - **Two tabs.** Last write wins, which is what `shelf.json` already does.
 - **Not multi-user.** One reader, one profile, which is what [auth.md](auth.md) says this app is —

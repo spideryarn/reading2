@@ -1,8 +1,10 @@
 /**
  * "What am I being written for?" — answered where the question is asked.
  *
- * A small popover, raised from beside the *Use your profile* checkbox and from
- * the *written for you* badge, that says what a profile does, shows both boxes
+ * A small popover, raised from the *written for you* badge (WrittenForYou.tsx)
+ * — and, until 2026-09-13, from a button beside the *Use your profile*
+ * checkbox, which went with the checkbox — that says what a profile does, shows
+ * both boxes
  * as the reader currently has them, and carries a working link to each editor.
  * docs/plans/260830c-profile-panel.md, docs/project/reader-profile.md.
  *
@@ -38,18 +40,17 @@
  * ## Why it fetches for itself, and what that argument is NOT
  *
  * It fetches `/api/reader?slug=` when it is **opened**, rather than taking the
- * text as props from the five hooks that already call `useHasProfile`. That
- * keeps this component's data in one place and leaves `useHasProfile` — and the
- * nine test files that mock it — alone.
+ * text as props from somewhere that fetched it at page load. That keeps this
+ * component's data in one place.
  *
  * **The reason this file first gave was wrong, and the correction is worth
  * keeping.** It claimed the panel fetched separately so that the reader's
- * profile would not be sent five times a page. It is: `/api/reader` has carried
- * `profile` since it was written, all five hooks fetch it, and `purpose` now
- * rides beside it. So this request is a *sixth*, not a substitute for five, and
- * consolidating them into one shared read is real work still worth doing —
- * costing an update to those nine mocks. Deferred deliberately rather than
- * unnoticed. GPT Sol's review of the built code, 2026-08-30.
+ * profile would not be sent five times a page. It was: five hooks called
+ * `useHasProfile`, which fetched `/api/reader` — `profile` and `purpose`
+ * included — for a boolean, so this request was a *sixth*, not a substitute
+ * for five. GPT Sol's review of the built code, 2026-08-30. Those five went
+ * with the *Use your profile* checkbox on 2026-09-13; this panel's read, made
+ * only when it is opened, is no longer one of six.
  *
  * What the fetch-on-open does buy is that the panel shows what the server holds
  * *now* rather than what it held when the page mounted. That is only true
@@ -81,7 +82,7 @@ import { PROFILE_HREF, carriedSearch, readHref } from "./router.js";
  *
  * `hasProfile` is on the response and deliberately unused here: this panel is
  * about the two boxes, and whether they add up to something the prompts count
- * is a question the checkbox already asks through `useHasProfile`.
+ * is not a question it needs answered.
  */
 interface ReaderProfile {
   /** "About you", the same on every article. `null` for never written. */

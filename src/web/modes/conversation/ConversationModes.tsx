@@ -624,7 +624,7 @@ export function ConversationBand({
       /* Local only — an empty conversation was never written down. See
          `withoutEmpty` in useChat.ts. */
       onDiscard={discard}
-      onSend={(question, useProfile) => {
+      onSend={(question) => {
         // `send` returns the thread it went to, minted here when this is a new
         // conversation — so the URL can name it before the request lands.
         /* The OPEN conversation's kind where there is one, and this mode's
@@ -634,7 +634,6 @@ export function ConversationBand({
            it, so this being wrong is a 409 rather than a corrupted transcript. */
         const sendKind = open?.kind ?? kind;
         const id = send(thread, question, at, {
-          useProfile,
           onThreadId: (corrected) => void setThread(corrected),
           kind: sendKind,
           ...(sendKind === "remember" ? { stance } : {}),
@@ -648,11 +647,10 @@ export function ConversationBand({
          `startNew` raises it — this *is* a new conversation being started, and
          the reader who typed to start it should still have a caret when it
          opens, in the composer that has just replaced the one they typed into. */
-      onSendNew={(question, useProfile) => {
+      onSendNew={(question) => {
         /* `null` for the thread, so this mints a new one — and therefore this
            mode's kind, not any open conversation's. */
         const id = send(null, question, at, {
-          useProfile,
           onThreadId: (corrected) => void setThread(corrected),
           kind,
           ...(kind === "remember" ? { stance } : {}),

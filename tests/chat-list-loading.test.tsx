@@ -25,10 +25,6 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { ChatThread } from "../src/types.js";
 import { SLOW_AFTER_MS } from "../src/web/useSlow.js";
 
-/* The profile hook fetches on mount, and this test is about what is on screen
-   while a different fetch is out. */
-vi.mock("../src/web/useProfile.js", () => ({ useHasProfile: () => false }));
-
 const { ChatPanel } = await import("../src/web/ChatPanel.js");
 
 /* A real id, because `?thread=` is parsed as a block id — src/ids.ts. */

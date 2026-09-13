@@ -30,7 +30,6 @@ import { useCallback, useEffect, useState } from "react";
 import { readSketch, type Sketch, type SketchFault } from "../sketch-scene.js";
 import type { BlockId, Job, SketchResponse } from "../types.js";
 import { apiFetch, readJson } from "./lib/api.js";
-import { useHasProfile } from "./useProfile.js";
 import { useAutoRun } from "./useAutoRun.js";
 import { useOrderedRead } from "./useOrderedRead.js";
 import { type StepFailure, useStepJob } from "./useStepJob.js";
@@ -51,7 +50,6 @@ export interface UseSketch {
   profiled: boolean;
   /** …and you are not that reader any more. */
   profileChanged: boolean;
-  hasProfile: boolean;
   slug: string;
   error: string | null;
   job: Job | null;
@@ -65,8 +63,6 @@ export interface UseSketch {
   stalled: boolean;
   /** The POST has gone and the queue has not seen it yet. `StepJob.starting`. */
   starting: boolean;
-  /** The run in flight was started automatically. `UseIdeas.automatic`. */
-  automatic: boolean;
   /**
    * **Draw it if nobody has** — unforced, for the automatic run and for the
    * button in the empty state.
@@ -77,7 +73,7 @@ export interface UseSketch {
    * during an unforced automatic start is a second key and a second two-minute,
    * $0.20 job. useIdeas.ts § `ensure`.
    */
-  ensure(useProfile?: boolean): Promise<void>;
+  ensure(): Promise<void>;
   /**
    * **Draw it again** — forced, for a redraw offered beside a picture that is
    * already there, where an unforced run would skip while the reader watched a
@@ -85,7 +81,7 @@ export interface UseSketch {
    * rather than appends, and `sketch` is in `FORCE_ONLY_WHEN_NAMED` so nothing
    * else is swept in with it.
    */
-  regenerate(useProfile?: boolean): Promise<void>;
+  regenerate(): Promise<void>;
   cancel(id: string): void;
 }
 
@@ -97,7 +93,6 @@ export function useSketch(slug: string, blockOrder: readonly BlockId[]): UseSket
   const [outdated, setOutdated] = useState(false);
   const [profiled, setProfiled] = useState(false);
   const [profileChanged, setProfileChanged] = useState(false);
-  const hasProfile = useHasProfile(slug);
   const [error, setError] = useState<string | null>(null);
 
   /**
@@ -186,14 +181,14 @@ export function useSketch(slug: string, blockOrder: readonly BlockId[]): UseSket
 
   /* Two verbs, split on `force`. See the interface above, and useIdeas.ts. */
   const ensure = useCallback(
-    async (useProfile = true) => {
-      await queue.start({ useProfile });
+    async () => {
+      await queue.start();
     },
     [queue],
   );
   const regenerate = useCallback(
-    async (useProfile = true) => {
-      await queue.start({ force: true, useProfile });
+    async () => {
+      await queue.start({ force: true });
     },
     [queue],
   );
@@ -204,7 +199,7 @@ export function useSketch(slug: string, blockOrder: readonly BlockId[]): UseSket
      will land on rather than a fixed one, so a press that opens Illustrated
      cannot leave a sketch token behind for a later Back step to spend:
      src/web/activation.ts § `activationForDiagram`. */
-  const auto = useAutoRun(slug, "sketch", status, ensure, reload);
+  useAutoRun(slug, "sketch", status, ensure, reload);
 
   return {
     status,
@@ -214,14 +209,12 @@ export function useSketch(slug: string, blockOrder: readonly BlockId[]): UseSket
     outdated,
     profiled,
     profileChanged,
-    hasProfile,
     slug,
     error,
     job: queue.job,
     failed: queue.failed,
     stalled: queue.stalled,
     starting: queue.starting,
-    automatic: auto && (queue.job !== null || queue.starting),
     ensure,
     regenerate,
     cancel: queue.cancel,

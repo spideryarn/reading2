@@ -176,11 +176,12 @@ export interface UseIllustrated {
 /**
  * **No profile argument on either verb, and that is not an omission.**
  *
- * Every other panel's `ensure` takes `useProfile` because the artefact records
- * what it was run with. This step passes `profile: null` to the brief call and
- * inherits `profileHash` from the Sketch (src/pipeline.ts § illustrated), so a
- * tickbox here would be a control with no effect on the picture — and worse
- * than no control, because it would imply the personalisation is this stage's
+ * Until 2026-09-13 every other panel's `ensure` took `useProfile`, from a
+ * *Use your profile* checkbox; that went, and none of them takes it now. This
+ * one never did, for a reason that still holds: this step passes
+ * `profile: null` to the brief call and inherits `profileHash` from the Sketch
+ * (src/pipeline.ts § illustrated), so a profile control here would have no
+ * effect on the picture — and would imply the personalisation is this stage's
  * when it is the Sketch's. The panel states the inherited fact instead.
  */
 export function useIllustrated(slug: string, blocks: readonly Block[]): UseIllustrated {

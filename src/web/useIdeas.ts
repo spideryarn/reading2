@@ -34,7 +34,6 @@ import { useOrderedRead } from "./useOrderedRead.js";
 import { type StepFailure, useStepJob } from "./useStepJob.js";
 import { useAutoRun } from "./useAutoRun.js";
 import { apiFetch, readJson } from "./lib/api.js";
-import { useHasProfile } from "./useProfile.js";
 
 type IdeasStatus = "loading" | "none" | "ready" | "error";
 
@@ -58,12 +57,11 @@ export interface UseIdeas {
    * (src/pipeline.ts § ideas), which no other stage does yet.
    */
   profileChanged: boolean;
-  hasProfile: boolean;
   /**
-   * The article this band is about — carried alongside `hasProfile` because
-   * the same question needs it. The profile panel shows the *per-article* half
-   * ("why you're reading this one") and links to the page that edits it, and
-   * neither is possible without knowing which article. docs/plans/260830c-profile-panel.md.
+   * The article this band is about. The profile panel shows the *per-article*
+   * half ("why you're reading this one") and links to the page that edits it,
+   * and neither is possible without knowing which article.
+   * docs/plans/260830c-profile-panel.md.
    */
   slug: string;
   error: string | null;
@@ -80,15 +78,12 @@ export interface UseIdeas {
   stalled: boolean;
   /** The POST has gone and the queue has not seen it yet. `StepJob.starting`. */
   starting: boolean;
-  /**
-   * **The run in flight was started automatically**, so the panel says which
-   * profile it is using rather than offering a tick it has already decided.
-   *
-   * Narrowed to *and something is running* here rather than in the panel, so
-   * five panels cannot each get the narrowing slightly different: once the job
-   * lands or fails, the tickbox is the honest control again.
+  /*
+   * `automatic` — *the run in flight started itself* — lived here until
+   * 2026-09-13, so the panel could say *Using your profile* instead of offering
+   * a tick the run had already decided. The tick and the sentence both went,
+   * and so did this. docs/plans/260913a-drop-the-use-your-profile-checkbox.md.
    */
-  automatic: boolean;
   /**
    * **Write the list if there is not one** — unforced, for the automatic run
    * and for the button beside the empty state.
@@ -100,7 +95,7 @@ export interface UseIdeas {
    * here and it forced always, which is exactly that bug waiting for a second
    * caller.
    */
-  ensure(useProfile?: boolean): Promise<void>;
+  ensure(): Promise<void>;
   /**
    * **Write the list again** — forced, for the button offered *beside a list
    * that is current*, where an unforced run would skip and the reader would
@@ -111,7 +106,7 @@ export interface UseIdeas {
    * `ideas` is in FORCE_ONLY_WHEN_NAMED, and `useStepJob` names the step it is
    * forcing — which is what makes that true rather than a hope.
    */
-  regenerate(useProfile?: boolean): Promise<void>;
+  regenerate(): Promise<void>;
   cancel(id: string): void;
 }
 
@@ -122,7 +117,6 @@ export function useIdeas(slug: string): UseIdeas {
   const [outdated, setOutdated] = useState(false);
   const [profiled, setProfiled] = useState(false);
   const [profileChanged, setProfileChanged] = useState(false);
-  const hasProfile = useHasProfile(slug);
   const [error, setError] = useState<string | null>(null);
 
   /**
@@ -192,14 +186,14 @@ export function useIdeas(slug: string): UseIdeas {
      interface above for why the difference is the identity of the request
      rather than a convenience. */
   const ensure = useCallback(
-    async (useProfile = true) => {
-      await queue.start({ useProfile });
+    async () => {
+      await queue.start();
     },
     [queue],
   );
   const regenerate = useCallback(
-    async (useProfile = true) => {
-      await queue.start({ force: true, useProfile });
+    async () => {
+      await queue.start({ force: true });
     },
     [queue],
   );
@@ -209,7 +203,7 @@ export function useIdeas(slug: string): UseIdeas {
      is not an answer. And `reload` rather than the raw `load`, which takes the
      ordering predicate from useOrderedRead and is not a standalone read — the
      merge of the two on 2026-09-02 was a typecheck error at this line. */
-  const auto = useAutoRun(slug, "ideas", status, ensure, reload);
+  useAutoRun(slug, "ideas", status, ensure, reload);
 
   return {
     status,
@@ -218,14 +212,12 @@ export function useIdeas(slug: string): UseIdeas {
     outdated,
     profiled,
     profileChanged,
-    hasProfile,
     slug,
     error,
     job: queue.job,
     failed: queue.failed,
     stalled: queue.stalled,
     starting: queue.starting,
-    automatic: auto && (queue.job !== null || queue.starting),
     ensure,
     regenerate,
     cancel: queue.cancel,
