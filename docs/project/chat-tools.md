@@ -420,6 +420,33 @@ the one place this pulls against the "?" answer's pedagogical addendum, which is
 says nothing at all about where an answer comes from
 ([comments.md](comments.md), [260905c](../plans/260905c-gutter-comment-chip-explanation-metadata-and-prompt.md)).
 
+### And so is asking where a passage stands, and every claim says where it came from
+
+Report 3D, 2026-09-12 — a question typed under the "?" drew only on the article:
+
+> So, in other words, asking a question with the comments panel has the full power of Chat, but is
+> really crystal clear about what is and what is not from the article and always provides sort of
+> evidentiary links back.
+>
+> — Greg, 2026-09-12
+
+Same finding as 1X: every passage-question path already offers web search on every round, so the
+model **was offered it and declined**, this time because none of `SYSTEM`'s triggers named the
+*broader sense of things* — how a passage fits its field, what others say, what has happened since.
+On a local baseline the "?" press and *"how does this fit the wider debate?"* searched **0 times in
+12** (two articles, three runs each), and of the six answers to *"what has happened since?"* that did
+search, five stated their findings with no link.
+
+So `SYSTEM` gained a trigger for that question beside the 1X one, and a **WHERE EACH CLAIM CAME
+FROM** section in place of the one-line *"say where something came from"*: four origins (article →
+block id, web → link, library → named by title, own reasoning → *"My inference is…"*), no unlinked
+general knowledge, and no web claim in a sentence that carries a block id. `WEB_LINKS` now links a
+page once per run of claims rather than once per answer, and the list under an answer is headed
+*From the web*. `helpSection` is untouched — `SYSTEM` still owns every rule about sources. Pinned by
+`tests/chat-search-triggers.test.ts` and `tests/chat-sources-from-the-web.test.tsx`; the reasoning
+and the before-and-after numbers are in
+[260913b](../plans/260913b-chat-and-comment-questions-reach-for-the-web-and-the-citations-list.md).
+
 ## The "?" says so, and the answer teaches
 
 A press of the "?" in the gutter sends `help: true` on the POST body, validated as **absent or

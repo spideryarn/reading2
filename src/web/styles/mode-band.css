@@ -623,9 +623,17 @@
   margin: 0.4rem 0 0;
   padding: 0.4rem 0 0;
   border-top: 1px solid var(--rule);
-  list-style: none;
   font-family: var(--font-ui);
   font-size: 0.85rem;
+}
+.chat-sources ul { margin: 0; padding: 0; list-style: none; }
+/* Says the list is the web half of the answer (report 3D). As quiet as the
+   list it heads — the same small-caps note `.chat-stance-tag` is. */
+.chat-sources-label {
+  margin: 0 0 0.15rem;
+  font-variant: small-caps;
+  letter-spacing: 0.03em;
+  color: var(--ink-faint);
 }
 .chat-sources a { color: var(--ink-faint); }
 .chat-sources a:hover { color: var(--highlight-ink); }

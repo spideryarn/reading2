@@ -242,3 +242,19 @@ machinery reused, and it already is; a second prompt is the drift 260905c warned
   "since" searched twice and its answer carries *no link at all* — it states a 2025 paper, a critic
   "Reichert (2025)" and a Microsoft executive as fact, beside article block ids, with nothing saying
   they came from the web.
+
+  **Two more runs** (`…-baseline-2026-09-13T03-38-33.json`), so three per cell — web searches that ran,
+  out of three:
+
+  | case | Seth | Gwern |
+  |---|---|---|
+  | "?" press (target) | 0 / 3 | 0 / 3 |
+  | "wider debate?" (target) | 0 / 3 | 0 / 3 |
+  | "what has happened since?" (target) | 3 / 3 | 3 / 3 |
+  | "what does this paragraph mean?" (control) | 0 / 3 | 0 / 3 |
+  | "does it use the word X?" (control) | 0 / 3 | 0 / 3 |
+
+  The "wider debate" turns did reach for tools — but for *ours*: `search_library` up to four times,
+  `search_article_words`, the glossary — never the web. And of the six "since" answers that did
+  search, **five carry no link in their text** to what they found. So the missing links are the
+  common case, not a fluke.

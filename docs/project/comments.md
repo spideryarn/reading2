@@ -1023,6 +1023,8 @@ question about is a cache hit rather than a fresh read of the whole article.
 ## See also
 
 - [vision.md](vision.md#where-this-goes-after-granularity-zoom) — where "ask in place" sits in the plan
+- [chat-tools.md § where a passage stands](chat-tools.md#and-so-is-asking-where-a-passage-stands-and-every-claim-says-where-it-came-from) —
+  why a question asked from a comment reaches for the web, and marks what is not from the article
 - [block-ids.md](block-ids.md) — the spine, and why losing an anchor beats moving it
 - [web-client.md](web-client.md) — the reading view this hangs off
 - [url-state.md](url-state.md) — `?note=` joins the family; why it replaces rather than pushes

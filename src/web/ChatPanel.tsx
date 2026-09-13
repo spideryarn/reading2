@@ -79,6 +79,7 @@ import type {
   BlockId,
   ChatMessage,
   ChatThread,
+  Citation,
   RememberStance,
   ThreadKind,
   ToolRun,
@@ -1417,23 +1418,7 @@ function Turn({
            prose. docs/plans/260831l-live-conversation-in-chat.md § 1b. */
         <PassageLinks passages={message.passages} onJump={onJump} />
       )}
-      {message.citations && message.citations.length > 0 && (
-        <ul className="chat-sources">
-          {/* Filtered again here, and the repetition is deliberate. The server
-              refuses a non-http(s) citation before storing it (converse.ts §
-              isWebUrl), but `chat.json` is a file on disk that predates this
-              check and could be edited by hand — and this is the one place in
-              chat where model output reaches an attribute rather than a text
-              node. A second cheap check at the boundary that matters. */}
-          {message.citations.filter((c) => isWebUrl(c.url)).map((c) => (
-            <li key={c.url}>
-              <a href={c.url} target="_blank" rel="noreferrer noopener">
-                {c.title ?? hostOf(c.url)}
-              </a>
-            </li>
-          ))}
-        </ul>
-      )}
+      <WebSources citations={message.citations} />
       {message.status !== "pending" && (
         <div className="chat-actions">
           {/* **Which stance produced this answer**, on Remember turns only.
@@ -1571,6 +1556,40 @@ function ToolIcon({ name }: { name: string }) {
     default:
       return <Search size={12} aria-hidden />;
   }
+}
+
+/**
+ * **The web pages a search brought back, under the answer, headed as such** —
+ * so the reader can see which half of the answer is the web, not only read it
+ * in the prose (report 3D; docs/plans/260913b-chat-and-comment-questions-reach-for-the-web-and-the-citations-list.md).
+ *
+ * Filtered again here, and the repetition is deliberate. The server refuses a
+ * non-http(s) citation before storing it (converse.ts § isWebUrl), but an older
+ * stored row predates that check and could hold anything — and this is the one
+ * place in chat where model output reaches an attribute rather than a text node.
+ * A second cheap check at the boundary that matters.
+ *
+ * And it filters **before** deciding whether to draw: an array holding only a
+ * non-web URL is non-empty and lists nothing, so a guard on the unfiltered array
+ * would put "From the web" over an empty list (Sol F10).
+ */
+export function WebSources({ citations }: { citations: Citation[] | undefined }) {
+  const web = (citations ?? []).filter((c) => isWebUrl(c.url));
+  if (web.length === 0) return null;
+  return (
+    <div className="chat-sources">
+      <p className="chat-sources-label">From the web</p>
+      <ul>
+        {web.map((c) => (
+          <li key={c.url}>
+            <a href={c.url} target="_blank" rel="noreferrer noopener">
+              {c.title ?? hostOf(c.url)}
+            </a>
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
 }
 
 /**
