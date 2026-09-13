@@ -33,12 +33,25 @@ When — and only when — **all three** hold:
 
 the Sentry mirror adds two attachments:
 
-- **`source.pdf` or `source.html`** — the original document, out of the `sources` bucket, through the
-  same revision reference and re-hash `readPdf` uses. Capped at **10 MiB**; above that it is left
-  off and the tag says so.
-- **`article.json`** — `{ metadata, article }`: `articleMetadata(slug)` (source, steps and when each
-  ran, visibility) and `loadArticle(slug)` (the payload the reading page loaded: blocks, tree,
-  arc, labels, assets manifest). Capped at **5 MiB** of JSON; it gzips well in transit.
+- **`source.pdf` or `source.html`** — the original document, through the **existing**
+  `loadSource(slug)` (src/store/contracts.ts `ArticleReader`), which already returns either kind,
+  owner-filters through `currentRevision`, and re-hashes through the shared raw-document resolver.
+  No new store method; `SourceStore.readPdf` stays narrow, because serving HTML inline from our
+  origin is stored XSS and that is its whole reason to exist. Capped at **10 MiB**, checked before
+  the bytes are read where the existing path allows it; above that it is left off and the tag says
+  so.
+- **`article.json`** — `loadArticle(slug)` (the payload the reading page loaded: blocks, tree,
+  arc, labels, assets manifest) plus a **field-by-field pick** from `articleMetadata(slug)` — the
+  steps and when each ran, the source's kind and size. **Built, not copied**: `ArticleMetadata`
+  carries `profile` and `purpose`, the reader's own "about you" and "why this one" text, and a
+  whole-object copy would send both. A test pins their absence. Capped at **5 MiB measured as UTF-8
+  bytes** — encoded once, the cap checked on `byteLength`, and those exact bytes attached, because
+  `json.length` counts UTF-16 units and undercounts non-Latin text by up to 3×. It gzips well in
+  transit.
+
+  The one reader-authored string that does ride along is `meta.title` when the reader has renamed
+  the article on their shelf (`titleFor` in src/store/pg.ts). That is the title the page showed
+  them, which is what the copy promises, and it is kept.
 
 Two new tags, each a **closed vocabulary**, so Sentry can be filtered on them and a missing file is
 visible rather than silent:
@@ -60,10 +73,15 @@ dangling bucket reference or a bad hash) — itself worth knowing.
 - **Unticked, nothing is read at all** — not "read and dropped". The gatherer is not called.
 - **The Postgres row is unchanged.** No migration; the source is already ours.
 - **Logs carry lengths and tags, never bytes** — docs/project/logging.md.
-- **The envelope guard is unchanged.** It already writes attachments only from what
-  `mirrorFeedback` registers (src/feedback-envelope.ts), so the new attachments ride through the
-  same seam and nothing ambient can join them. It is not a defence in security-map.md's table, and
-  no defence is edited.
+- **The envelope guard's rule is unchanged, its key is not.** It already writes attachments only
+  from what `mirrorFeedback` registers (src/feedback-envelope.ts), so the new attachments ride
+  through the same seam and nothing ambient can join them. What changes is *what a registration is
+  found by*: it was the report id, which the browser mints and which is unique only per owner
+  (`(owner_id, id)` is the key, src/db/schema.ts). Two owners filing the same id at once could have
+  each other's registration written into their envelope — message, user and now the article. So the
+  registration is keyed on a **server-minted random nonce**, carried on the event as a tag the guard
+  reads and never writes back. It is not a defence in security-map.md's table, and no defence is
+  edited.
 - **No Sentry client, no reads** — on a laptop and under `npm test` the gatherer is never reached,
   so nobody pays 10 MiB of bucket reads for a report going nowhere.
 
@@ -112,9 +130,10 @@ Quoted here so it can be read on its own, without a diff. Greg asked for the dia
 Proposed:
 
 > **Send extra diagnostics.** The last few requests this page made to us and how they went, the
-> names of any errors, and facts about your browser and screen size. If you are reading one of your
-> own articles, it also sends that article — the file it was made from and the page as we showed it
-> to you — so we can reproduce the problem. *Never* your notes, comments or chats.
+> names of any errors, and facts about your browser and screen size. On one of your own articles,
+> it may also send the file the article was made from and our copy of its text, within a size
+> limit, so we can reproduce the problem. *Never* your notes, comments or chats, or what you've
+> told us about yourself.
 
 Two things dropped on purpose: *"which article and passages you were looking at"* is subsumed by
 the article itself; *"anything you have typed into a search box"* is removed because it was only
@@ -130,11 +149,21 @@ Today:
 
 Proposed:
 
-> If you tick “send extra diagnostics” while reading one of your own articles, the report also
-> carries that article: the file it was made from, and the page as we showed it to you, including
-> what we had made from it. That goes to Sentry with the rest of the report, so that we can
-> reproduce what went wrong. Leave the box unticked, or send the report from any other page, and no
-> article text goes with it. A bug report never carries your notes, comments, highlights or chats.
+> If you tick “send extra diagnostics” on a page of one of your own articles, the report may also
+> carry that article: the file it was made from and our copy of its text, with the headings and
+> summaries we made for it, up to a size limit. That goes to Sentry with the rest of the report, so
+> that we can reproduce what went wrong. Otherwise we don't attach the article's text — though a
+> screenshot you add will show whatever was on your screen. A bug report never carries your notes,
+> comments, highlights or chats, or what you've written about yourself and why you're reading.
+
+**Why "may", "a page of", and the screenshot clause** — GPT Sol's plan review (R3): the slug rides
+from the article's metadata and tweets pages as well as the reading page, so "send it from any other
+page" was false; the caps and a missing source make "it also sends" false sometimes; `loadArticle`
+is the text, tree, headings and summaries, not every mode's output, so "the page as we showed it"
+promised more than it sends; and an absolute "no article text" was contradicted by a screenshot the
+reader adds under its own consent. *"What you've told us about yourself"* is the profile and the
+per-article purpose — named because `ArticleMetadata` carries both and the build deliberately
+leaves them out.
 
 **3. The hover card on the Feedback button** — *"Extra diagnostics go only if you tick the box"* —
 stays true and is unchanged.
@@ -145,14 +174,47 @@ why it qualifies under the third clause (*a fact the reader is told, on the page
 
 ## Stages
 
-1. **Server.** A `readDocument(slug)` on `SourceStore` (any kind, owner-filtered; `readPdf` becomes
-   a narrowing of it, so there is one resolution path), a gatherer that returns attachments + the
-   two tags and never throws, `mirrorFeedback` calling it only with a client and consent, the tag
-   keys added to `FEEDBACK_TAG_KEYS`. Tests on the **final envelope** (tests/feedback-mirror.test.ts):
-   attached when ticked and owned; nothing read when unticked; nothing for a stranger's slug;
-   `too_large`; `failed`. Red first. GPT Sol review.
+1. **Server.** A gatherer (its own module) that reads through the existing `loadSource`,
+   `loadArticle` and `articleMetadata`, builds `article.json` field by field, applies both byte
+   caps, returns attachments + the two tags, and never throws; `mirrorFeedback` calling it only with
+   a client and consent; the tag keys added to `FEEDBACK_TAG_KEYS`; the guard's registrations keyed
+   on a server nonce. Tests on the **final envelope** (tests/feedback-mirror.test.ts): attached when
+   ticked and owned; nothing read when unticked; nothing for a stranger's slug (the reads' 404);
+   `too_large` for each cap including non-ASCII JSON; `failed`; profile and purpose sentinels
+   absent; two owners' concurrent same-id reports each getting only their own attachments. Red
+   first. GPT Sol review.
+
+## What the plan review changed
+
+GPT Sol, 2026-09-13, on 9c79abc — *BUILD WITH CHANGES*, five findings, all taken:
+
+- **R1 (P0)** — `ArticleMetadata` wholesale would have sent `profile` and `purpose`. Now a
+  field-by-field pick, with a test. (Found independently the same hour by a fact-check subagent.)
+- **R2 (P1)** — the envelope guard keys registrations on a client-minted, per-owner-unique report id,
+  so two owners' concurrent same-id reports could swap payloads. Keyed on a server nonce now.
+- **R3 (P1)** — the wording promised more than the build does. Rewritten; § The proposed
+  reader-facing wording says clause by clause.
+- **R4 (P2)** — cap the JSON on encoded bytes, not string length.
+- **R5 (P2)** — `loadSource` already exists; the proposed `readDocument` would have been a second
+  resolver.
 2. **Words.** The dialog and `/privacy` sentences above, their tests, and the two docs. GPT Sol
    review.
+
+## Facts checked before building (2026-09-13)
+
+- **The owner box outlives `send`.** `handleApi` wraps all of `serveApi` in one
+  `AsyncLocalStorage` run (src/routes.ts ~6370), and `fileFeedback` awaits the mirror inside it, so
+  the gatherer's reads are filtered by the reporter's id. With a box and no owner,
+  `currentOwnerId()` **throws** (src/owner.ts ~244) — it never reads unfiltered.
+- **`loadArticle` and `articleMetadata` are owner-filtered on every path** — both go through
+  `currentRevisionQuery`'s unconditional `ownedSlug` (src/store/pg.ts ~1214) and throw a 404 for a
+  slug that is not the caller's. No public or admin bypass. The gatherer maps that 404 to `none`.
+- **Size before bytes.** `get(key, { maxBytes })` *throws* on an oversized object rather than
+  truncating (src/store/blobs.ts ~73), and `raw_sources.bytes` holds every object's length, keyed on
+  the same `(sha256, kind)` the revision carries — so the cap is checked with a primary-key read and
+  a 50 MiB PDF is never downloaded to be refused.
+- **Nothing pins the two sentences being changed** — no test asserts either the tick-box text or
+  the `/privacy` paragraph; stage 2 adds pins for the new ones.
 
 ## What happened
 
