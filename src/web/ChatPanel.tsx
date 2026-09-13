@@ -57,6 +57,7 @@ import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import {
   ArrowDown,
   BookOpen,
+  BookMarked,
   Check,
   ClipboardCheck,
   Copy,
@@ -1553,6 +1554,8 @@ function ToolIcon({ name }: { name: string }) {
       return <Link2 size={12} aria-hidden />;
     case "article_glossary":
       return <FileText size={12} aria-hidden />;
+    case "article_citations":
+      return <BookMarked size={12} aria-hidden />;
     default:
       return <Search size={12} aria-hidden />;
   }

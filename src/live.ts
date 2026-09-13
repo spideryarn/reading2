@@ -289,7 +289,7 @@ export const SHOW_PASSAGE_TOOL = {
 };
 
 /**
- * The seven chat tools plus `show_passage`, in the shape realtime wants.
+ * The eight chat tools plus `show_passage`, in the shape realtime wants.
  *
  * **Realtime flattens the function.** `CHAT_TOOLS` is chat/completions' shape —
  * `{ type: "function", function: { name, description, parameters } }` — and

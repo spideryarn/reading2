@@ -67,7 +67,7 @@ improved by work that is already planned, and the seam it goes behind is `librar
 in [`src/store/`](../../src/store/index.ts) — a store contract, so the semantic matcher lands there
 and this file does not change.
 
-## The seven, and the filter they had to pass
+## The eight, and the filter they had to pass
 
 > **Does it send the reader somewhere they could not otherwise get to?**
 
@@ -80,6 +80,7 @@ and this file does not change.
 | `read_web_page` | Fetch a page and read its main text | Web search gives snippets. This gives the piece. "What does the study he cites actually say?" |
 | `article_links` | The hyperlinks **this** article contains: which blocks each sits in, the author's words for it, where it goes | The address behind a link is the one thing about this article the prompt does not carry. Without it the model has a fetching tool and nothing to point it at — see [The links the prompt does not carry](#the-links-the-prompt-does-not-carry) |
 | `article_glossary` | This article's [glossary](glossary.md), if one has been generated | So an answer about a term agrees with what the app has already told the reader, rather than quietly contradicting it |
+| `article_citations` | The works **this** article cites, from its stored [citations](citations.md) list if one has been made: what the piece uses each for, where it cites it, and the link with where that link came from. An optional `query` narrows it | So a question about a work, author or study the piece leans on — or a web search about one — starts from the right paper rather than from a guess. Reads the list and never makes one. See [§ The citations list](#the-citations-list-one-more-tool) |
 
 **There is no `summarise_article` tool and there should never be one.** The whole article is in the
 prompt on every turn, so it would be a model call to do a thing the model can already do — wearing a
@@ -189,6 +190,42 @@ weighting the second pass higher, in one worked example. Both are kept beside
 
 Every guard here was switched off in turn and the suite watched go red before being switched back —
 twelve mutations across the two rounds ([silent-success.md](../reusable/silent-success.md)).
+
+## The citations list: one more tool
+
+**Built 2026-09-13**, for report 3F:
+
+> We don't want to overemphasize this. It's just one more tool that potentially the LLM could make
+> use of, and we want to kind of enable it to ask to search the citations as a tool.
+>
+> — Greg, 2026-09-12
+
+`article_citations` reads the article's stored [citations](citations.md) list — never makes one —
+so a question about a work the piece leans on, or a web search about its author, starts from the
+right paper. The optional `query` matches the title, authors, year and the *used for* line, which is
+Greg's *"search the citations … based on their summary"*. The code is `citationRows` and
+`citationsOutcome` in [`src/chat-tools.ts`](../../src/chat-tools.ts), pure so they can be tested as
+arithmetic ([`tests/chat-citations-tool.test.ts`](../../tests/chat-citations-tool.test.ts)).
+
+Four decisions, each from GPT Sol's plan review
+([260913b](../plans/260913b-chat-and-comment-questions-reach-for-the-web-and-the-citations-list.md)):
+
+- **Only a 404 means "there is no list".** Any other failure says the list *could not be read* —
+  the glossary tool's catch-all, which calls every database error "no glossary", is the thing not
+  copied.
+- **A stale list shows no rows**, because it describes an older version of the article; an
+  outdated one is announced above them; a `capped` one is counted as *the stored list*, never as the
+  article's total.
+- **Every row says where the article cites the work** — its blocks, or *only in the references* and
+  the reference's block — and **where its link came from** (*DOI in the article*, *a Scholar search,
+  not the work's own page*, *found on the web*), so a search link is never mistaken for the paper.
+- **Fenced like `article_links`**: the titles are the publisher's words and the *used for* lines a
+  model's, so the rows go inside `untrusted()` and our sentences stay outside it.
+
+**It reaches every mode that shares `CHAT_TOOLS`** — typed Chat, Remember, Candidates and Live —
+deliberately: it is read-only and article-local, and a per-kind tool list is more machinery than
+that warrants. It does not widen what `read_web_page` may fetch; the citation URLs are one of the
+sets the allowlist in [§ Still open](#still-open) would use.
 
 ## The loop, and the three things that are not obvious
 
@@ -330,7 +367,7 @@ read the owner's existing conversations. The answer is no, for now, and the reas
 naming because everything else in this repo's sharing machinery is built for the other shape.
 
 `search_library` and `read_library_passage` range over the reader's **whole shelf**, not over the
-article in front of them. That is the point of them — the seven exist so a conversation about this
+article in front of them. That is the point of them — the tools exist so a conversation about this
 piece can reach the others — and it means a stored answer can quote, summarise or paraphrase an
 article the reader never shared.
 
@@ -507,7 +544,7 @@ a word is written.
 ## Not built, and worth building
 
 Greg's list, with a recommendation each so nobody is blocked. All three are **writes**, which is the
-line the seven above deliberately do not cross — see the security section.
+line the eight above deliberately do not cross — see the security section.
 
 | Idea | Recommendation |
 |---|---|

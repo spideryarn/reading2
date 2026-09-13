@@ -3,7 +3,7 @@
  * wrong.** src/live.ts, docs/plans/260831g-live-conversation.md.
  *
  * Everything expensive about this feature is decided before a single word is
- * spoken — the model is told the article, handed eight tools and given the
+ * spoken — the model is told the article, handed nine tools and given the
  * reader's vocabulary in one request, and then talks to the browser directly on
  * a wire this process never sees. So the only thing worth testing here is what
  * we *sent*, exactly as `tests/transcribe.test.ts` argues about dictation.
@@ -27,6 +27,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   LIVE_MODEL,
+  LIVE_SERVER_TOOLS,
   LIVE_TRANSCRIBER,
   SHOW_PASSAGE_TOOL,
   liveInstructions,
@@ -59,12 +60,22 @@ describe("the tools, in the shape realtime actually takes", () => {
     }
   });
 
-  it("carries all seven chat tools plus show_passage", () => {
+  it("carries all eight chat tools plus show_passage", () => {
     const names = tools.map((t) => t.name);
     expect(names).toContain("show_passage");
     expect(names).toContain("search_article_words");
     expect(names).toContain("article_glossary");
-    expect(names).toHaveLength(8);
+    expect(names).toHaveLength(9);
+  });
+
+  it("offers article_citations and lets the server run it — deliberately", () => {
+    /* `CHAT_TOOLS` is shared by typed Chat, Remember, Candidates and Live, and
+       the citations tool reaches all four on purpose: read-only, article-local,
+       the reader's own derived data. A per-kind tool list was weighed and was
+       more machinery than that warrants. docs/plans/260913b-…-citations-list.md
+       § Where it reaches (GPT Sol F9). */
+    expect(tools.map((t) => t.name)).toContain("article_citations");
+    expect(LIVE_SERVER_TOOLS.has("article_citations")).toBe(true);
   });
 
   it("puts show_passage first, because it is the only one that costs nothing", () => {

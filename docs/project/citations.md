@@ -90,6 +90,15 @@ same row being pressed again: the `citation-find` bucket of the shared per-owner
 after the checks that refuse for free. The numbers are guesses, written as such. Added by the owed
 code review, GPT Sol F11.
 
+## Chat can read it
+
+Chat — typed, a passage question, and Live — can read the stored list through the
+`article_citations` tool, to answer a question about a work the piece leans on or to aim a web search
+at the right paper. It reads the list and never makes one: no list is an ordinary answer, a stale one
+shows no rows, and a capped one is counted as *the stored list*, never the article's total. The
+experimental switch governs this mode's screen, not the reader's own derived data, so the tool is not
+behind it. [chat-tools.md](chat-tools.md) has the tool.
+
 ## Who sees it
 
 Owner-only, and behind the [experimental switch](experimental-features.md). A visitor gets the

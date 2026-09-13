@@ -224,6 +224,17 @@ machinery reused, and it already is; a second prompt is the drift 260905c warned
   first), F9 (the tool reaches Live too, deliberately), F10 (filter before the heading), F11 (cache
   wording). One partial overrule: Sol suggested measuring before adding the *no web claim in a
   block-id sentence* rule; kept, for the reason given under Stage 1 item 2.
+- 2026-09-13, **Stage 1 built** (commit `ae260da5`): the trigger, WHERE EACH CLAIM CAME FROM, the
+  `WEB_LINKS` wording, and `WebSources` with its *From the web* label. `helpSection` untouched. Every
+  change was reverted in turn and a test went red.
+- 2026-09-13, **Stage 2 built**, in parallel on disjoint files: `article_citations`, `citationRows`,
+  `citationsOutcome`. The three edits that fell in Stage 1's files — naming it in `SYSTEM`, a
+  `BookMarked` icon in `ToolIcon`, the chat-tools.md row and section — were made after Stage 1 was
+  committed, so each commit holds one stage. 27 new tests; nine guards switched off in turn, each
+  reddening at least one; the `SYSTEM` pin seen red with the line reverted.
+- **One code review for both stages**, not one each: a write-capable reviewer on each commit would
+  edit `converse.ts` and `ChatPanel.tsx` at the same time in one tree. It runs once the after-run is
+  in, so it can judge the measurement too.
 - 2026-09-13, **baseline** (`evals/chat-web-reach.ts`, `anthropic/claude-sonnet-5`, one run,
   `evals/results/chat-web-reach-baseline-2026-09-13T03-34-50.json`). Articles
   `noema-mythology-of-conscious-ai` (passage `spya-hj5y6s`, Searle's biological naturalism) and

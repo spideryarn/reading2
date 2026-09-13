@@ -200,6 +200,15 @@ describe("a page is linked once per run of claims, not once per answer", () => {
   });
 });
 
+describe("the citations list is named among the tools", () => {
+  /* SYSTEM lists the tools in words, not by id, so a tool the prose never
+     mentions is one the model has only its description to find it by. Report
+     3F; docs/plans/260913b-chat-and-comment-questions-reach-for-the-web-and-the-citations-list.md. */
+  it("says the model can read the works this article cites", () => {
+    expect(flat).toContain("this article's glossary, and the works it cites");
+  });
+});
+
 describe("the encouragement that was already there is untouched", () => {
   /* The one place 1S and 1X pull against each other. If a later edit softens
      this to make room for the pedagogical addendum, the two changes cancel and

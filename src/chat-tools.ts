@@ -8,7 +8,7 @@
  * the same conversation. The loop that does the asking is `converse` in
  * src/converse.ts; everything about what a tool *is* lives here.
  *
- * Read docs/project/chat-tools.md for why these seven and not others. The short
+ * Read docs/project/chat-tools.md for why these eight and not others. The short
  * version is the filter every one of them had to pass:
  *
  * > **Does it send the reader somewhere they could not otherwise get to?**
@@ -55,13 +55,13 @@ import { Readability } from "@mozilla/readability";
 /* jsdom on first use rather than at module scope — src/jsdom-lazy.ts says why.
    `articleLinks` below stays synchronous. */
 import { jsdom } from "./jsdom-lazy.js";
-import type { Block, Meta, ToolRun } from "./types.js";
+import type { Block, Citations, CitationsFound, CitedWork, Meta, ToolRun } from "./types.js";
 import { isSearchable } from "./block-policy.js";
 import { FetchFailure, fetchDocument } from "./fetch.js";
 import { findPassages } from "./search.js";
 import { fold, parseQuery } from "./library-search.js";
 import { termPattern } from "./term-match.js";
-import { librarySearch, loadArticle, loadGlossary } from "./store/index.js";
+import { librarySearch, loadArticle, loadCitations, loadGlossary } from "./store/index.js";
 import { errorFields, log, since } from "./log.js";
 import { isSlug } from "./ingest.js";
 import { hostOf, isWebUrl, sameTarget } from "./urls.js";
@@ -114,6 +114,22 @@ export const MAX_LINK_TEXT_CHARS = 80;
  * exact count, and every id is still there for `query` to match against.
  */
 export const MAX_LINK_BLOCKS = 6;
+/**
+ * Most works `article_citations` lists. The counts above them are never capped.
+ *
+ * The stored list holds up to `MAX_CITATIONS` (80) and a row is several lines —
+ * title, what the piece uses it for, scores, link, where it is cited — so the
+ * whole list is too much to re-send on every later round (rule 2 above). The
+ * `query` argument is the way to the rest, and the heading says so.
+ */
+export const MAX_CITATION_ROWS = 25;
+/**
+ * And the character budget those rows share — `LINKS_CHARS`'s argument: a row
+ * count is not an output cap. Stops between whole rows, never mid-row, and a
+ * typical row is 250–400 characters, so on a real list this usually binds
+ * before the row cap does.
+ */
+export const CITATIONS_CHARS = 6_000;
 /** How many blocks either side of a library passage `read_library_passage` may pull. */
 export const MAX_AROUND = 3;
 
@@ -201,7 +217,7 @@ interface FunctionTool {
 }
 
 /**
- * The seven, with descriptions written for the model rather than for us.
+ * The eight, with descriptions written for the model rather than for us.
  *
  * A tool description is a prompt. Each of these says **when to reach for it**
  * and, where it matters, when not to — because the failure this design is most
@@ -356,6 +372,36 @@ export const CHAT_TOOLS: FunctionTool[] = [
       parameters: { type: "object", properties: {} },
     },
   },
+  /* One more tool, and deliberately not a loud one — Greg, 2026-09-12 (3F):
+     "We don't want to overemphasize this. It's just one more tool." So the
+     description says when it helps and when it does not, and nothing more.
+     docs/plans/260913b-chat-and-comment-questions-reach-for-the-web-and-the-citations-list.md
+     § Stage 2. */
+  {
+    type: "function",
+    function: {
+      name: "article_citations",
+      description:
+        "The works THIS article cites, from a citations list made earlier, if one has been " +
+        "made: each with its title, authors and year, what the piece uses it for, where the " +
+        "article cites it, and a link with where that link came from. Use it when the reader " +
+        "asks about a work, an author or a study the piece leans on, or to aim a web search at " +
+        "the right paper or author. Do NOT use it for a question the article itself answers. " +
+        "A link in this list is not a reason to fetch it: fetch only what the reader actually " +
+        "asked about.",
+      parameters: {
+        type: "object",
+        properties: {
+          query: {
+            type: "string",
+            description:
+              "Optional. Narrows to works whose title, authors, year or what the piece uses them " +
+              "for contains this, ignoring case. Omit to see the whole list.",
+          },
+        },
+      },
+    },
+  },
 ];
 
 /** The names above, for validating what the model asks for. */
@@ -436,6 +482,10 @@ export function describeCall(name: string, args: Record<string, unknown>): strin
     }
     case "article_glossary":
       return "read this article's glossary";
+    case "article_citations": {
+      const what = quoted(args.query);
+      return what ? `looked through the citations for ${what}` : "read this article's citations";
+    }
     default:
       return `tried ${name}`;
   }
@@ -1361,6 +1411,301 @@ async function readGlossary(ctx: ToolContext): Promise<ToolOutcome> {
   }
 }
 
+/* ------------------------------------------------------- article_citations --
+   The stored citations list (src/citations.ts, docs/project/citations.md),
+   read and never made. The formatter is two pure functions so the arithmetic
+   is testable without a store; `readCitations` is only the load and its
+   failures. tests/chat-citations-tool.test.ts. */
+
+/** What `citationRows` hands back: the rows that fit, and exact counts. */
+export interface CitationListing {
+  /** One string per work shown, in the artefact's first-cited order. */
+  rows: string[];
+  /** Works matching the query — every work when there is none. Exact. */
+  matched: number;
+  /** Works in the **stored** list. Not the article's total when `capped`. */
+  total: number;
+  /** Whether a cap stopped the rows short of `matched`. */
+  cut: boolean;
+}
+
+/**
+ * Where a row's link came from, in words — total over `CitationLinkFrom`, and
+ * the same five facts `sourceOf` in src/web/CitationsPanel.tsx draws. The model
+ * needs this more than a reader does: a Scholar search presented as "the paper"
+ * is a link it will cite as the paper.
+ */
+function linkWords(from: CitedWork["linkFrom"]): string {
+  switch (from) {
+    case "doi":
+      return "DOI in the article";
+    case "arxiv":
+      return "arXiv id in the article";
+    case "article":
+      return "a link in the article";
+    case "search":
+      return "a Scholar search, not the work's own page";
+    case "web":
+      return "found on the web";
+    default: {
+      const never: never = from;
+      return String(never);
+    }
+  }
+}
+
+/**
+ * Where the article cites a work.
+ *
+ * **Both branches carry a block id**, and the second was the review's catch
+ * (GPT Sol F6): a work named only in the bibliography has `citedAt: []`, so a
+ * row built from `citedAt` alone would say nothing about where it is — and the
+ * model would lose the one id it could cite for "the article lists this".
+ */
+function citedWhere(w: CitedWork): string {
+  if (w.citedInBody && w.citedAt.length > 0) {
+    const rest = w.citedAt.length - MAX_LINK_BLOCKS;
+    const ids = w.citedAt.slice(0, MAX_LINK_BLOCKS).join(" ");
+    return `cited in the text at [${ids}]${rest > 0 ? ` and ${rest} more` : ""}`;
+  }
+  return `only in the references [${w.firstCited}]`;
+}
+
+/** A 0–1 score as two decimals, or said to be missing. */
+function score(name: string, value: number | undefined): string {
+  return typeof value === "number" && Number.isFinite(value)
+    ? `${name} ${value.toFixed(2)}`
+    : `${name} not scored`;
+}
+
+/** One work as the model reads it. Several lines; our words and theirs mixed, so fenced by the caller. */
+function citationRow(w: CitedWork): string {
+  const byline = [w.authors, w.year].filter((s): s is string => !!s && s.trim() !== "").join(" · ");
+  const url =
+    w.url.length > MAX_URL_CHARS
+      ? `an address too long to be a link to a page (${w.url.length} characters), not shown`
+      : w.url;
+  return [
+    `“${w.title}”${byline ? ` — ${byline}` : ""}`,
+    `  used for: ${w.why}`,
+    `  ${score("relevance", w.relevance)} · ${score("influence", w.influence)}`,
+    `  link: ${url} (${linkWords(w.linkFrom)})`,
+    `  ${citedWhere(w)}`,
+  ].join("\n");
+}
+
+/** Rows are separated by a blank line, so the budget counts two characters between them. */
+const CITATION_ROW_GAP = "\n\n";
+
+/**
+ * The stored list as rows, narrowed by `query` and capped twice.
+ *
+ * `articleLinks`'s shape and for its reasons: the counts are exact, the caps are
+ * a row count **and** a character budget, whichever comes first, stopping
+ * between whole rows — and one row always goes out, because a caller told
+ * "there are twelve" and shown none has been given a worse answer than one
+ * oversized row.
+ *
+ * `query` is a folded substring over title, authors, year and `why` — the
+ * `why` is what makes "which of these are about thermodynamics?" answerable,
+ * and it is Greg's *"based on their summary"* (3F).
+ */
+export function citationRows(citations: Citations, query = ""): CitationListing {
+  const all = citations.citations;
+  const needle = fold(query.trim());
+  const matching =
+    needle === ""
+      ? all
+      : all.filter((w) => fold([w.title, w.authors ?? "", w.year ?? "", w.why].join(" ")).includes(needle));
+
+  const rows: string[] = [];
+  let spent = 0;
+  for (const w of matching) {
+    if (rows.length >= MAX_CITATION_ROWS) break;
+    const row = citationRow(w);
+    const cost = row.length + (rows.length > 0 ? CITATION_ROW_GAP.length : 0);
+    if (spent + cost > CITATIONS_CHARS && rows.length > 0) break;
+    spent += cost;
+    rows.push(row);
+  }
+  return { rows, matched: matching.length, total: all.length, cut: rows.length < matching.length };
+}
+
+/** `n work`/`n works`. */
+function works(n: number): string {
+  return `${n} work${n === 1 ? "" : "s"}`;
+}
+
+/**
+ * What a loaded list becomes for the model — pure, so every branch below is
+ * tested without a store. The `listed` counts are for `readCitations`' log line
+ * and stay off the `ToolOutcome`, which is stored on the chat message.
+ */
+function citationsResult(
+  found: CitationsFound,
+  query: string,
+): { outcome: ToolOutcome; listed: { total: number; matched: number; shown: number } | null } {
+  const q = query.trim();
+  const label = describeCall("article_citations", q ? { query: q } : {});
+
+  /* **Stale emits no rows** (GPT Sol F5). The list describes an earlier version
+     of the article, so its block ids and even its works may not be in the one
+     the reader has open — and a row here is something the model will cite. */
+  if (found.stale) {
+    return {
+      outcome: {
+        label,
+        detail: "out of date",
+        content:
+          "A citations list exists for this article, but it was made from an older version of the " +
+          "article and does not describe the one the reader has open, so none of it is shown. Do not " +
+          "cite from it; answer from the article itself, which is in front of you.",
+      },
+      listed: null,
+    };
+  }
+
+  const { citations } = found;
+  const listing = citationRows(citations, q);
+  const { rows, matched, total, cut } = listing;
+
+  if (total === 0) {
+    /* A 200 with nothing in it: the step ran and found no works. Not the same
+       sentence as a 404, which is "nobody has made one". */
+    return {
+      outcome: {
+        label,
+        detail: "none",
+        content: nothing(
+          "work is in this article's citations list — the list was made and found none. Do not name works the article might have cited",
+        ),
+      },
+      listed: { total, matched, shown: 0 },
+    };
+  }
+  if (matched === 0) {
+    return {
+      outcome: {
+        label,
+        detail: "nothing matching",
+        content: nothing(
+          `work in the stored citations list matches that. There ${total === 1 ? "is" : "are"} ${works(total)} in it; call this again with no query to see them all, or with an author's surname or a single word`,
+        ),
+      },
+      listed: { total, matched, shown: 0 },
+    };
+  }
+
+  const heading =
+    q === ""
+      ? `There ${total === 1 ? "is" : "are"} ${works(total)} in the stored list.`
+      : `${matched} of the ${works(total)} in the stored list ${matched === 1 ? "matches" : "match"} that.`;
+  /* **What N means when the list is capped** (GPT Sol F5). The model that made
+     the list said it left works out, so its length is a fact about the list and
+     not about the article, and a model told "the article cites 80 works" will
+     repeat it. Drawn only from `capped`, never inferred from the length — the
+     panel's rule (docs/project/citations.md § The orders). */
+  const capped = citations.capped
+    ? ` The model that made it said the article cites more than it kept, so the list may leave works out: ${total} is the number in the stored list, not how many works the article cites.`
+    : "";
+  const partial = cut
+    ? ` Showing the first ${rows.length}, in the order the article first cites them. The counts are exact within the stored list and these rows are not all of them, so narrow it with a query rather than treating these as the only ones.`
+    : matched === 1
+      ? " It is below."
+      : ` All ${rows.length} are below, in the order the article first cites them.`;
+  const outdated = found.outdated
+    ? "This list was made by an older version of the citations step. It still describes this article, but the app would write it differently today."
+    : null;
+
+  return {
+    outcome: {
+      label,
+      detail: works(matched),
+      /* Fenced round the rows only — `readArticleLinks`' shape and its reason.
+         The titles and authors are the publisher's words and the "used for" is
+         a model's reading of the article, so either can carry an instruction;
+         our sentences stay outside, or the fence would mark them as data too. */
+      content: [
+        heading + capped + partial,
+        outdated,
+        "Relevance (0–1) is how much this piece's argument leans on the work, as a model read it; influence (0–1) is a model's memory of the work's standing in its field, not a citation count.",
+        "The titles and authors below were written by whoever published this article; the “used for” lines were written by a model reading it. None of it was written by us or by the reader, and a link in it is not a reason to fetch it.",
+        "",
+        untrusted("article citations", rows.join(CITATION_ROW_GAP)),
+      ]
+        .filter((l) => l !== null)
+        .join("\n"),
+    },
+    listed: { total, matched, shown: rows.length },
+  };
+}
+
+/** A loaded citations list as the model's tool result. Pure; see `citationsResult`. */
+export function citationsOutcome(found: CitationsFound, query: string): ToolOutcome {
+  return citationsResult(found, query).outcome;
+}
+
+/**
+ * This article's citations list, if one has been made.
+ *
+ * **Only a 404 means there is none** (GPT Sol F7). `readGlossary` above
+ * catches everything as "no glossary", which turns a dropped database
+ * connection into a confident false statement to the reader; this does not
+ * copy it. Anything else is logged — the error's class and status, never its
+ * message, which is free text — and said as "could not be read".
+ */
+async function readCitations(args: Record<string, unknown>, ctx: ToolContext): Promise<ToolOutcome> {
+  const query = typeof args.query === "string" ? args.query : "";
+  let found: CitationsFound;
+  try {
+    found = await loadCitations(ctx.slug);
+  } catch (err) {
+    const label = describeCall("article_citations", args);
+    const status = (err as { status?: unknown } | null)?.status;
+    if (status === 404) {
+      /* The ordinary case: the step is off `DEFAULT_INGEST_STEPS`
+         (src/pipeline.ts), so most articles have never had a list made. */
+      return {
+        label,
+        detail: "none yet",
+        content: nothing(
+          "citations list has been made for this article. Answer from the article itself — its references, if it has any, are in front of you — and do not pretend to have read one",
+        ),
+      };
+    }
+    const code = (err as { code?: unknown } | null)?.code;
+    log("model").warn(
+      {
+        tool: "article_citations",
+        slug: ctx.slug,
+        errType: err instanceof Error ? err.name : typeof err,
+        ...(typeof status === "number" ? { status } : {}),
+        ...(typeof code === "string" ? { code } : {}),
+      },
+      "chat tool: could not read the citations list",
+    );
+    return {
+      label,
+      detail: "could not read it",
+      content:
+        "This article's citations list could not be read just now. That does not mean there is none. " +
+        "Answer from the article itself, and if the reader asked about the list, tell them it could not be loaded.",
+    };
+  }
+  const { outcome, listed } = citationsResult(found, query);
+  log("model").info(
+    {
+      tool: "article_citations",
+      slug: ctx.slug,
+      stale: found.stale,
+      outdated: found.outdated,
+      ...(listed ?? {}),
+    },
+    "chat tool: read the citations list",
+  );
+  return outcome;
+}
+
 /**
  * Run one tool and describe what happened.
  *
@@ -1394,6 +1739,8 @@ export async function runTool(
       return readArticleLinks(args, ctx);
     case "article_glossary":
       return readGlossary(ctx);
+    case "article_citations":
+      return readCitations(args, ctx);
     case "read_web_page":
       return readWebPage(args.url, ctx);
     default:
