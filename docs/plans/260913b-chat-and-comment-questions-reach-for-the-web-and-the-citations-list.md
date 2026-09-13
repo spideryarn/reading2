@@ -235,6 +235,43 @@ machinery reused, and it already is; a second prompt is the drift 260905c warned
 - **One code review for both stages**, not one each: a write-capable reviewer on each commit would
   edit `converse.ts` and `ChatPanel.tsx` at the same time in one tree. It runs once the after-run is
   in, so it can judge the measurement too.
+- 2026-09-13, **after-run**, against the thresholds fixed above (`evals/results/chat-web-reach-after-*.json`,
+  three runs, same articles, passages, questions and model) — web searches out of three:
+
+  | case | before Seth / Gwern | after Seth / Gwern | threshold |
+  |---|---|---|---|
+  | "wider debate?" (target — Greg's shape) | 0 / 0 | **2 / 3** | ≥ 2 — **pass** |
+  | bare "?" press (target) | 0 / 0 | **0 / 1** | ≥ 2 — **fail** |
+  | "what has happened since?" | 3 / 3 | 3 / 2 | — |
+  | "what does this paragraph mean?" (control) | 0 / 0 | 0 / 0 | ≤ 1 — **pass** |
+  | "does it use the word X?" (control) | 0 / 0 | 0 / 0 | ≤ 1 — **pass** |
+
+  The Gwern "since" run that did not search read a web page through `read_web_page` instead. **Links
+  in the text of the "since" answers went from 1 in 6 to 6 in 6**, and every answer still cites
+  block ids. The bare "?" missed its threshold; what was done about that is the next entry, not a
+  quiet change to the threshold.
+- 2026-09-13, **the "?" miss, arbitrated by Fable** (read-only, reading every help answer). Kept as
+  measured, and the threshold was wrong rather than the prompt — Fable's words:
+
+  > The "?" cell failed its threshold (0/3, 1/3) and the threshold was wrong, not the prompt: the
+  > "?" asks what the reader is missing, anchored to the same passage as the *plain* control, and a
+  > trigger that separated them would have to key on the passage and so pull the control in. Kept as
+  > measured. What the help answers *do* show is a provenance gap: every one states outside facts
+  > from memory unmarked and unlinked, and one searched twice and linked nothing — the fourth origin
+  > says "reasoning or synthesis" and has no slot for recalled background.
+
+  Every help answer placed its named person with a concrete fact (Searle's Chinese Room; Hawkins'
+  *On Intelligence*) — the *Robert Morris* case in comments.md, where not searching is right. Greg's
+  real turn was the typed follow-up, which passes.
+
+  **So a fifth origin, background knowledge**, marked in the sentence (*"The article doesn't say
+  so, but…"*), and *"if you searched, link what you used"*. **This partly overrules Sol F3.** F3
+  said no unlinked factual memory at all; read literally, that makes every help answer call the
+  Chinese Room "unverified". Kept: a *specific, checkable* claim — a number, a date, what a study
+  found, what someone said — is searched and linked or called unverified. Relaxed: well-known
+  background may be stated from memory, provided the sentence says it is not from the article,
+  which is the half Greg asked for (*"crystal clear about what is and what is not from the
+  article"*). Checked by re-reading the help answers of a fresh run, not by a search count.
 - 2026-09-13, **baseline** (`evals/chat-web-reach.ts`, `anthropic/claude-sonnet-5`, one run,
   `evals/results/chat-web-reach-baseline-2026-09-13T03-34-50.json`). Articles
   `noema-mythology-of-conscious-ai` (passage `spya-hj5y6s`, Searle's biological naturalism) and

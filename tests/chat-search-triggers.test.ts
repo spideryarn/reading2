@@ -165,18 +165,29 @@ describe("where each claim came from", () => {
     expect(finalUser).not.toContain("WHERE EACH CLAIM CAME FROM");
   });
 
-  it("names all four origins, the library included", () => {
+  it("names all five origins, the library and background knowledge included", () => {
     expect(where).toContain("The article → its block id");
     expect(where).toContain("The web → a link to the page it came from");
     expect(where).toContain("The reader's library →");
     expect(where).toContain("name that article by its title");
     expect(where).toContain("never present one as a citation into this article");
+    /* The origin the after-run found missing: every "?" answer stated recalled
+       background with nothing saying it was not from the article (Fable,
+       2026-09-13; plan § Progress). */
+    expect(where).toContain("Your own background knowledge → say in the sentence that it is not from the");
     expect(where).toContain('Your own reasoning or synthesis → say so: "My inference is');
   });
 
-  it("does not let general knowledge stand as an unlinked source", () => {
-    expect(where).toContain("General knowledge is not an unlinked source");
+  it("does not let background knowledge stand unmarked, or carry a specific claim unlinked", () => {
+    expect(where).toContain("Background knowledge is never left unmarked");
+    expect(where).toContain("a number, a date, what a study found, what someone said");
     expect(where).toContain("searched and linked, or said plainly to be unverified");
+  });
+
+  it("links what a search found, rather than searching and linking nothing", () => {
+    /* A "?" answer in the after-run searched twice and linked nothing — the
+       baseline's "since" failure again. */
+    expect(where).toContain("if you searched, link what you used");
   });
 
   it("keeps the web out of a sentence that cites the article", () => {
