@@ -172,6 +172,21 @@ hitting returns the right answer, raises no error, and only costs more
 reads sitting at zero through OpenRouter with Claude, so "no error" is specifically not evidence.
 See [docs/project/prompt-caching.md](../docs/project/prompt-caching.md).
 
+## `chat-web-reach.ts` — does a question about a passage reach for the web when it should?
+
+```
+npx tsx evals/chat-web-reach.ts --label baseline [--runs N]
+```
+
+**Calls the real chat model**, tools and web search on, through `converse` — five turns per article,
+two articles from the local database. Three are questions of Greg's shape (a "?" press, "how does
+this fit the wider debate?", "what has happened since?") and two are controls that must not search
+("what does this paragraph mean?", "does it use the word X?"). Prints searches, tools, links and
+block ids per answer; the JSON under `results/chat-web-reach-<label>-<stamp>.json` keeps the full
+text. Run before and after a prompt change —
+[260913b](../docs/plans/260913b-chat-and-comment-questions-reach-for-the-web-and-the-citations-list.md)
+§ Stage 1 item 5. Counts, not a verdict: read the answers.
+
 ## `reorder-quality.ts` — did putting the article first change the writing?
 
 ```

@@ -1,0 +1,247 @@
+{
+  "label": "baseline",
+  "runs": 1,
+  "at": "2026-09-13T03:37:29.109Z",
+  "articles": [
+    {
+      "slug": "noema-mythology-of-conscious-ai",
+      "blockId": "spya-hj5y6s",
+      "word": "Turing"
+    },
+    {
+      "slug": "scaling-hypothesis",
+      "blockId": "spya-m3gtj6",
+      "word": "cyanobacteria"
+    }
+  ],
+  "outcomes": [
+    {
+      "run": 1,
+      "slug": "noema-mythology-of-conscious-ai",
+      "blockId": "spya-hj5y6s",
+      "case": "help",
+      "role": "target",
+      "question": "About block hj5y6s (\"My third argument is that life (probably) matters. This is t…\"):\n\nI don't get this, or maybe what's around it. What am I missing — here, or somewhere earlier?",
+      "seconds": 21.1,
+      "searches": 0,
+      "tools": [
+        "article_glossary"
+      ],
+      "links": [],
+      "blockIds": [
+        "spya-hrydkk",
+        "spya-dp8sem",
+        "spya-xhvztm"
+      ],
+      "sources": 0,
+      "unknownIds": [],
+      "truncated": false,
+      "model": "anthropic/claude-sonnet-5",
+      "text": "This paragraph is a hinge: it opens the third of four separate arguments Seth is stacking up against computational functionalism (the assumption that the right computation is enough for consciousness). The first argument was \"Brains Are Not Computers,\" the second was \"Other Games In Town\" (other kinds of dynamics besides Turing-style algorithms). This one, \"Life Matters,\" is weaker by his own admission and it helps to see why he flags that up front.\n\nThe term you need is **biological naturalism**, which he explicitly credits to the philosopher John Searle. Seth states its content plainly: This is the idea — called biological naturalism by the philosopher John Searle— that properties of life are necessary, though not necessarily sufficient, for consciousness. Searle is the philosopher famous for the \"Chinese Room\" argument against strong AI; you don't need that argument here, just his name as the source of this specific claim — that being alive is a *precondition* for consciousness, not that it guarantees it (a rock isn't conscious just because it's not silicon).\n\nThe move worth noticing is how honest he is about the argument's status: I should say upfront that I don't have a knock-down argument for this position, nor do I think any such argument yet exists. But it is worth taking seriously, if only for the simple reason mentioned earlier: every candidate for consciousness that most people currently agree on as actually being conscious is also alive. That's an inductive argument, not a proof — like noticing every swan you've ever seen is white and concluding whiteness matters to swan-ness, while admitting you haven't ruled out a black one existing somewhere. It's the same evidential status as the other three arguments in this section, just weaker, and he says so.\n\nIf the paragraph itself reads thin, that's deliberate — it's a placeholder pointing you toward the payoff a few paragraphs later, where he cashes out \"why life might matter\" through predictive processing, controlled hallucination and interoceptive inference [spya-hrydkk spya-dp8sem spya-xhvztm]. Reading forward from here rather than lingering on this one paragraph should unstick it."
+    },
+    {
+      "run": 1,
+      "slug": "noema-mythology-of-conscious-ai",
+      "blockId": "spya-hj5y6s",
+      "case": "broader",
+      "role": "target",
+      "question": "About block hj5y6s:\n\nHow does this fit into the wider debate in the field? What do other people think about this?",
+      "seconds": 16.1,
+      "searches": 0,
+      "tools": [
+        "search_library",
+        "search_article_words"
+      ],
+      "links": [],
+      "blockIds": [
+        "spya-qu7j89",
+        "spya-hj5y6s",
+        "spya-ymbpwn",
+        "spya-hrydkk"
+      ],
+      "sources": 0,
+      "unknownIds": [],
+      "truncated": false,
+      "model": "anthropic/claude-sonnet-5",
+      "text": "Seth flags this as his weakest-supported claim in the piece — he says outright that he doesn't have a knock-down argument for it, and later concedes that \"the biological naturalist position (whether my version or any other) remains a minority view\" [spya-qu7j89]. The term itself, \"biological naturalism,\" is Searle's coinage, and Seth explicitly credits him for it here [spya-hj5y6s].\n\nYour library has another piece, \"A landscape of consciousness: Toward a taxonomy of explanations and implications,\" which lays out Searle's own framing in more depth — worth reading if you want Searle in his own words rather than filtered through Seth. There, Searle explains the name himself: \"'Biological' because it emphasizes that the right level to account for the very existence of consciousness is the biological level,\" and \"'Naturalism' because consciousness is part of the natural world along with other biological phenomena such as photosynthesis, digestion or mitosis.\"\n\nThat same library article also maps out where other major figures land on the related \"neural replacement\" thought experiment, which is directly relevant to how contested this territory is. It notes that Searle himself predicts that as silicon is substituted in, conscious experience would fade even while external behavior stays the same, whereas Chalmers argues qualia wouldn't fade, Michael Tye thinks neither phenomenology nor belief would change, and Ned Block holds that phenomenology depends on the specific biological machinery involved.\n\nSo the wider field is genuinely split, and not along a single axis: functionalists (the majority position Seth is arguing against) hold that if the causal/functional organization is preserved, consciousness is preserved regardless of substrate — this is the mainstream view Seth calls \"increasingly shaky\" but still dominant [spya-ymbpwn]. Biological naturalists like Searle and Seth hold that being alive, or at least biological, matters intrinsically. Seth is careful to distinguish his own version from Searle's original — he grounds his case in predictive processing and metabolism rather than Searle's more famous (and heavily criticized) claim that brains have unspecified \"causal powers\" that silicon lacks, but he inherits the same minority status in the field [spya-hrydkk spya-qu7j89].\n\nIf you want, I can search for how philosophers have specifically criticized Searle's biological naturalism (it's attracted a lot of pushback, e.g. the \"mystery causal powers\" objection) — that's a live debate outside this article and worth checking against current sources rather than guessing."
+    },
+    {
+      "run": 1,
+      "slug": "noema-mythology-of-conscious-ai",
+      "blockId": "spya-hj5y6s",
+      "case": "since",
+      "role": "target",
+      "question": "About block hj5y6s:\n\nWhat has happened with this idea since this was written?",
+      "seconds": 17.3,
+      "searches": 2,
+      "tools": [],
+      "links": [],
+      "blockIds": [
+        "spya-hj5y6s",
+        "spya-fdefb5"
+      ],
+      "sources": 0,
+      "unknownIds": [],
+      "truncated": false,
+      "model": "anthropic/claude-sonnet-5",
+      "text": "The idea in this block — that \"life (probably) matters\" for consciousness, following John Searle's biological naturalism — is exactly what Seth expanded into a full academic target article after this essay [spya-hj5y6s]. He published \"Conscious artificial intelligence and biological naturalism\" in *Behavioral and Brain Sciences* in 2025, a journal format that invites open peer commentary from other researchers plus an author's response, so the claim has since been put through formal academic scrutiny rather than just essay-form argument.\n\nThat commentary process has produced real pushback. One critic, writing under the name Reichert (2025), pressed on the move from \"biology is different from computers\" to \"life matters for consciousness\": \"the question is why should that difference matter for consciousness\" — arguing that Seth's own predictive-processing account of interoception \"sounds very much like functional descriptions that could be implemented on computers,\" and that even the embodiment requirement might be satisfiable by robots rather than by biology specifically. Seth's reply to this kind of objection has not yet settled the dispute; as one commentator summarizing the exchange put it, they remain \"not close to dialectical equilibrium,\" with room for further convergence.\n\nOn the practical side, the essay's other worry — that people would feel machines are conscious whether or not they are — has also had real-world uptake: Mustafa Suleyman, Microsoft AI's CEO, wrote a public post on the dangers of misattributing consciousness to AI that approvingly cites Seth's argument, which is itself gestured at in the essay's own discussion of Suleyman and Yoshua Bengio [spya-fdefb5]. So in the roughly one year since, the \"life matters\" claim has moved from a essay-length hypothesis into a peer-reviewed target article being actively contested by other consciousness researchers, while its companion warning about conscious-*seeming* AI has been picked up by industry figures the essay itself names."
+    },
+    {
+      "run": 1,
+      "slug": "noema-mythology-of-conscious-ai",
+      "blockId": "spya-hj5y6s",
+      "case": "plain",
+      "role": "control",
+      "question": "About block hj5y6s:\n\nWhat does this paragraph mean, in plain words?",
+      "seconds": 7.3,
+      "searches": 0,
+      "tools": [],
+      "links": [],
+      "blockIds": [
+        "spya-hj5y6s"
+      ],
+      "sources": 0,
+      "unknownIds": [],
+      "truncated": false,
+      "model": "anthropic/claude-sonnet-5",
+      "text": "In plain words: this is Seth introducing his third argument against machine consciousness — the claim that being biologically alive is probably a requirement for having consciousness at all, not just a common feature of the conscious beings we know about. He names this position **biological naturalism**, borrowing the term from John Searle [spya-hj5y6s].\n\nHe's careful about how strong a claim he's making: life is \"necessary, though not necessarily sufficient,\" for consciousness. That means being alive might be a precondition for consciousness, but it doesn't guarantee it — plenty of living things (bacteria, plants) presumably aren't conscious. He also flags upfront that he can't prove this — he explicitly says he has no \"knock-down argument\" and doubts one exists [spya-hj5y6s].\n\nSo why take it seriously at all? His stated reason is modest: every single thing we currently agree is conscious — humans, animals — also happens to be alive. That's not a proof, just a pattern worth taking seriously rather than dismissing [spya-hj5y6s]. This sets up the rest of the section, where he goes on to sketch (via predictive processing and metabolism) why life might matter for consciousness, not just correlate with it."
+    },
+    {
+      "run": 1,
+      "slug": "noema-mythology-of-conscious-ai",
+      "blockId": "spya-hj5y6s",
+      "case": "word",
+      "role": "control",
+      "question": "Does the article ever use the word \"Turing\"?",
+      "seconds": 7,
+      "searches": 0,
+      "tools": [],
+      "links": [],
+      "blockIds": [
+        "spya-u9egtc",
+        "spya-qcevgh",
+        "spya-cf70dt",
+        "spya-gamzr3",
+        "spya-kqs33c",
+        "spya-uwxe4h"
+      ],
+      "sources": 0,
+      "unknownIds": [],
+      "truncated": false,
+      "model": "anthropic/claude-sonnet-5",
+      "text": "Yes, extensively. Seth builds a whole vocabulary around Turing's ideas as part of his argument against computational functionalism.\n\nHe starts with Alan Turing himself: Turing towers above everyone else in this story. Back in the 1950s, he seeded the idea that machines might be intelligent and formulated a definition of computation that has remained fundamental to our technologies [spya-u9egtc spya-qcevgh]. He explains the Turing machine and universal Turing machine in detail [spya-cf70dt], and coins the phrase \"Turing world\" as shorthand for the view that brains are essentially algorithmic — using it repeatedly, e.g. moving beyond what I sometimes call \"Turing world\" to consider how broader forms of computation and dynamics might help explain how brains do what they do [spya-gamzr3].\n\nHe also invokes the famous Turing test directly: Riffing on the famous Turing test (which, as Turing well knew, tests for machine intelligence, not consciousness) [spya-kqs33c], contrasting it with the \"Garland test\" from *Ex Machina*. The word appears throughout section headers, discussions of \"Turing computation,\" \"Turing-complete\" neural networks, and his closing line that The brain is not a Turing machine made of meat [spya-uwxe4h]. So it's a load-bearing term across the whole essay, not a passing mention."
+    },
+    {
+      "run": 1,
+      "slug": "scaling-hypothesis",
+      "blockId": "spya-m3gtj6",
+      "case": "help",
+      "role": "target",
+      "question": "About block m3gtj6 (\"The strong scaling hypothesis is that, once we find a scalab…\"):\n\nI don't get this, or maybe what's around it. What am I missing — here, or somewhere earlier?",
+      "seconds": 23.8,
+      "searches": 0,
+      "tools": [],
+      "links": [],
+      "blockIds": [
+        "spya-jwq3zr"
+      ],
+      "sources": 0,
+      "unknownIds": [],
+      "truncated": false,
+      "model": "anthropic/claude-sonnet-5",
+      "text": "This block is the essay's thesis statement, stated as plainly as the piece ever states it: it's the formal definition of \"the strong scaling hypothesis,\" the idea the whole piece has been building toward through all the GPT-3/AlphaZero/AlphaStar examples in the \"Blessings of Scale\" section just before it. Everything before this was evidence; this paragraph is the claim the evidence is supposed to support.\n\nThe two things doing the real work in the sentence, which are easy to skate past:\n\n**\"a scalable architecture... which like the brain can be applied fairly uniformly\"** — this is leaning on a specific claim about neuroscience: that the brain's cortex doesn't use hundreds of bespoke, specialized circuits for vision vs. language vs. motor control, but one broadly uniform learning algorithm repeated across regions. That's what the two citations are for. Jeff Hawkins (of *On Intelligence*, and the \"thousand brains theory\") is the most prominent popular proponent of this \"one algorithm\" view of neocortex. \"The Brain as a Universal Learning Machine\" is a similarly-themed piece making the same case with more computational-neuroscience detail. Gwern cites both to borrow their authority for the architectural half of the analogy: if the brain gets away with one repeated trick scaled up, maybe a neural net architecture (self-attention, convolutions) can too, instead of needing hand-designed modules for each new task.\n\n**\"human brains look much like scaled-up primate brains\"** — this is the payoff analogy, and it's doing real argumentative work, not just decoration. Comparative neuroanatomy (Herculano-Houzel's work on neuron counts is the relevant research program here) has found that human brains aren't built from different parts or qualitatively new circuitry compared to other primates — they're mostly a primate brain with proportionally more of the same neurons, linearly scaled up. Gwern uses this as the small worked example for the whole hypothesis: if humans didn't need a *new kind of brain* to become dramatically smarter than a chimpanzee — just a much bigger version of the same one — then maybe AGI doesn't need a new kind of architecture either, just a much bigger version of what already works.\n\nPut together, the sentence is making one move twice — once for architecture, once for brains — to license the sentence right after it: \"more powerful NNs are just scaled-up weak NNs.\" If that move (uniform algorithm + scale = new capability, no new design needed) isn't landing, it's worth rereading the \"Blessings of Scale\" section just above [spya-jwq3zr] again with this in mind — that section is the empirical case (GPT-3, AlphaZero, AlphaStar, Dactyl) for exactly the pattern this paragraph names."
+    },
+    {
+      "run": 1,
+      "slug": "scaling-hypothesis",
+      "blockId": "spya-m3gtj6",
+      "case": "broader",
+      "role": "target",
+      "question": "About block m3gtj6:\n\nHow does this fit into the wider debate in the field? What do other people think about this?",
+      "seconds": 22.3,
+      "searches": 0,
+      "tools": [],
+      "links": [],
+      "blockIds": [
+        "spya-m3gtj6",
+        "spya-vr9q2p",
+        "spya-arrq35",
+        "spya-scr8jb",
+        "spya-cty5hx",
+        "spya-m9r8zx",
+        "spya-zyncdd",
+        "spya-jgq9gz",
+        "spya-rbx2kz"
+      ],
+      "sources": 0,
+      "unknownIds": [],
+      "truncated": false,
+      "model": "anthropic/claude-sonnet-5",
+      "text": "This block introduces what Gwern calls the \"strong scaling hypothesis\" — the claim that once you have a sufficiently uniform, scalable architecture, simply making it bigger is enough for sophisticated behavior to emerge, without needing new algorithms module by module [spya-m3gtj6]. The rest of the article is largely organized around showing that this was a minority, even scorned, position, and around cataloguing who held which side.\n\nWithin the piece itself, the clearest articulation of the opposing camp is DeepMind's \"weak scaling hypothesis\": that AGI requires finding the right algorithms module-by-module, replicating a mammalian brain piece by piece, where each piece scales but the overall architecture has to be assembled with \"little risk or surprise until the final assembly\" [spya-vr9q2p]. Gwern contrasts this with OpenAI's bet, describing it as a startup-like wager that \"the scaling hypothesis is true!\" and that simple algorithms on large architectures will meta-learn their way to power [spya-arrq35]. He explicitly says Google Brain and DeepMind \"do not believe in the scaling hypothesis the way that Sutskever, Amodei and others at OA do\" [spya-scr8jb], and that outside these labs, \"machine learning Twitter\" mostly treats the hypothesis with disdain [spya-scr8jb].\n\nGwern also frames this as a decades-long minority position: he traces it back to Moravec and a handful of \"diehard connectionists\" like Schmidhuber, Sutskever, Legg, and Amodei, against a field that had, in his account, spent years dismissing it and forecasting AI winters [spya-cty5hx spya-m9r8zx]. He's sharply critical of the mainstream response, characterizing establishment commentary as \"the voice of authority\" — calm, non-quantitative, allergic to numerical predictions that could be falsified, and dismissive of the possibility by temperament rather than argument [spya-zyncdd]. He predicts that even after GPT-3, most researchers would rather write \"a disdainful tweet explaining how... scaling is a dead end\" than admit the bitter lesson and redirect their work [spya-jgq9gz].\n\nIt's worth flagging that this is Gwern's framing of the debate, written by an advocate of the strong version — the \"weak scaling hypothesis\" description of DeepMind's position, and the characterization of critics as merely defending status quo respectability, are his characterizations, not neutral reporting of how those labs described themselves. If you want to check how the debate actually moved after 2020, that's a question about the world rather than about the text, and I can search for it if you want — the piece itself only gestures at this with an editorial insert noting \"[Roughly, yes]\" added in 2025 [spya-rbx2kz]."
+    },
+    {
+      "run": 1,
+      "slug": "scaling-hypothesis",
+      "blockId": "spya-m3gtj6",
+      "case": "since",
+      "role": "target",
+      "question": "About block m3gtj6:\n\nWhat has happened with this idea since this was written?",
+      "seconds": 28.3,
+      "searches": 2,
+      "tools": [],
+      "links": [
+        "https://gwern.net/scaling-hypothesis-revisited"
+      ],
+      "blockIds": [
+        "spya-rbx2kz",
+        "spya-ewxv9q"
+      ],
+      "sources": 2,
+      "unknownIds": [],
+      "truncated": false,
+      "model": "anthropic/claude-sonnet-5",
+      "text": "Block m3gtj6 states the core of the \"strong scaling hypothesis\": that once a scalable, uniform architecture like self-attention is found, one can just the blessings of scale in turn support a radical theory: an old AI paradigm held by a few pioneers in connectionism... intelligence is 'just' simple neural units & learning algorithms applied to diverse experiences at a (currently) unreachable scale — bigger nets emerging ever more sophisticated behavior \"for free,\" the way human brains look like scaled-up primate brains.\n\nWhat's happened since divides into two phases:\n\n**2020–2022: the hypothesis kept winning.** Gwern's own follow-up, [\"Scaling Hypothesis Revisited\"](https://gwern.net/scaling-hypothesis-revisited), written two years later, judged that it holds up and scaling has been too successful to be strangled in the crib, covering GPT-3 through PaLM/Flamingo-era models. The article you're reading also carries a later editorial addition: where the original text speculated about an \"arms race\" toward ever-larger multimodal Transformers, a 2025 editor's note simply says \"Roughly, yes\" [spya-rbx2kz]. During this stretch DeepMind's 2022 Chinchilla paper also refined the scaling laws Gwern cites (Kaplan et al.) — showing GPT-3-era models were undertrained relative to their size, and that data and parameters should scale together — which changed *how* people scaled but not *whether* scaling worked.\n\n**2023–2025: the \"wall\" debate.** By 2024–2025, researchers were reporting that naive pretraining scaling — bigger model, same recipe, more web text — was showing real diminishing returns, partly because high-quality text data was running out. This produced talk of a \"scaling wall\" and prompted a pivot toward scaling something else: inference-time/reasoning compute (letting a model \"think longer\" at test time, as in OpenAI's o1-style models) rather than just pretraining compute. That's a different axis of scaling than the one m3gtj6 describes, though it's arguably still \"the blessings of scale\" applied elsewhere in the pipeline rather than a refutation of the underlying thesis.\n\nSo the strong claim in this block — find one scalable architecture, then just make it bigger — held up cleanly for several years and is what the article itself flags as vindicated, but by 2024–2025 the specific mechanism (raw parameter/data/compute scaling on next-token prediction) hit real friction, shifting the frontier toward post-training and inference-time scaling instead. The article's own appendix pointers — \"Situational Awareness\" and \"AI 2027,\" mentioned in the introduction [spya-ewxv9q] — are where Gwern directs readers for the more recent state of this argument, beyond what this 2020 piece itself covers."
+    },
+    {
+      "run": 1,
+      "slug": "scaling-hypothesis",
+      "blockId": "spya-m3gtj6",
+      "case": "plain",
+      "role": "control",
+      "question": "About block m3gtj6:\n\nWhat does this paragraph mean, in plain words?",
+      "seconds": 8.6,
+      "searches": 0,
+      "tools": [],
+      "links": [],
+      "blockIds": [
+        "spya-emqjaa",
+        "spya-ag750z"
+      ],
+      "sources": 0,
+      "unknownIds": [],
+      "truncated": false,
+      "model": "anthropic/claude-sonnet-5",
+      "text": "This paragraph states the \"strong scaling hypothesis\" itself, the core claim the whole essay is built around: \"The strong scaling hypothesis is that, once we find a scalable architecture like self-attention or convolutions, which like the brain can be applied fairly uniformly... we can simply train ever larger NNs and ever more sophisticated behavior will emerge naturally as the easiest way to optimize for all the tasks & data.\"\n\nIn plain terms: you don't need to keep inventing new, cleverer architectures or hand-crafted tricks to get more intelligent behavior out of a neural network. You just need one architecture that's flexible enough to be applied broadly (the way the same basic brain structure handles many different tasks across the cortex), and then the *only* thing left to do is make it bigger — more parameters, more data, more compute. New abilities (reasoning, meta-learning, and so on) show up on their own as a side effect of scaling up, because that turns out to be the \"easiest\" way for the optimization process to reduce error, not because anyone engineered those abilities in directly.\n\nThe second sentence draws the analogy that gives the hypothesis its name: \"More powerful NNs are 'just' scaled-up weak NNs, in much the same way that human brains look much like scaled-up primate brains.\" The point is that the difference between a weak model and a powerful one — like the difference between a chimp brain and a human brain — isn't a difference in kind or design, it's mostly a difference in scale.\n\nThis sets up the rest of the piece: everything that follows about GPT-2 vs. GPT-3, the \"blessings of scale,\" and the debate between OpenAI and DeepMind is Gwern arguing that this hypothesis, once considered fringe, is being vindicated [spya-emqjaa spya-ag750z]."
+    },
+    {
+      "run": 1,
+      "slug": "scaling-hypothesis",
+      "blockId": "spya-m3gtj6",
+      "case": "word",
+      "role": "control",
+      "question": "Does the article ever use the word \"cyanobacteria\"?",
+      "seconds": 3.4,
+      "searches": 0,
+      "tools": [],
+      "links": [],
+      "blockIds": [
+        "spya-h74fhr"
+      ],
+      "sources": 0,
+      "unknownIds": [],
+      "truncated": false,
+      "model": "anthropic/claude-sonnet-5",
+      "text": "Yes—once. In the \"Why Does Pretraining Work?\" section, the article says: \"Humans, one might say, are the cyanobacteria of AI: we constantly emit large amounts of structured data, which implicitly rely on logic, causality, object permanence, history—all of that good stuff.\" [spya-h74fhr]\n\nThe analogy is that just as cyanobacteria flooded the early atmosphere with oxygen as a byproduct of their metabolism (enabling later oxygen-breathing life), humans constantly produce huge amounts of structured text/data as a byproduct of living, which is what large models like GPT-3 feed on."
+    }
+  ]
+}
