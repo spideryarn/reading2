@@ -176,13 +176,13 @@ function Harness() {
       >
         <p>
           the{" "}
-          {/* A term that is also a chat mark and also a link — the shape the
-              swallower exists for, all three at once. */}
-          <a href="#alpha">
-            <mark className="term chat" data-term="alpha" data-chat="c1">
-              first term
-            </mark>
-          </a>{" "}
+          {/* A term that is also a chat mark — the shape the swallower exists
+              for. **Not inside a link any more**: since 260915a a tap on
+              anything in a link is decided at the click, and
+              tests/link-tap-escapes.test.tsx is where that path is driven. */}
+          <mark className="term chat" data-term="alpha" data-chat="c1">
+            first term
+          </mark>{" "}
           and the <mark className="term" data-term="beta">second term</mark>.
         </p>
       </div>

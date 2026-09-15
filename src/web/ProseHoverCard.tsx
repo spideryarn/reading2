@@ -398,11 +398,11 @@ function HoverCard({
          link never is (see `tapSelector`).
 
          `window.open` rather than letting the click through, because the hook
-         swallows the compatibility click after any tap it has acted on
-         (useHoverCard.ts § swallowed) and unpicking that for one consumer would
-         put a second way of committing next to the one every other target uses.
-         This runs inside the `pointerup` listener, so it is a user activation
-         and not a popup for a blocker to refuse. `noopener,noreferrer` is the
+         cancels the click of every tap on a link and decides it itself
+         (useHoverCard.ts § clicked) — which is what stops a first tap escaping
+         to the destination, SPIDERYARN-READING2-3Y. This runs inside that
+         `click` listener, so it is a user activation and not a popup for a
+         blocker to refuse. `noopener,noreferrer` is the
          pair the anchor itself carries — a `window.open` does not inherit it. */
       if (data.link?.kind === "external" && data.href) {
         close();

@@ -199,11 +199,31 @@ hit. That keeps the rule a reader has already learnt for the 13% of this corpus'
 is a term ([Two things over one phrase](#two-things-over-one-phrase)); the link is still one press
 away at the card's foot. Decided against reversing it, on a GPT Sol review, 2026-09-04.
 
-The commit calls `window.open` rather than letting the click through, because the hook swallows the
-compatibility click after any tap it has acted on (`useHoverCard.ts` § `swallowed`); unpicking that
-for one consumer would be a second way of committing beside the one every other target uses. It runs
-inside the `pointerup` listener, so it is a user activation rather than a popup for a blocker to
-refuse, and it passes `noopener,noreferrer` — a `window.open` does not inherit the anchor's `rel`.
+**It is decided at the click, since 2026-09-15, and that is the fix for it not always working.**
+
+> Sometimes when I click on a hyperlink to an article, it opens the external article. … Why isn't
+> that reliably intercepting the click?
+>
+> — Greg, 2026-09-12, on a home-screen iPad ([SPIDERYARN-READING2-3Y](https://greg-detre.sentry.io/issues/SPIDERYARN-READING2-3Y))
+
+It used to be decided at `pointerup`, which then swallowed the click. But the click is what
+navigates, and the platform decides it separately: iOS may move it onto a link the finger only
+landed *beside* (touch adjustment), click where our tap test had refused (a 15px sideways drift or a
+700ms press both still click, measured), click for a Pencil, which was never on the touch path, or
+click after the swallow had expired. Every one of those opened the destination. So for any tap
+target inside a link — an outbound link, a term inside one, a footnote marker — `useHoverCard.ts`
+§ `clicked` now makes the decision on the click itself, and **a click commits only the card that
+was already open when its press began**, which is the whole guarantee that a first tap cannot leave
+the app. [260915a](../plans/260915a-ipad-link-taps-that-escape-the-link-card.md) has the six ways
+through and the design Sol preferred to the first draft;
+[the postmortem](../postmortems/260915a-a-tap-judged-at-pointerup-and-acted-on-at-click.md) names
+the class. It is scoped to the prose: a link in a chat answer still opens on the first tap
+(§ The links chat writes).
+
+The commit calls `window.open` rather than letting the click through, because the hook has already
+cancelled that click to make the decision. It runs inside the `click` listener, so it is a user
+activation rather than a popup for a blocker to refuse, and it passes `noopener,noreferrer` — a
+`window.open` does not inherit the anchor's `rel`.
 
 **Checked in Chrome on an 834×1194 viewport with `hasTouch`, 2026-09-04**, driving CDP
 `Input.dispatchTouchEvent` rather than synthetic events, because
