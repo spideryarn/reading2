@@ -1,5 +1,5 @@
 /**
- * **The chat store tells its listeners at most twice per browser task, and
+ * **The chat store tells its listeners at most once per browser task, and
  * always tells them the latest.**
  *
  * The contract behind the #185 fix, without React:
@@ -17,7 +17,7 @@
  * window is open is still told) and R2 (one throwing listener neither silences
  * the others nor wedges the gate).
  */
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { ChatController, type ChatEffects } from "../src/web/chat/controller.js";
 import type { TurnSink } from "../src/web/chat/effects.js";
 import { asOpId } from "../src/web/chat/model.js";
@@ -211,5 +211,39 @@ describe("when the chat store tells its listeners", () => {
     await task();
     sink.delta("c");
     expect(others, "a later change still notifies").toEqual(["a", "ab", "abc"]);
+  });
+
+  it("rethrows a trailing listener after telling everyone, with the next window already open", async () => {
+    const { c, sink } = await opened();
+    vi.useFakeTimers();
+    try {
+      let throws = false;
+      const others: string[] = [];
+      c.subscribe(() => {
+        if (throws) {
+          throws = false;
+          throw new Error("a trailing listener fell over");
+        }
+      });
+      c.subscribe(() => others.push(text(c)));
+
+      sink.delta("a");
+      sink.delta("b");
+      expect(others).toEqual(["a"]);
+
+      throws = true;
+      expect(
+        () => vi.advanceTimersToNextTimer(),
+        "the timer throw stays uncaught for the browser's global handler",
+      ).toThrow("a trailing listener fell over");
+      expect(others, "the other listener was still told by the trailing emit").toEqual(["a", "ab"]);
+
+      sink.delta("c");
+      expect(others, "the next window was open before the throw").toEqual(["a", "ab"]);
+      vi.advanceTimersToNextTimer();
+      expect(others, "the next window still flushes the latest snapshot").toEqual(["a", "ab", "abc"]);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });

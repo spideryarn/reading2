@@ -1,9 +1,9 @@
 # A "?" answer that arrives in a burst must not throw React #185
 
-**Status: built, awaiting GPT Sol's code review** — evidence: the two class tests and the whole-App
-reproduction were red before the fix and are green after it (5 files, 33 tests, exit 0, run by the
-orchestrator); the builder's scoped run over every chat test file is 44 files, 582 tests, exit 0;
-`npm run typecheck` exits 0.
+**Status: built and code-reviewed, full suite running** — evidence: the two class tests and the
+whole-App reproduction were red before the fix and are green after it; after GPT Sol's code-review
+fixes the five key files are 34 tests, exit 0, run by the orchestrator; the builder's scoped run
+over every chat test file is 44 files, 582 tests, exit 0; `npm run typecheck` exits 0.
 
 Overseer queue item `qi-tcxxvsvm`; Sentry `SPIDERYARN-READING2-3X`, reported 2026-09-12 11:20Z on
 build `d358f773`. From Greg, an admin, so trusted input — [feedback-reports.md](../project/feedback-reports.md).
@@ -268,6 +268,17 @@ did. So `useVisualViewport`'s one mount-time `setBox` was never a suspect.
   sequence (R3), the settle helper crosses two boundaries (R4), the promises about timing and about
   foreign exceptions are narrowed (R5, R6), the drafted postmortem and note no longer claim work
   that is not built (R7), and the scope count is eight, not nine (R8).
+
+- **GPT Sol's code review: no P0 or P1**, and *"the notification state machine cannot leave a
+  React subscriber permanently stale"* —
+  [260915a-question-press-answer-does-not-loop-code-review-sol.md](260915a-question-press-answer-does-not-loop-code-review-sol.md).
+  It fixed three things inside the stage, each read before it was committed: the postmortem still
+  described the disproved single-update test (C1); the controller said "twice per task" where
+  leading and trailing are in different tasks (C3); and nothing tested a listener throwing from
+  the trailing timer (C4 — a new case, red when `openWindow` is moved below `emit`). **C2, left as
+  it is:** assigning `awayNow.current` during render could in theory expose a speculative
+  concurrent-render value. P3, no reproduction, and no reachable wrong screen found; the pattern is
+  the one `AddPage.tsx` and `FeedbackDialog.tsx` already use.
 
 ### What the build changed about the plan
 

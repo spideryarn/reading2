@@ -90,12 +90,13 @@ about it. The update that armed the counter in the reproduction came in earlier,
    response returns and feeds nothing through `act`. Cheap, and it is the shape that was missing.
    Written, and red on the unfixed code.
 2. **A class test at the store's boundary**, independent of any component: a real controller, a
-   `useSyncExternalStore` subscriber, *one* unrelated pending update, a 200-event burst — and
-   beside it the controller's notification contract with no React at all. It stays red if every
-   `ChatPanel` effect is removed, which the whole-App test cannot promise. Being built in this run.
+   `useSyncExternalStore` subscriber, an effect that re-arms an update after every commit, a
+   180-event burst — and beside it the controller's notification contract with no React at all. It
+   stays red if every `ChatPanel` effect is removed, which the whole-App test cannot promise.
+   Written, and red on the unfixed code.
 3. **A notification bound in the store itself** — at most one notify per browser task, leading and
    trailing, state kept synchronous. This bounds the burst for this store whatever the subtree
-   does. Being built in this run; the plan has the state machine.
+   does. Written; the plan has the state machine.
 4. **Stop printing foreign exceptions as the answer.** `describeFetchFailure` trusts any `Error`'s
    message to be the server's. Deferred to its own plan: after (3) the burst no longer produces
    React's exception, but a leading listener still runs inside the stream loop, so the route is

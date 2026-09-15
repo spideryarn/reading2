@@ -332,8 +332,8 @@ export class ChatController {
   };
 
   /**
-   * Tell the listeners at most twice per browser task: once at once, and once
-   * more when the task ends if anything moved after that.
+   * Tell the listeners at most once per browser task: at once in the first
+   * task, then in a later timer task if anything moved after that.
    *
    * - **leading** — a change with no window open is told at once, as it always
    *   was, so a press, a `begin` or a paced delta draws exactly when it did;
