@@ -195,8 +195,14 @@
   z-index: 46;
   pointer-events: none;
 }
+/* **Right edge rather than a second copy of the band's width**, which is not a
+   style choice: `tests/spine-width.test.ts` finds the covering rule by looking
+   for that `calc(…)` *once* in the reader's stylesheets, and a verbatim copy
+   here made it ambiguous and took three of its cases red. Same box, one
+   arithmetic — and the twin is narrow-window.css § a band with no room. */
 .reader.band-covers .mode-herald-slot {
-  width: calc(100vw - var(--spine-w) - var(--safe-left) - var(--safe-right));
+  right: var(--safe-right);
+  width: auto;
 }
 .mode-herald {
   padding: 0.55rem 0.7rem 0.6rem;
