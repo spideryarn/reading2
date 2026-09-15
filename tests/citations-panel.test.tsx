@@ -247,7 +247,9 @@ describe("CitationsPanel", () => {
 
   it("starts the bar at the default, hides what is under it, and says how many", async () => {
     await draw(owner());
-    expect(CITATION_BAR_DEFAULT).toBe(0.4);
+    /* 0.25 since 2026-09-15 (docs/plans/260915d-…). PASSING's (2 × 0.2 + 0.2) / 3
+       = 0.20 is still under it, which is what the next line needs. */
+    expect(CITATION_BAR_DEFAULT).toBe(0.25);
     expect(host.querySelector(`[data-citation-id="${PASSING.id}"]`)).toBeNull();
     expect(host.textContent).toContain("1 citation is hidden by this threshold.");
     expect(row(UNSCORED.id).getAttribute("title")).toContain("Not scored");

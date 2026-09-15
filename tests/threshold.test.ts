@@ -1,7 +1,7 @@
 /**
- * The one threshold rule the three sliders share — src/web/threshold.ts.
+ * The one threshold rule every slider shares — src/web/threshold.ts.
  *
- * Glossary, Quotes and Search all now hide what is below the bar and say how
+ * Glossary, Quotes, Search and Citations all hide what is below the bar and say how
  * many, so the rule lives once and each caller passes its own score accessor.
  * What these tests are really protecting is the thing the plan calls this
  * feature's worst failure: **a count that disagrees with the list under it.**

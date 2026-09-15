@@ -163,13 +163,12 @@ describe("the quotes the prose marks", () => {
  * is the part a later edit could quietly change.
  */
 describe("how heavily each quote is drawn", () => {
-  it("is heavy above the bar's default and light below it", () => {
-    /* The two controls tell one story: at the bar's resting position everything
-       on the page is heavy, and the light ones are what dragging it down
-       reveals. If this threshold and QUOTE_BAR_DEFAULT ever part company, the
-       reader gets a page where raising the bar hides a heavy stroke and leaves
-       a light one — which reads as a bug in the feature whose whole job is to
-       say what matters. */
+  it("is heavy from 0.80 and light below it", () => {
+    /* Its own number since 2026-09-15, above where the bar now rests (0.60), so
+       the stroke's split is visible on first open. What the two controls must
+       still agree on is order — raising the bar removes light strokes before
+       heavy ones — and that holds because both read `priorityOf` (the next
+       test). QuotesPanel.tsx § QUOTE_HEAVY_AT. */
     expect(quoteTier(q("x", "spya-aaaaaa", "t", 0.8))).toBe(2);
     expect(quoteTier(q("x", "spya-aaaaaa", "t", 0.95))).toBe(2);
     expect(quoteTier(q("x", "spya-aaaaaa", "t", 0.79))).toBe(1);

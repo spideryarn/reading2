@@ -492,6 +492,6 @@ describe("the constants", () => {
        be on any grid — which is the whole reason the track stopped being a grid.
        What it must still be is inside the scale. */
     expect(QUOTE_BAR_DEFAULT).toBeLessThanOrEqual(1);
-    expect(snapToStop(barStops([q("a", 0.9), q("b", 0.4)]), QUOTE_BAR_DEFAULT)).toBe(0.9);
+    expect(snapToStop(barStops([q("a", 0.9), q("b", 0.65)]), QUOTE_BAR_DEFAULT)).toBe(0.65);
   });
 });

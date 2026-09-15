@@ -707,9 +707,10 @@ describe("prioritised order", () => {
   });
 
   it("gates on the product, so a high single score is not enough", () => {
-    // 0.95 difficulty and 0.3 centrality is 0.285 — under the gate, and under
-    // it on purpose. This is the assertion that a sum would fail.
-    const nearly = entry({ name: "nearly", difficulty: 0.95, centrality: 0.3 });
+    // 0.95 difficulty and 0.1 centrality is 0.095 — under the gate (0.10 since
+    // 2026-09-15), and under it on purpose. This is the assertion that a sum
+    // would fail: 0.95 + 0.1 clears any gate the product could.
+    const nearly = entry({ name: "nearly", difficulty: 0.95, centrality: 0.1 });
     expect(priorityOf(nearly)!).toBeLessThan(PRIORITY_GATE);
     expect(sortEntries([hard, nearly], "prioritised").map((e) => e.name)).toEqual(["hard"]);
   });

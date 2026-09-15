@@ -40,7 +40,10 @@ Four, under the glossary's order buttons ([glossary.md](glossary.md)):
 - **prioritised**, the default — `(2 × relevance + influence) / 3` against the threshold bar, in
   first-cited order. A work missing a score survives every position of the bar
   ([`threshold.ts`](../../src/web/threshold.ts)), and the line under it says how many are hidden. The
-  bar starts at **0.40**, set from the stage-1 runs (the plan's Progress). Falls back to first cited
+  bar starts at **0.25**, lowered from 0.40 on 2026-09-15 so most works come in by default — 92% on
+  average on the local runs
+  ([260915d](../plans/260915d-prioritised-by-default-in-search-and-lower-default-thresholds-everywhere.md)).
+  Falls back to first cited
   when no position of the bar would hide anything.
 - **first cited** — the artefact's own order.
 - **relevance**, **influence** — descending, a work missing that score last.

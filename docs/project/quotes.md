@@ -256,9 +256,12 @@ Three consequences, and the third is a correction:
   under a product. A maximum over a subset can only be *lower* than the maximum over both, so a
   quote scored on one axis can be under-promoted and never over-promoted, which is the direction an
   honest default has to fail in.
-- **The bar starts at `0.80`, not the glossary's `0.30`**, because a product of two 0–1 scores
-  clusters low and a maximum clusters high. It started at `0.70` and the first real run moved it —
-  see below.
+- **The bar starts at `0.60`, well above the glossary's `0.10`**, because a product of two 0–1
+  scores clusters low and a maximum clusters high. It started at `0.70`, the first real run moved it
+  to `0.80` — see below — and on 2026-09-15 it came down to `0.60` at Greg's request that every
+  prioritised bar let most entries in by default: 85% on average across the local quote lists, 95%
+  on the median one, with the snap to real scores modelled
+  ([260915d](../plans/260915d-prioritised-by-default-in-search-and-lower-default-thresholds-everywhere.md)).
 - **The right-hand end keeps "all the top-scored quotes", not "exactly one".** The plan claimed
   the glossary's promise and it does not carry: under `max` either score can produce a top value, so
   ties at the top are common. GPT Sol showed it false with a five-quote example.
@@ -375,11 +378,20 @@ finds it needs a fill for quotes after all, the reason this was chosen has been 
 | **the stroke** | **that this is a quote, and how much it matters** |
 
 **Two tiers, from `priorityOf`.** `quoteTier` (QuotesPanel.tsx, beside `priorityOf`) is heavy at or
-above `QUOTE_BAR_DEFAULT` and light below it — so at the bar's resting position every quote on the
-page is heavy, and the light ones are what dragging the bar down reveals. The two controls tell one
-story: **raise the bar and what survives is exactly the heavier strokes.** Driving it from
-`importance` alone would let them disagree, since `?bar=` thresholds on `max(importance, striking)`;
-a quote that is merely *striking* clears the bar, so it must also draw heavy.
+above `QUOTE_HEAVY_AT`, `0.80`, and light below it. **That number is its own, not the bar's**, since
+2026-09-15. It used to be the bar's resting position, so every quote the default bar kept was heavy;
+when the bar came down to `0.60` the tie would have made the stroke's split idle in exactly the
+state most readers see, and only visible once somebody dragged the bar. Decoupled, the quotes
+between `0.60` and `0.80` draw light beside the heavy ones on first open, so thickness means
+something without anyone touching anything (the fade carries the continuous signal; the tier's one
+job is a visible split).
+
+What the two controls still agree on is **order**: raising the bar removes scored light quotes
+before scored heavy ones, because both read `priorityOf`. (Not "what survives is exactly the heavy
+strokes": the bar snaps to real scores, so there may be no stop at `0.80`, and an unscored quote
+survives every bar while drawing light.) Driving the stroke from `importance` alone would let them
+disagree, since `?bar=` thresholds on `max(importance, striking)`; a quote that is merely *striking*
+clears the bar, so it must also draw heavy.
 
 **A quote with no score at all is light, and still drawn.** It has earned no emphasis, but a quote
 scored on neither axis survives every position of the bar (§ The bar hides what is below it), so
@@ -668,9 +680,9 @@ on a piece that quotes agent transcripts at length is the check doing its job ra
 **It moved the bar.** The five `max(importance, striking)` values came back `0.70`, `0.75`, `0.75`,
 `0.85`, `0.90` — clustered high, exactly as the argument for `max` predicts — so a starting bar of
 `0.70` showed **every quote** and the panel opened on a foot line saying nothing was hidden.
-`QUOTE_BAR_DEFAULT` ([`QuotesPanel.tsx`](../../src/web/QuotesPanel.tsx)) leaves two of those five on
-screen. One article is a better-supported
-guess and not a measurement, and the slider is still the feedback loop.
+`0.80` left two of those five on screen. One article is a better-supported guess and not a
+measurement, and the slider is still the feedback loop. (On 2026-09-15 the default came down to
+`0.60` — the bullet under § The bar above.)
 
 **And 11.9 seconds against a 120-second budget**, which is a `STEP_BUDGET_MS` guess with an order of
 magnitude of headroom in it. Worth leaving alone — one sample, and being under is the cheap way to be
@@ -678,7 +690,9 @@ wrong — but worth knowing.
 
 ## What is still open
 
-- **One article is one article.** `0.80` and `medium` effort both rest on that single run.
+- **One article is one article.** `medium` effort rests on that single run. The bar's `0.60` rests
+  on four local quote lists (260915d), which is more but still few; production has not been
+  measured.
   `data/writes/quotes.json` still does not exist, so `quotes.json` is off `GATE_FIXTURES`
   and the filesystem-to-Postgres round trip is still asserting that an absent artefact stays absent.
 - **The count has risen twice on the strength of an argument, not a measurement.**

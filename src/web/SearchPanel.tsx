@@ -1201,8 +1201,8 @@ function SortBar({
 /**
  * The foot line: how many passages the bar is holding back, and the way back.
  *
- * The same sentence the other two thresholds print, with this panel's noun —
- * all three hide rather than group since 2026-09-03, and threshold.ts holds the
+ * The same sentence the other thresholds print, with this panel's noun —
+ * they all hide rather than group since 2026-09-03, and threshold.ts holds the
  * copy and the argument for it. It replaced a `confNote` that spoke only when
  * the bar had hidden everything or nothing, which made an absent line
  * ambiguous.
