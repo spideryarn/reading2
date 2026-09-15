@@ -1,9 +1,14 @@
 # A "?" answer that arrives in a burst must not throw React #185
 
-**Status: built and code-reviewed, full suite running** — evidence: the two class tests and the
-whole-App reproduction were red before the fix and are green after it; after GPT Sol's code-review
-fixes the five key files are 34 tests, exit 0, run by the orchestrator; the builder's scoped run
-over every chat test file is 44 files, 582 tests, exit 0; `npm run typecheck` exits 0.
+**Status: shipped to `dev`, 2026-09-15** — evidence: the two class tests and the whole-App
+reproduction were red before the fix and are green after it; after GPT Sol's code-review fixes the
+five key files are 34 tests, exit 0; the builder's scoped run over every chat test file is 44
+files, 582 tests, exit 0; `npm run typecheck` exits 0. **The full suite: 1,120 files passed, 5
+failed, 1 skipped — all five a build this fresh worktree does not have**: `cold-start-lazy-imports`
+and `pdf-bundle-trace` want `api-dist/vercel.js`, `fleet-composed-access` wants
+`tools/fleet/web/dist/assets`, and `fleet-decisions-route` / `fleet-reports-route` exit 2 bringing
+up the fleet server over the same missing build. The three fleet files fail the same way run alone,
+and none of the five imports anything this change touched.
 
 Overseer queue item `qi-tcxxvsvm`; Sentry `SPIDERYARN-READING2-3X`, reported 2026-09-12 11:20Z on
 build `d358f773`. From Greg, an admin, so trusted input — [feedback-reports.md](../project/feedback-reports.md).

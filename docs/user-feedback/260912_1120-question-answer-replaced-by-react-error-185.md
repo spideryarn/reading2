@@ -4,7 +4,7 @@
 `temporal-context-reinstatement-spya-dhqkf9` with Summary open and a glossary term selected. Overseer
 queue item `qi-tcxxvsvm`.
 
-**Ending: pending** — becomes *shipped* when the fix is on `dev`.
+**Ending: shipped** — on `dev`, 2026-09-15.
 
 > In a question mark comment response. Minified React error #185; visit
 > https://react.dev/errors/185 for the full message or use the non-minified dev environment for full
