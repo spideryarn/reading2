@@ -4,7 +4,22 @@ import { MicLevel } from "../MicLevel.js";
 import { PassageLinks } from "../PassageLinks.js";
 import type { BlockId } from "../../types.js";
 import { listInputs, rememberedDevice, rememberDevice, type MicDevice } from "../mic-devices.js";
+import type { LiveStall } from "./stall.js";
 import type { LiveApi } from "./useLiveConversation.js";
+
+/**
+ * What each stall means, said to the reader. ./stall.ts decides which one it
+ * is; these say what happened in words that do not blame them, and point at the
+ * Reconnect button below, which is always there while the call is live.
+ */
+const STALL_NOTICE: Record<LiveStall, string> = {
+  "microphone-paused":
+    "Your device has paused the microphone, so nothing you say is reaching the conversation. It may come back by itself — if not, reconnect.",
+  connection: "The connection is unstable. It may recover by itself — if not, reconnect.",
+  "open-turn":
+    "Still hearing sound after half a minute. Background noise can keep your turn open — if you’ve finished speaking, reconnect.",
+  "no-reply": "No reply yet. The connection or the voice service may have stalled — reconnect to carry on.",
+};
 
 function status(live: LiveApi): string {
   if (live.phase === "connecting") return "Starting live conversation…";
@@ -72,6 +87,7 @@ export function LiveStatus({ live, onRestart, onType, onDictate, blocks, onJump 
       {live.deviceLabel && <p className="chat-live-device">Microphone: {live.deviceLabel}</p>}
       {live.quietInput && active && <p className="chat-live-notice">No sound detected yet. Check your microphone below.</p>}
       {live.notice && <p className="chat-live-notice">{live.notice}</p>}
+      {live.stall && live.phase === "live" && <p className="chat-live-notice" role="status">{STALL_NOTICE[live.stall]}</p>}
       {(devices.length > 0 || live.deviceLabel) && <label className="chat-live-device-picker">
         Microphone
         <select aria-label="Microphone device" value={chosen ?? ""} disabled={switching}
@@ -117,6 +133,8 @@ export function LiveStatus({ live, onRestart, onType, onDictate, blocks, onJump 
       </section>}
       <div className="chat-live-actions">
         {!active && !switching && live.error && <button type="button" onClick={onRestart}>Retry live</button>}
+        {live.phase === "live" && <button type="button" onClick={live.reconnect}
+          title="End this call and start a fresh one in the same conversation. What was said is kept.">Reconnect</button>}
         <button type="button" disabled={switching} onClick={onType}>Continue typing</button>
         {onDictate && <button type="button" disabled={switching} onClick={onDictate}>Use dictation</button>}
       </div>

@@ -58,6 +58,11 @@ export class ToolResponses {
     return true;
   }
 
+  /** A response has been created and has not finished. The stall rule's question. */
+  get inProgress(): boolean {
+    return this.active.size > 0;
+  }
+
   get responding(): boolean {
     return this.active.size > 0 || this.requested;
   }
