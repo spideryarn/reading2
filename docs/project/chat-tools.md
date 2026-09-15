@@ -521,6 +521,12 @@ the **final user message** between the anchor and the stance — below the `cach
 so a help turn and an ordinary one share one cached article prefix
 ([prompt-caching.md](prompt-caching.md)). `tests/help-prompt.test.ts` pins the byte identity.
 
+**So the reader's own words can be minimal, and since 2026-09-12 they are:** the "?" sends
+*"Help me understand."* (`HELP_QUESTION` in [`src/web/chat-handoff.ts`](../../src/web/chat-handoff.ts)),
+Greg's example. The reach past the passage — nearby, or somewhere earlier — used to be spelled out in
+that sentence and is now a line of `helpSection`, where it speaks to the model rather than for the
+reader ([260915d](../plans/260915d-help-question-says-help-me-understand.md)).
+
 And the anchor it sits beside is really there now. `buildConverseMessages` had documented since
 2026-08-26 that the passage is **sent on every turn** — because `recentHistory` keeps only the most
 recent turns, so a passage living in the reader's first message stops being sent while the panel and

@@ -221,40 +221,20 @@ describe("the '?' sends once, and says what the reader was looking at", () => {
     expect(sent).toContain(HELP_QUESTION);
   });
 
-  it("keeps both directions, and the exact wording Greg refused", () => {
-    /* **Two asks, a day apart, and the sentence has to carry both.**
+  it("is Greg's few plain words, and carries no instruction to the model", () => {
+    /* **The reader's words, not the model's instructions.** Greg, 2026-09-12
+       (report 3W): "Make this prompt more general and minimal. Eg help me
+       understand". The sentence had grown to carry two instructions to the
+       model — "what's around it" (2026-09-05) and "somewhere earlier"
+       (2026-09-04) — back when it was the only place the model learned a "?"
+       had been pressed. Since 2026-09-05 `helpSection` in src/converse.ts says
+       that, so the reach lives there now and is pinned in
+       tests/help-prompt.test.ts § what the addendum says.
 
-       Greg, 2026-09-04, is why the far half exists: "often the confusion is
-       wider in scope than just that block, so the LLM is going to have to use
-       its judgment on that." An earlier draft said "explain this and
-       surrounding blocks", which is exactly the instruction we know is usually
-       wrong — the thing you needed was three sections ago.
-
-       Greg, 2026-09-05, is why "around it" was added: "the prompt for the chat
-       should leave room implicitly for the question/explanation to cover nearby
-       blocks too."
-
-       **What this test can and cannot do, since the first version of it claimed
-       more than it delivers.** It was called "admits the neighbours without
-       naming a window", and GPT Sol pointed out that it cannot see a window at
-       all: *"I don't get this or what's around it. Please explain the two
-       adjacent blocks, or something somewhere earlier"* satisfies every
-       assertion below while naming a two-block radius. No string check could
-       catch that; it is a judgment about copy, and it lives in
-       `src/web/chat-handoff.ts` where the sentence does.
-
-       What these assertions genuinely hold is narrower and still worth having:
-       **both directions survive an edit, and the one phrasing Greg named and
-       refused cannot come back.** */
-    // The near case, and today's ask.
-    expect(HELP_QUESTION).toContain("around it");
-    /* The far case — and this is the clause that keeps the near half from
-       becoming a radius, because it goes on asking past whatever is nearby. */
-    expect(HELP_QUESTION).toContain("somewhere earlier");
-    // The literal wording refused on 2026-09-04. Not a test for windows in general.
-    expect(HELP_QUESTION.toLowerCase()).not.toContain("surrounding");
-    /* First person, because it is attributed to the reader in the transcript. */
-    expect(HELP_QUESTION).toMatch(/^I /);
+       Pinned exactly, because the words are his example taken literally
+       (GPT Sol, plan review): a shape check let many wrong sentences through.
+       Rewording it is a decision, and this is where it gets argued with. */
+    expect(HELP_QUESTION).toBe("Help me understand.");
   });
 
   it("keeps the anchor structural, so the prose draws no phantom mark", () => {

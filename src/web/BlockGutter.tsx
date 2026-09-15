@@ -177,7 +177,7 @@ interface Props {
    */
   onChatAbout?: ((id: BlockId) => void) | undefined;
   /**
-   * The reader pressed "?" on this paragraph — *"I don't get this"* in one
+   * The reader pressed "?" on this paragraph — *"Help me understand."* in one
    * press, and **its absence is what says the reader may not.**
    *
    * Optional and `| undefined` for exactly the reasons `onChatAbout` above

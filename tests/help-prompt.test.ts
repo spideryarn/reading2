@@ -118,6 +118,27 @@ describe("what the addendum says", () => {
     expect(text).toContain("Send them back into the paragraph better equipped to read it");
   });
 
+  /* **Both reaches, now that the reader's sentence is only "Help me
+     understand."** (report 3W, 2026-09-12). They used to ride in that sentence;
+     they are Greg's, on two days, and moved here rather than dropped.
+     2026-09-04, the far one: "often the confusion is wider in scope than just
+     that block, so the LLM is going to have to use its judgment on that."
+     2026-09-05, the near one: "leave room implicitly for the
+     question/explanation to cover nearby blocks too." And not the phrasing he
+     refused on 09-04, "explain this and surrounding blocks".
+
+     What this pins is that both reaches are present — an insertion/removal
+     detector. It cannot see whether the line sets a bounded window, or whether
+     it pulls the answer towards the article alone; those are judgments about
+     copy, made in src/converse.ts § helpSection (GPT Sol, plan review). */
+  it("keeps both reaches: past the passage, near and far", () => {
+    const text = finalUser(help());
+    expect(text).toContain("the starting point, not a boundary");
+    expect(text).toContain("around it");
+    expect(text).toContain("somewhere earlier");
+    expect(text.toLowerCase()).not.toContain("surrounding");
+  });
+
   it("sits between the anchor line and the question", () => {
     const text = finalUser(help());
     const anchorAt = text.indexOf("This conversation is about block spya-k3m9qt");
