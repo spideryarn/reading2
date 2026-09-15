@@ -147,7 +147,8 @@ it is: `reach: "letters"` or `reach: "mark"`.
 
 ## The trigger
 
-[`useLogoAnimation`](../../src/web/logo-animation.ts) returns a class name and a set of `<a>` props.
+[`useLogoAnimation`](../../src/web/logo-animation.ts) returns a class name and event props for any
+of the three hosts; the two wordmarks put them on their `<a>`, and the shelf puts them on its spider.
 Five things in it are decisions rather than plumbing.
 
 **A long press is a request to see, not to leave.** Holding the wordmark for 350ms picks an

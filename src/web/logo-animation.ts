@@ -19,14 +19,15 @@
  * The design, and every animation's reasoning, is in
  * docs/project/design-logo.md.
  *
- * ## Two mount points, one hook
+ * ## Three hosts, one hook
  *
  * The wordmark is drawn twice, with deliberately different inner markup —
  * `HomeLogo` in the top-left corner of the shelf-adjacent pages, `DockHome` at
  * the left-hand end of the reading view's bottom bar (Dock.tsx § The word, and
  * which mechanism takes it away). Both spread `useLogoAnimation()` onto their
  * `<a>`, so there is one implementation of *when* an animation runs and one
- * class name for the stylesheet to key on.
+ * class name for the stylesheet to key on. `ShelfSpider` uses the same hook on
+ * the shelf's decorative mark-only `<span>`.
  *
  * That is also why the CSS selects on `.logo-letter` and `.logo-image` and
  * never on `.logo-text`: only the corner copy has that wrapper.
@@ -215,20 +216,21 @@ const LONG_PRESS_MS = 350;
 const TOUCH_LINGER_MS = 4500;
 
 /**
- * How long the click-suppression flag stands after the press ends, in ms.
+ * How long a flag waiting for the click after a press stands, in ms.
  *
- * Long enough for the click that a long press normally produces to arrive and
- * read it; short enough that when no click comes — iOS cancels it after a long
- * press — the reader's next deliberate press is not the one that gets eaten.
+ * Long enough for the click a completed touch normally produces to arrive and
+ * read the flag; short enough that when no click comes — iOS may cancel it
+ * after a long press — a later click cannot inherit the old gesture.
  */
-const CLICK_SUPPRESSION_MS = 400;
+const CLICK_FOLLOWUP_MS = 400;
 
 /**
- * The `<a>` props that make the wordmark animate.
+ * The props that make a logo host animate.
  *
- * Spread onto the link, not onto a wrapper: both copies of the wordmark are
+ * The two wordmarks spread these onto their links, not onto wrappers: both are
  * already anchors with their own positioning, and a wrapper around a
- * `position: fixed` element is a layout change dressed up as a refactor.
+ * `position: fixed` element is a layout change dressed up as a refactor. The
+ * shelf's decorative spider spreads them onto its mark-only span.
  *
  * ## The gesture is owned, and it ends where it ends
  *
@@ -290,9 +292,10 @@ export function useLogoAnimation(
   /** Set by a completed long press, read and cleared by the click that follows. */
   const suppressClick = useRef(false);
   /**
-   * Whether the press the next click belongs to was a finger. Read only by the
+   * Whether the next click follows a completed short touch. Read only by the
    * `tap` option, so a mouse click on a hovered spider — which has already
-   * drawn once, on the hover — does not draw a second time.
+   * drawn once, on the hover — does not draw a second time. Armed on release,
+   * not down, and expired if the browser decides not to send that click.
    */
   const touchPress = useRef(false);
   const pressTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -344,7 +347,7 @@ export function useLogoAnimation(
   }, []);
 
   /**
-   * The flag stands for a moment after the gesture ends, then goes.
+   * A flag waiting for the click stands briefly after the gesture ends, then goes.
    *
    * A click does not always follow a long press — iOS cancels it, and so does a
    * release the browser decides was a drag — and a flag left standing then eats
@@ -352,18 +355,19 @@ export function useLogoAnimation(
    * reason. A real click arrives within a few milliseconds of the release and
    * clears the flag itself; this is only the backstop for when none does.
    */
-  const expireSuppression = useCallback(() => {
-    if (!suppressClick.current) return;
+  const expireClickFlags = useCallback(() => {
+    if (!suppressClick.current && !touchPress.current) return;
     if (flagTimer.current !== null) clearTimeout(flagTimer.current);
     flagTimer.current = setTimeout(() => {
       flagTimer.current = null;
       suppressClick.current = false;
-    }, CLICK_SUPPRESSION_MS);
+      touchPress.current = false;
+    }, CLICK_FOLLOWUP_MS);
   }, []);
 
   return {
     /**
-     * Goes on the `<a>` alongside `logo` and its per-site class.
+     * Goes on the host alongside `logo`/`shelf-spider` and its per-site class.
      *
      * **Two classes, not one.** The animation's own id carries its keyframes;
      * the bare `spya-anim` carries the handful of rules every animation needs
@@ -383,10 +387,12 @@ export function useLogoAnimation(
            before `pointerdown`. Taking it would mean every tap on the way home
            started an animation the reader never asked for and is about to
            navigate away from — and would consume the long press's re-roll
-           before the long press happened. Hover means a pointer that can
-           hover. */
+           before the long press happened. A contact-only pen also enters as
+           part of its down; unlike hover, that enter has a button held. A
+           press already owned by this hook may re-enter held and still rolls. */
         if (e.pointerType === "touch") return;
         inside.current = true;
+        if (e.buttons !== 0 && press.current === null) return;
         if (lingerTimer.current !== null) {
           clearTimeout(lingerTimer.current);
           lingerTimer.current = null;
@@ -405,6 +411,7 @@ export function useLogoAnimation(
         if (press.current === null) {
           clearTimers();
           suppressClick.current = false;
+          touchPress.current = false;
         }
       },
       onContextMenu: (e: ReactMouseEvent) => {
@@ -443,6 +450,7 @@ export function useLogoAnimation(
           flagTimer.current = null;
         }
         suppressClick.current = false;
+        touchPress.current = false;
 
         /* Read off the event now, not inside the timeout. React stopped pooling
            synthetic events in 17 so `e` would survive, but a handler that keeps
@@ -452,14 +460,17 @@ export function useLogoAnimation(
         const touch = e.pointerType === "touch";
         const host = e.currentTarget;
         press.current = { id, touch, held: false };
-        touchPress.current = touch;
+        /* `pointerdown` on the host is proof that this pointer is inside even
+           when no preceding enter reached us (for example, if the host appeared
+           under a stationary pointer). A later leave still revokes it. */
+        if (!touch) inside.current = true;
 
         const finish = (ev: PointerEvent) => {
           if (ev.pointerId !== id) return;
           const held = press.current?.held ?? false;
           endGesture();
           if (held) {
-            expireSuppression();
+            expireClickFlags();
             /* **The linger starts here, on release, and not at the threshold.**
                Started at the threshold it ran out under the reader's own
                finger: a five-second hold finished the animation before they
@@ -470,6 +481,9 @@ export function useLogoAnimation(
                 setActive(null);
               }, TOUCH_LINGER_MS);
             }
+          } else if (touch) {
+            touchPress.current = true;
+            expireClickFlags();
           }
         };
         const cancel = (ev: PointerEvent) => {
@@ -512,18 +526,19 @@ export function useLogoAnimation(
            useless — the reader would lose the page they were on to watch a
            spider for a tenth of a second. `Link` calls this before it checks
            `defaultPrevented`, so this is enough to stop it. */
+        const wasTouchPress = touchPress.current;
+        touchPress.current = false;
+        if (flagTimer.current !== null) {
+          clearTimeout(flagTimer.current);
+          flagTimer.current = null;
+        }
         if (suppressClick.current) {
           suppressClick.current = false;
-          if (flagTimer.current !== null) {
-            clearTimeout(flagTimer.current);
-            flagTimer.current = null;
-          }
           e.preventDefault();
           /* The hold already drew; its click is not a second request. */
           return;
         }
-        if (!tap || !touchPress.current) return;
-        touchPress.current = false;
+        if (!tap || !wasTouchPress) return;
         /* A tap during a linger replaces it: `onPointerDown` has already
            cleared the old one, so this draw is new (the picker excludes the
            last) and its linger runs from now. */

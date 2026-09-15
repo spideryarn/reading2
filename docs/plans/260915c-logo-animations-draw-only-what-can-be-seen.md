@@ -153,4 +153,21 @@ After the change: dock at 1280px, 40 hovers, only the six drawn; at 2560px, lett
   ever becomes one", which nothing watched.
 - [x] `docs/user-feedback/260912_1032-logo-animations-not-showing.md`, ending: **shipped**, with the
   two-tap question for Greg.
-- [ ] GPT Sol code review; full suite once via tmux-job; push to `dev`.
+- [x] GPT Sol code review; full suite once via tmux-job; push to `dev`.
+
+### GPT Sol's code review, 2026-09-15
+
+It fixed four things in the hook, each with a test; two of those were checked by putting the old
+code back and watching the test go red:
+
+- **A finger flag that outlived its gesture.** `touchPress` was set at `pointerdown` and survived a
+  long press's click, a tap on a host without `tap`, and a touch whose click never came — so a later
+  unrelated click could play the shelf's spider. It is now armed only when a short touch completes,
+  cleared by every click, and expired by the same 400ms backstop as the long-press flag.
+- **A press with no hover before it.** A mouse press on a host that appeared under a still pointer
+  set the click suppression but drew nothing, so the reader got neither an animation nor the way
+  home. A non-touch press now counts as inside.
+- **A pen with no hover.** Such a pen fires `pointerenter` as part of its down, so a pen tap on the
+  reading view's wordmark animated and navigated at once. A fresh enter with a button held is not
+  a hover.
+- **Docs that still said two hosts.**

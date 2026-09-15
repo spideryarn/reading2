@@ -219,9 +219,13 @@ function logo(): HTMLAnchorElement {
  */
 function pointer(
   type: string,
-  init: { pointerType?: string; button?: number; pointerId?: number } = {},
+  init: { pointerType?: string; button?: number; buttons?: number; pointerId?: number } = {},
 ) {
-  const e = new MouseEvent(type, { bubbles: true, button: init.button ?? 0 });
+  const e = new MouseEvent(type, {
+    bubbles: true,
+    button: init.button ?? 0,
+    buttons: init.buttons ?? 0,
+  });
   Object.defineProperty(e, "pointerType", { value: init.pointerType ?? "mouse" });
   Object.defineProperty(e, "pointerId", { value: init.pointerId ?? 1 });
   return e;
@@ -278,6 +282,20 @@ describe("the trigger", () => {
       logo().dispatchEvent(pointer("pointerover", { pointerType: "touch" }));
     });
     expect(running()).toBeNull();
+  });
+
+  it("distinguishes a pen hover from the enter synthesized by pen contact", () => {
+    act(() => root.render(<HomeLogo />));
+    act(() => {
+      logo().dispatchEvent(pointer("pointerover", { pointerType: "pen", buttons: 1 }));
+    });
+    expect(running()).toBeNull();
+
+    act(() => {
+      logo().dispatchEvent(pointer("pointerout", { pointerType: "pen" }));
+      logo().dispatchEvent(pointer("pointerover", { pointerType: "pen" }));
+    });
+    expect(running()).not.toBeNull();
   });
 
 });
@@ -439,8 +457,8 @@ describe("a tap on a host that is not a link", () => {
   beforeEach(() => vi.useFakeTimers());
   afterEach(() => vi.useRealTimers());
 
-  function Spider() {
-    const anim = useLogoAnimation({ tap: true });
+  function Spider({ tap = true }: { tap?: boolean }) {
+    const anim = useLogoAnimation({ tap });
     return (
       <span className={`spider-host ${anim.className}`} {...anim.handlers}>
         <span className="logo-mark">
@@ -511,6 +529,31 @@ describe("a tap on a host that is not a link", () => {
     expect(playing()).toBeNull();
   });
 
+  it("does not mistake a later click for a touch whose click never arrived", () => {
+    act(() => root.render(<Spider />));
+    act(() => {
+      spider().dispatchEvent(pointer("pointerdown", { pointerType: "touch" }));
+      release("pointerup");
+    });
+    act(() => void vi.advanceTimersByTime(500));
+    act(() => {
+      spider().dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true }));
+    });
+    expect(playing()).toBeNull();
+  });
+
+  it("clears the touch marker even when this host does not play on taps", () => {
+    act(() => root.render(<Spider tap={false} />));
+    tap();
+    expect(playing()).toBeNull();
+
+    act(() => root.render(<Spider />));
+    act(() => {
+      spider().dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true }));
+    });
+    expect(playing()).toBeNull();
+  });
+
   it("draws once for a hold, not again for the click that follows it", () => {
     act(() => root.render(<Spider />));
     act(() => {
@@ -525,6 +568,10 @@ describe("a tap on a host that is not a link", () => {
     });
     /* The picker never repeats the last draw, so a second roll here would show
        up as a different id rather than hide behind the same one. */
+    expect(playing()).toBe(held);
+    act(() => {
+      spider().dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true }));
+    });
     expect(playing()).toBe(held);
   });
 
@@ -543,6 +590,20 @@ describe("a tap on a host that is not a link", () => {
       spider().dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true }));
     });
     expect(playing()).toBe(hovered);
+  });
+
+  it("lets a touch tap replace a mouse hover on a hybrid device", () => {
+    act(() => root.render(<Spider />));
+    act(() => {
+      spider().dispatchEvent(pointer("pointerover"));
+    });
+    const hovered = playing();
+    tap();
+    const tapped = playing();
+    expect(tapped).not.toBeNull();
+    expect(tapped).not.toBe(hovered);
+    act(() => void vi.advanceTimersByTime(5000));
+    expect(playing()).toBeNull();
   });
 
   it("replaces a lingering animation on a second tap, and still expires", () => {
@@ -625,6 +686,22 @@ describe("the long press", () => {
     expect(bare().className).not.toContain("spya-anim");
   });
 
+  it("treats a primary mouse down on the host as inside even without a preceding enter", () => {
+    act(() => root.render(<Bare />));
+    act(() => {
+      bare().dispatchEvent(pointer("pointerdown"));
+    });
+    act(() => void vi.advanceTimersByTime(400));
+    expect(bare().className).toContain("spya-anim");
+
+    const click = new MouseEvent("click", { bubbles: true, cancelable: true });
+    act(() => {
+      release("pointerup");
+      bare().dispatchEvent(click);
+    });
+    expect(click.defaultPrevented).toBe(true);
+  });
+
   it("picks an animation once the press is held, and swallows the click", () => {
     if (LOGO_ANIMATIONS.length === 0) return;
     act(() => root.render(<Bare />));
@@ -678,7 +755,7 @@ describe("the long press", () => {
     act(() => void vi.advanceTimersByTime(400));
     act(() => {
       bare().dispatchEvent(pointer("pointerout"));
-      bare().dispatchEvent(pointer("pointerover"));
+      bare().dispatchEvent(pointer("pointerover", { buttons: 1 }));
     });
 
     const click = new MouseEvent("click", { bubbles: true, cancelable: true });
