@@ -312,5 +312,14 @@ from g group by th order by th;
 - [x] Code reviewed by GPT Sol — `-code-review-sol.md`: approve after fixes, no behavioural defect;
   its fixes were evidence and stale copy. One of them reversed a "respectively" in
   `quotes-panel.test.ts`, corrected by hand.
-- [ ] Full suite
-- [ ] On `dev`, feedback note written
+- [x] Full suite — `npm test` through `scripts/tmux-job.ts`, 2026-09-15: 1,125 files passed, 7 failed,
+  none of them this change's — the same seven, for the same causes, that
+  [260915c § Progress](260915c-search-result-score-card-only-from-the-score.md) recorded on `dev`
+  before this branched. Each of the five that is not a known worktree red was re-run alone and
+  failed the same way, and none imports a module this change touched:
+  - `pdf-bundle-trace`, `cold-start-lazy-imports` — a fresh worktree has no `api-dist/`.
+  - `fleet-composed-access`, `fleet-decisions-route`, `fleet-reports-route` — no
+    `tools/fleet/web/dist/`, which `tools/fleet/server.ts` refuses to start without (exit 2).
+  - `overseer-daemon-usage-pass`, `overseer-store-usage` — usage-report assertions in the Overseer,
+    which this change does not reach.
+- [x] On `dev`, feedback note written — `docs/user-feedback/260912_1215-prioritised-by-default-and-lower-thresholds.md`.
