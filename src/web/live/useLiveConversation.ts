@@ -389,6 +389,18 @@ export function useLiveConversation(slug: string, opts: LiveOptions = {}): LiveA
   const turnOpenSince = useRef<number | null>(null);
   /** When a reply became owed. See `StallFacts.owedSince` for what does and does not owe one. */
   const owedSince = useRef<number | null>(null);
+  /**
+   * User-item ids whose reply debt has already been accounted for.
+   *
+   * A committed audio turn is reported twice (`input_audio_buffer.committed`
+   * and `conversation.item.*`), and the API spellings this hook supports may
+   * both arrive. More importantly, any of those acknowledgements can arrive
+   * after the response has already started. Without the id, the later report
+   * re-owes a response that is already under way and produces a false stall.
+   */
+  const replyAccountedItems = useRef(new Set<string>());
+  /** A response began after the current `speech_started`, before its item arrived. */
+  const responseStartedDuringTurn = useRef(false);
   const lastEventAt = useRef(0);
   /** `speaking`, readable from outside a render. */
   const speakingNow = useRef(false);
@@ -587,6 +599,13 @@ export function useLiveConversation(slug: string, opts: LiveOptions = {}): LiveA
   const owe = useCallback(() => {
     if (owedSince.current === null) owedSince.current = Date.now();
   }, []);
+
+  /** Account one user input once, however many lifecycle events report it. */
+  const accountUserReply = useCallback((itemId: string, alreadyStarted: boolean) => {
+    if (itemId && replyAccountedItems.current.has(itemId)) return;
+    if (itemId) replyAccountedItems.current.add(itemId);
+    if (!alreadyStarted) owe();
+  }, [owe]);
 
   /**
    * **Ask whether this session is stuck, and say so.** On a one-second tick
@@ -927,26 +946,21 @@ export function useLiveConversation(slug: string, opts: LiveOptions = {}): LiveA
       /* The utterance has been committed — it is a conversation item now, so
          the ledger can see it and the grace window has something to wait on. */
       if (type === "input_audio_buffer.committed") {
+        accountUserReply(String(e.item_id ?? ""), responseStartedDuringTurn.current);
         midSentence.current = false;
         turnOpenSince.current = null;
+        responseStartedDuringTurn.current = false;
         tally.current.committed += 1;
         /* **`hearing` reconciles on the commit as well as on `speech_stopped`.**
            A turn that has been committed is not being heard any more, whatever
            else did or did not arrive, and one lost event must not pin
            "Listening…" for the rest of the session. */
         setHearing(false);
-        /* The reader has finished a turn, so a reply is owed. `create_response`
-           is on (the default), so the service starts one without being asked. */
-        owe();
       }
 
       if (type === "conversation.item.created" || type === "conversation.item.added") {
         const id = String((e.item as { id?: unknown } | undefined)?.id ?? "");
         const role = (e.item as { role?: unknown } | undefined)?.role;
-        if (role === "user") {
-          midSentence.current = false;
-          turnOpenSince.current = null;
-        }
         if (!seeding.current.done) {
           if (id) seeding.current.ids.add(id);
           if (seeding.current.ids.size >= seeding.current.expected) {
@@ -956,8 +970,11 @@ export function useLiveConversation(slug: string, opts: LiveOptions = {}): LiveA
         }
         if (id && seeding.current.ids.has(id)) return;
         if (role === "user") {
+          accountUserReply(id, responseStartedDuringTurn.current);
+          midSentence.current = false;
+          turnOpenSince.current = null;
+          responseStartedDuringTurn.current = false;
           setHearing(false);
-          owe();
         }
         if (id && role === "user" && !lineState.current.some((line) => line.id === id)) {
           put(id, "reader", "", "set", false);
@@ -1018,7 +1035,10 @@ export function useLiveConversation(slug: string, opts: LiveOptions = {}): LiveA
          for. */
       if (type === "input_audio_buffer.speech_started") {
         lastHeard.current = Date.now();
-        if (!midSentence.current) turnOpenSince.current = Date.now();
+        if (!midSentence.current) {
+          turnOpenSince.current = Date.now();
+          responseStartedDuringTurn.current = false;
+        }
         tally.current.speechStarted += 1;
       }
 
@@ -1068,6 +1088,7 @@ export function useLiveConversation(slug: string, opts: LiveOptions = {}): LiveA
       if (type === "response.created") {
         /* The reply has started, so nothing is owed any more. Whether it then
            goes silent is `StallFacts.responseActive`'s question. */
+        if (midSentence.current) responseStartedDuringTurn.current = true;
         owedSince.current = null;
         tally.current.responses += 1;
         const id = (e.response as { id?: unknown } | undefined)?.id;
@@ -1126,7 +1147,7 @@ export function useLiveConversation(slug: string, opts: LiveOptions = {}): LiveA
         continueAfterTools();
       }
     },
-    [answerTool, put, commit, meterEvent, failSession, continueAfterTools, owe],
+    [answerTool, put, commit, meterEvent, failSession, continueAfterTools, accountUserReply],
   );
 
   /**
@@ -1434,6 +1455,8 @@ export function useLiveConversation(slug: string, opts: LiveOptions = {}): LiveA
       connectionState.current = "new";
       turnOpenSince.current = null;
       owedSince.current = null;
+      replyAccountedItems.current = new Set();
+      responseStartedDuringTurn.current = false;
       lastEventAt.current = Date.now();
       speakingNow.current = false;
       tally.current = freshTally();
@@ -1902,6 +1925,9 @@ export function useLiveConversation(slug: string, opts: LiveOptions = {}): LiveA
          has no input transcription event, because nothing was transcribed. */
       const id = `typed-${Date.now()}`;
       put(id, "reader", trimmed, "set", true);
+      /* The server will acknowledge this same item later; it is still one
+         request for one response, not a second debt. */
+      replyAccountedItems.current.add(id);
       send({
         type: "conversation.item.create",
         item: { id, type: "message", role: "user", content: [{ type: "input_text", text: trimmed }] },

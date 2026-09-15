@@ -191,4 +191,27 @@ which one it was.
 
 ## Results
 
-(Filled in as the stages land.)
+**Stage 1, `dff07ebb`.** Eleven new tests — ten in `tests/live-session-flow.test.tsx` § "a stall says
+so, and Reconnect recovers it", plus the pure file `tests/live-stall.test.ts` — were run against the
+unchanged code and failed, each because the stall or Reconnect did not exist; the existing 58 in the
+flow file stayed green. After the build: 131 tests across the live and doc files pass, typecheck
+exit 0, and lint shows only the four complexity advisories on `start` and `stop`, which were already
+long.
+
+**GPT Sol code review** (`--sandbox workspace-write`, findings written before any edit). Two
+findings, both real, both fixed by the reviewer with a test watched red first:
+
+1. **A false "No reply yet".** There was one owed-reply clock, owed by every commit and user-item
+   event and cleared by any `response.created`. So a turn whose item event arrived *after* its
+   response had started, or arrived under both spellings, re-owed a reply that was already under way.
+   The debt is now counted once per user item id, and a response that began during the turn
+   discharges it.
+2. **Continue typing was disabled while `closing`**, and a reconnect is `closing`, so the control that
+   cancels a pending reconnect could not be pressed. The hook test called `stop()` directly, which is
+   why nothing went red. It stays enabled now, and pressing it joins the hang-up.
+
+After the fixes, checked here rather than taken from the reviewer: 176 tests across the live and doc
+files pass, and typecheck exits 0. The reviewer's own typecheck hit a sandbox `EPERM` on tsx's IPC
+socket and was re-run by hand. The full suite result is recorded under Stage 2 below.
+
+Postmortem: [260915b-live-conversation-stalls-silently.md](../postmortems/260915b-live-conversation-stalls-silently.md).

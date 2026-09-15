@@ -135,7 +135,9 @@ export function LiveStatus({ live, onRestart, onType, onDictate, blocks, onJump 
         {!active && !switching && live.error && <button type="button" onClick={onRestart}>Retry live</button>}
         {live.phase === "live" && <button type="button" onClick={live.reconnect}
           title="End this call and start a fresh one in the same conversation. What was said is kept.">Reconnect</button>}
-        <button type="button" disabled={switching} onClick={onType}>Continue typing</button>
+        {/* A reconnect is also `closing`; this action must remain able to join
+            that teardown and cancel its pending restart. */}
+        <button type="button" onClick={onType}>Continue typing</button>
         {onDictate && <button type="button" disabled={switching} onClick={onDictate}>Use dictation</button>}
       </div>
     </section>

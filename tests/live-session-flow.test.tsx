@@ -1838,6 +1838,56 @@ describe("a stall says so, and Reconnect recovers it", () => {
     } finally { h.unmount(); vi.useRealTimers(); }
   });
 
+  it("does not re-owe an answered turn when its commit and item arrive after response.created", async () => {
+    const h = await liveOnFakeClock({ wiring: wiringFor(ticketWith()) });
+    try {
+      /* These are three reports about one input, not three requests for an
+         answer. The response may start before the input lifecycle finishes,
+         and the API spellings this hook supports may both arrive for one id. */
+      await act(async () => {
+        channel?.deliver({ type: "input_audio_buffer.speech_started" });
+        channel?.deliver({ type: "response.created", response: { id: "already-r" } });
+        channel?.deliver({ type: "input_audio_buffer.committed", item_id: "late-u" });
+        channel?.deliver({ type: "conversation.item.created", item: { id: "late-u", role: "user", type: "message" } });
+        channel?.deliver({ type: "conversation.item.added", item: { id: "late-u", role: "user", type: "message" } });
+        channel?.deliver({ type: "response.done", response: { id: "already-r", status: "completed", output: [] } });
+      });
+      await advance(14_000);
+      expect(h.get().stall, "one answered input was counted again by its later lifecycle event").toBeNull();
+    } finally { h.unmount(); vi.useRealTimers(); }
+  });
+
+  it("does not re-owe a typed live turn when its item acknowledgement arrives after the reply", async () => {
+    const h = await liveOnFakeClock({ wiring: wiringFor(ticketWith()) });
+    try {
+      act(() => h.get().say("A typed live turn"));
+      const created = [...sent].reverse().find((event) => event.type === "conversation.item.create");
+      const id = String((created?.item as { id?: unknown } | undefined)?.id ?? "");
+      expect(id).not.toBe("");
+      await act(async () => {
+        channel?.deliver({ type: "response.created", response: { id: "typed-r" } });
+        channel?.deliver({ type: "conversation.item.created", item: { id, role: "user", type: "message" } });
+        channel?.deliver({ type: "response.done", response: { id: "typed-r", status: "completed", output: [] } });
+      });
+      await advance(14_000);
+      expect(h.get().stall, "the acknowledgement re-owed the response that had already started").toBeNull();
+    } finally { h.unmount(); vi.useRealTimers(); }
+  });
+
+  it("still expects a new reply when the reader interrupts an older active response", async () => {
+    const h = await liveOnFakeClock({ wiring: wiringFor(ticketWith()) });
+    try {
+      await act(async () => {
+        channel?.deliver({ type: "response.created", response: { id: "old-r" } });
+        channel?.deliver({ type: "input_audio_buffer.speech_started" });
+        channel?.deliver({ type: "input_audio_buffer.committed", item_id: "interrupt-u" });
+        channel?.deliver({ type: "response.done", response: { id: "old-r", status: "cancelled", output: [] } });
+      });
+      await advance(14_000);
+      expect(h.get().stall, "the older active response was mistaken for the reply to the interruption").toBe("no-reply");
+    } finally { h.unmount(); vi.useRealTimers(); }
+  });
+
   it("clears 'Listening' when the turn commits even if speech_stopped never came", async () => {
     const h = await liveOnFakeClock({ wiring: wiringFor(ticketWith()) });
     try {

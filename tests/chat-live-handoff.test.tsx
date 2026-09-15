@@ -298,6 +298,17 @@ describe("what the button says", () => {
 });
 
 describe("the live session in the shipping chat composer", () => {
+  it("keeps Continue typing available while a reconnect teardown can still be cancelled", async () => {
+    const { api } = fakeLive("closing");
+    paint(api);
+    const type = [...host.querySelectorAll("button")].find((button) => button.textContent === "Continue typing");
+    expect(type, "the cancel action is absent").toBeDefined();
+    expect(type?.disabled, "the hook can cancel the reconnect, but the rendered action cannot call it").toBe(false);
+    act(() => type!.click());
+    await act(async () => { await Promise.resolve(); });
+    expect(events).toEqual(["stop"]);
+  });
+
   it("shows an actionable failure and allows typing in the same conversation", async () => {
     const { api } = fakeLive("failed");
     api.error = "Microphone permission was denied. Allow access in your browser, then retry.";
