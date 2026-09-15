@@ -91,4 +91,10 @@ answering". The extra bullet costs one line and no cache (it sits below the brea
 
 ## Ending
 
-Shipped, if the gates and the reviews agree.
+**Shipped.** GPT Sol reviewed the plan (proceed with changes, all taken) and the code (two fixes,
+applied by it and checked here). One full suite on `e79a802b`, started 19:52: 1122 files passed,
+8 failed. Seven are the seven recorded on dev the same day in the 260915c plan (no `api-dist`, no
+fleet client build, the two overseer usage files) and import nothing this touches. The eighth was
+`tests/help-prompt.test.ts`, red because the code reviewer added the `left unstated` assertion while
+the suite was running, before its fix to `helpSection` landed. That was its red-first step, caught
+mid-run. On the committed code it passes alone, 10/10.
