@@ -1611,9 +1611,11 @@ function Legend({ matcher, coloured }: { matcher: Matcher; coloured: boolean }) 
           </span>
           {/* "its own guess" is doing the real work here, and it is in the
               legend rather than only in the hover card because a reader on a
-              touchscreen never opens a hover card — tapping a row navigates. A
-              caveat only a mouse can reach is a caveat half the readers do not
-              have. Raised by a GPT Sol review, 2026-08-26. */}
+              touchscreen rarely opens a hover card — tapping a row navigates,
+              and the card behind the score (`Hit`) is a tap nobody knows to
+              make until they are told there is something there. A caveat only a
+              curious pointer reaches is a caveat most readers do not have.
+              Raised by a GPT Sol review, 2026-08-26. */}
           how sure the model is — its own guess, not a measurement
         </span>
       )}
@@ -1688,10 +1690,26 @@ function HitCard({ found, criterion }: { found: Found; criterion: string | null 
  * and "the fourth of nine matches" is a fact about the list, not about the
  * piece.
  *
- * There is **no `title` on the number**. The row already opens a hover card, and
- * a native tooltip underneath a floating one is two panels fighting over the
- * same pointer; the explanation lives in the card (`HitCard`) where there is
- * room to say something worth reading.
+ * There is **no `title` on the number**. A native tooltip underneath a floating
+ * one is two panels fighting over the same pointer; the explanation lives in the
+ * card (`HitCard`) where there is room to say something worth reading.
+ *
+ * ## Two buttons: the score explains, the words go there
+ *
+ * Greg, 2026-09-12: *"I think it should only show that rich tooltip (that
+ * explains what the bar and the score is) if I click on the bar and the score,
+ * not on the entry itself, because I want to be able to click on the entry to be
+ * taken to that place in the text."*
+ *
+ * Until then the card was on the whole row, and a click opened it twice over —
+ * the pointer entering the row, and the button taking focus — right over the
+ * prose the jump had just scrolled to; on a touch screen it then stayed. So the
+ * gutter is **its own button, beside the row's and never inside it** (a button
+ * in a button is invalid HTML), which is the quotes row's ⓘ shape
+ * (QuotesPanel.tsx). It costs a second tab stop per row, which `ScoreBars`
+ * argues against for a decoration — and this is not a decoration any more but a
+ * second thing the row does, which is what a tab stop is for. It is also what
+ * gives the card back a keyboard route. docs/plans/260915c-….
  */
 function Hit({
   found,
@@ -1708,80 +1726,103 @@ function Hit({
   open: boolean;
   onOpen(key: string, blockId: BlockId): void;
 }) {
+  /**
+   * The card is **controlled**, for the reason the quotes row's ⓘ is: a touch
+   * screen has nothing to hover with, so without the button's own click there
+   * would be no tap route to it at all. Being controlled also makes `Tooltip`
+   * hover mouse-only, so a tap's synthesised `mouseenter` cannot open it.
+   *
+   * The click **sets** it open rather than toggling it. A mouse hovers before it
+   * clicks, so by the time the click lands the card is usually open already, and
+   * a toggle would shut it on the very press that asked for it. It closes the way
+   * every card here does: the pointer leaving, Escape, or a press anywhere else.
+   */
+  const [card, setCard] = useState(false);
+  const pct = Math.round(Math.min(1, Math.max(0, found.at)) * 100);
+  /* Everything the gutter draws, in words — the button's name. The marks inside
+     it are `aria-hidden` so a screen reader hears this once rather than each
+     mark's own label after it. WCAG 1.4.1 is why *found by* is in here: eight
+     hues is at the edge of what anybody can hold in their head, so the row has
+     to be able to say which search it came from to a reader who has stopped
+     trying to remember. */
+  const about = [
+    criterion !== null ? `found by ${criterion}` : null,
+    found.confidence !== null ? `the model's confidence ${found.confidence} out of 100` : null,
+    `${pct}% of the way through the article`,
+  ]
+    .filter(Boolean)
+    .join(", ");
+
   return (
-    <li className="srch-hit">
+    <li
+      className={`srch-hit${open ? " on" : ""}`}
+      /* The row wears its search's hue: a left edge, and the dot in the gutter.
+         Both from one custom property, so a slot that somehow does not resolve
+         leaves the row plainly uncoloured rather than half-coloured. On the
+         `<li>` rather than on either button, because the two buttons are one row
+         to the eye.
+
+         `data-hue` beside it is what the stylesheet *selects* on. The custom
+         property alone would have meant a `[style*="--cat-rgb"]` attribute
+         selector — matching a substring of an inline style attribute, which is
+         a rule that depends on how React chooses to serialise it and would
+         break silently if that ever changed. An attribute is a fact; a
+         substring of another attribute is a guess. */
+      {...(slot === undefined
+        ? {}
+        : {
+            "data-hue": slot,
+            style: { "--cat-rgb": `var(--cat-${slot}-rgb)` } as React.CSSProperties,
+          })}
+    >
       <Tooltip
         placement="right"
         className="tip-hit"
+        open={card}
+        onOpenChange={setCard}
         content={<HitCard found={found} criterion={criterion} />}
       >
         <button
           type="button"
-          className={`srch-hit-btn${open ? " on" : ""}`}
-          onClick={() => onOpen(found.key, found.blockId)}
-          aria-current={open ? "true" : undefined}
-          /* The row wears its search's hue: a left edge, and the dot in the
-             gutter below. Both from one custom property, so a slot that somehow
-             does not resolve leaves the row plainly uncoloured rather than
-             half-coloured.
-
-             `data-hue` beside it is what the stylesheet *selects* on. The
-             custom property alone would have meant a `[style*="--cat-rgb"]`
-             attribute selector — matching a substring of an inline style
-             attribute, which is a rule that depends on how React chooses to
-             serialise it and would break silently if that ever changed. An
-             attribute is a fact; a substring of another attribute is a guess. */
-          {...(slot === undefined
-            ? {}
-            : {
-                "data-hue": slot,
-                style: { "--cat-rgb": `var(--cat-${slot}-rgb)` } as React.CSSProperties,
-              })}
+          className="srch-gutter"
+          aria-label={`About this match: ${about}`}
+          aria-expanded={card}
+          onClick={() => setCard(true)}
         >
-          <span className="srch-gutter">
-            {/* Named, not left to colour alone. WCAG 1.4.1 is the rule and it is
-                the right rule here for an ordinary reason too: eight hues is at
-                the edge of what anybody can hold in their head, so the row has
-                to be able to say which search it came from to a reader who has
-                stopped trying to remember. The visible answer is the hover card;
-                this is the same answer for a screen reader. */}
-            {slot !== undefined && criterion !== null && (
-              <span className="srch-hit-dot" role="img" aria-label={`Found by: ${criterion}`} />
-            )}
-            {slot !== undefined && criterion === null && (
-              <span className="srch-hit-dot" aria-hidden />
-            )}
-            {found.confidence !== null && (
-              <span
-                className="srch-conf"
-                /* The same number the wash is drawn from, so the bar beside the
-                   row and the mark in the prose cannot disagree. */
-                style={{ "--hit-a": found.confidence / 100 } as React.CSSProperties}
-                /* `role="img"` so the number gets a name. Read out on its own it
-                   is "62" against a passage of prose, which is a number with no
-                   noun; the label supplies the noun. */
-                role="img"
-                aria-label={`The model's confidence in this match: ${found.confidence} out of 100`}
-              >
-                {found.confidence}
-              </span>
-            )}
-            <Place at={found.at} />
-          </span>
-          <span className="srch-hit-body">
-            <span className="srch-hit-quote">{found.short}</span>
-            {found.reasoning && <span className="srch-hit-why">{found.reasoning}</span>}
-            {/* Said out loud rather than left to look like a styling bug. A
-                result whose quote could not be found on the page marks the
-                whole paragraph, and a reader who cannot see why one result is a
-                slab and the rest are phrases will assume the feature is
-                broken. */}
-            {found.whole && (
-              <span className="srch-hit-whole">whole paragraph — the exact words have moved</span>
-            )}
-          </span>
+          {slot !== undefined && <span className="srch-hit-dot" aria-hidden />}
+          {found.confidence !== null && (
+            <span
+              className="srch-conf"
+              /* The same number the wash is drawn from, so the bar beside the
+                 row and the mark in the prose cannot disagree. */
+              style={{ "--hit-a": found.confidence / 100 } as React.CSSProperties}
+              aria-hidden
+            >
+              {found.confidence}
+            </span>
+          )}
+          <Place at={found.at} decorative />
         </button>
       </Tooltip>
+      <button
+        type="button"
+        className="srch-hit-btn"
+        onClick={() => onOpen(found.key, found.blockId)}
+        aria-current={open ? "true" : undefined}
+      >
+        <span className="srch-hit-body">
+          <span className="srch-hit-quote">{found.short}</span>
+          {found.reasoning && <span className="srch-hit-why">{found.reasoning}</span>}
+          {/* Said out loud rather than left to look like a styling bug. A
+              result whose quote could not be found on the page marks the
+              whole paragraph, and a reader who cannot see why one result is a
+              slab and the rest are phrases will assume the feature is
+              broken. */}
+          {found.whole && (
+            <span className="srch-hit-whole">whole paragraph — the exact words have moved</span>
+          )}
+        </span>
+      </button>
     </li>
   );
 }

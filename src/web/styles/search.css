@@ -486,29 +486,48 @@
 .srch-sort-btn.on { border-color: var(--rule-strong); background: var(--surface-raised); color: var(--ink); }
 
 .srch-hits { flex: 1; margin: 0; padding: 0.3rem; list-style: none; overflow-y: auto; }
-.srch-hit { margin: 0; }
-.srch-hit-btn {
+/* A result is TWO buttons side by side — the gutter, which explains the score,
+   and the words, which go to the passage (SearchPanel.tsx § Two buttons). The
+   row's box, its hue edge and its "open" state are on the `<li>`, because to the
+   eye it is one row. The two buttons tile it with no gap and no padding of the
+   row's own between them, so every pixel of the row still does one thing or the
+   other and none of it is dead. */
+.srch-hit {
   display: flex;
-  gap: 0.45rem;
-  width: 100%;
-  padding: 0.4rem 0.45rem;
+  margin: 0;
   border: 1px solid transparent;
   border-radius: var(--radius);
-  background: none;
   color: var(--ink-soft);
+}
+.srch-hit:hover { background: var(--surface-raised); color: var(--ink); }
+.srch-hit-btn {
+  flex: 1;
+  min-width: 0;
+  display: block;
+  margin: 0;
+  padding: 0.4rem 0.45rem 0.4rem 0;
+  border: 0;
+  background: none;
+  color: inherit;
   font-family: var(--font-ui);
   font-size: 0.9rem;
   text-align: left;
   cursor: pointer;
 }
-.srch-hit-btn:hover { background: var(--surface-raised); color: var(--ink); }
+/* The app's own focus ring, inset for the reason .srch-saved-body gives: the
+   list is a scroller, and an outward ring on the first or last row is clipped. */
+.srch-hit-btn:focus-visible,
+.srch-gutter:focus-visible {
+  outline: 2px solid var(--highlight);
+  outline-offset: -2px;
+}
 /* The row's own left edge in its search's hue — the same pairing the saved rows
    use, and for the same reason: one small mark is one too few. No fallback
    colour, so a literal result (which has no search and no slot) simply has no
    edge rather than borrowing one that would mean something. */
-.srch-hit-btn { border-left: 2px solid transparent; }
+.srch-hit { border-left: 2px solid transparent; }
 /* The row whose passage is marked as open in the prose. */
-.srch-hit-btn.on {
+.srch-hit.on {
   border-color: rgb(var(--hit-rgb) / 0.45);
   /* NOTE: this sets all four edges, which is why the categorical left edge is
      reasserted BELOW rather than above — see the rule after this block. */
@@ -518,8 +537,8 @@
 /* The row's own left edge in its search's hue — the same pairing the saved rows
    use, and for the same reason: one small mark is one too few.
 
-   **After `.on`, and that is not cosmetic ordering.** `.srch-hit-btn[data-hue]`
-   and `.srch-hit-btn.on` have identical specificity (0,2,0), so whichever comes
+   **After `.on`, and that is not cosmetic ordering.** `.srch-hit[data-hue]`
+   and `.srch-hit.on` have identical specificity (0,2,0), so whichever comes
    last wins — and `.on` sets `border-color` on all four edges. With this rule
    above it, pressing a result replaced its categorical hue with the flat search
    blue, so the one row the reader had just picked out was the one row that
@@ -527,7 +546,7 @@
 
    No fallback colour: a literal result has no search and no slot, so it gets no
    edge rather than borrowing one that would mean something. */
-.srch-hit-btn[data-hue] { border-left-color: rgb(var(--cat-rgb) / 0.75); }
+.srch-hit[data-hue] { border-left-color: rgb(var(--cat-rgb) / 0.75); }
 
 /* ---- the gutter: how sure, and where ----
 
@@ -544,15 +563,29 @@
 
 .srch-gutter {
   flex: none;
+  box-sizing: content-box;
   width: 2.6rem;
   display: flex;
   flex-direction: column;
   align-items: stretch;
   gap: 0.25rem;
-  /* Top-aligned with the first line of the quote, not centred against a row
-     whose height is whatever three clamped lines came to. */
-  align-self: flex-start;
-  padding-top: 0.05rem;
+  /* A button now (SearchPanel.tsx § Two buttons), and as tall as the row, so
+     the whole left-hand column is the target rather than the 1.5rem the marks
+     take up. The marks stay top-aligned with the first line of the quote —
+     `justify-content` — rather than centring against a row whose height is
+     whatever three clamped lines came to. */
+  align-self: stretch;
+  justify-content: flex-start;
+  margin: 0;
+  padding: 0.45rem 0.45rem 0.4rem;
+  border: 0;
+  border-radius: var(--radius) 0 0 var(--radius);
+  background: none;
+  color: inherit;
+  font: inherit;
+  /* It explains rather than goes somewhere, and a mouse can see that before
+     pressing — the same cue the masthead's origin line uses. */
+  cursor: help;
 }
 
 /* The confidence, printed as well as drawn — see the note in SearchPanel.tsx.

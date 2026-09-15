@@ -295,7 +295,7 @@ different one standing: **a bare 92 beside a paragraph is a number with no noun.
 carried said "The model's confidence in this match: 92%", which is the word already stencilled on the
 chip. What a reader actually needs is *whose* judgement it is and how much weight to put on it.
 
-So the explanation moved into the row's hover card, under the passage and behind a rule, and it says
+So the explanation moved into the result's hover card, under the passage and behind a rule, and it says
 the honest thing rather than the flattering one:
 
 > **92 out of 100** — how strongly the model thinks this passage matches what you asked for. It is
@@ -305,11 +305,26 @@ the honest thing rather than the flattering one:
 That is the same rule the glossary follows about the model's difficulty and centrality scores
 ([glossary.md](glossary.md)) — offer them, label them, never let them read as fact.
 
-**Not a second tooltip on the number itself.** The row already opens a hover card, and a native
-`title` underneath a floating panel is two tooltips fighting over one pointer. The card opens
-wherever on the row you are hovering, the number included, so the explanation is there when you look
-at the thing it explains. The `title` is gone and the chip carries an `aria-label` instead, which is
-what a screen reader needed anyway.
+**The card hangs off the score, not off the row** — since 2026-09-15.
+
+> I think it should only show that rich tooltip (that explains what the bar and the score is) if I
+> click on the bar and the score, not on the entry itself, because I want to be able to click on the
+> entry to be taken to that place in the text.
+>
+> — Greg, 2026-09-12
+
+Until then the card opened wherever on the row you were hovering, and a click opened it too, both
+because the pointer was on the row and because the row button took focus. So it landed over the
+prose the jump had just scrolled to, and on a touch screen it stayed there. Now **the gutter is its
+own button beside the row's**, not inside it (a button inside a button is invalid). Hovering the
+gutter, focusing it or pressing it opens the card, and pressing it goes nowhere. Pressing the words
+goes to the passage and opens nothing. The gutter is as tall as the row, so the whole left column is
+the target, and its `aria-label` says everything it draws. Glossary, Quotes and Citations already
+behaved this way, since `ScoreBars` puts their card on the bars rather than on the row.
+[260915c](../plans/260915c-search-result-score-card-only-from-the-score.md).
+
+There is still no native `title` on the number: a `title` under a floating card is two tooltips
+fighting over one pointer.
 
 ## Where in the article, on every result
 
