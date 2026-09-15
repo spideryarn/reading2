@@ -121,3 +121,19 @@ written red first against the current code:
   suites because this sandbox cannot connect to the local Postgres service (exit 1).
 - Outside the reviewer's sandbox, on the reviewed tree: the same four files passed 38 tests (exit 0)
   and the real `npm run typecheck` exited 0.
+- The full suite, once, through `scripts/readiness-run.ts test` in tmux, after merging `origin/dev`:
+  **1123 files passed, 7 failed, 1 skipped.** Every one of the seven was red again when run on its
+  own, so this is not contention, and none of them imports anything this change touches (a grep of
+  all seven for `SearchPanel`, `search-hits`, `search.css` and `Tooltip` finds nothing). Six are
+  the six that [260915b](260915b-shelf-actions-reachable-on-touch.md) recorded earlier the same day,
+  with the same causes: `cold-start-lazy-imports` and `pdf-bundle-trace` need `api-dist/`, which a
+  fresh worktree does not have; `fleet-composed-access`, `fleet-decisions-route` and
+  `fleet-reports-route` need a fleet client build; and `overseer-daemon-usage-pass` fails on its
+  *keep-stored* case.
+- **The seventh is new, and it is not this change's**: `overseer-store-usage` › "an incomplete scan
+  does NOT displace the report already on the checkpoint", red twice on its own. It fails the same
+  way as `overseer-daemon-usage-pass`: the arm that should keep the stored report takes the fresh
+  one. It is most likely that failure's twin, possibly a fixture date that has aged out: no commit
+  has touched `tools/overseer/` or either test since 2026-09-12, so the code under test is unchanged
+  while the result has turned red. It lives in
+  `tools/overseer/`, which is another stage's code, so it is written down here rather than fixed.
