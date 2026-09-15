@@ -179,6 +179,22 @@ describe("the ⋯ trigger", () => {
     expect(menu(), "a finger's tap did not open the menu").not.toBeNull();
   });
 
+  it("closes on a second finger tap after the modal menu has settled", async () => {
+    render(FETCHED);
+    tap(trigger());
+    expect(menu(), "the first finger tap did not open the menu").not.toBeNull();
+
+    /* Radix installs its outside-pointer listener on the next task. The trigger
+       is outside the portalled menu, so the second tap has to exercise that
+       dismissal before our click handler runs. */
+    await act(async () => {
+      await new Promise<void>((resolve) => setTimeout(resolve, 0));
+    });
+    tap(trigger());
+
+    expect(menu(), "the second finger tap reopened the menu after Radix dismissed it").toBeNull();
+  });
+
   it("treats a pen as a finger", () => {
     render(FETCHED);
     pointer(trigger(), "pointerdown", "pen");
@@ -270,15 +286,29 @@ describe("each item", () => {
   });
 
   it("Re-fetch and rebuild queues the job, once", async () => {
-    const fetch = vi.fn(async () => new Response("{}", { status: 202 }));
+    const reactErrors = vi.spyOn(console, "error").mockImplementation(() => {});
+    let answer!: (response: Response) => void;
+    const fetch = vi.fn(
+      () =>
+        new Promise<Response>((resolve) => {
+          answer = resolve;
+        }),
+    );
     vi.stubGlobal("fetch", fetch);
     click(tapOpen(FETCHED, "Re-fetch and rebuild"));
-    await vi.waitFor(() => expect(fetch).toHaveBeenCalledTimes(1));
+    await act(async () => {
+      await vi.waitFor(() => expect(fetch).toHaveBeenCalledTimes(1));
+    });
     const [url, init] = fetch.mock.calls[0] as unknown as [string, RequestInit];
     expect(url).toBe("/api/jobs");
     expect(init.method).toBe("POST");
     expect(JSON.parse(String(init.body))).toEqual({ slug: "a-piece", force: ["fetch"] });
+    await act(async () => {
+      answer(new Response("{}", { status: 202 }));
+      await new Promise<void>((resolve) => setTimeout(resolve, 0));
+    });
     expect(shelf.report, "the queued job was reported as a failure").not.toHaveBeenCalled();
+    expect(reactErrors, "the re-fetch state update escaped act").not.toHaveBeenCalled();
   });
 
   /**

@@ -874,8 +874,8 @@ function ShelfActionsMenu({ entry, actions }: { entry: LibraryEntry; actions: Sh
   const [open, setOpen] = useState(false);
 
   /**
-   * **Whether the press now under way is a finger's** — recorded at
-   * `pointerdown`, and good for one gesture.
+   * **A finger press and whether the menu was open when it began** — recorded
+   * at `pointerdown`, and good for one gesture.
    *
    * Radix's trigger toggles on `pointerdown` for every pointer type, which is
    * right for a mouse and wrong for a finger: a finger that lands on "⋯" at the
@@ -889,6 +889,12 @@ function ShelfActionsMenu({ entry, actions }: { entry: LibraryEntry; actions: Sh
    * while its `pointerdown` says `touch`. That bug is what stopped
    * `pressCapture` working on an iPad; this is the shape of the fix.
    *
+   * The starting state matters on a second tap. The trigger is outside the
+   * portalled menu, so Radix's modal dismissal can close the menu during that
+   * `pointerdown`; blindly toggling the latest state at `click` would then open
+   * it again. Remembering `wasOpen` makes the click finish the transition the
+   * finger began: closed to open, or open to closed.
+   *
    * **One gesture's lifetime**, GPT Sol's plan review: cleared by
    * `pointercancel` (the browser took the press for a scroll), consumed by the
    * click that reads it, and ignored by a keyboard's click — `detail === 0` —
@@ -896,7 +902,7 @@ function ShelfActionsMenu({ entry, actions }: { entry: LibraryEntry; actions: Sh
    * key handler, and a "finger" left over from an earlier scroll must not toggle
    * it shut again. tests/shelf-actions-menu.test.tsx has a case for each.
    */
-  const fingerPress = useRef(false);
+  const fingerPress = useRef<{ wasOpen: boolean } | null>(null);
 
   /**
    * Set when Edit title is chosen, so Radix does not hand focus back to the
@@ -919,21 +925,22 @@ function ShelfActionsMenu({ entry, actions }: { entry: LibraryEntry; actions: Sh
              title reaches it. GPT Sol, 2026-09-15. */
           aria-label={`Actions for ${entry.title}`}
           onPointerDown={(e) => {
-            fingerPress.current = e.pointerType === "touch" || e.pointerType === "pen";
+            const finger = e.pointerType === "touch" || e.pointerType === "pen";
+            fingerPress.current = finger ? { wasOpen: open } : null;
             /* `preventDefault` is what makes Radix stand aside: its
                `composeEventHandlers` runs ours first and skips its own toggle
                when the event comes back prevented (@radix-ui/primitive 1.1.7).
                It does not suppress the click that follows — the Pointer Events
                spec keeps the two apart — and that click is where we open. */
-            if (fingerPress.current) e.preventDefault();
+            if (finger) e.preventDefault();
           }}
           onPointerCancel={() => {
-            fingerPress.current = false;
+            fingerPress.current = null;
           }}
           onClick={(e) => {
-            const finger = fingerPress.current;
-            fingerPress.current = false;
-            if (finger && e.detail !== 0) setOpen((v) => !v);
+            const press = fingerPress.current;
+            fingerPress.current = null;
+            if (press && e.detail !== 0) setOpen(!press.wasOpen);
           }}
           className="tw:relative tw:inline-flex tw:size-10 tw:items-center tw:justify-center tw:rounded-md tw:text-muted-foreground tw:transition-colors tw:hover:bg-highlight/10 tw:hover:text-foreground tw:data-[state=open]:bg-highlight/10 tw:data-[state=open]:text-foreground"
         >
