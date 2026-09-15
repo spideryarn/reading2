@@ -240,8 +240,9 @@ Then the residue nothing refuses at compile time:
       article in the fixture a query filtering on nothing returns the same rows as one filtering
       correctly, so the predicate is untestable —
       *[`tests/public-visibility-pg.test.ts`](../../tests/public-visibility-pg.test.ts)*.
-- **Pressing the control that opens it — a mode button, a sub-mode chip, the Tweets link — runs the
-  job when there is nothing there**; arriving does not —
+- **Pressing the control that opens it — a mode button, a sub-mode chip — runs the job when there
+  is nothing there**; arriving does not. (A page with a path of its own may start on arrival
+  instead, as the Tweets page does since 2026-09-15 — `useAutoRunOnArrival` in the same file.)
   [`useAutoRun.ts`](../../src/web/useAutoRun.ts) is the whole rule, and
   [reading-view-overview.md § True across the whole view](reading-view-overview.md#true-across-the-whole-view)
   is why. *Nothing.*

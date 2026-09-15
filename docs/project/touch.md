@@ -611,6 +611,22 @@ which tells an iOS reader how to get the browser's own chrome out of the way, an
 `media()` in [`src/web/media.ts`](../../src/web/media.ts). They say different things and sit in
 different places: this one is in flow at the top of the article, that one is fixed above the dock.
 
+## A mode says its name when you press it
+
+> So if I'm on an iPad and I click on a mode, there's no tooltip, there's no heading, there's no
+> explanation.
+>
+> — Greg, 2026-09-12 (SPIDERYARN-READING2-3Q)
+
+Three decisions each right on its own added up to that: the band's title row lost the mode's name
+on 2026-09-05 because the Dock says it; the Dock drops its words whenever its row does not fit, which
+at iPad widths is always; and what a dropped word leaves behind is a hover card. So since 2026-09-15 a
+press on a mode lays its name and one sentence over the top of the band for three seconds
+([260915e](../plans/260915e-the-mode-names-itself-briefly-when-a-reader-opens-it.md)). It is for every
+device rather than for a finger, because the band's head is empty on a desktop too — **but a finger is
+the case it exists for, and the general point is worth carrying: anything this app says only in a
+tooltip, it does not say on an iPad.**
+
 ## What we deliberately did not build
 
 - **A setting.** Apple Books and Kindle both ship an explicit continuous-scroll / page-turn toggle,

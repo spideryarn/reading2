@@ -1,6 +1,9 @@
 /**
- * **The surfaces that start themselves when the reader presses them, named
- * once, in a module that imports nothing at runtime.**
+ * **The targets allowed one automatic attempt, named once, in a module that
+ * imports nothing at runtime.**
+ *
+ * Eleven start after a press; Tweets starts when its owner arrives at its own
+ * page. `beginAutoAttempt` applies the same loop guard to both triggers.
  *
  * A file of its own for the reason [`src/modes.ts`](../modes.ts) and
  * [`src/web/referee-views.ts`](./referee-views.ts) are files of their own: two
@@ -54,9 +57,10 @@ type StepAutoRunTarget = StepTarget<
   | "citations"
   | "sketch"
   | "illustrated"
-  /* The article as a numbered thread. Its own page rather than a band, so the
-     press is on a `DockLink` and the gesture seam is `Link.onNavigate` rather
-     than an `onClick` — Link.tsx. */
+  /* The article as a numbered thread. Its own page rather than a band, and
+     since 2026-09-15 it starts on arrival rather than on a press — no token is
+     ever armed for it; it is here because `beginAutoAttempt` is keyed on this
+     union (useAutoRun.ts § `useAutoRunOnArrival`). */
   | "tweets"
   /* The second half of Remember: the questions the piece asks you back. */
   | "quiz"
@@ -65,5 +69,5 @@ type StepAutoRunTarget = StepTarget<
 /** The two that are streams, with no job row and no place in `STEP_ORDER`. */
 type StreamAutoRunTarget = "claims" | "candidates";
 
-/** Every control that may start a paid run on being pressed. */
+/** Every target that may receive one automatic attempt in this tab session. */
 export type AutoRunTarget = StepAutoRunTarget | StreamAutoRunTarget;

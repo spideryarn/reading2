@@ -56,10 +56,8 @@ beforeEach(() => {
   host = document.createElement("div");
   document.body.append(host);
   root = createRoot(host);
-  /* **Armed activations are module state and outlive a render**, so a Tweets
-     row pressed in one test would be found still pending by the next — which
-     is how a check that arming *happened* passes for a bar that armed nothing.
-     activation.ts § `resetActivations` exists for exactly this. */
+  /* Mode activations are module state and outlive a render. Tweets no longer
+     arms one, but this file also presses modes and reads the shared map. */
   resetActivations();
 });
 
@@ -677,8 +675,8 @@ describe("the `generates` marker", () => {
    * by `kind`, so *"a page that did start work would be unmarked here and this
    * test would stay green while the bar under-warned"* (GPT Sol, 2026-09-07).
    *
-   * Tweets is that page — it arms a run over the whole article on its way to
-   * the thread — so the claim is now the one that could not be made before:
+   * Tweets is that page — it opens an owner-only page that runs on arrival when
+   * empty — so the claim is now the one that could not be made before:
    * **the marker follows the row's own `generates`, not its kind.** Both halves
    * are named rows rather than counts, because *some page has it and some page
    * does not* would be satisfied by the two being the wrong way round.
@@ -1026,41 +1024,23 @@ describe("the rows that are not modes", () => {
   });
 
   /**
-   * **The Tweets row arms the run *and* says it will**, and both halves are
-   * here because either alone is the bug.
+   * **The Tweets row says it spends, and goes to a page that does.**
    *
-   * Arming without the marker is the silent-spending hole GPT Sol refused an
-   * optional `generates` over on 2026-09-08. The marker without the arming is
-   * the opposite failure and is what the plan's simpler option would have
-   * shipped: a row that promises to start something, then lands the reader on
-   * the thread page with a button still to press.
-   *
-   * `pendingActivation` is read rather than a spy on `armActivationForTweets`,
-   * so what is asserted is the state the run really consumes — `beforeEach`
-   * clears it, which is what makes "it was armed here" mean anything.
+   * The marker is still true: the thread page writes the thread on arrival
+   * when there is none (Tweets.tsx § `useAutoRunOnArrival`, since 2026-09-15),
+   * which tests/tweets-press-starts-it.test.tsx holds end to end. What this row
+   * no longer does is arm a token — from 2026-09-08 it did, and a row that
+   * armed as well as the page starting itself would be two ways to start one
+   * run, one of which mints tokens nothing claims.
    */
-  it("arms the thread run on the way to it, and wears the `generates` marker", () => {
+  it("goes to the thread page, arms nothing, and wears the `generates` marker", () => {
     readingSignedIn();
     openBar();
     type("tweets");
     expect(listed()).toEqual(["Tweets"]);
     expect(rows()[0]?.querySelector(".cmdbar-generates")?.textContent).toBe(GENERATES_MARKER);
-    expect(pendingActivation("a-piece", "tweets"), "armed before the press").toBeNull();
     press("Enter");
     expect(wentTo()).toBe("/read/a-piece/tweets");
-    expect(pendingActivation("a-piece", "tweets"), "the press armed nothing").not.toBeNull();
-  });
-
-  /**
-   * The vacuity guard for the line above: `pendingActivation` answering
-   * non-null has to be something this press did, not something every press
-   * does. Metadata is the neighbouring row and arms nothing.
-   */
-  it("arms nothing when a row that only navigates is taken", () => {
-    readingSignedIn();
-    openBar();
-    type("metadata");
-    press("Enter");
     expect(pendingActivation("a-piece", "tweets")).toBeNull();
   });
 

@@ -46,6 +46,11 @@ of compression, down the page for position and across for detail. Read that firs
   what Tailwind and shadcn may touch, dark mode, and the full list of constraints.
 - **[new-mode.md](new-mode.md)** — the one checklist for adding a mode: the tables the compiler
   checks, then the residue it does not, for the client and for a generated artefact.
+- **A band names its mode for three seconds after a press, and at no other time** — the name and
+  the catalog's sentence over the top of the band, since the band's own title went and the Dock's
+  words drop on an iPad. No doc of its own;
+  [260915e](../plans/260915e-the-mode-names-itself-briefly-when-a-reader-opens-it.md) and
+  [`ModeHerald.tsx`](../../src/web/ModeHerald.tsx).
 
 ### The article itself
 
@@ -177,7 +182,8 @@ with nothing to point at.
 **What the original call refused is mostly still refused**, and where it is not, that is Greg's doing
 rather than a boundary quietly moving. It said a passage jump, a generation row, a chat and a model
 call each need **a verb this bar does not have**. Two of those have since arrived: a *generation row*
-is what Tweets is — pressing it arms the thread run exactly as the Dock's own button does, and it
+is what Tweets is — it goes to the thread page, which writes the thread on arrival when there is none
+(since 2026-09-15, [260915e](../plans/260915e-tweets-page-starts-writing-when-opened.md)), and it
 wears the `generates` marker for it — and Feedback is a genuinely new verb, admitted because it is
 what he asked for. A passage jump and an "ask this article" are still out, and the line is now
 sharper than "a verb we don't have": each would need the bar to grow an **argument** — *which*

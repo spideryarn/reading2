@@ -81,7 +81,7 @@ import { carriedSearch, readHref } from "./router.js";
 import { articleStats } from "./stats.js";
 import { useOrderedRead } from "./useOrderedRead.js";
 import { type StepFailure, useStepJob } from "./useStepJob.js";
-import { useAutoRun } from "./useAutoRun.js";
+import { useAutoRunOnArrival } from "./useAutoRun.js";
 import { useSlow } from "./useSlow.js";
 import { apiFetch, readJson } from "./lib/api.js";
 import { JobProgress } from "./JobProgress.js";
@@ -251,32 +251,37 @@ export function Tweets({ slug, article }: { slug: string; article: Article }) {
   }
 
   /**
-   * **The reader pressed Tweets in the bar and there is no thread — write one.**
+   * **The owner opened the thread page and there is no thread — write one.**
    *
-   * The rule every mode band follows (src/web/useAutoRun.ts), applied to the one
-   * page in the app that is not a mode. Greg, 2026-09-06: *"by opening the mode,
-   * the user is implicitly indicating that they want what's already generated,
-   * or to generate it if needed."* The press itself is minted in the bar, on
-   * `Link.onNavigate` rather than `onClick` so a ⌘-click cannot arm a tab that
-   * is staying put — Dock.tsx, beside the Tweets link.
+   * > The Tweets mode should automatically start generating (if it hasn't
+   * > already generated) when opened (without having to click a button to kick
+   * > it off)
+   * >
+   * > — Greg, 2026-09-12
    *
-   * **The unforced verb, written out.** `useAutoRun` requires it: `work_key` is
-   * computed from the request *including* `force`, so an automatic run and a
-   * press on the footer's Rewrite during the same second are two requests that
-   * `enqueueOrGet` will not collapse, and the reader pays twice. Spelling the
-   * arguments here rather than passing `write` means a later reader cannot make
-   * it forced by changing a default two lines up.
+   * **On arrival, not on a press**, since 2026-09-15. From 2026-09-06 this was
+   * `useAutoRun`, spending a token the bar's Tweets link minted — so a reload, a
+   * pasted link or Back showed the button instead, which is what Greg reported.
+   * The press rule exists because `?mode=` is query state; this page is a path,
+   * so arriving here is the intent. What it now spends on without a press, and
+   * why that is bounded, is src/web/useAutoRun.ts § `useAutoRunOnArrival` and
+   * docs/plans/260915e-tweets-page-starts-writing-when-opened.md.
    *
-   * **An inline arrow is fine and is not a re-render hazard** — `useAutoRun`
-   * holds this in a ref it rewrites every render, precisely so that a caller
-   * which rebuilds the function cannot re-fire the effect. The press is what
-   * fires it.
+   * **The unforced verb, written out.** `work_key` is computed from the request
+   * *including* `force`, so an automatic run and a press on the footer's
+   * Rewrite during the same second are two requests that `enqueueOrGet` will
+   * not collapse, and the reader pays twice. Spelling the arguments here rather
+   * than passing `write` means a later reader cannot make it forced by changing
+   * a default two lines up.
+   *
+   * **An inline arrow is fine and is not a re-render hazard** — the hook holds
+   * this in a ref it rewrites every render, precisely so that a caller which
+   * rebuilds the function cannot re-fire the effect.
    *
    * `reload`, not `write`, for the last argument: a read that *failed* is not an
-   * answer to *is there a thread*, so it is answered by reading again rather
-   * than by spending. useAutoRun.ts § A failed read is not an answer — and this
-   * page needs that way out, because its `error` branch draws a sentence and no
-   * run button at all, so the bar is the only control left.
+   * answer to *is there a thread*, so it is answered by reading again — once —
+   * rather than by spending. This page needs that way out, because its `error`
+   * branch draws a sentence and no run button at all.
    *
    * **The return value is dropped.** `automatic` was there so a panel could say
    * *Using your profile* instead of drawing a tickbox it had already decided —
@@ -285,7 +290,7 @@ export function Tweets({ slug, article }: { slug: string; article: Article }) {
    * was written with is stated afterwards by `<WrittenForYou>`, out of the
    * artefact itself.
    */
-  useAutoRun(slug, "tweets", loaded.status, () => write(false), reload);
+  useAutoRunOnArrival(slug, "tweets", loaded.status, () => write(false), reload);
 
   const backHref = readHref(slug, carriedSearch(location.search), "article");
 
@@ -378,14 +383,14 @@ export function Tweets({ slug, article }: { slug: string; article: Article }) {
  *
  * What has changed is that the button is no longer the *only* structural fix.
  * `jobEngine.beginAutoAttempt` is one automatic attempt per `(slug, target)` per
- * session and `claimActivation` ties the spend to a real press — both written
- * after this comment was, for the modes, and both closing exactly that loop. So
- * arriving here by pressing Tweets in the bar writes the thread on its own
- * (§ `useAutoRun` at the top of this file), and this button stays for the two
- * cases the automatic run does not cover: a reader who arrived without pressing
- * — a pasted link, a Back step — and a reader whose automatic attempt failed.
+ * page load — written after this comment was, for the modes, and closing
+ * exactly that loop. So since 2026-09-06 pressing Tweets wrote the thread on its
+ * own, and since 2026-09-15 arriving here does, however the owner arrived
+ * (§ `useAutoRunOnArrival` at the top of this file). This button stays for the
+ * case the automatic run does not cover: an attempt already spent in this page
+ * load, whether it failed or the reader came back after cancelling it.
  *
- * A failed attempt does not re-arm anything. The one try is spent, the button is
+ * A failed attempt does not try again. The one try is spent, the button is
  * here, and pressing it is a person rather than a loop.
  */
 function Empty({

@@ -475,6 +475,13 @@ mode docs describe their band's head.
 Glossary's and Timeline's counts are still where they were, and Summary and Search have one fewer
 row.
 
+**Partly walked back on 2026-09-15, and for a reason this stage could not see from a laptop.** The
+Dock does name the mode — until its row stops fitting and drops the words, which on an iPad is
+always, and a dropped word leaves only a hover card a finger never opens. Greg, on an iPad: *"there's
+no tooltip, there's no heading, there's no explanation."* The rows stay as this stage left them; the
+name comes back for three seconds after a press, laid over the band rather than in it —
+[260915e](260915e-the-mode-names-itself-briefly-when-a-reader-opens-it.md).
+
 **Landed 2026-09-05**, and it needed one thing the stage had assumed rather than checked.
 
 **The Dock was not, in fact, naming the mode.** A band is 400px of the window, so opening one is
