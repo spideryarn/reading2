@@ -44,6 +44,15 @@ export type LogoAnimation = {
   readonly id: string;
   readonly name: string;
   readonly blurb: string;
+  /**
+   * What it moves. `letters` animates the ten letters and nothing else, so it
+   * is a draw nobody sees wherever the word is not drawn — and on the reading
+   * view that is most windows, not only phones (docs/project/design-logo.md §
+   * What a phone sees). `mark` reaches the spider or the whole anchor, so it is
+   * seen wherever the wordmark is. tests/logo-animation.test.tsx checks each
+   * tag against the stylesheet's own selectors.
+   */
+  readonly reach: "letters" | "mark";
 };
 
 /**
@@ -71,66 +80,79 @@ export type LogoAnimation = {
 export const LOGO_ANIMATIONS: readonly LogoAnimation[] = [
   {
     id: "spya-settle",
+    reach: "mark",
     name: "The Settle",
     blurb: "The spider lifts and leans toward the library, overshoots, and settles like a thing with mass.",
   },
   {
     id: "spya-pluck",
+    reach: "letters",
     name: "Pluck the Thread",
     blurb: "The letters are a taut string; a bump runs along them and decays. Vibration is how a spider reads.",
   },
   {
     id: "spya-sag",
+    reach: "letters",
     name: "Stronger Than Steel",
     blurb: "The row takes a weight and hangs in a catenary, then springs back level without breaking.",
   },
   {
     id: "spya-register",
+    reach: "letters",
     name: "Misregistration",
     blurb: "Two ghost plates slide into perfect register under the word. Always toward, never away.",
   },
   {
     id: "spya-warm",
+    reach: "mark",
     name: "Warm Drift",
     blurb: "The orange drifts a few degrees warmer and a leg-shaped glow breathes. You would not notice it; you would notice it gone.",
   },
   {
     id: "spya-seam",
+    reach: "letters",
     name: "The Seam Opens",
     blurb: "The word parts where it really is a compound — Spider | yarn — and a thread stretches across the gap.",
   },
   {
     id: "spya-strain",
+    reach: "mark",
     name: "The Spider Strains",
     blurb: "It braces and hauls at the word, which does not budge. The text does not move, whatever the tool does to it.",
   },
   {
     id: "spya-i",
+    reach: "letters",
     name: "Only the i",
     blurb: "One letter rises a single pixel and stays there. Nothing else moves at all.",
   },
   {
     id: "spya-dawn",
+    reach: "mark",
     name: "Dawn Rebuild",
     blurb: "The wordmark is eaten right to left and respun left to right, the way an orb weaver rebuilds at dawn.",
   },
   {
     id: "spya-type",
+    reach: "letters",
     name: "Retype",
     blurb: "The word dims to a ghost, types itself back in, and leaves a block cursor blinking after the n.",
   },
   {
     id: "spya-abseil",
+    reach: "letters",
     name: "Abseil",
     blurb: "The final n lets go and drops on a thread of yarn, bobs, and is reeled back into the word.",
   },
   {
     id: "spya-dragline",
+    reach: "mark",
     name: "Dragline Drop",
     blurb: "The spider drops on a dragline, hangs and swings, and climbs back. It never lets go of where it came from.",
   },
   {
     id: "spya-radius",
+    reach: "mark",
     name: "Radius Sweep",
     blurb: "Light travels round the mark like a hand on a clock, lighting each leg in turn. Nothing moves.",
   },
@@ -146,12 +168,37 @@ export const LOGO_ANIMATIONS: readonly LogoAnimation[] = [
  * each time". Excluding the last pick costs nothing and removes the only
  * outcome that looks like a bug.
  */
-export function pickLogoAnimation(previous: string | null): LogoAnimation | null {
-  const pool =
-    LOGO_ANIMATIONS.length > 1
-      ? LOGO_ANIMATIONS.filter((a) => a.id !== previous)
-      : LOGO_ANIMATIONS;
+export function pickLogoAnimation(
+  previous: string | null,
+  wordShown = true,
+): LogoAnimation | null {
+  /* **Only what can be seen.** With the word gone, a `letters` animation puts
+     its class on the anchor and moves ten boxes that are `display: none` — the
+     hover happened and nothing did. On 2026-09-15 that was seven draws in
+     thirteen on the reading view at every window up to 1920px, and Greg
+     reported the feature as missing (docs/postmortems/260915c-…). */
+  const eligible = wordShown ? LOGO_ANIMATIONS : LOGO_ANIMATIONS.filter((a) => a.reach === "mark");
+  const pool = eligible.length > 1 ? eligible.filter((a) => a.id !== previous) : eligible;
   return pool[Math.floor(Math.random() * pool.length)] ?? null;
+}
+
+/**
+ * Whether the host's letters are laid out at all — asked of the element, at
+ * the moment of the draw.
+ *
+ * Three different things take the word away: the 731px query on `.logo-text`,
+ * the dock's fit ladder on `.dock-btn-label`, and a host with no letters (the
+ * shelf's spider). All three leave a letter with no layout box, so this is the
+ * one question they all answer, and nothing here has to know which applies.
+ *
+ * **It is not general visibility.** `visibility: hidden`, `opacity: 0` and an
+ * ancestor's clip all leave a box and read as drawn. None of the hosts hides
+ * its word that way, and the dock only shows the word at a rung where the row
+ * fits (dock-fit.ts), so the letters are then really on screen.
+ */
+export function lettersDrawn(host: Element): boolean {
+  const letter = host.querySelector(".logo-letter");
+  return letter !== null && letter.getClientRects().length > 0;
 }
 
 /** How long a press must be held before it counts as a long press, in ms. */
@@ -208,7 +255,23 @@ const CLICK_SUPPRESSION_MS = 400;
  * version began at the long-press threshold, so a five-second hold expired
  * under the reader's own finger.
  */
-export function useLogoAnimation() {
+export function useLogoAnimation(
+  options: {
+    /**
+     * **A tap plays one**, for a host that is not a link. On the reading view
+     * a tap on the wordmark goes home, so a finger gets an animation only from
+     * a hold; the shelf's spider is a picture, a tap there does nothing else,
+     * so the tap itself may be the request (Library.tsx § ShelfSpider).
+     *
+     * Decided on the `click`, never on a short `pointerup`: the release is
+     * heard on `window` wherever it happens, and a finger that slid off and
+     * lifted elsewhere is not a tap on this. The browser sends the click only
+     * when it has decided the touch was one. GPT Sol, 2026-09-15.
+     */
+    tap?: boolean;
+  } = {},
+) {
+  const tap = options.tap ?? false;
   const [active, setActive] = useState<string | null>(null);
   /* The last id *offered*, which is not the same as `active` — it must survive
      the clear on pointer-leave, or the exclusion in `pickLogoAnimation` would
@@ -226,6 +289,12 @@ export function useLogoAnimation() {
   const press = useRef<{ id: number; touch: boolean; held: boolean } | null>(null);
   /** Set by a completed long press, read and cleared by the click that follows. */
   const suppressClick = useRef(false);
+  /**
+   * Whether the press the next click belongs to was a finger. Read only by the
+   * `tap` option, so a mouse click on a hovered spider — which has already
+   * drawn once, on the hover — does not draw a second time.
+   */
+  const touchPress = useRef(false);
   const pressTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const lingerTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const flagTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -259,8 +328,16 @@ export function useLogoAnimation() {
     [clearTimers],
   );
 
-  const roll = useCallback(() => {
-    const next = pickLogoAnimation(last.current);
+  /**
+   * Whether a hovering pointer is over the wordmark now. Only a mouse or pen
+   * sets it — a touch has no hover — and it is what stops the long-press
+   * threshold rolling for a mouse that has already left (§ onPointerDown).
+   */
+  const inside = useRef(false);
+
+  /** A draw for this host, from the animations its current layout can show. */
+  const roll = useCallback((host: Element) => {
+    const next = pickLogoAnimation(last.current, lettersDrawn(host));
     if (!next) return;
     last.current = next.id;
     setActive(next.id);
@@ -309,11 +386,12 @@ export function useLogoAnimation() {
            before the long press happened. Hover means a pointer that can
            hover. */
         if (e.pointerType === "touch") return;
+        inside.current = true;
         if (lingerTimer.current !== null) {
           clearTimeout(lingerTimer.current);
           lingerTimer.current = null;
         }
-        roll();
+        roll(e.currentTarget);
       },
       onPointerLeave: (e: ReactPointerEvent) => {
         if (e.pointerType === "touch") return;
@@ -322,6 +400,7 @@ export function useLogoAnimation() {
            a gesture, and it may come back. Touching `suppressClick` here is
            what made a small excursion across the edge and back navigate on
            release. The gesture ends on `window`, where it actually ends. */
+        inside.current = false;
         setActive(null);
         if (press.current === null) {
           clearTimers();
@@ -371,7 +450,9 @@ export function useLogoAnimation() {
            until someone changes the React version underneath it. */
         const id = e.pointerId;
         const touch = e.pointerType === "touch";
+        const host = e.currentTarget;
         press.current = { id, touch, held: false };
+        touchPress.current = touch;
 
         const finish = (ev: PointerEvent) => {
           if (ev.pointerId !== id) return;
@@ -396,6 +477,7 @@ export function useLogoAnimation() {
           endGesture();
           clearTimers();
           suppressClick.current = false;
+          touchPress.current = false;
           setActive(null);
         };
         window.addEventListener("pointerup", finish);
@@ -414,7 +496,14 @@ export function useLogoAnimation() {
              down. That is the only way to ask for a second draw without
              leaving the corner and coming back. */
           suppressClick.current = true;
-          roll();
+          /* **Not for a mouse that has already left.** The press outlives the
+             leave on purpose — coming back and releasing must still not
+             navigate, which is why the flag above is set regardless — but a
+             draw made with the pointer elsewhere is one nobody asked for, and
+             a mouse release has no linger to clear it, so it stood until the
+             next hover. Coming back rolls anyway, through `onPointerEnter`.
+             GPT Sol, 2026-09-15. */
+          if (touch || inside.current) roll(host);
         }, LONG_PRESS_MS);
       },
       onClick: (e: ReactMouseEvent) => {
@@ -430,7 +519,20 @@ export function useLogoAnimation() {
             flagTimer.current = null;
           }
           e.preventDefault();
+          /* The hold already drew; its click is not a second request. */
+          return;
         }
+        if (!tap || !touchPress.current) return;
+        touchPress.current = false;
+        /* A tap during a linger replaces it: `onPointerDown` has already
+           cleared the old one, so this draw is new (the picker excludes the
+           last) and its linger runs from now. */
+        if (lingerTimer.current !== null) clearTimeout(lingerTimer.current);
+        roll(e.currentTarget);
+        lingerTimer.current = setTimeout(() => {
+          lingerTimer.current = null;
+          setActive(null);
+        }, TOUCH_LINGER_MS);
       },
     },
   };
