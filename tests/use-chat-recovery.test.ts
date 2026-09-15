@@ -122,6 +122,13 @@ function reply(patch: Partial<ChatMessage>): ChatThread[] {
  * and `advanceTimersByTimeAsync` only awaits *between timers* — with none
  * pending it yields almost nothing. Eight rounds is comfortably more than the
  * deepest chain here.
+ *
+ * **One millisecond a round, not zero.** The chat controller tells React about
+ * a burst at its `setTimeout(0)` (src/web/chat/controller.ts § `#notify`), and
+ * the fake clock schedules a zero delay made *during* a tick at `now + 1` — so
+ * a window opened inside one never closed under an advance of zero, and the
+ * screen stayed a notification behind. Eight milliseconds per settle is noise
+ * beside the three-second gaps these tests measure.
  */
 async function settle(ms = 0): Promise<void> {
   if (ms > 0) {
@@ -132,7 +139,7 @@ async function settle(ms = 0): Promise<void> {
   for (let i = 0; i < 8; i++) {
     await act(async () => {
       await Promise.resolve();
-      await vi.advanceTimersByTimeAsync(0);
+      await vi.advanceTimersByTimeAsync(1);
     });
   }
 }

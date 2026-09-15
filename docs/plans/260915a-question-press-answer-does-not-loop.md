@@ -1,8 +1,9 @@
 # A "?" answer that arrives in a burst must not throw React #185
 
-**Status: plan reviewed, not yet built** — evidence: the whole-App reproduction is red three runs
-of three; GPT Sol's plan review says "build with the listed changes", all of which are folded in
-below; `git diff HEAD -- src/` is empty.
+**Status: built, awaiting GPT Sol's code review** — evidence: the two class tests and the whole-App
+reproduction were red before the fix and are green after it (5 files, 33 tests, exit 0, run by the
+orchestrator); the builder's scoped run over every chat test file is 44 files, 582 tests, exit 0;
+`npm run typecheck` exits 0.
 
 Overseer queue item `qi-tcxxvsvm`; Sentry `SPIDERYARN-READING2-3X`, reported 2026-09-12 11:20Z on
 build `d358f773`. From Greg, an admin, so trusted input — [feedback-reports.md](../project/feedback-reports.md).
@@ -176,9 +177,13 @@ live throughout.
 
 **Plus the local guard, as hygiene rather than as the fix.** `ChatPanel`'s scroll effect clears
 `away` only when it is set, since a same-value `setState` on every word is a render per word for
-nothing. It is not the safety boundary: any one pending Default update arms the counter — on an
-iPad, `useVisualViewport`'s mount-time `setBox` on the very fiber that holds the store subscription
-is the likeliest (Sol, S5) — and a future effect would re-arm it.
+nothing. It is not the safety boundary: any effect in the chat's subtree that updates state on every
+store-driven commit re-arms the counter, and the next one anybody writes would. **A single pending
+update does not** — found while building, and it corrects Sol's S3 and S5: React 19.2 renders
+pending Sync, InputContinuous and Default work together (`getHighestPriorityLanes` returns
+`lanes & 42`), so one early update is spent by the first Sync commit. The counter climbs only when
+something re-schedules after every commit, which is exactly what `setAway(false)` on every word
+did. So `useVisualViewport`'s one mount-time `setBox` was never a suspect.
 
 ### What it costs
 
@@ -201,8 +206,8 @@ is the likeliest (Sol, S5) — and a future effect would re-arm it.
 ### Passed over
 
 - **The local guard alone.** One line, and it is what turned the whole-App test green — but it
-  fixes the instance and leaves the class: the reader's own scroll, the viewport hook, the draft
-  reset, or the next effect anyone writes each re-arm it. Sol, S8.
+  fixes the instance and leaves the class: the next effect anyone writes that updates state on
+  every commit re-arms it. Sol, S8.
 - **Coalescing in `drainTurn`** (merge the deltas of one read, or yield a task between reads).
   Local to the stream, but `readEvents` erases read boundaries (Sol, S2), a yield per read adds
   latency to every answer, and the store would still have no bound of its own for the next caller
@@ -263,3 +268,22 @@ is the likeliest (Sol, S5) — and a future effect would re-arm it.
   sequence (R3), the settle helper crosses two boundaries (R4), the promises about timing and about
   foreign exceptions are narrowed (R5, R6), the drafted postmortem and note no longer claim work
   that is not built (R7), and the scope count is eight, not nine (R8).
+
+### What the build changed about the plan
+
+- **The React class test re-arms the counter on every commit**, rather than scheduling one update
+  before the burst. As specified it passed on the unfixed code, because one pending Default update
+  is spent by the first Sync commit (§ The fix). Its sibling now answers every store change with a
+  new-value `setState` in an effect — still no `ChatPanel` — and it is red without the coalescing.
+- **`tests/use-chat-recovery.test.ts` was not fine as it stood.** Vitest's fake timers schedule a
+  `setTimeout(0)` made *during* a tick at `now + 1`, so its `advanceTimersByTimeAsync(0)` never
+  closed a window opened inside a tick and four tests saw the screen one notification behind. Its
+  helper now advances 1ms a round. No assertion changed.
+- **One `chat-intent-paths` test pressed send and cancel in two synchronous `act`s in one task** —
+  R4's case exactly: the cancel landed in the send's open window. One `await settle()` between the
+  presses; a reader's two presses are always separate tasks. No assertion changed.
+- **Mutation 1 is subtler than the plan said.** With the coalescing removed and the `ChatPanel`
+  guard left in, the whole-App test stays green, because the guard alone removes this instance's
+  re-arm; both class tests go red. With both removed it goes red again. Mutations 2–4 behaved as
+  planned: the guard alone reddens nothing, a listener set captured at schedule time reddens the
+  R1 case, and no `try/catch` reddens R2.

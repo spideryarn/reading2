@@ -21,6 +21,7 @@
 import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { settleChat } from "./helpers/settle-chat.js";
 
 let answer: (url: string, init?: RequestInit) => Promise<Response>;
 
@@ -52,11 +53,7 @@ function json(body: unknown, status = 200): Response {
   });
 }
 
-async function settle(): Promise<void> {
-  await act(async () => {
-    for (let i = 0; i < 8; i += 1) await Promise.resolve();
-  });
-}
+const settle = settleChat;
 
 beforeEach(async () => {
   (globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;

@@ -21,6 +21,7 @@
 import { act, createElement, StrictMode } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { settleChat } from "./helpers/settle-chat.js";
 
 /**
  * What the next `GET` answers with. Posed per test, by URL.
@@ -77,14 +78,7 @@ function deferred<T>(): { promise: Promise<T>; resolve(v: T): void; reject(e: Er
   return { promise, resolve, reject };
 }
 
-async function settle(): Promise<void> {
-  await act(async () => {
-    await Promise.resolve();
-    await Promise.resolve();
-    await Promise.resolve();
-    await Promise.resolve();
-  });
-}
+const settle = settleChat;
 
 async function mount(el: () => React.ReactElement): Promise<void> {
   await act(async () => {

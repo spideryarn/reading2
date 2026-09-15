@@ -41,10 +41,11 @@ Four facts, each harmless alone:
 3. **React counts consecutive commits that leave work pending as nested.** In 19.2 `commitRoot`
    increments `nestedUpdateCount` when a commit leaves Sync or Default work on the root, resets it
    only when one leaves none, and the next update past fifty throws.
-4. **One pending Default update is enough to keep it counting**, because it cannot run until the
-   chain ends. In the reproduction that was `ChatPanel`'s `setAway(false)` on every word; on an
-   iPad, `useVisualViewport`'s mount-time `setBox` on the very component that holds the subscription
-   is enough by itself (GPT Sol).
+4. **Something re-schedules an update after every commit.** Here, `ChatPanel`'s `setAway(false)`
+   on every word — same value, but it does not take React's eager bailout. A *single* pending
+   update is not enough, which GPT Sol and I both believed until the build proved otherwise: React
+   19.2 renders pending Sync and Default work together (`getHighestPriorityLanes` returns
+   `lanes & 42`), so one early update is spent by the first commit. It takes a re-arm per commit.
 
 So a burst of fifty frames is an "infinite loop" to React, and the throw comes out of the store's
 own listener call, inside the stream loop. `runTurn`'s `catch` read it as the stream failing and
@@ -99,15 +100,15 @@ about it. The update that armed the counter in the reproduction came in earlier,
    message to be the server's. Deferred to its own plan: after (3) the burst no longer produces
    React's exception, but a leading listener still runs inside the stream loop, so the route is
    narrowed rather than closed; making "the server wrote this" a type touches three hooks.
-5. **A lint rule against `setState` in effects** — rejected. The arming update can be anything, on
-   any fiber — a viewport listener, a scroll handler, a draft reset — and banning one kind would
-   leave the class open while flagging a great deal of correct code.
+5. **A lint rule against `setState` in effects** — rejected. The re-arm can be any effect anywhere in
+   the subtree that updates on every commit, including a same-value update that looks free, and a
+   rule strict enough to catch those would flag a great deal of correct code.
 
 ## The fix that is right for the long term
 
 The store notification bound (3), with the `ChatPanel` guard as hygiene. The one-line guard alone
 turned the reproduction green and would have been the fastest ship, but it fixes the instance: the
-reader's scroll, the viewport hook or the next effect written re-arms it. The rule for the next
+next effect anyone writes that updates state on every commit re-arms it. The rule for the next
 store is in [web-client.md](../project/web-client.md).
 
 ## The thing I would tell myself

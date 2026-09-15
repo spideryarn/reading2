@@ -764,8 +764,9 @@ loading half already and was missing the failed half.
 notifies on every event makes one synchronous commit per event — and React 19
 counts consecutive commits that leave other work pending as nested, and throws
 #185 past fifty. Paced events never get near that. A burst does: a stream whose
-chunks were already buffered drains in one microtask chain, and a single pending
-update anywhere on the root keeps the count climbing until it throws. That
+chunks were already buffered drains in one microtask chain, and any effect that
+updates state after every commit — even to the same value — keeps the count
+climbing until it throws. That
 reached a reader on 2026-09-12 as a "?" answer replaced by React's own error text —
 [260915a](../postmortems/260915a-a-store-notified-per-frame-turns-a-buffered-stream-into-an-update-loop.md).
 
