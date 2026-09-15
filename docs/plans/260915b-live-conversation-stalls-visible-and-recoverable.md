@@ -212,6 +212,20 @@ findings, both real, both fixed by the reviewer with a test watched red first:
 
 After the fixes, checked here rather than taken from the reviewer: 176 tests across the live and doc
 files pass, and typecheck exits 0. The reviewer's own typecheck hit a sandbox `EPERM` on tsx's IPC
-socket and was re-run by hand. The full suite result is recorded under Stage 2 below.
+socket and was re-run by hand.
+
+**Full suite, once, through `scripts/tmux-job.ts`, at `e0d93f7b`:** 1121 files and 24272 tests pass;
+**6 files and 5 tests fail, none of them in live code** — this branch touches only `src/web/live/`,
+the live tests and docs. Each was re-run on its own:
+
+- `cold-start-lazy-imports`, `pdf-bundle-trace`: this worktree has no `api-dist/`. They are the two
+  reds `worktree:setup` predicts for a tree that has not been built.
+- `fleet-decisions-route`, `fleet-reports-route` (`process.exit(2)` in `tools/fleet/server.ts`) and
+  `fleet-composed-access` (all 76 skipped): the same missing build. `ENOENT` on
+  `tools/fleet/web/dist/assets`.
+- `overseer-daemon-usage-pass` › "`keep-stored` still carries the DISCARDED fresh report": red on
+  its own too. Its fixtures carry fixed `collectedAt` dates of 2026-09-08, a week before this run, so
+  it looks dependent on the clock. Not investigated further, because it is in overseer code this
+  branch does not touch.
 
 Postmortem: [260915b-live-conversation-stalls-silently.md](../postmortems/260915b-live-conversation-stalls-silently.md).
