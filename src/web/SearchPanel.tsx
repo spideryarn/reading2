@@ -1201,11 +1201,11 @@ function SortBar({
 /**
  * The foot line: how many passages the bar is holding back, and the way back.
  *
- * The same sentence the other thresholds print, with this panel's noun —
- * they all hide rather than group since 2026-09-03, and threshold.ts holds the
- * copy and the argument for it. It replaced a `confNote` that spoke only when
- * the bar had hidden everything or nothing, which made an absent line
- * ambiguous.
+ * The same sentence the other thresholds print, with this panel's noun. The
+ * original three switched from grouping to hiding on 2026-09-03, later modes
+ * inherited that rule, and threshold.ts holds the copy and the argument for
+ * it. It replaced a `confNote` that spoke only when the bar had hidden
+ * everything or nothing, which made an absent line ambiguous.
  *
  * **It takes the counts, not the list**, so the sentence and the `N of M` above
  * it come out of the same `applyConf` call rather than two passes that could
@@ -1232,9 +1232,9 @@ function confNote(hidden: number, total: number): string {
  * - **the track ends where the data does** (`confMax`), so no part of it is
  *   dead;
  * - **it says how many it has hidden** (`hiddenNote`), in every state including
- *   none and all — the same foot line the other two thresholds now print, since
- *   all three hide rather than group (threshold.ts);
- * - **it can be put back** without the reader having to remember 50.
+ *   none and all — the same foot line every other threshold mode prints
+ *   (threshold.ts);
+ * - **it can be put back** without the reader having to remember the default.
  *
  * A native `<input type="range">` for the reasons the glossary's is one:
  * draggable, arrow-key steppable, announced, touch-friendly, and `accent-color`

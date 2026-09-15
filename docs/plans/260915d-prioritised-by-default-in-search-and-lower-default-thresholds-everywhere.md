@@ -228,13 +228,15 @@ that nobody asked for. Decoupling is one line.
 ## Evidence
 
 The four queries, run with the scratchpad script `q.mjs` (a `pg` client on
-`postgresql://postgres:postgres@127.0.0.1:54362/postgres`). The glossary one; the others swap the
-column, the array key and the composite:
+`postgresql://postgres:postgres@127.0.0.1:54362/postgres`). The three artefact queries all begin
+with the join through the article's current-revision pointer; this is the glossary one:
 
 ```sql
-with d as (select distinct on (glossary->>'slug') glossary x
-           from spideryarn.article_revisions where glossary is not null),
-items as (select d.x->>'slug' slug,
+with d as (select a.slug, r.glossary x
+           from spideryarn.articles a
+           join spideryarn.article_revisions r on r.id = a.current_revision_id
+           where r.glossary is not null),
+items as (select d.slug,
                  (e->>'difficulty')::float * (e->>'centrality')::float s
           from d, jsonb_array_elements(d.x->'entries') e),
 t as (select unnest(array[0.05,0.08,0.1,0.12,0.15,0.2,0.25,0.3]) th),
@@ -246,16 +248,69 @@ select th, round(avg(share),2) mean,
 from g group by th order by th;
 ```
 
-- Quotes: `quotes->'quotes'`, `greatest(importance, striking)`.
-- Citations: `citations->'citations'`, `(2 * relevance + influence) / 3`.
-- Search: `spideryarn.search_runs`, `hits` where `status = 'done'`, `confidence`, grouped by run id.
+For Citations the same query uses `r.citations`, `x->'citations'`, and
+`(2 * relevance + influence) / 3`; the arithmetic yields null unless both scores exist, matching
+`CitationsPanel.priorityOf` and the shared unscored-survival rule.
+
+Quotes needs one additional step because the panel snaps the nominal bar to the nearest score in
+each article, with ties downward. This is the query that produced the Quotes table:
+
+```sql
+with d as (select a.slug, r.quotes x
+           from spideryarn.articles a
+           join spideryarn.article_revisions r on r.id = a.current_revision_id
+           where r.quotes is not null),
+items as (select d.slug,
+                 greatest((q->>'importance')::float, (q->>'striking')::float) s
+          from d, jsonb_array_elements(d.x->'quotes') q),
+t as (select unnest(array[0.5,0.6,0.65,0.75,0.8]) th),
+snapped as (
+  select l.slug, t.th,
+         (select i.s from items i
+          where i.slug = l.slug and i.s is not null
+          order by abs(i.s - t.th), i.s
+          limit 1) bar
+  from (select distinct slug from items) l cross join t
+),
+g as (select i.slug, s.th,
+             avg(case when i.s is null or i.s >= s.bar then 1.0 else 0 end) share
+      from items i join snapped s on s.slug = i.slug
+      group by i.slug, s.th)
+select th, round(avg(share),2) mean,
+       round(percentile_cont(0.5) within group (order by share)::numeric,2) med,
+       round(min(share),2) mn
+from g group by th order by th;
+```
+
+Search is stored outside article revisions, so its run id and article id are the grouping key:
+
+```sql
+with items as (
+  select article_id, id, (h->>'confidence')::float s
+  from spideryarn.search_runs, jsonb_array_elements(hits) h
+  where status = 'done'
+),
+t as (select unnest(array[10,20,30,40,50]) th),
+g as (select article_id, id, th,
+             avg(case when s is null or s >= th then 1.0 else 0 end) share
+      from items, t group by article_id, id, th)
+select th, round(avg(share),2) mean,
+       round(percentile_cont(0.5) within group (order by share)::numeric,2) med,
+       round(min(share),2) mn
+from g group by th order by th;
+```
 
 ## Progress
 
-- [ ] Plan reviewed by GPT Sol
-- [ ] Tests red
-- [ ] Change made, tests green
-- [ ] Docs
-- [ ] Code reviewed by GPT Sol
+- [x] Plan reviewed by GPT Sol — `-plan-review-sol.md`: revise (remeasure on current revisions,
+  accept and test the dormant `?conf=`); both done. Fable arbitrated the stroke and "most".
+- [x] Tests red — `prioritised-defaults.test.ts` 6 of 6 on the old values;
+  `search-opens-prioritised.test.tsx` 2 of 4 (`60,20` for `60`; 2 for 0), preconditions green.
+- [x] Change made, tests green — 22 scoped files; typecheck exit 0. Three existing tests pinned the
+  old values (citations pin, glossary "nearly" fixture, a doc link) and were moved, not loosened.
+- [x] Docs
+- [x] Code reviewed by GPT Sol — `-code-review-sol.md`: approve after fixes, no behavioural defect;
+  its fixes were evidence and stale copy. One of them reversed a "respectively" in
+  `quotes-panel.test.ts`, corrected by hand.
 - [ ] Full suite
 - [ ] On `dev`, feedback note written

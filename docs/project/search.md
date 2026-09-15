@@ -34,10 +34,12 @@ Code: [`src/search.ts`](../../src/search.ts) (the model call),
  │  ▇▇          │ └──────────────────────┘ │ ┃He rejects the idea that mind is │
  │  ▇▇▇▇        │  ( words ) ( ●MEANING )  │ ┃▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂ │
  │              │ ──────────────────────── │ ┃software running on wet hardware,│
- │  the spine —  │  3 passages   by place ▾ │ ┃▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂         │
- │  where you   │  ▐62▌how sure ▬▭ where   │ ┃and the reason is not squeamish- │
- │  are, and it │                          │ ┃ness about carbon.               │
- │  never moves │  ▐92▌ …mind is software  │                                   │
+ │  the spine —  │  3 passages [prioritised]│ ┃▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂         │
+ │  where you   │  confidence 30 · 3 of 3  │ ┃and the reason is not squeamish- │
+ │  are, and it │  ●─────────────────────  │ ┃ness about carbon.               │
+ │  never moves │  Nothing is hidden.      │                                   │
+ │              │  ▐62▌how sure ▬▭ where   │                                   │
+ │              │  ▐92▌ …mind is software  │                                   │
  │              │  ▬▭▭▭ running on wet…    │  Living things are self-maintain- │
  │              │       Answers the func-  │  ing in a way a chip is not.      │
  │              │       tionalist claim    │                                   │
@@ -775,8 +777,8 @@ any number here means *more likely than not*: this confidence is
 [not a probability](#what-the-number-means-which-printing-it-does-not-say), and a starting position
 described as one would be the flattering reading the hover card was rewritten to avoid.
 
-**It hid where the glossary grouped, and since 2026-09-03 all three thresholds hide.** This one was
-the odd one out and is now the model the other two follow —
+**It hid where the glossary grouped, and since 2026-09-03 the three numeric thresholds that existed
+then all hide.** This one was the odd one out and became the model the others follow —
 [glossary.md § It hides what is below it](glossary.md#it-hides-what-is-below-it-since-2026-09-03)
 has Greg's words and the shared rule, [`src/web/threshold.ts`](../../src/web/threshold.ts). What
 changed with them is that this panel gained the **foot line** saying how many are hidden, which it

@@ -758,7 +758,7 @@ describe("the prioritised threshold", () => {
   });
 
   it("says out loud how many it has hidden, in the panel's own noun", () => {
-    /* Search prints the same foot line the other two thresholds now do —
+    /* Search prints the same foot line the other threshold modes do —
        `hiddenNote` in threshold.ts, with "passage" as the noun. The wording is
        covered verbatim in tests/threshold.test.ts; what matters here is that
        the number handed to it is this list's hidden count. */

@@ -40,9 +40,9 @@ string" rule look like fussiness until you know what they are answers to.
  │  ▇▇         │  most important       │  ┃ of thing you'd have to  │ ▍ │
  │  ▇▇▇▇       │  most striking        │    be able to write …      │   │
  │  ▇▇▇        ├───────────────────────┤                            │   │
- │  ▇▇▇▇▇      │ bar 0·80 · 5 of 14    │      ↑ the wash and the    │   │
+ │  ▇▇▇▇▇      │ bar 0·60 · 12 of 14   │      ↑ the wash and the    │   │
  │  ▇▇         │ ────────●──────────   │        ┃ border — the SAME │ ▍ │
- │  ▇▇▇▇▇▇     │ 9 quotes are hidden   │        marks a search hit  │   │
+ │  ▇▇▇▇▇▇     │ 2 quotes are hidden   │        marks a search hit  │   │
  │             │ by this threshold.    │        draws, because it   │   │
  │             │ Drag the slider left  │        IS one              │   │
  │             │ to show them.         │                            │   │

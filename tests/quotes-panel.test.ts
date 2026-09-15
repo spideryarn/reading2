@@ -7,7 +7,7 @@
  * behaviours were justified by properties a product has and a maximum does not:
  *
  *  - a product of two 0–1 scores clusters low, a maximum clusters high — so the
- *    starting bar is 0.70 rather than 0.30;
+ *    quotes bar starts at 0.60 where the glossary's starts at 0.10;
  *  - under a product a missing factor is fatal, under a maximum it is merely
  *    conservative — so `priorityOf` computes over whichever scores exist;
  *  - a product rarely ties at the top, a maximum ties often, because **either**

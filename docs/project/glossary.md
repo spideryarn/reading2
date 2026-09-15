@@ -26,9 +26,9 @@ until you know what they are for.
  │  ▇▇▇        │ order [prioritised] │   explanation of what it│
  │  ▇▇▇▇▇▇▇    │   first use hardest │   ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈   │
  │  ▇▇         ├─────────────────────┤   is like to be an      │
- │  ▇▇▇▇       │ threshold 0·30 · 6 of 24  organism …          │
+ │  ▇▇▇▇       │ threshold 0·10 · 21 of 24 organism …          │
  │             │ ──────●────────────  ← the bar, and the       │
- │             │ 18 terms are hidden    reader's hand on it    │
+ │             │ 3 terms are hidden     reader's hand on it    │
  │             │ by this threshold.  │                         │
  │             │ Drag the slider left│                         │
  │             │ to show them.       │                         │
@@ -998,7 +998,7 @@ Four things about the slider are decisions rather than details:
   ambiguous between *there is nothing here* and *you have hidden it all* —
   [silent-success](../reusable/silent-success.md), which this codebase keeps catching itself in.
   `hiddenNote` in [`src/web/threshold.ts`](../../src/web/threshold.ts) writes it for all four
-  sliders — this one, Quotes, Search and Citations.
+  numeric sliders — this one, Quotes, Search and Citations — and for Debate's categorical bar.
 - **The order no longer cancels itself just because the bar hides nothing.** It used to. The slider
   reverses that argument twice over: cancelling would take the slider away with it and strand the
   reader mid-adjustment, and a list with nothing hidden here is not silent — the bar is on screen

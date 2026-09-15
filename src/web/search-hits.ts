@@ -1046,9 +1046,10 @@ export function orderFound(found: Found[], order: HitOrder): Found[] {
    > threshold slider to the UI
 
    It is the glossary's prioritised order, and since 2026-09-03 it is that
-   without qualification: **all three thresholds hide what is below them and
-   say how many.** The shared rule is in threshold.ts, and this file keeps only
-   the unit (0–100 confidence), the track and the copy.
+   without qualification: **the three numeric thresholds that existed then all
+   hide what is below them and say how many.** Later threshold modes inherited
+   the shared rule in threshold.ts; this file keeps only the unit (0–100
+   confidence), the track and the copy.
 
    **This comment used to argue the opposite, and the reversal is worth
    naming.** It said *"the glossary groups; this hides"* — that a glossary is a

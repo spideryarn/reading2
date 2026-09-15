@@ -49,7 +49,7 @@ describe("search opens on the prioritised order", () => {
   });
 });
 
-describe("each bar rests low enough that most entries come in", () => {
+describe("each measured bar rests at its new boundary", () => {
   it("glossary: 0.10 on difficulty × centrality", () => {
     expect(PRIORITY_GATE).toBe(0.1);
     // 0.4 × 0.3 = 0.12 — a term the old 0.30 hid, and the new one keeps.

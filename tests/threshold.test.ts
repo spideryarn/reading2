@@ -1,8 +1,8 @@
 /**
  * The one threshold rule every slider shares — src/web/threshold.ts.
  *
- * Glossary, Quotes, Search and Citations all hide what is below the bar and say how
- * many, so the rule lives once and each caller passes its own score accessor.
+ * Glossary, Quotes, Search, Citations and Debate all hide what is below the bar
+ * and say how many, so the rule lives once and each caller passes its own score accessor.
  * What these tests are really protecting is the thing the plan calls this
  * feature's worst failure: **a count that disagrees with the list under it.**
  * `applyThreshold` returns one outcome in one pass so that the visible list,
@@ -140,7 +140,7 @@ describe("hiddenNote", () => {
     );
   });
 
-  it("takes its noun from the caller, because three panels count three things", () => {
+  it("takes its noun from the caller, because the panels count different things", () => {
     expect(hiddenNote(3, 9, QUOTE)).toMatch(/^3 quotes are hidden/);
   });
 
