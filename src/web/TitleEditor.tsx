@@ -259,9 +259,11 @@ export function useArticleRename(
  * **`opacity`, never `display: none`.** A hidden element is not focusable, so
  * hiding the pencil until hover would delete it outright for anyone navigating
  * by keyboard — and every check anybody ran with a mouse would look fine.
- * `focus-within` and `hover-none` are the two other ways in: the keyboard, and
- * a touch screen, which has no hover to give. Same three rules as the shelf's
- * row of buttons (ShelfEntry.tsx § Actions), for the same reasons.
+ * `focus-within` is the keyboard's way in, and `hover-none` with
+ * `any-pointer-coarse` a finger's — the second because a touchscreen laptop's
+ * primary pointer is the mouse, so `hover: none` alone never matches there.
+ * Same rules as the shelf's row of buttons (ShelfEntry.tsx § Actions), for the
+ * same reasons.
  */
 export function EditableTitle({
   rename,
@@ -326,7 +328,7 @@ export function EditableTitle({
         <div className="tw:group tw:flex tw:items-start tw:gap-2">
           {children}
           {offer && (
-            <span className="tw:mt-1 tw:shrink-0 tw:opacity-0 tw:transition-opacity tw:group-hover:opacity-100 tw:group-focus-within:opacity-100 tw:hover-none:opacity-100">
+            <span className="tw:mt-1 tw:shrink-0 tw:opacity-0 tw:transition-opacity tw:group-hover:opacity-100 tw:group-focus-within:opacity-100 tw:hover-none:opacity-100 tw:any-pointer-coarse:opacity-100">
               <IconButton ref={pencil} label="Edit title" onClick={rename.begin}>
                 <Pencil size={14} />
               </IconButton>

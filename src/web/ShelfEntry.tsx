@@ -624,9 +624,18 @@ export function Actions({
        `hover-none:opacity-100` is the other half: on a touch screen there is no
        hover, so without it these buttons stayed invisible AND hit-testable —
        controls you cannot see but can press by accident. Caught by a
-       cross-family review, 2026-08-26. */
+       cross-family review, 2026-08-26.
+
+       **`any-pointer-coarse` as well, since 2026-09-15**, because `hover: none`
+       asks about the *primary* pointer and a finger is not always it: Chrome on
+       a touchscreen laptop answers `hover: hover`, and the row stayed invisible
+       to the finger tapping it. The question a reveal like this should ask is
+       "is there a finger", which is `any-pointer`. (An iPad is not that case —
+       WebKit pins its primary pointer to touch whatever is attached.)
+       tests/shelf-actions-visible-to-a-finger-in-chrome.test.tsx,
+       docs/plans/260915b-shelf-actions-reachable-on-touch.md. */
     <div
-      className="tw:relative tw:flex tw:shrink-0 tw:items-center tw:gap-0.5 tw:opacity-0 tw:transition-opacity tw:group-hover:opacity-100 tw:group-focus-within:opacity-100 tw:hover-none:opacity-100"
+      className="tw:relative tw:flex tw:shrink-0 tw:items-center tw:gap-0.5 tw:opacity-0 tw:transition-opacity tw:group-hover:opacity-100 tw:group-focus-within:opacity-100 tw:hover-none:opacity-100 tw:any-pointer-coarse:opacity-100"
       onClickCapture={pressCapture}
     >
       <TooltipGroup delay={{ open: 240, close: 90 }} timeoutMs={400}>

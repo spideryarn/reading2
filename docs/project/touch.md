@@ -443,12 +443,20 @@ untapped prose is hiding anything — a `--panel` wash confirms a tap after it h
 advertise one. Shipped on the administrator's own request, with no first-visit hint, and recorded
 here so the next person measures rather than rediscovers.
 
-**A hybrid iPad is untouched by any of this**, and that hole is pre-existing: with a Magic Keyboard
-it reports `hover: hover`, so neither the blanket reveal nor the gated one ever applied to it.
+**An iPad with a Magic Keyboard is *not* a hybrid to these queries**, and this paragraph said it
+was until 2026-09-15. WebKit pins the primary `hover` and `pointer` to touch on iOS whatever is
+attached — *"On iOS, the primary pointer will always be touch input, so the `hover`/`pointer` media
+query should never change"* ([changeset 268086](https://trac.webkit.org/changeset/268086/webkit),
+2020) — and only `any-hover` and `any-pointer` gain `hover` and `fine`. So the gated reveal applies
+on an iPad with or without the keyboard.
+
+**The hybrid that is untouched is a touchscreen laptop**, whose primary pointer is the mouse.
 `(any-pointer: coarse)` is the semantically right query — an interaction rule should ask whether a
 coarse pointer exists, not which one is primary, exactly as the text-field rule above does — but the
 swap is not one token, because on a hybrid a mouse hover and a persisted touch selection need to be
-separate state and `hoveredRow` is one value carrying both.
+separate state and `hoveredRow` is one value carrying both. The shelf's action row made the swap on
+2026-09-15, where it *is* one token —
+[260915b](../plans/260915b-shelf-actions-reachable-on-touch.md).
 
 [260908e-gutter-icons-on-touch-only-when-a-block-is-selected.md](../plans/260908e-gutter-icons-on-touch-only-when-a-block-is-selected.md)
 has the reproduction, the arbitration about which marks are state, and the version that was refused.
