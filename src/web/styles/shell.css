@@ -600,6 +600,7 @@ h1 a:hover { text-decoration: underline; text-decoration-color: var(--highlight)
 td.gist .sticky,
 .spine,
 .mode-band,
+.mode-herald-slot, /* lies over the band's top, so it has to travel with it — mode-band.css § the herald */
 .reader:has(table.zoom.overflowing)::after {
   transition: top 0.18s ease;
 }

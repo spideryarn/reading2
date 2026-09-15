@@ -45,6 +45,7 @@ import {
 } from "../modes/conversation/ConversationModes.js";
 import { askAboutTerm } from "../chat-handoff.js";
 import { MODE_CONTAINMENT, ModeBoundary } from "./ModeBoundary.js";
+import { type HeraldPress, ModeHerald } from "../ModeHerald.js";
 import { TableView } from "../TableView.js";
 import type { SelectionAnchor } from "../selection.js";
 import type { TermSelection } from "../annotate.js";
@@ -348,6 +349,25 @@ export function Reader({
    * the third caller having to guess which one it wanted.
    */
   const bandOpen = inMode && mode !== "plain";
+  /**
+   * **The mode the reader has just pressed, for `ModeHerald` to name.**
+   *
+   * Set in the Dock's `onMode` below and nowhere else, because that is the one
+   * door a press comes through — the Dock's buttons and the command bar both
+   * reach it via `useActivateMode` — and a pasted `?mode=`, a Back step and a
+   * reload do not. The same *a mount is not a click* line activation.ts draws.
+   *
+   * **Component state and not the URL**, which is url-state.md applying rather
+   * than being excepted: the URL is for what a link or a reload should
+   * reproduce, and this is the one thing a reload must not.
+   * docs/plans/260915e-the-mode-names-itself-briefly-when-a-reader-opens-it.md.
+   */
+  const [herald, setHerald] = useState<HeraldPress | null>(null);
+  /* A press whose mode is no longer the one on screen — Back inside the three
+     seconds — is over, rather than waiting to reappear if Forward comes back. */
+  useEffect(() => {
+    if (herald !== null && herald.mode !== mode) setHerald(null);
+  }, [herald, mode]);
 
   /**
    * What stands between a visitor and the mode they have opened, if anything.
@@ -2395,6 +2415,15 @@ export function Reader({
           `POLICY` in visitor.ts says which, so no count lives here. */}
       {band()}
 
+      {/* **Over the top of the band, for three seconds after a press** —
+          ModeHerald.tsx. After the band in source order so it paints above it
+          at the same z-index. Only while a band is open: Plain and Hierarchy
+          have no *"top of the mode column"* to stand on. */}
+      <ModeHerald
+        press={bandOpen && herald !== null && herald.mode === mode ? herald : null}
+        onDone={() => setHerald(null)}
+      />
+
       {/* **The way back from a jump**, drawn only on an entry a jump stamped —
           ReturnChip.tsx, which owns that rule and the words. It takes the
           sections this component already built rather than resolving the
@@ -2415,6 +2444,9 @@ export function Reader({
         mode={mode}
         onMode={(next) => {
           void setMode(next);
+          /* A new nonce every press, so pressing the mode you are in shows it
+             again and a second press restarts the three seconds. */
+          setHerald((prev) => ({ mode: next, nonce: (prev?.nonce ?? 0) + 1 }));
           /* Search draws its results down the rail, so entering search mode
              brings the rail back if the reader had put it away — Greg,
              2026-08-26: *"show the Spine by default when Search mode is

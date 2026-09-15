@@ -161,6 +161,76 @@
   white-space: nowrap;
 }
 
+/* ------------------------------------------------------------ § the herald --
+   **The name the title row gave up, back for three seconds after a press.**
+   The row above lost the mode's name on 2026-09-05 because the Dock says it —
+   and the Dock drops its words whenever its row does not fit, which on an iPad
+   is always, leaving a hover card a finger never sees. Greg, 2026-09-12:
+   *"there's no tooltip, there's no heading, there's no explanation."*
+   src/web/ModeHerald.tsx; docs/plans/260915e-the-mode-names-itself-briefly-when-a-reader-opens-it.md.
+
+   **It lies over the band rather than in it**, so it moves nothing: not the
+   scroller, not a count row, not Search's zero-slack fit. That is also why it
+   is a sibling of `.mode-band` rather than a child — `ModeSurface` adds no DOM,
+   and says why at length.
+
+   **So its geometry is the band's, repeated from the same inputs.** Left, top
+   and width are `.mode-band`'s three at the top of this file, and the width
+   under `.band-covers` is narrow-window.css § a band with no room. Change one of
+   those and change this — and the `top` transition that lets it follow a bar
+   sliding away is in shell.css's one list of those, beside `.mode-band`.
+
+   **Neither the slot nor the card ever takes a tap.** A press meant for what
+   the card covers goes through to it, and ModeHerald.tsx clears the card on any
+   press inside the band — so Search's box, which is its band's first row and is
+   focused on mount, is never behind something that eats the reader's first
+   press at it. GPT Sol's plan review, 2026-09-15. */
+.mode-herald-slot {
+  position: fixed;
+  left: calc(var(--spine-w) + var(--safe-left));
+  top: var(--bar-bottom);
+  width: var(--mode-w);
+  /* Above the band (44) and the spine (45, which it never overlaps), below
+     every dialog (70), the drawer and its scrim (92/95) and the Dock (96). */
+  z-index: 46;
+  pointer-events: none;
+}
+.reader.band-covers .mode-herald-slot {
+  width: calc(100vw - var(--spine-w) - var(--safe-left) - var(--safe-right));
+}
+.mode-herald {
+  padding: 0.55rem 0.7rem 0.6rem;
+  background: var(--panel);
+  border-bottom: 1px solid var(--rule-strong);
+  box-shadow: 0 6px 14px -8px oklch(0 0 0 / 0.45);
+  font-family: var(--font-ui);
+  /* 3s, which is `HERALD_MS`: held for the first 2.5, faded over the last 0.5.
+     The timer in ModeHerald.tsx is what removes it; this is only how it looks
+     on the way, so the two can disagree by a frame and nothing breaks. */
+  animation: mode-herald-fade 3s linear forwards;
+}
+.mode-herald-name {
+  display: block;
+  font-size: 0.98rem; /* `.band-head h2`'s, which is what it stands in for */
+  font-weight: 600;
+  color: var(--ink);
+}
+.mode-herald-what {
+  display: block;
+  margin-top: 0.15rem;
+  font-size: 0.86rem;
+  line-height: 1.35;
+  color: var(--ink-faint);
+}
+@keyframes mode-herald-fade {
+  0%, 83% { opacity: 1; }
+  100% { opacity: 0; }
+}
+/* No fade: it is there, and then it is not, on the same three seconds. */
+@media (prefers-reduced-motion: reduce) {
+  .mode-herald { animation: none; }
+}
+
 .chat-icon {
   display: inline-flex;
   align-items: center;

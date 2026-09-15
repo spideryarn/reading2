@@ -46,6 +46,11 @@ of compression, down the page for position and across for detail. Read that firs
   what Tailwind and shadcn may touch, dark mode, and the full list of constraints.
 - **[new-mode.md](new-mode.md)** — the one checklist for adding a mode: the tables the compiler
   checks, then the residue it does not, for the client and for a generated artefact.
+- **A band names its mode for three seconds after a press, and at no other time** — the name and
+  the catalog's sentence over the top of the band, since the band's own title went and the Dock's
+  words drop on an iPad. No doc of its own;
+  [260915e](../plans/260915e-the-mode-names-itself-briefly-when-a-reader-opens-it.md) and
+  [`ModeHerald.tsx`](../../src/web/ModeHerald.tsx).
 
 ### The article itself
 
