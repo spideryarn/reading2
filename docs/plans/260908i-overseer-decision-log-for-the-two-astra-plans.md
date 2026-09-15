@@ -804,3 +804,9 @@ Production is now de24dac6, built 12:36Z today (Greg's deploy). That carries the
 ### 2026-09-15 16:20 UTC — fb3p landed: the logo animations were drawing into hidden letters
 
 On dev at c85c0276, not deployed. Nothing had been broken for a week except that the reading view's bottom bar hides the word "Spideryarn", so the thirteen animations played into letters nobody could see; they now draw only what is visible, and on an iPad holding the logo plays one. Sol's code review found and fixed four more tap and hover problems. Postmortem `260915c-logo-animations-drew-into-hidden-letters`. Not verified on a real iPad; with Reduce Motion on, most animations finish instantly by design. Two Overseer tests were red in the fresh tree (`overseer-daemon-usage-pass`, `overseer-store-usage`), unrelated to the change; both are on queue item qi-cw6rzavq. Session closed, tree self-removed, qi-x2ggmj65 done.
+
+### 2026-09-15 16:35 UTC — fb3t landed; a removal gap seen three times today
+
+**fb3t** (tapping a search result opened a tooltip that would not close): on dev at 96f46f4a, not deployed. A tap on a result now jumps to the passage; the score card is drawn only from the score. Sol reviewed plan and code and tightened the tests. **Assumption pending Greg:** the card still starts with the fuller passage above the score explanation; making it say only the score is a small change left out because it was not asked for. Queue item qi-8qx67emk done; session closed; tree removed from the primary.
+
+**Removal gap, queued (qi-…, Overseer tier):** fb42, fb40 and fb3t all finished with every commit on `origin/dev` and `worktree:check` saying safe, yet the in-tree `worktree:remove` asked for confirmation because it judged against the primary's stale local `dev`. From the primary after a fetch it removes cleanly every time. The in-tree path should judge against `origin/dev` after a fetch, as the doc promises.
