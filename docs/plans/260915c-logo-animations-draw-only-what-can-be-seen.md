@@ -171,3 +171,23 @@ code back and watching the test go red:
   reading view's wordmark animated and navigated at once. A fresh enter with a button held is not
   a hover.
 - **Docs that still said two hosts.**
+
+### The full suite, once, 2026-09-15
+
+`npm test` through `scripts/tmux-job.ts` on `1904a4f7`: **1,122 files passed, 7 failed, 1
+skipped**. All seven were red again run on their own, so not contention, and none reaches a file
+this change touches (`git diff --name-only origin/dev...HEAD` is the nine files above):
+
+- `cold-start-lazy-imports`, `pdf-bundle-trace` — want `api-dist/`, which a fresh worktree has not
+  built.
+- `fleet-composed-access` wants `tools/fleet/web/dist/assets`; `fleet-decisions-route` and
+  `fleet-reports-route` exit 2 because `tools/fleet/server.ts` refuses to start with no built client.
+- `overseer-daemon-usage-pass` — the Overseer's usage checkpoint, recorded as red on `origin/dev`
+  the same day by report 40 ([260915b](260915b-shelf-actions-reachable-on-touch.md)).
+- `overseer-store-usage` › "an incomplete scan does NOT displace the report already on the
+  checkpoint" — **not on report 40's list**, so a seventh. It is the same keep-the-stored-report
+  behaviour as the one above. It imports only `tools/overseer/daemon.ts` and `store.ts`, which reach
+  none of the nine files, and nothing under `tools/overseer` or either test changed since
+  2026-09-14. Left for the Overseer's owners rather than chased from a logo fix.
+
+The 43 logo tests, doc-links and typecheck were green after the merge of `origin/dev`.
