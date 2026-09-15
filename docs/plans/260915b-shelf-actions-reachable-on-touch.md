@@ -261,6 +261,23 @@ leaves the title as it was. Archive and Re-fetch were not pressed, on real artic
 Chrome, which reports `touch` on the click — so the one check left is a real iPad: tap "⋯", choose
 each item, and start a scroll of the shelf with a finger on a "⋯".
 
+## The full suite
+
+Once, through `scripts/readiness-run.ts test` in tmux, on cd290ff3: **1122 files passed, 6 failed**
+(24,262 tests passed, 5 failed). All six were red again run on their own, so not contention, and none
+is this change's — nothing they load imports `ShelfEntry`, `TitleEditor` or `src/web/tailwind.css`
+(a grep for the paths finds two comments and no imports):
+
+- `cold-start-lazy-imports`, `pdf-bundle-trace` — no `api-dist/` in a fresh worktree; the two
+  `npm run worktree:setup` warns about.
+- `fleet-composed-access`, `fleet-decisions-route`, `fleet-reports-route` — no fleet client build
+  (`no built client at tools/fleet/web/dist — run npm run build:fleet first`).
+- `overseer-daemon-usage-pass` › "`keep-stored` still carries the DISCARDED fresh report" — red on its
+  own, and the same six were recorded independently on `origin/dev` the same day by
+  de24dac6 ("the six reds that are not ours").
+
+After merging `origin/dev`, the six shelf files and doc-links were run again, and typecheck.
+
 ## Wider, and not fixed here
 
 WebKit bug 282988 is not a shelf fact. Every tap rule in the app that reads `pointerType` **off the
