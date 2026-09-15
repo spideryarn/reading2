@@ -113,9 +113,17 @@ function render(entry: LibraryEntry, shelf: Shelf = stubShelf()): void {
   });
 }
 
-/** Every control in the row, in the order they are drawn. */
+/**
+ * Every control in the row, in the order they are drawn.
+ *
+ * **`[data-action]`, not every button in the host**, since 2026-09-15:
+ * `Actions` also renders the "⋯" that stands in for the row wherever there is a
+ * finger, and jsdom applies no media query, so both are in the DOM here.
+ * `ActionTip` marks each of the row's five from its typed id, and the "⋯"
+ * carries no mark. docs/plans/260915b-shelf-actions-reachable-on-touch.md.
+ */
 function controls(): HTMLElement[] {
-  return [...host.querySelectorAll<HTMLElement>("button, a")];
+  return [...host.querySelectorAll<HTMLElement>("[data-action]")];
 }
 
 /** The one whose accessible name starts with this. */

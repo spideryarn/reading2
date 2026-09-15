@@ -125,6 +125,14 @@ const DEVICES = {
 interface Seen {
   /** The effective opacity of the row of five — every ancestor's multiplied in. */
   row: number;
+  /**
+   * Whether the row of five is laid out at all. `display: none`, on itself or
+   * any ancestor, leaves an element with no client rects — which is the one
+   * question opacity cannot answer, since a hidden element keeps its opacity.
+   */
+  rowShown: boolean;
+  /** The same, of the "⋯" that opens the menu of the five. */
+  menuShown: boolean;
   /** The same, of the pencil beside an article page's heading. */
   pencil: number;
   /** The row again, with the (fake, mouse) pointer resting on the card. */
@@ -150,11 +158,14 @@ async function look(device: keyof typeof DEVICES): Promise<Seen> {
           for (let at = el; at; at = at.parentElement) o *= Number(getComputedStyle(at).opacity);
           return o;
         };
+        const shown = (el: Element | null): boolean => (el?.getClientRects().length ?? 0) > 0;
         const first = document.querySelector("#card [data-action]");
         let row = first?.parentElement ?? null;
         while (row && row.querySelectorAll("[data-action]").length < 5) row = row.parentElement;
         return {
           row: visible(row),
+          rowShown: shown(row),
+          menuShown: shown(document.querySelector('#card button[aria-label^="Actions for"]')),
           pencil: visible(document.querySelector('#heading button[aria-label="Edit title"]')),
         };
       });
@@ -169,26 +180,41 @@ async function look(device: keyof typeof DEVICES): Promise<Seen> {
   }
 }
 
+/*
+ * **Stage 2 changed what "there for a finger" means.** Stage 1 asserted the row
+ * of five at opacity 1 under a finger. Since stage 2, wherever there is a finger
+ * (`any-pointer: coarse`) the row is not drawn at all and a "⋯" that opens a
+ * labelled menu of the same five stands in for it — so the finger cases now ask
+ * for the "⋯" shown and the row gone, and the mouse case for the reverse. The
+ * row's opacity is asserted only for the mouse, the one device that still sees
+ * it. The pencil beside an article's heading kept stage 1's rule, so its
+ * assertions are unchanged. docs/plans/260915b-shelf-actions-reachable-on-touch.md
+ * § Design.
+ */
 describe.skipIf(chrome === null)("the shelf's actions, in a browser that evaluates media queries", () => {
   it("are hidden from a mouse until it points at the card — the control", { timeout: 60_000 }, async () => {
     const seen = await look("mouse");
+    expect(seen.rowShown, "a desktop lost the row of five").toBe(true);
+    expect(seen.menuShown, "a desktop with no finger was given the ⋯ menu").toBe(false);
     expect(seen.row, "the row showed at rest on a desktop").toBe(0);
     expect(seen.pencil, "the pencil showed at rest on a desktop").toBe(0);
     expect(seen.rowHovered, "pointing at the card did not reveal the row").toBe(1);
   });
 
-  it("are there at rest for a finger on a tablet", { timeout: 60_000 }, async () => {
+  it("are a ⋯ menu, there at rest, for a finger on a tablet", { timeout: 60_000 }, async () => {
     const seen = await look("finger");
-    expect(seen.row).toBe(1);
+    expect(seen.menuShown, "a tablet showed no ⋯").toBe(true);
+    expect(seen.rowShown, "a tablet was still drawn the unlabelled row").toBe(false);
     expect(seen.pencil).toBe(1);
   });
 
   it(
-    "are there at rest for a finger on a machine whose primary pointer is a mouse",
+    "are a ⋯ menu for a finger on a machine whose primary pointer is a mouse",
     { timeout: 60_000 },
     async () => {
       const seen = await look("finger and mouse");
-      expect(seen.row, "a touchscreen laptop showed no shelf actions to its finger").toBe(1);
+      expect(seen.menuShown, "a touchscreen laptop showed no ⋯ to its finger").toBe(true);
+      expect(seen.rowShown, "a touchscreen laptop was still drawn the unlabelled row").toBe(false);
       expect(seen.pencil, "a touchscreen laptop showed no pencil beside the title").toBe(1);
     },
   );

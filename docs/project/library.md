@@ -173,9 +173,19 @@ The plan, the decisions and what was deliberately left out are in
 Since 2026-09-05 each of the five carries a [`ControlTip`](tooltips.md#controltip-which-is-what-most-of-them-are-now)
 card rather than a `title`, the whole row in one `TooltipGroup`.
 
-**On a finger the first tap reads a control and the second presses it**, because otherwise the tap
-that opens the card is also the tap that archives the article — [touch.md](touch.md), which lists
-this alongside the three other places that reveal before they act.
+**Where there is a finger, the five are a menu of words behind one "⋯"**, since 2026-09-15. Greg
+could not find them on an iPad — five 28px glyphs with no words, drawn on every card at once, read
+as decoration ([260915b](../plans/260915b-shelf-actions-reachable-on-touch.md)). So wherever
+`any-pointer: coarse` matches, the row is not drawn and a 40px "⋯" opens a Radix `DropdownMenu`
+listing the same five by name; an unavailable one is disabled with its reason in the words, and
+"Open the original" is a real link only for a web address. Both presentations call one
+`useShelfActions` hook in [`ShelfEntry.tsx`](../../src/web/ShelfEntry.tsx), so they cannot disagree
+about what an action does, and the table's last column gets the same "⋯".
+
+**Where the row is still drawn, a pen's first tap reads a control and the second presses it** — a
+mouse has no need, and a finger now gets the menu — because otherwise the tap that opens the card is
+also the tap that archives the article. [touch.md](touch.md) lists this alongside the three other
+places that reveal before they act.
 
 ### When a button cannot do its job
 

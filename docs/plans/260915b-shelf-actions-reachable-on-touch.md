@@ -77,10 +77,16 @@ is *actionable* (`isConsideredActionableContent`: a click handler, an image, an 
 tooltip `<div>` is not. Even if it were, the result would be the reveal-then-commit the row already
 does. Not the cause.
 
-### So: the icons were there, and they did not read as the way in
+### So: in the card view the icons would have been there, and they did not read as the way in
 
-In the default card view, on Greg's iPad, five 28px grey glyphs with no words were drawn in the
-corner of every card, and each worked. He did not recognise them as the options he was looking for,
+**Conditional, and worth saying so** (GPT Sol's plan review): the chain — iPadOS matches
+`(hover: none)`, so the row is opaque; cards are the default when there is no `?view=` — is sound,
+but nothing records which view Greg was in. A table view in portrait would have hidden Archive
+behind the scroll. Recognition is the leading explanation, not the only one, and the design below
+answers both.
+
+In the card view, on Greg's iPad, five 28px grey glyphs with no words would have been drawn in the
+corner of every card. He did not recognise them as the options he was looking for,
 which is the one explanation left and the one his own words fit: *"there didn't seem to be a way"*,
 and *"a couple of others that I can't remember"* — a reader who had seen the row would have been
 looking at the others. On a desktop the same row is found by pointing at a card and read one card at
@@ -163,9 +169,12 @@ glyphs do not say what they are, and a list of words does.
   scroll of the shelf would open the menu, and on a tap the list would appear under the finger
   before it lifts. So the trigger takes a finger's press at the *click*, and the decision that it is
   a finger is made at **`pointerdown`, where iOS reports it correctly** — composing our own
-  `onPointerDown` that calls `preventDefault()` for `touch` and `pen` (Radix's composed handler
-  skips itself when the event is already prevented), and an `onClick` that opens the menu if that
-  press was a finger's. A mouse and the keyboard keep Radix's own paths, untouched.
+  `onPointerDown` that calls `preventDefault()` for `touch` and `pen`, and an `onClick` that opens
+  the menu if that press was a finger's. A mouse and the keyboard keep Radix's own paths, untouched.
+  **That Radix then stands aside is read, not assumed**: `composeEventHandlers` in the installed
+  `@radix-ui/primitive` 1.1.7 calls the caller's handler first and runs its own only
+  `if (checkForDefaultPrevented === false || !event || !event.defaultPrevented)`, and the trigger's
+  `onPointerDown` takes the default, which is `true`.
 - **Finger-sized.** The trigger is 40px square on a coarse pointer, the house number for a thumb
   ([narrow-windows.md § What a control owes a finger](../project/narrow-windows.md#what-a-control-owes-a-finger)),
   and the items are at least as tall. The five icons were 28px.
@@ -183,6 +192,24 @@ glyphs do not say what they are, and a list of words does.
   double-tap-to-zoom.
 - **The "⋯" menu everywhere**, desktop included. It would make the desktop consistent with the iPad,
   but nobody asked for the desktop to change, and there the hover row with its cards works.
+
+## What the plan review changed
+
+GPT Sol, read-only, 2026-09-15: no P0 or P1, and the Radix mitigation confirmed sound — preventing a
+pointer event must not suppress `click` (Pointer Events spec), and a click-controlled trigger for
+every input is *not* simpler, because a keyboard's Enter runs Radix's key handler and then generates
+a click, which would need a second suppression rule. Five P2s, all taken:
+
+- **Copy's "Copied" would vanish**, because Radix closes the menu on select. Copy's `onSelect`
+  prevents the close, so the item itself reads "Copied".
+- **The trigger's accessible name is required**, "Actions for <title>", since the menu is
+  portalled away from its card and Radix names it from the trigger.
+- **The finger record lives one gesture**: cleared on `pointercancel`, consumed by the click that
+  reads it, and ignored by a keyboard's click (`detail === 0`) — or a scroll that began on "⋯"
+  would leave a stale "finger" that shuts a keyboard-opened menu.
+- **The diagnosis was stated too strongly** — now conditional on the card view, above.
+- **"Open the original" stays a real anchor** (`asChild`), so modifier-click and "copy link
+  address" survive on a touchscreen laptop, where mice and keyboards meet this menu too.
 
 ## Wider, and not fixed here
 
@@ -217,3 +244,26 @@ change. Written into the report's note for Greg.
    does nothing and says why); the Chrome test extended so a finger sees the "⋯" and not the row and
    a mouse the opposite; library.md and touch.md; a browser pass at iPad size in both views.
 3. **Bookkeeping** — the note in `docs/user-feedback/`, full suite once, GPT Sol code review, push.
+
+### What stage 2 built
+
+`useShelfActions` in [`ShelfEntry.tsx`](../../src/web/ShelfEntry.tsx) holds copy, re-fetch, archive
+and the `hasWebUrl` test, moved out of `Actions` with their comments. `Actions` renders the icon row
+(`any-pointer-coarse:hidden`, replacing stage 1's `any-pointer-coarse:opacity-100`) and
+`ShelfActionsMenu` (`hidden any-pointer-coarse:flex`) side by side, so the card and the table's
+`RowActions` switch together. The menu is Radix `DropdownMenu`: a 40px "⋯" named "Actions for
+<title>", five items at least 40px tall, an unavailable one disabled with `rerunLabel` or the new
+`openLabel` as its words (the row's accessible names use the same functions), "Open the original" an
+anchor only for a web URL, Copy held open so it can read "Copied", and Edit title stopping Radix's
+focus return. The trigger's finger rule is the one § Design and § What the plan review changed
+describe.
+
+- **[`tests/shelf-actions-menu.test.tsx`](../../tests/shelf-actions-menu.test.tsx)**, 17 cases, all
+  red before the component existed. Removing the finger branch of the trigger's `onPointerDown`
+  turns 14 of them red; the three that stay green (the name, a mouse, Enter) do not depend on it.
+- **The Chrome test**: the finger cases now ask for the "⋯" shown and the row gone; red 2 of 3
+  before, with the mouse control green throughout.
+- **One existing test changed**: `tests/shelf-action-tooltips.test.tsx` counted every button in the
+  host, and under jsdom the "⋯" is in the same DOM, so it now counts `[data-action]`.
+
+Not done in this stage: the browser pass at iPad size in both views.

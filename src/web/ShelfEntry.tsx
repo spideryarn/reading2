@@ -13,6 +13,7 @@
 import {
   cloneElement,
   useCallback,
+  useRef,
   useState,
   type Dispatch,
   type MouseEvent as ReactMouseEvent,
@@ -23,6 +24,7 @@ import {
   Archive,
   Check,
   Copy,
+  Ellipsis,
   ExternalLink,
   FileText,
   Globe,
@@ -30,6 +32,7 @@ import {
   Pencil,
   RefreshCw,
 } from "lucide-react";
+import { DropdownMenu } from "radix-ui";
 import { SHARING_BADGE, SHARING_ON } from "../messages.js";
 import type { LibraryEntry } from "../types.js";
 import { isWebUrl } from "../urls.js";
@@ -418,122 +421,19 @@ const TIPS = {
 } as const;
 
 /**
- * The row of buttons.
+ * **What the five actions do, written once for both presentations.**
  *
- * **`opacity`, never `display: none`.** A hidden element is not focusable, so
- * hiding the row until hover would delete it outright for anyone navigating by
- * keyboard — and every check anybody ran with a mouse would look fine.
- * `focus-within` brings it back for exactly that reason.
- *
- * **Five buttons, always five.** Two of them used to be drawn only for an
- * article with a usable source URL, which is right about the action and wrong
- * about the row: the icons moved between cards, and a reader had no way to find
- * out that a button existed, let alone why theirs was missing. So the
- * precondition still decides whether the button *works*, and the card says
- * which of the two absences this is. docs/project/library.md § When a button
- * cannot do its job.
- *
- * **One `TooltipGroup` around the lot**, the DiagramPanel.tsx idiom: once one
- * card is open the neighbours open instantly, so reading along five icons is a
- * scrub rather than five 240ms waits. `keepSide` with it, for the reason
- * Tooltip.tsx § `keepSide` gives about rows specifically — without it a card
- * too wide to centre is thrown onto the cross axis and lands on top of the very
- * buttons the reader is about to hover.
- *
- * **And on a finger, the first tap reads a control and the second presses it**
- * — `pressCapture` below. docs/project/touch.md § Reveal, then commit.
+ * Since 2026-09-15 there are two: the hover-revealed row of icons below, and,
+ * wherever there is a finger, a "⋯" that opens the same five as a menu of words
+ * (`ShelfActionsMenu`). Two presentations over two copies of the handlers is
+ * two places for "what does Copy do" to drift apart — the reasoning this file's
+ * header gives for sharing the row between the card and the table, one level
+ * down. So both call this, and the choice between them is only ever about how
+ * the five are drawn. docs/plans/260915b-shelf-actions-reachable-on-touch.md.
  */
-export function Actions({
-  entry,
-  shelf,
-  onEdit,
-}: {
-  entry: LibraryEntry;
-  shelf: Shelf;
-  onEdit: () => void;
-}) {
+function useShelfActions(entry: LibraryEntry, shelf: Shelf, onEdit: () => void) {
   const [copied, setCopied] = useState(false);
   const [rerunning, setRerunning] = useState(false);
-
-  /**
-   * Which control's card is open, and whether a finger opened it.
-   *
-   * **One piece of state for five controlled tooltips, which is the shape that
-   * took the spine's hover cards away for a day.** Once a tooltip is
-   * controlled, every route Floating UI has to `onOpenChange(false)` becomes a
-   * route into this value — `useDelayGroup` closes every *other* member the
-   * instant one opens, and `useHover`'s close timer fires 90ms behind the
-   * pointer without asking who is open by then. So the close is guarded by
-   * identity in `ActionTip`, and that guard is the whole reason this is safe:
-   * docs/postmortems/260828g-spine-hover-cards.md, whose last paragraph names
-   * this exact situation as the one to watch for.
-   *
-   * `byTouch` decides only whether the card says "tap again" — a mouse reader
-   * is already being told everything by hovering.
-   */
-  const [armed, setArmed] = useState<{ id: ActionKey; byTouch: boolean } | null>(null);
-
-  /**
-   * **The whole touch gesture, in one handler on the row.**
-   *
-   * Capture phase, so it runs *before* the control's own click and can cancel
-   * the press outright — which is what makes one handler enough for five
-   * controls that are not alike. Two of them can be an `IconButton` that
-   * swallows its own click (IconButton.tsx § `disabled`), and one of them is an
-   * `<a>` whose default is to navigate; a per-control design would need a hole
-   * punched in the first and a `preventDefault` threaded through the second.
-   * Here the button goes on refusing its own click and the anchor never sees
-   * the event at all.
-   *
-   * **`pointerType`, not a media query.** `(hover: none)` describes the UA's
-   * *primary* pointer, so a touchscreen laptop would jump on the first tap and
-   * a tablet with a mouse plugged in would need two clicks — both hybrids, both
-   * common, both wrong. This is a fact about *this press*. That is
-   * `bandPress`'s own second version (Spine.tsx), on GPT Sol's correction of
-   * 2026-08-27; optional-chained the same way, because a synthetic click — a
-   * test, an extension — carries no pointer, and the safe reading of "no
-   * pointer" is "not a finger", which presses.
-   *
-   * A mouse therefore takes the `commit` branch every time and the event passes
-   * through untouched, so nothing about pointer behaviour changes.
-   */
-  const pressCapture = useCallback(
-    (e: ReactMouseEvent<HTMLDivElement>) => {
-      const id = actionAt(e.target);
-      if (!id) return;
-      /* **`pen` as well as `touch`**, because docs/project/touch.md § An Apple
-         Pencil counts as a finger says so: iPadOS reports a Pencil as `pen`, it
-         cannot hover any more than a finger can, and `swipe.ts` already accepts
-         both. Taking only `touch` would have left a Pencil committing blind on
-         the one row where the card is the point — and Floating UI treats `pen`
-         as mouse-like, so its own hover would not have opened the card either.
-         GPT Sol, 2026-09-05. */
-      const finger =
-        (e.nativeEvent as PointerEvent).pointerType === "touch" ||
-        (e.nativeEvent as PointerEvent).pointerType === "pen";
-      /* `armed?.id !== id` rather than `armed === null`, so a finger moving
-         along the row re-reveals rather than firing at whatever it lands on —
-         the row can be read by walking it. Spine.tsx § `bandPress`. */
-      if (finger && armed?.id !== id) {
-        e.preventDefault();
-        e.stopPropagation();
-        setArmed({ id, byTouch: true });
-        return;
-      }
-      /* Committing. **Only a card a finger revealed is taken down**, and that
-         distinction is the difference between this changing nothing for a mouse
-         and it changing something: an unconditional clear closes a
-         *hover-opened* card the moment you click Copy, and leaves it closed
-         while the pointer is still sitting on the button — `useHover` has
-         already fired its `mouseenter` and will not fire another. Before these
-         tooltips were controlled, `useDismiss`'s `referencePress: false` meant
-         pressing a trigger never closed its own card, and that is worth
-         preserving. A finger's card, by contrast, has done its job the moment
-         the press it was explaining goes through. GPT Sol, 2026-09-05. */
-      setArmed((prev) => (prev?.byTouch ? null : prev));
-    },
-    [armed],
-  );
 
   const copy = useCallback(() => {
     const url = new URL(readHref(entry.slug), window.location.origin).toString();
@@ -617,8 +517,155 @@ export function Actions({
      "can we fetch it" and "can we link to it" were never two questions. */
   const hasWebUrl = Boolean(entry.url) && isWebUrl(entry.url ?? "");
 
+  const archive = useCallback(() => void shelf.archive(entry.slug), [entry.slug, shelf]);
+
+  return { copied, rerunning, hasWebUrl, copy, rerun, archive, edit: onEdit };
+}
+
+type ShelfActions = ReturnType<typeof useShelfActions>;
+
+/**
+ * The row of buttons.
+ *
+ * **`opacity`, never `display: none`.** A hidden element is not focusable, so
+ * hiding the row until hover would delete it outright for anyone navigating by
+ * keyboard — and every check anybody ran with a mouse would look fine.
+ * `focus-within` brings it back for exactly that reason.
+ *
+ * **Five buttons, always five.** Two of them used to be drawn only for an
+ * article with a usable source URL, which is right about the action and wrong
+ * about the row: the icons moved between cards, and a reader had no way to find
+ * out that a button existed, let alone why theirs was missing. So the
+ * precondition still decides whether the button *works*, and the card says
+ * which of the two absences this is. docs/project/library.md § When a button
+ * cannot do its job.
+ *
+ * **One `TooltipGroup` around the lot**, the DiagramPanel.tsx idiom: once one
+ * card is open the neighbours open instantly, so reading along five icons is a
+ * scrub rather than five 240ms waits. `keepSide` with it, for the reason
+ * Tooltip.tsx § `keepSide` gives about rows specifically — without it a card
+ * too wide to centre is thrown onto the cross axis and lands on top of the very
+ * buttons the reader is about to hover.
+ *
+ * **And on a pen, the first tap reads a control and the second presses it** —
+ * `pressCapture` below. docs/project/touch.md § Reveal, then commit.
+ *
+ * **Where there is a finger, none of this is drawn.** Since 2026-09-15 the row
+ * is `display: none` wherever `any-pointer: coarse` matches, and
+ * `ShelfActionsMenu` — a "⋯" opening the same five as a menu of words — is
+ * drawn in its place; everywhere else, the reverse. Both are always rendered
+ * and the stylesheet shows exactly one, so the switch lives here, in the one
+ * component the card and the table's `RowActions` both render, and both views
+ * get it. That `display: none` does not break the keyboard rule above: on those
+ * devices the "⋯" is the focusable control. Why a finger gets words rather than
+ * glyphs: docs/plans/260915b-shelf-actions-reachable-on-touch.md.
+ */
+export function Actions({
+  entry,
+  shelf,
+  onEdit,
+}: {
+  entry: LibraryEntry;
+  shelf: Shelf;
+  onEdit: () => void;
+}) {
+  const actions = useShelfActions(entry, shelf, onEdit);
+  const { copied, rerunning, hasWebUrl, copy, rerun } = actions;
+
+  /**
+   * Which control's card is open, and whether a finger opened it.
+   *
+   * **One piece of state for five controlled tooltips, which is the shape that
+   * took the spine's hover cards away for a day.** Once a tooltip is
+   * controlled, every route Floating UI has to `onOpenChange(false)` becomes a
+   * route into this value — `useDelayGroup` closes every *other* member the
+   * instant one opens, and `useHover`'s close timer fires 90ms behind the
+   * pointer without asking who is open by then. So the close is guarded by
+   * identity in `ActionTip`, and that guard is the whole reason this is safe:
+   * docs/postmortems/260828g-spine-hover-cards.md, whose last paragraph names
+   * this exact situation as the one to watch for.
+   *
+   * `byTouch` decides only whether the card says "tap again" — a mouse reader
+   * is already being told everything by hovering.
+   */
+  const [armed, setArmed] = useState<{ id: ActionKey; byTouch: boolean } | null>(null);
+
+  /**
+   * **The whole touch gesture, in one handler on the row.**
+   *
+   * Capture phase, so it runs *before* the control's own click and can cancel
+   * the press outright — which is what makes one handler enough for five
+   * controls that are not alike. Two of them can be an `IconButton` that
+   * swallows its own click (IconButton.tsx § `disabled`), and one of them is an
+   * `<a>` whose default is to navigate; a per-control design would need a hole
+   * punched in the first and a `preventDefault` threaded through the second.
+   * Here the button goes on refusing its own click and the anchor never sees
+   * the event at all.
+   *
+   * **`pointerType`, not a media query.** `(hover: none)` describes the UA's
+   * *primary* pointer, so a touchscreen laptop would jump on the first tap and
+   * a tablet with a mouse plugged in would need two clicks — both hybrids, both
+   * common, both wrong. This is a fact about *this press*. That is
+   * `bandPress`'s own second version (Spine.tsx), on GPT Sol's correction of
+   * 2026-08-27; optional-chained the same way, because a synthetic click — a
+   * test, an extension — carries no pointer, and the safe reading of "no
+   * pointer" is "not a finger", which presses.
+   *
+   * A mouse therefore takes the `commit` branch every time and the event passes
+   * through untouched, so nothing about pointer behaviour changes.
+   *
+   * **On an iPad this never ran, which is one reason a finger now gets the menu
+   * instead.** On iOS 18.2 and later a finger's *click* reports `pointerType`
+   * `mouse` — WebKit bug 282988, filed 2024-11, fixed, reopened, still open —
+   * while the same tap's `pointerdown` says `touch`. Reading the click, this took
+   * every tap on an iPad for a mouse's and committed it blind. Since 2026-09-15 a
+   * device with a finger is not drawn this row at all (`ShelfActionsMenu`, whose
+   * trigger decides at `pointerdown` for exactly this reason), and the gesture
+   * remains for a pen on a machine with no touchscreen, where `any-pointer` is
+   * `fine`. Its behaviour is left as it was.
+   * docs/plans/260915b-shelf-actions-reachable-on-touch.md § Diagnosis.
+   */
+  const pressCapture = useCallback(
+    (e: ReactMouseEvent<HTMLDivElement>) => {
+      const id = actionAt(e.target);
+      if (!id) return;
+      /* **`pen` as well as `touch`**, because docs/project/touch.md § An Apple
+         Pencil counts as a finger says so: iPadOS reports a Pencil as `pen`, it
+         cannot hover any more than a finger can, and `swipe.ts` already accepts
+         both. Taking only `touch` would have left a Pencil committing blind on
+         the one row where the card is the point — and Floating UI treats `pen`
+         as mouse-like, so its own hover would not have opened the card either.
+         GPT Sol, 2026-09-05. */
+      const finger =
+        (e.nativeEvent as PointerEvent).pointerType === "touch" ||
+        (e.nativeEvent as PointerEvent).pointerType === "pen";
+      /* `armed?.id !== id` rather than `armed === null`, so a finger moving
+         along the row re-reveals rather than firing at whatever it lands on —
+         the row can be read by walking it. Spine.tsx § `bandPress`. */
+      if (finger && armed?.id !== id) {
+        e.preventDefault();
+        e.stopPropagation();
+        setArmed({ id, byTouch: true });
+        return;
+      }
+      /* Committing. **Only a card a finger revealed is taken down**, and that
+         distinction is the difference between this changing nothing for a mouse
+         and it changing something: an unconditional clear closes a
+         *hover-opened* card the moment you click Copy, and leaves it closed
+         while the pointer is still sitting on the button — `useHover` has
+         already fired its `mouseenter` and will not fire another. Before these
+         tooltips were controlled, `useDismiss`'s `referencePress: false` meant
+         pressing a trigger never closed its own card, and that is worth
+         preserving. A finger's card, by contrast, has done its job the moment
+         the press it was explaining goes through. GPT Sol, 2026-09-05. */
+      setArmed((prev) => (prev?.byTouch ? null : prev));
+    },
+    [armed],
+  );
+
   return (
-    /* `opacity`, never `display: none` — a hidden element is not focusable, so
+    <>
+    {/* `opacity`, never `display: none` — a hidden element is not focusable, so
        hiding the row until hover would delete it outright for anyone navigating
        by keyboard, and every check done with a mouse would look fine.
        `hover-none:opacity-100` is the other half: on a touch screen there is no
@@ -626,16 +673,22 @@ export function Actions({
        controls you cannot see but can press by accident. Caught by a
        cross-family review, 2026-08-26.
 
-       **`any-pointer-coarse` as well, since 2026-09-15**, because `hover: none`
-       asks about the *primary* pointer and a finger is not always it: Chrome on
-       a touchscreen laptop answers `hover: hover`, and the row stayed invisible
-       to the finger tapping it. The question a reveal like this should ask is
-       "is there a finger", which is `any-pointer`. (An iPad is not that case —
+       **Where there is a finger, `display: none` after all — since
+       2026-09-15.** `hover: none` asks about the *primary* pointer and a finger
+       is not always it: Chrome on a touchscreen laptop answers `hover: hover`,
+       and the row stayed invisible to the finger tapping it. The question is
+       "is there a finger", which is `any-pointer` — so stage 1 of the plan
+       below revealed the row to one with `any-pointer-coarse:opacity-100`.
+       Stage 2, the same day, replaced that with `any-pointer-coarse:hidden`,
+       because visible was not enough: five unlabelled glyphs did not say what
+       they were, and on Greg's iPad they read as decoration. `ShelfActionsMenu`
+       stands in there, and it is the focusable control, so the keyboard
+       argument above still holds. (An iPad needs no `any-` to be caught —
        WebKit pins its primary pointer to touch whatever is attached.)
        tests/shelf-actions-visible-to-a-finger-in-chrome.test.tsx,
-       docs/plans/260915b-shelf-actions-reachable-on-touch.md. */
+       docs/plans/260915b-shelf-actions-reachable-on-touch.md. */}
     <div
-      className="tw:relative tw:flex tw:shrink-0 tw:items-center tw:gap-0.5 tw:opacity-0 tw:transition-opacity tw:group-hover:opacity-100 tw:group-focus-within:opacity-100 tw:hover-none:opacity-100 tw:any-pointer-coarse:opacity-100"
+      className="tw:relative tw:flex tw:shrink-0 tw:items-center tw:gap-0.5 tw:opacity-0 tw:transition-opacity tw:group-hover:opacity-100 tw:group-focus-within:opacity-100 tw:hover-none:opacity-100 tw:any-pointer-coarse:hidden"
       onClickCapture={pressCapture}
     >
       <TooltipGroup delay={{ open: 240, close: 90 }} timeoutMs={400}>
@@ -681,7 +734,7 @@ export function Actions({
               // noreferrer as well as noopener: the target should not be told which
               // of the reader's articles linked to it.
               rel="noopener noreferrer"
-              aria-label="Open the original page"
+              aria-label={openLabel(entry, true)}
               /* An `<a>` wearing the button's clothes, so the row does not have a
                  gap in it where the one link sits. Kept in step with `IconButton`
                  by hand — a shared helper would have to take an element
@@ -696,11 +749,7 @@ export function Actions({
                value we would not follow, disabled or otherwise. This one has no
                `href` to disable. */
             <IconButton
-              label={
-                entry.url
-                  ? "Open the original page (the recorded address is not a web page)"
-                  : "Open the original page (no address recorded)"
-              }
+              label={openLabel(entry, false)}
               titled={false}
               disabled
             >
@@ -743,13 +792,15 @@ export function Actions({
           <IconButton
             label="Archive"
             titled={false}
-            onClick={() => void shelf.archive(entry.slug)}
+            onClick={actions.archive}
           >
             <Archive size={14} />
           </IconButton>
         </ActionTip>
       </TooltipGroup>
     </div>
+    <ShelfActionsMenu entry={entry} actions={actions} />
+    </>
   );
 }
 
@@ -758,12 +809,222 @@ export function Actions({
  * carries — a screen reader is given the card as a *description* and may not
  * reach it at all, so the reason an unavailable control is unavailable belongs
  * in the name as well.
+ *
+ * **And the menu's visible words**, since 2026-09-15: `ShelfActionsMenu` draws
+ * this string as its item's text, so the word a finger reads and the name a
+ * screen reader hears on the row are one string and cannot drift.
  */
 function rerunLabel(entry: LibraryEntry, hasWebUrl: boolean, rerunning: boolean): string {
   if (hasWebUrl) return rerunning ? "Queueing…" : "Re-fetch and rebuild";
   return entry.url
     ? "Re-fetch and rebuild (the recorded address cannot be fetched)"
     : "Re-fetch and rebuild (no address recorded)";
+}
+
+/**
+ * "Open the original"'s name, in its three versions — `rerunLabel`'s twin, for
+ * the same two readers: the row's accessible name, and the menu's visible text.
+ * Lifted out of the row's JSX on 2026-09-15 when the menu needed the same words.
+ */
+function openLabel(entry: LibraryEntry, hasWebUrl: boolean): string {
+  if (hasWebUrl) return "Open the original page";
+  return entry.url
+    ? "Open the original page (the recorded address is not a web page)"
+    : "Open the original page (no address recorded)";
+}
+
+/**
+ * One menu item's look: finger-sized, and quiet until it is the one in focus.
+ *
+ * `min-h-10` — 40px, the house number for a thumb
+ * (docs/project/narrow-windows.md § What a control owes a finger); the row's
+ * icons were 28px. `data-highlighted` and `data-disabled` are the attributes
+ * Radix writes, so the item needs no state of its own to know either.
+ */
+const ITEM =
+  "tw:flex tw:min-h-10 tw:cursor-default tw:select-none tw:items-center tw:gap-2.5 tw:rounded-[3px] tw:px-2.5 tw:py-1.5 tw:text-sm tw:leading-snug tw:text-foreground tw:no-underline tw:outline-none tw:data-highlighted:bg-highlight/10 tw:data-disabled:text-muted-foreground";
+
+/**
+ * **The five as a menu of words, behind one "⋯"** — what a device with a finger
+ * is drawn instead of the row. docs/plans/260915b-shelf-actions-reachable-on-touch.md.
+ *
+ * Greg, 2026-09-12, on an iPad: *"there didn't seem to be a way to access them
+ * … add a drop-down button to display them"*. The row was there; five grey
+ * glyphs with no words did not say they were the options he was looking for. A
+ * list of words does, and that is also why nothing here reveals before it acts:
+ * the label *is* the explanation, and Archive's Undo strip is the confirmation
+ * it has always had.
+ *
+ * **Radix `DropdownMenu`**, from the `radix-ui` package the shelf already takes
+ * `RadioGroup` from, for the parts that are easy to get wrong by hand: dismissal
+ * by Escape and by a tap outside, focus into the list and back, arrow keys, a
+ * portal so the list is not under the card's stretched link, and flipping at
+ * the screen's edge.
+ *
+ * **An unavailable item is drawn, disabled, with its reason in its words** —
+ * `rerunLabel` and `openLabel`, the strings the row's buttons are named with.
+ * And "Open the original" is an `<a>` only for a web address: there must be no
+ * anchor whose `href` is a value we would not follow (library.md § When a
+ * button cannot do its job). A real anchor, through `asChild`, so ⌘-click and
+ * "copy link address" survive on a touchscreen laptop, where a mouse meets this
+ * menu too. GPT Sol, 2026-09-15.
+ */
+function ShelfActionsMenu({ entry, actions }: { entry: LibraryEntry; actions: ShelfActions }) {
+  const { copied, rerunning, hasWebUrl, copy, rerun, archive, edit } = actions;
+  const [open, setOpen] = useState(false);
+
+  /**
+   * **Whether the press now under way is a finger's** — recorded at
+   * `pointerdown`, and good for one gesture.
+   *
+   * Radix's trigger toggles on `pointerdown` for every pointer type, which is
+   * right for a mouse and wrong for a finger: a finger that lands on "⋯" at the
+   * start of a scroll of the shelf would open the menu, and a tap would draw the
+   * list under the finger before it lifts. So a finger's press is taken at the
+   * click — which is the browser's own verdict that this was a tap and not a
+   * scroll.
+   *
+   * **Decided at `pointerdown`, never read off the click**, because on iOS 18.2
+   * and later a finger's click reports `pointerType` `mouse` (WebKit bug 282988)
+   * while its `pointerdown` says `touch`. That bug is what stopped
+   * `pressCapture` working on an iPad; this is the shape of the fix.
+   *
+   * **One gesture's lifetime**, GPT Sol's plan review: cleared by
+   * `pointercancel` (the browser took the press for a scroll), consumed by the
+   * click that reads it, and ignored by a keyboard's click — `detail === 0` —
+   * because Enter and Space have already toggled the menu through Radix's own
+   * key handler, and a "finger" left over from an earlier scroll must not toggle
+   * it shut again. tests/shelf-actions-menu.test.tsx has a case for each.
+   */
+  const fingerPress = useRef(false);
+
+  /**
+   * Set when Edit title is chosen, so Radix does not hand focus back to the
+   * trigger when the menu closes. On a card the trigger is gone by then — the
+   * card draws `TitleEditor` where the actions were — and in the table, where it
+   * survives, focus returned to it would be taken from the editor. Either way
+   * the editor, which focuses itself, should keep it.
+   */
+  const editing = useRef(false);
+
+  return (
+    /* `relative`, so the trigger sits above the card's stretched title link and
+       a tap on it is not a tap on the article. `hidden` unless there is a
+       finger — the other half of the switch in `Actions`. */
+    <div className="tw:relative tw:hidden tw:shrink-0 tw:any-pointer-coarse:flex">
+      <DropdownMenu.Root open={open} onOpenChange={setOpen}>
+        <DropdownMenu.Trigger
+          /* Required, not decoration: the menu is portalled away from its card,
+             Radix names it from this, and it is the only place the article's
+             title reaches it. GPT Sol, 2026-09-15. */
+          aria-label={`Actions for ${entry.title}`}
+          onPointerDown={(e) => {
+            fingerPress.current = e.pointerType === "touch" || e.pointerType === "pen";
+            /* `preventDefault` is what makes Radix stand aside: its
+               `composeEventHandlers` runs ours first and skips its own toggle
+               when the event comes back prevented (@radix-ui/primitive 1.1.7).
+               It does not suppress the click that follows — the Pointer Events
+               spec keeps the two apart — and that click is where we open. */
+            if (fingerPress.current) e.preventDefault();
+          }}
+          onPointerCancel={() => {
+            fingerPress.current = false;
+          }}
+          onClick={(e) => {
+            const finger = fingerPress.current;
+            fingerPress.current = false;
+            if (finger && e.detail !== 0) setOpen((v) => !v);
+          }}
+          className="tw:relative tw:inline-flex tw:size-10 tw:items-center tw:justify-center tw:rounded-md tw:text-muted-foreground tw:transition-colors tw:hover:bg-highlight/10 tw:hover:text-foreground tw:data-[state=open]:bg-highlight/10 tw:data-[state=open]:text-foreground"
+        >
+          <Ellipsis size={18} aria-hidden="true" />
+        </DropdownMenu.Trigger>
+        <DropdownMenu.Portal>
+          <DropdownMenu.Content
+            align="end"
+            sideOffset={4}
+            collisionPadding={10}
+            onCloseAutoFocus={(e) => {
+              if (!editing.current) return;
+              editing.current = false;
+              e.preventDefault();
+            }}
+            /* The tooltip card's surface (styles/tooltip.css § .tooltip) in its
+               tokens — raised, opaque, the strong rule, the same shadow —
+               because this is the same kind of thing, drawn over the shelf.
+               `z-[100]` for the reason `.tooltip-anchor` gives: frontmost,
+               drawer included. Radix copies the content's z-index onto the
+               wrapper it positions. */
+            className="tw:z-[100] tw:min-w-[13rem] tw:max-w-[min(22rem,calc(100vw-1.75rem))] tw:rounded-[5px] tw:border tw:border-rule-strong tw:bg-surface-raised tw:p-1 tw:shadow-[0_1px_2px_rgb(0_0_0/0.5),0_8px_24px_-6px_rgb(0_0_0/0.65)]"
+          >
+            <DropdownMenu.Item
+              className={ITEM}
+              onSelect={() => {
+                editing.current = true;
+                edit();
+              }}
+            >
+              <Pencil size={16} aria-hidden="true" className="tw:shrink-0" />
+              <span>Edit title</span>
+            </DropdownMenu.Item>
+
+            <DropdownMenu.Item
+              className={ITEM}
+              disabled={!hasWebUrl || rerunning}
+              onSelect={() => void rerun()}
+            >
+              <RefreshCw
+                size={16}
+                aria-hidden="true"
+                className={`tw:shrink-0${rerunning ? " cmt-spinner" : ""}`}
+              />
+              <span>{rerunLabel(entry, hasWebUrl, rerunning)}</span>
+            </DropdownMenu.Item>
+
+            {hasWebUrl ? (
+              <DropdownMenu.Item className={ITEM} asChild>
+                {/* noreferrer as well as noopener, as on the row: the site is
+                    not told which of the reader's articles pointed at it. */}
+                <a href={entry.url} target="_blank" rel="noopener noreferrer">
+                  <ExternalLink size={16} aria-hidden="true" className="tw:shrink-0" />
+                  <span>{openLabel(entry, true)}</span>
+                </a>
+              </DropdownMenu.Item>
+            ) : (
+              <DropdownMenu.Item className={ITEM} disabled>
+                <ExternalLink size={16} aria-hidden="true" className="tw:shrink-0" />
+                <span>{openLabel(entry, false)}</span>
+              </DropdownMenu.Item>
+            )}
+
+            {/* **Stays open when chosen**, GPT Sol's plan review: Radix closes
+                a menu on select, and the confirmation is this item's own
+                "Copied" — a menu that shut at once would take it along. The
+                reader dismisses it, as they would any menu. */}
+            <DropdownMenu.Item
+              className={ITEM}
+              onSelect={(e) => {
+                e.preventDefault();
+                copy();
+              }}
+            >
+              {copied ? (
+                <Check size={16} aria-hidden="true" className="tw:shrink-0 tw:text-highlight" />
+              ) : (
+                <Copy size={16} aria-hidden="true" className="tw:shrink-0" />
+              )}
+              <span>{copied ? "Copied" : "Copy link"}</span>
+            </DropdownMenu.Item>
+
+            <DropdownMenu.Item className={ITEM} onSelect={archive}>
+              <Archive size={16} aria-hidden="true" className="tw:shrink-0" />
+              <span>Archive</span>
+            </DropdownMenu.Item>
+          </DropdownMenu.Content>
+        </DropdownMenu.Portal>
+      </DropdownMenu.Root>
+    </div>
+  );
 }
 
 /**

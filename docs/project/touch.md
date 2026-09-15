@@ -133,6 +133,17 @@ no hover has to let the first press mean *show me* or the reader commits blind.
   [260828g](../postmortems/260828g-spine-hover-cards.md) ends by warning about — nine of that
   change's eleven tests go red if the identity guard on the close is removed.
 
+  **Since 2026-09-15 a finger does not meet this row at all.** Wherever there is one
+  (`any-pointer: coarse`) the row is not drawn, and a "⋯" opens the five as a menu of words, which
+  needs no reveal because the label is the explanation
+  ([260915b](../plans/260915b-shelf-actions-reachable-on-touch.md)). Two reasons: on an iPad the
+  unlabelled row was not recognised as the way in, and on iOS 18.2 and later a finger's *click*
+  reports `pointerType` `mouse` ([WebKit bug 282988](https://bugs.webkit.org/show_bug.cgi?id=282988)),
+  so the reveal above, which reads it off the click, never ran there. The row keeps it for a pen on
+  a machine with no touchscreen. The "⋯" itself decides finger-or-mouse at `pointerdown`, which iOS
+  reports correctly, and opens a finger's menu at the click: Radix's trigger would open it at the
+  press, under the finger, at the start of a scroll.
+
 ## Why the prose is untouched
 
 This is the load-bearing decision, and it came out of the research rather than out of caution.
