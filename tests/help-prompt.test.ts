@@ -128,14 +128,17 @@ describe("what the addendum says", () => {
      refused on 09-04, "explain this and surrounding blocks".
 
      What this pins is that both reaches are present — an insertion/removal
-     detector. It cannot see whether the line sets a bounded window, or whether
-     it pulls the answer towards the article alone; those are judgments about
-     copy, made in src/converse.ts § helpSection (GPT Sol, plan review). */
-  it("keeps both reaches: past the passage, near and far", () => {
+     detector — and that they are not presented as the whole answer space:
+     context the article leaves unstated remains possible. It cannot see whether
+     the line sets a bounded window, or whether it pulls the answer towards the
+     article alone; those are judgments about copy, made in src/converse.ts
+     § helpSection (GPT Sol, plan and code review). */
+  it("keeps both reaches without making them exhaustive", () => {
     const text = finalUser(help());
     expect(text).toContain("the starting point, not a boundary");
     expect(text).toContain("around it");
     expect(text).toContain("somewhere earlier");
+    expect(text).toContain("left unstated");
     expect(text.toLowerCase()).not.toContain("surrounding");
   });
 

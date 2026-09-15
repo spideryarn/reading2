@@ -37,19 +37,20 @@ now `help: true` on the message row, and the server adds `helpSection()` in
    the passage, the thing around it, or something earlier.
 2. **The two reaches move into `helpSection`**, where instructions to the model belong and the
    reader never has to read them. One new bullet:
-   *"Treat this passage as the starting point, not a boundary: what makes it understandable may be
-   in what's around it, or somewhere earlier."* It sets no **bounded** window (it does name a
-   vicinity, as "around it" always did), and it deliberately does not say *in the article*: the
-   addendum is source-neutral, because `SYSTEM` owns the rule about reaching for the web
-   (`tests/help-prompt.test.ts § says nothing at all about where the answer comes from`). This keeps
-   both of Greg's earlier asks rather than dropping them for brevity.
+   *"Treat this passage as the starting point, not a boundary: the needed context may be around it,
+   somewhere earlier, or left unstated."* It sets no **bounded** window (it does name a vicinity,
+   as "around it" always did), and `left unstated` keeps those two article locations from reading as
+   the whole answer space. It deliberately names no source: `SYSTEM` owns the rule about reaching
+   for the web (`tests/help-prompt.test.ts § says nothing at all about where the answer comes from`).
+   This keeps both of Greg's earlier asks rather than dropping them for brevity.
 3. **Tests.** `tests/help-sends-once.test.tsx § keeps both directions…` pinned the reach in the
    reader's sentence (`"around it"`, `"somewhere earlier"`, `/^I /`). It is rewritten to pin the new
    division: the reader's sentence is exactly `"Help me understand."`, and
    `tests/help-prompt.test.ts § what the addendum says` gains the assertion that the addendum
-   carries both reaches and does not say "surrounding". Both written first and seen red (a first
-   draft of the sentence test checked only shape — five words, no dash — and was tightened to the
-   exact words on review).
+   carries both reaches, leaves room for context the passage does not state, and does not say
+   "surrounding". Both written first and seen red (a first draft of the sentence test checked only
+   shape — five words, no dash — and was tightened to the exact words on review; code review added
+   the non-exhaustive-context assertion and saw it red too).
 4. **The web-reach eval** (`evals/chat-web-reach.ts`) imports `HELP_QUESTION` for its `help` case,
    so its stimulus changes with this: a comparison against the 2026-09-13 results now moves two
    variables at once, the reader's words and the addendum. Recorded here as a baseline
