@@ -3,6 +3,8 @@
 Sentry `SPIDERYARN-READING2-3T`, 2026-09-12 10:48Z, from an admin (Greg), so trusted input. Overseer
 queue item `qi-8qx67emk`.
 
+**Status as of 2026-09-15: built in `4b512dae`; review fixes and final checks are recorded below.**
+
 > When I click on an entry, like one of the Search results, it shows me a rich explanatory tooltip
 > that doesn't seem to go away, and it's just too intrusive. I think it should only show that rich
 > tooltip (that explains what the bar and the score is) if I click on the bar and the score, not on
@@ -101,4 +103,21 @@ written red first against the current code:
 
 ## Results
 
-*(filled in at the end of each stage)*
+- The reproduction test was red against the old code: five search-row cases failed because pressing
+  the words opened the card, focusing the words opened it, the gutter opened nothing, and pressing
+  the gutter jumped.
+- Before review, the focused four-file run passed 38 tests, `npm run typecheck` exited 0, and Biome
+  reported no findings in the two changed TSX files.
+- In Chrome, both touch and mouse checks separated the actions: the words jumped without a card;
+  the full-height gutter opened one without jumping; pointer leave and an outside press closed it.
+  The touch checks used CDP touch events rather than synthetic DOM events.
+- The code review found no P0/P1 implementation defect. It strengthened the tests around the two
+  buttons' accessibility contract and around pointer-leave after a mouse press. Each of the four
+  requested mutations made the focused test fail before it was restored.
+- After review, the focused four-file run again passed 38 tests (exit 0), and Biome on the two TSX
+  files exited 0. The sandbox refused `npm run typecheck` at tsx's local IPC socket (exit 1);
+  `node --import tsx scripts/typecheck.ts`, the same script without that CLI socket, checked all four
+  TypeScript projects successfully (exit 0). `npm test` was also attempted and stopped before the
+  suites because this sandbox cannot connect to the local Postgres service (exit 1).
+- Outside the reviewer's sandbox, on the reviewed tree: the same four files passed 38 tests (exit 0)
+  and the real `npm run typecheck` exited 0.

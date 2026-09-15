@@ -40,6 +40,12 @@ const RUN: SavedSearch = {
   stale: false,
 };
 
+const OTHER_RUN: SavedSearch = {
+  ...RUN,
+  id: "spya-runzz9",
+  criterion: "where recall fails despite reinstatement",
+};
+
 const HIT: Found = {
   key: "spya-hitaa1:0",
   blockId: "spya-hitaa1" as BlockId,
@@ -67,7 +73,13 @@ async function render(node: ReactNode): Promise<void> {
   });
 }
 
-async function mountPanel(): Promise<void> {
+async function mountPanel({
+  openKey = null,
+  runs = [RUN],
+}: {
+  openKey?: string | null;
+  runs?: SavedSearch[];
+} = {}): Promise<void> {
   await render(
     <SearchPanel
       access={{
@@ -84,9 +96,9 @@ async function mountPanel(): Promise<void> {
       onMatcher={() => {}}
       find={null}
       onFind={() => {}}
-      runs={[RUN]}
-      active={[RUN.id]}
-      slots={assignSlots([RUN])}
+      runs={runs}
+      active={runs.map((run) => run.id)}
+      slots={assignSlots(runs)}
       onToggle={() => {}}
       onSolo={() => {}}
       onToggleAll={() => {}}
@@ -97,7 +109,7 @@ async function mountPanel(): Promise<void> {
       gate={0}
       gateMoved={false}
       onGate={() => {}}
-      openKey={null}
+      openKey={openKey}
       onOpen={(key) => jumps.push(key)}
     />,
   );
@@ -204,10 +216,41 @@ describe("a search result's card", () => {
   });
 
   it("has a name that says the numbers, for a reader who never opens the card", async () => {
-    await mountPanel();
-    const name = gutter().getAttribute("aria-label") ?? "";
-    expect(name).toContain("72 out of 100");
-    expect(name).toContain("40% of the way through the article");
+    await mountPanel({ openKey: HIT.key, runs: [RUN, OTHER_RUN] });
+    const hit = container.querySelector<HTMLElement>(".srch-hit");
+    if (!hit) throw new Error("no result row drawn");
+    const buttons = [...hit.querySelectorAll<HTMLButtonElement>(":scope > button")];
+
+    /* The source order is the tab order: first the left-hand score, then the
+       words. Both are native buttons and neither needs a tabindex override. */
+    expect(buttons).toHaveLength(2);
+    expect(buttons.map((button) => button.className)).toEqual(["srch-gutter", "srch-hit-btn"]);
+    expect(buttons.map((button) => button.tabIndex)).toEqual([0, 0]);
+
+    const score = buttons[0]!;
+    expect(score.getAttribute("aria-label")).toBe(
+      "About this match: found by where the context is reinstated, " +
+        "the model's confidence 72 out of 100, 40% of the way through the article",
+    );
+    expect(score.getAttribute("aria-expanded")).toBe("false");
+    const marks = [...score.querySelectorAll(".srch-hit-dot, .srch-conf, .srch-place")];
+    expect(marks).toHaveLength(3);
+    expect(marks.map((mark) => mark.getAttribute("aria-hidden"))).toEqual([
+      "true",
+      "true",
+      "true",
+    ]);
+
+    const words = buttons[1]!;
+    expect(words.getAttribute("aria-current")).toBe("true");
+    expect(words.getAttribute("aria-label")).toBeNull();
+    expect(words.textContent).toContain(HIT.short);
+    expect(words.textContent).not.toContain("72");
+    expect(words.textContent).not.toContain("40%");
+
+    await act(async () => score.click());
+    await wait();
+    expect(score.getAttribute("aria-expanded")).toBe("true");
   });
 
   it("opens from a tap on the score with no hover before it — the touch route", async () => {
@@ -236,10 +279,9 @@ describe("a search result's card closes", () => {
     expect(hitCards(), "the card should be open to begin with").toHaveLength(1);
   }
 
-  it("when the pointer leaves the score", async () => {
+  it("when the pointer leaves the score after pressing it", async () => {
     await mountPanel();
-    gutter().dispatchEvent(new MouseEvent("mouseenter"));
-    await wait();
+    await pointerPress(gutter(), gutter());
     expect(hitCards()).toHaveLength(1);
     gutter().dispatchEvent(new MouseEvent("mouseleave"));
     gutter().dispatchEvent(new MouseEvent("mouseout", { bubbles: true, relatedTarget: document.body }));
