@@ -34,10 +34,12 @@ Code: [`src/search.ts`](../../src/search.ts) (the model call),
  │  ▇▇          │ └──────────────────────┘ │ ┃He rejects the idea that mind is │
  │  ▇▇▇▇        │  ( words ) ( ●MEANING )  │ ┃▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂ │
  │              │ ──────────────────────── │ ┃software running on wet hardware,│
- │  the spine —  │  3 passages   by place ▾ │ ┃▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂         │
- │  where you   │  ▐62▌how sure ▬▭ where   │ ┃and the reason is not squeamish- │
- │  are, and it │                          │ ┃ness about carbon.               │
- │  never moves │  ▐92▌ …mind is software  │                                   │
+ │  the spine —  │  3 passages [prioritised]│ ┃▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂         │
+ │  where you   │  confidence 30 · 3 of 3  │ ┃and the reason is not squeamish- │
+ │  are, and it │  ●─────────────────────  │ ┃ness about carbon.               │
+ │  never moves │  Nothing is hidden.      │                                   │
+ │              │  ▐62▌how sure ▬▭ where   │                                   │
+ │              │  ▐92▌ …mind is software  │                                   │
  │              │  ▬▭▭▭ running on wet…    │  Living things are self-maintain- │
  │              │       Answers the func-  │  ing in a way a chip is not.      │
  │              │       tionalist claim    │                                   │
@@ -767,14 +769,16 @@ half a feature drawn somewhere they cannot see. The pill is one press away.
 > — Greg, 2026-08-26
 
 A third option beside *by place* and *by confidence*. It sorts exactly as *by place* does and
-**hides** every passage the model was less than `?conf=` sure of — 50 to start with, on a slider.
-50 is the midpoint of the scale the rows already print, and is chosen for that and not because it
-means *more likely than not*: this confidence is
+**hides** every passage the model was less than `?conf=` sure of — 30 to start with, on a slider.
+It was 50, the midpoint of the scale the rows print, until 2026-09-15, when this order became the
+default and every prioritised bar in the app was lowered so that most entries come in (below). 30
+is chosen so that a hit the model rated *worth a look* is not hidden by default — and not because
+any number here means *more likely than not*: this confidence is
 [not a probability](#what-the-number-means-which-printing-it-does-not-say), and a starting position
 described as one would be the flattering reading the hover card was rewritten to avoid.
 
-**It hid where the glossary grouped, and since 2026-09-03 all three thresholds hide.** This one was
-the odd one out and is now the model the other two follow —
+**It hid where the glossary grouped, and since 2026-09-03 the three numeric thresholds that existed
+then all hide.** This one was the odd one out and became the model the others follow —
 [glossary.md § It hides what is below it](glossary.md#it-hides-what-is-below-it-since-2026-09-03)
 has Greg's words and the shared rule, [`src/web/threshold.ts`](../../src/web/threshold.ts). What
 changed with them is that this panel gained the **foot line** saying how many are hidden, which it
@@ -834,11 +838,31 @@ the count on screen, the foot line in every state including none and all, and a 
 appears once there is something to reset. Its track is the exception — a fixed 0–100, because that
 is the unit the rows print, where the glossary's ends where its data does.
 
-**Not the default**, and it stayed that way when the glossary started hiding too. The reason given
-in 2026-08-26 was that the glossary's default only reordered while this one would hide; since
-2026-09-03 both hide, and what is left is the better half of it anyway — **a reader who has not
-asked for a filter should not have results kept from them.** A glossary is a list of the article's
-terms, there before the reader asked anything; these are the answer to a question they just typed.
+**The default since 2026-09-15**, on Greg's instruction:
+
+> Make prioritized the default submode for search.
+>
+> — Greg, 2026-09-12
+
+This section used to argue the opposite, and the argument is worth keeping next to its reversal. It
+said **a reader who has not asked for a filter should not have results kept from them** — a
+glossary is a list of the article's terms, there before the reader asked anything, while these are
+the answer to a question they just typed. What answers it is the bar's new starting position rather
+than the order: at 30, on the local runs, the default hides nothing at all, because the prompt
+already tells the model to leave weak matches out. So a reader opens on the place-ordered list they
+had before, with the slider and its foot line beside it. Search is deliberately the one prioritised
+bar set *below* "most, not all" — [the plan](../plans/260915d-prioritised-by-default-in-search-and-lower-default-thresholds-everywhere.md)
+has the measurement and the reasoning.
+
+Two consequences, both accepted there:
+
+- **A link with no `?order=` changes meaning.** nuqs leaves a default out of the URL, so every link
+  written while *by place* was the default carries no `?order=`, and now opens prioritised. An
+  explicit `?order=document` still means place order with nothing hidden.
+- **A leftover `?conf=` wakes up.** A reader who chose prioritised, dragged the bar, then went back to
+  *by place* left `?conf=` in the URL, where it filtered nothing; the same link now filters at that
+  value. The bar is on screen saying what it hides, and nothing in an old URL tells it apart from a
+  new one, so this is not migrated. `tests/search-opens-prioritised.test.tsx` pins it.
 
 ### What this removed
 
@@ -876,7 +900,7 @@ rather than one feature. The division: `match` says which matcher, and then exac
 | `find` | any string | replace, debounced 200ms | Written on every keystroke. A Back button that walked back through a half-typed word one letter at a time would be useless — same call `?at=` makes |
 | `runs` | comma-separated minted ids | replace | Which saved searches are switched on. Ticking one while you read is browsing; `mode` already put the entry on the stack Back should use |
 | `run` | a minted id | replace | **Read, never written.** The single-search spelling from before 2026-08-26, kept so the links already in the world still open the search they name |
-| `order` | `document` (default), `confidence`, `prioritised` | push | Changing the order of a list is a deliberate act on the view |
+| `order` | `document`, `confidence`, `prioritised` (default since 2026-09-15) | push | Changing the order of a list is a deliberate act on the view |
 | `conf` | `0`–`100` integer, **no default** | replace, debounced 200ms | Where the prioritised bar sits. Dragged, so the same call `find` makes; absent has to keep meaning *nobody has touched it* |
 
 ### `runs` and the singular `run` it replaced

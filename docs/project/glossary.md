@@ -26,9 +26,9 @@ until you know what they are for.
  │  ▇▇▇        │ order [prioritised] │   explanation of what it│
  │  ▇▇▇▇▇▇▇    │   first use hardest │   ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈   │
  │  ▇▇         ├─────────────────────┤   is like to be an      │
- │  ▇▇▇▇       │ threshold 0·30 · 6 of 24  organism …          │
+ │  ▇▇▇▇       │ threshold 0·10 · 21 of 24 organism …          │
  │             │ ──────●────────────  ← the bar, and the       │
- │             │ 18 terms are hidden    reader's hand on it    │
+ │             │ 3 terms are hidden     reader's hand on it    │
  │             │ by this threshold.  │                         │
  │             │ Drag the slider left│                         │
  │             │ to show them.       │                         │
@@ -955,8 +955,8 @@ disobey.
 what each does when it is wrong. An absolute gate that misfires degenerates to plain first-use order.
 A relative one would keep exactly a third on screen whatever the scores said — inventing a ranking that is
 not in the data and putting a confident label over it, which is the failure this whole feature has
-been shaped to avoid. Its starting value is a guess; on `data/writes` it leaves two terms of eleven
-on screen.
+been shaped to avoid. Its starting value was a guess, `0.30`, which on `data/writes` left two terms
+of eleven on screen; since 2026-09-15 it is `0.10`, measured (below).
 
 ### The threshold, and whose it is
 
@@ -967,9 +967,24 @@ Greg turned it into a control:
 >
 > — Greg, 2026-08-26
 
-So `0.30` is now a **starting position rather than a verdict**, `?gate=` carries wherever the reader
-moved it, and the last number this feature decided on the reader's behalf is theirs. Four things
-about it are decisions rather than details:
+So the number is a **starting position rather than a verdict**, `?gate=` carries wherever the reader
+moved it, and the last number this feature decided on the reader's behalf is theirs.
+
+**The starting position is `0.10`, lowered from `0.30` on 2026-09-15** at Greg's request that every
+prioritised bar let most entries in by default:
+
+> We have a few different modes that involve a prioritized submode with a kind of thresholding.
+> Let's set the threshold lower, i.e. more permissive, so that for all of these different modes,
+> most of the entries are coming in by default.
+>
+> — Greg, 2026-09-12
+
+At `0.30` a typical glossary opened on about a third of its terms; at `0.10` the thirteen local
+glossaries show 87% on average and all of them on the median one, while the weakest tail is still
+held back. The measurement, and the same change to the other three bars, is
+[260915d](../plans/260915d-prioritised-by-default-in-search-and-lower-default-thresholds-everywhere.md).
+
+Four things about the slider are decisions rather than details:
 
 - **The track ends where the data does**, not at 1.00. Real products cluster low — two scores of 0.7
   make 0.49 — so a fixed 0–1 track would be two thirds dead and every glossary would be adjusted in
@@ -982,8 +997,8 @@ about it are decisions rather than details:
   *different* reason teaches the reader nothing, and an empty list under a bar is otherwise
   ambiguous between *there is nothing here* and *you have hidden it all* —
   [silent-success](../reusable/silent-success.md), which this codebase keeps catching itself in.
-  `hiddenNote` in [`src/web/threshold.ts`](../../src/web/threshold.ts) writes it for all three
-  sliders.
+  `hiddenNote` in [`src/web/threshold.ts`](../../src/web/threshold.ts) writes it for all four
+  numeric sliders — this one, Quotes, Search and Citations — and for Debate's categorical bar.
 - **The order no longer cancels itself just because the bar hides nothing.** It used to. The slider
   reverses that argument twice over: cancelling would take the slider away with it and strand the
   reader mid-adjustment, and a list with nothing hidden here is not silent — the bar is on screen

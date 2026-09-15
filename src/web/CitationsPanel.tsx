@@ -49,12 +49,15 @@ import { applyThreshold, hiddenNote, type ThresholdResult } from "./threshold.js
 /**
  * The bar's **starting** position on `(2 × relevance + influence) / 3`.
  *
- * Measured, not chosen: on stage 1's real runs the median was 0.37 on both long
- * articles and 0.48 on the blog post, so 0.40 shows about half of a long list
- * (23 of 57, 39 of 80) and 6 of 8 on the short one. `?citebar=` overrides it.
- * docs/plans/260911g-citations-mode.md § Progress.
+ * **`0.25`, lowered from `0.40` on 2026-09-15**, at Greg's request that every
+ * prioritised bar let most entries in by default. `0.40` was set from stage 1's
+ * runs to show about half of a long list (docs/plans/260911g-citations-mode.md
+ * § Progress); across the four local citation lists it showed 46% on average,
+ * and `0.25` shows 92% (90% on the median list) while still holding the weakest
+ * tail back. `?citebar=` overrides it.
+ * docs/plans/260915d-prioritised-by-default-in-search-and-lower-default-thresholds-everywhere.md.
  */
-export const CITATION_BAR_DEFAULT = 0.4;
+export const CITATION_BAR_DEFAULT = 0.25;
 
 /**
  * What the bar thresholds on: two parts relevance to one part influence, **both

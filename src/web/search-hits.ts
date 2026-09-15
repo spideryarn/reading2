@@ -1046,9 +1046,10 @@ export function orderFound(found: Found[], order: HitOrder): Found[] {
    > threshold slider to the UI
 
    It is the glossary's prioritised order, and since 2026-09-03 it is that
-   without qualification: **all three thresholds hide what is below them and
-   say how many.** The shared rule is in threshold.ts, and this file keeps only
-   the unit (0–100 confidence), the track and the copy.
+   without qualification: **the three numeric thresholds that existed then all
+   hide what is below them and say how many.** Later threshold modes inherited
+   the shared rule in threshold.ts; this file keeps only the unit (0–100
+   confidence), the track and the copy.
 
    **This comment used to argue the opposite, and the reversal is worth
    naming.** It said *"the glossary groups; this hides"* — that a glossary is a
@@ -1082,14 +1083,18 @@ export function orderFound(found: Found[], order: HitOrder): Found[] {
 /**
  * The bar's **starting** position, on the 0–100 scale the rows print.
  *
- * `50` because it is the midpoint of the scale the rows print, and a threshold
- * the reader can locate on a number they can already see beats one they have to
- * be told about. **Not** "more likely than not": this confidence is the model's
- * judgement about its own answer and explicitly not a probability
- * (docs/project/search.md § What the number means), so reading the halfway
- * point as a coin-flip would be the flattering explanation the hover card was
- * rewritten to avoid. Halfway up *worth a look* → *probably*, no more than
- * that. An absolute starting point
+ * **`30` since 2026-09-15**, down from `50`, when prioritised became the
+ * default order and Greg asked that every prioritised bar let most entries in
+ * by default. 30 is chosen so that a hit the model rated *worth a look* is not
+ * held back unasked; on the local runs it hides nothing, because the prompt
+ * already tells the model to leave weak matches out. Search is deliberately the
+ * one bar set below "most, not all": its order is the one that became the
+ * default, and a reader who just typed a question is the one who should not
+ * have answers kept from them without asking
+ * (docs/plans/260915d-prioritised-by-default-in-search-and-lower-default-thresholds-everywhere.md).
+ * **Not** a probability either way: this confidence is the model's
+ * judgement about its own answer (docs/project/search.md § What the number
+ * means), so no position on it means *more likely than not*. An absolute starting point
  * rather than a relative "top half", for the reason the glossary's gate gives:
  * when the model's confidences run hot or cold an absolute bar degenerates to
  * *no filtering*, which is the list the reader had before, while a relative one
@@ -1099,7 +1104,7 @@ export function orderFound(found: Found[], order: HitOrder): Found[] {
  * deliberately has no default of its own so "absent" keeps meaning nobody has
  * touched it. See `confParam` in params.ts.
  */
-export const PRIORITY_CONF = 50;
+export const PRIORITY_CONF = 30;
 
 /** One step of the slider, and therefore how precise `?conf=` gets. */
 export const CONF_STEP = 1;

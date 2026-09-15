@@ -1,0 +1,24 @@
+1. The plan's reproducibility evidence still contains the exact query the plan review rejected (`260915d-prioritised-by-default-in-search-and-lower-default-thresholds-everywhere.md:235`): it selects an arbitrary revision with unordered `DISTINCT ON` instead of joining `articles.current_revision_id`. It therefore cannot reproduce the revised glossary, quote, or citation percentages the decision now cites. The same section says the other queries only swap the JSON column, array key, and composite (`260915d-prioritised-by-default-in-search-and-lower-default-thresholds-everywhere.md:249`), which also cannot reproduce Quotes' claimed `snapToStop` measurement: snapping needs a per-article nearest-score step that a composite substitution does not perform.
+
+2. Three overview diagrams still depict the old first-open state: Glossary shows `threshold 0·30` and 18 of 24 hidden (`docs/project/glossary.md:29`), Quotes shows `bar 0·80` and 9 of 14 hidden (`docs/project/quotes.md:43`), and Search shows `by place` with no prioritised slider (`docs/project/search.md:37`). The prose below each diagram now documents the new defaults, so an agent opening the owning doc gets two incompatible descriptions of what the reader sees.
+
+3. The promised stale-copy sweep is incomplete. `threshold.ts` introduces Citations and Debate, then still says "all three", describes only three score accessors, and says all callers preserve document order even though Citations can arrive in its own first-cited order and Debate in grouped order ([threshold.ts:20](../../src/web/threshold.ts#L20), [threshold.ts:100](../../src/web/threshold.ts#L100)). Search's slider comment still says the other two/all three thresholds and tells maintainers the reset saves the reader from remembering the old default `50` ([SearchPanel.tsx:1235](../../src/web/SearchPanel.tsx#L1235)). Equivalent stale three-way claims remain in `search-hits.ts`, `search.md`, `tests/search-hits.test.ts`, and `tests/threshold.test.ts`; `tests/quotes-panel.test.ts` still says the starting quote bar is `0.70` ([quotes-panel.test.ts:10](../../tests/quotes-panel.test.ts#L10)). These comments are the maintenance contract around shared threshold behavior, so the inconsistency makes the new fourth numeric caller and the new Search default easy to undo.
+
+4. The new defaults suite is named as though it proves that "most entries come in", but its fixtures deliberately prove only each numeric boundary ([prioritised-defaults.test.ts:51](../../tests/prioritised-defaults.test.ts#L51)). The file header correctly explains why corpus share is not a fixture property; the `describe` title contradicts that explanation and lets a green test be read as validation of the empirical density claim that only the measurement supports.
+
+## Fixes made
+
+- `docs/plans/260915d-prioritised-by-default-in-search-and-lower-default-thresholds-everywhere-code-review-sol.md` — recorded the findings first, then this fix inventory and verdict.
+- `docs/plans/260915d-prioritised-by-default-in-search-and-lower-default-thresholds-everywhere.md` — replaced the rejected arbitrary-revision evidence query with the current-revision join, documented the Citations substitution, and added the actual per-article quote-snap and Search queries.
+- `docs/project/glossary.md` — changed the overview's resting gate and illustrative survivor count to the new permissive default, and named Debate alongside the four numeric sliders.
+- `docs/project/quotes.md` — changed the overview's resting bar and illustrative survivor count to the new default.
+- `docs/project/search.md` — made the overview depict the prioritised default and its bar, and made the historical three-threshold statement explicitly historical.
+- `src/web/threshold.ts` — completed the caller inventory, added Citations to the missing-score cases, and made the order/copy contract true for all five callers.
+- `src/web/SearchPanel.tsx` — removed the stale three-mode and `50` reset comments while preserving the history of the original three modes.
+- `src/web/search-hits.ts` — made its three-threshold statement explicitly about the modes that existed in 2026-09-03.
+- `tests/prioritised-defaults.test.ts` — renamed the suite so it claims only the exact boundaries its assertions prove.
+- `tests/quotes-panel.test.ts` — updated the header's present-tense comparison to the new quote and glossary defaults.
+- `tests/search-hits.test.ts` — removed the stale claim that Search has only two sibling threshold modes.
+- `tests/threshold.test.ts` — named all five threshold modes and removed the stale three-panel count.
+
+Verdict: approve after fixes; the requested defaults and quote-stroke decoupling are correct, the glossary “nearly” fixture still tests product rather than sum, and the remaining defects were confined to evidence and stale documentation.

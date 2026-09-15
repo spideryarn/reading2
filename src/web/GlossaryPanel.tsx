@@ -585,9 +585,13 @@ export function sortEntries(
 /**
  * The gate's **starting** position: `difficulty × centrality`, both required.
  *
- * `0.30` is about `0.6 × 0.5` — the model called it more than half load-bearing
- * *and* more than half likely to stop you. On the one real glossary we have it
- * keeps two terms of eight, which is the size of list this is aiming at.
+ * **`0.10`, lowered from `0.30` on 2026-09-15**, at Greg's request that every
+ * prioritised bar let most entries in by default. `0.30` (about `0.6 × 0.5`)
+ * opened a typical glossary on about a third of its terms. `0.10` — about
+ * `0.35 × 0.3`, a term the model put meaningfully above the floor on both —
+ * shows 87% on average across the thirteen local glossaries and all of them on
+ * the median one, and still holds the weakest tail back. The measurement is in
+ * docs/plans/260915d-prioritised-by-default-in-search-and-lower-default-thresholds-everywhere.md.
  *
  * An **absolute** starting point rather than a relative "top third",
  * deliberately, and the reason is what each does when it is wrong. If the
@@ -600,7 +604,7 @@ export function sortEntries(
  * parameter deliberately has no default of its own so that "absent" keeps
  * meaning *nobody has touched this*. See `gateParam` in params.ts.
  */
-export const PRIORITY_GATE = 0.3;
+export const PRIORITY_GATE = 0.1;
 
 /**
  * How far the slider moves in one step, and therefore how precise `?gate=` gets.

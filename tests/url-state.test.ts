@@ -412,12 +412,13 @@ describe("search mode parameters", () => {
     expect(runParam.parse("spya-k3m9ql")).toBeNull();
   });
 
-  it("reads the three orderings and defaults to the article's own", () => {
+  it("reads the three orderings and defaults to prioritised", () => {
+    // Greg, 2026-09-12: "Make prioritized the default submode for search."
     expect(orderParam.parse("document")).toBe("document");
     expect(orderParam.parse("confidence")).toBe("confidence");
     expect(orderParam.parse("prioritised")).toBe("prioritised");
     expect(orderParam.parse("relevance")).toBeNull();
-    expect(orderParam.defaultValue).toBe("document");
+    expect(orderParam.defaultValue).toBe("prioritised");
   });
 
   it("spells prioritised the way the glossary spells it", () => {

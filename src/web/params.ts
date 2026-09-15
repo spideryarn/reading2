@@ -847,9 +847,18 @@ export function resolveRuns(runs: string[] | null, run: string | null): string[]
 /**
  * How the results list is ordered.
  *
- * `document` — where each passage sits in the article — is the default, and it
- * is the default because it is the ordering the reader already has in their
- * head. `confidence` is the reader asking for the model's own judgment about
+ * **`prioritised` is the default since 2026-09-15** — Greg, 2026-09-12: *"Make
+ * prioritized the default submode for search."* It was `document`, the ordering
+ * the reader already has in their head, and prioritised *is* that ordering with
+ * the weakest answers held back under `?conf=` — whose starting position came
+ * down to 30 at the same time, so on the runs we have it holds back nothing.
+ * Two consequences, both accepted (search.md § Prioritised): a link written
+ * while `document` was the default carries no `?order=` (nuqs leaves a default
+ * out) and now opens prioritised; and a leftover `?conf=` in such a link, which
+ * filtered nothing, now filters.
+ *
+ * `document` — where each passage sits in the article, nothing hidden — is
+ * still one press away. `confidence` is the reader asking for the model's own judgment about
  * its own answers, which is worth offering and is never worth doing silently:
  * the same condition Greg attached to the glossary's scores on 2026-08-25, and
  * for the same reason.
@@ -879,7 +888,7 @@ export const orderParam = createParser<HitOrder>({
   parse: (v) => (HIT_ORDERS.includes(v as HitOrder) ? (v as HitOrder) : null),
   serialize: (v) => v,
 })
-  .withDefault("document")
+  .withDefault("prioritised")
   .withOptions({ history: "push" });
 
 /**

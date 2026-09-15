@@ -1,8 +1,10 @@
 /**
- * **The one threshold rule the three sliders share.**
+ * **The one threshold rule every slider shares.**
  *
  * Glossary (`?gate=`), Quotes (`?bar=`) and Search (`?conf=`) each put a
- * threshold under the reader's hand, and until 2026-09-03 they disagreed about
+ * threshold under the reader's hand — Citations (`?citebar=`) joined them later,
+ * and Debate's categorical bar (`?name=`, debate-levels.ts) uses the same pass —
+ * and until 2026-09-03 the first three disagreed about
  * what one is for: Search hid what was below it, while the other two moved it
  * into a second group headed *"the rest"*. Greg looked at the built thing and
  * said the grouping was not clearer:
@@ -15,11 +17,13 @@
  * >
  * > — Greg, 2026-09-03
  *
- * So all three now hide, all three say how many they are holding back, and the
- * rule they hold in common is here rather than written a third time. Each
- * caller passes its own score accessor, because the *composite* differs and
- * nothing else does: the glossary multiplies two scores, quotes take a maximum
- * over whichever arrived, and a search hit carries the model's confidence.
+ * So the three numeric sliders that existed then hide and say how many they are
+ * holding back. Citations inherited that rule, and Debate reuses it over an
+ * ordinal rank for its categorical levels. The rule lives here rather than in
+ * one copy per panel. Each caller passes its own score accessor: the glossary
+ * multiplies two scores, quotes take a maximum over whichever arrived, Search
+ * carries confidence, Citations uses its weighted score, and Debate maps its
+ * named levels to an ordinal only for this pass.
  *
  * The reference-list argument that justified grouping — *a term you cannot find
  * is a term you have lost* — did not survive contact: the bar is on screen with
@@ -66,7 +70,7 @@ export interface ThresholdResult<T> {
  *
  * **A missing score always survives**, and it is the one line here that must
  * not be got wrong. Greg, asked whether an unscored entry should be hidden with
- * the rest or always shown: *"In the interim, always show them."* Three
+ * the rest or always shown: *"In the interim, always show them."* Four
  * different absences arrive at this function and the rule is right for all of
  * them:
  *
@@ -78,8 +82,10 @@ export interface ThresholdResult<T> {
  *  - **Every literal search match.** Words mode has no confidence at all, so
  *    reading null as zero would empty that list the moment an
  *    `?order=prioritised` link was opened there.
+ *  - **A citation missing relevance or influence.** Both are needed for its
+ *    weighted score; absence is not evidence that the work is unimportant.
  *
- * In all three, showing it is the lossless direction: a thing the reader can
+ * In all four, showing it is the lossless direction: a thing the reader can
  * see and judge beats one withheld on the strength of a missing field. Note
  * `== null` rather than a falsy check — **zero is a score**, and an item the
  * model scored `0` is not one it declined to score.
@@ -94,8 +100,7 @@ export function survivesThreshold(score: number | null | undefined, threshold: n
 /**
  * Apply the bar to a list, once, and answer everything the panel needs to know.
  *
- * Order-preserving: a filtered list is still in whatever order it arrived in,
- * which for all three callers is the reader's own order through the piece.
+ * Order-preserving: a filtered list is still in whatever order it arrived in.
  * A copy, never the caller's array, so nothing downstream can be reordered
  * under a set of marks already on screen.
  */
@@ -136,15 +141,15 @@ export interface ThresholdNoun {
  *
  * Two words are deliberately not in this copy:
  *
- *  - **"clears"**, which the three panels each used to say. An unscored item
+ *  - **"clears"**, which the three original panels each used to say. An unscored item
  *    survives without clearing anything, so the verb would be a small lie in
  *    exactly the place this feature has to be honest.
  *  - **"the rest"**, which named the second group. That group is gone.
  *
- * One sentence in three shapes rather than three copies in three panels: the
- * only thing that differs is the noun, and three copies of one sentence is how
- * they come to disagree. The plan expected the copy to stay beside each panel
- * on the grounds that it differed; after this change it does not.
+ * One sentence parameterised by its noun rather than one copy per panel: copies
+ * of one sentence are how panels come to disagree. The original plan expected
+ * the copy to stay beside each panel on the grounds that it differed; after
+ * this change it does not.
  *
  * Not in [`src/messages.ts`](../messages.ts): that module is defined around
  * model-call failures and their four `kind`s (docs/project/copy.md), and a

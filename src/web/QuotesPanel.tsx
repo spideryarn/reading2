@@ -153,18 +153,22 @@ interface Props {
  * exactly what the argument above predicts and the starting position was simply
  * too low for it.
  *
- * `0.80` keeps two of those five, which is the size of list this is for. **It
- * is one article**, so this is a better-supported guess rather than a
- * measurement — and it stays a guess in the same way `0.30` next door does,
- * because the slider under it is the feedback loop. What is no longer true is
- * that nothing had ever been looked at.
+ * `0.80` kept two of those five. **It was one article**, so a better-supported
+ * guess rather than a measurement.
+ *
+ * **`0.60` since 2026-09-15**, at Greg's request that every prioritised bar let
+ * most entries in by default. Measured on the four local quote lists, with the
+ * snap below modelled: `0.80` showed 56% of a list on average, `0.60` shows 85%
+ * (95% on the median list) and still holds the weakest tail back.
+ * docs/plans/260915d-prioritised-by-default-in-search-and-lower-default-thresholds-everywhere.md.
+ * Still well above the glossary's `0.10`, for the arithmetic reason above.
  *
  * `snapToStop` resolves a tie **downwards**, towards the lower score and so
  * towards showing more. That is the safer direction for a reference list: a
  * slightly generous list costs a reader a glance, where an empty one costs them
  * the feature.
  */
-export const QUOTE_BAR_DEFAULT = 0.8;
+export const QUOTE_BAR_DEFAULT = 0.6;
 
 /**
  * **The positions the bar can take: every score the list actually contains.**
@@ -251,12 +255,22 @@ export function priorityOf(quote: Quote): number | undefined {
 }
 
 /**
- * The bar the heavy stroke starts at, and it is `QUOTE_BAR_DEFAULT` **on
- * purpose**: at the bar's resting position every quote on the page is heavy, and
- * the light ones are exactly what dragging the bar down reveals. Two controls
- * telling one story rather than two.
+ * The priority the heavy stroke starts at — **its own number, not the bar's**,
+ * since 2026-09-15.
+ *
+ * It was `QUOTE_BAR_DEFAULT`, so every quote the resting bar kept was heavy.
+ * When the bar came down to `0.60`, keeping the tie would have left the
+ * stroke's two-tier split idle in exactly the state most readers see, visible
+ * only once somebody dragged the bar. At `0.80`, the quotes between the bar and
+ * here draw light beside the heavy ones on first open.
+ *
+ * What the two controls still agree on is **order**: raising the bar removes
+ * scored light quotes before scored heavy ones, because both read `priorityOf`.
+ * Not "what survives is exactly the heavy strokes" — the bar snaps to real
+ * scores, so there may be no stop at `0.80`, and an unscored quote survives
+ * every bar while drawing light. docs/project/quotes.md § The stroke.
  */
-export const QUOTE_HEAVY_AT = QUOTE_BAR_DEFAULT;
+export const QUOTE_HEAVY_AT = 0.8;
 
 /**
  * How heavily this quote is drawn in the prose — the priority the reader can see
