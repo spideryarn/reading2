@@ -47,10 +47,17 @@ let sent: Record<string, unknown>[] = [];
 /** The one live channel, so a test can push events into the hook. */
 let channel: FakeChannel | null = null;
 /** The microphone track the hook opened, so its `enabled` can be read. */
-let mic: { enabled: boolean; stopped: boolean } | null = null;
+let mic: {
+  enabled: boolean;
+  stopped: boolean;
+  muted: boolean;
+  /** The phone taking the samples away (screen lock, a Bluetooth route change, a call), and giving them back. */
+  mute(): void;
+  unmute(): void;
+} | null = null;
 /** Every peer connection the hook built, so a test can break the last one. */
 let pcs: unknown[] = [];
-let players: { play: ReturnType<typeof vi.fn>; srcObject: unknown }[] = [];
+let players: { play: ReturnType<typeof vi.fn>; srcObject: unknown; firePause(): void }[] = [];
 let playbackRefused = false;
 /**
  * Everything the hook told our own server about what the session cost.
@@ -90,12 +97,23 @@ class FakeChannel {
 }
 
 function fakeMic() {
-  mic = { enabled: true, stopped: false };
+  const on = new Map<string, ((e: unknown) => void)[]>();
+  const fire = (name: string) => { for (const fn of on.get(name) ?? []) fn({}); };
+  mic = {
+    enabled: true,
+    stopped: false,
+    muted: false,
+    mute() { this.muted = true; fire("mute"); },
+    unmute() { this.muted = false; fire("unmute"); },
+  };
   const held = mic;
   return {
     kind: "audio",
     label: "Built-in Microphone",
-    muted: false,
+    get muted() { return held.muted; },
+    addEventListener(name: string, fn: (e: unknown) => void) {
+      on.set(name, [...(on.get(name) ?? []), fn]);
+    },
     get readyState() { return held.stopped ? "ended" : "live"; },
     get enabled() {
       return held.enabled;
@@ -177,6 +195,14 @@ beforeEach(() => {
       play = vi.fn(async () => {
         if (playbackRefused) throw new DOMException("Playback blocked", "NotAllowedError");
       });
+      #on = new Map<string, ((e: unknown) => void)[]>();
+      addEventListener(name: string, fn: (e: unknown) => void) {
+        this.#on.set(name, [...(this.#on.get(name) ?? []), fn]);
+      }
+      /** The browser pausing the element on its own — a route change, an interruption. */
+      firePause() {
+        for (const fn of this.#on.get("pause") ?? []) fn({});
+      }
       pause() {}
       constructor() {
         players.push(this);
@@ -1742,5 +1768,233 @@ describe("spoken repair through the actual chat controller", () => {
       await act(async () => { s.repair({ ok: true, threads: [s.saved] }); });
       expect(s.controller.threads[0]?.messages).toEqual([]);
     } finally { h.unmount(); vi.useRealTimers(); }
+  });
+});
+
+describe("a stall says so, and Reconnect recovers it", () => {
+  /* Report SPIDERYARN-READING2-42: on a phone, walking outdoors with ANC
+     earbuds, the live conversation "just kept kind of hanging". Every state
+     below left the page `live` with nothing on screen saying anything was
+     wrong. docs/plans/260915b-live-conversation-stalls-visible-and-recoverable.md. */
+
+  /** Live, on the fake clock, so the one-second stall tick can be driven. */
+  async function liveOnFakeClock(opts: LiveOptions) {
+    vi.useFakeTimers();
+    const h = mount(opts);
+    act(() => h.get().start({ threadId: THREAD, microphone: true }));
+    await act(async () => { await vi.advanceTimersByTimeAsync(0); });
+    await act(async () => { channel?.open(); });
+    expect(h.get().phase).toBe("live");
+    return h;
+  }
+  const advance = (ms: number) => act(async () => { await vi.advanceTimersByTimeAsync(ms); });
+
+  it("says so when the phone pauses the microphone, and stops saying so when it comes back", async () => {
+    const h = await liveOnFakeClock({ wiring: wiringFor(ticketWith()) });
+    try {
+      expect(h.get().stall).toBeNull();
+      await act(async () => { mic?.mute(); });
+      expect(h.get().stall, "a deaf session went on saying 'you can speak now'").toBe("microphone-paused");
+      await act(async () => { mic?.unmute(); });
+      expect(h.get().stall).toBeNull();
+    } finally { h.unmount(); vi.useRealTimers(); }
+  });
+
+  it("shows a dropped connection at once, not only when it has failed eight seconds later", async () => {
+    const h = await liveOnFakeClock({ wiring: wiringFor(ticketWith()) });
+    try {
+      await act(async () => { (pcs.at(-1) as { disconnect(): void }).disconnect(); });
+      expect(h.get().phase).toBe("live");
+      expect(h.get().stall).toBe("connection");
+    } finally { h.unmount(); vi.useRealTimers(); }
+  });
+
+  it("names a turn that sound has held open for half a minute", async () => {
+    const h = await liveOnFakeClock({ wiring: wiringFor(ticketWith()) });
+    try {
+      await act(async () => { channel?.deliver({ type: "input_audio_buffer.speech_started" }); });
+      await advance(25_000);
+      expect(h.get().stall, "twenty-five seconds of talking is a reader, not a fault").toBeNull();
+      await advance(10_000);
+      expect(h.get().stall).toBe("open-turn");
+    } finally { h.unmount(); vi.useRealTimers(); }
+  });
+
+  it("names a finished turn that never got a reply, and clears once the reply starts", async () => {
+    const h = await liveOnFakeClock({ wiring: wiringFor(ticketWith()) });
+    try {
+      await act(async () => {
+        channel?.deliver({ type: "input_audio_buffer.speech_started" });
+        channel?.deliver({ type: "input_audio_buffer.speech_stopped" });
+        channel?.deliver({ type: "input_audio_buffer.committed" });
+      });
+      await advance(8_000);
+      expect(h.get().stall).toBeNull();
+      await advance(6_000);
+      expect(h.get().stall, "the page sat on 'Listening' with a reply owed").toBe("no-reply");
+      await act(async () => { channel?.deliver({ type: "response.created", response: { id: "late-r" } }); });
+      await advance(1_000);
+      expect(h.get().stall).toBeNull();
+    } finally { h.unmount(); vi.useRealTimers(); }
+  });
+
+  it("does not re-owe an answered turn when its commit and item arrive after response.created", async () => {
+    const h = await liveOnFakeClock({ wiring: wiringFor(ticketWith()) });
+    try {
+      /* These are three reports about one input, not three requests for an
+         answer. The response may start before the input lifecycle finishes,
+         and the API spellings this hook supports may both arrive for one id. */
+      await act(async () => {
+        channel?.deliver({ type: "input_audio_buffer.speech_started" });
+        channel?.deliver({ type: "response.created", response: { id: "already-r" } });
+        channel?.deliver({ type: "input_audio_buffer.committed", item_id: "late-u" });
+        channel?.deliver({ type: "conversation.item.created", item: { id: "late-u", role: "user", type: "message" } });
+        channel?.deliver({ type: "conversation.item.added", item: { id: "late-u", role: "user", type: "message" } });
+        channel?.deliver({ type: "response.done", response: { id: "already-r", status: "completed", output: [] } });
+      });
+      await advance(14_000);
+      expect(h.get().stall, "one answered input was counted again by its later lifecycle event").toBeNull();
+    } finally { h.unmount(); vi.useRealTimers(); }
+  });
+
+  it("does not re-owe a typed live turn when its item acknowledgement arrives after the reply", async () => {
+    const h = await liveOnFakeClock({ wiring: wiringFor(ticketWith()) });
+    try {
+      act(() => h.get().say("A typed live turn"));
+      const created = [...sent].reverse().find((event) => event.type === "conversation.item.create");
+      const id = String((created?.item as { id?: unknown } | undefined)?.id ?? "");
+      expect(id).not.toBe("");
+      await act(async () => {
+        channel?.deliver({ type: "response.created", response: { id: "typed-r" } });
+        channel?.deliver({ type: "conversation.item.created", item: { id, role: "user", type: "message" } });
+        channel?.deliver({ type: "response.done", response: { id: "typed-r", status: "completed", output: [] } });
+      });
+      await advance(14_000);
+      expect(h.get().stall, "the acknowledgement re-owed the response that had already started").toBeNull();
+    } finally { h.unmount(); vi.useRealTimers(); }
+  });
+
+  it("still expects a new reply when the reader interrupts an older active response", async () => {
+    const h = await liveOnFakeClock({ wiring: wiringFor(ticketWith()) });
+    try {
+      await act(async () => {
+        channel?.deliver({ type: "response.created", response: { id: "old-r" } });
+        channel?.deliver({ type: "input_audio_buffer.speech_started" });
+        channel?.deliver({ type: "input_audio_buffer.committed", item_id: "interrupt-u" });
+        channel?.deliver({ type: "response.done", response: { id: "old-r", status: "cancelled", output: [] } });
+      });
+      await advance(14_000);
+      expect(h.get().stall, "the older active response was mistaken for the reply to the interruption").toBe("no-reply");
+    } finally { h.unmount(); vi.useRealTimers(); }
+  });
+
+  it("clears 'Listening' when the turn commits even if speech_stopped never came", async () => {
+    const h = await liveOnFakeClock({ wiring: wiringFor(ticketWith()) });
+    try {
+      await act(async () => {
+        channel?.deliver({ type: "input_audio_buffer.speech_started" });
+        channel?.deliver({ type: "input_audio_buffer.committed" });
+      });
+      expect(h.get().hearing).toBe(false);
+    } finally { h.unmount(); vi.useRealTimers(); }
+  });
+
+  it("names a reply that started and went silent, but not one that is audibly playing", async () => {
+    const h = await liveOnFakeClock({ wiring: wiringFor(ticketWith()) });
+    try {
+      await act(async () => {
+        channel?.deliver({ type: "input_audio_buffer.committed" });
+        channel?.deliver({ type: "response.created", response: { id: "quiet-r" } });
+        channel?.deliver({ type: "output_audio_buffer.started" });
+      });
+      await advance(30_000);
+      expect(h.get().stall, "a long spoken answer is not a stall").toBeNull();
+      await act(async () => { channel?.deliver({ type: "output_audio_buffer.stopped" }); });
+      await advance(25_000);
+      expect(h.get().stall, "'Thinking…' for ever, with nothing arriving").toBe("no-reply");
+    } finally { h.unmount(); vi.useRealTimers(); }
+  });
+
+  it("does not call a continuation that is waiting on a slow tool a missing reply", async () => {
+    const h = await liveOnFakeClock({ wiring: { ...wiringFor(ticketWith()), runTool: () => new Promise(() => {}) } });
+    try {
+      const call = { type: "function_call", call_id: "slow", name: "search_library", arguments: "{}" };
+      await act(async () => {
+        channel?.deliver({ type: "input_audio_buffer.committed" });
+        channel?.deliver({ type: "response.created", response: { id: "tool-r" } });
+        channel?.deliver({ ...call, type: "response.function_call_arguments.done", response_id: "tool-r" });
+        channel?.deliver({ type: "response.done", response: { id: "tool-r", status: "completed", output: [call] } });
+      });
+      await advance(40_000);
+      expect(h.get().stall).toBeNull();
+    } finally { h.unmount(); vi.useRealTimers(); }
+  });
+
+  it("names a tool continuation that was sent and never answered", async () => {
+    const h = await liveOnFakeClock({ wiring: wiringFor(ticketWith()) });
+    try {
+      const call = { type: "function_call", call_id: "quick", name: "search_library", arguments: "{}" };
+      await act(async () => {
+        channel?.deliver({ type: "input_audio_buffer.committed" });
+        channel?.deliver({ type: "response.created", response: { id: "ask-r" } });
+        channel?.deliver({ type: "response.done", response: { id: "ask-r", status: "completed", output: [call] } });
+      });
+      await advance(0);
+      expect(sent.filter((e) => e.type === "response.create")).toHaveLength(1);
+      await advance(14_000);
+      expect(h.get().stall).toBe("no-reply");
+    } finally { h.unmount(); vi.useRealTimers(); }
+  });
+
+  it("reconnects on the same thread, and the ending names the stall it was for", async () => {
+    const h = await liveOnFakeClock({ wiring: wiringFor(ticketWith()) });
+    try {
+      await act(async () => { mic?.mute(); });
+      act(() => h.get().reconnect());
+      await advance(5_000);
+      expect(pcs, "Reconnect did not start a second session").toHaveLength(2);
+      await act(async () => { channel?.open(); });
+      expect(h.get().phase).toBe("live");
+      expect(h.get().threadId).toBe(THREAD);
+      expect(h.get().stall).toBeNull();
+      expect(metered.filter((m) => m.kind === "close").map((m) => m.reason)).toEqual(["reconnect-microphone-paused"]);
+    } finally { h.unmount(); vi.useRealTimers(); }
+  });
+
+  it("does not drag a reader who chose to type back into a call", async () => {
+    const h = await liveOnFakeClock({ wiring: wiringFor(ticketWith()) });
+    try {
+      /* Mid-sentence, so the hang-up settles before it lets go — the window in
+         which the reader can press Continue typing. */
+      await act(async () => { channel?.deliver({ type: "input_audio_buffer.speech_started" }); });
+      act(() => h.get().reconnect());
+      await act(async () => { void h.get().stop(); });
+      await advance(10_000);
+      expect(pcs, "a reconnect the reader had cancelled still started").toHaveLength(1);
+      expect(h.get().phase).toBe("idle");
+    } finally { h.unmount(); vi.useRealTimers(); }
+  });
+
+  it("offers Enable sound when the phone pauses the voice", async () => {
+    const h = await connected({ wiring: wiringFor(ticketWith()) });
+    await act(async () => {
+      (pcs.at(-1) as { ontrack: (e: unknown) => void }).ontrack({ streams: [{}] });
+    });
+    expect(h.get().playbackBlocked).toBe(false);
+    await act(async () => { players.at(-1)?.firePause(); });
+    expect(h.get().playbackBlocked, "the voice stopped and the page still said 'Speaking…'").toBe(true);
+    h.unmount();
+  });
+
+  it("does not take its own teardown's pause for the phone's", async () => {
+    const h = await connected({ wiring: wiringFor(ticketWith()) });
+    await act(async () => {
+      (pcs.at(-1) as { ontrack: (e: unknown) => void }).ontrack({ streams: [{}] });
+    });
+    const player = players.at(-1);
+    await act(async () => { await h.get().stop(); });
+    await act(async () => { player?.firePause(); });
+    expect(h.get().playbackBlocked).toBe(false);
+    h.unmount();
   });
 });

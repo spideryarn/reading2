@@ -95,6 +95,8 @@ import { LiveMeter, responseReport, transcriptionReport } from "./meter.js";
 import { resolvePlacement, type ResolvedPlacement } from "./mic-placement.js";
 import { apiWiring, type LiveWiring } from "./wiring.js";
 import { ToolResponses } from "./tool-responses.js";
+import { stallOf, type LiveStall } from "./stall.js";
+import { captureClientFailure } from "../monitoring.js";
 
 /** Where the connection is. `failed` carries a sentence in `error`. */
 export type LivePhase = "idle" | "connecting" | "live" | "closing" | "failed";
@@ -177,6 +179,20 @@ export interface LiveApi {
   stop: () => Promise<void>;
   /** Put a typed turn in, as if it had been spoken. */
   say: (text: string) => void;
+  /**
+   * The stall this session is in right now, or null — ./stall.ts says which
+   * and why. Only ever set while the session is `live`.
+   */
+  stall: LiveStall | null;
+  /**
+   * **End this call and start a fresh one on the same conversation.**
+   *
+   * The ordinary hang-up — words kept, microphone handed back — followed by an
+   * ordinary start, seeded from what was saved. Offered while `live`; a no-op
+   * otherwise. Any other `stop`, a new start or an unmount cancels the restart,
+   * so a reader who presses this and then chooses to type stays typing.
+   */
+  reconnect: () => void;
 }
 
 /** How this hook is wired to our own server, and to the thread. */
@@ -275,6 +291,37 @@ const SEED_TIMEOUT_MS = 15_000;
 const TOOL_TIMEOUT_MS = 60_000;
 const DISCONNECT_GRACE_MS = 8_000;
 
+/** How often a live session asks ./stall.ts whether it is stuck. */
+const STALL_TICK_MS = 1_000;
+
+/**
+ * How long a stall must last before Sentry hears about it.
+ *
+ * A Bluetooth route change can mute the microphone for a fraction of a second,
+ * and a report per blip would bury the ones that matter. The notice is shown at
+ * once regardless; this only decides what is worth writing down.
+ */
+const STALL_REPORT_AFTER_MS = 5_000;
+
+/** The counts a stall report carries. Numbers only — never a word the reader said. */
+interface StallTally {
+  speechStarted: number;
+  committed: number;
+  responses: number;
+  cancelled: number;
+  mutes: number;
+  disconnects: number;
+}
+
+const freshTally = (): StallTally => ({
+  speechStarted: 0,
+  committed: 0,
+  responses: 0,
+  cancelled: 0,
+  mutes: 0,
+  disconnects: 0,
+});
+
 function startupMessage(error: unknown): string {
   if (error instanceof DOMException) {
     if (error.name === "NotAllowedError") return "Microphone access was blocked. Allow it in your browser, then try Live again, or carry on typing.";
@@ -330,6 +377,47 @@ export function useLiveConversation(slug: string, opts: LiveOptions = {}): LiveA
   const [playbackBlocked, setPlaybackBlocked] = useState(false);
   const [responding, setResponding] = useState(false);
   const [pendingTools, setPendingTools] = useState<{ callId: string; name: string }[]>([]);
+  /**
+   * **The facts ./stall.ts decides from**, kept as refs because they are fed
+   * from event handlers several times a second and only `stall` renders.
+   * docs/plans/260915b-live-conversation-stalls-visible-and-recoverable.md.
+   */
+  const [stall, setStall] = useState<LiveStall | null>(null);
+  const micMuted = useRef(false);
+  const connectionState = useRef("new");
+  /** When the reader's current turn opened. Null whenever `midSentence` is false. */
+  const turnOpenSince = useRef<number | null>(null);
+  /** When a reply became owed. See `StallFacts.owedSince` for what does and does not owe one. */
+  const owedSince = useRef<number | null>(null);
+  /**
+   * User-item ids whose reply debt has already been accounted for.
+   *
+   * A committed audio turn is reported twice (`input_audio_buffer.committed`
+   * and `conversation.item.*`), and the API spellings this hook supports may
+   * both arrive. More importantly, any of those acknowledgements can arrive
+   * after the response has already started. Without the id, the later report
+   * re-owes a response that is already under way and produces a false stall.
+   */
+  const replyAccountedItems = useRef(new Set<string>());
+  /** A response began after the current `speech_started`, before its item arrived. */
+  const responseStartedDuringTurn = useRef(false);
+  const lastEventAt = useRef(0);
+  /** `speaking`, readable from outside a render. */
+  const speakingNow = useRef(false);
+  const tally = useRef<StallTally>(freshTally());
+  /** The stall showing now and when it began, for the report's dwell. */
+  const stallSeen = useRef<{ kind: LiveStall; since: number } | null>(null);
+  const stallReported = useRef(new Set<LiveStall>());
+  /** Where the microphone was taken to be, for the report. A category, never a device name. */
+  const placedAs = useRef<string | null>(null);
+  /**
+   * A reconnect waiting for its hang-up to finish, by token; 0 when none is.
+   * Cleared by any other stop, a start and an unmount — see `reconnect`.
+   */
+  const reconnecting = useRef(0);
+  const reconnectSeq = useRef(0);
+  /** Whether this session opened a real microphone, so a reconnect does the same. */
+  const microphoneWanted = useRef(true);
   const toolResponses = useRef(new ToolResponses());
   const toolRequests = useRef(new Set<AbortController>());
   const startup = useRef<{ timer: ReturnType<typeof setTimeout>; abort: AbortController } | null>(null);
@@ -507,11 +595,83 @@ export function useLiveConversation(slug: string, opts: LiveOptions = {}): LiveA
     if (channel?.readyState === "open") channel.send(JSON.stringify(msg));
   }, []);
 
+  /** A reply is now owed, if one was not already. `StallFacts.owedSince`. */
+  const owe = useCallback(() => {
+    if (owedSince.current === null) owedSince.current = Date.now();
+  }, []);
+
+  /** Account one user input once, however many lifecycle events report it. */
+  const accountUserReply = useCallback((itemId: string, alreadyStarted: boolean) => {
+    if (itemId && replyAccountedItems.current.has(itemId)) return;
+    if (itemId) replyAccountedItems.current.add(itemId);
+    if (!alreadyStarted) owe();
+  }, [owe]);
+
+  /**
+   * **Ask whether this session is stuck, and say so.** On a one-second tick
+   * while `live`, and at once when the microphone or the connection changes.
+   *
+   * Only a session that is actually live can be stalled: while it connects the
+   * startup deadline owns the question, and while it closes the hang-up does.
+   */
+  const checkStall = useCallback(() => {
+    if (!pc.current || !seeding.current.done || closing.current) {
+      stallSeen.current = null;
+      setStall(null);
+      return;
+    }
+    const now = Date.now();
+    const kind = stallOf({
+      now,
+      micMuted: micMuted.current,
+      connection: connectionState.current,
+      turnOpenSince: midSentence.current ? turnOpenSince.current : null,
+      owedSince: owedSince.current,
+      responseActive: toolResponses.current.inProgress,
+      lastEventAt: lastEventAt.current,
+      speaking: speakingNow.current,
+      toolRunning: toolRequests.current.size > 0,
+    });
+    setStall(kind);
+    if (!kind) {
+      stallSeen.current = null;
+      return;
+    }
+    if (stallSeen.current?.kind !== kind) stallSeen.current = { kind, since: now };
+    if (now - stallSeen.current.since < STALL_REPORT_AFTER_MS || stallReported.current.has(kind)) return;
+    stallReported.current.add(kind);
+    /* **One report per kind per session, and it carries counts, not words.**
+       The name is the kind because `sanitise` withholds any message without a
+       registered code and keeps the name — and Sentry's dedupe compares type
+       and value, so one name for every kind would drop the second kind a
+       session hit. Not anonymous: the monitoring scope carries the signed-in
+       reader's id, as every client report does. src/web/monitoring.ts. */
+    const error = new Error("live conversation stalled");
+    error.name = `LiveStall-${kind}`;
+    const t = tally.current;
+    captureClientFailure(error, {
+      live_stall: kind,
+      live_placement: placedAs.current,
+      live_speech_started: t.speechStarted,
+      live_committed: t.committed,
+      live_responses: t.responses,
+      live_cancelled: t.cancelled,
+      live_mutes: t.mutes,
+      live_disconnects: t.disconnects,
+    });
+  }, []);
+
   const continueAfterTools = useCallback(() => {
     if (closing.current || dc.current?.readyState !== "open") return;
-    if (toolResponses.current.takeContinuation(midSentence.current)) send({ type: "response.create" });
+    if (toolResponses.current.takeContinuation(midSentence.current)) {
+      send({ type: "response.create" });
+      /* Owed from here, and not from the function output before it: the
+         continuation is deliberately held until every tool has finished, and
+         that wait is not a stall. */
+      owe();
+    }
     setResponding(toolResponses.current.responding);
-  }, [send]);
+  }, [send, owe]);
 
   const failSession = useCallback((message: string, reason: string) => {
     setError(message);
@@ -768,6 +928,7 @@ export function useLiveConversation(slug: string, opts: LiveOptions = {}): LiveA
       }
       const type = String(e.type ?? "");
       setSeen((s) => ({ ...s, [type]: (s[type] ?? 0) + 1 }));
+      lastEventAt.current = Date.now();
 
       const response = e.response as { id?: string; status?: string; status_details?: { error?: { message?: string } }; output?: { type?: string; call_id?: string }[] } | undefined;
 
@@ -784,12 +945,22 @@ export function useLiveConversation(slug: string, opts: LiveOptions = {}): LiveA
          what makes a second event for the same seed harmless. */
       /* The utterance has been committed — it is a conversation item now, so
          the ledger can see it and the grace window has something to wait on. */
-      if (type === "input_audio_buffer.committed") midSentence.current = false;
+      if (type === "input_audio_buffer.committed") {
+        accountUserReply(String(e.item_id ?? ""), responseStartedDuringTurn.current);
+        midSentence.current = false;
+        turnOpenSince.current = null;
+        responseStartedDuringTurn.current = false;
+        tally.current.committed += 1;
+        /* **`hearing` reconciles on the commit as well as on `speech_stopped`.**
+           A turn that has been committed is not being heard any more, whatever
+           else did or did not arrive, and one lost event must not pin
+           "Listening…" for the rest of the session. */
+        setHearing(false);
+      }
 
       if (type === "conversation.item.created" || type === "conversation.item.added") {
         const id = String((e.item as { id?: unknown } | undefined)?.id ?? "");
         const role = (e.item as { role?: unknown } | undefined)?.role;
-        if (role === "user") midSentence.current = false;
         if (!seeding.current.done) {
           if (id) seeding.current.ids.add(id);
           if (seeding.current.ids.size >= seeding.current.expected) {
@@ -798,6 +969,13 @@ export function useLiveConversation(slug: string, opts: LiveOptions = {}): LiveA
           return;
         }
         if (id && seeding.current.ids.has(id)) return;
+        if (role === "user") {
+          accountUserReply(id, responseStartedDuringTurn.current);
+          midSentence.current = false;
+          turnOpenSince.current = null;
+          responseStartedDuringTurn.current = false;
+          setHearing(false);
+        }
         if (id && role === "user" && !lineState.current.some((line) => line.id === id)) {
           put(id, "reader", "", "set", false);
         }
@@ -855,7 +1033,14 @@ export function useLiveConversation(slug: string, opts: LiveOptions = {}): LiveA
          not our own tool traffic: a session that kept itself alive by answering
          its own last question would be exactly the forgotten tab this cap is
          for. */
-      if (type === "input_audio_buffer.speech_started") lastHeard.current = Date.now();
+      if (type === "input_audio_buffer.speech_started") {
+        lastHeard.current = Date.now();
+        if (!midSentence.current) {
+          turnOpenSince.current = Date.now();
+          responseStartedDuringTurn.current = false;
+        }
+        tally.current.speechStarted += 1;
+      }
 
       if (type === "input_audio_buffer.speech_started") {
         toolResponses.current.interrupt();
@@ -871,8 +1056,12 @@ export function useLiveConversation(slug: string, opts: LiveOptions = {}): LiveA
         return setHearing(true);
       }
       if (type === "input_audio_buffer.speech_stopped") return setHearing(false);
-      if (type === "output_audio_buffer.started") return setSpeaking(true);
+      if (type === "output_audio_buffer.started") {
+        speakingNow.current = true;
+        return setSpeaking(true);
+      }
       if (type === "output_audio_buffer.stopped" || type === "output_audio_buffer.cleared") {
+        speakingNow.current = false;
         return setSpeaking(false);
       }
 
@@ -897,6 +1086,11 @@ export function useLiveConversation(slug: string, opts: LiveOptions = {}): LiveA
          ends in a function call is billed exactly like one that ends in
          speech. */
       if (type === "response.created") {
+        /* The reply has started, so nothing is owed any more. Whether it then
+           goes silent is `StallFacts.responseActive`'s question. */
+        if (midSentence.current) responseStartedDuringTurn.current = true;
+        owedSince.current = null;
+        tally.current.responses += 1;
         const id = (e.response as { id?: unknown } | undefined)?.id;
         if (typeof id === "string" && id !== "") {
           responseStarts.current.set(id, new Date().toISOString());
@@ -921,6 +1115,7 @@ export function useLiveConversation(slug: string, opts: LiveOptions = {}): LiveA
          still in flight has not been appended yet, so the list cannot answer
          "have we started this one?" at all. */
       if (type === "response.done") {
+        if (response?.status === "cancelled") tally.current.cancelled += 1;
         toolResponses.current.done(
           response?.id ?? "", response?.status === "completed",
           (response?.output ?? []).filter((item) => item.type === "function_call" && item.call_id).map((item) => item.call_id!),
@@ -952,7 +1147,7 @@ export function useLiveConversation(slug: string, opts: LiveOptions = {}): LiveA
         continueAfterTools();
       }
     },
-    [answerTool, put, commit, meterEvent, failSession, continueAfterTools],
+    [answerTool, put, commit, meterEvent, failSession, continueAfterTools, accountUserReply],
   );
 
   /**
@@ -996,6 +1191,8 @@ export function useLiveConversation(slug: string, opts: LiveOptions = {}): LiveA
        abandons rather than opening a connection behind this teardown. */
     epoch.current += 1;
     setPhase("closing");
+    stallSeen.current = null;
+    setStall(null);
     if (connectionDeadline.current) clearTimeout(connectionDeadline.current);
     connectionDeadline.current = null;
     if (startup.current) {
@@ -1107,6 +1304,7 @@ export function useLiveConversation(slug: string, opts: LiveOptions = {}): LiveA
         void ending.flush();
       }
 
+      speakingNow.current = false;
       setSpeaking(false);
       setResponding(false);
       setPlaybackBlocked(false);
@@ -1248,6 +1446,25 @@ export function useLiveConversation(slug: string, opts: LiveOptions = {}): LiveA
       meter.current = null;
       responseStarts.current.clear();
       endedBecause.current = "reader";
+      /* **A fresh set of stall facts per session.** A tally or an owed reply
+         carried over would make the new session look stuck from its first
+         second. And a new start cancels any reconnect still waiting: this is
+         either that reconnect, or the reader choosing for themselves. */
+      setStall(null);
+      micMuted.current = false;
+      connectionState.current = "new";
+      turnOpenSince.current = null;
+      owedSince.current = null;
+      replyAccountedItems.current = new Set();
+      responseStartedDuringTurn.current = false;
+      lastEventAt.current = Date.now();
+      speakingNow.current = false;
+      tally.current = freshTally();
+      stallSeen.current = null;
+      stallReported.current = new Set();
+      placedAs.current = null;
+      reconnecting.current = 0;
+      microphoneWanted.current = microphone;
 
       /**
        * **This session's number, and the check that goes after every `await`.**
@@ -1348,6 +1565,7 @@ export function useLiveConversation(slug: string, opts: LiveOptions = {}): LiveA
           const where = await resolvePlacement(preferred);
           if (stale()) return abandon();
           setPlacement(where);
+          placedAs.current = where.placement;
 
           const wiring = wired.current.wiring ?? apiWiring;
           const ticket = await wiring.ticket(slug, opts.threadId, where.placement, abort.signal);
@@ -1388,6 +1606,12 @@ export function useLiveConversation(slug: string, opts: LiveOptions = {}): LiveA
           conn.addEventListener("connectionstatechange", () => {
             const state = conn?.connectionState;
             if (stale()) return;
+            connectionState.current = state ?? "new";
+            if (state === "disconnected") tally.current.disconnects += 1;
+            /* Said at once rather than only when the grace below runs out:
+               eight seconds of silence with "Listening" on screen is the hang
+               the reader reports. */
+            checkStall();
             if (connectionDeadline.current) clearTimeout(connectionDeadline.current);
             connectionDeadline.current = null;
             if (state === "disconnected") {
@@ -1406,6 +1630,16 @@ export function useLiveConversation(slug: string, opts: LiveOptions = {}): LiveA
           const el = new Audio();
           el.autoplay = true;
           audio.current = el;
+          /* **The phone pausing the voice**, on a route change or an
+             interruption, used to leave "Speaking…" on screen over silence.
+             Enable sound is the recovery that already exists. Guarded by
+             identity and epoch because our own `pause()` in `stop` queues its
+             event asynchronously, so an old player's pause can arrive after a
+             reconnect has begun. */
+          el.addEventListener?.("pause", () => {
+            if (stale() || audio.current !== el || closing.current || !el.srcObject) return;
+            setPlaybackBlocked(true);
+          });
           conn.ontrack = (ev) => {
             if (stale()) return;
             el.srcObject = ev.streams[0] ?? new MediaStream([ev.track]);
@@ -1599,6 +1833,24 @@ export function useLiveConversation(slug: string, opts: LiveOptions = {}): LiveA
             track.addEventListener?.("ended", () => {
               if (!stale()) failSession("The microphone disconnected. Choose an available input and try Live again.", "microphone-ended");
             });
+            /* **Muted is not ended.** The device has stopped giving us samples —
+               a screen lock, a Bluetooth route change, a call — and may start
+               again, so the session stays up and says so rather than failing.
+               Before this, the page said "you can speak now" to a microphone
+               that was sending nothing. */
+            const heard = track;
+            micMuted.current = heard.muted === true;
+            heard.addEventListener?.("mute", () => {
+              if (stale()) return;
+              micMuted.current = true;
+              tally.current.mutes += 1;
+              checkStall();
+            });
+            heard.addEventListener?.("unmute", () => {
+              if (stale()) return;
+              micMuted.current = false;
+              checkStall();
+            });
           }
           conn.addTrack(track);
 
@@ -1662,7 +1914,7 @@ export function useLiveConversation(slug: string, opts: LiveOptions = {}): LiveA
         }
       })();
     },
-    [onEvent, slug, updateLines, failSession, enableAudio],
+    [onEvent, slug, updateLines, failSession, enableAudio, checkStall],
   );
 
   const say = useCallback(
@@ -1673,13 +1925,17 @@ export function useLiveConversation(slug: string, opts: LiveOptions = {}): LiveA
          has no input transcription event, because nothing was transcribed. */
       const id = `typed-${Date.now()}`;
       put(id, "reader", trimmed, "set", true);
+      /* The server will acknowledge this same item later; it is still one
+         request for one response, not a second debt. */
+      replyAccountedItems.current.add(id);
       send({
         type: "conversation.item.create",
         item: { id, type: "message", role: "user", content: [{ type: "input_text", text: trimmed }] },
       });
       send({ type: "response.create" });
+      owe();
     },
-    [put, send],
+    [put, send, owe],
   );
 
   /**
@@ -1772,10 +2028,64 @@ export function useLiveConversation(slug: string, opts: LiveOptions = {}): LiveA
          microphone held by a session with no owner and no control on the page
          that could close it. GPT Sol, reviewing the built code. */
       epoch.current += 1;
+      reconnecting.current = 0;
       endedBecause.current = "unmounted";
       if (pc.current || dc.current || claim.current || startup.current || context.current) void stopRef.current();
     };
   }, []);
+
+  /** The stall tick. Only while live — see `checkStall`. */
+  useEffect(() => {
+    if (phase !== "live") return;
+    checkStall();
+    const tick = setInterval(checkStall, STALL_TICK_MS);
+    return () => clearInterval(tick);
+  }, [phase, checkStall]);
+
+  /**
+   * **Reconnect: the ordinary hang-up, then the ordinary start.** Nothing new
+   * in between — the hang-up keeps the words and hands the microphone back, the
+   * start re-seeds from what was saved — which is why it is safe.
+   *
+   * The one thing it adds is **intent**. The hang-up can take a few seconds (a
+   * sentence settling, a last transcription, the write queue), and a reader who
+   * presses Reconnect and then Continue typing, or switches thread, or leaves,
+   * has changed their mind. So the restart carries a token, and every other
+   * stop, every start and the unmount clear it. GPT Sol, plan review,
+   * 2026-09-15.
+   *
+   * It does not restart after a hang-up that failed — an append refused — which
+   * already says so and offers Retry.
+   */
+  const reconnect = useCallback(() => {
+    if (!pc.current || !seeding.current.done || closing.current || startup.current) return;
+    const thread = boundThread.current;
+    if (!thread) return;
+    reconnectSeq.current += 1;
+    const mine = reconnectSeq.current;
+    const microphone = microphoneWanted.current;
+    endedBecause.current = stallSeen.current ? `reconnect-${stallSeen.current.kind}` : "reconnect";
+    void stop().then(() => {
+      if (reconnecting.current !== mine) return;
+      reconnecting.current = 0;
+      if (failed.current) return;
+      start({ threadId: thread, microphone });
+    });
+    reconnecting.current = mine;
+  }, [stop, start]);
+
+  /**
+   * The hang-up callers see. The same promise as `stop` — "joined the hang-up
+   * already running" stays observable — but a reader's own stop also cancels a
+   * reconnect that was waiting on it, and the ending is then theirs.
+   */
+  const hangUp = useCallback((): Promise<void> => {
+    if (reconnecting.current !== 0) {
+      reconnecting.current = 0;
+      endedBecause.current = "reader";
+    }
+    return stop();
+  }, [stop]);
 
   return {
     phase,
@@ -1799,7 +2109,9 @@ export function useLiveConversation(slug: string, opts: LiveOptions = {}): LiveA
     placement,
     threadId,
     start,
-    stop,
+    stop: hangUp,
     say,
+    stall,
+    reconnect,
   };
 }

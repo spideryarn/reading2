@@ -63,6 +63,7 @@ conversations start in Chat.
 | [`src/web/live/mic-placement.ts`](../../src/web/live/mic-placement.ts) | Where the microphone is, which is what noise reduction wants to know. |
 | [`src/web/live/LiveButton.tsx`](../../src/web/live/LiveButton.tsx) | Start or continue, cancel, hangup and microphone placement. |
 | [`src/web/live/LiveStatus.tsx`](../../src/web/live/LiveStatus.tsx) | Streaming words, input level and device choice, session state, and recovery actions in the real composer. |
+| [`src/web/live/stall.ts`](../../src/web/live/stall.ts) | Which stall a live session is in, if any — the pure rules behind the notice and **Reconnect**. |
 | [`src/web/live/tool-responses.ts`](../../src/web/live/tool-responses.ts) | One continuation after a response's tool results settle; a newer spoken turn supersedes the old continuation. |
 | [`src/web/PassageLinks.tsx`](../../src/web/PassageLinks.tsx) | Shared live and saved passage references, using stable block ids. |
 | [`src/chat.ts`](../../src/chat.ts) `withSpokenTurn` | The write: both rows, both `done`, one transaction. |
@@ -326,6 +327,8 @@ thread, and start a fresh seeded session if the reader wants one.
 | **An append refused or lost** | Ends it, and stops the ones queued behind it. No later tail can be vouched for. |
 | **An edit, a retry or a delete in the same thread** | Not intercepted, and deliberately: the next spoken append claims a tail that has moved, gets a 409, and *that* ends the session and reloads the conversation. One mechanism instead of three, and it is the one that also covers a second tab. The cost is that the model is briefly seeded with a history that has changed under it, for the length of one answer. |
 | **Leaving mid-connect** | A session epoch is bumped by every start and every stop and checked after every `await`, so an abandoned `start` never opens a connection or claims a microphone. Without it the cleanup found nothing to tear down and the abandoned attempt carried on. |
+| **A stall** | Does **not** end it. The microphone paused by the device, a dropped connection, a turn that sound has held open for 30 s, or a reply owed for 12 s (or started and silent for 20 s) is named in the Chat panel, with **Reconnect**. Not ended automatically: deciding for the reader that a long open turn is street noise is a guess, and the thresholds are generous because a notice that fires on an ordinary conversation teaches the reader to ignore it. [260915b](../plans/260915b-live-conversation-stalls-visible-and-recoverable.md). |
+| **Reconnect** | The ordinary hang-up, then the ordinary start on the same thread, re-seeded from what was saved — offered whenever the call is live, not only with a notice. It carries an intent token: any other stop, a start or an unmount cancels the restart, so a reader who presses it and then types stays typing. The ending is `reconnect-<stall>` or `reconnect`. |
 | **Startup never finishes** | One deadline covers device discovery, ticket, permission, transport and seed acknowledgements. It belongs to that attempt and is cleared on every exit; Cancel stays available throughout. |
 
 **Every one of those endings names itself** to the session journal; the current reasons live beside

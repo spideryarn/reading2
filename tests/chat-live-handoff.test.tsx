@@ -84,6 +84,8 @@ function fakeLive(phase: LiveApi["phase"]): { api: LiveApi; finish: () => void }
       return done;
     },
     say: () => {},
+    stall: null,
+    reconnect: () => { events.push("reconnect"); },
   } satisfies LiveApi;
   return { api, finish: () => release() };
 }
@@ -296,6 +298,17 @@ describe("what the button says", () => {
 });
 
 describe("the live session in the shipping chat composer", () => {
+  it("keeps Continue typing available while a reconnect teardown can still be cancelled", async () => {
+    const { api } = fakeLive("closing");
+    paint(api);
+    const type = [...host.querySelectorAll("button")].find((button) => button.textContent === "Continue typing");
+    expect(type, "the cancel action is absent").toBeDefined();
+    expect(type?.disabled, "the hook can cancel the reconnect, but the rendered action cannot call it").toBe(false);
+    act(() => type!.click());
+    await act(async () => { await Promise.resolve(); });
+    expect(events).toEqual(["stop"]);
+  });
+
   it("shows an actionable failure and allows typing in the same conversation", async () => {
     const { api } = fakeLive("failed");
     api.error = "Microphone permission was denied. Allow access in your browser, then retry.";
@@ -408,6 +421,27 @@ describe("the live session in the shipping chat composer", () => {
     expect(host.textContent).not.toContain("Private words in another thread");
     expect(host.textContent).not.toContain("Error from another thread");
     expect(host.querySelector(".chat-live-status")).toBeNull();
+  });
+
+  it("names a stall in words and offers Reconnect, which is there whenever the call is live", () => {
+    /* SPIDERYARN-READING2-42: the call "kept hanging" with nothing on screen
+       saying so. The button is there with or without a notice, because the
+       stall nobody predicted is the one that happens next. */
+    const { api } = fakeLive("live");
+    paint(api);
+    const reconnect = () => [...host.querySelectorAll("button")].find((b) => b.textContent === "Reconnect");
+    expect(reconnect(), "no way out of a call that has stalled without a notice").toBeTruthy();
+    paint({ ...api, stall: "microphone-paused" });
+    expect(host.textContent).toMatch(/paused the microphone/);
+    act(() => reconnect()?.click());
+    expect(events).toContain("reconnect");
+  });
+
+  it("does not offer Reconnect, or a stall, when the call is not live", () => {
+    const { api } = fakeLive("connecting");
+    paint({ ...api, stall: "no-reply" });
+    expect([...host.querySelectorAll("button")].some((b) => b.textContent === "Reconnect")).toBe(false);
+    expect(host.textContent).not.toMatch(/No reply yet/);
   });
 
   it("offers cancellation while the session is connecting", () => {
