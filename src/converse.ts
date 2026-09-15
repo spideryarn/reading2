@@ -915,9 +915,9 @@ function stanceLine(
  *
  * **Anything about where the answer comes from.** Report 1X — a comment asking
  * for evidence that did not search the web — landed while this was being built,
- * and `SYSTEM` was strengthened in the same commit. Every line below pulls
- * towards answering from the article alone, which is the opposite pull; a
- * reader who presses "?" on a claim they doubt wants both. So the encouragement
+ * and `SYSTEM` was strengthened in the same commit. The addendum's focus on the
+ * passage already pulls towards answering from the article alone; a reader who
+ * presses "?" on a claim they doubt wants both. So the encouragement
  * to search stays where it already is, in `SYSTEM`, owned once. A second,
  * weaker copy of it here would fire only on help turns and would drift from the
  * first, and the drift would be invisible. tests/help-prompt.test.ts asserts the
@@ -928,6 +928,7 @@ function helpSection(help: boolean): string {
   return `The reader pressed the "?" beside this passage rather than typing a question, so they could not follow it and could not say why. Answer accordingly:
 
 - Open with one or two plain sentences on what this passage is doing. Not a summary of the article — they are reading it.
+- Treat this passage as the starting point, not a boundary: the needed context may be around it, somewhere earlier, or left unstated.
 - Then supply what they were missing: the term of art, the named person, the study, or the earlier move this passage is answering.
 - Use one analogy or one small worked example where it would do more than another restatement, and leave it out where it would not.
 - Keep the author's distinctive words and use ordinary ones for everything else.
