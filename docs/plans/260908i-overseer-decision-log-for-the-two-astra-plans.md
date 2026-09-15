@@ -749,3 +749,9 @@ milliseconds after the last read (closable only with a lock shared with Claude C
 EnterWorktree, which is not ours), and a live tree whose directory was renamed reading as abandoned
 (older than this change; queued qi-8p2kf24s). Decision: stop the chain here. The rule Greg asked for
 is in force and the remaining risk is a window of milliseconds against a peer who is mid-entry.
+
+### 2026-09-15 05:15 UTC — the changelog Greg asked for, and why nothing ran for two days
+
+Greg, 2026-09-15: *"Get an agent to run @docs/project/changelog.md in about 90 minutes and push, because we're going to deploy again in a couple of hours."* Dispatched as a one-off tmux job (`changelog-once-0915-0611-3991515`) that sleeps until 06:41Z and then runs the standing changelog prompt under the default login; its debrief lands in the scratchpad and the six-hourly loop's next run at ~08:57Z will find nothing further unless a deploy lands in between.
+
+Why the loop had not written anything itself: the default (rehearsable) login hit its **weekly limit at about 20:56Z on 2026-09-12**, and every six-hourly changelog run and every three-hourly feedback sweep since then exited within six seconds on a 429 (*"You've hit your weekly limit · resets 6am (Europe/London)"*). That reset at 05:00Z today; a trivial call at 05:12Z answered, so both loops will work from their next occurrence. The last changelog lines on dev are from eb966c4b (2026-09-12). Lesson for the runbook, not yet written in: a loop whose every run fails in six seconds is indistinguishable from a healthy loop in `tmux ls`; the tick should read the loop log's last exit code.
