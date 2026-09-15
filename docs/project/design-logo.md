@@ -79,7 +79,11 @@ The wordmark is drawn **twice**, with deliberately different inner markup:
 | `HomeLogo` | fixed top-left, shelf-adjacent pages | `.logo-text` | Geist Variable 600 |
 | `DockHome` | left end of the reading view's bottom bar | `.dock-btn-label` | Geist Variable |
 
-Both spread `useLogoAnimation()` onto their `<a>`, so *when* an animation runs has one
+A third host since 2026-09-15, and not a wordmark: the spider beside the shelf's heading
+([`Library.tsx`](../../src/web/Library.tsx) § ShelfSpider), 28px, with no letters for anything to
+reach, so only the six mark animations ever run there (§ The trigger).
+
+Both wordmarks spread `useLogoAnimation()` onto their `<a>`, so *when* an animation runs has one
 implementation. What they do not share is the wrapper class, and that is on purpose: `.logo-text` is
 hidden by the 731px query, and the dock's word is owned by the bar's own fit ladder instead
 ([Dock.tsx § The word, and which mechanism takes it away](../../src/web/Dock.tsx)).
@@ -120,15 +124,32 @@ of the two words that pay least. Both copies become the 20px spider and nothing 
 early.
 
 That is why **six of the thirteen animate the mark alone** — a ratio, not an accident. An animation
-that lives entirely in the ten letters is a hover that does nothing for every reader on a phone, and
-seven of the thirteen are in that class. The picker is uniform anyway for a first version: a null
-draw on a small screen is not worth forty lines of conditional weighting, and the fix if it ever
-becomes one is to weight the pool rather than to redesign the animations.
+that lives entirely in the ten letters is a hover that does nothing wherever the word is gone, and
+seven of the thirteen are in that class.
+
+**And the word is gone on the reading view at ordinary desktop widths, not only on a phone.** This
+section said "phone" for a week, and that was false the day it was written: the bar's own
+measurements put rung 0 at 1397px for the default reader ([`dock-fit.ts`](../../src/web/dock-fit.ts)),
+so a 1280 or 1366 laptop never saw the word. Measured on 2026-09-15, default modes, one signed-in
+article — the bar's width depends on the modes and counts, so another configuration moves these:
+
+| Window | Dock rung | The word |
+| --- | --- | --- |
+| 1280 – 1920 | `dock-fit-2` | hidden |
+| 2560 | none | shown |
+| 1024, touch (iPad) | `dock-fit-3` | hidden |
+
+With a uniform picker that was seven hovers in thirteen doing nothing, and Greg reported the feature
+as missing (SPIDERYARN-READING2-3P,
+[the postmortem](../postmortems/260915c-logo-animations-drew-into-hidden-letters.md)). So **the
+picker draws only what can be seen** (§ The trigger), and every entry in `LOGO_ANIMATIONS` says which
+it is: `reach: "letters"` or `reach: "mark"`.
 
 ## The trigger
 
-[`useLogoAnimation`](../../src/web/logo-animation.ts) returns a class name and a set of `<a>` props.
-Three things in it are decisions rather than plumbing.
+[`useLogoAnimation`](../../src/web/logo-animation.ts) returns a class name and event props for any
+of the three hosts; the two wordmarks put them on their `<a>`, and the shelf puts them on its spider.
+Five things in it are decisions rather than plumbing.
 
 **A long press is a request to see, not to leave.** Holding the wordmark for 350ms picks an
 animation *and* suppresses the click that follows. Without that, a reader who held the logo down to
@@ -147,11 +168,30 @@ in thirteen, and a repeat does not read as chance — it reads as the feature be
 the reader's model is "a new one each time". The exclusion costs nothing and removes the only
 outcome that looks like a bug. It is also why the set should not fall below about nine.
 
+**The draw is from what the host can show.** At the moment of the hover or the hold, `lettersDrawn`
+asks whether the host's first `.logo-letter` has a layout box, and if it has none only the six
+`mark` animations are in the pool. Three different mechanisms take the word away — the 731px query,
+the dock's fit ladder, and a host with no letters at all — and every one of them leaves a letter
+with no box, so the hook never has to know which applied. It is not general visibility:
+`visibility: hidden` or an ancestor's clip would still read as drawn, and no host hides its word
+that way. `tests/logo-animation.test.tsx` checks each `reach` against the stylesheet's own
+selectors, so the tag cannot drift from what the rules actually touch.
+
+**A tap plays one only where a tap does nothing else.** On the reading view and in the corner a tap
+is the way home and stays so; a finger gets its animation from the hold. The shelf's spider
+([`Library.tsx`](../../src/web/Library.tsx) § ShelfSpider) is a picture, so it takes
+`{ tap: true }` and a tap plays one — decided on the `click`, never a short `pointerup`, because the
+release is heard on `window` and a finger that slid off and lifted elsewhere is not a tap on it.
+Whether the reading view's first tap should play and the second go home, the way a link's card
+behaves on the iPad, is open and is Greg's to decide.
+
 ## Adding one
 
 Two files and a test. Put the keyframes in
 [`logo-animations.css`](../../src/web/styles/logo-animations.css) under a class named `spya-<thing>`,
-add the entry to `LOGO_ANIMATIONS`, and run `npm test`. `/design` picks it up with no further edit.
+add the entry to `LOGO_ANIMATIONS` with its `reach` — `mark` if any rule of it touches the spider or
+the anchor, `letters` if it lives only in the word, and the test says so if you guess wrong — and
+run `npm test`. `/design` picks it up with no further edit.
 
 The stylesheet's header carries the rules in full. The four that are worth knowing before you start,
 because each of them fails **silently** — the animation looks fine to whoever wrote it and does
@@ -256,7 +296,8 @@ away entirely.
   animation lands on, per animation, and that is the contract a fourteenth has to meet.
 - **No weighting, no rarity, no context.** The wildcard list proposed animations that appear one time
   in fifty, that know the time of day, or that behave differently on a second hover. Some are good
-  and they are all a second mechanism; the picker is uniform until something shows it should not be.
+  and they are all a second mechanism; the picker is uniform over what the host can show
+  (§ The trigger), and that one filter is the whole of its judgement.
 - **No sound.** Obviously.
 
 ## See also

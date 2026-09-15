@@ -62,6 +62,7 @@ import { DataTable, naturalDirections, useSortedTable } from "./lib/DataTable.js
 import { capRows } from "./lib/row-cap.js";
 import { isAllNatural, sinkLast, sortingFromUrl, sortingToUrl } from "./lib/table-sort.js";
 import { Link } from "./Link.js";
+import { useLogoAnimation } from "./logo-animation.js";
 import { fold, foldWithMap, libraryHitHref, queryTerms } from "./library-hits.js";
 import {
   libraryByParam,
@@ -355,28 +356,15 @@ export function Library({
               Greg, 2026-09-08: *"can you include the logo itself in the
               top-left of the logged-in Homepage next to the wordmark"*.
 
-              **Deliberately not `HomeLogo`, and deliberately not animated.**
-              This is home, so there is nothing to link to (App.tsx says why),
-              and the hover animations are calibrated in whole pixels against a
-              0.82rem wordmark and a 20px spider — a 2px pluck is invisible on a
-              30px heading, and `spya-radius` masks at a hard-coded `20px 20px`.
-              Making them travel here means expressing the whole set in `em`,
-              which is a rework rather than a class. styles/logo-animations.css.
+              **Deliberately not `HomeLogo`**: this is home, so there is
+              nothing to link to (App.tsx says why). **The spider animates,
+              the heading does not** — § ShelfSpider below.
 
               `items-center` in its own row so the glyph centres on the word
               while the header's outer flex keeps its baseline alignment for the
               links opposite. */}
           <div className="tw:flex tw:items-center tw:gap-2.5">
-            {/* `alt=""`: the wordmark is right there, and a screen reader
-                reading the name twice is how a decorative image becomes noise.
-                Same reasoning as HomeLogo.tsx. */}
-            <img
-              className="logo-image"
-              src="/spideryarn-logo.png"
-              alt=""
-              width={28}
-              height={28}
-            />
+            <ShelfSpider />
             <h1 className="tw:font-prose tw:text-3xl tw:text-foreground">Spideryarn</h1>
           </div>
           {/* One group, so that once the first card is up its neighbour opens
@@ -1124,4 +1112,36 @@ function UndoStrip({ title, onUndo }: { title: string; onUndo: () => void }) {
  */
 function Tip({ children }: { children: ReactNode }) {
   return <span className="tw:block tw:text-xs tw:leading-relaxed tw:text-ink-soft">{children}</span>;
+}
+
+/**
+ * **The spider beside the shelf's heading, which plays the wordmark's
+ * animations on a hover and on a tap.**
+ *
+ * Greg, 2026-09-12: *"they should show up on hover or … [a tap] wherever the
+ * logo is present"*. Until then this was a plain `<img>`, left still on the
+ * grounds that the set is calibrated in pixels against a 0.82rem word and a
+ * 20px spider. That argument is about the letters, and there are none here:
+ * `lettersDrawn` finds no `.logo-letter`, so only the six animations that
+ * reach the mark are ever drawn (logo-animation.ts § pickLogoAnimation), and
+ * they sit on `.logo-mark`, which is a box exactly the spider whatever its
+ * size. The heading beside it is an `<h1>` and is left alone.
+ *
+ * **A tap plays one here, where on the reading view it goes home**, because
+ * here it does nothing else — `{ tap: true }`, decided on the click.
+ *
+ * **Decorative, not a `<button>`.** A tab stop whose only effect is a hover
+ * flourish is noise to a keyboard or screen-reader reader, so it stays out of
+ * the accessibility tree and out of the tab order; `alt=""` for the reason
+ * HomeLogo.tsx gives — the name is right beside it.
+ */
+function ShelfSpider() {
+  const anim = useLogoAnimation({ tap: true });
+  return (
+    <span className={`shelf-spider ${anim.className}`} aria-hidden="true" {...anim.handlers}>
+      <span className="logo-mark">
+        <img className="logo-image" src="/spideryarn-logo.png" alt="" width={28} height={28} />
+      </span>
+    </span>
+  );
 }
