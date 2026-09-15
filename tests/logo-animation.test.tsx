@@ -219,9 +219,13 @@ function logo(): HTMLAnchorElement {
  */
 function pointer(
   type: string,
-  init: { pointerType?: string; button?: number; pointerId?: number } = {},
+  init: { pointerType?: string; button?: number; buttons?: number; pointerId?: number } = {},
 ) {
-  const e = new MouseEvent(type, { bubbles: true, button: init.button ?? 0 });
+  const e = new MouseEvent(type, {
+    bubbles: true,
+    button: init.button ?? 0,
+    buttons: init.buttons ?? 0,
+  });
   Object.defineProperty(e, "pointerType", { value: init.pointerType ?? "mouse" });
   Object.defineProperty(e, "pointerId", { value: init.pointerId ?? 1 });
   return e;
@@ -280,6 +284,357 @@ describe("the trigger", () => {
     expect(running()).toBeNull();
   });
 
+  it("distinguishes a pen hover from the enter synthesized by pen contact", () => {
+    act(() => root.render(<HomeLogo />));
+    act(() => {
+      logo().dispatchEvent(pointer("pointerover", { pointerType: "pen", buttons: 1 }));
+    });
+    expect(running()).toBeNull();
+
+    act(() => {
+      logo().dispatchEvent(pointer("pointerout", { pointerType: "pen" }));
+      logo().dispatchEvent(pointer("pointerover", { pointerType: "pen" }));
+    });
+    expect(running()).not.toBeNull();
+  });
+
+});
+
+/**
+ * **The seven that animate the letters and nothing else**, by name rather than
+ * read off the registry, so this file cannot agree with a wrong tag by
+ * construction. Measured in the dock on 2026-09-15 with the word hidden: each
+ * of these left no running animation on any box that was drawn.
+ * docs/plans/260915c-logo-animations-draw-only-what-can-be-seen.md.
+ */
+const LETTERS_ONLY = new Set([
+  "spya-pluck",
+  "spya-sag",
+  "spya-register",
+  "spya-seam",
+  "spya-i",
+  "spya-type",
+  "spya-abseil",
+]);
+
+/**
+ * **A draw the reader cannot see is a draw that did not happen.** The reading
+ * view's bar gives its brand word up first of anything (dock-fit.css § the fit
+ * ladder), and on 2026-09-15 that was every window up to 1920px — so with a
+ * uniform pool, seven hovers in thirteen animated ten letters that were
+ * `display: none`, and Greg reported the feature as missing.
+ *
+ * jsdom lays nothing out, so `getClientRects()` is empty for every element:
+ * that is the hidden word, as the browser reports it. The word shown is the
+ * same call stubbed to return one box.
+ */
+describe("the draw, when the word is not on the screen", () => {
+  function Lettered() {
+    const anim = useLogoAnimation();
+    return (
+      <a href="/read" className={`logo lettered ${anim.className}`} {...anim.handlers}>
+        <span className="logo-mark">
+          <img className="logo-image" src="/spideryarn-logo.png" alt="" />
+        </span>
+        <span className="dock-btn-label">
+          {"Spideryarn".split("").map((ch, i) => (
+            // biome-ignore lint/suspicious/noArrayIndexKey: fixed string, rebuilt whole
+            <span className="logo-letter" key={i}>
+              {ch}
+            </span>
+          ))}
+        </span>
+      </a>
+    );
+  }
+
+  function hoverDraws(n: number): string[] {
+    const seen: string[] = [];
+    for (let k = 0; k < n; k++) {
+      act(() => {
+        logo().dispatchEvent(pointer("pointerover"));
+      });
+      const id = running();
+      if (id) seen.push(id);
+      act(() => {
+        logo().dispatchEvent(pointer("pointerout"));
+      });
+    }
+    return seen;
+  }
+
+  afterEach(() => vi.restoreAllMocks());
+
+  it("never hovers into an animation that lives only in hidden letters", () => {
+    act(() => root.render(<Lettered />));
+    const seen = hoverDraws(120);
+    expect(seen).toHaveLength(120);
+    expect(seen.filter((id) => LETTERS_ONLY.has(id))).toEqual([]);
+  });
+
+  it("never long-presses into one either", () => {
+    vi.useFakeTimers();
+    try {
+      act(() => root.render(<Lettered />));
+      const seen: string[] = [];
+      for (let k = 0; k < 40; k++) {
+        act(() => {
+          logo().dispatchEvent(pointer("pointerdown", { pointerType: "touch" }));
+        });
+        act(() => void vi.advanceTimersByTime(400));
+        const id = running();
+        if (id) seen.push(id);
+        act(() => {
+          release("pointerup");
+        });
+        act(() => void vi.advanceTimersByTime(5000));
+      }
+      expect(seen).toHaveLength(40);
+      expect(seen.filter((id) => LETTERS_ONLY.has(id))).toEqual([]);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("still reaches all thirteen when the word is drawn", () => {
+    vi.spyOn(Element.prototype, "getClientRects").mockReturnValue([
+      {},
+    ] as unknown as DOMRectList);
+    act(() => root.render(<Lettered />));
+    const seen = new Set(hoverDraws(600));
+    expect([...seen].sort()).toEqual(LOGO_ANIMATIONS.map((a) => a.id).sort());
+  });
+
+  /* **The tag agrees with the stylesheet, in both directions**, the same way the
+     registry's ids do above. A selector that names the animation and does not
+     go through `.logo-letter` reaches the spider or the whole anchor, and those
+     are drawn whether or not the word is — so an animation with one such rule
+     is `mark`, and one with none is `letters`. Without this the tag is a claim
+     nothing checks, and a fourteenth that moves only letters but is tagged
+     `mark` is a null draw on every reading view again. */
+  it("tags each animation by whether any rule of its reaches past the letters", () => {
+    const selectors = [...RULES.matchAll(/([^{}]+)\{/g)]
+      .flatMap((m) => (m[1] ?? "").split(","))
+      .map((s) => s.trim())
+      .filter((s) => s.startsWith("."));
+    for (const a of LOGO_ANIMATIONS) {
+      const own = new RegExp(`\\.${a.id}(?![\\w-])`);
+      const mine = selectors.filter((s) => own.test(s));
+      expect(mine.length, `${a.id} has no rule at all`).toBeGreaterThan(0);
+      /* The anchor itself (`.spya-dawn`, perhaps with a pseudo-element), or
+         anything under the spider. Named rather than inferred from "does not
+         say `.logo-letter`", so a rule on some third wrapper is not taken as
+         proof of something visible. */
+      const anchor = new RegExp(`^\\.${a.id}(::?[\\w-]+)?$`);
+      const reachesMark = mine.some((s) => anchor.test(s) || /\.logo-(image|mark)(?![\w-])/.test(s));
+      expect(a.reach, a.id).toBe(reachesMark ? "mark" : "letters");
+    }
+  });
+
+  it("tags exactly those seven as needing the word", () => {
+    const tagged = LOGO_ANIMATIONS.filter((a) => a.reach === "letters").map((a) => a.id);
+    expect(tagged.sort()).toEqual([...LETTERS_ONLY].sort());
+    expect(LOGO_ANIMATIONS.every((a) => a.reach === "letters" || a.reach === "mark")).toBe(true);
+  });
+});
+
+/**
+ * **The shelf's spider: a host that is not a link, where a tap plays one.**
+ *
+ * On the reading view a tap on the wordmark goes home, so a finger gets the
+ * animation only from a hold. On the shelf the spider beside the heading is a
+ * picture — a tap there does nothing else — so `{ tap: true }` lets the tap
+ * itself be the request. Greg, 2026-09-12: *"they should show up on hover or
+ * … [a tap] wherever the logo is present"*.
+ *
+ * **The tap is the `click`, not a short `pointerup`.** The hook hears the
+ * release on `window`, wherever it happens, which is right for ending a
+ * gesture and wrong for deciding one happened: a finger that slid off the
+ * spider and lifted elsewhere would play it. The browser only sends the click
+ * when it has decided the touch was a tap on this element. GPT Sol, 2026-09-15.
+ */
+describe("a tap on a host that is not a link", () => {
+  beforeEach(() => vi.useFakeTimers());
+  afterEach(() => vi.useRealTimers());
+
+  function Spider({ tap = true }: { tap?: boolean }) {
+    const anim = useLogoAnimation({ tap });
+    return (
+      <span className={`spider-host ${anim.className}`} {...anim.handlers}>
+        <span className="logo-mark">
+          <img className="logo-image" src="/spideryarn-logo.png" alt="" />
+        </span>
+      </span>
+    );
+  }
+
+  function spider(): HTMLElement {
+    const el = host.querySelector(".spider-host");
+    if (!el) throw new Error("Spider rendered no host");
+    return el as HTMLElement;
+  }
+
+  function playing(): string | null {
+    const el = spider();
+    if (!el.classList.contains("spya-anim")) return null;
+    return [...el.classList].find((c) => c.startsWith("spya-") && c !== "spya-anim") ?? null;
+  }
+
+  /** A touch tap as a browser delivers one: down, up (on window), then the click. */
+  function tap() {
+    act(() => {
+      spider().dispatchEvent(pointer("pointerdown", { pointerType: "touch" }));
+    });
+    act(() => {
+      release("pointerup");
+      spider().dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true }));
+    });
+  }
+
+  it("plays a mark animation on a tap, and clears it after the linger", () => {
+    act(() => root.render(<Spider />));
+    tap();
+    const id = playing();
+    expect(id).not.toBeNull();
+    expect(LETTERS_ONLY.has(id ?? "")).toBe(false);
+    act(() => void vi.advanceTimersByTime(4000));
+    expect(playing()).toBe(id);
+    act(() => void vi.advanceTimersByTime(1000));
+    expect(playing()).toBeNull();
+  });
+
+  it("plays nothing for a touch the browser cancelled", () => {
+    act(() => root.render(<Spider />));
+    act(() => {
+      spider().dispatchEvent(pointer("pointerdown", { pointerType: "touch" }));
+    });
+    act(() => {
+      release("pointercancel");
+    });
+    act(() => void vi.advanceTimersByTime(5000));
+    expect(playing()).toBeNull();
+  });
+
+  it("plays nothing for a finger that slid off and lifted elsewhere", () => {
+    act(() => root.render(<Spider />));
+    act(() => {
+      spider().dispatchEvent(pointer("pointerdown", { pointerType: "touch" }));
+    });
+    /* Released on `window` with no click on the spider: the browser decided it
+       was not a tap on this element. */
+    act(() => {
+      release("pointerup");
+    });
+    act(() => void vi.advanceTimersByTime(100));
+    expect(playing()).toBeNull();
+  });
+
+  it("does not mistake a later click for a touch whose click never arrived", () => {
+    act(() => root.render(<Spider />));
+    act(() => {
+      spider().dispatchEvent(pointer("pointerdown", { pointerType: "touch" }));
+      release("pointerup");
+    });
+    act(() => void vi.advanceTimersByTime(500));
+    act(() => {
+      spider().dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true }));
+    });
+    expect(playing()).toBeNull();
+  });
+
+  it("clears the touch marker even when this host does not play on taps", () => {
+    act(() => root.render(<Spider tap={false} />));
+    tap();
+    expect(playing()).toBeNull();
+
+    act(() => root.render(<Spider />));
+    act(() => {
+      spider().dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true }));
+    });
+    expect(playing()).toBeNull();
+  });
+
+  it("draws once for a hold, not again for the click that follows it", () => {
+    act(() => root.render(<Spider />));
+    act(() => {
+      spider().dispatchEvent(pointer("pointerdown", { pointerType: "touch" }));
+    });
+    act(() => void vi.advanceTimersByTime(400));
+    const held = playing();
+    expect(held).not.toBeNull();
+    act(() => {
+      release("pointerup");
+      spider().dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true }));
+    });
+    /* The picker never repeats the last draw, so a second roll here would show
+       up as a different id rather than hide behind the same one. */
+    expect(playing()).toBe(held);
+    act(() => {
+      spider().dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true }));
+    });
+    expect(playing()).toBe(held);
+  });
+
+  it("draws once for a mouse, on the hover, and not again on its click", () => {
+    act(() => root.render(<Spider />));
+    act(() => {
+      spider().dispatchEvent(pointer("pointerover"));
+    });
+    const hovered = playing();
+    expect(hovered).not.toBeNull();
+    act(() => {
+      spider().dispatchEvent(pointer("pointerdown"));
+    });
+    act(() => {
+      release("pointerup");
+      spider().dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true }));
+    });
+    expect(playing()).toBe(hovered);
+  });
+
+  it("lets a touch tap replace a mouse hover on a hybrid device", () => {
+    act(() => root.render(<Spider />));
+    act(() => {
+      spider().dispatchEvent(pointer("pointerover"));
+    });
+    const hovered = playing();
+    tap();
+    const tapped = playing();
+    expect(tapped).not.toBeNull();
+    expect(tapped).not.toBe(hovered);
+    act(() => void vi.advanceTimersByTime(5000));
+    expect(playing()).toBeNull();
+  });
+
+  it("replaces a lingering animation on a second tap, and still expires", () => {
+    act(() => root.render(<Spider />));
+    tap();
+    const first = playing();
+    act(() => void vi.advanceTimersByTime(1000));
+    tap();
+    const second = playing();
+    expect(second).not.toBeNull();
+    expect(second).not.toBe(first);
+    /* 4.5s from the second tap, not from the first. */
+    act(() => void vi.advanceTimersByTime(4000));
+    expect(playing()).toBe(second);
+    act(() => void vi.advanceTimersByTime(1000));
+    expect(playing()).toBeNull();
+  });
+
+  it("does not play on a tap without the option, which is the reading view's case", () => {
+    function Plain() {
+      const anim = useLogoAnimation();
+      return (
+        <span className={`spider-host ${anim.className}`} {...anim.handlers}>
+          <span className="logo-mark" />
+        </span>
+      );
+    }
+    act(() => root.render(<Plain />));
+    tap();
+    expect(playing()).toBeNull();
+  });
 });
 
 /**
@@ -310,6 +665,42 @@ function bare(): HTMLAnchorElement {
 describe("the long press", () => {
   beforeEach(() => vi.useFakeTimers());
   afterEach(() => vi.useRealTimers());
+
+  /* **A mouse that left mid-press is not holding the wordmark.** The press
+     outlives the leave on purpose (a small excursion and back must still
+     suppress the click), but the threshold then fired with the pointer
+     elsewhere, rolled, and a mouse release has no linger to clear what it
+     rolled — so the class stood until the next hover. GPT Sol, 2026-09-15. */
+  it("does not strand an animation when a mouse leaves before the threshold and lets go outside", () => {
+    act(() => root.render(<Bare />));
+    act(() => {
+      bare().dispatchEvent(pointer("pointerover"));
+      bare().dispatchEvent(pointer("pointerdown"));
+      bare().dispatchEvent(pointer("pointerout"));
+    });
+    act(() => void vi.advanceTimersByTime(400));
+    act(() => {
+      release("pointerup");
+    });
+    act(() => void vi.advanceTimersByTime(5000));
+    expect(bare().className).not.toContain("spya-anim");
+  });
+
+  it("treats a primary mouse down on the host as inside even without a preceding enter", () => {
+    act(() => root.render(<Bare />));
+    act(() => {
+      bare().dispatchEvent(pointer("pointerdown"));
+    });
+    act(() => void vi.advanceTimersByTime(400));
+    expect(bare().className).toContain("spya-anim");
+
+    const click = new MouseEvent("click", { bubbles: true, cancelable: true });
+    act(() => {
+      release("pointerup");
+      bare().dispatchEvent(click);
+    });
+    expect(click.defaultPrevented).toBe(true);
+  });
 
   it("picks an animation once the press is held, and swallows the click", () => {
     if (LOGO_ANIMATIONS.length === 0) return;
@@ -364,7 +755,7 @@ describe("the long press", () => {
     act(() => void vi.advanceTimersByTime(400));
     act(() => {
       bare().dispatchEvent(pointer("pointerout"));
-      bare().dispatchEvent(pointer("pointerover"));
+      bare().dispatchEvent(pointer("pointerover", { buttons: 1 }));
     });
 
     const click = new MouseEvent("click", { bubbles: true, cancelable: true });

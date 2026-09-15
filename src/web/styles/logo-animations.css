@@ -832,8 +832,15 @@
       var(--highlight) 0.4turn,
       var(--highlight) 1turn
     );
-    -webkit-mask: url(/spideryarn-logo.png) center / 20px 20px no-repeat;
-    mask: url(/spideryarn-logo.png) center / 20px 20px no-repeat;
+    /* `100% 100%` of a box that is exactly the spider (`inset: 0` on
+       `.logo-mark`), rather than the `20px 20px` it was. **The spider is not
+       square**: measured on 2026-09-15 it is drawn 20 × 21.14 in the dock and
+       the corner, 19.22 × 20.31 in the corner on a phone, and 28 × 29.59 on the
+       shelf — so a fixed `20px 20px` painted the sweep about 5% shorter than
+       the spider it sits on, in every host. A mask sized to the box is the
+       image's own size wherever it is drawn. */
+    -webkit-mask: url(/spideryarn-logo.png) center / 100% 100% no-repeat;
+    mask: url(/spideryarn-logo.png) center / 100% 100% no-repeat;
     animation: spya-radius 2.4s linear infinite;
   }
 }

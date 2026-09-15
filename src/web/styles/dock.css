@@ -586,6 +586,15 @@
    whatever moves the mark moves this with it. */
 .logo-mark { display: flex; }
 .logo-image { display: block; }
+/* The shelf's spider (Library.tsx § ShelfSpider), which plays the same
+   animations on a tap. Not a `.logo`, so it takes that block's two
+   long-press lines itself: a held picture on iOS otherwise raises the
+   save-image callout over the animation the reader just asked for. */
+.shelf-spider {
+  display: inline-flex;
+  -webkit-touch-callout: none;
+  user-select: none;
+}
 
 /* The way home, fixed in the very top-left of the window — HomeLogo.tsx.
    Height matches `--bar-h` so it sits on the same line as the reading view's
