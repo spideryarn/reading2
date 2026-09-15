@@ -117,6 +117,17 @@ const TAP_MAX_MS = 600;
  */
 const TOUCH_FOCUS_MS = 700;
 
+/**
+ * How long a press snapshot is trusted to authorize a *commit*.
+ *
+ * The click itself is still caught after this: on browsers where `click` is a
+ * PointerEvent its own `pointerType` is enough to reveal safely. What expires
+ * is only the claim that this click belongs to an earlier press which saw the
+ * card open. That distinction keeps a missing click from leaving permission to
+ * open a tab behind indefinitely.
+ */
+const PRESS_COMMIT_MS = 2_000;
+
 /** Where a finger went down, what was true then, and the furthest it has been. */
 interface Press {
   id: number;
@@ -127,6 +138,18 @@ interface Press {
   at: number;
   /** Whether the reader already had text selected when the finger landed. */
   hadSelection: boolean;
+}
+
+/** The state one touch/pen press contributes to its eventual click. */
+interface ClickPress {
+  type: "touch" | "pen";
+  id: number;
+  at: number;
+  hadSelection: boolean;
+  /** False once another press begins before this one's click arrives. */
+  canCommit: boolean;
+  /** The card open when this particular press began. */
+  open: HTMLElement | null;
 }
 
 /**
@@ -462,6 +485,27 @@ export function useHoverCard<T>({
      * GPT Sol code review, 2026-08-27.
      */
     let lastTouchAt = Number.NEGATIVE_INFINITY;
+    /**
+     * One snapshot per touch/pen press, in dispatch order.
+     *
+     * Compatibility clicks may be delayed and grouped after several lifts,
+     * but their relative order is preserved. A singleton loses that ordering:
+     * the first click then borrows the last press's `open` card and can turn a
+     * first tap into a commit. Records are consumed by every touch/pen click,
+     * including clicks outside links, so one ordinary no-op cannot become
+     * authority for a later link.
+     */
+    let clickPresses: ClickPress[] = [];
+    const activeClickPresses = new Map<number, ClickPress>();
+    /** Fallback for Safari versions whose `click` is still a MouseEvent. */
+    let lastPointerType = "";
+
+    const discardClickPress = (press: ClickPress | undefined) => {
+      if (!press) return;
+      const at = clickPresses.indexOf(press);
+      if (at !== -1) clickPresses.splice(at, 1);
+      if (activeClickPresses.get(press.id) === press) activeClickPresses.delete(press.id);
+    };
 
     const pointerDown = (event: PointerEvent) => {
       /* Any new press ends the last tap's swallow window, whether or not the
@@ -471,7 +515,48 @@ export function useHoverCard<T>({
          tap. With this, staleness is bounded by the next touch rather than by
          a timer. */
       handled = null;
-      if (event.pointerType !== "touch" || !tapSelector) return;
+      if (!tapSelector) return;
+      lastPointerType = event.pointerType;
+      const held = window.getSelection();
+      if ((event.pointerType === "touch" || event.pointerType === "pen") && !event.isPrimary) {
+        /* A second contact makes the whole active press a pinch/palm gesture.
+           A UA will ordinarily emit no click, but if it does, no snapshot from
+           before the second contact may authorize a commit. */
+        for (const press of [...activeClickPresses.values()]) {
+          if (press.type === event.pointerType) discardClickPress(press);
+        }
+      } else if (event.pointerType === "touch" || event.pointerType === "pen") {
+        /* Drop records that can no longer authorize a commit. A later click
+           from the same device is still caught from its own pointerType and
+           reveals; it just cannot spend an ancient `open` snapshot. */
+        clickPresses = clickPresses.filter((press) => {
+          const current = event.timeStamp - press.at <= PRESS_COMMIT_MS;
+          if (!current && activeClickPresses.get(press.id) === press) {
+            activeClickPresses.delete(press.id);
+          }
+          return current;
+        });
+        /* If one press produced no click, the next click is indistinguishable
+           from a grouped delayed click in older MouseEvent-only Safari. Keep
+           intercepting both, but neither snapshot is safe enough to open a
+           destination. Once the queue drains, the ordinary second tap regains
+           commit authority. */
+        const canCommit = clickPresses.length === 0;
+        if (!canCommit) {
+          for (const press of clickPresses) press.canCommit = false;
+        }
+        const clickPress: ClickPress = {
+          type: event.pointerType,
+          id: event.pointerId,
+          at: event.timeStamp,
+          hadSelection: held !== null && !held.isCollapsed,
+          canCommit,
+          open: currentRef.current,
+        };
+        clickPresses.push(clickPress);
+        activeClickPresses.set(event.pointerId, clickPress);
+      }
+      if (event.pointerType !== "touch") return;
       lastTouchAt = event.timeStamp;
       /* A second finger is a pinch, and a pinch is not a tap. Dropping the
          gesture rather than tracking two: zoom has to survive, and the same
@@ -508,8 +593,9 @@ export function useHoverCard<T>({
        Every one of those means the same thing here, which is that no tap
        happened. Without this a scroll that began on a term and ended on one
        would open a card on the way past. */
-    const pointerCancel = () => {
+    const pointerCancel = (event: PointerEvent) => {
       down = null;
+      discardClickPress(activeClickPresses.get(event.pointerId));
     };
 
     /**
@@ -524,13 +610,33 @@ export function useHoverCard<T>({
      * 2026-08-27; the duration test in `isTap` is the guard for the case where
      * `contextmenu` never comes at all.
      */
-    const contextMenu = () => {
+    const contextMenu = (event: PointerEvent) => {
       down = null;
       handled = null;
+      const own = activeClickPresses.get(event.pointerId);
+      if (own) {
+        discardClickPress(own);
+      } else {
+        /* `contextmenu` may follow pointerup, after the active map was cleared. */
+        const type = event.pointerType || lastPointerType;
+        let at = -1;
+        for (let i = clickPresses.length - 1; i >= 0; i -= 1) {
+          const press = clickPresses[i];
+          if (
+            press?.type === type &&
+            (!Number.isFinite(event.pointerId) || event.pointerId < 0 || press.id === event.pointerId)
+          ) {
+            at = i;
+            break;
+          }
+        }
+        if (at !== -1) discardClickPress(clickPresses[at]);
+      }
       if (byTouchRef.current) shut();
     };
 
     const pointerUp = (event: PointerEvent) => {
+      activeClickPresses.delete(event.pointerId);
       if (event.pointerType !== "touch" || !tapSelector) return;
       lastTouchAt = event.timeStamp;
       const start = down;
@@ -553,6 +659,15 @@ export function useHoverCard<T>({
         return;
       }
 
+      /* **Anything inside a link is the click's to decide, not this
+         listener's** — see `clicked`. Deciding it here and swallowing the
+         click afterwards was only ever as good as this listener's guess at the
+         click, and the platform is free to disagree: to put the click on a
+         different node (touch adjustment), to click where `isTap` refused, or
+         to click after the swallow had expired. Every disagreement opened the
+         destination. docs/plans/260915a-ipad-link-taps-that-escape-the-link-card.md. */
+      if (hit.closest("a[href]")) return;
+
       handled = { x: event.clientX, y: event.clientY, at: event.timeStamp };
       if (hit === currentRef.current) {
         /* The card is left open and `currentRef.current` left set: what a second tap
@@ -563,9 +678,13 @@ export function useHoverCard<T>({
         commitRef.current?.({ el: hit, data });
         return;
       }
-      /* Open now rather than after `HOVER_DELAY.open`. A tap is a request, not
-         a pointer coming to rest, and there is no crossing-the-prose case to
-         defend against — the finger was put down on the word deliberately. */
+      reveal(hit, data);
+    };
+
+    /* Open now rather than after `HOVER_DELAY.open`. A tap is a request, not a
+       pointer coming to rest, and there is no crossing-the-prose case to
+       defend against — the finger was put down on the words deliberately. */
+    const reveal = (hit: HTMLElement, data: T) => {
       disarm();
       clearTimeout(closeTimer);
       currentRef.current = hit;
@@ -607,20 +726,132 @@ export function useHoverCard<T>({
 
        Both are capture-phase on `document`, which is above React's root
        container and therefore ahead of TableView's handlers. */
-    const swallowed = (event: MouseEvent) => {
-      if (!handled) return;
+    const swallowed = (event: MouseEvent): boolean => {
+      if (!handled) return false;
       const stale = event.timeStamp - handled.at > SWALLOW.ms;
       const elsewhere =
         Math.hypot(event.clientX - handled.x, event.clientY - handled.y) > SWALLOW.px;
       if (stale || elsewhere) {
         handled = null;
-        return;
+        return false;
       }
       if (event.type === "click") {
         handled = null;
         event.preventDefault();
       }
       event.stopPropagation();
+      return true;
+    };
+
+    /**
+     * **Every tap on a link is decided here, at the event that navigates.**
+     *
+     * SPIDERYARN-READING2-3Y: on a home-screen iPad a first tap on a link
+     * sometimes opened the destination over the whole app, when it should have
+     * shown the card. The decision used to be made at `pointerup` and only
+     * *predicted* the click; the click is the platform's own verdict — that
+     * this was a tap, and where — after touch adjustment, after its own slop,
+     * for any pointer, whenever it arrives. So for a tap target inside an
+     * `a[href]` (an outbound link, a term inside one, a footnote marker) it is
+     * the only verdict that counts. `pointerUp` steps aside for these.
+     *
+     * The `mouseup` before this click is let through, which is safe only
+     * because TableView's `onMouseUp` returns for anything inside `a[href]`
+     * once it has handled a real selection. If that line ever goes, a
+     * `mark.chat` inside a link opens its thread on a tap again.
+     *
+     * Four things it leaves to the link, and one it cancels without acting:
+     *
+     * - **Not a tap**: a keyboard's Enter carries `detail` 0; a mouse or a
+     *   trackpad identifies itself on the click (or the preceding press on an
+     *   older MouseEvent-only browser). The link does what it has always done.
+     * - **The card's own controls**, which are the second way to commit.
+     * - **A live selection** — the reader choosing words. TableView's click
+     *   handler already keeps that click from following the link, and a card
+     *   must never commit on a drag. GPT Sol's plan review, 2026-09-15.
+     * - **A target `read` declines.**
+     * - **A tap that cleared an earlier selection** is cancelled and opens
+     *   nothing: that is `hadSelection`'s rule on the `pointerup` path, and it
+     *   used to navigate here.
+     *
+     * **It commits only the card that was open when that click's press began**,
+     * never merely the one open now. A card can open
+     * during a tap without this code — a hover-capable Pencil's timer, a focus
+     * that lands late — and a same-gesture click finding it open would
+     * otherwise open the destination on a first tap. It also keeps grouped
+     * clicks honest: the spec lets compatibility clicks arrive together after
+     * several lifts, and the second must not read the first's reveal as its
+     * own card.
+     */
+    const clickPress = (event: MouseEvent): ClickPress | null | undefined => {
+      const ownType = (event as PointerEvent).pointerType;
+      /* Pointer Events defines an empty type for keyboard, voice and other
+         non-pointing activation. That is definitive even if a touch record is
+         waiting. */
+      if (ownType === "") return undefined;
+      /* On an older MouseEvent-only click, detail 0 is keyboard/programmatic
+         activation. `HTMLElement.click()` carries 0 too. */
+      if (typeof ownType !== "string" && event.detail < 1) return undefined;
+      let type = typeof ownType === "string" ? ownType : lastPointerType;
+      let pointerId = typeof ownType === "string" ? (event as PointerEvent).pointerId : null;
+      if (type === "mouse") {
+        /* WebKit bug 282988: affected iPads report `mouse` on a click whose
+           pointerdown/up correctly reported `touch`. A fresh queued press is
+           stronger evidence than that known-bad field. A real mouse press has
+           already put `mouse` in `lastPointerType`, and an ancient touch
+           snapshot is not allowed to override it. */
+        const preceding = clickPresses.find(
+          (press) => event.timeStamp - press.at <= PRESS_COMMIT_MS,
+        );
+        if (!preceding || lastPointerType === "mouse") return undefined;
+        type = preceding.type;
+        /* And its id is the mouse's, not the finger's, for the same reason.
+           Matching on it would find no record, so the reader's second tap
+           would re-reveal for ever and never open the link — on exactly the
+           iPads this branch is for. Fall back to order, like a MouseEvent
+           click. Found reading Sol's fix, 2026-09-15. */
+        pointerId = null;
+      }
+      if (type !== "touch" && type !== "pen") return undefined;
+
+      const at = clickPresses.findIndex(
+        (press) => press.type === type && (pointerId === null || press.id === pointerId),
+      );
+      if (at === -1) return null;
+      const [press] = clickPresses.splice(at, 1);
+      if (!press) return null;
+      if (activeClickPresses.get(press.id) === press) activeClickPresses.delete(press.id);
+      return press.canCommit && event.timeStamp - press.at <= PRESS_COMMIT_MS ? press : null;
+    };
+
+    const clicked = (event: MouseEvent) => {
+      const press = clickPress(event);
+      if (swallowed(event) || !tapSelector) return;
+      if (event.defaultPrevented || event.detail < 1 || press === undefined) return;
+      const target = event.target as Element | null;
+      if (!target?.closest?.("a[href]") || target.closest(`.${CARD_CLASS}`)) return;
+      const hit = target.closest(tapSelector) as HTMLElement | null;
+      const data = hit ? readRef.current(hit) : null;
+      if (!hit || data === null) return;
+      const selection = window.getSelection();
+      if (selection && !selection.isCollapsed) return;
+
+      event.preventDefault();
+      event.stopPropagation();
+      if (press?.hadSelection) return;
+      /* The matching press's `open` and not `currentRef.current`, in both
+         directions. Not
+         "open now", for the reason above; and not "still open", because a
+         fat-fingered second tap lands its pointer events on the words beside
+         the link, which `pointerUp` reads as a tap elsewhere and shuts the
+         card — before the click, adjusted onto the link, arrives here. The
+         reader was looking at that card when they pressed. */
+      if (press && hit === press.open) {
+        // The consumer closes the card if it acts — see `onCommit`.
+        commitRef.current?.({ el: hit, data });
+        return;
+      }
+      reveal(hit, data);
     };
 
     /**
@@ -705,7 +936,7 @@ export function useHoverCard<T>({
       document.addEventListener("pointercancel", pointerCancel);
       document.addEventListener("contextmenu", contextMenu);
       document.addEventListener("mouseup", swallowed, true);
-      document.addEventListener("click", swallowed, true);
+      document.addEventListener("click", clicked, true);
       /* Capture, because the scroller is often an element rather than the page
          and a `scroll` event from one does not bubble. Passive: this only ever
          reads. */
@@ -739,7 +970,7 @@ export function useHoverCard<T>({
         document.removeEventListener("pointercancel", pointerCancel);
         document.removeEventListener("contextmenu", contextMenu);
         document.removeEventListener("mouseup", swallowed, true);
-        document.removeEventListener("click", swallowed, true);
+        document.removeEventListener("click", clicked, true);
         document.removeEventListener("scroll", dismiss, true);
         window.removeEventListener("resize", dismiss);
       }

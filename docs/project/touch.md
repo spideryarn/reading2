@@ -104,6 +104,17 @@ no hover has to let the first press mean *show me* or the reader commits blind.
   finding is worth anything: Chrome at 834×1194 with `hasTouch`, driven through CDP
   `Input.dispatchTouchEvent` so the browser generates the pointer stream itself. Synthetic events
   would have agreed with a broken build, and once did.
+
+  **And the check tapped the centre of every link, which is the one place it could not fail.**
+  On 2026-09-12 a first tap still sometimes opened the page — because the rule was decided at
+  `pointerup` and the platform decides the *click* separately, moving it onto a link the finger
+  landed beside, or clicking where our tap test had refused. A tap on anything inside a link is
+  decided at the click now ([links.md](links.md#on-a-coarse-pointer-the-first-tap-reveals-and-the-second-opens)).
+  **The trap worth carrying to any other tap rule: a tap's pointer events and its click are two
+  answers to one gesture, and they can disagree about where, whether and when.** So test off-centre,
+  with a finger's radius, with a sideways drift and a held press — and if what you are guarding is
+  a navigation, guard it at the click
+  ([postmortem](../postmortems/260915a-a-tap-judged-at-pointerup-and-acted-on-at-click.md)).
 - **The shelf card's five action buttons**, since 2026-09-05 — first tap reads the control, second
   presses it. They are visible on a touch screen (`hover-none:opacity-100`, so that a control you
   cannot see is not also one you can hit by accident), and once
