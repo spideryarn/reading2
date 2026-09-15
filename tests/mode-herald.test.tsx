@@ -82,6 +82,10 @@ const pointerDownOn = (el: Element) =>
   act(() => {
     el.dispatchEvent(new Event("pointerdown", { bubbles: true }));
   });
+const keyDownOn = (el: Element) =>
+  act(() => {
+    el.dispatchEvent(new KeyboardEvent("keydown", { bubbles: true, key: "a" }));
+  });
 
 describe("the herald", () => {
   it("says nothing when nothing was pressed — and the region is there to be filled", () => {
@@ -126,6 +130,14 @@ describe("the herald", () => {
     pointerDownOn(document.body);
     expect(shown()).toContain(MODE_LABEL.search);
     expect(done).toBe(0);
+  });
+
+  it("goes when the reader starts typing in a band field", () => {
+    press("search");
+    const box = band.querySelector(".srch-box") as Element;
+    keyDownOn(box);
+    expect(shown()).toBe("");
+    expect(done).toBe(1);
   });
 
   it("a second press starts its own three seconds rather than inheriting the first's", () => {

@@ -88,15 +88,20 @@ function Card({ mode, onDone }: { mode: Mode; onDone(): void }) {
   useEffect(() => {
     const timer = setTimeout(() => done.current(), HERALD_MS);
     /* Capture, so a control that stops propagation still clears the card.
-       Only inside the band: a press on the prose or the Dock is about
-       something else, and the card is not in its way. */
-    const pressed = (e: Event) => {
+       Pointer input covers a tap and the start of a touch scroll; keyboard
+       input covers the other immediate-use path, especially typing into the
+       Search field that the band focuses on mount. Only inside the band: input
+       on the prose, command bar or Dock is about something else, and the card
+       is not in its way. */
+    const usedBand = (e: Event) => {
       if (e.target instanceof Element && e.target.closest(".mode-band")) done.current();
     };
-    document.addEventListener("pointerdown", pressed, true);
+    document.addEventListener("pointerdown", usedBand, true);
+    document.addEventListener("keydown", usedBand, true);
     return () => {
       clearTimeout(timer);
-      document.removeEventListener("pointerdown", pressed, true);
+      document.removeEventListener("pointerdown", usedBand, true);
+      document.removeEventListener("keydown", usedBand, true);
     };
   }, []);
   return (

@@ -130,6 +130,16 @@ sentence only**, because the Dock's radio has just announced the name. The visib
    Glossary button shows the herald; opening the page at `?mode=glossary` shows none. Red first
    against today's code.
 
+## Reviews
+
+- **Plan, GPT Sol, 2026-09-15** — six findings, all applied above: which presses count, Back then
+  Forward, keying the card rather than the region, taps passing through, the CSS contract, and
+  announcing only the sentence.
+- **Code, GPT Sol, 2026-09-16** — one P1, fixed by the reviewer with a test: keyboard input inside
+  the band did not clear the card, so a reader who opened Search and typed straight away wrote into a
+  box hidden under it for three seconds. A `keydown` in the band now clears it as a `pointerdown` does.
+  Its sandbox could not reach Postgres, so the full suite was run here instead.
+
 ## Deferred
 
 - **Hierarchy**, which has no band to put it on.
