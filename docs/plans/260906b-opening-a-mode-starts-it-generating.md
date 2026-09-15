@@ -26,7 +26,7 @@ spends money. The work is almost entirely *widening a vocabulary and calling a h
 | Glossary, Ideas, Quotes, Timeline, Debate | Dock mode button | **yes** | — |
 | Diagram → Sketch chip, Illustrated chip | chip inside Diagram | **yes** | — |
 | **Diagram** → the Sketch it lands on | Dock mode button | no | left out of `MODE_TARGET` on cost |
-| **Tweets** | Dock link, `/read/<slug>/tweets` | no | "a button, not an effect", 2026-08-25 |
+| **Tweets** | Dock link, `/read/<slug>/tweets` | no | "a button, not an effect", 2026-08-25 — and since 2026-09-15 it starts on *arrival*, not on the press this plan wired: [260915e](260915e-tweets-page-starts-writing-when-opened.md) |
 | **Remember → Quiz** | sub-mode chip | no | never wired |
 | **Referee → Claims** | sub-mode chip | no | a stream, not a job — no `StepName` |
 | **Referee → Candidates** | sub-mode chip | no | fired on *mount*; cut to a button 2026-09-02 |

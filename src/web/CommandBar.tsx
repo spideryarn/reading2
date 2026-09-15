@@ -36,10 +36,9 @@
  *
  *     The half of the call that has never changed: a mode row's Enter opens it
  *     **exactly as pressing its Dock button does** — same activation, same
- *     generate-on-open, same cost. Since 2026-09-08 that holds for the rows
- *     that are not modes too: Tweets arms a run over the whole article on its
- *     way to the thread page, exactly as the Dock's Tweets button does, and
- *     wears the `generates` marker for it.
+ *     generate-on-open, same cost. A non-mode row can spend too: Tweets is plain
+ *     navigation to the thread page, which writes on owner arrival when empty,
+ *     and the row wears the `generates` marker for that consequence.
  *  2. It is reachable by **⌘/Ctrl-K and by a button in the Dock**, because
  *     ⌘-K does not exist on a phone. The Dock keeps every mode button it has —
  *     this is an additional door, never a replacement. **The button moved to
@@ -396,10 +395,11 @@ export const GENERATES_MARKER = "generates";
  * > the check would go on excluding it and no test could see the difference.
  * > (GPT Sol, 2026-09-07)
  *
- * The Tweets row is that page — it arms a run over the whole article on the way
- * to the thread — so the fix is the one that comment prescribed: the answer is
- * a **property on the command**, and this function is what puts the two arms on
- * one footing rather than adding a second name to the old condition.
+ * The Tweets row is that page — since 2026-09-15 it navigates to a page that
+ * starts the run on owner arrival rather than arming one itself — so the fix is
+ * the one that comment prescribed: the answer is a **property on the command**,
+ * and this function is what puts the two arms on one footing rather than adding
+ * a second name to the old condition.
  *
  * The mode arm stays a table lookup rather than a copied flag, because
  * `MODE_TARGET` is already total and a duplicated boolean per mode is fourteen

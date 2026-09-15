@@ -56,10 +56,8 @@ beforeEach(() => {
   host = document.createElement("div");
   document.body.append(host);
   root = createRoot(host);
-  /* **Armed activations are module state and outlive a render**, so a Tweets
-     row pressed in one test would be found still pending by the next — which
-     is how a check that arming *happened* passes for a bar that armed nothing.
-     activation.ts § `resetActivations` exists for exactly this. */
+  /* Mode activations are module state and outlive a render. Tweets no longer
+     arms one, but this file also presses modes and reads the shared map. */
   resetActivations();
 });
 
@@ -677,8 +675,8 @@ describe("the `generates` marker", () => {
    * by `kind`, so *"a page that did start work would be unmarked here and this
    * test would stay green while the bar under-warned"* (GPT Sol, 2026-09-07).
    *
-   * Tweets is that page — it arms a run over the whole article on its way to
-   * the thread — so the claim is now the one that could not be made before:
+   * Tweets is that page — it opens an owner-only page that runs on arrival when
+   * empty — so the claim is now the one that could not be made before:
    * **the marker follows the row's own `generates`, not its kind.** Both halves
    * are named rows rather than counts, because *some page has it and some page
    * does not* would be satisfied by the two being the wrong way round.

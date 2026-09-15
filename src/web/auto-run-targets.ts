@@ -1,6 +1,9 @@
 /**
- * **The surfaces that start themselves when the reader presses them, named
- * once, in a module that imports nothing at runtime.**
+ * **The targets allowed one automatic attempt, named once, in a module that
+ * imports nothing at runtime.**
+ *
+ * Eleven start after a press; Tweets starts when its owner arrives at its own
+ * page. `beginAutoAttempt` applies the same loop guard to both triggers.
  *
  * A file of its own for the reason [`src/modes.ts`](../modes.ts) and
  * [`src/web/referee-views.ts`](./referee-views.ts) are files of their own: two
@@ -66,5 +69,5 @@ type StepAutoRunTarget = StepTarget<
 /** The two that are streams, with no job row and no place in `STEP_ORDER`. */
 type StreamAutoRunTarget = "claims" | "candidates";
 
-/** Every control that may start a paid run on being pressed. */
+/** Every target that may receive one automatic attempt in this tab session. */
 export type AutoRunTarget = StepAutoRunTarget | StreamAutoRunTarget;

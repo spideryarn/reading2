@@ -77,8 +77,9 @@ and named the strongest argument against — which is below, not hidden.
 
 - It **reverses 2026-08-25's "a button, not an effect"** for this page, and it makes a page load
   spend: Back onto the thread page in a tab that has never tried, or a reload after a failure, now
-  starts a job without a press. Bounded — one per article per tab session, the owner's own article
-  only, the owner's slots — and a reload after a failure is arguably the retry Greg wants.
+  starts a job without a press. Bounded client-side — one automatic attempt per article per page
+  load, and only after the private owner read succeeds — but **not** by the owner's slots: reruns
+  have no per-owner spend cap. A reload after a failure is arguably the retry Greg wants.
 - It is the **second** place in the reading view a paid call happens on arrival. The first is
   Diagram's Force, Drift and Trail embeddings (activation.ts § The three geometries arm nothing).
 - The Tweets page stops being like the modes, which stay press-only. That is the point: the modes'

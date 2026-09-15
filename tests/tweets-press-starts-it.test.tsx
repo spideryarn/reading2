@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 /**
- * **Pressing Tweets writes the thread. Arriving at the page does not.**
+ * **Opening Tweets writes the thread, whether by a press or a direct arrival.**
  *
  * > The Tweets mode should automatically start generating (if it hasn't already
  * > generated) when opened (without having to click a button to kick it off)
@@ -101,7 +101,7 @@ vi.mock("../src/web/lib/api.js", () => ({
 }));
 
 let nextJobId = 0;
-const jobs: Job[] = [];
+let jobs: Job[] = [];
 /** Whether the queue refuses, so the automatic attempt can be made to fail. */
 let postRefuses = false;
 
@@ -196,7 +196,7 @@ const tweetsPosts = () => posts.filter((p) => p.steps.includes("tweets"));
 beforeEach(() => {
   threadGets.length = 0;
   posts.length = 0;
-  jobs.length = 0;
+  jobs = [];
   nextJobId = 0;
   threadStatus = 404;
   postRefuses = false;
@@ -267,6 +267,38 @@ describe("the Tweets page, arrived at without a press", () => {
 
     expect(threadGets).toHaveLength(2);
     expect(posts).toHaveLength(0);
+  });
+
+  it("does not post again when an accepted job later fails", async () => {
+    await openAt(`/read/${SLUG}/tweets`);
+    expect(tweetsPosts()).toHaveLength(1);
+
+    jobs = [
+      {
+        id: "job1",
+        ownerId: "owner" as Job["ownerId"],
+        slug: SLUG,
+        steps: [
+          {
+            name: "tweets",
+            label: "Writing the thread",
+            status: "error",
+            error: "The accepted job failed.",
+          },
+        ],
+        status: "error",
+        error: "The accepted job failed.",
+        createdAt: "2026-09-16T00:00:00.000Z",
+        finishedAt: "2026-09-16T00:00:01.000Z",
+      },
+    ];
+    await act(async () => {
+      root.render(createElement(StrictMode, null, createElement(Page)));
+    });
+    await settle();
+
+    expect(host.textContent).toContain("The accepted job failed.");
+    expect(tweetsPosts()).toHaveLength(1);
   });
 
   it("tries once per tab: a second arrival after a refused run leaves the button", async () => {
