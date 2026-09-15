@@ -788,3 +788,9 @@ On dev at de24dac6, not deployed. Five ways a live call could hang behind "Liste
 **Assumption pending Greg:** nothing built to stop street noise interrupting the call (a noisy-place setting, not cutting the companion off, or push-to-talk); the session recommends waiting for the first Sentry stall events, and that is the default. Listed under reports that shipped in `awaiting-approval.md`.
 
 The tree's own `worktree:remove` refused because the local `dev` in the primary was behind; from the primary after a fetch it removed cleanly. Worth a queue note if it recurs: a session cannot fix that from inside its tree.
+
+### 2026-09-15 12:40 UTC — fb40 landed; the drafts were the harness's
+
+**fb40** (shelf actions unreachable on touch): on dev at d02e5c78. On an iPad every shelf card now has a "⋯" menu in words holding rename, archive and the rest. Sol's code review caught a second tap reopening the menu instead of closing it and fixed it; a browser run at iPad size and new tests cover it. Full suite green bar the six known fresh-worktree reds. **Wider, left to owners:** the reading view's left rail reads a tap the same way and probably jumps on the first tap on iPad; queued as an unauthorised product bug with fb3y's fix named as the shape.
+
+The unsent lines in the input boxes of fb3x, fb3y and now fb40 ("yes, remove the worktree") are the harness suggesting a next prompt, not Greg typing; all three sessions are closed. Two follow-ups from them are queued unauthorised: the describeFetchFailure hole from fb3x, and the date-rotting `overseer-daemon-usage-pass` fixture both fb40 and fb42 saw red. Chat links showing the card before opening stays a product call for Greg.
