@@ -818,3 +818,11 @@ On dev at 05328714, not deployed. The "?" comment now asks **"Help me understand
 ### 2026-09-15 20:15 UTC — fb3s+3z landed; fourth wave complete
 
 Search now opens on the prioritised order, and every mode with a prioritised order and a threshold slider starts lower, so most entries show by default. The thresholds were measured against the article versions readers actually see, after Sol's plan review caught the first measurement reading arbitrary versions (quotes 0.65→0.60, citations 0.30→0.25); the re-measure queries are in plan 260915d. Two accepted side effects: an old search link with no order in it now opens prioritised, and a carried slider value now filters where it used to do nothing. Sol's code review found only stale comments and diagrams. Session closed, tree self-removed, qi-k2g2jdz6 done. Eight fixes on dev since Greg's 12:36Z deploy; next pair (fb3q, fb3j) at 22:35Z.
+
+### 2026-09-16 00:05 UTC — fifth wave: fb3q landed, fb3j finishing
+
+**fb3q** (say which mode you just opened): on dev, not deployed. Three sensible decisions had stacked up so that on an iPad nothing named the mode: columns stopped naming it on 5 September because the bottom bar did, the bar drops its words at iPad width, and what was left was a hover tooltip a finger cannot open. A card now names the mode with one sentence, on every device (Fable's recommendation, taken). Sol's code review found typing into Search going into a box hidden under the card; fixed. Deferred in the plan: Hierarchy has no column to name; showing the card only the first few times; long-press for the bar's tooltips. Lesson worth keeping: anything this app says only in a tooltip, it does not say on an iPad.
+
+**fb3j** (Tweets mode generates on open) is pushed to dev and removing its tree; closed next tick. fb3j also reproduced both Overseer usage-test reds alone at 54258b8b and reads them as the take-fresh/keep-stored decision regressing rather than fixture rot; queue item qi-cw6rzavq updated with that.
+
+The 21:17Z changelog run found no new deploy and wrote nothing; the 21:50Z sweep queued nothing new and resolved 3S, 3Z and 3W in Sentry.
