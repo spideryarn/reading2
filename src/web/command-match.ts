@@ -119,19 +119,6 @@ export type Command =
       readonly kind: "page";
       /** Where it goes. `CommandBar` hands this to `navigate`. */
       readonly href: string;
-      /**
-       * **What has to happen before the navigation**, and the name is
-       * `DockLink`'s (Dock.tsx) rather than a new one, because it means exactly
-       * what that prop means: a press that is going to leave this page, and the
-       * work to arm before it does.
-       *
-       * One caller, and it is the reason the field exists: Tweets arms a run
-       * over the whole article on the way to its page, so the row and the Dock
-       * button do the same thing rather than the bar being *"a second, faster
-       * door"* into a different behaviour. See `generates` above, which such a
-       * row must also carry.
-       */
-      readonly onNavigate?: () => void;
     })
   | (CommandWords & {
       readonly kind: "action";

@@ -177,7 +177,8 @@ with nothing to point at.
 **What the original call refused is mostly still refused**, and where it is not, that is Greg's doing
 rather than a boundary quietly moving. It said a passage jump, a generation row, a chat and a model
 call each need **a verb this bar does not have**. Two of those have since arrived: a *generation row*
-is what Tweets is — pressing it arms the thread run exactly as the Dock's own button does, and it
+is what Tweets is — it goes to the thread page, which writes the thread on arrival when there is none
+(since 2026-09-15, [260915e](../plans/260915e-tweets-page-starts-writing-when-opened.md)), and it
 wears the `generates` marker for it — and Feedback is a genuinely new verb, admitted because it is
 what he asked for. A passage jump and an "ask this article" are still out, and the line is now
 sharper than "a verb we don't have": each would need the bar to grow an **argument** — *which*

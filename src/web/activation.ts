@@ -6,10 +6,13 @@
  * **Twelve controls start a paid run on their own**, between them arming
  * **eleven** targets — the two numbers differ because Diagram's bar button and
  * its Sketch chip are two gestures that arm the same picture. The controls: the
- * Glossary, Ideas, Quotes, Timeline, Debate and Diagram buttons in the bar; the
- * Sketch and Illustrated chips inside Diagram; the Quiz half of Remember; the
- * Claims and Candidates chips inside Referee; and the Tweets link, which does
- * not open a mode at all. Greg's rule is *"if the user **clicks** a mode that
+ * Glossary, Ideas, Quotes, Timeline, Debate, Citations and Diagram buttons in
+ * the bar; the Sketch and Illustrated chips inside Diagram; the Quiz half of
+ * Remember; and the Claims and Candidates chips inside Referee. The bar's Tweets
+ * link was one of them from 2026-09-06 to 2026-09-15, when the thread page began
+ * writing on arrival instead — it is a path rather than query state, so the
+ * reason below does not reach it (useAutoRun.ts § `useAutoRunOnArrival`).
+ * Greg's rule is *"if the user **clicks** a mode that
  * hasn't been run yet, automatically run it"*, and the word that carries the
  * money is **clicks**.
  *
@@ -193,8 +196,9 @@ export type { AutoRunTarget };
  * experimental-features switch, so the button is not in front of every reader,
  * and that the blurb on it says so.
  *
- * `tweets` is not here because it is not a mode: it is its own page, and the
- * press is on a `DockLink`. See `armActivationForTweets` below.
+ * `tweets` is not here because it is not a mode: it is its own page, and it
+ * arms nothing — the page writes on arrival (useAutoRun.ts §
+ * `useAutoRunOnArrival`).
  */
 export type ModeActivation =
   | { kind: "fixed"; target: AutoRunTarget }
@@ -390,10 +394,9 @@ const emit = () => {
  * Forward move, and history must never manufacture an activation.
  *
  * **A press is not always an `onClick`, and has not been since 2026-09-08.**
- * That sentence read *"called from a real `onClick`"* until the command bar grew
- * rows that are not modes: its Tweets row calls `armActivationForTweets` from
- * the `Enter` that takes it, so an arming can now come from a keypress in a
- * modal dialog. The rule the wording was protecting is untouched — it is
+ * That sentence read *"called from a real `onClick`"* until the command bar
+ * arrived: its mode rows arm from the `Enter` that takes them, so an arming can
+ * come from a keypress in a modal dialog. The rule the wording was protecting is untouched — it is
  * *deliberate act versus navigation*, and Enter on a row a reader chose is as
  * deliberate as a click on the button beside it. What is still forbidden is the
  * thing history does. 260908e.
@@ -564,25 +567,6 @@ export function bandTarget(
       throw new Error(`unhandled activation: ${JSON.stringify(unhandled)}`);
     }
   }
-}
-
-/**
- * A press on the bar's **Tweets** link.
- *
- * Its own function rather than a row in `MODE_TARGET`, because the thread is
- * not a mode: it is `/read/<slug>/tweets`, a page of its own, and the control
- * is a `DockLink` rather than a radio button. There is nothing to look up — the
- * one caller already knows which link was pressed — so this is `armActivation`
- * with the target spelled once, in the module that owns the vocabulary, rather
- * than in the bar.
- *
- * **The caller must be `Link`'s `onNavigate`, not its `onClick`.** A ⌘-click
- * opens a new tab and this one stays where it is, and a token minted for a
- * navigation that did not happen would sit pending until something arrived to
- * spend it. Link.tsx § `onNavigate` is the seam and carries the rest.
- */
-export function armActivationForTweets(slug: string): void {
-  armActivation(slug, "tweets");
 }
 
 /**

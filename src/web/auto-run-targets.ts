@@ -54,9 +54,10 @@ type StepAutoRunTarget = StepTarget<
   | "citations"
   | "sketch"
   | "illustrated"
-  /* The article as a numbered thread. Its own page rather than a band, so the
-     press is on a `DockLink` and the gesture seam is `Link.onNavigate` rather
-     than an `onClick` — Link.tsx. */
+  /* The article as a numbered thread. Its own page rather than a band, and
+     since 2026-09-15 it starts on arrival rather than on a press — no token is
+     ever armed for it; it is here because `beginAutoAttempt` is keyed on this
+     union (useAutoRun.ts § `useAutoRunOnArrival`). */
   | "tweets"
   /* The second half of Remember: the questions the piece asks you back. */
   | "quiz"

@@ -7,12 +7,14 @@
  * >
  * > — Greg, 2026-08-31
  *
- * Eleven targets can do this — Glossary, Ideas, Quotes, Timeline and Debate;
- * the Sketch and Illustrated pictures inside Diagram; the Quiz half of Remember;
- * Referee's Claims and Candidates; and the Tweets page — reached by twelve
- * controls, since Diagram's bar button and its Sketch chip both arm the Sketch.
- * This is the whole of it, in one place, because eleven copies of a rule about
- * spending money is eleven chances to get one of them wrong.
+ * Eleven targets can do this — Glossary, Ideas, Quotes, Timeline, Debate and
+ * Citations; the Sketch and Illustrated pictures inside Diagram; the Quiz half
+ * of Remember; Referee's Claims and Candidates — reached by twelve controls,
+ * since Diagram's bar button and its Sketch chip both arm the Sketch. The Tweets
+ * page was a twelfth target until 2026-09-15 and now starts on arrival instead:
+ * `useAutoRunOnArrival` at the foot of this file. This is the whole of it, in
+ * one place, because eleven copies of a rule about spending money is eleven
+ * chances to get one of them wrong.
  *
  * **Two of them have no job behind them.** `claims` and `candidates` are SSE
  * streams rather than pipeline steps (auto-run-targets.ts), so `ensure` starts
@@ -71,13 +73,11 @@
  *
  * ## What it does not do
  *
- * It never runs for a visitor, and mostly not because of a check here: every
- * hook that calls it mounts under `OwnedReader` — or, for Tweets, under the
- * owner's arm of `OwnedArticle` — and never for a visitor, which is the
- * capability seam the whole reading view uses. The Tweets *link* is the one
- * place that also checks, because the bar itself is drawn for a visitor and a
- * press there would mint a token nothing could ever spend (Dock.tsx). tests/public-network-trace.test.tsx is the measure of
- * that taken from outside.
+ * It never runs for a visitor, and not because of a check here: every hook
+ * that calls it mounts under `OwnedReader` — and `useAutoRunOnArrival`'s one
+ * caller under the owner's arm of `OwnedArticle` — and never for a visitor,
+ * which is the capability seam the whole reading view uses.
+ * tests/public-network-trace.test.tsx is the measure of that taken from outside.
  *
  * docs/plans/260902e-a-per-article-job-queue-that-appends-and-modes-that-start-themselves.md § 2b–2c.
  */
@@ -103,8 +103,8 @@ export type ArtefactStatus = "loading" | "none" | "ready" | "error";
  * @returns whether this mount made the automatic attempt. The glossary, ideas,
  *   quotes and sketch panels used it to say *Using your profile* instead of
  *   offering a tickbox the run had already decided; both pieces of UI went on
- *   2026-09-13 and those four hooks now ignore the return. Tweets ignores it
- *   too. Timeline, citations, debate and illustrated still carry it as
+ *   2026-09-13 and those four hooks now ignore the return. Timeline,
+ *   citations, debate and illustrated still carry it as
  *   `automatic` for their own consumers.
  */
 export function useAutoRun(
@@ -173,4 +173,71 @@ export function useAutoRun(
      true of the screen the moment the job lands or fails. A reset effect here
      would have to run after the one above and would simply undo it. */
   return automatic;
+}
+
+/**
+ * **A page the owner opened, with nothing on it, starts itself — no press.**
+ * One caller: the Tweets page (Tweets.tsx).
+ *
+ * > The Tweets mode should automatically start generating (if it hasn't already
+ * > generated) when opened (without having to click a button to kick it off)
+ * >
+ * > — Greg, 2026-09-12
+ *
+ * `useAutoRun` above ties the spend to a press because `?mode=` is query state:
+ * it survives leaving the mode and is carried by links from other pages, so a
+ * band mounting says nothing about what the reader just did.
+ * `/read/<slug>/tweets` is a **path**, and arriving at it is the intent. So the
+ * token goes, and everything else stays:
+ *
+ *  - **one attempt per `(slug, target)` per page load** — `beginAutoAttempt`,
+ *    which records before it answers, so `<StrictMode>`'s double effect is
+ *    refused and a failed job cannot loop;
+ *  - **a failed read is not an answer** — read again, once per slug per mount,
+ *    and run if that says there is nothing. The page's `error` branch draws no
+ *    button, so without this a transient failure would leave it dead;
+ *  - the callbacks in refs, so a caller that rebuilds them every render cannot
+ *    re-fire the effect.
+ *
+ * **What this spends on without a press, chosen rather than missed**: Back or
+ * Forward onto the page after a full reload or in a restored tab (a new page
+ * load starts with no attempts), and a sign-in that keeps the address
+ * (`jobEngine`'s teardown clears them). One run per article per page load, on
+ * the owner's own article — and a re-run carries no per-owner cap on the
+ * server (docs/project/billing.md). Going back to press-only is one line: call
+ * `useAutoRun` again and re-arm the two links.
+ * docs/plans/260915e-tweets-page-starts-writing-when-opened.md.
+ *
+ * **It relies on the caller being keyed by slug** — `OwnedArticle` is
+ * (ArticlePage.tsx). An unkeyed page moving from A to B while still holding A's
+ * `none` would start B before B's own read had settled.
+ */
+export function useAutoRunOnArrival(
+  slug: string,
+  target: AutoRunTarget,
+  status: ArtefactStatus,
+  ensure: () => Promise<void>,
+  reread: () => Promise<void>,
+): void {
+  const run = useRef(ensure);
+  run.current = ensure;
+  const again = useRef(reread);
+  again.current = reread;
+  /* The slug this mount has already re-read for, so `<StrictMode>`'s second
+     invocation asks the network once rather than twice, and a second failure
+     is the end of it rather than a loop. */
+  const rereadFor = useRef<string | null>(null);
+
+  useEffect(() => {
+    if (status === "loading" || status === "ready") return;
+    if (status === "error") {
+      if (rereadFor.current === slug) return;
+      rereadFor.current = slug;
+      void again.current();
+      return;
+    }
+    /* The session's one automatic try. See jobEngine.ts § beginAutoAttempt. */
+    if (!jobEngine.beginAutoAttempt(slug, target)) return;
+    void run.current();
+  }, [slug, target, status]);
 }

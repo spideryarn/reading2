@@ -11,8 +11,10 @@
  *
  *  - Referee's four sub-mode chips, two of which arm and two of which must not;
  *  - Remember's Recall | Quiz toggle;
- *  - the bar's **Tweets** link, which is a `<a>` rather than a button and is
- *    therefore the only one of the four where the browser can decide not to go.
+ *  - and, as a negative since 2026-09-15, the bar's **Tweets** link, which armed
+ *    a token from 2026-09-06 and now must not: the thread page writes on
+ *    arrival (tests/tweets-press-starts-it.test.tsx), and a link that armed as
+ *    well would be a second way to start one run, minting tokens nothing claims.
  *
  * ## Why this file measures tokens rather than requests
  *
@@ -262,56 +264,14 @@ function plainClick(el: HTMLElement): void {
   });
 }
 
-/** ⌘-click: a new tab, and this one stays exactly where it is. */
-function metaClick(el: HTMLElement): void {
-  act(() => {
-    el.dispatchEvent(
-      new MouseEvent("click", { bubbles: true, cancelable: true, button: 0, metaKey: true }),
-    );
-  });
-}
-
 describe("the bar's Tweets link", () => {
-  it("arms the thread when it is pressed", () => {
+  it("arms nothing, and still goes to the thread page", () => {
+    /* The page starts itself on arrival (Tweets.tsx § `useAutoRunOnArrival`),
+       so a token here would never be claimed — `useAutoRun` is not mounted
+       anywhere that asks for `tweets`. */
     mountDock("article");
-    expect(armed("tweets")).toBe(false);
     plainClick(tweetsLink());
-    expect(armed("tweets")).toBe(true);
-  });
-
-  it("arms nothing on a ⌘-click, which opens a tab this one is not in", () => {
-    /**
-     * **The whole reason the seam is `Link.onNavigate` and not `onClick`.**
-     *
-     * `Link` runs `onClick` *before* it decides whether to take over — it has to,
-     * so a handler above can `preventDefault` — so a ⌘-click, a middle-click and
-     * a `target="_blank"` all reach it, and every one of them leaves this tab
-     * where it was. A token minted here would sit in the map with no owner until
-     * something arrived to spend or retire it, which is the same shape of bug as
-     * the Diagram one in tests/modes-that-start-themselves.test.tsx.
-     *
-     * Move the call from `onNavigate` to `onClick` and this is the only thing in
-     * the suite that notices.
-     */
-    mountDock("article");
-    metaClick(tweetsLink());
-    expect(armed("tweets")).toBe(false);
-  });
-
-  it("arms nothing on the page it already leads to", () => {
-    /* No navigation happens, so there is nothing to arm for — `navigate` itself
-       returns early on the href it is already at. */
-    window.history.replaceState(null, "", `/read/${SLUG}/tweets`);
-    mountDock("tweets");
-    plainClick(tweetsLink());
-    expect(armed("tweets")).toBe(false);
-  });
-
-  it("arms nothing for a visitor, who cannot write one", () => {
-    /* The capability seam every band uses. A visitor's press would mint a token
-       nothing can ever spend — the Tweets page's auto-run is the owner's. */
-    mountDock("article", true);
-    plainClick(tweetsLink());
+    expect(window.location.pathname).toBe(`/read/${SLUG}/tweets`);
     expect(armed("tweets")).toBe(false);
   });
 });

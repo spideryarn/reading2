@@ -196,7 +196,7 @@ import { MODE_CATALOG } from "../mode-catalog.js";
 import { MODE_LABEL } from "../title-text.js";
 import type { Comment } from "../types.js";
 import { passageOf } from "./comment-nav.js";
-import { armActivationForMode, armActivationForTweets } from "./activation.js";
+import { armActivationForMode } from "./activation.js";
 /* **This direction only.** `CommandBar` deliberately imports nothing from this
    file — the visible list and the one activation callback go down as props —
    because an import back the other way would close a cycle. GPT Sol, F3 on
@@ -1810,47 +1810,31 @@ export function Dock({
               page and its own route, which is the same rule that renamed `About`
               to `Metadata`.
 
-              **Pressing this writes the thread, since 2026-09-06** — one model
-              call over the whole article, tens of seconds — where before it took
-              you to a page with a button on it. Greg's rule about opening a mode
-              (activation.ts), applied to the one surface in this bar that is not
-              a mode.
-
-              `onNavigate` rather than `onClick`, and that distinction is the
-              whole of the care here: a ⌘-click opens the thread in a *new* tab
-              and leaves this one where it is, so an `onClick` would mint a token
-              in a tab that is not going to the thread. Link.tsx § `onNavigate`.
+              **This is only a link.** The thread page writes the thread itself
+              when its owner arrives and there is none — since 2026-09-15, however
+              they arrived (Tweets.tsx § `useAutoRunOnArrival`). From 2026-09-06
+              until then this link minted an activation token on the press, and a
+              reload or a pasted link got a page with a button on it instead.
 
               The page keeps its button. It is what a reader presses after a
-              failure, and after this session has spent its one automatic try. */}
+              failure, and after this page load has spent its one automatic try. */}
           <DockLink
             href={readHref(slug, search, "tweets")}
             current={view === "tweets"}
             icon={ListOrdered}
             label="Tweets"
             /* **The card says nothing about pressing it**, and that is not a
-               stylistic preference: this link arms a run only for the owner, only
-               from the reading view's own bar, and only when they are not already
-               on the thread — see `onNavigate` directly below. Three of the four
-               surfaces this string is drawn on arm nothing at all, so *"pressing
-               this writes the thread"* would be false on them. `NOT_A_MODE` above
-               carries the rule. */
+               stylistic preference: the page writes the thread only for the
+               owner, and only when there is none and this page load has not
+               already tried. A visitor's press writes nothing, so *"pressing this
+               writes the thread"* would be false on the surfaces they see.
+               `NOT_A_MODE` above carries the rule. */
             hover={
               <ControlTip
                 head="Tweets"
                 what={NOT_A_MODE.tweets.what}
                 how={NOT_A_MODE.tweets.how}
               />
-            }
-            /* **Only for the owner, and only from the reading view's own bar.**
-               `isVisitor` is the same capability seam every band uses: a visitor
-               cannot write anything, so arming would mint a token nothing can
-               ever spend. And `current` keeps a press on the page you are already
-               on from arming a second time — that navigation does not happen. */
-            onNavigate={
-              isVisitor || view === "tweets"
-                ? undefined
-                : () => armActivationForTweets(slug)
             }
           />
 
@@ -1969,9 +1953,9 @@ const TITLES: Record<Panel, { own: string; visitor: string }> = {
  * read on at least four surfaces: the button on the reading view, the same
  * button on the metadata and tweets pages, and either of those seen by a
  * **visitor** rather than the owner. So *"pressing this writes the thread"* is
- * false on three of the four — the Tweets link arms a run only for the owner,
- * only from the reading view's own bar, and only when they are not already on
- * that page (`onNavigate` below). The artefact-shaped sentence carries the same
+ * false for a visitor — the thread page writes only for the owner, and only
+ * when there is none and this page load has not already tried (Tweets.tsx §
+ * `useAutoRunOnArrival`). The artefact-shaped sentence carries the same
  * fact and is true wherever it is drawn. The rule and the twelve wrong drafts
  * that produced it: src/mode-catalog.ts § `how`, and
  * docs/plans/260907b-rich-tooltips-on-the-dock-modes.md § The register.
@@ -2851,7 +2835,6 @@ function DockLink({
   hover,
   className = "",
   keepLabel,
-  onNavigate,
 }: {
   href: string;
   current: boolean;
@@ -2899,17 +2882,10 @@ function DockLink({
    * be looking for the way back from.
    */
   keepLabel?: true | undefined;
-  /**
-   * **This link is about to replace the page, in this tab.** A pass-through to
-   * `Link.onNavigate`, which is where the whole note about why it is not
-   * `onClick` lives; one caller, the Tweets link below.
-   */
-  onNavigate?: (() => void) | undefined;
 }) {
   const link = (
     <Link
       href={href}
-      onNavigate={onNavigate}
       className={`dock-btn${current ? " on" : ""}${className ? ` ${className}` : ""}`}
       aria-current={current ? "page" : undefined}
       /* **No `title` here, and its absence is asserted rather than assumed.** A

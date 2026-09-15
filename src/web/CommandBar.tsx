@@ -94,7 +94,7 @@
  * they are on the elements even while they carry no rules.
  */
 import { useCallback, useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from "react";
-import { armActivationForTweets, modeGenerates } from "./activation.js";
+import { modeGenerates } from "./activation.js";
 import { useFeedbackOpen } from "./FeedbackButton.js";
 import {
   commandId,
@@ -278,24 +278,13 @@ function articleRows({ slug, search }: CommandBarArticle): readonly Command[] {
       description: "The article rewritten as a thread you could post.",
       aliases: ["thread", "twitter", "x", "social"],
       /**
-       * **This row spends, and it is the row CommandBar.tsx predicted.**
-       *
-       * Pressing the Dock's Tweets button arms a run over the whole article
-       * (Dock.tsx § the Tweets link) rather than taking you to a page with a
-       * button on it, and this does the same — *"a row opens its mode exactly
-       * as pressing that button here does"*, applied to a link. The alternative
-       * considered and rejected: navigate without arming, which would land the
-       * reader on the thread page with a button to press, having just been told
-       * by the marker below that Enter would start something.
-       *
-       * **The Dock guards this with `isVisitor || view === "tweets"` and this
-       * does not, because the bar's mount gate has already discharged both**:
-       * no visitor sees the bar at all, and `mode !== undefined` is only true
-       * on the reading view, so `view` is always `"article"` here. If the bar
-       * is ever offered off the reading view — 260908e § Deliberately deferred
-       * — this is the line that has to grow the second guard back.
+       * **This row spends, and it is the row CommandBar.tsx predicted** — but
+       * not by arming anything. The thread page writes the thread itself when
+       * its owner arrives and there is none (Tweets.tsx §
+       * `useAutoRunOnArrival`, since 2026-09-15), so this row is a plain
+       * navigation and the marker is still true of it. From 2026-09-08 until
+       * then it minted an activation token on the Enter, as the Dock's link did.
        */
-      onNavigate: () => armActivationForTweets(slug),
       generates: true,
     },
   ];
@@ -605,11 +594,6 @@ export function CommandBar({
          modal dialog has; an action runs its closure, which is 2026-09-08 and
          is argued in command-match.ts § `Command` rather than here.
 
-         **`onNavigate` before `navigate`, in that order**, and it is the order
-         `Link.tsx` uses for the same pair: the Tweets row arms a run and then
-         goes to the page that will show it, and arming *after* the navigation
-         would be arming in a component the navigation has unmounted.
-
          **No ⌘-click into a new tab**, which a real `<a>` would give and this
          does not. Deferred rather than missed: an `<a>` inside `role="option"`
          puts an interactive element inside an interactive role, and the rows
@@ -620,7 +604,6 @@ export function CommandBar({
           activateMode(command.mode);
           break;
         case "page":
-          command.onNavigate?.();
           navigate(command.href);
           break;
         case "action":
