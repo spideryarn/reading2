@@ -52,6 +52,7 @@
 import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { settleChat } from "./helpers/settle-chat.js";
 import type { ChatThread } from "../src/types.js";
 
 /** What the next request answers with. Posed per test, by method and URL. */
@@ -154,11 +155,7 @@ function deferred<T>(): { promise: Promise<T>; resolve(v: T): void; reject(e: Er
   return { promise, resolve, reject };
 }
 
-async function settle(): Promise<void> {
-  await act(async () => {
-    for (let i = 0; i < 8; i += 1) await Promise.resolve();
-  });
-}
+const settle = settleChat;
 
 /**
  * Render at a slug. Not `StrictMode` here on purpose: this file is about

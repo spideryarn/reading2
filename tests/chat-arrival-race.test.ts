@@ -32,6 +32,7 @@
 import { act, createElement, StrictMode } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { settleChat } from "./helpers/settle-chat.js";
 import type { ChatThread } from "../src/types.js";
 
 /** What the next request answers with. Posed per test, by method and URL. */
@@ -129,11 +130,7 @@ function streaming(threadId: string, close = false): Response {
   return new Response(body, { status: 200, headers: { "content-type": "text/event-stream" } });
 }
 
-async function settle(): Promise<void> {
-  await act(async () => {
-    for (let i = 0; i < 8; i += 1) await Promise.resolve();
-  });
-}
+const settle = settleChat;
 
 async function mount(strict = false): Promise<void> {
   await act(async () => {

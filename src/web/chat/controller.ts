@@ -182,6 +182,13 @@ export class ChatController {
   #current: ChatSnapshot;
   #listeners = new Set<() => void>();
   /**
+   * The open notification window's timer, or `null` when no window is open.
+   * `#notify` has the whole story.
+   */
+  #window: ReturnType<typeof setTimeout> | null = null;
+  /** Something changed inside the open window that the listeners were not told. */
+  #dirty = false;
+  /**
    * What each live send wants to be told if the server overrules its thread id.
    *
    * Kept beside the state rather than in it, because it is a callback rather
@@ -284,7 +291,8 @@ export class ChatController {
   }
 
   /**
-   * Apply one event, tell React, then go and do what the reducer asked for.
+   * Apply one event, tell React — now, or once this task ends — then go and do
+   * what the reducer asked for.
    *
    * The commands run last on purpose: a command that answers instantly would
    * otherwise re-enter with a result for an operation that had not finished
@@ -308,12 +316,96 @@ export class ChatController {
         recovering: chasing ? recoveringIds(state) : before.recovering,
       };
       if (chasing) this.#prune(state);
-      /* A copy, because a listener may unsubscribe while being told. */
-      for (const listener of [...this.#listeners]) listener();
+      /* **Not a notification per event, and that is the fix for #185.** React
+         answers every notification from `useSyncExternalStore` with a Sync
+         commit, and a stream whose frames arrive already buffered dispatches
+         once per frame in one microtask chain, where React's scheduler never
+         gets a macrotask. Fifty of those commits, each leaving an effect's
+         update behind, and React refused the next one — thrown out of
+         `sink.delta` and shown to Greg as the answer's failure. The state above
+         is still current on this line; only *when React hears* is bounded.
+         docs/postmortems/260915a-a-store-notified-per-frame-turns-a-buffered-stream-into-an-update-loop.md */
+      this.#notify();
     }
     for (const command of commands) this.#perform(command);
     return state;
   };
+
+  /**
+   * Tell the listeners at most once per browser task: at once in the first
+   * task, then in a later timer task if anything moved after that.
+   *
+   * - **leading** — a change with no window open is told at once, as it always
+   *   was, so a press, a `begin` or a paced delta draws exactly when it did;
+   * - **trailing** — a change while a window is open only marks the store
+   *   dirty, and the window's timer tells everyone once, with the latest
+   *   snapshot, and opens the next window. A burst that runs across tasks still
+   *   costs one Sync commit per task.
+   *
+   * A `getSnapshot` newer than the last notification is safe: React reads the
+   * snapshot at render and checks it again after commit. Skipped intermediate
+   * snapshots are safe because every decision — the gate, the operations, the
+   * commands — is made in here, never in a React effect reading one.
+   *
+   * **The order is the contract**, from GPT Sol's plan review
+   * (docs/plans/260915a-question-press-answer-does-not-loop.md § The state
+   * machine, exactly). The window is installed *before* anyone is told, so a
+   * listener that throws cannot leave the gate stuck, and a dispatch from
+   * inside a listener joins the window rather than re-entering it. And the
+   * listeners are read when the emit runs, never when the timer is scheduled:
+   * one that subscribed while a window was open is told at its end, where a
+   * copy taken earlier would have left it showing a stale chat for ever.
+   *
+   * `setTimeout(0)` rather than a `MessageChannel`, because fake timers can
+   * drive it and a `MessageChannel` would need a flush seam of its own.
+   * tests/use-chat-recovery.test.ts advances them a millisecond a round, not
+   * zero: Vitest schedules a zero delay made during a tick at `now + 1`. A
+   * background tab clamps it to a second, which delays only a render nobody
+   * can see.
+   */
+  #notify(): void {
+    if (this.#window !== null) {
+      this.#dirty = true;
+      return;
+    }
+    this.#openWindow();
+    this.#emit();
+  }
+
+  #openWindow(): void {
+    this.#window = setTimeout(this.#close, 0);
+  }
+
+  /**
+   * The window's end. With nobody listening it only resets and opens nothing: a
+   * listener that subscribes later is covered by `useSyncExternalStore`, which
+   * reads the snapshot as it subscribes.
+   */
+  #close = (): void => {
+    this.#window = null;
+    if (!this.#dirty) return;
+    this.#dirty = false;
+    if (this.#listeners.size === 0) return;
+    this.#openWindow();
+    this.#emit();
+  };
+
+  /**
+   * Everyone is told even if one of them throws, and the first throw is
+   * rethrown after — React has shown it can throw from in here. A copy, because
+   * a listener may unsubscribe while being told.
+   */
+  #emit(): void {
+    let failed: { error: unknown } | null = null;
+    for (const listener of [...this.#listeners]) {
+      try {
+        listener();
+      } catch (error) {
+        failed ??= { error };
+      }
+    }
+    if (failed) throw failed.error;
+  }
 
   /**
    * The consumer that owns these callbacks has gone. Stop calling it.
@@ -448,7 +540,12 @@ export class ChatController {
    * only then may the session be told where the conversation now ends. Told
    * first, it could start the next exchange against a projection that has not
    * caught up — and every exchange after that would be claiming a tail from a
-   * screen this tab had not finished updating.
+   * conversation this tab had not finished updating.
+   *
+   * **What the waiter is promised is the controller's projection, not React's
+   * commit.** `dispatch` has updated `threads` by the time it returns; React may
+   * hear about it a task later (`#notify`). Nothing is lost or reordered by
+   * that, and nothing the session does next reads the screen.
    */
   #write(command: Extract<ChatCommand, { type: "spoken" }>): void {
     const opId = command.opId;
@@ -531,7 +628,8 @@ export class ChatController {
       if (finished) return;
       finished = true;
       clearTimeout(deadline);
-      // Project the authoritative rows before releasing the live copy. The
+      // Project the authoritative rows before releasing the live copy — into
+      // the controller's projection, which React may draw a task later. The
       // reducer's existing identity guard still refuses stale repair snapshots.
       this.dispatch(result(outcome));
       const fresh = outcome.ok ? outcome.threads.find((t) => t.id === command.threadId) : undefined;

@@ -1039,6 +1039,20 @@ export function Conversation({
    * event that means what it says. Found in review, 2026-08-26.
    */
   const stick = useRef(true);
+  /**
+   * `away` as this render saw it, so the effect below can leave it alone when
+   * it is already clear. A same-value `setAway(false)` is not free — it does
+   * not take React's eager bailout — so it queued a render per streamed word,
+   * and an update left pending after every commit is what carried React's
+   * nested-update counter to #185 in a buffered answer. Hygiene, not the fix:
+   * that is the controller's notification window.
+   * docs/postmortems/260915a-a-store-notified-per-frame-turns-a-buffered-stream-into-an-update-loop.md
+   *
+   * A ref and not a dependency, because the array below is the list of things
+   * that mean "new text has been painted" and `away` is not one of them.
+   */
+  const awayNow = useRef(away);
+  awayNow.current = away;
   // biome-ignore lint/correctness/useExhaustiveDependencies: deliberate re-run triggers — the effect reads a ref, and these are what say "new text has been painted, scroll if we were following"
   useEffect(() => {
     const el = scroller.current;
@@ -1053,7 +1067,7 @@ export function Conversation({
        offering to take you there. Seen in a browser pass, 2026-08-26. */
     if (el.scrollHeight - el.scrollTop - el.clientHeight < 60) {
       stick.current = true;
-      setAway(false);
+      if (awayNow.current) setAway(false);
     }
     /* `last?.status` is in here for a reason that is easy to leave out and was.
        The frame that ends an answer usually changes neither of the other two —

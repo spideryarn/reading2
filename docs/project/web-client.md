@@ -758,6 +758,31 @@ it wrong are the three fixed here: `useChat`/`ChatPanel`, `useComments`/`Dock`,
 and `ProfilePage`'s shelf — plus `useSearch`/`SearchPanel`, which had the
 loading half already and was missing the failed half.
 
+## A store React subscribes to tells React once per task
+
+**`useSyncExternalStore` re-renders at `SyncLane`, always**, so a store that
+notifies on every event makes one synchronous commit per event — and React 19
+counts consecutive commits that leave other work pending as nested, and throws
+#185 past fifty. Paced events never get near that. A burst does: a stream whose
+chunks were already buffered drains in one microtask chain, and any effect that
+updates state after every commit — even to the same value — keeps the count
+climbing until it throws. That
+reached a reader on 2026-09-12 as a "?" answer replaced by React's own error text —
+[260915a](../postmortems/260915a-a-store-notified-per-frame-turns-a-buffered-stream-into-an-update-loop.md).
+
+**So the rule for a store fed by anything outside the reader's own hand** — a
+stream, a socket, a poll that can catch up: keep its state synchronous, and bound
+the *notification* instead. Notify on the first change in a browser task; mark
+the rest dirty and send one trailing notification a task later, reading the
+latest snapshot. `ChatController.dispatch` in
+[`src/web/chat/controller.ts`](../../src/web/chat/controller.ts) is the one
+that needed it, and the pattern to copy.
+
+A hook that writes each event into `useState` or `useReducer` does not need
+this: an update from outside React is Default-lane, and the scheduler batches a
+burst of them into one render. That is why none of the other eight streaming hooks
+tripped it.
+
 ## The constraints it works under
 
 - **Position is a block id, never a pixel offset or a selector.** Scroll restore, deep links,

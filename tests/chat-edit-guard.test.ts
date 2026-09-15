@@ -28,6 +28,7 @@
 import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { settleChat } from "./helpers/settle-chat.js";
 
 import { useChat, type ChatApi } from "../src/web/useChat.js";
 import type { ChatThread } from "../src/types.js";
@@ -78,13 +79,7 @@ function shortStream(): ReadableStream<Uint8Array> {
   });
 }
 
-async function settle(): Promise<void> {
-  for (let i = 0; i < 8; i++) {
-    await act(async () => {
-      await Promise.resolve();
-    });
-  }
-}
+const settle = settleChat;
 
 beforeEach(async () => {
   (globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;

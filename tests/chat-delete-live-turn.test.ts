@@ -30,6 +30,7 @@
 import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { settleChat } from "./helpers/settle-chat.js";
 import type { ChatThread } from "../src/types.js";
 
 /** What the next request answers with. Posed per test, by method and URL. */
@@ -110,11 +111,7 @@ function api(): ReturnType<typeof useChat> {
   return chat;
 }
 
-async function settle(): Promise<void> {
-  await act(async () => {
-    for (let i = 0; i < 8; i += 1) await Promise.resolve();
-  });
-}
+const settle = settleChat;
 
 async function mount(): Promise<void> {
   await act(async () => {

@@ -139,10 +139,21 @@ function hover(target: Element) {
   });
 }
 
+/**
+ * A finger's tap, **click included**. A marker is a link, and since 260915a a
+ * tap on anything inside a link is decided at the click — the event that
+ * navigates — rather than at `pointerup`. A real tap always ends in one, with
+ * `detail: 1`; this helper used to stop at the lift, which no device does.
+ * tests/link-tap-escapes.test.tsx drives the clicks that land elsewhere.
+ */
 function tap(target: Element) {
   act(() => {
     pointer("pointerdown", target, { pointerType: "touch" });
     pointer("pointerup", target, { pointerType: "touch" });
+  });
+  act(() => {
+    pointer("mouseup", target, { pointerType: "touch" });
+    target.dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true, detail: 1 }));
   });
 }
 
