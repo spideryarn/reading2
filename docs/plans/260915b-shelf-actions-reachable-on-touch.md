@@ -211,6 +211,56 @@ a click, which would need a second suppression rule. Five P2s, all taken:
 - **"Open the original" stays a real anchor** (`asChild`), so modifier-click and "copy link
   address" survive on a touchscreen laptop, where mice and keyboards meet this menu too.
 
+## What the code review changed
+
+GPT Sol, write-capable, 2026-09-15, over stages 1 and 2 — findings first, then fixes, both read and
+re-run here before they were committed (cd290ff3):
+
+- **C1 (P1), fixed — a second finger tap on an open menu closed it and opened it again.** With the
+  modal menu open the trigger is *outside* Radix's portalled content, so Radix's own dismissal closed
+  the menu at the second tap's `pointerdown`, and our click then toggled the *latest* state — back
+  open. The finger record now carries `wasOpen` from its `pointerdown`, and the click finishes the
+  transition that finger began. The jsdom case that catches it waits a task before the second tap,
+  because Radix installs its outside-pointer listener on the next one — the builder's case tapped too
+  soon to meet it. **Seen red here by mutation**: putting the blind toggle back turns exactly that case
+  red, 17 of 18 green.
+- **C3 (P3), fixed** — the re-fetch case let `rerunning`'s reset land outside `act`.
+- **C2, reported** — the wider iOS click `pointerType` finding below, already in this plan.
+
+Its sandbox could not launch Chrome (crashpad, `SIGTRAP`), so the Chrome test's evidence is the run
+here: six shelf files, 70 of 70, typecheck exit 0.
+
+**The C1 fix was not in any review's snapshot**, so it went back to Sol for a narrow check of that fix
+alone — discovery closed ([engineering-manager.md § GPT Sol](../reusable/engineering-manager.md#gpt-sol)).
+**Verdict: "C1 closed"**, no new P0 or P1 in the fix, the menu test 18 of 18 in its sandbox. It
+traced six orders and confirmed each: a first tap opens; a second closes and cannot reopen; an item
+acts and closes, Copy acts and stays open; a tap outside dismisses **without** opening the article
+underneath, because Radix's modal menu sets `pointer-events: none` on the body while it is open; a
+scroll's `pointercancel` leaves no stale finger for a later mouse; and the render-time `open` read at
+`pointerdown` is intentional in the second-tap case. The one residue it names is two *overlapping*
+touches sharing the single ref — gesture association, not a P0 or P1, and not pursued.
+
+## The browser pass on the finished code
+
+A Sonnet subagent, headless system Chrome, signed in, its own dev server, 2026-09-15, on cd290ff3:
+
+| Viewport | View | Device | Result |
+|---|---|---|---|
+| 820 × 1180 | cards | touch | "⋯" 40 × 40, on screen; the icon row not laid out |
+| 820 × 1180 | table | touch | "⋯" on screen; the table's box 770 = 770 — **no sideways scroll**, where Archive was cut off before |
+| 1180 × 820 | cards | touch | "⋯" 40 × 40, on screen |
+| 1180 × 820 | table | touch | "⋯" on screen, no overflow |
+| 1280 × 900 | cards | mouse only | "⋯" `display: none`; pointing at a card reveals the row as before |
+
+In all four touch cases: a tap opens the menu with the five in order, and it is still open 500ms
+later and not clipped; the URL does not change; a tap outside closes it and opens nothing; Copy stays
+open and reads "Copied"; Edit title closes the menu and puts focus in the title's input, and Escape
+leaves the title as it was. Archive and Re-fetch were not pressed, on real articles.
+
+**What Chrome cannot tell us, and an iPad can**: the iOS click-`pointerType` bug is not reproduced by
+Chrome, which reports `touch` on the click — so the one check left is a real iPad: tap "⋯", choose
+each item, and start a scroll of the shelf with a finger on a "⋯".
+
 ## Wider, and not fixed here
 
 WebKit bug 282988 is not a shelf fact. Every tap rule in the app that reads `pointerType` **off the
