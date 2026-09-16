@@ -52,7 +52,7 @@ import type { Config, DOMPurify } from "dompurify";
  * against a policy, and this names the policy. Tying it to the dependency would
  * re-sanitise every article in the library on every patch release, for nothing.
  */
-export const SANITIZER_VERSION = 6;
+export const SANITIZER_VERSION = 7;
 /* 1 → 2 on 2026-08-27: the policy now strips URLs pointing at our own `/api/`
    (see `isOwnApi`). Stricter, so every artefact stored under 1 was cleaned by a
    policy that has never seen this rule and has to be re-cleaned on next read —
@@ -89,7 +89,24 @@ export const SANITIZER_VERSION = 6;
    sentence its author picked. Found by a GPT Sol review of
    docs/plans/260907c-quotes-drawn-as-a-stroke-in-the-prose-with-weight-carrying-priority.md
    **before the attributes existed** — the third time in this list that a change
-   adding an annotation attribute would otherwise have forgotten this file. */
+   adding an annotation attribute would otherwise have forgotten this file.
+
+   6 → 7 on 2026-09-16: the `cite` class and the `data-cite` attribute are
+   reserved — the fifth `MarkKind` (src/web/annotate.ts § `citeMarks`), drawn on
+   every phrase the piece cites a work at. Stricter again, same reasoning: an
+   artefact cleaned under 6 could be carrying a forged citation mark, which is
+   our claim that *we found the work this phrase cites* printed on a phrase its
+   own author chose — and, since the prose hover card reads the work ids off the
+   attribute, our card aimed at a work id the publisher picked.
+
+   **This is the fourth entry in this list to be added by a reviewer rather than
+   by the change**, and the fourth is worth a sentence of its own because the
+   plan for it had the other two changes and not this one. The pattern is now
+   exact: every time an annotation attribute is added, the attribute is
+   remembered, and one of {the reserved class, this number} is not. If a sixth
+   `MarkKind` is ever added, do all three in one edit and read this paragraph
+   first. GPT Sol, 2026-09-16, reviewing
+   docs/plans/260916b-citations-marked-in-the-prose-and-a-clearer-find-it-button.md. */
 
 /**
  * Video embeds, by exact origin and path prefix.
@@ -246,6 +263,18 @@ export const ARTICLE_CONFIG: Config = {
        `data-hues`, which were forgotten once already — see the version history
        above, twice. */
     "data-quote", "data-quote-start", "data-quote-end", "data-wash",
+    /* **The fifth annotation kind**, added 2026-09-16 with `citeMarks`
+       (src/web/annotate.ts, SPIDERYARN-READING2-3M). It carries the ids of the
+       works a phrase cites, and the prose hover card reads them straight off
+       it — so an article shipping its own would be a stranger's document
+       claiming *we found the work this phrase cites* about a phrase its author
+       chose, and aiming our card at a work id of their choosing.
+
+       Listed here in the same breath as the class below and the version bump
+       above, which is the whole lesson of the three episodes in the history at
+       the top of this file: every one of them added an attribute and forgot one
+       of the other two. */
+    "data-cite",
     "data-open", "data-cmt-open", "data-chat-open", "data-hit-open", "data-term-open",
     /* The enlarge wrapper's own attribute (src/web/zoomable.ts). It decides
        whether the figure is laid out inline or as a block, so an article that
@@ -590,7 +619,12 @@ export function installArticlePolicy(purify: DOMPurify): void {
        the fourth `MarkKind` (src/web/annotate.ts) and the one three features
        now share, and a class alone still draws the highlight — which is exactly
        the argument the `term` entry above makes. */
-    for (const own of ["cmt", "chat", "term", "hit", "zoomable", "zoom-btn"]) {
+    /* `cite` joined on 2026-09-16 with `data-cite` above and the version bump
+       that goes with them. It is the fifth `MarkKind`, and a class alone still
+       draws the mark — `mark.cite` in annotations.css hangs the underline off
+       nothing else — which is exactly the argument the `term` entry above
+       makes. */
+    for (const own of ["cmt", "chat", "term", "hit", "cite", "zoomable", "zoom-btn"]) {
       if (el.classList?.contains(own)) el.classList.remove(own);
     }
     if (el.classList?.length === 0 && el.hasAttribute("class")) el.removeAttribute("class");

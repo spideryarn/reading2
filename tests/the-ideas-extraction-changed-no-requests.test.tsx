@@ -710,12 +710,32 @@ const ARRIVAL: Shape[] = [
  * It sits between the glossary's and the arc's because that is the order
  * `OwnedReader` calls the hooks in — recorded rather than sorted away, like the
  * orderings in `CHAT` below.
+ *
+ * **`/api/citations/` is the fifth, new on 2026-09-16, and it is the same story
+ * one feature later** (SPIDERYARN-READING2-3M,
+ * docs/plans/260916b-citations-marked-in-the-prose-and-a-clearer-find-it-button.md):
+ * the works a piece cites are now marked in the prose in every mode, so the
+ * opening read is `OwnedReader`'s.
+ *
+ * **This line is the price of a decision, so it is worth being explicit about
+ * what was bought.** The read could have been gated on the experimental-features
+ * switch that Citations mode itself is behind, which would have kept this
+ * request off most owners' article loads. It is not, on GPT Sol's review: the
+ * band has to read the list somehow, so a gate either costs two states and two
+ * requests or does not hold — and hiding a *control* behind that switch is not
+ * the same as making an existing `?mode=citations` URL half-work. One cheap GET
+ * per owned article view, and no model call. src/web/useCitations.ts §
+ * CitationsRead.
+ *
+ * It appears once, not twice, for the reason the quotes' line gives, and if it
+ * ever doubles the same de-duplication has broken.
  */
 const READING_VIEW: Shape[] = [
   GET(`/api/comments/${SLUG}?anchors=whole-block`),
   GET(`/api/chat/${SLUG}?summary=1`),
   GET(`/api/glossary/${SLUG}`),
   GET(`/api/quotes/${SLUG}`),
+  GET(`/api/citations/${SLUG}`),
   GET(`/api/arc/${SLUG}`),
   GET(`/api/comments/${SLUG}?anchors=whole-block`),
   GET(`/api/chat/${SLUG}?summary=1`),
@@ -757,6 +777,7 @@ const CHAT: Shape[] = [
   GET(`/api/chat/${SLUG}?summary=1`),
   GET(`/api/glossary/${SLUG}`),
   GET(`/api/quotes/${SLUG}`),
+  GET(`/api/citations/${SLUG}`),
   GET(`/api/arc/${SLUG}`),
   GET(`/api/chat/${SLUG}`),
   GET(`/api/comments/${SLUG}?anchors=whole-block`),

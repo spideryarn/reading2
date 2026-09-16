@@ -31,11 +31,12 @@
  * on *am I signed in*. That is Greg's rule and it is what makes the read-only
  * chrome one thing rather than two.
  */
-import type { Comment, Glossary, ThreadSummary } from "../types.js";
+import type { CitedWork, Comment, Glossary, ThreadSummary } from "../types.js";
 import type { SavedSearch } from "./useSearch.js";
 import type { PublicArtefactSet, PublicArtefacts } from "../public-types.js";
 import type { GlossaryRead } from "./useGlossary.js";
 import type { QuotesRead } from "./useQuotes.js";
+import type { CitationsRead } from "./useCitations.js";
 import type { ChatAnchorsApi } from "./useChatAnchors.js";
 import type { ClientComment, CommentsApi } from "./useComments.js";
 import type { UseArc } from "./useArc.js";
@@ -59,6 +60,23 @@ export type ReaderCapability =
        * their glossary does.
        */
       quotes: QuotesRead;
+      /**
+       * The opening citations read, shared with the band. `useCitationsRead`.
+       *
+       * Here for the reason `quotes` is, one feature later: since 2026-09-16
+       * the works the piece cites are marked in the prose in **every** mode
+       * (SPIDERYARN-READING2-3M), so the list is a standing property of the
+       * article rather than something citations mode fetches for itself.
+       *
+       * **And there is no visitor arm for it**, which is the difference from
+       * `glossary` and `quotes` and is a decision rather than an omission:
+       * `POLICY.citations` is `owners-only`, so the public projection these
+       * rows' URLs would pass through is not built (docs/project/citations.md
+       * § Who sees it). A visitor therefore gets no marks and no card section,
+       * by construction and not by a check — which is what keeps a half-working
+       * card off a shared link.
+       */
+      citations: CitationsRead;
       /**
        * The arc, and whether one is being written right now. `useArc`.
        *
@@ -198,6 +216,12 @@ export type ReaderCapability =
 export const NO_COMMENTS: ClientComment[] = [];
 export const NO_THREADS: ThreadSummary[] = [];
 export const NO_TERMS: Glossary["entries"] = [];
+/* The same constant for the same reason, one artefact later: `citeSelections`
+   in Reader.tsx memoises on it by identity, and an article with no citations —
+   still the ordinary case — must not hand that memo a fresh array on every
+   render. There is no visitor arm to share it with: a visitor has no citations
+   at all (see `citations` on the owner arm above). */
+export const NO_WORKS: CitedWork[] = [];
 
 /**
  * The same module constant for the same reason, and it is never rendered: only

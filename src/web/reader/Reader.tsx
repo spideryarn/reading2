@@ -23,7 +23,7 @@ import {
   useState,
 } from "react";
 import { useQueryState } from "nuqs";
-import type { Article, BlockId, GlossaryEntry } from "../../types.js";
+import type { Article, BlockId, CitedWork, GlossaryEntry } from "../../types.js";
 import { useExperimental } from "../useExperimental.js";
 import { addressWithout, useAddress } from "../router.js";
 import { IdeasBand, VisitorIdeasBand } from "../modes/ideas/IdeasMode.js";
@@ -48,7 +48,7 @@ import { MODE_CONTAINMENT, ModeBoundary } from "./ModeBoundary.js";
 import { type HeraldPress, ModeHerald } from "../ModeHerald.js";
 import { TableView } from "../TableView.js";
 import type { SelectionAnchor } from "../selection.js";
-import type { TermSelection } from "../annotate.js";
+import type { CiteSelection, TermSelection } from "../annotate.js";
 import { formsOf } from "../../term-match.js";
 import { horizontalInset, safeAreaInsets } from "../safe-area.js";
 import { Spine } from "../Spine.js";
@@ -105,6 +105,7 @@ import { pageTitle, useDocumentTitle } from "../page-title.js";
 import {
   NO_SEARCHES,
   NO_TERMS,
+  NO_WORKS,
   NO_THREADS,
   OWNER_HAS_EVERYTHING,
   type ReaderCapability,
@@ -734,6 +735,57 @@ export function Reader({
         blocks: entry.blocks,
       })),
     [terms],
+  );
+
+  /**
+   * **The works the piece cites, as the prose needs them**: an id and the
+   * verified places, and nothing else.
+   *
+   * Greg, 2026-09-12 (SPIDERYARN-READING2-3M): *"just as we do with quotes and
+   * glossary … once generated, we should always visually indicate Citations
+   * somehow in the main text"*. So this is the whole list, in every mode,
+   * whether or not the band has ever been opened — `citeMarks` in annotate.ts.
+   *
+   * **Owner-only, and that is the seam rather than a check.** `POLICY.citations`
+   * is `owners-only`, and the public projection these rows' URLs would pass
+   * through is not built — so a visitor's `artefacts` carries no citations and
+   * `works` is empty for them, which is the whole of the enforcement. There is
+   * deliberately no `?? artefacts?.citations` fallback here, unlike `terms`
+   * above: that would be the line that quietly shipped a half-working card onto
+   * a shared link. docs/project/citations.md § Who sees it.
+   *
+   * **Every work, not only those above the threshold bar**, which departs from
+   * what quotes mode does and follows what the glossary does. `?citebar=` is
+   * reachable only inside Citations mode while these marks are visible from
+   * every mode, so barring them here would change a paragraph's appearance
+   * from a control the reader has no way to see. Fable, 2026-09-16.
+   *
+   * `mentions` and `reference` together, and `start` deliberately dropped on the
+   * way: the stored offset is in `block.text`'s space and these marks live in
+   * the rendered text's. `CiteSelection` says why that is a property of the type
+   * rather than a habit of this call site.
+   */
+  /**
+   * The list itself, for the hover card — the marks need only ids and places,
+   * but the card draws the whole work.
+   *
+   * `NO_WORKS` is a module constant rather than a fresh `[]` because two memos
+   * below key on it by identity, and an article with no citations is the
+   * ordinary case. Empty for a visitor, which is the whole of what keeps this
+   * feature owner-only — see `citeSelections`.
+   */
+  const works: readonly CitedWork[] = owner?.citations.citations?.citations ?? NO_WORKS;
+
+  const citeSelections = useMemo<CiteSelection[]>(
+    () =>
+      works.map((work) => ({
+        id: work.id,
+        places: [...work.mentions, ...(work.reference ? [work.reference] : [])].map((p) => ({
+          blockId: p.blockId,
+          quote: p.quote,
+        })),
+      })),
+    [works],
   );
 
   /**
@@ -1719,7 +1771,7 @@ export function Reader({
          "first cited" is a jump, not a selection.
          docs/plans/260911g-citations-mode.md. */
       case "citations":
-        return owner ? <CitationsBand slug={slug} onJump={jumpTo} /> : null;
+        return owner ? <CitationsBand slug={slug} read={owner.citations} onJump={jumpTo} /> : null;
       /* **The owner/visitor pair, since 2026-09-04.** It was the owner alone
          until then, because search is the one mode where the reader's own
          question is the artefact. Greg drew the line at *making* one: a
@@ -2131,6 +2183,7 @@ export function Reader({
             : undefined
         }
         terms={termSelections}
+        cites={citeSelections}
         openTerm={term?.id ?? null}
         hitMarks={hitMarks}
         hitHues={hitHues}
@@ -2361,6 +2414,7 @@ export function Reader({
           be there in every mode too. */}
       <ProseHoverCard
         entries={terms}
+        works={works}
         /* Which article this is, and it is the *permission* for the third
            lookup rather than part of its question: `GET /api/link-preview`
            refuses to fetch a URL until it has proved this reader owns this

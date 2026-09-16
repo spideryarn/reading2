@@ -19,15 +19,27 @@
  * *Check the web* — and **one at a time**, so a second press cannot start a
  * second paid search while the first is out.
  *
- * Mounted by `CitationsBand` alone, never hoisted: nothing outside the band
- * reads the list (no marks in the prose in v1), and `useAutoRun`'s owner has to
- * die with the band so a press cannot be spent after the reader has left it —
- * src/web/useQuotes.ts § QuotesRead has the long version.
+ * ## Two hooks since 2026-09-16, not one
  *
- * docs/project/citations.md, docs/plans/260911g-citations-mode.md.
+ * This said *"Mounted by `CitationsBand` alone, never hoisted: nothing outside
+ * the band reads the list (no marks in the prose in v1)"*. That parenthesis is
+ * what changed: the citations are now marked in the prose in every mode
+ * (SPIDERYARN-READING2-3M), so a reader who never opens the band needs the
+ * list. `CitationsRead` below carries the whole argument — what moved up, what
+ * deliberately did not, and why the one write that crosses the seam is
+ * `applyFound` rather than a refetch.
+ *
+ * The half that did *not* move is the half the old sentence was really about:
+ * `useAutoRun`'s owner still dies with the band, so a press cannot be spent
+ * after the reader has left it. src/web/useQuotes.ts § QuotesRead is the same
+ * split, one feature earlier, with the two bugs that hoisting everything would
+ * have been.
+ *
+ * docs/project/citations.md, docs/plans/260911g-citations-mode.md,
+ * docs/plans/260916b-citations-marked-in-the-prose-and-a-clearer-find-it-button.md.
  */
 import { useCallback, useEffect, useRef, useState } from "react";
-import type { Citations, CitationsResponse, FindCitationResponse, Job } from "../types.js";
+import type { Citations, CitationsResponse, CitedWork, FindCitationResponse, Job } from "../types.js";
 import { useOrderedRead } from "./useOrderedRead.js";
 import { type StepFailure, useStepJob } from "./useStepJob.js";
 import { useAutoRun } from "./useAutoRun.js";
@@ -91,21 +103,98 @@ export interface UseCitations {
   find(id: string): Promise<void>;
 }
 
-export function useCitations(slug: string): UseCitations {
+/**
+ * **The opening read, split off from the band's hook so the prose can have it
+ * too** — `useQuotesRead`'s shape, for `useQuotesRead`'s reason, one feature
+ * later; and that one is `useGlossaryRead`'s, one feature before it.
+ *
+ * The citations are marked in the prose in **every** mode since 2026-09-16
+ * (docs/plans/260916b-…, SPIDERYARN-READING2-3M), so the list is needed by a
+ * reader who never opens the band. What crosses that seam is the *read*, plus
+ * the one narrow write below, and nothing else:
+ *
+ * | | mounted by | what it is |
+ * |---|---|---|
+ * | `useCitationsRead` | `OwnedReader`, always | one `GET /api/citations/:slug` |
+ * | `useCitations` | `CitationsBand`, in citations mode | the job poll, the auto-run, the verbs, `find` |
+ *
+ * **Hoisting the whole hook instead would be two bugs**, and neither is
+ * hypothetical — both were found on the quotes version of this move, by a GPT
+ * Sol review on 2026-09-08. `useStepJob` subscribes through `useJobs`, and a
+ * subscriber cannot *wake* the job engine but does hold it to its eight-second
+ * idle cadence once anything has started it. And `useAutoRun`'s owner lives for
+ * the *hook's* mount, so an owner mounted up here could claim a Citations
+ * press, watch the reader leave the band, and spend the token when the GET
+ * finally settled — against `activation.ts`'s rule that a press belongs to the
+ * band on screen.
+ *
+ * **The GET is unconditional, and the experimental switch does not gate it.**
+ * Citations mode is behind that switch, so the tempting saving is to skip this
+ * request for readers who cannot see the mode. It does not work: `CitationsBand`
+ * has to read the list somehow, so either it keeps a read of its own — two
+ * states, two requests — or it refreshes this one and the prose marks appear
+ * anyway. And it reads the contract backwards:
+ * docs/project/experimental-features.md says the switch hides *controls*, not
+ * that an existing `?mode=citations` URL half-works. GPT Sol, 2026-09-16.
+ *
+ * ## An always-mounted read is not an always-fresh read
+ *
+ * The opening GET happens once, and **every later revalidation belongs to the
+ * band**: its mount `reload`, and its job-completion `refresh`. So a list
+ * written while the band was closed — a job that finished after the reader left
+ * it, another tab, a CLI run with no job row at all — does not reach the prose
+ * until the band is opened again or the page is reloaded.
+ *
+ * **Named rather than fixed**, because the glossary and the quotes have exactly
+ * this gap and both say so, and matching the established pattern beats inventing
+ * a third one here. It is a **staleness** gap and not a disagreement: the panel
+ * and the prose read the same `CitationsRead`, so they are stale together and
+ * can never show different lists.
+ */
+export interface CitationsRead {
+  status: CitationsStatus;
+  citations: Citations | null;
+  stale: boolean;
+  outdated: boolean;
+  error: string | null;
+  /** Fetch again **only if nothing is already fetching** — the band's mount. */
+  reload(): Promise<void>;
+  /** Fetch again **because the list on the server has just changed** — a job finished. */
+  refresh(): Promise<void>;
+  /**
+   * **The one write that crosses this seam**, and it exists because `find`
+   * cannot.
+   *
+   * *Find it on the web* POSTs, so it stays in the band with the poller and the
+   * auto-run. But its answer patches the list, and the list now lives up here.
+   * The alternative GPT Sol offered — `refresh()` after every successful find —
+   * was refused for two reasons: it is a whole extra `GET` after a call the
+   * reader is already waiting on, and the F14 condition below would then live
+   * nowhere at all.
+   *
+   * **The link fields only**, never the whole work that came back: it is a
+   * snapshot taken before a model call, and a list replaced in the meantime must
+   * not have a stale row merged back into it — useGlossary.ts § `patchEntry` is
+   * the same lesson. **And only a row that is still a search**, which is the
+   * server's own rule (`attachFinds`): a re-run landing inside the find can give
+   * the same id a link the article gave, and that always wins. GPT Sol F14;
+   * tests/citations-find-late-reply.test.tsx.
+   *
+   * A read already in flight is the opposite ordering hazard: it may have read
+   * the old Scholar row before the POST stored this link, then land afterwards
+   * and erase the patch. `applyFound` arms one trailing repair only in that
+   * case, through `useOrderedRead.armRefresh`; it does not add an unconditional
+   * post-find GET.
+   */
+  applyFound(id: string, link: Pick<CitedWork, "url" | "linkFrom" | "found">): void;
+}
+
+export function useCitationsRead(slug: string): CitationsRead {
   const [status, setStatus] = useState<CitationsStatus>("loading");
   const [citations, setCitations] = useState<Citations | null>(null);
   const [stale, setStale] = useState(false);
   const [outdated, setOutdated] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [finding, setFinding] = useState<string | null>(null);
-  const [findNote, setFindNote] = useState<FindNote | null>(null);
-  /* Admission for `find`, as a ref so two presses in one render cannot both
-     get past it. State would let both see `null`. */
-  const findLive = useRef(false);
-  /* The slug a reply belongs to. A find that returns after the reader has moved
-     to another article must not patch that article's list. */
-  const slugNow = useRef(slug);
-  slugNow.current = slug;
 
   /**
    * The read itself. `current()` after every `await`, before any state is set:
@@ -148,8 +237,71 @@ export function useCitations(slug: string): UseCitations {
 
   /* An ordinary `reload` joins the read in flight, a post-job `refresh` trails
      it, and only the newest reply commits. src/web/useOrderedRead.ts. */
-  const { reload, refresh } = useOrderedRead(load);
+  const { reload, refresh, armRefresh } = useOrderedRead(load);
 
+  /* The opening read. Everything after it goes through `reload`, which does not
+     return `status` to `loading` — including `CitationsBand`'s own mount
+     effect, which joins this request rather than making a second. */
+  useEffect(() => {
+    void reload();
+  }, [reload]);
+
+  const applyFound = useCallback(
+    (id: string, link: Pick<CitedWork, "url" | "linkFrom" | "found">) => {
+      /* The POST has already stored this link, but a GET that began before it
+         may still be carrying the old searched row. Let that request land — it
+         may also carry newly regenerated works — then repair its stale snapshot
+         with one trailing read. This is `useGlossaryRead.patchEntry`'s race,
+         and `armRefresh` costs nothing when no read is in flight. */
+      armRefresh();
+      setCitations((current) =>
+        current
+          ? {
+              ...current,
+              citations: current.citations.map((w) =>
+                w.id === id && w.linkFrom === "search"
+                  ? { ...w, url: link.url, linkFrom: link.linkFrom, ...(link.found ? { found: link.found } : {}) }
+                  : w,
+              ),
+            }
+          : current,
+      );
+    },
+    [armRefresh],
+  );
+
+  return { status, citations, stale, outdated, error, reload, refresh, applyFound };
+}
+
+/**
+ * The band's half: the jobs, the verbs, and *Find it on the web*.
+ *
+ * `read` comes from `useCitationsRead` in `OwnedReader` — see its docstring for
+ * why the fetch moved up there, and what this hook still has to do on mount.
+ */
+export function useCitations(slug: string, read: CitationsRead): UseCitations {
+  const { status, citations, stale, outdated, error, reload, refresh, applyFound } = read;
+  const [finding, setFinding] = useState<string | null>(null);
+  const [findNote, setFindNote] = useState<FindNote | null>(null);
+  /* Admission for `find`, as a ref so two presses in one render cannot both
+     get past it. State would let both see `null`. */
+  const findLive = useRef(false);
+  /* The slug a reply belongs to. A find that returns after the reader has moved
+     to another article must not patch that article's list. */
+  const slugNow = useRef(slug);
+  slugNow.current = slug;
+
+  /**
+   * Revalidate on mount, behind whatever is on screen.
+   *
+   * **Not a refetch for its own sake.** `useStepJob` treats its first poll as a
+   * baseline and does not announce a job that had already finished, so a list
+   * written **in another tab while this band was closed** has nothing else to
+   * bring it in. `reload` joins a request already in flight, so opening the band
+   * while `OwnedReader`'s opening GET is outstanding costs nothing, and it never
+   * returns `status` to `loading`. `useQuotes` and `useGlossary` do the same
+   * three lines the same way, for the same reason.
+   */
   useEffect(() => {
     void reload();
   }, [reload]);
@@ -186,27 +338,13 @@ export function useCitations(slug: string): UseCitations {
           setFindNote({ id, kind: "no-match", message: answer.message });
           return;
         }
-        /* **The link fields only**, never the whole work that came back: it
-           is a snapshot taken before a model call, and a list replaced in the
-           meantime must not have a stale row merged back into it —
-           useGlossary.ts § patchEntry is the same lesson.
-           **And only a row that is still a search** — the server's rule
-           (`attachFinds`). A re-run landing inside the find can give the same
-           id a link the article gave, and that always wins (GPT Sol F14;
-           tests/citations-find-late-reply.test.tsx). */
+        /* The patch itself is `CitationsRead.applyFound`, up in the read half,
+           because that is where the list lives since 2026-09-16 — and its
+           docstring carries the two rules that used to be written here: the
+           link fields only, and only a row that is still a search. The POST
+           stays down here, which is the whole point of the split. */
         const { url, linkFrom, found } = answer.work;
-        setCitations((current) =>
-          current
-            ? {
-                ...current,
-                citations: current.citations.map((w) =>
-                  w.id === id && w.linkFrom === "search"
-                    ? { ...w, url, linkFrom, ...(found ? { found } : {}) }
-                    : w,
-                ),
-              }
-            : current,
-        );
+        applyFound(id, { url, linkFrom, ...(found ? { found } : {}) });
       } catch (err) {
         if (slugNow.current !== asked) return;
         setFindNote({ id, kind: "failed", message: (err as Error).message });
@@ -215,7 +353,7 @@ export function useCitations(slug: string): UseCitations {
         setFinding(null);
       }
     },
-    [slug],
+    [slug, applyFound],
   );
 
   /* `reload` is the way out of a failed read — useAutoRun.ts § A failed read

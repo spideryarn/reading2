@@ -354,6 +354,26 @@ describe("things the first draft got wrong", () => {
     }
   });
 
+  it("does not let an article forge a citation", () => {
+    /* `data-cite` is the fifth annotation kind (annotate.ts § MarkKind, added
+       2026-09-16 for SPIDERYARN-READING2-3M). A forged one is a stranger's
+       document putting *we found the work this phrase cites* onto a phrase its
+       own author chose — and, because the hover card reads the ids straight off
+       the attribute, pointing our card at a work id of the publisher's
+       choosing.
+
+       Both halves, as every one of these tests checks both: the attribute is
+       forbidden and the class is reserved. Either alone leaves the other
+       standing, and `mark.cite` in annotations.css draws the whole mark from
+       the class — so a forged class with no attribute still gets the underline,
+       which is the argument the `term` entry in the reserved list has always
+       made. */
+    const out = sanitizeHtml(`<p><mark class="cite" data-cite="spya-a2b3c4">forged</mark></p>`);
+    expect(out).not.toContain("data-cite");
+    expect(out).not.toMatch(/\bcite\b/);
+    expect(out).toContain("forged"); // the words are still the author's
+  });
+
   it("keeps a non-reserved class beside the stripped one", () => {
     const out = sanitizeHtml(`<p class="cmt lede">x</p>`);
     expect(out).toContain("lede");

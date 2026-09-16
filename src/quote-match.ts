@@ -337,8 +337,18 @@ export function quoteFinder(
   };
 }
 
-/** The unique-match counterpart to `quoteFinder`, kept private until a second bulk caller exists. */
-function quoteFinderWithMultiplicity(
+/**
+ * The unique-match counterpart to `quoteFinder`.
+ *
+ * **Exported on 2026-09-16**, which is what the previous version of this line
+ * said would happen: it read *"kept private until a second bulk caller
+ * exists"*, and `citeMarks` in src/web/annotate.ts is that caller. It asks one
+ * block's rendered text about every work the article cites there, so the
+ * reduction has to happen once rather than once per work — which is the whole
+ * difference between this and `findOnlyQuote`, exactly as it is between
+ * `quoteFinder` and `findQuote`.
+ */
+export function quoteFinderWithMultiplicity(
   text: string,
   passes: "forgiving" | "spaced",
 ): (quote: string) => Span | null {

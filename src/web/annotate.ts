@@ -33,6 +33,7 @@
  * docs/project/block-ids.md.
  */
 
+import { quoteFinderWithMultiplicity } from "../quote-match.js";
 import { termPattern, termSpans } from "../term-match.js";
 import { PALETTE_SLOTS } from "./hit-colours.js";
 import type { ValenceDirection } from "./valence.js";
@@ -55,6 +56,19 @@ import { costOn, leafClock, noteCost } from "./annotation-cost.js";
  * appearing and disappearing. `hit` is a search result: transient in
  * the same way, inert in the same way, and the only kind whose *intensity*
  * carries information — see `strength`.
+ *
+ * `cite` is a work the piece cites, drawn where it cites it — standing, in
+ * every mode, and inert to the click in exactly the way a `term` is, for
+ * exactly the same reason. It is the fifth kind, added 2026-09-16
+ * (SPIDERYARN-READING2-3M), and it cost what the paragraph further down
+ * predicted a fourth would: one entry in a union, one `if`, one class and one
+ * attribute. **The channel it takes is `text-decoration`**, which nothing else
+ * here uses — a comment and a term both draw a `border-bottom`, a quote a
+ * `box-shadow` and a hit a `background` — so a citation and a glossary term
+ * over one phrase can each keep their own line. What it must never do is
+ * recolour the words: `mark.cmt` sets `color: inherit` and says why, and the
+ * verbatim column does not advertise our annotation by repainting the author's
+ * prose.
  *
  * **Any two of them can cover the same words**, and that is the case worth
  * being careful about: a reader can ask a question about a sentence that also
@@ -84,7 +98,7 @@ import { costOn, leafClock, noteCost } from "./annotation-cost.js";
  * approach holds; if a fourth ever needs per-mark *styling* that classes cannot
  * express, that is when to reconsider.
  */
-export type MarkKind = "cmt" | "chat" | "term" | "hit";
+export type MarkKind = "cmt" | "chat" | "term" | "hit" | "cite";
 
 /**
  * How many coloured rules one phrase can wear.
@@ -408,6 +422,7 @@ function annotate(html: string, marks: readonly Mark[]): string {
       const chats = covering.filter((m) => m.kind === "chat");
       const terms = covering.filter((m) => m.kind === "term");
       const hits = covering.filter((m) => m.kind === "hit");
+      const cites = covering.filter((m) => m.kind === "cite");
       // Every class that applies. `mark.cmt` and `mark.chat` are what the click
       // handler in TableView.tsx selects on, so a term or a hit must never
       // carry either class alone — and neither artefact may lose its class
@@ -417,6 +432,7 @@ function annotate(html: string, marks: readonly Mark[]): string {
         chats.length > 0 ? "chat" : "",
         terms.length > 0 ? "term" : "",
         hits.length > 0 ? "hit" : "",
+        cites.length > 0 ? "cite" : "",
       ]
         .filter(Boolean)
         .join(" ");
@@ -635,6 +651,15 @@ function annotate(html: string, marks: readonly Mark[]): string {
           el.setAttribute("data-dir", dirs.size === 1 ? [...dirs][0]! : "mixed");
         }
       }
+      /* Space-separated work ids, as `data-term` is, and for the same reason:
+         two works can be cited by one phrase — "(Tulving 1983; Baddeley 1974)"
+         is one run of characters naming two — and the hover card draws a
+         section for each. No end-marker attribute and no `data-cite-open`: a
+         citation carries no glyph, and nothing selects one from the band yet
+         (`?cite=` is deferred).
+
+         Written last, so the attributes come out in the order the classes do. */
+      if (cites.length > 0) el.setAttribute("data-cite", cites.map((m) => m.id).join(" "));
       /* The one the reader has pressed — the comment whose dialog is open, the
          search hit they clicked in the panel, the conversation on screen, the
          term selected in the glossary band. All four mean the same thing and
@@ -836,6 +861,134 @@ export function termMarks(
       for (const span of termSpans(text, term.pattern)) {
         marks.push({ id: term.id, kind: "term" as const, ...span, ...(term.open ? { open: true } : {}) });
       }
+    }
+    if (marks.length > 0) byBlock.set(block.id, marks);
+  }
+  return byBlock;
+}
+
+/* ---------------------------------------------------------- cited works --
+   The third kind this file finds for itself, and the only one that arrives
+   with the article's own characters in hand. A term arrives as spellings and
+   has to be matched; a comment arrives with an anchor; a citation arrives as a
+   verified slice of the block it was found in (src/citations.ts § verifyPlace),
+   which makes this the simplest of the three and the one with the sharpest
+   failure mode. */
+
+/** One cited work, reduced to what drawing it in the prose needs. */
+export interface CiteSelection {
+  /** The work's id, so the mark can say which work it belongs to. */
+  id: string;
+  /**
+   * Where the article cites it: its `mentions`, and its bibliography
+   * `reference` if it has one.
+   *
+   * **`quote` is the article's own characters**, sliced out of the block by
+   * `verifyPlace`, never the model's typing — which is what makes this a
+   * re-find rather than a search, and what it has in common with a `Quote` and
+   * with nothing else the model returns.
+   *
+   * **`start` is deliberately absent**, and that is not an omission this type
+   * is hiding. The stored offset is measured in `block.text`, and every mark in
+   * this file lives in the rendered-text space of `block.html`; the two strings
+   * are different lengths, so an offset carried across does not disambiguate,
+   * it misdirects (GPT Sol reproduced exactly that for quotes — search-hits.ts
+   * § `resolveQuotes`). Leaving it off the *type* means no caller can pass it
+   * by accident.
+   */
+  places: { blockId: BlockId; quote: string }[];
+}
+
+/**
+ * Every place every work is cited, as marks, grouped by block.
+ *
+ * Greg, 2026-09-12 (SPIDERYARN-READING2-3M): *"once generated, we should always
+ * visually indicate Citations somehow in the main text"* — so this is the whole
+ * list, in every mode, whether or not the band has ever been opened, exactly as
+ * `termMarks` above is.
+ *
+ * **Every work, and not only those above the threshold bar.** That departs from
+ * the quotes rule, where the bar doubles as the highlight-density control, and
+ * the reason is that `?citebar=` is reachable only from Citations mode while
+ * these marks are visible from every mode. A bar the reader cannot see is not a
+ * setting, it is a paragraph changing appearance for no stated reason. This
+ * follows the glossary instead, whose prose marks come from the whole list
+ * however the panel's gate is set.
+ *
+ * ## The only occurrence, or none
+ *
+ * This is the one thing here that is not obvious, and the first draft of the
+ * plan got it wrong. `findOnlyQuote`'s rule — *one match is safe, two matches
+ * are no answer* — rather than the first occurrence.
+ *
+ * The tempting argument is quotes': `verifyPlace` takes the first occurrence in
+ * `block.text`, so the first occurrence in the rendered text is the one that was
+ * meant. It does not hold. `verifyPlace`'s second branch relocates a place to
+ * *exactly one other block*, which establishes uniqueness across blocks and says
+ * nothing about repeats within the block it settles on; and the two strings
+ * undergo different whitespace transformations, so "first in `block.text`" does
+ * not prove that "first in the rendered text" names the same characters. GPT Sol
+ * refused the argument on review, 2026-09-16. `locate` in src/quotes.ts has a
+ * property this does not, which is why `resolveQuotes` may do what this may not.
+ *
+ * The cost is a work cited twice **in identical words** in one paragraph, which
+ * draws nothing there. That is the safe direction: a mark on the wrong one of
+ * two repeats is the feature quietly lying about where the words are, which is
+ * worse than a feature that is visibly missing one.
+ *
+ * `"forgiving"` passes, the default, and not `verifyPlace`'s `"spaced"`. The two
+ * ask different questions: that one asks *did the model copy this*, where a
+ * whitespace-insensitive match is too generous; this asks *where are these
+ * characters on screen*, and the rendered text genuinely lacks whitespace
+ * `extractText` invented. Same call, and the same sentence, as `resolveQuotes`.
+ *
+ * ## And nothing for a place that is not there
+ *
+ * A place that cannot be re-found draws **no mark**, which is why this is built
+ * on the matcher directly rather than on `resolveOne` in search-hits.ts like
+ * every other passage source. `resolveOne` falls back to the whole block when it
+ * cannot locate a quote — right for a passage whose model-supplied locator may
+ * have drifted, catastrophic for a citation, where it would tint an entire
+ * paragraph for failing to find `(Tulving 1983)` and leave nothing downstream
+ * able to tell that from a mark somebody meant.
+ *
+ * The rendered text of a block is computed **once**, and the haystack reduced
+ * once, however many works cite it — `quoteFinderWithMultiplicity`, which was
+ * private until this became its second bulk caller. Both are what keep a
+ * heavily-cited paper from paying per work per block on every render, the same
+ * consideration `termMarks` states above.
+ */
+export function citeMarks(
+  blocks: Block[],
+  selections: readonly CiteSelection[],
+): Map<BlockId, Mark[]> {
+  const byBlock = new Map<BlockId, Mark[]>();
+  if (selections.length === 0) return byBlock;
+
+  /* Which works to look for in which block, inverted up front, so this is one
+     pass over the article rather than one pass per work. */
+  const wanted = new Map<BlockId, { id: string; quote: string }[]>();
+  for (const selection of selections) {
+    for (const place of selection.places) {
+      const list = wanted.get(place.blockId) ?? [];
+      list.push({ id: selection.id, quote: place.quote });
+      wanted.set(place.blockId, list);
+    }
+  }
+
+  for (const block of blocks) {
+    const here = wanted.get(block.id);
+    if (!here) continue;
+    // `renderedText`, not `block.text` — the offset space every mark in this
+    // file speaks. The whole header of this file is about mixing them up.
+    const find = quoteFinderWithMultiplicity(renderedText(block.html), "forgiving");
+    const marks: Mark[] = [];
+    for (const place of here) {
+      const span = find(place.quote);
+      /* `null` is both "the words have gone" and "there are two of them", and
+         both mean the same thing here: no mark. See the docstring. */
+      if (!span) continue;
+      marks.push({ id: place.id, kind: "cite" as const, start: span.start, end: span.end });
     }
     if (marks.length > 0) byBlock.set(block.id, marks);
   }

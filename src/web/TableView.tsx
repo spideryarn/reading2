@@ -43,6 +43,8 @@ import {
   renderedText,
   resolveMark,
   termMarks,
+  citeMarks,
+  type CiteSelection,
   type Mark,
   type TermSelection,
 } from "./annotate.js";
@@ -121,6 +123,8 @@ interface ProseEntry {
   terms: readonly Mark[];
   /** The `hitMarks` prop's array for this block — the search's marks. */
   hits: readonly Mark[];
+  /** `citeMarksByBlock`'s array for this block — every cited work placed here. */
+  cites: readonly Mark[];
   /**
    * `openTerm`, but **only when this block carries that term** — otherwise
    * null.
@@ -183,6 +187,7 @@ function sameInputs(
   cmts: readonly Mark[],
   terms: readonly Mark[],
   hits: readonly Mark[],
+  cites: readonly Mark[],
   openTerm: string | null,
 ): boolean {
   return (
@@ -190,6 +195,7 @@ function sameInputs(
     had.cmts === cmts &&
     had.terms === terms &&
     had.hits === hits &&
+    had.cites === cites &&
     had.openTerm === openTerm
   );
 }
@@ -397,6 +403,19 @@ const NOT_A_BLOCK_SELECTION = [
   "mark.hit.cmt",
   "mark.hit.chat",
   "mark.hit.term",
+  /* **A citation inside a quoted sentence**, added 2026-09-16 with the fifth
+     `MarkKind`. A bare `mark.cite` is already caught by `mark:not(.hit)` above;
+     this is the case that is not, and leaving it out would have made a citation
+     inside a quote behave differently from a glossary term inside a quote for no
+     reason a reader could see.
+
+     It belongs on this list for the list's own stated reason — *a tap on it
+     already means something*: `mark.cite` is in the hover card's `tapSelector`,
+     so the first tap opens the work's card. That is what makes this an exclusion
+     rather than a dead zone, and it is why the card's touch half could not be
+     deferred: without it, this line would take the tap away and give nothing
+     back. ProseHoverCard.tsx § tapSelector. */
+  "mark.hit.cite",
   "mark.hit[data-wash]",
   "mark.hit:not([data-quote])",
   /* The ⤢ on a figure, and every control in the gutter. The gutter's own
@@ -604,6 +623,23 @@ interface Props {
    */
   terms?: readonly TermSelection[] | undefined;
   /**
+   * The works the piece cites, and the verified places it cites them.
+   *
+   * The whole list, in every mode, since 2026-09-16
+   * (SPIDERYARN-READING2-3M) — and the whole list rather than the part above the
+   * threshold bar, because `?citebar=` is reachable only from Citations mode
+   * while these marks are visible from every one of them. `citeMarks` in
+   * annotate.ts has the argument.
+   *
+   * **No pressed-one prop beside it**, unlike `terms`/`openTerm`: nothing
+   * selects a citation from the band yet (`?cite=` is deferred), so there is no
+   * second state to keep off the scan's key.
+   *
+   * Optional, so an article with no citations — and every test that renders this
+   * table without them — goes on working unchanged.
+   */
+  cites?: readonly CiteSelection[] | undefined;
+  /**
    * The term the reader has pressed in the glossary band, of the many drawn.
    *
    * **Its own prop rather than an `open` flag inside `terms`**, so that pressing
@@ -725,6 +761,7 @@ function TableViewInner({
   onHelp,
   onBookmark,
   terms,
+  cites,
   openTerm,
   hitMarks,
   hitStrength,
@@ -996,6 +1033,21 @@ function TableViewInner({
   const termMarksByBlock = useMemo(() => termMarks(blocks, terms ?? []), [blocks, terms]);
 
   /**
+   * The citations, by block — a third map, for the reason there is a second.
+   *
+   * It changes on its own clock: the glossary moves when a term is pressed and
+   * the comments move on every streamed token, while this changes only when the
+   * citations list itself is replaced, which is once a run. Folding it into
+   * either of the others would recompute that one every time this one did not.
+   *
+   * Empty whenever the article has no citations, which is still the ordinary
+   * case, and then the prose is untouched exactly as it was before. `citeMarks`
+   * in annotate.ts, and note what it does NOT do: a place it cannot re-find
+   * draws nothing rather than the whole block.
+   */
+  const citeMarksByBlock = useMemo(() => citeMarks(blocks, cites ?? []), [blocks, cites]);
+
+  /**
    * Last render's `{ __html }` objects **and what each was built from**, so an
    * unchanged block can be handed back the one React has already seen without
    * being computed again — see `proseHtml` below for why each half matters.
@@ -1110,9 +1162,10 @@ function TableViewInner({
       const found = termMarksByBlock.get(block.id) ?? NO_MARKS;
       const cmts = marksByBlock.get(block.id) ?? NO_MARKS;
       const hits = hitMarks?.get(block.id) ?? NO_MARKS;
+      const cited = citeMarksByBlock.get(block.id) ?? NO_MARKS;
       const pressed = pressedIn(found, openTerm);
       const had = was.get(block.id);
-      if (had && sameInputs(had, block, cmts, found, hits, pressed)) {
+      if (had && sameInputs(had, block, cmts, found, hits, cited, pressed)) {
         /* Nothing this block is drawn from has changed, so neither has its
            html. The entry — and with it the `{ __html }` object React compares
            — is passed through untouched. */
@@ -1127,6 +1180,7 @@ function TableViewInner({
            anything except the blocks it actually appears in. */
         ...(pressed ? found.map((m) => (m.id === pressed ? { ...m, open: true } : m)) : found),
         ...hits,
+        ...cited,
       ];
       /* The unmarked majority never reaches the parser at all. `annotateHtml`
          has this test too; doing it here as well is what keeps an unmarked
@@ -1153,6 +1207,7 @@ function TableViewInner({
         cmts,
         terms: found,
         hits,
+        cites: cited,
         openTerm: pressed,
         out: had && had.out.__html === withHandles ? had.out : { __html: withHandles },
       });
@@ -1160,7 +1215,15 @@ function TableViewInner({
     proseCache.current = byBlock;
     if (timing) noteCost("proseHtml", t0);
     return byBlock;
-  }, [blocks, marksByBlock, termMarksByBlock, hitMarks, openTerm]);
+    /* **`citeMarksByBlock` was missing here until 2026-09-16**, and the feature
+       it belongs to did not work — intermittently, which is the worst way for it
+       not to work. The memo read the map and did not depend on it, so a
+       citations list arriving after the first render (it is a separate GET; the
+       blocks are in the payload) changed nothing on screen. Any *other*
+       dependency moving afterwards recomputed it and the marks appeared, so one
+       article had them and the next did not.
+       tests/prose-not-rebuilt.test.tsx has the reproduction. */
+  }, [blocks, marksByBlock, termMarksByBlock, hitMarks, citeMarksByBlock, openTerm]);
 
   /**
    * **Apparatus, dressed as apparatus** — which block starts a note, what the

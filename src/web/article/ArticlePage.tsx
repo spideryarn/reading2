@@ -29,6 +29,7 @@ import { useSlow } from "../useSlow.js";
 import { useArc } from "../useArc.js";
 import { useGlossaryRead } from "../useGlossary.js";
 import { useQuotesRead } from "../useQuotes.js";
+import { useCitationsRead } from "../useCitations.js";
 import type { SavedSearch } from "../useSearch.js";
 import { useLastView } from "../last-view.js";
 import { useComments } from "../useComments.js";
@@ -435,6 +436,24 @@ function OwnedReader({
    */
   const quotes = useQuotesRead(slug);
   /**
+   * **The citations, for the same reason and by the same split** — since
+   * 2026-09-16, when they started being marked in the prose in every mode
+   * rather than only being listed in the band
+   * (docs/plans/260916b-…, SPIDERYARN-READING2-3M).
+   *
+   * `useCitationsRead` is the opening GET plus `applyFound`, and nothing else.
+   * `CitationsBand` layers `useStepJob`, `useAutoRun` and the POST that is
+   * *Find it on the web* on top of it — and those stay down there for the two
+   * reasons the Quotes comment above gives, which apply here unchanged.
+   *
+   * **Unconditional, and not behind the experimental switch** that Citations
+   * mode itself is behind. The saving is not real — the band has to read the
+   * list somehow — and gating it would make an existing `?mode=citations` URL
+   * half-work, which is not what that switch means. src/web/useCitations.ts
+   * § CitationsRead.
+   */
+  const citations = useCitationsRead(slug);
+  /**
    * **The arc, and the request for one if there is none.** Here rather than in
    * `Reader` for the same reason the three above are: it can POST, and the
    * acceptance test for public reading is that a signed-out browser issues no
@@ -454,7 +473,7 @@ function OwnedReader({
     <Reader
       slug={slug}
       article={article}
-      capability={{ kind: "owner", comments, chatAnchors, glossary, quotes, arc }}
+      capability={{ kind: "owner", comments, chatAnchors, glossary, quotes, citations, arc }}
       onRenamed={onRenamed}
     />
   );

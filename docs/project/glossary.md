@@ -359,6 +359,12 @@ Point at an underlined term and its entry appears — name, what the author mean
 to bring to it, the web answer if somebody has already asked for one, and a way into the band.
 [`ProseHoverCard.tsx`](../../src/web/ProseHoverCard.tsx).
 
+**It is one card with several sections, not the glossary's card**, and it has been since the
+footnote markers joined it: a term, a footnote in full, a link described, and — since 2026-09-16 — a
+work the piece cites ([citations.md](citations.md)). A phrase that is two of those draws two
+sections, which is why the machinery below is written against `<mark>` elements in general rather
+than against `mark.term`.
+
 **It is not [`Tooltip.tsx`](../../src/web/Tooltip.tsx)**, and the reason is the same one that shapes
 `annotateHtml`: the marks are injected HTML, not React elements, so there is nothing to clone a ref
 onto — and there are hundreds of them on a long article, so one Floating UI instance per occurrence

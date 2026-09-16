@@ -95,6 +95,9 @@ function Harness() {
       </table>
       <ProseHoverCard
         entries={[]}
+        /* Nothing here is a citation — this suite mounts the card over a
+           footnote marker — and an empty list is what a visitor gets too. */
+        works={[]}
         /* No article, because nothing here is one: this suite mounts the card
            over a footnote marker. The link-preview lookup needs a slug to have
            permission to ask, so `null` is also "ask nobody". */

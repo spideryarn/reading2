@@ -216,3 +216,56 @@ it("a block whose html really changes is rebuilt, and only that block", async ()
     "only the block that gained a mark should have been rewritten",
   ).toEqual([target.id]);
 });
+
+/**
+ * **And a citations list that arrives late must reach the prose.**
+ *
+ * The other half of this memo's job, and the half it silently stopped doing on
+ * 2026-09-16: `citeMarksByBlock` was read inside the `proseHtml` memo and left
+ * out of its dependency array, so a citations list landing after the first
+ * render changed nothing on the page. The panel listed the works and the prose
+ * showed none — the one disagreement `useCitations.ts` § CitationsRead says
+ * cannot happen, because "the panel and the prose read the same
+ * `CitationsRead`".
+ *
+ * **It was intermittent, which is what makes it worth a test rather than a
+ * glance.** Any *other* dependency changing afterwards — a comment resolving, a
+ * search, a term pressed, a re-extraction — recomputed the memo and the marks
+ * appeared. So the feature worked on one article and not on the next, with
+ * nothing in the data to tell them apart.
+ *
+ * Found by a browser agent on a real article, having been named by `npm run
+ * lint` all along. AGENTS.md calls lint advice rather than a gate because its
+ * baseline is not clean; this is the argument for reading the advice anyway,
+ * and for reading it on the files you touched rather than on the tree.
+ *
+ * The shape is the `hitMarks` test above, with the one difference that matters:
+ * the list arrives on the **second** render rather than the first, because that
+ * is the real sequence — the blocks are in the page's payload and the citations
+ * are a separate GET.
+ */
+it("draws a citations list that lands after the first render", async () => {
+  const article = await readArticleFromDir(DIR);
+  const target = article.blocks.find((b) => b.gistable && b.text.length > 40);
+  if (!target) throw new Error("fixture has no ordinary prose block to mark");
+  /* The article's own characters, which is what `verifyPlace` stores: this is a
+     re-find rather than a search. */
+  const quote = target.text.slice(0, 12);
+
+  await act(async () => {
+    root.render(createElement(TableView, propsFor(article) as never));
+  });
+  expect(
+    host.querySelectorAll("mark.cite"),
+    "nothing should be marked before the citations arrive",
+  ).toHaveLength(0);
+
+  const cites = [{ id: "spya-a2b3c4", places: [{ blockId: target.id, quote }] }];
+  await act(async () => {
+    root.render(createElement(TableView, propsFor(article, { cites }) as never));
+  });
+
+  const marks = host.querySelectorAll("mark.cite");
+  expect(marks.length, "the late citations list never reached the prose").toBeGreaterThan(0);
+  expect(marks[0]?.getAttribute("data-cite")).toBe("spya-a2b3c4");
+});

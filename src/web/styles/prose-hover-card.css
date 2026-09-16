@@ -326,3 +326,52 @@
 }
 .prose-card-open:focus-visible { outline: 2px solid var(--highlight); outline-offset: 2px; }
 
+
+/* ---- a work the piece cites ------------------------------------------
+   The citation section, added 2026-09-16 (SPIDERYARN-READING2-3M). It reuses
+   `.prose-card-body`, `.prose-card-head`, `.prose-card-name`, `.prose-card-part`
+   and `.prose-card-foot` wholesale, so almost nothing is needed here — which is
+   the point of it being a section of the existing card rather than a second
+   card. What follows is only the two things a citation has that a term does
+   not. */
+
+/* The title can be a link, and then it wears the name's weight rather than a
+   link's colour: it is the heading of this section first and a destination
+   second, exactly as `.prose-card-name` is on a term. The external-link glyph
+   beside it is what says it leaves. */
+.prose-card-cite-title a.prose-card-name {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 0.25rem;
+  color: var(--ink);
+  text-decoration: none;
+}
+.prose-card-cite-title a.prose-card-name:hover {
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+.prose-card-cite-title a.prose-card-name svg {
+  flex: none;
+  align-self: center;
+  color: var(--ink-faint);
+}
+
+/* Authors · year, directly under the title and quieter than the prose under it:
+   it is the work's identity rather than something to read. */
+.prose-card-cite-by {
+  margin: -0.2rem 0 0.4rem;
+  color: var(--ink-faint);
+  font-size: 0.8rem;
+}
+
+/* The two quiet facts in the foot. `.prose-card-cite-source` is where the
+   address came from — "doi.org · DOI in the article" — and it is deliberately
+   NOT a link: the title above is the link, and a second one to the same place
+   would be two ways to do one thing. `.prose-card-cite-where` is the count that
+   stands in for the marks we cannot draw past three mentions. */
+.prose-card-cite-source,
+.prose-card-cite-where {
+  color: var(--ink-faint);
+  font-size: 0.76rem;
+}
+.prose-card-cite-where { margin-left: auto; }
