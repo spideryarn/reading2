@@ -150,12 +150,26 @@ mark.cmt.term {
    of one of them being redrawn, which is the ordinary case in an academic paper
    where the cited author is also a term in the glossary.
 
-   **Dashed, against the term's dotted**, and that pair is the thing to look at
-   on /design rather than to reason about here: at 1px the two are close, and
-   the reader has already learnt that a dotted rule means glossary. If the
-   specimen says they do not read as two things, the fallback named in the plan
-   is `underline double` — plainly distinct, and louder, which is why it is the
-   fallback and not the first choice.
+   **Dashed, against the term's dotted** — the pair that had to be looked at
+   rather than reasoned about, since at 1px the two are close and the reader has
+   already learnt that a dotted rule means glossary. Looked at on /design and on
+   a real article, 2026-09-16, zoomed and with pixel crops: **keep dashed**. The
+   two separate on three channels at once rather than on the dash pattern alone
+   — this sits on the text baseline in grey, `mark.term`'s rule sits several
+   pixels lower in the warm highlight tint — so a phrase carrying both reads as
+   two annotations rather than one line drawn twice.
+
+   `underline double` was the fallback and is now rejected rather than merely
+   unused: it is heavier than a plain link's own underline, and the paragraphs
+   with the most citations in them are exactly the ones already thick with the
+   author's links. The reason this one survives that test is that it is thin and
+   low-contrast; a louder rule would not.
+
+   The dash is what the eye picks up even where the cited words are one of the
+   article's own hyperlinks, which carry a solid underline of their own
+   (`.prose a`, prose.css). Checked by cropping a cited link against an uncited
+   one on a link-dense article rather than assumed — the decoration draws over
+   the anchor's rule.
 
    **And the words do not change colour**, which is the rule `mark.cmt` states
    and the reason Fable's suggestion to draw the mention in the link colour was

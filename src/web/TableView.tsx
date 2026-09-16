@@ -1215,7 +1215,15 @@ function TableViewInner({
     proseCache.current = byBlock;
     if (timing) noteCost("proseHtml", t0);
     return byBlock;
-  }, [blocks, marksByBlock, termMarksByBlock, hitMarks, openTerm]);
+    /* **`citeMarksByBlock` was missing here until 2026-09-16**, and the feature
+       it belongs to did not work — intermittently, which is the worst way for it
+       not to work. The memo read the map and did not depend on it, so a
+       citations list arriving after the first render (it is a separate GET; the
+       blocks are in the payload) changed nothing on screen. Any *other*
+       dependency moving afterwards recomputed it and the marks appeared, so one
+       article had them and the next did not.
+       tests/prose-not-rebuilt.test.tsx has the reproduction. */
+  }, [blocks, marksByBlock, termMarksByBlock, hitMarks, citeMarksByBlock, openTerm]);
 
   /**
    * **Apparatus, dressed as apparatus** — which block starts a note, what the

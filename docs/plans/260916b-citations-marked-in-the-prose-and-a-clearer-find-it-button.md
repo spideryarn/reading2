@@ -1,8 +1,17 @@
 # Citations marked in the prose, and a *Find it* button that says what it does
 
-**Status as of 2026-09-16: reviewed by GPT Sol and revised; not yet built** — evidence: no `MarkKind`
-`"cite"` in [`src/web/annotate.ts`](../../src/web/annotate.ts), and `CitationsPanel.tsx` still has no
-`Tooltip` import.
+**Status as of 2026-09-16: built, reviewed twice by GPT Sol, and looked at in a browser** — evidence:
+`MarkKind` in [`src/web/annotate.ts`](../../src/web/annotate.ts) has `"cite"`, and
+`CitationsPanel.tsx` imports `ControlTip`.
+
+**One bug got through every test and was found in a browser**, and it is worth reading before
+anything else here: the `proseHtml` memo read the citation marks and did not depend on them, so a
+list arriving after the first render — which is always, since it is a separate `GET` — drew nothing,
+intermittently, depending on whether anything else happened to invalidate the memo afterwards.
+[260916a](../postmortems/260916a-a-memo-that-read-a-map-it-did-not-depend-on.md) is the write-up; the
+short version is that `npm run lint` had been naming it the whole time and no test could have caught
+it, because every test rendered the blocks and the list together, which is the one sequence the app
+never performs.
 
 The review is
 [260916b-…-review-sol.md](260916b-citations-marked-in-the-prose-and-a-clearer-find-it-button-review-sol.md),
@@ -172,11 +181,29 @@ proposed tinting the words: the objection is not only that `.prose a` is already
 that recolouring the author's prose is something this column does not do. GPT Sol, review finding 8.
 
 **The risk, named: at 1px, dashed and dotted may not be tellable apart**, and the reader has already
-learnt that a dotted rule means glossary. The fallback is `underline double` — two hairlines, plainly
-distinct at a glance, and it reads as a reference rule. **This is decided at `/design`, not in
-prose:** a citation specimen joins `SPECIMEN_MARKS` in
-[`DesignPage.tsx`](../../src/web/DesignPage.tsx), and a dense paragraph — five citations in one
-sentence, one of them also a glossary term — is looked at before this lands.
+learnt that a dotted rule means glossary. The fallback was `underline double` — two hairlines, plainly
+distinct at a glance, and it reads as a reference rule. **This was decided at `/design`, not in
+prose:** three citation specimens joined `SPECIMEN_MARKS` in
+[`DesignPage.tsx`](../../src/web/DesignPage.tsx) for exactly this question.
+
+**Answered 2026-09-16: keep dashed.** Looked at in a browser, zoomed, with pixel crops rather than by
+eye — the second specimen is the one that decided it. The two strokes separate on three channels at
+once, not one: the citation's dashed decoration sits on the text baseline in grey, and the glossary's
+dotted rule sits several pixels lower in the warm highlight tint. Different colour, different
+vertical position, different pattern. They read as two annotations rather than as one line drawn
+twice.
+
+Two further findings from the same pass, both about the case the specimens could not show:
+
+- **On a real link-dense article the dash is not swamped by the anchor's own underline.** The worry
+  was that a citation whose words are also one of the article's hyperlinks would lose its mark under
+  the link's solid rule. Cropped side by side — a cited link against an uncited one — the dashed
+  decoration draws over it and is what the eye picks up.
+- **The density worry did not materialise.** The heaviest paragraph in *The Scaling Hypothesis*
+  carries 38 mark fragments in ~3,800 characters and reads as a page, not a ransom note, because the
+  line is thin and low-contrast on prose that was already hyperlink-dense. `underline double` would
+  have been the wrong call here: heavier than a plain link's own underline, in exactly the paragraphs
+  where there is most of it.
 
 Overlap rules, written explicitly rather than left to cascade. Whether a dotted `border-bottom` and
 a dashed `text-decoration` can both be drawn on one phrase without reading as a rendering bug is a

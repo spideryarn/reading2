@@ -1333,10 +1333,13 @@ export const SPECIMEN_MARKS: { label: string; marks: Mark[] }[] = [
        a dotted border and a dashed underline, 1px apart in weight and a couple
        of pixels apart on the page.
 
-       If these do not read as two things, the answer is in the plan
-       (docs/plans/260916b-…): `underline double` for the citation, which is
-       plainly distinct and louder. Decided here rather than in prose, because
-       this is a question about what it looks like. */
+       Decided here rather than in prose, because it is a question about what it
+       looks like — and answered on 2026-09-16, zoomed, with pixel crops: they
+       do read as two things, so the citation keeps `underline dashed` and the
+       `underline double` fallback is rejected. They separate on three channels
+       at once rather than on the dash pattern alone: this one sits on the text
+       baseline in grey, the term's rule sits several pixels lower in the warm
+       highlight tint. annotations.css § mark.cite. */
     label: "A citation that is also a glossary term — the dotted rule and the dashed one, together",
     marks: [
       { id: "t", start: 33, end: 41, kind: "term" },
