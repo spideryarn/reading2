@@ -234,3 +234,39 @@ interpretive feature.
   | spider-silk (Wikipedia) | 5 | 9 | none | 2,850 | 3 / 0 / 0 / 1 (borderline) / 1 (partly) |
 
   No summary-shaped rows, so the prompt was not iterated.
+- 2026-09-16 — stage 1 committed `b31d8b87`; **GPT Sol code review 1**
+  ([findings](260916d-faq-mode-code-review-1-findings.md), [answer](260916d-faq-mode-code-review-1-sol.md))
+  fixed five things in-stage, committed `301101e6`: a statement without a question mark no longer
+  survives as a question (prompt `faq/2`), malformed passage fields count as `malformed`, and three
+  comment/test corrections. Sol judged the cap-before-reading-order cut, the shared `overCap`
+  counter and the 150s step budget deliberate rather than defects. Postgres tests were run by us
+  before its fixes ([results](260916d-faq-mode-stage1-test-results.txt)); `faq.test.ts` after.
+- 2026-09-16 — **stage 2 built and committed** `0e947eb4`: `useFaq`, `FaqPanel`, `FaqBand`, every
+  client total, `docs/project/faq.md`. Icon `BadgeQuestionMark`, placed after Citations in the bar —
+  both unset by Greg. Aliases leave out `questions`, which would tie with Chat's `question` in the
+  command bar. **GPT Sol code review 2**
+  ([findings](260916d-faq-mode-code-review-2-findings.md), [answer](260916d-faq-mode-code-review-2-sol.md))
+  fixed four things, committed `418a3d57`: a read-only retry for a failed GET, questions as `h2`,
+  and a test that tells the unforced run from the forced one (its mutation of every button to
+  forced left the original 13 tests green). Its D3 card rewrite was taken in part: it rightly
+  dropped the sentence the band's foot already says, but its replacement was about ordering only,
+  and the second sentence now leads with *no answer is written*, which is the half a press would not
+  tell a reader expecting an FAQ. Two rounds of review in total, one per stage; no finding
+  overruled.
+- 2026-09-16 — **browser check** (Sonnet subagent, Playwright on the box, the seeded account, the
+  Noema essay's stage-1 FAQ): the button and its two-sentence card with the switch on; nine
+  questions with quoted passages; a jump landing the passage at the top of the viewport; the foot
+  and a dropped-count line; the button gone in Summary with the switch off and back when on; no
+  page errors and nothing FAQ-related in the console; no horizontal overflow at 390px. The
+  *older version of the prompt* banner showed, correctly, because the run was `faq/1`.
+- 2026-09-16 — **full suite once**, through `scripts/tmux-job.ts` on `418a3d57` (which contains
+  `origin/dev` at `a40aa270`): 1137 files passed, 9 failed, 24,571 tests passed. The nine are the
+  same nine [260916c](260916c-your-earlier-feedback-tab-in-the-feedback-dialog.md) recorded the same
+  day in another worktree, and none touches a file this plan changed: the two fresh-worktree bundle
+  tests (`cold-start-lazy-imports`, `pdf-bundle-trace`, no `api-dist/`); six fleet and Overseer
+  suites failing on the missing `tools/fleet/web/dist` build; and `overseer-standing-jobs`, whose
+  feedback-sweep pin disagrees with an edit to `feedback-reports.md` that only Greg can re-authorise.
+  Every mode, dock, visitor, store, route-contract and doc-links suite passed.
+- 2026-09-16 — **finished**: the note is
+  [260912_0819-faq-mode.md](../user-feedback/260912_0819-faq-mode.md), ending *shipped*; pushed to
+  `dev`. Not deployed — production is Greg's.
