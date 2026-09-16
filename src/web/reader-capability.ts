@@ -40,6 +40,7 @@ import type { CitationsRead } from "./useCitations.js";
 import type { ChatAnchorsApi } from "./useChatAnchors.js";
 import type { ClientComment, CommentsApi } from "./useComments.js";
 import type { UseArc } from "./useArc.js";
+import type { ReadingTime } from "./useReadingTime.js";
 
 export type ReaderCapability =
   | {
@@ -88,6 +89,16 @@ export type ReaderCapability =
        * the payload alone.
        */
       arc: UseArc;
+      /**
+       * **Where this reader has spent time in the piece** — `useReadingTime`,
+       * docs/plans/260916c-show-where-you-have-spent-time-reading-in-the-spine-and-gutter.md.
+       *
+       * **No visitor arm, and that is the enforcement.** It is a record of the
+       * owner's own reading: a visitor must neither add to it nor see it, so the
+       * hook that reads and writes it is only ever called for an owner, and a
+       * visitor's `Reader` has nothing to draw it from.
+       */
+      readingTime: ReadingTime;
     }
   | {
       kind: "visitor";

@@ -58,6 +58,9 @@ of compression, down the page for position and across for detail. Read that firs
   the tabular view, the spine, the arc, columns that will not fit, and what would make the idea fail.
 - **[column-context.md](column-context.md)** — why a coarse column is 80% blank mid-article, and the
   centred fisheye that fixed it.
+- **[reading-time.md](reading-time.md)** — the spine thicker where you have spent longer, and a
+  hairline beside each passage: how a second is shared out, what counts, and why a batch is never
+  sent twice. Owner only, behind the experimental switch.
 - **[maths.md](maths.md)** — TeX in an article drawn as maths: which delimiters count and why a
   price never does, the limits on one formula, and what it costs a comment in that paragraph.
 

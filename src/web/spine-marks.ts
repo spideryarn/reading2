@@ -30,6 +30,7 @@
  */
 import type { BlockId } from "../types.js";
 import type { JumpOrigin } from "./jump-history.js";
+import type { ReadLevel } from "./reading-time.js";
 import type { BlockMatch, MatchingSearch } from "./search-hits.js";
 
 /** One block's row, in the rail's document-pixel space. */
@@ -263,4 +264,52 @@ export function jumpOriginMark(
   if (origin === null || origin.kind === "top") return null;
   const row = rows.get(origin.blockId);
   return row ? { top: row.top, height: row.height } : null;
+}
+
+/** One stretch of the rail read to the same step — `readingRuns`. */
+export interface ReadingRun {
+  top: number;
+  height: number;
+  level: Exclude<ReadLevel, 0>;
+}
+
+/**
+ * **Where you have spent time reading, as runs down the rail** —
+ * docs/plans/260916c-show-where-you-have-spent-time-reading-in-the-spine-and-gutter.md.
+ *
+ * > maybe the spine is narrower in places where we haven't spent much time
+ * > reading and thicker in places where we have spent time reading.
+ * >
+ * > — Greg, 2026-09-12
+ *
+ * Neighbouring rows at the same step become one run, which is what keeps this a
+ * few dozen elements on a two-thousand-block article rather than one per row.
+ * **Neighbouring means adjacent `index`**, not adjacent in the map: a row this
+ * page does not have, or one at step 0, ends the run rather than being bridged,
+ * so a gap the reader skipped stays a gap. Rows are placed by the same
+ * document-pixel ruler as every other mark here.
+ */
+export function readingRuns(
+  rows: Map<string, Row>,
+  levels: ReadonlyMap<BlockId, ReadLevel>,
+): ReadingRun[] {
+  const lit: { index: number; top: number; bottom: number; level: Exclude<ReadLevel, 0> }[] = [];
+  for (const [id, level] of levels) {
+    if (level === 0) continue;
+    const row = rows.get(id);
+    if (row) lit.push({ index: row.index, top: row.top, bottom: row.top + row.height, level });
+  }
+  lit.sort((a, b) => a.index - b.index);
+  const runs: ReadingRun[] = [];
+  let prev: (typeof lit)[number] | undefined;
+  for (const r of lit) {
+    const last = runs[runs.length - 1];
+    if (last && prev && prev.index + 1 === r.index && prev.level === r.level) {
+      last.height = r.bottom - last.top;
+    } else {
+      runs.push({ top: r.top, height: r.bottom - r.top, level: r.level });
+    }
+    prev = r;
+  }
+  return runs;
 }

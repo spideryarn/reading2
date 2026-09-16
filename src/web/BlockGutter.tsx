@@ -16,6 +16,15 @@
  * marker is the superscript; each of those is the right form for what it says,
  * and an icon would be a worse duplicate.
  *
+ * **One thing here is not a mark you made and is still yours: how long you have
+ * spent on this passage**, as a hairline down the column's text-side edge. Greg
+ * asked for it by name — *"something in the vertical gutter in the text as well
+ * … I don't want it to be too obtrusive"* (2026-09-12) — and it is a trace of
+ * the reader's own reading, not something a model wrote. It is a pseudo-element
+ * driven by a style sheet rather than anything in this component, so it takes
+ * no slot and this file never re-renders for it: gutter.css § reading time,
+ * docs/project/reading-time.md.
+ *
  * And one grammar, which is what keeps it quiet: **at rest the gutter shows
  * *state*, on hover it shows *affordances*.** On an article you have never
  * marked it is empty all the way down until the pointer lands on a row.

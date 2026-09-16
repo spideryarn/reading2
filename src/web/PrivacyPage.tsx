@@ -55,7 +55,7 @@ import { pageTitle, useDocumentTitle } from "./page-title.js";
  * can honestly promise: there is no changelog, no diff view and nobody to email
  * about a wording change during a beta. Bump it when you change the words.
  */
-const LAST_UPDATED = "7 September 2026";
+const LAST_UPDATED = "16 September 2026";
 
 /**
  * A heading and its paragraphs. Eight of them; nothing else on the page.
@@ -204,6 +204,23 @@ export function PrivacyPage() {
             highlights, chat and voice conversations, saved searches, and the “about you” profile
             you can fill in, which is there to be given to the model. Quiz answers are the exception:
             they go to a model to be marked and are not stored.
+          </li>
+          {/* **Reading time, and three words in it that were chosen against
+              the obvious ones.** "Passage", not "paragraph": headings, figures
+              and lists are counted too. "Totals, not a history" rather than
+              "not when": every update is a timestamped request line naming the
+              article in the server logs, so "never when" would have been false
+              — GPT Sol, 2026-09-16. And "anybody reading an article you have
+              shared" rather than "anybody else": the operator can read stored
+              data, which this page says in its own paragraph above.
+              docs/project/privacy.md § Reading time. */}
+          <li className="tw:mb-2">
+            <strong className="tw:text-foreground">How long you have spent on each part of your
+            articles</strong> — with experimental features on, a running total of the seconds each
+            passage has been on your screen, so that the article’s outline and margin can show you
+            where you have been. We keep the totals, not a history of your reading (our ordinary
+            server logs do show when an update arrived). It is not shown to anybody reading an
+            article you have shared, and it goes when the article does.
           </li>
           <li className="tw:mb-2">
             <strong className="tw:text-foreground">What the models make for you</strong> —

@@ -34,6 +34,8 @@ import type { SavedSearch } from "../useSearch.js";
 import { useLastView } from "../last-view.js";
 import { useComments } from "../useComments.js";
 import { useChatAnchors } from "../useChatAnchors.js";
+import { useExperimental } from "../useExperimental.js";
+import { useReadingTime } from "../useReadingTime.js";
 import { articleWaitTitle, useDocumentTitle } from "../page-title.js";
 import { apiFetch } from "../lib/api.js";
 import type { PublicArtefactSet, PublicArtefacts } from "../../public-types.js";
@@ -468,12 +470,27 @@ function OwnedReader({
    * tests/public-network-trace.test.tsx § an owner's reading view, left alone.
    */
   const arc = useArc(slug, article.arc);
+  /**
+   * **Where the reader has spent time**, recorded and drawn only with
+   * experimental features on — both halves, as availability rather than
+   * consent: it is new code on every paying reader's article view and new data
+   * about a person, so it starts where the unfinished things are.
+   * docs/plans/260916c-show-where-you-have-spent-time-reading-in-the-spine-and-gutter.md
+   * § Who, and behind what, which also records Fable's case for recording for
+   * everyone.
+   */
+  const experimental = useExperimental();
+  const words = useMemo(
+    () => new Map(article.blocks.map((b) => [b.id, b.words] as const)),
+    [article.blocks],
+  );
+  const readingTime = useReadingTime(slug, words, experimental.on);
 
   return (
     <Reader
       slug={slug}
       article={article}
-      capability={{ kind: "owner", comments, chatAnchors, glossary, quotes, citations, arc }}
+      capability={{ kind: "owner", comments, chatAnchors, glossary, quotes, citations, arc, readingTime }}
       onRenamed={onRenamed}
     />
   );

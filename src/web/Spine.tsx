@@ -107,9 +107,11 @@ import {
   bandMatchCounts,
   jumpOriginMark,
   laneOrder,
+  readingRuns,
   spineMarks,
   type Row,
 } from "./spine-marks.js";
+import type { ReadLevel } from "./reading-time.js";
 import { useJumpOrigin } from "./router.js";
 import { Tooltip, TooltipGroup } from "./Tooltip.js";
 import { useRenderCount } from "./perf.js";
@@ -248,6 +250,11 @@ interface Props {
    * has to know this feature exists.
    */
   matches?: Map<BlockId, BlockMatch> | undefined;
+  /**
+   * How long the reader has spent on each block, as a step — `useReadingTime`.
+   * Empty for a visitor and with experimental features off, so nothing is drawn.
+   */
+  reading?: ReadonlyMap<BlockId, ReadLevel> | undefined;
   onJump(blockId: string): void;
 }
 
@@ -256,6 +263,7 @@ const READING_LINE = 0.35;
 
 /** Nothing to draw, and a stable identity so the memos below do not rerun. */
 const NO_MATCHES: Map<BlockId, BlockMatch> = new Map();
+const NO_READING: ReadonlyMap<BlockId, ReadLevel> = new Map();
 
 /**
  * What pressing a band should do: show what it is, or go there.
@@ -326,7 +334,7 @@ export function bandPress(
  */
 export const Spine = memo(SpineInner);
 
-function SpineInner({ outline, layoutKey, matches = NO_MATCHES, onJump }: Props) {
+function SpineInner({ outline, layoutKey, matches = NO_MATCHES, reading = NO_READING, onJump }: Props) {
   useRenderCount("Spine");
   /**
    * Which band's card is open, and what opened it.
@@ -700,6 +708,13 @@ function SpineInner({ outline, layoutKey, matches = NO_MATCHES, onJump }: Props)
    * spine-marks.ts § `jumpOriginMark` owns all three rules.
    */
   const jumpOrigin = useJumpOrigin();
+
+  /** Where the reader has spent time — spine-marks.ts § `readingRuns`. */
+  const readRuns = useMemo(
+    () => (metrics && reading.size > 0 ? readingRuns(metrics.rows, reading) : []),
+    [metrics, reading],
+  );
+
   const from = useMemo(
     () => (metrics ? jumpOriginMark(metrics.rows, jumpOrigin) : null),
     [metrics, jumpOrigin],
@@ -783,6 +798,33 @@ function SpineInner({ outline, layoutKey, matches = NO_MATCHES, onJump }: Props)
             />
           );
         })}
+
+        {/* **Where you have spent time reading** — wider where longer.
+            docs/plans/260916c-show-where-you-have-spent-time-reading-in-the-spine-and-gutter.md.
+
+            > maybe the spine is narrower in places where we haven't spent much
+            > time reading and thicker in places where we have
+            >
+            > — Greg, 2026-09-12
+
+            That is a width the reader has to learn, which the rail has refused
+            for a count of matches (the header); Greg asked for this one by
+            name. **After the parts and before `.spine-here` and the ticks**,
+            for the reason given at `.spine-here` below: tree order is paint
+            order, a permanent fill after the hairlines would hide the
+            article's subdivision, and one after the search marks would hide
+            the hits. tests/spine-reading.test.ts asserts it. `aria-hidden`: a
+            screen reader has no use for a thickness, and nothing here is
+            pressable. */}
+        {readRuns.map((r) => (
+          <div
+            key={`read-${r.top}`}
+            className="spine-read"
+            data-level={r.level}
+            aria-hidden="true"
+            style={{ top: pct(r.top), height: pct(r.height) }}
+          />
+        ))}
 
         {/* **The section you are in**, filled — see `hereRing` above for why
             the part alone was not enough and when this is deliberately absent.

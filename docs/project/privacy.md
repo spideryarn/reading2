@@ -367,6 +367,32 @@ see the section below for what is pinned and why this is not. The rule it broke 
 the page has to stay true of the code, and a feature that falsifies a sentence on it is not finished
 until that sentence moves. The same trap took three sentences down on 2026-09-02 (`fcb0a209`).
 
+## Reading time
+
+**Added 2026-09-16**, with [reading-time.md](reading-time.md): for an owner with experimental features
+on, a running total of seconds per block of their own articles, drawn in the spine and the gutter.
+The page's *What we keep* gained a bullet, because the list is only honest if it is complete, and
+"no advertising or analytics trackers" stays true: this is shown to the reader it is about and to
+nobody reading a shared link.
+
+Three words in that bullet were changed by GPT Sol's review of the plan, and each is a claim the
+code has to keep true:
+
+- **"Passage", not "paragraph"** — every row is sampled: headings, figures, list items.
+- **"The totals, not a history"**, not "never when". The table has no timestamp column, but every
+  update is a request line in the server logs, with a time and the article's slug in the path. The
+  page says so in brackets rather than promising something the logs contradict.
+- **"Not shown to anybody reading an article you have shared"**, not "to nobody else". An
+  administrator can read stored data, which the page already says.
+
+**The experimental switch is availability, not consent**, and the bullet says "with experimental
+features on" as a fact about when it is kept, not as a permission. If recording ever moves out from
+behind the switch — Fable's recommendation in
+[260916c](../plans/260916c-show-where-you-have-spent-time-reading-in-the-spine-and-gutter.md#who-and-behind-what)
+— that clause goes, and `LAST_UPDATED` moves with it.
+
+It goes with the article (a cascade through `block_identities`), and is in both exports.
+
 ## What is pinned by a test, and what is not
 
 [`tests/privacy-page.test.ts`](../../tests/privacy-page.test.ts) holds the **model names** to

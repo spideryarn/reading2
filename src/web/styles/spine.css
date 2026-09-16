@@ -125,6 +125,27 @@
 .spine-part.supplement::before { opacity: 0.1; }
 .spine-part.supplement.active::before { opacity: 0.4; }
 
+/* **Where you have spent time reading** — wider where longer, from the left
+   edge. Four steps of a quarter of the rail each (reading-time.ts § readLevel),
+   so a run the reader sat on reaches across and one they scrolled past is a
+   sliver. `--ink` at low opacity rather than a hue: every hue on this rail
+   already means something (the part tint, the search colours, the brand orange
+   on hover), and this should read as a shadow of the reader's own passage
+   rather than as one more signal. Painted under `.spine-here` and the ticks —
+   Spine.tsx says why the order is the correctness.
+   docs/plans/260916c-show-where-you-have-spent-time-reading-in-the-spine-and-gutter.md. */
+.spine-read {
+  position: absolute;
+  left: 0;
+  width: 25%;
+  pointer-events: none;
+  background: var(--ink);
+  opacity: 0.28;
+}
+.spine-read[data-level="2"] { width: 50%; }
+.spine-read[data-level="3"] { width: 75%; }
+.spine-read[data-level="4"] { width: 100%; }
+
 /* **The section you are in.** The concentric inner ring: the part is a quiet
    field, this is the bright fill inside it, and the viewport band's edges are
    the exact pixels. Three layers, three channels, none mistakable for another.

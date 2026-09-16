@@ -184,6 +184,14 @@ Everything a mode is *not* is derivable from `MODES` ([`src/modes.ts`](../../src
 | [Hierarchy](granularity-zoom.md) | **Not because it is unfinished.** Greg moved it on 2026-09-12, making Structure the one structural view everybody is given. Only its Dock entry points are gated — see [Hierarchy went in on 2026-09-12](#hierarchy-went-in-on-2026-09-12) for what that does and does not take with it. |
 | [Debate](../plans/260905f-debate-mode-what-the-web-says-about-this-piece.md) | Two metered web searches a run, up to ~$0.27 and rising with article length — the dearest mode press in the bar — and no live run has happened yet, so nothing about what a real list looks like is known. Its content is also the only thing in the band that is not in the article at all, and what the panel can prove about a row stops well short of what a reader will read into it. |
 
+**One thing that is not a mode is behind it too: [reading time](reading-time.md)**, since
+2026-09-16 — the spine thicker where the reader has spent longer. Both the recording and the drawing,
+because it is new code running every second on an owner's article and a new kind of data about a
+person, so it starts with the readers who asked for the unfinished things. The switch is availability
+here, not consent; `/privacy` says we keep it. Fable argued for recording for every owner, since reading
+time cannot be backfilled —
+[260916c § Who, and behind what](../plans/260916c-show-where-you-have-spent-time-reading-in-the-spine-and-gutter.md#who-and-behind-what).
+
 **Everything else is what everybody sees**, a signed-out visitor included.
 
 **This paragraph used to say that Hierarchy and Outline were stand-ins for a merged Structure mode,

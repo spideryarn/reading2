@@ -25,6 +25,7 @@ import {
 import { useQueryState } from "nuqs";
 import type { Article, BlockId, CitedWork, GlossaryEntry } from "../../types.js";
 import { useExperimental } from "../useExperimental.js";
+import { ReadingTimeStyle } from "../ReadingTimeStyle.js";
 import { addressWithout, useAddress } from "../router.js";
 import { IdeasBand, VisitorIdeasBand } from "../modes/ideas/IdeasMode.js";
 import { TimelineBand, VisitorTimelineBand } from "../modes/timeline/TimelineMode.js";
@@ -465,6 +466,20 @@ export function Reader({
   // sideways: the rail's width is taken out of the prose column's, so hiding it
   // rewraps every paragraph in the article and every row changes height.
   const layoutKey = `${fit.columns.join(",")}|${proseOn}|${windowWidth}|${fit.modeW}|${fit.spine}`;
+
+  /**
+   * **Is the prose on screen, for the reading-time recorder** — only this
+   * component knows. Text shown, and no band lying over it: `fit.modeW === 0`
+   * alone is also true with no band open at all (Plain on a phone), which is
+   * why `.band-covers` could not be the test.
+   * docs/plans/260916c-show-where-you-have-spent-time-reading-in-the-spine-and-gutter.md
+   * § What counts as a second.
+   */
+  const setReadingCounting = owner?.readingTime.setCounting;
+  const proseOnScreen = proseOn && !(bandOpen && fit.modeW === 0);
+  useEffect(() => {
+    setReadingCounting?.(proseOnScreen);
+  }, [setReadingCounting, proseOnScreen]);
   const { at, jumpTo, rowOf } = useReadingPosition(sections, article.blocks, layoutKey);
 
   /**
@@ -1943,9 +1958,11 @@ export function Reader({
           outline={outline}
           layoutKey={layoutKey}
           matches={hitBlocks}
+          reading={owner?.readingTime.levels}
           onJump={jumpTo}
         />
       )}
+      {owner && <ReadingTimeStyle levels={owner.readingTime.levels} />}
       {/* Everything constant about the article — see Masthead.tsx for why
           constant is the word that decides it belongs here and not in a
           column. */}

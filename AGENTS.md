@@ -44,6 +44,7 @@ listed here; the names under each are files in `docs/project/`.
   <br>↳ `web-client.md` (where the client code is) · `new-mode.md` (the checklist) ·
   `granularity-zoom.md` ·
   `column-context.md` (the gist column's fisheye) ·
+  `reading-time.md` (where you have spent time, down the spine) ·
   `maths.md` (TeX in the prose, drawn as maths) · `glossary.md` · `summaries.md` ·
   `ideas.md` (the propositions the piece assumes) ·
   `quotes.md` (the lines worth keeping) ·

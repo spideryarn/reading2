@@ -888,3 +888,33 @@ td.text.kind-heading .blk-gutter[data-open] {
    that a conversation *exists*, which is the one thing in this column that is
    about what the machine has produced rather than what the reader has done. */
 .blk-help:hover { color: var(--highlight); }
+
+/* ------------------------------------------------------- reading time ----
+   **A hairline down the gutter's text-side edge, darker where you have spent
+   longer.** docs/plans/260916c-show-where-you-have-spent-time-reading-in-the-spine-and-gutter.md.
+
+   > And then there's something in the vertical gutter in the text as well. I
+   > could use opacity or it could use thickness again. I don't want it to be
+   > too obtrusive.
+   >
+   > — Greg, 2026-09-12
+
+   A pseudo-element, so it is not a slot and changes nothing about how many
+   icons the row has room for (§ the column that truncates): absolutely placed
+   inside a box that is already `position: absolute`, it is out of the grid.
+
+   `--read` is set per row by the one style element `ReadingTimeStyle` renders
+   (reading-time.ts § gutterCss) — never by `TableView`, which would re-render
+   every row whenever one block crossed a step. Unset means 0, which draws
+   nothing. */
+.blk-gutter::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  right: 0;
+  width: 2px;
+  pointer-events: none;
+  background: var(--ink);
+  opacity: calc(var(--read, 0) * 0.1);
+}
