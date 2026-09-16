@@ -4488,6 +4488,22 @@ export const FEEDBACK_NOT_AVAILABLE: ReaderFacingFailure = {
     "[fb-store]",
 };
 
+/**
+ * **The reader's earlier reports would not load** — the Feedback dialog's
+ * Earlier tab. docs/plans/260916c-your-earlier-feedback-tab-in-the-feedback-dialog.md.
+ *
+ * `retry`, and the panel offers Try again beside it: nothing is lost by a read
+ * failing, and the one thing worth saying is that the reports themselves are
+ * safe — a reader who cannot see their list may otherwise wonder whether what
+ * they sent went anywhere.
+ */
+export const FEEDBACK_EARLIER_FAILED: ReaderFacingFailure = {
+  kind: "retry",
+  message:
+    "Your earlier feedback would not load just now. What you sent is safe with us — trying again " +
+    "in a moment usually works. [fb-list]",
+};
+
 /* ---- the subscription allowance. docs/project/billing.md ----------------------- */
 
 /** One article, as a refusal names it. Structural, so no import crosses here. */

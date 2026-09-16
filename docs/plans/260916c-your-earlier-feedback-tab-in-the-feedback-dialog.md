@@ -161,3 +161,11 @@ Option 1 is the natural next step and is Greg's to ask for.
   taken; its other — unmount rather than hide — passed over, because hiding keeps the caret and the
   guards are needed for the paste handler on the `<dialog>` either way. No defence change: it traced
   the gate, the owner set from `VerifiedUser`, and the one API function.
+- 2026-09-16: stage 1 landed (`8f864ca0`); GPT Sol code review approved it with one P2 test gap it
+  fixed itself (F7: `no-store` before the await, owner installed before `listMine`, a GET reads no
+  body) — [answer](260916c-your-earlier-feedback-tab-in-the-feedback-dialog-stage1-review-sol.md).
+- 2026-09-16: stage 2 built. The list and its read live in `src/web/FeedbackEarlier.tsx` so the
+  dialog only gains the tabs and the guards. Every guard was mutated out one at a time (send,
+  paste, drop, microphone, focus, reset on close, the read's generation check) and each turned its
+  own test red. One thing jsdom cannot see and CSS had to fix: `.fb-scroll`'s `display: flex`
+  outranks the UA's `[hidden]`, so `.fb-scroll[hidden], .fb-actions[hidden]` say it again.
