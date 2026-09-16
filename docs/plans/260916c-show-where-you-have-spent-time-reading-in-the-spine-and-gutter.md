@@ -218,12 +218,18 @@ spideryarn.reading_time
 - **Each batch is sent at most once.** An additive POST cannot be retried safely: if the server
   committed a request and the answer was lost, a retry would count it twice. `leavingFetch` cannot
   report failure at all (GPT Sol, finding 2). So pending seconds are **taken and cleared before** each
-  send, and a failed send is dropped. At most a minute of reading is lost to a failure, which the plan
-  accepted from the start; retrying would need idempotency keys and server-side deduplication, which
-  are deferred. The minute flush and the `hidden` flush use `apiFetch`, and `pagehide` sends only what
-  is still pending, with `leavingFetch` ([`lib/api.ts`](../../src/web/lib/api.ts)). That is the same
-  split `useProfile` makes. Because nothing is ever re-sent, one batch holds at most about a minute of
-  seconds, far below the 3,600 cap and the ~60 KiB keepalive budget.
+  send, and a failed send is dropped. Normally at most a minute of reading is lost to a failure; the
+  first batch can also contain however long the opening read took. The loss is accepted; retrying
+  would need idempotency keys and server-side deduplication, which are deferred. **An ordinary flush
+  waits for the opening GET**, or a slow GET can include a batch the
+  client still also holds in its local display total. A new mount's GET likewise waits for any cleanup
+  POST still in flight from the preceding mount, or a quick trip through Metadata can make the mark
+  disappear until the next reload. The minute flush and the `hidden` flush use `apiFetch`, and
+  `pagehide` sends only what is still pending, with `leavingFetch`
+  ([`lib/api.ts`](../../src/web/lib/api.ts)). A real teardown sends immediately; a bfcache page remains
+  live and preserves the GET-before-POST ordering. Because nothing is ever re-sent, one batch holds at
+  most about a minute of seconds after the opening read, far below the 3,600 cap and the ~60 KiB
+  keepalive budget.
 
 ## Privacy
 

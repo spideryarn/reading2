@@ -168,6 +168,7 @@ describe("GET and POST /api/reading-time/:slug", () => {
       ["a body that is not an object", () => "[1, 2]"],
       ["a JSON null", () => "null"],
       ["no seconds at all", () => ({})],
+      ["a field other than seconds", () => ({ seconds: {}, replace: true })],
       ["seconds that is not an object", () => ({ seconds: 5 })],
       ["seconds that is an array", () => ({ seconds: [5] })],
       [
@@ -200,8 +201,13 @@ describe("GET and POST /api/reading-time/:slug", () => {
       /* The body limit is derived from these two caps, so the largest batch
          the validator accepts must not be a 413. The ids are well-formed and
          not this article's, so the store drops them all. */
+      /* This is 24 characters through `JSON.stringify`, the longest spelling
+         admitted by the numeric validator and the case the outer byte limit
+         used to undercount by one byte per entry. */
+      const longestAccepted = 0.0000010000000000000002;
+      expect(JSON.stringify(longestAccepted)).toHaveLength(24);
       const seconds = Object.fromEntries(
-        Array.from({ length: 5000 }, (_, i) => [nthId("x", i), 3599.9999999999995]),
+        Array.from({ length: 5000 }, (_, i) => [nthId("x", i), longestAccepted]),
       );
       expect((await post(SLUG, { seconds })).status).toBe(204);
     });

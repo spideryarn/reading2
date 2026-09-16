@@ -28,8 +28,12 @@ and the drawing.
 - **Thickness is per block and absolute**: four steps of the time spent over the time the block takes
   to read at 230 words a minute, never under a second. Not relative to the most-read block, which
   would make everything else look unread. `readLevel`.
-- **Sent once a minute, on hide and on `pagehide`, and never twice.** The server adds what it is
-  sent, so a failed batch is dropped rather than retried. At most a minute is lost.
+- **Sent after the opening read, then once a minute, on hide and on `pagehide`, and never twice.**
+  A new opening read also waits for the preceding mount's cleanup write. Those two orderings stop an
+  opening snapshot from counting the same local batch twice or overtaking it. A real teardown sends
+  immediately; a bfcache page remains live and waits. The server adds what it is sent, so a failed
+  batch is dropped rather than retried. Normally at most a minute is lost; the first batch can also
+  contain however long the opening read took.
 - **Stored as running totals**, `spideryarn.reading_time (article_id, block_id) → seconds`, keyed to
   `block_identities` so the time survives a re-extraction and goes with the article. No timestamps.
   In both exports. `/privacy` says we keep it.

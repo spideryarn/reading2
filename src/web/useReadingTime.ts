@@ -34,8 +34,16 @@
  * The server **adds** what it is sent. A batch the server committed and whose
  * answer was lost would be counted twice if it were retried — so pending
  * seconds are taken and cleared *before* each send, and a failed send is
- * dropped. At most a minute of reading is lost to a failure. GPT Sol's
- * finding 2 on the plan, 2026-09-16.
+ * dropped. Normally that loses at most a minute of reading; the first batch can
+ * also contain however long the opening read took. GPT Sol's finding 2 on the
+ * plan, 2026-09-16.
+ *
+ * The opening GET is ordered before this mount's first ordinary flush, and
+ * after any cleanup POST from the preceding mount of the same article. Without
+ * both halves, the snapshot can include seconds still held in `local` (drawn
+ * twice), or miss seconds whose cleanup write it overtook (not drawn until the
+ * next reload). A real teardown still sends immediately; a bfcache page is
+ * still live and keeps the ordering.
  *
  * ## What re-renders
  *
@@ -64,6 +72,44 @@ const ROWS_STALE_MS = 10_000;
 const ROW_SELECTOR = "tbody tr[data-block]";
 
 const ACTIVITY_EVENTS = ["scroll", "wheel", "keydown", "pointerdown", "pointermove", "touchstart"] as const;
+
+/**
+ * Ordinary writes still in flight, by article path.
+ *
+ * A reader can leave the reading view for Metadata and come straight back. The
+ * old mount's cleanup POST and the new mount's opening GET must not race: if the
+ * GET wins, the just-read seconds disappear from the display until another
+ * reload. Writes may overlap each other because Postgres adds them atomically;
+ * an opening read waits for all of them.
+ */
+const writesInFlight = new Map<string, Set<Promise<void>>>();
+
+function sendReadingTime(path: string, init: RequestInit): void {
+  let writes = writesInFlight.get(path);
+  if (!writes) {
+    writes = new Set();
+    writesInFlight.set(path, writes);
+  }
+  const request = apiFetch(path, init).then(
+    () => undefined,
+    () => undefined,
+  );
+  writes.add(request);
+  void request.finally(() => {
+    writes.delete(request);
+    if (writes.size === 0 && writesInFlight.get(path) === writes) writesInFlight.delete(path);
+  });
+}
+
+async function waitForReadingTimeWrites(path: string): Promise<void> {
+  /* A write can join while an earlier one is settling, so observe until the set
+     is empty rather than taking one snapshot and assuming it was final. */
+  for (;;) {
+    const writes = writesInFlight.get(path);
+    if (!writes?.size) return;
+    await Promise.all(writes);
+  }
+}
 
 export interface ReadingTime {
   /** Blocks with a level above zero. Stable identity until one changes. */
@@ -143,6 +189,8 @@ export function useReadingTime(
     let rows: HTMLElement[] = [];
     let rowsReadAt = 0;
     let gone = false;
+    let opening = true;
+    let flushAfterOpening = false;
 
     const recompute = (ids: Iterable<BlockId>) => {
       let next: Map<BlockId, ReadLevel> | null = null;
@@ -193,6 +241,14 @@ export function useReadingTime(
 
     /** Take what is pending, clear it, send it once. `leaving` is `pagehide`. */
     const flush = (leaving: boolean) => {
+      /* Until the opening snapshot is known, an ordinary POST can land before
+         the GET reads. Its seconds would then be present in both `server` and
+         `local`. A cleanup has no live display left to corrupt and must not
+         wait for a continuation owned by the component being removed. */
+      if (!leaving && opening && !gone) {
+        flushAfterOpening = true;
+        return;
+      }
       if (pending.size === 0) return;
       const batch = pending;
       pending = new Map();
@@ -214,7 +270,7 @@ export function useReadingTime(
       /* Dropped on failure, never re-queued — see the file header. `apiFetch`
          records the failure in the client log buffer, which is what a bug
          report carries. */
-      apiFetch(path, init).catch(() => undefined);
+      sendReadingTime(path, init);
     };
 
     const active = () => {
@@ -229,7 +285,16 @@ export function useReadingTime(
         flush(false);
       }
     };
-    const leave = () => flush(true);
+    const leave = (event: PageTransitionEvent) => {
+      /* A bfcache page is not leaving: this effect and its opening GET resume
+         with it. Sending before that GET settles would recreate the double-count
+         race on Back. A real teardown has no display left and must send now. */
+      if (event.persisted && opening) {
+        flushAfterOpening = true;
+        return;
+      }
+      flush(true);
+    };
 
     for (const name of ACTIVITY_EVENTS) window.addEventListener(name, active, { passive: true, capture: true });
     window.addEventListener("pageshow", active);
@@ -239,17 +304,26 @@ export function useReadingTime(
     const ticker = window.setInterval(tick, TICK_MS);
     const flusher = window.setInterval(() => flush(false), FLUSH_MS);
 
-    apiFetch(path)
-      .then((r) => readJson<{ seconds: Record<BlockId, number> }>(r))
-      .then((body) => {
+    void (async () => {
+      try {
+        /* A cleanup POST from the preceding mount is part of the snapshot this
+           GET must see. This also makes StrictMode's simulated first mount
+           disappear before it spends a request. */
+        await waitForReadingTimeWrites(path);
+        if (gone) return;
+        const body = await readJson<{ seconds: Record<BlockId, number> }>(await apiFetch(path));
         if (gone) return;
         for (const [id, s] of Object.entries(body.seconds ?? {})) {
           if (typeof s === "number" && Number.isFinite(s) && s > 0) server.set(id, s);
         }
         recompute(new Set([...server.keys(), ...local.keys()]));
-      })
-      /* Nothing to draw from the server is not a reason to stop recording. */
-      .catch(() => undefined);
+      } catch {
+        /* Nothing to draw from the server is not a reason to stop recording. */
+      } finally {
+        opening = false;
+        if (flushAfterOpening && !gone) flush(false);
+      }
+    })();
 
     return () => {
       gone = true;

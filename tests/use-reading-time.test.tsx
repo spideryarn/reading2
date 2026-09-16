@@ -17,18 +17,42 @@ let posts: { via: "apiFetch" | "leavingFetch"; seconds: Record<string, number> }
 let serverSeconds: Record<string, number> = {};
 /** When set, the next POST through `apiFetch` rejects, as a lost connection does. */
 let failNextPost = false;
+/** Hold the opening GET or next POST to exercise request ordering. */
+let holdGet = false;
+let releaseGet: (() => void) | null = null;
+let holdNextPost = false;
+let releasePost: (() => void) | null = null;
+let gets = 0;
+let postCommitsToServer = false;
 
 vi.mock("../src/web/lib/api.js", () => ({
-  apiFetch: (_url: string, init?: RequestInit) => {
+  apiFetch: async (_url: string, init?: RequestInit) => {
     if (init?.method === "POST") {
       posts.push({ via: "apiFetch", ...JSON.parse(String(init.body)) });
+      if (postCommitsToServer) {
+        for (const [id, seconds] of Object.entries(posts.at(-1)?.seconds ?? {})) {
+          serverSeconds[id] = (serverSeconds[id] ?? 0) + seconds;
+        }
+      }
       if (failNextPost) {
         failNextPost = false;
-        return Promise.reject(new TypeError("Failed to fetch"));
+        throw new TypeError("Failed to fetch");
       }
-      return Promise.resolve(new Response(null, { status: 204 }));
+      if (holdNextPost) {
+        holdNextPost = false;
+        await new Promise<void>((resolve) => {
+          releasePost = resolve;
+        });
+      }
+      return new Response(null, { status: 204 });
     }
-    return Promise.resolve(new Response(JSON.stringify({ seconds: serverSeconds }), { status: 200 }));
+    gets += 1;
+    if (holdGet) {
+      await new Promise<void>((resolve) => {
+        releaseGet = resolve;
+      });
+    }
+    return new Response(JSON.stringify({ seconds: serverSeconds }), { status: 200 });
   },
   readJson: async (r: Response) => r.json(),
   leavingFetch: (_url: string, init: RequestInit) => {
@@ -97,6 +121,12 @@ beforeEach(() => {
   posts = [];
   serverSeconds = {};
   failNextPost = false;
+  holdGet = false;
+  releaseGet = null;
+  holdNextPost = false;
+  releasePost = null;
+  gets = 0;
+  postCommitsToServer = false;
   visibility = "visible";
   Object.defineProperty(document, "visibilityState", { configurable: true, get: () => visibility });
   Object.defineProperty(window, "innerHeight", { configurable: true, value: 800 });
@@ -199,6 +229,60 @@ describe("useReadingTime", () => {
     expect(posts).toHaveLength(1);
     expect(posts[0]?.via).toBe("apiFetch");
     expect(posts[0]?.seconds[A]).toBeCloseTo(20, 0);
+  });
+
+  it("does not let a flush land before the opening GET and double the displayed seconds", async () => {
+    mountRows([[A, 0, 800]]);
+    holdGet = true;
+    postCommitsToServer = true;
+    await render(true, new Map([[A, 230]]));
+    latest.setCounting(true);
+    await seconds(15);
+    visibility = "hidden";
+    document.dispatchEvent(new Event("visibilitychange"));
+    window.dispatchEvent(new PageTransitionEvent("pagehide", { persisted: true }));
+
+    /* Before the fix this POST went out while the GET was held. A real delayed
+       GET could then include it, while `local` kept the same seconds. A
+       bfcache pagehide must not bypass the same ordering on the way to Back. */
+    expect(posts).toHaveLength(0);
+    releaseGet?.();
+    await act(async () => {
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(posts).toHaveLength(1);
+    expect(latest.levels.get(A)).toBe(1);
+  });
+
+  it("waits for the preceding mount's cleanup POST before opening the same article again", async () => {
+    mountRows([[A, 0, 800]]);
+    await render(true, new Map([[A, 230]]));
+    latest.setCounting(true);
+    await seconds(15);
+
+    holdNextPost = true;
+    await render(false, new Map([[A, 230]]));
+    await act(async () => {
+      await Promise.resolve();
+    });
+    expect(posts).toHaveLength(1);
+
+    await render(true, new Map([[A, 230]]));
+    expect(gets, "the second opening read waits behind the cleanup write").toBe(1);
+
+    const saved = posts[0]?.seconds[A] ?? 0;
+    serverSeconds = { [A]: saved };
+    releasePost?.();
+    await act(async () => {
+      await Promise.resolve();
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(gets).toBe(2);
+    expect(latest.levels.get(A)).toBe(1);
   });
 
   it("sends what is pending on pagehide with the keepalive fetch", async () => {

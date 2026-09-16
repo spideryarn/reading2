@@ -497,10 +497,11 @@ const MAX_READING_TIME_SECONDS = 3600;
  * validator accepts has to fit through the door, or a 5,001-entry batch is a
  * bare 413 rather than the 400 that says why. Each entry at its worst as
  * `JSON.stringify` writes it — the quoted 11-character id and its colon (14),
- * the longest a finite number prints (23, `2.2250738585072014e-308`), a comma —
+ * the longest an accepted positive finite number prints (24,
+ * `0.0000010000000000000002`), a comma —
  * plus the envelope.
  */
-const MAX_READING_TIME_BODY_BYTES = MAX_READING_TIME_ENTRIES * (14 + 23 + 1) + 1024;
+const MAX_READING_TIME_BODY_BYTES = MAX_READING_TIME_ENTRIES * (14 + 24 + 1) + 1024;
 
 function send(res: ServerResponse, status: number, body: unknown): void {
   res.statusCode = status;
@@ -1024,7 +1025,13 @@ function objectBody(body: unknown): Record<string, unknown> {
  * refused here — the store drops it, so one stale id cannot fail the rest.
  */
 function readingTimeBatch(body: unknown): Record<string, number> {
-  const { seconds } = objectBody(body);
+  const sent = objectBody(body);
+  for (const key of Object.keys(sent)) {
+    if (key !== "seconds") {
+      throw httpError(400, "That request has a field this endpoint does not take");
+    }
+  }
+  const { seconds } = sent;
   if (typeof seconds !== "object" || seconds === null || Array.isArray(seconds)) {
     throw httpError(400, "Expected { seconds: { <block id>: <seconds> } }");
   }
