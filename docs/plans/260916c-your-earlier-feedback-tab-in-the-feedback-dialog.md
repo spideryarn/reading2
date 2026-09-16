@@ -64,25 +64,35 @@ need it, and a field not sent is one nobody has to argue about. Named as a later
 
 ### Client: two tabs, and the draft never unmounts
 
-- A `view: "write" | "earlier"` state in `FeedbackDialog`, reset to `"write"` each time the dialog
-  opens — pressing Feedback is a request to write.
+- A `view: "write" | "earlier"` state in `FeedbackDialog`, **reset to `"write"` when the dialog
+  closes**, so Write is already the rendered view before the next `showModal()` picks initial focus
+  — pressing Feedback is a request to write.
 - **The Write panel is hidden, not unmounted**, when Earlier is showing (`hidden` on its scroll
-  area and its action row). The draft already lives in the dialog's state, but the textarea, the
-  dictation hook's ref and the file input do not survive an unmount cleanly, and this dialog's whole
-  history is draft-loss bugs (`discard`'s header). Hiding is one attribute and cannot lose anything.
-- **⌘/Ctrl+Enter sends only from Write.** From Earlier it does nothing — a keystroke should not file
-  a report the reader cannot see.
-- **Earlier fetches each time it is opened**, so a report filed a minute ago is there. Three
-  states: loading (the house spinner), failed (a sentence with a bracketed code, in
-  `src/messages.ts`, and a Try again), and the list — or, empty, "You haven't sent us any feedback
-  yet." A generation counter drops an answer that arrives after the reader has switched away and
-  back, the same pattern `shotGeneration` uses.
-- Tabs are `role="tablist"`/`role="tab"`/`aria-selected`/`role="tabpanel"`, with Left/Right arrows
-  between the two — the ARIA tabs pattern, two buttons' worth of it.
-- The thank-you panel after a send is unchanged and has no tabs; a report just filed shows up in
-  Earlier the next time the dialog is opened.
-- Body text is rendered as text with `white-space: pre-wrap`, never as HTML. Long bodies are shown
-  whole: the reader wrote them, and a clamp would need an expander.
+  area and its action row). The draft lives in state either way; hiding keeps the caret and the
+  dictation hook's textarea ref, and this dialog's history is draft-loss bugs (`discard`'s header).
+- **Hiding a panel is not the same as switching it off**, and three things reach the hidden draft
+  unless each is guarded (GPT Sol, plan review F1–F3):
+  - **the microphone** stops when the reader leaves Write, through `dictate.dictation.toggle()`
+    (not the field wrapper, which moves focus back to the box); the transcript stays in the draft;
+  - **paste and drop** are handled on the whole `<dialog>`, so they attach nothing from Earlier —
+    a drop still has its default prevented, so the browser does not navigate to the file;
+  - **sending** is refused inside `send()` itself unless the view is Write, which covers the form's
+    `onSubmit` and ⌘/Ctrl+Enter at once; every new control is `type="button"`.
+- **Earlier fetches lazily, once per opening**, and reuses the answer while the reader flips back
+  and forth. Nothing can be filed and then viewed within one opening — the thank-you panel has no
+  tabs — so refetching buys nothing. The result is dropped when the dialog closes, and a generation
+  counter drops an answer that lands after that. Three states: loading (the house spinner), failed
+  (a sentence with a bracketed code in `src/messages.ts`, and Try again), and the list — or, empty,
+  "You haven't sent us any feedback yet."
+- **Tabs** are `role="tablist"`/`role="tab"`/`aria-selected`/`aria-controls`/`role="tabpanel"`,
+  roving `tabIndex` (0 on the selected tab, -1 on the other), Left/Right between them. One
+  `choose(view)` function does it all: stop dictation, set the view, focus the chosen tab — so a
+  pointer press and an arrow key end in the same place.
+- The thank-you panel after a send is unchanged and has no tabs.
+- Body text is rendered as text with `white-space: pre-wrap`, never as HTML, and whole.
+- **The wire shape is `EarlierFeedback` in `src/types.ts`** — its own four fields, not derived from
+  `FeedbackReport` or the admin row, so a field added to either cannot widen this response (F6).
+  Browser code may not import `src/store/contracts.ts`.
 
 ### Where each fact goes
 
@@ -97,13 +107,17 @@ need it, and a field not sent is one nobody has to argue about. Named as a later
 1. **Server** — `listMine`, the route, the contract row. Tests first, watched red:
    `tests/feedback-store.test.ts` (two owners: each sees only their own; newest first; `more` at
    the cap; no screenshot bytes or email in the rows), `tests/feedback-route.test.ts` (the GET hands
-   back exactly the four fields per row even when the store row carries more; `no-store`),
-   `tests/authenticated-api-route-contract.test.ts` (`GET` added to the `/api/feedback` row and the
-   counts moved by one). Done = those green, typecheck clean.
+   back exactly the four fields per row even when the store row carries more; `no-store`, set
+   before the store is awaited), `tests/authenticated-api-route-contract.test.ts` (a
+   `FEEDBACK_PATH` constant shared by the GET and POST rows, methods `["GET", "POST"]`, matchers
+   unchanged, guards +1, the GET in the ordered guard list — F4). Done = those green, typecheck
+   clean.
 2. **Dialog** — the tabs, the three states, the guards above. Tests first in
    `tests/feedback-dialog.test.tsx`: switching tabs keeps the draft; Earlier renders the list, the
-   empty sentence and the failure; ⌘Enter from Earlier sends nothing; reopening lands on Write; a
-   late answer from an earlier fetch is dropped. Then CSS, the doc, and a real browser (Playwright
+   empty sentence, the failure and Try again; one fetch per opening; ⌘Enter, a form submit and every
+   Earlier control send nothing; an armed microphone stops on leaving Write and its words stay; a
+   paste or drop on Earlier attaches nothing; focus lands on the chosen tab by pointer and by arrow;
+   reopening lands on Write; a late answer after close is dropped. Then CSS, the doc, and a real browser (Playwright
    on the box, in a subagent). Done = green, screenshots of both tabs at desktop and phone width.
 
 Each stage: GPT Sol code review (workspace-write), then commit. Full suite once at the end through
@@ -141,3 +155,9 @@ Option 1 is the natural next step and is Greg's to ask for.
 ## Log
 
 - 2026-09-16: plan written.
+- 2026-09-16: GPT Sol plan review ([answer](260916c-your-earlier-feedback-tab-in-the-feedback-dialog-plan-review-sol.md))
+  refused on F1–F3 (the hidden panel still hears the microphone, a paste, and a submit); all six
+  findings taken into § Client and § Stages above. Its "simpler version" — fetch once per opening —
+  taken; its other — unmount rather than hide — passed over, because hiding keeps the caret and the
+  guards are needed for the paste handler on the `<dialog>` either way. No defence change: it traced
+  the gate, the owner set from `VerifiedUser`, and the one API function.

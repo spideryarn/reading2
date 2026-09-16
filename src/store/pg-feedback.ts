@@ -45,13 +45,14 @@
  * this file writes. docs/project/logging.md.
  */
 
-import { and, asc, eq, isNull, sql } from "drizzle-orm";
+import { and, asc, desc, eq, isNull, sql } from "drizzle-orm";
 
 import { getDb } from "../db/client.js";
 import { feedback as feedbackTable } from "../db/schema.js";
 import { log } from "../log.js";
 import { currentOwnerId } from "../owner.js";
 import type {
+  EarlierFeedbackPage,
   FeedbackDiagnosticsPayload,
   FeedbackEnvironment,
   FeedbackKind,
@@ -326,6 +327,36 @@ const rawPgFeedbackStore: FeedbackStore = {
       .from(feedbackTable)
       .where(and(eq(feedbackTable.ownerId, currentOwnerId()), eq(feedbackTable.id, id)));
     return row ? toReport(row) : null;
+  },
+
+  async listMine(limit: number): Promise<EarlierFeedbackPage> {
+    /* **Four columns, named here**, not `REPORT_COLUMNS` narrowed afterwards:
+       what is never selected cannot be handed on by a later spread. One row past
+       the limit is how `more` is known without a second, counting query; the
+       `(owner_id, created_at)` index the cap uses serves this too, and `id`
+       breaks a tie between two reports filed in the same instant so the order
+       is stable across reads. */
+    const rows = await getDb()
+      .select({
+        id: feedbackTable.id,
+        createdAt: feedbackTable.createdAt,
+        kind: feedbackTable.kind,
+        body: feedbackTable.body,
+      })
+      .from(feedbackTable)
+      .where(eq(feedbackTable.ownerId, currentOwnerId()))
+      .orderBy(desc(feedbackTable.createdAt), desc(feedbackTable.id))
+      .limit(limit + 1);
+    return {
+      reports: rows.slice(0, limit).map((row) => ({
+        id: row.id,
+        createdAt: row.createdAt.toISOString(),
+        /* The same honest cast `toReport` makes: a CHECK holds the column to the union. */
+        kind: row.kind === null ? null : (row.kind as FeedbackKind),
+        body: row.body,
+      })),
+      more: rows.length > limit,
+    };
   },
 
   async markMirrorAttempted(id: string): Promise<void> {

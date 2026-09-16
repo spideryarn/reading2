@@ -4518,6 +4518,42 @@ export const FEEDBACK_KINDS = ["problem", "suggestion"] as const;
 export type FeedbackKind = (typeof FEEDBACK_KINDS)[number];
 
 /**
+ * **One of the reader's own earlier reports, as the Feedback dialog's Earlier
+ * tab shows it** — `GET /api/feedback`.
+ * docs/plans/260916c-your-earlier-feedback-tab-in-the-feedback-dialog.md.
+ *
+ * **Four fields, written out, and derived from nothing.** Not a `Pick` of
+ * `FeedbackReport` or of the admin row: a field added to either of those must
+ * not widen what this response carries by itself. The email, the address, the
+ * diagnostics and the screenshot stay behind — a list whose job is "what did I
+ * say" has no use for them, and the address can carry the reader's own search
+ * terms or a credential in an `/add/` URL (docs/project/feedback.md § The one
+ * rule). Here rather than in src/store/contracts.ts because the dialog reads it,
+ * and nothing under src/web/ may import the store.
+ */
+export interface EarlierFeedback {
+  id: string;
+  /** ISO. */
+  createdAt: string;
+  kind: FeedbackKind | null;
+  body: string;
+}
+
+/** The whole answer: the newest reports, and whether there were more than the cap. */
+export interface EarlierFeedbackPage {
+  reports: EarlierFeedback[];
+  /** `true` when the reader has filed more than `EARLIER_FEEDBACK_LIMIT`, so the list says so. */
+  more: boolean;
+}
+
+/**
+ * **How many earlier reports the dialog lists.** No paging: a reader with fifty
+ * reports is almost certainly the administrator, who has `/admin/feedback`.
+ * The server's number, never a query parameter.
+ */
+export const EARLIER_FEEDBACK_LIMIT = 50;
+
+/**
  * The longest the reader's report may be.
  *
  * Here rather than beside the store for the reason `MAX_PROFILE_CHARS` is here:

@@ -403,6 +403,8 @@ import { isThreadKind, THREAD_KINDS } from "./types.js";
    is checked against, and the two caps the dialog and this route must agree on.
    src/types.ts § feedback. */
 import {
+  EARLIER_FEEDBACK_LIMIT,
+  type EarlierFeedbackPage,
   FEEDBACK_ENVIRONMENTS,
   FEEDBACK_KINDS,
   MAX_FEEDBACK_URL_CHARS,
@@ -6760,6 +6762,9 @@ const SHELF_ENTRY_PATTERN = /^\/api\/library\/([\w.%-]+)$/;
 /* No slug, and that is the whole shape of it: this one is about the reader
    rather than about an article. */
 const READER_PATH = "/api/reader";
+/* Filed by POST, listed back by GET — one matcher, two methods, so both rows
+   name this constant (tests/authenticated-api-route-contract.test.ts). */
+const FEEDBACK_PATH = "/api/feedback";
 /* Same shape and same reasoning as the tweet thread's route — most articles have no
    glossary, so putting one on the article payload would make every reader of
    every article download a `null`.
@@ -7042,9 +7047,36 @@ const AUTH_ROUTES: readonly AuthRoute[] = [
   {
     kind: "exact",
     method: "POST",
-    path: "/api/feedback",
+    path: FEEDBACK_PATH,
     handler: async ({ user, request: { req, res } }) => {
       await fileFeedback(req, res, user);
+    },
+  },
+
+  /* **The reader's own earlier reports** — the Feedback dialog's Earlier tab.
+     docs/plans/260916c-your-earlier-feedback-tab-in-the-feedback-dialog.md.
+     Owner-scoped in the store like every other read; the cap is ours, not a
+     query parameter. `private, no-store` before the await, as
+     `/api/admin/feedback` does, because the body is what a reader wrote to us.
+     **Picked field by field** rather than passed through, so a store that one
+     day hands back more than four fields still sends four. */
+  {
+    kind: "exact",
+    method: "GET",
+    path: FEEDBACK_PATH,
+    handler: async ({ request: { res } }) => {
+      res.setHeader("Cache-Control", "private, no-store");
+      const page = await feedbackStore.listMine(EARLIER_FEEDBACK_LIMIT);
+      const answer: EarlierFeedbackPage = {
+        reports: page.reports.map(({ id, createdAt, kind, body }) => ({
+          id,
+          createdAt,
+          kind,
+          body,
+        })),
+        more: page.more,
+      };
+      send(res, 200, answer);
     },
   },
 
