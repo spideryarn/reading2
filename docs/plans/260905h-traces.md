@@ -1,5 +1,28 @@
 # The real request trace of Plain, Ideas and Chat, before and after the extraction
 
+**Later feature change, 2026-09-16:**
+[citations marked in the prose](260916b-citations-marked-in-the-prose-and-a-clearer-find-it-button.md)
+adds **one `GET /api/citations/a-piece`** to *every* owned reading view, in every mode, for the same
+reason and by the same move as the quotes below it: the works a piece cites are now drawn in the
+prose whether or not the band is open, so the opening read is `OwnedReader`'s. It lands **between
+`/api/quotes` and `/api/arc`** — the order `OwnedReader` calls its hooks in — and appears **once**,
+through `useOrderedRead`.
+
+Counted off the arrays rather than carried forward: **Plain is now 13 requests, Ideas 16, Chat 15.**
+The 2026-09-08 line below still says 13 / 17 / 19, and those have been stale since 2026-09-13, when
+the profile checkbox and its `useHasProfile` reads went — a reminder that the totals in this file are
+prose and the lists in the test are the record.
+
+**It is the price of a decision rather than an inevitability**, which is why it is written here
+rather than only in the test: the read could have been gated on the experimental-features switch that
+Citations mode itself is behind, and was not, on GPT Sol's review. A gate would not work — the band
+must read the list somehow, so it costs either two states and two requests or nothing at all — and
+hiding a *control* behind that switch is not the same as making an existing `?mode=citations` URL
+half-work. So: one cheap GET per owned article view, no model call, and no request at all for a
+visitor, which
+[tests/public-network-trace.test.tsx](../../tests/public-network-trace.test.tsx) holds as an exact
+one-element list. The expected lists here were updated after watching this assertion fail.
+
 **Later feature change, 2026-09-08:**
 [quotes marked in every mode](260908i-quotes-marked-in-the-prose-in-every-mode.md) adds
 **one `GET /api/quotes/a-piece`** to *every* owned reading view, in every mode — the read moved into
