@@ -249,4 +249,5 @@ export const MODE_LABEL: Record<Mode, string> = {
   debate: "Debate",
   structure: "Structure",
   citations: "Citations",
+  faq: "FAQ",
 };

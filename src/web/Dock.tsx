@@ -185,6 +185,7 @@ import {
   X,
   Quote,
   BookText,
+  BadgeQuestionMark,
 } from "lucide-react";
 /* The one name each mode has, and the one sentence about what it is — and the
    bar is one of four places that used to spell the name out for itself. Both
@@ -682,6 +683,19 @@ const MODES_UI = [
   {
     mode: "citations",
     icon: BookText,
+  },
+  /* **After Citations, at the end of the same group**: every row is a question
+     answered by passages of the piece itself, so it is still the article pulled
+     out rather than the web or the reader's own words. Greg has not set this one
+     by hand; move it if it is wrong.
+
+     `BadgeQuestionMark`, used nowhere else. Not `MessageCircleQuestionMark`,
+     which is Quiz's run button — the article asking *you* is the mode this one
+     must not be mistaken for — nor `CircleHelp`, the gutter's.
+     docs/plans/260916d-faq-mode.md. */
+  {
+    mode: "faq",
+    icon: BadgeQuestionMark,
   },
   /* Search was **two** dimmed placeholders in the `SOON` list this file used to
      carry — `Search` and `Highlights`, side by side — and is one mode now. That

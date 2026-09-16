@@ -1,0 +1,52 @@
+/* ------------------------------------------------------------------ faq mode --
+   The questions a careful reader would put to the piece. `.faq` is `.gloss`
+   with a class beside it, like `.citations`, so the band shell, the empty, stale
+   and error states, and the scroller and list (`.tl-scroll`, `.tl-list`,
+   `.tl-item`) come from glossary.css and timeline.css unchanged — and each
+   passage's solid left rule is `.gloss-part-senseHere`, the article-provenance
+   treatment, reused rather than re-declared. What is here is only the inside of
+   a row: the question, its passages, and the jump beside each.
+
+   Loaded after citations.css; it sets no property the sheets it borrows from set
+   on the same element, so its place in the cascade decides nothing between
+   them. FaqPanel.tsx, docs/project/faq.md. */
+
+.faq-item { padding: 0.5rem 0; }
+
+.faq-question {
+  margin: 0;
+  color: var(--ink);
+  font-size: 0.93rem;
+  font-weight: 600;
+  line-height: 1.35;
+}
+
+.faq-passages { margin: 0.35rem 0 0; padding: 0; list-style: none; }
+.faq-passage {
+  display: flex;
+  align-items: baseline;
+  gap: 0.4rem;
+}
+.faq-quote { flex: 1; min-width: 0; color: var(--ink); }
+
+/* The jump, drawn the way the glossary's "used in" ids are: a small raised
+   chip, so it reads as a control beside the words rather than part of them. */
+.faq-jump {
+  flex: none;
+  padding: 0 0.28rem;
+  border: 1px solid var(--rule-strong);
+  border-radius: 0.4rem;
+  background: var(--surface-raised);
+  font-size: 0.72rem;
+}
+.faq-jump:hover { border-color: var(--highlight); color: var(--highlight-ink); }
+
+/* A rule above it, so the promise reads as being about the list rather than the
+   last row's — the lesson citations.css's `.cite-foot` records. */
+.faq-foot { padding: 0.4rem 0.7rem 0; border-top: 1px solid var(--rule); }
+.faq-note {
+  margin: 0 0 0.3rem;
+  color: var(--ink-faint);
+  font-size: 0.77rem;
+  line-height: 1.35;
+}

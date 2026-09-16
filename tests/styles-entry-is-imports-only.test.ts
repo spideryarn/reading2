@@ -176,6 +176,10 @@ const MANIFEST = [
   /* After the two `.gloss`-with-a-class-beside-it sheets it borrows from, and
      setting nothing they set on the same element — citations.css's header. */
   "citations.css",
+  /* After citations.css, and for its reason: `.faq` is `.gloss` with a class
+     beside it, borrowing glossary.css and timeline.css, and setting nothing they
+     set on the same element — faq.css's header. */
+  "faq.css",
   "quiz.css",
   "feedback.css",
   "site.css",

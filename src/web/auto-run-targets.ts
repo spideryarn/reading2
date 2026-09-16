@@ -55,6 +55,9 @@ type StepAutoRunTarget = StepTarget<
   | "debate"
   /* Every work the piece cites — docs/plans/260911g-citations-mode.md. */
   | "citations"
+  /* The questions a careful reader would put to the piece —
+     docs/plans/260916d-faq-mode.md. */
+  | "faq"
   | "sketch"
   | "illustrated"
   /* The article as a numbered thread. Its own page rather than a band, and

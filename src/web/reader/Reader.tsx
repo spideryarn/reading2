@@ -33,6 +33,7 @@ import { QuotesBand, VisitorQuotesBand } from "../modes/quotes/QuotesMode.js";
 import { useQuoteMarks } from "./useQuoteMarks.js";
 import { DebateBand } from "../modes/debate/DebateMode.js";
 import { CitationsBand } from "../modes/citations/CitationsMode.js";
+import { FaqBand } from "../modes/faq/FaqMode.js";
 import { GlossaryBand, VisitorGlossaryBand } from "../modes/glossary/GlossaryMode.js";
 import { SearchBand, VisitorSearchBand } from "../modes/search/SearchMode.js";
 import { StructureBand } from "../modes/structure/StructureMode.js";
@@ -1787,6 +1788,11 @@ export function Reader({
          docs/plans/260911g-citations-mode.md. */
       case "citations":
         return owner ? <CitationsBand slug={slug} read={owner.citations} onJump={jumpTo} /> : null;
+      /* **The owner alone** — `POLICY.faq` is `owners-only` for v1, so a visitor
+         meets the boundary sentence. No passages: each passage under a question
+         is a jump, not a selection. docs/plans/260916d-faq-mode.md. */
+      case "faq":
+        return owner ? <FaqBand slug={slug} onJump={jumpTo} /> : null;
       /* **The owner/visitor pair, since 2026-09-04.** It was the owner alone
          until then, because search is the one mode where the reader's own
          question is the artefact. Greg drew the line at *making* one: a

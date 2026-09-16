@@ -202,6 +202,13 @@ export const MODES = [
      src/types.ts) — which is why the stored type is `CitedWork`.
      docs/plans/260911g-citations-mode.md, docs/project/citations.md. */
   "citations",
+  /* 2026-09-16: the questions a careful reader would put to this piece while
+     reading it, each answered by passages of the piece itself — never a
+     written answer. Asked for through the Feedback button (SPIDERYARN-READING2-3A);
+     behind the experimental switch and owner-only for v1. Not Quiz, where the
+     article asks the reader; not Ideas, which are propositions nobody asks.
+     docs/plans/260916d-faq-mode.md, docs/project/faq.md. */
+  "faq",
 ] as const;
 export type Mode = (typeof MODES)[number];
 

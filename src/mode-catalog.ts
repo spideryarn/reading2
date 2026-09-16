@@ -460,4 +460,28 @@ export const MODE_CATALOG: Record<Mode, ModeCatalogEntry> = {
        docs/plans/260910g-structure-mode-subsumes-outline.md. */
     experimental: false,
   },
+  faq: {
+    description: "The questions a careful reader would ask this piece, and where it responds",
+    /* **Checked against the source, claim by claim** (docs/project/new-mode.md §
+       The card on the button):
+       - "one model pass over the article, written once and stored": the `faq`
+         step, one messages-wire call over `articleWithIds`, written to the `faq`
+         column and replaced on a re-run (src/faq.ts, src/pipeline.ts § STEPS).
+       - "no answer is written": `FaqQuestion` has `question` and `passages` and
+         nothing else (src/types.ts) — docs/plans/260916d-faq-mode.md § The one
+         product call.
+       - "the words are checked against it": `verifyPassage` in src/faq.ts —
+         `findQuote(…, "spaced")` in the named block, and what is stored is the
+         article's own slice.
+       - "which passage answers which question is the model's reading": nothing
+         checks the pairing; only the words are verified (Sol F3).
+       About the mode, not the press, and no price. */
+    how: "One model pass over the article, written once and stored. No answer is written: each question is answered by passages of the piece itself, whose words are checked against it — which passage answers which question is the model's reading.",
+    /* Not `questions`: `question` is Chat's, and a prefix of it would tie the two
+       in the command bar. `faq` itself is this mode's label, which an alias may
+       not repeat (tests/mode-catalog.test.ts). */
+    aliases: ["faqs", "frequently asked questions"],
+    /* A new mode on an unmeasured prompt — docs/project/experimental-features.md. */
+    experimental: true,
+  },
 };

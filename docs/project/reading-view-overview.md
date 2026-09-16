@@ -121,6 +121,10 @@ readers never are.
 - **[citations.md](citations.md)** — every work the piece cites, each with a link out, ordered and
   thresholded the way the glossary is. Open it for the one safety property: every address a row
   shows was in the article, and a search says it is one. Owner-only and behind the switch for now.
+- **[faq.md](faq.md)** — the questions a careful reader would ask the piece while reading it, each
+  answered by passages of the piece itself and never by a written answer. Open it for where the
+  promise stops: the words are checked, which passage answers which question is not. Owner-only and
+  behind the switch for now.
 
 The last two band modes — **chat** and **remember**, and the quiz that is remember's other half — are
 under the next heading instead, because what they are about is a passage rather than the whole piece.

@@ -1420,6 +1420,10 @@ const WITNESS: Partial<Record<AnyMode, Witness[]>> = {
     { label: "CitationsBand", as: "owner" },
     { label: "VisitorBand", as: "visitor" },
   ],
+  faq: [
+    { label: "FaqBand", as: "owner" },
+    { label: "VisitorBand", as: "visitor" },
+  ],
   structure: [
     { label: "StructureBand", as: "owner" },
     { label: "StructureBand", as: "visitor" },

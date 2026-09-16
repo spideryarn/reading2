@@ -909,6 +909,8 @@ const BAND_SAYS: Record<Mode, { where: string | null; says: string | null }> = {
   debate: { where: VISITOR_BAND, says: "Debate is for whoever added this article" },
   /* Owners-only for v1, for Debate's reason — src/web/visitor.ts § POLICY.citations. */
   citations: { where: VISITOR_BAND, says: "Citations is for whoever added this article" },
+  /* Owners-only for v1 — src/web/visitor.ts § POLICY.faq. */
+  faq: { where: VISITOR_BAND, says: "FAQ is for whoever added this article" },
 };
 
 /**

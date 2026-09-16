@@ -318,6 +318,16 @@ const POLICY: Record<Mode, VisitorPolicy> = {
    * It spends: one model pass over the whole article.
    */
   citations: { kind: "owners-only" },
+  /**
+   * **`owners-only` for v1**, a staging decision like Citations': a visitor
+   * branch needs `PUBLIC_PROJECTIONS`, the public DTO and a `PublicArtefacts`
+   * flag for the `faq` column, and none is built. Until then a visitor meets
+   * the explanatory band rather than an empty one.
+   * docs/plans/260916d-faq-mode.md § Deferred.
+   *
+   * It spends: one model pass over the whole article.
+   */
+  faq: { kind: "owners-only" },
 };
 
 /**

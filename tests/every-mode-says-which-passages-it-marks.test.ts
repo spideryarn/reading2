@@ -110,6 +110,11 @@ const SILENT: Mode[] = [
      docs/plans/260911g-citations-mode.md § What is deliberately not built. When
      it lands, this entry moves to PRODUCERS. */
   "citations",
+  /* Earned for Citations' reason: each passage under a question is a jump, and
+     a `?faq=` selection that marks a question's passages is deferred —
+     docs/plans/260916d-faq-mode.md § Deferred. When it lands, this entry moves
+     to PRODUCERS. */
+  "faq",
 ];
 
 describe("selectPassages", () => {

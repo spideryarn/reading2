@@ -4092,6 +4092,11 @@ export const OWNER_MODE_NOTE: Record<Mode, string> = {
      says it is one (src/citations.ts § linkFor). */
   citations:
     "The works the model found this piece citing, with a link for each and why the piece uses it.",
+  /* "The model thought", because the questions and which passage answers each
+     are its reading; the passages themselves are the article's words (src/faq.ts
+     § verifyPassage). */
+  faq:
+    "The questions the model thought a careful reader would ask this piece, each with the passages where it responds.",
 };
 
 /* ---------------------------------------------------------------- timeline --

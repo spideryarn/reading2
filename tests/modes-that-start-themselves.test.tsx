@@ -154,6 +154,7 @@ const { useQuotes } = await import("../src/web/useQuotes.js");
 const { useTimeline } = await import("../src/web/useTimeline.js");
 const { useGlossary } = await import("../src/web/useGlossary.js");
 const { useDebate } = await import("../src/web/useDebate.js");
+const { useFaq } = await import("../src/web/useFaq.js");
 const { useSketch } = await import("../src/web/useSketch.js");
 const { useIllustrated } = await import("../src/web/useIllustrated.js");
 const { diagramInSearch } = await import("../src/web/params.js");
@@ -243,6 +244,21 @@ function DebateBand({ slug }: { slug: string }): ReactElement {
   return createElement(
     "div",
     { "data-band": "debate" },
+    view.automatic ? "auto" : view.starting ? "starting" : view.status,
+  );
+}
+
+/**
+ * **FAQ, as a positive control for a newer `MODE_TARGET` row** (2026-09-16).
+ * Remove the `useAutoRun` call in useFaq.ts, or turn `faq`'s row to
+ * `{ kind: "none" }`, and only the FAQ test below goes red.
+ * docs/plans/260916d-faq-mode.md.
+ */
+function FaqBand({ slug }: { slug: string }): ReactElement {
+  const view = useFaq(slug);
+  return createElement(
+    "div",
+    { "data-band": "faq" },
     view.automatic ? "auto" : view.starting ? "starting" : view.status,
   );
 }
@@ -370,6 +386,7 @@ function Reading({ slug, start }: { slug: string; start: Mode }): ReactElement {
     mode === "timeline" ? createElement(TimelineBand, { slug }) : null,
     mode === "glossary" ? createElement(GlossaryBand, { slug }) : null,
     mode === "debate" ? createElement(DebateBand, { slug }) : null,
+    mode === "faq" ? createElement(FaqBand, { slug }) : null,
     /* **The band Diagram opens is whichever picture the address bar names**, and
        that is the whole point of these two arms — the real `DiagramBand` does
        exactly this with `?diagram=`, and a test that always mounted the Sketch
@@ -601,6 +618,16 @@ describe("a press", () => {
 
     expect(artefactGets("debate").length).toBeGreaterThan(0);
     expect(posts).toEqual([{ slug: "constitution", steps: ["debate"] }]);
+  });
+
+  /* The fifth positive control. See FaqBand above. */
+  it("writes the FAQ, which nothing else here presses", async () => {
+    await open("plain");
+    await press("FAQ");
+    await settle();
+
+    expect(artefactGets("faq").length).toBeGreaterThan(0);
+    expect(posts).toEqual([{ slug: "constitution", steps: ["faq"] }]);
   });
 
   it("draws the sketch, which is the picture Diagram opens on", async () => {

@@ -142,6 +142,10 @@ export function selectPassages(mode: Mode, slots: PassageSlots): PassageSlot {
        cites it (`?cite=`, a `Found` producer) is deferred —
        docs/plans/260911g-citations-mode.md § What is deliberately not built. */
     case "citations":
+    /* FAQ marks nothing in v1 either: each passage under a question is a jump,
+       and a `?faq=` selection that marks a question's passages in the prose is
+       deferred — docs/plans/260916d-faq-mode.md § Deferred. */
+    case "faq":
       return NOTHING;
     default: {
       /* The compiler being made to say that every mode has been given an
