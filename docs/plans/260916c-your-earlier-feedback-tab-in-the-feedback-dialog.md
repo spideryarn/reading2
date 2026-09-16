@@ -181,3 +181,11 @@ Option 1 is the natural next step and is Greg's to ask for.
   checks: one panel and one button row visible per tab, newest first with line breaks kept, the
   draft kept across tabs, ⌘/Ctrl+Enter from Earlier files nothing, arrows move selection and focus,
   reopening lands on Write, a long URL wraps at 390px, no console errors.
+- 2026-09-16: full suite once, on this worktree merged with `origin/dev` at `7c39e670`: 1131 files
+  passed, 9 failed, none of them touching a file this plan changed. Two are the fresh-worktree
+  bundle tests (`cold-start-lazy-imports`, `pdf-bundle-trace`, no `api-dist/`). Seven are fleet and
+  Overseer suites, and they fail again when run on their own. The cause is a missing fleet web
+  build (`tools/fleet/web/dist`), plus `overseer-standing-jobs` reporting that
+  `docs/project/feedback-reports.md` changed since Greg authorised the feedback sweep's pin. That
+  edit is `02a63b7b`, another session's, and re-authorising it is Greg's call. Every feedback,
+  route-contract, messages and doc-links suite passed.
