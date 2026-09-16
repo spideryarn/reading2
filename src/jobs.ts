@@ -676,9 +676,11 @@ export const STEP_BUDGET_MS: Record<StepName, number> = {
      is one article, the answer budget here is 10,000 tokens, and the cost of
      being under is a mid-step kill rather than a slow step. */
   quiz: 150_000,
-  /* **A GUESS**, in `quiz`'s family: one Messages call over the body at `high`
-     effort with a smaller answer budget than the quiz's. Re-measure from the
-     stage-1 runs (docs/plans/260916d-faq-mode.md § Progress). */
+  /* **MEASURED 2026-09-16**, two stage-1 runs over two unlike articles: 29–35s,
+     one Messages call each over the body at `high` effort. 150s is more than
+     four times the slower run because two articles are evidence, not a runtime
+     distribution, and being under kills a call the reader has already bought.
+     docs/plans/260916d-faq-mode.md § Progress records the articles and outputs. */
   faq: 150_000,
   /* **MEASURED**, over seven draws of five articles on 2026-08-30: 121–194
      seconds, one model call each, the longest being the constitution at 194.4s

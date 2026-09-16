@@ -1,0 +1,31 @@
+
+ RUN  v4.1.11 /home/greg/code/spideryarn2/.claude/worktrees/faq-mode
+
+  [private lane] spideryarn_test_260916151802_07817184f82340d7b96e7c8b8ce3e45f in 4.7s, leased as spideryarn-test-lease-899555, priced reader/researcher
+ ✓  unit  tests/doc-links.test.ts (14 tests) 2526ms
+     ✓ finds links to check at all  1580ms
+     ✓ cite symbols the file still holds  325ms
+ ✓  unit  tests/meta-fallback-fingerprint.test.ts (5 tests) 375ms
+ ✓  unit  tests/stage-stamp-agreement.test.ts (22 tests) 1664ms
+     ✓ assets, with metadata  1113ms
+ ✓  unit  tests/pipeline-artifact-store.test.ts (67 tests) 1116ms
+ ✓  unit  tests/cacheable-covers-artefact-routes.test.ts (21 tests) 178ms
+ ✓  unit  tests/authenticated-api-route-contract.test.ts (335 tests) 354ms
+ ✓  unit  tests/store-revision-columns.test.ts (42 tests) 79ms
+ ✓  unit  tests/job-state.test.ts (20 tests) 33ms
+ ✓  unit  tests/faq.test.ts (19 tests) 61ms
+ ✓  unit  tests/db-step-constraint.test.ts (4 tests) 32ms
+ ✓  unit  tests/article-cache-group.test.ts (16 tests) 19ms
+ ✓  unit  tests/cost-categories.test.ts (24 tests) 22ms
+ ✓  private-postgres  tests/export-route.test.ts (13 tests) 6923ms
+     ✓ hands the owner a zip that actually opens  6671ms
+ ✓  private-postgres  tests/store-artefacts-pg.test.ts (72 tests) 1445ms
+ ✓  private-postgres  tests/store-export-covers-tables.test.ts (13 tests) 1518ms
+
+ Test Files  15 passed (15)
+      Tests  687 passed (687)
+   Start at  16:18:01
+   Duration  41.78s (transform 11.84s, setup 1.55s, import 32.59s, tests 16.34s, environment 3ms)
+
+  [private lane] dropped spideryarn_test_260916151802_07817184f82340d7b96e7c8b8ce3e45f
+EXIT=0

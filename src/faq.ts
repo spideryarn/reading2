@@ -75,7 +75,7 @@ export type { Faq, FaqDropped, FaqPassage, FaqQuestion } from "./types.js";
  * Bumped whenever the prompt changes what a question *is*. Exported so tests
  * compare against the constant rather than a literal.
  */
-export const PROMPT_VERSION = "faq/1";
+export const PROMPT_VERSION = "faq/2";
 
 /** The only hard number on quantity. The prompt's budget is an upper bound under it. */
 export const MAX_QUESTIONS = 12;
@@ -184,13 +184,21 @@ export function verifyPassage(
     return null;
   }
   const p = raw as RawPassage;
-  const block = byId.get(text(p.blockId));
+  const blockId = text(p.blockId);
+  const typed = text(p.quote);
+  /* These are unreadable fields, not evidence that named the wrong block or
+     failed to occur in the right one. Keeping the three cases separate makes
+     the stored counters say whether the model's shape or its grounding failed. */
+  if (!blockId || !typed) {
+    dropped.malformed++;
+    return null;
+  }
+  const block = byId.get(blockId);
   if (!block) {
     dropped.unknownIds++;
     return null;
   }
-  const typed = text(p.quote);
-  const span = typed ? findQuote(block.text, typed, undefined, "spaced") : null;
+  const span = findQuote(block.text, typed, undefined, "spaced");
   if (!span) {
     dropped.unquoted++;
     return null;
@@ -239,7 +247,11 @@ export function toQuestions(
     }
     const r = item as RawQuestion;
     const question = text(r.question);
-    if (!question || question.length > MAX_QUESTION_CHARS) {
+    if (!question || question.length > MAX_QUESTION_CHARS || !question.endsWith("?")) {
+      dropped.malformed++;
+      continue;
+    }
+    if (!Array.isArray(r.passages)) {
       dropped.malformed++;
       continue;
     }
@@ -251,7 +263,7 @@ export function toQuestions(
       draft = { index, question, passages: [] };
       drafts.set(key, draft);
     }
-    for (const p of Array.isArray(r.passages) ? r.passages : []) {
+    for (const p of r.passages) {
       const located = verifyPassage(p, byId, dropped);
       if (!located) continue;
       const same = draft.passages.some(
@@ -428,7 +440,7 @@ piece answers it in a particular place.
 
 WRITING THE QUESTION
 
-- One sentence, one thing asked, under ${MAX_QUESTION_CHARS} characters, ending
+- One sentence, one thing asked, at most ${MAX_QUESTION_CHARS} characters, ending
   in a question mark.
 - Ask it as the reader would, not as a description of the page: never "Why does
   the author say…" when "Why…" will do, and never locate it in the document

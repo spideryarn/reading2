@@ -157,6 +157,15 @@ describe("a passage is believed only if the article backs it up", () => {
     expect(d.tooLong).toBe(1);
     expect(d.unquoted).toBe(0);
   });
+
+  it("counts missing required passage strings as malformed, not as failed evidence", () => {
+    const d = drops();
+    expect(verifyPassage({ quote: "Things fall apart" }, byId, d)).toBeNull();
+    expect(verifyPassage({ blockId: A.id, quote: 42 }, byId, d)).toBeNull();
+    expect(d.malformed).toBe(2);
+    expect(d.unknownIds).toBe(0);
+    expect(d.unquoted).toBe(0);
+  });
 });
 
 /* -------------------------------------------------------------- the batch -- */
@@ -253,19 +262,28 @@ describe("turning the model's answer into questions", () => {
     expect(new Set(out.map((x) => x.id)).size).toBe(MAX_QUESTIONS);
   });
 
-  it("refuses a question over the length cap, and one with no text", () => {
+  it("refuses a question over the length cap, one with no text, and a statement", () => {
     const d = drops();
     const out = toQuestions(
       [
         q(`${"Why ".repeat(60)}?`, [{ blockId: A.id, quote: "Things fall apart" }]),
         q("", [{ blockId: A.id, quote: "Things fall apart" }]),
+        q("Entropy still increases", [{ blockId: A.id, quote: "Things fall apart" }]),
         null,
       ],
       blocks,
       d,
     );
     expect(out).toEqual([]);
-    expect(d.malformed).toBe(3);
+    expect(d.malformed).toBe(4);
+  });
+
+  it("counts a non-array passages field as malformed rather than unanchored", () => {
+    const d = drops();
+    const out = toQuestions([{ question: "Why does this follow?", passages: "spya-aaaaaa" }], blocks, d);
+    expect(out).toEqual([]);
+    expect(d.malformed).toBe(1);
+    expect(d.unanchored).toBe(0);
   });
 });
 
@@ -342,7 +360,8 @@ describe("the request", () => {
 
     const [faqCall, ideasCall] = sent;
     expect(faqCall?.task).toBe("faq");
-    const system = (c: typeof faqCall) => (c?.body as { system: unknown[] }).system;
+    if (!faqCall || !ideasCall) throw new Error("expected both the FAQ and Ideas calls");
+    const system = (c: (typeof sent)[number]) => (c.body as { system: unknown[] }).system;
     expect(system(faqCall)[0]).toEqual(system(ideasCall)[0]);
     expect(system(faqCall)[0]).toMatchObject({ cache_control: { type: "ephemeral" } });
     expect(system(faqCall)[1]).toEqual({ type: "text", text: FAQ_SYSTEM });

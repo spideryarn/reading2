@@ -3812,7 +3812,7 @@ export const MAX_QUIZ_ANSWER_CHARS = 4000;
  */
 export interface FaqPassage {
   blockId: BlockId;
-  /** The article's characters. At most `MAX_FAQ_QUOTE_CHARS` (src/faq.ts). */
+  /** The article's characters. At most `MAX_QUOTE_CHARS` (src/faq.ts). */
   quote: string;
   /** A disambiguator between repeats, never the anchor. As `IdeaOccurrence`. */
   start: number;
