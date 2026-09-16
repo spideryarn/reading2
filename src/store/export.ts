@@ -805,6 +805,13 @@ export async function exportArticle(
     await put("citation_finds", "citation-finds.json", { finds });
   }
 
+  /* Keyed by block id, the address everything else here uses. */
+  if (rows.readingTime.length) {
+    const seconds: Record<string, number> = {};
+    for (const row of rows.readingTime) seconds[row.blockId] = row.seconds;
+    await put("reading_time", "reading-time.json", { seconds });
+  }
+
   logger.info({ slug, files: written.length, tables: wroteFrom.size }, "article exported");
   return { slug, files: written, tables: [...wroteFrom] };
 }

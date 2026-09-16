@@ -33,6 +33,7 @@ import {
   citationFinds,
   comments as commentsTable,
   glossaryLookups,
+  readingTime,
   refereeClaims,
   refereeCriteria,
   revisionBlocks,
@@ -180,6 +181,13 @@ export const ARTICLE_TABLE_COVERAGE = {
   citation_finds: {
     rollback: { exported: true, into: "citation-finds.json" },
     bundle: { exported: true, into: "augmentations/citation-finds.json" },
+  },
+  /* Seconds spent per block — reader state keyed on block ids, so it travels
+     with them. docs/plans/260916c-show-where-you-have-spent-time-reading-in-the-spine-and-gutter.md
+     § Privacy. */
+  reading_time: {
+    rollback: { exported: true, into: "reading-time.json" },
+    bundle: { exported: true, into: "augmentations/reading-time.json" },
   },
 
   /** The one table the two projections disagree about — see `TableCoverage`. */
@@ -509,6 +517,7 @@ export interface ArticleRows {
   readonly refereeClaims: readonly (typeof refereeClaims.$inferSelect)[];
   readonly glossaryLookups: readonly (typeof glossaryLookups.$inferSelect)[];
   readonly citationFinds: readonly (typeof citationFinds.$inferSelect)[];
+  readonly readingTime: readonly (typeof readingTime.$inferSelect)[];
 }
 
 /**
@@ -706,6 +715,11 @@ async function walk(tx: Tx, slug: string): Promise<ArticleRows> {
     .from(citationFinds)
     .where(eq(citationFinds.articleId, article.id))
     .orderBy(asc(citationFinds.entryId));
+  const secondsRead = await tx
+    .select()
+    .from(readingTime)
+    .where(eq(readingTime.articleId, article.id))
+    .orderBy(asc(readingTime.blockId));
 
   return {
     article,
@@ -720,6 +734,7 @@ async function walk(tx: Tx, slug: string): Promise<ArticleRows> {
     refereeClaims: claims,
     glossaryLookups: lookups,
     citationFinds: finds,
+    readingTime: secondsRead,
   };
 }
 

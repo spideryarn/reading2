@@ -274,6 +274,7 @@ const HOMES: Record<string, string> = {
   "referee-claims.json": "referee_claims (one row per article, claims stay JSONB)",
   "glossary-lookups.json": "glossary_lookups",
   "citation-finds.json": "citation_finds",
+  "reading-time.json": "reading_time",
   /* Reader state, and the one exception to "never on a revision" being stated
      as a positive: these four ARE on `articles` rather than on a table of their
      own. There is exactly one row per article and it is per-owner state on a
@@ -513,6 +514,14 @@ const COVERED_BY_ANOTHER_TEST: Record<string, Unexampled> = {
     evidence: {
       file: "tests/store-export-covers-tables.test.ts",
       contains: "citation_finds",
+    },
+  },
+  /* And again: a sentinel `reading_time` row, required back out of both. */
+  "reading-time.json": {
+    why: "no committed article carries reading time; a sentinel row is inserted and required back out of this filename",
+    evidence: {
+      file: "tests/store-export-covers-tables.test.ts",
+      contains: "reading_time",
     },
   },
 };

@@ -325,6 +325,9 @@ const CRITERION_ID = "spya-cvc234";
  */
 const DEPARTED_BLOCK_ID = "spya-cvj234";
 
+/** Seconds nobody would read by accident, printed the way `JSON.stringify` prints them. */
+const READING_TIME_SENTINEL = "2718.281828";
+
 /**
  * The string that has to survive the export, one per table.
  *
@@ -333,10 +336,13 @@ const DEPARTED_BLOCK_ID = "spya-cvj234";
  * other. The prefix is nonsense so that finding it in a file means it came from
  * the row and not from a field name or a fixture path — except for
  * `block_identities`, whose only column worth checking is a block id and which
- * must therefore carry a well-formed one.
+ * must therefore carry a well-formed one — and for `reading_time`, which has
+ * no string column that is not a block id, and so carries an unlikely number.
  */
 function sentinel(table: string): string {
-  return table === "block_identities" ? DEPARTED_BLOCK_ID : `sentinel-3f9c1e-${table}`;
+  if (table === "block_identities") return DEPARTED_BLOCK_ID;
+  if (table === "reading_time") return READING_TIME_SENTINEL;
+  return `sentinel-3f9c1e-${table}`;
 }
 
 /** One table's row, inserted with its sentinel somewhere a reader would keep. */
@@ -486,6 +492,15 @@ function fixtures(): Record<RollbackTable | BundledTable, Fixture> {
         foundAt: new Date(),
       });
     },
+    /* On the block `beforeAll` gave an identity row: the composite foreign key
+       refuses an id the article never had. The sentinel is the number. */
+    reading_time: async () => {
+      await db.insert(schema.readingTime).values({
+        articleId: ARTICLE_ID,
+        blockId: BLOCK_ID,
+        seconds: Number(sentinel("reading_time")),
+      });
+    },
   };
 }
 
@@ -581,6 +596,7 @@ const COLUMNS_LEFT_OUT: Record<BundledTable, Readonly<Record<string, string>>> =
   referee_claims: {},
   glossary_lookups: {},
   citation_finds: {},
+  reading_time: {},
 };
 
 /** A property of `value`, or `undefined` if it is not an object. */
@@ -617,6 +633,7 @@ const ROWS_IN: Record<BundledTable, (parsed: unknown) => unknown[]> = {
   referee_claims: (parsed) => [at(parsed, "run")],
   glossary_lookups: (parsed) => listAt(parsed, "lookups"),
   citation_finds: (parsed) => listAt(parsed, "finds"),
+  reading_time: (parsed) => listAt(parsed, "blocks"),
 };
 
 /** Every key any of these rows carries. */
@@ -655,6 +672,7 @@ await pgReady({
     "spideryarn.referee_claims",
     "spideryarn.glossary_lookups",
     "spideryarn.citation_finds",
+    "spideryarn.reading_time",
   ],
 });
 

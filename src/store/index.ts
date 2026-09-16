@@ -72,6 +72,7 @@ import type {
   ChatStore,
   CitationFindStore,
   CommentStore,
+  ReadingTimeStore,
   FeedbackStore,
   FetchAllowanceStore,
   GlossaryLookupStore,
@@ -101,6 +102,7 @@ import { pgLinkSummaryStore } from "./pg-link-summaries.js";
 import { pgFetchAllowanceStore } from "./pg-rate-limit.js";
 import { pgGlossaryLookupStore } from "./pg-lookups.js";
 import { pgCitationFindStore } from "./pg-citation-finds.js";
+import { pgReadingTimeStore } from "./pg-reading-time.js";
 import { pgReaderStore } from "./pg-reader.js";
 import { pgRefereeClaimsStore } from "./pg-referee-claims.js";
 import { pgRefereeCriteriaStore } from "./pg-referee-criteria.js";
@@ -336,6 +338,9 @@ export const lookUpTerm = makeLookUpTerm({
 });
 
 export const citationFindStore: CitationFindStore = guarded("citation-finds", pgCitationFindStore);
+
+/** Seconds spent per block — the spine's and gutter's reading-time layer. */
+export const readingTimeStore: ReadingTimeStore = guarded("reading-time", pgReadingTimeStore);
 
 /**
  * Explaining a term the reader typed into the glossary's box.

@@ -519,6 +519,11 @@ const EXPECTED_AUTH_ROUTES: ExpectedRoute[] = [
     witnesses: ["/api/citations/w1/w2/find"],
   },
   {
+    match: { kind: "regex", source: "^\\/api\\/reading-time\\/([\\w.%-]+)$", flags: "" },
+    methods: ["GET", "POST"],
+    witnesses: ["/api/reading-time/w1"],
+  },
+  {
     match: { kind: "regex", source: "^\\/api\\/sketch\\/([\\w.%-]+)$", flags: "" },
     methods: ["GET"],
     witnesses: ["/api/sketch/w1"],
@@ -774,8 +779,8 @@ const EXPECTED_AUTH_ROUTES: ExpectedRoute[] = [
 ];
 
 /** Loud failure controls. Never the oracle — see the header. */
-const EXPECTED_MATCHER_COUNT = 69;
-const EXPECTED_GUARD_COUNT = 84;
+const EXPECTED_MATCHER_COUNT = 70;
+const EXPECTED_GUARD_COUNT = 86;
 
 /* ------------------------------------------------------------- the source read */
 
@@ -1908,6 +1913,9 @@ describe("the authenticated API's route contract", () => {
         "GET regex /^\\/api\\/debate\\/([\\w.%-]+)$/",
         "GET regex /^\\/api\\/citations\\/([\\w.%-]+)$/",
         "POST regex /^\\/api\\/citations\\/([\\w.%-]+)\\/([\\w.%-]+)\\/find$/",
+        // reading time, 260916c
+        "GET regex /^\\/api\\/reading-time\\/([\\w.%-]+)$/",
+        "POST regex /^\\/api\\/reading-time\\/([\\w.%-]+)$/",
         "POST regex /^\\/api\\/quiz\\/([\\w.%-]+)\\/mark$/",
         // sketch to the two paid pictures, 260911c
         "GET regex /^\\/api\\/sketch\\/([\\w.%-]+)$/",

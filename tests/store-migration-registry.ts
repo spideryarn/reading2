@@ -1838,6 +1838,17 @@ export const STORE_MIGRATION: Readonly<Record<string, StoreEntry>> = {
       "Its reach into the condemned modules is the seeder's copy step and the spend ledger, as " +
       "for `tests/glossary-lookup-stream-route.test.ts`. Read off the graph, not re-witnessed.",
   },
+  "tests/reading-time-route.test.ts": {
+    category: "shared-mechanism-collateral",
+    mechanisms: ["fixture-loader"],
+    evidence: "static-only",
+    reason:
+      "Arrived after the witness ran, with reading time's stage 1 (2026-09-16). It seeds three " +
+      "articles with `scratchArticleInPg` and drives `GET` and `POST /api/reading-time/:slug` " +
+      "through `handleApi`, reading rows back out of `reading_time` — entirely Postgres. Its " +
+      "reach into the condemned modules is the seeder's copy step, as for " +
+      "`tests/citation-find-route.test.ts`. Read off the graph, not re-witnessed.",
+  },
   "tests/glossary-delete-then-rebuild.test.ts": {
     category: "shared-mechanism-collateral",
     mechanisms: ["step-context-paths"],
@@ -2579,6 +2590,9 @@ export const TEST_LANES: Readonly<Record<string, TestLane>> = {
   /* Seeds one article, writes a citations artefact and one find row, and
      drives *Find it* through the route; the provider is a stubbed `fetch`. */
   "tests/citation-find-route.test.ts": "private-postgres",
+  /* Seeds three articles and drives the reading-time GET and POST through the
+     route, reading rows back out of `reading_time`. No model is called. */
+  "tests/reading-time-route.test.ts": "private-postgres",
   /* Written 2026-09-11 for the last slice of the `AUTH_ROUTES` migration. Seeds
      one article and deletes only its own entry's lookup row; no model is called. */
   "tests/glossary-stream-lifetime.test.ts": "private-postgres",

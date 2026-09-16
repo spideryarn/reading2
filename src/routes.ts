@@ -38,6 +38,8 @@
  *   GET    /api/quiz/:slug       the questions the piece can ask you back, and staleness
  *   GET    /api/debate/:slug     what the rest of the web says about this piece, and staleness
  *   GET    /api/citations/:slug  every work the piece cites, with a link the article gave, and staleness
+ *   GET    /api/reading-time/:slug   → { seconds: { <block id>: n } }, the owner's time on each block
+ *   POST   /api/reading-time/:slug   { seconds: { <block id>: n } } → 204, ADDED to the totals
  *   POST   /api/quiz/:slug/mark  one answer, marked against one question — SSE, stateless
  *   GET    /api/quotes/:slug     the lines worth keeping, in the article's own words, and staleness
  *   GET    /api/arc/:slug        one sentence per part, and whether it still fits the article
@@ -129,6 +131,7 @@ import {
   refereeCriteriaStore,
   searchStore,
   shelfStore,
+  readingTimeStore,
   loadArticle,
   loadGlossary,
   lookUpTerm,
@@ -478,6 +481,26 @@ const MAX_FEEDBACK_BODY_BYTES =
      on 2026-09-02 and is capped at `MAX_FEEDBACK_URL_CHARS` (2048), which the
      4KB below still covers. */
   4 * 1024;
+
+/**
+ * **Reading time's batch** — `POST /api/reading-time/:slug`,
+ * docs/plans/260916c-show-where-you-have-spent-time-reading-in-the-spine-and-gutter.md
+ * § The wire. At most this many blocks in one batch, each at most this many
+ * seconds: the client sends about a minute at a time, so either limit being
+ * reached is a bug or somebody else's script, not reading.
+ */
+const MAX_READING_TIME_ENTRIES = 5000;
+const MAX_READING_TIME_SECONDS = 3600;
+
+/**
+ * The third body limit, for the feedback one's reason: the largest batch the
+ * validator accepts has to fit through the door, or a 5,001-entry batch is a
+ * bare 413 rather than the 400 that says why. Each entry at its worst as
+ * `JSON.stringify` writes it — the quoted 11-character id and its colon (14),
+ * the longest a finite number prints (23, `2.2250738585072014e-308`), a comma —
+ * plus the envelope.
+ */
+const MAX_READING_TIME_BODY_BYTES = MAX_READING_TIME_ENTRIES * (14 + 23 + 1) + 1024;
 
 function send(res: ServerResponse, status: number, body: unknown): void {
   res.statusCode = status;
@@ -992,6 +1015,32 @@ function objectBody(body: unknown): Record<string, unknown> {
     throw httpError(400, "Expected a JSON object");
   }
   return body as Record<string, unknown>;
+}
+
+/**
+ * `{ seconds: Record<BlockId, number> }`, or a 400 saying which part is wrong.
+ * Every entry is checked before anything is written, so a batch is taken whole
+ * or not at all. An id that is well-formed but not this article's is **not**
+ * refused here — the store drops it, so one stale id cannot fail the rest.
+ */
+function readingTimeBatch(body: unknown): Record<string, number> {
+  const { seconds } = objectBody(body);
+  if (typeof seconds !== "object" || seconds === null || Array.isArray(seconds)) {
+    throw httpError(400, "Expected { seconds: { <block id>: <seconds> } }");
+  }
+  const entries = Object.entries(seconds);
+  if (entries.length > MAX_READING_TIME_ENTRIES) {
+    throw httpError(400, `At most ${MAX_READING_TIME_ENTRIES} blocks in one batch`);
+  }
+  const out: Record<string, number> = {};
+  for (const [id, value] of entries) {
+    if (!isSpideryarnId(id)) throw httpError(400, "Every key must be a block id");
+    if (typeof value !== "number" || !Number.isFinite(value) || value <= 0 || value > MAX_READING_TIME_SECONDS) {
+      throw httpError(400, `Every value must be a number of seconds above 0 and at most ${MAX_READING_TIME_SECONDS}`);
+    }
+    out[id] = value;
+  }
+  return out;
 }
 
 /**
@@ -6757,6 +6806,8 @@ const ONE_THREAD_PATTERN = /^\/api\/chat\/([\w.%-]+)\/([\w.%-]+)$/;
 const COMMENTS_PATTERN = /^\/api\/comments\/([\w.%-]+)$/;
 const ONE_COMMENT_PATTERN = /^\/api\/comments\/([\w.%-]+)\/([\w.%-]+)$/;
 const SHELF_ENTRY_PATTERN = /^\/api\/library\/([\w.%-]+)$/;
+/* Reading time: GET reads the totals, POST adds to them — two rows, one path. */
+const READING_TIME_PATTERN = /^\/api\/reading-time\/([\w.%-]+)$/;
 /* No slug, and that is the whole shape of it: this one is about the reader
    rather than about an article. */
 const READER_PATH = "/api/reader";
@@ -7595,6 +7646,35 @@ const AUTH_ROUTES: readonly AuthRoute[] = [
           findCitation(at, slugPart(captures, 2)),
         ),
       );
+    },
+  },
+
+  /* **How long the reader has spent on each block** —
+     docs/plans/260916c-show-where-you-have-spent-time-reading-in-the-spine-and-gutter.md
+     § The wire. Owner-only, through `articleIdForOwned` in the store, so a
+     stranger's slug is a 404 on both verbs. Never spends. */
+  {
+    kind: "pattern",
+    method: "GET",
+    pattern: READING_TIME_PATTERN,
+    handler: async ({ request: { res } }, captures) => {
+      send(res, 200, { seconds: await readingTimeStore.read(slugPart(captures, 1)) });
+    },
+  },
+
+  /* **Adds** a batch to the totals, which is why the client sends each batch
+     at most once: a retry after a lost answer would count it twice (the plan's
+     § The wire). 204, because the totals are not worth reading back. */
+  {
+    kind: "pattern",
+    method: "POST",
+    pattern: READING_TIME_PATTERN,
+    handler: async ({ request: { req, res } }, captures) => {
+      const slug = slugPart(captures, 1);
+      const batch = readingTimeBatch(await readBody(req, MAX_READING_TIME_BODY_BYTES));
+      await readingTimeStore.add(slug, batch);
+      res.statusCode = 204;
+      res.end();
     },
   },
 

@@ -3481,6 +3481,42 @@ export const citationFinds = spideryarn.table(
   ],
 );
 
+/**
+ * **How long the reader has spent on each block** — a running total of seconds
+ * on screen, drawn as the spine's and the gutter's reading-time layer.
+ * docs/plans/260916c-show-where-you-have-spent-time-reading-in-the-spine-and-gutter.md
+ * § The table.
+ *
+ * - **Keyed to `block_identities`, by a composite foreign key**, so an id this
+ *   article never had cannot be stored, and — since identity rows are never
+ *   deleted — the time survives a re-extraction. Deleting the article cascades
+ *   through that table to this one.
+ * - **No `owner_id`**, unlike the sibling reader-state tables: only an
+ *   article's owner writes, and ownership is inherited through the article.
+ * - **No timestamps.** The row is a total, not a history of reading sessions —
+ *   which is also what docs/project/privacy.md promises.
+ *
+ * The write adds rather than replaces (src/store/pg-reading-time.ts).
+ */
+export const readingTime = spideryarn.table(
+  "reading_time",
+  {
+    articleId: uuid("article_id").notNull(),
+    blockId: text("block_id").notNull(),
+    seconds: doublePrecision("seconds").notNull(),
+  },
+  (t) => [
+    primaryKey({ columns: [t.articleId, t.blockId] }),
+    check("reading_time_block_id_format", sql`${t.blockId} ~ ${sql.raw(`'${SPIDERYARN_ID_REGEX}'`)}`),
+    check("reading_time_seconds", sql`${t.seconds} >= 0`),
+    foreignKey({
+      name: "reading_time_block_fk",
+      columns: [t.articleId, t.blockId],
+      foreignColumns: [blockIdentities.articleId, blockIdentities.blockId],
+    }).onDelete("cascade"),
+  ],
+);
+
 /* -------------------------------------------------------- reader profile -- */
 
 /**

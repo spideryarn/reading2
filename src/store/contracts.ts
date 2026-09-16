@@ -1222,6 +1222,22 @@ export interface GlossaryLookupStore {
 }
 
 /**
+ * How long the owner has spent on each block of one article, in seconds —
+ * docs/plans/260916c-show-where-you-have-spent-time-reading-in-the-spine-and-gutter.md.
+ * Both methods are owner-scoped: a slug the caller does not own is a 404.
+ */
+export interface ReadingTimeStore {
+  /** Every block with a total, keyed by block id. Blocks never read are absent. */
+  read(slug: string): Promise<Record<string, number>>;
+  /**
+   * **Adds** each value to that block's running total. Ids this article has
+   * never had are dropped silently, so one stale id cannot fail a batch; the
+   * caller validates the shape before this is reached.
+   */
+  add(slug: string, seconds: Record<string, number>): Promise<void>;
+}
+
+/**
  * The reader's global profile — "about you", true on every article rather
  * than on one. docs/plans/260826t-reader-profile.md is the design; src/profile.ts
  * is where the two boxes (this one and `ShelfState.purpose`) become one string
