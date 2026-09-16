@@ -40,13 +40,14 @@ const HOISTED = vi.hoisted(() => {
 });
 
 import { mintId } from "../src/ids.js";
+import { currentOwnerId } from "../src/owner.js";
 import {
   EARLIER_FEEDBACK_LIMIT,
   MAX_FEEDBACK_ANSWER_CHARS,
   MAX_FEEDBACK_URL_CHARS,
 } from "../src/types.js";
 import type { FeedbackReport, FeedbackSubmission, NewFeedback } from "../src/store/contracts.js";
-import { acceptAny, AUTHED_HEADERS, TEST_EMAIL } from "./helpers/authed.js";
+import { acceptAny, AUTHED_HEADERS, TEST_EMAIL, TEST_OWNER } from "./helpers/authed.js";
 import { logLinesWhile } from "./helpers/log-capture.js";
 
 /** Every `submit` the route made, in order. Read by nearly every test below. */
@@ -57,6 +58,8 @@ let mirrored: { id: string; sentryEventId: string | null }[] = [];
 let attempted: string[] = [];
 /** Every `listMine` limit the route asked for. */
 let listed: number[] = [];
+/** The request owner in force when each `listMine` began. */
+let listOwners: string[] = [];
 /** What the fake `listMine` answers with — deliberately loose, see § GET. */
 let listAnswer: unknown = { reports: [], more: false };
 /** What the fake store answers with. Set per test. */
@@ -93,6 +96,10 @@ vi.mock("../src/store/index.js", async (importActual) => {
       read: async () => null,
       listMine: async (limit: number) => {
         listed.push(limit);
+        /* The real store resolves this at the start of its query. Doing the
+           same here proves this route reached it only after the gate installed
+           the signed-in reader's owner. */
+        listOwners.push(currentOwnerId());
         if (listAnswer instanceof Error) throw listAnswer;
         return listAnswer;
       },
@@ -304,6 +311,7 @@ beforeEach(() => {
   mirrored = [];
   attempted = [];
   listed = [];
+  listOwners = [];
   listAnswer = { reports: [], more: false };
   hooks.clear();
   answer = undefined as unknown as FeedbackSubmission;
@@ -355,6 +363,24 @@ describe("GET /api/feedback", () => {
     });
     /* The cap is the server's, not a query parameter somebody can raise. */
     expect(listed).toEqual([EARLIER_FEEDBACK_LIMIT]);
+    expect(listOwners).toEqual([TEST_OWNER]);
+  });
+
+  it("sets no-store before awaiting the store, so a failed read is private too", async () => {
+    listAnswer = new Error("the feedback read failed");
+    const reply = await call(undefined, { method: "GET" });
+    expect(reply.status).toBe(500);
+    expect(reply.headers["cache-control"]).toBe("private, no-store");
+  });
+
+  it("does not read a request body or fall through to the POST on the shared path", async () => {
+    const reply = await call(undefined, {
+      method: "GET",
+      raw: Buffer.from("{not json", "utf8"),
+    });
+    expect(reply.status).toBe(200);
+    expect(listed).toEqual([EARLIER_FEEDBACK_LIMIT]);
+    expect(submitted).toEqual([]);
   });
 
   it("ignores a limit in the query", async () => {
