@@ -110,6 +110,34 @@
   color: var(--ink);
 }
 
+/* **Structure's row card, capped narrower than the rest.**
+
+   `.tooltip`'s 22rem is a reading width chosen for a card floating over prose.
+   This one hangs off a row inside a band that can be as little as 389px wide,
+   and on a window narrow enough for the band to *cover* the article there is
+   only about 200px between either column's edge and the far side of the screen
+   — so a 352px card has nowhere to go and `shift` parks it back over the thing
+   it describes. 18rem still holds a gist comfortably and leaves the row it came
+   from visible. GPT Sol's review of the plan, finding 4. */
+.tip-struct {
+  max-width: min(18rem, calc(100vw - 1.75rem));
+}
+
+/* **The row's address, in a card's title line.**
+
+   `.struct-num` is not reused here even though it says the same thing on the
+   row: its `grid-column` and `min-width` only do anything inside
+   `.struct-line`'s grid, so in a card it would look styled and be doing nothing
+   — one of the two ways a class can be wrong without a screenshot showing it.
+   StructurePanel.tsx § RowCard. */
+.tip-num {
+  margin-right: 0.4rem;
+  color: var(--ink-faint);
+  font-size: 0.82em;
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+}
+
 /* Matches the § in the gist cells: the author's own heading, not a generated one. */
 .tip-own {
   margin-left: 0.3rem;

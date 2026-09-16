@@ -50,12 +50,14 @@ import { useLayoutEffect, useRef, useState } from "react";
 import type { BlockId } from "../types.js";
 import { ModeSurface } from "./ModeSurface.js";
 import {
+  type StructureCard,
   type StructureColumn,
   type StructureProjection,
   type StructureRow,
   structureProjection,
   windowed,
 } from "./structure.js";
+import { Tooltip, TooltipGroup } from "./Tooltip.js";
 import type { SummaryNode } from "./tree.js";
 
 /**
@@ -212,22 +214,81 @@ function capacityFrom(
   return kept;
 }
 
+/**
+ * **What hovering a row says** — and the projection has already decided that,
+ * which is the whole of why this component is four lines of JSX. `structure.ts`
+ * § `StructureCard` holds the argument: the card is defined as what these two
+ * columns are *not* already showing, so everything here is unconditional except
+ * the fields the projection chose to leave out.
+ *
+ * The classes are the spine's (`tooltip.css` § tooltip), not new ones. Greg
+ * asked for the existing rich-tooltip machinery and this is what that means in
+ * practice: `BandCard` and this card are the same four shapes — a title, a
+ * sentence, a list of what is inside, a count — and a second stylesheet for them
+ * would be a second thing to keep in step with the palette.
+ *
+ * **No crumb, where `BandCard` opens with one.** The rail is proportional and
+ * cannot say what contains what, so its card must. Structure's whole shape is
+ * that statement — column A is the parts, column B is the inside of the marked
+ * one, and column B's header names that part in words — so a crumb here would be
+ * the third printing of a fact already on screen twice.
+ */
+function RowCard({ card, number, text }: { card: StructureCard; number: string; text: string }) {
+  return (
+    <>
+      <div className="tip-title">
+        {number ? <span className="tip-num">{number}</span> : null}
+        {text}
+      </div>
+      {card.gist ? <p className="tip-gist">{card.gist}</p> : null}
+      {card.navLabel ? <p className="tip-gist tip-navlabel">{card.navLabel}</p> : null}
+      {card.children.length > 0 && (
+        <ul className="tip-kids">
+          {card.children.map((c) => (
+            <li key={c.id}>{c.text}</li>
+          ))}
+          {card.more > 0 && <li className="tip-more">+ {card.more} more</li>}
+        </ul>
+      )}
+    </>
+  );
+}
+
 function Row({
   row,
   onJump,
+  /**
+   * **`false` on the measuring copies, and that is load-bearing.** They are the
+   * full unwindowed lists, rendered out of flow behind `aria-hidden="true"` so
+   * their heights can be read; a tooltip on each would be tens of extra Floating
+   * UI instances nobody can open, every one of them pointing an
+   * `aria-describedby` at a panel the accessibility tree has been told to
+   * ignore. Nothing would report it, because the visible cards would work.
+   */
+  tip,
 }: {
   row: StructureRow;
   onJump(id: BlockId): void;
+  tip: boolean;
 }) {
   const classes = ["struct-row", `struct-${row.kind}`];
   if (row.supplement) classes.push("struct-supp");
   if (row.before) classes.push("struct-read");
 
-  return (
-    <li>
-      <button
-        type="button"
-        className={classes.join(" ")}
+  /**
+   * **The wrapper must not change this row's box.** The panel measures the
+   * hidden copies and draws these, so markup that differs between them is a
+   * silent clip — the failure this file's history is made of. `Tooltip` renders
+   * `cloneElement(trigger)` plus a portal that only exists while the card is
+   * open, so the `<li>` keeps exactly one child element either way; the extra
+   * props it merges in are attributes and handlers, which have no layout. Checked
+   * in Chrome as well as read, because a claim about a library is not a claim
+   * a test here can settle (docs/plans/260916b-…).
+   */
+  const button = (
+    <button
+      type="button"
+      className={classes.join(" ")}
         /* `aria-current="true"` and not `"location"`: the mark says the reader is
            inside this row, which is a position in a document rather than a place
            in a set of navigation links. The same call `OutlinePanel` makes on its
@@ -249,6 +310,46 @@ function Row({
         </span>
         {row.gist ? <span className="struct-gist">{row.gist}</span> : null}
       </button>
+  );
+
+  const card = tip ? row.card : null;
+  return (
+    <li>
+      {card === null ? (
+        button
+      ) : (
+        /* **`right`, and deliberately without `keepSide`** — where Structure's
+            other face uses it. The band is the strip *between the spine and the
+            prose* (layout.ts § the mode band), so a card thrown right lands on
+            the article; thrown left it would land on a 12px rail and the window
+            edge.
+
+            `keepSide` was here in the first build and Chrome cut the card in
+            half: at 420×844 it opened at x≈222 with 288px of content and ran
+            straight off the right of the screen, mid-word, with no scrollbar and
+            nothing to say so. The reason is not what `shift` looks like it
+            promises — **`shift` slides along the *cross* axis**, which for a
+            `right` placement is vertical, so it cannot answer horizontal
+            overflow at all. `flip` is the only middleware that can, and
+            `keepSide` restricts it to left↔right; in that window neither side
+            had room, so flip kept the placement and the card stayed where it did
+            not fit.
+
+            Without it, `fallbackAxisSideDirection: "end"` lets the card drop
+            below the row once both sides have failed, and there `shift` *is* on
+            the horizontal axis and slides it fully on screen. The cost
+            `keepSide` exists to avoid was measured on a **row** of triggers
+            (Tooltip.tsx § `keepSide`); these are stacked vertically, so a
+            bottom-placed card covers the rows below it — and only in the one
+            case where there was nowhere else to go. */
+        <Tooltip
+          placement="right"
+          className="tip-struct"
+          content={<RowCard card={card} number={row.number} text={row.text} />}
+        >
+          {button}
+        </Tooltip>
+      )}
     </li>
   );
 }
@@ -311,7 +412,7 @@ function Column({
     <ol className="struct-col" aria-label={label}>
       <Elided n={column.earlier} where="earlier" />
       {column.rows.map((row) => (
-        <Row key={row.id} row={row} onJump={onJump} />
+        <Row key={row.id} row={row} onJump={onJump} tip={true} />
       ))}
       <Elided n={column.later} where="later" />
     </ol>
@@ -500,7 +601,7 @@ export function StructurePanel({
             <div className="struct-side">
               <ol className="struct-col" data-struct-measure="a">
                 {proj.columnA.rows.map((row) => (
-                  <Row key={row.id} row={row} onJump={NO_JUMP} />
+                  <Row key={row.id} row={row} onJump={NO_JUMP} tip={false} />
                 ))}
                 <MeasuredCounter />
               </ol>
@@ -508,48 +609,58 @@ export function StructurePanel({
             <div className="struct-side struct-inner">
               <ol className="struct-col" data-struct-measure="b">
                 {proj.columnB.rows.map((row) => (
-                  <Row key={row.id} row={row} onJump={NO_JUMP} />
+                  <Row key={row.id} row={row} onJump={NO_JUMP} tip={false} />
                 ))}
                 <MeasuredCounter />
               </ol>
             </div>
           </div>
-          <div className="struct-side">
-            <Column column={columnA} label="Parts" onJump={onJump} />
-          </div>
-          <div className="struct-side struct-inner">
-            {/* **The bracket, and the whole of the connector in v1.** It names
-                the row on the left that these rows are the inside of, and the
-                marked row in column A carries the matching edge marker. A drawn
-                taper between two independently measured columns needs geometry
-                redrawn on every resize and every boundary crossing; this answers
-                the same question — *these belong to that* — in CSS. */}
-            {proj.ofPart ? (
-              <p className="struct-of" ref={ofRef}>
-                <span className="struct-num">{proj.ofPart.number}</span>
-                <span className="struct-text">{proj.ofPart.text}</span>
-              </p>
-            ) : null}
-            {columnB.rows.length > 0 || columnB.later > 0 ? (
-              <Column column={columnB} label="Sections of this part" onJump={onJump} />
-            ) : (
-              /* **Two different nothings, and they must not read alike.** No
-                 current part at all — the reader is above the first or past the
-                 last — is a place they are, not a fault. A current part with no
-                 sections is an article whose parts were not subdivided. Both are
-                 ordinary; neither is an empty box. */
-              <p className="struct-empty">
-                {proj.ofPart
-                  ? "This part is not divided into sections."
-                  : "You are between parts."}
-              </p>
-            )}
-            {/* The honest half of what a centred paragraph window would have
-                claimed — structure.ts § `PARAGRAPH_IS_NEVER_CURRENT`. */}
-            {proj.paragraphTotal !== null ? (
-              <p className="struct-total">{proj.paragraphTotal} paragraphs</p>
-            ) : null}
-          </div>
+          {/* **One group for the whole grid, not one per column.** Once a card
+              is open its neighbours open instantly and the fade drops to zero,
+              which is what turns a run of rows into one surface you can read
+              down — the rail's argument (docs/project/tooltips.md § Grouping),
+              and the reason crossing from a part into its sections should not
+              re-wait either. The spine's delay pair, reused rather than
+              retuned: 240ms is long enough that crossing the band on the way to
+              pressing something does not fire a dozen cards. */}
+          <TooltipGroup delay={{ open: 240, close: 90 }} timeoutMs={400}>
+            <div className="struct-side">
+              <Column column={columnA} label="Parts" onJump={onJump} />
+            </div>
+            <div className="struct-side struct-inner">
+              {/* **The bracket, and the whole of the connector in v1.** It names
+                  the row on the left that these rows are the inside of, and the
+                  marked row in column A carries the matching edge marker. A drawn
+                  taper between two independently measured columns needs geometry
+                  redrawn on every resize and every boundary crossing; this answers
+                  the same question — *these belong to that* — in CSS. */}
+              {proj.ofPart ? (
+                <p className="struct-of" ref={ofRef}>
+                  <span className="struct-num">{proj.ofPart.number}</span>
+                  <span className="struct-text">{proj.ofPart.text}</span>
+                </p>
+              ) : null}
+              {columnB.rows.length > 0 || columnB.later > 0 ? (
+                <Column column={columnB} label="Sections of this part" onJump={onJump} />
+              ) : (
+                /* **Two different nothings, and they must not read alike.** No
+                   current part at all — the reader is above the first or past the
+                   last — is a place they are, not a fault. A current part with no
+                   sections is an article whose parts were not subdivided. Both are
+                   ordinary; neither is an empty box. */
+                <p className="struct-empty">
+                  {proj.ofPart
+                    ? "This part is not divided into sections."
+                    : "You are between parts."}
+                </p>
+              )}
+              {/* The honest half of what a centred paragraph window would have
+                  claimed — structure.ts § `PARAGRAPH_IS_NEVER_CURRENT`. */}
+              {proj.paragraphTotal !== null ? (
+                <p className="struct-total">{proj.paragraphTotal} paragraphs</p>
+              ) : null}
+            </div>
+          </TooltipGroup>
         </div>
       )}
     </ModeSurface>

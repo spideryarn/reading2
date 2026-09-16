@@ -94,6 +94,64 @@ const PARAGRAPH_IS_NEVER_CURRENT = false;
 
 export type RowKind = "part" | "section" | "paragraph";
 
+/**
+ * **What a row's hover card says — and it is defined as what the panel is *not*
+ * already showing.**
+ *
+ * Greg asked for the card on 2026-09-12: *"Add rich tooltips to Structure mode
+ * (so I can see summary of that bit of the text)"*. The difficulty is not
+ * drawing it but keeping it from being noise, because these two columns already
+ * say a great deal: the ladder prints a gist on the current row from rung 2, and
+ * **column B is the current part's list of sections**. A card repeating either
+ * is the failure docs/project/tooltips.md names outright — *a hover that costs a
+ * reader a second to discover they knew it already is worse than no card*.
+ *
+ * So every field here is conditional on the drawing, which is why the card is
+ * computed in `attachCards` below, after both columns exist, rather than in
+ * `makeRow` where the row's own facts are assembled.
+ *
+ * **A narrow value and not the `SummaryNode`.** That is GPT Sol's correction to
+ * the spine's `BandCard` (2026-08-28) and it transfers unchanged: handing the
+ * card the node hands it every sibling, every grandchild and the parent's own
+ * gist in order to render three lines, most of which the card is not allowed to
+ * show. It also makes *"is there anything left to say"* a pure question a test
+ * can ask with no DOM, which is the only way to check a suppression — a browser
+ * can show that a card appeared and cannot show that the right one was withheld.
+ */
+export interface StructureCard {
+  /** The one sentence from the tree — only where the row is not printing it. */
+  gist?: string;
+  /**
+   * Standing in for a gist there is none of.
+   *
+   * **Only where the row has a real title**, which is `BandCard`'s rule and the
+   * half that is easy to drop: with no title `rowText` has already used the
+   * navLabel as the row's own text, and repeating it underneath in italics reads
+   * as a rendering fault rather than as a summary.
+   */
+  navLabel?: string;
+  /**
+   * What is inside, in the order the document has them, capped at
+   * `CARD_CHILDREN` — and empty when those children are already on screen, or
+   * when the page is in no position to name them (`cardFor`'s `showChildren`).
+   *
+   * This is the half the panel genuinely cannot give: column B shows the inside
+   * of the **current** part and of no other, so for every other part in column A
+   * the card is the only preview there is.
+   */
+  children: { id: NodeId; text: string }[];
+  /**
+   * How many the cap left off. **Counted after the unnameable ones are
+   * dropped**, never before — a child with neither title nor navLabel is not a
+   * row anybody could be shown (`rowText`), so counting it makes "+ N more" a
+   * promise the card cannot keep. The spine paid for this one.
+   */
+  more: number;
+}
+
+/** Beyond this many, the list stops being scannable at a glance. `BandCard`'s number. */
+const CARD_CHILDREN = 5;
+
 export interface StructureRow {
   id: NodeId;
   kind: RowKind;
@@ -107,6 +165,13 @@ export interface StructureRow {
   endRow: number;
   /** One sentence, present only on the rows the rung reached. */
   gist?: string;
+  /**
+   * What hovering this row would add to what is already drawn, or `null` when it
+   * would add nothing — see `StructureCard`. `null` rather than an optional
+   * field, so "there is no card" is one state the compiler can see rather than a
+   * property that may or may not be there.
+   */
+  card: StructureCard | null;
   /** The reader is inside this row. Never true of a paragraph. */
   here: boolean;
   /** Already read: this row ends above the reader. */
@@ -224,10 +289,137 @@ function makeRow(
     startRow: entry.startRow,
     endRow: entry.endRow,
     ...(gist !== undefined && { gist }),
+    /* Filled in by `attachCards` once both columns exist — what a card may say
+       depends on what the *other* column turned out to draw, which is not known
+       here. `null` rather than left out, so a row that never reaches that pass
+       is a card-less row rather than a type error waiting to happen. */
+    card: null,
     here,
     before: entry.endRow < focusRow,
     supplement,
   };
+}
+
+/**
+ * What hovering `row` would add, given what the panel turned out to draw.
+ *
+ * **`showChildren` is the caller's to answer.** A part's children are already on
+ * screen when it is current, and a section's are already there when the
+ * paragraph rung spliced them in; `allowParagraphs` also withholds a section's
+ * whole child layer when the page may not show it. `allowNavLabels` is separate
+ * because a shallow branch can end directly under a part: a titled section is
+ * still safe to preview there, but its leaf `navLabel` is paragraph chrome and
+ * must obey the same gate. A card is a smaller surface than a column and not a
+ * quieter rule.
+ */
+function cardFor(
+  entry: SummaryNode,
+  row: StructureRow,
+  showChildren: boolean,
+  allowNavLabels: boolean,
+): StructureCard | null {
+  /**
+   * **A paragraph row never gets one, and the reason is stronger than
+   * tidiness.** Paragraph rows exist only when `allowParagraphs` is true, which
+   * the band only sets when the prose is *beside* it rather than covering it
+   * (StructureMode.tsx § `proseBeside`). So the paragraph itself is on screen a
+   * few centimetres to the right, and a card summarising two sentences the
+   * reader can already read is worse than no card.
+   */
+  if (row.kind === "paragraph") return null;
+
+  /**
+   * **Nor the apparatus.** `makeRow` never asks for a gist on a supplement and
+   * `buildSummaryTree` never descends into one, so the endnotes are in the
+   * structure and outside the argument — deliberately, in three places already.
+   * A card would be the fourth place and the one that broke it: the only thing
+   * it could carry is a `navLabel` standing in for the gist the apparatus is not
+   * given, which is the withholding undone by a different door. The row already
+   * says "Notes", and that is the whole of what there is to say.
+   */
+  if (row.supplement) return null;
+
+  /* The row is printing it; see `StructureCard`. */
+  const gist = row.gist === undefined ? entry.gist : undefined;
+
+  const hasTitle = (entry.node.title ?? "").trim() !== "";
+  const nav = entry.node.navLabel?.trim();
+  const navLabel =
+    allowNavLabels && entry.gist === undefined && hasTitle && nav ? nav : undefined;
+
+  /* Named before counted, never counted before named — `StructureCard.more`.
+
+     Title-first, like `rowText`, and not the spine's `navLabel || title`: this
+     card's list and the column beside it must say the same words about the same
+     node whenever both are permitted. The spine inverts it because its children
+     are depth-3 leaves which have no titles at all, so the question never arises
+     there. */
+  const named = showChildren
+    ? entry.children.flatMap((c) => {
+        /* A shallow branch may end directly under a part: section by depth,
+           paragraph by shape. Its title is still safe navigation structure, but
+           its navLabel is paragraph chrome and obeys `allowParagraphs` by this
+           separate gate. Using `rowText` here would leak that label through a
+           non-current part's card even while the paragraph layer is withheld. */
+        const title = c.node.title?.trim();
+        const nav = allowNavLabels ? c.node.navLabel?.trim() : undefined;
+        const text = title || nav || null;
+        /* Keyed by the node's own id rather than by its words: two children of
+           one node really can read alike — "Introduction" twice, or a repeated
+           paragraph navLabel — and in React a duplicate key is a warning plus a
+           list that reconciles to the wrong rows. `BandCard` keys by id for the
+           same reason. */
+        return text === null ? [] : [{ id: c.node.id, text }];
+      })
+    : [];
+  const children = named.slice(0, CARD_CHILDREN);
+
+  /**
+   * **The card needs something to say, and a word count is not something to
+   * say.** An earlier draft carried the row's length and a "you are here"; both
+   * are already on screen — the mark is `aria-current` plus a highlight — so a
+   * card holding only those is a panel that opens to tell the reader what they
+   * are looking at. One of gist, navLabel or children, or no card.
+   */
+  if (gist === undefined && navLabel === undefined && children.length === 0) return null;
+
+  return {
+    ...(gist !== undefined && { gist }),
+    ...(navLabel !== undefined && { navLabel }),
+    children,
+    more: named.length - children.length,
+  };
+}
+
+type RowPair = { row: StructureRow; entry: SummaryNode };
+
+/** Attach cards once both columns and the paragraph rung are settled. */
+function attachCards({
+  aPairs,
+  bPairs,
+  currentPart,
+  currentSection,
+  allowParagraphs,
+  paragraphsShown,
+}: {
+  aPairs: RowPair[];
+  bPairs: RowPair[];
+  currentPart: SummaryNode | null;
+  currentSection: SummaryNode | null;
+  allowParagraphs: boolean;
+  paragraphsShown: boolean;
+}) {
+  for (const { row, entry } of aPairs) {
+    row.card = cardFor(entry, row, entry !== currentPart, allowParagraphs);
+  }
+  for (const { row, entry } of bPairs) {
+    row.card = cardFor(
+      entry,
+      row,
+      allowParagraphs && !(entry === currentSection && paragraphsShown),
+      allowParagraphs,
+    );
+  }
 }
 
 /**
@@ -342,6 +534,15 @@ export function structureProjection({
     currentPart?.children.find((s) => contains(s, focusRow)) ?? null;
 
   /* ---- column A: every part ---- */
+  /**
+   * Rows and the nodes they came from, kept side by side for `attachCards`.
+   *
+   * The card cannot be built in `makeRow`: whether a part's sections are already
+   * on screen is a fact about **column B**, which does not exist yet. So the
+   * rows are built first and the cards hung on them at the end, in one place
+   * that can see the whole drawing.
+   */
+  const aPairs: RowPair[] = [];
   const aRows: StructureRow[] = [];
   for (const part of parts) {
     const isCurrent = part === currentPart;
@@ -353,7 +554,10 @@ export function structureProjection({
       !supplement &&
       (rungA >= 4 || (rungA >= 2 && isCurrent) || (rungA >= 3 && isNear(parts, part, currentPart)));
     const row = makeRow(part, "part", isCurrent, focusRow, wantsGist ? part.gist : undefined);
-    if (row) aRows.push(row);
+    if (row) {
+      aRows.push(row);
+      aPairs.push({ row, entry: part });
+    }
   }
 
   /* ---- column B: the current part's sections, then its detail ----
@@ -372,12 +576,28 @@ export function structureProjection({
      So: sections are the level, and the window is over the level. Paragraphs are
      detail hung off one of its rows, and they go in whole or not at all. */
   let paragraphTotal: number | null = null;
+  /**
+   * Did the paragraph rung actually splice the current section's children in?
+   *
+   * **A precondition on ever turning rung 3 on**, and the reason is a seam
+   * between this pass and the panel's. The splice below is atomic — the whole
+   * paragraph run goes in or none of it does — but `StructurePanel` then windows
+   * the *mixed* section-and-paragraph list, and that later pass can keep only
+   * some of the paragraphs while `attachCards` has already treated them as
+   * shown and withheld the current section's card. The reader would then see a
+   * cut-off run and have nothing to hover for the rest. Rungs 4 and 5 inherit
+   * rung 3, so all three want detail-aware windowing before they are enabled.
+   * Shipped rung 2 never reaches this. GPT Sol's code review of 260916b,
+   * finding 3.
+   */
+  let paragraphsShown = false;
   /* **No current part means no column B, and that is a state rather than a
      failure**: the reader is above the first part or below the last, or the tree
      covers less than the article. Drawing the first part's sections there would
      be a guess presented as an answer. */
   const sections = currentPart && currentPart.supplement !== true ? currentPart.children : [];
   const sectionRows: StructureRow[] = [];
+  const bPairs: RowPair[] = [];
   for (const section of sections) {
     const isCurrent = section === currentSection;
     const wantsGist =
@@ -389,7 +609,10 @@ export function structureProjection({
       focusRow,
       wantsGist ? section.gist : undefined,
     );
-    if (row) sectionRows.push(row);
+    if (row) {
+      sectionRows.push(row);
+      bPairs.push({ row, entry: section });
+    }
   }
 
   const columnB = windowed(sectionRows, limitB);
@@ -406,6 +629,7 @@ export function structureProjection({
       const room = limitB === null ? Number.POSITIVE_INFINITY : limitB - columnB.rows.length;
       const fits = allowParagraphs && kids.length <= PARAGRAPH_CAP && paraRows.length <= room;
       if (fits) {
+        paragraphsShown = true;
         columnB.rows = [
           ...columnB.rows.slice(0, at + 1),
           ...paraRows,
@@ -427,6 +651,31 @@ export function structureProjection({
       }
     }
   }
+
+  /* ---- the cards, now that both columns are settled ----
+
+     **Written onto the rows rather than returned beside them.** The rows were
+     built a few lines above, have not left this function, and are what every
+     consumer already holds; threading a parallel map through `windowed` and the
+     paragraph splice would be a second structure for the panel to keep in step
+     with the first, which is the shape this file's own history warns about.
+
+     **The answers are about the *level*, never about how much of it survived a
+     window**, and that distinction is GPT Sol's (plan review, finding 1). The
+     panel windows column B again after this runs, so a card built from
+     `columnB.rows.length` would be reasoning about a list that is about to
+     change. It does not need to: column B is *about* the current part whether it
+     has room for two of its sections or twelve, and the counters say how many it
+     left off. A card offering a five-item preview beside a windowed column would
+     be contradicting it rather than completing it. */
+  attachCards({
+    aPairs,
+    bPairs,
+    currentPart,
+    currentSection,
+    allowParagraphs,
+    paragraphsShown,
+  });
 
   return {
     columnA: windowed(aRows, limitA),

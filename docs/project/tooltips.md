@@ -73,6 +73,7 @@ Sources, read 2026-08-25: [Floating UI docs](https://floating-ui.com/docs/react)
 | [`src/web/Tooltip.tsx`](../../src/web/Tooltip.tsx) | the wrapper: `<Tooltip content={…}>{trigger}</Tooltip>`, plus `TooltipGroup` and `TipNote` — the latter being the panel's text where the panel is only a sentence, which is most of them outside the reading view |
 | [`src/web/Spine.tsx`](../../src/web/Spine.tsx) | `BandCard` — what a spine band actually says |
 | [`src/web/ProseHoverCard.tsx`](../../src/web/ProseHoverCard.tsx) | the other one — see below |
+| [`src/web/StructurePanel.tsx`](../../src/web/StructurePanel.tsx) | `RowCard` — what a row of Structure's two columns says on hover, and the only card here whose *contents* are decided by a projection rather than written beside the JSX. See [§ Structure's card](#structures-card-which-is-defined-by-subtraction) |
 | [`src/web/Dock.tsx`](../../src/web/Dock.tsx) | the bottom bar — the mode buttons, twice over, and the experimental switch. See [§ The bar](#the-bar-and-the-two-shapes-of-the-same-modes) |
 | [`src/mode-catalog.ts`](../../src/mode-catalog.ts) | the words in those fourteen cards, both paragraphs of each — the bar holds none of its own copy |
 | [`src/web/Library.tsx`](../../src/web/Library.tsx) | the homepage masthead's links — Profile, plus Admin for the administrator — and the one place a tooltip's trigger is not a host element |
@@ -343,6 +344,58 @@ it is never a fallback for a missing gist in the reading view.
 Listing the sub-sections is why [`reader/Reader.tsx`](../../src/web/reader/Reader.tsx) builds the
 outline three levels
 deep rather than two. The rail itself still only ever draws L1 and L2.
+
+### Structure's card, which is defined by subtraction
+
+*Added 2026-09-16, on Greg's report: "Add rich tooltips to Structure mode (so I can see summary of
+that bit of the text)."*
+
+[Structure mode](granularity-zoom.md) has two faces, and only the narrow one had a card: the list
+face is `OutlinePanel`, which has carried a number/title/gist card since it was a mode of its own,
+while the two-column face had none. So the card below is the columns face's
+([260916b](../plans/260916b-rich-tooltips-on-structure-mode-rows.md)).
+
+It is the same four shapes as the spine's — a title, a sentence, a list of what is inside, a count —
+drawn with the same `.tip-*` classes. **What is different is that its contents are computed rather
+than written**, and that is the whole of the idea worth carrying elsewhere.
+
+Every other card in this file says the same words every time it opens. Structure's cannot, because
+the panel it hangs off is already showing a great deal: the ladder prints a gist on the current row
+from rung 2 up, and **column B literally is the current part's list of sections**. A card repeating
+either would be the restatement failure [above](#controltip-which-is-what-most-of-them-are-now) —
+*a hover that costs a reader a second to discover they knew it already is worse than no card* —
+arriving not through careless copy but through a card and a panel drawing the same fact.
+
+So the card is **defined as the difference**: `structure.ts` § `attachCards` builds it after both
+columns are settled, and
+
+- the **gist** is carried only where the row is not printing one;
+- the **children** are listed only where they are not already drawn — which means for every part
+  *except* the one the reader is in, and for the current section only when its paragraphs did not
+  fit. A section's child layer is also withheld when paragraph labels are not allowed. The same
+  gate covers a shallow branch that ends directly under a part: its title remains ordinary
+  structure, but its leaf `navLabel` must not leak through that part's card while the paragraph
+  layer is withheld;
+- **the apparatus never gets one at all.** The endnotes are in the structure and outside the
+  argument, and three places already keep them there — unnumbered, never descended into, never asked
+  for a gist. A card would be the fourth and the one that broke it, because the only thing it could
+  carry is a `navLabel` standing in for the gist the apparatus is deliberately not given;
+- there is **no card at all** when that leaves nothing, which is the ordinary case on a paragraph
+  row. That is right rather than merely tidy: paragraph rows only exist when the prose is beside the
+  band, so the paragraph itself is on screen a few centimetres away.
+
+Two smaller departures from `BandCard`, both deliberate. **No crumb** — the rail is proportional and
+cannot say what contains what, so its card must, whereas Structure's two columns *are* that
+statement. **No footer** — the spine's words-and-position line answers "how big, and where am I" for
+a two-pixel band; here the mark is a highlight the reader can see, and a word count alone never
+earns a panel.
+
+**Hover and focus only.** The rows are real `<button>`s, so a keyboard gets the card that a mouse
+does; a finger does not, and that is the same call `OutlinePanel` made and for the same reason
+(§ [the postmortem](../postmortems/260828g-spine-hover-cards.md)). Reveal-then-commit needs a
+*controlled* tooltip, which is the shape that took the rail's cards away for a day, and it buys far
+less here: a spine band is two pixels tall and tapping one blind is a coin flip, while a Structure
+row is a legible line of text.
 
 ## Five things that are load-bearing
 
