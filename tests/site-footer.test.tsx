@@ -3,12 +3,14 @@
  * **The footer row, and the things about it that are decisions rather than
  * markup.**
  *
- * The row itself is a wordmark, an optional sentence, a colophon and six links
- * minus whichever one is this page, and a test that only counted them would be a
- * test of JSX. (It said "five links and an address" until 2026-09-08 — the
- * address left on 2026-09-06 and this sentence did not notice, which is the
- * argument for the inventory being a `describe` rather than a paragraph.) What
- * is worth pinning is:
+ * The row itself is a wordmark, an optional sentence, a colophon and the links
+ * in `LINKS` minus whichever one is this page, and a test that only counted them
+ * would be a test of JSX. (It said "five links and an address" until 2026-09-08
+ * — the address left on 2026-09-06 and this sentence did not notice — and then
+ * "six links" until 2026-09-16, when the shelf made seven. Twice wrong for the
+ * same reason is the argument for naming the array rather than counting it, and
+ * for the inventory being a `describe` rather than a paragraph.) What is worth
+ * pinning is:
  *
  *  - **It drops the link for the page it is on.** That is the whole reason the
  *    component reads `useRoute()` instead of taking a prop everywhere, and the
@@ -34,6 +36,7 @@ import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import { type AstNode, parseSource, walkAst } from "./helpers/ts-ast.js";
+import { PUBLIC_SHELF_LABEL } from "../src/messages.js";
 import { SiteFooter } from "../src/web/SiteFooter.js";
 
 /* React only treats `act()` as authoritative when this is set, and without it
@@ -73,7 +76,17 @@ afterEach(() => {
  */
 function footerAt(
   pathname: string,
-  here?: "library" | "features" | "privacy" | "contact" | "changelog" | "opensource",
+  here?:
+    | "library"
+    | "features"
+    | "privacy"
+    | "pricing"
+    | "contact"
+    | "changelog"
+    | "opensource"
+    /* Admitted because `FooterPage` admits it, not because anything passes it:
+       no page draws this row at `/read/public`. SiteFooter.tsx § `LINKS`. */
+    | "public-library",
 ): string[] {
   history.replaceState(null, "", pathname);
   act(() => root.render(<SiteFooter {...(here ? { here } : {})} />));
@@ -90,8 +103,18 @@ const CONTACT = "Contact → /contact";
 const CHANGELOG = "What’s new → /changelog";
 /* The one entry with a mark before its label (SiteFooter.tsx § `icon`). The
    mark is `aria-hidden` inline SVG, so `textContent` reads the label alone and
-   this constant has the same shape as the five above it. */
+   this constant has the same shape as the plain-text tokens above it. */
 const OPENSOURCE = "Open source → /opensource";
+/* **Built from the constant, not typed out.** Every other token here is a
+   literal, and deliberately so: a test that reads its expectation out of the
+   same constant the code renders cannot see the two disagree. This one is the
+   exception because what is being pinned is the opposite property — that the
+   footer, the command bar and the page's own `<h1>` are **one** string
+   (src/messages.ts § `PUBLIC_SHELF_LABEL`). Spelling "Shared articles" here as
+   well would be a fourth home for it, which is the thing the constant exists to
+   prevent. The destination beside it is still a literal, so the half of this
+   token that could silently follow a bad edit does not. */
+const SHELF = `${PUBLIC_SHELF_LABEL} → /read/public`;
 
 describe("the site footer", () => {
   it("carries the whole row on a page that is not one of its own", () => {
@@ -100,6 +123,7 @@ describe("the site footer", () => {
     expect(footerAt("/profile")).toEqual([
       HOME,
       FEATURES,
+      SHELF,
       PRICING,
       PRIVACY,
       CONTACT,
@@ -109,27 +133,93 @@ describe("the site footer", () => {
   });
 
   it("drops Home on the shelf, which is also the landing page", () => {
-    expect(footerAt("/")).toEqual([FEATURES, PRICING, PRIVACY, CONTACT, CHANGELOG, OPENSOURCE]);
+    expect(footerAt("/")).toEqual([
+      FEATURES,
+      SHELF,
+      PRICING,
+      PRIVACY,
+      CONTACT,
+      CHANGELOG,
+      OPENSOURCE,
+    ]);
   });
 
   it("drops Features on the features page", () => {
-    expect(footerAt("/features")).toEqual([HOME, PRICING, PRIVACY, CONTACT, CHANGELOG, OPENSOURCE]);
+    expect(footerAt("/features")).toEqual([
+      HOME,
+      SHELF,
+      PRICING,
+      PRIVACY,
+      CONTACT,
+      CHANGELOG,
+      OPENSOURCE,
+    ]);
+  });
+
+  /* **The one self-drop case this suite never had**, added 2026-09-16 with the
+     shelf link. Every other entry in `LINKS` had an assertion that it drops
+     itself and `Pricing` did not, so the row could have linked `/pricing` from
+     `/pricing` and nothing here would have said so — the exact failure the
+     filter exists to prevent, surviving in the one place nobody had looked.
+     GPT Sol found it while reviewing the plan for the shelf link, F3. */
+  it("drops Pricing on the pricing page", () => {
+    expect(footerAt("/pricing")).toEqual([
+      HOME,
+      FEATURES,
+      SHELF,
+      PRIVACY,
+      CONTACT,
+      CHANGELOG,
+      OPENSOURCE,
+    ]);
   });
 
   it("drops Privacy on the privacy page", () => {
-    expect(footerAt("/privacy")).toEqual([HOME, FEATURES, PRICING, CONTACT, CHANGELOG, OPENSOURCE]);
+    expect(footerAt("/privacy")).toEqual([
+      HOME,
+      FEATURES,
+      SHELF,
+      PRICING,
+      CONTACT,
+      CHANGELOG,
+      OPENSOURCE,
+    ]);
   });
 
   it("drops Contact on the contact page", () => {
-    expect(footerAt("/contact")).toEqual([HOME, FEATURES, PRICING, PRIVACY, CHANGELOG, OPENSOURCE]);
+    expect(footerAt("/contact")).toEqual([
+      HOME,
+      FEATURES,
+      SHELF,
+      PRICING,
+      PRIVACY,
+      CHANGELOG,
+      OPENSOURCE,
+    ]);
   });
 
   it("drops What's new on the changelog page", () => {
-    expect(footerAt("/changelog")).toEqual([HOME, FEATURES, PRICING, PRIVACY, CONTACT, OPENSOURCE]);
+    expect(footerAt("/changelog")).toEqual([
+      HOME,
+      FEATURES,
+      SHELF,
+      PRICING,
+      PRIVACY,
+      CONTACT,
+      OPENSOURCE,
+    ]);
   });
 
   it("drops Open source on the open-source page", () => {
-    expect(footerAt("/opensource")).toEqual([HOME, FEATURES, PRICING, PRIVACY, CONTACT, CHANGELOG]);
+    expect(footerAt("/opensource")).toEqual([
+      HOME,
+      FEATURES,
+      SHELF,
+      PRICING,
+      PRIVACY,
+      CONTACT,
+      CHANGELOG,
+    ]);
   });
 
   it("carries no email address anywhere in the row", () => {
@@ -166,6 +256,7 @@ describe("the site footer", () => {
   it("believes the page over the address when the caller says which it is", () => {
     expect(footerAt("/profile", "library")).toEqual([
       FEATURES,
+      SHELF,
       PRICING,
       PRIVACY,
       CONTACT,

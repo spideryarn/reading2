@@ -154,7 +154,16 @@ goes into the Overseer's queue ([overseer-queue.md](overseer-queue.md);
 judgment, but the order of the bands is not: an admin's bug report sits above a reader's bug report,
 which sits above an admin's suggestion, which sits above a reader's suggestion; within a band, what
 it costs the reader who hit it. Two reports that are one bug are one entry; one report that asks for
-three things may be three. This doc is Greg's standing authorisation for that work, so the sweep
+three things may be three.
+
+**A report split into several entries stays `unresolved` until every one of them has ended.** The
+halves finish at different times and each writes its own note, so a note naming an ending settles
+*that entry*, not the report — and the sweep's status write (below) reads notes, which is exactly
+where the two can be confused. Report 41, 2026-09-16: the "back to where you were" half was built
+and its note said *shipped* while the reading-heat half had not yet started its session. Resolving
+on the first note would have taken the report out of the queue with half of it unbuilt.
+
+This doc is Greg's standing authorisation for that work, so the sweep
 runs `authorize --by greg` on each entry with this doc as the source — the four endings in § Who
 sent it still belong to the agent, and "write it up and wait" is still the ending a reader's
 suggestion usually gets. `done` when the report reaches one of its three endings. **The Sentry

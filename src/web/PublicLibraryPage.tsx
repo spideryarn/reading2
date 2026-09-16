@@ -53,8 +53,24 @@
  * about the reading *view* rather than the path, gave the row to
  * `PublicChrome`'s two dead ends on that reasoning, and had it called
  * rationalising by a cross-family review. This page sits at a `/read/` address,
- * so it is out on the same terms — and nothing is lost, because the bar above
- * already carries every link the row would.
+ * so it is out on the same terms.
+ *
+ * **This paragraph used to end *"nothing is lost, because the bar above already
+ * carries every link the row would"*, and that was never true.** `SiteNav`
+ * offers Home, Features, Pricing, Privacy and a sign-in; the footer row carries
+ * Contact, What's new and Open source as well, and since 2026-09-16 a link to
+ * this page. So the honest version is the narrower one: for a stranger, the bar
+ * is a way back into the site. The three footer links they do not get are
+ * reachable in one press from anywhere the bar goes. GPT
+ * Sol found the claim while reviewing
+ * docs/plans/260916a-add-a-link-to-the-public-shelf-in-the-site-footer.md, which
+ * is the ordinary way a sentence like this is caught: somebody had to come back
+ * and read it because they were changing the thing it talks about.
+ *
+ * **And the new footer link would not appear here even if this page had a row**,
+ * which is the second half of the same correction: the row drops the link for
+ * the page it is on (`SiteFooter.tsx` § `LINKS`), and that page would be this
+ * one.
  *
  * ## 3. An empty shelf is a page
  *
@@ -72,7 +88,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import {
   PUBLIC_SHELF_EMPTY,
   PUBLIC_SHELF_FAILED,
-  PUBLIC_SHELF_HEADING,
+  PUBLIC_SHELF_LABEL,
   PUBLIC_SHELF_LEDE,
   PUBLIC_SHELF_RETRY,
   PUBLIC_SHELF_SLOW,
@@ -135,7 +151,7 @@ export function PublicLibraryPage({
       <header className="tw:relative tw:overflow-hidden tw:pt-16 tw:pb-2">
         <div className="site-glow" />
         <div className={`${SHELL} tw:relative`}>
-          <h1 className="site-display tw:max-w-[16ch]">{PUBLIC_SHELF_HEADING}</h1>
+          <h1 className="site-display tw:max-w-[16ch]">{PUBLIC_SHELF_LABEL}</h1>
           <p className="site-lede tw:mt-6">{PUBLIC_SHELF_LEDE}</p>
 
           {/* **Whose these articles are, and what to do if one is yours** —

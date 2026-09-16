@@ -93,6 +93,7 @@
  * they are on the elements even while they carry no rules.
  */
 import { useCallback, useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { PUBLIC_SHELF_LABEL } from "../messages.js";
 import { modeGenerates } from "./activation.js";
 import { useFeedbackOpen } from "./FeedbackButton.js";
 import {
@@ -323,16 +324,31 @@ const APP_PAGES: readonly Extract<Command, { kind: "page" }>[] = [
   {
     kind: "page",
     href: PUBLIC_LIBRARY_HREF,
-    /* Named for what it is rather than for its address: `/read/public` is a
-       shelf of other people's articles, and *Public shelf* is what
-       docs/project/public-shelf.md calls it. */
-    label: "Public shelf",
+    /* **`PUBLIC_SHELF_LABEL`, the same string the page's `<h1>` and the footer
+       row draw**, since 2026-09-16 — src/messages.ts.
+
+       It was the literal *"Public shelf"* until then, "named for what it is
+       rather than for its address", taken from what docs/project/public-shelf.md
+       calls the page. Both halves of that reasoning were wrong in the same way:
+       public-shelf.md is the **internal** name — the mistake `CHANGELOG_LABEL`
+       exists to record, where *Changelog* is what we call the process that
+       writes the page and not a word a reader has ever heard — and "shelf"
+       means the reader's *own* library everywhere else here, including the
+       `shelf` alias on the Library row above. It became visible the day the
+       footer linked this page too, because then one page had two navigation
+       names.
+
+       Nothing is lost: *public shelf* is an alias below, and an alias is what
+       this bar matches on. */
+    label: PUBLIC_SHELF_LABEL,
     /* *Anybody*, not *other readers*: public-shelf.md § It is not the owner's
        shelf narrowed — the page lists every article anybody has shared, the
        reader's own included, and describing it as other people's would be the
        one distinction that page exists to make, got backwards. */
     description: "Every article anybody has shared, yours included.",
-    aliases: ["public", "public library", "shared", "browse"],
+    /* *public shelf* joined these on 2026-09-16, when it stopped being the
+       label — somebody who knew the old name must still find the row by it. */
+    aliases: ["public", "public library", "public shelf", "shared", "browse"],
     generates: false,
   },
   {

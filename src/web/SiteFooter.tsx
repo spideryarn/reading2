@@ -118,6 +118,7 @@ import type { ReactNode } from "react";
 import { GitHubMark } from "./GitHubMark.js";
 import { Link } from "./Link.js";
 import { Wordmark } from "./SiteBits.js";
+import { PUBLIC_SHELF_LABEL } from "../messages.js";
 import {
   CHANGELOG_HREF,
   CHANGELOG_LABEL,
@@ -127,6 +128,7 @@ import {
   OPENSOURCE_HREF,
   PRICING_HREF,
   PRIVACY_HREF,
+  PUBLIC_LIBRARY_HREF,
   useRoute,
   type Route,
 } from "./router.js";
@@ -151,7 +153,25 @@ import {
  */
 type FooterPage = Extract<
   Route["kind"],
-  "library" | "features" | "privacy" | "pricing" | "contact" | "changelog" | "opensource"
+  | "library"
+  | "features"
+  | "privacy"
+  | "pricing"
+  | "contact"
+  | "changelog"
+  | "opensource"
+  /* **The one member whose drop does not fire in today's page tree**, and it is
+     here because this
+     type is *the link kinds `LINKS` carries* rather than *the pages that can
+     drop something*. `/read/public` is in the row since 2026-09-16 and draws no
+     footer of its own to drop it from — App.tsx answers that route with
+     `PublicLibraryPage` signed out and signed in alike, and that page mounts no
+     row (PublicLibraryPage.tsx). Leaving it out would mean giving `LINKS` a
+     second kind of entry, one whose `here` is optional, to save a member; and
+     the day Greg revisits the `/read/*` exclusion the drop is already written.
+     See `LINKS` below for the precise claim, which is *not* "never under
+     `/read/`". */
+  | "public-library"
 >;
 
 /**
@@ -169,8 +189,8 @@ const LINKS: readonly {
    * A mark drawn before the label, and exactly one entry has one.
    *
    * Greg asked for the open-source link *"using GitHub logo to indicate"*, and
-   * the mark is doing work the word cannot: in a row of six identical grey
-   * words, it is the only thing that says *this one leaves the site and goes
+   * the mark is doing work the word cannot: in a row of otherwise identical
+   * grey words, it is the only thing that says *this one leaves the site and goes
    * somewhere you already know how to read*. `aria-hidden` inside `GitHubMark`,
    * because the label beside it is the accessible name and an icon read aloud
    * as well is noise.
@@ -179,6 +199,33 @@ const LINKS: readonly {
 }[] = [
   { href: LIBRARY_HREF, label: "Home", here: "library" },
   { href: FEATURES_HREF, label: "Features", here: "features" },
+  /* Added 2026-09-16, and — like every entry below that carries the same note —
+     this array is the whole edit, which is the claim this file's header makes.
+     Greg, through the Feedback button, 2026-09-12: *"Add a link in all the footers to the publicly
+     readable shelf alongside, you know, feedback and pricing etc"*.
+     docs/plans/260916a-add-a-link-to-the-public-shelf-in-the-site-footer.md.
+
+     **After Features rather than at the end of the row.** The row runs product,
+     then commerce, then policy, then meta; this is a product destination — the
+     page that shows a stranger what the thing does, with real articles — and
+     appending it past the GitHub mark would bury the most persuasive link in the
+     row behind two written for people who already know what Spideryarn is.
+
+     **The label is `PUBLIC_SHELF_LABEL` and not a string**, so the footer, the
+     command bar and the page's own `<h1>` cannot come apart. It says *Shared
+     articles* rather than *Public shelf*, which was the command bar's word for
+     it: that one came out of docs/project/public-shelf.md, which is the
+     **internal** name for this page, and "shelf" means the reader's *own*
+     library everywhere else in the product. src/messages.ts § `PUBLIC_SHELF_LABEL`.
+
+     **`here` is inert for this one entry, and that is not the `/read/*`
+     exclusion being breached.** The precise claim is that no page draws this row
+     while `useRoute()` returns `public-library` — *not* that the row is never
+     drawn under `/read/`, which is false: signed out at an unshared
+     `/read/<slug>` the reader gets `LandingPage`, which carries it (see the
+     header). GPT Sol, reviewing the plan for this entry, caught the looser
+     wording before it became a comment. */
+  { href: PUBLIC_LIBRARY_HREF, label: PUBLIC_SHELF_LABEL, here: "public-library" },
   /* Added 2026-09-03 with `/pricing`, and this array is the whole edit — which
      is the claim the header makes, now tested by something other than itself. */
   { href: PRICING_HREF, label: "Pricing", here: "pricing" },
@@ -343,8 +390,26 @@ export function SiteFooter({
           § "a row of things whose widths you do not control must be allowed to
           wrap". On a narrow window the links drop under the left column, and
           inside `/login`'s 336px column they do so at any window width.
-          Measured clean — `scrollWidth - clientWidth === 0`, that doc's own
-          check — on all seven pages at 1440, 390 and 320. */}
+
+          **Measured clean on 2026-09-16, when the shelf link made the row
+          longer** — `scrollWidth - clientWidth === 0`, that doc's own check,
+          taken on the page, on this `<footer>` and on the nav below, at 1440,
+          390 and 320. Thirty-three cells, every one zero: nine signed-out
+          route states (`/`, `/features`, `/pricing`, `/privacy`,
+          `/contact`, `/changelog`, `/opensource`, `/login`,
+          `/features/public-readable-sharing`) and two signed-in route states
+          (`/` — the reader's shelf — and `/profile`). The row wraps rather than
+          scrolling: three lines at 320, two at 390, and two even at 1440 inside
+          `/login`'s column.
+
+          **The sentence this replaced said "all seven pages", and it was wrong
+          in both halves** — wrong about the count, which the mount inventory in
+          tests/site-footer.test.tsx had already outgrown, and silent about
+          whether it meant signed in or out, which is the distinction that
+          decides how many links are in the row at all (a page drops its own).
+          So this one names the addresses instead of counting them, for the same
+          reason the header above stopped counting the pages. GPT Sol, reviewing
+          docs/plans/260916a-add-a-link-to-the-public-shelf-in-the-site-footer.md. */}
       <div className="tw:flex tw:flex-wrap tw:items-start tw:justify-between tw:gap-x-10 tw:gap-y-6">
         <div className="tw:flex tw:max-w-[46ch] tw:flex-col tw:gap-2">
           {/* Plain text, deliberately: see SiteBits.tsx § `Wordmark`. A link to
