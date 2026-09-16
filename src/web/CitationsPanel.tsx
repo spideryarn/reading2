@@ -43,6 +43,7 @@ import { JobProgress } from "./JobProgress.js";
 import { ModeSurface } from "./ModeSurface.js";
 import { useRenderCount } from "./perf.js";
 import { applyThreshold, hiddenNote, type ThresholdResult } from "./threshold.js";
+import { ControlTip, Tooltip } from "./Tooltip.js";
 
 /* ------------------------------------------------------------- the scores -- */
 
@@ -581,21 +582,65 @@ function WorkRow({
             search Scholar ↗
           </a>
         )}
-        {/* Stage 3, on a searched row only. Disabled while any row's find
+        {/* Stage 3, on a searched row only. Held closed while any row's find
             runs, not just this one — each is a paid search, and a list that
             fires five because five were clicked spends money on a mis-click
             (GlossaryPanel.tsx § Check the web makes the same call). */}
         {source.kind === "search" && (
-          <button
-            type="button"
-            className="gloss-btn cite-find"
-            disabled={finding !== null}
-            title="Searches the web for this work, and keeps a page only if a search result is plainly its own. A few seconds; kept afterwards."
-            onClick={() => void onFind(work.id)}
+          <Tooltip
+            placement="bottom"
+            keepSide
+            className="tip-soon"
+            content={
+              <ControlTip
+                head="Find it on the web"
+                /* **What the button does not promise is the half 3K asked for**,
+                   and each clause below is bounded by what the code actually
+                   checks rather than by what the sentence wants to say:
+
+                   — not "one web search" and not "one model call". Nothing
+                     bounds how many searches the provider runs inside the call
+                     (docs/project/citations.md § It is one call, not one
+                     search), and a reader should not meet "model call" at all.
+                     Both are pinned in tests/citations-panel.test.tsx.
+                   — not "its own page". `namesTitle` / `pageNamesTitle` accept a
+                     result whose title *or excerpt* carries the work's title, so
+                     a review or a discussion of the paper can pass. "clearly
+                     matches the title" is what is actually tested for.
+                   — not a fixed price, because the attached search is variable
+                     work. */
+                what="Searches the web for this work, and replaces the Scholar search on this row with a real link when a result clearly matches the title."
+                how="It costs money: a paid web provider, and a few seconds. A press that finds nothing stores nothing, so pressing again just spends again — and the row keeps its Scholar fallback either way. Only rows the article gave no link for offer it."
+              />
+            }
           >
-            <Search size={11} aria-hidden="true" />
-            {finding === work.id ? "Looking…" : "Find it"}
-          </button>
+            {/* **`aria-disabled`, not `disabled`.** A `disabled` button emits no
+                pointer or focus events, so Floating UI never hears about it and
+                the card saying what this press costs is unreadable in exactly
+                the state a reader wants it — standing in front of a dead button
+                wondering what is missing. CriteriaPanel.tsx § Run this criterion
+                made the same call for the same reason.
+
+                **`aria-disabled` does not stop an activation**, so the inertness
+                moved into the handler rather than being lost: `onFind` is not
+                called while another row's find is out. That catches the click,
+                the Enter and the Space alike, because all three arrive here as
+                one. The hook has its own `findLive` guard underneath
+                (useCitations.ts § find), so this is the second of two rather
+                than the only one. */}
+            <button
+              type="button"
+              className="gloss-btn cite-find"
+              aria-disabled={finding !== null}
+              onClick={() => {
+                if (finding !== null) return;
+                void onFind(work.id);
+              }}
+            >
+              <Search size={11} aria-hidden="true" />
+              {finding === work.id ? "Looking…" : "Find it"}
+            </button>
+          </Tooltip>
         )}
         <span className="cite-first">
           {work.citedInBody ? "first cited" : "only in the references"}{" "}

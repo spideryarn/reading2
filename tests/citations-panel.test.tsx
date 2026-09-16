@@ -196,6 +196,122 @@ function row(id: string): HTMLElement {
   return el;
 }
 
+/* ------------------------------------------------- the Find it hover card --
+   Borrowed from tests/referee-tooltips.test.tsx, which borrowed `cardFor` from
+   tests/diagram-panel-hover.test.tsx. Kept small here: this file owns one
+   control's card, not thirty. */
+
+interface Card {
+  head: string;
+  body: string;
+  what: string;
+  how: string;
+}
+
+/** The *Find it* button on one row — a real element, so a miss is a thrown error. */
+function findButton(id: string): HTMLButtonElement {
+  const el = row(id).querySelector<HTMLButtonElement>(".cite-find");
+  if (!el) throw new Error(`no Find it button on row ${id}`);
+  return el;
+}
+
+/**
+ * **Open the card and read it**, then shut it again.
+ *
+ * Three things here are load-bearing and every one of them was found the hard
+ * way next door rather than reasoned out — see the long version in
+ * tests/referee-tooltips.test.tsx:
+ *
+ *  - **the card is portalled to the end of `<body>`**, not into `host`, so it is
+ *    looked for in the document; **exactly one** must be open, or a neighbour's
+ *    card left up would be read as this control's;
+ *  - **opening and closing do not take the same event.** A native `mouseleave`
+ *    on the trigger leaves the card up; what closes it is React's synthetic
+ *    `onMouseLeave`, synthesised from a *bubbling* `mouseout`. Both are sent, so
+ *    this does not depend on which route closes it;
+ *  - **two waits to close, not one long one**, because closing is two timers in
+ *    series with a React render between them, and inside a single `act` the
+ *    queued state update is not applied until the block exits.
+ */
+async function cardFor(el: Element): Promise<Card> {
+  el.dispatchEvent(new MouseEvent("mouseenter"));
+  await act(async () => {
+    await new Promise((r) => setTimeout(r, 400));
+  });
+  const cards = document.querySelectorAll('[role="tooltip"]');
+  expect(cards, "hovering this control opened no card, or more than one").toHaveLength(1);
+  const card = cards[0];
+  const head = card?.querySelector(".tip-soon-head")?.textContent ?? "";
+  const body = (card?.textContent ?? "").slice(head.length);
+  /* The two paragraphs separately, not one blob: `ControlTip`'s rule is about
+     the relationship between them, and a check that reads them concatenated
+     cannot see the failure the rule exists to prevent. */
+  const paras = [...(card?.querySelectorAll("p") ?? [])].map((n) =>
+    (n.textContent ?? "").replace(/\s+/g, " ").trim(),
+  );
+  el.dispatchEvent(new MouseEvent("mouseleave"));
+  el.dispatchEvent(new MouseEvent("mouseout", { bubbles: true, relatedTarget: document.body }));
+  for (const _ of [0, 1]) {
+    await act(async () => {
+      await new Promise((r) => setTimeout(r, 300));
+    });
+  }
+  expect(
+    document.querySelectorAll('[role="tooltip"]'),
+    "the card did not close, so the next one read here would be this one",
+  ).toHaveLength(0);
+  return { head, body, what: paras[0] ?? "", how: paras[1] ?? "" };
+}
+
+/* The stoplist and the two thresholds are tests/referee-tooltips.test.tsx's,
+   where both are calibrated against real cards this house has deleted. Copied
+   rather than exported, deliberately: that file's version carries a long
+   measurement table explaining why the floor is 3 and the ratio 0.4, and the
+   day somebody re-tunes it there they should not silently re-tune this. */
+const STOPWORDS = new Set(
+  (
+    "a about after all also an and any are as at back be because been before being between both but " +
+    "by can could did do does doing down each few for from further had has have having he her here " +
+    "him his how i if in into is it its just may more most no not of off on once one only or other " +
+    "our out over same so some than that the their them then there these they this those to under " +
+    "until up was what when where which while who will with would you your yours"
+  ).split(" "),
+);
+
+function words(s: string): string[] {
+  return s
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, " ")
+    .trim()
+    .split(" ")
+    .filter((w) => w !== "" && !STOPWORDS.has(w));
+}
+
+/** Is one of these two the other one again? Catches copying, not paraphrase. */
+function restates(a: string, b: string): boolean {
+  const [wa, wb] = [words(a), words(b)];
+  const [shorter, longer] = wa.length <= wb.length ? [wa, wb] : [wb, wa];
+  const uniq = new Set(shorter);
+  if (uniq.size < 3) return false;
+  if (longer.join(" ").includes(shorter.join(" "))) return true;
+  if (longer.length === 0 || shorter.length / longer.length < 0.4) return false;
+  const inLonger = new Set(longer);
+  let shared = 0;
+  for (const w of uniq) if (inLonger.has(w)) shared++;
+  return shared / uniq.size > 0.6;
+}
+
+/** Why this card does not earn its hover, or `null` if it does. */
+function earnsItsHover(card: Card): string | null {
+  if (card.what === "") return "the card has no first paragraph";
+  if (card.how === "") return "the card has no second paragraph, which is ControlTip's whole rule";
+  if (card.body.length <= 80) return "the card is a label, not an explanation";
+  if (restates(card.how, card.what)) return "the second paragraph is the first one again";
+  if (restates(card.how, card.head)) return "the second paragraph is the label again";
+  if (restates(card.what, card.head)) return "the first paragraph is the label again";
+  return null;
+}
+
 describe("CitationsPanel", () => {
   it("links the title to the article's address, in a new tab", async () => {
     await draw(owner());
@@ -227,7 +343,16 @@ describe("CitationsPanel", () => {
   /* GPT Sol F17 (second code review): the copy promised "one web search", and
      nothing bounds how many searches the provider runs inside the one call
      (the plan's F1). So it promises no count — in plain words, because a reader
-     should not meet "model call". */
+     should not meet "model call".
+
+     **Re-pointed from `button.title` to the card on 2026-09-16**, when the
+     button grew a `ControlTip` (SPIDERYARN-READING2-3K,
+     docs/plans/260916b-…). Re-pointed rather than deleted, and that is the
+     whole of why this note is here: the assertion reads whatever surface the
+     copy is on, and a `ControlTip` leaves `title` empty — so leaving it alone
+     would have left it asserting that the empty string says the right thing,
+     which every wording passes. A copy rule that stops being checked because
+     the copy moved is worse than one that was never written. */
   it("promises no search count the provider controls, in plain words", async () => {
     const searched = work({
       id: "spya-e2f3g4",
@@ -238,11 +363,55 @@ describe("CitationsPanel", () => {
       linkFrom: "search",
     });
     await draw(owner({ citations: artefact([searched, PASSING]) }));
-    const button = row(searched.id).querySelector<HTMLButtonElement>(".cite-find");
-    for (const copy of [button?.title ?? "", MODE_CATALOG.citations.how]) {
+    const button = findButton(searched.id);
+    const card = await cardFor(button);
+    for (const copy of [`${card.head} ${card.body}`, MODE_CATALOG.citations.how]) {
       expect(copy).toMatch(/searches the web for (this|the) work/i);
       expect(copy).not.toMatch(/one web search|model call/i);
     }
+  });
+
+  /* SPIDERYARN-READING2-3K, Greg, 2026-09-12: *"In Citation mode, there's a
+     'Find it' button - make it clearer what that does (e.g. rich tooltip) and
+     the effect of running it"*.
+
+     **What the `title` could not do is the reason this is a card**, and it is
+     the reason the report exists: a `title` waits about a second, cannot be
+     styled, truncates at the OS's idea of a line, and does not exist at all on
+     a touch device — which is the device Greg filed this from
+     (docs/project/tooltips.md). So the regression this pins is the `title`
+     coming back, exactly as tests/referee-tooltips.test.tsx pins it: on a
+     laptop a `title` still shows *something*, so nothing else here would
+     notice.
+
+     The wording is deliberately not pinned — it is copy and it will be edited.
+     What is pinned is the structure `ControlTip`'s rule is about, plus the one
+     fact 3K actually asked for: that the card says what running it *changes*. */
+  it("explains itself in a card rather than a title, and says what running it changes", async () => {
+    const searched = work({
+      id: "spya-e2f3g4",
+      title: "Searched",
+      relevance: 0.9,
+      influence: 0.9,
+      url: "https://scholar.google.com/scholar?q=Searched",
+      linkFrom: "search",
+    });
+    await draw(owner({ citations: artefact([searched, PASSING]) }));
+    const button = findButton(searched.id);
+    expect(button.hasAttribute("title"), "the button fell back to a title attribute").toBe(false);
+
+    const card = await cardFor(button);
+    expect(earnsItsHover(card), "the Find it card does not earn its hover").toBeNull();
+    /* The effect of running it, which is the half the `title` left out: a press
+       that finds nothing stores nothing, so pressing again is not a way of
+       making progress. */
+    expect(card.how.toLowerCase(), "the card no longer says what a press costs").toMatch(
+      /cost|spend|pay|paid|price/,
+    );
+    expect(
+      card.how.toLowerCase(),
+      "the card no longer says that finding nothing keeps nothing",
+    ).toMatch(/nothing|no match|no-match/);
   });
 
   it("starts the bar at the default, hides what is under it, and says how many", async () => {
