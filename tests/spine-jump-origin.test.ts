@@ -29,8 +29,11 @@ import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
+const { renders } = vi.hoisted(() => ({ renders: { Spine: 0 } }));
 vi.mock("../src/web/perf.js", () => ({
-  useRenderCount: () => {},
+  useRenderCount: (label: string) => {
+    if (label === "Spine") renders.Spine += 1;
+  },
   mark: (_l: string, fn: () => unknown) => fn(),
 }));
 
@@ -122,6 +125,7 @@ class FakeResizeObserver {
 }
 
 beforeEach(() => {
+  renders.Spine = 0;
   (globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
   (globalThis as unknown as { ResizeObserver: unknown }).ResizeObserver = FakeResizeObserver;
   (globalThis as unknown as { requestAnimationFrame: unknown }).requestAnimationFrame = (
@@ -292,6 +296,24 @@ describe("the mark for where the reader jumped from", () => {
       dismissJumpOrigin();
     });
     expect(marks()).toHaveLength(0);
+  });
+
+  /**
+   * Carrying a stamp changes only its distance. The rail draws the origin and
+   * has no use for that distance, so a mode/column push must not put this
+   * 2,000-row component back on the render path. `useJumpOrigin` is the
+   * origin-only view of the store for precisely this reason.
+   */
+  it("does not re-render when only the stamp depth changes", async () => {
+    await mount();
+    jumped(at(block(7)), block(18));
+    const before = renders.Spine;
+
+    act(() => history.pushState(history.state, "", `/read/x?at=${block(18)}&mode=citations`));
+
+    expect(renders.Spine).toBe(before);
+    expect(marks()).toHaveLength(1);
+    expect(markTop()).toBe("35%");
   });
 
   /**

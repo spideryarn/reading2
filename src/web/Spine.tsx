@@ -687,8 +687,10 @@ function SpineInner({ outline, layoutKey, matches = NO_MATCHES, onJump }: Props)
    * this component is careful about: `jumpOriginSnapshot` caches the object it
    * returns, so the `?at=` replace the scroll spy makes about once a second
    * fires the store's listener and changes nothing. What re-renders the rail is
-   * a change in the *effective stamp* — typically a jump, a Back or Forward, a
-   * push that strips it, or a dismissal — which is a few times a minute at most.
+   * a change in the *effective origin* — typically a jump, a Back or Forward,
+   * leaving the article, or a dismissal — which is a few times a minute at
+   * most. A same-article push changes only the depth and does not redraw this
+   * origin-only view.
    *
    * **Only while the chip is up, and never the other way round** — the same
    * `readStamp` is behind both. Two cases draw no mark, and they are not the

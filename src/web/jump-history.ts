@@ -133,11 +133,17 @@ const MAX_PLAUSIBLE_DEPTH = 4096;
  * **Where the reader jumped from, and how many entries back that is now.**
  *
  * The depth is a claim about *the stack*, not about the page, and that is what
- * makes it safe to carry: every same-document push adds exactly one entry, so
- * `depth + 1` names the origin's distance whatever the push changed — a mode, a
- * column, a sort, or something added next year that this file has never heard
- * of. A rule that had to know what a push *meant* could be wrong about one it
- * did not recognise; this one cannot be.
+ * makes it safe to carry while the entries remain available: every successful
+ * same-document push adds exactly one entry, so `depth + 1` names the origin's
+ * distance whatever the push changed — a mode, a column, a sort, or something
+ * added next year that this file has never heard of.
+ *
+ * The History API has one platform ceiling this count cannot observe. Browsers
+ * may evict old same-document state entries at an implementation-defined
+ * limit, and expose neither the entries nor the current index. If eviction
+ * removes the origin, no local counter can discover that; router.ts records
+ * the boundary beside `stampFor` rather than pretending the arithmetic solves
+ * retention too.
  */
 export interface JumpStamp {
   readonly origin: JumpOrigin;
@@ -171,7 +177,7 @@ export function readStamp(state: unknown): JumpStamp | null {
   const mine = state[STAMP_KEY];
   if (!isPlainObject(mine)) return null;
 
-  if (mine.v === VERSION) {
+  if (Object.hasOwn(mine, "v") && mine.v === VERSION) {
     const origin = originOf(mine.origin);
     if (origin === null) return null;
     const depth = mine.depth;
@@ -182,6 +188,12 @@ export function readStamp(state: unknown): JumpStamp | null {
     if (depth < 1 || depth > MAX_PLAUSIBLE_DEPTH) return null;
     return { origin, depth };
   }
+
+  /* A version marker means this is not the legacy shape. Unknown versions
+     fail closed even if a later format happens to reuse `from`: interpreting
+     that field as a one-entry legacy stamp could make the chip land somewhere
+     its label does not name. */
+  if (Object.hasOwn(mine, "v")) return null;
 
   /* The pre-2026-09-16 shape: no `v`, the origin under `from`, and a chip that
      could only ever step one entry — so depth 1 is what it meant. */
@@ -397,9 +409,9 @@ function announce(): void {
  * one the arm was set at (§ `from` above).
  *
  * `target` is the `?at=` of the push being made, or null when it names no
- * block; either way a mismatch leaves the arm where it was rather than
- * spending it, so the real push can still find it. What clears an arm nobody
- * claims is `clearArmedJump`, and router.ts calls it on every popstate.
+ * block. Match or not, an actual push ends the arm: nuqs has one global queue,
+ * so if this is not the expected flush then that flush has been superseded or
+ * abandoned. Leaving the arm behind would withhold the chip indefinitely.
  */
 export function consumeArmedJump(
   here: string,
@@ -407,8 +419,8 @@ export function consumeArmedJump(
   target: BlockId | null,
 ): JumpOrigin | null {
   if (armed === null) return null;
-  if (armed.from !== here || armed.pathname !== pathname || armed.target !== target) return null;
-  const { origin } = armed;
+  const matches = armed.from === here && armed.pathname === pathname && armed.target === target;
+  const origin = matches ? armed.origin : null;
   armed = null;
   /* No `announce()` here on purpose: the caller is the wrapper, mid-write, and
      it fires `NAVIGATED` immediately afterwards. Announcing first would redraw
@@ -419,13 +431,13 @@ export function consumeArmedJump(
 /**
  * Forget an arm nobody claimed.
  *
- * Called at the top of every jump, and on every `popstate` (router.ts): nuqs
- * can coalesce a queued update away, an ordinary navigation makes it abandon
- * one outright, and a component can unmount between the arming and the flush,
- * so an arm that never met its push is ordinary rather than exotic. One that
- * outlived its jump would attach a stale origin to some later push — a chip
- * pointing at a place the reader left minutes ago, on an entry whose Back does
- * something else entirely.
+ * Called at the top of every jump and after every history write that did not
+ * claim the arm (router.ts): nuqs can coalesce a queued update away, an
+ * ordinary navigation makes it abandon one outright, and a component can
+ * unmount between the arming and the flush, so an arm that never met its push
+ * is ordinary rather than exotic. One that outlived its jump would withhold
+ * the chip and rail mark indefinitely, and could attach a stale origin to a
+ * later matching push.
  */
 export function clearArmedJump(): void {
   if (armed === null) return;

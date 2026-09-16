@@ -106,11 +106,19 @@ So the rule is the simpler one, chosen explicitly rather than inferred: **a push
 article carries the stamp forward at depth + 1; a push that leaves it drops the stamp.** Nothing is
 guessed about movement at all.
 
-**That is not a compromise, it is the version that is provably right.** The depth is a claim about
-*the stack*, not about the page: every same-document push adds exactly one entry, so `depth + 1` is
-the origin's distance whatever the push changed — mode, columns, sort, or something added next year
-that this file has never heard of. The old rule needed to know what a push meant; this one does not,
-which is why it cannot be wrong about a push it does not recognise.
+**That is not a compromise; it is arithmetic rather than interpretation.** The depth is a claim
+about *the stack*, not about the page: a successful same-document push adds exactly one entry, so
+`depth + 1` is the origin's distance whatever the push changed — mode, columns, sort, or something
+added next year that this file has never heard of. The old rule needed to know what a push meant;
+this one does not, which is why it cannot be wrong about a push it does not recognise.
+
+**One ceiling it cannot reach past, and the code review would not let this plan claim otherwise.**
+The count is exact only while the browser retains the origin entry. The HTML standard permits an
+implementation-defined limit on same-document state entries with eviction of the oldest, and the
+History API exposes neither the entries nor the index — so an evicted origin cannot be detected
+locally, and a press would land elsewhere. The only fix is the parallel history 260906g refused.
+This stage accepts the ceiling; the first draft of this section called the rule *provably right*,
+which overstated it. GPT Sol, reviewing the built code.
 
 A push that **leaves the article** drops it, and that is not an exception but the same statement:
 the label is a section title resolved against *this* article's sections, and `history.go(-n)` from
@@ -316,6 +324,40 @@ The other three conclusions it was asked to attack it confirmed against the sour
 strips the stamp today, a narrow band covers the prose and Plain is a push, and a width change
 restarts the spy whose immediate `measure()` overwrites `?at=`. It also confirmed that Stage 3 alone
 would not answer the missing-chip complaint.
+
+### And the second round, on the code
+
+[The findings](260916a-code-review-sol.md), GPT Sol, 2026-09-16, weighted higher than the first
+round for the reason [codex-cli-as-subagent.md](../reusable/codex-cli-as-subagent.md) gives — a
+plan-stage review cannot see a cache keyed on the wrong thing. Three fixes, one of them a bug this
+stage did not introduce:
+
+1. **`useJumpOrigin` redrew the rail for a number it does not use.** The identity cache was keyed on
+   the whole stamp, so every mode or column push handed `Spine.tsx` a new object because the *depth*
+   had changed — a 2,000-row redraw for nothing. Now an origin-only snapshot over the same store.
+2. **`readStamp` fell through to the legacy shape for a *future* version marker**, so a later
+   `{ v: 9, from: … }` could be read as a one-step return. Unknown versions now fail closed, which
+   is the direction the whole versioning exercise exists for.
+3. **An armed jump could leak, and that predates this stage.** Only `popstate` ended an arm. A bare
+   `replaceState` reaching the wrapper makes nuqs run `sync()`, which resets its queue and **throws
+   the jump's queued write away** — the mechanism `dismissJumpOrigin` wears the nuqs marker to avoid
+   (F20, 2026-09-06). The push never came, so `isJumpArmed()` went on withholding the chip *and* the
+   rail's origin mark until the next `popstate` or the next jump. Any push that does not claim the
+   arm, and any replace, now ends it.
+
+**The third was checked rather than taken.** Ending an arm on any replace is only safe if a replace
+cannot land between the arm and the jump's own flush — and the case that would do it is ordinary
+rather than exotic: the glossary writes `?term=` (a replace) and then calls `onJump` (a push) in one
+handler, and ideas and quotes do the same with their own parameters. Three tests now drive the real
+nuqs setters in both orders and a tick apart, and nuqs merges them into the single pushed flush, so
+the arm meets its own write.
+
+Writing the boundary test corrected a belief rather than confirming one: a bare replace does not
+merely cost a jump its stamp, it cancels the jump's write outright — which is *why* the arm leaked
+rather than merely going stale.
+
+The fourth finding is the one with nothing to fix: § the rule above now says what it can and cannot
+claim.
 
 ## Deliberately not in this plan
 

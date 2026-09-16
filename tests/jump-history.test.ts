@@ -45,6 +45,7 @@ import {
   armJump,
   clearArmedJump,
   consumeArmedJump,
+  isJumpArmed,
   type JumpOrigin,
   type JumpStamp,
   oneFurtherBack,
@@ -52,7 +53,7 @@ import {
   withStamp,
 } from "../src/web/jump-history.js";
 import { beginJump } from "../src/web/keynav.js";
-import { atParam } from "../src/web/params.js";
+import { atParam, termParam } from "../src/web/params.js";
 import { dismissJumpOrigin, watchHistoryWrites } from "../src/web/router.js";
 
 /* `scrollToBlock` is stubbed rather than run: jsdom has no layout, and § does
@@ -192,6 +193,10 @@ describe("the stamp on a history entry", () => {
     ],
     [{ spya: { v: 2, origin: "spya-paraaa", depth: 4097 } }, "a depth past the ceiling"],
     [{ spya: { v: 9, origin: "spya-paraaa", depth: 1 } }, "a version from the future"],
+    [
+      { spya: { v: 9, from: "spya-paraaa", origin: "spya-paraaa", depth: 1 } },
+      "a future version that happens to reuse the legacy field",
+    ],
   ])("reads %j (%s) as no stamp", (state) => {
     expect(readStamp(state)).toBeNull();
   });
@@ -307,8 +312,9 @@ describe("arming a jump", () => {
   });
 
   /**
-   * A push that is not this jump's must not be able to wear its origin — and
-   * must leave it behind, so the real push can still find it. GPT Sol F11.
+   * A push that is not this jump's must not be able to wear its origin. It also
+   * ends the arm: nuqs has one global queue, so an actual different push means
+   * the expected flush was superseded or abandoned.
    *
    * The last row is F14: nuqs abandons a queued write when the page navigates,
    * so an arm can outlive its jump. Getting back to this article afterwards
@@ -321,10 +327,10 @@ describe("arming a jump", () => {
     [HERE, "/read/x", block(9), "another block"],
     [HERE, "/read/x", null, "a push that names no block at all"],
     ["/read/x?at=spya-parabf", "/read/x", B, "a push from an address the reader has since left"],
-  ])("refuses (%s) and stays armed", (here, pathname, target) => {
+  ])("refuses (%s) and ends the arm", (here, pathname, target) => {
     arm();
     expect(consumeArmedJump(here, pathname, target)).toBeNull();
-    expect(consumeArmedJump(HERE, "/read/x", B)).toEqual(at(A));
+    expect(isJumpArmed()).toBe(false);
   });
 });
 
@@ -500,6 +506,31 @@ describe("which entries carry a stamp", () => {
   });
 
   /**
+   * A non-nuqs history write makes nuqs reset its queue. If that queue held the
+   * armed jump, the expected push will never arrive, so the wrapper that saw
+   * the write must end the arm just as `popstate` does. Leaving it armed hides
+   * the chip and rail mark on every later entry because their snapshots refuse
+   * to make a claim while a jump is supposedly still in flight.
+   */
+  it("throws an unclaimed arm away when another push abandons the jump", () => {
+    arm(at(A), B);
+    expect(isJumpArmed()).toBe(true);
+
+    push("/read/x?mode=plain");
+
+    expect(isJumpArmed()).toBe(false);
+  });
+
+  it("throws an unclaimed arm away when a replace abandons the jump", () => {
+    arm(at(A), B);
+    expect(isJumpArmed()).toBe(true);
+
+    history.replaceState(history.state, "", "/read/x?mode=plain");
+
+    expect(isJumpArmed()).toBe(false);
+  });
+
+  /**
    * **State that is not ours to merge into is forwarded, not flattened.**
    *
    * `typeof x === "object"` is true of a `Date`, a `Map` and every class
@@ -587,14 +618,23 @@ let root: Root;
 let pushAt: ((id: BlockId) => void) | null = null;
 /** The scroll spy's write: a replace, queued behind atParam's 300ms debounce. */
 let queueAt: ((id: BlockId) => void) | null = null;
+/**
+ * **A second parameter, written with a replace** — `?term=`, which is what the
+ * glossary sets as it jumps (GlossaryPanel § onSelect writes the term and then
+ * calls `onJump`). It is here because the arm has to survive it: see § a panel
+ * that writes another parameter.
+ */
+let setTerm: ((id: string | null) => void) | null = null;
 
 function Position(): ReactNode {
   const [value, set] = useQueryState("at", atParam);
+  const [, setTermId] = useQueryState("term", termParam);
   seen.push(value as BlockId | null);
   pushAt = (id) => {
     void set(id, { history: "push", limitUrlUpdates: throttle(0) });
   };
   queueAt = (id) => void set(id);
+  setTerm = (id) => void setTermId(id);
   return null;
 }
 
@@ -654,6 +694,102 @@ describe("the jump transaction", () => {
    * block 12 while the reader stands at block 15, and only a measurement knows
    * which. GPT Sol F1, 2026-09-06.
    */
+  /**
+   * **A panel that writes another parameter as it jumps must not lose the
+   * stamp**, and this is the test that stands underneath a change made on
+   * 2026-09-16: a `replaceState` reaching the wrapper now **ends** any armed
+   * jump, because nuqs has one global queue and a different flush means the
+   * expected one was superseded or abandoned (GPT Sol's third finding on the
+   * built code).
+   *
+   * That is only safe if a replace cannot land *between* the arm and the jump's
+   * own flush — and the case that would do it is ordinary rather than exotic.
+   * The glossary writes `?term=` (a replace) and then calls `onJump` (a push)
+   * in one click handler; ideas and quotes do the same with their own
+   * parameters. nuqs coalesces both into a single flush, and a batch containing
+   * a push is pushed, so the arm meets its own write.
+   *
+   * Written because the alternative was to take that on trust. If nuqs ever
+   * stops merging them, this goes red and says so, rather than the chip quietly
+   * never appearing from the glossary again.
+   */
+  it("keeps the stamp when a panel writes another parameter in the same click", async () => {
+    layOut(READING_AT_15);
+    act(() => {
+      setTerm?.("spya-tgnssb");
+      void jump(block(25));
+    });
+    await settled();
+    expect(query()).toBe(block(25));
+    expect(new URLSearchParams(location.search).get("term")).toBe("spya-tgnssb");
+    expect(readStamp(history.state)).toEqual(stamp(at(block(15)), 1));
+  });
+
+  /** And in the other order, since a handler may jump before it selects. */
+  it("keeps the stamp when the other parameter is written after the jump", async () => {
+    layOut(READING_AT_15);
+    act(() => {
+      void jump(block(25));
+      setTerm?.("spya-tgnssb");
+    });
+    await settled();
+    expect(readStamp(history.state)).toEqual(stamp(at(block(15)), 1));
+  });
+
+  /**
+   * **And on a later tick inside the same flush window**, which is what a
+   * handler that selects in a `useEffect` after the render looks like. Still
+   * one flush, because the window is nuqs's and is measured from the last
+   * flush rather than from each setter.
+   */
+  it("keeps the stamp when the other parameter is written a tick later", async () => {
+    layOut(READING_AT_15);
+    act(() => void jump(block(25)));
+    act(() => setTerm?.("spya-tgnssb"));
+    await settled();
+    expect(readStamp(history.state)).toEqual(stamp(at(block(15)), 1));
+  });
+
+  /**
+   * **The abandonment the arm-clearing rule exists for, shown happening.**
+   *
+   * A `replaceState` that reaches the wrapper without nuqs's own marker makes
+   * nuqs run `sync()`, which **resets its update queue** before it notices
+   * nothing has changed (nuqs/dist/patch-history-*.js) — the same mechanism
+   * `dismissJumpOrigin` wears the marker to avoid, recorded there as GPT Sol
+   * F20 of 2026-09-06.
+   *
+   * So a jump caught by one does not merely lose its stamp: its queued write is
+   * **thrown away entirely**. The push never comes, `?at=` never names the
+   * destination, and — before 2026-09-16 — the arm waiting for that push
+   * stayed armed. `isJumpArmed()` is what withholds the chip while a jump is in
+   * flight, so a jump that never lands used to hide the chip *and* the rail's
+   * origin mark until the next `popstate` or the next jump. GPT Sol's third
+   * finding on the built code.
+   *
+   * Hence: any push that does not claim the arm, and any replace, ends it. The
+   * three cases above are what says that rule is safe — every real panel that
+   * writes a parameter as it jumps goes through nuqs, which merges the pair
+   * into one pushed flush and never reaches this path at all.
+   */
+  it("ends an arm whose queued write a bare replace threw away", async () => {
+    layOut(READING_AT_15);
+    act(() => void jump(block(25)));
+    expect(isJumpArmed()).toBe(true);
+    /* Not through nuqs: straight at the patched wrapper, which is where any
+       non-nuqs writer arrives. */
+    act(() => history.replaceState(history.state, "", location.pathname + location.search));
+    await settled();
+
+    /* nuqs abandoned the write, so the address never moved and no entry was
+       pushed — which is the pre-existing behaviour this test is not about. */
+    expect(query()).toBeNull();
+    expect(readStamp(history.state)).toBeNull();
+    /* What this test *is* about: nothing is left waiting for a push that will
+       never come, so the next jump's chip is not withheld by this one. */
+    expect(isJumpArmed()).toBe(false);
+  });
+
   it("records where the reader is, not the stale fine block in the address", async () => {
     history.replaceState(null, "", `/read/x?at=${block(12)}`);
     layOut(READING_AT_15);

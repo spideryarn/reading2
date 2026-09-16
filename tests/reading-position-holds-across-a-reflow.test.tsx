@@ -121,6 +121,13 @@ async function settle(): Promise<void> {
   });
 }
 
+/** Let a scroll-frame measurement run without letting the 300ms URL write land. */
+async function measureFrame(): Promise<void> {
+  await act(async () => {
+    await new Promise((resolve) => setTimeout(resolve, 32));
+  });
+}
+
 const atNow = () => new URLSearchParams(location.search).get("at");
 
 beforeEach(() => {
@@ -220,6 +227,30 @@ describe("a reflow under a reader who is staying put", () => {
     /* No sticky bar in this DOM, so the destination is the row's own document
        top: 12 rows at the landscape measure. */
     expect(scrollY).toBe(12 * LANDSCAPE);
+  });
+
+  /**
+   * The spy records its answer in `synced` before nuqs's 300ms debounce puts
+   * it in the address. A rotation inside that window must hold the newer
+   * measured section, not pull the reader back to the older `?at=` and then
+   * let the restarted spy overwrite the queued answer.
+   */
+  it("keeps a position the spy measured before its URL write has landed", async () => {
+    history.replaceState(null, "", `/read/x?at=${block(12)}`);
+    render("portrait");
+    await settle();
+
+    scrollY = 24 * PORTRAIT;
+    window.dispatchEvent(new Event("scroll"));
+    await measureFrame();
+    expect(atNow(), "the position write should still be queued").toBe(block(12));
+
+    rowHeight = LANDSCAPE;
+    render("landscape");
+    expect(scrollY).toBe(24 * LANDSCAPE);
+
+    await settle();
+    expect(atNow()).toBe(block(24));
   });
 
   /**

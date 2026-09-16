@@ -438,10 +438,20 @@ where the reader is — and its write is debounced, so whether a genuine move ha
 by the time the reader pressed Plain would decide whether the chip survived. The same gesture, twice,
 with different answers 300ms apart.
 
-**The pathname rule is not a compromise but the version that is provably right.** The depth is a
-claim about the *stack*, not about the page: every same-document push adds exactly one entry, so
-`depth + 1` is the origin's distance whatever the push changed — including a parameter added years
-from now. A rule that had to know what a push *meant* could be wrong about one it did not recognise.
+**The pathname rule is about stack arithmetic rather than about what a push means.** The depth is a
+claim about the *stack*, not about the page: a successful same-document push adds exactly one entry,
+so `depth + 1` is the origin's distance whatever the push changed — including a parameter added
+years from now. A rule that had to know what a push *meant* could be wrong about one it did not
+recognise.
+
+**It is exact only while the browser keeps the origin**, and that is a ceiling rather than a bug in
+the counting. The HTML standard lets an implementation cap how many same-document state entries it
+retains and evict the oldest, and the History API exposes neither the entries nor the current index —
+so if an origin is ever evicted there is no honest local way to find out, and `history.go` would land
+somewhere else. Detecting it would need the parallel history this feature deliberately does not keep
+([260906g](../plans/260906g-back-to-where-you-jumped-from.md) § the option that cannot be taken). An
+earlier draft of this paragraph called the rule *provably right*, which was a claim about the
+arithmetic dressed up as one about the platform. GPT Sol, reviewing the built code, 2026-09-16.
 
 Two consequences worth knowing:
 

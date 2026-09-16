@@ -283,11 +283,12 @@ describe("when the chip is drawn", () => {
  * which is `?mode=`, a push. Until this stage that push threw the way back
  * away, so on a phone the chip was gone every time it was needed.
  *
- * The rule 260906g wrote — *the reader taking the stack onwards strips the
- * stamp* — is kept for a reader who has moved, and the test that separates the
- * two cases is the one the wrapper already has in hand: same path, same `?at=`.
+ * The old rule — *the reader taking the stack onwards strips the stamp* — is
+ * replaced here. The wrapper deliberately asks only whether the pathname is
+ * unchanged; `?at=` is section-granular and debounced, so it cannot prove
+ * whether the reader physically moved.
  */
-describe("a push that does not move the reader", () => {
+describe("another pushed view of the same article", () => {
   it("keeps the way back when the reader only changes mode", () => {
     jumped(at(block(15)), block(25));
     act(() =>
