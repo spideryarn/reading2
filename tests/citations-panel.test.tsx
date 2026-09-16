@@ -412,6 +412,24 @@ describe("CitationsPanel", () => {
       card.how.toLowerCase(),
       "the card no longer says that finding nothing keeps nothing",
     ).toMatch(/nothing|no match|no-match/);
+    /* **The false claim that shipped, guarded as a claim rather than as a
+       phrase.** The first version of this copy said the row "keeps its Scholar
+       fallback either way", which is wrong on the half that matters: a
+       successful find REPLACES the Scholar search, which is the whole point of
+       pressing the button. GPT Sol caught it.
+
+       Only the negative is asserted. The fix that followed the catch pinned the
+       positive too, with `/otherwise.*scholar/` — and that matched on the one
+       word that had made the sentence ambiguous in the first place, so the test
+       would have held the confusion in place and failed on the clearer rewrite.
+       A copy test that pins a conjunction is pinning the wording, which is what
+       the header of tests/referee-tooltips.test.tsx says not to do; what is
+       checkable here is that the card does not promise the fallback survives
+       regardless. */
+    expect(
+      card.how.toLowerCase(),
+      "the card is back to promising the Scholar search survives a successful find",
+    ).not.toMatch(/either way|regardless|whichever|in both cases/);
   });
 
   it("starts the bar at the default, hides what is under it, and says how many", async () => {

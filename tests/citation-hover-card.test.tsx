@@ -49,6 +49,8 @@ class FakeResizeObserver {
 
 const ONE = "spya-k3m9qt" as BlockId;
 const TWO = "spya-p7w2dn" as BlockId;
+const THREE = "spya-h4v8zr" as BlockId;
+const REFS = "spya-m5n6p7" as BlockId;
 
 const block = (id: BlockId, html: string): Block => {
   const text = html.replace(/<[^>]+>/g, "");
@@ -58,6 +60,8 @@ const block = (id: BlockId, html: string): Block => {
 const BLOCKS: Block[] = [
   block(ONE, "<p>Context is reinstated at retrieval (Tulving 1983), and that matters.</p>"),
   block(TWO, "<p>Scaling laws followed (Kaplan et al 2020) soon after.</p>"),
+  block(THREE, `<p>Compare <a href="#${ONE}">(Broadbent 1958)</a> above.</p>`),
+  block(REFS, "<p>Example, A. (2001). A work listed only here.</p>"),
 ];
 
 function work(over: Partial<CitedWork> & Pick<CitedWork, "id" | "title">): CitedWork {
@@ -98,7 +102,31 @@ const KAPLAN = work({
   linkFrom: "search",
 });
 
-const WORKS = [TULVING, KAPLAN];
+/** A citation whose own words are also the author's link into the article. */
+const BROADBENT = work({
+  id: "spya-j2k3m4",
+  title: "Perception and Communication",
+  authors: "Broadbent",
+  year: "1958",
+  mentions: [{ blockId: THREE, quote: "(Broadbent 1958)", start: 8 }],
+  citedAt: [THREE],
+  firstCited: THREE,
+});
+
+/** A first-class row with no body citation, marked only in the bibliography. */
+const REFERENCE_ONLY = work({
+  id: "spya-n2p3q4",
+  title: "A work listed only here",
+  authors: "Example",
+  year: "2001",
+  mentions: [],
+  reference: { blockId: REFS, quote: "Example, A. (2001)", start: 0 },
+  citedAt: [],
+  firstCited: REFS,
+  citedInBody: false,
+});
+
+const WORKS = [TULVING, KAPLAN, BROADBENT];
 
 /** One glossary entry over the same phrase as a citation, for the overlap case. */
 const TERM: GlossaryEntry = {
@@ -121,7 +149,10 @@ function Harness({ works, entries }: { works: CitedWork[]; entries: GlossaryEntr
   const cites = citeMarks(BLOCKS, [
     ...works.map((w) => ({
       id: w.id,
-      places: w.mentions.map((p) => ({ blockId: p.blockId, quote: p.quote })),
+      places: [...w.mentions, ...(w.reference ? [w.reference] : [])].map((p) => ({
+        blockId: p.blockId,
+        quote: p.quote,
+      })),
     })),
   ]);
   const terms = termMarks(
@@ -169,6 +200,36 @@ function pointer(type: string, target: Element): void {
   Object.defineProperty(event, "pointerId", { value: 1 });
   Object.defineProperty(event, "isPrimary", { value: true });
   target.dispatchEvent(event);
+}
+
+/** A complete touch tap, including the compatibility click that can navigate. */
+function tap(target: Element): MouseEvent {
+  const fire = (type: string, at: Element | Document, bubbles = true): MouseEvent => {
+    const event = new MouseEvent(type, {
+      bubbles,
+      cancelable: true,
+      clientX: 10,
+      clientY: 10,
+      detail: 1,
+    });
+    Object.defineProperty(event, "pointerType", { value: "touch" });
+    Object.defineProperty(event, "pointerId", { value: 1 });
+    Object.defineProperty(event, "isPrimary", { value: true });
+    at.dispatchEvent(event);
+    return event;
+  };
+
+  let click!: MouseEvent;
+  act(() => {
+    fire("pointerover", target);
+    fire("pointerdown", target);
+    fire("pointerup", target);
+    fire("pointerout", target);
+    fire("pointerleave", document, false);
+    fire("mouseup", target);
+    click = fire("click", target);
+  });
+  return click;
 }
 
 /** Rest the pointer on something for long enough to open a card. */
@@ -263,6 +324,28 @@ describe("resting on a citation", () => {
     /* Singular, because one is a real answer and "1 paragraphs" is the sort of
        thing a reader notices and we do not. */
     expect(card()?.textContent).toMatch(/cited in 1 paragraph\b/i);
+  });
+
+  it("calls a bibliography-only work only in the references, not cited in zero paragraphs", () => {
+    paint([REFERENCE_ONLY]);
+    hover(cite(0));
+    expect(card()?.textContent).toMatch(/only in the references/i);
+    expect(card()?.textContent).not.toMatch(/cited in 0 paragraphs/i);
+  });
+
+  it("keeps an internal article link's second-tap jump when its words are a citation", () => {
+    paint();
+    const linked = cite(2);
+    expect(linked.closest("a")?.getAttribute("href")).toBe(`#${ONE}`);
+
+    const first = tap(linked);
+    expect(first.defaultPrevented).toBe(true);
+    expect(card()).not.toBeNull();
+    expect(jumped).toEqual([]);
+
+    const second = tap(linked);
+    expect(second.defaultPrevented).toBe(true);
+    expect(jumped).toEqual([ONE]);
   });
 
   it("draws both halves where a citation and a glossary term share the phrase", () => {

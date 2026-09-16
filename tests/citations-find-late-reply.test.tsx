@@ -67,6 +67,9 @@ function artefact(row: CitedWork): Citations {
 let listed: CitedWork = SEARCHED;
 /** The find's reply, held until the test lets it go. */
 let releaseFind: (() => void) | null = null;
+/** Hold the next GET after it has captured its snapshot. */
+let holdGet = false;
+let releaseGet: (() => void) | null = null;
 
 const FOUND: FindCitationResponse = {
   outcome: "found",
@@ -91,10 +94,21 @@ vi.mock("../src/web/lib/api.js", () => ({
       await new Promise<void>((go) => {
         releaseFind = go;
       });
+      /* The real route stores before replying, and refuses to replace a link
+         the article supplied. Mirroring both halves is what lets the read-race
+         case below distinguish a stale GET from current server state. */
+      if (listed.linkFrom === "search") listed = FOUND.work;
       return json(FOUND);
     }
     if (input === `/api/citations/${SLUG}`) {
-      return json({ citations: artefact(listed), stale: false, outdated: false });
+      const snapshot = listed;
+      if (holdGet) {
+        holdGet = false;
+        await new Promise<void>((go) => {
+          releaseGet = go;
+        });
+      }
+      return json({ citations: artefact(snapshot), stale: false, outdated: false });
     }
     throw new Error(`the test made an unexpected request: ${input}`);
   },
@@ -123,6 +137,7 @@ vi.mock("../src/web/useJobs.js", () => ({
 const { useCitations, useCitationsRead } = await import("../src/web/useCitations.js");
 
 let hook: ReturnType<typeof useCitations> | null = null;
+let readHook: ReturnType<typeof useCitationsRead> | null = null;
 /**
  * **Both halves of the hook, wired together the way the app wires them** —
  * since 2026-09-16, when the read split out so the prose could have the list
@@ -143,6 +158,7 @@ let hook: ReturnType<typeof useCitations> | null = null;
  */
 function Harness(): ReactElement | null {
   const read = useCitationsRead(SLUG);
+  readHook = read;
   hook = useCitations(SLUG, read);
   return null;
 }
@@ -153,8 +169,11 @@ let root: Root;
 beforeEach(() => {
   listed = SEARCHED;
   releaseFind = null;
+  holdGet = false;
+  releaseGet = null;
   onFinished = null;
   hook = null;
+  readHook = null;
   host = document.createElement("div");
   document.body.appendChild(host);
   root = createRoot(host);
@@ -238,5 +257,34 @@ describe("a find whose reply arrives after the list was found again", () => {
     expect(row?.linkFrom).toBe("web");
     expect(row?.url).toBe(WEB);
     expect(row?.found?.host).toBe("example.org");
+  });
+
+  it("repairs an older GET that lands after the found link was patched", async () => {
+    await open();
+
+    /* This reload reads the searched row now, but its reply stays in flight
+       across the POST. Without `armRefresh`, it lands last and silently puts
+       the Scholar row back on screen. */
+    holdGet = true;
+    let pendingRead: Promise<void> | undefined;
+    await act(async () => {
+      pendingRead = readHook?.reload();
+      await Promise.resolve();
+    });
+    expect(releaseGet, "the stale GET was not held").not.toBeNull();
+
+    const pendingFind = await press();
+    await answer(pendingFind);
+    expect(hook?.citations?.citations[0]?.linkFrom).toBe("web");
+
+    await act(async () => {
+      releaseGet?.();
+      await pendingRead;
+    });
+    await flush();
+
+    const row = hook?.citations?.citations[0];
+    expect(row?.linkFrom).toBe("web");
+    expect(row?.url).toBe(WEB);
   });
 });

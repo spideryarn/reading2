@@ -224,12 +224,15 @@ outside `tapSelector` is acted on by nothing at all.
   the same one a glossary term gets;
 - `"mark.hit.cite"` joins `NOT_A_BLOCK_SELECTION`, so a citation inside a quote behaves like a term
   inside a quote;
-- **`onCommit` gains no branch.** The precedence problem the first draft called a blocker — one
+- **A bare citation adds no `onCommit` branch.** The precedence problem the first draft called a blocker — one
   `<mark>` carrying both `term` and `cite`, with `closest` matching both and the if-chain silently
   picking whichever was written first — simply does not arise, because a citation's card needs no
   commit: its action is the outbound link, and the card takes pointer events, so the reader taps the
   link *in the card*. A second tap falls through every branch and leaves the card up, which is the
-  right thing for it to do.
+  right thing for it to do. **Code review found one exception:** if the cited words are also the
+  author's internal link, adding `mark.cite` makes the mark the intercepted tap target. That
+  resolved anchor commits through `onJump` on the second tap, preserving the link's existing
+  behaviour; note and glossary precedence remain above it.
 
 That last point is what makes cutting the foot button (§ Stages) cost nothing on touch.
 
@@ -271,8 +274,9 @@ A `CiteCard` section in `ProseHoverCard`, added the way `NoteCard` was. Reading 
 2. **authors · year**, as the article gives them.
 3. **`why`** — the one plain sentence on what the piece uses the work for. Fable: *"That is the
    augmentation; the citation itself is the author's."*
-4. **Where else it is cited** — *cited in 7 paragraphs*, from `citedAt.length`. Words, not marks:
-   the honest answer to the mentions-past-three gap.
+4. **Where else it is cited** — *cited in 7 paragraphs*, from `citedAt.length`, or *only in the
+   references* when `citedInBody` is false. Words, not marks: the honest answer to the
+   mentions-past-three gap without calling a bibliography-only work “cited in 0 paragraphs.”
 Not in the card, and each is a decision: the two score bars (glossary parity — the card says
 meaning, the band says numbers); *Find it* (billed; § above).
 
@@ -291,8 +295,9 @@ for, and an outbound action.
 
 **The card is not left without an action** — the link out *is* the action, and it is the one Fable
 says a hovering reader actually wants. It is also what makes cutting this free on touch (§ The press
-is inert): with no foot button there is nothing for a second tap to commit to, so `onCommit` needs no
-branch and the term/citation precedence question never arises.
+is inert): with no foot button a **bare citation** has nothing for a second tap to commit to, so the
+term/citation precedence question never arises. An author's internal link around those words keeps
+its pre-existing second-tap jump, as § The press is inert now records.
 
 ---
 

@@ -610,7 +610,7 @@ function WorkRow({
                    — not a fixed price, because the attached search is variable
                      work. */
                 what="Searches the web for this work, and replaces the Scholar search on this row with a real link when a result clearly matches the title."
-                how="It costs money: a paid web provider, and a few seconds. A press that finds nothing stores nothing, so pressing again just spends again — and the row keeps its Scholar fallback either way. Only rows the article gave no link for offer it."
+                how="It costs money: a paid web provider, and a few seconds. A press that finds nothing stores nothing — the Scholar search stays, and pressing again just spends again. Only rows the article gave no link for offer it."
               />
             }
           >

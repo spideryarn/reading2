@@ -179,6 +179,12 @@ export interface CitationsRead {
    * server's own rule (`attachFinds`): a re-run landing inside the find can give
    * the same id a link the article gave, and that always wins. GPT Sol F14;
    * tests/citations-find-late-reply.test.tsx.
+   *
+   * A read already in flight is the opposite ordering hazard: it may have read
+   * the old Scholar row before the POST stored this link, then land afterwards
+   * and erase the patch. `applyFound` arms one trailing repair only in that
+   * case, through `useOrderedRead.armRefresh`; it does not add an unconditional
+   * post-find GET.
    */
   applyFound(id: string, link: Pick<CitedWork, "url" | "linkFrom" | "found">): void;
 }
@@ -231,7 +237,7 @@ export function useCitationsRead(slug: string): CitationsRead {
 
   /* An ordinary `reload` joins the read in flight, a post-job `refresh` trails
      it, and only the newest reply commits. src/web/useOrderedRead.ts. */
-  const { reload, refresh } = useOrderedRead(load);
+  const { reload, refresh, armRefresh } = useOrderedRead(load);
 
   /* The opening read. Everything after it goes through `reload`, which does not
      return `status` to `loading` — including `CitationsBand`'s own mount
@@ -242,6 +248,12 @@ export function useCitationsRead(slug: string): CitationsRead {
 
   const applyFound = useCallback(
     (id: string, link: Pick<CitedWork, "url" | "linkFrom" | "found">) => {
+      /* The POST has already stored this link, but a GET that began before it
+         may still be carrying the old searched row. Let that request land — it
+         may also carry newly regenerated works — then repair its stale snapshot
+         with one trailing read. This is `useGlossaryRead.patchEntry`'s race,
+         and `armRefresh` costs nothing when no read is in flight. */
+      armRefresh();
       setCitations((current) =>
         current
           ? {
@@ -255,7 +267,7 @@ export function useCitationsRead(slug: string): CitationsRead {
           : current,
       );
     },
-    [],
+    [armRefresh],
   );
 
   return { status, citations, stale, outdated, error, reload, refresh, applyFound };
@@ -341,7 +353,7 @@ export function useCitations(slug: string, read: CitationsRead): UseCitations {
         setFinding(null);
       }
     },
-    [slug],
+    [slug, applyFound],
   );
 
   /* `reload` is the way out of a failed read — useAutoRun.ts § A failed read

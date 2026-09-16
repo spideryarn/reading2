@@ -426,13 +426,15 @@ function HoverCard({
        paragraph would be peppered with them, which is precisely what the quote
        carve-out in that list was written to prevent.
 
-       **And it needs no `onCommit` branch**, which is what makes it cheap. The
-       first tap reveals the card, and the card is where a citation's action
-       lives — the link out, which the card takes pointer events for. A second
-       tap falls through every branch below and leaves the card up, which is the
-       right thing for it to do. Were there a foot button here, the precedence
-       between a term and a citation on one `<mark>` would have to be decided;
-       there is not, so it does not. */
+       **A bare citation needs no `onCommit` branch.** The first tap reveals the
+       card, and the card is where a citation's action lives — the link out,
+       which the card takes pointer events for. A second tap falls through every
+       branch below and leaves the card up, which is the right thing for it to
+       do. The exception is a citation inside an author's internal link: because
+       the hook has intercepted that link in order to reveal the citation, the
+       anchor branch below preserves its established second-tap jump. Were there
+       a foot button here, the precedence between a term and a citation on one
+       `<mark>` would have to be decided; there is not, so it does not. */
     tapSelector: `mark.term, mark.cite, a[${NOTE_REF_ATTR}], .prose a[target="_blank"]`,
     /* The second tap on the same words, which is what the foot's "in the
        glossary" button does. Both, rather than the button alone: on a touch
@@ -456,9 +458,24 @@ function HoverCard({
       }
       const ids = data.termIds.filter((id) => byId.has(id));
       const only = ids.length === 1 ? ids[0] : undefined;
-      if (only) {
+      if (ids.length > 0) {
+        if (only) {
+          close();
+          onOpenTerm(only);
+        }
+        /* More than one deliberately does nothing: the reader chooses between
+           the card's named term buttons. Do not let a link or citation sharing
+           those words turn that ambiguity into a jump or an outbound tab. */
+        return;
+      }
+      /* `mark.cite` can be nested in the author's own internal link. It is the
+         tap target in that case, so the hook cancels the anchor's click on both
+         taps; preserve the ordinary second-tap jump just as the external branch
+         below preserves the ordinary second-tap tab. Notes and glossary terms
+         keep precedence above. */
+      if (data.link?.kind === "anchor" && data.anchor) {
         close();
-        onOpenTerm(only);
+        onJump(data.anchor.blockId);
         return;
       }
       /* **The link's own tab, on the second tap.** Last of the three, so a
@@ -1672,9 +1689,13 @@ function CiteCard({ work }: { work: CitedWork }) {
         )}
         {/* Where else it is cited. Words rather than marks — see the docstring
             — and the singular is written out rather than pluralised with an
-            "(s)", because one is a real and common answer. */}
+            "(s)", because one is a real and common answer. A bibliography-only
+            work is not "cited in 0 paragraphs": the band already has the honest
+            phrase for that first-class state. */}
         <span className="prose-card-cite-where">
-          cited in {where} {where === 1 ? "paragraph" : "paragraphs"}
+          {work.citedInBody
+            ? `cited in ${where} ${where === 1 ? "paragraph" : "paragraphs"}`
+            : "only in the references"}
         </span>
       </p>
     </div>

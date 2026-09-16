@@ -90,6 +90,7 @@ about it are not obvious:
   which is right for a passage whose model-supplied locator may have drifted and catastrophic for a
   citation.
 - **It takes the *only* occurrence, not the first**, through
+  `quoteFinderWithMultiplicity`, the bulk counterpart to
   [`findOnlyQuote`](../../src/quote-match.ts). The quotes argument does not transfer: `verifyPlace`'s
   relocation branch establishes uniqueness across blocks, not within the one it settles on. So a work
   cited twice in identical words in one paragraph draws nothing there, which is the safe direction.
@@ -102,7 +103,8 @@ like one of the article's own hyperlinks. `/design` has three specimens, includi
 
 **Pointing at one opens the work**, in the card the glossary and the links already share
 ([`ProseHoverCard.tsx`](../../src/web/ProseHoverCard.tsx)) — a fourth section, not a second card.
-It draws the title with its link, authors · year, `why`, and *cited in N paragraphs*. The provenance
+It draws the title with its link, authors · year, `why`, and *cited in N paragraphs* — or *only in
+the references* for a bibliography-only work. The provenance
 is the panel's own `sourceOf`, so a `search` row is drawn here as a search exactly as it is there:
 two surfaces disagreeing about whether an address is the work's own would teach a reader something
 false. Not in the card, each deliberately: the score bars (the card says meaning, the band says
@@ -111,8 +113,10 @@ foot button into the mode (it needs `?cite=`).
 
 **A finger gets the card on the first tap.** `mark.cite` is in `tapSelector` and in
 `NOT_A_BLOCK_SELECTION` — both, and the pair is the point: the second alone would take the tap away
-and give nothing back, leaving a dead hole in the paragraph wherever a work is cited. There is no
-second-tap commit, because the card's action is the link it carries.
+and give nothing back, leaving a dead hole in the paragraph wherever a work is cited. A bare
+citation has no second-tap commit, because the card's action is the link it carries. If the cited
+words are also the author's internal or outbound link, that link keeps its established second-tap
+jump or open.
 
 **Owner-only by construction.** The list is read in `OwnedReader`, so a visitor has no works, hence
 no marks and no card section — § Who sees it, satisfied without a check.
@@ -126,7 +130,7 @@ that does (e.g. rich tooltip) and the effect of running it"*. The card is bounde
 checks rather than by what the sentence wants to say — no call count, no fixed price, and not *its
 own page*, since `namesTitle` / `pageNamesTitle` accept a result whose title **or excerpt** carries
 the work's title. What it adds over the `title` it replaced is the effect: it costs money, a press
-that finds nothing stores nothing, and the Scholar fallback stays either way.
+that finds nothing stores nothing and leaves the Scholar search where it was.
 [tooltips.md](tooltips.md) is why a `title` was not a small version of this — it does not exist at
 all on a touch device, which is the device the report came from. `POST /api/citations/:slug/:id/find` makes one chat-wire call with
 `openrouter:web_search` (Exa, `max_total_results: 5`) and a short prompt asking for one search for
