@@ -48,6 +48,8 @@ export interface UseFaq {
   starting: boolean;
   /** The run in flight was started automatically. `UseDebate.automatic`. */
   automatic: boolean;
+  /** Repeat only the GET after a failed read. This never starts a model job. */
+  retryRead(): Promise<void>;
   /**
    * **Write it if nobody has** — unforced, for the automatic run and for the
    * button beside the empty state. They have to be the same request or their
@@ -113,6 +115,15 @@ export function useFaq(slug: string): UseFaq {
      it, and only the newest reply commits. src/web/useOrderedRead.ts. */
   const { reload, refresh } = useOrderedRead(load);
 
+  /* A recovery control for the read itself, never a generation verb. Keep an
+     already loaded list on screen while a failed post-job revalidation is tried
+     again; only the opening-error case returns to the loading sentence. */
+  const retryRead = useCallback(async () => {
+    setError(null);
+    if (faq === null) setStatus("loading");
+    await reload();
+  }, [faq, reload]);
+
   useEffect(() => {
     void reload();
   }, [reload]);
@@ -145,6 +156,7 @@ export function useFaq(slug: string): UseFaq {
     stalled: queue.stalled,
     starting: queue.starting,
     automatic: auto && (queue.job !== null || queue.starting),
+    retryRead,
     ensure,
     regenerate,
     cancel: queue.cancel,

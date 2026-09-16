@@ -6,7 +6,7 @@
  */
 import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { BlockId, Faq, FaqDropped, FaqQuestion } from "../src/types.js";
 import type { UseFaq } from "../src/web/useFaq.js";
 
@@ -68,6 +68,7 @@ function owner(over: Partial<UseFaq> = {}): UseFaq {
     stalled: false,
     starting: false,
     automatic: false,
+    retryRead: async () => {},
     ensure: async () => {},
     regenerate: async () => {},
     cancel: () => {},
@@ -128,7 +129,8 @@ describe("FaqPanel", () => {
   it("draws each question as a heading, then its passages in the stored order, each with a jump", async () => {
     await draw(owner());
     const r = row(FRIDGE.id);
-    expect(r.querySelector("h3")?.textContent).toBe(FRIDGE.question);
+    expect(r.querySelector("h2")?.textContent).toBe(FRIDGE.question);
+    expect(r.querySelector("h3")).toBeNull();
     const passages = [...r.querySelectorAll(".faq-passage")];
     expect(passages.map((p) => p.querySelector(".faq-quote")?.textContent)).toEqual([
       "a closed system can lower its local entropy",
@@ -188,8 +190,17 @@ describe("FaqPanel", () => {
   });
 
   it("draws a failed read's message", async () => {
-    await draw(owner({ status: "error", faq: null, error: "The server could not be reached." }));
+    const retryRead = vi.fn(async () => {});
+    await draw(
+      owner({ status: "error", faq: null, error: "The server could not be reached.", retryRead }),
+    );
     expect(host.querySelector(".gloss-error")?.textContent).toBe("The server could not be reached.");
+    const retry = [...host.querySelectorAll<HTMLButtonElement>("button")].find(
+      (button) => button.textContent?.trim() === "Try again",
+    );
+    expect(retry).toBeDefined();
+    await act(async () => retry?.click());
+    expect(retryRead).toHaveBeenCalledOnce();
   });
 
   it("draws a failed job's sentence under the button", async () => {
@@ -211,6 +222,26 @@ describe("FaqPanel", () => {
     await draw(owner({ outdated: true }));
     expect(host.textContent).toContain("These were written by an older version of the prompt.");
     expect(host.textContent).toContain("Find them again");
+  });
+
+  it("uses the unforced verb when empty and the forced verb when the list needs replacing", async () => {
+    const ensure = vi.fn(async () => {});
+    const regenerate = vi.fn(async () => {});
+    await draw(owner({ status: "none", faq: null, ensure, regenerate }));
+    const find = [...host.querySelectorAll<HTMLButtonElement>("button")].find(
+      (button) => button.textContent?.trim() === "Find the questions",
+    );
+    await act(async () => find?.click());
+    expect(ensure).toHaveBeenCalledOnce();
+    expect(regenerate).not.toHaveBeenCalled();
+
+    await draw(owner({ stale: true, ensure, regenerate }));
+    const again = [...host.querySelectorAll<HTMLButtonElement>("button")].find(
+      (button) => button.textContent?.trim() === "Find them again",
+    );
+    await act(async () => again?.click());
+    expect(regenerate).toHaveBeenCalledOnce();
+    expect(ensure).toHaveBeenCalledOnce();
   });
 
   it("writes no answer of its own: a row holds the question, the quotes and the ids, and nothing else", async () => {

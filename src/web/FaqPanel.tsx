@@ -33,7 +33,8 @@
  * No scores, no threshold bar, no marks in the prose and no `?faq=` selection in
  * v1 — `selectPassages` answers `NOTHING` (src/web/reader/passages.ts).
  */
-import { BadgeQuestionMark, TriangleAlert } from "lucide-react";
+import { BadgeQuestionMark, RotateCw, TriangleAlert } from "lucide-react";
+import { Button } from "@/components/ui/button";
 import type { BlockId, FaqDropped, FaqQuestion } from "../types.js";
 import type { UseFaq } from "./useFaq.js";
 import { BlockRef } from "./BlockRef.js";
@@ -130,7 +131,17 @@ export function FaqPanel({ owner, onJump }: Props) {
         ) : null
       }
     >
-      {owner.error && <p className="gloss-error">{owner.error}</p>}
+      {owner.error && (
+        <div className="faq-read-error">
+          <p className="gloss-error" role="alert">
+            {owner.error}
+          </p>
+          <Button type="button" variant="outline" size="sm" onClick={() => void owner.retryRead()}>
+            <RotateCw size={13} />
+            Try again
+          </Button>
+        </div>
+      )}
 
       {owner.status === "loading" && <p className="gloss-quiet">Looking for the questions…</p>}
 
@@ -187,7 +198,7 @@ export function FaqPanel({ owner, onJump }: Props) {
 function QuestionRow({ question, onJump }: { question: FaqQuestion; onJump(id: BlockId): void }) {
   return (
     <li className="tl-item faq-item" data-faq-id={question.id}>
-      <h3 className="faq-question">{question.question}</h3>
+      <h2 className="faq-question">{question.question}</h2>
       {/* In the order the artefact stores them, which is document order
           (src/faq.ts). Each is the article's own words — `.gloss-part-senseHere`
           is the solid rule Ideas and the Glossary draw for exactly that, reused
