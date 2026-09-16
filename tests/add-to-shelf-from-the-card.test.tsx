@@ -185,6 +185,8 @@ function Harness({ url, canAdd }: { url: string; canAdd: boolean }) {
       <p id="elsewhere">not a link</p>
       <ProseHoverCard
         entries={[]}
+        /* Nothing here is a citation — this suite is about the link half. */
+        works={[]}
         /* **No slug, so the third lookup never fires**, and that is about
            keeping this suite about one thing. `GET /api/link-preview` is
            article-scoped and needs a slug for permission; handing one over here

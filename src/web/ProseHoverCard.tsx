@@ -42,13 +42,14 @@ import {
   Globe,
   LoaderCircle,
   Plus,
+  Search,
   /* The house mark for "a model wrote this" — `SearchPanel`'s meaning search and
      `QuotesPanel` both use it for the same distinction, and using a different
      icon here would make the same claim in a second vocabulary. */
   Sparkles,
 } from "lucide-react";
 import { FloatingArrow, FloatingPortal } from "@floating-ui/react";
-import type { BlockId, GlossaryEntry, Job, PagePreview } from "../types.js";
+import type { BlockId, CitedWork, GlossaryEntry, Job, PagePreview } from "../types.js";
 import { urlKey } from "../ingest.js";
 import { hostOf } from "../urls.js";
 /* The same words-per-minute the masthead and the shelf card use. A second
@@ -56,6 +57,11 @@ import { hostOf } from "../urls.js";
    which is the drift src/reading-time.ts exists to make impossible. */
 import { readingMinutes } from "../reading-time.js";
 import { entryProse } from "./GlossaryPanel.js";
+/* **The band's own provenance function, not a second opinion.** `sourceOf`
+   decides whether a row has an address or only a search, and it is total over
+   `linkFrom` — so importing it is what stops this card and the band teaching a
+   reader two different rules about the same work. See `CiteCard`. */
+import { sourceOf } from "./CitationsPanel.js";
 import { useHoverCard } from "./useHoverCard.js";
 import { TermJump } from "./TermJump.js";
 import { describeLink, type ExternalPreview, type LinkPreview } from "./link-preview.js";
@@ -76,10 +82,18 @@ import {
   type NoteMarker,
 } from "./notes-view.js";
 
-/** What the pointer found: a term, a link, or both over the same words. */
+/** What the pointer found: a term, a citation, a link, or several over the same words. */
 interface Hit {
   /** Glossary entry ids, in the order the mark lists them. May be empty. */
   termIds: string[];
+  /**
+   * Cited-work ids, in the order the mark lists them. May be empty.
+   *
+   * More than one where a single phrase names two works — "(Tulving 1983;
+   * Baddeley 1974)" is one run of characters — and the card then draws a
+   * section for each, exactly as it does for two overlapping terms.
+   */
+  citeIds: string[];
   /** The href, already described. Null when the pointer is on a bare term. */
   link: LinkPreview | null;
   /** For an in-article anchor: the block it resolves to. */
@@ -124,6 +138,7 @@ export function ProseHoverCard(props: Parameters<typeof HoverCard>[0]) {
 
 function HoverCard({
   entries,
+  works,
   slug,
   sourceUrl,
   blockText,
@@ -135,6 +150,20 @@ function HoverCard({
   canAddToShelf,
 }: {
   entries: GlossaryEntry[];
+  /**
+   * **The works the piece cites** — the whole list, so a citation mark in any
+   * mode can find the work it belongs to.
+   *
+   * Empty for a visitor, and that is the enforcement rather than a check
+   * beside it: `POLICY.citations` is `owners-only` and the public projection
+   * these rows' URLs would pass through is not built, so a shared link carries
+   * no citations, draws no marks, and reaches no branch of this card
+   * (docs/project/citations.md § Who sees it).
+   *
+   * A list rather than a `Map`, matching `entries`; `byWork` below does the
+   * indexing once for the same reason `byId` does.
+   */
+  works: readonly CitedWork[];
   /**
    * **Which article the reader is in**, and both server-side sources are
    * article-scoped: `GET /api/link-preview` and, since 2026-09-05,
@@ -232,6 +261,9 @@ function HoverCard({
   canAddToShelf: boolean;
 }) {
   const byId = useMemo(() => new Map(entries.map((e) => [e.id, e])), [entries]);
+  /* The same indexing for the citations, for the same reason: `read` runs on
+     every `pointerover` and must look things up rather than scan. */
+  const byWork = useMemo(() => new Map(works.map((w) => [w.id, w])), [works]);
 
   /* Called on every hover, so it looks things up and scans nothing.
 
@@ -250,6 +282,25 @@ function HoverCard({
       const termIds = [
         ...new Set(marks.flatMap((m) => (m.getAttribute("data-term") ?? "").split(" "))),
       ].filter((id) => byId.has(id));
+
+      /* The citations, read the same two ways for the same reason — and
+         separately from the terms, because a phrase can carry both and they are
+         two different `<mark>` *classes* on what may be one element. `closest`
+         is asked for each, so neither can shadow the other.
+
+         **Filtered against the list**, exactly as the terms are, which is what
+         makes a stale mark and a forged one the same harmless case: the prose
+         can outlive the list it was marked from, and an id we do not have draws
+         no section. */
+      const citeMark = el.closest("mark.cite");
+      const citeEls = citeMark
+        ? [citeMark]
+        : anchorEl
+          ? [...anchorEl.querySelectorAll("mark.cite")]
+          : [];
+      const citeIds = [
+        ...new Set(citeEls.flatMap((m) => (m.getAttribute("data-cite") ?? "").split(" "))),
+      ].filter((id) => byWork.has(id));
 
       const href = anchorEl?.getAttribute("href") ?? null;
       const link = href ? describeLink(href, sourceUrl) : null;
@@ -278,13 +329,15 @@ function HoverCard({
          mentions of one destination the reader is actually looking at. */
       const inBlock = anchorEl?.closest("tr[data-block]")?.getAttribute("data-block") ?? null;
 
-      if (note) return { termIds, link, anchor, inBlock, href, note, back: false };
+      if (note) return { termIds, citeIds, link, anchor, inBlock, href, note, back: false };
 
       // Nothing to say. A bare `<a>` we cannot describe is not worth a panel.
-      if (termIds.length === 0 && !link) return null;
-      if (termIds.length === 0 && link?.kind === "anchor" && !anchor) return null;
+      if (termIds.length === 0 && citeIds.length === 0 && !link) return null;
+      if (termIds.length === 0 && citeIds.length === 0 && link?.kind === "anchor" && !anchor)
+        return null;
       return {
         termIds,
+        citeIds,
         link,
         anchor,
         inBlock,
@@ -293,7 +346,7 @@ function HoverCard({
         back: !!anchorEl && isBackLink(anchorEl),
       };
     },
-    [byId, sourceUrl, blockText, notes],
+    [byId, byWork, sourceUrl, blockText, notes],
   );
 
   const { shown, close, anchorProps, arrowRef, context } = useHoverCard<Hit>({
@@ -310,7 +363,7 @@ function HoverCard({
        deciding whether to follow an address somebody else chose: the article's
        own hyperlinks, the links a chat answer writes into its prose
        (`cited-link`, Cited.tsx), and the sources listed under an answer. */
-    selector: "mark.term, .prose a[href], a.cited-link, .chat-sources a[href]",
+    selector: "mark.term, mark.cite, .prose a[href], a.cited-link, .chat-sources a[href]",
     /* Both containers survive their own re-render, which is the whole
        requirement — see `host`. A chat answer's `<p>` does not, so the
        fallback would leave a card pinned to a detached node as an answer
@@ -364,7 +417,23 @@ function HoverCard({
        glossary — for the 13% of this corpus's links whose text is a term. The
        link half of that card is still one press away, at its foot. Decided by
        the orchestrator on GPT Sol's review, 2026-09-04. */
-    tapSelector: `mark.term, a[${NOTE_REF_ATTR}], .prose a[target="_blank"]`,
+    /* **And a citation, since 2026-09-16.** Not an extra: leaving it out is what
+       breaks the page rather than what keeps it simple. `mark.cite` matches
+       `NOT_A_BLOCK_SELECTION`'s `"mark:not(.hit)"` entry in TableView.tsx, so a
+       tap on one already does not select the paragraph — and if nothing here
+       acts on it either, every citation becomes a small dead hole in the prose
+       where a finger reaches neither the card nor the gutter. A densely-cited
+       paragraph would be peppered with them, which is precisely what the quote
+       carve-out in that list was written to prevent.
+
+       **And it needs no `onCommit` branch**, which is what makes it cheap. The
+       first tap reveals the card, and the card is where a citation's action
+       lives — the link out, which the card takes pointer events for. A second
+       tap falls through every branch below and leaves the card up, which is the
+       right thing for it to do. Were there a foot button here, the precedence
+       between a term and a citation on one `<mark>` would have to be decided;
+       there is not, so it does not. */
+    tapSelector: `mark.term, mark.cite, a[${NOTE_REF_ATTR}], .prose a[target="_blank"]`,
     /* The second tap on the same words, which is what the foot's "in the
        glossary" button does. Both, rather than the button alone: on a touch
        screen the words are a far bigger target than a 10px-tall row of text,
@@ -412,14 +481,18 @@ function HoverCard({
   });
 
   if (!shown) return null;
-  const { termIds, link, anchor, inBlock, href, note, back } = shown.data;
+  const { termIds, citeIds, link, anchor, inBlock, href, note, back } = shown.data;
   const found = termIds
     .map((id) => byId.get(id))
     .filter((e): e is GlossaryEntry => e !== undefined);
-  if (found.length === 0 && !link) return null;
+  /* Resolved here rather than carried on `Hit`, as the terms are: `read` runs on
+     every hover and the list can be replaced between the hover and the paint. */
+  const cited = citeIds.map((id) => byWork.get(id)).filter((w): w is CitedWork => w !== undefined);
+  if (found.length === 0 && cited.length === 0 && !link) return null;
 
   const label = [
     ...found.map((e) => e.name),
+    ...cited.map((w) => w.title),
     note
       ? `note ${note.label}`.trim()
       : link?.kind === "external"
@@ -457,6 +530,19 @@ function HoverCard({
               mark records. */}
           {found.map((entry) => (
             <TermCard key={entry.id} entry={entry} onOpen={() => { close(); onOpenTerm(entry.id); }} />
+          ))}
+          {/* The citation half, under the term half and above the link half.
+              That order is the one the link half already argues for: the reader
+              is in the middle of a sentence, so what the word means comes first,
+              then what work is being leaned on, and only then where either
+              would take them.
+
+              More than one where a phrase names two works, for the same reason
+              two terms can both be drawn: which of them the mark's characters
+              "belong" to is not a thing the mark records, so picking one would
+              be picking for the reader. */}
+          {cited.map((w) => (
+            <CiteCard key={w.id} work={w} />
           ))}
           {/* The note in full, in place of the link half rather than under it.
               A marker IS a link into this article, so `LinkCard` would happily
@@ -1482,6 +1568,119 @@ function clip(text: string, max: number): string {
  * An answer that has *already* been fetched is shown, because by then it is
  * simply part of the entry.
  */
+/**
+ * **One work the piece cites**, as a section of the card — SPIDERYARN-READING2-3M.
+ *
+ * Fable's brief for it, 2026-09-16, and the ordering is its answer to *what does
+ * a reader hovering a citation actually want*: what this is, and can I get it.
+ * So the title and its link come first, then who wrote it and when, then `why` —
+ * the one line here that is ours rather than the author's, and the reason this
+ * is augmentation rather than a prettier bibliography.
+ *
+ * ## The provenance is `sourceOf`, not a second opinion
+ *
+ * The band's own function, imported rather than reimplemented, and that is the
+ * whole point. Citations mode has one safety property — **every address a row
+ * presents as the work's own was in the article, and code found it** — and it is
+ * kept by drawing a `search` row *as a search*: the title is not a link, and the
+ * one link says so. A card that quietly drew the Scholar query as the work's
+ * address would teach a reader the opposite of what the band teaches them, from
+ * the same data, two panels apart. `sourceOf` is total over `linkFrom`, so there
+ * is no fifth case for this file to get wrong.
+ * docs/project/citations.md § The one safety property.
+ *
+ * ## What is deliberately not here
+ *
+ * - **The two score bars.** Glossary parity: the card says what a thing means,
+ *   the band says what we scored it. A relevance bar in a hover panel is a
+ *   number with nothing to compare it against.
+ * - **Find it on the web.** It is billed, rate-limited and owner-only, and a
+ *   surface that opens because a pointer rested somewhere is the wrong place for
+ *   a press that spends money.
+ * - **A foot button into Citations mode.** It would need `?cite=` and a
+ *   threshold reveal, both deferred — see the plan. The link out is the action,
+ *   and it is the one a reader came for.
+ *
+ * ## And a count instead of more marks
+ *
+ * `mentions` is capped at three; `citedAt` is not. So past three we know only
+ * *which paragraph*, and marking a whole paragraph to mean "something in here
+ * cites something" is the vague version of the question the mark exists to
+ * answer. The honest close is words — *cited in 7 paragraphs* — which is Fable's
+ * call and costs nothing.
+ */
+function CiteCard({ work }: { work: CitedWork }) {
+  const source = sourceOf(work);
+  const by = [work.authors, work.year].filter(Boolean).join(" · ");
+  const where = work.citedAt.length;
+
+  return (
+    /* No `divided` prop, unlike `LinkCard` and `NoteCard`: the rule between
+       sections is `.prose-card-body + .prose-card-body` in prose-hover-card.css,
+       which fires for any sibling and needs nothing passed. `TermCard` above
+       relies on the same thing, and copying its two-spellings-of-one-rule
+       neighbours would have been a second way to say what the stylesheet
+       already says. */
+    <div className="prose-card-body">
+      <p className="prose-card-head prose-card-cite-title">
+        {source.kind === "address" ? (
+          /* `noreferrer` as well as `noopener`, as everywhere outbound here: the
+             article's own URL is a reading history. The scheme was settled
+             server-side — `linkFor` in src/citations.ts builds every one of
+             these from an identifier or an anchor the article itself carried. */
+          <a
+            className="prose-card-name"
+            href={source.url}
+            target="_blank"
+            rel="noopener noreferrer"
+          >
+            {work.title}
+            <ExternalLink size={10} />
+          </a>
+        ) : (
+          /* **Not a link, and that is the safety property in one line.** Where
+             the article gave no address, `source.url` is a Google Scholar query
+             — so a link on the title would be this card saying *here is the
+             work* about a search we built. The search is offered in the foot,
+             drawn as a search. */
+          <span className="prose-card-name">{work.title}</span>
+        )}
+      </p>
+      {by && <p className="prose-card-text prose-card-cite-by">{by}</p>}
+
+      <div className="prose-card-part prose-card-part-why">
+        <p className="prose-card-label">what the piece uses it for</p>
+        <p className="prose-card-text">{work.why}</p>
+      </div>
+
+      <p className="prose-card-foot">
+        {source.kind === "address" ? (
+          <span className="prose-card-cite-source">
+            {source.host} · {source.how}
+          </span>
+        ) : (
+          <a
+            className="prose-card-link"
+            href={source.url}
+            target="_blank"
+            rel="noopener noreferrer"
+            title="The article gives no link for this work, so this is a Google Scholar search for its title — not a link the article gave"
+          >
+            <Search size={10} />
+            search Scholar
+          </a>
+        )}
+        {/* Where else it is cited. Words rather than marks — see the docstring
+            — and the singular is written out rather than pluralised with an
+            "(s)", because one is a real and common answer. */}
+        <span className="prose-card-cite-where">
+          cited in {where} {where === 1 ? "paragraph" : "paragraphs"}
+        </span>
+      </p>
+    </div>
+  );
+}
+
 function TermCard({ entry, onOpen }: { entry: GlossaryEntry; onOpen(): void }) {
   const prose = entryProse(entry);
 

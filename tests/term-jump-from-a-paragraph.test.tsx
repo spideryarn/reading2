@@ -96,6 +96,9 @@ function Harness() {
     createElement("div", { dangerouslySetInnerHTML: { __html: ARTICLE } }),
     createElement(ProseHoverCard, {
       entries: ENTRIES,
+      /* Nothing here is a citation — this suite is about the keyboard's route
+         to a glossary entry — and an empty list is what a visitor gets too. */
+      works: [],
       slug: null,
       sourceUrl: null,
       blockText: new Map(),

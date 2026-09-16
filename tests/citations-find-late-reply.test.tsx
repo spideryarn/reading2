@@ -120,11 +120,30 @@ vi.mock("../src/web/useJobs.js", () => ({
   },
 }));
 
-const { useCitations } = await import("../src/web/useCitations.js");
+const { useCitations, useCitationsRead } = await import("../src/web/useCitations.js");
 
 let hook: ReturnType<typeof useCitations> | null = null;
+/**
+ * **Both halves of the hook, wired together the way the app wires them** —
+ * since 2026-09-16, when the read split out so the prose could have the list
+ * (docs/plans/260916b-…).
+ *
+ * The patch this file is about now crosses that seam: `find` POSTs down here
+ * and calls `CitationsRead.applyFound` up there, where the list lives. So the
+ * F14 guard — *only a row that is still a search is ever upgraded* — moved with
+ * it, and a test that kept calling `useCitations` alone would no longer be
+ * testing the thing it was written for. Driving the pair is the point: unit
+ * tests with a stubbed read cannot see whether the two are joined up correctly.
+ *
+ * One component rather than the app's two (`OwnedReader` and `CitationsBand`),
+ * which is the one liberty taken here: the hooks and the seam between them are
+ * real, the component boundary is not. What that boundary buys — the job
+ * subscription and the activation owner dying with the band — is not what this
+ * file is about.
+ */
 function Harness(): ReactElement | null {
-  hook = useCitations(SLUG);
+  const read = useCitationsRead(SLUG);
+  hook = useCitations(SLUG, read);
   return null;
 }
 
