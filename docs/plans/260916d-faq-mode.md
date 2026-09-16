@@ -221,3 +221,16 @@ interpretive feature.
 
 - 2026-09-16 — plan written; Fable consulted on the product shape; GPT Sol's plan review (approve
   with changes), all fourteen findings taken and the plan revised.
+- 2026-09-16 — **stage 1 built** (server: types, step, migration `20260916150539_faq`, `src/faq.ts`,
+  `GET /api/faq/:slug`, `CACHEABLE`, export, `tests/faq.test.ts` plus rows in the registration
+  tests), not yet committed. One deviation from F7: `drizzle-kit generate` *did* emit the
+  DROP/ADD CHECK pair, from the hand-widened literal in `src/db/schema.ts`. Merged duplicates:
+  a repeated question's passages join the first copy's. Real runs through `scripts/stage.ts`,
+  local database, `claude-sonnet-5`, prompt `faq/1`, answer budget 5,524 tokens:
+
+  | Article | questions | passages | dropped | out tokens | FAQ / Summary / Ideas / Quiz / unsupported |
+  |---|---|---|---|---|---|
+  | noema-mythology-of-conscious-ai (essay) | 9 | 13 | 2 unquoted | 3,180 | 9 / 0 / 0 / 0 / 0 |
+  | spider-silk (Wikipedia) | 5 | 9 | none | 2,850 | 3 / 0 / 0 / 1 (borderline) / 1 (partly) |
+
+  No summary-shaped rows, so the prompt was not iterated.

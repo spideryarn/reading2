@@ -40,7 +40,7 @@ matching before the article is even reached.
 | Cache | Who shares it | The rendering |
 |---|---|---|
 | **request path** | search, chat, explain — one entry *each*, per article. All three use an **explicit** breakpoint on the article; see the chat postmortem for why automatic mode is not an option here | `articleWithIds` |
-| **pipeline** | **three groups**, one shared entry each: `arc`+`tweets`, `glossary`+`quotes`, and `ideas`+`timeline`+`quiz`+`sketch`. Membership is effort **and** rendering together, read off [`STAGE_EFFORT`](../../src/models.ts) rather than kept in a second list here — **see below for why glossary is not with arc** | `articleText`, and `articleWithIds` for the third group |
+| **pipeline** | **three groups**, one shared entry each: `arc`+`tweets`, `glossary`+`quotes`, and `ideas`+`timeline`+`quiz`+`faq`+`sketch` (all sending the body only). Membership is effort **and** rendering together, read off [`STAGE_EFFORT`](../../src/models.ts) rather than kept in a second list here — **see below for why glossary is not with arc** | `articleText`, and `articleWithIds` for the third group |
 | **labels** | the parallel batches of one run | the outline, via `batchParts` |
 
 All three are OpenRouter's caches now, and were not always — see

@@ -65,6 +65,11 @@ import {
   PROMPT_VERSION as QUIZ_PROMPT_VERSION,
 } from "../quiz.js";
 import {
+  inputFingerprint as faqFingerprint,
+  isStale as faqIsStale,
+  PROMPT_VERSION as FAQ_PROMPT_VERSION,
+} from "../faq.js";
+import {
   inputFingerprint as debateFingerprint,
   isDebateDocument,
   isStale as debateIsStale,
@@ -121,6 +126,8 @@ import type {
   CitationsFound,
   Debate,
   DebateFound,
+  Faq,
+  FaqFound,
   Glossary,
   GlossaryFound,
   Quiz,
@@ -427,6 +434,7 @@ type RevisionReader =
   | "illustrated"
   | "debate"
   | "citations"
+  | "faq"
   | "arc"
   /**
    * **The image manifest on its own**, for the route that serves one asset's
@@ -472,7 +480,7 @@ const REVISION_READ_POLICY: Record<
     article: "value", library: "value", metadata: "value", publish: "value",
     tweets: "value", glossary: "value", quotes: "value", ideas: "value",
     sketch: "value", arc: "value", timeline: "value", quiz: "value", rawSource: "value",
-    illustrated: "value", debate: "value", assets: "value", citations: "value",
+    illustrated: "value", debate: "value", assets: "value", citations: "value", faq: "value",
   },
   articleId: { publish: "value" },
   /* `publish` refuses a revision that is not still a draft. */
@@ -515,6 +523,9 @@ const REVISION_READ_POLICY: Record<
     /* `citations` sends `articleWithIds` too, so it is judged on the cited
        head and the outline, as `ideas` is. */
     citations: "value",
+    /* `faq` sends `articleWithIds` over the body, byte-identical to `ideas`,
+       so it is judged on the cited head and the outline as `ideas` is. */
+    faq: "value",
     /* **Not because this stage's own prompt prints them** — its prompt prints
        the scene — but because this read reports the *Sketch's* staleness as
        well as its own, and answering that needs exactly what the `sketch` read
@@ -531,6 +542,9 @@ const REVISION_READ_POLICY: Record<
     /* `citations` sends `articleWithIds` too, so it is judged on the cited
        head and the outline, as `ideas` is. */
     citations: "value",
+    /* `faq` sends `articleWithIds` over the body, byte-identical to `ideas`,
+       so it is judged on the cited head and the outline as `ideas` is. */
+    faq: "value",
     /* **Not because this stage's own prompt prints them** — its prompt prints
        the scene — but because this read reports the *Sketch's* staleness as
        well as its own, and answering that needs exactly what the `sketch` read
@@ -547,6 +561,9 @@ const REVISION_READ_POLICY: Record<
     /* `citations` sends `articleWithIds` too, so it is judged on the cited
        head and the outline, as `ideas` is. */
     citations: "value",
+    /* `faq` sends `articleWithIds` over the body, byte-identical to `ideas`,
+       so it is judged on the cited head and the outline as `ideas` is. */
+    faq: "value",
     /* **Not because this stage's own prompt prints them** — its prompt prints
        the scene — but because this read reports the *Sketch's* staleness as
        well as its own, and answering that needs exactly what the `sketch` read
@@ -598,6 +615,9 @@ const REVISION_READ_POLICY: Record<
     /* `citations` sends `articleWithIds` too, so it is judged on the cited
        head and the outline, as `ideas` is. */
     citations: "value",
+    /* `faq` sends `articleWithIds` over the body, byte-identical to `ideas`,
+       so it is judged on the cited head and the outline as `ideas` is. */
+    faq: "value",
     /* **Not because this stage's own prompt prints them** — its prompt prints
        the scene — but because this read reports the *Sketch's* staleness as
        well as its own, and answering that needs exactly what the `sketch` read
@@ -646,6 +666,8 @@ const REVISION_READ_POLICY: Record<
     /* `citations` sends `articleWithIds` too, so it is judged on the cited
        head and the outline, as `ideas` is. */
     citations: "value",
+    /* `faq` hashes the outline too: the skeleton is in its user message. */
+    faq: "value",
     /* `quotes` arrived from another session on 2026-08-31 taking
        `FINGERPRINT_COLUMNS` in its projection, which is right — it hashes the
        outline like its five neighbours — and this line had not caught up.
@@ -749,6 +771,9 @@ const REVISION_READ_POLICY: Record<
      `quotes`, `timeline` and `debate` make. `isCurrent` needs the column for
      its arm. */
   citations: { metadata: "value", citations: "value" },
+  /* Its own reader and the metadata page, and not the library — the call
+     `quiz` and `citations` make. `isCurrent` needs the column for its arm. */
+  faq: { metadata: "value", faq: "value" },
 
   /* **Read by nobody through here.** The two HTML columns are the whole article
      again, and they are pipeline artefacts reached through
@@ -1029,6 +1054,8 @@ export const REVISION_PROJECTIONS = {
     debate: articleRevisions.debate,
     /* For `isCurrent`'s arm, as `debate` above. */
     citations: articleRevisions.citations,
+    /* For `isCurrent`'s arm, as `debate` above. */
+    faq: articleRevisions.faq,
   },
   publish: {
     id: articleRevisions.id,
@@ -1099,6 +1126,12 @@ export const REVISION_PROJECTIONS = {
   citations: {
     id: articleRevisions.id,
     citations: articleRevisions.citations,
+    ...CITED_FINGERPRINT_COLUMNS,
+  },
+  /* The cited set, like `ideas` and `quiz`: `articleWithIds` prints a `URL:` line. */
+  faq: {
+    id: articleRevisions.id,
+    faq: articleRevisions.faq,
     ...CITED_FINGERPRINT_COLUMNS,
   },
   /**
@@ -1567,6 +1600,7 @@ export const STEP_STORAGE: Record<StepName, string[]> = {
   illustrated: ["article_revisions.illustrated"],
   debate: ["article_revisions.debate"],
   citations: ["article_revisions.citations"],
+  faq: ["article_revisions.faq"],
 };
 
 /**
@@ -2841,6 +2875,23 @@ const rawPgArticleReader: ArticleReader = {
             },
           );
         }
+        /* The same shape as `quiz`, over the same cited head. */
+        case "faq": {
+          const faq = revision.faq as Faq | null;
+          if (!faq || !tree || blocks.length === 0) return false;
+          return sameStamp(
+            {
+              inputHash: faq.sourceHash,
+              promptVersion: faq.version,
+              model: faq.generator,
+            },
+            {
+              inputHash: faqFingerprint(blocks, tree, citedFingerprint),
+              promptVersion: FAQ_PROMPT_VERSION,
+              model: CAPABLE_MODEL,
+            },
+          );
+        }
         case "sketch":
           return sketchIsCurrent(revision, blocks, citedFingerprint);
         /* **The only arm here that does not look at the article**, and the
@@ -3210,6 +3261,38 @@ const rawPgArticleReader: ArticleReader = {
       // Unknown counts as stale, the same way round as its neighbours.
       stale: !tree || quizIsStale(quiz, blocks, tree, citedMetaFingerprintOf(found.revision)),
       outdated: quiz.version !== QUIZ_PROMPT_VERSION,
+    };
+  },
+
+  /**
+   * The FAQ on its own — the Postgres half of `loadFaq`.
+   *
+   * The cited head and the tree, like `loadQuiz`, because this stage sends
+   * `articleWithIds` and the skeleton. **A 404 is the ordinary case** (the step
+   * is off `DEFAULT_INGEST_STEPS`); an EMPTY list is a 200 — the model found no
+   * question worth asking — as `SHAPE.faq` decides at the store boundary.
+   */
+  async loadFaq(slug: string): Promise<FaqFound> {
+    requireSlug(slug);
+    const found = await currentRevision(slug, "faq");
+    if (!found) throw notFound(slug);
+    const faq = found.revision.faq as Faq | null;
+    if (!faq || !Array.isArray(faq.questions)) {
+      throw Object.assign(
+        new Error(
+          `No FAQ for "${slug}" yet. Build it with ` +
+            `POST /api/jobs { "slug": "${slug}", "steps": ["faq"] }.`,
+        ),
+        { status: 404 },
+      );
+    }
+    const blocks = await blockHashInputs(found.revision.id);
+    const tree = found.revision.tree as Tree | null;
+    return {
+      faq,
+      // Unknown counts as stale, the same way round as its neighbours.
+      stale: !tree || faqIsStale(faq, blocks, tree, citedMetaFingerprintOf(found.revision)),
+      outdated: faq.version !== FAQ_PROMPT_VERSION,
     };
   },
 

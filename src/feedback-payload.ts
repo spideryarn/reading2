@@ -180,6 +180,7 @@ const STEPS = [
   "ideas",
   "timeline",
   "quiz",
+  "faq",
   "sketch",
   "illustrated",
   "debate",

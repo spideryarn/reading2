@@ -86,6 +86,11 @@ import {
   PROMPT_VERSION as QUIZ_PROMPT_VERSION,
 } from "./quiz.js";
 import {
+  generateFaq,
+  inputFingerprint as faqFingerprint,
+  PROMPT_VERSION as FAQ_PROMPT_VERSION,
+} from "./faq.js";
+import {
   generateDebate,
   inputFingerprint as debateFingerprint,
   PROMPT_VERSION as DEBATE_PROMPT_VERSION,
@@ -457,6 +462,12 @@ export const FORCE_ONLY_WHEN_NAMED: ReadonlySet<StepName> = new Set<StepName>([
      and it is why an unnamed force must never reach this step.
      docs/plans/260831al-review-quiz-sub-mode.md § Marking. */
   "quiz",
+  /* The same two reasons: it reads the blocks, the tree and the metadata,
+     nothing else in the pipeline reads what it writes, so the positional
+     cascade would buy a model call for nothing (Sol F9). Its `stamp` compares
+     a stored `sourceHash`, so a moved article re-runs without being forced.
+     And it replaces rather than appends. docs/plans/260916d-faq-mode.md. */
+  "faq",
   /* The same two reasons, and a third that is about the clock rather than the
      money. `sketch` is the slowest call here — 194s measured on the
      constitution — and every step self-aborts at 400s inside an 800s
@@ -3610,6 +3621,67 @@ export const STEPS: { [K in StepName]: PipelineStep<K> } = {
       );
       return {
         parts: { quiz: run.quiz },
+        detail: `${questions.length} ${questions.length === 1 ? "question" : "questions"}`,
+      };
+    },
+  },
+  /* Stage 5p — the FAQ: the questions a careful reader would put to the piece
+     while reading it, and the passages where it responds. Off
+     DEFAULT_INGEST_STEPS and in FORCE_ONLY_WHEN_NAMED.
+     docs/plans/260916d-faq-mode.md.
+
+     **No baseline read**, unlike `ideas`: ids are minted per run because
+     nothing addresses a question yet (Sol F6). */
+  faq: {
+    name: "faq",
+    label: "Finding the questions",
+    produces: ["faq"],
+    /**
+     * `articleWithIdsFingerprint` — the blocks, the tree (the skeleton is in
+     * the user message) and the cited head — with the **real, nullable**
+     * metadata, which is what `generateFaq` hashes too. **No `profileHash`**:
+     * no profile is in the prompt in v1.
+     */
+    stamp: async (ctx, store) => {
+      const article = await tryReadArticle(ctx.slug, store);
+      if (!article) return null;
+      return {
+        inputHash: faqFingerprint(article.blocks, article.tree, article.meta),
+        promptVersion: FAQ_PROMPT_VERSION,
+        model: CAPABLE_MODEL,
+      };
+    },
+    async run(ctx, store) {
+      const run = await generateFaq({
+        article: await readArticle(ctx.slug, store),
+        onProgress: ctx.report,
+        signal: ctx.signal,
+        cacheArticle: ctx.cacheArticle,
+      });
+      const questions = run.faq.questions;
+      const passages = questions.reduce((n, q) => n + q.passages.length, 0);
+      plog.info(
+        {
+          slug: ctx.slug,
+          step: "faq",
+          model: run.model,
+          inputTokens: run.inputTokens,
+          outputTokens: run.outputTokens,
+          cacheReadTokens: run.cacheReadTokens,
+          cacheWriteTokens: run.cacheWriteTokens,
+          maxTokens: run.maxTokens,
+          ms: run.elapsedMs,
+          words: run.words,
+          questions: questions.length,
+          passages,
+          /* Counts only — never a question or a quote. `unanchored` is the one
+             to watch: the model asking about a theme rather than a passage. */
+          ...run.dropped,
+        },
+        `faq ${ctx.slug}: ${questions.length} questions`,
+      );
+      return {
+        parts: { faq: run.faq },
         detail: `${questions.length} ${questions.length === 1 ? "question" : "questions"}`,
       };
     },

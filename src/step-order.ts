@@ -94,7 +94,8 @@ export const STEP_ORDER = [
      over the whole article and it is a mode somebody goes to. */
   "timeline",
   /* Beside `timeline`, for the third time and the same argument: `high` effort
-     and the `ids` renderer, so `ideas`, `timeline`, `quiz` and `sketch` are one
+     and the `ids` renderer, so `ideas`, `timeline`, `quiz` and `sketch` (and,
+     since 2026-09-16, `faq`) are one
      cache group and this list keeps them contiguous. A `quiz` placed anywhere
      else in this array would still work and would quietly stop sharing the
      cached article prefix with the three stages it is identical to — the
@@ -105,6 +106,13 @@ export const STEP_ORDER = [
      over the whole article and it is a thing somebody asks for.
      docs/plans/260831al-review-quiz-sub-mode.md. */
   "quiz",
+  /* Beside `quiz`, a fourth time for the same argument: `high` effort, the
+     `ids` renderer and the body-only evidence, so `ideas`, `timeline`, `quiz`,
+     `faq` and `sketch` are one cache group and this list keeps them contiguous.
+     Off `DEFAULT_INGEST_STEPS` and in `FORCE_ONLY_WHEN_NAMED` — a model call
+     over the whole article that a reader asks for by opening the mode.
+     docs/plans/260916d-faq-mode.md. */
+  "faq",
   /* Off `DEFAULT_INGEST_STEPS`: nothing reads what it writes except the one
      below, and it is the slowest single model call in the app at 121–194
      seconds measured. docs/project/diagram.md § Sketch. */
@@ -119,8 +127,8 @@ export const STEP_ORDER = [
   /* **Last, and it depends on nothing in this list.** Every other name here
      reads an artefact something before it wrote; this one goes to the open web
      and comes back with pages that answer the piece. It is last because it has
-     no place it must be — putting it between `quiz` and `sketch` would break the
-     `ideas`/`timeline`/`quiz`/`sketch` cache group's contiguity for nothing, and
+     no place it must be — putting it between `faq` and `sketch` would break the
+     `ideas`/`timeline`/`quiz`/`faq`/`sketch` cache group's contiguity for nothing, and
      putting it before `illustrated` would separate that step from the `sketch`
      it paints.
 

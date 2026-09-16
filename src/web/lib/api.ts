@@ -840,6 +840,9 @@ const CACHEABLE = [
   "/api/quotes/",
   "/api/timeline/",
   "/api/quiz/",
+  /* Here with the route rather than with the panel, as `/api/debate/` is: the
+     derived test asks for it the moment the route exists. */
+  "/api/faq/",
   "/api/sketch/",
   /* **The artefact, and the plates' bytes ride along.** A URL under this prefix
      is either `/api/illustrated/<slug>` — JSON, cached like its neighbours — or

@@ -46,6 +46,7 @@ import type {
   Block,
   Citations,
   Debate,
+  Faq,
   Glossary,
   Ideas,
   Meta,
@@ -93,6 +94,7 @@ export type ArtifactKind =
   | "quotes"
   | "timeline"
   | "quiz"
+  | "faq"
   | "sketch"
   | "illustrated"
   | "debate"
@@ -158,6 +160,12 @@ export interface ArtifactMap {
    * the `quiz` step. docs/plans/260831al-review-quiz-sub-mode.md.
    */
   quiz: Quiz;
+  /**
+   * The questions a careful reader would put to the piece, and where it
+   * responds — `Faq`, src/types.ts, written by the `faq` step.
+   * docs/plans/260916d-faq-mode.md.
+   */
+  faq: Faq;
   sketch: Sketch;
   /**
    * The same argument painted — `Illustrated`, src/illustrated-plate.ts,
@@ -328,6 +336,13 @@ export const SHAPE: Record<ArtifactKind, ShapeCheck> = {
      rule, at the store boundary, so a hand-written or imported file cannot get
      round it either. */
   quiz: { field: "questions", ok: (v) => isArray(v) && (v as unknown[]).length > 0 },
+  /* A `questions` array, and **an EMPTY one IS usable** — the opposite call
+     from `quiz` directly above. The FAQ prompt says none is a fine answer and
+     means it: a piece that raises no question worth asking is a real result
+     the panel has a sentence for. `buildFaq` (src/faq.ts) throws only when the
+     model named questions and validation dropped every one.
+     docs/plans/260916d-faq-mode.md (Sol F8). */
+  faq: { field: "questions", ok: isArray },
   /* **`scenes`, and an empty one is NOT usable**, unlike the assets manifest
      two rows up. An article with no images legitimately has an empty list; a
      picture with no scenes is not a picture, and `accept` in
@@ -885,6 +900,9 @@ export const STAMP_SOURCE: Record<StepName, ArtifactKind | null> = {
      runs (src/pipeline.ts § the `quiz` step), and `readBaseline` throws for a
      kind with no row precisely so that nothing can half-inherit. */
   quiz: "quiz",
+  /* **And deliberately NO `BASELINE` row**, like `quiz`: ids are minted fresh
+     per run because nothing addresses a question yet (Sol F6). */
+  faq: "faq",
   sketch: "sketch",
   illustrated: "illustrated",
   /* **And deliberately NO `BASELINE` row**, like `quiz` above and for the same

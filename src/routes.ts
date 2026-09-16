@@ -36,6 +36,7 @@
  *   GET    /api/ideas/:slug      the propositions the piece needs you to hold, and staleness
  *   GET    /api/timeline/:slug   when the piece says things happened, and staleness
  *   GET    /api/quiz/:slug       the questions the piece can ask you back, and staleness
+ *   GET    /api/faq/:slug        the questions a careful reader would put to the piece, where it responds, and staleness
  *   GET    /api/debate/:slug     what the rest of the web says about this piece, and staleness
  *   GET    /api/citations/:slug  every work the piece cites, with a link the article gave, and staleness
  *   GET    /api/reading-time/:slug   → { seconds: { <block id>: n } }, the owner's time on each block
@@ -143,6 +144,7 @@ import {
   loadIllustrated,
   loadSketch,
   loadQuiz,
+  loadFaq,
   loadDebate,
   loadCitations,
   findCitation,
@@ -7615,6 +7617,20 @@ const AUTH_ROUTES: readonly AuthRoute[] = [
          fields where `IdeasResponse` has three.
          docs/plans/260831al-review-quiz-sub-mode.md § No profile in v1. */
       send(res, 200, await loadQuiz(slugPart(captures, 1)));
+    },
+  },
+
+  /* The FAQ — docs/plans/260916d-faq-mode.md. GET only, and no DELETE, for the
+     reason `ideas` and `quiz` have none: the step replaces, so asking again is
+     POST /api/jobs { slug, steps: ["faq"] }. This route never spends. */
+  {
+    kind: "pattern",
+    method: "GET",
+    pattern: /^\/api\/faq\/([\w.%-]+)$/,
+    handler: async ({ request: { res } }, captures) => {
+      /* **No `withProfileChanged`**, for `quiz`'s reason: this artefact is not
+         written for a profile. `FaqResponse` in src/types.ts has two fields. */
+      send(res, 200, await loadFaq(slugPart(captures, 1)));
     },
   },
 

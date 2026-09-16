@@ -330,6 +330,29 @@ describe("an article with no metadata", () => {
     expect(headSent()).toBe(headTheFingerprintDescribes(withoutMeta, datedArticleFingerprint));
   });
 
+  it("faq: hashes the absent metadata, and still sends a head", async () => {
+    /* The fourth stage of this shape, docs/plans/260916d-faq-mode.md. Its head
+       must be Ideas' byte for byte — that is its cache share — so the property
+       is the same one against the same fingerprint. */
+    const { generateFaq } = await import("../src/faq.js");
+    const block = quotable(withoutMeta.blocks);
+    answer = JSON.stringify({
+      questions: [
+        {
+          question: "Why does this follow?",
+          passages: [{ blockId: block.id, quote: block.text.split(/\s+/).slice(0, 6).join(" ") }],
+        },
+      ],
+    });
+
+    const run = await generateFaq({ article: withoutMeta });
+
+    expect(run.faq.sourceHash).toBe(
+      articleWithIdsFingerprint(withoutMeta.blocks, withoutMeta.tree, null),
+    );
+    expect(headSent()).toBe(headTheFingerprintDescribes(withoutMeta, articleWithIdsFingerprint));
+  });
+
   /**
    * **The control, and without it the two tests above are worthless.**
    *

@@ -181,6 +181,7 @@ const LAYOUT: {
   quotes: { quotes: (at) => path.join(at.dir, "quotes.json") },
   timeline: { timeline: (at) => path.join(at.dir, "timeline.json") },
   quiz: { quiz: (at) => path.join(at.dir, "quiz.json") },
+  faq: { faq: (at) => path.join(at.dir, "faq.json") },
   sketch: { sketch: (at) => path.join(at.dir, "sketch.json") },
   illustrated: { illustrated: (at) => path.join(at.dir, "illustrated.json") },
   debate: { debate: (at) => path.join(at.dir, "debate.json") },

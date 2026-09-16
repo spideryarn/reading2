@@ -418,6 +418,10 @@ export type Task =
      a block id, so it renders with `articleWithIds` and joins that cached
      prefix rather than arc's. */
   | "quiz"
+  /* The questions a careful reader would put to the piece, and the passages
+     where it responds — docs/plans/260916d-faq-mode.md. Article-reading like
+     `ideas`, naming block ids, so `articleWithIds` and that cached prefix. */
+  | "faq"
   | "explain"
   | "chat"
   /* **Marking a reader's answer, and its own job rather than a mode of `quiz`.**
@@ -736,6 +740,7 @@ export const TASK_TIER: Record<Task, Tier> = {
   timeline: "capable",
   illustrated: "capable",
   quiz: "capable",
+  faq: "capable",
   explain: "capable",
   chat: "capable",
   "quiz-mark": "capable",
@@ -946,6 +951,7 @@ export const TASK_WIRE: Record<Task, Wire> = {
   timeline: "messages",
   illustrated: "messages",
   quiz: "messages",
+  faq: "messages",
   explain: "chat",
   chat: "chat",
   "quiz-mark": "chat",
@@ -1047,6 +1053,7 @@ export const MODEL_ENV_VAR: Record<Task, string | null> = {
   timeline: null,
   illustrated: null,
   quiz: null,
+  faq: null,
   citations: null,
   /* It has one because it is on the chat wire, and every chat-wire task does —
      `REQUEST_PATH_TASKS` is derived from `TASK_WIRE`, and tests/models.test.ts
@@ -1299,7 +1306,8 @@ export type ArticleStage =
   | "ideas"
   | "sketch"
   | "timeline"
-  | "quiz";
+  | "quiz"
+  | "faq";
 
 /**
  * **How hard each article-reading stage thinks — and it lives here because it is
@@ -1425,6 +1433,13 @@ export const STAGE_EFFORT: Record<ArticleStage, Effort> = {
      Untested, like every effort choice that has not been through
      evals/results/effort-vs-quality.md. */
   quiz: "high",
+  /* `high`, the fifth member of the `ids` group: same effort, same renderer,
+     same body-only evidence, so `faq` shares a cached article with `ideas`,
+     `sketch`, `timeline` and `quiz`. What it is paid for is reading the
+     argument closely enough to feel where a careful reader would push back.
+     Untested, like every effort choice not yet through
+     evals/results/effort-vs-quality.md. docs/plans/260916d-faq-mode.md. */
+  faq: "high",
 };
 
 /**
@@ -1474,6 +1489,9 @@ export const ARTICLE_RENDERER: Record<ArticleStage, "text" | "ids"> = {
      have to be on the page. Same consequence as the three above: no shared
      prefix with the four `articleText` stages. */
   quiz: "ids",
+  /* Every passage names a block id, so the ids have to be on the page — and it
+     sends the body only, byte-identical to `ideas`, so it joins that prefix. */
+  faq: "ids",
 };
 
 /** One stage's effort, with the whole-run environment override applied. */

@@ -676,6 +676,10 @@ export const STEP_BUDGET_MS: Record<StepName, number> = {
      is one article, the answer budget here is 10,000 tokens, and the cost of
      being under is a mid-step kill rather than a slow step. */
   quiz: 150_000,
+  /* **A GUESS**, in `quiz`'s family: one Messages call over the body at `high`
+     effort with a smaller answer budget than the quiz's. Re-measure from the
+     stage-1 runs (docs/plans/260916d-faq-mode.md § Progress). */
+  faq: 150_000,
   /* **MEASURED**, over seven draws of five articles on 2026-08-30: 121–194
      seconds, one model call each, the longest being the constitution at 194.4s
      with the shape-claims section added to the prompt. Rounded up hard, because

@@ -85,6 +85,7 @@ import type {
   IllustratedFound,
   SketchFound,
   QuizFound,
+  FaqFound,
   TimelineFound,
   ThreadFound,
   ThreadKind,
@@ -268,6 +269,14 @@ export interface ArticleReader {
    * this app after a selection. `timeline` made the same call.
    */
   loadQuiz(slug: string): Promise<QuizFound>;
+
+  /**
+   * The FAQ, plus whether it still describes the article — the cited head and
+   * the tree, as `loadQuiz`. Two staleness facts: no profile is in this stage's
+   * stamp. **Owner-only in v1**, and there is no public twin.
+   * docs/plans/260916d-faq-mode.md.
+   */
+  loadFaq(slug: string): Promise<FaqFound>;
 
   /**
    * What the rest of the web says about this piece, plus whether the artefact

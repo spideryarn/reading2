@@ -342,6 +342,9 @@ const STAGE_ICONS: Record<StepName, ComponentType<{ size?: number }>> = {
      of the article. Not `FileQuestion`, which this page already uses for the
      "no raw document" state a few rows down. */
   quiz: MessageCircleQuestionMark,
+  /* The same bubble as `quiz`, reused rather than a new import — the FAQ panel
+     is stage 2 of docs/plans/260916d-faq-mode.md and may choose its own glyph. */
+  faq: MessageCircleQuestionMark,
   sketch: PenLine,
   /* A paintbrush beside the sketch's pen: the same argument, painted rather
      than drawn. docs/project/diagram.md § Illustrated. */

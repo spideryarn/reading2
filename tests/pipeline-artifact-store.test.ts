@@ -105,6 +105,11 @@ import {
   inputFingerprint as citationsFingerprint,
   PROMPT_VERSION as CITATIONS_VERSION,
 } from "../src/citations.js";
+import {
+  emptyDropped as emptyFaqDropped,
+  inputFingerprint as faqFingerprint,
+  PROMPT_VERSION as FAQ_VERSION,
+} from "../src/faq.js";
 import { PROMPT_VERSION as QUOTES_VERSION } from "../src/quotes.js";
 import { PROMPT_VERSION as TWEETS_VERSION } from "../src/tweets.js";
 import { splitIntoBlocks } from "../src/blocks.js";
@@ -229,6 +234,9 @@ const DEBATE_SOURCE_HASH = debateFingerprint(BLOCKS, TREE, META);
 /* `citations` is `articleWithIdsFingerprint` once more, over every block —
    computed through its own module for the same reason as the three above. */
 const CITATIONS_SOURCE_HASH = citationsFingerprint(BLOCKS, TREE, META);
+/* `faq` is `articleWithIdsFingerprint` again, over the body — computed through
+   its own module for the same reason. */
+const FAQ_SOURCE_HASH = faqFingerprint(BLOCKS, TREE, META);
 const ARC_SOURCE_HASH = arcFingerprint(BLOCKS, TREE, META);
 /* **The one that is not `articleFingerprint` underneath.** `timeline` stamps
    `datedArticleFingerprint` — the blocks, the tree and a head that carries
@@ -585,6 +593,18 @@ function writeWholeArticle(store: MemoryArtifactStore): void {
     version: CITATIONS_VERSION,
     citations: [],
     capped: false,
+    generatedAt: new Date().toISOString(),
+    elapsedMs: 1,
+  });
+  /* **An EMPTY list**, which `SHAPE.faq` accepts: the model found no question
+     worth asking this piece, and the prompt says that is a fine answer. */
+  store.plant(SLUG, "faq", "faq", {
+    generator: CAPABLE_MODEL,
+    slug: SLUG,
+    sourceHash: FAQ_SOURCE_HASH,
+    version: FAQ_VERSION,
+    questions: [],
+    dropped: emptyFaqDropped(),
     generatedAt: new Date().toISOString(),
     elapsedMs: 1,
   });

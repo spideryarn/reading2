@@ -203,6 +203,7 @@ const EXPECTED_THRESHOLD_MS: Record<StepName, number> = {
   quotes: 180_000,
   timeline: 180_000,
   quiz: 180_000,
+  faq: 180_000,
   /* Seven minutes: past twice the worst of the thirteen sketch runs (199s). */
   sketch: 420_000,
   illustrated: 600_000,

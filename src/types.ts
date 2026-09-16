@@ -2515,6 +2515,12 @@ export type StepName =
      so all four share one cached article prefix and `STEP_ORDER` keeps them
      contiguous. */
   | "quiz"
+  /* The questions a careful reader would put to this piece while reading it,
+     and the passages where the piece responds — docs/plans/260916d-faq-mode.md.
+     Beside `quiz` for the same reason `quiz` is beside `timeline`:
+     `articleWithIds` over the body at `high` effort, so it joins the
+     `ideas`/`timeline`/`quiz`/`sketch` cached article prefix. */
+  | "faq"
   /* The picture a model draws of the argument — docs/project/diagram.md § Sketch.
      Nothing reads what it writes except the one below. */
   | "sketch"
@@ -2544,7 +2550,7 @@ export type StepName =
      **Deliberately NOT an `ArticleStage`** either, for a different reason from
      `debate`'s: it is on the Messages wire, but it sends `articleWithIds` over
      *every* block — the notes and the bibliography are the whole point — where
-     `ideas`, `timeline`, `quiz` and `sketch` send the body only. Different
+     `ideas`, `timeline`, `quiz`, `faq` and `sketch` send the body only. Different
      bytes, so no shared cached prefix, so no row in `STAGE_EFFORT` or
      `ARTICLE_RENDERER`; its effort is a constant in src/citations.ts. */
   | "citations";
@@ -3786,6 +3792,93 @@ export interface QuizMarkBody {
  * of a limit is one copy that drifts.
  */
 export const MAX_QUIZ_ANSWER_CHARS = 4000;
+
+/* -------------------------------------------------------------------- faq --
+   The questions a careful first-time reader would put to this piece while
+   reading it, and the passages where the piece itself responds — the `faq`
+   column on `article_revisions`. docs/plans/260916d-faq-mode.md.
+
+   Here rather than in src/faq.ts for the reason `Quiz` is, above: the panel
+   needs the shape and `src/web/` may import only the pure leaves.
+
+   **No written answer and no status**, deliberately: the passages are the
+   answer, and the only verified claim is that their words are the article's.
+   Which passage answers which question is the model's reading. */
+
+/**
+ * One place the piece responds to a question — **the article's own
+ * characters**, sliced out of the block at the offsets `findQuote` located in
+ * its `"spaced"` pass, never the model's typing.
+ */
+export interface FaqPassage {
+  blockId: BlockId;
+  /** The article's characters. At most `MAX_FAQ_QUOTE_CHARS` (src/faq.ts). */
+  quote: string;
+  /** A disambiguator between repeats, never the anchor. As `IdeaOccurrence`. */
+  start: number;
+}
+
+export interface FaqQuestion {
+  /** `mintUniqueId`, fresh per run. Nothing addresses a question yet. */
+  id: string;
+  /** One sentence, in the article's own terms. */
+  question: string;
+  /** 1–3, deduplicated on `{blockId, start, end}`, in document order. */
+  passages: FaqPassage[];
+}
+
+/**
+ * What validation threw away. Counts only — never a question or a quote.
+ * Invisible from outside (a dropped question looks exactly like one the model
+ * never asked), which is why they are stored and logged.
+ */
+export interface FaqDropped {
+  /** A passage naming a block id that is not in the body evidence. */
+  unknownIds: number;
+  /** A passage whose quote `findQuote` (`"spaced"`) could not find in its block. */
+  unquoted: number;
+  /** A passage whose located quote is over the cap — dropped, never truncated. */
+  tooLong: number;
+  /** A repeated passage on one question, or a repeated question. */
+  duplicate: number;
+  /** Questions that lost every passage and were dropped whole. */
+  unanchored: number;
+  /** Questions past `MAX_QUESTIONS`, or passages past the per-question cap. */
+  overCap: number;
+  /** Items we could not read: no question text, an overlong one, a non-object. */
+  malformed: number;
+}
+
+/** The artefact. The `faq` column on `article_revisions`. */
+export interface Faq {
+  version: string;
+  generator: string;
+  slug: string;
+  /** `articleWithIdsFingerprint` over the blocks, the tree and the cited head. */
+  sourceHash: string;
+  /**
+   * **In reading order** — each question ranked by its earliest surviving
+   * passage, the model's index as tie-break. Fixed at write time. **An empty
+   * list is a real answer**: the model found no question worth asking.
+   */
+  questions: FaqQuestion[];
+  /** What validation threw away. See `FaqDropped`. */
+  dropped: FaqDropped;
+  generatedAt: string;
+  elapsedMs: number;
+}
+
+/** `GET /api/faq/:slug`. Two staleness facts: no profile is in this stamp. */
+export interface FaqResponse {
+  faq: Faq;
+  /** The article moved underneath this — blocks, sections or the cited head. */
+  stale: boolean;
+  /** The article is the same and we would write this differently now. */
+  outdated: boolean;
+}
+
+/** As `QuizFound`: the same type, because there is no `profileChanged` to omit. */
+export type FaqFound = FaqResponse;
 
 /* ----------------------------------------------------------------- debate --
    What the rest of the web says about this piece — the `debate` column on

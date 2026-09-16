@@ -181,6 +181,7 @@ export const JOB_DISPOSITION: Record<AiJob, JobDisposition> = {
   timeline: "step-driven",
   illustrated: "step-driven",
   quiz: "step-driven",
+  faq: "step-driven",
   debate: "step-driven",
   citations: "step-driven",
   /* Three tasks a reader waits on with the page open. */

@@ -81,6 +81,7 @@ import type {
   Arc,
   Citation,
   Debate,
+  Faq,
   FeedbackDiagnosticsPayload,
   Glossary,
   Ideas,
@@ -823,6 +824,18 @@ export const articleRevisions = spideryarn.table(
      * rather than take a delete with it or block one.
      */
     quiz: jsonb("quiz").$type<Quiz>(),
+
+    /**
+     * The questions a careful reader would put to the piece, and the passages
+     * where it responds — `Faq`, src/types.ts, written by the `faq` step.
+     * docs/plans/260916d-faq-mode.md.
+     *
+     * The WHOLE artefact, like its neighbours. `sourceHash` is
+     * `articleWithIdsFingerprint` over the blocks, the tree and the cited head.
+     * No `profileHash`. No foreign key from a passage's `blockId` to
+     * `revision_blocks`, on the argument its neighbours make.
+     */
+    faq: jsonb("faq").$type<Faq>(),
 
     /**
      * The picture a model drew of the argument — `Sketch`,
@@ -2349,7 +2362,7 @@ export const revisionStepRuns = spideryarn.table(
          the truth. `tests/db-step-constraint.test.ts` compares the last
          `ADD CONSTRAINT` in the migrations against `STEP_ORDER` in both
          directions, which is what makes there not be a third drift. */
-      sql`${t.stepName} in ('fetch','extract','blocks','hierarchy','labels','assets','arc','tweets','glossary','quotes','ideas','timeline','quiz','sketch','illustrated','debate','citations')`,
+      sql`${t.stepName} in ('fetch','extract','blocks','hierarchy','labels','assets','arc','tweets','glossary','quotes','ideas','timeline','quiz','faq','sketch','illustrated','debate','citations')`,
     ),
     check(
       "revision_step_runs_status",

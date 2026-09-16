@@ -749,6 +749,7 @@ export type ChatJob = Exclude<
   /* Generation only. `quiz-mark` is a separate `Task` and stays IN — it is a
      request-path call on chat/completions and needs a route below. */
   | "quiz"
+  | "faq"
   /* **Not a pipeline stage, and still not on this wire.** A live session is a
      WebRTC connection the browser holds open to OpenAI; this file never sends
      it anything and never sees a response, so there is no OpenRouter path to

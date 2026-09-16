@@ -315,6 +315,12 @@ export const REVISION_CARRY_POLICY: Record<
      The `sourceHash` on the artefact is what tells the panel the article moved
      underneath them — carrying is not a claim that they are still current. */
   quiz: "carry",
+  /* **Carries, like `quiz`** — a replace-on-rerun list whose `sourceHash`
+     answers at read time whether the article moved underneath it. What a
+     re-extraction can cost is a passage jump to a block that has gone; the
+     questions are still worth reading, and minting would empty the band until
+     somebody paid for the call again. docs/plans/260916d-faq-mode.md. */
+  faq: "carry",
   /* Carries like the seven above, and it is the one where carrying costs
      nothing at all: the plates are content-addressed objects in the blob store
      and the column holds only their hashes, so a new draft inherits pictures

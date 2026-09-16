@@ -264,6 +264,9 @@ const STAGES = [
      somebody noticed — the mistake this list's own header records about
      `timeline`, which went uncovered from the day it shipped. */
   "quiz",
+  /* Added the day the stage was registered, 2026-09-16, for `quiz`'s reason.
+     docs/plans/260916d-faq-mode.md. */
+  "faq",
   "assets",
 ] as const;
 type Stage = (typeof STAGES)[number];
@@ -369,6 +372,21 @@ function scriptFor(stage: Stage, article: Article): string[] {
               band: "easy",
               value: 4,
               evidence: [{ blockId: block.id, quote: block.text.slice(0, 60) }],
+            },
+          ],
+        }),
+      ];
+    case "faq":
+      /* One question with one real passage, so it survives `toQuestions` —
+         `buildFaq` accepts an empty list, so a stub whose passage stopped
+         resolving would throw here (a non-empty list emptied) rather than
+         write an empty artefact and test nothing. */
+      return [
+        JSON.stringify({
+          questions: [
+            {
+              question: "Why does the piece say this?",
+              passages: [{ blockId: block.id, quote: block.text.slice(0, 60) }],
             },
           ],
         }),
