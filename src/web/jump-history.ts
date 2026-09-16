@@ -92,7 +92,61 @@ export const STAMP_KEY = "spya";
 const TOP = "top";
 
 /**
- * The origin on a history-state object, or `null` for "no stamp here" — and
+ * **The version marker on the shape below, and it is a compatibility device
+ * rather than bookkeeping.**
+ *
+ * A stamp is written by the code that is running and read by whatever code is
+ * running when the entry comes back, and those need not be the same deploy: an
+ * entry stamped at depth 2 can be reloaded onto the *previous* bundle, whose
+ * `readStamp` knows only `from` and whose chip is `history.back()`. It would
+ * draw a chip, ignore the depth, step one entry, and land the reader somewhere
+ * the label does not name — failing **open**, which is the bad direction.
+ *
+ * So the new shape carries no `from` at all. The old parser looks for one,
+ * finds nothing, and returns `null`: no chip, which is the honest answer from
+ * code that cannot honour this stamp. GPT Sol's first finding on the plan,
+ * 2026-09-16.
+ *
+ * **Under the same `STAMP_KEY`, deliberately.** A second key would be invisible
+ * to the old `withStamp(state, null)`, which deletes `STAMP_KEY` and nothing
+ * else — so an old bundle would carry an unfamiliar stamp forward through every
+ * push of the session with nothing able to clear it.
+ */
+const VERSION = 2;
+
+/**
+ * **The ceiling on how far back the origin may be**, and it is plausibility
+ * rather than policy.
+ *
+ * The plan's first draft capped inheritance at ten, so that one press could not
+ * undo eleven deliberate acts. That was refused in review and the refusal is
+ * right: at depth eleven the origin is exactly as reachable as at depth one, so
+ * a cap takes a working way back away for a feeling, and the reader already has
+ * the × for a return that has outlived its use. What is left here is only a
+ * guard against a number that cannot have come from us — `history.state`
+ * survives a browser restore and an older deploy — because `history.go(-n)` for
+ * an absurd `n` walks the reader out of the session. GPT Sol's fifth finding.
+ */
+const MAX_PLAUSIBLE_DEPTH = 4096;
+
+/**
+ * **Where the reader jumped from, and how many entries back that is now.**
+ *
+ * The depth is a claim about *the stack*, not about the page, and that is what
+ * makes it safe to carry: every same-document push adds exactly one entry, so
+ * `depth + 1` names the origin's distance whatever the push changed — a mode, a
+ * column, a sort, or something added next year that this file has never heard
+ * of. A rule that had to know what a push *meant* could be wrong about one it
+ * did not recognise; this one cannot be.
+ */
+export interface JumpStamp {
+  readonly origin: JumpOrigin;
+  /** Entries between here and the origin: `1` on the entry a jump landed on. */
+  readonly depth: number;
+}
+
+/**
+ * The stamp on a history-state object, or `null` for "no stamp here" — and
  * **never a throw**.
  *
  * Every input is untrusted: `history.state` is whatever the last writer left,
@@ -105,47 +159,97 @@ const TOP = "top";
  * A stamp naming a block **this article no longer has** is a different problem
  * and is not this function's: it is a syntactically fine id, and only the
  * caller that resolves it against the article can tell.
+ *
+ * **Two shapes are read and one is written.** `{ v: 2, origin, depth }` is
+ * ours; `{ from }` is what the deploy before 2026-09-16 wrote, and it reads as
+ * depth 1 because that is what it meant — the chip of that era could only ever
+ * step one entry. Costs a line, and spares a reader who kept a tab open across
+ * the deploy a chip that does nothing.
  */
-export function readStamp(state: unknown): JumpOrigin | null {
+export function readStamp(state: unknown): JumpStamp | null {
   if (!isPlainObject(state)) return null;
   const mine = state[STAMP_KEY];
   if (!isPlainObject(mine)) return null;
-  const from = mine.from;
-  if (from === TOP) return { kind: "top" };
-  if (typeof from === "string" && isSpideryarnId(from))
-    return { kind: "block", blockId: from as BlockId };
+
+  if (mine.v === VERSION) {
+    const origin = originOf(mine.origin);
+    if (origin === null) return null;
+    const depth = mine.depth;
+    /* An implausible depth draws nothing rather than being clamped to
+       something: clamping would aim the labelled button at an entry nobody
+       chose, which is the failure the label makes worse. */
+    if (typeof depth !== "number" || !Number.isSafeInteger(depth)) return null;
+    if (depth < 1 || depth > MAX_PLAUSIBLE_DEPTH) return null;
+    return { origin, depth };
+  }
+
+  /* The pre-2026-09-16 shape: no `v`, the origin under `from`, and a chip that
+     could only ever step one entry — so depth 1 is what it meant. */
+  const origin = originOf(mine.from);
+  return origin === null ? null : { origin, depth: 1 };
+}
+
+/** The origin a stamp field spells, or `null` if it spells nothing we minted. */
+function originOf(value: unknown): JumpOrigin | null {
+  if (value === TOP) return { kind: "top" };
+  if (typeof value === "string" && isSpideryarnId(value))
+    return { kind: "block", blockId: value as BlockId };
   return null;
 }
 
 /**
- * The same state with our stamp **set** (`from` non-null) or **stripped**
- * (`from` null), and every foreign key untouched either way.
+ * The same state with our stamp **set** (`stamp` non-null) or **stripped**
+ * (`stamp` null), and every foreign key untouched either way.
  *
  * Two things it deliberately does not do:
  *
  *  - **It never mutates.** `history.state` is handed straight back to
  *    `pushState`, which structured-clones it; editing the object in place would
  *    edit the state of the entry we are still standing on.
- *  - **It returns `null`, not `{}`, when nothing is left.** Every same-path
- *    push strips the inherited stamp (router.ts § `watchHistoryWrites`), so
- *    without this every entry in the session would carry an empty object that
- *    nobody put there and nobody can explain.
+ *  - **It returns `null`, not `{}`, when nothing is left.** A push that leaves
+ *    the article strips the stamp (router.ts § `watchHistoryWrites`), so
+ *    without this those entries would carry an empty object that nobody put
+ *    there and nobody can explain.
  *
  * A state that is not a plain object — a string, a number, an array — has no
  * keys to merge into, so stamping it would mean throwing somebody else's value
  * away. It is returned unchanged: the chip is worth less than a stranger's
  * state. Not reachable today, since only nuqs and router.ts write here.
+ *
+ * **It writes only the current shape**, never the legacy `{ from }` one, so
+ * there is one writer and one thing to reason about. `readStamp` is where the
+ * two shapes meet, and it is the only place they do.
  */
-export function withStamp(state: unknown, from: JumpOrigin | null): unknown {
+export function withStamp(state: unknown, stamp: JumpStamp | null): unknown {
   if (!canStamp(state)) return state;
   /* `null` and `undefined` are *absence*, which is somebody's state only in the
      sense that nobody has written one — so they are merged into, not declined.
      Declining them was a bug for one test run: it made every stamp a no-op,
      because the entry a jump pushes has no state until we give it one. */
   const next: Record<string, unknown> = isPlainObject(state) ? { ...state } : {};
-  if (from === null) delete next[STAMP_KEY];
-  else next[STAMP_KEY] = { from: from.kind === "top" ? TOP : from.blockId };
+  if (stamp === null) delete next[STAMP_KEY];
+  else
+    next[STAMP_KEY] = {
+      v: VERSION,
+      origin: stamp.origin.kind === "top" ? TOP : stamp.origin.blockId,
+      depth: stamp.depth,
+    };
   return Object.keys(next).length === 0 ? null : next;
+}
+
+/**
+ * **The same stamp, one entry further from its origin** — what an ordinary push
+ * does with the stamp it inherits, and `null` when there is nothing to carry.
+ *
+ * Here rather than in router.ts because the arithmetic and the bound it has to
+ * respect are one fact, and splitting them is how a bound stops being applied.
+ * A stamp already at the ceiling is dropped rather than grown past it, so
+ * nothing this file writes can fail this file's own reader.
+ */
+export function oneFurtherBack(stamp: JumpStamp | null): JumpStamp | null {
+  if (stamp === null) return null;
+  const depth = stamp.depth + 1;
+  return depth > MAX_PLAUSIBLE_DEPTH ? null : { origin: stamp.origin, depth };
 }
 
 /**

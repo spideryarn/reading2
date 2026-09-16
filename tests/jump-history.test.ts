@@ -17,10 +17,12 @@
  *  - **The stamp** — pure functions over an opaque history-state object.
  *  - **The wrapper** — `watchHistoryWrites` (router.ts) is the single choke
  *    point for both nuqs's writes and `navigate`'s, and it decides which
- *    entries carry a stamp. The sharpest case is § does not let a later push
- *    inherit: nuqs hands `pushState` the **current** entry's state verbatim, so
- *    an unstamped push would silently inherit the last jump's origin and the
- *    chip would promise a return it cannot make.
+ *    entries carry a stamp and at what depth. The sharpest case is § carries
+ *    the stamp one entry further back: nuqs hands `pushState` the **current**
+ *    entry's state verbatim, so what a push carries has to be decided by
+ *    `stampFor` rather than inherited by accident — which is what it was until
+ *    2026-09-16, when the cure was to strip it and the chip went with it
+ *    (docs/plans/260916a-back-to-where-you-were-survives-a-mode-change.md).
  *  - **The jump** — `beginJump` makes exactly one nuqs push and the wrapper
  *    performs the pair, because two `setAt` calls in one tick are not a
  *    transaction: nuqs keeps pending updates in a `Map` keyed by parameter
@@ -44,6 +46,8 @@ import {
   clearArmedJump,
   consumeArmedJump,
   type JumpOrigin,
+  type JumpStamp,
+  oneFurtherBack,
   readStamp,
   withStamp,
 } from "../src/web/jump-history.js";
@@ -122,34 +126,41 @@ const B = block(1);
 const TOP = { kind: "top" } as const;
 const at = (id: BlockId) => ({ kind: "block", blockId: id }) as const;
 
+/* A stamp, which is an origin **and** how many entries back it is. Defaulting
+   to 1 keeps every case below reading as a statement about the origin, which is
+   what they are about; the depth has a section of its own further down. */
+const stamp = (origin: JumpOrigin, depth = 1): JumpStamp => ({ origin, depth });
+
 /* ------------------------------------------------------------- the stamp -- */
 
 describe("the stamp on a history entry", () => {
   it("round-trips a block origin", () => {
-    expect(readStamp(withStamp(null, at(A)))).toEqual(at(A));
+    expect(readStamp(withStamp(null, stamp(at(A))))).toEqual(stamp(at(A)));
   });
 
   /** The top of the article is a case of its own all the way through — F8. */
   it("round-trips the top of the article, distinctly from any block", () => {
-    expect(readStamp(withStamp(null, TOP))).toEqual(TOP);
+    expect(readStamp(withStamp(null, stamp(TOP)))).toEqual(stamp(TOP));
   });
 
   /** Nothing else writes `history.state` today; that is not a reason to eat it. */
   it("preserves foreign keys when it writes, and when it strips", () => {
-    const stamped = withStamp({ scroll: 3 }, at(A)) as Record<string, unknown>;
+    const stamped = withStamp({ scroll: 3 }, stamp(at(A))) as Record<string, unknown>;
     expect(stamped.scroll).toBe(3);
-    expect(readStamp(stamped)).toEqual(at(A));
+    expect(readStamp(stamped)).toEqual(stamp(at(A)));
     expect(withStamp(stamped, null)).toEqual({ scroll: 3 });
   });
 
   /** `{}` on every entry would be litter with no owner. */
   it("strips to null rather than to an empty object", () => {
-    expect(withStamp(withStamp(null, at(A)), null)).toBeNull();
+    expect(withStamp(withStamp(null, stamp(at(A))), null)).toBeNull();
     expect(withStamp(null, null)).toBeNull();
   });
 
   it("replaces an older stamp rather than nesting one", () => {
-    expect(readStamp(withStamp(withStamp(null, at(A)), at(B)))).toEqual(at(B));
+    expect(readStamp(withStamp(withStamp(null, stamp(at(A))), stamp(at(B))))).toEqual(
+      stamp(at(B)),
+    );
   });
 
   /** Never throws, whatever another patcher or a browser restore left there. */
@@ -162,12 +173,108 @@ describe("the stamp on a history entry", () => {
     [{ spya: null }, "our key holding null"],
     [{ spya: "spya-paraaa" }, "our key holding a string"],
     [{ spya: {} }, "our key holding an object with no origin"],
-    [{ spya: { from: 7 } }, "an origin that is not a string"],
-    [{ spya: { from: "n0003" } }, "a node id, which is not a block id"],
-    [{ spya: { from: "spya-parab" } }, "an id one character short"],
-    [{ spya: { from: "spya-para15" } }, "an id using characters the alphabet drops"],
+    [{ spya: { v: 2, origin: 7, depth: 1 } }, "an origin that is not a string"],
+    [{ spya: { v: 2, origin: "n0003", depth: 1 } }, "a node id, which is not a block id"],
+    [{ spya: { v: 2, origin: "spya-parab", depth: 1 } }, "an id one character short"],
+    [
+      { spya: { v: 2, origin: "spya-para15", depth: 1 } },
+      "an id using characters the alphabet drops",
+    ],
+    [{ spya: { v: 2, origin: "spya-paraaa" } }, "our shape with no depth at all"],
+    [{ spya: { v: 2, origin: "spya-paraaa", depth: 0 } }, "a depth of nought"],
+    [{ spya: { v: 2, origin: "spya-paraaa", depth: -3 } }, "a negative depth"],
+    [{ spya: { v: 2, origin: "spya-paraaa", depth: 1.5 } }, "a fractional depth"],
+    [{ spya: { v: 2, origin: "spya-paraaa", depth: "2" } }, "a depth written as a string"],
+    [{ spya: { v: 2, origin: "spya-paraaa", depth: Number.NaN } }, "a depth of NaN"],
+    [
+      { spya: { v: 2, origin: "spya-paraaa", depth: Number.POSITIVE_INFINITY } },
+      "a depth of infinity",
+    ],
+    [{ spya: { v: 2, origin: "spya-paraaa", depth: 4097 } }, "a depth past the ceiling"],
+    [{ spya: { v: 9, origin: "spya-paraaa", depth: 1 } }, "a version from the future"],
   ])("reads %j (%s) as no stamp", (state) => {
     expect(readStamp(state)).toBeNull();
+  });
+
+  /**
+   * **A depth is never clamped into range**, and that is the whole reason the
+   * cases above draw nothing instead. The chip carries a label naming a
+   * section; aiming it at whatever entry a clamped number happened to land on
+   * would make the button *lie*, which is worse than the button being absent.
+   */
+  it("accepts the far end of the plausible range and nothing past it", () => {
+    expect(readStamp({ spya: { v: 2, origin: A, depth: 4096 } })).toEqual(stamp(at(A), 4096));
+    expect(readStamp({ spya: { v: 2, origin: A, depth: 4097 } })).toBeNull();
+  });
+
+  /**
+   * **The shape the deploy before 2026-09-16 wrote**, which a reader who kept a
+   * tab open across the deploy still has on their entries. It reads as depth 1
+   * because that is what it meant: the chip of that era was `history.back()`
+   * and could only ever step one entry.
+   */
+  it("reads a stamp from the previous deploy as one entry back", () => {
+    expect(readStamp({ spya: { from: A } })).toEqual(stamp(at(A), 1));
+    expect(readStamp({ spya: { from: "top" } })).toEqual(stamp(TOP, 1));
+  });
+
+  /**
+   * **And the other direction fails closed**, which is the half that cannot be
+   * checked by running this code — so it is checked by *shape*.
+   *
+   * A rollback puts the previous bundle in front of entries this one stamped.
+   * That parser reads `mine.from`, and what it does with a missing one is
+   * return `null`: no chip. If a `from` key ever reappeared in what `withStamp`
+   * writes, that bundle would draw a chip, ignore the depth, step one entry,
+   * and land the reader somewhere the label does not name. GPT Sol's first
+   * finding on the plan, 2026-09-16.
+   */
+  it("writes nothing an older bundle would mistake for a stamp it can honour", () => {
+    const written = withStamp(null, stamp(at(A), 3)) as Record<string, Record<string, unknown>>;
+    expect(written.spya).toBeDefined();
+    expect(written.spya).not.toHaveProperty("from");
+  });
+
+  /* ------------------------------------------------------------- the depth -- */
+
+  /**
+   * One entry further back, which is what every push that stays on the article
+   * does with the stamp it inherits — router.ts § `stampFor`.
+   */
+  it("carries a stamp one entry further back", () => {
+    expect(oneFurtherBack(stamp(at(A), 1))).toEqual(stamp(at(A), 2));
+    expect(oneFurtherBack(stamp(TOP, 7))).toEqual(stamp(TOP, 8));
+  });
+
+  it("has nothing to carry when there is no stamp", () => {
+    expect(oneFurtherBack(null)).toBeNull();
+  });
+
+  /**
+   * **A stamp from the previous deploy, carried by this one.** The reader kept
+   * a tab open across the deploy, jumps, then presses Plain: the entry they
+   * were on says `{ from }`, and what the new push writes has to be two entries
+   * back rather than one.
+   *
+   * Asserted on the pure pair rather than by driving `history`, because there
+   * is no way to *put* a legacy stamp on an entry from inside a test — the
+   * wrapper's `replaceState` re-derives the stamp from the entry it finds and
+   * ignores what the caller passed, on purpose (router.ts § `dismissJumpOrigin`
+   * has why). A test that reached under the wrapper to stage one would be
+   * testing its own scaffolding.
+   */
+  it("carries a stamp from the previous deploy like any other", () => {
+    expect(oneFurtherBack(readStamp({ spya: { from: A } }))).toEqual(stamp(at(A), 2));
+  });
+
+  /**
+   * **It drops rather than growing past the ceiling**, so that nothing this
+   * file writes can fail this file's own reader — the failure that would
+   * otherwise appear as a chip that vanished for no reason a reader could see.
+   */
+  it("drops a stamp rather than carrying it past the ceiling", () => {
+    expect(oneFurtherBack(stamp(at(A), 4095))).toEqual(stamp(at(A), 4096));
+    expect(oneFurtherBack(stamp(at(A), 4096))).toBeNull();
   });
 
   /**
@@ -176,8 +283,8 @@ describe("the stamp on a history entry", () => {
    * than that, so we decline and leave the state alone.
    */
   it("declines to stamp a state it cannot merge into", () => {
-    expect(withStamp("theirs", at(A))).toBe("theirs");
-    expect(withStamp([1, 2], at(A))).toEqual([1, 2]);
+    expect(withStamp("theirs", stamp(at(A)))).toBe("theirs");
+    expect(withStamp([1, 2], stamp(at(A)))).toEqual([1, 2]);
   });
 });
 
@@ -255,21 +362,66 @@ describe("which entries carry a stamp", () => {
   it("stamps the push its jump armed", () => {
     arm(at(A), B);
     push(`/read/x?at=${B}`);
-    expect(readStamp(history.state)).toEqual(at(A));
+    expect(readStamp(history.state)).toEqual(stamp(at(A), 1));
   });
 
   /**
-   * **The regression this stage exists to stop shipping**, and the one nobody
-   * would have found by hand. nuqs passes the *current* entry's state into
-   * `pushState` verbatim (nuqs/dist/adapters/react.js), so a `cols`, `mode` or
-   * `sort` toggle after a jump would inherit that jump's origin and draw a chip
-   * on an entry whose Back merely undoes the toggle. GPT Sol F3, 2026-09-06.
+   * **A later push on the same article carries the stamp one entry further
+   * back**, which is the reversal of 2026-09-16 and the point of the whole
+   * change (docs/plans/260916a-back-to-where-you-were-survives-a-mode-change.md).
+   *
+   * This test used to assert the opposite, on GPT Sol's F3 of 2026-09-06: nuqs
+   * passes the *current* entry's state into `pushState` verbatim
+   * (nuqs/dist/adapters/react.js), so a `cols`, `mode` or `sort` toggle after a
+   * jump inherited that jump's origin and drew a chip on an entry whose
+   * `history.back()` merely undid the toggle. **That reading was right about
+   * the bug and wrong about the cure.** The chip was pointing at the correct
+   * origin; it was the *press* that was one entry short. Dropping the stamp
+   * fixed the lie by removing the offer — and on a phone, where a covering band
+   * means leaving the mode is the only way to see where a jump landed, removing
+   * the offer is all it ever did.
+   *
+   * So the origin is kept and the distance is recorded with it. Nothing is
+   * inherited blindly: `stampFor` re-derives it from the entry we are standing
+   * on rather than trusting the state nuqs handed through, so what the push
+   * carries is decided here whatever nuqs does with it.
    */
-  it("does not let a later push inherit the last jump's stamp", () => {
+  it("carries the stamp one entry further back on a later push", () => {
     arm(at(A), B);
     push(`/read/x?at=${B}`);
     push("/read/x?cols=0,2");
+    expect(readStamp(history.state)).toEqual(stamp(at(A), 2));
+    push("/read/x?cols=0,2&mode=citations");
+    expect(readStamp(history.state)).toEqual(stamp(at(A), 3));
+  });
+
+  /**
+   * **And a push that leaves the article drops it**, which is the half of the
+   * old rule that was always right. The label is a section title resolved
+   * against *this* article's sections, and a `history.go(-n)` that lands in
+   * another document is not an offer this chip can make.
+   */
+  it("drops the stamp on a push that leaves the article", () => {
+    arm(at(A), B);
+    push(`/read/x?at=${B}`);
+    push("/read/y");
     expect(readStamp(history.state)).toBeNull();
+  });
+
+  /**
+   * **A second jump replaces the inherited stamp rather than deepening it.**
+   * The arm wins, and it wins at depth 1, because the entry the reader is
+   * leaving *is* the new origin. Getting this wrong would leave a reader two
+   * jumps in with a chip pointing at the first one.
+   */
+  it("starts again at one when a fresh jump lands on an inherited entry", () => {
+    arm(at(A), B);
+    push(`/read/x?at=${B}`);
+    push("/read/x?cols=0,2");
+    expect(readStamp(history.state)).toEqual(stamp(at(A), 2));
+    arm(at(B), block(9));
+    push(`/read/x?at=${block(9)}&cols=0,2`);
+    expect(readStamp(history.state)).toEqual(stamp(at(B), 1));
   });
 
   /** The counterpart: a replace must **not** lose it, or the chip blinks out. */
@@ -277,7 +429,7 @@ describe("which entries carry a stamp", () => {
     arm(at(A), B);
     push(`/read/x?at=${B}`);
     history.replaceState(null, "", `/read/x?at=${block(9)}`);
-    expect(readStamp(history.state)).toEqual(at(A));
+    expect(readStamp(history.state)).toEqual(stamp(at(A), 1));
   });
 
   /** An excursion belongs to one article. */
@@ -321,7 +473,7 @@ describe("which entries carry a stamp", () => {
     history.replaceState(null, "", `/read/x?cols=0,2&at=${block(9)}`);
     arm(TOP, block(25));
     push(`/read/x?cols=0,2&at=${block(25)}`);
-    expect(readStamp(history.state)).toEqual(TOP);
+    expect(readStamp(history.state)).toEqual(stamp(TOP, 1));
     await goBack();
     expect(location.search).toBe("?cols=0,2");
   });
@@ -508,7 +660,7 @@ describe("the jump transaction", () => {
     act(() => void jump(block(25)));
     await settled();
     expect(query()).toBe(block(25));
-    expect(readStamp(history.state)).toEqual(at(block(15)));
+    expect(readStamp(history.state)).toEqual(stamp(at(block(15)), 1));
     await act(async () => await goBack());
     expect(query()).toBe(block(15));
   });
@@ -525,7 +677,7 @@ describe("the jump transaction", () => {
     act(() => void jump(block(20)));
     await settled();
     expect(query()).toBe(block(20));
-    expect(readStamp(history.state)).toEqual(TOP);
+    expect(readStamp(history.state)).toEqual(stamp(TOP, 1));
     await act(async () => await goBack());
     expect(query()).toBeNull();
   });
@@ -545,7 +697,7 @@ describe("the jump transaction", () => {
     layOut(NOTHING_REACHED);
     act(() => void jump(block(20)));
     await settled();
-    expect(readStamp(history.state)).toEqual(TOP);
+    expect(readStamp(history.state)).toEqual(stamp(TOP, 1));
     await act(async () => await goBack());
     expect(query()).toBeNull();
   });
@@ -631,6 +783,6 @@ describe("the jump transaction", () => {
       await new Promise((resolve) => setTimeout(resolve, 500));
     });
     expect(query()).toBe(block(25));
-    expect(readStamp(history.state)).toEqual(at(block(15)));
+    expect(readStamp(history.state)).toEqual(stamp(at(block(15)), 1));
   });
 });

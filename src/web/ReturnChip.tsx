@@ -12,9 +12,9 @@
  * Every deliberate jump pushes a history entry (url-state.md § Position
  * replaces history) and Stage A put a stamp on that entry saying where the
  * reader was standing (jump-history.ts). So this component is a *view* of one
- * fact — `readStamp(history.state)`, through `useJumpOrigin` — and pressing it
- * calls `history.back()` and nothing else. **Nothing here scrolls anything:**
- * `popstate` restores the predecessor's `?at=`, nuqs hands it to the `at`
+ * fact — `readStamp(history.state)`, through `useJumpStamp` — and pressing it
+ * calls `history.go` and nothing else. **Nothing here scrolls anything:**
+ * `popstate` restores the target entry's `?at=`, nuqs hands it to the `at`
  * parameter, and `useReadingPosition`'s restore effect moves the page, which is
  * the same path a pasted link takes. Adding a `scrollToBlock` here would be a
  * second mover racing that one.
@@ -23,14 +23,29 @@
  * imagined without any of its machinery — and the machinery is not optional,
  * since JavaScript can see `history.length` and nothing else in the stack.
  *
+ * ## `history.go(-depth)`, and why it is not `history.back()`
+ *
+ * It was `history.back()` until 2026-09-16, which was correct only while the
+ * origin was always the *immediate* predecessor. Since a stamp now rides across
+ * every push that stays on this article — so that leaving a covering band to
+ * see where you landed does not destroy the way back
+ * (docs/plans/260916a-back-to-where-you-were-survives-a-mode-change.md) — the
+ * origin can be several entries away, and one press has to walk all of them.
+ *
+ * The depth is carried on the entry rather than counted here, and that is what
+ * makes Back, Forward and a second jump all free: each entry knows its own
+ * distance, so nothing has to be kept in step with the reader wandering the
+ * stack.
+ *
  * ## When it is not there
  *
  * Exactly when the current entry carries no usable stamp, and there is **no
  * hide rule of any other kind** — not distance, not "you are already in that
- * section". A citation five paragraphs away is a genuine pushed jump inside one
- * section, and hiding the chip there would suppress a real return: GPT Sol F2,
- * 2026-09-06. The two things that *do* remove it are the reader taking the
- * stack onwards (any push strips the stamp) and the reader saying so (the ×).
+ * section", and since 2026-09-16 not a depth limit either. A citation five
+ * paragraphs away is a genuine pushed jump inside one section, and hiding the
+ * chip there would suppress a real return: GPT Sol F2, 2026-09-06. The two
+ * things that *do* remove it are the reader leaving the article and the reader
+ * saying so (the ×).
  *
  * A stamp naming a block this article no longer has — the reader jumped, the
  * piece was re-extracted, the id went — draws nothing rather than a button that
@@ -42,7 +57,7 @@ import { X } from "lucide-react";
 import type { BlockId } from "../types.js";
 import type { JumpOrigin } from "./jump-history.js";
 import { type Section, sectionIndexContaining } from "./position.js";
-import { dismissJumpOrigin, useJumpOrigin } from "./router.js";
+import { dismissJumpOrigin, useJumpStamp } from "./router.js";
 
 export function ReturnChip({
   sections,
@@ -52,9 +67,9 @@ export function ReturnChip({
   /** The article's block → row index, which is how a stamp is placed. */
   rowOf: ReadonlyMap<BlockId, number>;
 }) {
-  const origin = useJumpOrigin();
-  const label = origin === null ? null : labelFor(origin, sections, rowOf);
-  if (label === null) return null;
+  const stamp = useJumpStamp();
+  const label = stamp === null ? null : labelFor(stamp.origin, sections, rowOf);
+  if (stamp === null || label === null) return null;
 
   return (
     /* `role="note"` and no live region, for `InstallHint`'s reason: this is a
@@ -65,10 +80,10 @@ export function ReturnChip({
       <button
         type="button"
         className="return-chip-go"
-        /* `history.back()`, and that really is the whole handler — see the
+        /* `history.go(-depth)`, and that really is the whole handler — see the
            header. It is also why this is a button rather than a link: there is
-           no href for "the entry before this one". */
-        onClick={() => history.back()}
+           no href for "the entry this reader came from". */
+        onClick={() => history.go(-stamp.depth)}
       >
         {/* Decorative: the sentence beside it already says what the press
             does, so a screen reader reading "left arrow hook" first would only

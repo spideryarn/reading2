@@ -85,7 +85,9 @@ import {
   consumeArmedJump,
   isJumpArmed,
   type JumpOrigin,
+  type JumpStamp,
   onArmedJumpChange,
+  oneFurtherBack,
   readStamp,
   withStamp,
 } from "./jump-history.js";
@@ -1438,7 +1440,7 @@ export function watchHistoryWrites(): void {
       ? consumeArmedJump(location.pathname + location.search, pathnameOfWrite(url), atOfWrite(url))
       : null;
     if (origin !== null) innerReplace(history.state, marker, originHref(origin));
-    innerPush(withStamp(state, origin), marker, url ?? null);
+    innerPush(withStamp(state, stampFor(origin, state, url)), marker, url ?? null);
     window.dispatchEvent(new Event(NAVIGATED));
   };
 
@@ -1447,6 +1449,62 @@ export function watchHistoryWrites(): void {
     innerReplace(withStamp(state, kept), marker, url ?? null);
     window.dispatchEvent(new Event(NAVIGATED));
   };
+}
+
+/**
+ * **What the entry this push creates should say about the way back.**
+ *
+ * Three cases, and the middle one is what changed on 2026-09-16
+ * (docs/plans/260916a-back-to-where-you-were-survives-a-mode-change.md):
+ *
+ *  - **This push *is* a jump** — an arm claimed it — so the stamp is new and
+ *    the origin is the entry right behind: depth 1.
+ *  - **This push stays on the article.** It carries the stamp forward one
+ *    entry further back. A mode change, a column toggle, a sort: the reader is
+ *    looking at the same article a different way, and the way back out of the
+ *    jump they made a moment ago is exactly as reachable as it was.
+ *  - **This push leaves the article.** Nothing is carried. The chip's label is a
+ *    section title resolved against *this* article, and `history.go(-n)` from
+ *    another document is not an offer it can make.
+ *
+ * ## Why the condition is only the pathname
+ *
+ * Until this stage the rule was *any push strips the stamp*
+ * (260906g), which is right about a reader who has moved on and wrong about one
+ * who has not moved at all — and on a phone, where the mode band covers the
+ * article (narrow-window.css § a band with no room), leaving the mode is the
+ * only way to *see* where a jump landed. So the chip was destroyed at exactly
+ * the moment it was needed. Sentry SPIDERYARN-READING2-41.
+ *
+ * The obvious replacement — carry it only when the reader has not moved, which
+ * is to say when `?at=` is unchanged — was refused in review, twice over.
+ * `?at=` names a **section** and `positionToWrite` deliberately holds it still
+ * while the reader moves anywhere inside that section (position.ts), so it is
+ * not a statement about where the reader is; and its write is debounced, so
+ * whether a genuine move had reached the address by the time the reader pressed
+ * Plain would decide whether the chip survived. The same gesture, twice, with
+ * different answers 300ms apart. GPT Sol, 2026-09-16.
+ *
+ * **The pathname rule is not a compromise, it is the version that is provably
+ * right.** The depth is a claim about the *stack*: every same-document push
+ * adds exactly one entry, so `depth + 1` names the origin's distance whatever
+ * the push changed — including a parameter added years from now that this
+ * function will never hear about. A rule that had to know what a push *meant*
+ * could be wrong about one it did not recognise.
+ *
+ * `canStamp` is asked again rather than assumed: a state we cannot merge into
+ * is one we must hand on untouched, and inheriting into it would mean throwing
+ * a stranger's value away for a chip.
+ */
+function stampFor(
+  origin: JumpOrigin | null,
+  state: unknown,
+  url: string | URL | null | undefined,
+): JumpStamp | null {
+  if (origin !== null) return { origin, depth: 1 };
+  if (!canStamp(state)) return null;
+  if (pathnameOfWrite(url) !== location.pathname) return null;
+  return oneFurtherBack(readStamp(history.state));
 }
 
 /**
@@ -1592,8 +1650,8 @@ export function useAddress(): string {
  * on a serialisation of it. `history.state` is one global, so one cache serves
  * every caller.
  */
-let originCache: { key: string; origin: JumpOrigin | null } = { key: "", origin: null };
-function jumpOriginSnapshot(): JumpOrigin | null {
+let stampCache: { key: string; stamp: JumpStamp | null } = { key: "", stamp: null };
+function jumpStampSnapshot(): JumpStamp | null {
   /* **Nothing to offer while a jump is in flight.** The reader has asked to be
      somewhere else and the page is already moving, but the push that records it
      is 50ms away — 320ms on an older Safari — so the entry underneath still
@@ -1604,15 +1662,15 @@ function jumpOriginSnapshot(): JumpOrigin | null {
      and why. */
   const next = isJumpArmed() ? null : readStamp(history.state);
   const key = next === null ? "" : JSON.stringify(next);
-  if (key !== originCache.key) originCache = { key, origin: next };
-  return originCache.origin;
+  if (key !== stampCache.key) stampCache = { key, stamp: next };
+  return stampCache.stamp;
 }
 
 /**
  * `subscribe` plus arming, which is the one thing that changes what this store
  * says without writing to history at all.
  */
-function subscribeToJumpOrigin(onChange: () => void): () => void {
+function subscribeToJumpStamp(onChange: () => void): () => void {
   const stopWatchingHistory = subscribe(onChange);
   const stopWatchingArm = onArmedJumpChange(onChange);
   return () => {
@@ -1621,8 +1679,32 @@ function subscribeToJumpOrigin(onChange: () => void): () => void {
   };
 }
 
+/**
+ * **The whole stamp** — where the jump started *and* how far back that is now.
+ *
+ * The chip wants both: the origin to name the place, the depth to know how many
+ * entries `history.go` has to walk. One store rather than two, because they are
+ * one fact and a second store could disagree with this one about which entry
+ * the reader is standing on.
+ */
+export function useJumpStamp(): JumpStamp | null {
+  return useSyncExternalStore(subscribeToJumpStamp, jumpStampSnapshot, () => null);
+}
+
+/**
+ * **Just where the jump started**, for a caller that has no use for the
+ * distance — which is `Spine.tsx`, drawing one tick at the block the reader
+ * came from.
+ *
+ * Derived rather than a store of its own. The plan for this stage claimed Spine
+ * needed no change at all; that was false, because Spine and the chip read one
+ * store and the store's type was moving (GPT Sol's sixth finding, 2026-09-16).
+ * This is the smaller half of the correction: the type Spine wants is still
+ * spelled for it here, so the call site keeps its meaning and the identity it
+ * gets is the cached stamp's own.
+ */
 export function useJumpOrigin(): JumpOrigin | null {
-  return useSyncExternalStore(subscribeToJumpOrigin, jumpOriginSnapshot, () => null);
+  return useJumpStamp()?.origin ?? null;
 }
 
 /**

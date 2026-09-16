@@ -403,14 +403,55 @@ Three things about it are worth knowing before you touch anything near here:
   caller, and that is not a stylistic choice: nuqs keeps pending updates in a `Map` keyed by
   parameter name, so two `setAt` calls in one tick are not a transaction — the second overwrites the
   first, one push lands, and the predecessor rewrite silently never happens.
-- **A push strips the stamp unless a jump armed it.** nuqs hands `pushState` the *current* entry's
-  state verbatim, so without the strip a `cols` or `mode` toggle after a jump would inherit that
-  jump's origin and the chip would promise a return it cannot make.
+- **What a push does with an inherited stamp is decided, never inherited.** nuqs hands `pushState`
+  the *current* entry's state verbatim, so a `cols` or `mode` toggle after a jump would otherwise
+  carry that jump's origin by accident. `stampFor` ([`router.ts`](../../src/web/router.ts)) decides
+  it instead, from the entry the reader is standing on — see the rule below.
 
 Nothing about it rides along in a shared link: the record lives on `history.state`, per entry, which
 is why it is not a `?from=` parameter. The stamp is not a parameter and so is not in § The
 parameters; the one place it is written down is
 [`jump-history.ts`](../../src/web/jump-history.ts).
+
+#### The way back lives until you leave the article
+
+**A stamp carries a depth, and every push that stays on this article carries it one entry further
+back.** Since 2026-09-16, and it replaces the flat rule this section used to state — *any push
+strips the stamp* — which was right about a reader who had moved on and wrong about one who had not
+moved at all. On a phone the mode band **covers** the article
+([narrow-windows.md](narrow-windows.md)), so leaving the mode is the only way to *see* where a jump
+landed; the chip was therefore destroyed at exactly the moment it was needed, which is what the
+reader reported. [260916a](../plans/260916a-back-to-where-you-were-survives-a-mode-change.md).
+
+So the chip is `history.go(-depth)` rather than `history.back()`, and:
+
+| The push | The stamp on the entry it creates |
+|---|---|
+| a jump armed it | new, naming the measured origin, `depth: 1` |
+| same pathname | the current entry's, at `depth + 1` |
+| a different pathname | none |
+
+**The condition is only the pathname, and that is the whole of it.** "Carry it only when the reader
+has not moved" was tried first and refused in review: `?at=` names a *section* and deliberately holds
+still while the reader moves inside one (§ The unit is a section), so it is not a statement about
+where the reader is — and its write is debounced, so whether a genuine move had reached the address
+by the time the reader pressed Plain would decide whether the chip survived. The same gesture, twice,
+with different answers 300ms apart.
+
+**The pathname rule is not a compromise but the version that is provably right.** The depth is a
+claim about the *stack*, not about the page: every same-document push adds exactly one entry, so
+`depth + 1` is the origin's distance whatever the push changed — including a parameter added years
+from now. A rule that had to know what a push *meant* could be wrong about one it did not recognise.
+
+Two consequences worth knowing:
+
+- **The stamp's shape is versioned**, `{ v, origin, depth }`, and carries no `from`. That is what an
+  older bundle reads after a rollback, and it must fail *closed*: the old parser looks for `from`,
+  finds none, and draws no chip, rather than drawing one and stepping a single entry to somewhere
+  its own label does not name.
+- **There is no cap on the depth**, only a plausibility bound on a number that could have come from
+  a browser restore. A cap would take a working way back away for a feeling, and the reader already
+  has the × .
 
 ### Debounced, not throttled
 

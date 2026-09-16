@@ -1,5 +1,15 @@
 # Back to where you jumped from
 
+**One rule here was reversed on 2026-09-16** —
+[260916a](260916a-back-to-where-you-were-survives-a-mode-change.md). This plan has *any push strips
+the stamp* throughout (F3, and § Stage A), on the reasoning that the chip could only ever step one
+entry and so could only be truthful about its immediate predecessor. That was right about the
+mechanism and wrong about the cure: the chip was pointing at the correct origin and it was the
+*press* that was one entry short. A stamp now carries a depth and rides every push that stays on the
+article, because on a phone the covering band makes leaving the mode the only way to see where a
+jump landed — so the old rule destroyed the chip exactly when it was needed. Read that plan before
+trusting any sentence here about when a stamp survives.
+
 Status as of 2026-09-06: **every stage, every review and the docs are done** — evidence:
 `src/web/ReturnChip.tsx` and `src/web/comment-jump.ts` exist, `Spine.tsx` draws a `.spine-from` mark
 for a jump origin, and every stage has been through a cross-family review whose findings are all

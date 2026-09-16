@@ -10,11 +10,12 @@
  * docs/plans/260906c-separate-article-access-reader-composition-and-mode-controllers.md.
  */
 
-import { useCallback, useEffect, useMemo, useRef } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef } from "react";
 import { throttle, useQueryState } from "nuqs";
 import type { Block, BlockId } from "../../types.js";
 import { atParam } from "../params.js";
 import {
+  abandonScroll,
   glideTarget,
   scrollToBlock,
   scrollToTop,
@@ -59,6 +60,81 @@ export function useReadingPosition(sections: Section[], blocks: Block[], layoutK
     if (at === null) scrollToTop();
     else scrollToBlock(at, "auto");
   }, [at]);
+
+  /**
+   * **Turn the phone, and you are still reading the same section.**
+   *
+   * Greg, 2026-09-12 (Sentry SPIDERYARN-READING2-41): *"if I switch from
+   * portrait to landscape … it takes me to other bits of the article and I sort
+   * of lose my place."* Stage 3 of
+   * docs/plans/260916a-back-to-where-you-were-survives-a-mode-change.md.
+   *
+   * A rotation keeps `window.scrollY` in **pixels** and reflows the prose to a
+   * new measure, so the pixel the reader was on is now a different paragraph.
+   * Nothing here used to answer that, and the one thing that noticed made it
+   * worse: the spy below re-runs on every `layoutKey` change and calls
+   * `measure()` immediately, so the app's response to a reflow was to *write
+   * down where the reflow had left the reader* — overwriting `?at=`, the only
+   * record of where they had been. The reader lost their place and the address
+   * agreed with the loss.
+   *
+   * This is the other way round. On a layout change the **address is the truth**
+   * and the page is put back under it. `?at=` is section-granular
+   * (position.ts § `positionToWrite` writes only when the section changes), so
+   * what is restored is the section rather than the sentence — the precision
+   * this app has, and the same precision a reload gives.
+   *
+   * ## The three things that decide whether it acts
+   *
+   *  - **`layoutKey` changed and `at` did not.** When `at` changed too, the
+   *    restore effect above owns the move: it is what handles Back, Forward and
+   *    a pasted link, and a traversal that changes both would otherwise be two
+   *    movers on one page, disagreeing the moment either changed. "Skip the
+   *    first render" was the first draft of this guard and it was wrong for
+   *    exactly that reason — arrival is not the only thing that effect owns.
+   *    GPT Sol's fourth finding, 2026-09-16.
+   *  - **`at` is not null.** Above the first section there is no section to
+   *    hold, and the top of the page is where the browser's own restoration is
+   *    already right.
+   *  - **Nothing else may still be travelling.** `scrollToBlock` works out a
+   *    destination in pixels and `glide` spends ~200ms going to that number, so
+   *    a reflow mid-flight leaves it aiming at a layout that no longer exists.
+   *    `abandonScroll()` first, then an instant move: there is no stale pixel
+   *    left to land on. The plan's first draft *skipped* the re-anchor while a
+   *    glide was in flight, which is precisely when the stale number needs
+   *    overriding. GPT Sol's second finding.
+   *
+   *    **And `abandonScroll` is not redundant beside the move that follows it**,
+   *    though it looks it: every path of `scrollToBlock` cancels an in-flight
+   *    glide *except the one that matters here*, which is `if (!row) return` —
+   *    a `?at=` naming a block this article no longer has, after a
+   *    re-extraction. That is precisely the case where nothing else would stop
+   *    the stale pixel, and the reader would be carried off to it by a layout
+   *    they had just left.
+   *
+   * The one window this does not cover is the ~50ms between a tap and nuqs
+   * flushing the jump's push, in which `?at=` still names the origin: rotate
+   * inside it and the reader is put back where they started rather than where
+   * they were going. Said plainly rather than defended — it is a 50ms window on
+   * a gesture that takes a second, and "the jump did not happen" is recoverable
+   * by tapping again.
+   *
+   * **`useLayoutEffect`, not `useEffect`**, so the correction happens before the
+   * browser paints. A passive effect would show the reader one frame of the
+   * wrong paragraph, which is a flicker they would read as the app losing their
+   * place — the very complaint this answers.
+   */
+  const laidOut = useRef<{ layoutKey: string; at: BlockId | null } | null>(null);
+  useLayoutEffect(() => {
+    const was = laidOut.current;
+    laidOut.current = { layoutKey, at };
+    if (was === null) return; // arrival: the restore effect above owns it
+    if (was.layoutKey === layoutKey) return; // nothing reflowed
+    if (was.at !== at) return; // the address moved too — not ours
+    if (at === null) return; // nothing to hold at the top
+    abandonScroll();
+    scrollToBlock(at, "auto");
+  }, [layoutKey, at]);
 
   // Page → URL, once the reader stops moving.
   useEffect(() => {
