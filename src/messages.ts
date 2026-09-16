@@ -543,10 +543,12 @@ export const CODE_KINDS: Record<string, FailureKind> = {
      somebody" at that exact moment would have handed them a loop. `retry`, and
      the dialog puts a Copy button beside it for the case where it keeps failing.
      `fb-store` is a deployment running without the database reports are kept in,
-     which another go cannot fix. See § feedback below, and
+     which another go cannot fix. `fb-list` is the transient failure to read the
+     reports back. See § feedback below, and
      docs/project/feedback.md. */
   "fb-send": "retry",
   "fb-store": "ours",
+  "fb-list": "retry",
   /* The subscription allowance, `pay-`. All six are registered rather than
      left to fall through, and the four `blocked` ones are the reason: an
      unrecognised code means *offer another go*, so "you have used all three of

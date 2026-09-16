@@ -169,3 +169,15 @@ Option 1 is the natural next step and is Greg's to ask for.
   paste, drop, microphone, focus, reset on close, the read's generation check) and each turned its
   own test red. One thing jsdom cannot see and CSS had to fix: `.fb-scroll`'s `display: flex`
   outranks the UA's `[hidden]`, so `.fb-scroll[hidden], .fb-actions[hidden]` say it again.
+- 2026-09-16: GPT Sol stage-2 code review approved, fixing four things itself, each read and
+  re-run (500 tests across the scoped suites, typecheck clean) —
+  [answer](260916c-your-earlier-feedback-tab-in-the-feedback-dialog-stage2-review-sol.md):
+  F8 a wrong-shaped 200 would have crashed the list, so the page is validated before it is shown;
+  F9 the Earlier panel is itself a tab stop, so a keyboard reader can scroll a list with no
+  controls in it; F10 `[fb-list]` was missing from `CODE_KINDS`, which `tests/messages.test.ts`
+  catches and my scoped run had not included; F11 a send that fails after the reader has moved to
+  Earlier brings them back to Write, where the recovery panel is, rather than failing out of sight.
+- 2026-09-16: a real browser (Playwright, system Chrome, 1280×900 and 390×844) passed all nine
+  checks: one panel and one button row visible per tab, newest first with line breaks kept, the
+  draft kept across tabs, ⌘/Ctrl+Enter from Earlier files nothing, arrows move selection and focus,
+  reopening lands on Write, a long URL wraps at 390px, no console errors.

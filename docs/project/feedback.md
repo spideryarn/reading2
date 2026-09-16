@@ -174,7 +174,9 @@ more. **What came of each report is not shown** — the plan's § Deferred says 
 paste and drop handlers on the whole `<dialog>`, and the form's submit all still reach a draft the
 reader cannot see; each has a guard and a test. And `.fb-scroll[hidden]` needs its own
 `display: none`, because the panel's `display: flex` outranks the UA's `[hidden]` — jsdom cannot see
-that one. [260916c](../plans/260916c-your-earlier-feedback-tab-in-the-feedback-dialog.md).
+that one. A send already in flight is allowed to finish: success becomes the ordinary thank-you,
+and failure returns to Write so its recovery panel cannot land hidden.
+[260916c](../plans/260916c-your-earlier-feedback-tab-in-the-feedback-dialog.md).
 
 ## The thank-you, and getting out of it
 

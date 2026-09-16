@@ -682,6 +682,28 @@ export function FeedbackDialog({ open, onClose, where }: Props) {
   const panelId = (which: View) => `${ids}-panel-${which}`;
   const writeTab = useRef<HTMLButtonElement>(null);
   const earlierTab = useRef<HTMLButtonElement>(null);
+  const viewRef = useRef(view);
+  viewRef.current = view;
+
+  /**
+   * A failed send needs the reader's action, so it must not land inside the
+   * hidden Write panel. Do not move focus in a dialog they have since closed;
+   * reopening already resets to Write and preserves the failed draft.
+   */
+  const revealSendFailure = useCallback(() => {
+    if (viewRef.current !== "earlier" || !ref.current?.open) return;
+    setView("write");
+    writeTab.current?.focus();
+  }, []);
+
+  const showSendFailure = useCallback(
+    (message: string) => {
+      revealSendFailure();
+      sending.current = false;
+      setStage({ kind: "failed", message });
+    },
+    [revealSendFailure],
+  );
 
   /**
    * **One way to change tab**, for a pointer and an arrow key alike, so both end
@@ -809,8 +831,7 @@ export function FeedbackDialog({ open, onClose, where }: Props) {
         const message =
           res.status === 501 ? FEEDBACK_NOT_AVAILABLE.message : (await failure(res)).message;
         if (!stillMine()) return;
-        sending.current = false;
-        setStage({ kind: "failed", message });
+        showSendFailure(message);
         return;
       }
       /* 200 and 201 are both success as far as the reader is concerned: the
@@ -824,10 +845,22 @@ export function FeedbackDialog({ open, onClose, where }: Props) {
          `Response` and there is not one — this is the correlated-failure case
          the plan names, and the sentence is written for it. */
       if (!stillMine()) return;
-      sending.current = false;
-      setStage({ kind: "failed", message: FEEDBACK_SEND_FAILED.message });
+      showSendFailure(FEEDBACK_SEND_FAILED.message);
     }
-  }, [view, reportId, somethingSaid, over, preparing, consented, body, kind, where, shot, dictationBusy]);
+  }, [
+    view,
+    reportId,
+    somethingSaid,
+    over,
+    preparing,
+    consented,
+    body,
+    kind,
+    where,
+    shot,
+    dictationBusy,
+    showSendFailure,
+  ]);
 
   const copy = useCallback(() => {
     const clipboard = navigator.clipboard;
@@ -1187,6 +1220,8 @@ export function FeedbackDialog({ open, onClose, where }: Props) {
           role="tabpanel"
           id={panelId("earlier")}
           aria-labelledby={tabId("earlier")}
+          // biome-ignore lint/a11y/noNoninteractiveTabindex: this tabpanel is itself a scroll box and its ordinary loaded state contains no controls; without a tab stop, a keyboard reader skips from the Earlier tab to Close and cannot reliably scroll the list.
+          tabIndex={0}
           hidden={view !== "earlier"}
         >
           <EarlierList earlier={earlier} retry={retry} />

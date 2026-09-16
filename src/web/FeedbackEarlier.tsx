@@ -30,6 +30,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { FEEDBACK_EARLIER_FAILED } from "../messages.js";
 import {
   EARLIER_FEEDBACK_LIMIT,
+  FEEDBACK_KINDS,
   type EarlierFeedbackPage,
   type FeedbackKind,
 } from "../types.js";
@@ -40,6 +41,24 @@ export type EarlierState =
   | { kind: "loading" }
   | { kind: "failed"; message: string }
   | { kind: "loaded"; page: EarlierFeedbackPage };
+
+/** A 200 is only success when it carries the wire shape the panel can render. */
+function isEarlierFeedbackPage(value: unknown): value is EarlierFeedbackPage {
+  if (typeof value !== "object" || value === null) return false;
+  const page = value as Record<string, unknown>;
+  if (!Array.isArray(page.reports) || typeof page.more !== "boolean") return false;
+  return page.reports.every((value: unknown) => {
+    if (typeof value !== "object" || value === null) return false;
+    const report = value as Record<string, unknown>;
+    return (
+      typeof report.id === "string" &&
+      typeof report.createdAt === "string" &&
+      !Number.isNaN(Date.parse(report.createdAt)) &&
+      (report.kind === null || FEEDBACK_KINDS.some((kind) => kind === report.kind)) &&
+      typeof report.body === "string"
+    );
+  });
+}
 
 /**
  * The read, lazily. `wanted` is whether the Earlier tab is showing; `open` is
@@ -63,8 +82,13 @@ export function useEarlierFeedback(
         }
         return;
       }
-      const page = (await res.json()) as EarlierFeedbackPage;
-      if (mine === generation.current) setEarlier({ kind: "loaded", page });
+      const page: unknown = await res.json();
+      if (mine !== generation.current) return;
+      setEarlier(
+        isEarlierFeedbackPage(page)
+          ? { kind: "loaded", page }
+          : { kind: "failed", message: FEEDBACK_EARLIER_FAILED.message },
+      );
     } catch {
       if (mine === generation.current) {
         setEarlier({ kind: "failed", message: FEEDBACK_EARLIER_FAILED.message });

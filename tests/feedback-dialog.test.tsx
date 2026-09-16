@@ -14,7 +14,7 @@
  * Escape, top-layer painting — is the platform's, and a test asserting the
  * platform works would be testing the wrong thing.
  */
-import { act, createElement, useState } from "react";
+import { act, createElement, StrictMode, useState } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -139,6 +139,25 @@ function mount() {
   document.body.append(host);
   root = createRoot(host);
   show(true);
+}
+
+function mountStrict() {
+  host = document.createElement("div");
+  document.body.append(host);
+  root = createRoot(host);
+  act(() => {
+    root.render(
+      createElement(
+        StrictMode,
+        null,
+        createElement(FeedbackDialog, {
+          open: true,
+          onClose: () => {},
+          where: { url: "https://www.spideryarn.com/read/a-piece", slug: "a-piece" },
+        }),
+      ),
+    );
+  });
 }
 
 /**
@@ -1241,6 +1260,28 @@ describe("the Earlier tab", () => {
     expect(panelOf("Earlier").querySelectorAll("li")).toHaveLength(2);
   });
 
+  it("treats a wrong-shaped successful response as a load failure", async () => {
+    listAnswer = page({ reports: "not a list", more: false });
+    mount();
+    click(tab("Earlier"));
+    await act(async () => {});
+
+    expect(panelOf("Earlier").textContent).toContain("[fb-list]");
+    expect(panelOf("Earlier").getAttribute("hidden")).toBeNull();
+  });
+
+  it.each([
+    ["a non-JSON 200", async () => new Response("not JSON", { status: 200 })],
+    ["a 401", page({ error: "sign in again" }, 401)],
+  ])("treats %s as a load failure", async (_case, response) => {
+    listAnswer = response;
+    mount();
+    click(tab("Earlier"));
+    await act(async () => {});
+
+    expect(panelOf("Earlier").textContent).toContain("[fb-list]");
+  });
+
   it("reads once per opening, however often the reader flips between tabs", async () => {
     listAnswer = page(REPORTS);
     mount();
@@ -1255,6 +1296,14 @@ describe("the Earlier tab", () => {
     click(tab("Earlier"));
     await act(async () => {});
     expect(lists, "a new opening reads afresh").toHaveLength(2);
+  });
+
+  it("starts one read when Earlier is chosen under StrictMode", async () => {
+    mountStrict();
+    click(tab("Earlier"));
+    await act(async () => {});
+
+    expect(lists).toEqual(["/api/feedback"]);
   });
 
   it("keeps the draft through a trip to Earlier and back", async () => {
@@ -1305,6 +1354,40 @@ describe("the Earlier tab", () => {
     expect(posts).toHaveLength(1);
   });
 
+  it("brings a failed in-flight send back into view after the reader switches to Earlier", async () => {
+    let settle: ((res: Response) => void) | null = null;
+    answer = () => new Promise<Response>((resolve) => (settle = resolve));
+    mount();
+    type("A report whose failure must not be hidden.");
+    send();
+    click(tab("Earlier"));
+
+    await act(async () => {
+      settle?.(new Response("nope", { status: 500 }));
+    });
+
+    expect(tab("Write").getAttribute("aria-selected")).toBe("true");
+    expect(panelOf("Write").hidden).toBe(false);
+    expect(panelOf("Write").querySelector(".fb-failed")?.textContent).toContain("nope");
+    expect(document.activeElement).toBe(tab("Write"));
+  });
+
+  it("shows the thank-you when an in-flight send lands after the reader switches to Earlier", async () => {
+    let settle: ((res: Response) => void) | null = null;
+    answer = () => new Promise<Response>((resolve) => (settle = resolve));
+    mount();
+    type("A report that did arrive.");
+    send();
+    click(tab("Earlier"));
+
+    await act(async () => {
+      settle?.(new Response("{}", { status: 201 }));
+    });
+
+    expect(host.querySelector(".fb-done")).not.toBeNull();
+    expect(host.querySelectorAll('[role="tab"]')).toHaveLength(0);
+  });
+
   it("stops the microphone on the way to Earlier, without pulling focus back to the box", () => {
     mic.armed = true;
     try {
@@ -1346,6 +1429,7 @@ describe("the Earlier tab", () => {
     expect(document.activeElement).toBe(tab("Earlier"));
     expect(tab("Earlier").tabIndex).toBe(0);
     expect(tab("Write").tabIndex).toBe(-1);
+    expect(panelOf("Earlier").tabIndex, "the scrollable list is skipped by Tab").toBe(0);
 
     act(() => {
       tab("Earlier").dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowLeft", bubbles: true }));

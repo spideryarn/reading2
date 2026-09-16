@@ -220,6 +220,10 @@
   font-size: 0.8rem;
   color: var(--ink-soft);
 }
+.fb-earlier:focus-visible {
+  outline: 1px solid var(--highlight);
+  outline-offset: -1px;
+}
 
 .fb-head {
   display: flex;
@@ -549,4 +553,3 @@
    in this file that declare their own `font: inherit` still win, and so does
    every utility. Two spellings of one rule is the thing worth not leaving
    behind. */
-
