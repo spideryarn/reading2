@@ -1317,6 +1317,43 @@ export const SPECIMEN_MARKS: { label: string; marks: Mark[] }[] = [
     label: "The quote the reader pressed — a white stroke and a momentary wash",
     marks: [{ id: "q", start: 25, end: 65, kind: "hit", quoteStroke: { tier: 2, alpha: 1 }, open: true }],
   },
+  {
+    /* The fifth kind, 2026-09-16 (SPIDERYARN-READING2-3M). `software` stands in
+       for "(Tulving 1983)" — this specimen text has no citation in it, and
+       rewriting it would have restated all six expected outputs above to show
+       one new mark. */
+    label: "A work the piece cites — a dashed rule, on the one channel nothing else uses",
+    marks: [{ id: "c", start: 33, end: 41, kind: "cite" }],
+  },
+  {
+    /* **This is the specimen the plan was written to look at**, and the reason
+       the citation mark took `text-decoration` rather than a fourth
+       `border-bottom`. A cited author who is also a glossary term is the
+       ordinary case in a paper, not a corner: one <mark> carrying both classes,
+       a dotted border and a dashed underline, 1px apart in weight and a couple
+       of pixels apart on the page.
+
+       If these do not read as two things, the answer is in the plan
+       (docs/plans/260916b-…): `underline double` for the citation, which is
+       plainly distinct and louder. Decided here rather than in prose, because
+       this is a question about what it looks like. */
+    label: "A citation that is also a glossary term — the dotted rule and the dashed one, together",
+    marks: [
+      { id: "t", start: 33, end: 41, kind: "term" },
+      { id: "c", start: 33, end: 41, kind: "cite" },
+    ],
+  },
+  {
+    /* The other overlap that is reachable today: the quotes are marked in every
+       mode, so any citation inside a quoted sentence draws both. A stroke and a
+       background do not compete with a text decoration, which is the claim this
+       row exists to let somebody check. */
+    label: "A citation inside a quote — the stroke and the dashed rule, neither redrawn",
+    marks: [
+      { id: "q", start: 25, end: 65, kind: "hit", quoteStroke: { tier: 2, alpha: 1 } },
+      { id: "c", start: 33, end: 41, kind: "cite" },
+    ],
+  },
 ];
 
 /** `annotateHtml(SPECIMEN_HTML, marks)` for each of the above, in the same order. */
@@ -1327,4 +1364,7 @@ export const SPECIMEN_OUT: string[] = [
   '<p><mark class="hit" data-hit="q1" data-quote="2" style="--quote-a:1.00" data-quote-start="" data-quote-end="">He rejects the idea</mark><mark class="hit" data-hit="q2" data-quote="1" style="--quote-a:0.70" data-quote-start=""> that mind is </mark><em><mark class="hit" data-hit="q2" data-quote="1" style="--quote-a:0.70">software</mark></em><mark class="hit" data-hit="q2" data-quote="1" style="--quote-a:0.70" data-quote-end=""> running on wet hardware</mark>, and says so in the first paragraph.</p>',
   '<p>He rejects the idea that <mark class="hit" data-hit="q" data-quote="2" style="--quote-a:1.00" data-quote-start="">mind is </mark><em><mark class="hit" data-hit="h q" data-wash="" data-quote="2" data-hues="1" style="--hit-a:0.450;--quote-a:1.00;--h0:var(--cat-0-rgb)">software</mark></em><mark class="hit" data-hit="h q" data-wash="" data-quote="2" data-hues="1" style="--hit-a:0.450;--quote-a:1.00;--h0:var(--cat-0-rgb)" data-quote-end=""> running on wet hardware</mark><mark class="hit" data-hit="h" data-wash="" data-hues="1" style="--hit-a:0.450;--h0:var(--cat-0-rgb)">, and says so</mark> in the first paragraph.</p>',
   '<p>He rejects the idea that <mark class="hit" data-hit="q" data-quote="2" style="--quote-a:1.00" data-quote-start="" data-hit-open="">mind is </mark><em><mark class="hit" data-hit="q" data-quote="2" style="--quote-a:1.00" data-hit-open="">software</mark></em><mark class="hit" data-hit="q" data-quote="2" style="--quote-a:1.00" data-quote-end="" data-hit-open=""> running on wet hardware</mark>, and says so in the first paragraph.</p>',
+  '<p>He rejects the idea that mind is <em><mark class="cite" data-cite="c">software</mark></em> running on wet hardware, and says so in the first paragraph.</p>',
+  '<p>He rejects the idea that mind is <em><mark class="term cite" data-term="t" data-cite="c">software</mark></em> running on wet hardware, and says so in the first paragraph.</p>',
+  '<p>He rejects the idea that <mark class="hit" data-hit="q" data-quote="2" style="--quote-a:1.00" data-quote-start="">mind is </mark><em><mark class="hit cite" data-hit="q" data-quote="2" style="--quote-a:1.00" data-cite="c">software</mark></em><mark class="hit" data-hit="q" data-quote="2" style="--quote-a:1.00" data-quote-end=""> running on wet hardware</mark>, and says so in the first paragraph.</p>',
 ];

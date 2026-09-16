@@ -137,6 +137,64 @@ mark.cmt.term {
   border-bottom-style: solid;
 }
 
+/* ---- a work the piece cites -----------------------------------------
+   The fifth `MarkKind` (annotate.ts § `citeMarks`), drawn on every phrase the
+   article cites a work at, standing and in every mode. Greg, 2026-09-12
+   (SPIDERYARN-READING2-3M): "once generated, we should always visually indicate
+   Citations somehow in the main text".
+
+   **`text-decoration`, which nothing else here uses.** A comment and a term
+   both draw a `border-bottom`, a quote a `box-shadow`, a search hit a
+   `background`. Taking the one free channel is not tidiness — it is what lets a
+   citation and a glossary term over one phrase each keep their own line instead
+   of one of them being redrawn, which is the ordinary case in an academic paper
+   where the cited author is also a term in the glossary.
+
+   **Dashed, against the term's dotted**, and that pair is the thing to look at
+   on /design rather than to reason about here: at 1px the two are close, and
+   the reader has already learnt that a dotted rule means glossary. If the
+   specimen says they do not read as two things, the fallback named in the plan
+   is `underline double` — plainly distinct, and louder, which is why it is the
+   fallback and not the first choice.
+
+   **And the words do not change colour**, which is the rule `mark.cmt` states
+   and the reason Fable's suggestion to draw the mention in the link colour was
+   refused twice over: `.prose a` is already `--highlight-ink`, so it would make
+   a citation look like one of the article's own hyperlinks — which go somewhere
+   when pressed, and this does not — and, underneath that, the verbatim column
+   does not repaint the author's prose to advertise our annotation. The tint
+   lives entirely in `text-decoration-color`.
+
+   No `[data-cite-open]` and no marker glyph: nothing selects a citation from
+   the band yet (`?cite=` is deferred), and a citation is not an artefact the
+   reader made. */
+mark.cite {
+  background: none;
+  color: inherit;
+  text-decoration: underline dashed;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 2px;
+  text-decoration-color: color-mix(in oklab, var(--ink-soft) 70%, transparent);
+  /* `help`, not `pointer`, for `mark.term`'s reason: the click does nothing,
+     the card is the affordance, and a pointer cursor promising a click is the
+     small lie that makes people click twice. */
+  cursor: help;
+  transition: text-decoration-color 0.12s, background 0.12s;
+}
+mark.cite:hover {
+  text-decoration-color: var(--ink);
+  background: color-mix(in oklab, var(--highlight) 5%, transparent);
+}
+/* The phrase a finger has armed — useHoverCard.ts § TAP_ATTR, which writes the
+   attribute without knowing the kind. Same weight as the hover state, for
+   `mark.term[data-hover-tap]`'s reason: on a touch screen there has to be
+   something saying *which* words the card belongs to, and `:hover` cannot do it
+   because iOS makes it sticky. */
+mark.cite[data-hover-tap] {
+  text-decoration-color: var(--ink);
+  background: color-mix(in oklab, var(--highlight) 5%, transparent);
+}
+
 /* A search hit. **The one mark whose intensity means something** — `--hit-a` is
    set per run by annotate.ts from the model's confidence, so a passage the
    model was sure about is visibly heavier than one it was hedging on. A binary
