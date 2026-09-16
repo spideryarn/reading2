@@ -72,7 +72,7 @@ import type { PublicLibrary } from "../src/public-library-types.js";
 import {
   PUBLIC_SHELF_EMPTY,
   PUBLIC_SHELF_FAILED,
-  PUBLIC_SHELF_HEADING,
+  PUBLIC_SHELF_LABEL,
   PUBLIC_SHELF_LEDE,
   PUBLIC_SHELF_RETRY,
   PUBLIC_SHELF_PROVENANCE,
@@ -275,7 +275,7 @@ describe("the shelf of shared articles", () => {
 
   it("and says what the page is, above them", async () => {
     const page = await show();
-    expect(page.querySelector("h1")?.textContent).toBe(PUBLIC_SHELF_HEADING);
+    expect(page.querySelector("h1")?.textContent).toBe(PUBLIC_SHELF_LABEL);
     expect(page.textContent).toContain(PUBLIC_SHELF_LEDE);
   });
 
@@ -331,7 +331,7 @@ describe("when nobody has shared anything", () => {
     expect(cards(page)).toHaveLength(0);
     /* And it is still the page: the heading is what says the address meant
        something, which a 404 would have denied. */
-    expect(page.querySelector("h1")?.textContent).toBe(PUBLIC_SHELF_HEADING);
+    expect(page.querySelector("h1")?.textContent).toBe(PUBLIC_SHELF_LABEL);
   });
 });
 
@@ -474,12 +474,12 @@ describe("if something on the shelf is yours", () => {
   /**
    * **Above the list, and it used to be below it.** Asserted against the
    * heading rather than against a card, so an empty shelf exercises it too —
-   * `PUBLIC_SHELF_HEADING` is in the header on every arm.
+   * `PUBLIC_SHELF_LABEL` is in the header on every arm.
    */
   it("puts it at the top of the page", async () => {
     const page = await show();
     const text = page.textContent ?? "";
-    expect(text.indexOf(PUBLIC_SHELF_HEADING)).toBeLessThan(
+    expect(text.indexOf(PUBLIC_SHELF_LABEL)).toBeLessThan(
       text.indexOf(PUBLIC_SHELF_PROVENANCE),
     );
     /* And it is not also at the foot. A page making the same offer at both ends

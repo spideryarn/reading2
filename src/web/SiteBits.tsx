@@ -75,13 +75,23 @@ export function Wordmark({ className }: { className?: string }) {
 }
 
 /**
- * The bar at the top of all three pages: wordmark left, three links right.
+ * The marketing bar: wordmark left, page links right.
  *
- * **Four pages, since 2026-09-04**, and the fourth is not a marketing page:
+ * **`/read/public` joined the marketing pages on 2026-09-04**, though it is not
+ * itself a marketing page.
  * `/read/public` (PublicLibraryPage.tsx) is a list of somebody's shared
  * articles, and it borrows this bar because it is somewhere a stranger is
  * *sent* and needs a way to the rest of the site. It borrows nothing else here,
- * and it is deliberately not in `LINKS` below or in `SiteFooter`'s.
+ * and it is deliberately not in `LINKS` below.
+ *
+ * **It joined `SiteFooter`'s list on 2026-09-16 and not this one**, which this
+ * sentence used to bracket together and which are two different decisions.
+ * Greg asked for the shelf in the footers (SiteFooter.tsx § `LINKS`); this bar
+ * stayed as it was for the reason `/contact` also stayed out of it — below `sm`
+ * a stranger sees exactly one page link and *Sign in*, measured to fit at the
+ * 320px reflow width, and another always-on entry puts it back over. So the row
+ * at the foot of the page grows and the bar at the top does not, and that
+ * asymmetry is a measurement rather than an oversight.
  *
  * It is sticky and translucent, and it grows a hairline border only once the
  * page has scrolled — done in CSS with `animation-timeline: scroll()`, so there
@@ -89,9 +99,9 @@ export function Wordmark({ className }: { className?: string }) {
  * unsupported it simply stays borderless, which is the right look at the top of
  * the page and an acceptable one below it.
  *
- * **`signedIn` has no default, and that is the point of it.** Two of the three
- * pages that draw this bar are mounted signed in as well as signed out
- * (App.tsx), and *Sign in* is the one entry whose destination exists only for a
+ * **`signedIn` has no default, and that is the point of it.** Features, Pricing
+ * and the public library are mounted signed in as well as signed out (App.tsx),
+ * and *Sign in* is the one entry whose destination exists only for a
  * stranger — see the comment on it below. A defaulted prop would let the next
  * caller inherit a dead link without saying anything, which is exactly how this
  * one got here, so every caller answers the question.
@@ -451,4 +461,3 @@ export function Feature({ name, children }: { name: string; children: ReactNode 
    in Spideryarn — did not move: it is each page's own child text, because it is
    a promise about *these pages* rather than a fact about the site.
    docs/project/marketing-pages.md § Say what the pictures are. */
-

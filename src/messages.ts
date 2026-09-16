@@ -2908,8 +2908,38 @@ export const NOT_FOUND_TO_HOME = "Go to the home page";
  * caught that the fix had left it standing. What survives says only what the
  * page holds and what it does not hold, both of which the `where` clause can
  * only ever confirm. docs/reusable/silent-success.md.
+ *
+ * ## `LABEL` rather than `HEADING`, since 2026-09-16
+ *
+ * **This is the page's shared reader-facing name**, not just the words over the
+ * list: the `<h1>` (PublicLibraryPage.tsx), the footer row
+ * (src/web/SiteFooter.tsx § `LINKS`) and the command bar
+ * (src/web/CommandBar.tsx). It was `PUBLIC_SHELF_HEADING` until the footer link
+ * arrived, and the rename is the same call `CHANGELOG_LABEL` records
+ * (src/web/router.ts): a name that says where a string is drawn goes stale the
+ * first time it is drawn somewhere else, and then it argues against reuse — the
+ * next person reads `HEADING` and writes a second literal for their nav link
+ * rather than importing this.
+ *
+ * **Which is exactly what had happened.** The command bar called this page
+ * *"Public shelf"*, a literal of its own, taken from the name
+ * docs/project/public-shelf.md uses — and *that* is the internal name, the same
+ * mistake `CHANGELOG_LABEL`'s note describes about *Changelog*. It now reads
+ * this constant, with *public shelf* kept as an alias.
+ *
+ * **Two literals of these words survive**, deliberately and not happily: the
+ * browser tab (src/web/page-title.ts § `public-library`) and the *← Back* link
+ * on `/features/public-readable-sharing`. Both already say the right thing, so
+ * folding them in would change no behaviour, and GPT Sol's review of
+ * docs/plans/260916a-add-a-link-to-the-public-shelf-in-the-site-footer.md called
+ * it more than that change needed. They are named here so the next person to
+ * touch either does not have to find out on their own.
+ *
+ * **The prose on `/privacy` still says "our public shelf"** and should. That is
+ * a sentence describing the thing, not a name for a destination a reader
+ * presses, and the two are allowed to differ.
  */
-export const PUBLIC_SHELF_HEADING = "Shared articles";
+export const PUBLIC_SHELF_LABEL = "Shared articles";
 
 /**
  * **The line under the heading, and its last clause is the load-bearing one.**

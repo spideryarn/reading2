@@ -129,7 +129,23 @@ being about the reading *view* instead, and had it called rationalising.
 
 ## Who sends people here
 
-Two marketing pages, `/` and `/features`, each draw the same block — a heading, a sentence, up to
+**The footer, on every page that has one** — since 2026-09-16, and it is the only one of these ways
+in that is not aimed at a particular reader at a particular moment. Greg, through the Feedback
+button, 2026-09-12:
+
+> Add a link in all the footers to the publicly readable shelf alongside, you know, feedback and
+> pricing etc
+
+One entry in `LINKS` in [`SiteFooter.tsx`](../../src/web/SiteFooter.tsx), which is what that array is
+for, labelled from `PUBLIC_SHELF_LABEL` so the footer, the command bar and this page's own `<h1>`
+cannot drift into three names.
+[260916a](../plans/260916a-add-a-link-to-the-public-shelf-in-the-site-footer.md) is the plan, and it
+is also where the answer to *"all the footers"* is written down: there is one.
+
+**Not on this page itself**, twice over — `/read/public` draws no footer at all (§ The chrome), and
+the row drops the link for the page it is on in any case.
+
+**Two marketing pages**, `/` and `/features`, each draw the same block — a heading, a sentence, up to
 three real shared articles, and a link back to this shelf.
 [`src/web/PublicShowcase.tsx`](../../src/web/PublicShowcase.tsx) is the component and carries the
 argument; [marketing-pages.md](marketing-pages.md) is the pages it sits on.

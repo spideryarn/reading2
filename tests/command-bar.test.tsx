@@ -998,8 +998,12 @@ describe("the rows that are not modes", () => {
       type(query);
       const names = listed();
       /* **First, and exactly once.** Not *alone*, which is what this asserted
-         first and which `library` fails: `Public shelf` carries the alias
-         `public library`, so it is an alias-substring hit and ranks below.
+         first and which `library` fails: the shared-articles row carries the
+         alias `public library`, so it is an alias-substring hit and ranks below.
+         (That row was labelled `Public shelf` when this was written, and the
+         words moved into `PUBLIC_SHELF_LABEL` on 2026-09-16 — so it is named
+         here by what it is rather than by a label that has already changed
+         once.)
          That is the ranking working — a label prefix beats a substring
          (command-match.ts § `TIERS`) — and demanding a one-row answer would
          have been this test insisting on a worse bar. What matters is that

@@ -48,6 +48,17 @@ entry in its `LINKS` array**, which is the whole reason it is a component — it
 hand on the landing and features pages, and those two copies already disagreed about which links
 they carried.
 
+**And the claim keeps being exercised**, by `/pricing`, `/contact`, `/changelog`, `/opensource` and —
+on 2026-09-16, when Greg asked for the publicly readable shelf in the footers — by `/read/public`
+([public-shelf.md](public-shelf.md)). Each joined the row through one entry in that array rather than
+through edits to every page that mounts it. (Written without a number on purpose; the count of
+things in this row has been wrong twice, which
+`SiteFooter.tsx`'s header and `tests/site-footer.test.tsx` both now say out loud.) The shelf joins
+*What's new* in reading its label from a **constant** rather than words typed here:
+`PUBLIC_SHELF_LABEL` in [`messages.ts`](../../src/messages.ts). The footer, command bar and shelf
+heading use it together so those three consumers cannot acquire three names independently — the
+same reason `CHANGELOG_LABEL` exists.
+
 **It nearly became two components on the day it became one.** The marketing redesign
 ([marketing-pages.md](marketing-pages.md)) extracted its own `SiteFooter` into `SiteBits.tsx` in
 another worktree the same afternoon, and the two met at a merge. Greg's call, 2026-09-03, was one
