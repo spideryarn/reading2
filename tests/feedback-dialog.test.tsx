@@ -14,7 +14,7 @@
  * Escape, top-layer painting — is the platform's, and a test asserting the
  * platform works would be testing the wrong thing.
  */
-import { act, createElement, useState } from "react";
+import { act, createElement, StrictMode, useState } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -25,10 +25,19 @@ import { MAX_FEEDBACK_ANSWER_CHARS } from "../src/types.js";
 
 const posts: { input: string; init: RequestInit }[] = [];
 let answer: () => Promise<Response>;
+/** Every `GET /api/feedback` — the Earlier tab's reads, kept apart from `posts`. */
+const lists: string[] = [];
+let listAnswer: () => Promise<Response>;
 
 vi.mock("../src/web/lib/api.js", () => ({
-  apiFetch: async (input: string, init: RequestInit) => {
-    posts.push({ input, init });
+  apiFetch: async (input: string, init?: RequestInit) => {
+    /* The Earlier tab's read has no method, and it is not a report: it goes in
+       its own list so that `posts` still means "what was filed". */
+    if ((init?.method ?? "GET") === "GET") {
+      lists.push(input);
+      return listAnswer();
+    }
+    posts.push({ input, init: init ?? {} });
     return answer();
   },
   failure: async (res: Response) => new Error(await res.text()),
@@ -70,14 +79,16 @@ vi.mock("../src/web/DictationStrip.js", () => ({
 /* Re-encoding an image needs a canvas, which jsdom does not have. What matters
    here is only *when* it finishes, so the stub is a promise this file resolves. */
 let finishShot: ((base64: string) => void) | null = null;
+/** What a paste or a drop carries. `null` everywhere but the tests about the Earlier tab. */
+let carried: File | null = null;
 vi.mock("../src/web/feedback-screenshot.js", () => ({
   screenshotFromFile: () =>
     new Promise((resolve) => {
       finishShot = (base64: string) =>
         resolve({ ok: true, base64, width: 800, height: 600, bytes: 1000 });
     }),
-  imageFileFromPaste: () => null,
-  imageFileFromDrop: () => null,
+  imageFileFromPaste: () => carried,
+  imageFileFromDrop: () => carried,
 }));
 
 /* `showModal`/`close` are not implemented in jsdom, and `open` is a real
@@ -102,6 +113,11 @@ const { FeedbackDialog } = await import("../src/web/FeedbackDialog.js");
 let host: HTMLDivElement;
 let root: Root;
 
+/** An answer to `GET /api/feedback`. */
+function page(body: unknown, status = 200): () => Promise<Response> {
+  return async () => new Response(JSON.stringify(body), { status });
+}
+
 function ok(status: number): () => Promise<Response> {
   return async () => new Response(JSON.stringify({ id: "x" }), { status });
 }
@@ -123,6 +139,25 @@ function mount() {
   document.body.append(host);
   root = createRoot(host);
   show(true);
+}
+
+function mountStrict() {
+  host = document.createElement("div");
+  document.body.append(host);
+  root = createRoot(host);
+  act(() => {
+    root.render(
+      createElement(
+        StrictMode,
+        null,
+        createElement(FeedbackDialog, {
+          open: true,
+          onClose: () => {},
+          where: { url: "https://www.spideryarn.com/read/a-piece", slug: "a-piece" },
+        }),
+      ),
+    );
+  });
 }
 
 /**
@@ -230,6 +265,10 @@ function body(): Record<string, unknown> {
 beforeEach(() => {
   posts.length = 0;
   answer = ok(201);
+  lists.length = 0;
+  listAnswer = page({ reports: [], more: false });
+  carried = null;
+  finishShot = null;
 });
 
 afterEach(() => {
@@ -1106,5 +1145,334 @@ describe("the keyboard, and the button under it", () => {
   it("promises nothing on Enter, because Enter writes a newline", () => {
     mount();
     expect(firstBox().getAttribute("enterkeyhint")).toBeNull();
+  });
+});
+
+/* ------------------------------------------------------ the Earlier tab -- */
+
+/**
+ * **The reader's own earlier reports, in a second tab** —
+ * docs/plans/260916c-your-earlier-feedback-tab-in-the-feedback-dialog.md.
+ *
+ * Most of what is pinned here is what GPT Sol's plan review found: **hiding a
+ * panel is not switching it off.** The Write panel stays mounted while Earlier
+ * shows, so its microphone, the paste and drop handlers on the whole `<dialog>`,
+ * and the form's submit all still reach a draft the reader cannot see — unless
+ * each is guarded. A test per guard.
+ */
+describe("the Earlier tab", () => {
+  function tab(name: "Write" | "Earlier"): HTMLButtonElement {
+    const found = [...host.querySelectorAll<HTMLButtonElement>('[role="tab"]')].find(
+      (b) => (b.textContent ?? "").trim() === name,
+    );
+    if (!found) throw new Error(`no ${name} tab`);
+    return found;
+  }
+
+  function click(el: Element | null | undefined) {
+    if (!el) throw new Error("nothing to click");
+    act(() => {
+      el.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+  }
+
+  function panelOf(name: "Write" | "Earlier"): HTMLElement {
+    const id = tab(name).getAttribute("aria-controls");
+    const panel = id ? document.getElementById(id) : null;
+    if (!panel) throw new Error(`the ${name} tab controls nothing`);
+    return panel;
+  }
+
+  function commandEnter() {
+    act(() => {
+      host
+        .querySelector("dialog")
+        ?.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", metaKey: true, bubbles: true }));
+    });
+  }
+
+  const REPORTS = {
+    reports: [
+      {
+        id: "spya-k3m9qt",
+        createdAt: "2026-09-12T10:45:00.000Z",
+        kind: "suggestion",
+        body: "A tab of what I sent before.\nJust a list.",
+      },
+      { id: "spya-a1b2c3", createdAt: "2026-09-09T08:00:00.000Z", kind: null, body: "The shelf is slow." },
+    ],
+    more: false,
+  };
+
+  it("starts on Write, and lists the reader's own reports when Earlier is chosen", async () => {
+    listAnswer = page(REPORTS);
+    mount();
+    expect(tab("Write").getAttribute("aria-selected")).toBe("true");
+    expect(lists, "nothing is read until the tab is chosen").toEqual([]);
+
+    click(tab("Earlier"));
+    await act(async () => {});
+
+    expect(lists).toEqual(["/api/feedback"]);
+    expect(tab("Earlier").getAttribute("aria-selected")).toBe("true");
+    const items = [...panelOf("Earlier").querySelectorAll("li")];
+    expect(items).toHaveLength(2);
+    expect(items[0]?.textContent).toContain("A tab of what I sent before.");
+    expect(items[0]?.textContent).toContain("Suggestion");
+    expect(items[1]?.textContent).toContain("The shelf is slow.");
+    /* Neither kind, and it says nothing about one rather than inventing it. */
+    expect(items[1]?.textContent).not.toMatch(/Problem|Suggestion/);
+    expect(items[0]?.querySelector("time")?.getAttribute("datetime")).toBe("2026-09-12T10:45:00.000Z");
+    expect(panelOf("Earlier").hidden).toBe(false);
+    expect(panelOf("Write").hidden, "the Write panel is still showing").toBe(true);
+  });
+
+  it("says so when there is nothing yet", async () => {
+    mount();
+    click(tab("Earlier"));
+    await act(async () => {});
+    expect(panelOf("Earlier").textContent).toContain("You haven't sent us any feedback yet.");
+  });
+
+  it("says the list is cut short when there were more", async () => {
+    listAnswer = page({ ...REPORTS, more: true });
+    mount();
+    click(tab("Earlier"));
+    await act(async () => {});
+    expect(panelOf("Earlier").textContent).toContain("Showing your 50 most recent.");
+  });
+
+  it("says so when the list cannot be loaded, and tries again on request", async () => {
+    listAnswer = page({ error: "nope" }, 500);
+    mount();
+    click(tab("Earlier"));
+    await act(async () => {});
+    expect(panelOf("Earlier").textContent).toContain("[fb-list]");
+
+    listAnswer = page(REPORTS);
+    click(
+      [...panelOf("Earlier").querySelectorAll("button")].find((b) =>
+        (b.textContent ?? "").includes("Try again"),
+      ),
+    );
+    await act(async () => {});
+    expect(lists).toHaveLength(2);
+    expect(panelOf("Earlier").querySelectorAll("li")).toHaveLength(2);
+  });
+
+  it("treats a wrong-shaped successful response as a load failure", async () => {
+    listAnswer = page({ reports: "not a list", more: false });
+    mount();
+    click(tab("Earlier"));
+    await act(async () => {});
+
+    expect(panelOf("Earlier").textContent).toContain("[fb-list]");
+    expect(panelOf("Earlier").getAttribute("hidden")).toBeNull();
+  });
+
+  it.each([
+    ["a non-JSON 200", async () => new Response("not JSON", { status: 200 })],
+    ["a 401", page({ error: "sign in again" }, 401)],
+  ])("treats %s as a load failure", async (_case, response) => {
+    listAnswer = response;
+    mount();
+    click(tab("Earlier"));
+    await act(async () => {});
+
+    expect(panelOf("Earlier").textContent).toContain("[fb-list]");
+  });
+
+  it("reads once per opening, however often the reader flips between tabs", async () => {
+    listAnswer = page(REPORTS);
+    mount();
+    click(tab("Earlier"));
+    await act(async () => {});
+    click(tab("Write"));
+    click(tab("Earlier"));
+    await act(async () => {});
+    expect(lists).toHaveLength(1);
+
+    reopen();
+    click(tab("Earlier"));
+    await act(async () => {});
+    expect(lists, "a new opening reads afresh").toHaveLength(2);
+  });
+
+  it("starts one read when Earlier is chosen under StrictMode", async () => {
+    mountStrict();
+    click(tab("Earlier"));
+    await act(async () => {});
+
+    expect(lists).toEqual(["/api/feedback"]);
+  });
+
+  it("keeps the draft through a trip to Earlier and back", async () => {
+    mount();
+    type("Half of what went wrong");
+    pick("suggestion");
+    click(tab("Earlier"));
+    await act(async () => {});
+    click(tab("Write"));
+    expect(firstBox().value).toBe("Half of what went wrong");
+    expect(panelOf("Write").hidden).toBe(false);
+    expect(host.querySelector('button.fb-kind-button[aria-pressed="true"]')?.textContent).toContain(
+      "suggestion",
+    );
+  });
+
+  it("files nothing from Earlier — not by keyboard, not by submit, not by any button on it", async () => {
+    listAnswer = page({ error: "nope" }, 500);
+    mount();
+    type("A draft the reader cannot see from Earlier.");
+    click(tab("Earlier"));
+    await act(async () => {});
+
+    commandEnter();
+    act(() => {
+      host
+        .querySelector("form")
+        ?.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
+    });
+    /* Every control Earlier shows, bar the tabs and the ✕ — Try again is on
+       screen because the read failed, which is why this test makes it fail. */
+    const controls = [
+      ...panelOf("Earlier").querySelectorAll("button"),
+      ...host.querySelectorAll<HTMLElement>(".fb-actions:not([hidden]) button"),
+    ];
+    expect(controls.length, "the failed read should have offered Try again").toBeGreaterThan(1);
+    for (const control of controls) {
+      expect(control.getAttribute("type")).toBe("button");
+      click(control);
+    }
+    await act(async () => {});
+    expect(posts).toEqual([]);
+
+    /* The positive control: back on Write, the same keystroke files it. */
+    reopen();
+    commandEnter();
+    await act(async () => {});
+    expect(posts).toHaveLength(1);
+  });
+
+  it("brings a failed in-flight send back into view after the reader switches to Earlier", async () => {
+    let settle: ((res: Response) => void) | null = null;
+    answer = () => new Promise<Response>((resolve) => (settle = resolve));
+    mount();
+    type("A report whose failure must not be hidden.");
+    send();
+    click(tab("Earlier"));
+
+    await act(async () => {
+      settle?.(new Response("nope", { status: 500 }));
+    });
+
+    expect(tab("Write").getAttribute("aria-selected")).toBe("true");
+    expect(panelOf("Write").hidden).toBe(false);
+    expect(panelOf("Write").querySelector(".fb-failed")?.textContent).toContain("nope");
+    expect(document.activeElement).toBe(tab("Write"));
+  });
+
+  it("shows the thank-you when an in-flight send lands after the reader switches to Earlier", async () => {
+    let settle: ((res: Response) => void) | null = null;
+    answer = () => new Promise<Response>((resolve) => (settle = resolve));
+    mount();
+    type("A report that did arrive.");
+    send();
+    click(tab("Earlier"));
+
+    await act(async () => {
+      settle?.(new Response("{}", { status: 201 }));
+    });
+
+    expect(host.querySelector(".fb-done")).not.toBeNull();
+    expect(host.querySelectorAll('[role="tab"]')).toHaveLength(0);
+  });
+
+  it("stops the microphone on the way to Earlier, without pulling focus back to the box", () => {
+    mic.armed = true;
+    try {
+      mount();
+      micToggles.length = 0;
+      click(tab("Earlier"));
+      expect(micToggles).toEqual(["hook"]);
+    } finally {
+      mic.armed = false;
+    }
+  });
+
+  it("attaches nothing pasted or dropped while Earlier is showing", async () => {
+    mount();
+    click(tab("Earlier"));
+    carried = new File([new Uint8Array([137, 80, 78, 71])], "shot.png", { type: "image/png" });
+    act(() => {
+      host.querySelector("dialog")?.dispatchEvent(new Event("paste", { bubbles: true }));
+    });
+    const drop = new Event("drop", { bubbles: true, cancelable: true });
+    act(() => {
+      host.querySelector("dialog")?.dispatchEvent(drop);
+    });
+    expect(finishShot, "a picture was taken into the hidden draft").toBeNull();
+    /* Still refused as a navigation, so the browser does not open the file. */
+    expect(drop.defaultPrevented).toBe(true);
+
+    /* The positive control: the same paste on Write is taken. */
+    click(tab("Write"));
+    act(() => {
+      host.querySelector("dialog")?.dispatchEvent(new Event("paste", { bubbles: true }));
+    });
+    expect(finishShot).not.toBeNull();
+  });
+
+  it("puts focus on the chosen tab, by pointer and by arrow, and only it is in the tab order", async () => {
+    mount();
+    click(tab("Earlier"));
+    expect(document.activeElement).toBe(tab("Earlier"));
+    expect(tab("Earlier").tabIndex).toBe(0);
+    expect(tab("Write").tabIndex).toBe(-1);
+    expect(panelOf("Earlier").tabIndex, "the scrollable list is skipped by Tab").toBe(0);
+
+    act(() => {
+      tab("Earlier").dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowLeft", bubbles: true }));
+    });
+    expect(document.activeElement).toBe(tab("Write"));
+    expect(tab("Write").getAttribute("aria-selected")).toBe("true");
+    expect(tab("Write").tabIndex).toBe(0);
+
+    act(() => {
+      tab("Write").dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowRight", bubbles: true }));
+    });
+    expect(tab("Earlier").getAttribute("aria-selected")).toBe("true");
+    expect(document.activeElement).toBe(tab("Earlier"));
+    await act(async () => {});
+  });
+
+  it("opens on Write again, whichever tab it was shut on", async () => {
+    mount();
+    click(tab("Earlier"));
+    await act(async () => {});
+    reopen();
+    expect(tab("Write").getAttribute("aria-selected")).toBe("true");
+    expect(panelOf("Write").hidden).toBe(false);
+  });
+
+  it("drops a list that arrives after the dialog was shut", async () => {
+    let settle: ((res: Response) => void) | null = null;
+    listAnswer = () => new Promise<Response>((resolve) => (settle = resolve));
+    mount();
+    click(tab("Earlier"));
+    await act(async () => {});
+    show(false);
+    await act(async () => {
+      settle?.(new Response(JSON.stringify(REPORTS), { status: 200 }));
+    });
+
+    /* Reopened, the next read is still in the air — and the old answer must not
+       be standing in for it. */
+    listAnswer = () => new Promise<Response>(() => {});
+    show(true);
+    click(tab("Earlier"));
+    await act(async () => {});
+    expect(lists).toHaveLength(2);
+    expect(panelOf("Earlier").querySelectorAll("li")).toHaveLength(0);
   });
 });

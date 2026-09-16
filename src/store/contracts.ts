@@ -1701,6 +1701,7 @@ export type {
   FeedbackEnvironment,
   FeedbackKind,
 } from "../types.js";
+import type { EarlierFeedbackPage } from "../types.js";
 
 /**
  * **What the reader filed** — everything the row is built from, and nothing
@@ -1957,6 +1958,16 @@ export interface FeedbackStore {
    * `ownedSlug` and for the same reason — 404 rather than a 403 that confirms.
    */
   read(id: string): Promise<FeedbackReport | null>;
+  /**
+   * **This reader's own reports, newest first**, at most `limit` of them, and
+   * whether there were more — the Feedback dialog's Earlier tab.
+   * docs/plans/260916c-your-earlier-feedback-tab-in-the-feedback-dialog.md.
+   *
+   * Owner-scoped like `read`, and the owner is never an argument. Four fields a
+   * report and no more: see `EarlierFeedback` in src/types.ts for why the email,
+   * the address, the diagnostics and the screenshot are not among them.
+   */
+  listMine(limit: number): Promise<EarlierFeedbackPage>;
   /**
    * **We handed it over.** Written the moment `captureFeedback` returns an
    * event id, which is a thing we know.

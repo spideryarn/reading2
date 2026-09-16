@@ -148,6 +148,83 @@
   margin-inline: -2px;
 }
 
+/* **`hidden` has to be said again here**, and it is the whole tab switch. The UA
+   gives `[hidden]` `display: none`, and the `display: flex` on `.fb-scroll` and
+   `.fb-actions` is an author rule, which wins — so without this both tabs'
+   panels and both rows of buttons would show at once, while every jsdom test
+   that reads `.hidden` stayed green. FeedbackDialog.tsx § `view`. */
+.fb-scroll[hidden],
+.fb-actions[hidden] { display: none; }
+
+/* Write / Earlier. Underlined rather than boxed, so the pair reads as a place
+   to be rather than as two more buttons beside Problem and Suggestion. */
+.fb-tabs {
+  flex: 0 0 auto;
+  display: flex;
+  gap: 1rem;
+  border-bottom: 1px solid var(--rule-strong);
+}
+.fb-tab {
+  margin-bottom: -1px;
+  padding: 0.2rem 0 0.4rem;
+  border: 0;
+  border-bottom: 2px solid transparent;
+  background: none;
+  color: var(--ink-soft);
+  font: inherit;
+  font-size: 0.8rem;
+  cursor: pointer;
+}
+.fb-tab:hover { color: var(--ink); }
+.fb-tab[aria-selected="true"] {
+  color: var(--ink);
+  font-weight: 600;
+  border-bottom-color: var(--highlight);
+}
+.fb-tab:focus-visible { outline: 1px solid var(--highlight); outline-offset: 2px; border-radius: 3px; }
+
+/* The reader's earlier reports — FeedbackEarlier.tsx. */
+.fb-earlier-list {
+  display: flex;
+  flex-direction: column;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.fb-earlier-item {
+  padding: 0.6rem 0;
+  border-bottom: 1px solid var(--rule-strong);
+}
+.fb-earlier-item:first-child { padding-top: 0.2rem; }
+.fb-earlier-item:last-child { border-bottom: 0; }
+.fb-earlier-meta {
+  margin: 0 0 0.25rem;
+  font-size: 0.72rem;
+  color: var(--ink-faint);
+}
+/* `pre-wrap` keeps the reader's own line breaks; `anywhere` stops a pasted URL
+   from pushing the panel sideways on a phone. */
+.fb-earlier-body {
+  margin: 0;
+  font-size: 0.82rem;
+  line-height: 1.5;
+  color: var(--ink);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.fb-earlier-status {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  margin: 0;
+  font-size: 0.8rem;
+  color: var(--ink-soft);
+}
+.fb-earlier:focus-visible {
+  outline: 1px solid var(--highlight);
+  outline-offset: -1px;
+}
+
 .fb-head {
   display: flex;
   align-items: baseline;
@@ -476,4 +553,3 @@
    in this file that declare their own `font: inherit` still win, and so does
    every utility. Two spellings of one rule is the thing worth not leaving
    behind. */
-

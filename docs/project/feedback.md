@@ -154,6 +154,30 @@ the test can stand inside the `sending` stage and look. If the report says other
 screen, the thing to suspect is not the markup: the POST body is built **synchronously** before the
 first `await`, so a large pasted screenshot is stringified before React gets to paint the spinner.
 
+## Your earlier reports, since 2026-09-16
+
+> In the feedback dialog box, it would be nice to have a tab showing previous feedback that this
+> user has provided, just as a kind of list. I mean, it would be amazing if we could indicate which
+> ones have been acted on, but I suspect that will involve access to the database that you
+> currently don't have. So do the simplest thing first.
+>
+> — Greg, 2026-09-12 (SPIDERYARN-READING2-3R)
+
+The dialog has two tabs, **Write** and **Earlier**. Earlier is the signed-in reader's own reports,
+newest first — the date, problem or suggestion, and what they wrote — read by `GET /api/feedback`,
+which is owner-scoped in the store like every other read and sends **four fields a report and
+nothing else**: not the email, the address, the diagnostics or the screenshot (`EarlierFeedback` in
+[`src/types.ts`](../../src/types.ts) says why). Fifty at most, and the list says so when there were
+more. **What came of each report is not shown** — the plan's § Deferred says what that would take.
+
+**The Write panel is hidden, not unmounted, and hiding is not switching off.** Its microphone, the
+paste and drop handlers on the whole `<dialog>`, and the form's submit all still reach a draft the
+reader cannot see; each has a guard and a test. And `.fb-scroll[hidden]` needs its own
+`display: none`, because the panel's `display: flex` outranks the UA's `[hidden]` — jsdom cannot see
+that one. A send already in flight is allowed to finish: success becomes the ordinary thank-you,
+and failure returns to Write so its recovery panel cannot land hidden.
+[260916c](../plans/260916c-your-earlier-feedback-tab-in-the-feedback-dialog.md).
+
 ## The thank-you, and getting out of it
 
 > After submitting a bit of feedback in the feedback dialogue, it says something like thank you that
@@ -299,6 +323,7 @@ which *is* the verified account id.
 |---|---|
 | the dialog's host, the three shapes of trigger, their hover card, and who sees them | [`src/web/FeedbackButton.tsx`](../../src/web/FeedbackButton.tsx) |
 | the dialog | [`src/web/FeedbackDialog.tsx`](../../src/web/FeedbackDialog.tsx) |
+| its Earlier tab: the reader's own reports | [`src/web/FeedbackEarlier.tsx`](../../src/web/FeedbackEarlier.tsx), and `GET /api/feedback` in [`src/routes.ts`](../../src/routes.ts) |
 | the microphone on its box | [dictation.md](dictation.md), and two guards this dialog needs that the others do not — see its header |
 | the diagnostics allowlist, shared by both halves | [`src/feedback-payload.ts`](../../src/feedback-payload.ts) |
 | the client ring buffer the diagnostics read | [`src/web/log-buffer.ts`](../../src/web/log-buffer.ts) |

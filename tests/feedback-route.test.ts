@@ -40,9 +40,14 @@ const HOISTED = vi.hoisted(() => {
 });
 
 import { mintId } from "../src/ids.js";
-import { MAX_FEEDBACK_ANSWER_CHARS, MAX_FEEDBACK_URL_CHARS } from "../src/types.js";
+import { currentOwnerId } from "../src/owner.js";
+import {
+  EARLIER_FEEDBACK_LIMIT,
+  MAX_FEEDBACK_ANSWER_CHARS,
+  MAX_FEEDBACK_URL_CHARS,
+} from "../src/types.js";
 import type { FeedbackReport, FeedbackSubmission, NewFeedback } from "../src/store/contracts.js";
-import { acceptAny, AUTHED_HEADERS, TEST_EMAIL } from "./helpers/authed.js";
+import { acceptAny, AUTHED_HEADERS, TEST_EMAIL, TEST_OWNER } from "./helpers/authed.js";
 import { logLinesWhile } from "./helpers/log-capture.js";
 
 /** Every `submit` the route made, in order. Read by nearly every test below. */
@@ -51,6 +56,12 @@ let submitted: NewFeedback[] = [];
 let mirrored: { id: string; sentryEventId: string | null }[] = [];
 /** Every `markMirrorAttempted` — the honest half, written before delivery. */
 let attempted: string[] = [];
+/** Every `listMine` limit the route asked for. */
+let listed: number[] = [];
+/** The request owner in force when each `listMine` began. */
+let listOwners: string[] = [];
+/** What the fake `listMine` answers with — deliberately loose, see § GET. */
+let listAnswer: unknown = { reports: [], more: false };
 /** What the fake store answers with. Set per test. */
 let answer: FeedbackSubmission;
 /** What `captureFeedback` does. A test makes it throw. */
@@ -83,6 +94,15 @@ vi.mock("../src/store/index.js", async (importActual) => {
         return answer ?? { kind: "created", report: storedReport(input) };
       },
       read: async () => null,
+      listMine: async (limit: number) => {
+        listed.push(limit);
+        /* The real store resolves this at the start of its query. Doing the
+           same here proves this route reached it only after the gate installed
+           the signed-in reader's owner. */
+        listOwners.push(currentOwnerId());
+        if (listAnswer instanceof Error) throw listAnswer;
+        return listAnswer;
+      },
       markMirrorAttempted: async (id: string) => {
         attempted.push(id);
       },
@@ -164,6 +184,8 @@ async function call(
     verify?: Parameters<typeof handleApi>[2];
     /** A raw body, for the case where the point is how many bytes arrived. */
     raw?: Buffer;
+    /** The request line's path, query included. */
+    path?: string;
   } = {},
 ): Promise<Reply> {
   const payload =
@@ -174,7 +196,7 @@ async function call(
     })(),
     {
       method: options.method ?? "POST",
-      url: "/api/feedback",
+      url: options.path ?? "/api/feedback",
       headers: options.headers ?? AUTHED_HEADERS,
     },
   ) as unknown as IncomingMessage;
@@ -288,6 +310,9 @@ beforeEach(() => {
   submitted = [];
   mirrored = [];
   attempted = [];
+  listed = [];
+  listOwners = [];
+  listAnswer = { reports: [], more: false };
   hooks.clear();
   answer = undefined as unknown as FeedbackSubmission;
   captureBehaviour = () => "sentry-event-id";
@@ -296,6 +321,82 @@ beforeEach(() => {
 
 afterEach(() => {
   vi.restoreAllMocks();
+});
+
+/**
+ * **The Earlier tab's read** — the reader's own reports, and only four fields
+ * of each. docs/plans/260916c-your-earlier-feedback-tab-in-the-feedback-dialog.md.
+ *
+ * The fake store hands back rows carrying *more* than the four — an email, an
+ * address, diagnostics — which is what makes "the route picks, it does not
+ * spread" a thing this file can see rather than a thing the store happens to do.
+ */
+describe("GET /api/feedback", () => {
+  it("answers the reader's own list, four fields a report, and never caches it", async () => {
+    listAnswer = {
+      reports: [
+        {
+          id: "spya-k3m9qt",
+          createdAt: "2026-09-12T10:45:00.000Z",
+          kind: "suggestion",
+          body: "A tab of what I sent before",
+          reporterEmail: "someone@example.invalid",
+          url: "https://www.spideryarn.com/add/https://user:secret@example.com/",
+          diagnostics: { version: 2, payload: {} },
+        },
+      ],
+      more: true,
+    };
+    const reply = await call(undefined, { method: "GET" });
+    expect(reply.status).toBe(200);
+    expect(reply.headers["cache-control"]).toBe("private, no-store");
+    expect(reply.body).toEqual({
+      reports: [
+        {
+          id: "spya-k3m9qt",
+          createdAt: "2026-09-12T10:45:00.000Z",
+          kind: "suggestion",
+          body: "A tab of what I sent before",
+        },
+      ],
+      more: true,
+    });
+    /* The cap is the server's, not a query parameter somebody can raise. */
+    expect(listed).toEqual([EARLIER_FEEDBACK_LIMIT]);
+    expect(listOwners).toEqual([TEST_OWNER]);
+  });
+
+  it("sets no-store before awaiting the store, so a failed read is private too", async () => {
+    listAnswer = new Error("the feedback read failed");
+    const reply = await call(undefined, { method: "GET" });
+    expect(reply.status).toBe(500);
+    expect(reply.headers["cache-control"]).toBe("private, no-store");
+  });
+
+  it("does not read a request body or fall through to the POST on the shared path", async () => {
+    const reply = await call(undefined, {
+      method: "GET",
+      raw: Buffer.from("{not json", "utf8"),
+    });
+    expect(reply.status).toBe(200);
+    expect(listed).toEqual([EARLIER_FEEDBACK_LIMIT]);
+    expect(submitted).toEqual([]);
+  });
+
+  it("ignores a limit in the query", async () => {
+    await call(undefined, { method: "GET", path: "/api/feedback?limit=100000" });
+    expect(listed).toEqual([EARLIER_FEEDBACK_LIMIT]);
+  });
+
+  it("refuses an anonymous request before it reads anything", async () => {
+    const reply = await call(undefined, { method: "GET", headers: {} });
+    expect(reply.status).toBe(401);
+    expect(listed).toEqual([]);
+    /* The positive control, for the reason the POST's twin below gives: a 401
+       alone would pass with no route at all. Signed in, the same request reads. */
+    expect((await call(undefined, { method: "GET" })).status).toBe(200);
+    expect(listed).toEqual([EARLIER_FEEDBACK_LIMIT]);
+  });
 });
 
 describe("POST /api/feedback", () => {

@@ -93,7 +93,16 @@
  * cannot file the same bug twice there either. Mint it per opening and the
  * property holds; mint it per click and there is no idempotency at all.
  */
-import { type ReactNode, useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
+import {
+  type KeyboardEvent as ReactKeyboardEvent,
+  type ReactNode,
+  useCallback,
+  useEffect,
+  useId,
+  useLayoutEffect,
+  useRef,
+  useState,
+} from "react";
 import { Bug, Check, Copy, Lightbulb, LoaderCircle, Mail, X } from "lucide-react";
 
 import { mintId } from "../ids.js";
@@ -107,6 +116,7 @@ import type { FeedbackDiagnosticsV1 } from "../feedback-payload.js";
 /** The stamp the release and the source maps went up under, if this is a build. */
 import { buildCommit } from "./build-stamp.js";
 import { DictationButton, DictationStrip } from "./DictationStrip.js";
+import { EarlierList, useEarlierFeedback } from "./FeedbackEarlier.js";
 import { collectFeedbackDiagnostics } from "./feedback-diagnostics.js";
 import { imageFileFromDrop, imageFileFromPaste, screenshotFromFile } from "./feedback-screenshot.js";
 import { apiFetch, failure } from "./lib/api.js";
@@ -162,6 +172,12 @@ type Stage =
    */
   | { kind: "sent"; said: FeedbackKind | null; sentBody: string }
   | { kind: "failed"; message: string };
+
+/**
+ * **Which tab is showing** — writing a report, or the reader's earlier ones
+ * (FeedbackEarlier.tsx). docs/plans/260916c-your-earlier-feedback-tab-in-the-feedback-dialog.md.
+ */
+type View = "write" | "earlier";
 
 /**
  * **What we say once it is filed, and it follows what they called it.**
@@ -641,6 +657,77 @@ export function FeedbackDialog({ open, onClose, where }: Props) {
   const visible = useVisualViewport(open);
 
   /**
+   * **The two tabs, and hiding one is not switching it off.**
+   *
+   * The Write panel stays mounted while Earlier shows — `hidden`, not
+   * unmounted — so the caret and the dictation hook's textarea survive a look
+   * at the list, in a dialog whose history is draft-loss bugs (`discard`). The
+   * price is that three things still reach a draft the reader cannot see, and
+   * each has its guard: the microphone stops in `choose`, paste and drop take
+   * nothing unless `view` is Write (the handlers on `<dialog>` below), and
+   * `send` refuses from Earlier — which covers ⌘/Ctrl+Enter and the form's
+   * submit at once. GPT Sol's plan review, 2026-09-16, F1–F3.
+   *
+   * **Back to Write once the dialog is shut**, in an effect that runs while it
+   * is shut, so Write is what is rendered when the next `showModal()` picks
+   * where focus starts. Pressing Feedback is a request to write.
+   */
+  const [view, setView] = useState<View>("write");
+  useEffect(() => {
+    if (!open) setView("write");
+  }, [open]);
+  const { earlier, retry } = useEarlierFeedback(open, view === "earlier");
+  const ids = useId();
+  const tabId = (which: View) => `${ids}-tab-${which}`;
+  const panelId = (which: View) => `${ids}-panel-${which}`;
+  const writeTab = useRef<HTMLButtonElement>(null);
+  const earlierTab = useRef<HTMLButtonElement>(null);
+  const viewRef = useRef(view);
+  viewRef.current = view;
+
+  /**
+   * A failed send needs the reader's action, so it must not land inside the
+   * hidden Write panel. Do not move focus in a dialog they have since closed;
+   * reopening already resets to Write and preserves the failed draft.
+   */
+  const revealSendFailure = useCallback(() => {
+    if (viewRef.current !== "earlier" || !ref.current?.open) return;
+    setView("write");
+    writeTab.current?.focus();
+  }, []);
+
+  const showSendFailure = useCallback(
+    (message: string) => {
+      revealSendFailure();
+      sending.current = false;
+      setStage({ kind: "failed", message });
+    },
+    [revealSendFailure],
+  );
+
+  /**
+   * **One way to change tab**, for a pointer and an arrow key alike, so both end
+   * in the same place: the microphone stopped if it was on, the view set, and
+   * focus on the chosen tab — never left on an element that has just been
+   * hidden. `dictation.toggle` rather than the field wrapper, which would put
+   * focus back in the box being hidden; stopping rather than aborting, so what
+   * was said is kept in the draft.
+   */
+  const choose = (next: View) => {
+    if (next !== "write" && dictate.dictation.armed) dictate.dictation.toggle();
+    setView(next);
+    (next === "write" ? writeTab : earlierTab).current?.focus();
+  };
+
+  /* Left and Right between the two, the ARIA tabs pattern's arrows. With two
+     tabs, either arrow is simply "the other one". */
+  const onTabKey = (e: ReactKeyboardEvent<HTMLButtonElement>) => {
+    if (e.key !== "ArrowLeft" && e.key !== "ArrowRight") return;
+    e.preventDefault();
+    choose(view === "write" ? "earlier" : "write");
+  };
+
+  /**
    * **Shutting the dialog stops the microphone.**
    *
    * This component is mounted for the whole life of the page — FeedbackButton
@@ -659,6 +746,11 @@ export function FeedbackDialog({ open, onClose, where }: Props) {
   }, [open, dictate.dictation.armed, dictate.dictation.toggle]);
 
   const send = useCallback(async () => {
+    /* **Only from Write.** The draft is still in the form while Earlier is
+       showing, and a keystroke must not file a report the reader cannot see.
+       Here rather than on each way in, so ⌘/Ctrl+Enter and the form's own
+       submit are refused by one line. */
+    if (view !== "write") return;
     if (sending.current) return;
     if (!somethingSaid) return;
     /* **The counter above was a statement, not a rule**, until GPT Sol's code
@@ -739,8 +831,7 @@ export function FeedbackDialog({ open, onClose, where }: Props) {
         const message =
           res.status === 501 ? FEEDBACK_NOT_AVAILABLE.message : (await failure(res)).message;
         if (!stillMine()) return;
-        sending.current = false;
-        setStage({ kind: "failed", message });
+        showSendFailure(message);
         return;
       }
       /* 200 and 201 are both success as far as the reader is concerned: the
@@ -754,10 +845,22 @@ export function FeedbackDialog({ open, onClose, where }: Props) {
          `Response` and there is not one — this is the correlated-failure case
          the plan names, and the sentence is written for it. */
       if (!stillMine()) return;
-      sending.current = false;
-      setStage({ kind: "failed", message: FEEDBACK_SEND_FAILED.message });
+      showSendFailure(FEEDBACK_SEND_FAILED.message);
     }
-  }, [reportId, somethingSaid, over, preparing, consented, body, kind, where, shot, dictationBusy]);
+  }, [
+    view,
+    reportId,
+    somethingSaid,
+    over,
+    preparing,
+    consented,
+    body,
+    kind,
+    where,
+    shot,
+    dictationBusy,
+    showSendFailure,
+  ]);
 
   const copy = useCallback(() => {
     const clipboard = navigator.clipboard;
@@ -811,6 +914,8 @@ export function FeedbackDialog({ open, onClose, where }: Props) {
         if (e.target === ref.current) onClose();
       }}
       onPaste={(e) => {
+        /* Nothing is taken into a draft the reader cannot see — see `view`. */
+        if (view !== "write") return;
         const file = imageFileFromPaste(e.nativeEvent);
         if (file) {
           e.preventDefault();
@@ -821,8 +926,10 @@ export function FeedbackDialog({ open, onClose, where }: Props) {
       onDrop={(e) => {
         const file = imageFileFromDrop(e.nativeEvent);
         if (file) {
+          /* Refused as a navigation either way, so a picture dropped on Earlier
+             does not open in the tab — but only Write takes it. */
           e.preventDefault();
-          void takeFile(file);
+          if (view === "write") void takeFile(file);
         }
       }}
       /* ⌘/Ctrl+Enter from anywhere in the form. The textareas need Enter for
@@ -871,12 +978,53 @@ export function FeedbackDialog({ open, onClose, where }: Props) {
           </button>
         </div>
 
+        {/* **Two tabs, outside the part that scrolls**, so switching is always
+            in reach. Roving `tabIndex`: only the selected tab is in the Tab
+            order, and the arrows move between them — `onTabKey`. Both are
+            `type="button"`, inside a form whose submit must not fire. */}
+        <div className="fb-tabs" role="tablist" aria-label="Feedback">
+          <button
+            ref={writeTab}
+            type="button"
+            role="tab"
+            id={tabId("write")}
+            className="fb-tab"
+            aria-selected={view === "write"}
+            aria-controls={panelId("write")}
+            tabIndex={view === "write" ? 0 : -1}
+            onClick={() => choose("write")}
+            onKeyDown={onTabKey}
+          >
+            Write
+          </button>
+          <button
+            ref={earlierTab}
+            type="button"
+            role="tab"
+            id={tabId("earlier")}
+            className="fb-tab"
+            aria-selected={view === "earlier"}
+            aria-controls={panelId("earlier")}
+            tabIndex={view === "earlier" ? 0 : -1}
+            onClick={() => choose("earlier")}
+            onKeyDown={onTabKey}
+          >
+            Earlier
+          </button>
+        </div>
+
         {/* **Only this scrolls**, so the buttons at the foot cannot be
             scrolled away — the shape `.cmt-dialog` already uses, and the
             reason it matters here is a phone: with the soft keyboard up the
             panel has half a screen to live in, and Send has to be in it.
             docs/project/feedback.md § The keyboard, and the button under it. */}
-        <div className="fb-scroll">
+        <div
+          className="fb-scroll"
+          role="tabpanel"
+          id={panelId("write")}
+          aria-labelledby={tabId("write")}
+          hidden={view !== "write"}
+        >
           {/* **The thanks goes first**, because it is the reason to keep reading
               rather than a sign-off. Greg asked for "some kind of indication of our
               appreciation for them making the effort", and it is true in a way
@@ -1064,7 +1212,28 @@ export function FeedbackDialog({ open, onClose, where }: Props) {
 
         </div>
 
-        <div className="fb-actions">
+        {/* **What the reader has sent us before.** Its own scroller, so a long
+            list scrolls between the tabs and the Close button the same way the
+            form does. FeedbackEarlier.tsx. */}
+        <div
+          className="fb-scroll fb-earlier"
+          role="tabpanel"
+          id={panelId("earlier")}
+          aria-labelledby={tabId("earlier")}
+          // biome-ignore lint/a11y/noNoninteractiveTabindex: this tabpanel is itself a scroll box and its ordinary loaded state contains no controls; without a tab stop, a keyboard reader skips from the Earlier tab to Close and cannot reliably scroll the list.
+          tabIndex={0}
+          hidden={view !== "earlier"}
+        >
+          <EarlierList earlier={earlier} retry={retry} />
+        </div>
+
+        <div className="fb-actions" hidden={view !== "earlier"}>
+          <button type="button" className="fb-cancel" onClick={onClose}>
+            Close
+          </button>
+        </div>
+
+        <div className="fb-actions" hidden={view !== "write"}>
           <button type="button" className="fb-cancel" onClick={onClose}>
             Cancel
           </button>

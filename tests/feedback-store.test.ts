@@ -695,6 +695,83 @@ describe("the Postgres feedback store", { timeout: 30_000 }, () => {
     ).toBe("feedback_diagnostics_consented");
   });
 
+  /* ---------------------------------------------- the reader's own list -- */
+
+  /**
+   * **The Earlier tab's read** — docs/plans/260916c-your-earlier-feedback-tab-in-the-feedback-dialog.md.
+   * Owner-scoped like `read`, newest first, capped with an honest `more`, and
+   * **four fields and nothing else**: the email, the address, the diagnostics
+   * and the screenshot all stay behind, because a list whose job is "what did I
+   * say" has no use for them and a field not sent is one nobody has to argue about.
+   */
+  it("lists only this reader's own reports, newest first, and nobody else's", async () => {
+    const older = mintId();
+    const newer = mintId();
+    await runAsOwner(ALICE, () =>
+      pgFeedbackStore.submit(report({ id: older, body: "Alice, first", kind: "problem" })),
+    );
+    await runAsOwner(ALICE, () =>
+      pgFeedbackStore.submit(report({ id: newer, body: "Alice, second", kind: null })),
+    );
+    await runAsOwner(BOB, () => pgFeedbackStore.submit(report({ id: mintId(), body: "Bob's" })));
+    /* Pull the older one back an hour, so "newest first" is a fact about
+       `created_at` rather than about which insert happened to land second. */
+    await getDb()
+      .update(feedbackTable)
+      .set({ createdAt: sql`now() - interval '1 hour'` })
+      .where(and(eq(feedbackTable.ownerId, ALICE), eq(feedbackTable.id, older)));
+
+    const alices = await runAsOwner(ALICE, () => pgFeedbackStore.listMine(10));
+    expect(alices.more).toBe(false);
+    expect(alices.reports.map((r) => r.body)).toEqual(["Alice, second", "Alice, first"]);
+    expect(alices.reports.map((r) => r.kind)).toEqual([null, "problem"]);
+
+    const bobs = await runAsOwner(BOB, () => pgFeedbackStore.listMine(10));
+    expect(bobs.reports.map((r) => r.body)).toEqual(["Bob's"]);
+  });
+
+  it("hands back exactly four fields per report, and never the email, address or picture", async () => {
+    const id = mintId();
+    await runAsOwner(ALICE, () =>
+      pgFeedbackStore.submit(
+        report({
+          id,
+          consented: true,
+          diagnostics: { version: 2, payload: { blockIds: ["spya-k3m9qt"] } },
+          screenshot: new Uint8Array([137, 80, 78, 71]),
+        }),
+      ),
+    );
+    const { reports } = await runAsOwner(ALICE, () => pgFeedbackStore.listMine(10));
+    expect(reports).toHaveLength(1);
+    const [only] = reports;
+    expect(Object.keys(only ?? {}).sort()).toEqual(["body", "createdAt", "id", "kind"]);
+    expect(only?.id).toBe(id);
+    expect(Number.isNaN(Date.parse(only?.createdAt ?? ""))).toBe(false);
+  });
+
+  it("says there are more when the reader has filed past the limit, and not at it", async () => {
+    for (let i = 0; i < 3; i++) {
+      await runAsOwner(ALICE, () =>
+        pgFeedbackStore.submit(report({ id: mintId(), body: `report ${i}` })),
+      );
+    }
+    const atLimit = await runAsOwner(ALICE, () => pgFeedbackStore.listMine(3));
+    expect(atLimit.reports).toHaveLength(3);
+    expect(atLimit.more).toBe(false);
+
+    const pastLimit = await runAsOwner(ALICE, () => pgFeedbackStore.listMine(2));
+    expect(pastLimit.reports).toHaveLength(2);
+    expect(pastLimit.more).toBe(true);
+  });
+
+  it("lists nothing, and no more, for a reader who has filed nothing", async () => {
+    expect(await runAsOwner(BOB, () => pgFeedbackStore.listMine(10))).toEqual({
+      reports: [],
+      more: false,
+    });
+  });
+
   it("logs how much the reader wrote, never what they wrote", async () => {
     /* The hard rule of this whole feature, and the one most likely to be undone
        by somebody adding a helpful field to a log line. docs/project/logging.md. */

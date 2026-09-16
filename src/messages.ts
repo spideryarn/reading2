@@ -543,10 +543,12 @@ export const CODE_KINDS: Record<string, FailureKind> = {
      somebody" at that exact moment would have handed them a loop. `retry`, and
      the dialog puts a Copy button beside it for the case where it keeps failing.
      `fb-store` is a deployment running without the database reports are kept in,
-     which another go cannot fix. See § feedback below, and
+     which another go cannot fix. `fb-list` is the transient failure to read the
+     reports back. See § feedback below, and
      docs/project/feedback.md. */
   "fb-send": "retry",
   "fb-store": "ours",
+  "fb-list": "retry",
   /* The subscription allowance, `pay-`. All six are registered rather than
      left to fall through, and the four `blocked` ones are the reason: an
      unrecognised code means *offer another go*, so "you have used all three of
@@ -4486,6 +4488,22 @@ export const FEEDBACK_NOT_AVAILABLE: ReaderFacingFailure = {
     "This copy of the app cannot file reports — it is running without the database they are kept " +
     "in. Trying again will not help. The Copy button below puts the report on your clipboard. " +
     "[fb-store]",
+};
+
+/**
+ * **The reader's earlier reports would not load** — the Feedback dialog's
+ * Earlier tab. docs/plans/260916c-your-earlier-feedback-tab-in-the-feedback-dialog.md.
+ *
+ * `retry`, and the panel offers Try again beside it: nothing is lost by a read
+ * failing, and the one thing worth saying is that the reports themselves are
+ * safe — a reader who cannot see their list may otherwise wonder whether what
+ * they sent went anywhere.
+ */
+export const FEEDBACK_EARLIER_FAILED: ReaderFacingFailure = {
+  kind: "retry",
+  message:
+    "Your earlier feedback would not load just now. What you sent is safe with us — trying again " +
+    "in a moment usually works. [fb-list]",
 };
 
 /* ---- the subscription allowance. docs/project/billing.md ----------------------- */

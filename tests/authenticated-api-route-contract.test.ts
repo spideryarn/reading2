@@ -419,7 +419,7 @@ const EXPECTED_AUTH_ROUTES: ExpectedRoute[] = [
   },
   {
     match: { kind: "literal", path: "/api/feedback" },
-    methods: ["POST"],
+    methods: ["GET", "POST"],
     witnesses: ["/api/feedback"],
   },
   {
@@ -780,7 +780,7 @@ const EXPECTED_AUTH_ROUTES: ExpectedRoute[] = [
 
 /** Loud failure controls. Never the oracle — see the header. */
 const EXPECTED_MATCHER_COUNT = 70;
-const EXPECTED_GUARD_COUNT = 86;
+const EXPECTED_GUARD_COUNT = 87;
 
 /* ------------------------------------------------------------- the source read */
 
@@ -1887,6 +1887,8 @@ describe("the authenticated API's route contract", () => {
         "GET literal /api/models",
         "POST literal /api/transcribe",
         "POST literal /api/feedback",
+        // the reader's own earlier reports, 260916c — beside the POST it lists
+        "GET literal /api/feedback",
         "GET literal /api/reader",
         "PATCH literal /api/reader",
         "POST regex /^\\/api\\/library\\/([\\w.%-]+)\\/open$/",
