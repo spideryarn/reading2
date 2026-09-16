@@ -1,6 +1,6 @@
 # Show where you have spent time reading, in the spine and the gutter
 
-Status: **planned**, 2026-09-16. Reviewed by GPT Sol ([the findings](260916c-reading-time-review-sol.md):
+Status: **built**, 2026-09-16 — every stage, on `dev`; see *What landed* at the foot. Reviewed by GPT Sol ([the findings](260916c-reading-time-review-sol.md):
 seven P1s and two P2s, all taken) and by Fable (the product calls; one dissent is recorded under
 *Who, and behind what*).
 
@@ -50,7 +50,9 @@ Both were written before this report, and both would forbid the feature if read 
   not an icon, so the one-column truncation arithmetic is untouched.
 - [`Spine.tsx`](../../src/web/Spine.tsx): *"without inventing a width or an opacity the reader would
   have to learn"*. Greg asked for exactly that width, in those words. The legend is one sentence
-  ("thicker where you have spent longer"), and it goes in the spine's tooltip.
+  ("thicker where you have spent longer"). **It did not go in a tooltip as first planned**: the rail
+  has no tooltip of its own to put it in (only its bands' hover cards), so the sentence lives in
+  [reading-time.md](../project/reading-time.md) and the feedback note.
 
 Both comments are updated to say so, quoting him, so the next agent does not "fix" it back.
 
@@ -300,3 +302,22 @@ before it is pushed.
 two counts: Greg asked for the server in so many words ("every minute, we send an update to the
 server"), and a place kept in one browser is not there on another device, or after the browser clears
 site data, which Safari does to a site's storage on its own schedule.
+
+## What landed
+
+- **Stage 1** `ec414cb4` (an Opus subagent, read and committed here). Two departures from the brief,
+  both right: the POST reads its body with its own size limit so a 5,001-entry batch is a 400 rather
+  than a 413; and `tests/store-shelf-pg.test.ts`'s delete map was left alone because it lists only
+  direct children of `articles` — `tests/reading-time-route.test.ts` checks the cascade instead.
+- **Stages 2–3** `f803b076`. `tick` was split (`rowsOnScreen`) to get under biome's complexity limit.
+- **GPT Sol code review** `5ce454d4` ([findings](260916c-reading-time-code-review-findings-sol.md),
+  [answer](260916c-reading-time-code-review-sol.md)): two P1s and a P2, fixed by Sol, read here. The
+  opening GET now waits for the previous mount's cleanup POST and this mount's ordinary flushes wait
+  for the GET, so the drawn total cannot double-count or miss a batch; the body budget allows a
+  24-character number; surplus fields are a 400. No P0; the switch-off and visitor conclusions held.
+- **Browser check** on the box (Sonnet subagent, Playwright, dev account, a 10,000-word article):
+  GET 200 on open; reading down to 40% then lingering produced 204 POSTs whose five-row batch summed
+  to ~60 s per minute; after reload 17 `.spine-read` runs spanning 0%–42.6% and nothing below, the
+  lingered screen at full width; gutter `::after` opacity 0.1–0.4 on read rows and 0 on unread; at
+  390 × 844 in Plain the rail is present and time is still credited; with the switch off, no request,
+  no layer, no style element. No console errors from this code.
