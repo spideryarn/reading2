@@ -27,3 +27,8 @@ The deferred half makes the PDF reader write maths as TeX in the first place. Re
 same PDF, the reader usually flattens equations into unreadable plain text rather than writing
 LaTeX. That half needs the PDF scorer made TeX-aware first, and is in the Overseer's queue as the
 proposal `qi-njx3xh37`.
+
+**Listed on [`awaiting-approval.md`](awaiting-approval.md) since 2026-09-17.** The plan says stage 2
+goes out only on Greg's word, so the feedback sweep did not dispatch it; it put the decision where he
+reads it and gave the queue item a priority (0.6) and a `needs-greg` mark, so the queue no longer
+sorts a wanted admin follow-up to the bottom as though nobody had asked for it.
