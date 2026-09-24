@@ -19,6 +19,10 @@ import { afterEach, describe, expect, test } from "vitest";
 import type { ScanCoverage, UsageAccount, UsageReport } from "../tools/fleet/wire.js";
 import { runOverseer } from "../tools/overseer/daemon.js";
 import { readCheckpoint } from "../tools/overseer/store.js";
+import { clockFrom } from "./helpers/fixture-clock.js";
+
+/** Just after the fixtures' own `collectedAt`s: the daemon's clock starts here, not at today. */
+const FIXTURE_NOW = "2026-09-08T12:31:00.000Z";
 
 const roots: string[] = [];
 
@@ -97,6 +101,7 @@ describe("the whole path: does a usage report reach current.json", () => {
       root,
       baseUrl: "http://127.0.0.1:1",
       signal: controller.signal,
+      now: clockFrom(FIXTURE_NOW),
       tickMs: 100,
       log: () => {},
       source: async function* () {
@@ -128,6 +133,7 @@ describe("the whole path: does a usage report reach current.json", () => {
       root,
       baseUrl: "http://127.0.0.1:1",
       signal: controller.signal,
+      now: clockFrom(FIXTURE_NOW),
       tickMs: 100,
       log: () => {},
       source: async function* () {
@@ -154,6 +160,7 @@ describe("the whole path: does a usage report reach current.json", () => {
       root,
       baseUrl: "http://127.0.0.1:1",
       signal: controller.signal,
+      now: clockFrom(FIXTURE_NOW),
       tickMs: 100,
       log: () => {},
       source: async function* () {
@@ -193,6 +200,7 @@ describe("the whole path: does a usage report reach current.json", () => {
       baseUrl: "http://127.0.0.1:1",
       signal: first.signal,
       tickMs: 100,
+      now: clockFrom(FIXTURE_NOW),
       log: () => {},
       source: async function* () {
         await heldOpen(first.signal);
@@ -207,6 +215,7 @@ describe("the whole path: does a usage report reach current.json", () => {
       baseUrl: "http://127.0.0.1:1",
       signal: second.signal,
       tickMs: 100,
+      now: clockFrom(FIXTURE_NOW),
       log: () => {},
       source: async function* () {
         await heldOpen(second.signal);

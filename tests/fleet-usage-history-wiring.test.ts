@@ -22,6 +22,10 @@ import { openUsageHistoryForRead } from "../tools/fleet/usage-history.js";
 import { makeUsageRetention } from "../tools/fleet/usage-history-wiring.js";
 import type { CodexUsageReading, ScanCoverage, UsageAccount, UsageReport } from "../tools/fleet/wire.js";
 import { runOverseer } from "../tools/overseer/daemon.js";
+import { clockFrom } from "./helpers/fixture-clock.js";
+
+/** Just after the fixtures' own `collectedAt`s: the daemon's clock starts here, not at today. */
+const FIXTURE_NOW = "2026-09-09T01:00:00.000Z";
 
 const roots: string[] = [];
 afterEach(() => {
@@ -195,13 +199,15 @@ async function runWith(
 ): Promise<string> {
   const root = tempRoot();
   const controller = abortAfter(forMs);
-  const retention = makeUsageRetention(root, { nextDueMs: 300_000, log: () => {} });
+  const now = clockFrom(FIXTURE_NOW);
+  const retention = makeUsageRetention(root, { nextDueMs: 300_000, now, log: () => {} });
 
   await runOverseer({
     root,
     baseUrl: "http://127.0.0.1:1",
     signal: controller.signal,
     tickMs: 40,
+    now,
     log: () => {},
     source: async function* () {
       yield* [];
@@ -258,7 +264,8 @@ describe("a usage pass becomes a line on disk", () => {
 
     const root = tempRoot();
     const controller = new AbortController();
-    const retention = makeUsageRetention(root, { nextDueMs: 300_000, log: () => {} });
+    const now = clockFrom(FIXTURE_NOW);
+    const retention = makeUsageRetention(root, { nextDueMs: 300_000, now, log: () => {} });
     const codex = deferred<CodexUsageReading>();
     let claudeCalls = 0;
     let codexCalls = 0;
@@ -268,6 +275,7 @@ describe("a usage pass becomes a line on disk", () => {
       root,
       baseUrl: "http://127.0.0.1:1",
       signal: controller.signal,
+      now,
       tickMs: 10,
       log: () => {},
       source: async function* () {
@@ -331,7 +339,8 @@ describe("a usage pass becomes a line on disk", () => {
 
   test("hands the same Codex observation to the account collector once, including after a Claude failure", async () => {
     const root = tempRoot();
-    const retention = makeUsageRetention(root, { nextDueMs: 300_000, log: () => {} });
+    const now = clockFrom(FIXTURE_NOW);
+    const retention = makeUsageRetention(root, { nextDueMs: 300_000, now, log: () => {} });
     const handed: Array<CodexUsageReading | null> = [];
     const options = usageHistoryDaemonOptions(retention, {
       claude: async () => {
@@ -357,7 +366,8 @@ describe("a usage pass becomes a line on disk", () => {
 
   test("a synchronous Codex throw still awaits the Claude collector", async () => {
     const root = tempRoot();
-    const retention = makeUsageRetention(root, { nextDueMs: 300_000, log: () => {} });
+    const now = clockFrom(FIXTURE_NOW);
+    const retention = makeUsageRetention(root, { nextDueMs: 300_000, now, log: () => {} });
     const claude = deferred<UsageReport>();
     let claudeStarted = false;
 
@@ -449,11 +459,13 @@ describe("a usage pass becomes a line on disk", () => {
        and the route says different things about them. */
     const root = tempRoot();
     const controller = abortAfter(300);
-    const retention = makeUsageRetention(root, { nextDueMs: 300_000, log: () => {} });
+    const now = clockFrom(FIXTURE_NOW);
+    const retention = makeUsageRetention(root, { nextDueMs: 300_000, now, log: () => {} });
     await runOverseer({
       root,
       baseUrl: "http://127.0.0.1:1",
       signal: controller.signal,
+      now,
       tickMs: 40,
       log: () => {},
       source: async function* () {
