@@ -654,8 +654,12 @@ function sameBox(a: PageBox, b: PageBox): boolean {
  * caption split across runs, broken with a hyphen, or set with an "ﬁ" ligature
  * reads the same as the transcription's. NFKD does the unfolding; the class
  * does the rest.
+ *
+ * Exported because the bitmap route asks the same question of the same text —
+ * is this caption printed on this page — and two normalisations would let the
+ * routes disagree about one caption (`captionPrintedOn`, src/pdf-figures.ts).
  */
-function normalise(text: string): string {
+export function normalise(text: string): string {
   return text.normalize("NFKD").toLowerCase().replace(/[^a-z0-9]/g, "");
 }
 

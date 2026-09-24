@@ -222,12 +222,13 @@ export interface CollectPdfFiguresOptions {
   pdf: Uint8Array;
   /**
    * Each marker's `<figcaption>` text, by ref — `pdfFigureCaptionsIn`,
-   * src/collect-assets.ts. **What turns the drawn-figure route on**: a marker
-   * with no caption here is never tried by it and keeps the bitmap route's
-   * answer, so a caller that passes none gets exactly the behaviour this
-   * module had before the route existed.
+   * src/collect-assets.ts. **Both routes need it**: the bitmap route attaches a
+   * picture only when the page prints the marker's caption, and the drawn route
+   * is tried only for a marker that has one. A marker absent here gets no
+   * picture from either. Required, so that a caller cannot leave it out and
+   * get an article whose every figure is refused without a word.
    */
-  captions?: ReadonlyMap<string, string>;
+  captions: ReadonlyMap<string, string>;
   blobs?: RawSourceStore;
   signal?: AbortSignal;
   now?: () => Date;
@@ -366,11 +367,19 @@ export async function collectPdfFigures(
       return;
     }
 
-    const { outcomes } = pairPageFigures({ markers: looked, candidates: read });
+    /* A marker the article gave no caption is refused `caption-not-in-page-text`
+       here, since there is nothing to check its page against — and the drawn
+       route below would refuse it for the same want. */
+    const { outcomes } = pairPageFigures({
+      markers: looked,
+      candidates: read.candidates,
+      captions: options.captions,
+      pageText: read.pageText,
+    });
     /* The drawn route's candidates: refused `no-raster` by the bitmap route,
        and captioned by the article. Everything else is decided above. */
     const candidates = outcomes.flatMap((outcome) =>
-      outcome.status === "refused" && outcome.reason === "no-raster" && options.captions?.has(outcome.marker.ref)
+      outcome.status === "refused" && outcome.reason === "no-raster" && options.captions.has(outcome.marker.ref)
         ? [outcome.marker]
         : [],
     );
@@ -604,8 +613,8 @@ async function readRasters(
   markers: readonly PdfFigureMarker[],
   options: CollectPdfFiguresOptions,
   signal: AbortSignal,
-): Promise<Awaited<ReturnType<typeof readPdfRasters>>["candidates"] | null> {
-  if (markers.length === 0) return [];
+): Promise<Awaited<ReturnType<typeof readPdfRasters>> | null> {
+  if (markers.length === 0) return { candidates: [], skippedPages: [], unread: [], pageText: new Map() };
   try {
     const read = await readPdfRasters({
       data: options.pdf,
@@ -618,7 +627,7 @@ async function readRasters(
          module that does take a signal. */
       signal,
     });
-    return read.candidates;
+    return read;
   } catch {
     return null;
   }
@@ -672,7 +681,7 @@ async function drawnRoute(
       if (!layout) return { status: "refused", reason: "no-raster" };
       const base = {
         layout,
-        caption: options.captions?.get(marker.ref) ?? "",
+        caption: options.captions.get(marker.ref) ?? "",
         markersOnPage: markersOnPage.get(marker.page) ?? 0,
       };
       /* Once without the resource walk, which needs pdf-lib and a cut: nearly
@@ -776,6 +785,8 @@ function pdfFigureFailure(reason: PairingFailure): PdfFigureFailure {
       return "no-raster";
     case "ambiguous":
       return "ambiguous";
+    case "caption-not-in-page-text":
+      return "caption-not-in-page-text";
     case "unsupported-kind":
       return "unsupported-kind";
     case "grayscale-1bpp":

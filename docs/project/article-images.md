@@ -250,6 +250,18 @@ the whole defence. [silent-success.md](../reusable/silent-success.md) is the fam
   `render-failed` — say which rule refused it. Two figures on one page, a page mixing a bitmap
   with a drawing, and a caption above its figure are all deferred, because ownership there would be
   inferred rather than shown (GPT Sol F1, F14; Fable's ruling is in the plan).
+- **Since 2026-09-24 a picture attaches to a caption only if its page prints that caption.** One
+  marker and one picture on a page used to be enough, but the page is the *transcript's* claim.
+  On a printed web essay, each tall figure was pushed onto the next page, and the model filed its
+  caption under the page where the introducing paragraph ends. So the one picture on the claimed
+  page was the previous figure's, and two of four figures showed the wrong picture
+  ([260924e](../plans/260924e-a-pdf-figure-paired-to-the-wrong-caption.md)). `captionPrintedOn`
+  ([`src/pdf-figures.ts`](../../src/pdf-figures.ts)) looks for the caption's opening, up to its
+  first TeX, in the page's text layer, using the drawn route's normalisation. A miss is
+  `caption-not-in-page-text`. A caption drawn *inside* the picture cannot pass, which costs the
+  figure and never the truth. What it does **not** catch: a page that prints the caption *and*
+  holds an unrelated picture while the real figure is elsewhere. Nothing records where a picture is
+  painted, so there is nothing to check that against yet.
 - **A figure ref carried by two elements refuses both.** The manifest is keyed by ref, so one entry
   is all there is; keeping the first meant the same picture appeared under two different captions —
   a fabricated claim about the paper the reader cannot detect. Both `pdfFigureMarkersIn` walks now

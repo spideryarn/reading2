@@ -387,8 +387,10 @@ export function pdfFigureMarkersIn(blocks: readonly Block[]): PdfFigureMarker[] 
  * *this* caption rather than a sentence that mentions it (src/pdf-figure-region.ts,
  * docs/plans/260912a-figure-2-vector-figures-from-a-pdf.md). The same walk as `pdfFigureMarkersIn` above, and only
  * the refs *it* hands back, so a ref two blocks carry gets no caption either.
- * A marker whose element has no caption is simply absent: the route is then
- * never tried for it, and it keeps the bitmap route's answer.
+ * A marker whose element has no caption is simply absent: neither recovery
+ * route can attach a picture without caption evidence. A bitmap pairing that
+ * reaches the caption gate is refused `caption-not-in-page-text`, and the
+ * drawn route is not tried.
  */
 export function pdfFigureCaptionsIn(blocks: readonly Block[]): Map<string, string> {
   const captions = new Map<string, string>();
@@ -421,9 +423,13 @@ export function pdfFigureCaptionsIn(blocks: readonly Block[]): Map<string, strin
  * render-side containment check** — every pixel PDFium draws must lie inside
  * ink the locator measured — and it had to be a bump, not a quiet change: a
  * drawn figure stored under `2` would otherwise read current and go on being
- * served without ever passing the check (GPT Sol, F36).
+ * served without ever passing the check (GPT Sol, F36). **`4` is the caption
+ * check on the bitmap route** — a picture attaches only where its page prints
+ * the marker's caption — and it is a bump for the same reason: a picture
+ * attached under `3` to the wrong caption would otherwise read current for
+ * ever (docs/plans/260924e-a-pdf-figure-paired-to-the-wrong-caption.md).
  */
-export const PDF_FIGURE_RECOVERY_POLICY = "pdf-figures/3";
+export const PDF_FIGURE_RECOVERY_POLICY = "pdf-figures/4";
 
 /**
  * The cheap look before the parse — built once, from the registered name rather
@@ -1197,4 +1203,3 @@ export async function collectAssets(options: CollectAssetsOptions): Promise<Asse
     elapsedMs: Date.now() - startedAt,
   };
 }
-

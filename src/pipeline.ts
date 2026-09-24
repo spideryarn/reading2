@@ -1802,8 +1802,9 @@ export async function recoverPdfFigures(
     );
     return allFailed(ours ? "no-source" : "storage");
   }
-  /* The captions are what turn the drawn-figure route on — a marker without
-     one keeps the bitmap route's answer (src/collect-pdf-figures.ts § 4). */
+  /* Both routes need the captions: the bitmap route attaches a picture only
+     where its page prints the caption, and the drawn route is tried only for a
+     captioned marker (src/collect-pdf-figures.ts § 4). */
   return collectPdfFigures({ markers, pdf, signal: ctx.signal, captions: pdfFigureCaptionsIn(blocks) });
 }
 

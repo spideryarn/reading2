@@ -180,6 +180,13 @@ export interface PdfRasterRead {
   skippedPages: { page: number; reason: PageSkip }[];
   /** Image operators we saw and did not read. The v1 limits, itemised. */
   unread: { page: number; key: string; reason: UnreadReason }[];
+  /**
+   * Each page's text layer, runs joined by a space — every in-range page,
+   * scanned ones included, because it was already fetched to count its words.
+   * `pairPageFigures` asks it whether a caption is printed where the transcript
+   * put it (src/pdf-figures.ts § 3).
+   */
+  pageText: Map<number, string>;
 }
 
 export interface ReadPdfRastersInput {
@@ -222,7 +229,7 @@ export interface ReadPdfRastersInput {
  * src/pdf-figures.ts do that, on bytes, where they can be argued with.
  */
 export async function readPdfRasters(input: ReadPdfRastersInput): Promise<PdfRasterRead> {
-  const result: PdfRasterRead = { candidates: [], skippedPages: [], unread: [] };
+  const result: PdfRasterRead = { candidates: [], skippedPages: [], unread: [], pageText: new Map() };
   /* Sorted and de-duplicated, so a caller that passes one page per figure marker
      — two markers on page 7 — does not make us decode page 7 twice. */
   const wanted = [...new Set(input.pages)].sort((a, b) => a - b);
@@ -325,7 +332,9 @@ async function readOnePage(
   into: PdfRasterRead,
 ): Promise<void> {
   const proxy = await doc.getPage(page);
-  if ((await pageWords(proxy)) < SCAN_WORDS_PER_PAGE) {
+  const text = await pageText(proxy);
+  into.pageText.set(page, text);
+  if (wordCount(text) < SCAN_WORDS_PER_PAGE) {
     into.skippedPages.push({ page, reason: "scanned" });
     return;
   }
@@ -370,16 +379,17 @@ async function readOnePage(
 }
 
 /** Every word in the text layer, upright or not. See the header on the divergence. */
-async function pageWords(proxy: {
-  getTextContent: () => Promise<{ items: unknown[] }>;
-}): Promise<number> {
+async function pageText(proxy: { getTextContent: () => Promise<{ items: unknown[] }> }): Promise<string> {
   const content = await proxy.getTextContent();
   let text = "";
   for (const item of content.items) {
     if (item && typeof item === "object" && "str" in item) text += `${String(item.str)} `;
   }
-  const trimmed = text.replace(/\s+/g, " ").trim();
-  return trimmed ? trimmed.split(" ").length : 0;
+  return text.replace(/\s+/g, " ").trim();
+}
+
+function wordCount(text: string): number {
+  return text ? text.split(" ").length : 0;
 }
 
 /** Distinguishable from any value pdf.js could hand back, which `undefined` is not. */

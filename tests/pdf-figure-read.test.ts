@@ -67,7 +67,7 @@ describe("a document with no raster image anywhere", () => {
     // article, and most have no figure markers. The proof is that five bytes
     // which are not a PDF do not make it throw — nothing parsed them.
     const out = await readPdfRasters({ data: new Uint8Array([0x25, 0x50, 0x44, 0x46, 0x2d]), pages: [] });
-    expect(out).toEqual({ candidates: [], skippedPages: [], unread: [] });
+    expect(out).toEqual({ candidates: [], skippedPages: [], unread: [], pageText: new Map() });
   });
 });
 
