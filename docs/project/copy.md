@@ -136,7 +136,8 @@ the file picker in the browser refusing before anything is sent, which is the di
 matters when somebody quotes one at you
 ([ingest-queue.md § Uploading a PDF](ingest-queue.md#uploading-a-pdf)). `pdf-` is a document the
 pipeline could not read: too long, locked, or damaged. `web-` is the page in the reader's browser
-failing on its own account — `[web-unexpected]`, below.
+failing on its own account — `[web-unexpected]`, below — and `net-` is the browser not reaching the
+server at all (`[net-down]`, `COULD_NOT_REACH`).
 
 **The `mic-` family is the exception to the paragraph after next**, and worth
 knowing about before you go looking for it in `src/messages.ts`: it is not there.
@@ -447,15 +448,26 @@ reaches them as `PAGE_FAULT`. That is the cost, and the fix is one word at the
 throw site; `tests/describe-fetch-failure.test.ts` refuses one in any file that
 calls `describeFetchFailure`.
 
-**What this cannot see is the server's half.** The client trusts the server's
-two reader channels — the `{ error }` of a refused request and the `error` frame
-of a stream — as sentences for a reader, because that is what they are for. The
-JSON one is held to it by the last-resort catch (`UNEXPECTED_FAILURE`). The
-stream ones are not yet: five streaming routes in
-[`src/routes.ts`](../../src/routes.ts) send `(err as Error).message` in their
-`error` frame, so an unclassified exception after the headers — a bare
-`TypeError("fetch failed")` in the mirror, say — still reaches a reader verbatim.
-Open, and a server change (GPT Sol, code review F5 on the plan above). [The plan](../plans/260924a-only-a-sentence-the-server-wrote-reaches-the-reader.md).
+**The server's half, for streams.** The client trusts the server's two reader
+channels — the `{ error }` of a refused request and the `error` frame of a
+stream — as sentences for a reader, because that is what they are for. Until
+2026-09-24 the streaming routes in [`src/routes.ts`](../../src/routes.ts) put
+`(err as Error).message` in their `error` frame and on the stored row, so an
+unclassified exception after the headers — a bare `TypeError("fetch failed")` in
+the mirror, say — reached a reader verbatim (GPT Sol, F5). Every one of them now
+goes through `sayToReader` ([`src/reader-sentence.ts`](../../src/reader-sentence.ts)),
+which reuses the two conventions the server already had — a declared
+`stageFailure`, or a message ending in a registered code — and otherwise sends
+`ANSWER_GAVE_UP` (`[ai-gave-up]`, kind `retry`, for `readerFailureOf`'s reason)
+and logs the real error.
+
+**Still open: the JSON half.** `handleApi`'s own catch sends
+`(err as Error).message` for every status, a 500 included, so an unexpected
+throw inside a route reaches the reader verbatim; `UNEXPECTED_FAILURE` guards
+only what escapes `handleApi` altogether. Not changed with the streams because
+some routes answer a 500 with a sentence they wrote and no code, and telling
+those apart needs its own audit.
+[The plan](../plans/260924a-only-a-sentence-the-server-wrote-reaches-the-reader.md).
 
 ## The words on the one control that cannot be undone
 

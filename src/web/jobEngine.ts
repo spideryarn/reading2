@@ -71,6 +71,7 @@
 import type { Job, StepName } from "../types.js";
 import type { AutoRunTarget } from "./auto-run-targets.js";
 import { apiFetch, readJson, statusOf } from "./lib/api.js";
+import { couldNotReach } from "./lib/reader-facing.js";
 
 /** While something is running. Fast enough to feel live, slow enough to be free. */
 const BUSY_MS = 1000;
@@ -462,7 +463,7 @@ export function createJobEngine(deps: JobEngineDeps): JobEngine {
 
   const readable = (err: unknown): string =>
     (err as Error).message === "Failed to fetch"
-      ? "Couldn't reach the server — is `npm run dev` still running?"
+      ? couldNotReach()
       : (err as Error).message;
 
   /**
