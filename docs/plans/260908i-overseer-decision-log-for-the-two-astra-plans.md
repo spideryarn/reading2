@@ -864,3 +864,11 @@ HTML imports too; the shared form already exists (delimited TeX in block text, d
 named or built if it shares the seam. **3J:** approved as recommended — keep writing on open, no
 spend cap for now. **3E:** a Playwright screenshot stands in for his iPad check; if the icon looks
 right it is treated as fixed and he reopens if not.
+
+### 2026-09-24 04:05 — box changes are permanent by default; statusline made permanent
+
+Greg: "Make it permanent" (the new status line) → session `statusline-permanent` copies it into
+`infra/hetzner/provision.sh`, wires the gregmindstone login too, and adds tests. Greg: "pretty much any
+time we change how this box works, we want it to be permanent" → written into
+hetzner-remote-server-box.md § A change to the box is a change to a file. AGENTS.md's matching line
+still says "ask Greg"; its rewording is shown to him before and after, per edit-important-docs.
