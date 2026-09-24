@@ -35,3 +35,9 @@ paragraphs stay rare — one or two in 22.
 **New lists only.** The list he was reading keeps its short quotes, and Find more cannot lengthen
 them. Whether an outdated list should be offered a rewrite is left for him, in
 [awaiting-approval.md](awaiting-approval.md)'s shipped-but-open table.
+
+**2026-09-24 — the rewrite is offered** (report 3C, decided on Greg's delegated authority). An
+outdated list's banner now carries *Choose them again*, which replaces the list with one the current
+prompt chooses; Find more is no longer offered on an outdated list, since appending cannot lengthen
+its quotes. A quote chosen again in exactly its words keeps its id, so its `?quote=` links survive.
+[260924d](../plans/260924d-choose-them-again-on-an-outdated-quote-list.md).

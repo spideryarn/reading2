@@ -46,6 +46,7 @@ import {
 import { isStale as arcIsStale, PROMPT_VERSION as ARC_PROMPT_VERSION } from "../arc.js";
 import { isStale as glossaryIsStale, PROMPT_VERSION } from "../glossary.js";
 import {
+  isOutdated as quotesAreOutdated,
   isStale as quotesAreStale,
   PROMPT_VERSION as QUOTES_PROMPT_VERSION,
 } from "../quotes.js";
@@ -3144,8 +3145,10 @@ const rawPgArticleReader: ArticleReader = {
       stale: !quotesTree || quotesAreStale(quotes, blocks, quotesTree, quotesMeta),
       /* A different fact from `stale`, needing its own sentence: `stale` means
          the article moved underneath these quotes; this means the article is
-         the same and we would choose differently now. */
-      outdated: quotes.version !== QUOTES_PROMPT_VERSION,
+         the same and we would choose differently now. The one predicate the
+         stage's `existingFor` also asks, so the banner's *Choose them again*
+         and the rewrite it starts cannot disagree (260924d). */
+      outdated: quotesAreOutdated(quotes),
     };
   },
 

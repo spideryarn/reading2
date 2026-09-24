@@ -8,6 +8,9 @@
  *    different version of the piece (the plan had this backwards);
  *  - the run's `dropped` is **this pass's** alone, for the log that watches for
  *    prompt drift, while the artefact's `discarded` is the whole list's;
+ *  - an **outdated** list — same article, older prompt — is rewritten, not
+ *    appended to, and a quote chosen again in exactly its words keeps its id
+ *    (docs/plans/260924d-choose-them-again-on-an-outdated-quote-list.md);
  *  - the count asked for is **capped by the room left** under
  *    `MAX_QUOTES_TOTAL`, and at the ceiling no call is made at all.
  *
@@ -39,7 +42,7 @@ vi.mock("../src/messages-stream.js", async (importOriginal) => {
   };
 });
 
-const { generateQuotes, inputFingerprint, noneDropped } = await import("../src/quotes.js");
+const { generateQuotes, inputFingerprint, noneDropped, PROMPT_VERSION } = await import("../src/quotes.js");
 
 const FIRST = "Writing is thinking, and there is no other kind of thinking.";
 const SECOND = "The mathematical marriage of convenience starts to fall apart here.";
@@ -62,9 +65,11 @@ const TREE = {
 const ARTICLE = { slug: "writes", blocks: BLOCKS, tree: TREE, meta: null };
 const HERE = inputFingerprint(BLOCKS, TREE, null);
 
+/* The CURRENT version by default: since 2026-09-24 only a current list is
+   appended to, and an outdated one is rewritten (the describe below). */
 function previous(over: Partial<Quotes> = {}): Quotes {
   return {
-    version: "quotes/3",
+    version: PROMPT_VERSION,
     generator: "m",
     slug: "writes",
     sourceHash: HERE,
@@ -138,13 +143,51 @@ describe("generateQuotes, on a Find more", () => {
 });
 
 describe("generateQuotes, on a stale list", () => {
-  it("replaces it with FRESH ids, even for the same words", async () => {
+  it("replaces it with FRESH ids even when it is also outdated, and even for the same words", async () => {
     answer = JSON.stringify({ quotes: [{ text: FIRST }] });
-    const run = await generateQuotes({ article: ARTICLE, previous: previous({ sourceHash: "an-older-article" }) });
+    const run = await generateQuotes({
+      article: ARTICLE,
+      previous: previous({ sourceHash: "an-older-article", version: "quotes/3" }),
+    });
     expect(run.quotes.quotes).toHaveLength(1);
     expect(run.quotes.quotes[0]?.id).not.toBe("spya-keep01");
     expect(run.quotes.passes).toBe(1);
     expect(sent[0]).not.toContain("ALREADY ON THE LIST");
+  });
+});
+
+describe("generateQuotes, on an outdated list (same article, older prompt)", () => {
+  /* SPIDERYARN-READING2-3C: Find more cannot lengthen a list an older prompt
+     chose, because the old spans win every overlap — so a forced run on one
+     replaces it, stamped current. The article has not moved, so a quote chosen
+     again in exactly the same words keeps the reader's `?quote=` link. */
+  it("replaces it rather than appending, and is stamped with the current prompt", async () => {
+    answer = JSON.stringify({ quotes: [{ text: SECOND }] });
+    const run = await generateQuotes({ article: ARTICLE, previous: previous({ version: "quotes/3" }) });
+    expect(run.quotes.quotes.map((q) => q.text)).toEqual([SECOND]);
+    expect(run.quotes.version).toBe(PROMPT_VERSION);
+    expect(run.quotes.passes).toBe(1);
+    expect(run.quotes.discarded.unfound).toBe(0);
+    expect(sent[0]).not.toContain("ALREADY ON THE LIST");
+  });
+
+  it("keeps the id of a quote chosen again in exactly its words, and mints the rest", async () => {
+    answer = JSON.stringify({ quotes: [{ text: FIRST }, { text: SECOND }] });
+    const run = await generateQuotes({ article: ARTICLE, previous: previous({ version: "quotes/3" }) });
+    const ids = run.quotes.quotes.map((q) => q.id);
+    expect(ids[0]).toBe("spya-keep01");
+    expect(ids[1]).not.toBe("spya-keep01");
+  });
+
+  it("gives a LONGER passage containing the old words a fresh id, not the bookmark", async () => {
+    const longer = `${FIRST} ${THIRD}`;
+    const blocks = [block("spya-aaaaaa", longer), BLOCKS[1]!];
+    const article = { ...ARTICLE, blocks };
+    const sourceHash = inputFingerprint(blocks, TREE, null);
+    answer = JSON.stringify({ quotes: [{ text: longer }] });
+    const run = await generateQuotes({ article, previous: previous({ version: "quotes/3", sourceHash }) });
+    expect(run.quotes.quotes).toHaveLength(1);
+    expect(run.quotes.quotes[0]?.id).not.toBe("spya-keep01");
   });
 });
 

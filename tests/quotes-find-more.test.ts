@@ -8,14 +8,15 @@
  *
  * The shape is the glossary's (src/glossary.ts § existingFor): one forced verb,
  * and the state of the previous list decides whether that run appends or
- * replaces. The one place it deliberately parts company with the glossary is
- * the prompt version — see `existingFor` in src/quotes.ts and
- * docs/plans/260911a-quotes-find-more-and-a-fade-that-carries-priority.md § 2.
+ * replaces. It parted company with the glossary over the prompt version from
+ * 2026-09-11 (260911a § 2) until 2026-09-24, when an outdated list went back to
+ * being rewritten (260924d) — see `existingFor` in src/quotes.ts.
  */
 import { describe, expect, it } from "vitest";
 import {
   buildQuotes,
   existingFor,
+  isOutdated,
   MAX_QUOTES,
   noneDropped,
   PROMPT_VERSION,
@@ -87,12 +88,31 @@ describe("existingFor — which previous list a forced run appends to", () => {
     expect(existingFor(previous(), "hash-2")).toBeNull();
   });
 
-  it("appends across a prompt version, unlike the glossary", () => {
-    /* A quote's words are the author's, verified verbatim; an older prompt
-       contributed only which lines. Refusing here would make the first Find
-       more on every list that predates quotes/4 silently replace it. */
-    const p = previous({ version: "quotes/3" });
-    expect(existingFor(p, "hash-1")).toBe(p);
+  it("does NOT append to a list an older prompt chose — that is a rewrite, since 2026-09-24", () => {
+    /* Until then it appended, keeping the older stamp (260911a). But quotes/6
+       changed what a quote is — a passage long enough to stand alone — and an
+       append cannot deliver that: the old short spans win every overlap. So an
+       outdated list is rewritten, like a stale one, and the panel offers
+       Choose them again rather than Find more on it (SPIDERYARN-READING2-3C,
+       docs/plans/260924d-choose-them-again-on-an-outdated-quote-list.md). */
+    expect(existingFor(previous({ version: "quotes/3" }), "hash-1")).toBeNull();
+  });
+
+  it("treats a NEWER prompt's list as current, never as outdated — no downgrade in a rollback", () => {
+    /* GPT Sol, 260924d F3: during a rollback an older build meets a list a
+       newer prompt wrote. Inequality would call it outdated, offer Choose them
+       again, and rewrite it with the older prompt. Only an older version is. */
+    const newer = previous({ version: "quotes/99" });
+    expect(isOutdated(newer)).toBe(false);
+    expect(existingFor(newer, "hash-1")).toBe(newer);
+    expect(isOutdated(previous({ version: "quotes/3" }))).toBe(true);
+    expect(isOutdated(previous({ version: PROMPT_VERSION }))).toBe(false);
+  });
+
+  it("treats an unparseable prompt version as current rather than guessing that it is older", () => {
+    const unknown = previous({ version: "quotes/3-extra" });
+    expect(isOutdated(unknown)).toBe(false);
+    expect(existingFor(unknown, "hash-1")).toBe(unknown);
   });
 
   it("appends across a profile — Find more continues the list, it does not re-choose it", () => {
@@ -238,7 +258,10 @@ describe("buildQuotes, appending", () => {
   });
 
   it("keeps the list's own stamps — profile and prompt version — rather than certifying old lines as new", () => {
-    /* GPT Sol on the plan: restamping a quotes/3 list quotes/4 after an append
+    /* Since 2026-09-24 production never appends to an outdated list
+       (`existingFor` refuses it), so this is a belt on the pure helper: an
+       append must not certify old lines as new whoever calls it.
+       GPT Sol on the plan: restamping a quotes/3 list quotes/4 after an append
        clears the outdated banner over lines the current prompt never chose,
        and does it even when the pass added nothing. The list keeps its older
        version, so it goes on saying it includes such lines. */
