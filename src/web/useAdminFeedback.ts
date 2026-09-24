@@ -17,6 +17,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import type { AdminFeedbackPage, AdminFeedbackReport, FeedbackCursor } from "../types.js";
 import { encodeFeedbackCursor } from "../types.js";
 import { apiFetch, readJson } from "./lib/api.js";
+import { couldNotReach } from "./lib/reader-facing.js";
 
 export interface UseAdminFeedback {
   /** `null` while the first request is in flight — not "no reports". */
@@ -68,7 +69,7 @@ export function useAdminFeedback(): UseAdminFeedback {
       const message = e instanceof Error ? e.message : String(e);
       setError(
         message === "Failed to fetch"
-          ? "Couldn't reach the server — is `npm run dev` still running?"
+          ? couldNotReach()
           : message,
       );
       /* What is already held is left alone rather than blanked, the same call

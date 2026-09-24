@@ -144,3 +144,62 @@ Code review: [260924a-…-code-review-sol.md](260924a-only-a-sentence-the-server
 Left open: `ChatController`'s spoken repair (`controller.ts`, `(error) => finish({ error:
 error.message })`) is a second, smaller path by which a foreign exception's text could reach
 `#landed`; it does not go through `describeFetchFailure` and is not changed here.
+
+## Stage 2b
+
+Asked by the orchestrator after stage 2 was committed (6c7c1d0d): fix F5 and the two other leftovers
+in this run rather than queue them, because they are the same class.
+
+**1. F5, the server's stream channels.** Not five sites but nine, all in `src/routes.ts`: the five
+`error` frames (glossary ask, glossary lookup, quiz mark, chat, referee mirror) and the four stored
+rows whose `error` a reader later sees (explain, search, referee criteria, referee claims — and chat's
+stored row, which shares its frame's variable). All now go through `sayToReader`
+(`src/reader-sentence.ts`, new). **No new convention**: it passes a declared `stageFailure`
+(`declaredFailure`) or a message ending in a registered code (`kindOfMessage`, the test
+`authored` in `monitoring-scrub.ts` already applies before Sentry). Anything else →
+`ANSWER_GAVE_UP` (`[ai-gave-up]`) and one `log("http").error` line with the error.
+`retry` rather than `UNEXPECTED_FAILURE`'s `bug`: before, an uncoded raw message read as
+kind-unknown and so kept its Retry, and `readerFailureOf`'s documented rule is that an undeclared
+failure keeps the offer. The simpler option, reusing `UNEXPECTED_FAILURE`, would have taken Retry
+away from what is most often a broken connection to the provider.
+
+Red first: `tests/glossary-asked-term-stream-route.test.ts` § "says only a sentence written for the
+reader…" — the provider body breaks with `TypeError("fetch failed: <sentinel>")`; the sentinel was in
+the frame. Green after; reverting that one site reds it again. `tests/reader-sentence.test.ts` pins
+the helper's three branches and the log line.
+
+**2. `ChatController`.** Four catches put `e.message` into state the panel draws — the spoken
+repair's (`finish({ error: error.message })`), `#write`'s, `#stream`'s and `#settle`'s. All four now
+call `describeFetchFailure`. The first test covered only a `runTurn` rejection; review F8 (P2) proved
+that reverting `#write` to `e.message` still left the file green. The focused test now drives all
+four rejection paths. Each mutation — `#write`, the spoken repair, `#stream` and `#settle` — exposes
+React #185 and reds its own case; the built code draws `[web-unexpected]` instead.
+
+Review F9 (P2) found the spoken repair's deadline setting `finished`, aborting its request, and then
+classifying the resulting `AbortError` before `finish` could ignore the late result. That drew
+nothing, but reported an ordinary timeout as `[web-unexpected]` to Sentry. The rejection branch now
+returns on `finished` before calling `describeFetchFailure`; a fake-clock test watches the monitoring
+seam as well as the reader's existing timeout sentence.
+
+**3. "is `npm run dev` still running?" on production.** `couldNotReach(detail?)` in
+`src/web/lib/reader-facing.ts`: a built page (`import.meta.env.PROD`) says `COULD_NOT_REACH`
+(`[net-down]`, new in `src/messages.ts`) and never the browser's own words (which also closes F3's
+exposure half); the dev build keeps the hint and the bracketed detail. Used by `describeFetchFailure`
+and the four others (`useShelf`, `jobEngine`, `useAdminUsers`, `useAdminFeedback`). Tested both ways
+with `vi.stubEnv("PROD", …)`; forcing the dev branch reds the production case.
+
+**Found, not changed:**
+- `handleApi`'s own catch (`send(res, status, { error: (err as Error).message })`) sends a raw
+  message for every status, 500 included. Same class, JSON side. Not changed because some routes
+  answer a 500 with an uncoded sentence they wrote (fleet, admin), which needs an audit to tell
+  apart. Recorded in copy.md.
+- Those four "couldn't reach" sites still match the exact string `"Failed to fetch"` (Chrome's; Safari
+  says "Load failed") and pass any other `e.message` through. Routing them through
+  `describeFetchFailure` would fix both; it lives in a hook module they do not import today.
+
+**Stage 2b review ledger.** [2b code review](260924a-only-a-sentence-the-server-wrote-reaches-the-reader-2b-code-review-sol.md):
+no P0/P1. F8 (P2, only `#stream`'s catch was pinned) — taken by Sol: a test per controller catch,
+each reds under its own mutation. F9 (P2, the spoken repair's deadline abort reported as
+`[web-unexpected]`) — taken by Sol: the late rejection returns on `finished` first, with a
+fake-clock test. Also `tests/shelf-cached-paint.test.tsx` now matches `[net-down]` rather than the
+dev-only prose.

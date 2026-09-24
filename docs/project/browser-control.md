@@ -39,6 +39,12 @@ screenshots are large and the reasoning is small.
 - **[infra/hetzner/README.md](../../infra/hetzner/README.md)** — the box itself: `gjd-remote tunnel`
   plus `start-vnc` to watch the browser over noVNC, why Playwright runs `--isolated`, and why the
   MCP list is deliberately short.
+- **WebKit, for anything iPad-shaped.** Since 2026-09-24 the box has WebKit's system packages
+  (`provision.sh`), and `npx playwright@1.62.1 install webkit` fetches the browser into
+  `~/.cache/ms-playwright`. It is a standalone Playwright script, not the MCP (which drives Chrome):
+  `webkit.launch()` with an iPad user agent, `hasTouch`, `isMobile`, and a device scale factor of 2.
+  It is the nearest thing to iOS Safari here, but not iOS itself. First used for the send icon,
+  SPIDERYARN-READING2-3E.
 
 ### Two MCPs on the box, and which one to open
 

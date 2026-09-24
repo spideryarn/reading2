@@ -350,6 +350,7 @@ import {
   type UploadRecord,
 } from "./upload-records.js";
 import { errorFields, log, since } from "./log.js";
+import { sayToReader } from "./reader-sentence.js";
 import { placeQuoteInBlock } from "./quote-in-block.js";
 import { processSingleton } from "./process-state.js";
 import { captureFailure, setMonitoringUser } from "./monitoring.js";
@@ -1702,7 +1703,7 @@ async function answer(
        reader has already read the half. */
     const patch = {
       status: "error" as const,
-      error: (err as Error).message,
+      error: sayToReader(err, { route: "explain", slug }),
       ...(text.trim() ? { answer: text.trim() } : {}),
     };
     /* **Nothing past `sse(res)` may throw.** The headers are gone, so an escaped
@@ -1851,7 +1852,7 @@ async function streamAskedTerm(slug: string, term: unknown, res: ServerResponse)
        is not a failure worth an issue, and `frame` is a no-op on their closed
        socket anyway. */
     if (!gone.aborted) captureFailure(err, { route: "glossary-ask", slug });
-    frame("error", { error: (err as Error).message });
+    frame("error", { error: sayToReader(err, { route: "glossary-ask", slug }) });
   } finally {
     res.end();
   }
@@ -1892,7 +1893,7 @@ async function streamTermLookup(slug: string, termId: string, res: ServerRespons
     }
   } catch (err) {
     captureFailure(err, { route: "glossary-lookup", slug });
-    frame("error", { error: (err as Error).message });
+    frame("error", { error: sayToReader(err, { route: "glossary-lookup", slug }) });
   } finally {
     res.end();
   }
@@ -2124,7 +2125,7 @@ async function markOneAnswer(slug: string, body: unknown, res: ServerResponse): 
        a mark and a reason beats a spinner that turns into nothing, and the
        reader has already read the half — but it arrives as `error`, so the
        question stays un-ticked and the reply stays retryable. */
-    frame("error", { error: (err as Error).message, text });
+    frame("error", { error: sayToReader(err, { route: "quiz-mark", slug }), text });
   } finally {
     res.end();
   }
@@ -3120,7 +3121,7 @@ async function streamChat(slug: string, body: unknown, res: ServerResponse): Pro
        *record* the failure is swallowed, having been logged where it happened.
        Found by a GPT-5.6 review, 2026-08-26. */
     captureFailure(err, { route: "chat", slug, threadId: thread.id });
-    const message = (err as Error).message;
+    const message = sayToReader(err, { route: "chat", slug });
     try {
       // The partial answer is kept, not dropped — see the header note.
       await chatStore.finish(
@@ -4076,7 +4077,7 @@ async function search(slug: string, body: unknown, res: ServerResponse): Promise
     patch = { status: "done", hits, model };
   } catch (err) {
     captureFailure(err, { route: "search", slug, id: run.id });
-    patch = { status: "error", error: (err as Error).message };
+    patch = { status: "error", error: sayToReader(err, { route: "search", slug }) };
   } finally {
     searching.delete(key);
   }
@@ -4324,7 +4325,7 @@ async function runRefereeCriterion(
     patch = { status: "done", results, model };
   } catch (err) {
     captureFailure(err, { route: "referee-criteria", slug, id: row.id });
-    patch = { status: "error", error: (err as Error).message };
+    patch = { status: "error", error: sayToReader(err, { route: "referee-criteria", slug }) };
   } finally {
     refereeing.delete(key);
   }
@@ -4462,7 +4463,7 @@ async function runRefereeClaims(slug: string, res: ServerResponse): Promise<void
     patch = { status: "done", claims, model, claimsOmitted };
   } catch (err) {
     captureFailure(err, { route: "referee-claims", slug });
-    patch = { status: "error", error: (err as Error).message, claims: [] };
+    patch = { status: "error", error: sayToReader(err, { route: "referee-claims", slug }), claims: [] };
   } finally {
     pullingClaims.delete(slug);
   }
@@ -4575,7 +4576,7 @@ async function runMirror(slug: string, res: ServerResponse): Promise<void> {
        remark whose pointers have not been verified is exactly the
        confident-looking claim about a sentence nobody wrote that this whole
        module is arranged against. */
-    frame("error", { error: (err as Error).message });
+    frame("error", { error: sayToReader(err, { route: "referee-mirror", slug }) });
   } finally {
     res.end();
   }
