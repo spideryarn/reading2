@@ -27,7 +27,8 @@ import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 import {
   authHint, authPlan, buildCodexArgs, childEnv, combinedLog, formatAnswer, isCredentialFailure,
-  parseArgs, readAnswerForConsole, reviewProfileDefined, runCodex, shouldFallBack, untrustedCheckoutHint,
+  parseArgs, pickNewestInFamily, readAnswerForConsole, resolveModelFamily, reviewProfileDefined,
+  runCodex, shouldFallBack, untrustedCheckoutHint,
 } from "../scripts/run-codex.js";
 import { EXIT_FILE, START_FILE, readArtefacts, shellQuote } from "../tools/overseer/launch-artefacts.js";
 import { makeLaunchDir, type LaunchFixture } from "./helpers/launch-fixture.js";
@@ -46,7 +47,19 @@ const noiseGenerator = (marker: string) =>
 /** The repo root, so a test can spawn the wrapper the way a person does. */
 const REPO = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 
-function fakeCodex(body: string): string {
+/**
+ * Every stand-in answers `codex app-server`'s model/list first, because `--model sol` (the
+ * default) is resolved through it before exec runs. The list is invented on purpose — a Sol newer
+ * than any real one, a `-pro` that must not count, a hidden one that must not either — so a
+ * wrapper that picked by anything but "newest listed Sol" runs the wrong id and the test says so.
+ */
+const STAND_IN_MODELS = [
+  { model: "gpt-5.6-sol" }, { model: "gpt-9.1-sol" }, { model: "gpt-9.10-sol-pro" },
+  { model: "gpt-10-sol", hidden: true }, { model: "gpt-9-astra", isDefault: true }, { model: "gpt-9.1-luna" },
+];
+const MODEL_LIST_STAND_IN = `if [ "$1" = app-server ]; then read -r _; echo '{"id":1,"result":{}}'; read -r _; read -r _; echo '${JSON.stringify({ id: 2, result: { data: STAND_IN_MODELS, nextCursor: null } })}'; exit 0; fi`;
+
+function fakeCodex(body: string, modelListStandIn = MODEL_LIST_STAND_IN): string {
   const dir = mkdtempSync(join(tmpdir(), "fake-codex-"));
   const path = join(dir, "codex");
   // Every stand-in needs the -o path, since the wrapper fails closed without that file.
@@ -54,11 +67,90 @@ function fakeCodex(body: string): string {
     path,
     // `here` is the stand-in's own directory: somewhere a body can leave scratch files that the
     // test then reads, without inventing an environment variable to pass one in.
-    `#!/usr/bin/env bash\nout=""; prev=""\nfor a in "$@"; do if [ "$prev" = "-o" ]; then out="$a"; fi; prev="$a"; done\nhere="$(cd "$(dirname "$0")" && pwd)"\n${body}\n`,
+    `#!/usr/bin/env bash\n${modelListStandIn}\nout=""; prev=""\nfor a in "$@"; do if [ "$prev" = "-o" ]; then out="$a"; fi; prev="$a"; done\nhere="$(cd "$(dirname "$0")" && pwd)"\n${body}\n`,
   );
   chmodSync(path, 0o755);
   return path;
 }
+
+describe("pickNewestInFamily", () => {
+  const reply = (data: unknown) => ({ id: 2, result: { data } });
+
+  it("compares versions as numbers, part by part, and skips -pro and hidden models", () => {
+    expect(pickNewestInFamily(reply(STAND_IN_MODELS), "sol")).toEqual({ ok: true, model: "gpt-9.1-sol" });
+    // 5.10 is newer than 5.9: a string sort would pick 5.9.
+    expect(pickNewestInFamily(reply([{ model: "gpt-5.9-sol" }, { model: "gpt-5.10-sol" }]), "sol"))
+      .toEqual({ ok: true, model: "gpt-5.10-sol" });
+    expect(pickNewestInFamily(reply([{ model: "gpt-6-sol" }, { model: "gpt-5.6-sol" }]), "sol"))
+      .toEqual({ ok: true, model: "gpt-6-sol" });
+  });
+
+  it("refuses rather than falling back when there is nothing to pick", () => {
+    expect(pickNewestInFamily(reply([{ model: "gpt-6-astra", isDefault: true }]), "sol").ok).toBe(false);
+    expect(pickNewestInFamily({ id: 2, error: { message: "nope" } }, "sol")).toEqual({ ok: false, why: "model/list failed: nope" });
+    expect(pickNewestInFamily({ id: 2, result: {} }, "sol").ok).toBe(false);
+  });
+});
+
+describe("resolveModelFamily", () => {
+  it("follows model/list pagination before choosing the newest model", async () => {
+    const standIn = `if [ "$1" = app-server ]; then
+read -r _; echo '{"id":1,"result":{}}'
+read -r _; read -r _
+echo '{"id":2,"result":{"data":[{"model":"gpt-5.6-sol"}],"nextCursor":"page-2"}}'
+read -r page_two
+case "$page_two" in *'"id":3'*'"cursor":"page-2"'*) ;; *) exit 44 ;; esac
+echo '{"id":3,"result":{"data":[{"model":"gpt-9-sol"}],"nextCursor":null}}'
+exit 0
+fi`;
+    const bin = fakeCodex("exit 97", standIn);
+    const got = await resolveModelFamily("sol", {
+      ...process.env, PATH: `${dirname(bin)}:${process.env.PATH}`,
+    }, REPO);
+    expect(got).toEqual({ ok: true, model: "gpt-9-sol" });
+  });
+
+  it("does not continue after initialize was refused", async () => {
+    const standIn = `if [ "$1" = app-server ]; then
+read -r _; echo '{"id":1,"error":{"message":"no initialize"}}'
+read -r _; read -r _
+echo '{"id":2,"result":{"data":[{"model":"gpt-99-sol"}],"nextCursor":null}}'
+exit 0
+fi`;
+    const bin = fakeCodex("exit 97", standIn);
+    const got = await resolveModelFamily("sol", {
+      ...process.env, PATH: `${dirname(bin)}:${process.env.PATH}`,
+    }, REPO);
+    expect(got).toEqual({ ok: false, why: "codex app-server refused initialization: no initialize" });
+  });
+
+  it("kills the app-server process group and waits for it to close", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "model-list-process-"));
+    const pidFile = join(dir, "grandchild-pid");
+    const standIn = `if [ "$1" = app-server ]; then
+( trap '' HUP TERM; while true; do sleep 1; done ) &
+echo "$!" > "$MODEL_LIST_GRANDCHILD_PID"
+read -r _; echo '{"id":1,"result":{}}'
+read -r _; read -r _
+echo '{"id":2,"result":{"data":[{"model":"gpt-9-sol"}],"nextCursor":null}}'
+wait
+fi`;
+    const bin = fakeCodex("exit 97", standIn);
+    const got = await resolveModelFamily("sol", {
+      ...process.env, PATH: `${dirname(bin)}:${process.env.PATH}`,
+      MODEL_LIST_GRANDCHILD_PID: pidFile,
+    }, REPO);
+    expect(got).toEqual({ ok: true, model: "gpt-9-sol" });
+    const pid = Number(readFileSync(pidFile, "utf8").trim());
+    let gone = false;
+    for (let i = 0; i < 50; i++) {
+      try { process.kill(pid, 0); } catch { gone = true; break; }
+      await new Promise((resolveWait) => setTimeout(resolveWait, 20));
+    }
+    if (!gone) process.kill(pid, "SIGKILL");
+    expect(gone).toBe(true);
+  });
+});
 
 describe("parseArgs", () => {
   it("will not let --pass-env hand over the one variable --auth controls", () => {
@@ -797,8 +889,13 @@ describe("runCodex", () => {
 
 describe("the CLI, end to end", () => {
   /** Run the wrapper itself, with a stand-in codex on PATH. */
-  function runCli(body: string, extraArgs: string[] = [], extraEnv: Record<string, string> = {}) {
-    const bin = fakeCodex(body);
+  function runCli(
+    body: string,
+    extraArgs: string[] = [],
+    extraEnv: Record<string, string> = {},
+    modelListStandIn = MODEL_LIST_STAND_IN,
+  ) {
+    const bin = fakeCodex(body, modelListStandIn);
     const dir = mkdtempSync(join(tmpdir(), "run-codex-cli-"));
     const answerPath = join(dir, "answer.md");
     const r = spawnSync(
@@ -809,7 +906,7 @@ describe("the CLI, end to end", () => {
         env: pinForWrapper({ ...process.env, PATH: `${join(bin, "..")}:${process.env.PATH}`, ...extraEnv }),
       },
     );
-    return { ...r, answerPath };
+    return { ...r, answerPath, here: dirname(bin) };
   }
 
   it("prints the answer and the paths, and neither channel of the activity log", () => {
@@ -824,6 +921,54 @@ describe("the CLI, end to end", () => {
     // channels, a few hundred bytes to the caller.
     expect(r.stdout.length + r.stderr.length).toBeLessThan(2_000);
     expect(readFileSync(`${r.answerPath}.activity.log`, "utf8").length).toBeGreaterThan(800_000);
+  }, 60_000);
+
+  it("--model sol (the default) runs the newest Sol the model list offers, and says which", () => {
+    // Greg, 2026-09-24: no caller names a version. The stand-in lists 5.6, 9.1, a 9.10 -pro and a
+    // hidden 10; only 9.1 is both a plain Sol and offered, and the exec argv must say so.
+    const r = runCli('printf "%s\\n" "$@" > "$here/argv"\nprintf "A\\n" > "$out"');
+    expect(r.status, r.stderr).toBe(0);
+    const argv = readFileSync(join(r.here, "argv"), "utf8").split("\n");
+    expect(argv[argv.indexOf("--model") + 1]).toBe("gpt-9.1-sol");
+    expect(r.stdout).toContain("gpt-9.1-sol, the newest sol");
+  }, 60_000);
+
+  it("resolves the family again under the credential used by a fallback attempt", () => {
+    const modelAttempts = join(mkdtempSync(join(tmpdir(), "model-attempts-")), "models");
+    const standIn = `if [ "$1" = app-server ]; then
+if [ -n "$CODEX_API_KEY" ]; then offered=gpt-9-sol; else offered=gpt-8-sol; fi
+read -r _; echo '{"id":1,"result":{}}'
+read -r _; read -r _
+printf '{"id":2,"result":{"data":[{"model":"%s"}],"nextCursor":null}}\n' "$offered"
+exit 0
+fi`;
+    const r = runCli(
+      `model=""; previous=""
+for argument in "$@"; do if [ "$previous" = --model ]; then model="$argument"; fi; previous="$argument"; done
+echo "$model" >> "$MODEL_ATTEMPTS"
+if [ -z "$CODEX_API_KEY" ]; then echo 'ERROR: Your workspace is out of credits.' >&2; exit 1; fi
+printf 'A\n' > "$out"`,
+      [],
+      { CODEX_API_KEY: "sk-TEST", MODEL_ATTEMPTS: modelAttempts },
+      standIn,
+    );
+    expect(r.status, r.stderr).toBe(0);
+    expect(readFileSync(modelAttempts, "utf8").trim().split("\n"))
+      .toEqual(["gpt-8-sol", "gpt-9-sol"]);
+    expect(r.stdout).toContain("gpt-9-sol, the newest sol");
+  }, 60_000);
+
+  it("a family the account is not offered stops before exec rather than guessing an id", () => {
+    const r = runCli('touch "$here/exec-ran"\nprintf "A\\n" > "$out"', ["--model", "terra"]);
+    expect(r.status).toBe(1);
+    expect(r.stderr).toContain("--model terra: model/list offers this account no gpt-<version>-terra model");
+    expect(existsSync(join(r.here, "exec-ran"))).toBe(false);
+  }, 60_000);
+
+  it("a concrete id is passed through without asking the model list", () => {
+    const r = runCli('printf "%s\\n" "$@" > "$here/argv"\nprintf "A\\n" > "$out"', ["--model", "gpt-5.5"]);
+    expect(r.status, r.stderr).toBe(0);
+    expect(r.stdout).toContain("codex exec (gpt-5.5, ");
   }, 60_000);
 
   it("caps an enormous answer too — the log is not the only thing that can flood a caller", () => {
@@ -909,10 +1054,16 @@ describe("the CLI, end to end", () => {
     const dir = mkdtempSync(join(tmpdir(), "dry-run-"));
     const promptPath = join(dir, "prompt.md");
     writeFileSync(promptPath, `PROMPT-HEAD${"w".repeat(2 * 1024 * 1024)}PROMPT-TAIL`);
+    // A stand-in on PATH even for a dry run: `--model sol` asks codex's model list first.
+    const bin = fakeCodex("exit 97");
     const r = spawnSync("npx", ["tsx", "scripts/run-codex.ts", "--prompt-file", promptPath, "--dry-run"], {
       encoding: "utf8",
+      env: pinForWrapper({ ...process.env, PATH: `${dirname(bin)}:${process.env.PATH}` }),
     });
-    expect(r.status).toBe(0);
+    expect(r.status, r.stderr).toBe(0);
+    // The pasteable line names the id that would really run, not the family.
+    expect(r.stdout).toContain("--model gpt-9.1-sol ");
+    expect(r.stdout).toContain("# model gpt-9.1-sol, the newest sol");
     expect(r.stdout).toContain("approval_policy=never");
     // The command ends `-- -` and takes the prompt from the file, by name.
     expect(r.stdout).toContain("-- -");

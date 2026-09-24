@@ -36,7 +36,7 @@ Specific to this project; the rest of the doc travels. **Every plan under `docs/
 Sol before it is built, and the code built from it goes back for a second review.**
 
 ```bash
-npx tsx scripts/run-codex.ts --model gpt-5.6-sol --effort high --timeout-minutes 90 \
+npx tsx scripts/run-codex.ts --model sol --effort high --timeout-minutes 90 \
   --sandbox workspace-write --prompt-file <review-prompt> --output <review-answer>
 ```
 
@@ -298,7 +298,7 @@ confident wrong hint is worse than no hint.
 Verify with a cheap round trip:
 
 ```bash
-npx tsx scripts/run-codex.ts --model gpt-5.6-luna --effort low --prompt "Reply with exactly: OK" --print
+npx tsx scripts/run-codex.ts --model luna --effort low --prompt "Reply with exactly: OK" --print
 ```
 
 ## Quick start
@@ -646,19 +646,25 @@ that gets dropped.
 
 ## Picking the model and effort
 
-As of 2026-09-07 the Codex CLI offers:
+**Name a family, never a version.** Greg, 2026-09-24: *"make sure we aren't specifying exact models
+anywhere in our dev tooling"*. The wrapper's `--model` takes a family and runs the newest
+`gpt-<version>-<family>` that codex's own `model/list` offers this account, asked on every run.
+The only place that turns a family into an id is `scripts/run-codex.ts`, and the `Done —` line and
+`--dry-run` both print the id it picked. A concrete id still passes straight through.
 
-| Model | Use |
+| `--model` | Use |
 |---|---|
-| `gpt-6-astra` | the hardest things only — see below |
-| `gpt-5.6-sol` | frontier agentic coding — hard reviews, gnarly implementation. The house default |
-| `gpt-5.6-terra` | balanced, everyday work |
-| `gpt-5.6-luna` | fast and cheap — smoke tests, mechanical edits, quick opinions |
-| `gpt-5.5`, `gpt-5.4` | previous generation; still selectable |
+| `astra` | the hardest things only — see below |
+| `sol` | frontier agentic coding — hard reviews, gnarly implementation. The house default |
+| `terra` | balanced, everyday work |
+| `luna` | fast and cheap — smoke tests, mechanical edits, quick opinions |
 
-`gpt-5.4-mini` is deprecated in favour of `gpt-5.6-luna`. Availability differs between
-ChatGPT-subscription auth and API-key auth, and a model that 400s under one may work under the
-other — check `~/.codex/models_cache.json` or just try it, rather than trusting a hardcoded list.
+"Offered" is the word that matters. Measured 2026-09-24, `gpt-6-sol` exists on the API, but codex
+on a ChatGPT subscription refuses it with a 400 and `model/list` does not list it — so `sol`
+resolved to the newest Sol that *is* offered, a version behind, and will move by itself when the
+subscription lists the next one. Availability differs between subscription and API-key auth; the
+wrapper asks under the credential it will spend, resolving again if a read-only run falls back from
+the subscription to the API key.
 
 **Astra is opt-in, not the new default.** The house review — every plan, and the code built from it
 — stays on Sol. Greg, 2026-09-07: *"We only want to use it for really difficult stuff, mostly for
@@ -688,9 +694,11 @@ Defaults for the whole machine go in `~/.codex/config.toml`, per-project ones in
 `.codex/config.toml`:
 
 ```toml
-model = "gpt-5.6-sol"
 model_reasoning_effort = "high"
 ```
+
+Leave `model` out of both: codex's config takes only a concrete id, which is the pin this page
+avoids, and the wrapper always passes one anyway.
 
 ## Raw `codex exec` — the escape hatch
 
@@ -698,7 +706,7 @@ For a human in a shell, or when you need a flag the wrapper doesn't expose:
 
 ```bash
 codex exec \
-  --model gpt-5.6-sol \
+  --model <id> \
   -c model_reasoning_effort="high" \
   -c approval_policy="never" \
   --sandbox workspace-write \
@@ -710,7 +718,8 @@ codex exec \
 ```
 
 Both the `-c approval_policy="never"` and the `< /dev/null` are load-bearing; the `--` stops a
-prompt beginning with `-` from being read as a flag.
+prompt beginning with `-` from being read as a flag. Raw codex has no families, so `<id>` is
+concrete: `npx tsx scripts/run-codex.ts --model sol --prompt x --dry-run` prints today's.
 
 Flags worth knowing (verified on 0.146.0):
 

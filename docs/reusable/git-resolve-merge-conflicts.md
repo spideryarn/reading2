@@ -26,7 +26,7 @@ If it's complex or risky, get help — hand over the conflicted hunks *and* the 
 side, not just the file:
 
 - **GPT Sol**, via [codex-cli-as-subagent.md](codex-cli-as-subagent.md):
-  `npx tsx scripts/run-codex.ts --model gpt-5.6-sol --effort high --prompt-file … --output …`
+  `npx tsx scripts/run-codex.ts --model sol --effort high --prompt-file … --output …`
 - and perhaps **Fable** too — a subagent with `model: "fable"`.
 
 **Make a proposal. Don't make changes yet.**
