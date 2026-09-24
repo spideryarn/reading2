@@ -33,7 +33,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { SearchHit, SearchRun } from "../types.js";
 import { mintId } from "../ids.js";
 import { isStale } from "../search-stale.js";
-import { describeFetchFailure } from "./useComments.js";
+import { describeFetchFailure } from "./lib/describe-failure.js";
 import { readEvents, STREAM_STALL_MS } from "./lib/sse.js";
 import { apiFetch, failure, fetchOk } from "./lib/api.js";
 import { ReaderFacingError } from "./lib/reader-facing.js";

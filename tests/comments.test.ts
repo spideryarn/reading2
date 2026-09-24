@@ -46,7 +46,7 @@ import { mkdir, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import { loadComments } from "../src/comments.js";
-import { describeFetchFailure } from "../src/web/useComments.js";
+import { describeFetchFailure } from "../src/web/lib/describe-failure.js";
 import { StreamStalled } from "../src/web/lib/sse.js";
 import { markUnreachable, ReaderFacingError } from "../src/web/lib/reader-facing.js";
 import { wentQuiet } from "../src/messages.js";

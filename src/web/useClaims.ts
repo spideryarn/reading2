@@ -35,7 +35,7 @@ import { ReaderFacingError } from "./lib/reader-facing.js";
 import { readEvents, STREAM_STALL_MS } from "./lib/sse.js";
 import { useOrderedRead } from "./useOrderedRead.js";
 import { type ArtefactStatus, useAutoRun } from "./useAutoRun.js";
-import { describeFetchFailure } from "./useComments.js";
+import { describeFetchFailure } from "./lib/describe-failure.js";
 
 export interface ClaimsApi {
   /** The stored run, or `null` when this paper has never been asked. */

@@ -34,16 +34,19 @@
  * server's answer.
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { PAGE_FAULT } from "../src/messages.js";
 import type { Job } from "../src/types.js";
+import { markUnreachable, ReaderFacingError } from "../src/web/lib/reader-facing.js";
 import { type Advanced, createJobEngine, type JobEngineDeps } from "../src/web/jobEngine.js";
 
 const job = (id: string, status: Job["status"]): Job =>
   ({ id, slug: "a-piece", status, steps: [] }) as unknown as Job;
 
-/** What `readJson` throws for a refusal: an `Error` carrying the status.
- *  Duck-typed on purpose — `statusOf` reads `.status` and nothing else. */
+/** What `readJson` throws for a refusal: an `HttpError` — a `ReaderFacingError`
+ *  carrying the status. `statusOf` reads `.status`; `describeFetchFailure`
+ *  passes the words only because of the class (plan 260924a § Stage 2c). */
 const refusal = (status: number, message: string) =>
-  Object.assign(new Error(message), { status });
+  Object.assign(new ReaderFacingError(message), { status });
 
 const EXPIRED = "Your session has expired.";
 
@@ -93,6 +96,32 @@ beforeEach(() => {
 
 afterEach(() => {
   vi.useRealTimers();
+});
+
+describe("a job-list failure's reader-facing sentence", () => {
+  it("recognises Safari's transport wording by apiFetch's brand", async () => {
+    const engine = createJobEngine(deps);
+    engine.start("reader-1");
+    await settle();
+    pending.shift()?.no(markUnreachable(new TypeError("Load failed")));
+    await settle();
+
+    expect(engine.getSnapshot().error).toMatch(/\[net-down\]/);
+    expect(engine.getSnapshot().error).not.toBe("Load failed");
+    engine.stop();
+  });
+
+  it("does not expose an injected dependency's foreign exception", async () => {
+    const engine = createJobEngine(deps);
+    engine.start("reader-1");
+    await settle();
+    pending.shift()?.no(new Error("Minified React error #185"));
+    await settle();
+
+    expect(engine.getSnapshot().error).toBe(PAGE_FAULT.message);
+    expect(engine.getSnapshot().error).not.toContain("React");
+    engine.stop();
+  });
 });
 
 describe("a final 401 on the job list", () => {

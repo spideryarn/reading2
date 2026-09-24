@@ -25,6 +25,7 @@ import type { Job, StepName } from "../types.js";
 import { jobEngine, send } from "./jobEngine.js";
 import { uploadEngine } from "./uploadEngine.js";
 import { statusOf } from "./lib/api.js";
+import { describeFetchFailure } from "./lib/describe-failure.js";
 
 /**
  * *There is nothing to queue: this upload is already this article.*
@@ -344,8 +345,12 @@ export function useJobs(cadence: QueueCadence, onFinished?: (job: Job) => void):
          2026-09-02: the blocking job came out of a 409 that no longer exists,
          and one field with nothing beside it cannot fall out of step with
          itself. */
-      lastFailure.current = (err as Error).message;
-      jobEngine.actionFailed((err as Error).message, statusOf(err), epoch);
+      /* Through the one rule — a lost connection by `apiFetch`'s brand (Safari
+         says "Load failed"), the server's sentence by class, anything else not.
+         Plan 260924a § Stage 2c, GPT Sol's F11. */
+      const said = describeFetchFailure(err instanceof Error ? err : new Error(String(err)));
+      lastFailure.current = said;
+      jobEngine.actionFailed(said, statusOf(err), epoch);
       return null;
     }
   }, []);

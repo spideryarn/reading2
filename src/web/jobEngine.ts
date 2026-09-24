@@ -71,7 +71,7 @@
 import type { Job, StepName } from "../types.js";
 import type { AutoRunTarget } from "./auto-run-targets.js";
 import { apiFetch, readJson, statusOf } from "./lib/api.js";
-import { couldNotReach } from "./lib/reader-facing.js";
+import { describeFetchFailure } from "./lib/describe-failure.js";
 
 /** While something is running. Fast enough to feel live, slow enough to be free. */
 const BUSY_MS = 1000;
@@ -461,10 +461,11 @@ export function createJobEngine(deps: JobEngineDeps): JobEngine {
     set({ authFailed: true, error: message });
   };
 
+  /* Through the one rule — see `describeFetchFailure`. It used to match
+     Chrome's "Failed to fetch" and pass anything else through, so an iPad
+     reader was shown Safari's "Load failed" (plan 260924a § Stage 2c). */
   const readable = (err: unknown): string =>
-    (err as Error).message === "Failed to fetch"
-      ? couldNotReach()
-      : (err as Error).message;
+    describeFetchFailure(err instanceof Error ? err : new Error(String(err)));
 
   /**
    * Number every job that has newly reached `done`.

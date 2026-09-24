@@ -25,7 +25,9 @@
 import { act, createElement, useEffect } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { PAGE_FAULT } from "../src/messages.js";
 import type { LibraryEntry, LibraryResponse } from "../src/types.js";
+import { markUnreachable, ReaderFacingError } from "../src/web/lib/reader-facing.js";
 
 /** What each URL answers with, posed per test. */
 const answers = new Map<string, () => Promise<unknown>>();
@@ -61,6 +63,8 @@ vi.mock("../src/web/lib/offline-store.js", () => ({
 }));
 
 const { useShelf } = await import("../src/web/useShelf.js");
+const { useAdminUsers } = await import("../src/web/useAdminUsers.js");
+const { useAdminFeedback } = await import("../src/web/useAdminFeedback.js");
 type Shelf = ReturnType<typeof useShelf>;
 const { shelfFromCachedBody } = await import("../src/web/lib/cached-shelf.js");
 
@@ -116,6 +120,17 @@ function Probe({ readerId }: { readerId: string }) {
   return null;
 }
 
+let adminError: string | null = null;
+function AdminUsersProbe() {
+  adminError = useAdminUsers().error;
+  return null;
+}
+
+function AdminFeedbackProbe() {
+  adminError = useAdminFeedback().error;
+  return null;
+}
+
 /* React only complains about an update outside `act` when it has been told it
    is in an act environment; without this it complains about `root.unmount()`
    instead, which is noise and would have made the assertion below fire
@@ -142,6 +157,7 @@ async function settle(): Promise<void> {
 /** What is on the shelf right now. */
 const shelfNow = (): string[] | null => seen[seen.length - 1] ?? null;
 const errorNow = (): string => errors[errors.length - 1] ?? "";
+const actionErrorNow = (): string => shelfNow_?.actionError ?? "";
 
 beforeEach(() => {
   answers.clear();
@@ -151,6 +167,7 @@ beforeEach(() => {
   errors = [];
   renders = 0;
   shelfNow_ = null;
+  adminError = null;
   host = document.createElement("div");
   document.body.append(host);
   root = createRoot(host);
@@ -159,6 +176,28 @@ beforeEach(() => {
 afterEach(() => {
   act(() => root.unmount());
   host.remove();
+});
+
+describe("the admin lists use the same failure boundary", () => {
+  it("recognises the users request's Safari wording by apiFetch's brand", async () => {
+    answers.set("/api/admin/users", () =>
+      Promise.reject(markUnreachable(new TypeError("Load failed"))),
+    );
+    act(() => root.render(createElement(AdminUsersProbe)));
+    await settle();
+
+    expect(adminError).toMatch(/\[net-down\]/);
+    expect(adminError).not.toBe("Load failed");
+  });
+
+  it("does not expose a foreign exception from the feedback request", async () => {
+    answers.set("/api/admin/feedback", () => Promise.reject(new Error("Minified React error #185")));
+    act(() => root.render(createElement(AdminFeedbackProbe)));
+    await settle();
+
+    expect(adminError).toBe(PAGE_FAULT.message);
+    expect(adminError).not.toContain("React");
+  });
 });
 
 describe("the saved shelf and the live one", () => {
@@ -434,8 +473,10 @@ describe("the saved shelf and the live one", () => {
 describe("what a failure does to a shelf that is already painted", () => {
   it("keeps the stale shelf and says so when the server returns a 500", async () => {
     readCache.mockResolvedValue({ body: shelfOf("saved-piece"), savedAt: 1 });
+    /* What the real `readJson` throws — an `HttpError`, which is a
+       `ReaderFacingError` carrying its status. `lib/api.js` is mocked here. */
     answers.set("/api/library", () =>
-      Promise.reject(Object.assign(new Error("Request failed (500)"), { status: 500 })),
+      Promise.reject(Object.assign(new ReaderFacingError("Request failed (500)"), { status: 500 })),
     );
 
     paint();
@@ -446,13 +487,112 @@ describe("what a failure does to a shelf that is already painted", () => {
 
   it("keeps the stale shelf when the transport fails", async () => {
     readCache.mockResolvedValue({ body: shelfOf("saved-piece"), savedAt: 1 });
-    answers.set("/api/library", () => Promise.reject(new Error("Failed to fetch")));
+    /* Marked, as the real `apiFetch` marks a rejecting `fetch`. */
+    answers.set("/api/library", () =>
+      Promise.reject(markUnreachable(new TypeError("Failed to fetch"))),
+    );
 
     paint();
     await settle();
     expect(shelfNow()).toEqual(["saved-piece"]);
     // The code, not the prose — the wording differs between dev and a built page.
     expect(errorNow()).toMatch(/\[net-down\]/);
+  });
+
+  it("says the same when Safari words the lost connection its own way", async () => {
+    /* **Greg reads on an iPad.** Safari's `fetch` rejects with "Load failed",
+       and the shelf used to match Chrome's "Failed to fetch" exactly and pass
+       anything else through — so an iPad reader was shown "Load failed".
+       Plan 260924a § Stage 2c. */
+    readCache.mockResolvedValue({ body: shelfOf("saved-piece"), savedAt: 1 });
+    answers.set("/api/library", () => Promise.reject(markUnreachable(new TypeError("Load failed"))));
+
+    paint();
+    await settle();
+    expect(errorNow()).toMatch(/\[net-down\]/);
+    expect(errorNow()).not.toBe("Load failed");
+  });
+
+  it("does not pass an unrecognised exception's words through", async () => {
+    readCache.mockResolvedValue({ body: shelfOf("saved-piece"), savedAt: 1 });
+    answers.set("/api/library", () => Promise.reject(new Error("Minified React error #185")));
+
+    paint();
+    await settle();
+    expect(errorNow()).not.toContain("React");
+    expect(errorNow()).toMatch(/\[web-unexpected\]/);
+  });
+
+  describe("a shelf action whose request never reached the server", () => {
+    /** Pose the mounted shelf first, then make one action's request fail in
+     * Safari's words with the same brand the real `apiFetch` adds. */
+    async function safariFailure(url: string, actOnShelf: (shelf: Shelf) => Promise<void>) {
+      answers.set("/api/library", () => Promise.resolve(shelfOf("a-piece")));
+      paint();
+      await settle();
+      answers.set(url, () => Promise.reject(markUnreachable(new TypeError("Load failed"))));
+
+      await act(async () => {
+        await actOnShelf(shelfNow_!);
+      });
+      expect(actionErrorNow()).toMatch(/\[net-down\]/);
+      expect(actionErrorNow()).not.toBe("Load failed");
+    }
+
+    it("describes archive's Safari failure by the transport brand", async () => {
+      await safariFailure("/api/library/a-piece", (shelf) => shelf.archive("a-piece"));
+    });
+
+    it("describes rename's Safari failure by the transport brand", async () => {
+      await safariFailure("/api/library/a-piece", (shelf) => shelf.rename("a-piece", "A title"));
+    });
+
+    it("describes the archived-list Safari failure by the transport brand", async () => {
+      await safariFailure("/api/library?archived=1", (shelf) => shelf.loadArchived());
+    });
+
+    it("describes restore's Safari failure by the transport brand", async () => {
+      answers.set("/api/library", () => Promise.resolve(shelfOf("a-piece")));
+      answers.set("/api/library?archived=1", () => Promise.resolve(shelfOf("a-piece")));
+      paint();
+      await settle();
+      await act(async () => {
+        await shelfNow_!.loadArchived();
+      });
+      answers.set("/api/library/a-piece", () =>
+        Promise.reject(markUnreachable(new TypeError("Load failed"))),
+      );
+
+      await act(async () => {
+        await shelfNow_!.restore("a-piece");
+      });
+      expect(actionErrorNow()).toMatch(/\[net-down\]/);
+      expect(actionErrorNow()).not.toBe("Load failed");
+    });
+
+    it("describes undo's Safari failure by the transport brand", async () => {
+      answers.set("/api/library", () => Promise.resolve(shelfOf("a-piece")));
+      answers.set("/api/library/a-piece", () =>
+        Promise.resolve({
+          entry: entry({ slug: "a-piece", archivedAt: "2026-09-24T10:00:00.000Z" }),
+        }),
+      );
+      paint();
+      await settle();
+      await act(async () => {
+        await shelfNow_!.archive("a-piece");
+      });
+      expect(shelfNow_?.undoable?.slug).toBe("a-piece");
+      answers.set("/api/library/a-piece", () =>
+        Promise.reject(markUnreachable(new TypeError("Load failed"))),
+      );
+
+      await act(async () => {
+        await shelfNow_!.undo();
+      });
+      expect(actionErrorNow()).toMatch(/\[net-down\]/);
+      expect(actionErrorNow()).not.toBe("Load failed");
+    });
   });
 
   /**
@@ -464,12 +604,13 @@ describe("what a failure does to a shelf that is already painted", () => {
     const cache = deferred<{ body: unknown; savedAt: number }>();
     readCache.mockReturnValue(cache.promise);
     answers.set("/api/library", () =>
-      Promise.reject(Object.assign(new Error("Not signed in"), { status: 401 })),
+      Promise.reject(Object.assign(new ReaderFacingError("Your session has expired."), { status: 401 })),
     );
 
     paint();
     await settle();
     expect(shelfNow()).toBeNull();
+    expect(errorNow()).toBe("Your session has expired.");
 
     cache.resolve({ body: shelfOf("saved-piece"), savedAt: 1 });
     await settle();

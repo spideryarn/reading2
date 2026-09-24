@@ -17,63 +17,12 @@
  */
 import { useCallback, useEffect, useRef, useState } from "react";
 import { anchorFields, type BlockId, type Comment, type CommentAnchor } from "../types.js";
-import { readEvents, StreamStalled, STREAM_STALL_MS } from "./lib/sse.js";
-import { PAGE_FAULT, wentQuiet } from "../messages.js";
+import { readEvents, STREAM_STALL_MS } from "./lib/sse.js";
 import { apiFetch, failure, fetchOk, readJson } from "./lib/api.js";
-import { couldNotReach, isUnreachable, ReaderFacingError } from "./lib/reader-facing.js";
-import { captureClientFailure } from "./monitoring.js";
+import { ReaderFacingError } from "./lib/reader-facing.js";
+import { describeFetchFailure } from "./lib/describe-failure.js";
 import { openingRead } from "./lib/opening-read.js";
 import type { Mark } from "./PlaceOnCriterion.js";
-
-/**
- * The sentence a reader sees for a caught failure — and only three kinds of
- * error get to choose it: a stalled stream, a lost connection our helpers
- * marked as one, and a `ReaderFacingError` (the server's own `{ error }`, or a
- * sentence the client wrote for a reader). Anything else gets `PAGE_FAULT` and
- * is reported, because its words were never written for a reader — see
- * src/web/lib/reader-facing.ts and docs/project/copy.md.
- *
- * `fetch` rejects with a bare `TypeError: Failed to fetch` for every
- * transport-level failure — server down, connection reset, request cut off
- * mid-flight — and that message tells a reader nothing they can act on. It is
- * also the failure they are most likely to hit: an explain call takes 15-25
- * seconds, and `npm run dev` restarts whenever vite.config.ts changes, so the
- * window for a request to be orphaned is wide. Greg hit exactly this on
- * 2026-08-25, with the dev server simply not running.
- *
- * The original text is kept in parentheses so the message is still searchable.
- */
-export function describeFetchFailure(error: Error): string {
-  /* A stream that stopped delivering bytes. `StreamStalled`'s own message is
-     written for whoever is reading a stack trace — "the stream sent nothing for
-     60s" — and `wentQuiet` is the same fact said to a reader, with the bracketed
-     code every other failure here carries. Handled in the one function all three
-     hooks describe their failures through, rather than at each of the three
-     `catch` blocks, because a raw class message reaching a reader is exactly the
-     kind of thing that only shows up when the failure does. */
-  if (error instanceof StreamStalled) return wentQuiet(error.seconds).message;
-  /* A lost connection, but only one our own helpers **saw** come out of the
-     transport — `apiFetch`, `readJson`, `readEvents` mark it there. Not "any
-     `TypeError`": every JavaScript bug is one of those too, and telling a
-     reader "couldn't reach the server" over `Cannot read properties of
-     undefined` is a false claim with the bug's text in brackets. */
-  if (isUnreachable(error)) {
-    return couldNotReach(error.message);
-  }
-  /* A sentence somebody here wrote for a reader — the server's own `{ error }`
-     (`HttpError`), or one the client wrote at the throw site. The class is the
-     claim; see src/web/lib/reader-facing.ts. */
-  if (error instanceof ReaderFacingError) return error.message;
-  /* Anything else is an exception nobody wrote for a reader: React's own
-     `Minified React error #185` reached one here on 2026-09-12, printed as a
-     chat answer's failure after the server had finished it. Its words go to the
-     console and to Sentry (whose scrubber withholds an unauthored message);
-     the reader gets the page's own sentence.
-     docs/plans/260924a-only-a-sentence-the-server-wrote-reaches-the-reader.md */
-  console.error("[describeFetchFailure] an exception with no reader-facing sentence", error);
-  captureClientFailure(error, { where: "describeFetchFailure" }, { neverAuthored: true });
-  return PAGE_FAULT.message;
-}
 
 /**
  * A stored comment, plus what only this tab knows about it.

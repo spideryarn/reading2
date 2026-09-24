@@ -211,7 +211,7 @@ export function safeEvent(event: ErrorEvent): ErrorEvent {
  * `message_withheld` tag, so an issue that looks bare says why.
  *
  * **`neverAuthored`** is for a caller that already knows the message is not
- * ours, whatever it ends in: `describeFetchFailure` in src/web/useComments.ts
+ * ours, whatever it ends in: `describeFetchFailure` in src/web/lib/describe-failure.ts
  * reports exactly the errors that are *not* a sentence written for a reader,
  * and `authored` alone would let `new Error("<the article> [ai-busy]")` through
  * on its suffix. GPT Sol, reviewing the plan, 2026-09-24.

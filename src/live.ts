@@ -56,6 +56,8 @@ import { articleWithIds } from "./article-prompt.js";
 import { CHAT_TOOLS } from "./chat-tools.js";
 import { recentHistory } from "./converse.js";
 import { webLinks } from "./urls.js";
+import { stageFailure } from "./job-failure.js";
+import { LIVE_UPSTREAM } from "./messages.js";
 /* **Type-only, both of them, and it has to stay that way.** `src/store/contracts.ts`
    and `src/ai-spend.ts` sit at the far end of import graphs this file is already
    inside — a value import from either would close a cycle, and `npm run cycles`
@@ -570,8 +572,16 @@ export async function mintLiveToken(
        model this account cannot reach says so — and throwing away that sentence
        to report "400" is how an afternoon gets spent. Never the key, which is
        not in the body. */
-    throw new Error(
-      `OpenAI refused the live session (${res.status}): ${(await res.text()).slice(0, 400)} [live-upstream]`,
+    /* A declared failure: the reader gets `LIVE_UPSTREAM`; the body, which is
+       OpenAI's words, stays in the diagnostic and so in the log. No code on the
+       diagnostic — a code there would read as authored (plan 260924a § 2c). */
+    /* The body is quoted and fixed text ends the line, so nothing OpenAI sends
+       can finish the diagnostic — a body ending in `[live-upstream]` would
+       otherwise read as authored to the Sentry scrubber (GPT Sol, F16). */
+    const body = JSON.stringify((await res.text()).slice(0, 400));
+    throw stageFailure(
+      LIVE_UPSTREAM,
+      `OpenAI refused the live session (${res.status}), saying ${body} (end of OpenAI's body).`,
     );
   }
 
@@ -585,7 +595,7 @@ export async function mintLiveToken(
      shape that changed under us would otherwise reach the browser as the string
      "undefined" and fail at the SDP exchange, one layer further from the cause. */
   if (typeof body.value !== "string" || body.value === "") {
-    throw new Error("OpenAI's session had no client secret in it. [live-upstream]");
+    throw stageFailure(LIVE_UPSTREAM, "OpenAI's session had no client secret in it.");
   }
 
   return {

@@ -596,8 +596,13 @@ describe("the one query that lists articles for nobody in particular", () => {
         "./billing/webhook.js",
         "./chat.js",
         "./comments.js",
+        /* The `catch`'s 5xx rule: `UNEXPECTED_FAILURE`, and `authoredSentence`
+           deciding whether an error's message may reach the reader. Neither
+           touches a store (plan 260924a § Stage 2c). */
+        "./messages.js",
         "./monitoring.js",
         "./public/routes.js",
+        "./reader-sentence.js",
       ],
     },
     {

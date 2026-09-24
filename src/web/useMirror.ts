@@ -37,7 +37,7 @@ import type { MirrorResult } from "../referee-mirror-types.js";
 import { apiFetch, failure } from "./lib/api.js";
 import { ReaderFacingError } from "./lib/reader-facing.js";
 import { readEvents, STREAM_STALL_MS } from "./lib/sse.js";
-import { describeFetchFailure } from "./useComments.js";
+import { describeFetchFailure } from "./lib/describe-failure.js";
 
 /**
  * Where one run has got to.

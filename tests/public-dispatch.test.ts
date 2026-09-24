@@ -55,6 +55,7 @@ import type { IncomingMessage, ServerResponse } from "node:http";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { type AuthedUser, requireUser, type VerifiedUser } from "../src/auth.js";
+import { UNEXPECTED_FAILURE } from "../src/messages.js";
 import { runInRequest } from "../src/owner.js";
 import { pathOf } from "../src/public/route-names.js";
 import { PUBLIC_ROUTES } from "../src/public/routes.js";
@@ -373,7 +374,13 @@ describe("the closed public namespace", () => {
        at all, and the argument rules out a route that matched the wrong thing. */
     expect(read).toHaveBeenCalledWith("example");
     expect(r.status).toBe(THREW);
-    expect(JSON.stringify(r.body)).toContain(SENTINEL);
+    /* **Withheld, not echoed.** This used to assert the sentinel was *in* the
+       body — the raw message of the reader's throw reaching a stranger. Since
+       2026-09-24 a 5xx carries only a sentence written for a reader (plan
+       260924a § Stage 2c), so the proof that the replaced reader ran is the
+       call above, and the body is the generic sentence. */
+    expect(JSON.stringify(r.body)).not.toContain(SENTINEL);
+    expect(r.body).toEqual({ error: UNEXPECTED_FAILURE.message });
   });
 
   it("and answers a signed-in one exactly the same way", async () => {

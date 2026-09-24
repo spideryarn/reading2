@@ -36,6 +36,9 @@ import {
   mintLiveToken,
 } from "../src/live.js";
 import type { Block, Meta } from "../src/types.js";
+import { LIVE_UPSTREAM } from "../src/messages.js";
+import { authoredSentence } from "../src/reader-sentence.js";
+import { sanitise } from "../src/monitoring-scrub.js";
 
 const meta = { slug: "piece", title: "A Piece", byline: "Someone" } as Meta;
 const blocks = [
@@ -251,6 +254,39 @@ describe("minting a token", () => {
     await expect(
       mintLiveToken({}, (async () => bad) as unknown as typeof fetch),
     ).rejects.toThrow(/Unknown parameter: session\.wibble/);
+  });
+
+  it("keeps OpenAI's sentence for the log, and says only its own to the reader", async () => {
+    /* The diagnostic (above) keeps the body; what `handleApi` may put in front
+       of a reader is the declared `LIVE_UPSTREAM`, still ending in the code the
+       client recognises. The body used to travel with a `[live-upstream]` on
+       the end, which now reads as unauthored and would be withheld as generic
+       copy — or, registered, as authored and forwarded. Plan 260924a § 2c, F10. */
+    process.env.OPENAI_API_KEY = "sk-test";
+    const bad = {
+      ok: false,
+      status: 400,
+      text: async () => '{"error":{"message":"Unknown parameter: session.wibble."}}',
+    } as Response;
+    const err = await mintLiveToken({}, (async () => bad) as unknown as typeof fetch).catch((e) => e);
+    expect(authoredSentence(err)).toBe(LIVE_UPSTREAM.message);
+    expect(LIVE_UPSTREAM.message).toMatch(/\[live-upstream\]$/);
+    expect((err as Error).message).not.toMatch(/\[live-upstream\]/);
+  });
+
+  it("never lets the provider's body buy authored status by ending in a code", async () => {
+    /* A body that ends in `[live-upstream]` would, pasted last into the
+       diagnostic, make the whole of it read as ours — and the Sentry scrubber
+       would forward it verbatim. GPT Sol, F16 (plan 260924a § Stage 2c). */
+    process.env.OPENAI_API_KEY = "sk-test";
+    const sly = {
+      ok: false,
+      status: 400,
+      text: async () => "provider-controlled [live-upstream]",
+    } as Response;
+    const err = await mintLiveToken({}, (async () => sly) as unknown as typeof fetch).catch((e) => e);
+    expect(sanitise(err).withheld).toBe(true);
+    expect((err as Error).message).toContain("provider-controlled");
   });
 
   it("refuses without a key rather than sending an unauthenticated request", async () => {

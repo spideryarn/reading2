@@ -33,7 +33,7 @@ import { useEffect, useState } from "react";
 
 import type { SourceScan } from "../injection-scan-types.js";
 import { apiFetch, readJson } from "./lib/api.js";
-import { describeFetchFailure } from "./useComments.js";
+import { describeFetchFailure } from "./lib/describe-failure.js";
 
 /**
  * What the notice has to draw, as four arms it must all handle.

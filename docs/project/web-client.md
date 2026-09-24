@@ -471,7 +471,7 @@ and there should not be one — [logging.md](logging.md) is about the server, an
 browser already has a console — but before this, nothing reached it at all.
 [`tests/web-api.test.ts`](../../tests/web-api.test.ts) pins the real bodies.
 
-`describeFetchFailure` in [`useComments.ts`](../../src/web/useComments.ts) is
+`describeFetchFailure` in [`lib/describe-failure.ts`](../../src/web/lib/describe-failure.ts) is
 where a caught failure becomes the sentence a reader sees, for the seven files
 that use it — a refusal from here, a request that never got a response at all, a
 stream that stalled, or something else entirely. It passes a caught error's words

@@ -16,7 +16,8 @@
 import { readdirSync, readFileSync } from "node:fs";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { PAGE_FAULT } from "../src/messages.js";
+import { CODE_KINDS, PAGE_FAULT } from "../src/messages.js";
+import { authoredSentence } from "../src/reader-sentence.js";
 import type { ChatEffects } from "../src/web/chat/controller.js";
 
 vi.mock("../src/web/lib/supabase.js", () => ({
@@ -56,7 +57,7 @@ vi.mock("../src/web/monitoring.js", async () => {
   };
 });
 
-const { describeFetchFailure } = await import("../src/web/useComments.js");
+const { describeFetchFailure } = await import("../src/web/lib/describe-failure.js");
 const { sanitise } = await import("../src/monitoring-scrub.js");
 const { apiFetch, readJson } = await import("../src/web/lib/api.js");
 const { readEvents } = await import("../src/web/lib/sse.js");
@@ -104,6 +105,38 @@ describe("an exception nobody wrote for a reader", () => {
 });
 
 describe("a sentence that was written for a reader", () => {
+  it.each([
+    ["auth-down", "retry"],
+    ["mic-not-set-up", "ours"],
+    ["mic-unreadable", "retry"],
+    ["mic-no-upstream", "retry"],
+    ["mic-upstream", "retry"],
+    ["live-not-set-up", "ours"],
+  ] as const)("registers the deliberate 5xx code [%s] as %s", (code, kind) => {
+    const sentence = `A sentence the server wrote for a reader. [${code}]`;
+    expect(CODE_KINDS[code]).toBe(kind);
+    expect(authoredSentence(new Error(sentence))).toBe(sentence);
+  });
+
+  it("uses the declared sentence at both formerly uncoded 5xx throw sites", () => {
+    /* The registry assertion above is not enough: reverting either throw site
+       to its old bare string would leave it green while the reader once again
+       got `UNEXPECTED_FAILURE`. These are private helpers with database-shaped
+       dependencies, so pin the small wiring seam directly. */
+    const shelf = readFileSync(
+      path.resolve(import.meta.dirname, "..", "src", "store", "pg-shelf.ts"),
+      "utf8",
+    );
+    const citations = readFileSync(
+      path.resolve(import.meta.dirname, "..", "src", "citation-find.ts"),
+      "utf8",
+    );
+    expect(shelf).toMatch(
+      /new Error\(DELETE_HELD_BY_UNSETTLED_SLOT\.message\),\s*\{ status: 500 \}/,
+    );
+    expect(citations).toContain("httpError(503, CITATION_FIND_RESTING.message)");
+  });
+
   it("passes the server's own { error } through, from a real readJson", async () => {
     const res = new Response(JSON.stringify({ error: "That question is longer than the limit." }), {
       status: 400,
@@ -389,14 +422,22 @@ describe("every file that describes its failures through it", () => {
       .map((f) => path.join(web, f))
       .filter((f) => /describeFetchFailure\(/.test(readFileSync(f, "utf8")));
     expect(files.length).toBeGreaterThanOrEqual(7);
-    const offenders = files.flatMap((f) =>
-      readFileSync(f, "utf8")
-        .split("\n")
-        .map((line, i) => ({ line: line.trim(), at: `${path.relative(web, f)}:${i + 1}` }))
+    /* One exemption, and it is structural: the throw in an exhaustiveness
+       check — the line after `const x: never = …` — is a diagnostic by
+       construction; the compiler proves it unreachable. */
+    const offenders = files.flatMap((f) => {
+      const lines = readFileSync(f, "utf8").split("\n");
+      return lines
+        .map((line, i) => ({
+          line: line.trim(),
+          before: (lines[i - 1] ?? "").trim(),
+          at: `${path.relative(web, f)}:${i + 1}`,
+        }))
         .filter(({ line }) => !line.startsWith("*") && !line.startsWith("//"))
         .filter(({ line }) => /throw new Error\(/.test(line))
-        .map(({ at }) => at),
-    );
+        .filter(({ before }) => !/:\s*never\s*=/.test(before))
+        .map(({ at }) => at);
+    });
     expect(offenders).toEqual([]);
   });
 });

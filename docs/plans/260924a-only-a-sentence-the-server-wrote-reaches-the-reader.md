@@ -203,3 +203,75 @@ each reds under its own mutation. F9 (P2, the spoken repair's deadline abort rep
 `[web-unexpected]`) — taken by Sol: the late rejection returns on `finished` first, with a
 fake-clock test. Also `tests/shelf-cached-paint.test.tsx` now matches `[net-down]` rather than the
 dev-only prose.
+
+## Stage 2c
+
+Asked after 2b was committed (39d4d643): the two "found, not changed" items.
+
+**1. Safari's "Load failed".** `describeFetchFailure` moved to its own module,
+`src/web/lib/describe-failure.ts`, so the shelf, the job engine and the admin pages can use it
+without importing a comments hook. The four sites (`useShelf`, `jobEngine`, `useAdminUsers`,
+`useAdminFeedback`) that matched Chrome's exact `"Failed to fetch"` and passed every other message
+through now call it: a lost connection is recognised by `apiFetch`'s brand whatever the browser's
+wording, a server sentence passes by class, and anything else is `PAGE_FAULT`. `describeFetchFailure`
+itself never matched the string (stage 2 replaced that with the brand), so it needed nothing.
+Red first: `tests/shelf-cached-paint.test.tsx` § "says the same when Safari words the lost connection
+its own way" (a marked `TypeError("Load failed")` showed "Load failed") and § "does not pass an
+unrecognised exception's words through". Tests that faked a server refusal as a plain `Error`
+(`shelf-cached-paint`, `job-engine-auth-pause`) now fake what `readJson` really throws.
+
+**2. `handleApi`'s JSON catch — the audit.** Every server throw carrying a 5xx `status`, plus
+computed statuses, `statusCode`, status-bearing classes, and throws with no status that this catch
+therefore answers as 500:
+
+| Where | Sentence | Verdict |
+|---|---|---|
+| `store/pg-source.ts`, `pg-successor.ts`, `pg-jobs.ts`, `pg-comments.ts`, `pg-searches.ts`, `pg-referee-criteria.ts`, `raw-document.ts` ×2, `contracts.ts` `MissingAttempt`, `artifacts-pg.ts` `WrongArticle`, `owner.ts` | diagnostics (file references, slugs, keys, "See src/…") | **leaking to readers today** — generic is right |
+| `auth.ts` `[auth-down]`; `transcribe.ts` ×4 (`[mic-*]`) | deliberate coded sentences, but their codes were absent from `CODE_KINDS` | **registered**; otherwise `authoredSentence` rejects them and the catch sends the generic sentence |
+| `live.ts` `[live-not-set-up]` | deliberate coded sentence with no explicit status, so the catch answers 500 | **registered**; the browser turns it into Live voice's shorter unavailable sentence |
+| `billing/*` (`[pay-off]`, `[pay-down]`), `UPLOAD_UNAVAILABLE`, `placingFailed`, `citation-find.ts` 502/504, `public-library` / `public-reader` `STORAGE_FAILED` | coded | pass unchanged |
+| `store/pg-shelf.ts` `strandedReservation` (500) | deliberate reader sentence, uncoded | **coded**: `DELETE_HELD_BY_UNSETTLED_SLOT`, `[jb-slot-held]` |
+| `citation-find.ts` `CITATION_FIND_RESTING` (503) | deliberate reader sentence, uncoded | **coded**: now a `ReaderFacingFailure`, `[cite-resting]`, kind `blocked` |
+| `live.ts` `[live-upstream]` | one branch includes OpenAI's body; another is our missing-secret diagnostic, under the same code | **split** (F10): both now throw `stageFailure(LIVE_UPSTREAM, diagnostic)` — the reader gets `LIVE_UPSTREAM`, still ending in `[live-upstream]` so `startupMessage` recognises it; OpenAI's body stays in the diagnostic, which carries no code |
+| `routes.ts` plate / image "could not be read back" ×2, `public-reader.ts` ×1 (500) | uncoded, but answers an `<img>` request nobody reads as text | generic is fine |
+| `billing/checkout.ts` "Stripe did not return a checkout page" (502) | uncoded | generic — `UNEXPECTED_FAILURE` is true and says it was recorded |
+| any error with no `status` → 500 (the "URI malformed" case), and third-party errors carrying their own `status` | foreign | generic is right |
+
+Small and clean, so built: from 500 up the catch sends `authoredSentence(err) ?? UNEXPECTED_FAILURE`
+(`authoredSentence` is the question `sayToReader` already asked, now exported); **below 500 nothing
+changes**, because 4xx refusals are chosen by the route and many are deliberate uncoded sentences.
+Red first: `tests/authenticated-api-route-contract.test.ts` § "decodes the slug first on PATCH
+/api/library/:slug" asserted the body was `"URI malformed"`; it now asserts `UNEXPECTED_FAILURE`, red
+before the change. `tests/owner-isolation.test.ts` pins the modules the pre-auth region uses, and the
+catch now uses `./messages.js` and `./reader-sentence.js` (neither touches a store) — added with a
+note. `tests/eager-client-graph.test.ts` lists `describe-failure.ts` and `sse.ts`, which the admin
+routes now reach.
+
+The first grep missed auth and dictation codes that existed at their throw sites but not in the
+registry, and Live's implicit 500. The wider pass covered computed statuses, class fields,
+`statusCode`, `guardDbStore` and no-status throws. A future helper can still evade a source audit;
+such a sentence degrades to `UNEXPECTED_FAILURE`, the safe direction, and copy.md says a new 5xx
+sentence needs a registered code.
+
+**Stage 2c review ledger.** [2c code review](260924a-only-a-sentence-the-server-wrote-reaches-the-reader-2c-code-review-sol.md):
+
+| ID | Finding | Disposition |
+|----|---------|-------------|
+| F10 (P1) | Live voice's `[live-upstream]` now reached the catch unauthored, so the client lost its "Live voice is unavailable" path; one branch carried 400 characters of OpenAI's body | **Fixed by me** (outside Sol's file list): `LIVE_UPSTREAM` in `src/messages.ts`, both `live.ts` branches throw it as a declared failure with the body in the diagnostic only. `tests/live.test.ts` § "keeps OpenAI's sentence for the log…" — red with the old throw put back |
+| F11 (P1) | `useJobs`' `act` kept `err.message`, so a job action failing on Safari showed "Load failed" | **Fixed by me**: `describeFetchFailure`, status still read from the original error. `tests/refused-job-reason-survives.test.tsx` § "says a lost connection in its own words…" — red with the old line |
+| F12 (P1) | `auth-down`, four `mic-*` codes and `live-not-set-up` were used at 5xx throw sites but not registered, so they would have become generic | **Fixed by Sol**: registered, with boundary tests; copy.md's `mic-` paragraph now distinguishes server-side codes from browser-only ones |
+| F13 (P1) | five more shelf catches (archive, undo, rename, archived list, restore) still passed `.message` | **Fixed by Sol**: all through `describeFetchFailure`, a regression test each |
+| F14 (P2) | a thrown `null` made the catch throw reading `.status` | **Fixed by Sol**: null-safe status/code extraction, tested |
+| F15 (P2) | no test of the authored-5xx arm, the admin callers, or the two coded throw sites | **Fixed by Sol**: tests added |
+
+Also: `tests/public-dispatch.test.ts` used to prove the public reader ran by finding its thrown
+sentinel **in the 500 body** — the leak itself. It now asserts the sentinel is withheld and the body is
+`UNEXPECTED_FAILURE`; the reader's having run is still proven by the spy's call.
+
+**F10 / F11 recheck** (read-only, scoped to those two fixes —
+[answer](260924a-only-a-sentence-the-server-wrote-reaches-the-reader-2c-f10-f11-review-sol.md)):
+**F11 closed.** **F10's reader half closed**, but Sol raised **F16 (P1, established)**: with
+`live-upstream` registered, an OpenAI body that itself ended in `[live-upstream]` made the whole
+diagnostic read as authored, so the Sentry scrubber would forward it. **Fixed**: the body is
+JSON-quoted and fixed text ends the diagnostic. `tests/live.test.ts` § "never lets the provider's body
+buy authored status…" was red before the change (`withheld: false`) and is green after.

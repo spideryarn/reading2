@@ -296,6 +296,21 @@ export const CODE_KINDS: Record<string, FailureKind> = {
   "ai-gave-up": "retry",
   /* The browser could not reach the server at all — see `COULD_NOT_REACH`. */
   "net-down": "retry",
+  /* Sentences answered with a 5xx on purpose, registered here so `handleApi`
+     can distinguish them from a dependency's or JS engine's words. The auth,
+     mic and live declarations live at their throw sites rather than here. */
+  "auth-down": "retry",
+  "mic-not-set-up": "ours",
+  "mic-unreadable": "retry",
+  "mic-no-upstream": "retry",
+  "mic-upstream": "retry",
+  "live-not-set-up": "ours",
+  /* Registered for `LIVE_UPSTREAM`, which src/live.ts throws as a declared
+     failure. The diagnostic beside it carries OpenAI's own body and must never
+     end in this code, or it would read as authored. */
+  "live-upstream": "retry",
+  "jb-slot-held": "bug",
+  "cite-resting": "blocked",
   "ai-not-set-up": "ours",
   "ai-overflowed": "retry",
   "ai-slow": "retry",
@@ -2312,6 +2327,43 @@ export function wentQuiet(seconds: number): ReaderFacingFailure {
 }
 
 /**
+ * Delete refused: a finished import of this article still holds a quota slot
+ * that was never settled — `strandedReservation` in src/store/pg-shelf.ts,
+ * which has the reasoning for a 500 rather than a 409.
+ *
+ * Moved here and coded on 2026-09-24 because `handleApi` now lets a 5xx's
+ * message reach the reader only when it is declared or coded (plan 260924a
+ * § Stage 2c); as a bare string it would have become `UNEXPECTED_FAILURE` and
+ * lost "nothing has been deleted", which is the part the reader needs.
+ */
+export const DELETE_HELD_BY_UNSETTLED_SLOT: ReaderFacingFailure = {
+  kind: "bug",
+  message:
+    "This article cannot be deleted: one of its finished imports is still holding a quota slot " +
+    "that was never settled, and deleting it would spend that slot for ever. Nothing has been " +
+    "deleted, and this has been reported; it needs fixing here rather than by you. [jb-slot-held]",
+};
+
+/**
+ * Live voice could not start because OpenAI would not hand over a session —
+ * `mintLiveToken` in src/live.ts.
+ *
+ * A declared failure since 2026-09-24 (plan 260924a § Stage 2c, GPT Sol's F10).
+ * The old throw put OpenAI's own response body, 400 characters of it, into the
+ * message and ended it in `[live-upstream]`, so it reached the reader and the
+ * client recognised it by the code. `handleApi` now lets a 5xx's words out only
+ * when declared or coded, so the body stays in the diagnostic (the log) and this
+ * sentence — still ending in the code `startupMessage` in
+ * src/web/live/useLiveConversation.ts looks for — is what travels.
+ */
+export const LIVE_UPSTREAM: ReaderFacingFailure = {
+  kind: "retry",
+  message:
+    "Live voice could not start, because the voice service did not hand over a session. Trying " +
+    "again in a moment usually works; typing carries on as normal. [live-upstream]",
+};
+
+/**
  * The request never got a response at all — the reader's connection, or the
  * server not being there.
  *
@@ -2362,7 +2414,7 @@ export const ANSWER_GAVE_UP: ReaderFacingFailure = {
  * Says **not necessarily the server**, because the one time it was seen the
  * server had finished the answer and the page lost it — so reloading is the
  * honest next step, not asking again. Raised by `describeFetchFailure` in
- * src/web/useComments.ts, which also reports the exception to Sentry.
+ * src/web/lib/describe-failure.ts, which also reports the exception to Sentry.
  */
 export const PAGE_FAULT: ReaderFacingFailure = {
   kind: "bug",
@@ -4939,5 +4991,16 @@ export const CITATION_FIND_BUSY =
   "Another Find it is still running. Wait for it to finish, then try this one.";
 export const CITATION_FIND_LIMITED =
   "You have looked up a lot of works recently. Try again in a while — the Scholar search is still there.";
-export const CITATION_FIND_RESTING =
-  "Find it has done as many searches as it can for today. Try again tomorrow — the Scholar search is still there.";
+/**
+ * The one of the three answered with a 5xx (503 — the allowance is everyone's,
+ * not this reader's), so the one that carries a code: `handleApi` lets a 5xx's
+ * message reach the reader only when it is declared or coded (plan 260924a
+ * § Stage 2c). The two 429s pass as they are.
+ */
+export const CITATION_FIND_RESTING: ReaderFacingFailure = {
+  kind: "blocked",
+  message:
+    "Find it has done as many searches as it can for today, so asking again today will get the " +
+    "same answer. Try again tomorrow — the Scholar " +
+    "search is still there. [cite-resting]",
+};

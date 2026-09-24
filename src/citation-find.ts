@@ -137,7 +137,7 @@ function refusedBy(kind: Exclude<AllowanceTaken["kind"], "allowed">): Error {
     case "rate":
       return httpError(429, CITATION_FIND_LIMITED);
     case "global":
-      return httpError(503, CITATION_FIND_RESTING);
+      return httpError(503, CITATION_FIND_RESTING.message);
     default: {
       const never: never = kind;
       return never;

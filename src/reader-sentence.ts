@@ -26,14 +26,24 @@ import { errorFields, log } from "./log.js";
 import { ANSWER_GAVE_UP, kindOfMessage } from "./messages.js";
 
 /**
+ * The sentence `err` carries for a reader under either convention, or `null`
+ * if it carries none. `sayToReader` below, and `handleApi`'s JSON catch for a
+ * 5xx (src/routes.ts, plan 260924a § Stage 2c), both ask this one question.
+ */
+export function authoredSentence(err: unknown): string | null {
+  const declared = declaredFailure(err);
+  if (declared) return declared.message;
+  const message = err instanceof Error ? err.message : undefined;
+  return message && kindOfMessage(message) !== null ? message : null;
+}
+
+/**
  * @param context what the log line should carry beside the error — a route
  *   name and a slug. Never prose.
  */
 export function sayToReader(err: unknown, context: Record<string, string>): string {
-  const declared = declaredFailure(err);
-  if (declared) return declared.message;
-  const message = err instanceof Error ? err.message : undefined;
-  if (message && kindOfMessage(message) !== null) return message;
+  const said = authoredSentence(err);
+  if (said !== null) return said;
   log("http").error(
     { ...errorFields(err), ...context },
     "a streamed failure with no reader-facing sentence was withheld from the reader",

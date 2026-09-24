@@ -19,7 +19,7 @@ import { useCallback, useEffect, useState } from "react";
 
 import type { AdminUser } from "../admin.js";
 import { apiFetch, readJson } from "./lib/api.js";
-import { couldNotReach } from "./lib/reader-facing.js";
+import { describeFetchFailure } from "./lib/describe-failure.js";
 
 export interface UseAdminUsers {
   /** `null` while the first request is in flight — not "no users". */
@@ -55,14 +55,10 @@ export function useAdminUsers(): UseAdminUsers {
         setError(null);
       })
       .catch((e: Error) => {
-        /* "Failed to fetch" is what a request that never reached the server
-           says, and it tells the reader nothing. Same substitution the shelf
-           makes, for the same reason. */
-        setError(
-          e.message === "Failed to fetch"
-            ? couldNotReach()
-            : e.message,
-        );
+        /* Through the one rule the shelf uses — see `describeFetchFailure`.
+           It used to match Chrome's "Failed to fetch" and pass anything else
+           through, Safari's "Load failed" included. */
+        setError(describeFetchFailure(e));
         /* The old list is left alone rather than blanked. If a refresh failed,
            what is on screen is stale — which the message says — and replacing
            it with nothing throws away the only numbers we have. */

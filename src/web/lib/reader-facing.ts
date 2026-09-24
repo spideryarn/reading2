@@ -1,5 +1,5 @@
 /**
- * The two facts `describeFetchFailure` (src/web/useComments.ts) needs before it
+ * The two facts `describeFetchFailure` (src/web/lib/describe-failure.ts) needs before it
  * will put a caught error's words in front of a reader — each set where it is
  * known, never guessed afterwards.
  *

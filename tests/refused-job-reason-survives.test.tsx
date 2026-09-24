@@ -106,6 +106,8 @@ let refused = REFUSED;
 let sent: { method: string; url: string }[] = [];
 /** Whether the next `POST /api/jobs` is refused. The second test turns it off. */
 let refusing = true;
+/** When set, `POST /api/jobs` never reaches the server: `fetch` rejects with this. */
+let transport: (() => Error) | null = null;
 /** Job-list polls waiting to be answered. See the header — the holding is the test. */
 let heldPolls: Array<() => void> = [];
 
@@ -137,12 +139,14 @@ beforeEach(() => {
   ideas = null;
   refusing = true;
   refused = REFUSED;
+  transport = null;
   vi.stubGlobal(
     "fetch",
     vi.fn(async (url: string, init?: RequestInit) => {
       const method = (init?.method ?? "GET").toUpperCase();
       sent.push({ method, url });
       if (method === "POST" && url === "/api/jobs") {
+        if (transport) throw transport();
         /* Received and **refused**, with a reason written for a reader. This is
            the case `postFailed` cannot tell from a dead network on its own. */
         if (refusing) return json({ error: refused }, 402);
@@ -237,6 +241,27 @@ describe("a job the server received and refused", () => {
        reason is still the server's. */
     expect(ideas?.failed?.message).toBe(REFUSED);
     expect(host.textContent).toBe(REFUSED);
+  });
+
+  it("says a lost connection in its own words, whatever the browser calls it", async () => {
+    /* **Greg reads on an iPad.** Safari's `fetch` rejects with "Load failed",
+       and `useJobs` used to keep `err.message` — so that is what the reader
+       was shown. Plan 260924a § Stage 2c, GPT Sol's F11. */
+    await act(async () => {
+      root.render(createElement(Harness));
+    });
+    await settle();
+    await answerPolls();
+
+    transport = () => new TypeError("Load failed");
+    await act(async () => {
+      await ideas?.regenerate();
+    });
+    await settle();
+
+    expect(sent.some((r) => r.method === "POST" && r.url === "/api/jobs")).toBe(true);
+    expect(ideas?.failed?.message).not.toBe("Load failed");
+    expect(ideas?.failed?.message).toMatch(/\[net-down\]/);
   });
 
   it("lets go of it the moment a run does start", async () => {

@@ -306,6 +306,7 @@ import { ADMIN_FEEDBACK_DEFAULT_LIMIT, decodeFeedbackCursor } from "./types.js";
 import { assertVerifiedUser, requireUser, type VerifiedUser, type Verifier } from "./auth.js";
 import {
   placingFailed,
+  UNEXPECTED_FAILURE,
   UPLOAD_MISSING,
   UPLOAD_STILL_ARRIVING,
   UPLOAD_UNAVAILABLE,
@@ -350,7 +351,7 @@ import {
   type UploadRecord,
 } from "./upload-records.js";
 import { errorFields, log, since } from "./log.js";
-import { sayToReader } from "./reader-sentence.js";
+import { authoredSentence, sayToReader } from "./reader-sentence.js";
 import { placeQuoteInBlock } from "./quote-in-block.js";
 import { processSingleton } from "./process-state.js";
 import { captureFailure, setMonitoringUser } from "./monitoring.js";
@@ -6333,7 +6334,7 @@ async function fileFeedback(
  * both are answered 409 and 404 by design. GPT Sol's review, 2026-08-27.
  */
 function chosenByUs(err: unknown): boolean {
-  return typeof (err as { status?: number }).status === "number";
+  return typeof (err as { status?: unknown } | null | undefined)?.status === "number";
 }
 
 function logRequest(
@@ -6579,8 +6580,14 @@ async function serveApi(
     // missing artefact or a genuine fault, and telling those apart matters: a
     // blanket 404 made a corrupt comments.json and a bad request both read as
     // "no such article", which is the wrong thing to go and investigate.
+    /* A dependency can reject with any JavaScript value. Optional access is
+       part of the JSON boundary: a thrown `null` must not make the catch throw
+       a second time and escape without a body. Accept a status only when it is
+       actually numeric, as the rest of this function assumes. */
+    const thrown = err as { status?: unknown; code?: unknown } | null | undefined;
+    const explicitStatus = typeof thrown?.status === "number" ? thrown.status : null;
     const status =
-      (err as { status?: number }).status ??
+      explicitStatus ??
       /* A retry or an edit the stored conversation will not accept — a stale
          tab, a second window, a Back button. 409 rather than 500, because
          nothing here is broken and the client's job is to reload and look
@@ -6606,7 +6613,7 @@ async function serveApi(
          being pushed down the retired explanation path (409). Guessing one for
          both would make a deleted comment read as "you cannot answer that". */
       (err instanceof NotAnExplanation ? (err.why === "missing" ? 404 : 409) : null) ??
-      ((err as NodeJS.ErrnoException).code === "ENOENT" ? 404 : 500);
+      (thrown?.code === "ENOENT" ? 404 : 500);
     // Handed to `logRequest`, which decides how much of it to write down — the
     // message for a failure this file chose, the whole stack for one it did
     // not. That is the point of the exercise: an unexpected throw used to be
@@ -6641,7 +6648,18 @@ async function serveApi(
        parameters (src/store/db-errors.ts) and a provider's own words
        (docs/project/copy.md rule 4), and a generic spread would put every one
        of those on the wire. */
-    send(res, status, { error: (err as Error).message });
+    /* **A 5xx says only a sentence written for a reader.** Until 2026-09-24
+       this sent `(err as Error).message` for every status, so a 500 put a JS
+       engine's "URI malformed", a store invariant's "See src/store/…" or an
+       SDK's own words in front of the reader. Below 500 the message is a
+       refusal a route chose to send (a 404, a 409) and passes as before; from
+       500 up it must be declared or coded — `authoredSentence`, the same two
+       conventions the streams use — and anything else is `UNEXPECTED_FAILURE`.
+       The error itself is already in `logRequest`'s line, stack and all.
+       Plan 260924a § Stage 2c. */
+    const said =
+      status >= 500 ? (authoredSentence(err) ?? UNEXPECTED_FAILURE.message) : (err as Error).message;
+    send(res, status, { error: said });
     return true;
   } finally {
     logRequest(method, path, res.statusCode, started, failure);

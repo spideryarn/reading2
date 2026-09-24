@@ -857,7 +857,7 @@ got a response at all.
 It is the easiest failure to hit here, for a reason worth stating: **an explain call takes 11-25
 seconds**, and `npm run dev` restarts whenever `vite.config.ts` changes. With several agents editing
 this tree at once, that is a wide window for a request to be orphaned mid-flight. So
-`describeFetchFailure` in [`useComments.ts`](../../src/web/useComments.ts) rewrites the browser's
+`describeFetchFailure` in [`lib/describe-failure.ts`](../../src/web/lib/describe-failure.ts) rewrites the browser's
 message into one that names the cause, keeping the original in parentheses so it stays searchable:
 
 > Couldn't reach the dev server — is `npm run dev` still running? (Failed to fetch)

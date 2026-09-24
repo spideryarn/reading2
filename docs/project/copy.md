@@ -137,11 +137,11 @@ matters when somebody quotes one at you
 ([ingest-queue.md § Uploading a PDF](ingest-queue.md#uploading-a-pdf)). `pdf-` is a document the
 pipeline could not read: too long, locked, or damaged. `web-` is the page in the reader's browser
 failing on its own account — `[web-unexpected]`, below — and `net-` is the browser not reaching the
-server at all (`[net-down]`, `COULD_NOT_REACH`).
+server at all (`[net-down]`, `COULD_NOT_REACH`). `cite-` is a citation's *Find it* refusing
+(`[cite-resting]`, its daily allowance spent).
 
-**The `mic-` family is the exception to the paragraph after next**, and worth
-knowing about before you go looking for it in `src/messages.ts`: it is not there.
-Those sentences live beside the code that raises them —
+**The `mic-` family is the exception to the paragraph after next.** Its
+sentences are not declared in `src/messages.ts`; they live beside the code that raises them —
 [`dictation-errors.ts`](../../src/web/dictation-errors.ts) for what the browser's
 recogniser reports, [`useDictation.ts`](../../src/web/useDictation.ts) and
 [`dictation-upload.ts`](../../src/web/dictation-upload.ts) for the rest — because
@@ -152,6 +152,14 @@ nothing to say to `worthRetrying`. What they take from this section is the part
 that is about the reader: a code, last, in brackets, so somebody can quote four
 characters. Added 2026-08-27 with the two-pass rewrite, when they were the one
 family of reader-facing messages in the app without one.
+
+The distinction between a declaration and the registry matters here. The four
+`mic-` sentences that the server answers with a 502 or 503 are registered in
+`CODE_KINDS`: `handleApi` uses that registry to distinguish words we wrote for
+the reader from a provider's or runtime's words. Browser-only `mic-` codes still
+live solely at their throw sites because no server boundary has to classify
+them. The same narrow exception registers `[auth-down]` and
+`[live-not-set-up]`, whose sentences also live at their server throw sites.
 
 **The import-state sentences are the second exception**, and they differ from the
 `mic-` family in the one way that matters: they carry **no bracketed code at
@@ -256,8 +264,9 @@ four characters would have picked one
 ([the postmortem](../postmortems/260904b-a-sentence-written-for-the-reader-was-thrown-away-at-the-seam.md)).
 **`pick-` rather than `up-`, deliberately**: `up-` is the upload *record's* refusals, decided on the
 server over the bytes that arrived, so the prefix itself tells whoever is helping whether anything
-was ever sent. Like `mic-`, they live beside the code that raises them and are not in `CODE_KINDS` —
-nothing classifies them, and `kindOfMessage` answers `null` for a code it does not know.
+was ever sent. Like the browser-only `mic-` codes, they live beside the code that raises them and
+are not in `CODE_KINDS` — nothing classifies them, and `kindOfMessage` answers `null` for a code it
+does not know.
 
 The `db-` pair also marks the **second widening of `src/messages.ts`**, after
 `UNEXPECTED_FAILURE`: these sentences exist because a failed Drizzle query puts
@@ -417,7 +426,7 @@ working when somebody rewrote one — [`src/jobs.ts`](../../src/jobs.ts) §
 ### The same seam in the browser
 
 The client has one place that turns a caught failure into the sentence a reader
-sees — `describeFetchFailure` in [`useComments.ts`](../../src/web/useComments.ts),
+sees — `describeFetchFailure` in [`lib/describe-failure.ts`](../../src/web/lib/describe-failure.ts),
 used by comments, chat, search, criteria, claims, the mirror and the source scan
 — and until 2026-09-24 it had the pipeline's old shape: any `Error`'s message
 went through, on a comment's word that "an Error we threw ourselves already
@@ -461,13 +470,19 @@ which reuses the two conventions the server already had — a declared
 `ANSWER_GAVE_UP` (`[ai-gave-up]`, kind `retry`, for `readerFailureOf`'s reason)
 and logs the real error.
 
-**Still open: the JSON half.** `handleApi`'s own catch sends
-`(err as Error).message` for every status, a 500 included, so an unexpected
-throw inside a route reaches the reader verbatim; `UNEXPECTED_FAILURE` guards
-only what escapes `handleApi` altogether. Not changed with the streams because
-some routes answer a 500 with a sentence they wrote and no code, and telling
-those apart needs its own audit.
-[The plan](../plans/260924a-only-a-sentence-the-server-wrote-reaches-the-reader.md).
+**And the JSON half, from 500 up.** `handleApi`'s own catch used to send
+`(err as Error).message` for every status, so a 500 put a JS engine's *"URI
+malformed"*, a store invariant's *"… See src/store/pg-source.ts."* or an SDK's
+own words in front of the reader — `guardDbStore` lets any error with an
+explicit `status` through, and eight store diagnostics carry `status: 500`.
+Since 2026-09-24 a 5xx's message must pass the same `authoredSentence` test the
+streams use, or the reader gets `UNEXPECTED_FAILURE`; the error is in
+`logRequest`'s line either way. **Below 500 nothing changed**: a 4xx is a
+refusal a route chose to send, and many of those are deliberate uncoded
+sentences. The two deliberate uncoded 5xx sentences the audit found were given
+codes (`[jb-slot-held]`, `[cite-resting]`); a new one needs a code too, or it
+arrives as the generic sentence.
+[The plan](../plans/260924a-only-a-sentence-the-server-wrote-reaches-the-reader.md) § Stage 2c.
 
 ## The words on the one control that cannot be undone
 

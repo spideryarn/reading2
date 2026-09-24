@@ -305,6 +305,7 @@ import { isAdmin } from "../src/admin.js";
 import type { Verifier, VerifyResult } from "../src/auth.js";
 import { WEBHOOK_PATH } from "../src/billing/webhook.js";
 import { loadEnvLocal } from "../src/env.js";
+import { UNEXPECTED_FAILURE } from "../src/messages.js";
 import { isPublicNamespace } from "../src/public/routes.js";
 import { handleApi } from "../src/routes.js";
 import { acceptAny, AUTHED_HEADERS, TEST_SUB } from "./helpers/authed.js";
@@ -1630,6 +1631,17 @@ const acceptStranger: Verifier = async (): Promise<VerifyResult> => ({
   },
 });
 
+/** The two authentication failures that exercise both sides of handleApi's
+ *  reader-sentence boundary without reaching a route or a store. */
+const authUnavailable: Verifier = async (): Promise<VerifyResult> => ({
+  ok: false,
+  kind: "unavailable",
+});
+const authExpired: Verifier = async (): Promise<VerifyResult> => ({
+  ok: false,
+  kind: "bad-token",
+});
+
 /** Does this witness reach this row? */
 function matches(match: MatchSpec, witness: string): boolean {
   return match.kind === "literal"
@@ -2438,6 +2450,33 @@ const ${ROUTE_TABLE}: readonly AuthRoute[] = [
     });
   });
 
+  describe("the JSON catch's reader-facing boundary", () => {
+    it("passes an authored 503 sentence through", async () => {
+      const reply = await call("GET", "/api/models", authUnavailable);
+
+      expect(reply.status).toBe(503);
+      expect(reply.body.error).toMatch(/\[auth-down\]$/);
+      expect(reply.body.error).not.toBe(UNEXPECTED_FAILURE.message);
+    });
+
+    it("leaves a deliberate uncoded 401 unchanged", async () => {
+      const reply = await call("GET", "/api/models", authExpired);
+
+      expect(reply.status).toBe(401);
+      expect(reply.body.error).toBe("Your sign-in has expired or isn't valid. Sign in again. [auth-bad]");
+    });
+
+    it("still answers JSON when a dependency throws a non-Error value", async () => {
+      const throwNull: Verifier = async () => {
+        throw null;
+      };
+
+      const reply = await call("GET", "/api/models", throwNull);
+      expect(reply.status).toBe(500);
+      expect(reply.body.error).toBe(UNEXPECTED_FAILURE.message);
+    });
+  });
+
   /**
    * Which happens first — reading the body or decoding the slug — differs per
    * route, and the difference is visible from outside as two different status
@@ -2477,7 +2516,12 @@ const ${ROUTE_TABLE}: readonly AuthRoute[] = [
          be a behaviour change, so this asserts what is, not what is tidy. */
       const reply = await call("PATCH", "/api/library/%", acceptAny, MALFORMED_BODY);
       expect(reply.status).toBe(500);
-      expect(reply.body.error).toBe("URI malformed");
+      /* **The status stays; the words do not.** "URI malformed" is the JS
+         engine's sentence, and until 2026-09-24 `handleApi` sent it to the
+         reader as the failure. A 5xx now carries only a sentence written for a
+         reader — plan 260924a § Stage 2c. */
+      expect(reply.body.error).not.toContain("URI malformed");
+      expect(reply.body.error).toBe(UNEXPECTED_FAILURE.message);
     });
 
     it("sends the two different answers to the same two malformed inputs", async () => {

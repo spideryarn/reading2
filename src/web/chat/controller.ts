@@ -40,7 +40,7 @@ import { reduce } from "./reduce.js";
 /* Every catch below hands its error to the one rule for what a reader may be
    shown — an effect that throws is a bug, and a bug's text is not a sentence
    for a reader (plan 260924a § Stage 2b). */
-import { describeFetchFailure } from "../useComments.js";
+import { describeFetchFailure } from "../lib/describe-failure.js";
 
 /**
  * A lost stream goes back and looks for its answer before it gives up.

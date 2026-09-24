@@ -35,7 +35,7 @@ import { apiFetch, failure, fetchOk } from "./lib/api.js";
 import { ReaderFacingError } from "./lib/reader-facing.js";
 import { openingRead } from "./lib/opening-read.js";
 import { readEvents, STREAM_STALL_MS } from "./lib/sse.js";
-import { describeFetchFailure } from "./useComments.js";
+import { describeFetchFailure } from "./lib/describe-failure.js";
 
 /** A saved criterion, plus the one thing about it that is not on the row. */
 export interface SavedCriterionState extends SavedCriterion {

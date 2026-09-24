@@ -49,8 +49,13 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { LibraryEntry, LibraryResponse } from "../types.js";
 import { apiFetch, readJson, statusOf } from "./lib/api.js";
-import { couldNotReach } from "./lib/reader-facing.js";
+import { describeFetchFailure } from "./lib/describe-failure.js";
 import { readCachedShelf } from "./lib/cached-shelf.js";
+
+/** Every shelf catch, including its action catches, goes through the same
+ * reader-facing boundary. Non-Error throws are bugs too, never copy. */
+const readableFailure = (error: unknown): string =>
+  describeFetchFailure(error instanceof Error ? error : new Error(String(error)));
 
 /** How long the Undo strip stays up. Long enough to reach, short enough not to nag. */
 const UNDO_MS = 9000;
@@ -205,8 +210,7 @@ export function useShelf(readerId: string): Shelf {
         // shelf that is now perfectly fine.
         setError(null);
       })
-      // A fetch that never reached the server says "Failed to fetch", which
-      // tells the reader nothing. Say the likely cause — and rethrow, so a
+      // Say what failed in words the reader can use — and rethrow, so a
       // caller awaiting this knows it did not happen.
       .catch((e: Error) => {
         /* Somebody else's request failing is not this reader's error to show.
@@ -240,11 +244,11 @@ export function useShelf(readerId: string): Shelf {
           settled.current = mine;
           setArticles(null);
         }
-        setError(
-          e.message === "Failed to fetch"
-            ? couldNotReach()
-            : e.message,
-        );
+        /* Through the one rule: a lost connection recognised by `apiFetch`'s
+           mark rather than by Chrome's wording (Safari says "Load failed"), a
+           server sentence passed through, anything else not. Plan 260924a
+           § Stage 2c. */
+        setError(readableFailure(e));
         throw e;
       });
   }, []);
@@ -358,7 +362,7 @@ export function useShelf(readerId: string): Shelf {
         if (undoTimer.current) clearTimeout(undoTimer.current);
         undoTimer.current = setTimeout(() => setUndoable(null), UNDO_MS);
       } catch (e) {
-        if (stillOurs(asked)) setActionError((e as Error).message);
+        if (stillOurs(asked)) setActionError(readableFailure(e));
       } finally {
         archiving.current.delete(slug);
       }
@@ -390,7 +394,7 @@ export function useShelf(readerId: string): Shelf {
       setUndoable(null);
       if (undoTimer.current) clearTimeout(undoTimer.current);
     } catch (e) {
-      if (stillOurs(asked)) setActionError((e as Error).message);
+      if (stillOurs(asked)) setActionError(readableFailure(e));
     }
   }, [patch, reload, stillOurs, undoable]);
 
@@ -406,7 +410,7 @@ export function useShelf(readerId: string): Shelf {
         if (!stillOurs(asked)) return;
         setArticles((list) => list?.map((a) => (a.slug === slug ? entry : a)) ?? null);
       } catch (e) {
-        if (stillOurs(asked)) setActionError((e as Error).message);
+        if (stillOurs(asked)) setActionError(readableFailure(e));
       }
     },
     [patch, stillOurs],
@@ -426,7 +430,7 @@ export function useShelf(readerId: string): Shelf {
       if (!stillOurs(asked)) return;
       setArchived(body.articles);
     } catch (e) {
-      if (stillOurs(asked)) setActionError((e as Error).message);
+      if (stillOurs(asked)) setActionError(readableFailure(e));
     }
   }, [stillOurs]);
 
@@ -445,7 +449,7 @@ export function useShelf(readerId: string): Shelf {
         setArchived((list) => list?.filter((a) => a.slug !== slug) ?? null);
         await reload();
       } catch (e) {
-        if (stillOurs(asked)) setActionError((e as Error).message);
+        if (stillOurs(asked)) setActionError(readableFailure(e));
       }
     },
     [patch, reload, stillOurs],

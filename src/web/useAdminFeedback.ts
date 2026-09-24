@@ -17,7 +17,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import type { AdminFeedbackPage, AdminFeedbackReport, FeedbackCursor } from "../types.js";
 import { encodeFeedbackCursor } from "../types.js";
 import { apiFetch, readJson } from "./lib/api.js";
-import { couldNotReach } from "./lib/reader-facing.js";
+import { describeFetchFailure } from "./lib/describe-failure.js";
 
 export interface UseAdminFeedback {
   /** `null` while the first request is in flight — not "no reports". */
@@ -66,12 +66,8 @@ export function useAdminFeedback(): UseAdminFeedback {
          no error at all. */
       setError(null);
     } catch (e) {
-      const message = e instanceof Error ? e.message : String(e);
-      setError(
-        message === "Failed to fetch"
-          ? couldNotReach()
-          : message,
-      );
+      /* Through the one rule the shelf uses — see `describeFetchFailure`. */
+      setError(describeFetchFailure(e instanceof Error ? e : new Error(String(e))));
       /* What is already held is left alone rather than blanked, the same call
          useAdminUsers makes: a failed refresh means the page is stale, which it
          says, and replacing it with nothing throws away the only reports we

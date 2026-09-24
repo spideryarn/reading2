@@ -515,6 +515,11 @@ const SHARED_WITH_READER = [
   "src/web/diagram.ts",
   "src/web/jump-history.ts",
   "src/web/lib/DataTable.tsx",
+  /* Arrived 2026-09-24 by the first predicted route: the admin pages
+     (`useAdminUsers`, `useAdminFeedback`) started using `describeFetchFailure`,
+     which the reader's shelf and comments already download — and `sse.ts`
+     follows it in for `StreamStalled`. Plan 260924a § Stage 2c. */
+  "src/web/lib/describe-failure.ts",
   "src/web/lib/api.ts",
   "src/web/lib/offline-store.ts",
   /* Arrived 2026-09-24 as the second predicted case: `lib/api.ts`, already
@@ -522,6 +527,8 @@ const SHARED_WITH_READER = [
      A leaf of two dozen lines the reader already downloads through `api.ts`;
      docs/plans/260924a-only-a-sentence-the-server-wrote-reaches-the-reader.md. */
   "src/web/lib/reader-facing.ts",
+  /* With `describe-failure.ts`, above. */
+  "src/web/lib/sse.ts",
   "src/web/lib/supabase.ts",
   "src/web/lib/table-sort.ts",
   "src/web/lib/utils.ts",

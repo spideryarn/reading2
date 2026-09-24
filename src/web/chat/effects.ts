@@ -25,7 +25,7 @@ import { ENDED_UNFINISHED, NO_RESPONSE } from "../../messages.js";
 import { apiFetch, failure, readJson } from "../lib/api.js";
 import { ReaderFacingError } from "../lib/reader-facing.js";
 import { readEvents, StreamStalled, STREAM_STALL_MS } from "../lib/sse.js";
-import { describeFetchFailure } from "../useComments.js";
+import { describeFetchFailure } from "../lib/describe-failure.js";
 import type { Begun, ThreadsOutcome, TurnDone, WriteOutcome } from "./model.js";
 
 /**

@@ -26,6 +26,7 @@ import { articles, articleRevisions, ingestEvents, jobs, revisionBlocks } from "
 import { MAX_TITLE_CHARS } from "../shelf.js";
 import { MAX_PURPOSE_CHARS, normaliseProfileText } from "../profile.js";
 import { log } from "../log.js";
+import { DELETE_HELD_BY_UNSETTLED_SLOT } from "../messages.js";
 import { currentOwnerId, type OwnerId } from "../owner.js";
 import { READ_COMMITTED } from "./isolation.js";
 import { lockBillingAccount } from "./pg-billing.js";
@@ -313,14 +314,9 @@ function strandedReservation(rows: { jobId: string; reservationId: string }[]): 
     { jobIds: rows.map((r) => r.jobId), reservationIds: rows.map((r) => r.reservationId) },
     "refusing to delete an article: a finished job still holds an unsettled ingest reservation",
   );
-  return Object.assign(
-    new Error(
-      "This article cannot be deleted: one of its finished imports is still holding a quota " +
-        "slot that was never settled, and deleting it would spend that slot for ever. Nothing " +
-        "has been deleted, and this has been reported.",
-    ),
-    { status: 500 },
-  );
+  /* Coded (src/messages.ts) so `handleApi` still lets it out: a 5xx's message
+     now reaches the reader only when it is declared or coded. */
+  return Object.assign(new Error(DELETE_HELD_BY_UNSETTLED_SLOT.message), { status: 500 });
 }
 
 const rawPgShelfStore: ShelfStore = {
