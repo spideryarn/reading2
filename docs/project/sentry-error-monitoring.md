@@ -73,6 +73,17 @@ article text is *more* true when the message leaves the machine:
 - the SDK's own defaults — which include the local variables of every stack frame — are turned off
   one by one
 
+**So an error whose only diagnostic is its message arrives as `Error: Error`**, tagged
+`message_withheld`. SPIDERYARN-READING2-43 did, and the stack could say only which function threw,
+not which of its five throws
+([260924a](../postmortems/260924a-a-malformed-label-pair-kills-the-step-without-a-retry.md)). The
+way to make a failure readable in Sentry without loosening the scrubber is a **class name** and a
+**`code` from a closed set**. `sanitise` forwards `code` as a tag (`SAFE_PROPS`), and a value built
+only from an enumeration cannot carry article text. `MalformedJson` in
+[`src/parse-json.ts`](../../src/parse-json.ts) and `LabelsFailed` in
+[`src/labels.ts`](../../src/labels.ts) do it. Never make a free-text diagnostic *look* authored to
+get it through — see `stageFailure` in [`src/job-failure.ts`](../../src/job-failure.ts).
+
 The full build, the options reference and the source-map story are in
 [260827y-error-monitoring-sentry.md](../plans/260827y-error-monitoring-sentry.md).
 

@@ -30,6 +30,8 @@ import { Readability } from "@mozilla/readability";
 import { escapeHtml } from "./html.js";
 import { canonicaliseCallouts, type CalloutStats } from "./callouts.js";
 import { type FurnitureRemovals, removePlatformFurniture } from "./furniture.js";
+import { canonicaliseMaths } from "./maths-import.js";
+import { loadMathsRenderer } from "./maths-server.js";
 import { canonicaliseNotes, type NoteStats } from "./notes.js";
 import {
   type KeptStructure,
@@ -722,6 +724,12 @@ function prepareDocument(
      neither reads what the other writes — so it is simply the later arrival.
      src/callouts.ts. */
   const callouts = canonicaliseCallouts(doc);
+  /* **A formula's TeX source, kept as the one form maths is stored in** — before
+     the sanitiser deletes the `<annotation>` holding it. After the recognisers
+     that read the publisher's own shapes, so none of them sees a changed input
+     (K6 of the 3b plan review), and before `protectAuthoredStructure`, which
+     stays last for its own reason, below. src/maths-import.ts. */
+  canonicaliseMaths(doc);
   /* **Last, and the order is the safe one rather than an arbitrary one.**
      Nothing else in this pass reads a class token we invent — the note and
      callout recognisers know their shapes by the publisher's own class names —
@@ -1124,6 +1132,9 @@ export class TooLittleTextToRead extends Error {
  * derive it from, and every caller already knows the slug. The command line
  * that could pass an explicit filename is gone too.
  */
+/** The cheap test before loading temml: a `<math>` or a MathJax script anywhere in the raw page. */
+const MIGHT_HOLD_MATHS = /<math[\s>]|math\/tex/iu;
+
 export async function runExtract(opts: {
   html: string;
   /**
@@ -1142,6 +1153,10 @@ export async function runExtract(opts: {
   slug: string;
 }): Promise<ExtractResult> {
   const { slug } = opts;
+  /* Before the DOM pass that asks whether each formula would draw: this is the
+     temml load the built function can trace (src/maths-server.ts). Only for a
+     page that could hold a formula — most do not, and need not pay for it. */
+  if (MIGHT_HOLD_MATHS.test(opts.html)) await loadMathsRenderer();
 
   /* **A `VirtualConsole` with nothing attached to it**, and this is not tidiness.
      JSDOM's default forwards its own errors straight to `console`, and one of

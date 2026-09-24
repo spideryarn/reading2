@@ -312,6 +312,128 @@ describe("the rest of the line", () => {
 });
 
 /**
+ * The three segments added on 2026-09-24: which session this is, which worktree
+ * it is in, and how much of the account's usage limits is gone.
+ *
+ * Rendered from an empty temp directory with no `TMUX` and `TZ=UTC`, so that
+ * neither this checkout's own worktree, the tmux session the suite happens to
+ * run in, nor the box's timezone can answer an assertion for the script.
+ */
+describe("session, worktree and usage-limit segments", () => {
+  const NOWHERE = mkdtempSync(path.join(tmpdir(), "gjd-statusline-cwd-"));
+  function quietEnv(extra: NodeJS.ProcessEnv = {}): NodeJS.ProcessEnv {
+    const env: NodeJS.ProcessEnv = {};
+    for (const [k, v] of Object.entries(process.env)) {
+      if (k === "TMUX" || k.startsWith("GIT_") || k === "BASH_ENV" || k === "ENV") continue;
+      env[k] = v;
+    }
+    return { ...env, TZ: "UTC", ...extra };
+  }
+  const renderRaw = (over: Record<string, unknown>, env: NodeJS.ProcessEnv = quietEnv()) =>
+    spawnSync("bash", ["-c", SCRIPT], { input: payload(over), cwd: NOWHERE, env, encoding: "utf8" });
+  const renderQuiet = (over: Record<string, unknown> = {}, env?: NodeJS.ProcessEnv) =>
+    plain(renderRaw(over, env).stdout ?? "");
+
+  /** A `tmux` on PATH that names the session, as the real one does inside a pane. */
+  function fakeTmuxEnv(name: string): NodeJS.ProcessEnv {
+    const bin = mkdtempSync(path.join(tmpdir(), "gjd-fake-tmux-"));
+    writeFileSync(path.join(bin, "tmux"), `#!/bin/sh\necho ${name}\n`, { mode: 0o755 });
+    return quietEnv({ TMUX: "/tmp/fake,1,0", PATH: `${bin}:${process.env.PATH}` });
+  }
+
+  describe("session name", () => {
+    it("leads the line with Claude's session_name", () => {
+      const out = renderQuiet({ session_name: "fix usage tests" });
+      expect(out.startsWith("fix usage tests [Opus 5]")).toBe(true);
+    });
+
+    it("uses the tmux session name when Claude has none", () => {
+      expect(renderQuiet({}, fakeTmuxEnv("gjd-job")).startsWith("gjd-job [Opus 5]")).toBe(true);
+    });
+
+    it("shows both when they differ, and one when they agree", () => {
+      expect(renderQuiet({ session_name: "renamed" }, fakeTmuxEnv("gjd-job"))).toContain("gjd-job: renamed [Opus 5]");
+      const same = renderQuiet({ session_name: "gjd-job" }, fakeTmuxEnv("gjd-job"));
+      expect(same.startsWith("gjd-job [Opus 5]")).toBe(true);
+    });
+
+    it("flattens a tab or newline so the other fields keep their places", () => {
+      // The fields travel through one tab-separated read; a tab in the name
+      // would shift the worktree into the session's slot.
+      const out = renderQuiet({ session_name: "a\tb\nc", worktree: { name: "wt" } });
+      expect(out).toContain("a b c [Opus 5]");
+      expect(out).toContain("⑂ wt");
+    });
+
+    it("is left off when there is neither", () => {
+      expect(renderQuiet().startsWith("[Opus 5]")).toBe(true);
+    });
+  });
+
+  describe("worktree", () => {
+    it("names Claude's worktree.name", () => {
+      expect(renderQuiet({ worktree: { name: "statusline-permanent" } })).toContain("⑂ statusline-permanent");
+    });
+
+    it("falls back to the .claude/worktrees/<name> path when the payload has none", () => {
+      const out = renderQuiet({ workspace: { current_dir: "/home/x/repo/.claude/worktrees/wt-one/src/deep" } });
+      expect(out).toContain("⑂ wt-one");
+    });
+
+    it("is left off outside any worktree", () => {
+      expect(renderQuiet()).not.toContain("⑂");
+    });
+  });
+
+  describe("usage limits", () => {
+    // 2026-09-24 14:00:00 UTC, a Thursday.
+    const AT = Date.UTC(2026, 8, 24, 14, 0, 0) / 1000;
+    const limits = (five: unknown, week: unknown) => ({
+      rate_limits: {
+        five_hour: { used_percentage: five, resets_at: AT },
+        seven_day: { used_percentage: week, resets_at: AT },
+      },
+    });
+
+    it("shows both windows with when each resets", () => {
+      expect(renderQuiet(limits(23.6, 41))).toContain("5h 23% ↻14:00 wk 41% ↻Thu 14:00");
+    });
+
+    it("shows one window when only one is sent", () => {
+      const out = renderQuiet({ rate_limits: { seven_day: { used_percentage: 12, resets_at: AT } } });
+      expect(out).toContain("wk 12% ↻Thu 14:00");
+      expect(out).not.toContain("5h");
+    });
+
+    it("drops the reset time when it is missing, not the percentage", () => {
+      const out = renderQuiet({ rate_limits: { five_hour: { used_percentage: 5 } } });
+      expect(out).toContain("5h 5%");
+      expect(out).not.toContain("↻");
+    });
+
+    it("is dim below 70, yellow from 70, red from 90", () => {
+      const colour = (pct: number) =>
+        new RegExp(`(${ESC}\\[[0-9;]+m)5h `).exec(renderRaw(limits(pct, 1)).stdout ?? "")?.[1] ?? "none";
+      expect(colour(69)).toBe(`${ESC}[2m`);
+      expect(colour(70)).toBe(`${ESC}[1;33m`);
+      expect(colour(89)).toBe(`${ESC}[1;33m`);
+      expect(colour(90)).toBe(`${ESC}[1;31m`);
+    });
+
+    it("is left off when absent, and when the percentage is not a number", () => {
+      // Absent for API-key sessions and before the first response.
+      const none = renderQuiet({ context_window: { used_percentage: 10 } });
+      expect(none).not.toContain("5h");
+      expect(none).not.toContain("wk");
+      const junk = renderQuiet(limits("lots", null));
+      expect(junk).not.toContain("5h");
+      expect(junk).not.toContain("wk");
+      expect(junk).toContain("[Opus 5]");
+    });
+  });
+});
+
+/**
  * The other heredoc: the one that installs the script and edits settings.json.
  * It runs as the user, once per provisioning run, against a file that lives on
  * the persistent volume and already holds preferences nobody wants to lose. So
@@ -390,6 +512,57 @@ describe("the settings merge", () => {
     expect(j.statusLine.command).toBe(path.join(home, ".claude/statusline-script.sh"));
     expect(j.statusLine.padding).toBe(2);
     expect(j.statusLine.hideVimModeIndicator).toBe(true);
+  });
+
+  describe("the second config directory, ~/.claude-gregmindstone", () => {
+    const G = ".claude-gregmindstone";
+    const gSettingsOf = (home: string) => JSON.parse(readFileSync(path.join(home, G, "settings.json"), "utf8"));
+
+    it("points its statusLine at the same script, keeping every other key", () => {
+      const home = fresh();
+      mkdirSync(path.join(home, G));
+      writeFileSync(
+        path.join(home, G, "settings.json"),
+        JSON.stringify({ theme: "light", statusLine: { padding: 1 }, permissions: { allow: ["Read"] } }),
+      );
+      expect(run(home).status).toBe(0);
+      const j = gSettingsOf(home);
+      expect(j.statusLine).toEqual({
+        padding: 1,
+        type: "command",
+        command: path.join(home, ".claude/statusline-script.sh"),
+      });
+      expect(j.theme).toBe("light");
+      // Only the status line: the other keys the ~/.claude merge sets are that
+      // config's decisions, not this one's.
+      expect(j.permissions).toEqual({ allow: ["Read"] });
+      expect(j.env).toBeUndefined();
+    });
+
+    it("creates settings.json in the directory when it has none, and is idempotent", () => {
+      const home = fresh();
+      mkdirSync(path.join(home, G));
+      expect(run(home).status).toBe(0);
+      const first = readFileSync(path.join(home, G, "settings.json"), "utf8");
+      expect(run(home).status).toBe(0);
+      expect(readFileSync(path.join(home, G, "settings.json"), "utf8")).toBe(first);
+      expect(gSettingsOf(home).statusLine.command).toBe(path.join(home, ".claude/statusline-script.sh"));
+    });
+
+    it("does not create the directory when the box has no such account", () => {
+      const home = fresh();
+      expect(run(home).status).toBe(0);
+      expect(readdirSync(home)).not.toContain(G);
+    });
+
+    it("fails, and changes nothing, when its settings.json will not parse", () => {
+      const home = fresh();
+      mkdirSync(path.join(home, G));
+      writeFileSync(path.join(home, G, "settings.json"), "{ nope");
+      expect(run(home).status).not.toBe(0);
+      expect(readFileSync(path.join(home, G, "settings.json"), "utf8")).toBe("{ nope");
+      expect(readdirSync(path.join(home, G)).filter((n) => n.includes(".provision."))).toEqual([]);
+    });
   });
 
   it("fails, and changes nothing, on a settings.json that will not parse", () => {

@@ -65,9 +65,9 @@ import { CACHE_FLOOR_TOKENS, estimateTokens } from "./article-prompt.js";
 import { streamMessage, wasRefused } from "./messages-stream.js";
 import { CAPABLE_MODEL } from "./models.js";
 import { stageFailure } from "./job-failure.js";
-import { MODEL_REFUSED } from "./messages.js";
+import { codeOfMessage, kindOfMessage, MODEL_REFUSED } from "./messages.js";
 import { anthropicCallFailed } from "./anthropic-call.js";
-import { parseJsonAnswer } from "./parse-json.js";
+import { MalformedJson, parseJsonAnswer } from "./parse-json.js";
 import { isBodyEvidence, isStructural } from "./block-policy.js";
 /* **The one thing this file logs**, and only from the checkpoint seam: a
    store that could not be read or written. src/pipeline.ts owns the one line
@@ -108,8 +108,12 @@ export const LABELS_PROMPT_VERSION = "labels/2";
  * retry cannot be limited to truncation, which is the failure that announces
  * itself.
  *
- * Everything else — a malformed shape, a duplicate, an empty string — is a
- * plain `Error` and is not retried. Those do not get better on a second ask.
+ * **Until 2026-09-24 this said that everything else — a malformed shape, a
+ * duplicate, an empty string — was a plain `Error`, not retried, because "those
+ * do not get better on a second ask".** Production disproved it:
+ * SPIDERYARN-READING2-43 died on one bad pair at the first draw, and Greg's
+ * Retry succeeded. An empty label is now a missing pair, and a broken format a
+ * re-draw — see `readPairs` — and `fault` says which, for Sentry's sake.
  *
  * **`shortfall` is what makes the two retries different.** A truncated response
  * has nothing to keep and no way to say what is absent, so the answer to it is
@@ -125,7 +129,26 @@ export interface Shortfall {
   missing: number[];
 }
 
+/**
+ * Which way a batch's answer was unusable — a closed set, so that it can go to
+ * Sentry where the message cannot. See `LabelsFailed`.
+ *
+ * `short` is a well-formed answer with paragraphs absent, including ones whose
+ * label came back empty (see `readPairs`), and is the only fault with a
+ * shortfall to re-ask about. Every other fault is re-drawn whole, like a
+ * truncation.
+ */
+export type BatchFault =
+  | "short"
+  | "out-of-range"
+  | "malformed-pair"
+  | "truncated"
+  | "shifted"
+  | "not-a-list"
+  | "unparseable";
+
 export class BatchIncomplete extends Error {
+  readonly fault: BatchFault;
   readonly shortfall: Shortfall | undefined;
   /**
    * What the call cost — **attached by `runBatch`, not by the parser.**
@@ -145,12 +168,57 @@ export class BatchIncomplete extends Error {
    */
   readonly record: LabelBatchRecord | undefined;
 
-  constructor(message: string, shortfall?: Shortfall, record?: LabelBatchRecord) {
+  constructor(
+    fault: BatchFault,
+    message: string,
+    shortfall?: Shortfall,
+    record?: LabelBatchRecord,
+  ) {
     super(message);
     this.name = "BatchIncomplete";
+    this.fault = fault;
     this.shortfall = shortfall;
     this.record = record;
   }
+}
+
+/**
+ * What the step throws when a batch has failed twice — **named, and carrying a
+ * `code`, because the message will never reach Sentry.**
+ *
+ * SPIDERYARN-READING2-43 (2026-09-24) arrived as `Error: Error`: every message
+ * in this file is free text a step wrote, and `authored` in
+ * src/monitoring-scrub.ts withholds free text on purpose, since it is where a
+ * stretch of the article turns up. So what Sentry can read has to be built from
+ * values that cannot carry prose. `name` is one; `code` is the other, and
+ * `sanitise` forwards it as a tag (`SAFE_PROPS`) — `MalformedJson` in
+ * src/parse-json.ts is the precedent.
+ *
+ * `code` is `<first>+<second>`: the first attempt's `BatchFault`, then the
+ * second's, or the second's registered bracket code (`ai-busy`, `ai-429`, …)
+ * when it was a model-call failure, or `other`. Every part is from a closed set,
+ * which is what makes it safe to send. The message stays the diagnostic, for
+ * the log. docs/plans/260924e-a-malformed-label-pair-kills-the-step-without-a-retry.md.
+ */
+export class LabelsFailed extends Error {
+  readonly code: string;
+
+  constructor(message: string, first: BatchIncomplete, again: unknown) {
+    super(message);
+    this.name = "LabelsFailed";
+    this.code = `${first.fault}+${faultName(again)}`;
+  }
+}
+
+function faultName(err: unknown): string {
+  if (err instanceof BatchIncomplete) return err.fault;
+  /* Only a code `kindOfMessage` recognises: that is the same test `authored`
+     applies before Sentry will take a message, so nothing gets through this
+     door that could not get through that one. */
+  if (err instanceof Error && kindOfMessage(err.message) !== null) {
+    return codeOfMessage(err.message) ?? "other";
+  }
+  return "other";
 }
 
 /**
@@ -176,7 +244,7 @@ export class BatchIncomplete extends Error {
  */
 export class LabelsShifted extends BatchIncomplete {
   constructor(message: string, record?: LabelBatchRecord) {
-    super(message, undefined, record);
+    super("shifted", message, undefined, record);
     this.name = "LabelsShifted";
   }
 }
@@ -1161,19 +1229,21 @@ function paragraphList(ns: number[]): string {
  * It is simply not what gets stored.
  */
 export function parseLabels(raw: string, batch: Batch): Record<string, string> {
-  const seen = readPairs(raw);
+  const { seen, mentioned, invalidLabels } = readPairs(raw);
   const expected = batch.blocks.length;
   const wanted = Array.from({ length: expected }, (_, i) => i + 1);
   const missing = wanted.filter((n) => !seen.has(n));
-  const extra = [...seen.keys()].filter((n) => n < 1 || n > expected);
+  const extra = mentioned.filter((n) => n < 1 || n > expected);
 
   if (missing.length > 0 || extra.length > 0) {
     throw new BatchIncomplete(
+      extra.length > 0 ? "out-of-range" : "short",
       `Nav labels: this call asked for ${expected} labels and got ${seen.size}` +
         (missing.length ? `, missing ${paragraphList(missing)}` : "") +
         (extra.length
           ? `, and ${paragraphList(extra)} ${extra.length === 1 ? "was" : "were"} not asked for`
           : "") +
+        describeInvalid(invalidLabels) +
         `. Nothing has been written.`,
       /* What the call did produce, carried on the error rather than lost with
          it. Everything above this line is unchanged; this is the whole of what
@@ -1211,19 +1281,21 @@ export function parseShortfall(
   batch: Batch,
   wanted: number[],
 ): Record<string, string> {
-  const seen = readPairs(raw);
+  const { seen, mentioned, invalidLabels } = readPairs(raw);
   const expected = batch.blocks.length;
   const missing = wanted.filter((n) => !seen.has(n));
-  const extra = [...seen.keys()].filter((n) => n < 1 || n > expected);
+  const extra = mentioned.filter((n) => n < 1 || n > expected);
 
   if (missing.length > 0 || extra.length > 0) {
     throw new BatchIncomplete(
+      extra.length > 0 ? "out-of-range" : "short",
       `Nav labels: this call asked again for ${wanted.length} of the batch's ${expected} labels ` +
         `and got ${seen.size}` +
         (missing.length ? `, still missing ${paragraphList(missing)}` : "") +
         (extra.length
           ? `, and ${paragraphList(extra)} ${extra.length === 1 ? "was" : "were"} not asked for`
           : "") +
+        describeInvalid(invalidLabels) +
         `.`,
       /* Whatever the re-ask *did* answer is still worth having: two paragraphs
          missing and one repaired is one dropped, not two. Only the ordinals
@@ -1244,41 +1316,133 @@ export function parseShortfall(
  * Split out of `parseLabels` when the shortfall re-ask arrived, so that the two
  * callers cannot disagree about the wire format — which is the failure a second
  * hand-written parser produces, and it produces it silently.
+ *
+ * ## An empty label is a missing pair; any other bad pair is a re-draw
+ *
+ * **Until 2026-09-24 every fault below threw a plain `Error`**, and the retry
+ * loop retries only a `BatchIncomplete` — so one bad pair in fifty-eight ended
+ * the step on its first draw, with no re-ask and no re-draw.
+ * SPIDERYARN-READING2-43, an imported PDF; Greg's Retry then worked, because a
+ * fresh sample wrote that pair properly.
+ * docs/postmortems/260924a-a-malformed-label-pair-kills-the-step-without-a-retry.md.
+ *
+ * **Two kinds of bad pair, and they mean different things** — GPT Sol's review
+ * of the plan, 2026-09-24, findings 1 and 2:
+ *
+ * - **A label that is empty or not text** is the model declining that
+ *   paragraph — the same event as leaving it out, which is what a PDF's stray
+ *   fragment or a stripped code cell provokes (tests/labels-shortfall.test.ts §
+ *   a hostile article). So it is skipped, its ordinal falls into `missing`, and
+ *   the shortfall machinery takes it: a re-ask naming it, then `acceptGap`'s
+ *   bounded forgiveness. That forgiveness rests on "the model would not write
+ *   this one", and two empty labels are that.
+ * - **Anything structural** — an entry that is not a pair, an ordinal that is
+ *   not an integer, an ordinal given twice — is the model losing the format,
+ *   not declining a paragraph. It says nothing about any paragraph, so it must
+ *   not reach `acceptGap`: it is a `BatchIncomplete` with no shortfall, which
+ *   the caller answers with a whole re-draw, as it does a truncation.
+ *
+ * **Every integer ordinal counts as mentioned**, including one whose label was
+ * empty, so that `[999, ""]` still reads as a number nobody asked for — the
+ * refusal `parseLabels` makes of an answer written for some other batch — rather
+ * than vanishing with its label.
+ *
+ * **A whole answer with nothing in it to keep** — not JSON, or `labels` not a
+ * list — is the same re-draw.
  */
-function readPairs(raw: string): Map<number, string> {
+function readPairs(raw: string): {
+  seen: Map<number, string>;
+  mentioned: number[];
+  invalidLabels: number;
+} {
   /* `parseJsonAnswer`, never bare `JSON.parse`. The reasoning that used to sit
      here — including that `redact` is path-based and so reaches neither the
      message nor the stack, and that src/hierarchy.ts learned this before this
      file was written without it — is now in src/parse-json.ts, next to the code
-     it is about. */
-  const parsed = parseJsonAnswer<{ labels?: unknown }>(raw, "the nav labels");
-  if (!Array.isArray(parsed.labels)) {
+     it is about. Its message is a diagnosis of the shape and is safe to carry;
+     that is what `MalformedJson` promises. */
+  let parsed: { labels?: unknown } | null;
+  try {
+    parsed = parseJsonAnswer<{ labels?: unknown } | null>(raw, "the nav labels");
+  } catch (err) {
+    if (err instanceof MalformedJson) throw new BatchIncomplete("unparseable", err.message);
+    throw err;
+  }
+  if (!Array.isArray(parsed?.labels)) {
     /* No sample of the text. The shape is the whole diagnosis, and a sample
        here would be the same leak by hand that `parseJsonFrom` just prevented. */
-    throw new Error(
-      `Nav labels: expected {"labels": [[n, "…"], …]} and got ${describeShape(parsed.labels)}.`,
+    throw new BatchIncomplete(
+      "not-a-list",
+      `Nav labels: expected {"labels": [[n, "…"], …]} and got ${describeShape(parsed?.labels)}.`,
     );
   }
 
   const seen = new Map<number, string>();
+  const mentioned = new Set<number>();
+  const structural = { "not-a-pair": 0, "not-an-integer": 0, twice: 0 };
+  let invalidLabels = 0;
   for (const entry of parsed.labels) {
     if (!Array.isArray(entry) || entry.length !== 2) {
-      // Shape, not value — the second element is a label the model wrote.
-      throw new Error(`Nav labels: expected [number, string] pairs, got ${describeShape(entry)}.`);
+      structural["not-a-pair"]++;
+      continue;
     }
     const [n, label] = entry as [unknown, unknown];
     if (typeof n !== "number" || !Number.isInteger(n)) {
-      // Shape, not value — `n` is `entry[0]` from model output and can be a
-      // string of arbitrary prose rather than the integer it was asked for.
-      throw new Error(`Nav labels: paragraph number is not an integer, got ${describeShape(n)}.`);
+      structural["not-an-integer"]++;
+      continue;
     }
+    if (mentioned.has(n)) {
+      structural.twice++;
+      continue;
+    }
+    mentioned.add(n);
     if (typeof label !== "string" || label.trim() === "") {
-      throw new Error(`Nav labels: paragraph ${n} has an empty label`);
+      invalidLabels++;
+      continue;
     }
-    if (seen.has(n)) throw new Error(`Nav labels: paragraph ${n} was labelled twice`);
     seen.set(n, label.trim());
   }
-  return seen;
+
+  const broken = describeCounts([
+    [
+      structural["not-a-pair"],
+      "entry that was not a [number, label] pair",
+      "entries that were not [number, label] pairs",
+    ],
+    [
+      structural["not-an-integer"],
+      "paragraph number that was not an integer",
+      "paragraph numbers that were not integers",
+    ],
+    [structural.twice, "repeated paragraph number", "repeated paragraph numbers"],
+  ]);
+  if (broken) {
+    // Counts and kinds only — every label here is the model's writing.
+    throw new BatchIncomplete(
+      "malformed-pair",
+      `Nav labels: the answer broke the [number, label] format, with ${broken}. ` +
+        `Nothing has been written.`,
+    );
+  }
+  return { seen, mentioned: [...mentioned], invalidLabels };
+}
+
+/** `"1 x"`, `"2 xs and 1 y"`, or `""` — built from counts, never from values. */
+function describeCounts(counts: [n: number, one: string, many: string][]): string {
+  const parts = counts
+    .filter(([n]) => n > 0)
+    .map(([n, one, many]) => `${n} ${n === 1 ? one : many}`);
+  const last = parts.pop();
+  if (last === undefined) return "";
+  return parts.length ? `${parts.join(", ")} and ${last}` : last;
+}
+
+/** `" (1 label that was empty or not text)"`, or nothing. */
+function describeInvalid(n: number): string {
+  const said = describeCounts([
+    [n, "label that was empty or not text", "labels that were empty or not text"],
+  ]);
+  return said ? ` (${said})` : "";
 }
 
 /**
@@ -1817,6 +1981,7 @@ async function runBatch(
      * the right answer, rather than by omission at six.
      */
     throw new BatchIncomplete(
+      "truncated",
       truncatedMessage("nav labels", maxTokens, answerTokens, {
         outputTokens: message.usage.output_tokens,
         answerChars: raw.length,
@@ -1831,7 +1996,7 @@ async function runBatch(
     labels = only ? parseShortfall(raw, batch, only) : parseLabels(raw, batch);
   } catch (err) {
     if (err instanceof BatchIncomplete) {
-      throw new BatchIncomplete(err.message, err.shortfall, record);
+      throw new BatchIncomplete(err.fault, err.message, err.shortfall, record);
     }
     throw err;
   }
@@ -2447,11 +2612,13 @@ export async function generateLabels(opts: {
              * found back into an accepted gap".
              */
             if (again instanceof LabelsShifted && cameBackShort(err)) {
-              throw new Error(
+              throw new LabelsFailed(
                 `The nav labels for one section came back short, and the repaired set is ` +
                   `displaced.\n` +
                   `  First attempt: ${err.message}\n` +
                   `  After the re-ask: ${again.message}`,
+                err,
+                again,
               );
             }
             /* **The bounded partial accept**, and it happens here rather than
@@ -2476,7 +2643,7 @@ export async function generateLabels(opts: {
                  error — the one case where the two messages differ most. Caught by
                  GPT-5.6-sol, 2026-08-26. There is no reason to special-case the
                  second failure's type: what the reader needs is both. */
-              throw new Error(
+              throw new LabelsFailed(
                 `The nav labels for one section failed twice.\n` +
                   `  First attempt: ${err.message}\n` +
                   `  Second attempt: ` +
@@ -2488,6 +2655,8 @@ export async function generateLabels(opts: {
                      shift-check — arrive as the same two lines above, and the
                      reader has to go and read `acceptGap` to tell which. */
                   (decision.why ? `\n  ${decision.why}` : ""),
+                err,
+                again,
               );
               /* No `cause`. src/log.ts follows cause chains, and src/parse-json.ts
                  spells out why that matters here: an attached original error puts

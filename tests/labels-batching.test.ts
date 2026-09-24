@@ -20,12 +20,14 @@
  */
 import { readFileSync } from "node:fs";
 import path from "node:path";
+import { APIError } from "@anthropic-ai/sdk";
 import PQueue from "p-queue";
 import { beforeEach, describe, expect, it } from "vitest";
 import {
   allOrStop,
   assertEveryBlockLabelled,
   BatchIncomplete,
+  LabelsFailed,
   batchFingerprint,
   contentWords,
   coversExactly,
@@ -41,6 +43,8 @@ import {
   structureHash,
   usableEntry,
 } from "../src/labels.js";
+import { anthropicCallFailed } from "../src/anthropic-call.js";
+import { failureKindOf, readerFailureOf } from "../src/job-failure.js";
 import type { Batch } from "../src/labels.js";
 import { nullCheckpointStore, type CheckpointStore } from "../src/store/checkpoints.js";
 import { memoryCheckpoints, type MemoryCheckpoints } from "./helpers/memory-checkpoints.js";
@@ -525,14 +529,37 @@ describe("parseLabels", () => {
     const dupe = JSON.stringify({
       labels: [[1, "First"], [1, "Also first"], [2, "b"], [3, "c"], [4, "d"], [5, "e"], [6, "f"]],
     });
-    expect(() => parseLabels(dupe, batch)).toThrow(/labelled twice/);
+    expect(() => parseLabels(dupe, batch)).toThrow(/1 repeated paragraph number/);
+  });
+
+  it("describes several format faults by count and kind, without quoting their values", () => {
+    const mixed = JSON.stringify({
+      labels: [
+        "ARTICLE_SENTINEL not a pair",
+        ["ARTICLE_SENTINEL", "not an integer"],
+        [1, "first"],
+        [1, "second"],
+        [1, "third"],
+      ],
+    });
+    expect(() => parseLabels(mixed, batch)).toThrow(
+      "Nav labels: the answer broke the [number, label] format, with " +
+        "1 entry that was not a [number, label] pair, " +
+        "1 paragraph number that was not an integer and 2 repeated paragraph numbers. " +
+        "Nothing has been written.",
+    );
+    expect(() => parseLabels(mixed, batch)).not.toThrow(/ARTICLE_SENTINEL/);
   });
 
   it("refuses an empty label rather than storing a blank row", () => {
     const blank = JSON.stringify({
       labels: batch.blocks.map((_, i) => [i + 1, i === 2 ? "   " : "a real label here"]),
     });
-    expect(() => parseLabels(blank, batch)).toThrow(/empty label/);
+    /* Refused as *missing*, so the retry loop re-asks for it rather than the
+       step dying on the first draw — SPIDERYARN-READING2-43, 2026-09-24. */
+    expect(() => parseLabels(blank, batch)).toThrow(
+      /missing paragraph 3 \(1 label that was empty or not text\)/,
+    );
   });
 
   it("takes a heading's label from the block, not from the model", () => {
@@ -567,8 +594,9 @@ describe("parseLabels", () => {
   });
 
   it("refuses a shape that is not pairs", () => {
+    // Every entry malformed is every paragraph missing, and still a refusal.
     expect(() => parseLabels(JSON.stringify({ labels: ["one", "two"] }), batch)).toThrow(
-      /\[number, string\] pairs/,
+      /2 entries that were not \[number, label\] pairs/,
     );
     expect(() => parseLabels(JSON.stringify({ nope: [] }), batch)).toThrow(/expected/);
   });
@@ -579,25 +607,91 @@ describe("parseLabels", () => {
     );
   });
 
-  it("marks an incomplete answer as retryable, and a malformed one as not", () => {
-    // The distinction generateLabels retries on. Seen live at effort "medium":
-    // a batch asked about 42 paragraphs answered about 41, well-formed, twice.
-    // That is a model slip and a second ask usually fixes it. A malformed shape
-    // or a duplicate is not — asking again produces the same thing, and a retry
-    // loop over it would just spend money slowly.
-    const short = JSON.stringify({ labels: [[1, "One"], [2, "Two"]] });
-    expect(() => parseLabels(short, batch)).toThrow(BatchIncomplete);
+  it("marks every unusable answer as retryable, and says which way it was unusable", () => {
+    /* **This test asserted the opposite until 2026-09-24**: that a malformed
+       shape or a duplicate "is not [retryable] — asking again produces the same
+       thing". Production disproved it. SPIDERYARN-READING2-43 died on the first
+       draw with a bad pair, and Greg's Retry then succeeded, because a fresh
+       sample wrote that pair properly. Nor was the retry ever a loop: it is one
+       re-ask, or one re-draw, bounded by `acceptGap`. So every unusable answer
+       is now a `BatchIncomplete`, and its `fault` says which kind: an empty
+       label is a shortfall, a broken format a re-draw.
+       docs/postmortems/260924a-a-malformed-label-pair-kills-the-step-without-a-retry.md. */
+    const thrown = (raw: string): BatchIncomplete => {
+      try {
+        parseLabels(raw, batch);
+      } catch (err) {
+        expect(err).toBeInstanceOf(BatchIncomplete);
+        return err as BatchIncomplete;
+      }
+      return expect.unreachable("should have thrown");
+    };
 
-    const dupe = JSON.stringify({
-      labels: [[1, "a"], [1, "b"], [2, "c"], [3, "d"], [4, "e"], [5, "f"], [6, "g"]],
-    });
-    try {
-      parseLabels(dupe, batch);
-      expect.unreachable("should have thrown");
-    } catch (err) {
-      expect(err).toBeInstanceOf(Error);
-      expect(err).not.toBeInstanceOf(BatchIncomplete);
-    }
+    expect(thrown(JSON.stringify({ labels: [[1, "One"], [2, "Two"]] })).fault).toBe("short");
+
+    const dupe = thrown(
+      JSON.stringify({
+        labels: [[1, "a"], [1, "b"], [2, "c"], [3, "d"], [4, "e"], [5, "f"], [6, "g"]],
+      }),
+    );
+    // A format fault, so a whole re-draw: no shortfall for `acceptGap` to forgive.
+    expect(dupe.fault).toBe("malformed-pair");
+    expect(dupe.shortfall).toBeUndefined();
+
+    const blank = thrown(
+      JSON.stringify({ labels: batch.blocks.map((_, i) => [i + 1, i === 0 ? "" : "a label"]) }),
+    );
+    expect(blank.fault).toBe("short");
+    expect(blank.shortfall?.missing).toEqual([1]);
+
+    const notAList = thrown(JSON.stringify({ labels: "no" }));
+    expect(notAList.fault).toBe("not-a-list");
+    expect(notAList.shortfall, "nothing to keep, so a re-draw").toBeUndefined();
+
+    expect(thrown("I would rather not.").fault).toBe("unparseable");
+  });
+});
+
+describe("LabelsFailed", () => {
+  it("uses the registered code from an Anthropic failure, never its upstream text", () => {
+    const secret = "ARTICLE_SENTINEL private upstream text";
+    const upstream = APIError.generate(
+      429,
+      { error: { message: secret } },
+      undefined,
+      new Headers(),
+    );
+    const first = new BatchIncomplete("short", "a safe first-attempt diagnostic");
+    const failed = new LabelsFailed("a safe combined diagnostic", first, anthropicCallFailed(upstream));
+
+    expect(failed.code).toBe("short+ai-busy");
+    expect(failed.code).not.toContain(secret);
+  });
+
+  it("calls an unrecognised second error other, without copying its text", () => {
+    const secret = "ARTICLE_SENTINEL private article text";
+    const first = new BatchIncomplete("short", "a safe first-attempt diagnostic");
+    const failed = new LabelsFailed("a safe combined diagnostic", first, new Error(secret));
+
+    expect(failed.code).toBe("short+other");
+    expect(failed.code).not.toContain(secret);
+  });
+
+  it("remains an ordinary retryable step failure at the job boundary", () => {
+    const first = new BatchIncomplete("short", "the first answer was short");
+    const failed = new LabelsFailed(
+      "The nav labels for one section failed twice.",
+      first,
+      new BatchIncomplete("short", "the second answer was short"),
+    );
+    const previous = new Error("The nav labels for one section failed twice.");
+
+    expect(failed).toBeInstanceOf(Error);
+    expect(failed).not.toBeInstanceOf(BatchIncomplete);
+    expect(failureKindOf(failed)).toBe(failureKindOf(previous));
+    expect(readerFailureOf(failed, "Labelling the paragraphs")).toEqual(
+      readerFailureOf(previous, "Labelling the paragraphs"),
+    );
   });
 });
 

@@ -20,7 +20,7 @@ import { anchorFields, type BlockId, type Comment, type CommentAnchor } from "..
 import { readEvents, StreamStalled, STREAM_STALL_MS } from "./lib/sse.js";
 import { PAGE_FAULT, wentQuiet } from "../messages.js";
 import { apiFetch, failure, fetchOk, readJson } from "./lib/api.js";
-import { isUnreachable, ReaderFacingError } from "./lib/reader-facing.js";
+import { couldNotReach, isUnreachable, ReaderFacingError } from "./lib/reader-facing.js";
 import { captureClientFailure } from "./monitoring.js";
 import { openingRead } from "./lib/opening-read.js";
 import type { Mark } from "./PlaceOnCriterion.js";
@@ -58,7 +58,7 @@ export function describeFetchFailure(error: Error): string {
      reader "couldn't reach the server" over `Cannot read properties of
      undefined` is a false claim with the bug's text in brackets. */
   if (isUnreachable(error)) {
-    return `Couldn't reach the dev server — is \`npm run dev\` still running? (${error.message})`;
+    return couldNotReach(error.message);
   }
   /* A sentence somebody here wrote for a reader — the server's own `{ error }`
      (`HttpError`), or one the client wrote at the throw site. The class is the

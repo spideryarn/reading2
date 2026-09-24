@@ -16,41 +16,8 @@
  * docs/plans/260924b-pdf-transcriber-writes-maths-as-tex.md.
  */
 
-import { createRequire } from "node:module";
-import {
-  acceptsMarkup,
-  MAX_TEX_CHARS,
-  type RenderTex,
-  type TemmlLike,
-  temmlRenderer,
-} from "./maths-tex.js";
-
-const requireFromHere = createRequire(import.meta.url);
-let renderTex: RenderTex | undefined;
-
-/**
- * **Load temml for the check, the way the bundle can see** — a literal
- * `await import("temml")`, which @vercel/nft follows into the API function
- * (the same seam as `loadTemmlOnServer` in src/quote-in-block.ts). Called once
- * at the top of `runPdfExtract`, before anything is scored.
- *
- * `recognised` is synchronous, because every check it sits under is. Without
- * this it falls back to `createRequire(import.meta.url)("temml")`, which works
- * wherever `node_modules` does — a test, an eval, the CLI — **and is not traced
- * into the built function**: measured 2026-09-24, `temml.cjs` was absent from
- * the trace. In production that fallback would find nothing, every span would
- * read as markup, and every maths chunk would be asked twice. So the stage
- * loads it here, and the fallback is for callers that are not the stage.
- */
-export async function loadPdfMathsRenderer(): Promise<void> {
-  if (renderTex !== undefined) return;
-  try {
-    const { default: temml } = await import("temml");
-    renderTex = temmlRenderer(temml);
-  } catch {
-    /* Left unset: `recognised` tries its own fallback, and then refuses. */
-  }
-}
+import { MAX_TEX_CHARS } from "./maths-tex.js";
+import { texWouldDraw } from "./maths-server.js";
 
 /**
  * A balanced `\(…\)` or `\[…\]` — the two delimiters the prompt asks for.
@@ -238,24 +205,8 @@ function recognised(tex: string, display: boolean): boolean {
      argument `\frac`, or mismatched environments use only allowed words but
      temml refuses the whole span. Ask the exact bounded renderer stage 1 uses.
 
-     Loaded lazily either way — `pdf-tex` is statically reachable from every
-     API route through the pipeline, and a static temml import would put the
-     renderer on every request's cold start. The stage loads it with
-     `loadPdfMathsRenderer`; this synchronous fallback serves every other
-     caller, and is not in the built function (see that function). */
-  if (renderTex === undefined) {
-    try {
-      renderTex = temmlRenderer(requireFromHere("temml") as TemmlLike);
-    } catch {
-      /* A temml that did not ship must not take every PDF import down with it.
-         Every span is then unrecognised: its TeX is markup, the chunk is asked
-         again and published with a quality note — loud in the log, not an
-         outage. tests/pdf-bundle-trace.test.ts is what says it ships. */
-      renderTex = () => null;
-    }
-  }
-  const markup = renderTex(tex, display);
-  return markup !== null && acceptsMarkup(markup);
+     The stage loads temml first (`loadMathsRenderer`, src/maths-server.ts). */
+  return texWouldDraw(tex, display);
 }
 
 /**

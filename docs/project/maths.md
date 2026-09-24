@@ -7,6 +7,14 @@ Part of [reading-view-overview.md](reading-view-overview.md).
 >
 > — Greg, 2026-09-12 (SPIDERYARN-READING2-30)
 
+**Delimited TeX in block text is the canonical form importers write when they have safe TeX.** It is
+stored as `\(…\)` or `\[…\]`, and the reading view draws it. A web formula that cannot be converted
+without losing something keeps the publisher's own form. The PDF transcriber writes delimited TeX
+since 2026-09-24, and HTML imports convert what the page carried
+([content-extraction.md](content-extraction.md)). Greg, 2026-09-24: *"ideally we would have some
+general way of representing LaTeX that might also be useful for HTML imports too, not just PDFs"* —
+[260924b](../plans/260924b-pdf-transcriber-writes-maths-as-tex.md).
+
 **Delimited TeX already in an article is drawn as MathML, in the browser, as the article arrives.**
 Nothing stored changes: the render is recomputed on every load, so it can be altered or deleted with
 no migration. The reasoning, the options passed over and GPT Sol's review are in

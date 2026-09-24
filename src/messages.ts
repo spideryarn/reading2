@@ -291,6 +291,11 @@ export const CODE_KINDS: Record<string, FailureKind> = {
   "ai-unexpected": "bug",
   /* The browser's half of `ai-unexpected` — see `PAGE_FAULT`. */
   "web-unexpected": "bug",
+  /* A streamed answer that failed for a reason nobody declared — see
+     `ANSWER_GAVE_UP`. `retry`, for `readerFailureOf`'s reason. */
+  "ai-gave-up": "retry",
+  /* The browser could not reach the server at all — see `COULD_NOT_REACH`. */
+  "net-down": "retry",
   "ai-not-set-up": "ours",
   "ai-overflowed": "retry",
   "ai-slow": "retry",
@@ -2305,6 +2310,45 @@ export function wentQuiet(seconds: number): ReaderFacingFailure {
       "Trying again starts a fresh answer. [ai-stalled]",
   };
 }
+
+/**
+ * The request never got a response at all — the reader's connection, or the
+ * server not being there.
+ *
+ * Until 2026-09-24 five places in the client said *"is `npm run dev` still
+ * running?"* here, to readers on production who have never heard of it. The
+ * development build still adds that hint — `couldNotReach` in
+ * src/web/lib/reader-facing.ts — and this is what everyone else reads. It does
+ * not guess which side is at fault, because the client cannot tell.
+ */
+export const COULD_NOT_REACH: ReaderFacingFailure = {
+  kind: "retry",
+  message:
+    "Couldn't reach the server, so nothing was sent or received just now. That is usually the " +
+    "connection; trying again once it is back should work. [net-down]",
+};
+
+/**
+ * A streamed answer failed after its headers went out, for a reason nobody
+ * wrote the reader a sentence about.
+ *
+ * The streaming routes in src/routes.ts used to put `(err as Error).message`
+ * in their `error` frame and on the stored row — whatever a driver, a parser or
+ * a `fetch` happened to say reached the reader verbatim (plan 260924a § Stage
+ * 2b, GPT Sol's F5). `sayToReader` in src/reader-sentence.ts now sends a
+ * declared sentence or this one, and the real error goes to the log.
+ *
+ * **`retry` rather than `UNEXPECTED_FAILURE`'s `bug`**, for the reason
+ * `readerFailureOf` in src/job-failure.ts gives: nobody said what kind it was,
+ * so the reader keeps the offer of another go. These routes are model calls,
+ * and an undeclared failure there is most often a connection that broke.
+ */
+export const ANSWER_GAVE_UP: ReaderFacingFailure = {
+  kind: "retry",
+  message:
+    "This answer stopped for a reason this app could not explain to you; what happened has been " +
+    "recorded. It was not anything you did, and trying again is worth a go. [ai-gave-up]",
+};
 
 /**
  * The page caught an exception nobody wrote a sentence for.

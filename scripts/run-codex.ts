@@ -50,8 +50,10 @@ import {
   chmodSync, closeSync, copyFileSync, existsSync, mkdirSync, mkdtempSync, openSync, readFileSync,
   writeFileSync,
 } from 'node:fs';
+import { spawn } from 'node:child_process';
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
+import { StringDecoder } from 'node:string_decoder';
 import { isMain } from '../src/is-main.js';
 import {
   answerIsUsable, type ChildStdin, elapsedSeconds, formatAnswer, loadRepoEnv, readAnswerForConsole,
@@ -63,8 +65,22 @@ import type { WrapperFailure, WrapperLaunch } from './launch-dir.js';
 // and because a caller who has this file has the whole wrapper.
 export { formatAnswer, readAnswerForConsole };
 
-/** Frontier tier. `gpt-5.6-terra` is the everyday middle, `gpt-5.6-luna` the cheap/fast one. */
-const DEFAULT_MODEL = 'gpt-5.6-sol';
+/**
+ * **Callers name a family, never a version, and this file is the only place one becomes an id.**
+ * Greg, 2026-09-24: a pinned version quietly goes stale the week OpenAI ships the next. `--model
+ * sol` (the default) means the newest `gpt-<version>-sol` that codex's own `model/list` offers this
+ * account, asked live on every run — see resolveModelFamily. Any other `--model` goes through
+ * untouched, so a concrete id still works.
+ *
+ * Sol and not codex's `isDefault`, which measured 2026-09-24 is `gpt-6-astra`: Astra is opt-in
+ * (Greg, 2026-09-07, docs/reusable/codex-cli-as-subagent.md § Picking the model and effort). And
+ * newest *listed*, not newest released: `gpt-6-sol` exists on the API but codex refuses it on a
+ * ChatGPT subscription with a 400, so today this resolves to `gpt-5.6-sol` and moves by itself
+ * the day the subscription lists a newer Sol.
+ */
+export const MODEL_FAMILIES = ['astra', 'sol', 'terra', 'luna'];
+const DEFAULT_MODEL = 'sol';
+const MODEL_LIST_TIMEOUT_MS = 30_000;
 /** `xhigh` for a hard review, `low` for mechanical work; see EFFORTS for the whole vocabulary. */
 const DEFAULT_EFFORT = 'high';
 const DEFAULT_TIMEOUT_MINUTES = 30;
@@ -167,6 +183,176 @@ export function runCodex(opts: {
   });
 }
 
+/** `spawn` when codex itself could not be started, so exit.json names the same cause exec would. */
+type ModelPick = { ok: true; model: string } | { ok: false; why: string; spawn?: true };
+type RpcMessage = { id?: unknown; error?: unknown; result?: unknown };
+type ModelListPage = { ok: true; data: unknown[]; nextCursor: string | null } | Extract<ModelPick, { ok: false }>;
+
+function rpcErrorMessage(error: unknown): string {
+  if (typeof error === 'object' && error !== null && 'message' in error
+      && typeof (error as { message?: unknown }).message === 'string') {
+    return (error as { message: string }).message;
+  }
+  return JSON.stringify(error) ?? String(error);
+}
+
+function parseModelListPage(msg: RpcMessage): ModelListPage {
+  if (msg.error !== undefined) return { ok: false, why: `model/list failed: ${rpcErrorMessage(msg.error)}` };
+  const result = msg.result as { data?: unknown; nextCursor?: unknown } | null;
+  if (!Array.isArray(result?.data)) return { ok: false, why: 'model/list returned no data array' };
+  if (result.nextCursor !== null && typeof result.nextCursor !== 'string') {
+    return { ok: false, why: 'model/list returned no nextCursor' };
+  }
+  return { ok: true, data: result.data, nextCursor: result.nextCursor };
+}
+
+/**
+ * The newest `gpt-<version>-<family>` in codex's `model/list` reply, or why there is none. Pure, so
+ * the shapes are tested without a codex. Anchored at both ends, so `gpt-6-sol-pro` is not a Sol.
+ * No fallback to a hardcoded id: a pinned fallback is exactly the stale version this exists to
+ * remove, and it would only ever surface when nobody was looking.
+ */
+export function pickNewestInFamily(reply: unknown, family: string): ModelPick {
+  const r = reply as { error?: { message?: string }; result?: { data?: unknown } } | null;
+  if (r?.error) return { ok: false, why: `model/list failed: ${r.error.message ?? JSON.stringify(r.error)}` };
+  const data = r?.result?.data;
+  if (!Array.isArray(data)) return { ok: false, why: 'model/list returned no data array' };
+  const pattern = new RegExp(`^gpt-(\\d+(?:\\.\\d+)*)-${family}$`);
+  let best: { model: string; version: number[] } | undefined;
+  for (const m of data as unknown[]) {
+    if (typeof m !== 'object' || m === null) continue;
+    const { model: id, hidden } = m as { model?: unknown; hidden?: unknown };
+    if (typeof id !== 'string' || hidden === true) continue;
+    const match = pattern.exec(id);
+    if (!match) continue;
+    const version = match[1]!.split('.').map(Number);
+    if (best === undefined || compareVersions(version, best.version) > 0) best = { model: id, version };
+  }
+  if (best === undefined) return { ok: false, why: `model/list offers this account no gpt-<version>-${family} model` };
+  return { ok: true, model: best.model };
+}
+
+function compareVersions(a: number[], b: number[]): number {
+  for (let i = 0; i < Math.max(a.length, b.length); i++) {
+    const d = (a[i] ?? 0) - (b[i] ?? 0);
+    if (d !== 0) return d;
+  }
+  return 0;
+}
+
+/**
+ * The newest model in `family` this account can run: every page of `model/list` over `codex
+ * app-server` stdio, the protocol tools/overseer/codex-usage.ts reads rate limits with. No model
+ * runs and nothing is billed. Under `env` because the list is per account; a fallback resolves
+ * again under its own credential.
+ */
+export function resolveModelFamily(family: string, env: NodeJS.ProcessEnv, repoDir: string): Promise<ModelPick> {
+  return new Promise((settle) => {
+    const child = spawn('codex', ['app-server', '--listen', 'stdio://'], {
+      cwd: resolve(repoDir), env, detached: true, stdio: ['pipe', 'pipe', 'ignore'],
+    });
+    let outcome: ModelPick | undefined;
+    let closed = false;
+    let timer: NodeJS.Timeout | undefined;
+    const settleAfterClose = () => {
+      if (!closed || outcome === undefined) return;
+      if (timer !== undefined) clearTimeout(timer);
+      settle(outcome);
+    };
+    const killGroup = () => {
+      if (child.pid === undefined) return;
+      try { process.kill(-child.pid, 'SIGKILL'); }
+      catch {
+        // It may have exited after writing the reply but before stdout drained. `close` below is
+        // still the reaping boundary; the direct kill is only a fallback for a missing group.
+        try { child.kill('SIGKILL'); } catch { /* already gone */ }
+      }
+    };
+    const finish = (v: ModelPick, kill = true) => {
+      if (outcome !== undefined) return;
+      outcome = v;
+      if (timer !== undefined) clearTimeout(timer);
+      if (kill) killGroup();
+      settleAfterClose();
+    };
+    const send = (o: object) => {
+      if (outcome !== undefined) return;
+      try { child.stdin.write(`${JSON.stringify(o)}\n`); }
+      catch (e) { finish({ ok: false, why: `could not write to codex app-server: ${(e as Error).message}` }); }
+    };
+    child.on('error', (e) => finish({ ok: false, why: `could not run codex app-server (${e.message}) — is the Codex CLI on PATH?`, spawn: true }));
+    // `exit` can precede the last stdout data. `close` cannot: it waits for the stdio handles, so a
+    // reply written in the process's last chunk wins over this failure instead of racing it.
+    child.on('close', (code, signal) => {
+      closed = true;
+      if (outcome === undefined) {
+        finish({ ok: false, why: `codex app-server exited ${code}${signal ? ` [${signal}]` : ''} before answering model/list` }, false);
+      } else {
+        settleAfterClose();
+      }
+    });
+    child.stdin.on('error', (e) => {
+      if (outcome === undefined) finish({ ok: false, why: `could not write to codex app-server: ${e.message}` });
+    });
+    const decoder = new StringDecoder('utf8');
+    let buf = '';
+    let initialized = false;
+    let requestId = 2;
+    let awaitingId: number | undefined;
+    const models: unknown[] = [];
+    const cursors = new Set<string>();
+    const requestPage = (cursor?: string) => {
+      awaitingId = requestId;
+      send({ jsonrpc: '2.0', id: requestId++, method: 'model/list', params: cursor === undefined ? {} : { cursor } });
+    };
+    const handleMessage = (msg: RpcMessage) => {
+      if (msg.id === 1 && !initialized) {
+        if (msg.error !== undefined) {
+          finish({ ok: false, why: `codex app-server refused initialization: ${rpcErrorMessage(msg.error)}` });
+          return;
+        }
+        initialized = true;
+        send({ jsonrpc: '2.0', method: 'initialized', params: {} });
+        requestPage();
+        return;
+      }
+      if (!initialized || msg.id !== awaitingId) return;
+      const page = parseModelListPage(msg);
+      if (!page.ok) {
+        finish(page);
+        return;
+      }
+      models.push(...page.data);
+      if (page.nextCursor === null) {
+        finish(pickNewestInFamily({ result: { data: models } }, family));
+      } else if (cursors.has(page.nextCursor)) {
+        finish({ ok: false, why: `model/list repeated pagination cursor ${JSON.stringify(page.nextCursor)}` });
+      } else {
+        cursors.add(page.nextCursor);
+        requestPage(page.nextCursor);
+      }
+    };
+    const handleLines = () => {
+      while (true) {
+        const nl = buf.indexOf('\n');
+        if (nl < 0) break;
+        const line = buf.slice(0, nl);
+        buf = buf.slice(nl + 1);
+        let msg: RpcMessage;
+        try { msg = JSON.parse(line) as typeof msg; } catch { continue; }
+        handleMessage(msg);
+      }
+    };
+    child.stdout.on('data', (b: Buffer) => {
+      buf += decoder.write(b);
+      handleLines();
+    });
+    child.stdout.on('end', () => { buf += decoder.end(); handleLines(); });
+    timer = setTimeout(() => finish({ ok: false, why: `codex app-server did not answer model/list within ${MODEL_LIST_TIMEOUT_MS / 1000}s` }), MODEL_LIST_TIMEOUT_MS);
+    send({ jsonrpc: '2.0', id: 1, method: 'initialize', params: { clientInfo: { name: 'run-codex', version: '0.0.1' } } });
+  });
+}
+
 interface Args {
   model: string;
   prompt?: string;
@@ -241,8 +427,9 @@ export function parseArgs(argv: string[]): Args {
     }
   }
   if (!out.prompt && !out.promptFile) throw new Error('provide --prompt or --prompt-file');
-  // A dry run launches nothing, so under a launch directory it would leave evidence of a run that
-  // never happened.
+  // A dry run launches no `codex exec` and records no attempt (family discovery still uses the
+  // free app-server), so under a launch directory it would leave evidence of a run that never
+  // happened.
   if (out.launchDir !== undefined && out.dryRun) throw new Error('--launch-dir cannot be combined with --dry-run');
   if (!SANDBOXES.includes(out.sandbox)) throw new Error(`--sandbox must be one of: ${SANDBOXES.join(', ')}`);
   if (!AUTH_MODES.includes(out.auth)) throw new Error(`--auth must be one of: ${AUTH_MODES.join(', ')}`);
@@ -487,15 +674,30 @@ export function authHint(log: string, usedKey = true): string {
  * with a fallback in play the earlier failure was on a credential we have already stopped using,
  * and sending somebody to top that account up would point at the wrong one.
  */
-async function runPlan(args: Args, promptPath: string, tmpDir: string, plan: boolean[]): Promise<{
-  run: RunResult; outFile: string; logs: string[]; attempt: number;
+async function runPlan(
+  args: Args, promptPath: string, tmpDir: string, plan: boolean[], modelFamily?: string,
+): Promise<{
+  run: RunResult; outFile: string; logs: string[]; attempt: number; model: string;
+  modelFailure?: Extract<ModelPick, { ok: false }>;
 }> {
   const logs: string[] = [];
   let run!: RunResult;
   let outFile = '';
   let attempt = 0;
-  for (; attempt < plan.length; attempt++) {
-    const withKey = plan[attempt]!;
+  let model = args.model;
+  for (let nextAttempt = 0; nextAttempt < plan.length; nextAttempt++) {
+    const withKey = plan[nextAttempt]!;
+    // The subscription and CODEX_API_KEY can be offered different models. Resolve lazily, only
+    // once a fallback is actually going to spend the second credential: resolving both up front
+    // would make a perfectly good subscription run fail because an unused key lacked that family.
+    if (nextAttempt > 0 && modelFamily !== undefined) {
+      const newest = await resolveModelFamily(
+        modelFamily, childEnv(process.env, args.passEnv, withKey), args.repoDir,
+      );
+      if (!newest.ok) return { run, outFile, logs, attempt, model, modelFailure: newest };
+      model = newest.model;
+    }
+    attempt = nextAttempt;
     // A fresh -o path per attempt. Sharing one would let a first attempt's partial answer stand in
     // for a retry that produced nothing — indistinguishable, from out here, from the retry working.
     outFile = join(tmpDir, `output-${attempt + 1}.txt`);
@@ -515,7 +717,7 @@ async function runPlan(args: Args, promptPath: string, tmpDir: string, plan: boo
     const promptFd = openSync(promptPath, 'r');
     try {
       run = await runCodex({
-        argv: buildCodexArgs({ ...args, outFile }),
+        argv: buildCodexArgs({ ...args, model, outFile }),
         timeoutMs: args.timeoutMinutes * 60_000,
         stream: args.stream,
         env: withLaunchId(childEnv(process.env, args.passEnv, withKey)),
@@ -543,7 +745,7 @@ async function runPlan(args: Args, promptPath: string, tmpDir: string, plan: boo
     // risk of doing this automatically. Names the credential; never its value.
     console.log(`${credentialName(withKey)} could not run this — retrying with ${credentialName(plan[attempt + 1]!)}.`);
   }
-  return { run, outFile, logs, attempt };
+  return { run, outFile, logs, attempt, model };
 }
 
 /**
@@ -616,6 +818,18 @@ async function main(): Promise<void> {
       + ' would destroy the first');
   }
   const plan = authPlan(args.auth, Boolean(process.env[CODEX_SECRET]));
+  // Resolved before the dry run too, so the line it prints names the model that would really run.
+  const askedFor = args.model;
+  const modelFamily = MODEL_FAMILIES.includes(askedFor) ? askedFor : undefined;
+  if (modelFamily !== undefined) {
+    const newest = await resolveModelFamily(askedFor, childEnv(process.env, args.passEnv, plan[0]!), args.repoDir);
+    if (!newest.ok) {
+      fail(`--model ${askedFor}: ${newest.why}${newest.spawn ? '' : ' — pass a concrete --model to run anyway'}`,
+        newest.spawn ? 'spawn' : 'wrapper');
+    }
+    args.model = newest.model;
+  }
+  let modelNote = askedFor === args.model ? args.model : `${args.model}, the newest ${askedFor}`;
 
   if (args.dryRun) {
     const codexArgs = buildCodexArgs({ ...args, outFile: join(tmpDir, 'output-1.txt') });
@@ -631,6 +845,7 @@ async function main(): Promise<void> {
     // so an argv-only dry run would be silent about the half --auth controls. A comment line, so
     // the thing below it still pastes.
     console.log(`# auth ${args.auth}: ${plan.map(credentialName).join(', then ')}`);
+    console.log(`# model ${modelNote}`);
     /* The `-` at the end reads the prompt from fd 0, so the pasteable form needs a redirect. A
        file, never a pipe: see ChildStdin for the sixty seconds that cost. */
     const source = args.promptFile ? resolve(args.promptFile) : '<a temp file this wrapper writes>';
@@ -652,7 +867,10 @@ async function main(): Promise<void> {
   // re-hashed against the launch's pin.
   const promptMismatch = launch?.promptProblem(readFileSync(promptPath));
   if (promptMismatch) fail(`--launch-dir: ${promptMismatch}`, 'prompt-unverified');
-  const { run, outFile, logs, attempt } = await runPlan(args, promptPath, tmpDir, plan);
+  const { run, outFile, logs, attempt, model, modelFailure } = await runPlan(
+    args, promptPath, tmpDir, plan, modelFamily,
+  );
+  modelNote = askedFor === model ? model : `${model}, the newest ${askedFor}`;
   launch?.noteRun(run);
   // --output when given; under `--launch-dir` an unset one defaults into the attempt directory.
   const answerTarget = args.output ? resolve(args.output) : launch?.defaults.answer;
@@ -685,6 +903,11 @@ async function main(): Promise<void> {
     launch?.notePaths({ transcript: logPath });
   }
   const hint = logPath ? `; activity log at ${logPath}` : '';
+
+  if (modelFailure !== undefined) {
+    fail(`--model ${askedFor}: ${modelFailure.why}${modelFailure.spawn ? '' : ' — pass a concrete --model to run anyway'}${hint}`,
+      modelFailure.spawn ? 'spawn' : 'wrapper');
+  }
 
   // Fail closed, most-specific cause first. Every branch reports the *last* attempt: with a
   // fallback in play the earlier one failed on a credential we have already stopped using, and
@@ -719,7 +942,7 @@ async function main(): Promise<void> {
     copyFileSync(outFile, answerPath);
   }
 
-  console.log(`Done — codex exec (${args.model}, ${args.effort}, ${args.sandbox}, ${credentialName(plan[attempt]!)}).`);
+  console.log(`Done — codex exec (${modelNote}, ${args.effort}, ${args.sandbox}, ${credentialName(plan[attempt]!)}).`);
   console.log(`Output: ${answerPath}`);
   if (logPath) console.log(`Activity log (not streamed): ${logPath}`);
   // The answer is the thing you asked for, so print it: a caller that has to shell out a second
