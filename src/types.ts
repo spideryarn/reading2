@@ -1122,8 +1122,8 @@ export const MAX_QUOTES_TOTAL = 120;
  *
  * **Appended to since 2026-09-11** — a Find more on a list from the same
  * article keeps every quote and adds more (`passes`, `lastAdded`), and only a
- * stale list is replaced. Until then it replaced, like `Ideas`. src/quotes.ts
- * § existingFor.
+ * stale or (since 2026-09-24) an outdated list is replaced. Until then it
+ * replaced, like `Ideas`. src/quotes.ts § existingFor.
  */
 export interface Quotes {
   version: string;

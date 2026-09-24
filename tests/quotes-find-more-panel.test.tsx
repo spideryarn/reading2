@@ -11,11 +11,16 @@
  * | state | banner | foot |
  * |---|---|---|
  * | current | — | Find more |
- * | outdated | says Find more uses the current prompt, no button | Find more |
+ * | outdated | Choose them again (since 2026-09-24, report 3C) | — |
  * | stale | Choose them again | — |
  * | at the ceiling | — | the sentence, no button |
  *
- * The stage's half — that a forced run appends — is tests/quotes-find-more.test.ts.
+ * An outdated list's row changed on 2026-09-24 (SPIDERYARN-READING2-3C,
+ * docs/plans/260924d-choose-them-again-on-an-outdated-quote-list.md): Find more
+ * cannot lengthen a list an older prompt chose, so it is rewritten instead.
+ *
+ * The stage's half — that a forced run appends, or on a stale or outdated list
+ * replaces — is tests/quotes-find-more.test.ts and tests/quotes-find-more-stage.test.ts.
  */
 import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
@@ -168,11 +173,19 @@ describe("the foot", () => {
 });
 
 describe("the banners", () => {
-  it("an outdated list: says Find more uses the current prompt, and has no button of its own", async () => {
-    await mount(owner(list({ version: "quotes/3" }), { outdated: true }));
-    expect(banner()?.textContent).toContain("Find more uses the current one");
-    expect(banner()?.querySelector("button")).toBeNull();
-    expect(foot()?.textContent).toContain("Find more");
+  it("an outdated list: Choose them again on the banner, and no Find more — appending cannot lengthen old quotes", async () => {
+    const regenerate = vi.fn(async () => {});
+    await mount(owner(list({ version: "quotes/3" }), { outdated: true, regenerate }));
+    expect(banner()?.textContent).toContain("earlier version of the prompt");
+    const again = [...(banner()?.querySelectorAll("button") ?? [])].find((b) =>
+      /choose them again/i.test(b.textContent ?? ""),
+    );
+    if (!again) throw new Error("no Choose them again on the outdated banner");
+    expect(foot()).toBeNull();
+    expect(buttons().some((b) => /find more/i.test(b))).toBe(false);
+    /* The stale banner's own request: a list of its own, for the profile. */
+    await act(async () => again.click());
+    expect(regenerate.mock.calls).toEqual([[]]);
   });
 
   it("a stale list: Choose them again on the banner — the one place it survives — and no Find more", async () => {

@@ -16,7 +16,7 @@
  * inputs reach it.
  */
 import { describe, expect, it } from "vitest";
-import { bandPress } from "../src/web/Spine.js";
+import { bandClick, bandPress } from "../src/web/Spine.js";
 
 const A = "spya-k3m9qt";
 const B = "spya-p7w2dn";
@@ -70,5 +70,52 @@ describe("a tap reveals, then commits", () => {
     expect([press(A), press(A)]).toEqual(["reveal", "jump"]);
     // And the next band starts over rather than inheriting the last one's arm.
     expect([press(B), press(B)]).toEqual(["reveal", "jump"]);
+  });
+});
+
+/**
+ * Spine.tsx § bandClick — finger or not is read off the press recorded at
+ * `pointerdown`, because on iOS 18.2+ a finger's click says `mouse` (WebKit
+ * bug 282988). tests/spine-hover.test.tsx drives the same rules through the
+ * real rail, including the queue that supplies `press`.
+ */
+describe("a click, decided from its own press", () => {
+  const touch = (armed: string | null) => ({ type: "touch", armed });
+
+  it("reveals on an iPad's first tap, whose click says mouse", () => {
+    expect(bandClick("mouse", 1, touch(null), null, A)).toBe("reveal");
+  });
+
+  it("jumps on the second, whose press began with this card open", () => {
+    expect(bandClick("mouse", 1, touch(A), A, A)).toBe("jump");
+  });
+
+  it("does not jump when the card opened after the press began — grouped clicks", () => {
+    /* Two taps on A, both clicks arriving after both lifts: the first click
+       revealed A, but the second press began with nothing open. */
+    expect(bandClick("mouse", 1, touch(null), A, A)).toBe("reveal");
+  });
+
+  it("jumps for a real mouse on the first click", () => {
+    expect(bandClick("mouse", 1, { type: "mouse", armed: null }, null, A)).toBe("jump");
+  });
+
+  it("keeps a pen jumping on the first press, as it did", () => {
+    expect(bandClick("mouse", 1, { type: "pen", armed: null }, null, A)).toBe("jump");
+    expect(bandClick("pen", 1, null, null, A)).toBe("jump");
+  });
+
+  it("jumps for a keyboard, whatever was recorded", () => {
+    expect(bandClick("", 0, touch(null), null, A)).toBe("jump");
+    expect(bandClick(undefined, 0, null, null, A)).toBe("jump");
+  });
+
+  it("reveals, never jumps blind, for a pointer click with no press on the rail", () => {
+    /* A finger that landed beside the rail, or a click after a cancel. */
+    expect(bandClick("mouse", 1, null, null, A)).toBe("reveal");
+    expect(bandClick(undefined, 1, null, null, A)).toBe("reveal");
+    expect(bandClick("touch", 1, null, null, A)).toBe("reveal");
+    // Even an open card cannot lend authority to a click with no own press.
+    expect(bandClick("mouse", 1, null, A, A)).toBe("reveal");
   });
 });

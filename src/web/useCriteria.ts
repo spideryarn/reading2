@@ -32,6 +32,7 @@ import type { RefereeCriterionConfig, RefereeResult } from "../referee-criteria.
 import type { SavedCriterion } from "../saved-criteria.js";
 import { isStale } from "../search-stale.js";
 import { apiFetch, failure, fetchOk } from "./lib/api.js";
+import { ReaderFacingError } from "./lib/reader-facing.js";
 import { openingRead } from "./lib/opening-read.js";
 import { readEvents, STREAM_STALL_MS } from "./lib/sse.js";
 import { describeFetchFailure } from "./useComments.js";
@@ -278,7 +279,7 @@ export function useCriteria(slug: string): CriteriaApi {
           }
 
           if (!settled && !deleted.current.has(liveId)) {
-            throw new Error("The criterion stopped arriving. Try again.");
+            throw new ReaderFacingError("The criterion stopped arriving. Try again.");
           }
         } catch (e) {
           if (deleted.current.has(liveId)) return;

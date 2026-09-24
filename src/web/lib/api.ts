@@ -89,6 +89,7 @@ import {
 import { noteNoConnection, noteReachedServer, noteServedCopy } from "../offline.js";
 import { recordLog } from "../log-buffer.js";
 import { setClientMonitoringUser } from "../monitoring.js";
+import { markUnreachable, ReaderFacingError } from "./reader-facing.js";
 import { supabase } from "./supabase.js";
 
 /** How much of an unexpected body reaches the console. Enough to recognise it. */
@@ -203,7 +204,7 @@ function header(res: Response, name: string): string | null {
  * which puts the same two lines back in every caller and gets forgotten in
  * exactly one of them.
  */
-export class HttpError extends Error {
+export class HttpError extends ReaderFacingError {
   readonly status: number;
   /**
    * **What the server sent beside `error`**, or `{}` when it sent nothing.
@@ -345,7 +346,12 @@ export async function failure(res: Response): Promise<Error> {
  * enforces is worth less here than twelve call sites that keep working.
  */
 export async function readJson<T>(res: Response): Promise<T> {
-  const text = await res.text();
+  /* A body that dies mid-read — a connection cut after the headers — rejects
+     here, and it is a lost connection, not a bug: marked so
+     `describeFetchFailure` can tell the two apart (lib/reader-facing.ts). */
+  const text = await res.text().catch((e: unknown) => {
+    throw e instanceof TypeError ? markUnreachable(e) : e;
+  });
 
   if (!res.ok) throw errorFor(res, text);
 
@@ -363,7 +369,7 @@ export async function readJson<T>(res: Response): Promise<T> {
        the reply is the whole client. Worth its own sentence, because a "not
        found" would send you looking in the wrong place entirely. */
     logFailure(res, text, false);
-    throw new Error(
+    throw new ReaderFacingError(
       `The server replied ${res.status} but not with JSON — the browser console has more.`,
     );
   }
@@ -427,7 +433,13 @@ export async function apiFetch(input: string, init: RequestInit = {}): Promise<R
        looking almost right. */
     const headers = new Headers(init.headers);
     if (token) headers.set("Authorization", `Bearer ${token}`);
-    return fetch(input, { ...init, headers });
+    /* A `TypeError` out of `fetch` itself is the transport failing, and this is
+       the one place that knows it came from `fetch` rather than from a bug —
+       marked for `describeFetchFailure` (lib/reader-facing.ts). An abort is not
+       a lost connection and is left alone. */
+    return fetch(input, { ...init, headers }).catch((e: unknown) => {
+      throw e instanceof TypeError ? markUnreachable(e) : e;
+    });
   };
 
   /**

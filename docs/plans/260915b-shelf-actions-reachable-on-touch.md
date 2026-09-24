@@ -299,6 +299,13 @@ The fix is the same shape each time — take the pointer type from the `pointerd
 gesture, which iOS reports correctly — and it belongs to each surface's owner rather than to a shelf
 change. Written into the report's note for Greg.
 
+**2026-09-24:** of the three, only the spine was broken, and it is fixed — the rail records the type
+at `pointerdown` (Spine.tsx § `bandClick`,
+[260924c](260924c-ipad-first-tap-on-the-rail-shows-the-card.md)). `clickPress` already caught a
+finger's `mouse` click (260915a's `type === "mouse"` branch, with tests in
+`tests/link-tap-escapes.test.tsx`, now including a term inside a link), and a bare glossary term's
+outcome does not depend on the click's type. The permalink is harmless as said. Neither changed.
+
 ## Stages
 
 1. **The media query** — `any-pointer-coarse:opacity-100` beside `hover-none:opacity-100` on the

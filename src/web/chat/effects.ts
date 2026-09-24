@@ -23,6 +23,7 @@
 import type { ChatMessage, ChatThread, ToolRun } from "../../types.js";
 import { ENDED_UNFINISHED, NO_RESPONSE } from "../../messages.js";
 import { apiFetch, failure, readJson } from "../lib/api.js";
+import { ReaderFacingError } from "../lib/reader-facing.js";
 import { readEvents, StreamStalled, STREAM_STALL_MS } from "../lib/sse.js";
 import { describeFetchFailure } from "../useComments.js";
 import type { Begun, ThreadsOutcome, TurnDone, WriteOutcome } from "./model.js";
@@ -157,7 +158,7 @@ export async function runTurn(
          by engine, and reading a reader-facing sentence off it would be reading
          whichever one this browser happens to use. The controller is ours and
          it knows. */
-      if (opening.signal.aborted) throw new Error(NO_RESPONSE.message);
+      if (opening.signal.aborted) throw new ReaderFacingError(NO_RESPONSE.message);
       throw e;
     } finally {
       clearTimeout(openBy);
@@ -166,17 +167,20 @@ export async function runTurn(
       // A failure *before* the stream starts is ordinary JSON — a bad slug, a
       // question over the size cap. After it starts, failures arrive as an
       // `error` frame inside a 200, and `drainTurn` handles those.
-      const why = (await failure(response)).message;
+      const refusal = await failure(response);
       /* **409 is the one status the screen cannot survive being wrong about.**
          It means the server refused a retry or an edit this client had already
          performed on screen — and an edit performs by *destroying*: the
          question is rewritten and every turn below it is gone. The refusal
          drops the operation, which is the whole of putting it back. */
       if (response.status === 409) {
-        sink.refused(why);
+        sink.refused(refusal.message);
         return;
       }
-      throw new Error(why);
+      /* The refusal itself, not a plain `Error` with its words copied in: its
+         class is what tells `describeFetchFailure` a reader was meant to read
+         it (lib/reader-facing.ts). */
+      throw refusal;
     }
     try {
       /* The stream ended without saying how — the server always sends `done` or
@@ -396,6 +400,11 @@ export async function askForThreads(slug: string, signal?: AbortSignal): Promise
     if (body.error) return { ok: false, error: body.error };
     return { ok: true, threads: body.threads ?? [] };
   } catch (e) {
+    /* Our own caller gave up on it — the spoken repair's deadline aborts this
+       after it has already finished — so nothing failed. Not through
+       `describeFetchFailure`, which would report the `AbortError` as a fault
+       in the page every time. GPT Sol, reviewing the plan (F2). */
+    if (signal?.aborted) return { ok: false, error: "Stopped waiting for the list of conversations." };
     return { ok: false, error: describeFetchFailure(e as Error) };
   }
 }

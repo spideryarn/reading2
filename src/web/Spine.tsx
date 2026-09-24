@@ -316,6 +316,146 @@ export function bandPress(
 }
 
 /**
+ * **Which pointer made this click — asked of the gesture, not of the click.**
+ *
+ * On iOS 18.2 and later a finger's click reports `pointerType` `mouse`
+ * ([WebKit bug 282988](https://bugs.webkit.org/show_bug.cgi?id=282988), still
+ * open) while the same gesture's `pointerdown` says `touch`. Reading the click,
+ * `bandPress` took every iPad tap for a mouse click and jumped on the first one,
+ * so the card never opened first. So the rail records each press at
+ * `pointerdown` — its type, and which card was open when it began — and the
+ * click is decided from that record: the shape of useHoverCard.ts §
+ * `clickPress` and of the shelf's "⋯" (ShelfEntry.tsx § `fingerPress`).
+ * docs/plans/260924c-ipad-first-tap-on-the-rail-shows-the-card.md.
+ *
+ * - `click === ""` is Pointer Events' word for a keyboard or voice activation,
+ *   and it is definitive even when a finger's press is still recorded. So is
+ *   no `pointerType` at all with `detail < 1`: a browser whose click is still
+ *   a plain MouseEvent, or a synthetic `.click()`. A keyboard jumps.
+ * - With a record, its type decides whether this was a finger.
+ * - **With no record, it is taken for a finger** (bar a click that says `pen`,
+ *   which keeps the Pencil's behaviour as it was). A real mouse always leaves
+ *   one — its `pointerdown` is on the rail — so a pointer click with none is a
+ *   finger that landed just beside the 12px rail and was moved onto a band by
+ *   touch adjustment, or a click after the browser cancelled its press for a
+ *   scroll. Either may reveal; neither may jump, even onto a card already
+ *   open, because no press of theirs saw it. GPT Sol, plan and code reviews.
+ * - **A finger jumps only if its own press began with this band's card
+ *   open**, not merely if it is open now. The Pointer Events spec lets a
+ *   tap's click arrive late and grouped with the next tap's, and the first
+ *   click's reveal must not become the second click's permission.
+ */
+/** How long a press recorded at `pointerdown` may wait for its click. */
+const PRESS_MS = 2_000;
+
+/** A keyboard's, voice's or script's click — no pointer made it. */
+function isKeyboardClick(click: string | undefined, detail: number): boolean {
+  return click === "" || (click === undefined && detail < 1);
+}
+
+export interface RailPress {
+  type: string;
+  /** The band whose card was open when this press began. */
+  armed: string | null;
+}
+
+interface QueuedRailPress extends RailPress {
+  pointerId: number;
+  at: number;
+  releasedAt: number | null;
+}
+
+/** Newest mouse that has lifted and can therefore have produced a click. */
+function lastReleasedMouse(queue: QueuedRailPress[], pointerId?: number): number {
+  for (let i = queue.length - 1; i >= 0; i -= 1) {
+    const press = queue[i];
+    if (
+      press?.type === "mouse" &&
+      press.releasedAt !== null &&
+      (pointerId === undefined || press.pointerId === pointerId)
+    ) {
+      return i;
+    }
+  }
+  return -1;
+}
+
+/** Which of mouse or touch lifted most recently, if either has. */
+function latestReleasedType(queue: QueuedRailPress[]): "mouse" | "touch" | null {
+  let latest: QueuedRailPress | null = null;
+  for (const press of queue) {
+    if (
+      (press.type === "mouse" || press.type === "touch") &&
+      press.releasedAt !== null &&
+      (latest?.releasedAt === null ||
+        latest?.releasedAt === undefined ||
+        press.releasedAt >= latest.releasedAt)
+    ) {
+      latest = press;
+    }
+  }
+  return latest?.type === "mouse" || latest?.type === "touch" ? latest.type : null;
+}
+
+/**
+ * Take the press that can have produced this click.
+ *
+ * A correctly labelled touch or pen click can use its type and id. The WebKit
+ * bug leaves a click labelled `mouse` ambiguous. Whichever of touch and mouse
+ * lifted most recently identifies the gesture; grouped touch records remain
+ * FIFO. A pointer still held down cannot have clicked yet. Pen must never be
+ * used for this fallback: it would turn a finger's first tap into a pen's jump.
+ */
+function takeRailPress(
+  queue: QueuedRailPress[],
+  click: string | undefined,
+  pointerId: number | undefined,
+): QueuedRailPress | null {
+  let at = -1;
+  if (click === "touch" || click === "pen") {
+    at = queue.findIndex((press) => press.type === click && press.pointerId === pointerId);
+    if (at === -1) at = queue.findIndex((press) => press.type === click);
+  } else if (click === "mouse") {
+    /* A touch record added after a mouse record is stronger evidence than the
+       known-bad click field: a mouse's own click normally completes before a
+       later physical press can begin, while WebKit deliberately dispatches a
+       touch click after its gesture recognizer commits the tap. Keep FIFO
+       order among touch records for grouped taps. */
+    if (latestReleasedType(queue) === "touch") {
+      at = queue.findIndex((press) => press.type === "touch" && press.releasedAt !== null);
+    } else {
+      if (pointerId !== undefined) at = lastReleasedMouse(queue, pointerId);
+      if (at === -1) at = lastReleasedMouse(queue);
+      if (at === -1) at = queue.findIndex((press) => press.type === "touch");
+    }
+  } else {
+    /* MouseEvent-only Safari gives the click no type or id. Preserve dispatch
+       order, but only after the detail-0 keyboard case has been excluded. */
+    at = queue.length > 0 ? 0 : -1;
+  }
+  if (at === -1) return null;
+  return queue.splice(at, 1)[0] ?? null;
+}
+
+export function bandClick(
+  click: string | undefined,
+  detail: number,
+  press: RailPress | null,
+  armed: string | null,
+  id: string,
+): "reveal" | "jump" {
+  if (isKeyboardClick(click, detail)) return "jump";
+  /* No record means there is no press whose open-card snapshot can authorize
+     a jump. This includes a click after `pointercancel`: the card may still be
+     open, but it belongs to an earlier gesture. Pen is the one deliberate
+     exception, preserving its existing one-press behaviour. */
+  if (!press) return click === "pen" ? "jump" : "reveal";
+  const finger = press.type === "touch";
+  if (bandPress(finger, armed, id) === "reveal") return "reveal";
+  return finger && press.armed !== id ? "reveal" : "jump";
+}
+
+/**
  * **Memoised, for the reason `TableView` is** — and it is the larger of the
  * two counts. performance.md's own example line reads `Spine=114 TableView=104`.
  *
@@ -402,6 +542,22 @@ function SpineInner({ outline, layoutKey, matches = NO_MATCHES, reading = NO_REA
   );
   /** The moving viewport band, written to directly rather than re-rendered. */
   const viewportBand = useRef<HTMLDivElement>(null);
+  /**
+   * The presses begun on the rail whose clicks have not arrived yet, oldest
+   * first — see `bandClick`. A queue rather than one slot because clicks may
+   * arrive grouped after several lifts, in order. A ref, because it decides a
+   * click and draws nothing. Recorded on the `<aside>` rather than on each band
+   * so that a click the platform's touch adjustment moves onto a neighbouring
+   * band still finds its own press.
+   *
+   * Kept short by three rules: a click takes its matching type (and, when the
+   * click reports it reliably, pointer id); `pointercancel` drops its own; and
+   * every `pointerdown` forgets presses older than `PRESS_MS` (a tap's click
+   * does not wait that long). Within the touch fallback, grouped clicks still
+   * consume records oldest first. A mouse is marked released at `pointerup`,
+   * so it cannot steal a delayed touch click while its button is still down.
+   */
+  const presses = useRef<QueuedRailPress[]>([]);
 
   // ---- measurement -------------------------------------------------------
   // `layoutKey` is a re-run trigger, not a value this effect reads — that is
@@ -777,6 +933,32 @@ function SpineInner({ outline, layoutKey, matches = NO_MATCHES, reading = NO_REA
          for. Revisit it as its own change if anybody asks for it — do not
          change it as a side-effect of a visual one. GPT Sol, 2026-09-06. */
       data-nav-depth={1}
+      /* What made this press, and which card it saw — the band's click reads
+         it (`bandClick`). `pointercancel` is the browser taking the press for
+         a scroll, after which no click comes. */
+      onPointerDown={(e) => {
+        const at = e.timeStamp;
+        presses.current = presses.current.filter((p) => at - p.at <= PRESS_MS);
+        presses.current.push({
+          type: e.pointerType,
+          armed: armedId,
+          pointerId: e.pointerId,
+          at,
+          releasedAt: null,
+        });
+      }}
+      onPointerUp={(e) => {
+        for (let i = presses.current.length - 1; i >= 0; i -= 1) {
+          const press = presses.current[i];
+          if (press?.pointerId === e.pointerId && press.type === e.pointerType) {
+            press.releasedAt = e.timeStamp;
+            break;
+          }
+        }
+      }}
+      onPointerCancel={(e) => {
+        presses.current = presses.current.filter((p) => p.pointerId !== e.pointerId);
+      }}
     >
       <div className="spine-track">
         {metrics.l1.map((b) => {
@@ -1101,15 +1283,19 @@ function SpineInner({ outline, layoutKey, matches = NO_MATCHES, reading = NO_REA
                    A mouse is untouched: `coarse` is false, the tooltip owns its
                    own open state, and one click still jumps. */
                 onClick={(e) => {
-                  /* `pointerType` is "touch" for a finger, "mouse" for a
-                     click, and "" for a keypress — React's click carries the
-                     native PointerEvent. Optional-chained because a synthetic
-                     click (a test, an extension) may carry no pointer at all,
-                     and the safe reading of "no pointer" is "not a finger",
-                     which jumps. */
-                  const touch =
-                    (e.nativeEvent as PointerEvent).pointerType === "touch";
-                  if (bandPress(touch, armedId, b.entry.node.id) === "reveal") {
+                  /* Finger or not is taken from this press's `pointerdown`,
+                     not from the click, because an iPad's click says "mouse"
+                     for a finger — `bandClick` has the rules. A keyboard's
+                     click ("" or detail 0) takes no record: none was made
+                     for it. */
+                  const native = e.nativeEvent as Partial<PointerEvent>;
+                  const click = native.pointerType;
+                  const press = isKeyboardClick(click, e.detail)
+                    ? null
+                    : takeRailPress(presses.current, click, native.pointerId);
+                  if (
+                    bandClick(click, e.detail, press, armedId, b.entry.node.id) === "reveal"
+                  ) {
                     setArmed({ id: b.entry.node.id, byTouch: true, outline });
                     return;
                   }

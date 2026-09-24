@@ -33,7 +33,7 @@
  */
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
-import { afterEach, beforeEach, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { Spine } from "../src/web/Spine.js";
 import type { OutlineEntry } from "../src/web/tree.js";
 import type { BlockId, NodeId, TreeNode } from "../src/types.js";
@@ -115,9 +115,9 @@ afterEach(() => {
 });
 
 /** Render the rail and let its rAF-debounced measurement run. */
-function mountSpine() {
+function mountSpine(onJump: (blockId: string) => void = () => {}) {
   act(() => {
-    root.render(<Spine outline={OUTLINE} layoutKey="test" onJump={() => {}} />);
+    root.render(<Spine outline={OUTLINE} layoutKey="test" onJump={onJump} />);
   });
   act(() => {
     vi.advanceTimersByTime(50);
@@ -344,4 +344,312 @@ it("a new article does not arrive with a card already open", () => {
     vi.advanceTimersByTime(AFTER_THE_CLOSE_DELAY);
   });
   expect(cards()).toHaveLength(0);
+});
+
+/* ------------------------------------------------- WebKit bug 282988 ----
+   On iOS 18.2 and later a finger's *click* says `pointerType: "mouse"`, while
+   the same gesture's `pointerdown` correctly says `touch`
+   (https://bugs.webkit.org/show_bug.cgi?id=282988). Reading the click, the
+   rail took every iPad tap for a mouse click and jumped on the first one, so
+   the card never opened first. The type now comes from the press recorded at
+   its own `pointerdown` (Spine.tsx § bandClick).
+   docs/plans/260924c-ipad-first-tap-on-the-rail-shows-the-card.md. */
+
+interface Fire {
+  detail?: number;
+  /** `event.timeStamp`, for the cases that depend on how old a press is. */
+  at?: number | undefined;
+  pointerId?: number;
+  /** Dispatch here instead of at the band — a finger that landed off the rail. */
+  target?: Element;
+}
+
+/** Dispatch a pointer or mouse event carrying `pointerType` (jsdom has no PointerEvent). */
+function fire(type: string, index: number, pointerType: string, o: Fire = {}) {
+  const hit = o.target ?? host.querySelectorAll<HTMLElement>(".spine-hit")[index];
+  const ev = new MouseEvent(type, { bubbles: true, cancelable: true, detail: o.detail ?? 1 });
+  Object.defineProperty(ev, "pointerType", { value: pointerType });
+  Object.defineProperty(ev, "pointerId", { value: o.pointerId ?? 1 });
+  if (o.at !== undefined) Object.defineProperty(ev, "timeStamp", { value: o.at });
+  act(() => {
+    hit?.dispatchEvent(ev);
+  });
+}
+
+/** A finger's tap as an affected iPad reports it: touch down and up, a click that says mouse. */
+function ipadTap(index: number, at?: number) {
+  fire("pointerdown", index, "touch", { at });
+  fire("pointerup", index, "touch", { at });
+  /* The mislabelled click carries the mouse's id too, presumably — see
+     tests/link-tap-escapes.test.tsx. Nothing here may match on it. */
+  fire("click", index, "mouse", { at, pointerId: 99 });
+}
+
+/** Which bands have an open card — `useRole` sets `aria-describedby` only while one is. */
+const openBands = () =>
+  [...host.querySelectorAll(".spine-hit")].map((h) => h.getAttribute("aria-describedby") !== null);
+
+it("an iPad's first tap on a band opens its card rather than jumping", () => {
+  const onJump = vi.fn();
+  mountSpine(onJump);
+  ipadTap(0);
+  expect(onJump).not.toHaveBeenCalled();
+  expect(openBands()).toEqual([true, false]);
+  expect(cards()[0]?.textContent).toContain("Tap again to go here");
+});
+
+it("an iPad's second tap on the same band goes there", () => {
+  const onJump = vi.fn();
+  mountSpine(onJump);
+  ipadTap(0);
+  ipadTap(0);
+  expect(onJump).toHaveBeenCalledTimes(1);
+  expect(onJump).toHaveBeenCalledWith("n1-a");
+});
+
+it("an iPad tap on another band re-reveals rather than jumping", () => {
+  const onJump = vi.fn();
+  mountSpine(onJump);
+  ipadTap(0);
+  ipadTap(1);
+  expect(onJump).not.toHaveBeenCalled();
+  expect(openBands()).toEqual([false, true]);
+});
+
+it("a real mouse still jumps on its first click", () => {
+  /* The control: without it, "every click reveals" would pass the cases above. */
+  const onJump = vi.fn();
+  mountSpine(onJump);
+  fire("pointerdown", 0, "mouse");
+  fire("pointerup", 0, "mouse");
+  fire("click", 0, "mouse");
+  expect(onJump).toHaveBeenCalledTimes(1);
+});
+
+it("a real mouse still jumps when hover already opened the card", () => {
+  const onJump = vi.fn();
+  mountSpine(onJump);
+  act(() => {
+    hover(0);
+    vi.advanceTimersByTime(AFTER_THE_OPEN_DELAY);
+  });
+  expect(openBands()).toEqual([true, false]);
+  fire("pointerdown", 0, "mouse");
+  fire("pointerup", 0, "mouse");
+  fire("click", 0, "mouse");
+  expect(onJump).toHaveBeenCalledTimes(1);
+  expect(onJump).toHaveBeenCalledWith("n1-a");
+});
+
+it("a real mouse still jumps when keyboard focus already opened the card", () => {
+  const onJump = vi.fn();
+  mountSpine(onJump);
+  const hit = host.querySelectorAll<HTMLElement>(".spine-hit")[0];
+  act(() => hit?.focus());
+  expect(openBands()).toEqual([true, false]);
+  fire("pointerdown", 0, "mouse");
+  fire("pointerup", 0, "mouse");
+  fire("click", 0, "mouse");
+  expect(onJump).toHaveBeenCalledTimes(1);
+  expect(onJump).toHaveBeenCalledWith("n1-a");
+});
+
+it("a mouse still jumps after a finger's click has gone missing", () => {
+  /* A hybrid device: a finger lands on the rail and lifts off it, so no click
+     and no cancel. The mouse's click that follows must be the mouse's. */
+  const onJump = vi.fn();
+  mountSpine(onJump);
+  fire("pointerdown", 0, "touch");
+  fire("pointerup", 0, "touch");
+  fire("pointerdown", 1, "mouse");
+  fire("pointerup", 1, "mouse");
+  fire("click", 1, "mouse");
+  expect(onJump).toHaveBeenCalledTimes(1);
+  expect(onJump).toHaveBeenCalledWith("n2-a");
+});
+
+it("a mouse press cannot steal a delayed finger click", () => {
+  /* A hybrid iPad can receive mouse input while WebKit's gesture recognizer
+     still owes a touch click. The finger's click arrives while the mouse is
+     down; after the mouse lifts, its own click must still jump normally. */
+  const onJump = vi.fn();
+  mountSpine(onJump);
+  fire("pointerdown", 0, "touch", { pointerId: 7 });
+  fire("pointerup", 0, "touch", { pointerId: 7 });
+  fire("pointerdown", 1, "mouse", { pointerId: 1 });
+  fire("click", 0, "mouse", { pointerId: 1 });
+  expect(onJump).not.toHaveBeenCalled();
+  expect(openBands()).toEqual([true, false]);
+  fire("pointerup", 1, "mouse", { pointerId: 1 });
+  fire("click", 1, "mouse", { pointerId: 1 });
+  expect(onJump).toHaveBeenCalledTimes(1);
+  expect(onJump).toHaveBeenCalledWith("n2-a");
+});
+
+it("a finger held down cannot steal a mouse click", () => {
+  /* Only a released pointer can have produced the click. Even though touch is
+     the newest press, the mouse is the newest release and still jumps. */
+  const onJump = vi.fn();
+  mountSpine(onJump);
+  fire("pointerdown", 1, "mouse", { pointerId: 1 });
+  fire("pointerdown", 0, "touch", { pointerId: 7 });
+  fire("pointerup", 1, "mouse", { pointerId: 1 });
+  fire("click", 1, "mouse", { pointerId: 1 });
+  expect(onJump).toHaveBeenCalledTimes(1);
+  expect(onJump).toHaveBeenCalledWith("n2-a");
+  fire("pointerup", 0, "touch", { pointerId: 7 });
+  fire("click", 0, "mouse", { pointerId: 1 });
+  expect(onJump).toHaveBeenCalledTimes(1);
+  expect(openBands()).toEqual([true, false]);
+});
+
+it("a pen still jumps after a finger press that never clicked", () => {
+  /* A reliable pen click must take its own pen record, not the oldest record
+     left by another pointer type. */
+  const onJump = vi.fn();
+  mountSpine(onJump);
+  fire("pointerdown", 0, "touch", { pointerId: 1 });
+  fire("pointerup", 0, "touch", { pointerId: 1 });
+  fire("pointerdown", 1, "pen", { pointerId: 2 });
+  fire("pointerup", 1, "pen", { pointerId: 2 });
+  fire("click", 1, "pen", { pointerId: 2 });
+  expect(onJump).toHaveBeenCalledTimes(1);
+  expect(onJump).toHaveBeenCalledWith("n2-a");
+});
+
+it("a finger cannot borrow a pen press that never clicked", () => {
+  /* On the affected iPad the finger's click says mouse, so consuming the
+     queue's oldest record without checking its type would take this for a pen
+     and jump on the finger's first tap. */
+  const onJump = vi.fn();
+  mountSpine(onJump);
+  fire("pointerdown", 0, "pen", { pointerId: 2 });
+  fire("pointerup", 0, "pen", { pointerId: 2 });
+  ipadTap(1);
+  expect(onJump).not.toHaveBeenCalled();
+  expect(openBands()).toEqual([false, true]);
+});
+
+it("a finger cannot borrow a mouse press that never clicked", () => {
+  /* A mouse press may end without a click if the pointer lifts elsewhere. The
+     touch pointerdown after it is the newest gesture, so the affected iPad's
+     `mouse` click belongs to touch rather than to that stale mouse record. */
+  const onJump = vi.fn();
+  mountSpine(onJump);
+  fire("pointerdown", 0, "mouse", { pointerId: 1 });
+  fire("pointerup", 0, "mouse", { pointerId: 1 });
+  ipadTap(1);
+  expect(onJump).not.toHaveBeenCalled();
+  expect(openBands()).toEqual([false, true]);
+});
+
+it("a keyboard press after a finger that never clicked still jumps", () => {
+  /* Enter on a band is a keyboard's press (`pointerType` ""), whatever a
+     finger left behind, and a keyboard jumps. */
+  const onJump = vi.fn();
+  mountSpine(onJump);
+  fire("pointerdown", 0, "touch");
+  fire("click", 0, "", { detail: 0 });
+  expect(onJump).toHaveBeenCalledTimes(1);
+});
+
+it("a press the browser cancelled for a scroll does not cost the next tap", () => {
+  /* Had the cancelled press stayed queued, the next tap's click would take it
+     for its own, and the tap after that would take the first tap's record —
+     which began with no card open — so the second tap would reveal again. */
+  const onJump = vi.fn();
+  mountSpine(onJump);
+  fire("pointerdown", 0, "touch");
+  fire("pointercancel", 0, "touch");
+  ipadTap(0);
+  ipadTap(0);
+  expect(onJump).toHaveBeenCalledTimes(1);
+});
+
+it("a press too old to still be waiting for its click is forgotten", () => {
+  const onJump = vi.fn();
+  mountSpine(onJump);
+  fire("pointerdown", 0, "touch", { at: 1_000 }); // lifted off the rail: no click, no cancel
+  ipadTap(1, 5_000);
+  ipadTap(1, 5_500);
+  expect(onJump).toHaveBeenCalledTimes(1);
+  expect(onJump).toHaveBeenCalledWith("n2-a");
+});
+
+it("a click after a cancel, with no press of its own, reveals rather than jumping", () => {
+  /* Whatever the click says: on an iPad it says `mouse` for a finger, and a
+     real mouse always has a press on the rail. GPT Sol, plan review F1. */
+  const onJump = vi.fn();
+  mountSpine(onJump);
+  fire("pointerdown", 0, "touch");
+  fire("pointercancel", 0, "touch");
+  fire("click", 0, "mouse", { pointerId: 99 });
+  expect(onJump).not.toHaveBeenCalled();
+  expect(openBands()).toEqual([true, false]);
+});
+
+it("a cancelled second tap cannot spend the card opened by the first", () => {
+  /* The missing half of the case above: the click has no press of its own, so
+     even an already-open card cannot authorize it. Otherwise a cancel followed
+     by the click WebKit sometimes still sends turns a cancelled gesture into a
+     jump. GPT Sol, plan review F1. */
+  const onJump = vi.fn();
+  mountSpine(onJump);
+  ipadTap(0);
+  fire("pointerdown", 0, "touch");
+  fire("pointercancel", 0, "touch");
+  fire("click", 0, "mouse", { pointerId: 99 });
+  expect(onJump).not.toHaveBeenCalled();
+  expect(openBands()).toEqual([true, false]);
+});
+
+it("a finger that landed beside the rail and was moved onto a band reveals first", () => {
+  /* Touch adjustment: the pointer events land on what is under the finger —
+     here the table beside the 12px rail — and the click on the band WebKit
+     judged it meant. The rail saw no press. GPT Sol, plan review F2. */
+  const onJump = vi.fn();
+  mountSpine(onJump);
+  const beside = table.querySelector("td") as Element;
+  fire("pointerdown", 0, "touch", { target: beside });
+  fire("pointerup", 0, "touch", { target: beside });
+  fire("click", 0, "mouse", { pointerId: 99 });
+  expect(onJump).not.toHaveBeenCalled();
+  expect(openBands()).toEqual([true, false]);
+  /* A second tap that lands on the band goes there. (One that lands beside
+     the rail again re-reveals instead: its `pointerdown` outside the band is
+     an outside press, and `useDismiss` closes the card before the click — as
+     it always has, on any touch device. Not changed here.) */
+  ipadTap(0);
+  expect(onJump).toHaveBeenCalledTimes(1);
+});
+
+describe("clicks that arrive grouped after several lifts", () => {
+  /* The Pointer Events spec lets compatibility clicks arrive late and
+     together, in order. The first click's reveal must not become the second
+     click's permission to jump. GPT Sol, plan review F1. */
+  it("two quick taps on two bands reveal the second and jump to neither", () => {
+    const onJump = vi.fn();
+    mountSpine(onJump);
+    fire("pointerdown", 0, "touch");
+    fire("pointerup", 0, "touch");
+    fire("pointerdown", 1, "touch");
+    fire("pointerup", 1, "touch");
+    fire("click", 0, "mouse", { pointerId: 99 });
+    fire("click", 1, "mouse", { pointerId: 99 });
+    expect(onJump).not.toHaveBeenCalled();
+    expect(openBands()).toEqual([false, true]);
+  });
+
+  it("a quick double tap on one band shows its card and does not jump blind", () => {
+    const onJump = vi.fn();
+    mountSpine(onJump);
+    fire("pointerdown", 0, "touch");
+    fire("pointerup", 0, "touch");
+    fire("pointerdown", 0, "touch");
+    fire("pointerup", 0, "touch");
+    fire("click", 0, "mouse", { pointerId: 99 });
+    fire("click", 0, "mouse", { pointerId: 99 });
+    expect(onJump).not.toHaveBeenCalled();
+    expect(openBands()).toEqual([true, false]);
+  });
 });

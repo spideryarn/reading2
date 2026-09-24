@@ -681,10 +681,12 @@ export function QuotesPanel({
         </>
       }
       /* Pinned under the list rather than at the end of it. Same guard it had
-          as a trailing child of the band — and **not on a stale list**, whose
-          banner offers the one honest action there, a list of its own. */
+          as a trailing child of the band — and **not on a stale or an outdated
+          list**, whose banner offers the one honest action there, a list of its
+          own. On an outdated list Find more would not even be what it says: the
+          forced run it sends is a rewrite there (src/quotes.ts § existingFor). */
       foot={
-        quotes && owner?.status === "ready" && owner.quotes && !owner.stale ? (
+        quotes && owner?.status === "ready" && owner.quotes && !owner.stale && !owner.outdated ? (
           <Foot list={owner.quotes} running={owner.job !== null || owner.starting} findMore={findMore} />
         ) : null
       }
@@ -738,13 +740,19 @@ export function QuotesPanel({
               differently now*, which is what bumping `PROMPT_VERSION` means.
               Stale wins when both are true; two banners stacked is a wall.
 
-              **Only the stale banner has a button since 2026-09-11.** A moved
-              article is the one state where extending the list is impossible
-              and replacing it is the honest action, so *Choose them again*
-              survives there and nowhere else. An outdated list is extended by
-              Find more in the foot — which appends lines chosen by the current
-              prompt and keeps every one the reader has — so the banner says so
-              rather than offering a second button that would throw them away. */}
+              **Both banners carry *Choose them again*, and neither list gets
+              Find more.** Greg removed the button from a *current* list on
+              2026-09-11 (*"Remove the "Choose them again" button, and add a
+              "Find more" button"*), and it survived on the stale banner, where
+              extending the list is impossible. From 2026-09-11 to 2026-09-24 an
+              outdated list was extended by Find more instead; but `quotes/6`
+              changed what a quote is — a passage long enough to stand alone —
+              and an append cannot lengthen an old short quote, because the old
+              span wins every overlap. So an outdated list is the other state
+              where a list of its own is the honest action, and the forced run
+              this button sends rewrites it (src/quotes.ts § existingFor),
+              keeping the id of any quote chosen again in exactly its words.
+              SPIDERYARN-READING2-3C; docs/plans/260924d-choose-them-again-on-an-outdated-quote-list.md. */}
           {owner?.stale ? (
             <div className="quotes-stale">
               <p>
@@ -758,16 +766,14 @@ export function QuotesPanel({
             <div className="quotes-stale">
               <p>
                 <TriangleAlert size={13} />
-                {/* **"Include", so the sentence is true of a mixed list.** A
-                    Find more on an outdated list keeps its older stamp
-                    (src/quotes.ts § buildQuotes), so this banner stays up over
-                    a list that is part old and part new — and "these were
-                    chosen by an earlier version" would then be false of the
-                    new part. "Include" is true whether some or all of them
-                    were. */}
-                These include lines chosen by an earlier version of the prompt. Find more uses the
-                current one, and keeps these.
+                {/* **"Include", so the sentence is true of a mixed list** —
+                    the lists a Find more appended to between 2026-09-11 and
+                    2026-09-24 kept their older stamp, and are part old and
+                    part new. */}
+                These include lines chosen by an earlier version of the prompt. Choosing them again
+                replaces this list with one the current prompt chooses.
               </p>
+              {rerun("Choose them again", true)}
             </div>
           ) : null}
 

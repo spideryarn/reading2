@@ -36,6 +36,7 @@ import { isStale } from "../search-stale.js";
 import { describeFetchFailure } from "./useComments.js";
 import { readEvents, STREAM_STALL_MS } from "./lib/sse.js";
 import { apiFetch, failure, fetchOk } from "./lib/api.js";
+import { ReaderFacingError } from "./lib/reader-facing.js";
 import { openingRead } from "./lib/opening-read.js";
 
 /**
@@ -400,7 +401,7 @@ export function useSearch(slug: string): SearchApi {
              src/routes.ts § search. Anything else ending silently is a
              dropped connection, the same failure useComments.ts guards. */
           if (!settled && !deleted.current.has(liveId)) {
-            throw new Error("The search stopped arriving. Try again.");
+            throw new ReaderFacingError("The search stopped arriving. Try again.");
           }
         } catch (e) {
           if (deleted.current.has(liveId)) return;

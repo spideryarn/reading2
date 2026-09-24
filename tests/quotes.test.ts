@@ -495,7 +495,18 @@ describe("buildQuotes", () => {
   });
 
   it("does not hand one old id to two fresh quotes", () => {
-    const article = [block("spya-jjjjjj", FIRST), block("spya-kkkkkk", FIRST)];
+    /* NFKC makes full-width Latin text the same inheritance key as ASCII,
+       while `place` locates the two occurrences separately. This reaches the
+       `used` guard: two identical raw suggestions would overlap at the first
+       occurrence and be deduplicated before ids were inherited. */
+    const fullWidth = [...FIRST]
+      .map((character) =>
+        character === " "
+          ? character
+          : String.fromCodePoint(character.codePointAt(0)! + 0xfee0),
+      )
+      .join("");
+    const article = [block("spya-jjjjjj", `${FIRST} ${fullWidth}`)];
     const previous: Quotes = {
       version: PROMPT_VERSION,
       generator: CAPABLE_MODEL,
@@ -506,14 +517,42 @@ describe("buildQuotes", () => {
       generatedAt: "2026-08-31T00:00:00.000Z",
       elapsedMs: 1,
     };
-    const built = buildQuotes({ quotes: [{ text: FIRST }, { text: FIRST }] }, {
+    const built = buildQuotes({ quotes: [{ text: FIRST }, { text: fullWidth }] }, {
       ...opts,
       blocks: article,
       dropped: drops(),
       inherit: idsByText(previous),
     });
     const ids = built.quotes.map((q) => q.id);
+    expect(built.quotes).toHaveLength(2);
+    expect(ids).toContain("spya-oldold");
     expect(new Set(ids).size).toBe(ids.length);
+  });
+
+  it("does not move a bookmark to the same words in a DIFFERENT block", () => {
+    /* GPT Sol, 260924d F2: the same sentence in two blocks, the old quote on the
+       second. `locate` finds the first, so a text-only key would hand the id to
+       the other occurrence and the deep link would jump somewhere else. */
+    const article = [block("spya-jjjjjj", FIRST), block("spya-kkkkkk", FIRST)];
+    const previous: Quotes = {
+      version: "quotes/3",
+      generator: CAPABLE_MODEL,
+      slug: "writes",
+      sourceHash: "hash-1",
+      quotes: [{ id: "spya-oldold", blockId: "spya-kkkkkk", text: FIRST }],
+      discarded: noneDropped(),
+      generatedAt: "2026-08-31T00:00:00.000Z",
+      elapsedMs: 1,
+    };
+    const built = buildQuotes({ quotes: [{ text: FIRST }] }, {
+      ...opts,
+      blocks: article,
+      dropped: drops(),
+      inherit: idsByText(previous),
+    });
+    expect(built.quotes).toHaveLength(1);
+    expect(built.quotes[0]?.blockId).toBe("spya-jjjjjj");
+    expect(built.quotes[0]?.id).not.toBe("spya-oldold");
   });
 });
 

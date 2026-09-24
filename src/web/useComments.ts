@@ -18,13 +18,20 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { anchorFields, type BlockId, type Comment, type CommentAnchor } from "../types.js";
 import { readEvents, StreamStalled, STREAM_STALL_MS } from "./lib/sse.js";
-import { wentQuiet } from "../messages.js";
+import { PAGE_FAULT, wentQuiet } from "../messages.js";
 import { apiFetch, failure, fetchOk, readJson } from "./lib/api.js";
+import { isUnreachable, ReaderFacingError } from "./lib/reader-facing.js";
+import { captureClientFailure } from "./monitoring.js";
 import { openingRead } from "./lib/opening-read.js";
 import type { Mark } from "./PlaceOnCriterion.js";
 
 /**
- * What to say when the request never reached the server.
+ * The sentence a reader sees for a caught failure — and only three kinds of
+ * error get to choose it: a stalled stream, a lost connection our helpers
+ * marked as one, and a `ReaderFacingError` (the server's own `{ error }`, or a
+ * sentence the client wrote for a reader). Anything else gets `PAGE_FAULT` and
+ * is reported, because its words were never written for a reader — see
+ * src/web/lib/reader-facing.ts and docs/project/copy.md.
  *
  * `fetch` rejects with a bare `TypeError: Failed to fetch` for every
  * transport-level failure — server down, connection reset, request cut off
@@ -45,11 +52,27 @@ export function describeFetchFailure(error: Error): string {
      `catch` blocks, because a raw class message reaching a reader is exactly the
      kind of thing that only shows up when the failure does. */
   if (error instanceof StreamStalled) return wentQuiet(error.seconds).message;
-  // A TypeError from fetch means the request never got a response at all; an
-  // Error we threw ourselves already carries a real message from the server.
-  return error instanceof TypeError
-    ? `Couldn't reach the dev server — is \`npm run dev\` still running? (${error.message})`
-    : error.message;
+  /* A lost connection, but only one our own helpers **saw** come out of the
+     transport — `apiFetch`, `readJson`, `readEvents` mark it there. Not "any
+     `TypeError`": every JavaScript bug is one of those too, and telling a
+     reader "couldn't reach the server" over `Cannot read properties of
+     undefined` is a false claim with the bug's text in brackets. */
+  if (isUnreachable(error)) {
+    return `Couldn't reach the dev server — is \`npm run dev\` still running? (${error.message})`;
+  }
+  /* A sentence somebody here wrote for a reader — the server's own `{ error }`
+     (`HttpError`), or one the client wrote at the throw site. The class is the
+     claim; see src/web/lib/reader-facing.ts. */
+  if (error instanceof ReaderFacingError) return error.message;
+  /* Anything else is an exception nobody wrote for a reader: React's own
+     `Minified React error #185` reached one here on 2026-09-12, printed as a
+     chat answer's failure after the server had finished it. Its words go to the
+     console and to Sentry (whose scrubber withholds an unauthored message);
+     the reader gets the page's own sentence.
+     docs/plans/260924a-only-a-sentence-the-server-wrote-reaches-the-reader.md */
+  console.error("[describeFetchFailure] an exception with no reader-facing sentence", error);
+  captureClientFailure(error, { where: "describeFetchFailure" }, { neverAuthored: true });
+  return PAGE_FAULT.message;
 }
 
 /**
@@ -524,7 +547,7 @@ export function useComments(slug: string): CommentsApi {
              `pending` is a spinner that never stops. Chat learned this the same
              way; see the `!finished` guard in useChat.ts. */
           if (!settled && !deleted.current.has(id)) {
-            throw new Error("The answer stopped arriving. Try again.");
+            throw new ReaderFacingError("The answer stopped arriving. Try again.");
           }
         } catch (e) {
           if (deleted.current.has(id)) return;

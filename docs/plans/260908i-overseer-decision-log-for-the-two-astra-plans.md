@@ -846,3 +846,12 @@ fetched preview to stop for); **the reading view's logo** tap still goes home (a
 everyone two taps home; a hold plays one); **the search score card** keeps its fuller passage (Greg
 asked where it opens from, not what it holds). Each is recorded in its note and in
 [awaiting-approval.md](../user-feedback/awaiting-approval.md), under *Answered 2026-09-24*.
+
+### 2026-09-24 03:20 — feedback authority widened, by Greg
+
+Greg approved a minimal runbook update giving the Overseer more judgement over how feedback work is
+started, split, briefed and signed off, and restated that his own reports carry a direct prompt's
+authority while a reader's need more scrutiny and usually his approval. Written into
+[overseer.md § 2](../project/overseer.md#2-answer-facts-route-judgement-default-the-product-call) as
+one bullet with his words. feedback-reports.md left untouched, so the standing-jobs pin is not moved
+a second time.

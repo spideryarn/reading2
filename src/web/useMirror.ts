@@ -35,6 +35,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 
 import type { MirrorResult } from "../referee-mirror-types.js";
 import { apiFetch, failure } from "./lib/api.js";
+import { ReaderFacingError } from "./lib/reader-facing.js";
 import { readEvents, STREAM_STALL_MS } from "./lib/sse.js";
 import { describeFetchFailure } from "./useComments.js";
 
@@ -103,11 +104,11 @@ async function readRun(
       ) {
         return data as MirrorResult;
       }
-      throw new Error("The run finished with an answer this page could not read. Try again.");
+      throw new ReaderFacingError("The run finished with an answer this page could not read. Try again.");
     }
     if (event.name === "error") {
       const message = (event.data as { error?: unknown }).error;
-      throw new Error(
+      throw new ReaderFacingError(
         typeof message === "string" && message
           ? message
           : "The run stopped before it was finished.",
@@ -117,7 +118,7 @@ async function readRun(
   /* **The case a mocked complete transcript cannot reach.** The body ended
      cleanly with no terminal frame in it — a provider that stopped, an instance
      that was killed, a proxy that closed. */
-  throw new Error("The run stopped arriving before it was finished. Nothing was lost — try again.");
+  throw new ReaderFacingError("The run stopped arriving before it was finished. Nothing was lost — try again.");
 }
 
 const url = (slug: string) => `/api/referee/mirror/${encodeURIComponent(slug)}`;

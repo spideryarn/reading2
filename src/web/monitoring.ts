@@ -158,11 +158,19 @@ export function setClientMonitoringUser(user: { id: string; email?: string } | n
   }
 }
 
-/** Report a failure the app caught itself — the error boundary, chiefly. */
-export function captureClientFailure(err: unknown, context?: Fields): void {
+/**
+ * Report a failure the app caught itself — the error boundary, chiefly.
+ *
+ * `neverAuthored` withholds the message whatever it ends in — see `sanitise`.
+ */
+export function captureClientFailure(
+  err: unknown,
+  context?: Fields,
+  options?: { neverAuthored?: boolean },
+): void {
   try {
     if (!started) return;
-    const { error, withheld, props } = sanitise(err);
+    const { error, withheld, props } = sanitise(err, options);
     withScope((scope) => {
       scope.setTag("message_withheld", withheld);
       for (const [key, value] of Object.entries({ ...props, ...context })) {

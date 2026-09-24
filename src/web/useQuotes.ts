@@ -17,8 +17,9 @@
  * lines worth keeping and running the step again already *is* "choose them
  * again". **Since then a forced run appends**, as the glossary's does — Greg
  * asked twice for *Find more* (src/quotes.ts § existingFor) — and replaces only
- * a list the article has moved out from under. Still no DELETE route and no
- * `reset`: the one way to a list of its own is the stale banner's button.
+ * a list the article has moved out from under or (since 2026-09-24) an older
+ * prompt chose. Still no DELETE route and no `reset`: the one way to a list of
+ * its own is those two banners' button.
  *
  * **Two verbs since 2026-09-02** — `ensure` and `regenerate` — and the split is
  * `force` rather than append: see useIdeas.ts, which made the same change for
@@ -168,9 +169,10 @@ export interface UseQuotes {
   /**
    * **The forced run, and the stage decides what it does** — the glossary's
    * `more`, one verb for two buttons since 2026-09-11. On a list written from
-   * this same article it **appends** (*Find more*, in the foot); on one the
-   * article has moved out from under it replaces (*Choose them again*, on the
-   * stale banner, the one place that label survives). src/quotes.ts §
+   * this same article by the current prompt it **appends** (*Find more*, in
+   * the foot); on one the article has moved out from under, or an older prompt
+   * chose, it replaces (*Choose them again*, on the stale and outdated banners,
+   * the two places that label survives). src/quotes.ts §
    * existingFor. Forced because an unforced run on a current list would skip;
    * `quotes` is in FORCE_ONLY_WHEN_NAMED with `useStepJob` naming the step.
    *

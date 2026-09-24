@@ -135,7 +135,8 @@ older version of the piece
 the file picker in the browser refusing before anything is sent, which is the distinction that
 matters when somebody quotes one at you
 ([ingest-queue.md § Uploading a PDF](ingest-queue.md#uploading-a-pdf)). `pdf-` is a document the
-pipeline could not read: too long, locked, or damaged.
+pipeline could not read: too long, locked, or damaged. `web-` is the page in the reader's browser
+failing on its own account — `[web-unexpected]`, below.
 
 **The `mic-` family is the exception to the paragraph after next**, and worth
 knowing about before you go looking for it in `src/messages.ts`: it is not there.
@@ -411,6 +412,50 @@ distinguishing fact is a typed abort reason rather than a matched sentence,
 because copy stays freely rewritable and a message match would quietly stop
 working when somebody rewrote one — [`src/jobs.ts`](../../src/jobs.ts) §
 `DeadlineReached`.
+
+### The same seam in the browser
+
+The client has one place that turns a caught failure into the sentence a reader
+sees — `describeFetchFailure` in [`useComments.ts`](../../src/web/useComments.ts),
+used by comments, chat, search, criteria, claims, the mirror and the source scan
+— and until 2026-09-24 it had the pipeline's old shape: any `Error`'s message
+went through, on a comment's word that "an Error we threw ourselves already
+carries a real message from the server". On 2026-09-12 React's own *"Minified
+React error #185"* reached a reader that way as a chat answer's failure, after
+the server had finished the answer
+([the report](../user-feedback/260912_1120-question-answer-replaced-by-react-error-185.md)).
+
+So it is split the same way, by **declaring at the throw site**, never by
+recognising afterwards
+([`lib/reader-facing.ts`](../../src/web/lib/reader-facing.ts)):
+
+- **`ReaderFacingError`** is the claim that a reader was meant to read this.
+  `HttpError` extends it — the server's own `{ error }` — and so does every
+  sentence the client writes for a reader inside those flows ("The answer
+  stopped arriving. Try again."). Constructing one around anybody else's text
+  is the one way to break this.
+- **A lost connection is marked where it happens** — the `fetch` in `apiFetch`,
+  the body read in `readJson`, the stream read in `readEvents` — rather than
+  inferred from `TypeError`, which is also what every JavaScript bug throws.
+- **Anything else gets `PAGE_FAULT`** (`[web-unexpected]`, kind `bug`), which
+  says the page is at fault, not necessarily the server, and that reloading
+  shows what did get saved. The exception goes to the console and to Sentry with
+  its message withheld whatever it ends in (`neverAuthored` on `sanitise`).
+
+A bare `throw new Error("…")` written for a reader in one of those hooks now
+reaches them as `PAGE_FAULT`. That is the cost, and the fix is one word at the
+throw site; `tests/describe-fetch-failure.test.ts` refuses one in any file that
+calls `describeFetchFailure`.
+
+**What this cannot see is the server's half.** The client trusts the server's
+two reader channels — the `{ error }` of a refused request and the `error` frame
+of a stream — as sentences for a reader, because that is what they are for. The
+JSON one is held to it by the last-resort catch (`UNEXPECTED_FAILURE`). The
+stream ones are not yet: five streaming routes in
+[`src/routes.ts`](../../src/routes.ts) send `(err as Error).message` in their
+`error` frame, so an unclassified exception after the headers — a bare
+`TypeError("fetch failed")` in the mirror, say — still reaches a reader verbatim.
+Open, and a server change (GPT Sol, code review F5 on the plan above). [The plan](../plans/260924a-only-a-sentence-the-server-wrote-reaches-the-reader.md).
 
 ## The words on the one control that cannot be undone
 

@@ -556,7 +556,8 @@ The loop that made Greg choose a button in the first place —
 the request goes out. The two verbs exist for the same reason: `ensure` is unforced and is what
 **both** the automatic run and the empty state's button call, because `work_key` is computed from the
 request and two keys are two paid jobs; `regenerate` is forced and is **Find more** beside a
-result that is already there — and, on a stale one, *Choose them again* (§ Find more appends).
+result that is already there — and, on a stale or outdated one, *Choose them again* (§ Find more
+appends).
 [`src/web/useAutoRun.ts`](../../src/web/useAutoRun.ts).
 
 An automatic run uses the reader's profile, as does *Choose them again*; only **Find more** asks in
@@ -570,7 +571,7 @@ the *Using your profile* sentence an automatic run showed in its place, were rem
 returns it as `parts`. A step that wrote `<dir>/quotes.json` inside `run`
 works on a laptop and cannot work through a store that puts the artefact in a Postgres column.
 
-### Find more appends. Only a stale list is replaced.
+### Find more appends. Only a stale or outdated list is replaced.
 
 **Since 2026-09-11.** Until then it replaced, on the ideas' reasoning that a piece has a dozen
 quotable lines and running the step again already *is* "choose them again". Greg asked for the
@@ -585,15 +586,31 @@ appends or replaces**, and `existingFor` in [src/quotes.ts](../../src/quotes.ts)
 | previous list | a forced run |
 |---|---|
 | none | writes a list of its own |
-| written from this same article | **appends**: every quote keeps its words, scores and id; the model gets the taken lines as *already on the list* and is asked for up to `count` more; a new line overlapping an existing one is dropped, whatever its length |
-| the article has moved since | **replaces**, and mints every id fresh — an id carried across would point a reader's `?quote=` link at words from a different version of the piece |
+| written from this same article by the current prompt | **appends**: every quote keeps its words, scores and id; the model gets the taken lines as *already on the list* and is asked for up to `count` more; a new line overlapping an existing one is dropped, whatever its length |
+| written from this same article by an **older prompt** (*outdated*) | **replaces**, stamped current; a quote chosen again in **exactly** its words (after `normaliseQuote`) **in the same block** keeps its id, every other id is fresh |
+| the article has moved since (*stale*) | **replaces**, and mints every id fresh — an id carried across would point a reader's `?quote=` link at words from a different version of the piece |
 
-**Two conditions the glossary has and this does not, both deliberate, and both made honest at the
-stamp rather than by refusing.** A list from an **older prompt version** is appended to — refusing
-would make the first Find more on every list written before `quotes/4` silently replace it — and
-**keeps its older `version`**, because most of it still is the older prompt's choosing. So it stays
-*outdated*, and the banner says *"These include lines chosen by an earlier version of the prompt"*,
-true whether some or all of them were. A **different profile** is appended to as well: Find more
+**An outdated list is rewritten, since 2026-09-24** (SPIDERYARN-READING2-3C, decided on Greg's
+delegated authority; [260924d](../plans/260924d-choose-them-again-on-an-outdated-quote-list.md)).
+From 2026-09-11 it was appended to under its older stamp, so that the first Find more on every list
+written before `quotes/4` would not silently replace it. Then `quotes/6` changed what a quote *is* —
+a passage long enough to stand on its own — and an append cannot deliver that: the old short span
+wins every overlap, so the longer version of it is dropped (GPT Sol, 260912e finding 1). So an
+outdated list is the second state, beside a stale one, where a list of its own is the honest action.
+Its banner carries *Choose them again* and the foot, Find more included, is not drawn — on that list
+Find more would send a rewrite under an append's name. **What the reader gave up**: an outdated list
+can no longer be extended in place, and today that is every list written before `quotes/6`. The
+alternative — both buttons, and a request field saying which — was passed over as a second mechanism
+beside the state-decided one, for the privilege of appending to a list appending cannot fix.
+`isOutdated` is the one predicate: the read path's `outdated` and `existingFor` both call it, so
+within one build the banner and the branch cannot disagree. It means **older**, not different — a
+newer or unparseable version counts as current, so a rollback never rewrites a newer list with an
+older prompt. **Across a deploy they can disagree**, and that was accepted: a prompt bump landing
+while a Find more is queued turns it into a rewrite, which is the exposure a stale list has always
+had (an article re-extracted between click and run). Closing it needs the verb in the request —
+260924d § GPT Sol's plan review, F1.
+
+**A different profile does not refuse, made honest at the stamp rather than by refusing.** Find more
 sends the list's own profile setting and the artefact keeps the `profileHash` of the pass that
 started it, so the only way two profiles' choices meet in one list is a reader who changed or
 deleted theirs since — the one state where the badge already says the list was written for a
@@ -612,16 +629,21 @@ counts the runs; `discarded` and `elapsedMs` accumulate across them. The list is
 left, at the ceiling no call is made, and the foot says so instead of offering the button.
 
 **What the reader gave up** is a whole rewrite of a current list, including one for a new profile —
-*Choose them again* was the only way to throw a current list away. It survives on the **stale**
-banner alone, the one state where extending is impossible and a list of its own is the honest
-action.
+*Choose them again* was the only way to throw a current list away. It survives on the **stale** and
+**outdated** banners, the two states where extending cannot give the reader what the current prompt
+would.
 
-**Id inheritance has no production caller any more.** `idsByText` gave a fresh quote the id the old
-artefact used for the same words — but only on a rewrite of an *unmoved* list, and an unmoved list is
-now always appended to, which keeps every id outright. It stays in `buildQuotes`, tested, for the day
-a same-article rewrite returns. Deliberately conservative when it does run — a sentence returned with
-one more clause is a different key and gets a new id. A dead `?quote=` opens the list; a wrongly
-inherited one opens somebody else's words wearing the reader's bookmark.
+**Ids on the outdated rewrite are inherited by exact words, and nowhere else.** This is the
+same-article rewrite `idsByText` was kept for. The article has not moved, so an old quote's words are
+still where they were, and a quote the current prompt chooses again in exactly those words is the
+passage the reader's `?quote=` bookmark named. Most will not match — `quotes/6` chooses longer
+passages — and those links go dead, which opens the list with nothing selected. **A longer passage
+containing the old words does not inherit**: that would send a bookmark on one sentence to a
+paragraph the reader never chose, and "contains" can admit several candidates where exact admits one.
+A dead `?quote=` opens the list; a wrongly inherited one opens somebody else's words wearing the
+reader's bookmark. **The key includes the block id**, because the same sentence can occur in two
+blocks and `locate` takes the first — a text-only key would move a bookmark on the second to the
+first. A stale rewrite inherits nothing, for the reason in the table.
 
 ### Freshness
 
@@ -720,9 +742,9 @@ wrong — but worth knowing.
   sentences (median 148 → 169). The reframing took it to 202–255 over two samples, with whole
   paragraphs still rare. The prompt states the constants rather than its own numbers, and the answer's
   token allowance is computed from the ceiling at one token a character (`answerTokensFor`). **Old
-  lists keep their short quotes**: Find more's taken spans win every overlap, so it cannot lengthen
-  them — whether to offer an outdated list a rewrite is Greg's
-  ([awaiting-approval.md](../user-feedback/awaiting-approval.md)). One article, three samples;
+  lists keep their short quotes until the reader presses *Choose them again***: Find more's taken
+  spans win every overlap, so it cannot lengthen them, and since 2026-09-24 an outdated list is
+  offered the rewrite instead (§ Find more appends). Nothing rewrites one unasked. One article, three samples;
   [260912e](../plans/260912e-quotes-long-enough-to-stand-on-their-own.md). **Longer quotes mark more
   of the prose**, which makes the density point below more pressing — and make the known gap likelier:
   text inside `<svg>` or `<math>` is counted but not wrapped (`annotateHtml`), so a quote crossing a

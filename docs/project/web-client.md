@@ -471,10 +471,14 @@ and there should not be one — [logging.md](logging.md) is about the server, an
 browser already has a console — but before this, nothing reached it at all.
 [`tests/web-api.test.ts`](../../tests/web-api.test.ts) pins the real bodies.
 
-`describeFetchFailure` in [`useComments.ts`](../../src/web/useComments.ts) is the
-neighbouring case and stays where it is: it names the failure where the request
-never got a *response at all*, which is a different thing from a response that
-says no.
+`describeFetchFailure` in [`useComments.ts`](../../src/web/useComments.ts) is
+where a caught failure becomes the sentence a reader sees, for the seven files
+that use it — a refusal from here, a request that never got a response at all, a
+stream that stalled, or something else entirely. It passes a caught error's words
+through only when the error says a reader was meant to read them — a
+`ReaderFacingError` (`HttpError` is one), or a lost connection this file and
+`lib/sse.ts` marked as one — and gives anything else the page's own sentence;
+[copy.md § The same seam in the browser](copy.md#the-same-seam-in-the-browser).
 
 ### A write nobody reads the answer to
 

@@ -58,7 +58,7 @@
  * cache-compatible with the glossary (src/models.ts § ARTICLE_RENDERER —
  * compatible, and only a saving inside one job; see `cacheArticle` below).
  *
- * ## It appends, since 2026-09-11 — and replaces only a list the article left
+ * ## It appends, since 2026-09-11 — and replaces a stale or an outdated list
  *
  * From 2026-08-31 it replaced, on the ideas' reasoning that a piece has a
  * dozen quotable lines and running the step again already *is* "choose them
@@ -68,11 +68,14 @@
  * **extends** it: every quote the reader has keeps its words, its scores and
  * its id, and the model is asked for more, with the taken lines listed. That is
  * the glossary's shape (src/glossary.ts § existingFor), reused rather than
- * reinvented, with one deliberate difference — see `existingFor` below. A list
- * the article has moved out from under is still replaced, with every id minted
- * fresh so a reader's `?quote=` link cannot silently move to changed words.
+ * reinvented. A list the article has moved out from under is still replaced,
+ * with every id minted fresh so a reader's `?quote=` link cannot silently move
+ * to changed words; and since 2026-09-24 so is a list an older prompt chose,
+ * keeping only the ids of quotes chosen again in exactly their words — see
+ * `existingFor` below.
  *
- * See docs/plans/260911a-quotes-find-more-and-a-fade-that-carries-priority.md,
+ * See docs/plans/260924d-choose-them-again-on-an-outdated-quote-list.md,
+ * docs/plans/260911a-quotes-find-more-and-a-fade-that-carries-priority.md,
  * docs/plans/260831j-quotes-mode.md and docs/project/quotes.md.
  */
 
@@ -127,7 +130,8 @@ import type { ArtifactStore } from "./store/artifacts.js";
  * every line it has: a Find more on it appends lines chosen by this prompt, and
  * **the list keeps its older stamp**, because most of it still is the older
  * prompt's choosing — so it stays *outdated*, and says it includes such lines
- * (`existingFor`, `buildQuotes`). A stale list is replaced and stamped afresh.
+ * (`buildQuotes`). A stale list is replaced and stamped afresh. (Since
+ * 2026-09-24 an outdated list is replaced too — `existingFor`.)
  *
  * **`quotes/5`, 2026-09-11: one point, one quote.** Greg, SPIDERYARN-
  * READING2-2X: *"slightly emphasise diversity (i.e. to avoid ending up with
@@ -873,8 +877,17 @@ export function normaliseQuote(value: string): string {
 }
 
 /**
- * The ids the previous artefact used, by normalised quote — so a rewrite keeps
- * the reader's `?quote=` links pointing at the same words.
+ * The ids the previous artefact used, by **block and** normalised quote — so a
+ * rewrite keeps the reader's `?quote=` links pointing at the same words in the
+ * same place.
+ *
+ * **The block is part of the key**, because the same sentence can occur in two
+ * blocks and `locate` takes the first: a text-only key would hand a quote on
+ * the second occurrence's id to the first, and the deep link would jump
+ * somewhere the reader did not bookmark (GPT Sol, 260924d F2). Block ids are
+ * safe to compare here because the only caller is a rewrite of an unmoved
+ * article. Two occurrences inside one block are not told apart — rare enough,
+ * and the words and the paragraph are then the same.
  *
  * **Names are display; ids are identity.** The prose of a quote is the
  * author's, so unlike a glossary entry it does not get rewritten between runs —
@@ -886,17 +899,23 @@ export function normaliseQuote(value: string): string {
 export function idsByText(onDisk: Quotes | null): Map<string, string> {
   const out = new Map<string, string>();
   for (const quote of onDisk?.quotes ?? []) {
-    const key = normaliseQuote(quote.text);
-    if (key && !out.has(key)) out.set(key, quote.id);
+    const text = normaliseQuote(quote.text);
+    const key = inheritKey(quote.blockId, text);
+    if (text && !out.has(key)) out.set(key, quote.id);
   }
   return out;
+}
+
+/** A block id never contains a colon (`spya-k3m9qt`), so the key is unambiguous. */
+function inheritKey(blockId: string, normalised: string): string {
+  return `${blockId}:${normalised}`;
 }
 
 function inheritIds(fresh: Quote[], inherit: Map<string, string> | null): Quote[] {
   if (!inherit || inherit.size === 0) return fresh;
   const used = new Set<string>();
   return fresh.map((quote) => {
-    const old = inherit.get(normaliseQuote(quote.text));
+    const old = inherit.get(inheritKey(quote.blockId, normaliseQuote(quote.text)));
     /* `used`, because two fresh quotes can normalise to one old key and an id
        handed out twice is worse than a new one — `?quote=` would then address
        whichever the panel happened to find first. */
@@ -908,25 +927,25 @@ function inheritIds(fresh: Quote[], inherit: Map<string, string> | null): Quote[
 
 /**
  * The list a forced run **appends to**, or null for a run that writes a list
- * of its own — the glossary's `existingFor`, and one condition shorter.
+ * of its own — the glossary's `existingFor`, and one condition shorter: an
+ * older prompt refuses, a different profile does not.
  *
- * **Only the article moving refuses an append.** A list whose `sourceHash` no
+ * **The article moving refuses an append.** A list whose `sourceHash` no
  * longer matches holds block ids that may be gone and words that may no longer
  * be in the piece, so extending it would add true lines to a list that is no
  * longer true — that one is replaced with fresh ids. Inheriting an id across
  * changed source text would silently move a reader's link to different words.
  *
- * **An older prompt version does not refuse, and that is the deliberate
- * difference from the glossary.** There, appending across a version "certified
- * rather than replaced" a `glossary/1` entry: its blended prose survived under
- * a `glossary/2` label that described it falsely. A quote has no prose of ours
- * to be false — its words are the author's, sliced out of the block and
- * verified — and **the certification is avoided at the stamp instead**: an
- * append keeps the list's own, older `version` (`buildQuotes`), so the list
- * goes on saying it holds lines an earlier prompt chose. Keeping them is what
- * the reader asked for — *"add a "Find more" button"*, in place of the one
- * that threw the list away — and refusing would make the first Find more on
- * every list written before `quotes/4` silently replace it.
+ * **So does an older prompt version, since 2026-09-24** — `isOutdated`, the
+ * one predicate the read path's `outdated` banner also asks. From 2026-09-11 an
+ * outdated list was appended to under its own older stamp, so the first Find
+ * more on every list written before `quotes/4` would not silently replace it.
+ * Then `quotes/6` changed what a quote *is* — a passage long enough to stand
+ * alone — and an append cannot deliver that: the old short span wins every
+ * overlap in `dedupeOverlaps`, so the longer version of it is dropped. So an
+ * outdated list is rewritten, the panel offers *Choose them again* on it and
+ * not Find more, and `generateQuotes` inherits ids only by exact words.
+ * SPIDERYARN-READING2-3C; docs/plans/260924d-choose-them-again-on-an-outdated-quote-list.md.
  *
  * **Nor does a different profile.** Find more continues the list rather than
  * choosing it for somebody else, and sends the list's own setting; the glossary
@@ -935,14 +954,40 @@ function inheritIds(fresh: Quote[], inherit: Map<string, string> | null): Quote[
  * is the one where the badge is already warning about it — `buildQuotes` says
  * why the old stamp is kept.
  *
- * GPT Sol objected to both on the plan, as provenance written falsely into a
- * file; Fable arbitrated, 2026-09-11, for keeping the append and making the
- * stamps honest about a mixed list rather than refusing to make one.
+ * GPT Sol objected to appending across both, version and profile, on the
+ * plan, as provenance written falsely into a file; Fable arbitrated,
+ * 2026-09-11, for keeping the append and making the stamps honest about a mixed
+ * list rather than refusing to make one. The version half is reversed above.
  * docs/plans/260911a-quotes-find-more-and-a-fade-that-carries-priority.md.
  */
 export function existingFor(onDisk: Quotes | null, sourceHash: string): Quotes | null {
   if (!onDisk || onDisk.sourceHash !== sourceHash) return null;
+  if (isOutdated(onDisk)) return null;
   return onDisk;
+}
+
+/**
+ * **Was this list chosen by an older prompt?** One predicate for the two places
+ * that ask: the read path's `outdated` (src/store/pg.ts), which puts *Choose
+ * them again* on the banner, and `existingFor`, which makes the forced run that
+ * button starts a rewrite. Two spellings of the comparison could disagree, and
+ * then the button would say one thing and the stage do another.
+ *
+ * **Older, not merely different.** In a rollback an older build meets a list
+ * a newer prompt wrote; inequality would call that outdated, offer *Choose them
+ * again*, and rewrite it with the older prompt (GPT Sol, 260924d F3). So a
+ * version that is newer, or that does not parse as `quotes/<n>`, is treated as
+ * current: appended to, never downgraded.
+ */
+export function isOutdated(quotes: Pick<Quotes, "version">): boolean {
+  const stored = versionNumber(quotes.version);
+  const current = versionNumber(PROMPT_VERSION);
+  return stored !== null && current !== null && stored < current;
+}
+
+function versionNumber(version: string): number | null {
+  const match = /^quotes\/(\d+)$/.exec(version);
+  return match ? Number(match[1]) : null;
 }
 
 /**
@@ -983,12 +1028,14 @@ export function buildQuotes(
     /** The rendered profile this was written from, or null for none. */
     profile?: string | null;
     elapsedMs: number;
-    /** Ids from the list this run is replacing — see `idsByText`. */
+    /**
+     * Ids from the list this run is replacing — see `idsByText`. Production
+     * passes one only on an outdated, same-article rewrite (`generateQuotes`).
+     */
     inherit?: Map<string, string> | null;
     /**
      * The list this run is **appending to** — `existingFor`. Mutually exclusive
-     * with `inherit`: production passes `existing` or neither; `inherit` remains
-     * only for the tested same-article rewrite helper.
+     * with `inherit`: production passes `existing`, `inherit`, or neither.
      */
     existing?: Quotes | null;
     dropped: Dropped;
@@ -1172,8 +1219,9 @@ export class QuotesBaselineUnusable extends Error {
  * old artefact for, and the thing landing D would otherwise take away.
  *
  * **Four states, and the same table as the glossary's and the ideas'**. This
- * stage appends **only when `sourceHash` matches**; a mismatch is a legitimate
- * replace with fresh ids rather than a fault.
+ * stage appends **only when `sourceHash` matches** and the list is not
+ * outdated; a mismatch is a legitimate replace with fresh ids rather than a
+ * fault (and an outdated list a replace that inherits by exact words).
  *
  * | | what it means | what happens |
  * |---|---|---|
@@ -1547,18 +1595,26 @@ export async function generateQuotes(opts: {
 
   const sourceHash = inputFingerprint(blocks, tree, meta);
   const onDisk = opts.previous;
-  /* **Append** to a list written from this same article — Find more. That is
-     every previous list `existingFor` does not refuse, and it refuses only a
-     moved article. */
+  /* **Append** to a list the current prompt wrote from this same article —
+     Find more. `existingFor` refuses the other two: a moved article (stale)
+     and an older prompt (outdated), both of which a forced run rewrites. */
   const existing = existingFor(onDisk, sourceHash);
-  /* **No ids are inherited any more, and a stale replace mints every one
-     fresh.** Ids came across only on a replace of an unmoved list, and since
-     2026-09-11 an unmoved list is always appended to — so the one replace left
-     is of a list the article moved out from under, where inheriting would
-     carry a reader's `?quote=` link onto words from a different version of the
-     piece. GPT Sol, on the plan, which had got this backwards. `idsByText`
-     and `buildQuotes`' `inherit` stay, tested, for the day a same-article
-     rewrite comes back; nothing in production passes one today. */
+  /* **Ids are inherited on exactly one replace: an outdated list's.** The
+     article has not moved, so an old quote's words are still where they were,
+     and a quote the current prompt chooses again *in exactly those words*
+     (after `normaliseQuote`) is the passage the reader's `?quote=` bookmark
+     named — keeping its id keeps the link alive. Most will not match, because
+     `quotes/6` chooses longer passages, and those links go dead, which opens
+     the list with nothing selected. A longer passage containing the old words
+     does **not** inherit: that would hand a bookmark on one sentence to a
+     paragraph the reader never chose.
+
+     **A stale replace mints every id fresh**, as it always has — inheriting
+     across a moved article would carry a link onto words from a different
+     version of the piece (GPT Sol on 260911a, which had this backwards).
+     docs/plans/260924d-choose-them-again-on-an-outdated-quote-list.md. */
+  const inherit =
+    !existing && onDisk && onDisk.sourceHash === sourceHash ? idsByText(onDisk) : null;
 
   /* **The argument, not the apparatus** — the same filter every article-reading
      stage applies at its call site rather than inside the prompt builders.
@@ -1715,6 +1771,7 @@ export async function generateQuotes(opts: {
     profile: opts.profile ?? null,
     elapsedMs: Date.now() - started,
     existing,
+    inherit,
     dropped,
     scores,
   });
