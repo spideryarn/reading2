@@ -244,8 +244,8 @@ nothing else has a copy of.
 
 - **Check which machine you are on.** `/home/greg/` is probably the Hetzner box, `/Users/greg/` is
   Greg's Mac. A change to either that should still be true next week — a package, a key in
-  `.env.local`, a config — is also a change to the file that builds the next box, so ask Greg whether
-  to make it so now, going forwards, or both —
+  `.env.local`, a config — is also a change to the file that builds the next box, so make it both, now
+  and going forwards, without asking; ask only for a secret or a trial —
   [hetzner-remote-server-box.md § A change to the box is a change to a file](docs/project/hetzner-remote-server-box.md#a-change-to-the-box-is-a-change-to-a-file).
   On the Mac, more caution: a different OS, and not disposable — spike it first where that is safe.
 - **Other agents will get in your way; be tolerant.** Every tree shares one local Supabase and one
