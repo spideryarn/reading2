@@ -119,6 +119,21 @@ The differences that matter to a reader:
   differing by 0.001 in opposite directions, 67 spans, none the renderer refuses —
   [260924b](../plans/260924b-pdf-transcriber-writes-maths-as-tex.md). **A PDF already on the shelf
   keeps its old transcription until it is re-imported.**
+- **A web page's maths is stored as delimited TeX too**, since 2026-09-24. Before Readability,
+  `canonicaliseMaths` ([`src/maths-import.ts`](../../src/maths-import.ts)) replaces every formula
+  that carries its own TeX source — MathML with an `application/x-tex` annotation or a TeX
+  `alttext` (LaTeXML/ar5iv, MediaWiki, KaTeX) and MathJax v2 `<script type="math/tex">` — with
+  `\(…\)` or `\[…\]`, the publisher's wrapper and its fallback image or HTML twin included. Until
+  then the sanitiser deleted the annotation and the formula survived as MathML, an image, or — for
+  KaTeX — its text twice. A formula the reading view would not draw, one inside an element the view
+  skips (`code`, `pre`, existing MathML, SVG and their peers), one a link targets, a MathJax source
+  nested in another publisher's formula, or a wrapper whose exact formula-and-twin topology does not
+  hold, is left as the page had it. Bare MathML with no TeX source, and `<img class="latex">`, are not
+  converted yet. On the source DOM, before Readability: 142 of 142 on ar5iv, 188 of 188 on Wikipedia
+  and 268 of 268 on Distill — 598 of 598. Readability's extracted article retains 142, 188 and 221 of
+  those respectively, all 551 found as spans by the reading view's own scanner.
+  **A web article already on the shelf changes only on a refresh**, and then its maths blocks get
+  new ids — [260924b § Stage 3b](../plans/260924b-pdf-transcriber-writes-maths-as-tex.md#stage-3b-html-imports).
 - **A PDF that will not open at all is refused here, and says which way.** Locked with a password, or
   damaged past parsing — two sentences and two codes, `PDF_LOCKED` and `PDF_DAMAGED` in
   [`src/messages.ts`](../../src/messages.ts), because only one of them mentions a password. Both are

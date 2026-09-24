@@ -1,11 +1,11 @@
 /**
  * **The PDF stage loads temml itself, the way the built function can trace.**
  *
- * `recognised` in src/pdf-tex.ts asks temml whether a TeX span would be drawn.
+ * `recognised` in src/pdf-tex.ts asks temml (through src/maths-server.ts) whether a TeX span would be drawn.
  * Its synchronous fallback, `createRequire(import.meta.url)("temml")`, works in
  * every test because `node_modules` is there — and is not traced into the
  * built API function (measured 2026-09-24: `temml.cjs` absent). So a stage that
- * forgot to call `loadPdfMathsRenderer` would pass every other test here and,
+ * forgot to call `loadMathsRenderer` would pass every other test here and,
  * in production, read every span as markup and pay for every maths chunk twice.
  *
  * This file takes the fallback away, as production does, and runs the stage.
@@ -18,7 +18,7 @@ vi.mock("node:module", async (importOriginal) => {
   const actual = await importOriginal<typeof import("node:module")>();
   const createRequire = (from: string | URL) => {
     const real = actual.createRequire(from);
-    if (!String(from).includes("pdf-tex")) return real;
+    if (!String(from).includes("maths-server")) return real;
     return Object.assign((id: string) => {
       if (id === "temml") throw new Error("temml.cjs is not in the built function");
       return real(id);

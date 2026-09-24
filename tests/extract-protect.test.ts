@@ -473,8 +473,11 @@ describe("rule A — the four tables Readability deleted for saying they have he
     expect(gained).toHaveLength(3);
     expect(gained.filter((b) => /^Table [12]:/.test(b.text)).map((b) => b.tag)).toEqual(["figure", "figure"]);
     expect(gained.filter((b) => /^Table [12]:/.test(b.text)).every((b) => b.html.includes("<table"))).toBe(true);
-    expect(on.chars).toBe(41_528);
-    expect(off.chars).toBe(40_430);
+    /* 41,528 / 40,430 until 2026-09-24, when ar5iv's formulas became delimited
+       TeX rather than MathML text (src/maths-import.ts). The tables, rows and
+       blocks above did not move. */
+    expect(on.chars).toBe(40_983);
+    expect(off.chars).toBe(39_983);
   });
 
   it("never lets either token reach the reader", async () => {

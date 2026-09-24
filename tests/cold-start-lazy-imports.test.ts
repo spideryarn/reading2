@@ -54,7 +54,7 @@ const MUST_NOT_BE_STATIC: Record<string, string> = {
   /* The TeX renderer, needed only when a comment or chat quotes across a
      formula in a block whose text holds TeX — the slow path of the quote
      check. fb30 stage 1b; docs/project/maths.md. */
-  temml: "`loadTemmlOnServer` in src/quote-in-block.ts, and `loadPdfMathsRenderer` in src/pdf-tex.ts",
+  temml: "`loadTemmlOnServer` in src/quote-in-block.ts, and `loadMathsRenderer` in src/maths-server.ts",
 };
 
 /** Every bare specifier the bundle imports at module scope. */
