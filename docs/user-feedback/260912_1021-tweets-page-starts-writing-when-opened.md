@@ -50,3 +50,6 @@ GPT Sol reviews.
 2. **No spend cap built — still Greg's.** A cap is a billing defence, which this run has no authority
    to add; the recommendation is to leave it off until spend data shows a re-run problem. It stays on
    [awaiting-approval.md](awaiting-approval.md) as a narrowed row.
+
+**Greg, 2026-09-24, on both:** *"yes, approved"* — writing on open stays, and there is no spend cap
+for now. Off [awaiting-approval.md](awaiting-approval.md).
