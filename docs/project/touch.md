@@ -46,6 +46,15 @@ no hover has to let the first press mean *show me* or the reader commits blind.
   is a coin flip. First tap opens the band's card, second goes there (Spine.tsx § bandPress). That
   is also the only reason the rail is usable by finger at all: everything it knows lives in a card.
 
+  **On an iPad it jumped on the first tap until 2026-09-24.** The finger test read `pointerType`
+  off the click, and on iOS 18.2 and later a finger's click says `mouse`
+  ([WebKit bug 282988](https://bugs.webkit.org/show_bug.cgi?id=282988)). The rail now records each
+  press at its `pointerdown`, which iOS reports correctly — its type, and which card was open when
+  it began — and still decides at the click; a click it has no press for may reveal but never jump
+  (Spine.tsx § `bandClick`;
+  [260924c](../plans/260924c-ipad-first-tap-on-the-rail-shows-the-card.md)). Any new tap rule here
+  should do the same: read the pointer off the `pointerdown`, never off the click.
+
   **The rail is 12px wide, and that is below every guideline by a factor of four.** It was 24px,
   which was already far below the 44/48px everyone recommends; Greg halved it on 2026-08-28
   ([260828ay-spine-rail.md](../plans/260828ay-spine-rail.md)) and the cost lands entirely here, because a mouse loses

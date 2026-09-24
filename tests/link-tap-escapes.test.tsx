@@ -417,6 +417,22 @@ describe("the other tap targets that live inside a link", () => {
     expect(committed).toEqual([{ id: "autopoiesis" }]);
   });
 
+  /* WebKit bug 282988 for the term, not only the link: both clicks say
+     `mouse` with the mouse's id. Traced for 260924c, and pinned here because
+     the mislabel cases above only ever tap a plain link. GPT Sol, 2026-09-24. */
+  it("and does the same when both of its clicks are mislabelled as mouse", () => {
+    const term = el("mark[data-term=autopoiesis]");
+    press(term);
+    const first = compat(term, { pointerType: "mouse", id: 99 });
+    expect(first.defaultPrevented).toBe(true);
+    expect(card()).toBe("autopoiesis");
+    expect(committed).toEqual([]);
+    press(term);
+    const second = compat(term, { pointerType: "mouse", id: 99 });
+    expect(second.defaultPrevented).toBe(true);
+    expect(committed).toEqual([{ id: "autopoiesis" }]);
+  });
+
   /* A marker's first tap shows the note; its second follows it, once — and
      TableView's own jump never runs, or the reader would get two. */
   it("a footnote marker previews, then follows exactly once", () => {
