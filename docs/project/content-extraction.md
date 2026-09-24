@@ -102,6 +102,23 @@ The differences that matter to a reader:
   again — and it is the *only* guard for the stage CLIs, which do not go through the queue's stage 1
   at all: the queue stores whatever it fetched, and `npm run eval:pdf-read` keeps the original before
   `runPdfExtract` counts anything. Neither can reach a reader's job.
+- **Maths comes out as TeX, and the checks read it as what it prints.** Since 2026-09-24
+  (`PROMPT_VERSION` `pdf-v4`) the prompt asks for inline maths between `\(…\)` and displayed
+  equations between `\[…\]`, never `$`, which the reading view draws as maths ([maths.md](maths.md)).
+  Before that it forbade LaTeX outright, and equation (1) of the paper behind Greg's report came out
+  as eight lines of symbols. Every comparison with the text layer — the scorer, the context-page and
+  repeat dedup, the page-presence floor, the bibliography rule — reads a recognised span through
+  [`src/pdf-tex.ts`](../../src/pdf-tex.ts) § `mathsAsText`: control words dropped, operands, digits
+  and `\text{…}` kept, a subscript glued to its base as pdf.js glues it. A span is recognised only
+  if the reading view would draw it as visible maths: commands first pass a conservative allow-list,
+  then the span passes the reading view's exact bounded renderer and acceptance rule. Thus `\phantom`,
+  `\hspace`, `\label`, TeX comments, invalid command sequences, dollar spans and bare TeX in prose
+  are still markup and still cost a retry.
+  `meta.title` and `meta.byline` get the same span as plain words (`plainMaths`), since the masthead
+  prints a string. Measured on the same paper: the same mean recall as the old prompt, with two pages
+  differing by 0.001 in opposite directions, 67 spans, none the renderer refuses —
+  [260924b](../plans/260924b-pdf-transcriber-writes-maths-as-tex.md). **A PDF already on the shelf
+  keeps its old transcription until it is re-imported.**
 - **A PDF that will not open at all is refused here, and says which way.** Locked with a password, or
   damaged past parsing — two sentences and two codes, `PDF_LOCKED` and `PDF_DAMAGED` in
   [`src/messages.ts`](../../src/messages.ts), because only one of them mentions a password. Both are

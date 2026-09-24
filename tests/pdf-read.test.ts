@@ -217,6 +217,40 @@ describe("text the chunk was only meant to look at", () => {
     expect(kept.length).toBeLessThan(chopped.length / 2 + honest.length);
     expect(kept.filter((r) => honest.some((h) => h.text === r.text)).length).toBe(honest.length);
   }, 30_000);
+
+  /* F9 of docs/plans/260912d-plan-review-sol.md: a short equation from the
+     context page, re-emitted as TeX under the next page's number. It is under
+     the twenty-word floor, so only the context-page rule can catch it — and
+     that rule compares words, which `\sum_{x \in X}` and the text layer's
+     `x∈X` only share once both are read the way the check reads them. */
+  it("drops a context-page equation written as TeX and relabelled", () => {
+    const context = [
+      "Mutual information [12] can measure the dependence in the spiking between two neurons:",
+      "I(X; Y) := ∑",
+      "x∈X",
+      "y∈Y",
+      "P(x, y) log2",
+      "P(x|y)",
+      "P(x) (1)",
+    ].join("\n");
+    const wanted = "Transfer entropy is well suited to measuring how much the past activity of one neuron accounts for another.";
+    const pass: Pass0 = {
+      pages: [
+        { page: 3, text: context, words: 30, items: [] },
+        { page: 4, text: wanted, words: 20, items: [] },
+      ],
+      isScan: false,
+      metaTitle: null,
+      furniture: new Set(),
+    };
+    const equation = record({
+      page: 4,
+      text: String.raw`\[ I(X;Y) := \sum_{x \in X} \sum_{y \in Y} P(x,y) \log_2 \frac{P(x|y)}{P(x)} \] (1)`,
+    });
+    const honest = record({ page: 4, text: wanted });
+    const kept = withoutRepeats([equation, honest], new Set(), wordsOf(pass, [3]), wordsOf(pass, [4]));
+    expect(kept).toEqual([honest]);
+  });
 });
 
 describe("records into HTML", () => {
@@ -542,6 +576,37 @@ describe("the whole stage, with the model stubbed out", () => {
     const result = await run();
     expect(result.meta.quality).toBeUndefined();
   }, 30_000);
+
+  /* F1 of docs/plans/260912d-plan-review-sol.md, the condition the TeX prompt
+     could not land without: a chunk transcribed with maths as delimited TeX
+     passes on its first attempt, is checkpointed, and is reused without another
+     call. Before the check was taught TeX, `\frac` was markup and every such
+     chunk was asked twice and never kept. docs/plans/260924b-pdf-transcriber-writes-maths-as-tex.md. */
+  it("reads a chunk written as TeX once, keeps it, and does not pay for it again", async () => {
+    const asTex = (records: PdfRecord[]) =>
+      records.map((r) => {
+        const words = r.text.split(" ");
+        if (words.length < 6 || /[\\{}$]/.test(r.text)) return r;
+        const [a, b, c, ...rest] = words;
+        return {
+          ...r,
+          text: String.raw`\(\frac{\text{${a}}}{\mathrm{${b}}}\) \[\sqrt{\text{${c}}} \cdot \left( \right)\] ${rest.join(" ")}`,
+        };
+      });
+    const clean = await run();
+    const plain = asks;
+    const store = memoryCheckpoints({ slug: "paper", articleId: "article-paper" });
+    const first = await run(asTex, store);
+    /* One ask per chunk, the same as a transcription with no TeX in it. */
+    expect(asks).toBe(plain);
+    expect(first.retries).toEqual([]);
+    expect(first.meta.quality).toBeUndefined();
+    expect(first.extractedHtml).toContain(String.raw`\(\frac{\text{`);
+    expect([...store.entries.keys()].filter((k) => k.startsWith("pdf-chunk/")).length).toBe(first.chunks);
+    await run(asTex, store);
+    expect(asks).toBe(0);
+    expect(clean.chunks).toBe(first.chunks);
+  }, 60_000);
 
   /* ============================== the chunk checkpoints, and what a crash leaves ==
      Every entry under the `pdf-chunk` namespace is a paid vision-model call, so

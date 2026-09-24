@@ -1,4 +1,5 @@
 import { baselineFor, type Pass0, type PdfRecord, type RecordType } from "./pdf.js";
+import { mathsAsText } from "./pdf-tex.js";
 
 /** A complete reading envelope, whether it came from the wire or a checkpoint. */
 export interface ValidatedChunkReading {
@@ -127,7 +128,10 @@ export function structuralIssues(
   for (const record of records) {
     transcribedWords.set(
       record.page,
-      (transcribedWords.get(record.page) ?? 0) + lexicalWords(record.text).length,
+      /* Maths read as what it prints, or `\frac`, `\sum` and `\sqrt` would be
+         three "words" and a page of prose replaced by one formula would clear
+         the presence floor (G3, docs/plans/260924b-pdf-transcriber-writes-maths-as-tex.md). */
+      (transcribedWords.get(record.page) ?? 0) + lexicalWords(mathsAsText(record.text)).length,
     );
   }
 

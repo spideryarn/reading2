@@ -160,6 +160,10 @@ width ([narrow-windows.md](../project/narrow-windows.md)), like `.prose pre` and
 
 ## Stage 2, deferred — ask the transcriber for TeX
 
+**Built 2026-09-24 as its own plan:
+[260924b-pdf-transcriber-writes-maths-as-tex.md](260924b-pdf-transcriber-writes-maths-as-tex.md)**,
+which meets F1, F7 and F9 and has the measurement. What follows is the requirement as it was set.
+
 Worth doing, because failure mode (2) is the common one. Its requirements, from the review:
 
 - **F1** — the PDF checks become TeX-aware *before* the prompt changes: recognised, balanced `\(…\)`

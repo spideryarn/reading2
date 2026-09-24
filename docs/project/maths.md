@@ -37,9 +37,12 @@ the code is `src/web/maths.ts`, and its header is the detail behind every line b
 - **Undelimited TeX**, and **TeX in the side panels** — quotes, ideas, glossary cards and search
   snippets show `block.text` or model-written strings, not block html.
 
-**Most maths-bearing PDFs imported today have no TeX to draw.** The transcriber mostly flattens an
-equation into lines of symbols rather than writing TeX; asking it for TeX is the plan's deferred
-stage 2, which has to make the PDF checks TeX-aware first.
+**A PDF imported since 2026-09-24 has TeX to draw.** The transcriber writes maths between `\(…\)`
+and `\[…\]`, and the PDF checks read it as what it prints —
+[content-extraction.md](content-extraction.md) and
+[260924b](../plans/260924b-pdf-transcriber-writes-maths-as-tex.md). A PDF imported before then
+mostly has its equations flattened into lines of symbols, which there is nothing to draw from; a
+re-import fixes it.
 
 ## Where it sits
 
