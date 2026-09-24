@@ -666,9 +666,11 @@ blanks the tab you already had it in; `--include-attached` says you meant it.
 
 ## The status line
 
-The box shows the same status line as the laptop — model, directory, git branch, and a ten-cell bar
-for how much of the context window is gone, yellow from 70% and red from 90%. Auto-compaction lands
-around 80%, so the colour arrives before the loss does.
+The box's status line names the session (tmux and Claude's own name), the model, directory, git
+branch and worktree, a ten-cell bar for how much of the context window is gone — yellow from 70% and
+red from 90%, so the colour arrives before auto-compaction at around 80% does — and how much of the
+account's five-hour and weekly usage limits is used, with when each resets. Both Claude config
+directories on the box point at it.
 
 The script is a heredoc inside [`infra/hetzner/provision.sh`](../../infra/hetzner/provision.sh)
 rather than a file of its own, because that is the file you re-run on a live box; a second copy is

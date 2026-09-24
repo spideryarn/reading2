@@ -795,11 +795,17 @@ echo "=== claude settings ==="
 # step idempotent, which re-running provision.sh on a live box depends on.
 # jq exits non-zero on a settings.json that is not valid JSON, and the `mv`
 # never happens, so a broken file fails the step rather than being replaced.
-# The status line under the prompt: model, directory, git branch, and -- the
-# reason this is here -- how much of the context window is gone, as a ten-cell
-# bar that turns yellow at 70% and red at 90%. Auto-compaction lands around 80%,
-# so the bar is the warning that a long session is about to lose its middle.
-# Same script Greg runs on the laptop, so the two boxes read alike.
+# The status line under the prompt: the session's name (the tmux session, and
+# Claude's own `session_name` when it differs), model, directory, git branch,
+# the worktree (`worktree.name`, else a linked git worktree, else a
+# .claude/worktrees/<name> path), how much of the context window is gone as a
+# ten-cell bar that turns yellow at 70% and red at 90%, and the account's usage
+# limits -- `5h 23% ↻14:00 wk 41% ↻Thu 14:00`, dim, yellow at 70, red at 90.
+# Auto-compaction lands around 80%, so the bar is the warning that a long
+# session is about to lose its middle; the limits say which account still has
+# room. Every segment is left off when its field is absent.
+# It began as the script Greg runs on the laptop; this copy
+# was synced byte for byte from the box's live one on 2026-09-24.
 #
 # It lives HERE, in provision.sh, rather than in its own file injected through
 # cloud-init like the credential helper. That is deliberate: provision.sh is the
@@ -902,6 +908,63 @@ if git rev-parse --git-dir >/dev/null 2>&1; then
     fi
 fi
 
+# Session name, worktree name and account rate limits, all from stdin in one jq
+# call. Field names are from code.claude.com/docs/en/statusline (CLI 2.1.281):
+#   session_name                 -- /rename or --name, else the AI title; absent otherwise
+#   worktree.name                -- only in a --worktree / EnterWorktree session
+#   rate_limits.{five_hour,seven_day}.{used_percentage,resets_at (epoch s)}
+#                                -- Pro/Max only, absent before the first response
+# Each piece is omitted when its field is absent.
+session_name="" json_worktree="" rl5="" rl5_reset="" rl7="" rl7_reset=""
+if command -v jq >/dev/null 2>&1; then
+    IFS=$'\t' read -r session_name json_worktree rl5 rl5_reset rl7 rl7_reset < <(
+        echo "$input" | jq -r '[
+            (.session_name // "" | tostring | gsub("[\t\n]"; " ")),
+            (.worktree.name // "" | tostring),
+            (.rate_limits.five_hour.used_percentage // "" | tostring),
+            (.rate_limits.five_hour.resets_at // "" | tostring),
+            (.rate_limits.seven_day.used_percentage // "" | tostring),
+            (.rate_limits.seven_day.resets_at // "" | tostring)
+        ] | map(if . == "" then "-" else . end) | @tsv' 2>/dev/null
+    )
+    for v in session_name json_worktree rl5 rl5_reset rl7 rl7_reset; do
+        [ "${!v}" = "-" ] && printf -v "$v" ''
+    done
+fi
+# Box sessions are tmux sessions named after their job; use that when Claude has no name.
+tmux_name=""
+[ -n "$TMUX" ] && tmux_name=$(tmux display-message -p '#S' 2>/dev/null)
+session_info=""
+if [ -n "$session_name" ] && [ -n "$tmux_name" ] && [ "$session_name" != "$tmux_name" ]; then
+    session_info="$tmux_name: $session_name"
+elif [ -n "$session_name" ]; then
+    session_info="$session_name"
+elif [ -n "$tmux_name" ]; then
+    session_info="$tmux_name"
+fi
+# Claude's own worktree name wins; the git check above covers worktrees made by hand.
+[ -n "$json_worktree" ] && worktree_info="⑂ $json_worktree"
+if [ -z "$worktree_info" ] && [[ "$cwd" == */.claude/worktrees/* ]]; then
+    wt="${cwd#*/.claude/worktrees/}"; worktree_info="⑂ ${wt%%/*}"
+fi
+
+# One rate-limit segment: "5h 23% ↻14:00", coloured like the context bar.
+rl_segment() { # label pct resets_at date-format
+    local label=$1 pct=${2%.*} reset=$3 fmt=$4 color when=""
+    case "$pct" in ''|*[!0-9]*) return ;; esac
+    if [ "$pct" -ge 90 ]; then color='\033[1;31m'
+    elif [ "$pct" -ge 70 ]; then color='\033[1;33m'
+    else color='\033[2m'; fi
+    case "$reset" in ''|*[!0-9]*) ;; *) when=" ↻$(date -d "@$reset" +"$fmt" 2>/dev/null)" ;; esac
+    printf "${color}%s %s%%%s\033[0m" "$label" "$pct" "$when"
+}
+limits_info=""
+seg5=$(rl_segment 5h "$rl5" "$rl5_reset" '%H:%M')
+seg7=$(rl_segment wk "$rl7" "$rl7_reset" '%a %H:%M')
+if [ -n "$seg5" ] && [ -n "$seg7" ]; then limits_info="$seg5 $seg7"
+else limits_info="$seg5$seg7"; fi
+
+
 # Get context window usage (% of context used) and render a threshold-colored bar.
 # context_window.used_percentage is pre-computed by Claude Code (0-100, input tokens only).
 # Absent on older CLI versions / before the first API call -> the segment is simply omitted.
@@ -936,6 +999,8 @@ line=$(printf "\033[1;32m[%s]\033[0m \033[1;32m%s\033[0m" "$model" "$dir_display
 [ -n "$git_info" ] && line="$line $git_info"
 [ -n "$worktree_info" ] && line="$line $(printf "\033[1;36m%s\033[0m" "$worktree_info")"
 [ -n "$context_info" ] && line="$line$context_info"
+[ -n "$limits_info" ] && line="$line $(printf "\033[2m·\033[0m") $limits_info"
+[ -n "$session_info" ] && line="$(printf "\033[1;35m%s\033[0m" "$session_info") $line"
 printf "%s" "$line"
 STATUSLINE
 
@@ -1002,6 +1067,22 @@ jq --arg sl "$sl" '
   | .permissions = ((.permissions // {}) + { defaultMode: "auto" })
 ' "$f" > "$tmp"
 mv "$tmp" "$f"
+
+# The second Claude config directory -- the gregmindstone account, launched with
+# CLAUDE_CONFIG_DIR -- reads its own settings.json, so without this its sessions
+# show no status line at all. Same script, same `+` merge, but ONLY the status
+# line: the scroll speed and permission mode above are decisions about the
+# default account and this one has not been asked. Skipped when the directory is
+# absent, because creating it would conjure an account the box does not have.
+g="$HOME/.claude-gregmindstone"
+if [ -d "$g" ]; then
+  gf="$g/settings.json"
+  [ -f "$gf" ] || printf '{}\n' > "$gf"
+  gtmp="$gf.provision.$$"
+  trap 'rm -f "$tmp" "$gtmp"' EXIT
+  jq --arg sl "$sl" '.statusLine = ((.statusLine // {}) + { type: "command", command: $sl })' "$gf" > "$gtmp"
+  mv "$gtmp" "$gf"
+fi
 SETTINGS
 # 0644: the scripts are written by root in /tmp and read by $USER_NAME's shell.
 chmod 0644 "$CLAUDE_SETTINGS_SH" "$CLAUDE_STATUSLINE_SH"

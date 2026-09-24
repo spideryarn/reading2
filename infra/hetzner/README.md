@@ -326,10 +326,25 @@ good, change it in [`provision.sh`](provision.sh).
 
 ### The status line
 
-The same status line Greg runs on the laptop, so the two machines read alike: model, directory, git
-branch, and a ten-cell bar for how much of the context window is gone — green, yellow from 70%, red
-from 90%. Auto-compaction lands around 80%, so the colour is a warning that a long session is about
-to lose its middle rather than a report that it already has.
+It began as the status line Greg runs on the laptop, and now says, left to right:
+
+- **which session this is** — the tmux session's name, and Claude's own `session_name` (from
+  `/rename` or `--name`) after a colon when the two differ;
+- the model, the directory and the git branch;
+- **the worktree**, as `⑂ name` — Claude's `worktree.name`, else a linked git worktree, else a
+  `.claude/worktrees/<name>` path;
+- a ten-cell bar for how much of the context window is gone — green, yellow from 70%, red from 90%.
+  Auto-compaction lands around 80%, so the colour is a warning that a long session is about to lose
+  its middle rather than a report that it already has;
+- **the account's usage limits**, `5h 23% ↻14:00 wk 41% ↻Thu 14:00` — the five-hour and weekly
+  windows with when each resets, dim, yellow from 70%, red from 90%.
+
+Each segment is left off when Claude Code does not send its field: `rate_limits` only comes on a
+Pro/Max login and after the first response, `worktree` only in a worktree session.
+
+`provision.sh` wires it into `~/.claude/settings.json` and, when the directory exists, into
+`~/.claude-gregmindstone/settings.json` as well — the second account's own config, which reads
+nothing from the first. Only `statusLine` is merged into that one.
 
 The script is a heredoc **inside [`provision.sh`](provision.sh)**, installed to
 `~/.claude/statusline-script.sh`, with `.statusLine.command` in `settings.json` pointing at it by
