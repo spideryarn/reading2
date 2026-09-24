@@ -99,6 +99,13 @@ import { ALL_FIXTURES } from "./corpus.mjs";
 import { readArticleWithProvenance, sourceRefOf } from "../../src/extract.js";
 import { RESERVED_ATTRS } from "../../src/reserved.js";
 import { isMain } from "../../src/is-main.js";
+import { loadMathsRenderer } from "../../src/maths-server.js";
+
+/* temml, loaded before anything reads a page: stage 2's maths conversion and
+   the PDF check both refuse every formula without it (src/maths-server.ts), so
+   an eval that skipped this would measure a different extractor from the one
+   that ships. */
+await loadMathsRenderer();
 
 /**
  * The permitted differences, as data. Read this before believing an "agrees":

@@ -64,6 +64,13 @@ import { compare, STRUCTURE } from "./inventory.mjs";
 import { FIXTURE_UA } from "./corpus.mjs";
 import { splitIntoBlocks } from "../../src/blocks.js";
 import { isMain } from "../../src/is-main.js";
+import { loadMathsRenderer } from "../../src/maths-server.js";
+
+/* temml, loaded before anything reads a page: stage 2's maths conversion and
+   the PDF check both refuse every formula without it (src/maths-server.ts), so
+   an eval that skipped this would measure a different extractor from the one
+   that ships. */
+await loadMathsRenderer();
 
 /** The fixtures' own User-Agent, so a probe of a live URL and the committed
  *  capture of it are the same document. See FIXTURE_UA in corpus.mts. */

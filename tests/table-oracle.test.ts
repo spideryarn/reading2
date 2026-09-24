@@ -50,6 +50,7 @@ import {
   type TableDifference,
   type TableOracleResult,
 } from "../evals/extraction/table-oracle.mjs";
+import { loadMathsRenderer } from "../src/maths-server.js";
 
 const FIXTURES = path.join("evals", "extraction", "fixtures");
 
@@ -77,6 +78,9 @@ const PAGES = {
 const sources: Record<keyof typeof PAGES, Document> = {} as Record<keyof typeof PAGES, Document>;
 
 beforeAll(async () => {
+  /* Before the sources are built: the ids below count elements after ar5iv's
+     formulas became TeX, which needs temml (src/maths-server.ts). */
+  await loadMathsRenderer();
   for (const [key, page] of Object.entries(PAGES)) {
     const raw = await readFile(path.join(FIXTURES, page.file), "utf-8");
     sources[key as keyof typeof PAGES] = readArticleWithProvenance(raw, page.url).source;

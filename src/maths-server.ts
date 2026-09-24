@@ -9,25 +9,29 @@
  * (src/maths-import.ts). Both ask stage 1's own bounded renderer and acceptance
  * rule (src/maths-tex.ts), so the answer is the reader's answer.
  *
- * **temml is loaded lazily, and the load the bundle can see is the async one.**
- * Everything that asks is synchronous — a scorer, a DOM pass — so the stages
- * call `loadMathsRenderer()` first, a literal `await import("temml")` that
- * @vercel/nft follows into the API function (the seam `loadTemmlOnServer` in
- * src/quote-in-block.ts already uses). The synchronous fallback,
- * `createRequire(import.meta.url)("temml")`, serves callers that are not a
- * stage — tests, evals, a CLI — and is **not** traced into the built function
- * (measured 2026-09-24). A stage that forgot the load would pass every test and,
- * in production, refuse every formula. tests/pdf-tex-stage-loads-temml.test.ts
- * and tests/maths-import-stage-loads-temml.test.ts are what say both stages load it.
+ * **temml is loaded lazily, and only by `loadMathsRenderer()`** — a literal
+ * `await import("temml")`, which @vercel/nft follows into the API function
+ * (the seam `loadTemmlOnServer` in src/quote-in-block.ts already uses).
+ * Everything that asks is synchronous — a scorer, a DOM pass — so **every
+ * caller loads it first**: the two stages at their top (`runPdfExtract`,
+ * `runExtract`), and every test, eval and script that reaches the check
+ * without a stage, in a `beforeAll` or at the top of the module.
+ *
+ * **Until it is loaded, every answer is `false`**, on purpose. There used to be
+ * a synchronous `createRequire` fallback. It was never traced into the built
+ * function (measured 2026-09-24), so it only ever worked where it did not
+ * matter, and the env sweep refuses a non-literal `require`
+ * (tests/env-reads-are-literal.test.ts). Without it, a stage that forgot the
+ * load refuses every formula in tests exactly as it would in production — which
+ * is what tests/pdf-tex-stage-loads-temml.test.ts and
+ * tests/maths-import-stage-loads-temml.test.ts catch.
  *
  * Never statically imported: the API's cold start stays free of temml
  * (tests/cold-start-lazy-imports.test.ts).
  */
 
-import { createRequire } from "node:module";
-import { acceptsMarkup, type RenderTex, type TemmlLike, temmlRenderer } from "./maths-tex.js";
+import { acceptsMarkup, type RenderTex, temmlRenderer } from "./maths-tex.js";
 
-const requireFromHere = createRequire(import.meta.url);
 let renderTex: RenderTex | undefined;
 
 /** Load temml the way the built function can trace. Call at the top of a stage. */
@@ -37,7 +41,7 @@ export async function loadMathsRenderer(): Promise<void> {
     const { default: temml } = await import("temml");
     renderTex = temmlRenderer(temml);
   } catch {
-    /* Left unset: `texWouldDraw` tries its own fallback, and then refuses. */
+    /* Left unset: `texWouldDraw` then refuses every formula. */
   }
 }
 
@@ -45,18 +49,13 @@ export async function loadMathsRenderer(): Promise<void> {
  * **True only if the reading view would draw `tex` as one visible formula** —
  * temml parses it within the bounds, and the markup passes `acceptsMarkup`.
  *
- * With no temml at all, every answer is `false`: the PDF check then calls the
- * span markup (a retry and a quality note), and the HTML extractor leaves the
- * page's own formula in place. Loud in effect, never an outage.
+ * Before `loadMathsRenderer()` has succeeded, every answer is `false`: the PDF
+ * check then calls the span markup (a retry and a quality note), and the HTML
+ * extractor leaves the page's own formula in place. Loud in effect, never an
+ * outage.
  */
 export function texWouldDraw(tex: string, display: boolean): boolean {
-  if (renderTex === undefined) {
-    try {
-      renderTex = temmlRenderer(requireFromHere("temml") as TemmlLike);
-    } catch {
-      renderTex = () => null;
-    }
-  }
+  if (renderTex === undefined) return false;
   const markup = renderTex(tex, display);
   return markup !== null && acceptsMarkup(markup);
 }

@@ -86,6 +86,13 @@ import { ALL_FIXTURES } from "./corpus.mjs";
 import { probeHtml } from "./probe.mjs";
 import { splitIntoBlocks } from "../../src/blocks.js";
 import { readArticle } from "../../src/extract.js";
+import { loadMathsRenderer } from "../../src/maths-server.js";
+
+/* temml, loaded before anything reads a page: stage 2's maths conversion and
+   the PDF check both refuse every formula without it (src/maths-server.ts), so
+   an eval that skipped this would measure a different extractor from the one
+   that ships. */
+await loadMathsRenderer();
 
 /* `loadEnvLocal()`, not a bare import — see the same note in rescue.mts. The
    bare form reads whatever the shell exported, which is a different OpenRouter

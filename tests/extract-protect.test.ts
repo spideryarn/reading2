@@ -46,7 +46,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { Readability } from "@mozilla/readability";
 import { JSDOM, VirtualConsole } from "jsdom";
-import { describe, expect, it } from "vitest";
+import { beforeAll, describe, expect, it } from "vitest";
 
 import { ALL_FIXTURES } from "../evals/extraction/corpus.mjs";
 import { splitIntoBlocks } from "../src/blocks.js";
@@ -70,6 +70,11 @@ import {
   protectionIsDisabled,
   withProtectionDisabled,
 } from "../src/protect.js";
+import { loadMathsRenderer } from "../src/maths-server.js";
+
+/* temml, loaded the one way there is (src/maths-server.ts): without it every
+   formula is refused, as in a stage that forgot to load it. */
+beforeAll(loadMathsRenderer);
 
 const FIXTURES = path.join(path.dirname(fileURLToPath(import.meta.url)), "../evals/extraction/fixtures");
 

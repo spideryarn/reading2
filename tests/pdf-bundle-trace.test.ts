@@ -70,11 +70,12 @@ const MUST_SHIP = [
      follows that import. If it does not, a selection across an equation falls
      back to the source-only check and is refused — a 400, not an outage, and
      silent in exactly the way this list exists to catch. fb30 stage 1b.
-     The PDF check loads the same file the same way (`loadMathsRenderer`,
-     src/maths-server.ts); if it did not ship, every TeX span in a transcription would
-     read as markup and every maths chunk would be asked twice. Its synchronous
-     `createRequire` fallback reaches `temml.cjs`, which is NOT traced — measured
-     2026-09-24 — so the stage must not depend on it. */
+     The PDF check and stage 2's maths conversion load the same file the same
+     way (`loadMathsRenderer`, src/maths-server.ts); if it did not ship, every TeX
+     span in a transcription would read as markup, every maths chunk would be
+     asked twice, and no web page's formula would convert. There is no other way
+     in: a synchronous `createRequire` of `temml.cjs` was tried, and is NOT traced
+     (measured 2026-09-24). */
   "node_modules/temml/dist/temml.mjs",
 ];
 

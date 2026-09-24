@@ -8,7 +8,7 @@
  * in production at the price of a full transcription.
  */
 import { readFile } from "node:fs/promises";
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import type { Pass0, PdfRecord } from "../src/pdf.js";
 import { pass0 } from "../src/pdf.js";
 import { check } from "../src/pdf-score.js";
@@ -26,6 +26,11 @@ import {
 } from "../src/pdf-read.js";
 import { parsePdfFigureMarker } from "../src/assets.js";
 import { memoryCheckpoints, type MemoryCheckpoints } from "./helpers/memory-checkpoints.js";
+import { loadMathsRenderer } from "../src/maths-server.js";
+
+/* temml, loaded the one way there is (src/maths-server.ts): without it every
+   formula is refused, as in a stage that forgot to load it. */
+beforeAll(loadMathsRenderer);
 
 const EASY = new URL("../evals/pdf/easy/source.pdf", import.meta.url);
 

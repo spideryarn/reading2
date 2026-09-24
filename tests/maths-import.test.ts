@@ -9,10 +9,15 @@
  */
 import { readFileSync } from "node:fs";
 import { JSDOM } from "jsdom";
-import { describe, expect, it } from "vitest";
+import { beforeAll, describe, expect, it } from "vitest";
 import { readArticle } from "../src/extract.js";
 import { canonicaliseMaths } from "../src/maths-import.js";
 import { findMathSpans, MATHS_SKIP_TAGS } from "../src/maths-tex.js";
+import { loadMathsRenderer } from "../src/maths-server.js";
+
+/* temml, loaded the one way there is (src/maths-server.ts): without it every
+   formula is refused, as in a stage that forgot to load it. */
+beforeAll(loadMathsRenderer);
 
 function convert(body: string): { html: string; text: string; converted: number } {
   const doc = new JSDOM(`<!doctype html><body>${body}</body>`).window.document;

@@ -14,12 +14,17 @@
  * subscript glued to its base (`Yt+1`) and the stacked fraction split over
  * lines, exactly as the real text layer holds them.
  */
-import { describe, expect, it } from "vitest";
+import { beforeAll, describe, expect, it } from "vitest";
 import type { Pass0, PdfRecord } from "../src/pdf.js";
 import { check } from "../src/pdf-score.js";
 import { structuralIssues } from "../src/pdf-integrity.js";
 import { mathsAsText, plainMaths } from "../src/pdf-tex.js";
 import { PROMPT_VERSION, SYSTEM } from "../src/pdf-read.js";
+import { loadMathsRenderer } from "../src/maths-server.js";
+
+/* temml, loaded the one way there is (src/maths-server.ts): without it every
+   formula is refused, as in a stage that forgot to load it. */
+beforeAll(loadMathsRenderer);
 
 const PAGE = [
   "Mutual information [12] can measure the dependence in the spiking between two neurons:",

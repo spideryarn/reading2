@@ -71,6 +71,13 @@ import { RESERVED_ATTRS, scrubReserved } from "../../src/reserved.js";
 import type { Candidate } from "./corruptions.mjs";
 import type { AssertionManifest } from "./manifest.mjs";
 import { contentRoot, gistableChars, regionTextById } from "./scorecard.mjs";
+import { loadMathsRenderer } from "../../src/maths-server.js";
+
+/* temml, loaded before anything reads a page: stage 2's maths conversion and
+   the PDF check both refuse every formula without it (src/maths-server.ts), so
+   an eval that skipped this would measure a different extractor from the one
+   that ships. */
+await loadMathsRenderer();
 
 /**
  * **What an arm is allowed to know about the page it is attacking.**

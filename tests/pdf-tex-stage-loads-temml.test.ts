@@ -1,31 +1,15 @@
 /**
- * **The PDF stage loads temml itself, the way the built function can trace.**
+ * **The PDF stage loads temml itself.**
  *
- * `recognised` in src/pdf-tex.ts asks temml (through src/maths-server.ts) whether a TeX span would be drawn.
- * Its synchronous fallback, `createRequire(import.meta.url)("temml")`, works in
- * every test because `node_modules` is there — and is not traced into the
- * built API function (measured 2026-09-24: `temml.cjs` absent). So a stage that
- * forgot to call `loadMathsRenderer` would pass every other test here and,
- * in production, read every span as markup and pay for every maths chunk twice.
- *
- * This file takes the fallback away, as production does, and runs the stage.
+ * `recognised` in src/pdf-tex.ts asks temml, through src/maths-server.ts,
+ * whether a TeX span would be drawn, and until `loadMathsRenderer()` has run
+ * every answer is no. This file never loads it: only `runPdfExtract` can. So a
+ * stage that forgot the load reads every span as markup here, exactly as it
+ * would in production, and pays for every maths chunk twice.
  * docs/plans/260924b-pdf-transcriber-writes-maths-as-tex.md.
  */
 import { readFile } from "node:fs/promises";
-import { describe, expect, it, vi } from "vitest";
-
-vi.mock("node:module", async (importOriginal) => {
-  const actual = await importOriginal<typeof import("node:module")>();
-  const createRequire = (from: string | URL) => {
-    const real = actual.createRequire(from);
-    if (!String(from).includes("maths-server")) return real;
-    return Object.assign((id: string) => {
-      if (id === "temml") throw new Error("temml.cjs is not in the built function");
-      return real(id);
-    }, real);
-  };
-  return { ...actual, createRequire, default: { ...actual, createRequire } };
-});
+import { describe, expect, it } from "vitest";
 
 const { pass0 } = await import("../src/pdf.js");
 const { runPdfExtract } = await import("../src/pdf-read.js");
@@ -35,7 +19,7 @@ import type { PdfRecord } from "../src/pdf.js";
 
 const EASY = new URL("../evals/pdf/easy/source.pdf", import.meta.url);
 
-describe("the stage, with temml reachable only through its own loader", () => {
+describe("the stage, with temml loaded by nothing but the stage", () => {
   it("still reads a chunk written as TeX once, with no retry", async () => {
     const bytes = new Uint8Array(await readFile(EASY));
     const pass = await pass0(bytes);

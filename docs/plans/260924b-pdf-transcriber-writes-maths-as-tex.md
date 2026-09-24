@@ -187,7 +187,7 @@ and built: **it is not traced into the API function.** In production every span 
 unrecognised, and every maths chunk asked twice — the P0 this plan exists to prevent, with every
 unit test green. Fixed with `loadPdfMathsRenderer` (since stage 3b `loadMathsRenderer` in `src/maths-server.ts`), a literal `await import("temml")` (the seam the
 tracer already follows for the quote check) called at the top of `runPdfExtract`; the synchronous
-path stays only as a fallback for evals and the CLI. `tests/pdf-tex-stage-loads-temml.test.ts` takes
+path stayed as a fallback for evals and the CLI until the env sweep refused it (§ Log, below). `tests/pdf-tex-stage-loads-temml.test.ts` takes
 the fallback away, as production does, and runs the stage: green with the loader call, red without
 it. After the fix the build's trace and cold-start tests pass. No second Sol round: the change is a
 correction to the review's own fix, and the wiring test and the build are stronger evidence than a
@@ -290,7 +290,8 @@ converted only if stage 1 would draw it: the same bounded temml renderer and acc
 (`src/maths-tex.ts`), loaded server-side. The loader moved out of `src/pdf-tex.ts` into a shared
 `src/maths-server.ts` — one literal `await import("temml")` the bundle traces, awaited by
 `runPdfExtract` always and by `runExtract` only when the raw page holds `<math` or `math/tex` (K7),
-with the synchronous fallback for evals. Also left as the page had it: TeX holding its own closer
+and by every test and eval that reaches the check without a stage — there is no synchronous
+fallback (§ Log). Also left as the page had it: TeX holding its own closer
 (`\]` for display, `\)` inline); maths inside every element the reading view skips, including
 existing MathML and SVG (K2); a formula a link points at by id (K3); a wrapper whose exact known
 formula-and-twin topology does not hold (K3); and a MathJax source nested in a KaTeX or MediaWiki
@@ -354,3 +355,14 @@ out of 598 converted, counted with the reading view's own scanner. **L6** (a pee
 
 - 2026-09-24 — plan written; the PDF re-downloaded from the mirror (same byte count as the parent's
   run); text-layer baseline dumped to confirm pdf.js glues subscripts to their base.
+- 2026-09-24 — **the synchronous temml fallback removed.** `createRequire(import.meta.url)("temml")`
+  in `src/maths-server.ts` (and in `src/pdf-tex.ts` at `42cb3bf5` before it) is a non-literal
+  `require`, which `tests/env-reads-are-literal.test.ts` and `tests/env-names-are-inventoried.test.ts`
+  refuse; dev had been red on both since `42cb3bf5`. It was also untraced into the built function,
+  so it only ever worked where it did not matter. Now `texWouldDraw` answers `false` until
+  `loadMathsRenderer()` has run, and every caller that is not a stage loads it first: `beforeAll` in
+  `tests/{maths-import,pdf-tex,pdf-read,extract-protect,table-oracle}.test.ts`, top-level `await` in
+  `evals/extraction/{arms,provenance,table-oracle,tidy,probe}.mts` and
+  `evals/pdf/{bakeoff/score,bakeoff/detail,item-boundaries/compare}.mts`. The two stage wiring tests
+  lost their `node:module` mock, which is no longer needed: they never load temml themselves, so a
+  stage that forgot fails them — checked by commenting out each stage's load (both red, then green).
