@@ -32,6 +32,10 @@ import { afterEach, describe, expect, test } from "vitest";
 import type { ScanCoverage, StoredAccountUsage, UsageAccount, UsageReport } from "../tools/fleet/wire.js";
 import { runOverseer, type UsagePassOutcome } from "../tools/overseer/daemon.js";
 import { readCheckpoint } from "../tools/overseer/store.js";
+import { clockFrom } from "./helpers/fixture-clock.js";
+
+/** Just after the fixtures' own `collectedAt`s: the daemon's clock starts here, not at today. */
+const FIXTURE_NOW = "2026-09-10T06:01:00.000Z";
 
 const roots: string[] = [];
 afterEach(() => {
@@ -134,6 +138,7 @@ async function runWithHook(options: {
     baseUrl: "http://127.0.0.1:1",
     signal: controller.signal,
     tickMs: options.tickMs ?? 40,
+    now: clockFrom(FIXTURE_NOW),
     log: () => {},
     source: async function* () {
       await heldOpen(controller.signal);
@@ -337,6 +342,7 @@ describe("the per-account pass is wired, and is independent of the scan", () => 
       root,
       baseUrl: "http://127.0.0.1:1",
       signal: controller.signal,
+      now: clockFrom(FIXTURE_NOW),
       tickMs: 40,
       log: () => {},
       source: async function* () {
@@ -413,6 +419,7 @@ describe("the per-account pass is wired, and is independent of the scan", () => 
       root,
       baseUrl: "http://127.0.0.1:1",
       signal: controller.signal,
+      now: clockFrom(FIXTURE_NOW),
       tickMs: 10,
       log: () => {},
       source: async function* () {

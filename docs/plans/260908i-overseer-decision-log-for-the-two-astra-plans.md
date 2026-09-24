@@ -855,3 +855,12 @@ authority while a reader's need more scrutiny and usually his approval. Written 
 [overseer.md § 2](../project/overseer.md#2-answer-facts-route-judgement-default-the-product-call) as
 one bullet with his words. feedback-reports.md left untouched, so the standing-jobs pin is not moved
 a second time.
+
+### 2026-09-24 03:45 — Greg answers 30, 3J, 3E
+
+Relayed to fb-decisions-0924. **30:** Greg wants one general way of representing LaTeX, useful for
+HTML imports too; the shared form already exists (delimited TeX in block text, drawn by
+`src/web/maths.ts`), so the stage is framed as "every importer emits delimited TeX", PDF first, HTML
+named or built if it shares the seam. **3J:** approved as recommended — keep writing on open, no
+spend cap for now. **3E:** a Playwright screenshot stands in for his iPad check; if the icon looks
+right it is treated as fixed and he reopens if not.
