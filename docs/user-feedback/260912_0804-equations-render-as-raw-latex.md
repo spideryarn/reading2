@@ -32,3 +32,10 @@ proposal `qi-njx3xh37`.
 goes out only on Greg's word, so the feedback sweep did not dispatch it; it put the decision where he
 reads it and gave the queue item a priority (0.6) and a `needs-greg` mark, so the queue no longer
 sorts a wanted admin follow-up to the bottom as though nobody had asked for it.
+
+**2026-09-24 — the deferred half is built** (Greg delegated the call: *"use your judgment, keep it
+simple"*). The PDF reader now writes maths as TeX between `\(…\)` and `\[…\]`, and its checks read
+that TeX as what it prints, so a maths chunk is not paid for twice. On the same paper, equation (1)
+comes out as one displayed formula and recall is unchanged —
+[260924b-pdf-transcriber-writes-maths-as-tex.md](../plans/260924b-pdf-transcriber-writes-maths-as-tex.md).
+**Greg's existing copy gets it by re-importing the PDF**; nothing already on the shelf is changed.

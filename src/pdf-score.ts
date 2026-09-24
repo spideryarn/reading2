@@ -49,6 +49,7 @@ import {
   structuralFailureMessages,
   type IntegrityVerdict,
 } from "./pdf-integrity.js";
+import { mathsAsText } from "./pdf-tex.js";
 
 /**
  * The smoke test, not the gate — and the difference is worth reading before
@@ -260,6 +261,15 @@ const tokens = (s: string): string[] => {
   const folded = fold(s);
   return folded ? folded.split(" ") : [];
 };
+
+/**
+ * **A transcription's words, the way every comparison in the PDF path reads
+ * them** — its maths turned back into what the printed page says, then `fold`.
+ * `withoutRepeats` and `wordsOf` in src/pdf-read.ts use this too, so the
+ * context-page rule and the scorer cannot disagree about what a formula's words
+ * are (F9 of docs/plans/260912d-plan-review-sol.md).
+ */
+export const comparisonWords = (s: string): string[] => tokens(mathsAsText(s));
 
 /**
  * The tokens that must survive exactly: anything with a digit in it, and
@@ -568,7 +578,21 @@ const GARBAGE = /\uFFFD/gu;
  * down to words that match the page perfectly. Mistral Medium emitted both on
  * the first page it was given, at a recall of 0.93.
  */
-const MARKUP = /<\/?[a-z][a-z0-9]*(?:\s[^>]*)?>|\$\^?\{|\\[a-zA-Z]{2,}|\*\*[^*\n]+\*\*|^#{1,6}\s/gmu;
+/* A `\(` or `\[` that survives `mathsAsText` opened a span the renderer would
+   not draw. Match its opener explicitly: such a span need not contain a control
+   word (`\(x % hidden source\ny\)` is the important case). */
+const MARKUP = /<\/?[a-z][a-z0-9]*(?:\s[^>]*)?>|\$\^?\{|\\[\[(]|\\[a-zA-Z]{2,}|\*\*[^*\n]+\*\*|^#{1,6}\s/gmu;
+
+/* Dollar-delimited maths is forbidden by the PDF prompt and is deliberately
+   not consumed by `mathsAsText`. Include the bare `$x$` case that stage 1 also
+   leaves raw, while not mistaking `$5 and $10` or `$PATH/$HOME` for a span. */
+const DOLLAR_MATH =
+  /(?<!\\)\$\$(?!\$)[\s\S]+?(?<!\\)\$\$|(?<!\\)\$(?![$\s])(?:\\.|[^$\n])+?(?<![\s\\])\$(?![\d\p{L}\p{N}_])/gu;
+
+const markupIn = (text: string): string[] => [
+  ...[...text.matchAll(MARKUP)].map((m) => m[0]),
+  ...[...text.matchAll(DOLLAR_MATH)].map((m) => (m[0].startsWith("$$") ? "$$" : "$")),
+];
 
 function counts(list: string[]): Map<string, number> {
   const m = new Map<string, number>();
@@ -706,11 +730,15 @@ export function scorePage(
   const base = baseline.flatMap(tokens);
   /* Everything, for recall and the missing runs: the page has to have been
      transcribed in full, whatever we intend to show of it. */
-  const text = records.map((r) => r.text).join("\n");
+  /* Every record's maths as the words it prints, before anything is counted —
+     so a formula written as TeX is compared, and its markup looked for, like
+     any other text. `mathsAsText`. */
+  const said = (rs: PdfRecord[]) => rs.map((r) => mathsAsText(r.text)).join("\n");
+  const text = said(records);
   const got = tokens(text);
   /* What the reader will actually see, for the checks that gate. */
-  const shownText = records.filter((r) => RENDERED.has(r.type)).map((r) => r.text).join("\n");
-  const hiddenText = records.filter((r) => !RENDERED.has(r.type)).map((r) => r.text).join("\n");
+  const shownText = said(records.filter((r) => RENDERED.has(r.type)));
+  const hiddenText = said(records.filter((r) => !RENDERED.has(r.type)));
   const shared: Omit<
     PageScore,
     "recall" | "precision" | "order" | "spans" | "absent" | "invented" | "unshown"
@@ -720,7 +748,7 @@ export function scorePage(
     got: got.length,
     records: records.length,
     uncertain: records.filter((r) => r.uncertain).length,
-    markup: [...shownText.matchAll(MARKUP)].map((m) => m[0]).slice(0, 5),
+    markup: markupIn(shownText).slice(0, 5),
     garbage: shownText.match(GARBAGE)?.length ?? 0,
   };
   if (base.length === 0) {
@@ -752,7 +780,7 @@ export function scorePage(
     invented: protectedFaults(protect(shownText), onPage, defused),
     unshown: [
       ...protectedFaults(protect(hiddenText), onPage, defused),
-      ...[...hiddenText.matchAll(MARKUP)].map((m) => m[0]),
+      ...markupIn(hiddenText),
       ...(hiddenText.match(GARBAGE) ?? []),
     ].slice(0, 10),
   };
@@ -952,7 +980,7 @@ function thinPages(
   floor: number,
   chunkRecall: number,
 ): string[] {
-  const everything = tokens(records.map((r) => r.text).join("\n"));
+  const everything = comparisonWords(records.map((r) => r.text).join("\n"));
   const out: string[] = [];
   for (const page of checkable) {
     const baseline = baselineFor(pass, page).flatMap(tokens);
