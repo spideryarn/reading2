@@ -287,6 +287,7 @@ const DIAGNOSTIC_ERROR_NAMES: ReadonlySet<string> = new Set([
   "StreamStalled",
   "MarkStopped",
   "OpeningReadTimedOut",
+  "ReaderFacingError",
 ]);
 
 /**
