@@ -96,7 +96,9 @@ vi.mock("../src/messages-stream.js", async (importOriginal) => {
   };
 });
 
-const { generateLabels } = await import("../src/labels.js");
+const { generateLabels, LabelsFailed } = await import("../src/labels.js");
+type LabelsFailed = import("../src/labels.js").LabelsFailed;
+const { sanitise } = await import("../src/monitoring-scrub.js");
 
 function block(i: number): Block {
   const id = `spya-${String(i).padStart(6, "0")}`;
@@ -662,5 +664,202 @@ describe("a hostile article, rather than a hostile response", () => {
       blocks[3]!.id,
     ]);
     expect(Object.keys(run.labels).length).toBe(57);
+  });
+});
+
+/**
+ * **One bad pair, not one missing pair.** SPIDERYARN-READING2-43, 2026-09-24:
+ * an imported PDF's labels step died with Sentry reading `Error: Error`, top
+ * frame `readPairs`, and Greg's Retry then succeeded. Every fault `readPairs`
+ * found in a single pair — an empty label, an ordinal given twice, an ordinal
+ * that is not an integer, an entry that is not a pair — was a plain `Error`,
+ * and the retry loop retries only a `BatchIncomplete`, so one bad pair in
+ * fifty-eight ended the step on the first draw. The same model *omitting* that
+ * pair would have been re-asked, and forgiven within the budget.
+ * docs/plans/260924e-a-malformed-label-pair-kills-the-step-without-a-retry.md.
+ */
+describe("an answer with one malformed pair", () => {
+  /** A whole, good answer for 1…n, with paragraph 4's pair replaced by `bad`. */
+  function withBadPair(n: number, bad: unknown[]): string {
+    const labels: unknown[] = Array.from({ length: n }, (_, i) => [
+      i + 1,
+      `A claim about paragraph ${i + 1}, said at a workable length`,
+    ]);
+    labels.splice(3, 1, ...bad);
+    return JSON.stringify({ labels });
+  }
+
+  /* **Declining a paragraph**: a label that is empty or not text. The same
+     event as leaving the pair out, so the same answer — a re-ask naming it. */
+  const declined: [string, unknown[]][] = [
+    ["an empty label", [[4, ""]]],
+    ["a whitespace label", [[4, "   "]]],
+    ["a label that is not text", [[4, null]]],
+  ];
+
+  for (const [what, bad] of declined) {
+    it(`re-asks for the paragraph with ${what}, rather than failing the step`, async () => {
+      const { tree, blocks } = oneSection(58);
+      wire.answers.push(withBadPair(58, bad));
+      wire.answers.push(answering([4], "A repaired claim about paragraph"));
+
+      const run = await generateLabels({ tree, blocks, slug: "test", checkpoints: nullCheckpointStore() });
+
+      expect(wire.calls.length).toBe(2);
+      expect(wire.calls[1]!.parts.join("\n")).toMatch(/paragraph 4\b/);
+      expect(Object.keys(run.labels).length).toBe(58);
+      expect(run.labels[blocks[3]!.id]).toContain("A repaired claim");
+      expect(run.dropped).toEqual([]);
+    });
+  }
+
+  it("accepts an empty label given twice as a drop, like an omission given twice", async () => {
+    // The likeliest production shape: a PDF fragment the prompt makes
+    // unlabellable, answered with "" instead of by leaving it out.
+    const { tree, blocks } = oneSection(58);
+    wire.answers.push(withBadPair(58, [[4, ""]]));
+    wire.answers.push(JSON.stringify({ labels: [[4, ""]] }));
+
+    const run = await generateLabels({ tree, blocks, slug: "test", checkpoints: nullCheckpointStore() });
+
+    expect(run.dropped).toEqual([blocks[3]!.id]);
+    expect(Object.keys(run.labels).length).toBe(57);
+  });
+
+  it("still shift-checks what it keeps around an empty label", async () => {
+    /* The shortfall route skips `runBatch`'s own shift check and relies on
+       `repairShortfall` checking the merged set. An empty label must not be a
+       way round that. Nineteen labels each written for the paragraph after. */
+    const { tree, blocks } = oneSection(20);
+    const distinct = blocks.map((b, i) => ({
+      ...b,
+      text: `This passage concerns ${WORDS[i]} and nothing else whatsoever.`,
+    }));
+    const displaced = (n: number): string =>
+      `A claim concerning ${WORDS[n] ?? "afterwards"} at some length`;
+    wire.answers.push(
+      JSON.stringify({
+        labels: Array.from({ length: 20 }, (_, i) => i + 1).map((n) => [n, n === 7 ? "" : displaced(n)]),
+      }),
+    );
+    wire.answers.push(JSON.stringify({ labels: [[7, displaced(7)]] }));
+
+    await expect(
+      generateLabels({ tree, blocks: distinct, slug: "test", checkpoints: nullCheckpointStore() }),
+    ).rejects.toThrow(/match the paragraph after it/);
+  });
+
+  it("re-draws when an empty label carries a paragraph number nobody asked for", async () => {
+    /* `[999, ""]` is an answer written for some other batch, and `parseLabels`
+       refuses that whole — its in-range half would be a guess. Skipping the pair
+       for its empty label must not lose the number. GPT Sol, plan review,
+       finding 1. */
+    const { tree, blocks } = oneSection(12);
+    wire.answers.push(
+      JSON.stringify({ labels: [...JSON.parse(allBut(12, [])).labels, [999, ""]] }),
+    );
+    wire.answers.push(allBut(12, []));
+
+    const run = await generateLabels({ tree, blocks, slug: "test", checkpoints: nullCheckpointStore() });
+
+    expect(wire.calls.length).toBe(2);
+    expect(wire.calls[1]!.maxTokens, "a whole re-draw, not a re-ask").toBeGreaterThan(
+      wire.calls[0]!.maxTokens,
+    );
+    expect(Object.keys(run.labels).length).toBe(12);
+  });
+
+  /* **Losing the format**: these say nothing about any one paragraph, so they
+     must not reach `acceptGap`'s "the model would not write this one". A whole
+     re-draw, as for a truncation. GPT Sol, plan review, finding 2. */
+  const broken: [string, unknown[]][] = [
+    ["the ordinal given twice", [[4, "One claim about it"], [4, "Another claim about it"]]],
+    ["the ordinal given three times", [[4, "One"], [4, "Two"], [4, "Three"]]],
+    ["an ordinal that is a string", [["4", "A claim about paragraph four"]]],
+    ["an entry that is not a pair", [[4, "A claim", "and a stray third element"]]],
+  ];
+  const wholeFaults: [string, string][] = [
+    ...broken.map(([what, bad]): [string, string] => [what, withBadPair(12, bad)]),
+    ["labels that are not a list", JSON.stringify({ labels: { "1": "a claim" } })],
+    ["an answer that is null", "null"],
+    ["an answer that is not JSON", "I could not label these paragraphs."],
+  ];
+  for (const [what, answer] of wholeFaults) {
+    it(`re-draws the whole batch for ${what}`, async () => {
+      const { tree, blocks } = oneSection(12);
+      wire.answers.push(answer);
+      wire.answers.push(allBut(12, []));
+
+      const run = await generateLabels({ tree, blocks, slug: "test", checkpoints: nullCheckpointStore() });
+
+      expect(wire.calls.length).toBe(2);
+      expect(wire.calls[1]!.maxTokens).toBeGreaterThan(wire.calls[0]!.maxTokens);
+      expect(Object.keys(run.labels).length).toBe(12);
+    });
+  }
+
+  it("never forgives a format fault as a drop, however small the gap", async () => {
+    // Fifty-eight blocks: one label of slack, and this would fit inside it.
+    const { tree, blocks } = oneSection(58);
+    const dupe = [[4, "One claim about it"], [4, "Another claim about it"]];
+    wire.answers.push(withBadPair(58, dupe));
+    wire.answers.push(withBadPair(58, dupe));
+
+    await expect(
+      generateLabels({ tree, blocks, slug: "test", checkpoints: nullCheckpointStore() }),
+    ).rejects.toBeInstanceOf(LabelsFailed);
+  });
+});
+
+/**
+ * **What Sentry is told when the step does fail.** SPIDERYARN-READING2-43 read
+ * `Error: Error` and nothing else: every message here is free text, and Sentry
+ * withholds free text on purpose (`authored` in src/monitoring-scrub.ts). So the
+ * terminal error carries a name and a `code` from a closed set, which
+ * `sanitise` forwards as a tag — `MalformedJson`'s precedent in
+ * src/parse-json.ts.
+ */
+describe("the error the step fails with", () => {
+  async function failure(): Promise<unknown> {
+    const { tree, blocks } = oneSection(12);
+    return generateLabels({ tree, blocks, slug: "test", checkpoints: nullCheckpointStore() }).then(
+      () => new Error("it did not throw at all"),
+      (err: unknown) => err,
+    );
+  }
+
+  it("names both attempts' faults in a code Sentry forwards", async () => {
+    wire.answers.push(JSON.stringify({ labels: "no" }));
+    wire.answers.push("TRUNCATED");
+
+    const err = await failure();
+    expect(err).toBeInstanceOf(LabelsFailed);
+    expect((err as LabelsFailed).code).toBe("not-a-list+truncated");
+
+    const { error, withheld, props } = sanitise(err);
+    expect(withheld, "the message is still free text, and still withheld").toBe(true);
+    expect(error.name).toBe("LabelsFailed");
+    expect(props.code).toBe("not-a-list+truncated");
+  });
+
+  it("names a shortfall that stayed short past the budget", async () => {
+    // Twelve blocks, nine missing twice: well past what a batch may lose.
+    wire.answers.push(answering([1, 2, 3]));
+    wire.answers.push(answering([4]));
+
+    const err = await failure();
+    expect(err).toBeInstanceOf(LabelsFailed);
+    expect((err as LabelsFailed).code).toBe("short+short");
+  });
+
+  it("never carries a label the model wrote, in the message or the code", async () => {
+    const secret = "ARTICLE_SENTINEL private prose";
+    wire.answers.push(JSON.stringify({ labels: [[1, secret], [1, secret]] }));
+    wire.answers.push(JSON.stringify({ labels: [[1, secret], [1, secret]] }));
+
+    const err = await failure();
+    expect(err).toBeInstanceOf(LabelsFailed);
+    expect((err as Error).message).not.toContain("ARTICLE_SENTINEL");
+    expect((err as LabelsFailed).code).not.toContain("ARTICLE_SENTINEL");
   });
 });
