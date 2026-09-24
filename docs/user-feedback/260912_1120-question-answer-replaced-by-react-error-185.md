@@ -32,3 +32,8 @@ exception's text as a failure message (`describeFetchFailure`), and a render-pha
 under `SignedIn` on every page load in development.
 
 The Sentry status write is the next sweep's — this session ran on a pool account.
+
+2026-09-24: the first of those two is built — a foreign exception's text no longer reaches a reader
+through `describeFetchFailure`; it gets the page's own `[web-unexpected]` sentence instead, and goes
+to Sentry with its message withheld.
+[260924a](../plans/260924a-only-a-sentence-the-server-wrote-reaches-the-reader.md).

@@ -289,6 +289,8 @@ export const CODE_KINDS: Record<string, FailureKind> = {
   "ai-interrupted": "retry",
   "ai-unreadable": "retry",
   "ai-unexpected": "bug",
+  /* The browser's half of `ai-unexpected` — see `PAGE_FAULT`. */
+  "web-unexpected": "bug",
   "ai-not-set-up": "ours",
   "ai-overflowed": "retry",
   "ai-slow": "retry",
@@ -2303,6 +2305,28 @@ export function wentQuiet(seconds: number): ReaderFacingFailure {
       "Trying again starts a fresh answer. [ai-stalled]",
   };
 }
+
+/**
+ * The page caught an exception nobody wrote a sentence for.
+ *
+ * The browser's half of `UNEXPECTED_FAILURE`, and for the same reason: the text
+ * of whatever escaped — React's own `Minified React error #185`, a `TypeError`
+ * from a bug, a parser's complaint — is not ours to publish and says nothing a
+ * reader can act on. It reached a reader on 2026-09-12 as a chat answer's
+ * failure (docs/plans/260924a-only-a-sentence-the-server-wrote-reaches-the-reader.md).
+ *
+ * Says **not necessarily the server**, because the one time it was seen the
+ * server had finished the answer and the page lost it — so reloading is the
+ * honest next step, not asking again. Raised by `describeFetchFailure` in
+ * src/web/useComments.ts, which also reports the exception to Sentry.
+ */
+export const PAGE_FAULT: ReaderFacingFailure = {
+  kind: "bug",
+  message:
+    "This page ran into a fault of its own while handling that, so what you see may be out of date " +
+    "rather than lost — reloading the page usually shows whatever the server did finish. It is a bug " +
+    "in this app that needs fixing here, not something you did. [web-unexpected]",
+};
 
 /**
  * The request went out and nothing came back — not an error, not a status, not

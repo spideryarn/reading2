@@ -517,6 +517,11 @@ const SHARED_WITH_READER = [
   "src/web/lib/DataTable.tsx",
   "src/web/lib/api.ts",
   "src/web/lib/offline-store.ts",
+  /* Arrived 2026-09-24 as the second predicted case: `lib/api.ts`, already
+     here, gained an import of it — `HttpError` extends its `ReaderFacingError`.
+     A leaf of two dozen lines the reader already downloads through `api.ts`;
+     docs/plans/260924a-only-a-sentence-the-server-wrote-reaches-the-reader.md. */
+  "src/web/lib/reader-facing.ts",
   "src/web/lib/supabase.ts",
   "src/web/lib/table-sort.ts",
   "src/web/lib/utils.ts",

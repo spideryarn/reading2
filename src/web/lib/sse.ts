@@ -10,6 +10,8 @@
  * The server half is `sse` in src/routes.ts; the OpenRouter half, which parses
  * a different SSE dialect, is `sseChunks` in src/openrouter-stream.ts.
  */
+import { markUnreachable } from "./reader-facing.js";
+
 export interface ServerEvent {
   name: string;
   data: unknown;
@@ -105,8 +107,15 @@ export async function* readEvents(
   let started = false;
   try {
     for (;;) {
-      const { done, value } =
-        stallMs === undefined || !started ? await reader.read() : await readBefore(reader, stallMs);
+      /* A `TypeError` out of the read is the body dying mid-stream — a lost
+         connection, not a bug — and this is the one place that knows it came
+         from the transport. Marked for `describeFetchFailure`
+         (lib/reader-facing.ts); `StreamStalled` and an abort pass unmarked. */
+      const { done, value } = await (
+        stallMs === undefined || !started ? reader.read() : readBefore(reader, stallMs)
+      ).catch((e: unknown) => {
+        throw e instanceof TypeError ? markUnreachable(e) : e;
+      });
       if (done) break;
       // A zero-length chunk is not a byte. Vanishingly unlikely on a `fetch`
       // body, and the contract above says "the first byte" — so it says it.

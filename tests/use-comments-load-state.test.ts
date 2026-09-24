@@ -43,6 +43,7 @@ vi.mock("../src/web/lib/api.js", async () => {
 });
 
 const { useComments } = await import("../src/web/useComments.js");
+const { ReaderFacingError } = await import("../src/web/lib/reader-facing.js");
 type CommentsApi = ReturnType<typeof useComments>;
 
 let container: HTMLDivElement;
@@ -165,7 +166,10 @@ describe("useComments, on the fetch that fills the list", () => {
      not happen is `loadFailed` staying false, which is what turns "the server
      did not answer" into "you have asked nothing". */
   it("says both things when the request throws", async () => {
-    answer = () => Promise.reject(new Error("network down"));
+    /* A sentence written for the reader, the only kind `describeFetchFailure`
+       passes through (lib/reader-facing.ts) — a plain Error would be shown as
+       `PAGE_FAULT`, which is also a failed load but not the point here. */
+    answer = () => Promise.reject(new ReaderFacingError("network down"));
     await show("a-piece");
     await settle();
     expect(latest?.loaded).toBe(true);

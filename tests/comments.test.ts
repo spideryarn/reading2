@@ -48,6 +48,7 @@ import { afterEach, describe, expect, it } from "vitest";
 import { loadComments } from "../src/comments.js";
 import { describeFetchFailure } from "../src/web/useComments.js";
 import { StreamStalled } from "../src/web/lib/sse.js";
+import { markUnreachable, ReaderFacingError } from "../src/web/lib/reader-facing.js";
 import { wentQuiet } from "../src/messages.js";
 
 const SLUG = "test-comments-fixture";
@@ -100,16 +101,19 @@ describe("describeFetchFailure", () => {
   it("turns fetch's bare TypeError into something a reader can act on", () => {
     // The failure Greg actually hit on 2026-08-25: the dev server was not
     // running, and "Failed to fetch" said nothing about what to do next.
-    const message = describeFetchFailure(new TypeError("Failed to fetch"));
+    // Marked, as `apiFetch` marks a rejecting `fetch` — an unmarked TypeError is
+    // a bug, not a lost connection (tests/describe-fetch-failure.test.ts).
+    const message = describeFetchFailure(markUnreachable(new TypeError("Failed to fetch")));
     expect(message).toContain("npm run dev");
     expect(message).toContain("Failed to fetch"); // still searchable
   });
 
   it("leaves a real server message alone", () => {
-    // Anything we threw ourselves already says something useful; wrapping it in
-    // "is the dev server running?" would be actively misleading.
-    expect(describeFetchFailure(new Error("OpenRouter 402: Insufficient credits"))).toBe(
-      "OpenRouter 402: Insufficient credits",
+    // A sentence written for a reader says something useful; wrapping it in
+    // "is the dev server running?" would be actively misleading. Only the class
+    // makes that claim now — a plain Error does not get through.
+    expect(describeFetchFailure(new ReaderFacingError("The AI service is out of credit. [ai-no-credit]"))).toBe(
+      "The AI service is out of credit. [ai-no-credit]",
     );
   });
 

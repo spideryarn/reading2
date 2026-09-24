@@ -209,8 +209,17 @@ export function safeEvent(event: ErrorEvent): ErrorEvent {
  * not all of it. Anybody reading this in six months should know the trade was
  * deliberate rather than assume messages went missing by accident — hence the
  * `message_withheld` tag, so an issue that looks bare says why.
+ *
+ * **`neverAuthored`** is for a caller that already knows the message is not
+ * ours, whatever it ends in: `describeFetchFailure` in src/web/useComments.ts
+ * reports exactly the errors that are *not* a sentence written for a reader,
+ * and `authored` alone would let `new Error("<the article> [ai-busy]")` through
+ * on its suffix. GPT Sol, reviewing the plan, 2026-09-24.
  */
-export function sanitise(err: unknown): { error: Error; withheld: boolean; props: Fields } {
+export function sanitise(
+  err: unknown,
+  { neverAuthored = false }: { neverAuthored?: boolean } = {},
+): { error: Error; withheld: boolean; props: Fields } {
   if (!(err instanceof Error)) {
     /* Never `String(err)` and never `JSON.stringify`. src/log.ts's `describe`
        explains both: one moves an arbitrary object's contents into a string
@@ -221,7 +230,7 @@ export function sanitise(err: unknown): { error: Error; withheld: boolean; props
     return { error: new Error(`non-Error thrown: ${name}`), withheld: true, props: {} };
   }
 
-  const withheld = !authored(err.message);
+  const withheld = neverAuthored || !authored(err.message);
   const safe = new Error(withheld ? err.name : err.message);
   safe.name = err.name;
   if (typeof err.stack === "string") {

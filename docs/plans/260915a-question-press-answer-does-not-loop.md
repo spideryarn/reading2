@@ -226,7 +226,8 @@ did. So `useVisualViewport`'s one mount-time `setBox` was never a suspect.
   ours. After this fix the burst no longer produces React's exception, but a leading listener still
   runs inside the stream loop, so a foreign exception from some other cause could still be printed
   as an answer's failure (Sol, R6). Making "a sentence the server wrote" a type rather than
-  a hope touches three hooks and every caller; worth its own small plan.
+  a hope touches three hooks and every caller; worth its own small plan. **Built 2026-09-24:**
+  [260924a](260924a-only-a-sentence-the-server-wrote-reaches-the-reader.md).
 - **The `SignedIn` render-phase update warning** — § Two things the diagnosis turned up.
 
 ## Stages

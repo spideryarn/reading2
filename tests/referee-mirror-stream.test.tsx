@@ -180,7 +180,10 @@ describe("a run that stops without a done frame", () => {
        finished looking at. */
     expect(latest?.status).toBe("failed");
     expect(latest?.result).toBeNull();
-    expect(latest?.error).toBeTruthy();
+    /* The hook's own sentence, exactly — a `toBeTruthy` here stayed green with
+       it thrown as a plain `Error`, which `describeFetchFailure` now replaces
+       with the page-fault copy (GPT Sol, code review F6, plan 260924a). */
+    expect(latest?.error).toMatch(/stopped arriving before it was finished/);
   });
 
   it("stops saying it is answering", async () => {

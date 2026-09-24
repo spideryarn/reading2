@@ -34,6 +34,7 @@
  */
 import { LIST_LOAD_TIMED_OUT } from "../../messages.js";
 import { apiFetch, readJson } from "./api.js";
+import { ReaderFacingError } from "./reader-facing.js";
 
 /**
  * How long a panel waits for its saved list before giving up on it.
@@ -47,7 +48,7 @@ import { apiFetch, readJson } from "./api.js";
 export const OPENING_READ_DEADLINE_MS = 15_000;
 
 /** The read was given up on at the deadline. Its message is the reader's. */
-export class OpeningReadTimedOut extends Error {
+export class OpeningReadTimedOut extends ReaderFacingError {
   constructor() {
     super(LIST_LOAD_TIMED_OUT.message);
     this.name = "OpeningReadTimedOut";

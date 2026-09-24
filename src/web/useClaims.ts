@@ -31,6 +31,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { Claim, ClaimsRun } from "../referee-claims.js";
 import { isStale } from "../search-stale.js";
 import { apiFetch, failure, readJson } from "./lib/api.js";
+import { ReaderFacingError } from "./lib/reader-facing.js";
 import { readEvents, STREAM_STALL_MS } from "./lib/sse.js";
 import { useOrderedRead } from "./useOrderedRead.js";
 import { type ArtefactStatus, useAutoRun } from "./useAutoRun.js";
@@ -229,7 +230,7 @@ export function useClaims(slug: string): ClaimsApi {
           }
         }
 
-        if (!settled) throw new Error("The claims stopped arriving. Try again.");
+        if (!settled) throw new ReaderFacingError("The claims stopped arriving. Try again.");
       } catch (e) {
         if (!stillMine()) return;
         const message = describeFetchFailure(e as Error);

@@ -1,0 +1,21 @@
+Verdict: refuse until F1 is addressed. The producer audit otherwise found no missed production sentence source.
+
+- **F1 — P0, established: the promised Sentry withholding is not guaranteed.**  
+  The plan sends the original foreign error to `captureClientFailure` and claims its message will be withheld ([plan](/home/greg/code/spideryarn2/.claude/worktrees/feedback-suggestions-0924/docs/plans/260924a-only-a-sentence-the-server-wrote-reaches-the-reader.md:62)). But [`authored()`](/home/greg/code/spideryarn2/.claude/worktrees/feedback-suggestions-0924/src/monitoring-scrub.ts:63) trusts any message ending in a registered code. Thus `new Error("private article text [ai-busy]")` is foreign to `ReaderFacingError`, yet `sanitise` forwards its complete message to Sentry. This violates the monitoring privacy contract precisely on the new arbitrary-error capture path.  
+  Smallest change: give `captureClientFailure` an explicit force-withhold option—or a dedicated unexpected-client-failure entry point—that preserves the original name and frames but never authorises its message by content. Add a sentinel test whose foreign message ends in `[ai-busy]`.
+
+- **F2 — P2, established: an intentional spoken-repair abort will be reported as a bug.**  
+  The spoken repair deadline first finishes its operation and then calls `abort.abort()` ([controller](/home/greg/code/spideryarn2/.claude/worktrees/feedback-suggestions-0924/src/web/chat/controller.ts:645)). `askForThreads` catches that expected `AbortError` and unconditionally calls `describeFetchFailure` ([effects](/home/greg/code/spideryarn2/.claude/worktrees/feedback-suggestions-0924/src/web/chat/effects.ts:391)). Because aborts are deliberately unbranded, the new generic branch will send one Sentry issue and `console.error` for every timed-out spoken repair; its returned failure is then ignored because the controller already finished.  
+  Smallest change: short-circuit `askForThreads` when `signal?.aborted` without calling `describeFetchFailure`, and test that the repair deadline produces no capture.
+
+- **F3 — P2, reasoned: “TypeError at a transport API” does not prove a lost connection.**  
+  `fetch`, `Response.text()`, and `reader.read()` can reject with `TypeError` for programmer/state errors too. For example, `apiFetch("/api/x", { method: "GET", body: "{}" })` rejects from `fetch` because GET cannot have a body; `readJson` on an already-consumed response rejects because the body is unusable. Both would be branded unreachable, misreported as a connection loss, and the existing copy would expose the engine-written message in parentheses.  
+  Smallest change: validate request construction outside the branded catch and reject already-used bodies before branding. More robustly, remove the raw `error.message` from the “couldn’t reach” sentence and keep it only in local diagnostics.
+
+- **F4 — P2, established: the tests do not prove both SSE read paths preserve the brand.**  
+  `readEvents` reads once directly before the stream starts and later through `readBefore`; these are separate `reader.read()` sites ([sse](/home/greg/code/spideryarn2/.claude/worktrees/feedback-suggestions-0924/src/web/lib/sse.ts:109), [sse](/home/greg/code/spideryarn2/.claude/worktrees/feedback-suggestions-0924/src/web/lib/sse.ts:174)). The proposed tests exercise only a rejecting `fetch` through `apiFetch`, so omitting either SSE brand still leaves every named test green.  
+  Smallest change: add `readEvents` tests for a `TypeError` before the first byte and after one successful chunk, asserting that the original object is branded in both cases.
+
+The WeakSet itself survives `attempt`’s cache-miss rethrow and `openingRead`’s `Promise.race`; neither wraps the error. `StreamStalled` winning `readBefore` also remains correctly handled. After excluding intentional aborts, `bug` is the right kind for the genuinely foreign branch: suppressing a paid Retry and advising reload matches the documented meaning of an internal client defect.
+
+No files changed. I did not run the test allowance because the reviewed implementation is absent from `HEAD`, while concurrent uncommitted implementation files appeared in the live worktree during review.
