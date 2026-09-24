@@ -42,3 +42,11 @@ GPT Sol reviews.
    bypasses nothing, but it does make a paid re-run happen without a press, which makes the
    missing cap more worth deciding. Nothing was built — a cap would be a billing defence, which is
    yours ([billing.md](../project/billing.md)).
+
+## Decided 2026-09-24, on Greg's delegated judgment
+
+1. **Keep writing on open.** It is what Greg asked for, and the two unasked cases are at most one run
+   per article per page load on the reader's own article.
+2. **No spend cap built — still Greg's.** A cap is a billing defence, which this run has no authority
+   to add; the recommendation is to leave it off until spend data shows a re-run problem. It stays on
+   [awaiting-approval.md](awaiting-approval.md) as a narrowed row.

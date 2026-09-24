@@ -17,3 +17,8 @@ gutter shows the card and does not jump. Glossary, Quotes and Citations were che
 behaved this way, since their card is on the score bars rather than on the row. The plan, the
 reasoning and what was passed over are in
 [260915c](../plans/260915c-search-result-score-card-only-from-the-score.md).
+
+**Decided 2026-09-24, on Greg's delegated judgment (Fable arbitrating): the card keeps its fuller
+passage.** Greg asked about where the card opens from, which shipped, not what it holds, and the
+longer passage is the only preview a desktop reader gets before jumping. What would change it: Greg
+finding the passage noise.

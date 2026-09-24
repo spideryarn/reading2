@@ -826,3 +826,23 @@ Search now opens on the prioritised order, and every mode with a prioritised ord
 **fb3j** (Tweets mode generates on open) is pushed to dev and removing its tree; closed next tick. fb3j also reproduced both Overseer usage-test reds alone at 54258b8b and reads them as the take-fresh/keep-stored decision regressing rather than fixture rot; queue item qi-cw6rzavq updated with that.
 
 The 21:17Z changelog run found no new deploy and wrote nothing; the 21:50Z sweep queued nothing new and resolved 3S, 3Z and 3W in Sentry.
+
+### 2026-09-24 02:45 UTC — back after an eight-day gap; dev's red gate and the feedback decisions dispatched
+
+Production is 493615a4 (deployed 2026-09-18); dev is one changelog commit ahead, so a deploy now ships nothing but that line. The ticks stopped between 2026-09-16 and 09-24; the loops kept running (changelog runs and sweeps every few hours, all quiet since the 18th).
+
+Dev's test gate has been red since at least 2026-09-23 on four tooling files and no product test. Greg, 2026-09-24: *"Yes, go, fix the tests."* Dispatched `fix-dev-test-reds` (qi-cw6rzavq, authorised by Greg) for three of them: `overseer-daemon-usage-pass`, `overseer-store-usage`, `fleet-usage-history-wiring`. The fourth, `overseer-standing-jobs`, is red by design: `docs/project/feedback-reports.md` was edited in 02a63b7b (2026-09-16, the rule that a split report stays unresolved until every half has ended) after Greg pinned it, and re-pinning is his authorisation. Asked him plainly.
+
+Greg, 2026-09-24: *"And then work through the various feedback suggestions."* Dispatched `fb-decisions-0924` under his 2026-09-11 guidance (*"use your judgment. try to keep things simple"*): the six rows resting with him in `awaiting-approval.md` (30, 3J, 42, 3D+3F, 3C, and 3E, which is a device check only he can do), the two queued follow-ups he has now authorised (qi-9d85r384 left-rail first tap; qi-pbasrz4b describeFetchFailure), and the three 2026-09-15 defaults (chat links card-first, logo tap, search score card). Each decision is recorded in its note with a reason; money, production writes and defence changes stay with Greg.
+
+A close-out agent is also retiring the eight finished feedback sessions left alive from the 2026-09-15 sweep.
+
+### 2026-09-24 — the three 2026-09-15 assumptions, decided
+
+Session `fb-decisions-0924`, on Greg's *"work through the various feedback suggestions"* and his
+standing *"use your judgment, keep it simple"*, with Fable arbitrating. All three assumptions stand,
+now as decisions: **chat links** keep opening on the first tap (tapped on purpose, host printed, no
+fetched preview to stop for); **the reading view's logo** tap still goes home (a play-first tap costs
+everyone two taps home; a hold plays one); **the search score card** keeps its fuller passage (Greg
+asked where it opens from, not what it holds). Each is recorded in its note and in
+[awaiting-approval.md](../user-feedback/awaiting-approval.md), under *Answered 2026-09-24*.
