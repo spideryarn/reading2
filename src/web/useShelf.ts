@@ -49,6 +49,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { LibraryEntry, LibraryResponse } from "../types.js";
 import { apiFetch, readJson, statusOf } from "./lib/api.js";
+import { couldNotReach } from "./lib/reader-facing.js";
 import { readCachedShelf } from "./lib/cached-shelf.js";
 
 /** How long the Undo strip stays up. Long enough to reach, short enough not to nag. */
@@ -241,7 +242,7 @@ export function useShelf(readerId: string): Shelf {
         }
         setError(
           e.message === "Failed to fetch"
-            ? "Couldn't reach the server — is `npm run dev` still running?"
+            ? couldNotReach()
             : e.message,
         );
         throw e;

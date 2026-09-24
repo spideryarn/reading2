@@ -208,8 +208,11 @@ rendered = rendered.replaceAll("$${", "${"); // the escape Terraform consumes
 }
 
 const bashOk = (script: string, label: string) => {
-  const r = spawnSync("bash", ["-n", "-c", script], { encoding: "utf8" });
-  if (r.status !== 0) fail(`${label}: ${(r.stderr || "").trim().split("\n")[0]}`);
+  // On stdin, not as `-c <script>`: Linux caps one argv string at 128 KiB
+  // (MAX_ARG_STRLEN), and provision.sh passed that on 2026-09-24 — the spawn
+  // then failed with E2BIG and an empty stderr, reading as a syntax error.
+  const r = spawnSync("bash", ["-n"], { input: script, encoding: "utf8" });
+  if (r.status !== 0) fail(`${label}: ${(r.stderr || r.error?.message || "").trim().split("\n")[0]}`);
   return r.status === 0;
 };
 

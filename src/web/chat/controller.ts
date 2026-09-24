@@ -37,6 +37,10 @@ import { asOpId, initialState, recoveringIds } from "./model.js";
 import type { SpokenOutcome, TurnSink } from "./effects.js";
 import { project, storedSpoken } from "./project.js";
 import { reduce } from "./reduce.js";
+/* Every catch below hands its error to the one rule for what a reader may be
+   shown — an effect that throws is a bug, and a bug's text is not a sentence
+   for a reader (plan 260924a § Stage 2b). */
+import { describeFetchFailure } from "../useComments.js";
 
 /**
  * A lost stream goes back and looks for its answer before it gives up.
@@ -595,7 +599,7 @@ export class ChatController {
              becoming a second one, and above all so the waiter is still told.
              A promise nobody resolves is a live session holding a microphone
              for ever. */
-          this.#checkSpoken(opId, e.message);
+          this.#checkSpoken(opId, describeFetchFailure(e));
         },
       );
   }
@@ -650,7 +654,13 @@ export class ChatController {
     // response after timeout so it cannot replace the restored live words.
     void Promise.resolve().then(() => this.#effects.loadThreads(command.slug, abort.signal)).then(
       finish,
-      (error: Error) => finish({ ok: false, error: error.message }),
+      (error: Error) => {
+        /* The deadline above sets `finished` before it aborts this request. A
+           fetch rejecting from that abort is the expected tail of the timeout,
+           not a second page failure to report through `describeFetchFailure`. */
+        if (finished) return;
+        finish({ ok: false, error: describeFetchFailure(error) });
+      },
     );
   }
 
@@ -694,7 +704,7 @@ export class ChatController {
          effects in effects.ts — it is here so that one later changed into a
          function that throws joins the same path rather than becoming a second
          one. That is the shape the two worst bugs in this file's history had. */
-      this.dispatch({ type: "turn.failed", opId, error: e.message });
+      this.dispatch({ type: "turn.failed", opId, error: describeFetchFailure(e) });
     });
   }
 
@@ -764,7 +774,7 @@ export class ChatController {
   ): void {
     void work.then(
       (outcome) => this.dispatch(done(outcome)),
-      (e: Error) => this.dispatch(threw(e.message)),
+      (e: Error) => this.dispatch(threw(describeFetchFailure(e))),
     );
   }
 }

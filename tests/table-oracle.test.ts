@@ -128,7 +128,10 @@ function oracleFor(page: keyof typeof PAGES, id: string, mutate: (clone: Element
  * on its first header cell and four `colspan`s — is the one the plan names as
  * the case a text-only oracle would pass while the spans were being stripped.
  */
-const AR5IV_TABLE_2 = "s1865";
+/* s1865 until 2026-09-24: the ids count elements in document order, and each of
+   ar5iv's 142 formulas above it is now one text node of TeX rather than a
+   `<math>` subtree (src/maths-import.ts), so the same table is numbered earlier. */
+const AR5IV_TABLE_2 = "s554";
 /** The GDP fixture's regional table: fourteen rows, three columns, links in most cells. */
 const GDP_REGIONAL = "s3561";
 

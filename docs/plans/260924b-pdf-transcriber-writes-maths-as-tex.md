@@ -10,6 +10,18 @@ plan's requirements (F1, F9, F7 from its [plan review](260912d-plan-review-sol.m
 Greg delegated the go/no-go on 2026-09-24 — *"use your judgment, keep it simple"* — and the
 orchestrator decided to build it.
 
+**The contract, since Greg widened it the same day:**
+
+> ideally we would have some general way of representing LaTeX that might also be useful for HTML
+> imports too, not just PDFs...?
+>
+> — Greg, 2026-09-24, on report 30
+
+That representation already exists, and it is the only one: **delimited TeX (`\(…\)`, `\[…\]`) in
+block text, drawn at display** by `src/web/maths.ts` ([maths.md](../project/maths.md)). Every
+importer's job is to put maths into block text in that form. The PDF transcriber is the first
+(stages 1–3 below); HTML imports are the second (§ Stage 3b).
+
 ## What and why
 
 The reproduction in the parent plan found that the PDF transcriber, obeying prompt rule 8 (*"No
@@ -173,7 +185,7 @@ re-gated here:
 `createRequire(import.meta.url)("temml")`. I added `temml.cjs` to `tests/pdf-bundle-trace.test.ts`
 and built: **it is not traced into the API function.** In production every span would have been
 unrecognised, and every maths chunk asked twice — the P0 this plan exists to prevent, with every
-unit test green. Fixed with `loadPdfMathsRenderer`, a literal `await import("temml")` (the seam the
+unit test green. Fixed with `loadPdfMathsRenderer` (since stage 3b `loadMathsRenderer` in `src/maths-server.ts`), a literal `await import("temml")` (the seam the
 tracer already follows for the quote check) called at the top of `runPdfExtract`; the synchronous
 path stays only as a fallback for evals and the CLI. `tests/pdf-tex-stage-loads-temml.test.ts` takes
 the fallback away, as production does, and runs the stage: green with the loader call, red without
@@ -221,6 +233,122 @@ third clause tripped and needed a baseline to read against. Two runs each, $0.09
   dollar spans, equation (1) delimited. The third clause (a chunk failing on its final attempt) and
   the "second run asks nothing" line both trip — on two chunks whose faults are not maths and which
   the control shares exactly. **Not a regression; shipped.**
+
+## Stage 3b: HTML imports
+
+**What a web page carries, measured on the extraction corpus** (`evals/extraction/fixtures/`): three
+of the pages with maths deliver it the same way — a MathML `<math>` holding its own TeX source in an
+`<annotation encoding="application/x-tex">`.
+
+| fixture | `<math>` | with an x-tex annotation | wrapper |
+|---|---|---|---|
+| `ar5iv.html` (LaTeXML) | 142 | 142 (and `alttext`) | none — the `<math>` itself |
+| `wiki_transformer.html` (MediaWiki) | 188 | 188 (and `alttext`) | `span.mwe-math-element`, which also holds a fallback `<img alt="{\displaystyle …}">` |
+| `distill_momentum.html` (KaTeX) | 268 | 268 | `span.katex` = MathML + an `aria-hidden` HTML rendering; `span.katex-display` for display |
+
+The source-DOM pass converts all 598. Readability then retains **551 drawable spans** in the
+extracted articles: 142, 188 and 221 respectively. The first measurement called that 598 in block
+text; it had crossed the before/after-Readability boundary, and a regex then over-counted 17
+`\\[` line-spacing commands inside Distill TeX as new formula openers. The corpus test now asks the
+reading view's own `findMathSpans` instead.
+
+**Before this stage**: the sanitiser deleted `<annotation>` (src/sanitize-policy.ts), so the
+TeX is thrown away. ar5iv keeps native MathML, whose text is the symbols; Wikipedia shows its SVG
+fallback images; KaTeX's MathML *and* its HTML rendering both survive, since
+`unhideCollapsedSections` lifts `aria-hidden` — the formula's text twice. Maths is a second
+representation on every one of them.
+
+**The formats, and which are built:**
+
+1. **MathML with an x-tex annotation** — built. The one seam covers all three fixtures and KaTeX in
+   general: a `<math>` with the annotation (or, failing it, a TeX `alttext`) becomes a text node
+   `\(tex\)`, or `\[tex\]` when it is `display="block"`. The whole wrapper goes with it — the
+   `.katex` span (its HTML twin included), `.katex-display`, and `.mwe-math-element` (its fallback
+   image included) — so nothing is left drawn twice. A leading `{\displaystyle …}` / `{\textstyle
+   …}` wrapper, which MediaWiki adds to every formula, is taken off.
+2. **MathJax v2 `<script type="math/tex">`** (`; mode=display` for display) — built, in the same
+   pass: a static fetch never runs MathJax, so the source is the script's text. A preceding
+   `.MathJax_Preview` sibling goes with it. No corpus fixture has one; the test's fixture is
+   hand-written.
+3. **`<img alt="TeX">` alone** — **not built, named next.** Only with a class that says the alt is
+   TeX (WordPress.com's `img.latex`): an arbitrary alt is prose. Wikipedia's image is already covered
+   by (1), via its wrapper.
+4. **Bare MathML with no annotation** — **not built, named next.** It needs a MathML-to-TeX
+   converter; the candidates are a dependency (`mathml-to-latex`, MIT) or a hand-written walker for
+   the common elements. It stays native MathML meanwhile, which draws well already, so it is the
+   least urgent.
+
+**Where it sits**: `canonicaliseMaths(doc)` in a new `src/maths-import.ts`, called from
+`prepareDocument` in `src/extract.ts` — the one place both Readability callers (`readArticle` and
+`readArticleWithProvenance`) prepare the source DOM, before Readability and before the sanitiser
+deletes the annotation. After the furniture, note and callout recognisers, so none of them sees a
+changed input, and before `protectAuthoredStructure`, which stays last (K6).
+
+**A failed conversion leaves the page as it was** — the rule that keeps it small. The page's declared
+TeX is trusted as the formula's source; nothing compares it with the MathML (K4). A formula is
+converted only if stage 1 would draw it: the same bounded temml renderer and acceptance rule
+(`src/maths-tex.ts`), loaded server-side. The loader moved out of `src/pdf-tex.ts` into a shared
+`src/maths-server.ts` — one literal `await import("temml")` the bundle traces, awaited by
+`runPdfExtract` always and by `runExtract` only when the raw page holds `<math` or `math/tex` (K7),
+with the synchronous fallback for evals. Also left as the page had it: TeX holding its own closer
+(`\]` for display, `\)` inline); maths inside every element the reading view skips, including
+existing MathML and SVG (K2); a formula a link points at by id (K3); a wrapper whose exact known
+formula-and-twin topology does not hold (K3); and a MathJax source nested in a KaTeX or MediaWiki
+formula.
+
+**Block ids.** A new article is fine: its ids are minted from the TeX. **An article already on the
+shelf changes only if it is re-extracted** (a refresh). Measured (K5) by running each fixture's
+stage 2 without and with the conversion, then stage 3 over the new article with the old blocks as the
+previous run:
+
+| fixture | blocks before → after | carried | reminted (all hold maths) | carried, text changed |
+|---|---|---|---|---|
+| ar5iv | 149 → 149 | 122 | 27 | 10 |
+| wiki_transformer | 365 → 365 | 314 | 51 | 0 |
+| distill_momentum | 145 → 145 | 87 | 58 | 0 |
+
+Every reminted block holds maths; no block without maths moved; title, refusal and the furniture,
+note, callout and protection stats are identical on all three (K6). A reminted block loses what was
+anchored to it — the designed failure (block-ids.md § Two honest limits), and the parent plan's
+warning. And since block text changes, `hashBlocks` does, so a refresh re-runs the paid downstream
+stages for that article, as any text change would. Not mitigated: a mapping step would be a second
+mechanism.
+
+**Fable arbitrated this, 2026-09-24: accept it.** Skipping the conversion on a refresh would make
+stage 2's output depend on stage 3's artefact and leave the existing shelf on MathML for good.
+A maths-neutral key in `carryOverIds` would be fuzzy matching by another name, and would still
+re-mint a block that is only a formula. What would change it: a read-only production count of
+comments, highlights and notes anchored to blocks whose html holds `<math`, KaTeX or MathJax. If
+that is more than a handful, the answer is a one-off remapping script run with Greg's approval, not
+a mechanism.
+
+**Passed over**: converting in the browser at display time (stage 1 already skips `<math>`, and the
+annotation has been sanitised away by then); keeping MathML as a second stored form (the brief: one
+representation).
+
+**Review ledger, stage 3b.** Plan review
+[260924b-…-3b-plan-review-sol.md](260924b-pdf-transcriber-writes-maths-as-tex-3b-plan-review-sol.md)
+refused on K1, K2. All eight taken: K1 (display from the wrapper, and the outer `.katex-display`
+replaced) and K2 were already in the build and are pinned; K3 guards added (wrapper topology, link
+targets), with tests seen red by mutation; K4 by rewording the promise; K5 and K6 by the measurement
+above, and by moving the call after the recognisers; K7 by the raw-page test and the mock retarget;
+K8 by tense, now that it is built.
+
+**Done means**: a failing test per built format (a TeX-annotated `<math>`, the three wrappers, a
+MathJax script, display vs inline), plus a temml-refused formula left alone; destructive wrapper,
+nested-formula and MIME-lookalike cases seen red then fixed; all 598 source formulas converted and
+all 551 formulas retained by Readability found by the reading view's scanner; the bundle and
+cold-start tests green after a build; content-extraction.md and maths.md updated.
+
+**Code review, stage 3b** — [260924b-…-3b-code-review-sol.md](260924b-pdf-transcriber-writes-maths-as-tex-3b-code-review-sol.md),
+GPT Sol, write-capable, one round. It fixed, red-first: **L1** (P0) an outer `<math>` adopting a
+nested formula's annotation and deleting its siblings; **L2** (P0) wrapper checks that were shallow
+— now the exact KaTeX and MediaWiki topologies only; **L3** nested MathML/SVG converted though the
+reading view skips it, and detached candidates counted; **L4** the MathJax type test (`math/texture`,
+case, nesting, a preview that is a link); **L5** the measurement, now 551 spans kept by Readability
+out of 598 converted, counted with the reading view's own scanner. **L6** (a peer's typecheck error in
+`tests/shelf-cached-paint.test.tsx`) is not this stage's. I read its diff; the corpus still converts
+598 of 598; after a build, 26 scoped files and 661 tests pass, bundle trace and cold start included.
 
 ## Log
 

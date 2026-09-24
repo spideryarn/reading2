@@ -119,7 +119,8 @@ import {
   TooManyPages,
 } from "./pdf.js";
 import { type Check, check, comparisonWords, report } from "./pdf-score.js";
-import { loadPdfMathsRenderer, mathsAsText, plainMaths } from "./pdf-tex.js";
+import { mathsAsText, plainMaths } from "./pdf-tex.js";
+import { loadMathsRenderer } from "./maths-server.js";
 import {
   PdfReadingShapeError,
   structuralFailureMessages,
@@ -2086,8 +2087,8 @@ async function keepChunk(
 export async function runPdfExtract(opts: PdfExtractOptions): Promise<PdfExtractResult> {
   const reader = opts.reader ?? openRouterReader();
   /* Before anything is scored: the check asks temml whether each TeX span would
-     be drawn, and this is the load the built function can trace. src/pdf-tex.ts. */
-  await loadPdfMathsRenderer();
+     be drawn, and this is the load the built function can trace. src/maths-server.ts. */
+  await loadMathsRenderer();
   let pass: Pass0;
   try {
     pass = await pass0(opts.bytes, { maxPages: MAX_PAGES });

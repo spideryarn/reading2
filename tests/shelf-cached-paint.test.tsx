@@ -451,7 +451,8 @@ describe("what a failure does to a shelf that is already painted", () => {
     paint();
     await settle();
     expect(shelfNow()).toEqual(["saved-piece"]);
-    expect(errorNow()).toContain("Couldn't reach the server");
+    // The code, not the prose — the wording differs between dev and a built page.
+    expect(errorNow()).toMatch(/\[net-down\]/);
   });
 
   /**

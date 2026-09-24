@@ -187,7 +187,7 @@ const BANNED = [
  * model is a decision worth a diff, and a flag would let a run record the wrong
  * one by omission.
  */
-const GENERATED_BY = { trawl: "claude-sonnet-5", review: "gpt-5.6-sol", copy: "claude-opus-5" };
+const GENERATED_BY = { trawl: "sonnet", review: "sol", copy: "opus" };
 
 // ---------------------------------------------------------------------------
 // Small shared machinery
@@ -823,7 +823,7 @@ function cmdReviewPrompt(root: string, work: string, only: string | undefined): 
     );
   }
   console.log(
-    `\nNext, per day: npx tsx scripts/run-codex.ts --model gpt-5.6-sol --effort high ` +
+    `\nNext, per day: npx tsx scripts/run-codex.ts --model sol --effort high ` +
       `--timeout-minutes 45 --prompt-file ${reviewDir}/<day>-prompt.md --output ${reviewDir}/<day>-sol.json`,
   );
 }

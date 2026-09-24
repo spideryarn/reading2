@@ -137,6 +137,10 @@ function heldProvider(first: string) {
       controller?.enqueue(chunk({ error: { message: "upstream went away" } }));
       close();
     },
+    /** The body itself breaks, with an exception nobody wrote for a reader. */
+    breakWith(err: Error) {
+      controller?.error(err);
+    },
     /** A clean `[DONE]` after the model hit its token ceiling. */
     runOutOfRoom() {
       controller?.enqueue(chunk({ choices: [{ finish_reason: "length", delta: {} }] }));
@@ -273,6 +277,28 @@ describe("an answer that is still arriving", () => {
 
     const names = frames(call.body()).map((f) => f.name);
     expect(names.filter((n) => n === "done" || n === "error")).toEqual(["error"]);
+  });
+
+  it("says only a sentence written for the reader when something undeclared breaks", async () => {
+    /* An exception nobody wrote for a reader — here the body breaking with a
+       raw TypeError whose text stands for anything (a driver's message, a
+       parser quoting its input). Its words must go to the log, not into the
+       frame: plan 260924a § Stage 2b, GPT Sol's F5. */
+    const SENTINEL = "raw-internal-words-7f3q";
+    const provider = heldProvider("Half an answer ");
+    const call = serve(SLUG, { term: word });
+    const handled = handleApi(call.req, call.res, acceptAny);
+    await until(() => provider.calls() > 0);
+    provider.breakWith(new TypeError(`fetch failed: ${SENTINEL}`));
+    await handled;
+
+    const terminals = frames(call.body()).filter((f) => f.name === "done" || f.name === "error");
+    expect(terminals.map((f) => f.name)).toEqual(["error"]);
+    const said = (terminals[0]?.data as { error?: unknown } | undefined)?.error;
+    expect(typeof said).toBe("string");
+    expect(said).not.toContain(SENTINEL);
+    /* And it is a sentence from the closed vocabulary, not an empty frame. */
+    expect(said).toMatch(/\[[a-z]+-[a-z0-9-]+\]$/);
   });
 
   it("ends in `error` when the answer ran out of room, clean `[DONE]` and all", async () => {
