@@ -35,3 +35,7 @@ conversation behaves, so it was not built. There are three ways, and any of them
 - push-to-talk, where you hold a button while you speak.
 
 The plan's § Not built describes each one.
+
+**Decided 2026-09-24, on Greg's delegated judgment: wait for data.** None of the three changes is
+built, because each alters every live conversation and the first Sentry `LiveStall-*` events will say
+whether street noise is the stall that actually happens; revisit when they arrive.

@@ -42,3 +42,7 @@ everyone, so it wasn't done unasked. Say if you want it.
 **Also worth knowing:** with Reduce Motion on, most of these finish instantly by design, so they
 will look like nothing happened. And the hold has not been tried on a real iPad, only in an
 emulated one.
+
+**Decided 2026-09-24, on Greg's delegated judgment: leave it.** In the reading view a tap on the
+logo goes home and holding it plays an animation; making the first tap play would cost every reader
+two taps to get home.

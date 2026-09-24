@@ -24,3 +24,6 @@ itself, which our server cannot run. The new design removes the two leading susp
 there after the next deploy, but that is not a proven fix. If it is still missing, five checks in
 Safari's Web Inspector on the Mac would settle it; they are listed in the plan.
 [260912c-send-button-icon-and-primary-style.md](../plans/260912c-send-button-icon-and-primary-style.md).
+
+**2026-09-24: still Greg's.** Whether the icon is there on his iPad after a deploy is a device check
+nobody else can make; left on [awaiting-approval.md](awaiting-approval.md) as it is.

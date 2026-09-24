@@ -826,3 +826,13 @@ Search now opens on the prioritised order, and every mode with a prioritised ord
 **fb3j** (Tweets mode generates on open) is pushed to dev and removing its tree; closed next tick. fb3j also reproduced both Overseer usage-test reds alone at 54258b8b and reads them as the take-fresh/keep-stored decision regressing rather than fixture rot; queue item qi-cw6rzavq updated with that.
 
 The 21:17Z changelog run found no new deploy and wrote nothing; the 21:50Z sweep queued nothing new and resolved 3S, 3Z and 3W in Sentry.
+
+### 2026-09-24 — the three 2026-09-15 assumptions, decided
+
+Session `fb-decisions-0924`, on Greg's *"work through the various feedback suggestions"* and his
+standing *"use your judgment, keep it simple"*, with Fable arbitrating. All three assumptions stand,
+now as decisions: **chat links** keep opening on the first tap (tapped on purpose, host printed, no
+fetched preview to stop for); **the reading view's logo** tap still goes home (a play-first tap costs
+everyone two taps home; a hold plays one); **the search score card** keeps its fuller passage (Greg
+asked where it opens from, not what it holds). Each is recorded in its note and in
+[awaiting-approval.md](../user-feedback/awaiting-approval.md), under *Answered 2026-09-24*.

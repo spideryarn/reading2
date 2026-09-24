@@ -46,3 +46,9 @@ chat gained `article_citations`, which reads the Citations list. Measured after:
 questions search 6 of 6; the "?" answers mark what is not from the article 6 of 6. Marking is far
 more likely, not enforced. The plan, every measurement and what was deferred are in
 [260913b](../plans/260913b-chat-and-comment-questions-reach-for-the-web-and-the-citations-list.md).
+
+**Decided 2026-09-24, on Greg's delegated judgment (Fable arbitrating): leave it.** Enforcement would
+end word-by-word streaming and add a model call per turn to catch a case the evals now show rarely,
+and the logging step would write to logs nobody reads. What would change it: a reader report of a
+background fact presented as the article's — then first a render-side cue on uncited paragraphs,
+which keeps streaming.

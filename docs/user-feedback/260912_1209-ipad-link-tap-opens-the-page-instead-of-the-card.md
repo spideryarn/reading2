@@ -46,3 +46,9 @@ link, drift a little, and use the Pencil.
 [the postmortem](../postmortems/260915a-a-tap-judged-at-pointerup-and-acted-on-at-click.md) ·
 [links.md](../project/links.md#on-a-coarse-pointer-the-first-tap-reveals-and-the-second-opens) is
 the doc.
+
+**Decided 2026-09-24, on Greg's delegated judgment (Fable arbitrating): chat links keep opening on
+the first tap.** A chat link is sparse and tapped on purpose, already prints its real host beside the
+label, and its card has no fetched preview, so a card-first tap would be a second tap to see less.
+What would change it: a report of a chat link escaping by accident, or chat links gaining a fetched
+preview.
