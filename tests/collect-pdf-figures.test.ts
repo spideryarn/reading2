@@ -56,6 +56,26 @@ function marker(page: number, ordinal = 1) {
   return { ref: `${ref}.${page}.${ordinal}`, page, ordinal };
 }
 
+/**
+ * What a transcript of evals/pdf/harder would carry as each marker's caption:
+ * the caption that page prints, for the two pages that print one, and a caption
+ * printed nowhere for the rest. Every marker these tests mint is in here, so a
+ * figure is attached only where the real page prints its caption — the rule
+ * in src/pdf-figures.ts § 3, which these tests are not about.
+ */
+const PRINTED_ON_HARDER = new Map([
+  [3, "Figure 1. Colour drawing of Haidinger’s object as seen in the window frame."],
+  [6, "Figure 2. Sketch 1997 by Alfred Geiswinkler about his 1968 observation."],
+]);
+const HARDER_CAPTIONS: ReadonlyMap<string, string> = new Map(
+  [1, 2, 3, 4, 5, 6].flatMap((page) =>
+    [1, 2].map((ordinal) => [
+      marker(page, ordinal).ref,
+      PRINTED_ON_HARDER.get(page) ?? `Figure on page ${page}, which that page does not print.`,
+    ]),
+  ),
+);
+
 /** A bucket in a Map. Create-only, exactly like the real one. */
 function fakeBlobs(): RawSourceStore & { objects: Map<string, Uint8Array> } {
   const objects = new Map<string, Uint8Array>();
@@ -80,8 +100,30 @@ function fakeBlobs(): RawSourceStore & { objects: Map<string, Uint8Array> } {
 }
 
 describe("a real paper with four figures and a masthead", () => {
+  it("attaches nothing when the transcript files a caption on a page that does not print it", async () => {
+    /* docs/plans/260924e-a-pdf-figure-paired-to-the-wrong-caption.md, on the
+       real document: page 3 holds one picture, Figure 1, and the marker says
+       page 3 while carrying Figure 2's caption — the one-page slip a tall
+       figure pushed past a page break produces. One marker and one picture on
+       the page used to be the whole test, and Figure 1 went under Figure 2's
+       caption. The page's text is what says otherwise, so this also proves the
+       step hands the text layer through to the rule. */
+    const misfiled = marker(3);
+    const run = await collectPdfFigures({
+      captions: new Map([[misfiled.ref, PRINTED_ON_HARDER.get(6)!]]),
+      markers: [misfiled],
+      pdf: await bytes(HARDER),
+      blobs: fakeBlobs(),
+    });
+    expect(run.entries).toEqual([
+      expect.objectContaining({ ref: misfiled.ref, status: "failed", reason: "caption-not-in-page-text" }),
+    ]);
+    expect(run.stored).toBe(0);
+  });
+
   it("recovers the figure on a page that has exactly one of each", async () => {
     const run = await collectPdfFigures({
+      captions: HARDER_CAPTIONS,
       markers: [marker(3)],
       pdf: await bytes(HARDER),
       blobs: fakeBlobs(),
@@ -124,7 +166,7 @@ describe("a real paper with four figures and a masthead", () => {
        landed under. A manifest that says `png` over bytes that are not one is
        the failure content addressing exists to make impossible. */
     const blobs = fakeBlobs();
-    const run = await collectPdfFigures({ markers: [marker(6)], pdf: await bytes(HARDER), blobs });
+    const run = await collectPdfFigures({ captions: HARDER_CAPTIONS, markers: [marker(6)], pdf: await bytes(HARDER), blobs });
     const entry = run.entries[0]!;
     expect(entry.status).toBe("stored");
     if (entry.status !== "stored") return;
@@ -142,6 +184,7 @@ describe("a real paper with four figures and a masthead", () => {
        src/pdf-figure-read.ts § 1), which is why the reason is `no-raster` and
        not "this figure is vector art". */
     const run = await collectPdfFigures({
+      captions: HARDER_CAPTIONS,
       markers: [marker(2)],
       pdf: await bytes(HARDER),
       blobs: fakeBlobs(),
@@ -157,6 +200,7 @@ describe("a real paper with four figures and a masthead", () => {
        behind it, and the reader cannot detect it. A missing figure is visible.
        Both markers are refused and both are recorded. */
     const run = await collectPdfFigures({
+      captions: HARDER_CAPTIONS,
       markers: [marker(3, 1), marker(3, 2)],
       pdf: await bytes(HARDER),
       blobs: fakeBlobs(),
@@ -172,6 +216,7 @@ describe("a real paper with four figures and a masthead", () => {
        bytes here are not a PDF: reaching pdf.js with them would throw or
        report a failure, and a run of zero entries is the proof it did not. */
     const run = await collectPdfFigures({
+      captions: HARDER_CAPTIONS,
       markers: [],
       pdf: new TextEncoder().encode("not a PDF at all"),
       blobs: fakeBlobs(),
@@ -195,6 +240,7 @@ describe("every marker gets an entry, whatever went wrong", () => {
        we looked inside. */
     const markers = [marker(1), marker(2), marker(3)];
     const run = await collectPdfFigures({
+      captions: HARDER_CAPTIONS,
       markers,
       pdf: new TextEncoder().encode("%PDF-1.4 but not really"),
       blobs: fakeBlobs(),
@@ -214,6 +260,7 @@ describe("every marker gets an entry, whatever went wrong", () => {
        is running slow today*. GPT Sol, C-4. */
     const markers = Array.from({ length: 5 }, (_, i) => marker(i + 1));
     const run = await collectPdfFigures({
+      captions: HARDER_CAPTIONS,
       markers,
       pdf: await bytes(HARDER),
       blobs: fakeBlobs(),
@@ -233,6 +280,7 @@ describe("every marker gets an entry, whatever went wrong", () => {
       throw new Error("Storage put failed (503)");
     };
     const run = await collectPdfFigures({
+      captions: HARDER_CAPTIONS,
       markers: [marker(3), marker(6)],
       pdf: await bytes(HARDER),
       blobs,
@@ -246,6 +294,7 @@ describe("every marker gets an entry, whatever went wrong", () => {
 
   it("records a figure too big to deliver rather than storing it", async () => {
     const run = await collectPdfFigures({
+      captions: HARDER_CAPTIONS,
       markers: [marker(3)],
       pdf: await bytes(HARDER),
       blobs: fakeBlobs(),
@@ -270,6 +319,7 @@ describe("every marker gets an entry, whatever went wrong", () => {
     aborted.abort();
     const markers = [marker(3), marker(6)];
     const run = await collectPdfFigures({
+      captions: HARDER_CAPTIONS,
       markers,
       pdf: await bytes(HARDER),
       blobs: fakeBlobs(),
@@ -294,7 +344,7 @@ describe("the step's own deadline", () => {
       markers: [drawn, bitmap],
       pdf: await bytes(HARDER),
       blobs: fakeBlobs(),
-      captions: new Map([[drawn.ref, "Figure 1. A caption that turns the drawn route on."]]),
+      captions: new Map([...HARDER_CAPTIONS, [drawn.ref, "Figure 1. A caption that turns the drawn route on."]]),
       signal: stop.signal,
       readLayouts: async () => {
         stop.abort();
@@ -326,6 +376,7 @@ describe("the step's own deadline", () => {
     blobs.putIfAbsent = () => new Promise<PutResult>(() => {});
     const markers = [marker(3), marker(6)];
     const run = await collectPdfFigures({
+      captions: HARDER_CAPTIONS,
       markers,
       pdf: await bytes(HARDER),
       blobs,
@@ -345,6 +396,7 @@ describe("the step's own deadline", () => {
        *after* whatever was in flight has had time to finish and try. */
     const blobs = fakeBlobs();
     const run = await collectPdfFigures({
+      captions: HARDER_CAPTIONS,
       markers: [marker(3)],
       pdf: await bytes(HARDER),
       blobs,
@@ -383,6 +435,7 @@ describe("the step's own deadline", () => {
       });
 
     const run = await collectPdfFigures({
+      captions: HARDER_CAPTIONS,
       markers: [marker(3)],
       pdf: await bytes(HARDER),
       blobs,
@@ -418,6 +471,7 @@ describe("the article's shared byte budget", () => {
        second is recorded `budget` — *this article is enormous*, which is a
        different fact with a different fix from `out-of-time`. */
     const generous = await collectPdfFigures({
+      captions: HARDER_CAPTIONS,
       markers: [marker(3)],
       pdf: await bytes(HARDER),
       blobs: fakeBlobs(),
@@ -428,6 +482,7 @@ describe("the article's shared byte budget", () => {
 
     const blobs = fakeBlobs();
     const run = await collectPdfFigures({
+      captions: HARDER_CAPTIONS,
       markers: [marker(3), marker(6)],
       pdf: await bytes(HARDER),
       blobs,

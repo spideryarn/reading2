@@ -73,6 +73,17 @@
  * Order carries no information either: on p11 of the target document the real
  * image is painted before the overlay and on p16 after it.
  *
+ * **And one of each on a page is not yet evidence, because the page is the
+ * transcript's word.** Until 2026-09-24 it was taken as a fact, and on a printed
+ * web essay whose tall figures each fell onto the next page the model filed
+ * every caption one page early: the one picture on each claimed page was the
+ * *previous* figure's, and two of four figures showed the wrong picture. So the
+ * caption must also be **printed on that page** — `captionPrintedOn`, on the
+ * text layer the raster reader already fetches, normalised as the drawn route
+ * normalises it. A caption drawn inside the picture, which that essay's were,
+ * is not on the text layer and cannot pass; that costs the figure, never the
+ * truth. docs/plans/260924e-a-pdf-figure-paired-to-the-wrong-caption.md.
+ *
  * **Every marker gets an outcome, paired or refused, and none may vanish.**
  * That is the same distinction `AssetFailure`'s `out-of-time` exists to keep in
  * src/assets.ts — *we looked and refused* and *we never looked* are different
@@ -103,6 +114,7 @@ import { promisify } from "node:util";
 import { deflate } from "node:zlib";
 
 import { imageDimensions, sniffImage } from "./assets.js";
+import { CAPTION_MATCH_CHARS, normalise } from "./pdf-figure-region.js";
 
 const deflateAsync = promisify(deflate);
 
@@ -619,7 +631,17 @@ export type PdfFigureFailure =
    * left after the blank overlays. The commonest outcome by far, and an honest
    * one: a vector-drawn figure gets nothing from this route.
    */
-  | "no-raster";
+  | "no-raster"
+  /**
+   * One marker and one usable picture on the page, and **the caption is not
+   * printed there** — so nothing shows that the picture is this caption's. The
+   * page is the transcript's claim, and a claim about a figure's page can be
+   * wrong by exactly one page break: a tall picture pushed onto the next page
+   * is filed under the page where the prose introducing it ends, and the one
+   * picture on *that* page is the previous figure's.
+   * docs/plans/260924e-a-pdf-figure-paired-to-the-wrong-caption.md.
+   */
+  | "caption-not-in-page-text";
 
 /** What became of one marker. Exactly one of these exists per marker. */
 export type FigureOutcome =
@@ -664,6 +686,10 @@ export interface FigurePairing {
 export function pairPageFigures(input: {
   markers: readonly FigureMarker[];
   candidates: readonly RasterCandidate[];
+  /** Each marker's caption, by ref, as the article carries it. A ref absent here has nothing to check, and is refused. */
+  captions: ReadonlyMap<string, string>;
+  /** Each page's text layer, by 1-based page. A page absent here prints nothing, as far as this gate knows. */
+  pageText: ReadonlyMap<number, string>;
 }): FigurePairing {
   assertDistinctRefs(input.markers);
 
@@ -689,6 +715,10 @@ export function pairPageFigures(input: {
       });
       continue;
     }
+    if (!captionPrintedOn(input.captions.get(marker.ref) ?? "", input.pageText.get(marker.page) ?? "")) {
+      outcomes.push({ status: "refused", marker, reason: "caption-not-in-page-text" });
+      continue;
+    }
     claimed.add(`${marker.page}\u0000${only.key}`);
     outcomes.push({ status: "paired", marker, key: only.key, raster: only.raster });
   }
@@ -702,6 +732,26 @@ export function pairPageFigures(input: {
 
   assertNothingVanishedOrDoubled(input.markers, outcomes);
   return { outcomes, unclaimed };
+}
+
+/**
+ * Is this caption printed on this page — the opening `CAPTION_MATCH_CHARS` of
+ * it, normalised, anywhere in the page's text?
+ *
+ * Normalised by the drawn route's own `normalise`, so a hyphen at a line end, a
+ * ligature or a run split mid-word reads the same on both routes. Looser than
+ * the drawn route's `findCaption` on purpose: that one also needs the caption's
+ * *position*, to bound a region, and this one only needs to know the caption
+ * is on the page with the picture. An empty caption is never printed.
+ */
+export function captionPrintedOn(caption: string, pageText: string): boolean {
+  /* Only what comes before the caption's first maths. The transcript writes
+     maths as TeX between `\(`/`\[` delimiters (rule 8, src/pdf-read.ts) and the
+     page prints glyphs, so a needle that ran through `\alpha` would look for
+     "alpha" where the page has α. GPT Sol, plan review, finding 1. */
+  const prose = caption.split(/\\[([]/, 1)[0] ?? "";
+  const needle = normalise(prose).slice(0, CAPTION_MATCH_CHARS);
+  return needle.length > 0 && normalise(pageText).includes(needle);
 }
 
 /** One usable picture on one page, and the key it came back under. */

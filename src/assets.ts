@@ -193,8 +193,8 @@ export interface Assets {
 /**
  * Why a figure marker ended up with no picture.
  *
- * The first seven are `PdfFigureFailure` in src/pdf-figures.ts, which decides
- * them on bytes; the rest are this step's, and cannot be decided there because
+ * The first eight are `PdfFigureFailure` in src/pdf-figures.ts, which decides
+ * them on bytes and the page's text; the rest are this step's, and cannot be decided there because
  * that module never encodes, stores, reads a bucket or watches a clock. Three
  * of those — `not-located`, `too-complex`, `render-failed` — belong to the
  * route for a figure that is drawn rather than pictured
@@ -228,6 +228,12 @@ export type PdfFigureFailure =
   | "bad-dimensions"
   | "too-many-pixels"
   | "byte-count-mismatch"
+  /**
+   * One caption and one picture on the page, and the caption is not printed
+   * there, so nothing shows the picture is this caption's. `pairPageFigures`,
+   * src/pdf-figures.ts; docs/plans/260924e-a-pdf-figure-paired-to-the-wrong-caption.md.
+   */
+  | "caption-not-in-page-text"
   /**
    * **The page was the narrow case the drawn-figure route exists for, and no
    * drawing on it could be proved to be this caption's.** One figure marker,

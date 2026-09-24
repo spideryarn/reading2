@@ -483,9 +483,21 @@ function verdicts(result: ReturnType<typeof pairPageFigures>): string[] {
   return result.outcomes.map((o) => (o.status === "paired" ? `paired:${o.key}` : `refused:${o.reason}`));
 }
 
+/**
+ * The pairing rules other than the caption check, asked with every marker's
+ * caption printed on its own page — so these tests keep asserting what they
+ * did before `caption-not-in-page-text` existed, and the check has its own tests.
+ */
+function pairPrinted(input: { markers: readonly FigureMarker[]; candidates: readonly RasterCandidate[] }) {
+  const captions = new Map(input.markers.map((m) => [m.ref, `Figure ${m.ref}. A caption printed on its page.`]));
+  const pageText = new Map<number, string>();
+  for (const m of input.markers) pageText.set(m.page, `${pageText.get(m.page) ?? ""} ${captions.get(m.ref)}`);
+  return pairPageFigures({ ...input, captions, pageText });
+}
+
 describe("pairPageFigures", () => {
   it("attaches when a page holds exactly one marker and exactly one usable raster", () => {
-    const result = pairPageFigures({
+    const result = pairPrinted({
       markers: [marker({ ref: "r1", page: 3 })],
       candidates: [rgb(4, 4, [1, 2, 3], { page: 3, key: "img_p2_1" })],
     });
@@ -503,13 +515,13 @@ describe("pairPageFigures", () => {
       [overlay, picture],
       [picture, overlay],
     ]) {
-      const result = pairPageFigures({ markers: [marker({ page: 3 })], candidates });
+      const result = pairPrinted({ markers: [marker({ page: 3 })], candidates });
       expect(verdicts(result)).toEqual(["paired:img_p2_2"]);
     }
   });
 
   it("refuses two markers on one page, and drops neither", () => {
-    const result = pairPageFigures({
+    const result = pairPrinted({
       markers: [marker({ ref: "r1", page: 3, ordinal: 1 }), marker({ ref: "r2", page: 3, ordinal: 2 })],
       candidates: [rgb(4, 4, [1, 2, 3], { page: 3 })],
     });
@@ -520,7 +532,7 @@ describe("pairPageFigures", () => {
   it("refuses two usable rasters under one caption", () => {
     /* The wrong one of these under that caption is a claim about the paper the
        reader has no way to check. */
-    const result = pairPageFigures({
+    const result = pairPrinted({
       markers: [marker({ page: 7 })],
       candidates: [
         rgb(4, 4, [1, 2, 3], { page: 7, key: "a" }),
@@ -538,10 +550,10 @@ describe("pairPageFigures", () => {
   });
 
   it("says no-raster for a marker whose page offers nothing usable", () => {
-    expect(verdicts(pairPageFigures({ markers: [marker({ page: 5 })], candidates: [] }))).toEqual([
+    expect(verdicts(pairPrinted({ markers: [marker({ page: 5 })], candidates: [] }))).toEqual([
       "refused:no-raster",
     ]);
-    const onlyBlank = pairPageFigures({
+    const onlyBlank = pairPrinted({
       markers: [marker({ page: 5 })],
       candidates: [rgba(4, 4, [0, 0, 0, 0], { page: 5 })],
     });
@@ -549,7 +561,7 @@ describe("pairPageFigures", () => {
   });
 
   it("keeps the refusal's own name when the only raster was refused, not blank", () => {
-    const result = pairPageFigures({
+    const result = pairPrinted({
       markers: [marker({ page: 5 })],
       candidates: [{ ...rgb(4, 4, [0, 0, 0], { page: 5 }), kind: 1, data: new Uint8Array(2) }],
     });
@@ -559,7 +571,7 @@ describe("pairPageFigures", () => {
   it("records a usable raster no marker claimed, and invents no marker for it", () => {
     /* Page 1's masthead and Kuhn's logo arrive this way: a real picture on a
        page the model gave no figure record. It is recorded and not attached. */
-    const result = pairPageFigures({
+    const result = pairPrinted({
       markers: [],
       candidates: [rgb(4, 4, [1, 2, 3], { page: 1, key: "img_p0_1" })],
     });
@@ -574,7 +586,7 @@ describe("pairPageFigures", () => {
        simply handed the first raster to the first marker — the obvious wrong
        one — satisfied it exactly. Putting the picture behind the later caption
        is what makes this a claim about grouping rather than about order. */
-    const result = pairPageFigures({
+    const result = pairPrinted({
       markers: [marker({ ref: "r1", page: 3 }), marker({ ref: "r2", page: 4 })],
       candidates: [rgb(4, 4, [1, 2, 3], { page: 4, key: "four" })],
     });
@@ -591,7 +603,7 @@ describe("pairPageFigures", () => {
       marker({ ref: "r3", page: 4 }),
       marker({ ref: "r4", page: 9 }),
     ];
-    const result = pairPageFigures({
+    const result = pairPrinted({
       markers,
       candidates: [
         rgb(4, 4, [1, 2, 3], { page: 3, key: "a" }),
@@ -608,6 +620,68 @@ describe("pairPageFigures", () => {
     ]);
   });
 
+  it("refuses a picture whose page does not print the caption it would go under", () => {
+    /* docs/plans/260924e-a-pdf-figure-paired-to-the-wrong-caption.md. The
+       transcript put "Semi-Local" on page 2 because the paragraph introducing
+       it ends there; the one picture on page 2 is the *Local* code figure, and
+       neither caption is printed as text — each is a title inside its PNG. One
+       marker and one picture on a page is not evidence that they belong
+       together, so it must not be treated as one. */
+    const result = pairPageFigures({
+      markers: [marker({ ref: "semi-local", page: 2 })],
+      candidates: [rgb(4, 4, [1, 2, 3], { page: 2, key: "local-code-png" })],
+      captions: new Map([["semi-local", "Thorpe’s “Semi-Local Code” Example"]]),
+      pageText: new Map([[2, "This example might seem silly and wasteful, but it is worth noting"]]),
+    });
+    expect(verdicts(result)).toEqual(["refused:caption-not-in-page-text"]);
+    expect(result.unclaimed).toEqual([{ page: 2, key: "local-code-png" }]);
+  });
+
+  it("attaches when the page prints the caption, however the text layer spaces and hyphenates it", () => {
+    const result = pairPageFigures({
+      markers: [marker({ ref: "f2", page: 4 })],
+      candidates: [rgb(4, 4, [1, 2, 3], { page: 4, key: "fig" })],
+      captions: new Map([["f2", "Figure 2 – Schematic illustration of pure vs mixed selectivity."]]),
+      pageText: new Map([[4, "prose above  Figure  2 – Sche- matic illustration of pure vs mixed selec tivity. prose below"]]),
+    });
+    expect(verdicts(result)).toEqual(["paired:fig"]);
+  });
+
+  it("matches a caption up to its first maths, which the transcript writes as TeX and the page as glyphs", () => {
+    /* Rule 8 of the transcriber's prompt (src/pdf-read.ts) turns "α-power of
+       the ratio" into "\\(\\alpha\\)-power of the ratio"; the text layer keeps
+       the glyph. Normalised, the TeX leaves "alpha" where the page has
+       nothing, so a needle running past it could never match. GPT Sol, plan
+       review, finding 1. */
+    const result = pairPageFigures({
+      markers: [marker({ ref: "f3", page: 6 })],
+      candidates: [rgb(4, 4, [1, 2, 3], { page: 6, key: "fig" })],
+      captions: new Map([["f3", "Figure 3. Spectral decay of the signal, fitted by the \\(\\alpha\\)-power of the ratio."]]),
+      pageText: new Map([[6, "Figure 3. Spectral decay of the signal, fitted by the α -power of the ratio."]]),
+    });
+    expect(verdicts(result)).toEqual(["paired:fig"]);
+  });
+
+  it("refuses a caption that is maths from its first character, since nothing before the TeX can be checked", () => {
+    const result = pairPageFigures({
+      markers: [marker({ ref: "f4", page: 6 })],
+      candidates: [rgb(4, 4, [1, 2, 3], { page: 6, key: "fig" })],
+      captions: new Map([["f4", "\\(\\alpha\\) against \\(\\beta\\)"]]),
+      pageText: new Map([[6, "α against β"]]),
+    });
+    expect(verdicts(result)).toEqual(["refused:caption-not-in-page-text"]);
+  });
+
+  it("refuses a marker with no caption to check, rather than pairing it blind", () => {
+    const result = pairPageFigures({
+      markers: [marker({ ref: "nameless", page: 4 })],
+      candidates: [rgb(4, 4, [1, 2, 3], { page: 4, key: "fig" })],
+      captions: new Map(),
+      pageText: new Map([[4, "Figure 1. Something."]]),
+    });
+    expect(verdicts(result)).toEqual(["refused:caption-not-in-page-text"]);
+  });
+
   it("refuses to carry on if a marker is offered twice", () => {
     /* The internal invariant, stated where it can fail: one image per marker,
        one marker per image. A duplicate ref means whatever minted them lost
@@ -615,7 +689,7 @@ describe("pairPageFigures", () => {
        picture to a caption that is not the one it came with. */
     const twice = [marker({ ref: "same", page: 3 }), marker({ ref: "same", page: 4 })];
     expect(() =>
-      pairPageFigures({ markers: twice, candidates: [rgb(4, 4, [1, 2, 3], { page: 3 })] }),
+      pairPrinted({ markers: twice, candidates: [rgb(4, 4, [1, 2, 3], { page: 3 })] }),
     ).toThrow(/ref/);
   });
 });
