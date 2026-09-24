@@ -408,6 +408,13 @@ echo "=== playwright ==="
 # @latest and downloads the revision *that* wants, which is how the 1234/1237
 # mismatch above happened in the first place.
 run 420 "playwright system deps" npx --yes playwright@latest install-deps chromium
+# WebKit's system packages too, since 2026-09-24: Greg asked for a Playwright
+# WebKit screenshot in place of an iPad check (SPIDERYARN-READING2-3E), and
+# WebKit is the nearest this box gets to iOS Safari. Only the packages live
+# here; the browser itself is fetched on demand, version-matched, into
+# ~/.cache/ms-playwright on the /home volume --
+# `npx playwright@1.62.1 install webkit` -- for the reason given above.
+run 420 "playwright webkit deps" npx --yes playwright@latest install-deps webkit
 
 # A pinned playwright-core FOR THE AGENT USER, with no browsers attached.
 #

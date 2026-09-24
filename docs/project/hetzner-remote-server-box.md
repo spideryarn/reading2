@@ -385,8 +385,11 @@ a key in `.env.local`, a config file, an MCP server, and plenty this list does n
 to **two** things: this box now, and the file that builds the next one. Do only the first and it is
 gone at the next rebuild, and no box after this one ever has it.
 
-**Ask Greg first, and offer both**: this box now, *and* every box after it. He may want only one;
-what he should not have to do is notice that you did half.
+**Both is the default.** Greg, 2026-09-24: *"pretty much any time we change how this box works, we
+want it to be permanent"*. So a change to how the box works goes into this box *and* the file that
+builds the next one, in the same piece of work, without asking which. Ask only for the exceptions
+below — a secret, a trial — or when you cannot tell whether it is one. (It replaced "ask Greg first,
+and offer both", which cost him a question every time with the same answer.)
 
 The usual homes, not all of them:
 

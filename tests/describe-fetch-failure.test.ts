@@ -17,6 +17,7 @@ import { readdirSync, readFileSync } from "node:fs";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { PAGE_FAULT } from "../src/messages.js";
+import type { ChatEffects } from "../src/web/chat/controller.js";
 
 vi.mock("../src/web/lib/supabase.js", () => ({
   supabase: {
@@ -217,6 +218,157 @@ describe("the reader's path: a chat turn", () => {
       disconnected() {},
     });
     expect(failed).toEqual([PAGE_FAULT.message]);
+  });
+});
+
+describe("the lost-connection sentence on a built page", () => {
+  /* *"is `npm run dev` still running?"* reached production readers from five
+     places. A built page says `COULD_NOT_REACH` and nothing of the browser's
+     own; the development build keeps the hint. Plan 260924a § Stage 2b. */
+  afterEach(() => vi.unstubAllEnvs());
+
+  it("says nothing about npm, or the browser's words, in production", async () => {
+    const { couldNotReach } = await import("../src/web/lib/reader-facing.js");
+    const { COULD_NOT_REACH } = await import("../src/messages.js");
+    vi.stubEnv("PROD", true);
+    expect(couldNotReach("Failed to fetch")).toBe(COULD_NOT_REACH.message);
+    vi.stubGlobal("fetch", () => Promise.reject(new TypeError("Failed to fetch")));
+    const e = await apiFetch("/api/comments/x", { method: "POST" }).catch((x: Error) => x);
+    const said = describeFetchFailure(e as Error);
+    expect(said).not.toContain("npm");
+    expect(said).not.toContain("Failed to fetch");
+    expect(said).toMatch(/\[net-down\]$/);
+  });
+
+  it("keeps the dev-server hint in development", async () => {
+    const { couldNotReach } = await import("../src/web/lib/reader-facing.js");
+    vi.stubEnv("PROD", false);
+    expect(couldNotReach("Failed to fetch")).toContain("npm run dev");
+  });
+});
+
+describe("the chat controller's own catches", () => {
+  /* `ChatController` caught an effect's rejection and put `e.message` straight
+     into the state the panel draws — four catches, the spoken repair's among
+     them. Plan 260924a § Stage 2b. Each rejection path is driven separately:
+     reverting any one of the four catches must make its case expose React's
+     words again. */
+  const never = () => new Promise<never>(() => {});
+  const task = () => new Promise((go) => setTimeout(go, 0));
+
+  async function controller(overrides: Partial<ChatEffects> = {}) {
+    const { ChatController } = await import("../src/web/chat/controller.js");
+    return new ChatController("a-slug", {
+      loadThreads: never,
+      renameThread: never,
+      deleteThread: never,
+      runTurn: never,
+      appendSpoken: never,
+      settledAnswer: async () => null,
+      stopAnswer: never,
+      cancelThread: never,
+      ...overrides,
+    });
+  }
+
+  const spoken = async (overrides: Partial<ChatEffects>) => {
+    const { asOpId } = await import("../src/web/chat/model.js");
+    const c = await controller(overrides);
+    const at = "2026-09-24T10:00:00.000Z";
+    const landed = c.appendSpoken({
+      id: asOpId("spya-dff1sp"),
+      kind: "spoken",
+      threadId: "spya-dff1th",
+      question: { id: "spya-dff1qn", role: "user", text: "why?", createdAt: at, status: "done" },
+      reply: { id: "spya-dff1rp", role: "assistant", text: "because", createdAt: at, status: "done" },
+      expectedTailId: null,
+      at,
+    });
+    return { c, landed };
+  };
+
+  it("does not draw an effect's foreign exception as the turn's failure", async () => {
+    const { asOpId } = await import("../src/web/chat/model.js");
+    const c = await controller({ runTurn: () => Promise.reject(new Error(REACT_185)) });
+    const at = "2026-09-24T10:00:00.000Z";
+    c.startTurn({
+      type: "turn.started",
+      op: {
+        id: asOpId("spya-dff1op"),
+        kind: "turn",
+        shape: "send",
+        threadId: "spya-dff1th",
+        replyId: "spya-dff1rp",
+        reply: { id: "spya-dff1rp", role: "assistant", text: "", createdAt: at, status: "pending" },
+        question: { id: "spya-dff1qn", role: "user", text: "why?", createdAt: at, status: "done" },
+        editing: null,
+        opening: { id: "spya-dff1th", title: "why?", createdAt: at, updatedAt: at, kind: "chat", messages: [] },
+        title: null,
+        at,
+        began: false,
+        attempt: null,
+      },
+      payload: {},
+    });
+    for (let i = 0; i < 3; i++) await task();
+    const drawn = JSON.stringify({ state: c.state, threads: c.threads });
+    expect(drawn).not.toContain("Minified React error");
+    expect(drawn).toContain("[web-unexpected]");
+  });
+
+  it("does not keep a rejected spoken write's foreign exception for its repair", async () => {
+    const { landed } = await spoken({
+      appendSpoken: () => Promise.reject(new Error(REACT_185)),
+      loadThreads: async () => ({ ok: true, threads: [] }),
+    });
+    const result = await landed;
+    if (result.ok) throw new Error("the rejected spoken write was reported as saved");
+    expect(result.error).not.toContain("Minified React error");
+    expect(result.error).toBe(PAGE_FAULT.message);
+  });
+
+  it("does not keep a rejected spoken repair's foreign exception", async () => {
+    const { landed } = await spoken({
+      appendSpoken: async () => ({ ok: false, conflict: true, error: "That write was refused." }),
+      loadThreads: () => Promise.reject(new Error(REACT_185)),
+    });
+    const result = await landed;
+    if (result.ok) throw new Error("the rejected spoken repair was reported as saved");
+    expect(result.error).not.toContain("Minified React error");
+    expect(result.error).toBe(PAGE_FAULT.message);
+  });
+
+  it("does not report the spoken repair's own late abort as a page fault", async () => {
+    vi.useFakeTimers();
+    try {
+      const { landed } = await spoken({
+        appendSpoken: async () => ({ ok: false, conflict: true, error: "That write was refused." }),
+        loadThreads: (_slug, signal) =>
+          new Promise((_, reject) => {
+            signal?.addEventListener(
+              "abort",
+              () => reject(signal.reason ?? new Error("the repair was aborted")),
+              { once: true },
+            );
+          }),
+      });
+      await vi.advanceTimersByTimeAsync(10_000);
+      const result = await landed;
+      if (result.ok) throw new Error("the timed-out spoken repair was reported as saved");
+      expect(result.error).toContain("Couldn’t confirm");
+      expect(captured).toEqual([]);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("does not draw a one-shot effect's foreign exception", async () => {
+    const { asOpId } = await import("../src/web/chat/model.js");
+    const c = await controller({ loadThreads: () => Promise.reject(new Error(REACT_185)) });
+    c.dispatch({ type: "load.started", op: { id: asOpId("spya-dff1ld"), kind: "load" } });
+    await task();
+    expect(c.state.error).not.toContain("Minified React error");
+    expect(c.state.error).toBe(PAGE_FAULT.message);
   });
 });
 

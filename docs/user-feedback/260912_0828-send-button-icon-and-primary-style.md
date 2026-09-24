@@ -27,3 +27,10 @@ Safari's Web Inspector on the Mac would settle it; they are listed in the plan.
 
 **2026-09-24: still Greg's.** Whether the icon is there on his iPad after a deploy is a device check
 nobody else can make; left on [awaiting-approval.md](awaiting-approval.md) as it is.
+
+**2026-09-24: treated as fixed, on Greg's word.** He asked for a Playwright screenshot instead of his
+own device check. In real WebKit (Playwright's build, installed on the box that day), with an iPad
+user agent and touch, at 834×1194 and 1194×834, the icon is drawn in chat's composer both empty
+(orange outline, grey arrow) and with text (orange fill, dark arrow): 36px button, 18px svg,
+opacity 1. The comment composer is the same component and was not shot separately. Not a real iPad,
+so if his still shows no icon he reopens it.

@@ -19,6 +19,7 @@ import { useCallback, useEffect, useState } from "react";
 
 import type { AdminUser } from "../admin.js";
 import { apiFetch, readJson } from "./lib/api.js";
+import { couldNotReach } from "./lib/reader-facing.js";
 
 export interface UseAdminUsers {
   /** `null` while the first request is in flight — not "no users". */
@@ -59,7 +60,7 @@ export function useAdminUsers(): UseAdminUsers {
            makes, for the same reason. */
         setError(
           e.message === "Failed to fetch"
-            ? "Couldn't reach the server — is `npm run dev` still running?"
+            ? couldNotReach()
             : e.message,
         );
         /* The old list is left alone rather than blanked. If a refresh failed,

@@ -10,10 +10,32 @@
  * reader as a chat answer's failure. See
  * docs/plans/260924a-only-a-sentence-the-server-wrote-reaches-the-reader.md.
  *
- * A leaf module on purpose: several tests `vi.mock("…/lib/api.js")` wholesale,
+ * Nearly a leaf on purpose — its one import is src/messages.ts, itself a leaf:
+ * several tests `vi.mock("…/lib/api.js")` wholesale,
  * and a class that lived there would be mocked away — `instanceof` against
  * `undefined` throws.
  */
+
+import { COULD_NOT_REACH } from "../../messages.js";
+
+/**
+ * **What to say when the request never got a response at all**, for every
+ * place in the client that says it.
+ *
+ * A built page says `COULD_NOT_REACH` and nothing else. The development build
+ * — `npm run dev`, where this failure is most often the dev server having
+ * restarted or stopped — says so, and keeps the browser's own words in brackets
+ * so the failure is still searchable. Those words are never shown on a built
+ * page: they are the browser's, and a `TypeError` from somewhere unexpected
+ * can carry more than "Failed to fetch" (GPT Sol, F3 on plan 260924a).
+ *
+ * @param detail the transport error's own message, for the development build.
+ */
+export function couldNotReach(detail?: string): string {
+  if (import.meta.env.PROD) return COULD_NOT_REACH.message;
+  const why = detail ? ` (${detail})` : "";
+  return `Couldn't reach the dev server — is \`npm run dev\` still running?${why} [net-down]`;
+}
 
 /**
  * An error whose message somebody here wrote **for a reader** — the server's
