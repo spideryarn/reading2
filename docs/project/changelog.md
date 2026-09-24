@@ -177,7 +177,7 @@ earns its place here because the failure mode is a confident sentence about a ch
 happen.
 
 ```
-npx tsx scripts/run-codex.ts --model gpt-5.6-sol --effort high --timeout-minutes 90 \
+npx tsx scripts/run-codex.ts --model sol --effort high --timeout-minutes 90 \
   --prompt-file <review-prompt> --output <review-answer>
 ```
 

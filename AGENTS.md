@@ -323,7 +323,7 @@ nothing else has a copy of.
   rejects the request.
 
   ```
-  npx tsx scripts/run-codex.ts --model gpt-5.6-sol --effort high --timeout-minutes 90 \
+  npx tsx scripts/run-codex.ts --model sol --effort high --timeout-minutes 90 \
     --sandbox workspace-write --prompt-file <review-prompt> --output <review-answer>
   ```
 
