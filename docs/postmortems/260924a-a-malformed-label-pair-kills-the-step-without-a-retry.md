@@ -67,14 +67,15 @@ in that function it was.
    paragraph, so its ordinal falls into `missing`. The re-ask names it, `acceptGap` bounds what may
    be dropped, and `detectShift` still votes on the merged set.
 2. **A broken format is a re-draw.** A pair of the wrong shape, a non-integer or repeated ordinal,
-   unparseable text, or `labels` not a list is a `BatchIncomplete` with no shortfall. The caller
-   already re-draws that at double headroom. It is never forgiven as a drop, because it says
-   nothing about any paragraph — GPT Sol's plan review caught the first draft doing exactly that.
+   an out-of-range ordinal, unparseable text, or `labels` not a list is a `BatchIncomplete` with no
+   shortfall. The caller already re-draws that at double headroom. It is never forgiven as a drop,
+   because it says nothing about any paragraph — GPT Sol's plan review caught the first draft doing
+   exactly that.
 3. **Sentry can tell failures apart.** A batch that fails twice throws `LabelsFailed`, whose `code`
-   is `<first fault>+<second fault>`. Each part comes from a closed set, or is a registered bracket
-   code. `sanitise` forwards `code` as a tag, following `MalformedJson`'s precedent. The message
-   stays the diagnostic, for the log. The log message now also counts skipped pairs by kind, never
-   by content.
+   is `<first fault>+<second fault>`. Each part is a `BatchFault`, a registered bracket code
+   validated through `kindOfMessage`, or the literal `other`. `sanitise` forwards `code` as a tag,
+   following `MalformedJson`'s precedent. The message stays the diagnostic, for the log. The log
+   message now also counts skipped pairs by kind, never by content.
 
 This is the long-term design for this stage, not a patch.
 
@@ -83,8 +84,9 @@ This is the long-term design for this stage, not a patch.
 1. **Give every terminal error a name and a closed-set `code`.** Done here for labels. It is cheap,
    it is the difference between `Error: Error` and `LabelsFailed` with `code=short+short`, and it
    needs no argument about what counts as authored. It should be the rule for every stage's
-   terminal error. It belongs in [logging.md](../project/logging.md) as a line, and is recorded for
-   Greg rather than swept here.
+   terminal error. The recipe is now in
+   [sentry-error-monitoring.md](../project/sentry-error-monitoring.md#it-is-a-fifth-egress-and-the-logging-rules-apply-to-it);
+   applying it to the other stages is recorded for Greg rather than swept here.
 2. **When a validator walks a list of independent items, ask what one bad item should cost.** Ask it
    in review, of any `throw` inside a `for` over model output. Free, and it would have caught this
    on 2026-08-26.

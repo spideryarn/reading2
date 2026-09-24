@@ -20,12 +20,14 @@
  */
 import { readFileSync } from "node:fs";
 import path from "node:path";
+import { APIError } from "@anthropic-ai/sdk";
 import PQueue from "p-queue";
 import { beforeEach, describe, expect, it } from "vitest";
 import {
   allOrStop,
   assertEveryBlockLabelled,
   BatchIncomplete,
+  LabelsFailed,
   batchFingerprint,
   contentWords,
   coversExactly,
@@ -41,6 +43,8 @@ import {
   structureHash,
   usableEntry,
 } from "../src/labels.js";
+import { anthropicCallFailed } from "../src/anthropic-call.js";
+import { failureKindOf, readerFailureOf } from "../src/job-failure.js";
 import type { Batch } from "../src/labels.js";
 import { nullCheckpointStore, type CheckpointStore } from "../src/store/checkpoints.js";
 import { memoryCheckpoints, type MemoryCheckpoints } from "./helpers/memory-checkpoints.js";
@@ -528,6 +532,25 @@ describe("parseLabels", () => {
     expect(() => parseLabels(dupe, batch)).toThrow(/1 repeated paragraph number/);
   });
 
+  it("describes several format faults by count and kind, without quoting their values", () => {
+    const mixed = JSON.stringify({
+      labels: [
+        "ARTICLE_SENTINEL not a pair",
+        ["ARTICLE_SENTINEL", "not an integer"],
+        [1, "first"],
+        [1, "second"],
+        [1, "third"],
+      ],
+    });
+    expect(() => parseLabels(mixed, batch)).toThrow(
+      "Nav labels: the answer broke the [number, label] format, with " +
+        "1 entry that was not a [number, label] pair, " +
+        "1 paragraph number that was not an integer and 2 repeated paragraph numbers. " +
+        "Nothing has been written.",
+    );
+    expect(() => parseLabels(mixed, batch)).not.toThrow(/ARTICLE_SENTINEL/);
+  });
+
   it("refuses an empty label rather than storing a blank row", () => {
     const blank = JSON.stringify({
       labels: batch.blocks.map((_, i) => [i + 1, i === 2 ? "   " : "a real label here"]),
@@ -626,6 +649,49 @@ describe("parseLabels", () => {
     expect(notAList.shortfall, "nothing to keep, so a re-draw").toBeUndefined();
 
     expect(thrown("I would rather not.").fault).toBe("unparseable");
+  });
+});
+
+describe("LabelsFailed", () => {
+  it("uses the registered code from an Anthropic failure, never its upstream text", () => {
+    const secret = "ARTICLE_SENTINEL private upstream text";
+    const upstream = APIError.generate(
+      429,
+      { error: { message: secret } },
+      undefined,
+      new Headers(),
+    );
+    const first = new BatchIncomplete("short", "a safe first-attempt diagnostic");
+    const failed = new LabelsFailed("a safe combined diagnostic", first, anthropicCallFailed(upstream));
+
+    expect(failed.code).toBe("short+ai-busy");
+    expect(failed.code).not.toContain(secret);
+  });
+
+  it("calls an unrecognised second error other, without copying its text", () => {
+    const secret = "ARTICLE_SENTINEL private article text";
+    const first = new BatchIncomplete("short", "a safe first-attempt diagnostic");
+    const failed = new LabelsFailed("a safe combined diagnostic", first, new Error(secret));
+
+    expect(failed.code).toBe("short+other");
+    expect(failed.code).not.toContain(secret);
+  });
+
+  it("remains an ordinary retryable step failure at the job boundary", () => {
+    const first = new BatchIncomplete("short", "the first answer was short");
+    const failed = new LabelsFailed(
+      "The nav labels for one section failed twice.",
+      first,
+      new BatchIncomplete("short", "the second answer was short"),
+    );
+    const previous = new Error("The nav labels for one section failed twice.");
+
+    expect(failed).toBeInstanceOf(Error);
+    expect(failed).not.toBeInstanceOf(BatchIncomplete);
+    expect(failureKindOf(failed)).toBe(failureKindOf(previous));
+    expect(readerFailureOf(failed, "Labelling the paragraphs")).toEqual(
+      readerFailureOf(previous, "Labelling the paragraphs"),
+    );
   });
 });
 

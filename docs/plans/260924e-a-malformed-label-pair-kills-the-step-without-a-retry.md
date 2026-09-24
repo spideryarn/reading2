@@ -48,10 +48,11 @@ and, failing that, accepted within the drop budget.
 3. **Sentry can tell failures apart.** Following `MalformedJson`'s precedent (a `name`, and a
    `code` from a closed set, which `SAFE_PROPS` in src/monitoring-scrub.ts forwards as a tag),
    the step's terminal errors become a `LabelsFailed` class carrying `code`: the kind of the first
-   attempt's failure and, when there was one, the second's — e.g. `short+short`, `unparseable`,
-   `truncated+api`. Every value of `code` is from an enumerated union, so it is authored by
-   construction and carries no model text. The `BatchIncomplete` message also names the pair faults
-   by count and kind (never the label text), so the log line says why a paragraph was re-asked.
+   attempt's failure and the second's — e.g. `short+short`, `unparseable+truncated`,
+   `truncated+ai-busy`. Each part is a `BatchFault`, a registered bracket code validated through
+   `kindOfMessage`, or the literal `other`, so it is authored by construction and carries no model
+   text. The `BatchIncomplete` message also names the pair faults by count and kind (never the label
+   text), so the log line says why a paragraph was re-asked.
 
 ## Passed over
 

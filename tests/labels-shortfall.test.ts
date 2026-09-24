@@ -52,7 +52,7 @@ const wire = vi.hoisted(() => ({
   /** Every request body that reached the wire, in order. */
   calls: [] as { maxTokens: number; parts: string[] }[],
   /** What to answer, indexed by call number. Set by each test. */
-  answers: [] as string[],
+  answers: [] as Array<string | { fail: () => never }>,
 }));
 
 vi.mock("../src/messages-stream.js", async (importOriginal) => {
@@ -76,21 +76,24 @@ vi.mock("../src/messages-stream.js", async (importOriginal) => {
       return {
         onText: () => {},
         aborted: () => false,
-        finalMessage: async () => ({
-          id: "msg_test",
-          type: "message",
-          role: "assistant",
-          model: "test",
-          content: [{ type: "text", text: answer === "TRUNCATED" ? "{" : answer }],
-          stop_reason: stop,
-          stop_sequence: null,
-          usage: {
-            input_tokens: 1000,
-            output_tokens: 500,
-            cache_read_input_tokens: 0,
-            cache_creation_input_tokens: 0,
-          },
-        }),
+        finalMessage: async () => {
+          if (typeof answer !== "string") return answer.fail();
+          return {
+            id: "msg_test",
+            type: "message",
+            role: "assistant",
+            model: "test",
+            content: [{ type: "text", text: answer === "TRUNCATED" ? "{" : answer }],
+            stop_reason: stop,
+            stop_sequence: null,
+            usage: {
+              input_tokens: 1000,
+              output_tokens: 500,
+              cache_read_input_tokens: 0,
+              cache_creation_input_tokens: 0,
+            },
+          };
+        },
       };
     },
   };
@@ -809,6 +812,42 @@ describe("an answer with one malformed pair", () => {
       generateLabels({ tree, blocks, slug: "test", checkpoints: nullCheckpointStore() }),
     ).rejects.toBeInstanceOf(LabelsFailed);
   });
+
+  const badRepairs: [what: string, answer: string, code: string][] = [
+    ["an entry that is not a pair", JSON.stringify({ labels: ["paragraph 4"] }), "malformed-pair"],
+    ["a non-integer ordinal", JSON.stringify({ labels: [["4", "A claim"]] }), "malformed-pair"],
+    [
+      "a repeated ordinal",
+      JSON.stringify({ labels: [[4, "One claim"], [4, "Another claim"]] }),
+      "malformed-pair",
+    ],
+    ["an out-of-range ordinal", JSON.stringify({ labels: [[999, ""]] }), "out-of-range"],
+  ];
+
+  for (const [what, answer, code] of badRepairs) {
+    it(`does not forgive ${what} on the re-ask as the original one-label gap`, async () => {
+      /* This is the route `parseShortfall` takes, rather than the first-draw
+         route above. If the bad pair were converted into a shortfall, the 57
+         good labels from the first answer would clear the displacement check
+         and `acceptGap` would publish them with paragraph 4 dropped. */
+      const { tree, blocks } = oneSection(58);
+      wire.answers.push(allBut(58, [4]));
+      wire.answers.push(answer);
+
+      const err = await generateLabels({
+        tree,
+        blocks,
+        slug: "test",
+        checkpoints: nullCheckpointStore(),
+      }).then(
+        () => new Error("the format fault was accepted as a gap"),
+        (caught: unknown) => caught,
+      );
+
+      expect(err).toBeInstanceOf(LabelsFailed);
+      expect((err as LabelsFailed).code).toBe(`short+${code}`);
+    });
+  }
 });
 
 /**
@@ -862,4 +901,51 @@ describe("the error the step fails with", () => {
     expect((err as Error).message).not.toContain("ARTICLE_SENTINEL");
     expect((err as LabelsFailed).code).not.toContain("ARTICLE_SENTINEL");
   });
+});
+
+describe("an abort while a batch is being attempted", () => {
+  for (const attempt of ["first", "second"] as const) {
+    it(`rethrows the ${attempt}-attempt abort itself`, async () => {
+      const { tree, blocks } = oneSection(12);
+      const controller = new AbortController();
+      const abort = new Error(`abort during the ${attempt} attempt`);
+      const realAborted = Object.getOwnPropertyDescriptor(AbortSignal.prototype, "aborted")!.get!;
+      let reportAborted = false;
+      const aborted = vi
+        .spyOn(AbortSignal.prototype, "aborted", "get")
+        .mockImplementation(function (this: AbortSignal): boolean {
+          return reportAborted || (realAborted.call(this) as boolean);
+        });
+      const fail = {
+        fail: (): never => {
+          /* Report `signal.aborted` without firing the abort event: `p-queue`
+             otherwise wins the rejection race with `signal.reason`, masking
+             whether the labels catch rethrew this error or wrapped it. */
+          reportAborted = true;
+          throw abort;
+        },
+      };
+      if (attempt === "first") wire.answers.push(fail);
+      else wire.answers.push(JSON.stringify({ labels: "no" }), fail);
+
+      let err: unknown;
+      try {
+        err = await generateLabels({
+          tree,
+          blocks,
+          slug: "test",
+          checkpoints: nullCheckpointStore(),
+          signal: controller.signal,
+        }).then(
+          () => new Error("the aborted run completed"),
+          (caught: unknown) => caught,
+        );
+      } finally {
+        aborted.mockRestore();
+      }
+
+      expect(err).toBe(abort);
+      expect(err).not.toBeInstanceOf(LabelsFailed);
+    });
+  }
 });
