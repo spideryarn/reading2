@@ -46,7 +46,9 @@ paragraph is the part still worth acting on.
 > human happened to be looking. If reader-facing copy is ever to be gated on a person, the gate has
 > to live somewhere the deploy path executes.
 
-<!-- Nothing resting with Greg: the last six rows were answered on 2026-09-24, below. -->
+| report | what is left for Greg |
+|---|---|
+| [44](https://greg-detre.sentry.io/issues/SPIDERYARN-READING2-44) — plainer summaries and glossary (shipped to `dev`, 2026-09-26) | Two things. Should chat, Explain and the glossary's *Check the web* answer get the same plain-words rule? They still use the older wording. And is a 28-word plain depth-1 summary line better than a 24-word dense one? The new prompt runs past the 25-word limit more often. [note](260926_0238-plainer-summaries-and-glossary.md) · [plan](../plans/260926a-plainer-summaries-and-glossary.md) |
 
 **Six rows came off this table on 2026-09-17**, because Greg had already answered them on 2026-09-11
 and they were still sitting here as though he had not: the dictation privacy wording, the Socratic
