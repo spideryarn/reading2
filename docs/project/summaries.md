@@ -261,6 +261,23 @@ top-level line.
 [260907d](../plans/260907d-ship-socratic-v4-repair-the-eval-gate-and-answer-q7.md) is where that
 tension sits, unresolved.
 
+### Plain words, since `toc/8`
+
+**Added 2026-09-26**, from SPIDERYARN-READING2-44. Greg:
+
+> we want the summaries to really use simpler language, because half the problem is we may not know
+> what the jargon means
+>
+> — Greg, 2026-09-26
+
+The gist kept "the article's own words for the things it names", which let every term of art through
+unexplained. It now keeps the name as a handhold but has to make the sentence understandable to a
+reader who does not know it, and plainer means equally specific —
+[new-mode.md § The words the mode puts in front of the reader](new-mode.md) has the rule, and
+[260926a](../plans/260926a-plainer-summaries-and-glossary.md) the measurement. The QUESTIONS block
+did not change: it says "ordinary words for the rest, exactly as with gists", so it takes the rule
+by reference and stays byte-identical to the V4 the eval measured. New articles only.
+
 #### One line of production code moved with it
 
 The hint follows the question mark, so `questionFor` — which appends a `?` to anything not ending in

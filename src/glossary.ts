@@ -81,11 +81,17 @@ import type { ArtifactStore } from "./store/artifacts.js";
  * is what marks every existing glossary stale, which is not a side effect but
  * the migration: the panel says so at the top and offers "Find them again".
  *
+ * `glossary/5`, 2026-09-26: entries are written for a reader from outside the
+ * field — no second hard word, the plain meaning first, plainer meaning equally
+ * specific — with a worked BAD/GOOD pair for the register. Greg,
+ * SPIDERYARN-READING2-44: *"the glossary as well especially should explain in
+ * simpler language."* docs/plans/260926a-plainer-summaries-and-glossary.md.
+ *
  * Exported so tests can assert against the current value rather than pin a
  * literal that has to be edited on every bump — a fixture that hardcodes the
  * version tests the fixture.
  */
-export const PROMPT_VERSION = "glossary/4";
+export const PROMPT_VERSION = "glossary/5";
 
 /**
  * The most entries one call may return.
@@ -917,6 +923,14 @@ export async function previousGlossaryFrom(
 const SYSTEM = `You are writing an AUTHOR'S GLOSSARY: the terms THIS PIECE uses in a
 non-obvious way, defined from the piece itself.
 
+WHO READS AN ENTRY
+
+A curious, well-read reader who has never studied this field, stopped
+mid-sentence by one word. An entry has worked if, after reading it once, they
+understand the word well enough to carry on reading — and could explain it to a
+friend. A definition a specialist would write for another specialist has
+failed, however accurate it is.
+
 WHAT BELONGS IN IT
 
 A term earns an entry when a careful reader could reach it, not know what the
@@ -953,6 +967,17 @@ piece bends an ordinary word. From the article and only the article. If the
 piece's use is plain once you know what the term is — a person simply quoted, a
 work simply named — LEAVE THIS FIELD OUT rather than restate the page. An absent
 field is a real answer.
+
+The MEANING comes from the article and only the article; the WORDS are yours,
+chosen for the reader above. A paper that defines a term in its own vocabulary
+has not defined it for that reader, and copying its definition back is the
+failure, not fidelity.
+
+None of that moves outside knowledge into this field. What a term ordinarily
+means, who a person is, who coined an idea, what a famous illusion or
+experiment shows: that is "background", however plainly you can put it, and
+the reader is owed the label that says so. People and works named without
+introduction still earn entries of their own.
 
 This field is where a description of the page is most tempting and does the most
 damage, because it is the line the reader sees first. If your sentence would
@@ -1001,6 +1026,23 @@ choose is governed by this article — those two are here because they are the
 ones that make the quotation carry weight — but the sentence you write is about
 the term, not about the page.
 
+An economics paper defines "moral hazard" in its own terms and then leans on it.
+
+BAD — "senseHere": "The post-contractual distortion whereby an insured agent's
+unobservable effort deviates from the first-best level because the principal
+bears part of the loss."
+That is the paper's definition in the paper's words, and it is the commonest
+failure in a glossary because it looks like precision. The reader stopped by
+"moral hazard" is stopped again by "post-contractual", "agent", "first-best"
+and "principal".
+
+GOOD — "senseHere": "Taking more risks because someone else pays when things go
+wrong, when the one who pays cannot see how careful you are being. A fully
+insured driver has less reason to drive carefully."
+The same meaning, from the same paper, with nothing to look up. The condition
+the definition turns on — the payer cannot see — survives, and nothing in it
+describes what the paper does with the term.
+
 NAMES AND ALIASES
 
 "name" is the canonical and unambiguous way to refer to it (usually the longest
@@ -1036,10 +1078,32 @@ WRITING
 - "senseHere": one or two plain sentences, or absent.
 - "background": one to three plain sentences, or absent.
 - Plain prose in both. No Markdown, no bullet lists, no headings, no bold.
-- Keep the article's own words for the term and for what the article names, and
-  ordinary words for everything else. An entry is read by somebody just stopped
-  by one hard word, and another hard word loses them: plainer than the article,
-  never further from it.
+- Write for the reader above. They were stopped by one hard word, and another
+  hard word loses them. Nothing in an entry should send them to look something
+  else up: if the only accurate account needs a second technical term, explain
+  it in the same breath or find another way to say it. Do not explain ordinary
+  words.
+- The first sentence of each field is at most 20 words and has no hard word in
+  it but the term itself. Anything more exact goes in a second sentence, if at
+  all. No semicolons or brackets doing a second sentence's work.
+- Check every entry before you send it: list the words in it that reader would
+  not know. The only exemptions are the term itself and proper names. A word is
+  NOT exempt because the article uses it, or because it has an entry of its own
+  here: an entry that can only be understood by reading another entry has
+  explained nothing. Field words that look ordinary count too — "significant",
+  "normal", "model", "signal", "power". If the list is not empty, rewrite.
+  Rewrite the words, never the list of entries: this is not a reason to merge
+  two terms into one entry or to drop one. Each term, and each person, keeps
+  an entry of its own under its own name.
+- Lead with what the term means, in plain words. A more exact or technical
+  restatement may follow; it never leads.
+- An example or comparison is welcome when it carries the meaning — a clause,
+  not a paragraph, and never for its own sake. In "senseHere" it must come from
+  the article; a comparison of your own belongs in "background".
+- Plainer means equally specific: the same meaning in commoner words, never a
+  looser one. "A kind of statistical effect" is vaguer, not plainer. Keep the
+  term itself, and proper names, exactly as the article writes them: plainer
+  than the article, never further from it.
 - Do not begin with "refers to" or "is a term for". Say the thing.
 - Do not hedge about the article ("the article doesn't say, but ..."). The panel
   labels which field is which; saying it again in the prose spends the reader's

@@ -113,8 +113,13 @@ import type { Block } from "./types.js";
  * the target briefings included (src/hierarchy-deepen.ts §
  * `canonicalExpansionRequest`), so a changed prompt already misses. What this
  * buys is a record on every candidate of **which semantic protocol wrote it**.
+ *
+ * **`expand/5`, 2026-09-26**: the gist bullet gained the plain-words rule `toc/8`
+ * gave the whole-document call — keep the name, make it understandable, plainer
+ * means equally specific. Provenance again, for the same reason as `expand/4`.
+ * docs/plans/260926a-plainer-summaries-and-glossary.md.
  */
-export const EXPAND_PROMPT_VERSION = "expand/4";
+export const EXPAND_PROMPT_VERSION = "expand/5";
 
 /**
  * **Both prompt versions, as one string** — the wave-1 prompt this outline came
@@ -280,9 +285,21 @@ TITLES AND GISTS
   should be rare. Omit "sourceHeading" entirely where the author gave the child
   no heading — do not send an empty one.
 - gist: exactly ONE sentence, on every child. It is a CLAIM or a MOVE, not a
-  topic label. Keep the work's own words for the things it names and ordinary
-  words for everything else; where a shorter, commoner word loses nothing, use
-  it.
+  topic label. Keep the work's own name for a thing the reader will meet again
+  in the prose — it is their handhold — but a handhold is not an explanation. If
+  a curious reader from outside the field would not already know the term, the
+  sentence must make it understandable anyway: say it in ordinary words
+  instead, or keep it and let the rest of the sentence show what it is. Work the
+  meaning into the claim; no dictionary asides in brackets. Never leave a hard
+  word bare, and never explain an ordinary one; that explaining counts toward
+  the word limit, and the limit wins. Before you send a gist, list the words in
+  it a reader from outside the field would not know: each must be explained by
+  its sentence, or gone.
+- Everything else gets the commonest word that loses nothing. Plainer means
+  equally specific: the same claim in commoner words, never a looser one. Do not
+  lose a number, name, direction, comparison or condition the claim depends on —
+  "uses a clever method" for "uses gradient descent" is vaguer, not plainer.
+  Plainer than the article, never further from it.
 - These are the FINE rungs, and a fine gist is longer than a coarse one, not
   shorter: AT LEAST 22 words, and at most 32. The floor is the half that will
   feel wrong, so obey it: down here a one-clause gist is too SHORT, not
@@ -513,7 +530,7 @@ export interface ExpansionRequest {
    * usage fields. src/labels.ts spent months writing a marker that bought
    * nothing for exactly this reason. The plan's estimate for this prefix was
    * 1,150–1,400, near enough the floor to fall either side; since `expand/4`
-   * added the QUESTIONS block, `EXPAND_SYSTEM` is 1,631 estimated tokens and
+   * added the QUESTIONS block, `EXPAND_SYSTEM` is 1,865 estimated tokens (1,631 until `expand/5`) and
    * clears the floor on its own, so this is `true` for every outline including
    * none at all. It is still reported rather than assumed, because that margin
    * is one prompt edit wide. A zero in `cache_read_input_tokens` is also what

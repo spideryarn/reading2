@@ -172,10 +172,15 @@ const SHARED_DELTAS: readonly string[] = [
  * show up; at the default depth 1 a run can only see the two ceilings.
  *
  * **`incumbent` is deliberately not the comparison.** It slices the *live*
- * SYSTEM, so from the moment a bump lands it **is** the new prompt: byte for
- * byte `gists-toc6`. Running it against `gists-toc6` buys a second sample of the
- * after and no before at all. `tests/summaries-eval.test.ts` asserts that
- * identity rather than leaving it to be discovered by a null result.
+ * SYSTEM, so from the moment a bump lands it **is** the new prompt. From toc/6
+ * until toc/8 that made it byte for byte `gists-toc6`, and running the two
+ * together bought a second sample of the after and no before at all. Since
+ * `toc/8` (2026-09-26, the plain-words GISTS rule of
+ * docs/plans/260926a-plainer-summaries-and-glossary.md) the live GISTS block
+ * has moved on and `gists-toc6` no longer equals it — which is exactly the
+ * case the pin exists for: this pair still measures the toc/6 length bump and
+ * nothing else. `tests/summaries-eval.test.ts` asserts the difference, and
+ * that it is the plain-words bullets, rather than leaving it to be discovered.
  */
 const LENGTH_PAIR_DELTAS: readonly string[] = [
   ...SHARED_DELTAS,
@@ -303,7 +308,7 @@ export const ARMS: readonly ArmSpec[] = [
     name: "gists-toc6",
     comparison: "bakeoff",
     isolatedAgainst: "gists-toc5",
-    axis: "the GISTS block as it ships today: root <=18 words, depth 1 <=25, deeper 22-32",
+    axis: "the GISTS block as it shipped at toc/6 and toc/7: root <=18 words, depth 1 <=25, deeper 22-32",
     variant: "V4",
     newGists: false,
     shippedGists: "toc/6",

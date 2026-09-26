@@ -1232,6 +1232,9 @@ So a reader's older articles keep questions in a shape nothing else in the libra
 has no `outdated` chip to show them, because it has no staleness mechanism at all.
 [summaries.md § The shape it has](summaries.md) is what changed.
 
+**`toc/8` on 2026-09-26 is the third** — plainer gists, from Greg's own report — and the same
+answer applies: an article already read keeps its jargon until its stage is re-run.
+
 **So this is chosen, not merely what happens.** Nothing is broken, nobody is charged for a summary
 they did not ask to be regenerated, and no reader is shown a warning about a line that reads
 perfectly well. The cost is the one that prompted the question: a change you make today is not

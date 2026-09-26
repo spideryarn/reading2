@@ -1,0 +1,3 @@
+# Fable, blind (read only the pairs file), 2026-09-26. Line 2: plain winner per pair. Line 3: fid flags (the worse side).
+X Y Y Y Y Y Y X X Y Y Y Y Y Y Y Y Y Y same Y Y Y Y Y Y X Y Y Y Y Y Y X Y Y Y Y Y same Y X Y Y Y Y Y Y same Y same X same X Y Y Y Y Y Y Y Y Y X Y Y Y Y Y Y Y Y Y Y Y Y Y Y Y Y Y Y Y Y Y Y Y Y Y Y Y Y Y same Y
+fid: 2=Y- 14=Y- 16=Y- 18=X- 52=Y- 74=Y-

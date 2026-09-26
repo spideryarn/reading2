@@ -79,8 +79,19 @@ import type { Block } from "./types.js";
    toc/6 questions until somebody re-runs the stage: new prompts reach new
    articles only (docs/project/hierarchy.md § prompt versions).
 
-   docs/plans/260907d-ship-socratic-v4-repair-the-eval-gate-and-answer-q7.md. */
-export const PROMPT_VERSION = "toc/7";
+   docs/plans/260907d-ship-socratic-v4-repair-the-eval-gate-and-answer-q7.md.
+
+   **`toc/8`, 2026-09-26: a name is a handhold, not an explanation.** Greg,
+   SPIDERYARN-READING2-44: *"we want the summaries to really use simpler
+   language, because half the problem is we may not know what the jargon
+   means."* The 2026-09-03 rule kept "the article's own words for the things it
+   names", and every term of art is a thing the article names, so it exempted
+   exactly the jargon. The GISTS block now keeps the name but requires the
+   sentence to make it understandable, and says plainer means equally specific.
+   QUESTIONS is unchanged — it inherits the rule through "exactly as with
+   gists" — so it stays byte-identical to `evals/summaries/variants.md` § V4. New articles only,
+   as before. docs/plans/260926a-plainer-summaries-and-glossary.md. */
+export const PROMPT_VERSION = "toc/8";
 
 /**
  * How hard the model thinks before it starts writing.

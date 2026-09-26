@@ -1,0 +1,4 @@
+# Fable, blind (read only the pairs file), 2026-09-26. plain = easier for an outsider; fid = the worse side on fidelity.
+Y X Y Y Y Y Y Y X Y X Y Y Y Y Y X X Y Y Y Y same X Y Y Y X Y Y X Y X Y Y Y X Y Y Y X X X Y Y Y X Y Y X Y Y Y Y Y same Y Y Y Y Y Y Y Y Y Y Y Y Y Y Y same Y Y Y Y Y Y Y Y Y Y Y Y Y Y Y Y Y Y Y Y Y Y Y Y Y Y Y Y
+fid: 8=X- (blurs peak-at-intermediate-correlation) 11=Y- (narrates the page) 12=X- (drops a strand) 32=X- (bends who was dismissed) 100=Y- (glosses the person, not the cited paper)
+Pattern (Fable): Y systematically longer and more explanatory; X wins mostly where Y's length outweighs its clarity; Y's one real failure mode is narrating the page.

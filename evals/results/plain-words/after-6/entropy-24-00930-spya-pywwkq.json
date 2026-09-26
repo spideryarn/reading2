@@ -1,0 +1,338 @@
+{
+  "arm": "after-6",
+  "slug": "entropy-24-00930-spya-pywwkq",
+  "tocVersion": "toc/8",
+  "glossaryVersion": "glossary/5",
+  "at": "2026-09-26T04:39:44.117Z",
+  "summaries": [
+    {
+      "depth": 0,
+      "range": "spya-ekjksy..spya-gajhn8",
+      "title": "Multivariate Information Decomposition in Neural Circuits",
+      "gist": "Partial information decomposition reveals synergy—information only visible in joint neural activity—as a measurable signature of neural computation, structured by connectivity and behavior.",
+      "question": "How can we quantify neural information processing beyond mere information transfer? (a framework plus empirical evidence)"
+    },
+    {
+      "depth": 1,
+      "range": "spya-ekjksy..spya-gzwbsr",
+      "title": "Introduction",
+      "gist": "Understanding how brains process information has been limited by data scarcity and weak analytical tools, both of which recent recording technology and information theory now address.",
+      "question": "Why has neural information processing been hard to study, and what now makes progress possible? (motivation and scope)"
+    },
+    {
+      "depth": 2,
+      "range": "spya-ekjksy..spya-y66sc5",
+      "title": "Abstract and metadata",
+      "gist": "This review introduces partial information decomposition, a method separating redundant, unique, and synergistic contributions neurons make when integrating multiple inputs."
+    },
+    {
+      "depth": 2,
+      "range": "spya-yb735k..spya-fmdncw",
+      "title": "The information processing challenge",
+      "gist": "Neuroscience still lacks answers to basic questions about how circuit structure shapes information processing, though recurring patterns are beginning to emerge across studies."
+    },
+    {
+      "depth": 2,
+      "range": "spya-s9kmxa..spya-gzwbsr",
+      "title": "Data and tools now available",
+      "gist": "New high-density recording technologies have solved the old data-scarcity problem, leaving the need for analytical methods like partial information decomposition as the remaining barrier."
+    },
+    {
+      "depth": 1,
+      "range": "spya-ygkzd8..spya-p4pyuy",
+      "title": "2. Tracking Information in Neural Circuits",
+      "gist": "Applying information theory to neural data requires choosing variable states, the elements studied, and a timescale, then using tools like transfer entropy to track directed information flow.",
+      "question": "What choices and tools let researchers track information flow between neurons? (dimensions plus two measures)"
+    },
+    {
+      "depth": 2,
+      "range": "spya-t4pc0p..spya-bdrp5d",
+      "title": "2.1. Defining Key Dimensions",
+      "gist": "Analyzing neural information processing requires specifying whether data are continuous or discrete, which elements and connections are studied, and what timescale of binning is appropriate for detecting transformations."
+    },
+    {
+      "depth": 2,
+      "range": "spya-mx45r0..spya-p4pyuy",
+      "title": "2.2. Tracking Information",
+      "gist": "Mutual information measures undirected statistical dependence between neurons, while transfer entropy measures directed information flow from one neuron's past to another's future, capturing propagation rather than mere correlation."
+    },
+    {
+      "depth": 1,
+      "range": "spya-dhy39x..spya-wer4cd",
+      "title": "3. Information Processing in Neural Circuits",
+      "gist": "Because information transfer alone cannot show how neurons combine multiple input streams into new information, multivariate information decomposition is proposed as the tool for studying processing itself.",
+      "question": "How can synergistic combination of inputs, not just transfer, be captured? (proposal of PID)"
+    },
+    {
+      "depth": 2,
+      "range": "spya-dhy39x..spya-u5ra3d",
+      "title": "Limits of information transfer",
+      "gist": "Tracking information flow shows how much one neuron's past predicts another's future but cannot reveal how a target neuron combines multiple sources into something new, motivating a decomposition approach."
+    },
+    {
+      "depth": 2,
+      "range": "spya-wer4cd..spya-wer4cd",
+      "title": "Setting up the decomposition problem",
+      "gist": "Understanding how a target neuron integrates two source neurons requires knowing the past states of both sources and the target, plus the target's own future state, which partial information decomposition formalizes."
+    },
+    {
+      "depth": 1,
+      "range": "spya-u0wm5e..spya-rc76qn",
+      "title": "4. PID: Partial Information Decomposition",
+      "gist": "Partial information decomposition splits joint mutual information about a target into redundant, unique, and synergistic pieces, but requires choosing among competing, imperfect redundancy measures.",
+      "question": "How does PID formally separate redundant, unique, and synergistic information, and how is redundancy defined? (worked example plus lattice)"
+    },
+    {
+      "depth": 2,
+      "range": "spya-euzn9r..spya-q9gytb",
+      "title": "4.1. The Basic Problem and Intuition",
+      "gist": "The joint information that two parent neurons provide about a target's future is not simply the sum of what each provides alone, revealing either synergistic computation or redundant double-counting between sources."
+    },
+    {
+      "depth": 2,
+      "range": "spya-k378fv..spya-atvpm9",
+      "title": "4.2. The Partial Information Lattice",
+      "gist": "Given an idealized redundancy function satisfying certain axioms, the set of all non-redundant source combinations forms a partially ordered lattice whose atoms can be recovered by Mobius inversion."
+    },
+    {
+      "depth": 2,
+      "range": "spya-d2quz5..spya-rc76qn",
+      "title": "4.3. Choosing a Redundancy Measure",
+      "gist": "No single redundancy measure is universally accepted, since each has trade-offs like fixed system size or discreteness requirements, forcing researchers to choose based on their data's properties."
+    },
+    {
+      "depth": 1,
+      "range": "spya-cc282b..spya-b32ecw",
+      "title": "5. PID in Action",
+      "gist": "Empirical PID analyses of cortical neuron recordings show synergy concentrates in rich clubs, grows with recurrent connectivity, peaks at intermediate source similarity, and shifts with behavioral task demands.",
+      "question": "Where and why does synergistic computation concentrate in real neural circuits? (five empirical case studies)"
+    },
+    {
+      "depth": 2,
+      "range": "spya-dk32tp..spya-kqkb58",
+      "title": "Empirical setup with cortical recordings",
+      "gist": "Multielectrode recordings from cultured mouse cortex, reduced to transfer-entropy triads and analyzed with PID, showed synergy tracks feedforward transfer entropy at roughly a quarter of its value."
+    },
+    {
+      "depth": 2,
+      "range": "spya-e3ghxj..spya-akxt70",
+      "title": "5.1. Synergy in Rich Clubs",
+      "gist": "Densely interconnected rich-club neurons, which carry most information propagation, also account for a hugely disproportionate share of synergistic computation, roughly 88% from under 40% of neurons."
+    },
+    {
+      "depth": 2,
+      "range": "spya-p8by2y..spya-sd9fzd",
+      "title": "5.2. The Importance of Feedforward, Feedback, and Recurrent Connections",
+      "gist": "Synergy rises with feedforward and recurrent connection strength among source neurons but is largely unaffected by feedback, explaining why richly interconnected rich-club triads process the most information."
+    },
+    {
+      "depth": 2,
+      "range": "spya-zfs2z7..spya-cs9fdy",
+      "title": "5.3. Synergy from the Convergence of Correlated Information",
+      "gist": "Synergy rises with source-neuron similarity at short synaptic timescales but peaks and then falls at longer ones, because highly similar information eventually becomes redundant rather than synergistic."
+    },
+    {
+      "depth": 2,
+      "range": "spya-vjzxxm..spya-j4cy9j",
+      "title": "5.4. Caveats to Consider",
+      "gist": "The in vitro findings rest on bivariate transfer-entropy networks that may overstate connection significance, and on cultured tissue rather than behaving animals, leaving open how well results generalize."
+    },
+    {
+      "depth": 2,
+      "range": "spya-aqcngt..spya-b32ecw",
+      "title": "5.5. PID in Behaving Primates",
+      "gist": "In behaving macaques, cortical activity was normally synergy-dominated but shifted toward redundancy during movement execution, showing synergy reflects task-specific, behaviorally meaningful computational demands."
+    },
+    {
+      "depth": 1,
+      "range": "spya-kmgwhs..spya-qa7gt2",
+      "title": "6. Practical Considerations in PID",
+      "gist": "Applying PID successfully requires matching redundancy functions to data type, ensuring enough data to avoid estimation bias, choosing appropriate software tools, and respecting the lattice's combinatorial explosion.",
+      "question": "What practical choices and limits must researchers navigate to apply PID responsibly? (data type, sample size, tools, scaling limits)"
+    },
+    {
+      "depth": 2,
+      "range": "spya-uktkdy..spya-tz99zn",
+      "title": "Data type and sample size concerns",
+      "gist": "Different redundancy functions suit discrete, Gaussian, or general continuous data unevenly, and inferring joint distributions for many neurons demands enough samples to avoid undersampling errors."
+    },
+    {
+      "depth": 2,
+      "range": "spya-rf4pp0..spya-cwsuea",
+      "title": "6.1. Tools for Data Analysis",
+      "gist": "Available software packages, DIT, IDTxl, SxPID, and a MATLAB toolbox, differ in supported redundancy functions, programming language, and whether they handle time series or only joint distributions directly."
+    },
+    {
+      "depth": 2,
+      "range": "spya-h6h922..spya-spdx0y",
+      "title": "6.2. Interpreting PID Results as Neural Information Processing",
+      "gist": "PID reveals statistical synergy reliably but does not explain the biological mechanisms, such as neurotransmitter systems or architecture, that cause particular neurons to be synergy- or redundancy-dominated."
+    },
+    {
+      "depth": 2,
+      "range": "spya-djfyag..spya-qa7gt2",
+      "title": "6.3. Practical Limitations of the PID Framework",
+      "gist": "The number of partial information atoms explodes combinatorially with more parent neurons, and finite-sample entropy estimation biases further limit PID's scalability and accuracy in practice."
+    },
+    {
+      "depth": 1,
+      "range": "spya-zz5xxs..spya-cds6mm",
+      "title": "7. Future Directions",
+      "gist": "Emerging extensions of PID, local time-resolved decomposition and multi-target versions like integrated information decomposition, promise finer-grained and broader analyses beyond classic single-target PID.",
+      "question": "How might PID be extended beyond its classic single-target, distribution-wide form? (two extensions)"
+    },
+    {
+      "depth": 2,
+      "range": "spya-z39m3x..spya-ckpq7e",
+      "title": "7.1. Local PID",
+      "gist": "Localizing PID to individual moments, rather than whole probability distributions, enables time-resolved informational time series, already revealing distinct computational profiles within single neuronal avalanches."
+    },
+    {
+      "depth": 2,
+      "range": "spya-xn6y4f..spya-cds6mm",
+      "title": "7.2. Multi-Target and Temporal PID",
+      "gist": "Extending PID to multiple targets, as in integrated information decomposition, has already uncovered novel temporal information dynamics and links to consciousness and brain genetic architecture in fMRI studies."
+    },
+    {
+      "depth": 1,
+      "range": "spya-rc5z33..spya-gajhn8",
+      "title": "8. Summary",
+      "gist": "Statistical synergy shows neurons respond to patterns of joint input rather than summed totals, and this synergy is systematically shaped by network position, connectivity, and behavioral state.",
+      "question": "What has this review established about synergy as a marker of neural computation? (closing synthesis)"
+    },
+    {
+      "depth": 2,
+      "range": "spya-sp50v3..spya-sp50v3",
+      "title": "Summary text",
+      "gist": "PID demonstrates that synergistic information processing exists throughout neural circuits and is systematically linked to network position, connectivity motifs, and behavioral state across studied systems."
+    },
+    {
+      "depth": 2,
+      "range": "spya-xxjenw..spya-gajhn8",
+      "title": "Contributions and funding",
+      "gist": "This section lists author contributions, funding sources, and declarations of no conflicts of interest for the review."
+    }
+  ],
+  "glossary": [
+    {
+      "name": "Partial Information Decomposition",
+      "aliases": [
+        "PID"
+      ],
+      "senseHere": "A method that splits the total information two or more sources give about a target into separate pieces: information both sources share, information unique to each, and information that only appears when both are considered together. The last piece, synergy, is treated as a signature of genuine computation."
+    },
+    {
+      "name": "rich club",
+      "aliases": [],
+      "senseHere": "The subset of most-connected neurons in a network that are also more densely interconnected with each other than chance would predict. In the cortical recordings discussed, these neurons carry a disproportionate share of both information flow and synergistic computation."
+    },
+    {
+      "name": "mutual information",
+      "aliases": [
+        "I(X;Y)"
+      ],
+      "senseHere": "A measure of how much knowing one variable's state reduces uncertainty about another's, calculated from their joint and individual probability distributions. The article uses it to gauge undirected statistical dependence between neurons, likened to a nonlinear correlation."
+    },
+    {
+      "name": "transfer entropy",
+      "aliases": [
+        "TE"
+      ],
+      "senseHere": "A directional measure of how much a source neuron's past activity reduces uncertainty about a target neuron's future activity, beyond what the target's own past already explains. It stands in for information flow or effective connectivity between neurons."
+    },
+    {
+      "name": "functional connectivity",
+      "aliases": [],
+      "senseHere": "A description of statistical dependence between two neurons' activity patterns, without implying that one causes or drives the other, as measured by mutual information."
+    },
+    {
+      "name": "effective connectivity",
+      "aliases": [],
+      "senseHere": "A description of directed influence, where one neuron's past activity actually helps predict another's future activity, as measured by transfer entropy, in contrast to the merely descriptive functional connectivity."
+    },
+    {
+      "name": "synergy",
+      "aliases": [
+        "synergistic information",
+        "Syn"
+      ],
+      "senseHere": "The portion of information about a target neuron's activity that can only be learned by observing two or more source neurons together, not from any source alone. The article treats high synergy as evidence that a neuron is combining inputs into something new rather than just summing them."
+    },
+    {
+      "name": "redundant information",
+      "aliases": [
+        "redundancy",
+        "Red"
+      ],
+      "senseHere": "The part of the information about a target that could be learned equally well from either source alone, so it would be double-counted if the sources' individual information were simply added up."
+    },
+    {
+      "name": "unique information",
+      "aliases": [
+        "Unq"
+      ],
+      "senseHere": "The information about a target that only one particular source discloses, and that the other source cannot provide even in part."
+    },
+    {
+      "name": "redundancy function",
+      "aliases": [
+        "I∩"
+      ],
+      "senseHere": "A formal rule for quantifying exactly how much information counts as redundant between any group of sources, needed to make the PID's system of equations solvable. Different proposed redundancy functions (Imin, Iccs, Isx, IBROJA, etc.) give different, sometimes conflicting, answers."
+    },
+    {
+      "name": "Imin",
+      "aliases": [],
+      "senseHere": "The original redundancy function proposed for PID, defining shared information as the minimum information any single source provides about each specific target outcome. It is widely used but criticized for producing unintuitive redundancy values in some cases."
+    },
+    {
+      "name": "partial information lattice",
+      "aliases": [],
+      "senseHere": "A structured diagram of all the distinct ways multiple sources can share or jointly disclose information about a target, ordered so each piece (atom) can be computed from simpler combinations below it. It generalizes the redundant/unique/synergistic split to any number of sources."
+    },
+    {
+      "name": "organotypic culture",
+      "aliases": [],
+      "senseHere": "Living cortical tissue kept growing in a dish after being sliced from a mouse brain, preserving much of the original cell arrangement and connectivity for study."
+    },
+    {
+      "name": "computational triad",
+      "aliases": [],
+      "senseHere": "A basic three-neuron unit used for PID analysis: two source neurons whose past activity feeds into a single target neuron's future activity, letting redundancy, uniqueness, and synergy be computed for that trio."
+    },
+    {
+      "name": "DIT",
+      "aliases": [
+        "Discrete Information Theory toolbox"
+      ],
+      "background": "A Python software package for computing various multivariate information-theoretic measures, including an automated solver for partial information decomposition lattices with up to five sources."
+    },
+    {
+      "name": "IDTxl",
+      "aliases": [],
+      "senseHere": "A software package for analyzing time-series data with information-theoretic tools, including built-in PID solvers and algorithms for inferring transfer entropy networks directly from recordings."
+    },
+    {
+      "name": "Dedekind number",
+      "aliases": [],
+      "senseHere": "A rapidly growing count of possible logical groupings of a set of elements, used here to show that the number of distinct information atoms in a PID lattice explodes uncontrollably as the number of source neurons grows."
+    },
+    {
+      "name": "O-information",
+      "aliases": [],
+      "senseHere": "A simplified, more computationally tractable measure of overall redundancy versus synergy across a whole group of variables, used as a scalable stand-in when full PID becomes intractable for many neurons."
+    },
+    {
+      "name": "local PID",
+      "aliases": [],
+      "senseHere": "A version of PID applied to single specific moments or configurations of activity rather than averaged over all possibilities, producing a time-resolved trace of redundancy, uniqueness, and synergy instead of one overall number."
+    },
+    {
+      "name": "integrated information decomposition",
+      "aliases": [
+        "ΦID"
+      ],
+      "senseHere": "An extension of PID that decomposes information shared between sets of sources and sets of targets simultaneously, rather than only sources feeding into a single target, and can track how redundant or synergistic information evolves over time."
+    }
+  ]
+}

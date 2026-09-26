@@ -419,8 +419,8 @@ export function GlossaryPanel({
             <div className="gloss-stale">
               <p>
                 <TriangleAlert size={13} />
-                These were written before entries said where each half came from. Finding them
-                again splits each one into what the article means and what the model knows.
+                These were written by a different version of the glossary. Finding them again
+                rewrites each entry the way it would be written now.
               </p>
               <div className="gloss-run">
                 <Progress

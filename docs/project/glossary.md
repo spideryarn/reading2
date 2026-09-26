@@ -513,6 +513,19 @@ away — *"Cited as", "Quoted for", "Referenced as", "Used as an example of", "I
 article's"*. The distinction that makes it coherent is the same one the selection rules use: **which
 facts you choose is governed by this article; the sentence you write is about the term.**
 
+### Written for somebody outside the field
+
+**Added 2026-09-26** (`glossary/5`), from SPIDERYARN-READING2-44. Greg: *"the glossary as well
+especially should explain in simpler language."* An entry that defines one hard word with four more
+is accurate and useless — `glossary/4` defined *mutual information* as *"a symmetric, undirected
+measure of statistical dependence"*. The WRITING rules now name the reader (curious, well-read, never
+studied this field), forbid a second lookup, lead with the plain meaning, allow a one-clause example
+— from the article in `senseHere`, the model's own only in `background`, so the provenance labels
+stay true — and say plainer means equally specific. A second worked BAD/GOOD pair carries the
+register, for the reason the section above gives. The bump shows every owner's older glossary the
+*written by a different version* banner, which is the migration.
+[260926a](../plans/260926a-plainer-summaries-and-glossary.md).
+
 ### Name the thing, not the topic
 
 One guard added after watching the first run: the model came back with **"JFK speechwriting"** and

@@ -486,15 +486,15 @@ describe("the arms", () => {
   });
 
   /**
-   * **The pinned pair, and the identity that makes it necessary.**
+   * **The pinned pair, and why it has to be pinned.**
    *
    * `incumbent` slices the live SYSTEM, so it is the *newest* shipped block
-   * whatever that is. The check that could have failed — and would have, had the
-   * block been retyped rather than copied — is the first one: the pinned `toc/6`
-   * text is character-for-character what production sends today. The second says
-   * out loud why the before half cannot be `incumbent`: its whole system prompt
-   * is byte-identical to `gists-toc6`'s, so a run of the two would measure the
-   * model's wobble and report it as the effect of the bump.
+   * whatever that is. From toc/6 until toc/8 that made its whole system prompt
+   * byte-identical to `gists-toc6`'s, so a run of the two would have measured
+   * the model's wobble and reported it as the effect of the bump. On 2026-09-26
+   * `toc/8` moved the live GISTS block on (plan 260926a), and the pinned `toc/6`
+   * text stayed where it was — which is the whole point of pinning it. The test
+   * below asserts that divergence, and that it is the plain-words bullets.
    */
   /**
    * **The questions axis's pinned control, and the identity that makes it
@@ -541,14 +541,17 @@ describe("the arms", () => {
    * wobble as an effect — which is the entire reason `incumbent-repeat` is
    * spelled out as a pair rather than left to be noticed.
    *
-   * **The surviving group has three members, and that was true before any of
-   * this.** `gists-toc6` pins the toc/6 GISTS block, `incumbent` slices the live
-   * one, and they are the same block — the identity `arms.ts`
-   * § `LENGTH_PAIR_DELTAS` states outright and the next test asserts over the
-   * whole system prompt. So `gists-toc6` buys a third sample of the incumbent
-   * recipe. It stays because it is the named *after* half of two pinned pairs
-   * (`gists-toc5` before it, `questions-toc6` beside it), and a pair with a half
-   * that follows the live prompt stops being a pair the day that prompt moves.
+   * **The surviving group is the declared noise floor alone.** From toc/6
+   * until toc/8 it had a third member: `gists-toc6` pins the toc/6 GISTS block,
+   * `incumbent` slices the live one, and for those two versions they were the
+   * same block, so `gists-toc6` was a third sample of the incumbent recipe. On
+   * 2026-09-26 `toc/8` gave the live GISTS block the plain-words rule (plan
+   * 260926a) and the pinned copy stayed put, so `gists-toc6` left the group —
+   * the next test asserts the difference. It was kept through the identity
+   * because it is the named *after* half of two pinned pairs (`gists-toc5`
+   * before it, `questions-toc6` beside it), and a pair with a half that follows
+   * the live prompt stops being a pair the day that prompt moves — which is
+   * the day that has now come.
    *
    * The value here is the **exactness**: a new duplicate changes this list and
    * has to be argued for rather than discovered in a null result.
@@ -561,12 +564,24 @@ describe("the arms", () => {
       seen.set(key, [...(seen.get(key) ?? []), arm.name]);
     }
     const shared = [...seen.values()].filter((names) => names.length > 1);
-    expect(shared).toEqual([["incumbent", "incumbent-repeat", "gists-toc6"]]);
+    expect(shared).toEqual([["incumbent", "incumbent-repeat"]]);
   });
 
-  it("pins toc/6 to what production sends, and toc/5 to what it sent before", () => {
-    expect(promptBlocksFor(armByName("gists-toc6")).gists).toBe(productionGists());
-    expect(systemFor(armByName("incumbent"))).toBe(systemFor(armByName("gists-toc6")));
+  it("pins toc/6 and toc/5, neither of which is what production sends since toc/8", () => {
+    const six = promptBlocksFor(armByName("gists-toc6")).gists;
+    expect(six).not.toBe(productionGists());
+    expect(systemFor(armByName("incumbent"))).not.toBe(systemFor(armByName("gists-toc6")));
+    /* What toc/8 added, present in production and absent from the pinned toc/6
+       block — so the gap is the plain-words rule and not an accidental edit to
+       the pin. */
+    for (const sentence of ["a handhold is not an explanation", "Plainer means equally specific"]) {
+      expect(productionGists()).toContain(sentence);
+      expect(six).not.toContain(sentence);
+    }
+    /* And what toc/6 itself added is still in the pin, so it is still toc/6. */
+    expect(six).toContain("LENGTH IS SET BY WHERE THE LINE IS READ");
+    expect(six).toContain("No narration of document order");
+    expect(six).toContain("Where a shorter, commoner");
     const five = promptBlocksFor(armByName("gists-toc5")).gists;
     expect(five).not.toBe(productionGists());
     /* The three sentences the bump added, absent from the before block. */

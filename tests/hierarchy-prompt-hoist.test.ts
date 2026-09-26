@@ -63,7 +63,7 @@ const BLOCKS: Block[] = [
 
 describe("hoisting the structure prompt's three values", () => {
   it("moved the stamp and the effort without moving either value", () => {
-    expect(PROMPT_VERSION).toBe("toc/7");
+    expect(PROMPT_VERSION).toBe("toc/8");
     expect(PRODUCTION_EFFORT).toBe("low");
   });
 
@@ -105,10 +105,16 @@ describe("hoisting the structure prompt's three values", () => {
    * must not be resumed onto it — an article part-way through the stage would
    * otherwise come out with V4 questions on the parts written after the resume
    * and toc/6 questions on the ones written before, and nothing would say why.
+   *
+   * **And again on 2026-09-26**, from `8e314a56003e9d89` to the value below,
+   * when the GISTS block gained the plain-words rule (`toc/8`, plan 260926a,
+   * SPIDERYARN-READING2-44). Only SYSTEM's GISTS bullets changed — not
+   * `renderBlocks`, not `EFFORT` — so a checkpoint written under toc/7 is
+   * correctly no longer found.
    */
-  it("mints one stable key for the toc/7 structure request", () => {
+  it("mints one stable key for the toc/8 structure request", () => {
     expect(checkpointKey(canonicalStructureRequest(structureRequest(BLOCKS).params))).toBe(
-      "8e314a56003e9d89",
+      "da076a41758df064",
     );
   });
 });

@@ -276,6 +276,23 @@ everything else**. It is not a licence to flatten. A mode that swaps the author'
 distinctive word for a common synonym has taken something from the reader, which is
 [vision.md](vision.md)'s whole objection to summaries.
 
+**A handhold is not an explanation**, and that is the half the first version missed:
+
+> we want the summaries to really use simpler language, because half the problem is we may not
+> know what the jargon means, and the glossary as well especially should explain in simpler
+> language.
+>
+> — Greg, 2026-09-26
+
+Every term of art is a thing the article names, so "the article's own words for the things it
+names" exempted exactly the jargon. The rule now reads: keep the name, but make the sentence
+understandable to a reader from outside the field who does not already know it — say it in ordinary
+words instead, or keep it and let the rest of the sentence show what it is. And **plainer means
+equally specific**: the same claim in commoner words, never a looser one. So far only the summary
+prompts (`src/hierarchy.ts`, `src/hierarchy-expand.ts`) and the glossary (`src/glossary.ts`) say
+this; the other prompts listed by the grep below still carry the 2026-09-03 wording —
+[260926a](../plans/260926a-plainer-summaries-and-glossary.md) § Deferred.
+
 Every prompt that carries it ends on the same phrase, **"plainer than the article,
 never further from it"**, so `grep -rni "lainer than the article" src/` is the list
 of prompts that have it. Put it where the prompt already talks about how to write

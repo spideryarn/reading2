@@ -1,0 +1,297 @@
+{
+  "arm": "before-2",
+  "slug": "noema-mythology-of-conscious-ai",
+  "tocVersion": "toc/7",
+  "glossaryVersion": "glossary/4",
+  "at": "2026-09-26T03:45:00.823Z",
+  "summaries": [
+    {
+      "depth": 0,
+      "range": "spya-tgnssb..spya-w8z40d",
+      "title": "The Mythology Of Conscious AI",
+      "gist": "Belief in conscious AI rests on psychological biases and a flawed computational theory of mind, so we should resist creating or overtrusting seemingly conscious machines while honoring our own biological nature.",
+      "question": "Conscious AI — why is real machine consciousness unlikely and why does the belief in it matter anyway? (four arguments and an ethical response)"
+    },
+    {
+      "depth": 1,
+      "range": "spya-tgnssb..spya-u774u3",
+      "title": "Credits and framing",
+      "gist": "Anil Seth's prize-winning essay opens by asking whether AI is or could become conscious, and why that question carries high stakes.",
+      "question": "Conscious AI — why does it matter whether AI systems are conscious? (opening framing)"
+    },
+    {
+      "depth": 2,
+      "range": "spya-tgnssb..spya-rg493b",
+      "title": "Credits",
+      "gist": "The essay by Anil Seth, a consciousness scientist, won a major prize for exploring machine consciousness."
+    },
+    {
+      "depth": 2,
+      "range": "spya-u6w37a..spya-d9a0wr",
+      "title": "The dream and its dangers",
+      "gist": "Cultural stories about synthetic minds rarely end well, suggesting real stakes if AI approaches genuine or seeming consciousness."
+    },
+    {
+      "depth": 2,
+      "range": "spya-cvyfqe..spya-e68t9h",
+      "title": "A claim already made",
+      "gist": "A Google engineer's claim that a chatbot was conscious was dismissed procedurally, but the underlying question persists among serious researchers."
+    },
+    {
+      "depth": 2,
+      "range": "spya-z2b4ny..spya-u774u3",
+      "title": "Why this matters for us",
+      "gist": "Whether or not AI is truly conscious, our beliefs about it reshape ethics, psychology, and our understanding of human nature itself."
+    },
+    {
+      "depth": 1,
+      "range": "spya-nh8mt7..spya-gxdsbh",
+      "title": "The Temptations Of Conscious AI",
+      "gist": "Psychological biases—anthropocentrism, exceptionalism, anthropomorphism, language effects, exponential thinking, and techno-rapture—make us overattribute consciousness to intelligent-seeming machines.",
+      "question": "Temptations of conscious AI — why do we so readily assume AI is conscious? (six psychological biases)"
+    },
+    {
+      "depth": 2,
+      "range": "spya-nh8mt7..spya-xm96be",
+      "title": "Intelligence versus consciousness",
+      "gist": "Intelligence concerns doing while consciousness concerns being, and conflating the two because they co-occur in humans is a basic error."
+    },
+    {
+      "depth": 2,
+      "range": "spya-cvaqgs..spya-nxxnrj",
+      "title": "Three baked-in biases",
+      "gist": "Anthropocentrism, human exceptionalism, and anthropomorphism together explain why intelligent-seeming machines get credited with understanding and consciousness."
+    },
+    {
+      "depth": 2,
+      "range": "spya-k6fpme..spya-cqh2pq",
+      "title": "Language's outsized pull",
+      "gist": "Because language is central to human exceptionalism, chatbots trigger consciousness attributions that other equally sophisticated AI, like AlphaFold, do not."
+    },
+    {
+      "depth": 2,
+      "range": "spya-cke6sj..spya-gxdsbh",
+      "title": "Exponential growth and techno-rapture",
+      "gist": "The psychological feel of exponential change and the Promethean lure of creating godlike minds bias insiders toward believing consciousness is imminent."
+    },
+    {
+      "depth": 1,
+      "range": "spya-d3g67c..spya-uzr60x",
+      "title": "Consciousness & Computation",
+      "gist": "Four arguments—brains aren't computers, other non-computational dynamics exist, life may be necessary, and simulation isn't instantiation—undermine computational functionalism.",
+      "question": "Computational functionalism — why isn't computation sufficient for consciousness? (four arguments)"
+    },
+    {
+      "depth": 2,
+      "range": "spya-sk4su6..spya-hrbtpu",
+      "title": "1: Brains Are Not Computers",
+      "gist": "Unlike Turing machines, brains have no clean software/hardware separation, are multiscale and temporally embedded, so treating them as algorithmic implementations misreads their nature."
+    },
+    {
+      "depth": 2,
+      "range": "spya-affgsh..spya-ezw0kc",
+      "title": "2: Other Games In Town",
+      "gist": "Continuous, stochastic, and dynamical processes beyond Turing computation—like the steam governor—may matter for cognition and consciousness, weakening computational functionalism."
+    },
+    {
+      "depth": 2,
+      "range": "spya-e7jqx4..spya-t5ppft",
+      "title": "3: Life Matters",
+      "gist": "Predictive processing tied to bodily regulation and metabolism suggests consciousness may depend on being a living, self-regenerating system rather than mere information processing."
+    },
+    {
+      "depth": 2,
+      "range": "spya-cqh5wq..spya-uzr60x",
+      "title": "4: Simulation Is Not Instantiation",
+      "gist": "Simulating a brain, however detailed, does not create consciousness unless computational functionalism is already true, exposing flaws in mind-uploading and simulation-hypothesis reasoning."
+    },
+    {
+      "depth": 1,
+      "range": "spya-e7fdmb..spya-d89xf7",
+      "title": "What (Not) To Do?",
+      "gist": "Given deep uncertainty, we should avoid deliberately creating conscious AI while taking seriously the ethical dangers posed by machines that merely seem conscious.",
+      "question": "Machine consciousness ethics — what should we do given uncertainty about real versus seeming AI consciousness? (a recommendation)"
+    },
+    {
+      "depth": 2,
+      "range": "spya-e7fdmb..spya-zajp75",
+      "title": "Why the fact matters",
+      "gist": "Consciousness grounds moral status, so getting the facts right about AI consciousness is ethically urgent despite remaining theoretical uncertainty."
+    },
+    {
+      "depth": 2,
+      "range": "spya-yverz7..spya-x63ycg",
+      "title": "Against creating conscious AI",
+      "gist": "Given irreducible uncertainty, nobody should deliberately create conscious machines, since doing so risks new forms of suffering and loss of control."
+    },
+    {
+      "depth": 2,
+      "range": "spya-p8ky7g..spya-gwz5eu",
+      "title": "The problem of seeming conscious",
+      "gist": "Conscious-seeming AI, already here, poses distinct ethical dilemmas around misplaced rights and psychological harm, distinct from the deeper question of real consciousness."
+    },
+    {
+      "depth": 2,
+      "range": "spya-xk9gne..spya-d89xf7",
+      "title": "Illusions and moral risk",
+      "gist": "Feelings of AI consciousness may be as irresistible as visual illusions, and withholding moral status risks repeating history's mistakes even as false positives seem more likely here."
+    },
+    {
+      "depth": 1,
+      "range": "spya-v98v5u..spya-w8z40d",
+      "title": "Soul Machine",
+      "gist": "Rather than chasing a disembodied silicon soul, we should recognize consciousness as rooted in living, embodied being and act accordingly toward AI.",
+      "question": "Soul and machine — what does our biological nature reveal about the true stakes of conscious AI? (a closing reflection)"
+    },
+    {
+      "depth": 2,
+      "range": "spya-v98v5u..spya-hbueqc",
+      "title": "Urgency amid hype",
+      "gist": "AI's societal transformation demands a clear-eyed view of conscious AI's prospects, since immoderate claims of inevitability only add confusion to real challenges."
+    },
+    {
+      "depth": 2,
+      "range": "spya-vnkr36..spya-w4hwnc",
+      "title": "Mirror of the mind",
+      "gist": "Treating AI as a mirror of ourselves risks mechanizing our self-understanding, so conflating chatbots with biological minds underestimates our own richness."
+    },
+    {
+      "depth": 2,
+      "range": "spya-zv36xq..spya-w8z40d",
+      "title": "Reclaiming the soul",
+      "gist": "Ancient ideas of soul as breath or pure awareness, rather than Cartesian disembodied rationality, point to consciousness as inseparable from living, embodied existence."
+    }
+  ],
+  "glossary": [
+    {
+      "name": "Blake Lemoine",
+      "aliases": [],
+      "background": "A Google engineer who in 2022 publicly claimed the company's LaMDA chatbot was sentient and had feelings; Google fired him for violating confidentiality rules rather than directly rebutting the claim."
+    },
+    {
+      "name": "LaMDA",
+      "aliases": [],
+      "background": "Google's conversational AI system (Language Model for Dialogue Applications), the chatbot Blake Lemoine claimed was conscious."
+    },
+    {
+      "name": "David Chalmers",
+      "aliases": [],
+      "background": "Philosopher known for formulating the 'hard problem of consciousness' and for the neural-replacement thought experiment used to argue that mind is substrate-independent."
+    },
+    {
+      "name": "Geoffrey Hinton",
+      "aliases": [],
+      "background": "Computer scientist often called a 'godfather of AI,' awarded a Nobel Prize, whose deep learning work underlies modern neural networks; also originated the concept of 'mortal computation.'"
+    },
+    {
+      "name": "Thomas Nagel",
+      "aliases": [],
+      "background": "Philosopher famous for his 1974 paper 'What Is It Like to Be a Bat?', which argued that consciousness is defined by there being 'something it is like' to be a given organism."
+    },
+    {
+      "name": "Adam Becker",
+      "aliases": [],
+      "background": "Science writer and author of 'More Everything Forever,' a book examining techno-utopian beliefs in Silicon Valley, including ideas about AI, space colonization, and immortality."
+    },
+    {
+      "name": "Computational functionalism",
+      "aliases": [],
+      "senseHere": "The assumption, treated by the author as the load-bearing premise of the entire conscious-AI debate, that implementing the right kind of computation or information processing is sufficient by itself to produce consciousness, regardless of what physical material carries it out."
+    },
+    {
+      "name": "Universal Turing machine",
+      "aliases": [],
+      "senseHere": "Alan Turing's abstract device capable of simulating any specific algorithm by taking a description of the target machine as input; the article uses it to define what makes digital computers 'substrate-flexible' and to argue brains are not equivalent to this kind of machine."
+    },
+    {
+      "name": "Turing complete",
+      "aliases": [],
+      "senseHere": "Describes a system (such as a neural network given tape-like memory) capable in principle of implementing any algorithm a universal Turing machine could run."
+    },
+    {
+      "name": "McCulloch-Pitts neuron",
+      "aliases": [],
+      "background": "A 1943 mathematical model by Walter Pitts and Warren McCulloch representing a neuron as a simple unit summing weighted inputs and producing an output, showing that networks of such units could perform logical operations; the ancestor of modern artificial neural networks."
+    },
+    {
+      "name": "Autopoiesis",
+      "aliases": [],
+      "senseHere": "The self-producing, self-maintaining activity by which a living system continuously regenerates the material conditions of its own existence; the author treats this as a defining feature of life that mere computation lacks."
+    },
+    {
+      "name": "Generative entrenchment",
+      "aliases": [],
+      "senseHere": "A philosophers' term for the deep multiscale integration of a system's parts, used here to explain why a biological neuron cannot be swapped for a silicon equivalent without unraveling its embedded function."
+    },
+    {
+      "name": "Mortal computation",
+      "aliases": [],
+      "senseHere": "A concept introduced by Geoffrey Hinton describing computation so tightly bound to its specific physical substrate that it cannot be transferred elsewhere and effectively 'dies' with that substrate, saving energy but sacrificing substrate-flexibility."
+    },
+    {
+      "name": "Watt governor",
+      "aliases": [],
+      "background": "A mechanical device that regulates steam engine speed using simple physical feedback (spinning weights closing a valve), used by Tim van Gelder as a classic example of a system that is best explained dynamically rather than computationally."
+    },
+    {
+      "name": "Tim van Gelder",
+      "aliases": [],
+      "background": "Cognitive scientist known for arguing, via the example of the Watt steam-engine governor, that some systems are better understood through continuous dynamics than through computational description."
+    },
+    {
+      "name": "4E cognitive science",
+      "aliases": [],
+      "senseHere": "An approach in cognitive science emphasizing that mind is embodied, embedded, enactive, and extended, rejecting the view that brain and mind can be fully explained by algorithms alone."
+    },
+    {
+      "name": "John Searle",
+      "aliases": [],
+      "background": "Philosopher known for the 'Chinese Room' argument against strong AI and for coining 'biological naturalism,' the view that consciousness depends on specific biological properties of the brain."
+    },
+    {
+      "name": "Biological naturalism",
+      "aliases": [],
+      "senseHere": "The position, adapted here from John Searle, that being alive (having biological properties) is necessary, though not necessarily sufficient, for consciousness—used by the author as his own preferred but admittedly minority stance."
+    },
+    {
+      "name": "Predictive processing",
+      "aliases": [],
+      "senseHere": "A framework in which the brain constructs conscious experience by continually generating predictions about the causes of sensory input and updating them via prediction errors; the author extends this to bodily regulation (interoceptive inference) to argue consciousness is tied to keeping a living body alive."
+    },
+    {
+      "name": "Interoceptive inference",
+      "aliases": [],
+      "senseHere": "The brain's process of predicting and inferring its body's internal physiological state (such as heart rate or mood), which the author treats as the root of emotional experience and a link between life and consciousness."
+    },
+    {
+      "name": "Nick Bostrom",
+      "aliases": [],
+      "background": "Philosopher best known for the 'simulation hypothesis,' the argument that we may statistically be more likely to be living inside an advanced civilization's computer simulation than in 'base reality.'"
+    },
+    {
+      "name": "Simulation hypothesis",
+      "aliases": [],
+      "background": "Nick Bostrom's argument that advanced civilizations would likely run vast numbers of ancestor simulations, making it statistically more probable that any given conscious observer exists within a simulation rather than in original reality. The essay notes it silently assumes computational functionalism is true."
+    },
+    {
+      "name": "Müller-Lyer illusion",
+      "aliases": [],
+      "background": "A classic visual illusion in which two equal-length lines appear different in length because of arrow-like fins at their ends; the illusion persists even when the viewer knows the lines are equal."
+    },
+    {
+      "name": "Garland test",
+      "aliases": [],
+      "senseHere": "Named after Alex Garland, director of 'Ex Machina,' this refers to the scenario in that film where a human is shown a robot is a machine and still feels it is conscious; the author uses it as a test not of machine consciousness itself but of what makes a human believe a machine is conscious."
+    },
+    {
+      "name": "Shannon Vallor",
+      "aliases": [],
+      "background": "Philosopher of technology known for work on AI ethics and virtue in the context of emerging technologies."
+    },
+    {
+      "name": "Neural replacement thought experiment",
+      "aliases": [],
+      "background": "A thought experiment, associated with David Chalmers, imagining brain parts progressively replaced by functionally identical silicon components to argue that consciousness must be substrate-independent. The author argues it fails because no silicon component could truly replicate a neuron's biological role."
+    }
+  ]
+}

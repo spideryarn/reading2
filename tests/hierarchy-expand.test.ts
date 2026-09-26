@@ -323,9 +323,14 @@ describe("the constants a scoped call is made with", () => {
    * `expand/4`, 2026-09-07: the prompt gained a QUESTIONS block and a
    * per-section marker, so an `expand/3` answer has no `question` on any child
    * of any section — the defect P1-5 names, in stored form.
+   *
+   * `expand/5`, 2026-09-26: the gist bullet gained the plain-words rule `toc/8`
+   * gave the whole-document call — keep the name as a handhold, make it
+   * understandable, plainer means equally specific. Provenance, as with
+   * `expand/4` (docs/plans/260926a-plainer-summaries-and-glossary.md).
    */
-  it("is at expand/4, since the children of the whole work are asked a question", () => {
-    expect(EXPAND_PROMPT_VERSION).toBe("expand/4");
+  it("is at expand/5, since fine gists now make a kept term understandable", () => {
+    expect(EXPAND_PROMPT_VERSION).toBe("expand/5");
   });
 
   /**
@@ -333,24 +338,27 @@ describe("the constants a scoped call is made with", () => {
    * doing nothing.** It is derived from both prompt versions, so `toc/7` had
    * already carried it from `toc/6+expand/3` to `toc/7+expand/3` before this
    * work began, and any test asserting only that it *changed* would have passed
-   * over an expansion prompt nobody had touched. ⟨GPT Sol's F5.⟩
+   * over an expansion prompt nobody had touched. ⟨GPT Sol's F5.⟩ The same
+   * held on 2026-09-26: `toc/8` alone would have moved it to `toc/8+expand/4`,
+   * so the pin names `expand/5` too.
    *
    * What the explicit bump buys is honest provenance rather than a forced
    * checkpoint miss: `canonicalExpansionRequest` hashes the whole wire request,
    * `EXPAND_SYSTEM` included, so a changed prompt already misses.
    */
-  it("stamps toc/7+expand/4, both halves named", () => {
-    expect(EXPANSION_PROMPT_STAMP).toBe("toc/7+expand/4");
+  it("stamps toc/8+expand/5, both halves named", () => {
+    expect(EXPANSION_PROMPT_STAMP).toBe("toc/8+expand/5");
   });
 
   /**
    * The floor is a property of the model, not of us, and the estimate is four
    * characters to a token.
    *
-   * **`EXPAND_SYSTEM` now clears it on its own**, at 1,631 estimated tokens
+   * **`EXPAND_SYSTEM` now clears it on its own**, at 1,865 estimated tokens
    * against 1,024, so `expansionPrefixIsCacheable` is `true` for every outline
    * including none at all. It was 893 until `expand/3`, 1,078 until `expand/4`
-   * added the QUESTIONS block.
+   * added the QUESTIONS block, and 1,631 until `expand/5` added the plain-words
+   * rule.
    *
    * **What that changed, stated exactly**, because the loose version of it was
    * wrong and GPT Sol caught it: eligibility moved from *outline-dependent* to

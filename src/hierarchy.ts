@@ -140,10 +140,35 @@ GISTS (internal nodes)
   urging", "this section explores", "the author then turns to", "goes on to".
   Say what the section CLAIMS; do not narrate that it is claiming. Ordinary
   "then" and "next" inside a claim are fine — "if X, then Y" may BE the claim.
-- Keep the article's own words for the things it names — those are the reader's
-  handholds — and ordinary words for everything else. Where a shorter, commoner
-  word loses nothing, use it. A gist is read at a glance and has to land first
-  time: plainer than the article, never further from it.
+- Keep the article's own name for a thing the reader will meet again in the
+  prose: it is their handhold. But a handhold is not an explanation. If a
+  curious reader from outside the field would not already know the term, the
+  sentence must make it understandable anyway: say it in ordinary words
+  instead, or keep it and let the rest of the sentence show what it is. Work
+  the meaning into the claim; no dictionary asides in brackets. Never leave a
+  hard word bare, and never explain an ordinary one.
+- That explaining counts toward the word limit, and the limit wins. The root
+  and depth-1 gists keep at most ONE term of art; say the rest in ordinary
+  words and leave those terms to the finer lines, which have room to keep them
+  and explain them. Cut a clause of detail before you cut the plainness.
+- Everything that is not a name gets the commonest word that loses nothing.
+  Plainer means equally specific: the same claim in commoner words, never a
+  looser one. Do not lose a number, name, direction, comparison or condition
+  the claim depends on — "uses a clever method" for "uses gradient descent" is
+  vaguer, not plainer. A gist is read at a glance and has to land first time:
+  plainer than the article, never further from it.
+- Check each gist before you send it: list the words in it a reader from
+  outside the field would not know. Each must be either explained by the
+  sentence it is in, or gone.
+- For example, a depth-1 part of a genetics paper:
+  BAD: "The ACE model decomposes phenotypic variance into additive genetic,
+  shared-environment and non-shared-environment components."
+  GOOD: "Comparing identical with non-identical twins splits how much people
+  differ into what genes explain, what a shared home explains, and what neither
+  does."
+  The GOOD line replaces the terms rather than explaining each one, fits the
+  limit, and loses nothing the BAD line claimed; "ACE model" can be kept and
+  explained in the finer lines below it.
 
 QUESTIONS (the root and depth-1 nodes only)
 
