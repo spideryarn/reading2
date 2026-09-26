@@ -354,7 +354,7 @@ describe("the constants a scoped call is made with", () => {
    * The floor is a property of the model, not of us, and the estimate is four
    * characters to a token.
    *
-   * **`EXPAND_SYSTEM` now clears it on its own**, at 1,865 estimated tokens
+   * **`EXPAND_SYSTEM` now clears it on its own**, at 1,895 estimated tokens
    * against 1,024, so `expansionPrefixIsCacheable` is `true` for every outline
    * including none at all. It was 893 until `expand/3`, 1,078 until `expand/4`
    * added the QUESTIONS block, and 1,631 until `expand/5` added the plain-words

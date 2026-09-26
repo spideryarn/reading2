@@ -27,18 +27,23 @@
  * **RE-PINNED AGAIN 2026-09-07 for `toc/7`**, and it fired the same way: the
  * QUESTIONS block became V4 — the reading order Greg drew, `<topic> —
  * <question>? (<shape hint>)` — so the bytes moved on purpose a second time.
- * The block below is byte-identical to `evals/summaries/variants.md` § V4,
- * which is the copy the eval measured; `tests/summaries-eval.test.ts` asserts
- * that identity, so this pin and that one cannot drift apart quietly.
+ * The block below was then byte-identical to `evals/summaries/variants.md`
+ * § V4, which is the copy the eval measured; since `toc/8` it is V4 with one
+ * bullet replaced (below). `tests/summaries-eval.test.ts` asserts exactly that
+ * relation, so this pin and that one cannot drift apart quietly.
  * docs/plans/260907d-ship-socratic-v4-repair-the-eval-gate-and-answer-q7.md.
  *
  * **RE-PINNED 2026-09-26 for `toc/8`**, and it fired the same way a third
  * time: the GISTS block's plain-word bullet became three — a name is a
  * handhold, not an explanation, so a term the reader would not know must be
  * made understandable; that explaining counts toward the word limit; and
- * plainer means equally specific. Greg, SPIDERYARN-READING2-44. Only those
- * GISTS bullets moved; the QUESTIONS block is untouched and still
- * byte-identical to `evals/summaries/variants.md` § V4.
+ * plainer means equally specific. Greg, SPIDERYARN-READING2-44. And the
+ * QUESTIONS block's last bullet moved with them: the topic keeps the
+ * article's term as the handhold, and the question after it must make sense
+ * to a reader who does not know that term — because a blind eval showed
+ * depth-1 questions did not get plainer from the GISTS cross-reference alone.
+ * So QUESTIONS is now `evals/summaries/variants.md` § V4 with that one bullet
+ * replaced, and nothing else.
  * docs/plans/260926a-plainer-summaries-and-glossary.md.
  */
 
@@ -185,8 +190,10 @@ QUESTIONS (the root and depth-1 nodes only)
   different number. Omit the hint when there is no honest shape.
 - The root's question is the one the whole piece exists to answer.
 - Not rhetorical, not yes/no, never the gist with a question mark on it.
-- Under 20 words in all. Digits for counts. The article's own words for what it
-  names, ordinary words for the rest, exactly as with gists.
+- Under 20 words in all. Digits for counts. The topic keeps the article's own
+  term as the handhold; the question after it is in ordinary words and must
+  make sense to a reader who does not know that term yet. No other term of
+  art, exactly as with gists.
 
 OUTPUT
 

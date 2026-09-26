@@ -162,10 +162,12 @@ const SHARED_DELTAS: readonly string[] = [
  * word of `src/hierarchy.ts` silently changes what that comparison is of, while
  * the arm's own note claims both halves stay put. ⟨GPT Sol, F13, 2026-09-07.⟩
  *
- * So both length-pair arms name `variant: "V4"`. They still send exactly what
- * production sends today — `tests/summaries-eval.test.ts` asserts
- * `productionQuestions()` is byte-identical to `variants.md` § V4 — and they go
- * on sending it after production moves on, which is what a pinned arm is for.
+ * So both length-pair arms name `variant: "V4"`. They sent exactly what
+ * production sent from `toc/7`, and they went on sending it when production
+ * moved on at `toc/8` (plan 260926a replaced V4's last bullet with the
+ * plain-words one), which is what a pinned arm is for.
+ * `tests/summaries-eval.test.ts` asserts `productionQuestions()` is
+ * `variants.md` § V4 with exactly that one bullet swapped, and nothing else.
  *
  * **Run them at `--depth 2`.** Depth 2 is where 852 of the 1,239 stored gists
  * live and where the *"22-32 words, and use them"* half of the change has to
@@ -184,7 +186,7 @@ const SHARED_DELTAS: readonly string[] = [
  */
 const LENGTH_PAIR_DELTAS: readonly string[] = [
   ...SHARED_DELTAS,
-  "GISTS: a PINNED copy of a shipped block from variants.md, not the live slice; QUESTIONS: PINNED to V4, which is what production sends today and will go on being what this pair sends after production moves",
+  "GISTS: a PINNED copy of a shipped block from variants.md, not the live slice; QUESTIONS: PINNED to V4, which production sent at toc/7 (since toc/8 it is V4 with one plain-words bullet changed); this pair goes on sending V4",
 ];
 
 export const ARMS: readonly ArmSpec[] = [
@@ -213,9 +215,11 @@ export const ARMS: readonly ArmSpec[] = [
   {
     /**
      * **Since `toc/7` this arm also carries V4's questions**, because production
-     * does and it takes production's live block. It is therefore byte-identical
-     * to the arm that used to be called `v4`, which is why that entry was
-     * removed rather than kept beside it — see the note above `questions-toc6`.
+     * does and it takes production's live block (since `toc/8`, V4 with its last
+     * bullet swapped for the plain-words one). At `toc/7` it was therefore
+     * byte-identical to the arm that used to be called `v4`, which is why that
+     * entry was removed rather than kept beside it — see the note above
+     * `questions-toc6`.
      * Its own axis is unchanged: it is still the GISTS block alone against
      * `incumbent`.
      */
@@ -227,7 +231,7 @@ export const ARMS: readonly ArmSpec[] = [
     questionRule: "production",
     deltas: [
       ...SHARED_DELTAS,
-      "GISTS: the replacement block from variants.md; QUESTIONS: production's, unchanged — which since toc/7 is V4's",
+      "GISTS: the replacement block from variants.md; QUESTIONS: production's, unchanged — V4 at toc/7, V4 plus the plain-words bullet since toc/8",
     ],
   },
   {
@@ -291,8 +295,10 @@ export const ARMS: readonly ArmSpec[] = [
    * **What replaces it as evidence is `questions-toc6` below**, which is the
    * comparison that still has a question to answer: V4 against the wording it
    * displaced, both halves pinned. And `tests/summaries-eval.test.ts` asserts
-   * `productionQuestions()` is byte-identical to `variants.md` § V4 directly,
-   * without needing an arm to carry the claim.
+   * directly, without needing an arm to carry the claim, that
+   * `productionQuestions()` is `variants.md` § V4 — byte-identical at `toc/7`,
+   * and since `toc/8` (plan 260926a) V4 with only its last bullet swapped for
+   * the plain-words one.
    */
   {
     name: "gists-toc5",
@@ -327,8 +333,9 @@ export const ARMS: readonly ArmSpec[] = [
      * rather than a missing arm.
      *
      * **Its partner is `gists-toc6`, not `incumbent`, and that is the whole
-     * design.** `gists-toc6` is pinned toc/6 GISTS with production's live —
-     * i.e. V4's — QUESTIONS. This arm is pinned toc/6 GISTS with pinned toc/6
+     * design.** `gists-toc6` is pinned toc/6 GISTS with pinned V4 QUESTIONS
+     * (production's live block at `toc/7`; production has since moved one
+     * bullet past it at `toc/8`). This arm is pinned toc/6 GISTS with pinned toc/6
      * QUESTIONS. So the pair differs in **exactly one block**, both halves stay
      * put when `src/hierarchy.ts` moves again, and the comparison is *V4's
      * wording against the wording it replaced* rather than a bakeoff of two

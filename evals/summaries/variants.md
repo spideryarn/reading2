@@ -347,9 +347,9 @@ cascade. That sentence is unchanged and is the reason this section stays rather 
 rule, plus the no-narration rule and *"where a shorter, commoner word loses nothing, use it"*.
 
 It is copied rather than sliced live because the arm that carries it has to stay put while
-`src/hierarchy.ts` moves on; `tests/summaries-eval.test.ts` asserts the copy is
-character-for-character what production sends today, so a drift is a red test rather than a
-measurement of something we do not ship.
+`src/hierarchy.ts` moves on. `tests/summaries-eval.test.ts` asserted the copy was
+character-for-character what production sent, until `toc/8` (2026-09-26) moved the live block on
+with the plain-words rule; it now asserts that they differ by that rule, so the copy is history.
 
 ### Five drafts in one day, and what the numbers said
 

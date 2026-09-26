@@ -83,7 +83,7 @@ import type { ArtifactStore } from "./store/artifacts.js";
  *
  * `glossary/5`, 2026-09-26: entries are written for a reader from outside the
  * field — no second hard word, the plain meaning first, plainer meaning equally
- * specific — with a worked BAD/GOOD pair for the register. Greg,
+ * specific — with worked BAD/GOOD pairs for the register and provenance split. Greg,
  * SPIDERYARN-READING2-44: *"the glossary as well especially should explain in
  * simpler language."* docs/plans/260926a-plainer-summaries-and-glossary.md.
  *
@@ -1017,16 +1017,17 @@ without writing, you only think you're thinking,' which the article uses to
 argue writing and thinking are inseparable."
 That describes the page the reader is looking at. It is the whole failure.
 
-GOOD — "background": "Turing Award-winning computer scientist, known for
-distributed systems and for writing LaTeX. A byword for the view that precise
-writing is the test of precise thought."
+GOOD — "background": "Turing Award-winning computer scientist who made networks
+of computers more reliable and created the writing system LaTeX. Known for the
+view that clear writing is the test of clear thought."
 That is what makes the quotation land, and it is not on the page. Note where it
 STOPS: it does not go on to say what the article does with him. Which facts you
 choose is governed by this article — those two are here because they are the
 ones that make the quotation carry weight — but the sentence you write is about
 the term, not about the page.
 
-An economics paper defines "moral hazard" in its own terms and then leans on it.
+An economics paper defines "moral hazard" in its own terms and uses an insured
+driver as its example.
 
 BAD — "senseHere": "The post-contractual distortion whereby an insured agent's
 unobservable effort deviates from the first-best level because the principal
@@ -1036,12 +1037,25 @@ failure in a glossary because it looks like precision. The reader stopped by
 "moral hazard" is stopped again by "post-contractual", "agent", "first-best"
 and "principal".
 
-GOOD — "senseHere": "Taking more risks because someone else pays when things go
-wrong, when the one who pays cannot see how careful you are being. A fully
-insured driver has less reason to drive carefully."
+GOOD — "senseHere": "Taking more risks because someone else pays for mistakes
+and cannot see how careful you are. A fully insured driver has less reason to
+drive carefully."
 The same meaning, from the same paper, with nothing to look up. The condition
 the definition turns on — the payer cannot see — survives, and nothing in it
 describes what the paper does with the term.
+
+An essay compares a choice to a "prisoner's dilemma" without giving that phrase
+a special meaning.
+
+BAD — "senseHere": "A game where each player is rewarded for betraying the
+other, though both lose when both betray."
+That is the phrase's ordinary meaning, brought to the article from outside and
+put under the label that says the article supplied it.
+
+GOOD — "background": "A game where betrayal rewards each player alone, even
+though working together leaves both better off."
+There is no "senseHere": once the reader knows the game, the article's ordinary
+comparison is already in front of them.
 
 NAMES AND ALIASES
 
@@ -1084,8 +1098,8 @@ WRITING
   it in the same breath or find another way to say it. Do not explain ordinary
   words.
 - The first sentence of each field is at most 20 words and has no hard word in
-  it but the term itself. Anything more exact goes in a second sentence, if at
-  all. No semicolons or brackets doing a second sentence's work.
+  it but the term itself or a proper name. Anything more exact goes in a second
+  sentence, if at all. No semicolons or brackets doing a second sentence's work.
 - Check every entry before you send it: list the words in it that reader would
   not know. The only exemptions are the term itself and proper names. A word is
   NOT exempt because the article uses it, or because it has an entry of its own

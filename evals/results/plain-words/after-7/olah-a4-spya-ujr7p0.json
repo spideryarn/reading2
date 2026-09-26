@@ -1,0 +1,193 @@
+{
+  "arm": "after-7",
+  "slug": "olah-a4-spya-ujr7p0",
+  "tocVersion": "toc/8",
+  "glossaryVersion": "glossary/5",
+  "sourceSha256": {
+    "hierarchy.ts": "a2ee59052e60dbd528252f9ea973edaf39cfce85609c95055b1f1dcd6c020b1f",
+    "glossary.ts": "f2dbb9220b3264c1543da0d14787de0fe76b5c38cb9b05ed92b647d80e0d6308"
+  },
+  "at": "2026-09-26T05:08:24.147Z",
+  "summaries": [
+    {
+      "depth": 0,
+      "range": "spya-c905ct..spya-e4p2aj",
+      "title": "Composition vs Superposition",
+      "gist": "Distributed representations blend two competing strategies—composition and superposition—that trade off and should be told apart.",
+      "question": "How do superposition and composition relate as forms of distributed representation? (a conceptual analysis)"
+    },
+    {
+      "depth": 1,
+      "range": "spya-c905ct..spya-zhbm9s",
+      "title": "Transformer Circuits Thread",
+      "gist": "This introductory note by Chris Olah, published May 2023, sets up a discussion relating superposition to distributed representations.",
+      "question": "What is this note about? (an introduction)"
+    },
+    {
+      "depth": 2,
+      "range": "spya-c905ct..spya-zhbm9s",
+      "title": "Transformer Circuits Thread",
+      "gist": "The note's title and byline identify it as an informal piece by Chris Olah on superposition and distributed representations, published May 2023."
+    },
+    {
+      "depth": 1,
+      "range": "spya-s2q3w9..spya-kq5p9m",
+      "title": "Distributed Representations: Composition & Superposition",
+      "gist": "Neural codes for shapes and colors reveal two distinct kinds of distributed representation, feature composition and superposition, each with different tradeoffs.",
+      "question": "How do local, compositional, and dense neural codes differ in representing shapes and colors? (three examples)"
+    },
+    {
+      "depth": 2,
+      "range": "spya-s2q3w9..spya-hdz82q",
+      "title": "Local vs Distributed Codes",
+      "gist": "Distributed representations may combine two separable ideas, composition and superposition, which the note illustrates using Thorpe's four example neural codes for colored shapes."
+    },
+    {
+      "depth": 2,
+      "range": "spya-ddu8qf..spya-n30s4d",
+      "title": "\"Local\" Codes",
+      "gist": "A pure local code assigns one neuron per shape-color pair, letting any subset of stimuli be linearly selected later, though it wastes many neurons."
+    },
+    {
+      "depth": 2,
+      "range": "spya-vphj9g..spya-armg2f",
+      "title": "\"Semi-Local\" / Compositional Codes",
+      "gist": "Encoding independent color and shape features that compose together lets networks use far fewer neurons, generalize across new combinations, and remain interpretable."
+    },
+    {
+      "depth": 2,
+      "range": "spya-c2eewa..spya-kq5p9m",
+      "title": "\"Dense\" / Maximal Superposition Codes",
+      "gist": "Superposition packs many more objects into fewer neurons than composition allows, but sacrifices linear probing of features and the ability to represent in-between blends."
+    },
+    {
+      "depth": 1,
+      "range": "spya-gxb7uk..spya-sq6424",
+      "title": "Composition vs Superposition",
+      "gist": "Composition and superposition are not points on one spectrum of distributedness but competing ways to use a fixed representational capacity.",
+      "question": "Why are composition and superposition competing rather than complementary strategies? (a capacity argument)"
+    },
+    {
+      "depth": 2,
+      "range": "spya-gxb7uk..spya-dzemsa",
+      "title": "Distributed Codes Aren't One Spectrum",
+      "gist": "Though local, semi-local, and highly-distributed codes look like points on one spectrum of distributedness, they actually reflect two orthogonal strategies, composition and superposition."
+    },
+    {
+      "depth": 2,
+      "range": "spya-xcrca8..spya-sq6424",
+      "title": "Allocating Exponential Volume",
+      "gist": "With a fixed number of bits, a code can either compose exponentially many feature combinations or store exponentially many separate items in superposition, but not both."
+    },
+    {
+      "depth": 1,
+      "range": "spya-c87jsg..spya-vw7xv6",
+      "title": "Mixing Composition and Superposition",
+      "gist": "Sparse, rarely-combined features leave gaps in representational space that networks can fill with superposed features, letting both strategies mix.",
+      "question": "How can sparse composition coexist with superposition in one code? (an example, the semi-distributed code)"
+    },
+    {
+      "depth": 2,
+      "range": "spya-vefv29..spya-ajbh7f",
+      "title": "Sparse Composition Enables Superposition",
+      "gist": "When feature combinations are common, only one feature fits per neuron, but when combinations are rare, the unused combinatorial space can hold extra features in superposition."
+    },
+    {
+      "depth": 2,
+      "range": "spya-fknpfa..spya-vw7xv6",
+      "title": "The Semi-Distributed Code",
+      "gist": "Thorpe's semi-distributed code composes color and shape features while placing each set in mutual superposition, so features exist as neuron-direction combinations rather than single units."
+    },
+    {
+      "depth": 1,
+      "range": "spya-g92gsy..spya-v47ca7",
+      "title": "Conclusion",
+      "gist": "Distinguishing composition from superposition matters because only composition lets us understand networks through a small number of independent features.",
+      "question": "Why does distinguishing composition from superposition matter for interpretability? (a summary claim)"
+    },
+    {
+      "depth": 2,
+      "range": "spya-g92gsy..spya-v47ca7",
+      "title": "Two Kinds of Distributed Representation",
+      "gist": "Composition and superposition, though mixable, are fundamentally in tension, and only composition lets networks be understood via a linear number of independent features instead of exponential volume."
+    },
+    {
+      "depth": 1,
+      "range": "spya-rksy99..spya-tj6yyz",
+      "title": "About",
+      "gist": "This is an informal, unrefined note by Chris Olah, not a polished paper, published May 4, 2023.",
+      "question": "What kind of piece is this? (a disclaimer)"
+    },
+    {
+      "depth": 2,
+      "range": "spya-rksy99..spya-tj6yyz",
+      "title": "About",
+      "gist": "Informal notes like this one share undeveloped ideas more like a colleague's conversation or blog post than a finished, rigorously checked paper."
+    },
+    {
+      "depth": 1,
+      "range": "spya-rx4un4..spya-uehzn9",
+      "title": "Acknowledgments",
+      "gist": "The note was edited by Joshua Batson and shaped by feedback and conversations with many named colleagues and researchers.",
+      "question": "Who contributed to this note? (a list of names)"
+    },
+    {
+      "depth": 2,
+      "range": "spya-rx4un4..spya-uehzn9",
+      "title": "Acknowledgments",
+      "gist": "Joshua Batson's editing and feedback from a dozen named colleagues, plus countless other conversations, shaped the ideas presented in this note."
+    },
+    {
+      "depth": 1,
+      "range": "spya-e4p2aj..spya-e4p2aj",
+      "title": "Footnotes",
+      "gist": "This heading marks the footnotes accompanying the note's text.",
+      "question": "What supplementary notes accompany the text? (footnotes)"
+    },
+    {
+      "depth": 2,
+      "range": "spya-e4p2aj..spya-e4p2aj",
+      "title": "Footnotes",
+      "gist": "A heading marking the footnotes section, with no footnote content included here."
+    }
+  ],
+  "glossary": [
+    {
+      "name": "Superposition",
+      "aliases": [],
+      "senseHere": "Packing more features into a representation than there are neurons, by giving each neuron several overlapping meanings rather than one. This only works if the features are rarely all present at once, and reading them back out needs a nonlinear step, unlike composition."
+    },
+    {
+      "name": "Distributed representation",
+      "aliases": [],
+      "senseHere": "A representation where information about a stimulus is spread across multiple active neurons rather than one dedicated neuron per stimulus. The piece's central claim is that this umbrella phrase actually hides two different, competing strategies: composition and superposition.",
+      "background": "A long-standing idea in neuroscience and connectionist AI holding that concepts are encoded across patterns of neural activity rather than by single dedicated cells."
+    },
+    {
+      "name": "Composition",
+      "aliases": [],
+      "senseHere": "Building a representation of a whole object out of separate, independent feature-neurons that combine, such as one neuron for color and another for shape jointly encoding a colored shape. It lets a network generalize across combinations it never saw, but the exponential number of possible combinations must each get their own volume, so it competes with superposition for the same limited space."
+    },
+    {
+      "name": "Thorpe's four example codes",
+      "aliases": [
+        "local code",
+        "semi-local code",
+        "semi-distributed code",
+        "highly-distributed code"
+      ],
+      "senseHere": "Four illustrative ways neurons could encode (shape, color) pairs, ranging from one neuron per combination up to only four neurons handling everything, that the piece reinterprets not as one continuum from local to distributed but as different mixes of composition and superposition.",
+      "background": "Simon Thorpe, a neuroscientist, proposed these examples in a 1989 paper to illustrate possibilities between fully local and fully distributed neural codes."
+    },
+    {
+      "name": "Linear probe",
+      "aliases": [],
+      "senseHere": "A simple linear function trained on a network's internal activity to check whether some concept, like 'red', can be read out. The piece warns that a probe succeeding does not prove the network actually has a dedicated 'red' feature, since even a local code without any true feature for 'red' would still let a probe find it."
+    },
+    {
+      "name": "Monosemantic / polysemantic",
+      "aliases": [],
+      "senseHere": "A monosemantic neuron responds to one single feature or meaning, as in the local code where each neuron means one exact (shape, color) pair. A polysemantic neuron responds to several unrelated features at once, which is what makes superposition and the semi-distributed code possible."
+    }
+  ]
+}

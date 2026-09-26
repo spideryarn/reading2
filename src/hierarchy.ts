@@ -194,8 +194,10 @@ QUESTIONS (the root and depth-1 nodes only)
   different number. Omit the hint when there is no honest shape.
 - The root's question is the one the whole piece exists to answer.
 - Not rhetorical, not yes/no, never the gist with a question mark on it.
-- Under 20 words in all. Digits for counts. The article's own words for what it
-  names, ordinary words for the rest, exactly as with gists.
+- Under 20 words in all. Digits for counts. The topic keeps the article's own
+  term as the handhold; the question after it is in ordinary words and must
+  make sense to a reader who does not know that term yet. No other term of
+  art, exactly as with gists.
 
 OUTPUT
 

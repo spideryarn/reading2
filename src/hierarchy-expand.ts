@@ -345,8 +345,10 @@ another section in the same answer.
   item from its text. Never count anything below this child — that is a
   different number. Omit the hint when there is no honest shape.
 - Not rhetorical, not yes/no, never the gist with a question mark on it.
-- Under 20 words in all. Digits for counts. The work's own words for what it
-  names, ordinary words for the rest, exactly as with gists.
+- Under 20 words in all. Digits for counts. The topic keeps the work's own
+  term as the handhold; the question after it is in ordinary words and must
+  make sense to a reader who does not know that term yet. No other term of
+  art, exactly as with gists.
 
 THE VERDICT
 
@@ -530,7 +532,7 @@ export interface ExpansionRequest {
    * usage fields. src/labels.ts spent months writing a marker that bought
    * nothing for exactly this reason. The plan's estimate for this prefix was
    * 1,150–1,400, near enough the floor to fall either side; since `expand/4`
-   * added the QUESTIONS block, `EXPAND_SYSTEM` is 1,865 estimated tokens (1,631 until `expand/5`) and
+   * added the QUESTIONS block, `EXPAND_SYSTEM` is 1,895 estimated tokens (1,631 until `expand/5`) and
    * clears the floor on its own, so this is `true` for every outline including
    * none at all. It is still reported rather than assumed, because that margin
    * is one prompt edit wide. A zero in `cache_read_input_tokens` is also what

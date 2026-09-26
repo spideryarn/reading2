@@ -2,8 +2,8 @@
 
 From SPIDERYARN-READING2-44, a suggestion from Greg, overseer queue entry `qi-qpsx92kg`.
 
-**Status:** building (stage 1). Written before the work, per
-[engineering-manager.md](../reusable/engineering-manager.md).
+**Status:** stage 1 and 1b built and measured with a valid blind read; round-2 review next.
+Written before the work, per [engineering-manager.md](../reusable/engineering-manager.md).
 
 ## What Greg said
 
@@ -35,10 +35,10 @@ plainer.
 
 ## What changes
 
-*Written before the build and describing v1. What ships is v3's gists and v5's glossary: a
+*Written before the build and describing v1. The candidate is v3's gists and v5's glossary: a
 self-check, a 20-word first sentence for glossary fields, "at most one term of art" at the root and
-depth 1, one worked example per prompt, and two guards that fix regressions v3 and v4 caused —
-§ What happened in stage 1 says why.*
+depth 1, worked examples, and two guards intended to fix regressions v3 and v4 caused — § What
+happened in stage 1 says what the eval found.*
 
 ### Summaries — `src/hierarchy.ts` `SYSTEM`, and `src/hierarchy-expand.ts` `EXPAND_SYSTEM`
 
@@ -176,7 +176,7 @@ dictionary asides; plain means equally specific.*
 **The first two versions did almost nothing, and the first screen could not see it.** The runs are in
 `evals/results/plain-words/`: `before` and `before-2` are the old prompts twice (the wobble),
 `after` is v1, `after-2` v2, `after-3` v3, and `after-4` to `after-6` are the glossary guards
-below; `after-6` is what ships.
+below; `after-6` is the candidate that entered round-2 review.
 
 | | first sentence of `senseHere` | hard words in it (types, not counting the term) | other entries it leans on |
 |---|---:|---:|---:|
@@ -199,10 +199,10 @@ the outputs:
   formal definition, so restating it looked like fidelity.
 
 v3 says the meaning comes from the article and the words are ours, exempts only the term and proper
-names, caps the first sentence at 20 words with no hard word but the term, and carries a `senseHere`
-worked pair. **Both examples, in both prompts, are from subjects none of the three eval articles
-touch** (moral hazard, twin studies) — Fable's drafts used the eval article's own terms, which
-would have taught the test.
+names, asks for a first sentence of at most 20 words with no other hard word, and carries a
+`senseHere` worked pair. **The worked subjects are ones none of the three eval articles touch**
+(moral hazard, twin studies, and — after round-2 review — the prisoner's dilemma) — Fable's drafts
+used the eval article's own terms, which would have taught the test.
 
 The share-of-hard-words screen was **flattering** v1 and v2: an explanation adds common words around
 the same hard ones, so the share falls while the entry gets longer and no easier. The per-entry
@@ -224,12 +224,21 @@ things were wrong, and both were caused by the new rules:
   arrived. The cross-reference rule (*an entry that can only be understood by reading another entry
   has explained nothing*) is the likely cause: merging is the cheapest way to obey it. Guard:
   *rewrite the words, never the list of entries … each term, and each person, keeps an entry of its
-  own.* `after-6`: the people are back and the entry count is the old one (50 against 50).
+  own.* `after-6`: Chalmers, Hinton and Turing are back, but Vallor and Turkle are not; the entry
+  count is the old one (50 against 50), with a different list.
 
 Two fused names survive in `after-6`, and both carry every part as an alias, so every occurrence in
 the prose is still found ([term-match.ts](../../src/term-match.ts) matches name and aliases); the
-three biases are a group the essay itself names together. Accepted as cosmetic. The screens that
-catch both are in `run.ts` now — entries with `background`, and fused names.
+three biases are a group the essay itself names together. The aliases make the occurrence matching
+work, but *Blake Lemoine and LaMDA* still combines a person and a chatbot against the prompt's
+one-entry-per-thing rule, so the guard did not fully work. The screens that catch both are in
+`run.ts` now — entries with `background`, and fused names.
+
+Round-2 review found that the background count did not prove the provenance guard worked:
+`after-6` still defines the ordinary *Müller-Lyer illusion* and *pareidolia* in `senseHere`, despite
+the prompt naming a famous illusion's ordinary meaning as `background`. The review added a worked
+concept-allusion pair from a fourth subject (the prisoner's dilemma): ordinary meaning in
+`background`, and no `senseHere` when the article has not bent it. It has not had a paid rerun.
 
 | | entries | with `background` | first sentence of `senseHere` | hard types in it | other entries leaned on |
 |---|---:|---:|---:|---:|---:|
@@ -238,17 +247,21 @@ catch both are in `run.ts` now — entries with `background`, and fused names.
 | v3 (`after-3`) | 47 | 10 | 28.2 | 3.16 | 0.38 |
 | v4 (`after-4`) | 46 | **1** | 30.1 | 3.36 | 0.31 |
 | v5 (`after-5`) | 45 | 12 | 27.3 | 2.63 | 0.42 |
-| **shipped (`after-6`)** | **50** | **10** | **27.2** | **3.15** | **0.75** |
+| **candidate (`after-6`)** | **50** | **10** | **27.2** | **3.15** | **0.75** |
 
-The shipped version gives back some of the cross-reference gain for keeping people and
-provenance — the right trade: a lying label or a missing person is a defect, a leaning entry is a
-weaker entry.
+The candidate gives back some of the cross-reference gain while restoring three people and the
+number of background fields. It still misses two people and still mislabels some outside knowledge,
+which are defects rather than trades to argue away; a leaning entry is merely a weaker entry.
 
-### The blind read — the evidence
+### The attempted blind read — the side shuffle was broken
 
-100 pairs of `before` against `after-3`, matched by node range and term name, sides shuffled by a
-seeded coin, judged by Fable from the pairs file alone (`pairs-before-vs-after-3.md`; the verdicts
-are in `.judged.txt` and the key in `.key.tsv`).
+100 pairs of `before` against `after-3`, matched by node range and term name, were judged by Fable
+from the pairs file alone (`pairs-before-vs-after-3.md`; the verdicts are in `.judged.txt` and the
+key in `.key.tsv`). Round-2 review found that the advertised seeded coin was broken by JavaScript
+number precision: it put the new arm on X once and on Y 99 times (once and 94 times in the 95-pair
+`after-6` read). Fable could not see the key, but a fixed side cannot rule out a preference for the
+second item. The tables below are an accurate decoding of the recorded judgments, not valid
+randomised blind evidence; the pair files must be regenerated and judged again.
 
 | field | v3 plainer | old plainer | same |
 |---|---:|---:|---:|
@@ -261,15 +274,15 @@ are in `.judged.txt` and the key in `.key.tsv`).
 | background | 1 | 0 | 0 |
 | **all** | **81** | **16** | **3** |
 
-**Fidelity: no loss.** Five pairs were flagged: three against the old lines (a blurred finding, a
-dropped strand, *who* was dismissed bent) and two against v3 — one depth-1 gist narrating the page
-(*"The summary concludes … followed by author and funding credits"*) and one entry that glossed the
-person rather than the 1989 paper cited.
+**The recorded fidelity flags:** five pairs were flagged: three against the old lines (a blurred
+finding, a dropped strand, *who* was dismissed bent) and two against v3 — one depth-1 gist narrating
+the page (*"The summary concludes … followed by author and funding credits"*) and one entry that
+glossed the person rather than the 1989 paper cited.
 
-**The shipped version, read the same way** (`pairs-before-vs-after-6.*`, 95 pairs, a fresh blind
+**The `after-6` candidate, read the same way** (`pairs-before-vs-after-6.*`, 95 pairs, a fresh blind
 Fable told to judge ease rather than length):
 
-| field | shipped plainer | old plainer | same |
+| field | candidate judged plainer | old judged plainer | same |
 |---|---:|---:|---:|
 | `senseHere` | 32 | 1 | 0 |
 | `background` | 3 | 0 | 1 |
@@ -280,18 +293,66 @@ Fable told to judge ease rather than length):
 | root question | 3 | 0 | 0 |
 | **all** | **81** | **8** | **6** |
 
-**Fidelity is where it costs something, and it is named rather than argued away**: 5 of 95 flagged
-against the shipped lines, 1 against the old. Two narrate the page (a depth-1 gist *"are shown to
-be"*, a question *"what has this review established"*), one depth-1 gist drops the reason a
+**The recorded fidelity result costs something, and it is named rather than argued away**: 5 of 95
+flagged against the candidate lines, 1 against the old. Two narrate the page (a depth-1 gist *"are
+shown to be"*, a question *"what has this review established"*), one depth-1 gist drops the reason a
 distinction matters, one entry drops *"regardless of the material"* from computational
 functionalism, and one root gist softens the essay's recommendation (*"myth"*, *"refuse to
-build"*). In the v3 read it was 2 against the new side and 3 against the old. So: plainer almost
-everywhere, and on about one line in twenty, a little less exact. That is the thing Greg's own
+build"*). In the v3 read it was 2 against the new side and 3 against the old. In the recorded
+judgments the candidate is plainer almost everywhere and, on about one line in twenty, a little less
+exact; the broken shuffle means neither rate is a blind comparison yet. That is the thing Greg's own
 guard — augment, not replace — is about, and it is what the next person to touch these prompts
 should look at first.
 
-**The QUESTIONS gate (stage 1b) is not needed**: depth-1 questions came out plainer in 13 of 14
-matched pairs with that block byte-for-byte unchanged, through its "exactly as with gists" line.
+The recorded judgments call 13 of 14 matched depth-1 questions plainer with the QUESTIONS block
+byte-for-byte unchanged, through its "exactly as with gists" line. The broken side shuffle means
+that result cannot waive the stage-1b gate until the pairs are judged again.
+
+### The valid blind read, and stage 1b
+
+With the shuffle fixed (`blindCoin`, 32-bit, tested), three reads, all by a fresh Fable from the
+pairs file alone. Files: `pairs-<a>-vs-<b>.{md,key.tsv,judged.txt}`.
+
+| read | pairs | new plainer | old plainer | same | fidelity flags: new / old |
+|---|---:|---:|---:|---:|---:|
+| **control**: `before` vs `before-2` (old prompt, twice) | 113 | — | 55 / 46 | 12 | 2 on one side |
+| `before` vs `after-7` (round-2 glossary fixes; QUESTIONS by reference) | 89 | 66 | 18 | 5 | 3 / 1 |
+| **`before` vs `after-8` (what ships)** | 91 | **70** | **13** | 8 | **4 / 3** |
+
+**The control is what makes the other two mean something**: the same prompt against itself splits
+55–46, so the judge is not picking a side and not preferring a run; 70–13 is not noise.
+
+**Stage 1b fired.** In `after-7` the depth-1 questions split 6–5 — the "exactly as with gists"
+cross-reference had not carried the rule to the line the Summary panel draws by default. The last
+QUESTIONS bullet (in `SYSTEM` and `EXPAND_SYSTEM`) now says it outright: *the topic keeps the
+article's own term as the handhold; the question after it is in ordinary words and must make sense
+to a reader who does not know that term yet. No other term of art.* In `after-8` they split
+**10–1** (3 same). The block is otherwise still V4; the tests now assert *V4 with that bullet
+replaced*, and V4 itself stays in `variants.md` as what the Socratic eval measured.
+
+`after-8`, by field:
+
+| field | shipped plainer | old plainer | same |
+|---|---:|---:|---:|
+| root gist | 2 | 0 | 1 |
+| depth-1 gist | 13 | 1 | 0 |
+| deeper gist | 18 | 6 | 1 |
+| root question | 3 | 0 | 0 |
+| depth-1 question | 10 | 1 | 3 |
+| `senseHere` | 24 | 4 | 2 |
+| `background` | 0 | 1 | 1 |
+
+**Fidelity is even**: 4 flags against the shipped lines (a root gist that says *"cannot"* where the
+essay says *likely*; a depth-1 gist that drops the linear-against-exponential reason; one that
+narrates *"essay examines"*; one entry that never says what the thing is) and 3 against the old.
+The judge's pattern note is the useful part: the plainer line is the one that names concrete things
+instead of field terms, and the fidelity flags cluster on lines that narrate the page — which both
+prompts already ban, and which the old prompt did as often.
+
+**Provenance is at parity, not better.** `after-8` has 15 entries with `background` and no fused
+names, but ordinary definitions still land in `senseHere` on the essay (*Müller-Lyer illusion*,
+*Turing machine*, *Watt governor*) — as they did under the old prompt. The regression `after-4` had
+is gone; the older habit is not, and it is named under § Deferred.
 
 ### The cost, named
 
@@ -303,10 +364,12 @@ matched pairs with that block byte-for-byte unchanged, through its "exactly as w
 | before-2 | 2/3 | 1/22 | 0/58 |
 | v3 | 2/3 | 6/21 | 8/53 |
 | v4 (`after-4`) | 2/3 | 4/21 | 1/52 |
-| **shipped (`after-6`)** | 1/3 | 6/21 | 0/55 |
+| `after-6` | 1/3 | 6/21 | 0/55 |
+| `after-7` | 1/3 | 6/21 | 9/60 |
+| **shipped (`after-8`)** | 2/3 | 8/23 | 4/53 |
 
-The gist prompt is the same from v3 to the shipped version, so those rows are one prompt sampled
-four times: the deeper overruns come and go, and **depth 1 is the one that stays** (4–6 of 21
+The gist prompt is the same from v3 to `after-7`, so those rows are one prompt sampled
+five times: the deeper overruns come and go, and **depth 1 is the one that stays** (4–6 of 21
 against 1). The overruns are small (26–29 words against 25) and the root was over already.
 The judge also said the plainer side is *"systematically longer and more explanatory"*, so part of
 the 81 may be a preference for length. Two things were tried against it — "the limit wins" and
@@ -315,11 +378,27 @@ away. I stopped there rather than trade plainness back for length on a third rou
 are Greg's from 2026-09-06, and if a line of 28 words is worse to him than a jargon-dense line of
 24, it is a one-line tightening.
 
-**Root gists did not move** (n = 3, 1–2). The root is 18 words for the one claim of the whole
-piece, and on these three it stays at the level of the article's own vocabulary.
+**The glossary's 20-word first-sentence ceiling was missed more severely, and the original report
+did not count it.** Round-2 review added that count to `run.ts`; in `after-6`, 37 of 40 `senseHere`
+first sentences and all 10 `background` first sentences exceed 20 words. The worked GOOD example
+itself was 23 words and did not establish that its driver comparison came from the article; the
+review shortened it and made that provenance explicit, red-first in
+`tests/plain-words-metric.test.ts`. That narrow prompt correction has not had a paid rerun.
 
-**One sample per arm**, so a gap is read against `before`/`before-2`, not proven. Spend: eight runs (seven arms, plus a first `before` thrown away when the script gained ranges)
-of three articles, one structure call and one glossary call each — 48 calls, roughly four dollars estimated from [Q7](../project/open-questions.md#q7)'s cost per block, not read from the ledger.
+**The glossary's 20-word first sentence is still mostly ignored after the fix**: 33 of 39
+`senseHere` and 13 of 15 `background` in `after-8`. The hard words in those sentences fell anyway
+(2.9 types against 4.9), so the rule is doing its work through the "no hard word" half, not the
+length half. Not tightened further: a sixth round would be tuning to three articles.
+
+**One sample per arm**, read against the `before`/`before-2` control. Spend: eleven runs (ten arms,
+plus a first `before` thrown away when the script gained ranges) of three articles, one structure
+call and one glossary call each — 66 calls, roughly five or six dollars estimated from
+[Q7](../project/open-questions.md#q7)'s cost per block, not read from the ledger.
+
+The seven committed arms record `tocVersion` and `glossaryVersion`, but all successive after arms
+used the same `toc/8` and `glossary/5` labels while their prompt text changed. Their exact
+intermediate prompt bytes therefore cannot be reconstructed from the JSON alone. Round-2 review
+added source-file SHA-256 hashes to every new arm; the required rerun will carry them.
 
 ## The simpler option passed over
 
@@ -328,6 +407,13 @@ It is one word and no new structure, and it would do nothing about the cause: th
 things stays, and the named things are the jargon.
 
 ## Deferred, named
+
+- **Ordinary definitions labelled as the article's.** The glossary puts what a term ordinarily means
+  in `senseHere` (article-only) as often under the new prompt as the old; a worked example against
+  it went in during round 2 and did not visibly move it. Worth a change of its own, with a screen
+  that checks the label rather than counting fields.
+- **Depth-1 gists run past 25 words** in about a third of cases against one in twenty before. Greg's
+  call whether 28 plain words beat 24 dense ones.
 
 - **The other eleven prompts** carrying the 2026-09-03 rule (converse, quiz, quiz-mark, arc, labels,
   ideas, sketch, explain, live, quotes' `reason`, timeline's `label`). Greg named summaries and the

@@ -337,6 +337,34 @@ describe("the incumbent arm's rules are sliced out of the live SYSTEM", () => {
 /* ------------------------------------------------------------ V4's patch -- */
 
 /**
+ * **V4's last bullet, as measured, and the one `toc/8` replaced it with**
+ * (plan 260926a). Production's QUESTIONS block is V4 with exactly this swap.
+ */
+const V4_WORDS_BULLET =
+  "- Under 20 words in all. Digits for counts. The article's own words for what it\n" +
+  "  names, ordinary words for the rest, exactly as with gists.";
+const TOC8_PLAIN_WORDS_BULLET =
+  "- Under 20 words in all. Digits for counts. The topic keeps the article's own\n" +
+  "  term as the handhold; the question after it is in ordinary words and must\n" +
+  "  make sense to a reader who does not know that term yet. No other term of\n" +
+  "  art, exactly as with gists.";
+
+/**
+ * `variants.md` § V4 with its last bullet swapped for toc/8's. It asserts the
+ * old bullet is there exactly once, as V4's last lines, so the replace cannot
+ * silently no-op and hand back V4 unchanged.
+ */
+function v4WithToc8Bullet(): string {
+  const v4 = readVariants().questions.get("V4");
+  if (v4 === undefined) throw new Error("variants.md defines no V4");
+  expect(v4.split(V4_WORDS_BULLET)).toHaveLength(2);
+  expect(v4.endsWith(V4_WORDS_BULLET)).toBe(true);
+  const expected = v4.slice(0, -V4_WORDS_BULLET.length) + TOC8_PLAIN_WORDS_BULLET;
+  expect(expected).not.toBe(v4);
+  return expected;
+}
+
+/**
  * **This block used to be called "V4 is the only arm that needs a change to
  * production code", and the rename is the record of the change landing.**
  *
@@ -452,9 +480,18 @@ describe("production keeps V4's shape, which is the patch that shipped as toc/7"
    *
    * Seen red, 2026-09-07, by changing "four arguments" to "4 arguments" in
    * `variants.md` § V4 and nowhere else.
+   *
+   * **Since `toc/8` production is V4 plus one deliberate bullet**, not V4 byte
+   * for byte: plan 260926a replaced V4's last bullet (the article's own words
+   * for what it names) with the plain-words one (the topic keeps the term as
+   * the handhold; the question after it must make sense without it), because a
+   * blind eval showed depth-1 questions did not get plainer by cross-reference
+   * alone. V4 itself stays in `variants.md` exactly as measured. Everything
+   * else in the block is still asserted byte for byte.
    */
-  it("ships exactly the V4 QUESTIONS block that was measured, byte for byte", () => {
-    expect(productionQuestions()).toBe(readVariants().questions.get("V4"));
+  it("ships the measured V4 QUESTIONS block with only toc/8's plain-words bullet changed", () => {
+    expect(productionQuestions()).toBe(v4WithToc8Bullet());
+    expect(productionQuestions()).not.toBe(readVariants().questions.get("V4"));
   });
 });
 
@@ -500,7 +537,8 @@ describe("the arms", () => {
    * **The questions axis's pinned control, and the identity that makes it
    * necessary — the same argument as the gists pair above, one bump later.**
    *
-   * `incumbent` has been V4 since `toc/7` landed, so it cannot be the before
+   * `incumbent` has carried V4's questions since `toc/7` landed (and, since
+   * `toc/8`, V4 plus the plain-words bullet), so it cannot be the before
    * half of a before/after. Without `questions-toc6` this eval would have two
    * names for one recipe and could never return *"the control was better all
    * along"*, which it was built to be able to return.
@@ -514,15 +552,19 @@ describe("the arms", () => {
        Unequal on QUESTIONS, because that is the variable. */
     expect(before.gists).toBe(after.gists);
     expect(before.questions).not.toBe(after.questions);
-    /* **The "after" half is PINNED to V4, and equal to what production ships
-       today.** Both halves, and the difference between them is F13: for a day
-       `gists-toc6` resolved its questions through `productionQuestions()`, so
-       one word changed in `src/hierarchy.ts` would have silently changed what
-       this comparison was *of*, while the arm's own note claimed both halves
-       stay put. Pinning makes the claim true; the equality keeps it honest
-       about today. */
+    /* **The "after" half is PINNED to V4, and production has since moved one
+       bullet past it.** Both halves, and the difference between them is F13:
+       for a day `gists-toc6` resolved its questions through
+       `productionQuestions()`, so one word changed in `src/hierarchy.ts` would
+       have silently changed what this comparison was *of*, while the arm's own
+       note claimed both halves stay put. Pinning makes the claim true — and
+       `toc/8` (plan 260926a) is the day it earned its keep: production replaced
+       V4's last bullet with the plain-words one, and this arm did not move. The
+       last two lines keep it honest about exactly how far production has moved:
+       that one bullet, nothing else. */
     expect(after.questions).toBe(readVariants().questions.get("V4"));
-    expect(after.questions).toBe(productionQuestions());
+    expect(after.questions).not.toBe(productionQuestions());
+    expect(productionQuestions()).toBe(v4WithToc8Bullet());
     expect(armByName("gists-toc6").variant).toBe("V4");
     expect(armByName("gists-toc5").variant).toBe("V4");
     /* The two sentences that separate the halves, one from each side. */
@@ -610,8 +652,8 @@ describe("the arms", () => {
   it("sends the variant text the file defines, and refuses one it does not", () => {
     expect(promptBlocksFor(armByName("v3")).questions).toContain("asked STRAIGHT");
     /* `incumbent` and `gists-only` both take production's live QUESTIONS block,
-       which since toc/7 is V4's. They used to be checked for
-       THE_DIAGNOSED_SENTENCE; that assertion moved to `questions-toc6`, the
+       which was V4's from toc/7 and since toc/8 is V4 plus the plain-words
+       bullet. They used to be checked for THE_DIAGNOSED_SENTENCE; that assertion moved to `questions-toc6`, the
        pinned arm that is now the only thing carrying it. What is checked here
        is the identity that replaced it — the live slice, not a copy of it. */
     expect(promptBlocksFor(armByName("incumbent")).questions).toBe(productionQuestions());

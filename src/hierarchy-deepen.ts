@@ -1207,10 +1207,10 @@ export function describeFailure(err: unknown): string {
  * pay the 1.25× write premium and none of them reads. src/labels.ts answers that
  * by running its first batch alone and widening afterwards, and this deliberately
  * does not. The arithmetic is why, and two prompt versions have moved it. The
- * prompt alone is 1,865 estimated tokens at `expand/5` (1,631 once `expand/4` put a QUESTIONS block
+ * prompt alone is 1,895 estimated tokens at `expand/5` (1,631 once `expand/4` put a QUESTIONS block
  * in it) — 893 when 1,150–1,400 was the figure, 1,078 at `expand/3` — and
  * the frozen outline of either book adds about 590 more, so the prefix is roughly
- * 2,450 rather than the range this used to quote. Against per-call
+ * 2,490 rather than the range this used to quote. Against per-call
  * inputs measured at 14,889 and 76,558 (evals/results/hierarchy-waves-2026-09-04/),
  * serialising the first call of a book's wave therefore buys about 3% of the
  * wave's input tokens rather than about 1%, and still costs a whole call's latency

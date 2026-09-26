@@ -108,13 +108,16 @@ describe("hoisting the structure prompt's three values", () => {
    *
    * **And again on 2026-09-26**, from `8e314a56003e9d89` to the value below,
    * when the GISTS block gained the plain-words rule (`toc/8`, plan 260926a,
-   * SPIDERYARN-READING2-44). Only SYSTEM's GISTS bullets changed — not
-   * `renderBlocks`, not `EFFORT` — so a checkpoint written under toc/7 is
-   * correctly no longer found.
+   * SPIDERYARN-READING2-44), and the QUESTIONS block's last bullet with it
+   * (the topic keeps the article's term; the question after it is in ordinary
+   * words). It was briefly `da076a41758df064`, with the GISTS change alone,
+   * before the QUESTIONS bullet joined it; neither shipped. Only SYSTEM
+   * changed — not `renderBlocks`, not `EFFORT` — so a checkpoint written
+   * under toc/7 is correctly no longer found.
    */
   it("mints one stable key for the toc/8 structure request", () => {
     expect(checkpointKey(canonicalStructureRequest(structureRequest(BLOCKS).params))).toBe(
-      "da076a41758df064",
+      "ce8affdf587d1925",
     );
   });
 });

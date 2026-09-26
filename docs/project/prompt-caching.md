@@ -205,12 +205,13 @@ than defaults:
 - **It reports whether the prefix could be cached at all.** `ExpansionRequest.estimatedCacheable` is
   `estimateTokens(system + outline) >= CACHE_FLOOR_TOKENS`. The estimate used to land at 1,150–1,400
   against a floor of 1,024, near enough to fall either side; `expand/4`'s QUESTIONS block took
-  `EXPAND_SYSTEM` to 1,631 on its own, so the flag is now `true` whatever the outline. It is still
-  reported rather than assumed — a zero in `cache_read_input_tokens` is
+  `EXPAND_SYSTEM` to 1,631 on its own and `expand/5`'s plain-words rule took it to 1,895, so the flag
+  is now `true` whatever the outline. It is still reported rather than assumed — a zero in
+  `cache_read_input_tokens` is
   what both "there was nothing to read" and "there was, and it did not" look like, and this flag is
   what separates them. § The floor.
 - **There is no warm-up call**, where [`src/labels.ts`](../../src/labels.ts) has one. The prefix is
-  about 2,200 tokens — 1,631 of prompt plus a frozen outline measured at about 590 on both books —
+  about 2,490 tokens — 1,895 of prompt plus a frozen outline measured at about 590 on both books —
   against per-call evidence measured at 14,889 and 76,558, so running the first call alone would buy
   about 3% of a book wave's input tokens for a whole call's latency. It was about 1% before
   `expand/4`; the answer is still no, with less room. The reasoning is on `runExpansionWave`, so that

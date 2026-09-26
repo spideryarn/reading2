@@ -520,10 +520,12 @@ especially should explain in simpler language."* An entry that defines one hard 
 is accurate and useless — `glossary/4` defined *mutual information* as *"a symmetric, undirected
 measure of statistical dependence"*. The WRITING rules now name the reader (curious, well-read, never
 studied this field), forbid a second lookup, lead with the plain meaning, allow a one-clause example
-— from the article in `senseHere`, the model's own only in `background`, so the provenance labels
-stay true — and say plainer means equally specific. A second worked BAD/GOOD pair carries the
-register, for the reason the section above gives. The bump shows every owner's older glossary the
-*written by a different version* banner, which is the migration.
+— from the article in `senseHere`, the model's own only in `background` — and say plainer means
+equally specific. Two new worked BAD/GOOD pairs carry the register and the field boundary, for the
+reason the section above gives. The concept-allusion pair was added in round-2 review after
+`after-6` still put the ordinary meanings of *Müller-Lyer illusion* and *pareidolia* in `senseHere`;
+it still needs a paid rerun. The bump shows every owner's older glossary the *written by a different
+version* banner, which is the migration.
 [260926a](../plans/260926a-plainer-summaries-and-glossary.md).
 
 ### Name the thing, not the topic

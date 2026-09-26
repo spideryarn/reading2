@@ -242,7 +242,7 @@ export function readVariants(path: URL = VARIANTS_PATH): VariantsFile {
      only arm that can say the control won. */
   if (!shippedQuestions.has("toc/6")) {
     throw new Error(
-      `variants.md: no "## The shipped QUESTIONS block, toc/6" section — that block is the pre-V4 control (arms.ts § questions-toc6) and the live SYSTEM has been V4 since toc/7, so nothing else has a copy of it`,
+      `variants.md: no "## The shipped QUESTIONS block, toc/6" section — that block is the pre-V4 control (arms.ts § questions-toc6) and the live SYSTEM has been V4-based since toc/7, so nothing else has a copy of it`,
     );
   }
   if (anchors.length !== 5) {

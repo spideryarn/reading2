@@ -18,6 +18,9 @@
  * of either prompt in here to drift. `before-2` is a second sample of the same
  * prompt, so a before/after gap can be read against the gap between two runs of
  * one prompt.
+ * New arms also record SHA-256 hashes of the two source files containing those
+ * prompts. The first seven arms predate that guard, so their exact intermediate
+ * prompt bytes are not recoverable from the result JSON alone.
  *
  * **What it reads and writes.** It reads articles from the local database,
  * read-only, and writes nothing there beyond the AI-spend rows every call
@@ -38,6 +41,7 @@
 
 import fs from "node:fs";
 import path from "node:path";
+import { createHash } from "node:crypto";
 import { loadEnvLocal } from "../../src/env.js";
 import { COMMON_WORDS } from "./common-words.js";
 
@@ -218,9 +222,15 @@ function report(): void {
  * OTHER entries' names or aliases the field uses, which is Greg's complaint
  * exactly (one hard word explained with another). Zero is the target for both.
  */
+function firstSentenceOverrun(field: "senseHere" | "background", name: string, first: string, words: number): string[] {
+  if (words <= 20) return [];
+  return [`    ${field} (${words} > 20), ${name}: ${first}`];
+}
+
 function glossaryScreens(arm: string): void {
-  /* A fused name ("X and Y", "X, Y") appears nowhere in the prose, so nothing
-     underlines it — glossary.md § Name the thing, not the topic. A rule that
+  /* A fused name ("X and Y", "X, Y") combines separate things under one entry.
+     Aliases can preserve their underlines, but not the one-entry-per-thing
+     contract — glossary.md § Name the thing, not the topic. A rule that
      punishes leaning on another entry invites exactly this merge. */
   const entries = readArm(arm).flatMap((r) => r.glossary);
   const fused = entries.filter((e) => /\sand\s|,/i.test(e.name)).map((e) => e.name);
@@ -231,6 +241,7 @@ function glossaryScreens(arm: string): void {
     let firstHard = 0;
     let crossRefs = 0;
     let clean = 0;
+    const overFirst: string[] = [];
     for (const r of readArm(arm)) {
       const others = r.glossary.map((e) => ({ e, forms: [e.name, ...(e.aliases ?? [])].map(normalName).filter((f) => f.length > 2) }));
       for (const { e } of others) {
@@ -241,6 +252,7 @@ function glossaryScreens(arm: string): void {
         const first = text.split(/(?<=[.!?])\s+/)[0] ?? text;
         const ws = wordsIn(first);
         firstWords += ws.length;
+        overFirst.push(...firstSentenceOverrun(field, e.name, first, ws.length));
         const hard = new Set(ws.map((w) => w.toLowerCase()).filter((w) => !own.has(w) && !isCommon(w)));
         firstHard += hard.size;
         const body = ` ${normalName(text)} `;
@@ -251,12 +263,25 @@ function glossaryScreens(arm: string): void {
     }
     if (n === 0) continue;
     console.log(
-      `  ${field}: first sentence ${(firstWords / n).toFixed(1)} words, ${(firstHard / n).toFixed(2)} hard types; ${(crossRefs / n).toFixed(2)} other entries leaned on; ${clean}/${n} clean on both`,
+      `  ${field}: first sentence ${(firstWords / n).toFixed(1)} words, ${overFirst.length}/${n} over 20, ${(firstHard / n).toFixed(2)} hard types; ${(crossRefs / n).toFixed(2)} other entries leaned on; ${clean}/${n} clean on both`,
     );
+    if (overFirst.length) console.log(`  over the first-sentence limit:\n${overFirst.join("\n")}`);
   }
 }
 
 /* ---------------------------------------------------------- the pairs -- */
+
+/** The deterministic side shuffle used by `pairs`. */
+export function blindCoin(seed = 260926): () => boolean {
+  return () => {
+    /* `Math.imul` keeps the multiply in 32-bit integer arithmetic. A plain
+       JavaScript multiply loses the low bits here after the first draw, which
+       made the old "coin" return true once and false forever. Read a high bit,
+       rather than the alternating low bit of this LCG. */
+    seed = (Math.imul(seed, 1_664_525) + 1_013_904_223) >>> 0;
+    return seed < 0x8000_0000;
+  };
+}
 
 /**
  * **A blind side-by-side of two arms**, matched by node range and term name.
@@ -266,8 +291,7 @@ function glossaryScreens(arm: string): void {
 function pairs(a: string, b: string): void {
   const fa = armFields(a);
   const fb = armFields(b);
-  let seed = 260926;
-  const coin = () => ((seed = (seed * 1103515245 + 12345) % 2 ** 31) & 1) === 1;
+  const coin = blindCoin();
   const out: string[] = [
     `# Blind pairs: ${a} vs ${b}`,
     "",
@@ -291,6 +315,13 @@ function pairs(a: string, b: string): void {
   const unmatched = FIELDS.map((f) => `${f}: ${[...fa.get(f)!.keys()].filter((k) => !fb.get(f)!.has(k)).length} only in ${a}, ${[...fb.get(f)!.keys()].filter((k) => !fa.get(f)!.has(k)).length} only in ${b}`);
   const pairsFile = path.join(OUT, `pairs-${a}-vs-${b}.md`);
   const keyFile = path.join(OUT, `pairs-${a}-vs-${b}.key.tsv`);
+  const judgedFile = path.join(OUT, `pairs-${a}-vs-${b}.judged.txt`);
+  const existingOutputs = [pairsFile, keyFile, judgedFile].filter((file) => fs.existsSync(file));
+  if (existingOutputs.length) {
+    throw new Error(
+      `refusing to overwrite an existing blind read:\n${existingOutputs.map((file) => `  ${path.relative(process.cwd(), file)}`).join("\n")}\ngenerate a new arm name instead`,
+    );
+  }
   fs.writeFileSync(pairsFile, `${out.join("\n")}\n`);
   fs.writeFileSync(keyFile, `${key.join("\n")}\n`);
   console.log(`${n} pairs → ${path.relative(process.cwd(), pairsFile)} (key: ${path.relative(process.cwd(), keyFile)})`);
@@ -309,6 +340,14 @@ async function generate(arm: string, slugs: string[]): Promise<void> {
   const { streamMessage } = await import("../../src/messages-stream.js");
   const { parseJsonFrom, stripFence } = await import("../../src/parse-json.js");
   const { generateGlossary, PROMPT_VERSION: GLOSSARY_VERSION } = await import("../../src/glossary.js");
+  const sourceSha256 = Object.fromEntries(
+    ["hierarchy.ts", "glossary.ts"].map((file) => [
+      file,
+      createHash("sha256")
+        .update(fs.readFileSync(path.join(import.meta.dirname, "..", "..", "src", file)))
+        .digest("hex"),
+    ]),
+  );
 
   function flatten(node: ModelNode, depth: number, out: Line[]): Line[] {
     /* The question through production's own filter, so a line production would
@@ -329,6 +368,9 @@ async function generate(arm: string, slugs: string[]): Promise<void> {
   await runAsOwner(environmentOwnerId(), async () => {
     for (const slug of slugs) {
       const out = path.join(OUT, arm, `${slug}.json`);
+      if (fs.existsSync(out)) {
+        throw new Error(`refusing to overwrite existing arm output ${path.relative(process.cwd(), out)}`);
+      }
       console.log(`${arm}: ${slug} (${TOC_VERSION}, ${GLOSSARY_VERSION})`);
       const article = await loadArticle(slug);
       const summaries = async (): Promise<Line[]> => {
@@ -351,7 +393,7 @@ async function generate(arm: string, slugs: string[]): Promise<void> {
       const [s, g] = await Promise.all([summaries(), glossary()]);
       fs.writeFileSync(
         out,
-        `${JSON.stringify({ arm, slug, tocVersion: TOC_VERSION, glossaryVersion: GLOSSARY_VERSION, at: new Date().toISOString(), summaries: s, glossary: g }, null, 2)}\n`,
+        `${JSON.stringify({ arm, slug, tocVersion: TOC_VERSION, glossaryVersion: GLOSSARY_VERSION, sourceSha256, at: new Date().toISOString(), summaries: s, glossary: g }, null, 2)}\n`,
       );
       console.log(`  wrote ${path.relative(process.cwd(), out)}: ${s.length} nodes, ${g.length} glossary entries`);
     }

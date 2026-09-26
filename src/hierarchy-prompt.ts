@@ -88,9 +88,11 @@ import type { Block } from "./types.js";
    names", and every term of art is a thing the article names, so it exempted
    exactly the jargon. The GISTS block now keeps the name but requires the
    sentence to make it understandable, and says plainer means equally specific.
-   QUESTIONS is unchanged — it inherits the rule through "exactly as with
-   gists" — so it stays byte-identical to `evals/summaries/variants.md` § V4. New articles only,
-   as before. docs/plans/260926a-plainer-summaries-and-glossary.md. */
+   QUESTIONS changed in its last bullet only: the topic keeps the author's
+   term, the question after it is in ordinary words. It was left alone at
+   first, inheriting through "exactly as with gists", and a blind read showed
+   depth-1 questions did not get plainer that way. Everything else in the block
+   is still `evals/summaries/variants.md` § V4. New articles only, as before. docs/plans/260926a-plainer-summaries-and-glossary.md. */
 export const PROMPT_VERSION = "toc/8";
 
 /**

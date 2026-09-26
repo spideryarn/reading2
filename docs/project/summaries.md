@@ -275,8 +275,10 @@ unexplained. It now keeps the name as a handhold but has to make the sentence un
 reader who does not know it, and plainer means equally specific —
 [new-mode.md § The words the mode puts in front of the reader](new-mode.md) has the rule, and
 [260926a](../plans/260926a-plainer-summaries-and-glossary.md) the measurement. The QUESTIONS block
-did not change: it says "ordinary words for the rest, exactly as with gists", so it takes the rule
-by reference and stays byte-identical to the V4 the eval measured. New articles only.
+changed in one bullet: the topic keeps the author's term, and the question after it must make sense
+to a reader who does not know it. It was left alone at first, to take the rule through "exactly as
+with gists", and a blind read found the depth-1 questions no plainer that way; the rest of the block
+is still the V4 the eval measured. New articles only.
 
 #### One line of production code moved with it
 
