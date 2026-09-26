@@ -2,8 +2,9 @@
 
 From SPIDERYARN-READING2-44, a suggestion from Greg, overseer queue entry `qi-qpsx92kg`.
 
-**Status:** stage 1 and 1b built and measured with a valid blind read; round-2 review next.
-Written before the work, per [engineering-manager.md](../reusable/engineering-manager.md).
+**Status:** shipped to `dev` — stages 1 and 1b, two rounds of GPT Sol code review, the second
+ending *"ship after my fixes"*. Written before the work, per
+[engineering-manager.md](../reusable/engineering-manager.md).
 
 ## What Greg said
 
@@ -238,7 +239,9 @@ Round-2 review found that the background count did not prove the provenance guar
 `after-6` still defines the ordinary *Müller-Lyer illusion* and *pareidolia* in `senseHere`, despite
 the prompt naming a famous illusion's ordinary meaning as `background`. The review added a worked
 concept-allusion pair from a fourth subject (the prisoner's dilemma): ordinary meaning in
-`background`, and no `senseHere` when the article has not bent it. It has not had a paid rerun.
+`background`, and no `senseHere` when the article has not bent it. `after-7` and `after-8` are the
+two paid reruns with that pair in the prompt; § The valid blind read records what they did and did
+not fix.
 
 | | entries | with `background` | first sentence of `senseHere` | hard types in it | other entries leaned on |
 |---|---:|---:|---:|---:|---:|
@@ -383,7 +386,7 @@ did not count it.** Round-2 review added that count to `run.ts`; in `after-6`, 3
 first sentences and all 10 `background` first sentences exceed 20 words. The worked GOOD example
 itself was 23 words and did not establish that its driver comparison came from the article; the
 review shortened it and made that provenance explicit, red-first in
-`tests/plain-words-metric.test.ts`. That narrow prompt correction has not had a paid rerun.
+`tests/plain-words-metric.test.ts`. Both `after-7` and `after-8` include that correction.
 
 **The glossary's 20-word first sentence is still mostly ignored after the fix**: 33 of 39
 `senseHere` and 13 of 15 `background` in `after-8`. The hard words in those sentences fell anyway
@@ -395,10 +398,25 @@ plus a first `before` thrown away when the script gained ranges) of three articl
 call and one glossary call each — 66 calls, roughly five or six dollars estimated from
 [Q7](../project/open-questions.md#q7)'s cost per block, not read from the ledger.
 
-The seven committed arms record `tocVersion` and `glossaryVersion`, but all successive after arms
-used the same `toc/8` and `glossary/5` labels while their prompt text changed. Their exact
-intermediate prompt bytes therefore cannot be reconstructed from the JSON alone. Round-2 review
-added source-file SHA-256 hashes to every new arm; the required rerun will carry them.
+The eight older arms record `tocVersion` and `glossaryVersion`, but all successive after arms used
+the same `toc/8` and `glossary/5` labels while their prompt text changed. Their exact intermediate
+prompt bytes therefore cannot be reconstructed from the JSON alone. Round-2 review added source-file
+SHA-256 hashes to every new arm; `after-7` and `after-8` carry them, and `after-8`'s match the source
+files that ship.
+
+## GPT Sol on the code, rounds 1 and 2
+
+**Round 1 (`eb6717ad`) said do not ship**, and was right: the blind read's side shuffle was broken
+(C1), the glossary's 20-word first sentence was ignored and not counted (C2), outside knowledge still
+landed in `senseHere` (C3), the plan overstated the restored people and waved away fused names (C4),
+depth-1 overruns were recurrent (C5), intermediate arms were not reproducible (C6), and
+`prompt-caching.md` was stale (C7). It fixed C1, C2, C3's prompt half, C6 and C7 itself; those fixes
+were read and kept. C1 is why § The valid blind read exists; C4 and C5 are in the plan as costs.
+
+**Round 2 (`8ef53055`), narrow, said ship after its fixes**: no P0 or P1. D1 — `EXPAND_SYSTEM`'s new
+QUESTIONS bullet was not pinned by any test (now it is); D2 — the plan and `glossary.md` still said
+the example fixes awaited a rerun, and miscounted the unhashed arms. It recomputed every `after-8`
+and control table from the key and judged files and found them exact. Discovery closed there.
 
 ## The simpler option passed over
 

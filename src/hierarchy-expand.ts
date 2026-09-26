@@ -116,7 +116,9 @@ import type { Block } from "./types.js";
  *
  * **`expand/5`, 2026-09-26**: the gist bullet gained the plain-words rule `toc/8`
  * gave the whole-document call — keep the name, make it understandable, plainer
- * means equally specific. Provenance again, for the same reason as `expand/4`.
+ * means equally specific. Before shipping, stage 1b also made the QUESTIONS
+ * block's final plain-words rule explicit. Provenance again, for the same reason
+ * as `expand/4`.
  * docs/plans/260926a-plainer-summaries-and-glossary.md.
  */
 export const EXPAND_PROMPT_VERSION = "expand/5";
@@ -232,10 +234,11 @@ const ENVELOPE_TOKENS = 200;
  *    `EXPAND_SYSTEM` had no such field, so a part built by the cascade drew a
  *    bare gist beside a neighbour's question once `SummaryPanel` began drawing
  *    `question ?? gist` — GPT Sol's P1-5, recorded on 2026-09-05 and fixed here.
- *    The content rules are **V4's**, copied from the QUESTIONS block in
- *    src/hierarchy.ts § `SYSTEM` and put into this prompt's voice, because two
- *    paths writing two kinds of line is the same failure as two contracts for a
- *    tree. **Which targets are asked is marked per section, not stated once**:
+ *    The content rules are **V4's shape plus `toc/8`'s plain-words rule**,
+ *    copied from the QUESTIONS block in src/hierarchy.ts § `SYSTEM` and put
+ *    into this prompt's voice, because two paths writing two kinds of line is
+ *    the same failure as two contracts for a tree. **Which targets are asked
+ *    is marked per section, not stated once**:
  *    a batch carries up to four parents at different depths, so a global
  *    instruction is wrong for some of them and the model has nothing to infer a
  *    depth from. `renderTargetBriefing` supplies each mark; this explains it.

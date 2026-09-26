@@ -251,9 +251,9 @@ the gist carried, whose only honest output is a bare why-question. `antikythera`
 of them in the wild and they are lookups, yes/no questions and the gist re-asked. Four candidate
 rewordings were built into an eval and measured over seven real articles;
 [`evals/summaries/variants.md`](../../evals/summaries/variants.md) has all four, the axes that
-separate them, and the code change this one needed. **The block that ships is copied byte-for-byte
-out of that file, and a test asserts it stays that way**, so the prompt production sends and the
-prompt the eval measured cannot drift apart.
+separate them, and the code change this one needed. Production shipped that V4 block byte-for-byte
+at `toc/7`; `toc/8` replaced only its final plain-words bullet, and a test asserts that exact
+relationship so neither the measured block nor production can drift quietly.
 
 The cost, named rather than discovered: **these lines are nearly twice as long** — a median of 18
 words against the old 10 — while the same brief also asked for simpler language and a briefer
@@ -372,14 +372,15 @@ you, and they are not equally visible.
   every question that was *written and then discarded*, this case included, and the panel draws the
   gist.
 - **An expansion was asked for a question and did not write one.** The closed fourth case is why
-  this one exists: `EXPAND_SYSTEM` now has its own QUESTIONS block (`expand/4`) carrying the same V4
-  rules, and the request marks each target `ASK QUESTION ON CHILDREN` or `OMIT QUESTION` — per
-  target, because one call batches parents at different depths and a single instruction would be
-  wrong for some of them. Only the children of the whole work are asked, which is the only depth
-  `questionFor` keeps one at. But **the request asks; it does not insist**. An answer that comes
-  back without a question for one of its children is accepted as it stands — nothing throws,
-  nothing is redrawn, no second call is bought — so that child reaches the panel with a gist and no
-  question. It is **counted, and by name**: `DeepenStats.missingQuestions` lists the positions, and
+  this one exists: `EXPAND_SYSTEM` now has its own QUESTIONS block (V4's shape since `expand/4`,
+  plus `toc/8`'s explicit plain-words bullet), and the request marks each target
+  `ASK QUESTION ON CHILDREN` or `OMIT QUESTION` — per target, because one call batches parents at
+  different depths and a single instruction would be wrong for some of them. Only the children of
+  the whole work are asked, which is the only depth `questionFor` keeps one at. But **the request
+  asks; it does not insist**. An answer that comes back without a question for one of its children
+  is accepted as it stands — nothing throws, nothing is redrawn, no second call is bought — so that
+  child reaches the panel with a gist and no question. It is **counted, and by name**:
+  `DeepenStats.missingQuestions` lists the positions, and
   it is deliberately not the same number as `droppedQuestions`, because *the model wrote one and the
   tree threw it away* and *the model wrote none* have different fixes.
 - **Wave 1 wrote none for that part.** The structure call is asked for questions too, and the same

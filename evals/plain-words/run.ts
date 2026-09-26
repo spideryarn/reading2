@@ -19,7 +19,7 @@
  * prompt, so a before/after gap can be read against the gap between two runs of
  * one prompt.
  * New arms also record SHA-256 hashes of the two source files containing those
- * prompts. The first seven arms predate that guard, so their exact intermediate
+ * prompts. The first eight arms predate that guard, so their exact intermediate
  * prompt bytes are not recoverable from the result JSON alone.
  *
  * **What it reads and writes.** It reads articles from the local database,

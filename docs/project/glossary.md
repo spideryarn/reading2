@@ -524,7 +524,8 @@ studied this field), forbid a second lookup, lead with the plain meaning, allow 
 equally specific. Two new worked BAD/GOOD pairs carry the register and the field boundary, for the
 reason the section above gives. The concept-allusion pair was added in round-2 review after
 `after-6` still put the ordinary meanings of *Müller-Lyer illusion* and *pareidolia* in `senseHere`;
-it still needs a paid rerun. The bump shows every owner's older glossary the *written by a different
+`after-7` and `after-8` reran it, but ordinary definitions still landed in `senseHere` as often as
+under the old prompt. The bump shows every owner's older glossary the *written by a different
 version* banner, which is the migration.
 [260926a](../plans/260926a-plainer-summaries-and-glossary.md).
 

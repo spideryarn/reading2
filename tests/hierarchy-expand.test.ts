@@ -245,20 +245,26 @@ describe("the scoped prompt", () => {
    * expansion prompt with no `question` field is invisible in every test that
    * asks whether a tree is well formed — the tree *is* well formed.
    *
-   * The rules pinned here are V4's, from `SYSTEM` in src/hierarchy.ts, because
-   * the two paths must write the same kind of line: the shape with the topic
-   * first and the bracketed hint last, the presupposed direction, and a hint
-   * that is the shape of the answer rather than its content. A second prompt
-   * inventing its own rules is how one article comes to read as though two
-   * people wrote it.
+   * The rules pinned here are V4's shape plus `toc/8`'s plain-words bullet,
+   * from `SYSTEM` in src/hierarchy.ts, because the two paths must write the
+   * same kind of line: the shape with the topic first and the bracketed hint
+   * last, the presupposed direction, a hint that is the shape of the answer
+   * rather than its content, and a question understandable without knowing the
+   * topic's term. A second prompt inventing its own rules is how one article
+   * comes to read as though two people wrote it.
    */
-  it("asks for V4's question, in V4's shape, on the children it is told to", () => {
+  it("asks for toc/8's plain question in V4's shape on the children it is told to", () => {
     expect(EXPAND_SYSTEM).toContain(
       `- Shape: "<topic> — <question>? (<shape hint>)" — the topic first, in the`,
     );
     expect(EXPAND_SYSTEM).toContain("The question presupposes where the child lands.");
     expect(EXPAND_SYSTEM).toContain("The hint is the SHAPE of the answer, never its content");
-    expect(EXPAND_SYSTEM).toContain("Under 20 words in all.");
+    expect(EXPAND_SYSTEM).toContain(
+      "- Under 20 words in all. Digits for counts. The topic keeps the work's own\n" +
+        "  term as the handhold; the question after it is in ordinary words and must\n" +
+        "  make sense to a reader who does not know that term yet. No other term of\n" +
+        "  art, exactly as with gists.",
+    );
     /* The field has to be in the output shape too, or the rules above describe
        a key the model has never been shown a place to put. */
     expect(EXPAND_SYSTEM).toContain(`"question": "..."`);
@@ -326,8 +332,10 @@ describe("the constants a scoped call is made with", () => {
    *
    * `expand/5`, 2026-09-26: the gist bullet gained the plain-words rule `toc/8`
    * gave the whole-document call — keep the name as a handhold, make it
-   * understandable, plainer means equally specific. Provenance, as with
-   * `expand/4` (docs/plans/260926a-plainer-summaries-and-glossary.md).
+   * understandable, plainer means equally specific. Before shipping, stage 1b
+   * also replaced the QUESTIONS block's final bullet with `toc/8`'s explicit
+   * plain-words rule. Provenance, as with `expand/4`
+   * (docs/plans/260926a-plainer-summaries-and-glossary.md).
    */
   it("is at expand/5, since fine gists now make a kept term understandable", () => {
     expect(EXPAND_PROMPT_VERSION).toBe("expand/5");
