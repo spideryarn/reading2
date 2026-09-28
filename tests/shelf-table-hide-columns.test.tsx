@@ -247,6 +247,14 @@ function pointerDown(el: Element): void {
   });
 }
 
+function touchPointer(el: Element, type: "pointerdown" | "pointerup" | "pointercancel"): void {
+  const ev = new MouseEvent(type, { bubbles: true, cancelable: true, button: 0 });
+  Object.defineProperty(ev, "pointerType", { value: "touch" });
+  act(() => {
+    el.dispatchEvent(ev);
+  });
+}
+
 function click(el: Element): void {
   act(() => {
     el.dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true, detail: 1 }));
@@ -350,12 +358,27 @@ describe("the Columns menu", () => {
     const before = columnsTrigger();
     expect(before.getAttribute("aria-label")).not.toMatch(/hidden/);
     expect(flat(before.textContent)).toBe("Columns");
+    expect(before.hasAttribute("title"), "the trigger used an inaccessible native tooltip").toBe(
+      false,
+    );
 
     await hideFromMenu("Length");
     await hideFromMenu("Comments");
     const after = columnsTrigger();
     expect(after.getAttribute("aria-label")).toMatch(/^Columns\b.*\b2 hidden\b/);
     expect(flat(after.textContent)).toMatch(/^Columns\s*2$/);
+  });
+
+  it("waits for a finger tap instead of opening when a scroll starts on the trigger", () => {
+    paint();
+    const trigger = columnsTrigger();
+
+    touchPointer(trigger, "pointerdown");
+    expect(menu(), "pointerdown opened the menu before the browser knew this was a tap").toBeNull();
+
+    touchPointer(trigger, "pointerup");
+    click(trigger);
+    expect(menu(), "a completed finger tap did not open the menu").not.toBeNull();
   });
 
   it("is drawn beside the view switch in table view only", () => {
@@ -441,6 +464,23 @@ describe("right-clicking a header", () => {
     expect(flat(focused?.closest("th")?.textContent)).toBe("Comments");
   });
 
+  it("leaves Escape's focus return to Radix and keeps the column", async () => {
+    paint();
+    const before = th("Article").querySelector("button") as HTMLElement;
+    act(() => before.focus());
+    rightClick(th("Added"));
+    act(() => {
+      document.activeElement?.dispatchEvent(
+        new KeyboardEvent("keydown", { key: "Escape", bubbles: true, cancelable: true }),
+      );
+    });
+    await wait(20);
+
+    expect(menu()).toBeNull();
+    expect(headers()).toContain("Added");
+    expect(document.activeElement).toBe(before);
+  });
+
   it("opens nothing on Article or Actions", () => {
     paint();
     rightClick(th("Article"));
@@ -451,9 +491,27 @@ describe("right-clicking a header", () => {
 
   it("still sorts on a plain click of the header", () => {
     paint();
-    const button = th("Words").querySelector("button") as HTMLElement;
+    const header = th("Words");
+    const row = header.parentElement as HTMLTableRowElement;
+    expect(row.tagName).toBe("TR");
+    expect([...row.children].every((child) => child.tagName === "TH")).toBe(true);
+
+    const button = header.querySelector("button") as HTMLElement;
     click(button);
     expect(th("Words").getAttribute("aria-sort")).toBe("descending");
+  });
+
+  it("does not sort when a finger lifts after opening the context menu by long-press", async () => {
+    paint();
+    const button = th("Words").querySelector("button") as HTMLElement;
+
+    touchPointer(button, "pointerdown");
+    await wait(720);
+    expect(menu(), "the long-press did not open the context menu").not.toBeNull();
+
+    touchPointer(button, "pointerup");
+    click(button);
+    expect(th("Words").getAttribute("aria-sort")).toBeNull();
   });
 });
 
@@ -509,6 +567,51 @@ describe("the row card", () => {
     const cards = [...document.body.querySelectorAll<HTMLElement>(".tooltip")];
     expect(cards).toHaveLength(1);
     expect(flat(cards[0]?.textContent)).toContain("3,456 words");
+  });
+
+  it("takes the table's real hidden ids and restores every hidden value", async () => {
+    store.set(HIDDEN_COLUMNS_KEY, '["opened","opens","questions","length"]');
+    paint([entry({ slug: "hidden-facts", words: 3456, opens: 5, comments: 7 })]);
+    expect(headers()).toEqual(["Article", "Added", "Actions"]);
+
+    const link = host.querySelector<HTMLAnchorElement>("tbody a[href]") as HTMLAnchorElement;
+    link.dispatchEvent(new MouseEvent("mouseenter"));
+    await wait(400);
+    const card = document.body.querySelector<HTMLElement>(".tooltip");
+    const words = flat(card?.textContent);
+    expect(words).toMatch(/Last opened\s*never/);
+    expect(words).toMatch(/Opened\s*5 times/);
+    expect(words).toMatch(/Comments\s*7/);
+    expect(words).toContain("3,456 words");
+  });
+});
+
+describe("visibility state identity", () => {
+  it("keeps both controlled-state identities across an unrelated render", () => {
+    const seen: Array<{ visibility: object; onChange: object }> = [];
+
+    function IdentityHarness(): ReactElement {
+      const columns = useMemo(() => libraryColumns(shelf, NOW), []);
+      const [tick, setTick] = useState(0);
+      const [columnVisibility, onColumnVisibilityChange] = useShelfHiddenColumns(columns);
+      seen.push({ visibility: columnVisibility, onChange: onColumnVisibilityChange });
+      useSortedTable<LibraryEntry>({
+        data: ENTRIES,
+        columns,
+        sorting: STABLE_SORT,
+        onSortingChange: () => {},
+        rowId: slugOf,
+        columnVisibility,
+        onColumnVisibilityChange,
+      });
+      return createElement("button", { type: "button", onClick: () => setTick((n) => n + 1) }, tick);
+    }
+
+    act(() => root.render(createElement(IdentityHarness)));
+    click(host.querySelector("button") as HTMLButtonElement);
+    expect(seen).toHaveLength(2);
+    expect(seen[1]?.visibility).toBe(seen[0]?.visibility);
+    expect(seen[1]?.onChange).toBe(seen[0]?.onChange);
   });
 });
 

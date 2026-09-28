@@ -56,7 +56,7 @@
  * attribute to every sorted header is not what WAI-ARIA asks for. Only the
  * first key carries it; the rest say where they are through the chip ordinal.
  */
-import { useMemo, useRef } from "react";
+import { useMemo, useRef, useState } from "react";
 import {
   type Column,
   type ColumnDef,
@@ -439,6 +439,15 @@ const MENU_ITEM =
  * columns should not take three trips to the button.
  */
 export function ColumnsMenu<T>({ table }: { table: Table<T> }) {
+  const [open, setOpen] = useState(false);
+  /* Radix toggles a dropdown on `pointerdown`, before a finger has shown
+     whether it means to tap or scroll. Keep the pointer's real type here — an
+     iOS finger's later click may call itself a mouse — and let the completed
+     click make the decision instead. This is the same one-gesture rule as
+     `ShelfActionsMenu`; the controls row can be the place a reader starts a
+     scroll just as readily as an article card can. */
+  const fingerPress = useRef<{ wasOpen: boolean } | null>(null);
+
   const hideable = table
     .getAllLeafColumns()
     .filter((c) => c.getCanHide() && c.columnDef.meta !== undefined);
@@ -451,8 +460,26 @@ export function ColumnsMenu<T>({ table }: { table: Table<T> }) {
       : `Columns, ${hidden} hidden — choose which the table shows`;
 
   return (
-    <DropdownMenu.Root>
-      <DropdownMenu.Trigger aria-label={describe} className={chipClass(hidden > 0)}>
+    <DropdownMenu.Root open={open} onOpenChange={setOpen}>
+      <DropdownMenu.Trigger
+        aria-label={describe}
+        onPointerDown={(e) => {
+          const finger = e.pointerType === "touch" || e.pointerType === "pen";
+          fingerPress.current = finger ? { wasOpen: open } : null;
+          if (finger) e.preventDefault();
+        }}
+        onPointerCancel={() => {
+          fingerPress.current = null;
+        }}
+        onClick={(e) => {
+          const press = fingerPress.current;
+          fingerPress.current = null;
+          /* Keyboard activation (`detail === 0`) has already gone through
+             Radix's key handler and must not be toggled a second time. */
+          if (press && e.detail !== 0) setOpen(!press.wasOpen);
+        }}
+        className={chipClass(hidden > 0)}
+      >
         <Columns3 size={12} aria-hidden="true" />
         Columns
         {hidden > 0 && (
@@ -601,10 +628,50 @@ function HeaderCell<T>({ table, header }: { table: Table<T>; header: Header<T, u
      time Radix asks where focus should go, this header has been unmounted. */
   const thRef = useRef<HTMLTableCellElement>(null);
   const afterHide = useRef<{ table: HTMLTableElement | null; next: string | null } | null>(null);
+  const touchPress = useRef(false);
+  const suppressTouchClick = useRef(false);
+  const canHide = header.column.getCanHide();
 
   const cell = (
     <th
       ref={thRef}
+      onPointerDown={
+        canHide
+          ? (e) => {
+              touchPress.current = e.pointerType === "touch" || e.pointerType === "pen";
+              suppressTouchClick.current = false;
+            }
+          : undefined
+      }
+      onPointerMove={
+        canHide
+          ? () => {
+              touchPress.current = false;
+            }
+          : undefined
+      }
+      onPointerCancel={
+        canHide
+          ? () => {
+              touchPress.current = false;
+              suppressTouchClick.current = false;
+            }
+          : undefined
+      }
+      onClickCapture={
+        canHide
+          ? (e) => {
+              if (!suppressTouchClick.current) return;
+              /* Radix opens after holding for 700ms but does not prevent the
+                 click browsers synthesize when that same finger lifts. The
+                 click belongs to the context-menu gesture, not to sorting. */
+              suppressTouchClick.current = false;
+              touchPress.current = false;
+              e.preventDefault();
+              e.stopPropagation();
+            }
+          : undefined
+      }
       scope="col"
       /* What `focusSortButton` finds the neighbouring header by. */
       data-column-id={header.column.id}
@@ -646,7 +713,7 @@ function HeaderCell<T>({ table, header }: { table: Table<T>; header: Header<T, u
      every column of a table that did not opt in (`useSortedTable`), and for
      Article and Actions on the shelf. A right-click there gets the browser's
      own menu, as it always did. */
-  if (!header.column.getCanHide()) return cell;
+  if (!canHide) return cell;
 
   return (
     /* **Right-click a header: a one-item menu, not an instant hide**, so a
@@ -656,7 +723,15 @@ function HeaderCell<T>({ table, header }: { table: Table<T>; header: Header<T, u
        The trigger is the `<th>` itself (`asChild`), so a plain click on the
        sort button inside it still sorts: the menu listens only for
        `contextmenu` and for a held touch. */
-    <ContextMenu.Root>
+    <ContextMenu.Root
+      onOpenChange={(open) => {
+        if (open && touchPress.current) suppressTouchClick.current = true;
+        if (!open) {
+          touchPress.current = false;
+          suppressTouchClick.current = false;
+        }
+      }}
+    >
       <ContextMenu.Trigger asChild>{cell}</ContextMenu.Trigger>
       <ContextMenu.Portal>
         <ContextMenu.Content
