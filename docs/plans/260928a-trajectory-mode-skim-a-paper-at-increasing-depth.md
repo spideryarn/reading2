@@ -826,3 +826,11 @@ every path (‹ ›, ← →, row, door, go round again, deep link), after the s
 the ringed block, and none on a depth change that keeps the stop; the band steps aside at 420; the
 dots match their "about N%" text; one *Plan it again*; the rebuild POSTs `force: ["trajectory"]` only.
 The app is dark-only, so the dark-mode leg is the only mode there is.
+
+### 5f review — GPT Sol ([prompt](260928a-trajectory-mode-stage5f-review-prompt.md), [answer](260928a-trajectory-mode-stage5f-review-sol.md)), verdict *accept after fixes*
+
+F41 (P3-level doc wording in trajectory.md) fixed by Sol. It proved the gates by mutation: putting
+Trajectory back in `BEHIND_THE_SWITCH` alone reds 6 tests; setting `POLICY.trajectory` to
+`available` reds 5 visitor-protection tests, including three network traces that assert no POST for
+signed-out and signed-in non-owner readers. The server side is `tests/enqueue-owns-the-article.test.ts`
+(404 and no job row for an article the caller does not own), run here against Postgres: green.

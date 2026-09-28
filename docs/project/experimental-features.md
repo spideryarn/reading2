@@ -164,7 +164,7 @@ is a column rather than something in the browser's `localStorage`.
 four on 2026-09-03
 ([260903c](../plans/260903c-gate-unpolished-modes-behind-experimental-features.md)), Debate joined
 them on 2026-09-05, Quotes came out on 2026-09-06, Structure, which went in on 2026-09-06, came
-out on 2026-09-10, Citations joined on 2026-09-11, and Hierarchy went in on 2026-09-12; each row is a required
+out on 2026-09-10, Citations joined on 2026-09-11, Hierarchy went in on 2026-09-12, and Trajectory came and went on 2026-09-28; each row is a required
 `experimental: boolean` in `MODE_CATALOG` ([`mode-catalog.ts`](../../src/mode-catalog.ts) — it was
 on the `MODES_UI` row in [`Dock.tsx`](../../src/web/Dock.tsx) until 2026-09-07), so mode fifteen
 cannot be added without somebody deciding which side of the line it is on.
@@ -182,7 +182,6 @@ Everything a mode is *not* is derivable from `MODES` ([`src/modes.ts`](../../src
 | [Remember](remember-mode.md) | The name suggests saved notes and spaced repetition, neither of which exists; the quiz half is newer still. |
 | [Citations](citations.md) | A new mode on an unmeasured prompt: four local runs so far, and on a long bibliography the list is capped at 80 and chosen by the model. The links are safe by construction — each is one the article gave, or a search that says it is one — but which works make the list, and the two scores, have not been checked against a reader's judgment. |
 | [FAQ](faq.md) | A new mode on an unmeasured prompt: two local runs so far. The quoted words are checked against the article, but whether the questions are the ones a reader would actually have — and whether each passage really answers its question — is unchecked. |
-| [Trajectory](trajectory.md) | A new mode on an unmeasured prompt, and Greg asked for it to stay behind the switch (2026-09-28). The stops are the article's own Quotes, but whether the route's order and its three depths actually give a reader the gist first — and whether the Quotes cover the sections a skim needs — has been looked at on three local articles and nowhere else. |
 | [Hierarchy](granularity-zoom.md) | **Not because it is unfinished.** Greg moved it on 2026-09-12, making Structure the one structural view everybody is given. Only its Dock entry points are gated — see [Hierarchy went in on 2026-09-12](#hierarchy-went-in-on-2026-09-12) for what that does and does not take with it. |
 | [Debate](../plans/260905f-debate-mode-what-the-web-says-about-this-piece.md) | Two metered web searches a run, up to ~$0.27 and rising with article length — the dearest mode press in the bar — and no live run has happened yet, so nothing about what a real list looks like is known. Its content is also the only thing in the band that is not in the article at all, and what the panel can prove about a row stops well short of what a reader will read into it. |
 
@@ -258,6 +257,24 @@ who said them** ([quotes.md](quotes.md)) — but it is now a thing a reader meet
 rather than a reason to hide the mode. Pressing the button starts a paid run, the same as Glossary
 and Ideas, so this is a third default-visible mode that spends on a press
 ([`activation.ts`](../../src/web/activation.ts) § `MODE_TARGET`).
+
+**Trajectory left the table on 2026-09-28, the day it arrived.** Greg:
+
+> And take Trajectory and Quotes modes out of Experimental features, i.e. into mainstream features.
+>
+> — Greg, 2026-09-28
+
+Quotes was already out (above), so only Trajectory moved. What the switch had gated is the mode's
+button in the Dock and its row in the command bar — nothing else. **Owner-only is a separate rule
+and it stays**: `POLICY.trajectory` is `owners-only` ([`visitor.ts`](../../src/web/visitor.ts)), the
+generated Trajectory panel is mounted only for an article's owner, and the job route resolves the
+article through the signed-in owner, so a visitor on a shared link or the public shelf sees the
+explanatory band and can start nothing. What changed is for owners with the switch off: they now
+see the button, and
+pressing it starts a paid run — the route (about two cents), with the Quotes chosen first when there
+are none or they are stale, as Glossary, Ideas and Quotes already do on a press
+([`activation.ts`](../../src/web/activation.ts) § `MODE_TARGET`). Its unmeasured-prompt caveat has
+not gone away; [trajectory.md](trajectory.md) keeps it as a Question for Greg.
 
 ## The one thing that is gated below mode level
 

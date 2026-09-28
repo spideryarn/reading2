@@ -4,13 +4,13 @@ A mode for going round a piece more than once, a little deeper each time: a hand
 first time round, about a dozen the second, a larger share of the piece the third. The stops need
 not come in the paper's order — the results first, say, and then a quick tour of the methods.
 
-**Status (2026-09-28): being built**, behind the experimental switch — the plan is
+**Status (2026-09-28): built, and out of Experimental** — shown to every owner, still owner-only — the plan is
 [260928a](../plans/260928a-trajectory-mode-skim-a-paper-at-increasing-depth.md). This doc is the
 vision; the plan is the build.
 
 ## What shipped
 
-v1, behind the experimental switch and for the article's owner only
+v1, for the article's owner only, and behind the experimental switch until later on 2026-09-28
 ([experimental-features.md](experimental-features.md)):
 
 - **The step**, `trajectory` ([`src/trajectory.ts`](../../src/trajectory.ts)): one small model call
@@ -176,7 +176,8 @@ better for every mode that reads it.
 
 ## Version one
 
-- A **Trajectory** button in the mode bar, behind the experimental switch.
+- A **Trajectory** button in every owner's mode bar (behind the experimental switch only on the
+  day it first shipped, 2026-09-28).
 - Opening it for the first time makes one small model call that puts the article's Quotes in a route
   and gives each a depth, written once and stored. If there are no Quotes yet, they are made first.
 - The band shows **Stop 3 of 5**, a **‹ ›** pair, and a three-step depth control, **Gist · More ·
@@ -215,7 +216,10 @@ chosen, is written below when it lands.
 
 ## Decided
 
-- **Behind the experimental switch, for now** — Greg, 2026-09-28, above.
+- ~~**Behind the experimental switch, for now**~~ — Greg, 2026-09-28, above; **reversed the same day**:
+  *"take Trajectory and Quotes modes out of Experimental features, i.e. into mainstream features."*
+  The button is in every owner's bar; visitors still get the explanatory band
+  ([experimental-features.md](experimental-features.md)).
 - **v2 is the scrapbook, not web search** — Greg, 2026-09-28, above.
 
 ## Later

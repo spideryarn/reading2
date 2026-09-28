@@ -504,8 +504,10 @@ export const MODE_CATALOG: Record<Mode, ModeCatalogEntry> = {
     how: "A short model pass over the article's Quotes — never the rest of its prose — puts them in an order and gives each a depth, shaped by your profile if you have one. When there are no Quotes yet, they are chosen first.",
     /* The two words Greg used for it in the brief — docs/project/trajectory.md. */
     aliases: ["spiral", "route"],
-    /* A new mode on an unmeasured prompt, and Greg asked for it to stay behind
-       the switch (2026-09-28) — docs/project/experimental-features.md. */
-    experimental: true,
+    /* Behind the switch from 2026-09-28 until later that day, when Greg asked
+       for it in the mainstream: "take Trajectory and Quotes modes out of
+       Experimental features" — docs/project/experimental-features.md. Still
+       owners-only (`POLICY.trajectory`, src/web/visitor.ts). */
+    experimental: false,
   },
 };
