@@ -126,7 +126,8 @@ export function TrajectoryBand({
   covers: boolean;
   /** Get out of the way of the prose. Only meaningful while `covers`. */
   onAway(): void;
-  onJump(id: BlockId): void;
+  /** A row press is a block jump narrowed to that stop's quote. */
+  onJump(id: BlockId, passage?: string): void;
   onFound(found: Found[]): void;
   openKey: string | null;
   onOpenKey(key: string | null): void;
@@ -236,7 +237,7 @@ function useTrajectoryMode({
   quoteMarks: readonly Found[];
   covers: boolean;
   onAway(): void;
-  onJump(id: BlockId): void;
+  onJump(id: BlockId, passage?: string): void;
   onFound(found: Found[]): void;
   openKey: string | null;
   onOpenKey(key: string | null): void;
@@ -454,7 +455,7 @@ function useTrajectoryMode({
          upgrades the combined flush to the push, so both land on one entry. */
       void setRoute({ stop: quoteId }, { history: "replace" });
       const block = blockOf(quoteId);
-      if (block) onJump(block);
+      if (block) onJump(block, quoteMarkKey(quoteId, block));
       if (covers) onAway();
     },
     [setRoute, blockOf, onJump, covers, onAway],
@@ -501,8 +502,8 @@ function useTrajectoryMode({
  * `scrollToBlock`, not `jumpTo`: traversal writes no history entry of its own,
  * and `useReadingPosition` replaces `?at=` when the scroll settles —
  * comment-jump.ts § stepToComment, the same argument. A row press is not here:
- * it is a jump, through `onJump` → `beginJump`, which already flashes (the
- * whole block — `beginJump` is shared and takes no passage).
+ * it is a jump, through `onJump` → `beginJump`, handed the same passage key so
+ * its history-pushing arrival flashes the quote too.
  *
  * **What flashes is the quote's own words** (plan 260928a § 7b): the stop is a
  * quote, so `flashBlock` is handed its mark key — the one annotate.ts writes

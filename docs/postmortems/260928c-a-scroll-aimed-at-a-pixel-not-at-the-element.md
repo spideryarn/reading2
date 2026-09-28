@@ -86,7 +86,9 @@ Shipped in the shared helper, which is where the class lives (`src/web/scroll.ts
 - `glide` takes **`aim: () => number`** — a question, not a number — and asks it on every frame. The
   eased position is the fraction of the way from the start to where the element is *now*, so the
   last frame lands on the element whatever moved above it. `scrollToBlock` passes `aimAt(id, row)`,
-  which re-measures the row (re-finding it by id if React replaced it) and the bars each frame.
+  which re-measures the row (re-finding it by id if React replaced it) and the bars each frame. If
+  the row is gone rather than replaced at the final frame, the journey reports `missing` instead of
+  calling its last remembered pixel `settled`.
 - **The instant path** (reduced motion, `behavior: "auto"`) still moves synchronously, then runs one
   corrective frame after the commit, and only then reports `settled`. Before, it reported `settled`
   on a position measured before the commit — the same bug, without the animation.
@@ -111,10 +113,10 @@ reading. And the `< 1px` early return still settles at once without a re-check.
 ## What would have caught it, ranked by ease against value
 
 1. **Scroll-aware rect stubs** — `top = docTop − scrollY`, with `docTop` a map a test can move.
-   Done in `tests/scroll-settlement.test.ts`; the four new tests there (a shift before the first
-   frame, a shift mid-glide, the instant path, the wheel after re-aiming) go red with the per-frame
-   `aim()` mutated back to the first measurement. A constant rect is a stub that agrees with the
-   code by construction.
+   Done in `tests/scroll-settlement.test.ts`; its cases move the target before and during a glide,
+   replace it, remove it, change the page-height clamp, exercise the instant correction and let the
+   reader cancel. The movement cases go red with the per-frame `aim()` mutated back to the first
+   measurement. A constant rect is a stub that agrees with the code by construction.
 2. **When a caller patches a helper's property, move the fix into the helper or say why not.**
    260916a is the example: the sentence describing the class was written, and the fix went one
    level too shallow. A habit, costs nothing.

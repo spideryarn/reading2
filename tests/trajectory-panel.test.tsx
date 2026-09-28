@@ -92,11 +92,13 @@ vi.mock("../src/web/useJobs.js", async (importOriginal) => {
 
 /* Scrolls are recorded — jsdom has no layout, and the claim is that a step
    scrolls rather than pushes. comment-jump.test.ts does the same. */
-const { scrolled, flashed, passages, movement } = vi.hoisted(() => ({
+const { scrolled, flashed, passages, jumpPassages, movement } = vi.hoisted(() => ({
   scrolled: [] as string[],
   flashed: [] as string[],
   /* The passage each flash was narrowed to (plan 260928a § 7b), or null. */
   passages: [] as (string | null)[],
+  /* The passage a history-pushing row jump asks `beginJump` to flash. */
+  jumpPassages: [] as (string | null)[],
   movement: { outcome: "settled" as "settled" | "cancelled" | "missing", dropped: 0 },
 }));
 vi.mock("../src/web/scroll.js", async (importOriginal) => {
@@ -249,6 +251,7 @@ beforeEach(() => {
   scrolled.length = 0;
   flashed.length = 0;
   passages.length = 0;
+  jumpPassages.length = 0;
   movement.outcome = "settled";
   movement.dropped = 0;
   requested.length = 0;
@@ -667,7 +670,10 @@ function Harness({ covers = false, arrival }: { covers?: boolean; arrival?: Traj
       quoteMarks: MARKS,
       covers,
       onAway: () => void away++,
-      onJump: (id: BlockId) => void scrolled.push(`jump ${id}`),
+      onJump: (id: BlockId, passage?: string) => {
+        scrolled.push(`jump ${id}`);
+        jumpPassages.push(passage ?? null);
+      },
       onFound,
       openKey,
       onOpenKey: setOpenKey,
@@ -919,12 +925,13 @@ describe("the band, walked", () => {
     expect(flashed).toEqual([B[3]]);
   });
 
-  it("leaves a row press's flash to the jump it makes, so it flashes once (5a)", async () => {
+  it("leaves a row press's quote flash to the jump it makes, so it flashes once (5a, 7b)", async () => {
     await mount();
     await act(async () => host.querySelectorAll<HTMLButtonElement>(".traj-go")[1]!.click());
     await settled();
     /* `onJump` → `beginJump` flashes in the real reader; the band adds none. */
     expect(scrolled).toEqual([`jump ${B[0]}`]);
+    expect(jumpPassages).toEqual([`${Q[0]}:${B[0]}:0`]);
     expect(flashed).toEqual([]);
   });
 

@@ -21,6 +21,7 @@ let now = 0;
 const realNow = performance.now;
 const realMatchMedia = window.matchMedia;
 let started = 0;
+let scrolls: number[] = [];
 
 function flush(t: number) {
   now = started + t;
@@ -62,6 +63,7 @@ beforeEach(() => {
   Object.defineProperty(window, "innerHeight", { value: 900, configurable: true });
   Object.defineProperty(window, "scrollY", { value: 0, writable: true, configurable: true });
   window.scrollTo = ((o: { top: number }) => {
+    scrolls.push(o.top);
     Object.defineProperty(window, "scrollY", { value: o.top, writable: true, configurable: true });
   }) as typeof window.scrollTo;
   window.requestAnimationFrame = ((cb: FrameRequestCallback) => {
@@ -74,6 +76,7 @@ beforeEach(() => {
   globalThis.requestAnimationFrame = window.requestAnimationFrame;
   globalThis.cancelAnimationFrame = window.cancelAnimationFrame;
   window.matchMedia = realMatchMedia;
+  scrolls = [];
 });
 
 afterEach(() => {
@@ -105,6 +108,7 @@ describe("scrollToBlock says how it ended", () => {
     expect(outcomes, "settled waits for the post-commit re-check").toEqual([]);
     flush(16);
     expect(outcomes).toEqual(["settled"]);
+    expect(scrolls, "an unchanged target does not cause a second jump").toEqual([4000]);
   });
 
   it("settles at once when there is no distance to cover", () => {
@@ -235,6 +239,7 @@ describe("scrollToBlock re-aims while it travels", () => {
     flush(16);
     expect(window.scrollY).toBe(3925);
     expect(outcomes).toEqual(["settled"]);
+    expect(scrolls, "the second jump exists only because the target moved").toEqual([4000, 3925]);
   });
 
   it("still stops dead for the reader's wheel after re-aiming", () => {
@@ -247,5 +252,56 @@ describe("scrollToBlock re-aims while it travels", () => {
     flush(250);
     expect(outcomes).toEqual(["cancelled"]);
     expect(window.scrollY, "no frame after the wheel").toBe(at);
+  });
+
+  it("re-finds a row React replaces during the glide", () => {
+    const { outcomes, done } = recorder();
+    scrollToBlock("spya-far", "smooth", done);
+    document.querySelector('[data-block="spya-far"]')?.remove();
+    row("spya-far", 4300);
+    flush(250);
+    expect(outcomes).toEqual(["settled"]);
+    expect(window.scrollY).toBe(4300);
+  });
+
+  it("does not call a stale pixel settled when the row disappears", () => {
+    const { outcomes, done } = recorder();
+    scrollToBlock("spya-far", "smooth", done);
+    flush(50);
+    document.querySelector('[data-block="spya-far"]')?.remove();
+    flush(250);
+    expect(outcomes).toEqual(["missing"]);
+  });
+
+  it("re-clamps against the page's current height", () => {
+    docTop.set("spya-far", 19_000);
+    const { outcomes, done } = recorder();
+    scrollToBlock("spya-far", "smooth", done);
+    flush(50);
+    Object.defineProperty(document.documentElement, "scrollHeight", {
+      value: 5000,
+      configurable: true,
+    });
+    flush(250);
+    expect(outcomes).toEqual(["settled"]);
+    expect(window.scrollY).toBe(4100);
+  });
+
+  it("chases a moving row only for the bounded glide", () => {
+    const { outcomes, done } = recorder();
+    scrollToBlock("spya-far", "smooth", done);
+    flush(50);
+    docTop.set("spya-far", 4100);
+    flush(100);
+    docTop.set("spya-far", 4200);
+    flush(150);
+    docTop.set("spya-far", 4300);
+    flush(250);
+    expect(outcomes).toEqual(["settled"]);
+    expect(window.scrollY).toBe(4300);
+
+    docTop.set("spya-far", 4500);
+    flush(500);
+    expect(window.scrollY, "a shift after arrival is not chased").toBe(4300);
   });
 });

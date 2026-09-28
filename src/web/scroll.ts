@@ -631,7 +631,7 @@ let landing: ((outcome: ScrollOutcome) => void) | null = null;
  * `outcome` is what the jump's caller is told, and it is `settled` only from
  * the glide's own last frame, which ends the animation through here too.
  */
-function cancel(outcome: "settled" | "cancelled" = "cancelled") {
+function cancel(outcome: ScrollOutcome = "cancelled") {
   /* **The reader taking over ends the quiet window, and must.** `cancel` is what
      a wheel, a touch or a `pointercancel` runs (see `bail` below), so past this
      line the page is moving because *they* are moving it — and leaving
@@ -678,7 +678,12 @@ export function glideTarget(): number | null {
  * A caller whose destination really is a number (`scrollByScreen`) passes a
  * function that returns it.
  */
-function glide(aim: () => number, done?: (outcome: ScrollOutcome) => void, ms: number = SCROLL_MS) {
+function glide(
+  aim: () => number,
+  done?: (outcome: ScrollOutcome) => void,
+  ms: number = SCROLL_MS,
+  finish: () => "settled" | "missing" = () => "settled",
+) {
   cancel();
   const from = window.scrollY;
   const first = aim();
@@ -756,7 +761,7 @@ function glide(aim: () => number, done?: (outcome: ScrollOutcome) => void, ms: n
     // because a deep tree scrolls the table sideways (layout.ts § overflowing).
     if (Math.abs(top - window.scrollY) >= 0.5) window.scrollTo({ top, behavior: "auto" });
     if (t < 1) frame = requestAnimationFrame(tick);
-    else cancel("settled");
+    else cancel(finish());
   };
   frame = requestAnimationFrame(tick);
 }
@@ -798,7 +803,9 @@ export function scrollToTop() {
  *    docs/postmortems/260928c-a-scroll-aimed-at-a-pixel-not-at-the-element.md.
  *  - `cancelled`: the reader's wheel or touch stopped the glide, or a newer
  *    movement replaced it (another jump, an arrow key, Back, `abandonScroll`).
- *  - `missing`: there is no row for that id — nothing moved.
+ *  - `missing`: there is no row for that id when asked, or it disappeared and
+ *    was not replaced before the last frame. In the latter case the glide may
+ *    have moved toward its last known position, but no arrival action fires.
  *
  * Reported rather than guessed with a timer, because a timer set to
  * `SCROLL_MS` fires just the same when the reader has already taken the page
@@ -821,7 +828,13 @@ export function scrollToBlock(
     cancel();
     return done?.("missing");
   }
-  glide(aimAt(id, row), done, behavior === "smooth" && !reducedMotion() ? SCROLL_MS : 0);
+  const aim = aimAt(id, row);
+  glide(
+    aim.read,
+    done,
+    behavior === "smooth" && !reducedMotion() ? SCROLL_MS : 0,
+    aim.finish,
+  );
 }
 
 /**
@@ -834,21 +847,33 @@ export function scrollToBlock(
  *
  * A row React has replaced mid-glide is found again by its id; a row that has
  * gone altogether keeps the last answer rather than aiming at a detached
- * node's zero rectangle.
+ * node's zero rectangle, but reports `missing` rather than claiming that stale
+ * pixel was an arrival.
  */
-function aimAt(id: string, first: HTMLElement): () => number {
+function aimAt(
+  id: string,
+  first: HTMLElement,
+): { read: () => number; finish: () => "settled" | "missing" } {
   let row = first;
   let last: number | null = null;
-  return () => {
-    if (!row.isConnected) {
-      const again = blockRow(id);
-      if (!again) return last ?? window.scrollY;
-      row = again;
-    }
-    const top = row.getBoundingClientRect().top + window.scrollY - stickyDestination();
-    const max = document.documentElement.scrollHeight - window.innerHeight;
-    last = Math.max(0, Math.min(top, max));
-    return last;
+  let present = true;
+  return {
+    read: () => {
+      if (!row.isConnected) {
+        const again = blockRow(id);
+        if (!again) {
+          present = false;
+          return last ?? window.scrollY;
+        }
+        row = again;
+      }
+      present = true;
+      const top = row.getBoundingClientRect().top + window.scrollY - stickyDestination();
+      const max = document.documentElement.scrollHeight - window.innerHeight;
+      last = Math.max(0, Math.min(top, max));
+      return last;
+    },
+    finish: () => (present ? "settled" : "missing"),
   };
 }
 

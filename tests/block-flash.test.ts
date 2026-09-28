@@ -259,6 +259,17 @@ describe("flashBlock with a passage", () => {
     expect(washed()).toEqual([]);
   });
 
+  it("restarts a passage flash on the newer clock", () => {
+    withQuote();
+    flashBlock("spya-aaaaaa", { passage: KEY });
+    vi.advanceTimersByTime(FLASH_MS - 100);
+    flashBlock("spya-aaaaaa", { passage: KEY });
+    vi.advanceTimersByTime(200);
+    expect(washed(), "still on the second clock").toEqual(["the quote ", "itself"]);
+    vi.advanceTimersByTime(FLASH_MS);
+    expect(washed()).toEqual([]);
+  });
+
   it("falls back to the block when the passage is not drawn", () => {
     layOut();
     flashBlock("spya-aaaaaa", { passage: KEY });

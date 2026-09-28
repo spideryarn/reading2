@@ -914,3 +914,27 @@ Quotes that include never-offered abstract ones; **F82** an article whose only q
 abstract gets its own refusal (`[jb-only-abstract-quotes]`); **F83** the prompt sentence keeps other
 opening quotes available. **F84** (known limit, documented): untitled and non-English abstracts are
 not detected — conservative on purpose.
+
+### Stage 7 — what landed
+
+- **The scroll** ([postmortem](../postmortems/260928c-a-scroll-aimed-at-a-pixel-not-at-the-element.md)):
+  reproduced in Playwright — a step to a stop *below* the current one settled ~86px too far, at
+  every width, because the "Next stop" door moved out from above the target after `scrollToBlock`
+  measured it. Fixed in the shared helper: the glide re-measures the element each frame (chasing
+  bounded to 200 ms), the instant path corrects once after the commit. The class, named: *a scroll
+  destination measured once for a journey the layout does not hold still for*.
+- **The flash**: `flashBlock(id, { passage })` washes the quote's own fragments, falling back to the
+  block. Trajectory's steps and (after Sol's F90) its row press pass it; every other caller still
+  washes the block.
+- **Bigger ‹ ›**: 44px through `--control-h-lg`.
+
+**GPT Sol code review** ([prompt](260928a-trajectory-mode-stage7-code-review-prompt.md),
+[answer](260928a-trajectory-mode-stage7-code-review-sol.md)), *accept after fixes*: F90 the row
+press flashes the quote too (an optional passage through `jumpTo`/`beginJump`); F91 a row removed
+mid-glide reports `missing`, not `settled`.
+
+**Browser check after** (Playwright, 1440, 1024×1366, 820×1180; ‹ ›, →, door, row press; above and
+below): row top −0.4 to +0.1px, the quote's first fragment 7.5–62px below it, no drift after 1 s,
+the quote's words flashed on every path. Regressions: a Glossary passage link lands at +0.5px and
+flashes its block as before; `?at=` restores; a wheel mid-glide stops it. Search was not exercised
+(no hits for the probe word).
