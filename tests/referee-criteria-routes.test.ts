@@ -399,7 +399,7 @@ describe("Referee's criteria routes", { timeout: 60_000 }, () => {
          there records no attempt at all and `sweepPending` treats a row with no
          attempt as abandoned outright. Postgres stamps `attempt_started_at`
          with `clock_timestamp()` and leaves the row alone for
-         `CRITERION_ORPHAN_GRACE_MS` — 150 seconds, sized for a `literature` run
+         `CRITERION_ORPHAN_GRACE_MS` — derived from a `literature` run's deadline, for a run
          that goes to the web — because on Vercel the process being asked is not
          the process that is running the criterion.
 

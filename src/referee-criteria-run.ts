@@ -114,6 +114,7 @@ import {
 import { parseHits } from "./search.js";
 import { hitExtractor } from "./search-hits-stream.js";
 import { plainWords } from "./plain-words.js";
+import { budgetFor, deadlineFor } from "./token-budget.js";
 import type { Block, Citation, Meta } from "./types.js";
 
 /** The job this bills under. Not `search`'s — src/models.ts § `referee-criteria`. */
@@ -141,10 +142,58 @@ export const defaultModel = (): string => modelFor(CRITERIA_JOB);
  * longer pair is explain.ts's, which has been running against real web searches
  * since 2026-08-26.
  */
-export const CRITERION_TIMEOUT_MS = 60_000;
 export const CRITERION_STALL_MS = 30_000;
-export const LITERATURE_TIMEOUT_MS = 120_000;
 export const LITERATURE_STALL_MS = 45_000;
+
+/**
+ * **`max_tokens` is thinking plus answer, and until 2026-09-28 it was sized for
+ * the answer alone** — 4,000, 6,000 for `literature`. With no effort named,
+ * a `single` criterion on an 8,290-word essay thought for up to 1,558 tokens and
+ * used 94% of its 4,000: the Referee Claims failure
+ * (docs/plans/260928c-referee-claims-fail-on-long-pieces.md), one notch away.
+ * The effort is `CHAT_REASONING`'s row for this job (src/ai-call.ts), which the
+ * gateway sends; these are the two terms sized against it.
+ *
+ * Answer room: `MAX_RESULTS` filled at the rate measured on that essay — ~150
+ * tokens a result, a quote, a sentence, a confidence and sometimes a valence;
+ * ~430 for `literature`, whose results carry citations and whose model writes a
+ * paragraph before the JSON — and a quarter again. An estimate, not a bound: the
+ * cap limits rows, not their length.
+ *
+ * Thinking room: at `medium` a `single` criterion thought for none and a
+ * `literature` one for 851, between its searches. 10,000 is several times the
+ * most any run spent unleashed, because a long PDF makes the same effort think
+ * more — claims, on a 152,000-word paper, varied 4,700–11,500 at `medium`. A
+ * ceiling, not a purchase: unused room is not billed.
+ */
+const CRITERION_THINKING_ROOM = 10_000;
+const CRITERION_MAX_TOKENS = budgetFor(
+  CRITERIA_JOB,
+  Math.ceil(MAX_RESULTS * 150 * 1.25),
+  CRITERION_THINKING_ROOM,
+);
+const LITERATURE_MAX_TOKENS = budgetFor(
+  CRITERIA_JOB,
+  Math.ceil(MAX_RESULTS * 430 * 1.25),
+  CRITERION_THINKING_ROOM,
+);
+
+/** The ceiling this kind of criterion sends. */
+export function maxTokensFor(kind: RefereeCriterionConfig["kind"]): number {
+  return kind === "literature" ? LITERATURE_MAX_TOKENS : CRITERION_MAX_TOKENS;
+}
+
+/**
+ * The deadlines, **derived from the ceilings since 2026-09-28** —
+ * src/token-budget.ts § `deadlineFor` says why the two limits are sized
+ * together. They were 60s and 120s, which the new ceilings would outrun.
+ * Measured at `medium`: a `single` criterion finished in 19s and a `literature`
+ * one, with seven searches, in 57s, so these fire only on a run that is still
+ * moving at the end of an unusually long answer. The stall clocks above are
+ * what catch a hung stream, and they have not moved.
+ */
+export const CRITERION_TIMEOUT_MS = deadlineFor(CRITERION_MAX_TOKENS);
+export const LITERATURE_TIMEOUT_MS = deadlineFor(LITERATURE_MAX_TOKENS);
 
 /** How many web searches one `literature` criterion may run. explain.ts's cap. */
 export const MAX_LITERATURE_SEARCHES = 8;
@@ -531,11 +580,11 @@ export async function* runCriterionStream({
 
   const request = {
     model,
-    /* Room for `MAX_RESULTS` results, each carrying a quote, a sentence and —
-       on a literature criterion — a citation or two. Set with that cap in mind
-       rather than picked round: a ceiling too low truncates the JSON mid-object,
-       and a truncated object is not a short list, it is a parse error. */
-    max_tokens: config.kind === "literature" ? 6000 : 4000,
+    /* Answer plus thinking — `maxTokensFor` above has both terms and the
+       measurements. A ceiling too low truncates the JSON mid-object, and a
+       truncated object is not a short list, it is a parse error. No `reasoning`
+       here: the gateway sends `CHAT_REASONING`'s row. */
+    max_tokens: maxTokensFor(config.kind),
     /* **Tools on exactly one kind.** Sol's finding 10, and it is why this is a
        kind rather than a flag on search: `single` and `diverging` ask "where in
        this paper", which no page on the web can answer, and giving them a

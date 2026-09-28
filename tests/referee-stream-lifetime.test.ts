@@ -48,7 +48,7 @@
  * **That assertion cannot fail.** `sweepPending`
  * (src/store/pg-referee-criteria.ts) has two guards and its own comment says
  * each alone is a bug: the live set — what *this* process is streaming — **or**
- * an age cutoff of `CRITERION_ORPHAN_GRACE_MS`, which is 150 seconds. A row
+ * an age cutoff of `CRITERION_ORPHAN_GRACE_MS` — minutes, derived from the literature deadline. A row
  * begun moments ago is younger than the cutoff, so it is spared by its age
  * whether or not the lock holds it. Deleting `refereeing.delete(key)` would
  * have left the test green.

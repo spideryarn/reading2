@@ -75,6 +75,8 @@ import { imageDimensions, sniffImage } from "./assets.js";
    it means the gateway cannot be handed a container the browser never
    validated. */
 import type { AudioFormat } from "./dictation-limits.js";
+/* `log.ts` imports only pino and its redaction list, so this closes no cycle. */
+import { log } from "./log.js";
 import { NOT_CONFIGURED, providerHttpFailure } from "./messages.js";
 /* **A type-only import, and that is load-bearing rather than tidy.** A value
    import here closes a cycle: `models.ts` imports `EMBEDDING_MODEL` from
@@ -713,6 +715,141 @@ export const AI_JOB_ROUTE: Record<RoutedJob, Route> = {
   },
 };
 
+/** The values OpenRouter's chat wire takes for `reasoning.effort` (docs/project/ai-gateway.md). */
+export type ReasoningEffort = "none" | "minimal" | "low" | "medium" | "high";
+
+/**
+ * How hard a chat job's model thinks: a named effort, or the provider's
+ * default with the reason nobody has chosen one.
+ *
+ * A union rather than an optional field, so "decided to leave it" and "never
+ * thought about it" cannot be the same value.
+ */
+export type ReasoningDecision =
+  | { readonly effort: ReasoningEffort }
+  | { readonly providerDefault: string };
+
+/**
+ * **How hard each chat job thinks — decided here, for every job, and sent from
+ * here.**
+ *
+ * `max_tokens` covers the model's thinking as well as its answer, and every
+ * capable-tier model this app sends thinks by default, for as long as it likes,
+ * more on a longer input. A ceiling sized for the answer alone is therefore a
+ * ceiling the thinking can spend first. The pipeline learned that on 2026-08-25
+ * (docs/postmortems/260826a-toc-max-tokens.md) and wrote it into
+ * src/token-budget.ts — which nothing on this wire imports, so Referee Claims,
+ * built a week later with a 12,000 ceiling sized for its JSON, failed on every
+ * long paper it was given
+ * (docs/postmortems/260928b-a-lesson-kept-in-a-helper-does-not-reach-the-other-wire.md).
+ *
+ * So the decision lives at the seam every chat call passes through, where it
+ * cannot be absent: **exhaustive over `ChatJob`**, so a new job does not compile
+ * until somebody has written down how hard it thinks, and **`outgoing` sends
+ * it**, after the caller's body, which is forbidden from carrying its own
+ * (`AiRequestBody.reasoning` is `never`). A caller sizing its `max_tokens`
+ * reads its row here.
+ *
+ * `providerDefault` is a legitimate answer and most rows give it: it is what
+ * every one of them sent before this table existed, so writing it down changed
+ * nothing any reader sees. Its string is the reason, and "nothing has failed" is
+ * a weaker reason than a measurement — say which.
+ *
+ * `openRouterStream` warns, with the job, when a stream stops on `length`
+ * having spent reasoning tokens: the log line that would have named the claims
+ * bug the first time it happened.
+ */
+export const CHAT_REASONING: Record<ChatJob, ReasoningDecision> = {
+  chat: {
+    providerDefault:
+      "Not measured. A turn can run several tool rounds, each with its own ceiling; " +
+      "the empty-answer log records each round's finish reason (docs/project/chat-tools.md).",
+  },
+  explain: {
+    providerDefault:
+      "Not measured, and the tightest ceiling of the whole-article calls (src/explain.ts). " +
+      "Nothing has failed that we know of; the length warning below is what would say so.",
+  },
+  search: {
+    providerDefault:
+      "Measured 2026-09-28 on an 8,290-word essay: 44 and 194 thinking tokens against a " +
+      "4,000 ceiling, about 30% used (docs/plans/260928c-referee-claims-fail-on-long-pieces.md).",
+  },
+  "referee-mirror": {
+    providerDefault:
+      "Not measured. It reads the referee's own comments and their passages, never the " +
+      "whole paper, so its input does not grow with the article.",
+  },
+  /* Measured 2026-09-28 on an 8,290-word essay: unleashed, a `single` criterion
+     thought for 1,349–1,558 tokens and used 85–94% of its 4,000; at `medium` it
+     thought for none, answered in 19s against 35–39s, and returned as many
+     results. docs/plans/260928c-referee-claims-fail-on-long-pieces.md, and
+     src/referee-criteria-run.ts for the budget sized with it. */
+  "referee-criteria": { effort: "medium" },
+  /* The job this table was written for. Unleashed, on an 8,290-word essay,
+     8,000–13,000 thinking tokens, 113–160s, and on one run all 12,000 of the
+     old ceiling with nothing written. At `medium`: none on that essay, 1,207 on
+     a short synthetic paper, answers in about 50s. `low` lost a passage to a
+     paraphrased quote. src/referee-claims-run.ts sizes its budget with this. */
+  "referee-claims": { effort: "medium" },
+  "referee-candidates": {
+    providerDefault:
+      "Not measured. A chat personality (src/converse.ts) that weighs web search results, " +
+      "where thinking is the job; its ceiling is 12,000.",
+  },
+  "pdf-frontmatter": {
+    providerDefault: "Not measured. Reads a PDF's first pages, not the whole paper.",
+  },
+  debate: {
+    providerDefault:
+      "Not measured. Weighs web search results against the article, where thinking is the job; " +
+      "its answer ceiling is src/debate.ts § ANSWER_TOKENS.",
+  },
+  "quiz-mark": {
+    providerDefault:
+      "Not measured. A short mark against a whole-article prompt; a cut-off mark is refused " +
+      "rather than shown (src/quiz-mark.ts § MARK_CUT_OFF).",
+  },
+  "quiz-verdict": {
+    providerDefault: "Not measured. One word out, on the quick tier.",
+  },
+  /* Greg's choice for this job, 2026-09-05 — src/link-summary.ts § the request
+     says why, and that the documented 1,024-token floor means even `low` buys
+     a thousand tokens of thinking. Sent from here since 2026-09-28. */
+  "link-summary": { effort: "low" },
+  "citations-find": {
+    providerDefault: "Not measured. One cited work and a web search, not the article.",
+  },
+  pdf: {
+    providerDefault:
+      "Not measured on this wire's terms. Reads a whole PDF into structured blocks with a " +
+      "16,000 ceiling (src/pdf-read.ts).",
+  },
+  "pdf-figure-locate": {
+    providerDefault: "Not measured. One page image, not the article.",
+  },
+  eval: {
+    providerDefault:
+      "Through the gateway an eval call takes the provider default. An eval comparing efforts " +
+      "posts its own request (evals/hierarchy-structure/model-arms.ts § chatBody), not via here.",
+  },
+  embeddings: {
+    providerDefault: "An embedding model, which does not think; there is nothing to decide.",
+  },
+  "env-proposal": {
+    providerDefault: "Not measured. A short proposal from a short prompt.",
+  },
+};
+
+/**
+ * The effort a job's row names, or `null` for a `providerDefault` row — for a
+ * caller sizing its `max_tokens` against what will actually be sent.
+ */
+export function effortOf(job: ChatJob): ReasoningEffort | null {
+  const row = CHAT_REASONING[job];
+  return "effort" in row ? row.effort : null;
+}
+
 /**
  * Which path a job posts to.
  *
@@ -1090,6 +1227,8 @@ export type AiRequestBody = {
   stream?: never;
   stream_options?: never;
   usage?: never;
+  /** Decided per job in `CHAT_REASONING` and sent by `outgoing`, since 2026-09-28. */
+  reasoning?: never;
 } & Record<string, unknown>;
 
 /**
@@ -1122,8 +1261,14 @@ function outgoing(
   body: AiRequestBody,
   streaming: boolean,
 ): string {
+  const thinking = CHAT_REASONING[job];
+  /* After the spread, like `provider`: a body built at run time can carry a
+     `reasoning` the type never saw, and the table is the decision. A
+     `providerDefault` row strips one for the same reason. */
+  const { reasoning: _ignored, ...rest } = body as Record<string, unknown>;
   return JSON.stringify({
-    ...body,
+    ...rest,
+    ...("effort" in thinking ? { reasoning: { effort: thinking.effort } } : {}),
     /* Every chat row has one; the conditional is for `Route.provider`'s `null`,
        which only the image route uses and which never reaches here. */
     ...(routeFor(job).provider ? { provider: routeFor(job).provider } : {}),
@@ -1413,6 +1558,46 @@ export async function* openRouterStream(
       else if (!options.end.terminated) outcome = "error";
     }
     meter.finish(outcome);
+    warnIfThinkingAteTheCeiling(job, body, options.end, meter);
+  }
+}
+
+/**
+ * **One line, for every streamed chat call, when the model's thinking spent the
+ * allowance.** A stream that stops on `length` having spent reasoning tokens is
+ * the shape of the claims bug
+ * (docs/postmortems/260928b-a-lesson-kept-in-a-helper-does-not-reach-the-other-wire.md),
+ * and until this line each caller's own log said `finishReason: "length"` and
+ * nothing about where the tokens went — which read as *the input was too big*.
+ * A warning, not an error: the caller decides what the stop means and logs its
+ * own verdict; this says which of `CHAT_REASONING`'s rows to revisit.
+ *
+ * Counts and names only — `logging.md`'s rule, and the job's prompt is somebody's
+ * article.
+ */
+function warnIfThinkingAteTheCeiling(
+  job: ChatJob,
+  body: AiRequestBody,
+  end: StreamEnd,
+  meter: Meter,
+): void {
+  if (end.finishReason !== "length" || !meter.reasoningTokens) return;
+  try {
+    const thinking = CHAT_REASONING[job];
+    log("model").warn(
+      {
+        job,
+        model: body.model,
+        ceiling: num(body.max_tokens) ?? num(body.max_completion_tokens),
+        reasoningTokens: meter.reasoningTokens,
+        outputTokens: meter.outputTokens,
+        effort: "effort" in thinking ? thinking.effort : "provider-default",
+      },
+      `${job} stopped at its token ceiling after ${meter.reasoningTokens} tokens of thinking — ` +
+        "see CHAT_REASONING in src/ai-call.ts",
+    );
+  } catch {
+    // A log line must not be able to fail a call.
   }
 }
 

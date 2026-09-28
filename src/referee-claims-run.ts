@@ -91,7 +91,7 @@
  * evidence. Read the reasoning lines; the counters are a prompt to look.
  */
 
-import { classifyEnd, openRouterStream, ProviderRefused } from "./ai-call.js";
+import { classifyEnd, effortOf, openRouterStream, ProviderRefused } from "./ai-call.js";
 import {
   articleWithIds,
   cachedText,
@@ -121,6 +121,7 @@ import {
 import { parseHits } from "./search.js";
 import { hitExtractor } from "./search-hits-stream.js";
 import { plainWords } from "./plain-words.js";
+import { budgetFor, deadlineFor } from "./token-budget.js";
 import type { Block, Meta } from "./types.js";
 
 /** The job this bills under. Not `referee-criteria`'s — src/models.ts § `referee-claims`. */
@@ -138,17 +139,73 @@ const CLAIMS_JOB = "referee-claims" as const;
 export const defaultModel = (): string => modelFor(CLAIMS_JOB);
 
 /**
+ * **How hard the model thinks before it answers — and the reason this call
+ * failed on every long paper until 2026-09-28.**
+ *
+ * With no `reasoning` field, Sonnet 5 on this route thinks for as long as it
+ * likes, and **`max_tokens` covers the thinking as well as the answer**. On an
+ * 8,000-word essay it spent all of the old 12,000 thinking and wrote nothing —
+ * the referee saw *ran out of room before it wrote anything*, or, when the
+ * thinking took only most of it, a JSON object cut off mid-claim. The pipeline
+ * stages learned this on 2026-08-25 (src/token-budget.ts,
+ * docs/postmortems/260826a-toc-max-tokens.md); this request was never told.
+ *
+ * **Decided in `CHAT_REASONING` (src/ai-call.ts), which the gateway sends, and
+ * read back here** so the budget below is sized against the effort actually
+ * sent rather than a copy of it. The measurements behind `medium` are on that
+ * row. The route's `require_parameters: true` makes an upstream that does not
+ * claim to support the parameter refuse rather than answer unleashed — a claim
+ * about the upstream, not a guarantee, so the success line logs
+ * `reasoningTokens` and that is where an ignored effort would show.
+ * docs/plans/260928c-referee-claims-fail-on-long-pieces.md.
+ */
+export const CLAIMS_EFFORT = effortOf(CLAIMS_JOB);
+
+/**
+ * Room for a large answer — the first of the two terms `max_tokens` is made of.
+ *
+ * **An estimate, not a bound.** `MAX_CLAIMS` and `MAX_PASSAGES` cap how many
+ * rows come back, not how long each is: a quote or a claim line has no length
+ * limit. ~80 tokens a claim and ~107 a passage, measured on a 15-claim,
+ * 41-passage answer, filled to both caps and a quarter again on top. Written
+ * from the caps so that raising either raises this. A typical answer is a
+ * quarter of it — `max_tokens` is a ceiling, not a purchase, and unused room is
+ * not billed.
+ */
+export const CLAIMS_ANSWER_ROOM = Math.ceil(MAX_CLAIMS * (80 + MAX_PASSAGES * 107) * 1.25);
+
+/**
+ * Room for whatever thinking `CLAIMS_EFFORT` still does on a harder paper — the
+ * second term. A reservation, not a prediction: it is a little over what an
+ * *unleashed* run spent on the 8,000-word essay (7,963, then 12,000 and still
+ * going), so that a paper which does make `medium` think still has its whole
+ * answer room left. On the longest paper we have — a 152,077-word PDF, 360,716
+ * prompt tokens — `medium` thought for 4,716 and then 11,511 on the same input,
+ * and both runs finished inside 40% of the ceiling. src/token-budget.ts § `THINKING_HEADROOM` is the pipeline's version and its
+ * caveat applies: if this stops being enough, the answer is a lower effort, not
+ * a bigger number — a model that thinks adaptively expands into the room it is
+ * given.
+ */
+export const CLAIMS_THINKING_ROOM = 16_000;
+
+/**
+ * The `max_tokens` this call sends: answer plus thinking, through `budgetFor`
+ * so the model's own ceiling is checked rather than assumed.
+ */
+export const CLAIMS_MAX_TOKENS = budgetFor(CLAIMS_JOB, CLAIMS_ANSWER_ROOM, CLAIMS_THINKING_ROOM);
+
+/**
  * How long to wait, and how long a silent stream may stay silent.
  *
- * **Longer than a criterion's 60s**, and that is measured rather than padded:
- * this call reads the whole paper and then writes up to `MAX_CLAIMS` claims each
- * carrying up to `MAX_PASSAGES` quoted passages, which is several times a
- * criterion's output and is all of it after a single read. A deadline sized for
- * the shorter job would kill the answer at the point it was most nearly
- * complete, and a truncated JSON object is not a short list — it is a parse
- * error.
+ * **`deadlineFor(CLAIMS_MAX_TOKENS)` since 2026-09-28** — long enough for a run
+ * to use every token it was allowed, a little under nine minutes. It was a flat
+ * 180s, which a run that thought unleashed on an 8,000-word essay came within
+ * 20s of, and which a run filling the new ceiling would overshoot twice over;
+ * src/token-budget.ts § `deadlineFor` says why the two limits are sized
+ * together. The stall clock below is what catches a hung stream, and it does
+ * not move. `api/**` allows 800s (vercel.json).
  */
-export const CLAIMS_TIMEOUT_MS = 180_000;
+export const CLAIMS_TIMEOUT_MS = deadlineFor(CLAIMS_MAX_TOKENS);
 export const CLAIMS_STALL_MS = 45_000;
 
 /**
@@ -414,13 +471,17 @@ export async function* runClaimsStream({
 
   const request = {
     model,
-    /* Room for `MAX_CLAIMS` claims, each carrying its own quote and up to
-       `MAX_PASSAGES` quoted passages with a sentence apiece. Set with those caps
-       in mind rather than picked round: a ceiling too low truncates the JSON
-       mid-object, and a truncated object is not a short list, it is a parse
-       error. **No tools** — every answer is inside the paper, and a web search
-       here would be spending a referee's money to confirm background. */
-    max_tokens: 12000,
+    /* **Answer plus thinking, as two named terms.** This was 12,000 and its
+       comment sized it for the answer alone, which is the bug in
+       docs/plans/260928c-referee-claims-fail-on-long-pieces.md: the thinking
+       comes out of the same allowance, and it grows with the paper. A ceiling
+       too low truncates the JSON mid-object, and a truncated object is not a
+       short list, it is a parse error. **No tools** — every answer is inside
+       the paper, and a web search here would be spending a referee's money to
+       confirm background. */
+    max_tokens: CLAIMS_MAX_TOKENS,
+    /* No `reasoning` here: the gateway sends `CHAT_REASONING`'s row for this
+       job, and `CLAIMS_EFFORT` above is that row read back. */
     messages,
   };
 
@@ -623,7 +684,19 @@ export async function* runClaimsStream({
   const rawText = extractor.text();
   if (rawText.trim() === "") {
     if (stopped) throw new Error(READER_LEFT);
-    line.error({ model: used, ms: since(started), finishReason }, `${used} returned no text`);
+    /* `reasoningTokens` is the number that would have said what went wrong
+       when every long paper failed here: `length` with no text is the model
+       having thought through the whole allowance. `CLAIMS_EFFORT`. */
+    line.error(
+      {
+        model: used,
+        ms: since(started),
+        finishReason,
+        outputTokens: usage?.completion_tokens ?? null,
+        reasoningTokens: usage?.completion_tokens_details?.reasoning_tokens ?? null,
+      },
+      `${used} returned no text`,
+    );
     throw new Error(saidNothing(finishReason).message);
   }
 
@@ -661,6 +734,7 @@ export async function* runClaimsStream({
         ms: since(started),
         inputTokens: usage?.prompt_tokens ?? null,
         outputTokens: usage?.completion_tokens ?? null,
+        reasoningTokens: usage?.completion_tokens_details?.reasoning_tokens ?? null,
         cacheReadTokens: usage?.prompt_tokens_details?.cached_tokens ?? null,
         cacheWriteTokens:
           usage?.prompt_tokens_details?.cache_write_tokens ?? usage?.cache_write_tokens ?? null,

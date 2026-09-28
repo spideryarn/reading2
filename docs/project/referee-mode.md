@@ -29,6 +29,12 @@ it ([260831an-referee-mode-submodes-review-sol.md](../plans/260831an-referee-mod
 finding 4). Both adapters are real now and [`src/store/index.ts`](../../src/store/index.ts) picks
 between them like every other pair.
 
+**Claims works on long papers as of 2026-09-28**, and did not before: on an 8,000-word essay the
+model spent its whole 12,000-token allowance thinking and wrote nothing. It now asks for `medium`
+effort and a ceiling of answer plus thinking; Criteria had the same exposure and got the same fix
+([260928c-referee-claims-fail-on-long-pieces.md](../plans/260928c-referee-claims-fail-on-long-pieces.md),
+[the postmortem](../postmortems/260928b-a-lesson-kept-in-a-helper-does-not-reach-the-other-wire.md)).
+
 **The table is an interim and says so.** A claims run is an article-derived reusable artefact whose
 right home is a **pipeline artefact** — a `StepName`, an `ArtifactKind`, an `article_revisions`
 column — which the plan says out loud, and that has not changed;

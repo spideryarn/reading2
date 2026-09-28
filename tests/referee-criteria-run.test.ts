@@ -40,7 +40,8 @@ import {
   runCriterionStream,
 } from "../src/referee-criteria-run.js";
 import type { CriterionOutcome, CriterionRequest } from "../src/referee-criteria-run.js";
-import type { RefereeCriterionConfig, RefereeResult } from "../src/referee-criteria.js";
+import { MAX_RESULTS, type RefereeCriterionConfig, type RefereeResult } from "../src/referee-criteria.js";
+import { MODEL_MAX_TOKENS } from "../src/token-budget.js";
 import type { Block, Meta } from "../src/types.js";
 
 const meta = {
@@ -227,6 +228,42 @@ describe("the request", () => {
     expect(clocksFor("literature").stallMs).toBe(LITERATURE_STALL_MS);
     expect(clocksFor("single").stallMs).toBe(CRITERION_STALL_MS);
     expect(LITERATURE_STALL_MS).toBeGreaterThan(CRITERION_STALL_MS);
+  });
+
+  /* docs/plans/260928c-referee-claims-fail-on-long-pieces.md, stage 2. On an
+     8,290-word essay an unleashed `single` criterion thought for up to 1,558
+     tokens and used 94% of the old 4,000 — the claims bug, one notch away.
+     `max_tokens` covers thinking as well as the answer. */
+  describe("room for thinking as well as the answer", () => {
+    /** ~150 tokens a result measured (a quote, a sentence, a confidence, a
+        valence); a literature result with its citations and the prose the
+        model writes before the JSON, ~430. */
+    const worstAnswer = (perResult: number) => MAX_RESULTS * perResult;
+
+    for (const [name, config, perResult] of [
+      ["single", SINGLE, 150],
+      ["diverging", DIVERGING, 150],
+      ["literature", LITERATURE, 430],
+    ] as const) {
+      it(`asks a ${name} criterion to think at medium and leaves room for it`, async () => {
+        fetchMock.mockResolvedValue(reply([]));
+        await runCriterion(req(config));
+        const body = bodyOf(fetchMock);
+        expect(body.reasoning).toEqual({ effort: "medium" });
+        // The answer filled to the cap, plus at least 8,000 of thinking —
+        // over four times the most an unleashed run spent.
+        expect(body.max_tokens).toBeGreaterThanOrEqual(worstAnswer(perResult) + 8000);
+        expect(body.max_tokens).toBeLessThanOrEqual(MODEL_MAX_TOKENS);
+      });
+
+      it(`gives a ${name} criterion time to use every token it is allowed`, async () => {
+        fetchMock.mockResolvedValue(reply([]));
+        await runCriterion(req(config));
+        const ceiling = bodyOf(fetchMock).max_tokens as number;
+        // ~95 tokens a second measured; the deadline has to outlast a full ceiling.
+        expect(clocksFor(config.kind).timeoutMs / 1000).toBeGreaterThan((ceiling / 95) * 1.2);
+      });
+    }
   });
 });
 

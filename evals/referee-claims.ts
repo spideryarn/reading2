@@ -730,6 +730,15 @@ const SELF_CHECK: readonly {
     fires: false,
   },
   {
+    /* The same limitations sentence restated a third way, and the unanchored
+       `no … experiments were` arm of "the paper contains no such thing" blanked
+       it. docs/plans/260928c-referee-claims-fail-on-long-pieces.md. */
+    text: "states that no cross-domain transfer experiments were performed",
+    paper: "overclaim",
+    from: "overclaim, 2026-09-28",
+    fires: false,
+  },
+  {
     text: "reports the measured reduction figure on the single dataset tested",
     paper: "overclaim",
     from: "overclaim, 2026-09-01",

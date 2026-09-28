@@ -39,6 +39,7 @@ import {
   SUMMARY_MAX_COMPLETION_TOKENS,
   summaryRequest,
 } from "../src/link-summary.js";
+import { CHAT_REASONING } from "../src/ai-call.js";
 import type { LinkOccurrence } from "../src/link-previews.js";
 import type { Article, Block, Meta, Tree } from "../src/types.js";
 
@@ -217,7 +218,11 @@ describe("the request body", () => {
   });
 
   it("asks for low reasoning effort, per Greg", () => {
-    expect(body.reasoning).toEqual({ effort: "low" });
+    /* Decided in the gateway's table since 2026-09-28 and sent from there —
+       tests/chat-reasoning.test.ts reads it off the wire. The body itself may
+       not carry one. */
+    expect(CHAT_REASONING["link-summary"]).toEqual({ effort: "low" });
+    expect(body.reasoning).toBeUndefined();
   });
 
   it("offers the summariser no tools at all", () => {

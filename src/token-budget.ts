@@ -157,6 +157,32 @@ export class TooLongForOnePass extends Error {
 }
 
 /**
+ * How fast a stream arrives, thinking or answer, in tokens a second — the
+ * slower of two measured on Sonnet 5 through OpenRouter on 2026-09-28: ~110
+ * over a 5,600-token answer, ~95 over 12,000 tokens of thinking
+ * (docs/plans/260928c-referee-claims-fail-on-long-pieces.md). Slower, because a
+ * deadline has to hold for both.
+ */
+export const STREAM_TOKENS_PER_SECOND = 95;
+
+/**
+ * **A deadline long enough for a call to use every token it was allowed**, and a
+ * quarter again on top — for a request-path call whose `max_tokens` came from
+ * `budgetFor`.
+ *
+ * A deadline and a token ceiling are two limits on one stream, and sizing them
+ * separately is how a call ends up with one it can never reach: Referee Claims
+ * was given room for a large answer plus thinking and, for a draft, a deadline
+ * sized for the answer alone, which would have killed exactly the run that
+ * thought *and* wrote at length (GPT Sol, plan 260928c F1). The deadline only
+ * ever fires on a stream that is still moving; a hung one is the stall clock's
+ * job, and that is sized separately and much shorter.
+ */
+export function deadlineFor(maxTokens: number): number {
+  return Math.ceil((maxTokens / STREAM_TOKENS_PER_SECOND) * 1.25) * 1000;
+}
+
+/**
  * The `max_tokens` for one call, given what the stage thinks its answer costs.
  *
  * **It throws rather than clamping when the answer will not fit.** Clamping to

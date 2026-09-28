@@ -4155,13 +4155,20 @@ function liveCriteria(slug: string): Set<string> {
  * process may bury it.
  *
  * **Measured against the longest clock a criterion can have**, which is
- * `LITERATURE_TIMEOUT_MS` rather than the 60s the other two kinds get — a
+ * `LITERATURE_TIMEOUT_MS` rather than the shorter one the other two kinds get — a
  * `literature` run goes to the web, and a grace window sized for the short pair
  * would have another process burying a run that is still waiting on its fourth
  * search. That is the failure `SEARCH_ORPHAN_GRACE_MS` exists to prevent,
  * arriving through the one kind that has a different deadline.
+ *
+ * **Derived from that deadline since 2026-09-28**, the way
+ * `CLAIMS_ORPHAN_GRACE_MS` in src/store/pg-referee-claims.ts already was. It was
+ * a flat 150s; the deadlines became functions of the token ceilings
+ * (docs/plans/260928c-referee-claims-fail-on-long-pieces.md), and the
+ * assertion below is what caught the flat number falling behind — at module
+ * load, in every test that imports this file.
  */
-export const CRITERION_ORPHAN_GRACE_MS = 150_000;
+export const CRITERION_ORPHAN_GRACE_MS = LITERATURE_TIMEOUT_MS + 30_000;
 
 if (CRITERION_ORPHAN_GRACE_MS <= LITERATURE_TIMEOUT_MS) {
   throw new Error(

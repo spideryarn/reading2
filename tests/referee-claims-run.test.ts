@@ -31,7 +31,10 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import {
   buildClaimsMessages,
+  CLAIMS_ANSWER_ROOM,
+  CLAIMS_MAX_TOKENS,
   CLAIMS_STALL_MS,
+  CLAIMS_THINKING_ROOM,
   CLAIMS_SYSTEM,
   CLAIMS_TIMEOUT_MS,
   CLAIMS_UNUSABLE,
@@ -39,7 +42,8 @@ import {
   runClaimsStream,
 } from "../src/referee-claims-run.js";
 import { CRITERION_TIMEOUT_MS } from "../src/referee-criteria-run.js";
-import type { Claim } from "../src/referee-claims.js";
+import { MODEL_MAX_TOKENS } from "../src/token-budget.js";
+import { type Claim, MAX_CLAIMS, MAX_PASSAGES } from "../src/referee-claims.js";
 import type { Block, Meta } from "../src/types.js";
 
 const meta = {
@@ -170,6 +174,57 @@ describe("the clocks", () => {
   it("waits longer than a criterion does, because the answer is bigger", () => {
     expect(CLAIMS_TIMEOUT_MS).toBeGreaterThan(CRITERION_TIMEOUT_MS);
     expect(CLAIMS_STALL_MS).toBeLessThan(CLAIMS_TIMEOUT_MS);
+  });
+
+  it("gives a run that uses every token it is allowed time to produce them", () => {
+    /* ~95 tokens a second over 12,000 tokens of thinking and ~110 over an
+       answer, measured on the 8,290-word Noema essay
+       (docs/plans/260928c-referee-claims-fail-on-long-pieces.md). The whole
+       ceiling, not the answer alone: a run that thinks AND writes a long answer
+       is exactly the one a deadline sized for the answer kills. */
+    const secondsToFill = CLAIMS_MAX_TOKENS / 95;
+    expect(CLAIMS_TIMEOUT_MS / 1000).toBeGreaterThan(secondsToFill * 1.2);
+  });
+});
+
+/* ------------------------------------------------------------ the request -- */
+
+/** The biggest answer `MAX_CLAIMS` × `MAX_PASSAGES` allows, at the rates
+    measured on a real run: ~80 tokens a claim, ~107 a passage. */
+function worstCaseAnswerTokens(): number {
+  return MAX_CLAIMS * 80 + MAX_CLAIMS * MAX_PASSAGES * 107;
+}
+
+describe("the request", () => {
+  /* The bug behind docs/plans/260928c-referee-claims-fail-on-long-pieces.md:
+     `max_tokens` is thinking PLUS answer, and with no effort named Sonnet 5
+     spent all 12,000 of it thinking about an 8,000-word essay and wrote
+     nothing. These read the body that actually went to `fetch`. */
+  async function sentBody(): Promise<Record<string, unknown>> {
+    fetchMock.mockResolvedValue(reply([CLAIM]));
+    await runClaims({ meta, blocks: BLOCKS });
+    const init = fetchMock.mock.calls[0]?.[1] as { body: string };
+    return JSON.parse(init.body) as Record<string, unknown>;
+  }
+
+  it("names how hard to think, rather than leaving thinking unbounded", async () => {
+    const body = await sentBody();
+    // `medium`, not `low`: low dropped a passage to a paraphrased quote on the
+    // essay it was measured on, and the plan chose against it.
+    expect(body.reasoning).toEqual({ effort: "medium" });
+  });
+
+  it("leaves room for the largest answer the caps allow and for thinking on top", async () => {
+    const body = await sentBody();
+    // Answer plus thinking, as the two named terms, and inside the model's own
+    // ceiling. The answer room has to hold the caps filled at measured rates, and
+    // the thinking room at least what an unleashed run spent on the essay (12,000
+    // and still going) — a ceiling, not a purchase.
+    expect(body.max_tokens).toBe(CLAIMS_MAX_TOKENS);
+    expect(CLAIMS_MAX_TOKENS).toBe(CLAIMS_ANSWER_ROOM + CLAIMS_THINKING_ROOM);
+    expect(CLAIMS_ANSWER_ROOM).toBeGreaterThanOrEqual(worstCaseAnswerTokens());
+    expect(CLAIMS_THINKING_ROOM).toBeGreaterThanOrEqual(12_000);
+    expect(CLAIMS_MAX_TOKENS).toBeLessThanOrEqual(MODEL_MAX_TOKENS);
   });
 });
 

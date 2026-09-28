@@ -461,6 +461,17 @@ describe("a reasoning line that reads as a verdict", () => {
       expect(adequacyFrames(line), line).not.toEqual([]);
     }
   });
+
+  it("stays silent on a line that says what the paper's own limitations sentence says", () => {
+    /* Real model output, the claims eval of 2026-09-28, about the paper's own
+       *"we did not run the transfer experiments described in the
+       introduction"*. A restatement, and a useful one — and "the paper contains
+       no such thing" blanked it, because its `no … experiments were` arm was
+       unanchored. Anchored now, as the scope frame beside it already was;
+       *"No transfer experiment appears in the paper."*, above, still fires.
+       docs/plans/260928c-referee-claims-fail-on-long-pieces.md, Sol's F3. */
+    expect(adequacyFrames("states that no cross-domain transfer experiments were performed")).toEqual([]);
+  });
 });
 
 /* --------------------------------------------------------------- the caps -- */

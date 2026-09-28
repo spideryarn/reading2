@@ -637,8 +637,16 @@ const ADEQUACY_FRAMES: readonly { readonly name: string; readonly re: RegExp }[]
     re: /\b(?:different|another|not the same)\s+(?:\w+\s+){0,2}(?:quantity|quantities|measure|measures|metric|metrics|number|numbers|thing|things|question)\b/i,
   },
   {
+    /* **The `no … experiment … was` arm is anchored at the start of the line**,
+       for the scope frame's reason below. *"No transfer experiment appears in
+       the paper."* is a verdict standing on its own; *"states that no
+       cross-domain transfer experiments were performed"* restates the paper's
+       own limitations sentence, and the unanchored arm blanked it in the claims
+       eval of 2026-09-28 — a true line the referee lost.
+       docs/plans/260928c-referee-claims-fail-on-long-pieces.md. The `nowhere`
+       arms are not restatements in any wording, and stay unanchored. */
     name: "the paper contains no such thing",
-    re: /\bno\s+(?:\S+\s+){0,3}(?:experiment|test|analysis|evaluation|measurement|comparison|study|ablation)s?\s+(?:appears?|is|are|was|were|exists?)\b|\b(?:appears?|is|are)\s+(?:nowhere|absent)\b|\bnowhere in the (?:paper|manuscript)\b/i,
+    re: /^no\s+(?:\S+\s+){0,3}(?:experiment|test|analysis|evaluation|measurement|comparison|study|ablation)s?\s+(?:appears?|is|are|was|were|exists?)\b|\b(?:appears?|is|are)\s+(?:nowhere|absent)\b|\bnowhere in the (?:paper|manuscript)\b/i,
   },
   {
     /* **Anchored at the start of the line**, and that is the whole of the

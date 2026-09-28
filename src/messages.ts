@@ -2597,20 +2597,29 @@ export const GLOSSARY_CUT_OFF: ReaderFacingFailure = {
 /** The call succeeded and the model said nothing. */
 export function saidNothing(finishReason: string | null): ReaderFacingFailure {
   if (finishReason === "content_filter") return FILTER_STOPPED_IT;
-  /* `blocked`, not `retry`, and the reasoning has to match 413's or one of them
-     is wrong. 413 is `blocked` because resending an unchanged request sends the
-     same too-large thing. This is the same situation arriving by another door:
-     the input ate the whole budget and nothing came out. The sentence never
-     invited a retry anyway — its only advice was to ask about less — so with
-     `retry` the button and the prose disagreed, and the button was the one the
-     reader could act on. */
+  /* **What `length` with no text actually means.** Not that the input was too
+     big — the input does not count against `max_tokens` at all, and a prompt
+     too long for the model is refused before anything streams. On every model
+     this app sends, the ceiling covers the model's *thinking* as well as its
+     answer, and a model that thinks by default can spend the whole allowance
+     before writing a word. That is what happened on every long paper Referee
+     Claims was given until 2026-09-28
+     (docs/postmortems/260928b-a-lesson-kept-in-a-helper-does-not-reach-the-other-wire.md).
+     The sentence here used to blame the input and advise asking about a
+     shorter stretch — a control that Claims, Criteria and Mirror do not have,
+     and a diagnosis that was false for every caller.
+
+     `blocked`, not `retry`: the ceiling and the effort are ours, and resending
+     the same request makes the same decision about how long to think. It can
+     come out differently — thinking varies run to run — so the sentence says
+     *likely*, not *will*. Offering the button would promise more than that. */
   if (finishReason === "length") {
     return {
       kind: "blocked",
       message:
-        "The AI service ran out of room before it wrote anything, which usually means it was given " +
-        "too much at once. Sending the same thing again will hit the same ceiling; asking about a " +
-        "shorter stretch of the article should get an answer. [ai-no-room]",
+        "The AI service spent all the room it had working out its answer and ran out before it " +
+        "wrote any of it. That is a limit on our side rather than anything about the article, and " +
+        "sending the same request again is likely to hit it again. [ai-no-room]",
     };
   }
   return {

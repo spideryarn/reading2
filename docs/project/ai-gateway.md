@@ -258,6 +258,28 @@ to think rather than the Skin dropping the field.
 So the migration is a `baseURL` and a model spelling. The stages kept `client.messages.stream(…)`,
 `cache_control` breakpoints, `output_config.effort`, and native `stop_reason` values.
 
+### How hard a chat job thinks — `CHAT_REASONING`
+
+The other side of the same parameter. On the chat wire, a request with no `reasoning` field leaves
+Sonnet 5 to think as long as it likes — and **`max_tokens` covers the thinking as well as the
+answer**, so a ceiling sized for the answer alone can be spent before a word is written. Referee
+Claims was, on every long paper it was given, until 2026-09-28
+([260928b](../postmortems/260928b-a-lesson-kept-in-a-helper-does-not-reach-the-other-wire.md)).
+
+So every chat job's decision lives in one table, `CHAT_REASONING` in
+[`src/ai-call.ts`](../../src/ai-call.ts): a named `effort`, or `providerDefault` with the reason.
+It is exhaustive over `ChatJob`, `outgoing` sends the row, and a caller's body may not carry
+`reasoning` of its own. A caller sizes its `max_tokens` against its row (`effortOf`), as two terms
+— answer room plus thinking room — through `budgetFor`, and its deadline through `deadlineFor`
+([src/token-budget.ts](../../src/token-budget.ts)), so a run allowed to fill its ceiling has time
+to. `openRouterStream` warns, with the job, whenever a stream stops on `length` having spent
+reasoning tokens.
+
+What `medium` measured on the chat wire is in
+[260928c](../plans/260928c-referee-claims-fail-on-long-pieces.md): no thinking at all on some
+inputs, 1,207 on a short paper, 4,700–11,500 on a 152,000-word PDF. It narrows the spread; it
+does not fix the amount.
+
 ## What the Skin gives us that neither half had alone
 
 Its `usage` object carries Anthropic's own counters **and** OpenRouter's cost, together:

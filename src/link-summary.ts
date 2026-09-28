@@ -447,7 +447,9 @@ export function buildSummaryMessages(
  * - **`reasoning: { effort: "low" }`**, per Greg. The job is reading
  *   comprehension over material that is all in front of the model, and the
  *   documented 1,024-token floor means even `low` buys a thousand tokens of
- *   thinking.
+ *   thinking. **Not in this body since 2026-09-28**: every chat job's effort is
+ *   decided in `CHAT_REASONING` (src/ai-call.ts) and sent by the gateway, and
+ *   this job's row there says `low`.
  * - **No `tools`, of any kind.** The prompt carries a stranger's web page, and
  *   the strongest thing that can be said about an injected instruction is that
  *   there was nothing for it to reach. A `web_search` here would hand a page the
@@ -462,7 +464,6 @@ export function summaryRequest(
   return {
     model,
     max_completion_tokens: SUMMARY_MAX_COMPLETION_TOKENS,
-    reasoning: { effort: "low" },
     messages: buildSummaryMessages(reader, destination, profile),
   };
 }
