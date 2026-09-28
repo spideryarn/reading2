@@ -431,10 +431,14 @@ export function Reader({
         showText: proseOn,
         chosen: plainCols,
         modeBand: bandOpen,
+        /* Structure's two columns want a band of their own width where they
+           fit (layout.ts § `structureColumnsBand`); every other band is the
+           ordinary one. docs/plans/260928a-structure-two-columns-readable.md. */
+        bandShape: mode === "structure" ? "structure" : "standard",
         rootFontPx,
         showSpine,
       }),
-    [windowWidth, rootFontPx, gistDepths, geometry.leafDepth, proseOn, plainCols, bandOpen, showSpine],
+    [windowWidth, rootFontPx, gistDepths, geometry.leafDepth, proseOn, plainCols, bandOpen, showSpine, mode],
   );
 
   /**
@@ -1663,6 +1667,7 @@ export function Reader({
             layoutKey={layoutKey}
             supplementOf={geometry.supplementOf}
             arcByRow={arcCells}
+            rootFontPx={rootFontPx}
             /* `modeW` is 0 exactly when the band covers the prose instead of
                sitting beside it (layout.ts) — a phone, since 2026-09-06; it was
                iPad portrait and below until the crossover fell to 700. That is

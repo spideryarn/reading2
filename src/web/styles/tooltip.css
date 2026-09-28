@@ -113,12 +113,11 @@
 /* **Structure's row card, capped narrower than the rest.**
 
    `.tooltip`'s 22rem is a reading width chosen for a card floating over prose.
-   This one hangs off a row inside a band that can be as little as 389px wide,
-   and on a window narrow enough for the band to *cover* the article there is
-   only about 200px between either column's edge and the far side of the screen
-   — so a 352px card has nowhere to go and `shift` parks it back over the thing
-   it describes. 18rem still holds a gist comfortably and leaves the row it came
-   from visible. GPT Sol's review of the plan, finding 4. */
+   This one hangs off a row inside Structure's two-column face, whose band is at
+   least 609px at a 16px root. (A covering band has used the list face since
+   2026-09-28.) At the columns' minimum, 18rem still holds a gist comfortably,
+   fits beside a row in the neighbouring column or prose, and leaves the row it
+   came from visible. GPT Sol's review of the plan, finding 4. */
 .tip-struct {
   max-width: min(18rem, calc(100vw - 1.75rem));
 }
@@ -255,4 +254,3 @@
 @media (prefers-reduced-motion: reduce) {
   .tooltip { transition: none !important; transform: none !important; }
 }
-

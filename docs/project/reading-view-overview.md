@@ -83,7 +83,7 @@ four of its sub-modes are built, and it is for somebody asked to peer-review the
 readers never are.
 
 - **Structure** — the article's tree with two faces, chosen by the band's width. Where the band is
-  wide enough (389px border-box) it is two linked columns: every part on the left, the sections of
+  wide enough (609px border-box, a 1165px window — [narrow-windows.md](narrow-windows.md)) it is two linked columns: every part on the left, the sections of
   the one you are in on the right. Where it is not, it is a nested list, deep where you are reading
   and shallow everywhere else. It shares the tree with [granularity-zoom.md](granularity-zoom.md)
   rather than having a structure of its own, and there is no `structure.md` yet; the plans are the
