@@ -64,9 +64,8 @@ export interface UseTrajectory {
   ensure(): Promise<void>;
   /**
    * The forced run — *Plan it again*, under the route and on the outdated
-   * banner. It replaces the route, choosing the Quotes first when `ensure` would.
-   * `trajectory` is in FORCE_ONLY_WHEN_NAMED, so forcing it never sweeps the
-   * Quotes in (src/pipeline.ts).
+   * banner. It replaces the route, choosing the Quotes first (unforced) when
+   * `ensure` would — never merely because their prompt is older.
    */
   regenerate(): Promise<void>;
   cancel(id: string): void;
@@ -152,28 +151,33 @@ export function useTrajectory(slug: string, quotes: QuotesRead): UseTrajectory {
   /* **The Quotes go first when there are none, or when they are stale** — the
      article changed under them, so a route planned on them could stop at a
      passage that has gone (Sol F30 on the plan's stage 5). An unreadable list
-     is treated as none. The preceding step is unforced either way, so Quotes
-     that turn out to exist and be current are skipped by `stepIsDone` and
-     nothing extra is bought (useStepJob.ts § `precededBy`). */
+     is treated as none.
+
+     **Not on every request.** The server's `stepIsDone` re-runs Quotes whose
+     stamp differs in any way, an older prompt version included, so naming
+     Quotes on every press re-bought and *replaced* a reader's Quotes when all
+     they asked for was a new route — seen in the browser check on
+     2026-09-28, ~$0.08 on a ~$0.02 press (the plan's F38, reverted). The
+     narrow race it guarded — a Quotes read still revalidating — is left: the
+     automatic run already waits for the read, and a route planned on Quotes
+     that turn out stale says so in its outdated banner. */
   const quotesFirst =
     quotes.status === "none" || quotes.status === "error" || (quotes.status === "ready" && quotes.stale);
   const ensure = useCallback(async () => {
     await queue.start(quotesFirst ? { precededBy: ["quotes"] } : {});
   }, [queue, quotesFirst]);
-  /* Forced on `trajectory` alone — `force` names the step, and `trajectory` is
-     in FORCE_ONLY_WHEN_NAMED — so the Quotes, when they go first, go unforced. */
+  /* `useStepJob` names only this hook's own step in `force`, so Quotes stays
+     unforced. `FORCE_ONLY_WHEN_NAMED` protects the other direction: forcing
+     Quotes elsewhere must not sweep Trajectory into that job. */
   const regenerate = useCallback(async () => {
     await queue.start(quotesFirst ? { force: true, precededBy: ["quotes"] } : { force: true });
   }, [queue, quotesFirst]);
 
   /**
    * **The automatic run waits for the Quotes' read**, because the request it
-   * makes depends on the answer: with Quotes it is the route alone, without
-   * them it is the Quotes first. Spending while the Quotes are still loading
-   * would guess — and a guess of "none" buys nothing extra (the step is
-   * unforced, and `stepIsDone` skips Quotes that are current), while a guess of
-   * "some" is refused by the server and costs the reader their one automatic
-   * try. So a `none` here waits until the Quotes have answered.
+   * makes depends on the answer: with current Quotes it is the route alone,
+   * with none or stale ones it is the Quotes first. So a `none` here waits
+   * until the Quotes have answered.
    */
   const gate: TrajectoryStatus =
     status === "none" && quotes.status === "loading" ? "loading" : status;

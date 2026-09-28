@@ -236,10 +236,11 @@ export function TrajectoryPanel({ owner, view, quoteCount }: Props) {
             )}
             {/* **Plan it again**, pinned under the list as Ideas' and
                 Timeline's are — the plan's stage 5e. It rebuilds the route
-                only: `trajectory` is in `FORCE_ONLY_WHEN_NAMED`, so the force
-                never sweeps the Quotes in; Quotes has its own button for those.
-                Not drawn while the outdated banner is up, which offers the
-                same press already. */}
+                only: Quotes is an unforced prerequisite on the request, so the
+                server checks its currency, while `useStepJob` names only
+                Trajectory in `force`. Quotes has its own button for replacing
+                a current list. Not drawn while the outdated banner is up,
+                which offers the same press already. */}
             {!outdatedBy(owner) && <div className="traj-again">{run("Plan it again", true)}</div>}
           </div>
         ) : null

@@ -36,7 +36,11 @@ import { useQuoteMarks } from "./useQuoteMarks.js";
 import { DebateBand } from "../modes/debate/DebateMode.js";
 import { CitationsBand } from "../modes/citations/CitationsMode.js";
 import { FaqBand } from "../modes/faq/FaqMode.js";
-import { TrajectoryBand, type TrajectoryControl } from "../modes/trajectory/TrajectoryMode.js";
+import {
+  TrajectoryBand,
+  type TrajectoryArrival,
+  type TrajectoryControl,
+} from "../modes/trajectory/TrajectoryMode.js";
 import { TrajectoryDoor } from "../TrajectoryPanel.js";
 import type { CardTarget } from "../stop-card.js";
 import { GlossaryBand, VisitorGlossaryBand } from "../modes/glossary/GlossaryMode.js";
@@ -330,6 +334,13 @@ export function Reader({
    * So this is a single value the layout reads, not a flag each feature checks.
    */
   const [mode, setMode] = useQueryState("mode", modeParam);
+  /* The pasted Trajectory stop belongs to this article arrival, not to each
+     mount of its band. `ModeBoundary key={mode}` remounts the band on re-entry
+     while leaving mode-specific query state in the URL; this token survives
+     that boundary and is consumed by the first resolved arrival only. */
+  const trajectoryArrival = useRef<TrajectoryArrival>({
+    stop: mode === "trajectory" ? new URLSearchParams(location.search).get("stop") : null,
+  });
 
   /* The tab: the article first, then the mode — and nothing for whichever mode
      is the default, which is the one most tabs are in and so the one that
@@ -1961,6 +1972,7 @@ export function Reader({
             glossary={owner.glossary}
             onOpen={openFromStopCard}
             canOpen={canOpenFromStopCard}
+            arrival={trajectoryArrival.current}
           />
         ) : null;
       /* **The owner/visitor pair, since 2026-09-04.** It was the owner alone

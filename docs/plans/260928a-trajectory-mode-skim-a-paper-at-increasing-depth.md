@@ -781,3 +781,48 @@ spend beside a ~$0.02 route, for things the reader did not press, plus a second 
 subscription to refresh the read hooks, and a second definition of availability. The card keeps
 showing what already exists. **Question for Greg**: a disclosed one-press "fill the card" button.
 So 5-ii is now 5f alone (out of Experimental), with the Dock and command-bar tests (F34).
+
+### Stage 6 plan review — GPT Sol ([prompt](260928a-trajectory-mode-stage6-plan-review-prompt.md), [answer](260928a-trajectory-mode-stage6-plan-review-sol.md)), verdict *rethink*
+
+| ID | Sev | Finding | Outcome |
+|---|---|---|---|
+| F60 | P1 | block ids alone cannot tell the model which quotes carry an Idea (ids encode no position) | accepted — Ideas labelled `I1…`; each quote annotated in code with the Ideas it shares a block with (exact) or sits next to (adjacent, same top-level section, body blocks) |
+| F61 | P1 | Ideas made by the route's job would not reach the stop card until a reload | accepted — the band's `useIdeasRead` is created first and refreshed from the route job's completion |
+| F62 | P1 | a section stop keyed by `nodeId` breaks the block-id / URL contract | accepted by **deferring 6b** (below); if built later, anchored to a stable block id through `stopKey`/`stopBlockId` |
+| F63 | P2 | the coverage script would undercount section stops | moot while 6b is deferred |
+| F64 | P1 | the wait for Ideas is a longer paid prerequisite, undisclosed before the press | accepted — the empty state names what will be made first (Quotes, Ideas) and that Ideas is the long part |
+| F65 | P2 | before/after must score against the same Ideas; one sample per arm cannot separate prompt from noise | accepted — Ideas regenerated to the current version and snapshotted first; the old route prompt run twice (old-vs-old control); same-block coverage primary; adjacency confined to body blocks in one top-level section; three articles are a smoke set |
+| F66 | P2 | 6a mostly repeats Quotes' existing "across the whole piece" instruction; the bump is wide, and visitors silently keep the old list | accepted — 6a becomes an **offline evaluation arm** first; the version is bumped only if it wins |
+| F67 | P2 | 6c brings back the section gist the scrapbook spike removed for giving the finding away | accepted — 6c is not built |
+| F68 | P2 | freshness needs one input fingerprint over exactly what the prompt renders | accepted — one `trajectoryInputHash` (quotes, Ideas and their associations, top-level outline titles and gists, explicit `null`s); profile hash kept separate |
+| F69 | P3 | gists are optional (a provisional tree has none) | accepted — rendered and hashed as absent |
+
+**Stage 6 as it will be built** (Sol's "simplest worthwhile", which the baseline supports: the
+top-level sections with no quote at all are *Notes*, *Front Matter*, *Future Directions* and
+*Article overview* — mostly not content, so section stops would add little):
+
+1. The route is given the Ideas through code-computed quote↔Idea associations, and the top-level
+   outline (titles, gists where present), fenced as untrusted data. It is asked to cover as many
+   Ideas as the quotes allow, the headline few at Gist. Still quote-only stops, still nested.
+   `trajectory/7`.
+2. The route's job waits for Ideas (`precededBy: ["quotes", "ideas"]`, `trajectory` moved after
+   the `ideas … sketch` group — Sol confirmed the move safe, with `tests/trajectory.test.ts:610`
+   to rewrite); the empty state says so before the press; the card's Ideas read is refreshed.
+3. Measured as F65 says.
+4. 6a (the Quotes nudge) evaluated offline over the same articles; landed only if it wins.
+5. 6b and 6c are **deferred**, with the reason recorded in trajectory.md § question 6.
+
+### Stage 5-i code review — GPT Sol ([prompt](260928a-trajectory-mode-stage5-code-review-prompt.md), [answer](260928a-trajectory-mode-stage5-code-review-sol.md)), write-capable, verdict *accept after fixes*
+
+| ID | Sev | Finding | Outcome |
+|---|---|---|---|
+| F37 | P1 | the deep-link one-shot re-armed when the band remounted | fixed by Sol — the token lives in `Reader` |
+| F38 | P1 | a Quotes read still revalidating could hide stale Quotes; Sol made **every** request name Quotes first | **reverted.** The browser check pressed *Plan it again* on the entropy paper and the job re-chose its Quotes ($0.077 on a $0.022 route) — `stepIsDone` re-runs Quotes whose prompt is merely **outdated**, so a route rebuild replaced the reader's Quotes. Back to "missing or stale" on the client; the race is left, and a route planned on Quotes that turn out stale shows its banner |
+| F39 | P1 | a step that could not resolve its block changed `?stop=` without moving | fixed by Sol |
+| F40 | P2 | positions rescanned the article per row | fixed by Sol — `positionsOf`, one pass |
+
+**Browser check** (Sonnet, Playwright; 1440, 820×1180, 420): all pass — the bar order; a flash on
+every path (‹ ›, ← →, row, door, go round again, deep link), after the scroll settles, ~1.2 s, on
+the ringed block, and none on a depth change that keeps the stop; the band steps aside at 420; the
+dots match their "about N%" text; one *Plan it again*; the rebuild POSTs `force: ["trajectory"]` only.
+The app is dark-only, so the dark-mode leg is the only mode there is.

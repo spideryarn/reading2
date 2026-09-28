@@ -15,6 +15,7 @@ import {
   currentStop,
   offeredDepths,
   positionOf,
+  positionsOf,
   stepStop,
   stopAfterDepthChange,
   visibleRoute,
@@ -206,5 +207,21 @@ describe("where a stop sits in the article", () => {
     expect(positionOf("spya-pa2abc" as BlockId, wordless)).toBeCloseTo(0.125);
     expect(positionOf("spya-pc4ghj" as BlockId, wordless)).toBeCloseTo(0.625);
     expect(positionOf("spya-pa2abc" as BlockId, [block("spya-pa2abc", 0)])).toBeCloseTo(0.5);
+  });
+
+  it("builds every position in one linear pass for the route rows", () => {
+    let reads = 0;
+    const counted = BLOCKS.map((original) => ({
+      ...original,
+      get words() {
+        reads += 1;
+        return original.words;
+      },
+    }));
+
+    const positions = positionsOf(counted);
+
+    expect([...positions.values()]).toEqual([0.05, 0.2, 0.6, 0.95]);
+    expect(reads).toBeLessThanOrEqual(counted.length * 2);
   });
 });

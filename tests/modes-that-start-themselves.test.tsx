@@ -690,9 +690,10 @@ describe("a press", () => {
   });
 
   it("waits for the Quotes' read before deciding what the route press buys", async () => {
-    /* The request depends on the answer — the route alone, or the Quotes
-       first — so a press made while the Quotes are still loading must spend
-       nothing yet, and spend exactly once when they answer. */
+    /* The empty-state promise depends on the answer — whether the unforced
+       Quotes prerequisite has work to do — so a press made while the Quotes
+       are still loading must spend nothing yet, and spend exactly once when
+       they answer. */
     trajectoryQuotes = { ...SETTLED_EMPTY_QUOTES_READ, status: "loading" };
     try {
       await open("plain");

@@ -13,7 +13,7 @@
  *
  * docs/plans/260928a-trajectory-mode-skim-a-paper-at-increasing-depth.md.
  */
-import { act, createElement, useCallback, useState } from "react";
+import { act, createElement, StrictMode, useCallback, useEffect, useRef, useState } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { NuqsAdapter } from "nuqs/adapters/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -34,7 +34,11 @@ import type { StopCard } from "../src/web/stop-card.js";
 import type { Found } from "../src/web/search-hits.js";
 import type { UseTrajectory } from "../src/web/useTrajectory.js";
 import type { QuotesRead } from "../src/web/useQuotes.js";
-import type { TrajectoryControl, TrajectoryView } from "../src/web/modes/trajectory/TrajectoryMode.js";
+import type {
+  TrajectoryArrival,
+  TrajectoryControl,
+  TrajectoryView,
+} from "../src/web/modes/trajectory/TrajectoryMode.js";
 
 /* ------------------------------------------------------------ the network -- */
 
@@ -72,15 +76,23 @@ vi.mock("../src/web/lib/api.js", async () => {
 
 /* Scrolls are recorded — jsdom has no layout, and the claim is that a step
    scrolls rather than pushes. comment-jump.test.ts does the same. */
-const { scrolled, flashed } = vi.hoisted(() => ({ scrolled: [] as string[], flashed: [] as string[] }));
+const { scrolled, flashed, movement } = vi.hoisted(() => ({
+  scrolled: [] as string[],
+  flashed: [] as string[],
+  movement: { outcome: "settled" as "settled" | "cancelled" | "missing", dropped: 0 },
+}));
 vi.mock("../src/web/scroll.js", async (importOriginal) => {
   const actual = await importOriginal<typeof import("../src/web/scroll.js")>();
   /* The scroll settles at once, so a caller that flashes on "settled" does. */
   return {
     ...actual,
-    scrollToBlock: (id: string, _behavior?: ScrollBehavior, done?: (o: "settled") => void) => {
+    scrollToBlock: (
+      id: string,
+      _behavior?: ScrollBehavior,
+      done?: (o: "settled" | "cancelled" | "missing") => void,
+    ) => {
       scrolled.push(id);
-      done?.("settled");
+      done?.(movement.outcome);
     },
   };
 });
@@ -90,7 +102,12 @@ vi.mock("../src/web/flash.js", async (importOriginal) => {
   return {
     ...actual,
     flashBlock: (id: string) => void flashed.push(id),
-    dropPendingFlash: () => {},
+    dropPendingFlash: () => {
+      movement.dropped += 1;
+    },
+    resetFlash: () => {
+      flashed.length = 0;
+    },
   };
 });
 
@@ -98,6 +115,7 @@ const { TrajectoryPanel, TrajectoryDoor, coverageNote, trajectoryPromise } = awa
   "../src/web/TrajectoryPanel.js"
 );
 const { TrajectoryBand } = await import("../src/web/modes/trajectory/TrajectoryMode.js");
+const { resetFlash } = await import("../src/web/flash.js");
 const { resolveQuotes } = await import("../src/web/search-hits.js");
 const { quoteStroke } = await import("../src/web/QuotesPanel.js");
 
@@ -209,6 +227,8 @@ let root: Root;
 beforeEach(() => {
   scrolled.length = 0;
   flashed.length = 0;
+  movement.outcome = "settled";
+  movement.dropped = 0;
   requested.length = 0;
   posted.length = 0;
   quotesRead = QUOTES_READ;
@@ -581,7 +601,10 @@ let published: Found[] = [];
 let control: TrajectoryControl | null = null;
 let away = 0;
 
-function Harness({ covers = false }: { covers?: boolean }) {
+function Harness({ covers = false, arrival }: { covers?: boolean; arrival?: TrajectoryArrival }) {
+  const ownArrival = useRef<TrajectoryArrival>({
+    stop: new URLSearchParams(location.search).get("stop"),
+  });
   const [found, setFound] = useState<Found[]>([]);
   const [openKey, setOpenKey] = useState<string | null>(null);
   const onFound = useCallback((f: Found[]) => {
@@ -611,6 +634,7 @@ function Harness({ covers = false }: { covers?: boolean }) {
       glossary: glossaryRead,
       onOpen: (target: { kind: string; id: string }) => void opened.push(`${target.kind} ${target.id}`),
       canOpen: () => true,
+      arrival: arrival ?? ownArrival.current,
     }),
   );
 }
@@ -795,6 +819,17 @@ describe("the band, walked", () => {
     expect(flashed).toEqual([B[0], B[2], B[0]]);
   });
 
+  it("drops a held flash when movement starts and flashes only after a settled scroll", async () => {
+    await mount();
+    movement.outcome = "cancelled";
+    await act(async () => void control!.step(1));
+    await settled();
+
+    expect(scrolled).toEqual([B[0]]);
+    expect(movement.dropped).toBe(1);
+    expect(flashed).toEqual([]);
+  });
+
   it("flashes on ‹ › in the band too, and steps aside after on a narrow window (5a)", async () => {
     await mount(true);
     await act(async () => host.querySelector<HTMLButtonElement>('[aria-label="Next stop"]')!.click());
@@ -863,6 +898,63 @@ describe("the band, walked", () => {
     expect(flashed).toEqual([B[3], B[0]]);
   });
 
+  it("does not re-arm the deep-link arrival when the Trajectory band remounts", async () => {
+    history.replaceState(null, "", `/read/a-route?mode=trajectory&depth=2&stop=${Q[3]}`);
+
+    function Mode({ trajectory }: { trajectory: boolean }) {
+      const arrival = useRef<TrajectoryArrival>({
+        stop: new URLSearchParams(location.search).get("stop"),
+      });
+      return trajectory
+        ? createElement(Harness, { arrival: arrival.current })
+        : createElement("div", { "data-mode": "plain" });
+    }
+
+    await act(async () => root.render(createElement(Mode, { trajectory: true })));
+    await settled();
+    expect([scrolled, flashed]).toEqual([[B[3]], [B[3]]]);
+
+    await act(async () => root.render(createElement(Mode, { trajectory: false })));
+    await act(async () => root.render(createElement(Mode, { trajectory: true })));
+    await settled();
+
+    expect([scrolled, flashed], "the initial (slug, stop) arrival is one-shot").toEqual([
+      [B[3]],
+      [B[3]],
+    ]);
+  });
+
+  it("keeps one deep-link flash through StrictMode's synthetic cleanup", async () => {
+    history.replaceState(null, "", `/read/a-route?mode=trajectory&depth=2&stop=${Q[3]}`);
+
+    function FlashOwner() {
+      useEffect(() => resetFlash, []);
+      return createElement(Harness);
+    }
+
+    await act(async () =>
+      root.render(createElement(StrictMode, null, createElement(FlashOwner))),
+    );
+    await settled();
+
+    expect([scrolled, flashed]).toEqual([[B[3]], [B[3]]]);
+  });
+
+  it("does not move the route when the destination quote has not loaded", async () => {
+    quotesRead = { ...QUOTES_READ, quotes: null, status: "loading" };
+    await mount();
+
+    let took = true;
+    await act(async () => {
+      took = control!.step(1);
+    });
+    await settled();
+
+    expect(took).toBe(false);
+    expect(param("stop")).toBeNull();
+    expect([scrolled, flashed]).toEqual([[], []]);
+  });
+
   it("leaves the band open over a deep link on a narrow window", async () => {
     /* A shared link opens the band (Reader.tsx § bandAway); the flash is held
        behind it and fires when the band steps aside (flash.ts). */
@@ -878,6 +970,10 @@ describe("the band, walked", () => {
   });
 
   it("plans it again with the route forced, and nothing else when the Quotes are current (5e)", async () => {
+    /* Not `["quotes", "trajectory"]`: the server re-runs Quotes whose prompt
+       version is merely outdated, so naming them on every press re-bought and
+       replaced a reader's Quotes on a route rebuild (browser check, 2026-09-28;
+       the plan's F38). */
     await mount();
     await act(async () => host.querySelector<HTMLButtonElement>(".traj-again button")!.click());
     await settled();

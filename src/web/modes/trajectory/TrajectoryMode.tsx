@@ -34,7 +34,7 @@ import {
   doorAfter,
   effectiveDepth,
   offeredDepths,
-  positionOf,
+  positionsOf,
   stepStop,
   stopAfterDepthChange,
   visibleRoute,
@@ -75,6 +75,15 @@ export interface TrajectoryControl {
   advance(): void;
 }
 
+/**
+ * The one deep-link arrival owned by the reading view, not by this band's
+ * mount. Mode switches remount bands while leaving `?stop=` in the address, so
+ * the mutable token has to live above that boundary.
+ */
+export interface TrajectoryArrival {
+  stop: string | null;
+}
+
 /** A module constant, for `NO_FOUND`'s reason (reader/passages.ts). */
 const NO_STOPS: TrajectoryStop[] = [];
 const NO_QUOTES: Quote[] = [];
@@ -96,6 +105,7 @@ export function TrajectoryBand({
   glossary,
   onOpen,
   canOpen,
+  arrival,
 }: {
   slug: string;
   blocks: Block[];
@@ -108,6 +118,8 @@ export function TrajectoryBand({
   onOpen(target: CardTarget): void;
   /** Whether that target mode's control is available to this reader. */
   canOpen(target: CardTarget): boolean;
+  /** The reading view's one-shot initial `?stop=` token. */
+  arrival: TrajectoryArrival;
   /** The quotes already marked in the prose — `useQuoteMarks`' `found`. */
   quoteMarks: readonly Found[];
   /** The band is lying over the prose (a narrow window) — `fit.modeW === 0`. */
@@ -166,6 +178,7 @@ export function TrajectoryBand({
     openKey,
     onOpenKey,
     onControl,
+    arrival,
   });
   return <TrajectoryPanel owner={owner} view={view} quoteCount={quotes.quotes?.quotes.length ?? 0} />;
 }
@@ -206,6 +219,7 @@ function useTrajectoryMode({
   openKey,
   onOpenKey,
   onControl,
+  arrival,
 }: {
   sources: CardSources;
   onOpen(target: CardTarget): void;
@@ -222,6 +236,7 @@ function useTrajectoryMode({
   openKey: string | null;
   onOpenKey(key: string | null): void;
   onControl(control: TrajectoryControl | null): void;
+  arrival: TrajectoryArrival;
 }): TrajectoryView {
   /* **One `useQueryStates`, so a depth change and the stop it lands on are one
      URL update** — the plan's § URL, F9. The per-call history option decides:
@@ -261,7 +276,13 @@ function useTrajectoryMode({
     if (want !== null && openKey !== want) onOpenKey(want);
   }, [want, openKey, onOpenKey]);
 
-  const blockOf = useCallback((quoteId: string) => byId.get(quoteId)?.blockId ?? null, [byId]);
+  const blockOf = useCallback(
+    (quoteId: string) => {
+      const block = byId.get(quoteId)?.blockId ?? null;
+      return block !== null && index.has(block) ? block : null;
+    },
+    [byId, index],
+  );
 
   /**
    * **Every direct movement along the route goes through here** — ‹ ›, ← →,
@@ -281,10 +302,16 @@ function useTrajectoryMode({
 
   /** A step along the route: replaces, and moves the reader to the stop. */
   const goStep = useCallback(
-    (quoteId: string) => {
-      void setRoute({ stop: quoteId }, { history: "replace" });
+    (quoteId: string): boolean => {
       const block = blockOf(quoteId);
-      if (block) moveTo(block);
+      /* A route can arrive before its Quotes read, and a stale Quote can name a
+         block the current article no longer has. Do not commit a movement the
+         page cannot perform: there would be no later event to supply its flash,
+         and an older held flash could then surface under the wrong stop. */
+      if (block === null) return false;
+      void setRoute({ stop: quoteId }, { history: "replace" });
+      moveTo(block);
+      return true;
     },
     [setRoute, blockOf, moveTo],
   );
@@ -293,15 +320,15 @@ function useTrajectoryMode({
     (to: TrajectoryDepth) => {
       if (depth === null) return;
       const next = stopAfterDepthChange(stops, depth, to, current?.quoteId ?? null);
+      const moved = next !== null && next !== current?.quoteId;
+      const block = moved ? blockOf(next) : null;
+      if (moved && block === null) return;
       /* **One update, pushed** — depth and stop together. */
       void setRoute({ depth: to, stop: next }, { history: "push" });
       /* Scroll — and flash — only when the change moved the reader. Staying
          put is the point of "changing depth keeps your place", and nothing
          was jumped to. */
-      if (next !== null && next !== current?.quoteId) {
-        const block = blockOf(next);
-        if (block) moveTo(block);
-      }
+      if (block !== null) moveTo(block);
     },
     [depth, stops, current, setRoute, blockOf, moveTo],
   );
@@ -310,8 +337,7 @@ function useTrajectoryMode({
     (dir: -1 | 1): boolean => {
       const next = stepStop(route, current?.quoteId ?? null, dir);
       if (next === null) return false;
-      goStep(next);
-      return true;
+      return goStep(next);
     },
     [route, current, goStep],
   );
@@ -352,23 +378,23 @@ function useTrajectoryMode({
   /* **A deep link's stop is brought into view and flashed, once** — the
      plan's stage 5a and Sol F28. `?at=` is the only address the reading view
      restores (useReadingPosition), so without this a link to a stop opened
-     wherever the page happened to be. The `?stop=` the band opened on is
-     remembered, and the first time a current stop resolves to a block (the
-     route and the Quotes arrive over the wire) it is `arrive`d at if it is
-     that stop, and forgotten either way — a link whose stop fell back to the
-     first one gets nothing. **One-shot, not an effect on `current`**, which
-     would move the reader a second time after every step and row press.
+     wherever the page happened to be. Reader remembers the initial `?stop=`
+     above the mode boundary, and the first time a current stop resolves to a
+     block (the route and the Quotes arrive over the wire) it is `arrive`d at if
+     it is that stop, and forgotten either way — a link whose stop fell back to
+     the first one gets nothing. **One-shot, not an effect on `current`**, which
+     would move the reader a second time after every step and row press, or
+     re-arm when a mode switch remounts this band.
 
      `arrive`, not `moveTo`: the band does not step aside. A shared link opens
      the band (Reader.tsx § `bandAway`); on a narrow window the flash is held
      behind it and fires when the band steps aside (flash.ts). */
-  const linked = useRef(asked.stop);
   useEffect(() => {
-    if (linked.current === null || current === null || stopBlock === null) return;
-    const named = linked.current === current.quoteId;
-    linked.current = null;
+    if (arrival.stop === null || current === null || stopBlock === null) return;
+    const named = arrival.stop === current.quoteId;
+    arrival.stop = null;
     if (named) arrive(stopBlock);
-  }, [current, stopBlock]);
+  }, [arrival, current, stopBlock]);
 
   const control = useMemo<TrajectoryControl | null>(
     () =>
@@ -390,11 +416,12 @@ function useTrajectoryMode({
       offeredDepths(stops).map((d) => ({ depth: d, label: DEPTH_LABEL[d], count: countAt(stops, d) })),
     [stops],
   );
+  const positions = useMemo(() => positionsOf(blocks), [blocks]);
   const rows = useMemo<TrajectoryRow[]>(
     () =>
       route.map((stop, i) => {
-        const q = byId.get(stop.quoteId);
-        const path = q ? sectionPathOf(q.blockId, index, tree) : [];
+        const block = blockOf(stop.quoteId);
+        const path = block ? sectionPathOf(block, index, tree) : [];
         return {
           quoteId: stop.quoteId,
           n: i + 1,
@@ -405,12 +432,12 @@ function useTrajectoryMode({
           current: stop.quoteId === current?.quoteId,
           /* A stop whose quote is no longer in the Quotes: a row with nowhere
              to go. The stale banner says why. */
-          missing: q === undefined,
+          missing: block === null,
           /* How far through the article, in words — the dot on the row (5b). */
-          position: q ? positionOf(q.blockId, blocks) : null,
+          position: block === null ? null : (positions.get(block) ?? null),
         };
       }),
-    [route, byId, index, tree, depth, current, blocks],
+    [route, blockOf, index, tree, depth, current, positions],
   );
 
   /** Choosing a stop in the band: a jump, and on a narrow window the band steps aside. */

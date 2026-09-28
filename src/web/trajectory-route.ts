@@ -196,15 +196,25 @@ export function doorAfter(
  * `(index + ½) / count`, rather than dividing by nothing.
  */
 export function positionOf(blockId: BlockId, blocks: readonly Block[]): number | null {
-  let index = -1;
+  return positionsOf(blocks).get(blockId) ?? null;
+}
+
+/**
+ * Every block midpoint in one pass after the total is known. The Trajectory
+ * panel asks for up to 36 positions at once, so building this map once keeps a
+ * render O(blocks + stops), rather than making `positionOf` rescan the article
+ * for every row.
+ */
+export function positionsOf(blocks: readonly Block[]): ReadonlyMap<BlockId, number> {
+  const positions = new Map<BlockId, number>();
+  if (blocks.length === 0) return positions;
+
+  const total = blocks.reduce((words, block) => words + block.words, 0);
   let before = 0;
-  let total = 0;
   for (const [i, b] of blocks.entries()) {
-    if (index === -1 && b.id === blockId) index = i;
-    else if (index === -1) before += b.words;
-    total += b.words;
+    const words = b.words;
+    positions.set(b.id, total <= 0 ? (i + 0.5) / blocks.length : (before + words / 2) / total);
+    before += words;
   }
-  if (index === -1) return null;
-  if (total <= 0) return (index + 0.5) / blocks.length;
-  return (before + (blocks[index]?.words ?? 0) / 2) / total;
+  return positions;
 }
