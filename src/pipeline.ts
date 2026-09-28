@@ -3294,107 +3294,6 @@ export const STEPS: { [K in StepName]: PipelineStep<K> } = {
       };
     },
   },
-  /**
-   * Stage 5t — **a route through the Quotes, at three depths.**
-   * docs/plans/260928a-trajectory-mode-skim-a-paper-at-increasing-depth.md.
-   *
-   * **A step whose input is other steps' artefacts**, like `illustrated`, and
-   * it takes on that step's two obligations:
-   *
-   * 1. **It refuses without Quotes, and does not fetch them — nor the Ideas.**
-   *    The client names them in one job (`precededBy: ["quotes", "ideas"]`
-   *    when either is missing or stale); `STEP_ORDER` puts both first, and
-   *    `stepIsDone` decides whether each half runs at all. Unlike
-   *    `illustrated`, it does not refuse *stale* Quotes: a quote on a paragraph
-   *    that has gone is simply not offered (`usableQuotes`). Without Ideas it
-   *    plans on the quotes alone (plan 260928a § Stage 6).
-   * 2. **Its fingerprint is what the prompt renders, not the article** —
-   *    `trajectoryInputHash` over `trajectoryInput`: the offered quotes, the
-   *    Ideas they carry, and the top-level outline. `stamp` and `run` build
-   *    the same input from the same reads, so *Find more* adding a quote, or
-   *    the Ideas being regenerated or arriving, makes the route not-current
-   *    without anybody forcing it (Sol F68).
-   *
-   * **And the profile is the reader's own, in the stamp** — like `ideas`, and
-   * unlike `illustrated`, which inherits the Sketch's. The route is exactly the
-   * thing a profile should change, and none → some counts: `sameStamp` compares
-   * a recorded `null` against an expected hash as a mismatch, which is the
-   * stricter rule the plan asks for (src/trajectory.ts § `routeProfileIsStale`).
-   */
-  trajectory: {
-    name: "trajectory",
-    label: "Planning the route",
-    produces: ["trajectory"],
-    stamp: async (ctx, store) => {
-      const quotes = await store.read(ctx.slug, "quotes", "quotes");
-      /* `null` is "we cannot tell", which makes the step run — and running is
-         where the refusal is, as `illustrated`'s stamp does for a Sketch. */
-      if (!quotes || !Array.isArray(quotes.quotes) || quotes.quotes.length === 0) return null;
-      const article = await tryReadArticle(ctx.slug, store);
-      if (!article) return null;
-      const ideas = await store.read(ctx.slug, "ideas", "ideas");
-      const input = trajectoryInput({ quotes, blocks: article.blocks, tree: article.tree, ideas });
-      if (input.offered.length === 0) return null;
-      return {
-        inputHash: trajectoryInputHash(input),
-        promptVersion: TRAJECTORY_PROMPT_VERSION,
-        model: CAPABLE_MODEL,
-        profileHash: ctx.profile ? hashProfile(ctx.profile) : null,
-      };
-    },
-    async run(ctx, store) {
-      const quotes = await store.read(ctx.slug, "quotes", "quotes");
-      /* The tree and the blocks for the section paths, the outline and the
-         Idea associations only — the prose is never sent. `readArticle`
-         refuses loudly when they are missing. */
-      const article = await readArticle(ctx.slug, store);
-      const ideas = await store.read(ctx.slug, "ideas", "ideas");
-      const input = trajectoryInput({ quotes, blocks: article.blocks, tree: article.tree, ideas });
-      if (!quotes || input.offered.length === 0) throw stageFailure(TRAJECTORY_NO_QUOTES);
-
-      const run = await generateTrajectory({
-        slug: ctx.slug,
-        input,
-        profile: ctx.profile ?? null,
-        onProgress: ctx.report,
-        signal: ctx.signal,
-      });
-      const [gist, more, most] = run.trajectory.visible;
-      plog.info(
-        {
-          slug: ctx.slug,
-          step: "trajectory",
-          model: run.model,
-          inputTokens: run.inputTokens,
-          outputTokens: run.outputTokens,
-          maxTokens: run.maxTokens,
-          ms: run.elapsedMs,
-          offered: run.offered,
-          gist,
-          more,
-          most,
-          /* Counts only — never a quote or a role. `unknownQuote` is the one to
-             watch: the model inventing an id. `overCap` says the targets and
-             the caps disagree with what the model wanted. */
-          ...run.dropped,
-          /* How many Ideas it was given (`null`: none at all), and each part
-             of the prompt's size — lengths, never the text. */
-          ideas: run.ideas,
-          ideasChars: run.promptChars.ideas,
-          outlineChars: run.promptChars.outline,
-          quotesChars: run.promptChars.quotes,
-          promptChars: run.promptChars.total,
-          /* The profile's LENGTH, never the profile. docs/project/logging.md. */
-          profileChars: ctx.profile?.length ?? 0,
-        },
-        `trajectory ${ctx.slug}: ${gist}/${more}/${most} stops over ${run.offered} quotes`,
-      );
-      return {
-        parts: { trajectory: run.trajectory },
-        detail: `${most} ${most === 1 ? "stop" : "stops"} over ${run.offered} quotes`,
-      };
-    },
-  },
   /* Stage 5f — the ideas. In STEP_ORDER but not in DEFAULT_INGEST_STEPS, for
      the reason `tweets` and `glossary` established: everything up to
      `arc` makes the article readable, everything after it is a thing somebody
@@ -4127,6 +4026,107 @@ export const STEPS: { [K in StepName]: PipelineStep<K> } = {
         detail:
           `${stored} plate(s) painted` + (missing > 0 ? `, ${missing} failed` : "") +
           ` — ${run.illustrated.style}`,
+      };
+    },
+  },
+  /**
+   * Stage 5t — **a route through the Quotes, at three depths.**
+   * docs/plans/260928a-trajectory-mode-skim-a-paper-at-increasing-depth.md.
+   *
+   * **A step whose input is other steps' artefacts**, like `illustrated`, and
+   * it takes on that step's two obligations:
+   *
+   * 1. **It refuses without Quotes, and does not fetch them — nor the Ideas.**
+   *    The client names them in one job (`precededBy: ["quotes", "ideas"]`
+   *    when either is missing or stale); `STEP_ORDER` puts both first, and
+   *    `stepIsDone` decides whether each half runs at all. Unlike
+   *    `illustrated`, it does not refuse *stale* Quotes: a quote on a paragraph
+   *    that has gone is simply not offered (`usableQuotes`). Without Ideas it
+   *    plans on the quotes alone (plan 260928a § Stage 6).
+   * 2. **Its fingerprint is what the prompt renders, not the article** —
+   *    `trajectoryInputHash` over `trajectoryInput`: the offered quotes, the
+   *    Ideas they carry, and the top-level outline. `stamp` and `run` build
+   *    the same input from the same reads, so *Find more* adding a quote, or
+   *    the Ideas being regenerated or arriving, makes the route not-current
+   *    without anybody forcing it (Sol F68).
+   *
+   * **And the profile is the reader's own, in the stamp** — like `ideas`, and
+   * unlike `illustrated`, which inherits the Sketch's. The route is exactly the
+   * thing a profile should change, and none → some counts: `sameStamp` compares
+   * a recorded `null` against an expected hash as a mismatch, which is the
+   * stricter rule the plan asks for (src/trajectory.ts § `routeProfileIsStale`).
+   */
+  trajectory: {
+    name: "trajectory",
+    label: "Planning the route",
+    produces: ["trajectory"],
+    stamp: async (ctx, store) => {
+      const quotes = await store.read(ctx.slug, "quotes", "quotes");
+      /* `null` is "we cannot tell", which makes the step run — and running is
+         where the refusal is, as `illustrated`'s stamp does for a Sketch. */
+      if (!quotes || !Array.isArray(quotes.quotes) || quotes.quotes.length === 0) return null;
+      const article = await tryReadArticle(ctx.slug, store);
+      if (!article) return null;
+      const ideas = await store.read(ctx.slug, "ideas", "ideas");
+      const input = trajectoryInput({ quotes, blocks: article.blocks, tree: article.tree, ideas });
+      if (input.offered.length === 0) return null;
+      return {
+        inputHash: trajectoryInputHash(input),
+        promptVersion: TRAJECTORY_PROMPT_VERSION,
+        model: CAPABLE_MODEL,
+        profileHash: ctx.profile ? hashProfile(ctx.profile) : null,
+      };
+    },
+    async run(ctx, store) {
+      const quotes = await store.read(ctx.slug, "quotes", "quotes");
+      /* The tree and the blocks for the section paths, the outline and the
+         Idea associations only — the prose is never sent. `readArticle`
+         refuses loudly when they are missing. */
+      const article = await readArticle(ctx.slug, store);
+      const ideas = await store.read(ctx.slug, "ideas", "ideas");
+      const input = trajectoryInput({ quotes, blocks: article.blocks, tree: article.tree, ideas });
+      if (!quotes || input.offered.length === 0) throw stageFailure(TRAJECTORY_NO_QUOTES);
+
+      const run = await generateTrajectory({
+        slug: ctx.slug,
+        input,
+        profile: ctx.profile ?? null,
+        onProgress: ctx.report,
+        signal: ctx.signal,
+      });
+      const [gist, more, most] = run.trajectory.visible;
+      plog.info(
+        {
+          slug: ctx.slug,
+          step: "trajectory",
+          model: run.model,
+          inputTokens: run.inputTokens,
+          outputTokens: run.outputTokens,
+          maxTokens: run.maxTokens,
+          ms: run.elapsedMs,
+          offered: run.offered,
+          gist,
+          more,
+          most,
+          /* Counts only — never a quote or a role. `unknownQuote` is the one to
+             watch: the model inventing an id. `overCap` says the targets and
+             the caps disagree with what the model wanted. */
+          ...run.dropped,
+          /* How many Ideas it was given (`null`: none at all), and each part
+             of the prompt's size — lengths, never the text. */
+          ideas: run.ideas,
+          ideasChars: run.promptChars.ideas,
+          outlineChars: run.promptChars.outline,
+          quotesChars: run.promptChars.quotes,
+          promptChars: run.promptChars.total,
+          /* The profile's LENGTH, never the profile. docs/project/logging.md. */
+          profileChars: ctx.profile?.length ?? 0,
+        },
+        `trajectory ${ctx.slug}: ${gist}/${more}/${most} stops over ${run.offered} quotes`,
+      );
+      return {
+        parts: { trajectory: run.trajectory },
+        detail: `${most} ${most === 1 ? "stop" : "stops"} over ${run.offered} quotes`,
       };
     },
   },
