@@ -135,11 +135,37 @@ export interface PaintOpCodes {
   readonly paintSolidColorImageMask: number;
 }
 
+/**
+ * One image paint: which image, and the page rectangle it was drawn into.
+ *
+ * An image is painted into the unit square through the current transform, so
+ * `box` is that square's box on the page. `clip` is the clip in force, as far
+ * as the interpreter could measure it, and `clipExact` says whether it could:
+ * a clip that is not an axis-aligned rectangle leaves `clip` wider than what
+ * really shows. Only `paintImageXObject` carries a key a decoded raster can be
+ * matched on (`RasterCandidate.key`); every other image operator is `other`.
+ * docs/plans/260924e-a-pdf-figure-paired-to-the-wrong-caption.md, stage 2.
+ */
+export interface ImagePaint {
+  op: "xobject" | "other";
+  key: string | null;
+  box: PageBox;
+  clip: PageBox | null;
+  clipExact: boolean;
+  /**
+   * `false` when a `gs` in force changes what shows — a soft mask, a blend
+   * mode, zero alpha — so the picture's bytes are not what the page showed.
+   */
+  appearanceExact: boolean;
+}
+
 /** What one page's operator list paints — the drawing half of a `PageLayout`. */
 export interface PaintSummary {
   ink: InkBox[];
   paths: number;
   imageOps: number;
+  /** Every image operator, in paint order. The layout reader, which drops images unseen, sees none. */
+  images: ImagePaint[];
   shadings: number;
   unmeasuredPaint: number;
 }
@@ -152,6 +178,10 @@ export interface PaintSummary {
 export interface GraphicsState {
   ctm: Matrix;
   clip: PageBox | null;
+  /** `false` once a clip that is not an axis-aligned rectangle applies: `clip` is then wider than the truth. */
+  clipExact: boolean;
+  /** `false` once a `gs` that changes visibility applies — see `changesVisibility`. */
+  appearanceExact: boolean;
   lineWidth: number;
   lineJoin: number;
   miterLimit: number;
@@ -164,6 +194,8 @@ export function initialState(view: readonly number[]): GraphicsState {
   return {
     ctm: IDENTITY,
     clip: { x0: view[0] ?? 0, y0: view[1] ?? 0, x1: view[2] ?? 0, y1: view[3] ?? 0 },
+    clipExact: true,
+    appearanceExact: true,
     lineWidth: 1,
     lineJoin: 0,
     miterLimit: 10,
@@ -181,6 +213,7 @@ interface Run {
   whitePaint: InkBox[];
   paths: number;
   imageOps: number;
+  images: ImagePaint[];
   shadings: number;
   unmeasuredPaint: number;
 }
@@ -210,6 +243,7 @@ export function interpretOperators(
     whitePaint: [],
     paths: 0,
     imageOps: 0,
+    images: [],
     shadings: 0,
     unmeasuredPaint: 0,
   };
@@ -224,6 +258,7 @@ export function interpretOperators(
     ink: run.ink,
     paths: run.paths,
     imageOps: run.imageOps,
+    images: run.images,
     shadings: run.shadings,
     unmeasuredPaint: run.unmeasuredPaint,
   };
@@ -232,6 +267,11 @@ export function interpretOperators(
 function handlersFor(codes: PaintOpCodes): Map<number, Handler> {
   const countImage: Handler = (run) => {
     run.imageOps += 1;
+    recordImage(run, "other", null);
+  };
+  const countXObject: Handler = (run, args) => {
+    run.imageOps += 1;
+    recordImage(run, "xobject", typeof args?.[0] === "string" ? args[0] : null);
   };
   return new Map<number, Handler>([
     [codes.save, save],
@@ -256,7 +296,7 @@ function handlersFor(codes: PaintOpCodes): Map<number, Handler> {
         run.shadings += 1;
       },
     ],
-    [codes.paintImageXObject, countImage],
+    [codes.paintImageXObject, countXObject],
     [codes.paintImageXObjectRepeat, countImage],
     [codes.paintInlineImageXObject, countImage],
     [codes.paintInlineImageXObjectGroup, countImage],
@@ -265,6 +305,17 @@ function handlersFor(codes: PaintOpCodes): Map<number, Handler> {
     [codes.paintImageMaskXObjectRepeat, countImage],
     [codes.paintSolidColorImageMask, countImage],
   ]);
+}
+
+function recordImage(run: Run, op: ImagePaint["op"], key: string | null): void {
+  run.images.push({
+    op,
+    key,
+    box: transformBox(run.state.ctm, 0, 0, 1, 1),
+    clip: run.state.clip,
+    clipExact: run.state.clipExact && axisAligned(run.state.ctm),
+    appearanceExact: run.state.appearanceExact,
+  });
 }
 
 function save(run: Run): void {
@@ -294,7 +345,10 @@ function beginForm(run: Run, args: Args): void {
   if (bbox === undefined) return;
   if (bbox && axisAligned(run.state.ctm)) {
     run.state.clip = intersectBox(run.state.clip, transformBox(run.state.ctm, ...bbox));
-  } else run.unmeasuredPaint += 1;
+  } else {
+    run.unmeasuredPaint += 1;
+    run.state.clipExact = false;
+  }
 }
 
 /** Four numbers from an array-like: `undefined` when absent, `null` when present and unusable. */
@@ -342,6 +396,7 @@ function setGState(run: Run, args: Args): void {
   const entries = args?.[0];
   if (!Array.isArray(entries) || entries.some((entry) => gStateEntryUnmeasured(run.state, entry))) {
     run.unmeasuredPaint += 1;
+    run.state.appearanceExact = false;
   }
 }
 
@@ -397,6 +452,7 @@ function constructPath(run: Run, args: Args): void {
   if (!box) {
     if (run.pendingClip) {
       run.unmeasuredPaint += 1;
+      run.state.clipExact = false;
       run.pendingClip = false;
     }
     return;
@@ -406,7 +462,10 @@ function constructPath(run: Run, args: Args): void {
   if (args?.[0] !== run.codes.endPath) recordPaint(run, args?.[0], box, rect, buffer);
   if (run.pendingClip) {
     if (rect && axisAligned(run.state.ctm)) run.state.clip = intersectBox(run.state.clip, box);
-    else run.unmeasuredPaint += 1;
+    else {
+      run.unmeasuredPaint += 1;
+      run.state.clipExact = false;
+    }
     run.pendingClip = false;
   }
 }

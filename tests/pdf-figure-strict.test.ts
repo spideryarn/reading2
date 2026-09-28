@@ -67,6 +67,7 @@ describe("the strict second read (Sol F33)", () => {
     const layout = (await readPdfPageLayouts({ data: pdf, pages: [1] })).get(1);
     expect(layout?.strictAgrees).toBe(true);
     const run = await collectPdfFigures({
+      locate: null,
       markers: [MARKER],
       pdf,
       blobs: fakeBlobs(),
@@ -85,6 +86,7 @@ describe("the strict second read (Sol F33)", () => {
     expect(layout?.strictAgrees).toBe(false);
     const blobs = fakeBlobs();
     const run = await collectPdfFigures({
+      locate: null,
       markers: [MARKER],
       pdf,
       blobs,

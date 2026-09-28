@@ -260,8 +260,23 @@ the whole defence. [silent-success.md](../reusable/silent-success.md) is the fam
   first TeX, in the page's text layer, using the drawn route's normalisation. A miss is
   `caption-not-in-page-text`. A caption drawn *inside* the picture cannot pass, which costs the
   figure and never the truth. What it does **not** catch: a page that prints the caption *and*
-  holds an unrelated picture while the real figure is elsewhere. Nothing records where a picture is
-  painted, so there is nothing to check that against yet.
+  holds an unrelated picture while the real figure is elsewhere.
+- **Since 2026-09-28 a figure both routes refused can be located by a model** — only those, Greg's
+  call: *"For now let's just do it for figures that fail."* The claimed page and its neighbours are
+  rendered whole by PDFium and shown to `PDF_FIGURE_LOCATOR_MODEL` with the caption, and the page
+  and box it answers must pass `judgeLocatedBox`
+  ([`src/pdf-figure-locate.ts`](../../src/pdf-figure-locate.ts), pure). In short, the box must
+  point into exactly one picture, a picture we can place, painted once and seen as painted, that is
+  not a page background, not a panel beside another picture, clipped only by the print frame, and
+  not already any other figure's. The **embedded picture is stored whole** through the same
+  `storeOne`: never a crop of the render, which on a browser-printed page would cut off what ran
+  past the margin. Refused answers leave the figure with the reason it already had. What it cannot
+  do is tell a right answer from a wrong one when the wrong one is a clean single picture. The
+  rules narrow that, and the evidence that it is rare is a measurement, not a proof:
+  [260924e § Stage 2](../plans/260924e-a-pdf-figure-paired-to-the-wrong-caption.md). Vector
+  figures are refused in v1. It costs ~$0.002 a call, at most `MAX_LOCATE_CALLS` per article, and
+  nothing for an article whose figures all pair. Every test passes `locate: null` or a script, so
+  the suite spends nothing.
 - **A figure ref carried by two elements refuses both.** The manifest is keyed by ref, so one entry
   is all there is; keeping the first meant the same picture appeared under two different captions —
   a fabricated claim about the paper the reader cannot detect. Both `pdfFigureMarkersIn` walks now

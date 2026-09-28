@@ -91,6 +91,8 @@
  * at all, `not-located`, `too-complex` or `render-failed` when it was.
  */
 
+import { createHash } from "node:crypto";
+
 import type { PdfFigureEntry, PdfFigureFailure, PdfFigureMarker } from "./assets.js";
 import { imageDimensions, sniffImage } from "./assets.js";
 import { describeStorageFailure } from "./collect-assets.js";
@@ -99,6 +101,7 @@ import { type FigurePage, type FigurePages, openFigurePages } from "./pdf-figure
 import { type DrawnFigureVerdict, locateDrawnFigure, type PageLayout } from "./pdf-figure-region.js";
 import { type RenderFailure, renderPdfRegion } from "./pdf-figure-render.js";
 import {
+  classifyRaster,
   type DecodedRaster,
   downscaleRaster,
   encodeFigurePng,
@@ -107,6 +110,14 @@ import {
   type PdfFigureFailure as PairingFailure,
 } from "./pdf-figures.js";
 import { readPdfRasters } from "./pdf-figure-read.js";
+import {
+  type FigureLocator,
+  judgeLocatedBox,
+  type LocatePage,
+  type PictureRef,
+  type SentPage,
+  type UsablePicture,
+} from "./pdf-figure-locate.js";
 import { type RawSourceStore, storeRawSource } from "./store/blobs.js";
 
 /**
@@ -215,6 +226,36 @@ export const MAX_ARTICLE_FIGURE_BYTES = 64 * 1024 * 1024;
  */
 export const PDF_FIGURES_BUDGET_MS = 180_000;
 
+/**
+ * **At most this many model calls per article** on the located route — about
+ * $0.002 and two seconds each, measured (the plan's test-run table). Eight
+ * covers every essay and paper seen so far; a document with more refused
+ * figures than that keeps the rest caption-only, the state they were in.
+ */
+export const MAX_LOCATE_CALLS = 8;
+
+/**
+ * **At most this many windows read** on the located route, asked about or not
+ * — each is three pages decoded and possibly rendered, and a document with a
+ * hundred refused vector figures would otherwise read three hundred pages to
+ * find it has nothing to ask. GPT Sol, stage 2 plan review, finding 7.
+ */
+export const MAX_LOCATE_LOOKS = 24;
+
+/**
+ * The refusals a look at the page could settle — a caption not in the page's
+ * text (the transcript's page may be one off, or the caption is drawn inside
+ * the picture), two pictures on the page, no picture on the page, no drawing
+ * that could be proved the caption's. The rest are about the bytes, the bucket
+ * or the clock, which no model can help with.
+ */
+const LOCATABLE: ReadonlySet<PdfFigureFailure> = new Set<PdfFigureFailure>([
+  "caption-not-in-page-text",
+  "ambiguous",
+  "no-raster",
+  "not-located",
+]);
+
 export interface CollectPdfFiguresOptions {
   /** Every marker in the article's blocks — `pdfFigureMarkersIn`, src/collect-assets.ts. */
   markers: readonly PdfFigureMarker[];
@@ -229,6 +270,19 @@ export interface CollectPdfFiguresOptions {
    * get an article whose every figure is refused without a word.
    */
   captions: ReadonlyMap<string, string>;
+  /**
+   * **The third route: a model shown the page.** Asked only about a marker
+   * both other routes refused for a reason a look at the page could settle
+   * (`LOCATABLE`), and only when a picture nobody has sits on its page or a
+   * neighbour. `null` turns it off. Required rather than defaulted, so that no
+   * caller — a test above all — can spend money by leaving it out: the
+   * pipeline hands in `openRouterFigureLocator`, and every test hands in `null`
+   * or a script. src/pdf-figure-locate.ts;
+   * docs/plans/260924e-a-pdf-figure-paired-to-the-wrong-caption.md § Stage 2.
+   */
+  locate: FigureLocator | null;
+  /** At most this many locator calls for the article. `MAX_LOCATE_CALLS` by default. */
+  maxLocateCalls?: number;
   blobs?: RawSourceStore;
   signal?: AbortSignal;
   now?: () => Date;
@@ -257,6 +311,10 @@ export interface PdfFiguresRun {
   stored: number;
   /** How many of `stored` were drawn from the page rather than decoded from a bitmap. */
   drawn: number;
+  /** How many of `stored` a model located (src/pdf-figure-locate.ts). */
+  located: number;
+  /** How many locator calls were made, whatever they answered. */
+  locateCalls: number;
   failed: number;
   /** Stored bytes that were already ours — two revisions of the same paper. */
   deduped: number;
@@ -308,10 +366,13 @@ export async function collectPdfFigures(
     entries: new Map(),
     stored: 0,
     drawn: 0,
+    located: 0,
+    locateCalls: 0,
     failed: 0,
     deduped: 0,
     bytes: 0,
     storageErrors: [],
+    held: new Map(),
   };
   /**
    * **First writer wins**, so that a straggler cannot overwrite the entry the
@@ -327,6 +388,18 @@ export async function collectPdfFigures(
   };
   const fail = (marker: PdfFigureMarker, reason: PdfFigureFailure): void => {
     record({ ref: marker.ref, page: marker.page, status: "failed", reason, at: at() });
+  };
+  /**
+   * **A refusal the located route may still overturn is held, not written** —
+   * `record` is first-writer-wins, so writing it would settle the figure. The
+   * held reason is what the figure gets if the route does not place it, and
+   * what the finaliser gives it if the clock runs out first: the honest answer
+   * is still the one the page gave, not `out-of-time`.
+   */
+  const refuse = (marker: PdfFigureMarker, reason: PdfFigureFailure): void => {
+    const captioned = (options.captions.get(marker.ref) ?? "").trim() !== "";
+    if (options.locate && captioned && LOCATABLE.has(reason)) book.held.set(marker.ref, reason);
+    else fail(marker, reason);
   };
 
   /* Past the runaway guard, and recorded before anything else happens so that
@@ -390,7 +463,7 @@ export async function collectPdfFigures(
        into `out-of-time`. Final assembly below restores marker order. */
     for (const outcome of outcomes) {
       if (outcome.status === "refused") {
-        if (!candidates.includes(outcome.marker)) fail(outcome.marker, pdfFigureFailure(outcome.reason));
+        if (!candidates.includes(outcome.marker)) refuse(outcome.marker, pdfFigureFailure(outcome.reason));
         continue;
       }
       /* Stop rather than record: every marker left is finalised below, which is
@@ -399,26 +472,51 @@ export async function collectPdfFigures(
       await storeOne(outcome.marker, outcome.raster, limits, signal, book, record, at);
     }
 
-    if (signal.aborted || candidates.length === 0) return;
-    const drawn = await drawnRoute(candidates, options, signal);
-    /* The layout read did not come back. An abort claims nothing and leaves the
-       markers to the finaliser; anything else leaves the bitmap route's answer
-       standing. */
-    if (!drawn) {
-      if (!signal.aborted) for (const marker of candidates) fail(marker, "no-raster");
-      return;
+    const drawnRan = await drawnPhase();
+    if (!drawnRan || signal.aborted || book.held.size === 0 || !options.locate) return;
+
+    /* Every picture the bitmap route gave a caption is that caption's, stored
+       or not, and no located figure may have it too. */
+    const taken = outcomes.flatMap((o) => (o.status === "paired" ? [pictureIdentity(o.raster)] : []));
+    const heldMarkers = looked.filter((m) => book.held.has(m.ref));
+    const chosen = await locatedRoute(heldMarkers, taken, options.locate, options, signal, book);
+    for (const { marker, raster } of chosen) {
+      if (signal.aborted) return;
+      await storeOne(marker, raster, limits, signal, book, record, at);
+      if (book.entries.get(marker.ref)?.status === "stored") book.located += 1;
     }
-    for (const marker of candidates) {
-      if (signal.aborted) return;
-      const result = await drawn.draw(marker);
-      if (result.status === "stopped") return;
-      if (result.status === "refused") {
-        fail(marker, result.reason);
-        continue;
+    if (signal.aborted) return;
+    for (const marker of heldMarkers) {
+      const reason = book.held.get(marker.ref);
+      if (reason) fail(marker, reason);
+    }
+
+    /** The drawn route; `false` when it stopped for the clock, which settles nothing. */
+    async function drawnPhase(): Promise<boolean> {
+      if (signal.aborted) return false;
+      if (candidates.length === 0) return true;
+      const drawn = await drawnRoute(candidates, options, signal);
+      /* The layout read did not come back. An abort claims nothing and leaves
+         the markers to the finaliser; anything else leaves the bitmap route's
+         answer standing. */
+      if (!drawn) {
+        if (signal.aborted) return false;
+        for (const marker of candidates) refuse(marker, "no-raster");
+        return true;
       }
-      if (signal.aborted) return;
-      await storeOne(marker, result.raster, limits, signal, book, record, at);
-      if (book.entries.get(marker.ref)?.status === "stored") book.drawn += 1;
+      for (const marker of candidates) {
+        if (signal.aborted) return false;
+        const result = await drawn.draw(marker);
+        if (result.status === "stopped") return false;
+        if (result.status === "refused") {
+          refuse(marker, result.reason);
+          continue;
+        }
+        if (signal.aborted) return false;
+        await storeOne(marker, result.raster, limits, signal, book, record, at);
+        if (book.entries.get(marker.ref)?.status === "stored") book.drawn += 1;
+      }
+      return true;
     }
   };
 
@@ -452,7 +550,9 @@ export async function collectPdfFigures(
    * from a figure the reader was never promised. Empty in the ordinary case,
    * where `work` won.
    */
-  for (const marker of looked) if (!book.entries.has(marker.ref)) fail(marker, "out-of-time");
+  for (const marker of looked) {
+    if (!book.entries.has(marker.ref)) fail(marker, book.held.get(marker.ref) ?? "out-of-time");
+  }
 
   /* Marker order, not completion order, and taken synchronously here so that
      nothing still in flight can join the list after it is decided. */
@@ -465,6 +565,8 @@ export async function collectPdfFigures(
     entries,
     stored: book.stored,
     drawn: book.drawn,
+    located: book.located,
+    locateCalls: book.locateCalls,
     failed: book.failed,
     deduped: book.deduped,
     bytes: book.bytes,
@@ -495,10 +597,14 @@ interface Ledger {
   entries: Map<string, PdfFigureEntry>;
   stored: number;
   drawn: number;
+  located: number;
+  locateCalls: number;
   failed: number;
   deduped: number;
   bytes: number;
   storageErrors: string[];
+  /** Refusals held for the located route, by ref — see `refuse`. */
+  held: Map<string, PdfFigureFailure>;
 }
 
 /**
@@ -614,7 +720,7 @@ async function readRasters(
   options: CollectPdfFiguresOptions,
   signal: AbortSignal,
 ): Promise<Awaited<ReturnType<typeof readPdfRasters>> | null> {
-  if (markers.length === 0) return { candidates: [], skippedPages: [], unread: [], pageText: new Map() };
+  if (markers.length === 0) return { candidates: [], skippedPages: [], unread: [], pageText: new Map(), paints: [], views: new Map(), rotations: new Map() };
   try {
     const read = await readPdfRasters({
       data: options.pdf,
@@ -628,6 +734,149 @@ async function readRasters(
       signal,
     });
     return read;
+  } catch {
+    return null;
+  }
+}
+
+/* ------------------------------------------------------------------ *
+ * The located route
+ * ------------------------------------------------------------------ */
+
+/**
+ * **Ask the model about each held marker, judge each answer, and hand back the
+ * pictures that passed** — src/pdf-figure-locate.ts says what the answer has to
+ * prove. Stores nothing: the caller stores through `storeOne`, so a located
+ * picture meets the same downscale, caps, budget and clock as any other.
+ *
+ * **One window at a time.** Markers are taken in document order, and for each
+ * the claimed page and its neighbours are read, and rendered, then let go — so
+ * what is held at once is three pages and the pictures already chosen, however
+ * many figures the article has (GPT Sol, stage 2 plan review, finding 7).
+ * `MAX_LOCATE_LOOKS` bounds how many windows are read at all, and the call cap
+ * how many are asked about. A page is shown only if it is unrotated and PDFium
+ * draws it at pdf.js's size, and a window with no usable picture nobody has is
+ * never asked about — which is what keeps a paper of vector figures free.
+ *
+ * **Two markers pointing at one picture get it neither**: one of the two
+ * answers is wrong, and nothing here can say which.
+ */
+async function locatedRoute(
+  held: readonly PdfFigureMarker[],
+  taken: readonly string[],
+  locate: FigureLocator,
+  options: CollectPdfFiguresOptions,
+  signal: AbortSignal,
+  book: Ledger,
+): Promise<{ marker: PdfFigureMarker; raster: DecodedRaster }[]> {
+  let cuts: FigurePages;
+  try {
+    cuts = await openFigurePages(options.pdf);
+  } catch {
+    return [];
+  }
+  const maxCalls = options.maxLocateCalls ?? MAX_LOCATE_CALLS;
+  const choices: { marker: PdfFigureMarker; identity: string; raster: DecodedRaster }[] = [];
+  let looks = 0;
+
+  for (const marker of [...held].sort((a, b) => a.page - b.page)) {
+    if (signal.aborted || book.locateCalls >= maxCalls || looks >= MAX_LOCATE_LOOKS) break;
+    looks += 1;
+    const window = [marker.page - 1, marker.page, marker.page + 1].filter((p) => p >= 1);
+    let read: Awaited<ReturnType<typeof readPdfRasters>>;
+    try {
+      read = await readPdfRasters({
+        data: options.pdf,
+        pages: window,
+        maxImagePixels: options.maxImagePixels ?? MAX_FIGURE_PIXELS,
+        signal,
+      });
+    } catch {
+      continue;
+    }
+
+    const usable: (UsablePicture & { raster: DecodedRaster })[] = [];
+    const blank: PictureRef[] = [];
+    for (const candidate of read.candidates) {
+      const verdict = classifyRaster(candidate);
+      if (verdict.status === "usable") {
+        usable.push({ page: candidate.page, key: candidate.key, identity: pictureIdentity(verdict.raster), raster: verdict.raster });
+      } else if (verdict.status === "blank") blank.push({ page: candidate.page, key: candidate.key });
+    }
+    /* Against what the other routes gave only: a picture another *located*
+       marker chose is still worth asking about, because two markers choosing
+       it is how a wrong answer shows itself (below). */
+    if (!usable.some((u) => !taken.includes(u.identity))) continue;
+
+    const sent: (SentPage & LocatePage)[] = [];
+    for (const page of window) {
+      const shown = await renderWholePage(page, read, cuts);
+      if (shown) sent.push({ page, view: shown.view, png: shown.png });
+    }
+    if (signal.aborted) break;
+    if (sent.length === 0) continue;
+
+    book.locateCalls += 1;
+    let answer: Awaited<ReturnType<FigureLocator>>;
+    try {
+      answer = await locate({ caption: options.captions.get(marker.ref) ?? "", pages: sent }, signal);
+    } catch {
+      /* A locator is an external call even when it is injected. The real
+         adapter turns provider failures into `{ ok: false }`, but this seam's
+         contract must hold for any implementation: a rejected call leaves the
+         page's refusal standing, just like an explicit failed result. */
+      continue;
+    }
+    if (!answer.ok || signal.aborted) continue;
+    const onSent = (p: { page: number }) => sent.some((s) => s.page === p.page);
+    const verdict = judgeLocatedBox({
+      answer: answer.answer,
+      sent,
+      usable: usable.filter(onSent),
+      blank: blank.filter(onSent),
+      paints: read.paints.filter(onSent),
+      /* Only what the other routes gave, not the other located choices: two
+         markers pointing at one picture must both be seen doing it, below. */
+      taken,
+    });
+    if (verdict.status !== "chosen") continue;
+    const picture = usable.find((u) => u.page === verdict.page && u.key === verdict.key);
+    if (picture) choices.push({ marker, identity: picture.identity, raster: picture.raster });
+  }
+
+  return choices.filter((c) => choices.filter((o) => o.identity === c.identity).length === 1);
+}
+
+/**
+ * **What a picture is**, for telling one picture from another across keys and
+ * pages: its layout, its size and its decoded bytes, hashed.
+ */
+function pictureIdentity(raster: DecodedRaster): string {
+  return createHash("sha256")
+    .update(`${raster.kind}:${raster.width}x${raster.height}:`)
+    .update(raster.data)
+    .digest("hex");
+}
+
+/** One page rendered whole, for the model — or `null` for a page it cannot be shown. */
+async function renderWholePage(
+  page: number,
+  read: Awaited<ReturnType<typeof readPdfRasters>>,
+  cuts: FigurePages,
+): Promise<{ png: Uint8Array; view: SentPage["view"] } | null> {
+  const view = read.views.get(page);
+  if (!view || (read.rotations.get(page) ?? 0) % 360 !== 0) return null;
+  try {
+    const width = view.x1 - view.x0;
+    const height = view.y1 - view.y0;
+    const whole = { x0: 0, y0: 0, x1: width, y1: height };
+    const drawnPage = await renderPdfRegion({
+      onePagePdf: (await cuts.cut(page)).bytes,
+      region: whole,
+      view: { width, height },
+      containment: [{ box: whole, allowance: 0 }],
+    });
+    return drawnPage.ok ? { png: await encodeFigurePng(drawnPage.raster), view } : null;
   } catch {
     return null;
   }
