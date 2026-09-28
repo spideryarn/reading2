@@ -349,15 +349,17 @@ describe("the row", () => {
     expect(row?.querySelector("[aria-hidden='true']")?.textContent).toBe("—");
   });
 
-  it("does not truncate the title or the byline line", () => {
+  it("wraps the title and byline line even when either contains an unbroken word", () => {
     paint();
     const link = titleLink();
     expect(link.className).not.toMatch(/\btw:truncate\b/);
+    expect(link.className).toMatch(/\btw:wrap-anywhere\b/);
     const byline = [...host.querySelectorAll<HTMLElement>("tbody span")].find((el) =>
       (el.textContent ?? "").includes("Ada Quillfeather"),
     );
     expect(byline, "no byline line").toBeDefined();
     expect(byline?.className ?? "").not.toMatch(/\btw:truncate\b/);
+    expect(byline?.className ?? "").toMatch(/\btw:wrap-anywhere\b/);
   });
 
   it("draws the Added cell as plain text, with no card of its own", () => {
@@ -375,6 +377,12 @@ describe("the Table control's own card", () => {
     const all = `${VIEW_TIPS.table.what} ${VIEW_TIPS.table.how}`;
     expect(all).not.toContain("every column at once");
     expect(all).not.toContain("No blurb");
+  });
+
+  it("does not promise a missing blurb or claim an already-present fact moves", () => {
+    expect(VIEW_TIPS.table.how).toContain("when there is one");
+    expect(VIEW_TIPS.table.how).toContain("stays available in that card");
+    expect(VIEW_TIPS.table.how).not.toContain("moves into that card");
   });
 });
 

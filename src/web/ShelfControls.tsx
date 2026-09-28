@@ -264,6 +264,6 @@ export const VIEW_TIPS = {
   table: {
     head: "Table",
     what: "One row per article, with a column each for when it was added, when you last opened it, how many times, how many comments, and how long it is.",
-    how: "The blurb is not on the row: point at a title, or tab to it, for a card with the blurb and the exact dates. A column you hide, from Columns or by right-clicking its header, stays hidden in this browser and its value moves into that card. Both views share one sort, so switching keeps your place in the order.",
+    how: "The blurb is not on the row: point at a title, or tab to it. The card shows its blurb when there is one, plus the date and time behind each date the row has. A column you hide, from Columns or by right-clicking its header, stays available in that card. Both views share one sort, so switching keeps your place in the order.",
   },
 } as const;
