@@ -904,3 +904,13 @@ queue)"* → session `reset-regenerate-metadata`. Defaults set as assumptions pe
 admin see it; a plain confirm; behind the experimental switch if cost or data risk is non-trivial;
 old revision kept. Hard line in the brief: reader-written data survives, and it stops and asks
 before any design that deletes it.
+
+### 2026-09-28 — shelf topics and the Table view, two sessions
+
+Greg asked for keyword/clustering filters on his shelf (overlapping subsets, near-full coverage,
+no LLM by default, rich tooltips, active/archived switch, Sonnet web research, Sol input and review)
+→ `shelf-topics`. His academic bulk-import idea goes to the same session as a judgement: build it
+only if a clean low-complexity version exists, otherwise a write-up for later. The Table view (row
+tooltips, fuller titles, hiding columns) → `shelf-table-view`. Both touch the home page, so each is
+told about the other. Defaults set as assumptions: column hiding needs a non-right-click route
+(iPad), remembered per viewer in browser storage.
