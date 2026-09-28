@@ -256,6 +256,80 @@ reusable set of highlights"*.
 4. **Full suite, push, clean up.** The full suite through `scripts/tmux-job.ts`, push to `dev`,
    `npm run worktree:check`, and remove the worktree.
 
+## Stage 3 in detail — the scrapbook (written after the spikes, 2026-09-28)
+
+**The spikes.** Three static mockups were built on real data from the entropy paper:
+
+- glossary, ideas, timeline and FAQ were generated first, for $0.35;
+- each stop was then gathered from every artefact that touches its paragraph or its section;
+- each shape was screenshotted at desktop and iPad widths.
+
+The shapes, with a screenshot of each:
+
+- **A. The stop card** ([screenshot](260928a-trajectory-scrapbook-spike-stop-card.png)) — under the
+  current row: terms it uses, ideas, the FAQ question it answers, where it sits in the study, the
+  section's gist, and the quote's reason.
+  - The term chips and the FAQ question earned their place.
+  - The **section gist** often gave away the finding (*"account for the vast majority of
+    network-wide synergy"*). It is the one piece that reads as a summary standing in for the
+    paper.
+  - The quote's *why this line* mostly repeated the role.
+- **B. The skim sheet** ([screenshot](260928a-trajectory-scrapbook-spike-skim-sheet.png)) — one
+  page per depth, one card per stop.
+  - It feels most like a scrapbook.
+  - It is also the most readable *replacement* for the paper: More is 643 of 8,580 words.
+  - And this route ran almost in paper order, so the reordering hardly showed.
+- **C. Threaded** ([screenshot](260928a-trajectory-scrapbook-spike-threaded.png)) — A plus **one
+  short generated line per stop**. The line says how this stop follows the one before, and points at
+  a term or at what to notice, never at what the passage found. For example: *"From the definition
+  to real recordings. The first place the paper looks for synergy is its network's rich club —
+  note the number."* It did the most to tie the disparate pieces together, which is what Greg asked
+  for, and the next stop's line shown under **Next stop ›** read as a door.
+
+**What stage 3 builds: C, with A trimmed.**
+
+1. **A thread line replaces the role line**, written by the same trajectory call. There is no
+   second call and no second artefact: the call already sees every quote's words and section, and
+   the line needs nothing else.
+   - **Per stop per depth.** The previous stop differs by depth, so a stop visible at
+     depths 1–3 has up to three lines. Stored as `thread: { "1"?: string, "2"?: string, "3"?:
+     string }`, where each key is a depth at which the stop is visible. A missing or invalid line is
+     simply absent, and the stop is kept (F8's rule).
+   - **Cap: 160 characters.** It follows the same plain-words rule, and never states a finding,
+     number or verdict — pointing at one ("note the number") is fine.
+   - **Cost:** an estimated +~1k output tokens, about +$0.01 on a ~$0.02 call. `PROMPT_VERSION`
+     is bumped, so existing routes show as outdated and offer a rebuild.
+   - `role` stays readable in the type for routes written before, and the band falls back to it,
+     but the prompt no longer asks for it.
+2. **The band.** The current row shows the thread line for the current depth. Under **Next stop ›**
+   in the prose, the next stop's line appears in small italics, so the door says where it leads.
+3. **The stop card**, under the current row, gathered on the client from what **already exists**:
+   - **Terms it uses.** A chip per glossary term that appears in the stop's paragraph; a tap opens
+     its one-line sense and a link into Glossary.
+     - Found the way the Glossary mode finds its underlines in the prose, **not** from the stored
+       per-term block list, which the spike showed misses word forms.
+     - A term met at an earlier stop of the current pass is marked *"met at stop k"*. There is **no
+       "new" marker**: absence of a match is not evidence, and a wrong "new" is worse than none.
+   - **Ideas** whose passages include the paragraph — name only, as a link into Ideas.
+   - **The FAQ question** this paragraph answers, if any — as a link into FAQ.
+   - **Where it sits in the study**, from Timeline — events whose passages are in this paragraph.
+   - **Not shown:** the section gist (the summary risk) and the quote's reason (a repeat).
+   - **Every cluster is shown only if its artefact exists and has something for this paragraph.**
+     Nothing here starts a run, and nothing is fetched that the reading view does not already know
+     how to fetch. When nothing is there, there is no card — and no "generate the glossary to see
+     terms" nag either; that is a Question for Greg.
+4. **Not built in stage 3**: the skim sheet (B), kept as a later toggle on the same data; the
+   gist; the word-form fix in the glossary's stored block lists (Glossary's own business, and not
+   needed because the card uses the prose matcher).
+
+**Done when:**
+
+- tests are red first for the thread-line validation and for the card's gathering (a pure function
+  from the artefacts plus a block id to the clusters);
+- a real run confirms the lines follow the rule;
+- a browser check has been run at the same widths;
+- Sol has reviewed it.
+
 ## Review ledger — GPT Sol on the plan, 2026-09-28 (read-only; verdict *rethink*)
 
 | ID | Sev | Finding | Outcome |
