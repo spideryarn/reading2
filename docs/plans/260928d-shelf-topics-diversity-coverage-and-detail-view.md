@@ -1,6 +1,7 @@
 # Shelf topics, round two: diversity, coverage in the first few, and a detail view
 
-**Status:** planned, 2026-09-28 14:10 BST. Follows
+**Status:** both stages built, reviewed and on `dev` by 14:48 BST, 2026-09-28 — in time for the
+15:50 deploy. Planned 14:10 BST. Follows
 [260928a-shelf-facet-terms.md](260928a-shelf-facet-terms.md), which built the Topics row; read its
 § Design first. Greg's production deploy fires ~15:50 BST today and takes whatever is on `dev`, so
 Stage 1 aims to be green and pushed by 15:30 and Stage 2 may wait for the next deploy.
@@ -231,7 +232,29 @@ stays e = 1. The call left open: e = 1.5 trades @8 (0.70 → 0.54) for fewer vag
   numbers and first-12 list unchanged on the local shelf.
 - **GPT Sol, stage 2 code** —
   [260928d-shelf-topics-diversity-coverage-and-detail-view-stage2-review-sol.md](260928d-shelf-topics-diversity-coverage-and-detail-view-stage2-review-sol.md)
-  (prompt: [260928d-shelf-topics-diversity-coverage-and-detail-view-stage2-review-prompt.md](260928d-shelf-topics-diversity-coverage-and-detail-view-stage2-review-sol.md)),
+  (prompt: [260928d-shelf-topics-diversity-coverage-and-detail-view-stage2-review-prompt.md](260928d-shelf-topics-diversity-coverage-and-detail-view-stage2-review-prompt.md)),
   reviewing 9af75f80, time-boxed. **No findings, no changes**, after a short run (about two
   minutes) — which is weaker evidence than a review that found something, so the final shape was
   also checked in a real browser (below).
+
+## The final browser check
+
+Sonnet subagent, Playwright, 2026-09-28 ~15:00 BST, the local 38-article shelf, 1280 and 390 wide:
+all six checks passed — 12 pills in rank order and "All 30 topics" expanding the same row; More
+detail with every bar at the same x (measured, 442px), distinct titles as `/read/` links (the *ball
+lightning* row now one link, not three), focus kept on the toggle, Back returning to pills; a chip
+in a row narrowing the shelf to a matching "3 of 38"; the tooltip; no horizontal scroll at 390px;
+`/api/library/terms` 200. One console error — *Cannot update a component (App) while rendering a
+different component (SignedIn)* — reproduces on an untouched load of `/` and is not this work's.
+
+![The detail view, final](260928d-shots/final-detail-desktop.png)
+
+## What is left, and why
+
+- **Vague single words in the first dozen** (*parent, shape, board, mistake* on the local shelf).
+  The fix is a shipped English word-frequency list as a fixed background, replacing the hand-written
+  generic list — the next step, and the one that would most improve what Greg sees.
+- **Near-copies of one article still count as separate works** (*ball lightning*, *Wagan Watson*),
+  which rewards topics that name one piece. Fuzzy grouping is the v2 named in plan 260928a.
+- **Coverage@8 trails the unweighted baseline** (0.70 vs 1.00) on this shelf; a production run of
+  `npm run shelf-terms:report` would say whether that holds on a real one.
