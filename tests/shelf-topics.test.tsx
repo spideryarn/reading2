@@ -15,7 +15,7 @@
  *    the same search, and that list stays up during a search;
  *  - a stale `?topics=` key is never applied before the topics load, and is
  *    dropped from the URL after;
- *  - "All N topics" lists each topic's top articles;
+ *  - "More detail" lists each topic's top articles, as links;
  *  - `pending > 0` says so, and asks again.
  *
  * The network is `apiFetch`, mocked by URL; the shelf is `useShelf`, mocked
@@ -206,10 +206,10 @@ async function waitFor(check: () => boolean, what: string, ms = 2000) {
 
 const params = () => new URLSearchParams(location.search);
 
-/** The topic chips in the row (not the rows of the "All topics" list). */
+/** The topic chips in the row (not the rows of the "More detail" view). */
 function chips(): HTMLButtonElement[] {
   return [...host.querySelectorAll<HTMLButtonElement>("button[aria-pressed]")].filter(
-    (b) => !b.closest('[aria-label="All topics"]') && /^(memory|neuron|startup) /.test(b.getAttribute("aria-label") ?? ""),
+    (b) => !b.closest('[aria-label="Topics in detail"]') && /^(memory|neuron|startup) /.test(b.getAttribute("aria-label") ?? ""),
   );
 }
 function chip(key: string): HTMLButtonElement {
@@ -359,15 +359,22 @@ describe("the Topics row", () => {
     expect(params().get("topics")).toBe("memory,neuron");
   });
 
-  it("lists every topic with the articles that use it most", async () => {
+  it("lists every topic with the articles that use it most, as links, in More detail", async () => {
     await show("/");
-    const toggle = [...host.querySelectorAll("button")].find((b) => b.textContent?.startsWith("All 3 topics"));
+    const toggle = [...host.querySelectorAll("button")].find((b) => b.textContent?.startsWith("More detail"));
     expect(toggle).toBeTruthy();
     click(toggle as HTMLButtonElement);
-    const rows = [...host.querySelectorAll('[aria-label="All topics"] > li')];
+    await settle();
+    expect(params().get("topicsView")).toBe("detail");
+    const rows = [...host.querySelectorAll('[aria-label="Topics in detail"] > li')];
     expect(rows).toHaveLength(3);
-    const memory = rows.find((r) => r.textContent?.startsWith("memory"));
+    const memory = rows.find((r) => r.querySelector("button[aria-pressed]")?.getAttribute("aria-label")?.startsWith("memory "));
     expect(memory?.textContent).toContain("Memory palaces · Memory and the brain · Neurons firing");
+    expect([...(memory?.querySelectorAll("a") ?? [])].map((a) => a.getAttribute("href"))).toEqual([
+      "/read/palaces",
+      "/read/mem-brain",
+      "/read/neurons",
+    ]);
   });
 
   it("gives each chip a card with both counts and the articles that use it most", async () => {
@@ -506,7 +513,7 @@ describe("the archive in scope", () => {
     await show("/?topics=topic13");
     const order = () =>
       [...host.querySelectorAll<HTMLButtonElement>("button[aria-pressed]")]
-        .filter((b) => !b.closest('[aria-label="All topics"]'))
+        .filter((b) => !b.closest('[aria-label="Topics in detail"]'))
         .map((b) => (b.getAttribute("aria-label") ?? "").split(" ")[0])
         .filter((k) => /^topic\d\d$/.test(k ?? ""));
     await waitFor(() => order().length > 0, "the chips");

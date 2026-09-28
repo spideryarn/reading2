@@ -1541,3 +1541,21 @@ export const libraryTopicsParam = createParser<string[]>({
  * `push`: opening the archive is a deliberate act, and Back closes it.
  */
 export const libraryArchivedParam = parseAsBit.withDefault(false).withOptions({ history: "push" });
+
+/**
+ * How the Topics row is drawn — pills on one line (absent), or one row per
+ * topic with its colour, a count bar and its top articles: `topicsView=detail`.
+ *
+ * Greg, 2026-09-28: *"there should be a different way to show 'More detail' or
+ * similar, that turns them into per-row-with-extra-detail rather than
+ * pills-on-the-same-row"* (plan 260928d § Stage 2). In the URL rather than
+ * `useState` because it is how the reader is looking at the shelf, and that is
+ * what a reload or a pasted link should keep (docs/project/url-state.md).
+ *
+ * `push`, like `view`: repainting a whole row is a thing Back should undo.
+ * Absent is pills, so a bare shelf address is the shelf as it was.
+ */
+export const libraryTopicsViewParam = createParser<"detail">({
+  parse: (v) => (v === "detail" ? v : null),
+  serialize: (v) => v,
+}).withOptions({ history: "push" });

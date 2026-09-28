@@ -198,9 +198,19 @@ describe("the two lists cover every parameter the client writes", () => {
   /**
    * The shelf's own parameters, which never reach an article's address:
    * `topics` and `archived` joined the first five on 2026-09-28
-   * (docs/project/shelf-terms.md).
+   * (docs/project/shelf-terms.md). `topicsView` (pills or one row per topic)
+   * joined them the same day (plan 260928d § Stage 2).
    */
-  const NOT_AN_ARTICLES = new Set(["q", "by", "dir", "view", "show", "topics", "archived"]);
+  const NOT_AN_ARTICLES = new Set([
+    "q",
+    "by",
+    "dir",
+    "view",
+    "show",
+    "topics",
+    "archived",
+    "topicsView",
+  ]);
 
   function clientFiles(dir: string): string[] {
     const out: string[] = [];

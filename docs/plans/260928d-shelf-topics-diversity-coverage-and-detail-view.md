@@ -82,6 +82,30 @@ numbers go in § Measurements.
   the screenshots as evidence, put them in this plan, and delete the others.
 - State: `?topicsView=detail` in the URL, per url-state.md.
 
+### The detail view: three shapes, and the pick
+
+Mocked behind a temporary `?topicsMock=` and screenshotted by a Sonnet subagent (Playwright, the
+local 38-article shelf, 1280 and 390 wide, 2026-09-28 14:36 BST): colours real, bars proportional,
+titles real links, no horizontal scroll at 390px, no console errors, for all three.
+
+| Shape | Desktop |
+|---|---|
+| **A — compact rows, bars in one column (chosen)** | ![A](260928d-shots/detail-a-desktop.png) |
+| B — cards in a grid | ![B](260928d-shots/detail-b-desktop.png) |
+| C — two-line rows | ![C](260928d-shots/detail-c-desktop.png) |
+
+**A, because the bars line up**: every bar starts at the same x, so counts compare down one column
+at a glance — which is the point of a per-row view with extra detail. It is the most compact and the
+nearest to the "per-row" table Greg described. C (the subagent's pick, and the builder's default)
+starts each bar where its label ends, so the eye cannot compare lengths; B is the most colourful
+and spends the most height, with titles squeezed into narrow cards. On a phone all three collapse to
+nearly the same thing ([A at 390px](260928d-shots/detail-a-phone.png)).
+
+All three screenshots showed the same flaw: **physical copies of one article repeat its title**
+(*A brief history of ball lightning…* ×3). The rows and the tooltip now list distinct titles; the
+counts stay physical. The pill row, collapsed and expanded in place:
+[collapsed](260928d-shots/pills-collapsed-desktop.png), [all 30](260928d-shots/pills-expanded-desktop.png).
+
 ## Stages and gates
 
 1. **Selection** — extract/choose changes, metrics, tests red first (acronym plural; subset
