@@ -96,9 +96,13 @@ already locks — `openOrBeginJobDraft` selects the live job row `for update` be
 session. `PublishRevisionResult` keeps `successor` for labels and gains
 `regenerated: SuccessorOutcome[]`.
 
-**The reset's work key includes `reset`**, so a reset never de-duplicates onto a plain "re-read"
-job (`force: ["extract"]`) that happens to be queued, and silently not reset anything. Added to
-`workKeyFor` and `sameWork` only when present, so every existing key hashes as before.
+**The reset's work key includes a reset marker**, so a reset never de-duplicates onto a plain
+"re-read" job (`force: ["extract"]`) that happens to be queued and silently not reset anything.
+The marker is deliberately independent of the regeneration list and profile: only one reset may
+be active on an article. Otherwise reset A can publish and insert its regeneration jobs behind an
+already-queued reset B; B then publishes, and A's jobs recreate extras B asked to leave absent.
+An identical second press shares the active reset; a different plan is a 409. Existing non-reset
+keys still hash exactly as before.
 
 Why each piece is this shape:
 
@@ -287,3 +291,11 @@ imports — a cycle otherwise. The browser sees `reset.regenerate` on a job but 
   `sketch`) P1, F7 (how the revision code reads the flag) P2. All three answered above. Discovery
   on the plan closes here; the F1 and F6 fixes get a narrow check in the stage 1 code review.
   [review](260928a-reset-and-regenerate-article-review-sol-r2.md).
+- **Stage 1 code, round 1** — GPT Sol (reviewer-fixer), accept after Postgres regressions pass:
+  F1 and F6 fixes confirmed sound. F8 P1 **fixed by Sol**: two resets with different
+  regeneration choices could queue together, and the first one's successors would recreate
+  extras the second asked to leave absent. Resets are now single-flight per article (the work key
+  carries a plain reset marker; an identical second press shares the active reset, a different
+  one is a 409), and a reset's `created_at` is the database clock at insert. Postgres tests run by
+  me afterwards: 14 files, 527 tests, exit 0.
+  [review](260928a-reset-and-regenerate-article-stage1-review-sol.md).

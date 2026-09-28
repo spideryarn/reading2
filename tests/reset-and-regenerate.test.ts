@@ -80,9 +80,10 @@ import { hashBlocks, structureHash } from "../src/source-hash.js";
 import { STEP_ORDER } from "../src/step-order.js";
 import { NO_INPUT_HASH, PIPELINE_RUN } from "../src/store/artifacts.js";
 import { workKeyFor } from "../src/store/jobs.js";
+import { pgJobStore } from "../src/store/pg-jobs.js";
 import { beginRevision, publishRevision, recordStepRun } from "../src/store/pg-revisions.js";
 import { openPgStoreSession } from "../src/store/pg-session.js";
-import type { Block, JobStep, OwnerId, StepName } from "../src/types.js";
+import type { Block, Job, JobStep, OwnerId, StepName } from "../src/types.js";
 import { cleanUpThenRelease, takeRunLockAndSetUp } from "./helpers/lock-lifecycle.js";
 import { pgReady } from "./helpers/pg-ready.js";
 import type { HeldRunLock } from "./helpers/run-lock.js";
@@ -607,6 +608,105 @@ describe("a reset, through the real claim and publication", () => {
     expect(await currentRevisionOf(slug)).toBe(before.revisionId);
     expect((await revision(before.revisionId)).quotes).toEqual(marker("quotes"));
     expect(await othersOn(slug, [job.id]), "a failed reset queued something").toEqual([]);
+  });
+
+  /**
+   * A reset's successors are minted at publication time. If a second reset is
+   * already queued, those successors otherwise sit behind it: the second reset
+   * publishes, then the first one's successors recreate extras the later press
+   * asked to leave absent. One active reset per article closes that crossing.
+   */
+  mine("refuses a conflicting reset while one is active", async () => {
+    const slug = `${SLUG_PREFIX}single-flight`;
+    await publishWithExtras(slug, ["quotes"]);
+    const first = await enqueueReset({
+      slug,
+      regenerate: true,
+      profile: PROFILE,
+      pump: false,
+    });
+
+    await expect(
+      enqueueReset({ slug, regenerate: false, pump: false }),
+    ).rejects.toMatchObject({ status: 409 });
+
+    const active = await db()
+      .select()
+      .from(jobsTable)
+      .where(and(eq(jobsTable.slug, slug), inArray(jobsTable.status, ["queued", "running"])));
+    expect(active.map((row) => row.id)).toEqual([first.job.id]);
+    expect(active[0]?.reset).toEqual({ regenerate: ["quotes"], profile: PROFILE });
+  });
+
+  /**
+   * The active-reset key closes the ordinary overlap, but an enqueue can have
+   * made its in-memory `createdAt` and then wait for the article lock while the
+   * earlier reset publishes and becomes terminal. Once the lock opens the key
+   * is free. Its INSERT-time database timestamp must keep the new reset behind
+   * the jobs the other transaction committed while it waited.
+   */
+  mine("timestamps a reset after jobs committed while its insert waited", async () => {
+    const slug = `${SLUG_PREFIX}insert-time`;
+    await publishWithExtras(slug, ["quotes"]);
+
+    let releaseLock: (() => void) | undefined;
+    let sayLocked: (() => void) | undefined;
+    const locked = new Promise<void>((resolve) => {
+      sayLocked = resolve;
+    });
+    const released = new Promise<void>((resolve) => {
+      releaseLock = resolve;
+    });
+    const blockerId = mintId();
+    const holder = db().transaction(async (tx) => {
+      await tx
+        .select({ id: articles.id })
+        .from(articles)
+        .where(eq(articles.slug, slug))
+        .for("update");
+      sayLocked?.();
+      await released;
+      const [blocker] = await tx
+        .insert(jobsTable)
+        .values({
+          id: blockerId,
+          ownerId: OWNER,
+          slug,
+          steps: [{ name: "quotes", label: STEPS.quotes.label, status: "pending" }],
+          status: "queued",
+          workKey: workKeyFor(["quotes"], new Set(), "insert-time blocker"),
+        })
+        .returning({ createdAt: jobsTable.createdAt });
+      if (!blocker) throw new Error("the blocker job was not inserted");
+      return blocker;
+    });
+
+    await locked;
+    const resetPlan = { regenerate: [] };
+    const wanted: Job = {
+      id: mintId(),
+      ownerId: OWNER,
+      slug,
+      steps: [{ name: "extract", label: STEPS.extract.label, status: "pending", force: true }],
+      status: "queued",
+      /* Deliberately stale: this is the timestamp made before waiting for the
+         article lock. The adapter must replace it for a reset. */
+      createdAt: "2000-01-01T00:00:00.000Z",
+      reset: resetPlan,
+    };
+    const enqueued = pgJobStore.enqueueOrGet(wanted, {
+      workKey: workKeyFor(["extract"], new Set(["extract"]), undefined, undefined, undefined, {
+        reset: resetPlan,
+      }),
+      reservesName: false,
+      requiresArticle: true,
+    });
+    releaseLock?.();
+
+    const [blocker, outcome] = await Promise.all([holder, enqueued]);
+    expect(outcome.kind).toBe("created");
+    if (outcome.kind !== "created") throw new Error(`the reset was ${outcome.kind}`);
+    expect(new Date(outcome.job.createdAt).getTime()).toBeGreaterThan(blocker.createdAt.getTime());
   });
 
   /**

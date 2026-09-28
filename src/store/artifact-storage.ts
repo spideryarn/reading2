@@ -136,4 +136,3 @@ export function siteFor(step: StepName, kind: ArtifactKind): Site {
   if (!site) throw new Error(`${step} does not produce ${kind}`);
   return site;
 }
-

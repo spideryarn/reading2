@@ -3041,7 +3041,22 @@ export async function enqueueReset(request: ResetRequest): Promise<ResetQueued> 
     reset,
     ...(request.pump === false ? { pump: false } : {}),
   });
-  return { job, regenerate };
+  /* **One active reset per article.** Its work key is deliberately independent
+     of the regeneration plan: otherwise reset A can publish and put its
+     successors behind reset B, after which A's successors recreate extras B
+     asked to leave absent. `enqueue` hands back the active reset; an identical
+     double-click may share it, while a different plan is a conflict the caller
+     can explain rather than silently changing either request. */
+  if (!job.reset) {
+    throw Object.assign(new Error("The active reset did not carry its reset plan."), { status: 500 });
+  }
+  if (!sameResetPlan(job.reset, reset)) {
+    throw Object.assign(
+      new Error("A reset with different regeneration options is already queued for this article."),
+      { status: 409 },
+    );
+  }
+  return { job, regenerate: job.reset.regenerate };
 }
 
 /**
@@ -3296,6 +3311,13 @@ export async function enqueue(request: EnqueueRequest): Promise<Job> {
       /* Already in hand: hand back the job doing it rather than starting a
          second one over the same files. A double-click on Add is all it takes.
 
+         **A reset is single-flight even when its plan differs**, because its
+         publication-time successors cannot safely cross another reset. That
+         makes the active-work key intentionally coarser than the request. Do
+         not silently hand a caller the other plan: this branch is reached by
+         Retry as well as `enqueueReset`, so the check belongs at this common
+         seam rather than only in the route helper.
+
          **And give it a pump**, because the job we are handing back may have
          nobody driving it. That is not a rare state: a job left `queued` by a
          dev-server restart is exactly what `sweepStopped` produces, and asking
@@ -3306,6 +3328,17 @@ export async function enqueue(request: EnqueueRequest): Promise<Job> {
          off, and takes the next step when the first releases — which is the
          same arrangement as a pump plus an open browser tab, and the whole
          reason the claim exists. */
+      if (
+        request.reset !== undefined &&
+        (outcome.job.reset === undefined || !sameResetPlan(outcome.job.reset, request.reset))
+      ) {
+        throw Object.assign(
+          new Error(
+            "A reset with different regeneration options is already queued for this article.",
+          ),
+          { status: 409 },
+        );
+      }
       drive(outcome.job.id);
       return outcome.job;
     }
@@ -3560,9 +3593,11 @@ export function sameWork(
   if (job.steps.length !== names.length) return false;
   /* **A reset is not a re-read**, though its steps and forcing are exactly
      those of one (`force: ["extract"]`). Handed a queued plain re-read, the
-     reader would watch a job succeed and reset nothing. And two resets asking
-     for different regenerations — or for one reader profile against another —
-     are two pieces of work. `workKeyFor`'s `WorkKeyExtras.reset`.
+     reader would watch a job succeed and reset nothing. Every reset is one
+     active piece of work regardless of its plan; `enqueueReset` compares the
+     returned holder's full plan and refuses a conflicting second press. This
+     single-flight rule keeps one reset's publication-time successors from
+     crossing a later reset. `workKeyFor`'s `WorkKeyExtras.reset`.
      docs/plans/260928a-reset-and-regenerate-article.md. */
   if (!sameReset(job.reset, reset)) return false;
   /* **Two uploads are never one piece of work**, whatever they are called and
@@ -3601,12 +3636,16 @@ export function sameWork(
 }
 
 /**
- * Two `reset`s are one piece of work when both are absent, or both ask for the
- * same regeneration list, in the same order, under the same profile — `?? ""`
- * on the profile for the reason `sameWork` gives.
+ * The work-key question: either neither job is a reset, or both are. The reset
+ * plan is deliberately not part of this answer; `enqueueReset` compares it
+ * after the database's active-work index has made the reset single-flight.
  */
 function sameReset(a: JobReset | undefined, b: JobReset | undefined): boolean {
-  if (a === undefined || b === undefined) return a === b;
+  return (a === undefined) === (b === undefined);
+}
+
+/** Whether an existing reset is exactly the reset this press asked for. */
+function sameResetPlan(a: JobReset, b: JobReset): boolean {
   return (
     a.regenerate.length === b.regenerate.length &&
     a.regenerate.every((step, i) => step === b.regenerate[i]) &&

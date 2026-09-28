@@ -807,8 +807,10 @@ describe("the work key", () => {
     /* **A reset, which is a re-read in every other dimension.** Its steps and
        forcing are exactly a plain `force: ["extract"]` re-read's, so without
        `reset` in both rules a reset would be handed that queued re-read and
-       reset nothing. And the regeneration list, its order and its profile are
-       each a different piece of work.
+       reset nothing. Every reset plan below deliberately shares one active-work
+       key: successors are inserted only at publication, so allowing reset B to
+       queue behind reset A lets A's successors cross B. `enqueueReset` checks
+       the full plan after deduplication and refuses a conflicting second press.
        docs/plans/260928a-reset-and-regenerate-article.md. */
     { names: ["extract", "blocks"], forced: ["extract", "blocks"] },
     { names: ["extract", "blocks"], forced: ["extract", "blocks"], reset: { regenerate: [] } },

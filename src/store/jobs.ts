@@ -101,9 +101,13 @@ export function workKeyFor(
         /* **Only when present**, so every key minted before these existed —
            every job that is not a reset or a reset's regeneration — hashes to
            exactly what it always did. `WorkKeyExtras` says why each is here. */
-        ...(more.reset !== undefined && {
-          reset: { regenerate: more.reset.regenerate, profile: more.reset.profile ?? "" },
-        }),
+        /* **One active reset per article**, whatever regeneration plan it
+           carries. A reset queues its successors only when it publishes. If a
+           second reset could sit behind it, the first reset's successors would
+           be inserted behind the second and could recreate extras the later
+           reset asked to leave absent. `enqueueReset` compares the plan on the
+           returned holder and answers 409 when the two presses disagree. */
+        ...(more.reset !== undefined && { reset: true }),
         ...(more.scope !== undefined && { scope: more.scope }),
       }),
     )
@@ -117,9 +121,12 @@ export function workKeyFor(
 export interface WorkKeyExtras {
   /**
    * The job's `reset`, so a reset never de-duplicates onto a queued plain
-   * "re-read" (`force: ["extract"]`) and silently resets nothing — and two
-   * resets asking for different regenerations stay two jobs. `sameWork`
-   * (src/jobs.ts) compares `job.reset` for the same reason.
+   * "re-read" (`force: ["extract"]`) and silently resets nothing. Its value is
+   * deliberately represented as the boolean `true` in the hash: only one reset
+   * may be active on an article, because the first one's publication-time
+   * successors would otherwise cross a second reset already waiting in line.
+   * The full plan still lives on the job row; `enqueueReset` refuses a
+   * conflicting second press rather than pretending it asked for the first.
    */
   reset?: JobReset;
   /**
