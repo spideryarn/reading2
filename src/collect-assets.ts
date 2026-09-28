@@ -428,8 +428,12 @@ export function pdfFigureCaptionsIn(blocks: readonly Block[]): Map<string, strin
  * the marker's caption — and it is a bump for the same reason: a picture
  * attached under `3` to the wrong caption would otherwise read current for
  * ever (docs/plans/260924e-a-pdf-figure-paired-to-the-wrong-caption.md).
+ * **`5` is the located route** — a model shown the page places a figure the
+ * other two refused (src/pdf-figure-locate.ts) — and an article stored under
+ * `4` has figures that route could now recover, so it reads stale too. Nothing
+ * re-runs on its own; tests/collect-assets.test.ts pins both stamps.
  */
-export const PDF_FIGURE_RECOVERY_POLICY = "pdf-figures/4";
+export const PDF_FIGURE_RECOVERY_POLICY = "pdf-figures/5";
 
 /**
  * The cheap look before the parse — built once, from the registered name rather

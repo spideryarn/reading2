@@ -127,6 +127,8 @@
 
 import { loadPdfjs, SCAN_WORDS_PER_PAGE } from "./pdf.js";
 import { MAX_FIGURE_PIXELS, type RasterCandidate } from "./pdf-figures.js";
+import { type ImagePaint, interpretOperators } from "./pdf-figure-paint.js";
+import type { PageBox } from "./pdf-figure-region.js";
 
 /**
  * How long one image object may take to arrive before we give up on it.
@@ -187,6 +189,18 @@ export interface PdfRasterRead {
    * put it (src/pdf-figures.ts § 3).
    */
   pageText: Map<number, string>;
+  /**
+   * Every image paint on the pages read, in page then paint order — where each
+   * picture was drawn, for matching a model's box to a candidate by position
+   * (stage 2 of docs/plans/260924e-a-pdf-figure-paired-to-the-wrong-caption.md).
+   * Interpreted from the same operator list the candidates came from, so a
+   * candidate's `key` finds its own paint here. Scanned pages have none.
+   */
+  paints: ({ page: number } & ImagePaint)[];
+  /** Each page's view box, in PDF points, for every in-range page read. */
+  views: Map<number, PageBox>;
+  /** Each page's declared rotation in degrees, beside `views`. The locator shows the model only unrotated pages. */
+  rotations: Map<number, number>;
 }
 
 export interface ReadPdfRastersInput {
@@ -229,7 +243,7 @@ export interface ReadPdfRastersInput {
  * src/pdf-figures.ts do that, on bytes, where they can be argued with.
  */
 export async function readPdfRasters(input: ReadPdfRastersInput): Promise<PdfRasterRead> {
-  const result: PdfRasterRead = { candidates: [], skippedPages: [], unread: [], pageText: new Map() };
+  const result: PdfRasterRead = { candidates: [], skippedPages: [], unread: [], pageText: new Map(), paints: [], views: new Map(), rotations: new Map() };
   /* Sorted and de-duplicated, so a caller that passes one page per figure marker
      — two markers on page 7 — does not make us decode page 7 twice. */
   const wanted = [...new Set(input.pages)].sort((a, b) => a - b);
@@ -332,6 +346,9 @@ async function readOnePage(
   into: PdfRasterRead,
 ): Promise<void> {
   const proxy = await doc.getPage(page);
+  const view = proxy.view;
+  into.views.set(page, { x0: view[0] ?? 0, y0: view[1] ?? 0, x1: view[2] ?? 0, y1: view[3] ?? 0 });
+  into.rotations.set(page, proxy.rotate ?? 0);
   const text = await pageText(proxy);
   into.pageText.set(page, text);
   if (wordCount(text) < SCAN_WORDS_PER_PAGE) {
@@ -340,6 +357,9 @@ async function readOnePage(
   }
 
   const ops = await proxy.getOperatorList();
+  for (const paint of interpretOperators(ops.fnArray, ops.argsArray, pdfjs.OPS, proxy.view).images) {
+    into.paints.push({ page, ...paint });
+  }
   for (let at = 0; at < ops.fnArray.length; at++) {
     const fn = ops.fnArray[at];
     if (fn === pdfjs.OPS.paintInlineImageXObject || fn === pdfjs.OPS.paintInlineImageXObjectGroup) {

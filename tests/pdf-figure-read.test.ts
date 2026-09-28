@@ -67,7 +67,7 @@ describe("a document with no raster image anywhere", () => {
     // article, and most have no figure markers. The proof is that five bytes
     // which are not a PDF do not make it throw — nothing parsed them.
     const out = await readPdfRasters({ data: new Uint8Array([0x25, 0x50, 0x44, 0x46, 0x2d]), pages: [] });
-    expect(out).toEqual({ candidates: [], skippedPages: [], unread: [], pageText: new Map() });
+    expect(out).toEqual({ candidates: [], skippedPages: [], unread: [], pageText: new Map(), paints: [], views: new Map(), rotations: new Map() });
   });
 });
 
@@ -123,6 +123,24 @@ describe("the ball-lightning paper", () => {
     const out = await readPdfRasters({ data: await bytes(HARDER), pages: [3, 6, 7, 11] });
     for (const c of out.candidates) expect(c.data.length).toBe(c.width * c.height * 3);
     expect(out.candidates.every((c) => classifyRaster(c).status === "usable")).toBe(true);
+  }, 60_000);
+
+  it("says where on its page every decoded picture was painted", async () => {
+    /* Stage 2 of docs/plans/260924e-a-pdf-figure-paired-to-the-wrong-caption.md
+       matches a model's box to a picture by position, so every candidate needs
+       one paint, keyed as the candidate is, inside its page. */
+    const out = await readPdfRasters({ data: await bytes(HARDER), pages: [3, 6] });
+    expect(out.candidates.length).toBeGreaterThan(0);
+    for (const c of out.candidates) {
+      const paints = out.paints.filter((p) => p.page === c.page && p.key === c.key);
+      expect(paints).toHaveLength(1);
+      const view = out.views.get(c.page)!;
+      const { box } = paints[0]!;
+      expect(box.x1 - box.x0).toBeGreaterThan(50);
+      expect(box.y1 - box.y0).toBeGreaterThan(50);
+      expect(box.x0).toBeGreaterThanOrEqual(view.x0 - 1);
+      expect(box.x1).toBeLessThanOrEqual(view.x1 + 1);
+    }
   }, 60_000);
 
   it("leaves the caller's own bytes alone", async () => {
@@ -364,6 +382,7 @@ async function withFakePdfjs(fake: {
   const page = {
     objs: store,
     commonObjs: store,
+    view: [0, 0, 595, 842],
     getTextContent: async () => {
       if (fake.abortDuringText) {
         fake.abortDuringText.abort();
