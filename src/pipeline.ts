@@ -45,6 +45,7 @@ import {
   pdfFigureMarkersIn,
 } from "./collect-assets.js";
 import { collectPdfFigures, type PdfFiguresRun } from "./collect-pdf-figures.js";
+import { type FigureLocator, openRouterFigureLocator } from "./pdf-figure-locate.js";
 import { ReadabilityRefused, TooLittleTextToRead, runExtract } from "./extract.js";
 import {
   cameFromAnUpload,
@@ -1710,16 +1711,21 @@ function refuseToIllustrate(reason: IllustrateRefusal): never {
  * figures and does not fail the step, because the article's web images are the
  * other half of it and are unaffected.
  *
- * @param deps the reader, injected. The default is the real `readRawBytes`; a
- *   test replaces it to reach the two arms below, which otherwise need a
- *   Storage outage and a corrupt canonical object to reproduce. Exported with
- *   this function for tests/collect-pdf-figures.test.ts.
+ * @param deps the reader and locator, injected. The reader defaults to the
+ *   real `readRawBytes`; the locator has no default so that a test or another
+ *   caller cannot buy a model call by omission. The pipeline passes the real
+ *   locator explicitly, and tests pass `null` or a script. Exported with this
+ *   function for tests/collect-pdf-figures.test.ts.
  */
 export async function recoverPdfFigures(
   ctx: StepContext,
   store: ArtifactReads,
   blocks: Block[],
-  deps: { readBytes?: typeof readRawBytes } = {},
+  deps: {
+    readBytes?: typeof readRawBytes;
+    /** The located route's model call; explicit so omission can never spend money. */
+    locate: FigureLocator | null;
+  },
 ): Promise<PdfFiguresRun | undefined> {
   const markers = pdfFigureMarkersIn(blocks);
   if (markers.length === 0) return undefined;
@@ -1742,6 +1748,8 @@ export async function recoverPdfFigures(
       entries,
       stored: 0,
       drawn: 0,
+      located: 0,
+      locateCalls: 0,
       failed: entries.length,
       deduped: 0,
       bytes: 0,
@@ -1805,7 +1813,16 @@ export async function recoverPdfFigures(
   /* Both routes need the captions: the bitmap route attaches a picture only
      where its page prints the caption, and the drawn route is tried only for a
      captioned marker (src/collect-pdf-figures.ts § 4). */
-  return collectPdfFigures({ markers, pdf, signal: ctx.signal, captions: pdfFigureCaptionsIn(blocks) });
+  return collectPdfFigures({
+    markers,
+    pdf,
+    signal: ctx.signal,
+    captions: pdfFigureCaptionsIn(blocks),
+    /* The third route, asked only about figures the other two refused —
+       Greg, 2026-09-28: "For now let's just do it for figures that fail."
+       docs/plans/260924e-a-pdf-figure-paired-to-the-wrong-caption.md § Stage 2. */
+    locate: deps.locate,
+  });
 }
 
 /**
@@ -2828,7 +2845,7 @@ export const STEPS: { [K in StepName]: PipelineStep<K> } = {
         signal: ctx.signal,
         onProgress: (done, total) => ctx.report(`${done}/${total} images`),
       });
-      const figures = await recoverPdfFigures(ctx, store, file.blocks);
+      const figures = await recoverPdfFigures(ctx, store, file.blocks, { locate: openRouterFigureLocator });
       /* No URLs and no hostnames. A log of the images in somebody's article is
          a reading history one step removed, and the counts are what an operator
          wants: `deduped` going from sometimes to never is how you find out the
@@ -2869,6 +2886,10 @@ export const STEPS: { [K in StepName]: PipelineStep<K> } = {
                 /* How many of those were drawn from a page rather than decoded
                    from a bitmap — docs/plans/260912a-figure-2-vector-figures-from-a-pdf.md. */
                 figuresDrawn: figures.drawn,
+                /* …and how many a model located, from how many questions —
+                   docs/plans/260924e-a-pdf-figure-paired-to-the-wrong-caption.md. */
+                figuresLocated: figures.located,
+                figuresLocateCalls: figures.locateCalls,
                 figuresMs: figures.elapsedMs,
                 ...(figures.storageErrors.length
                   ? { figureStorageErrors: figures.storageErrors }

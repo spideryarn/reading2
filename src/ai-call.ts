@@ -635,6 +635,16 @@ export const AI_JOB_ROUTE: Record<RoutedJob, Route> = {
     wire: "chat",
     provider: { require_parameters: true, allow_fallbacks: false },
   },
+  /* **A refused PDF figure, located** (src/pdf-figure-locate.ts). The PDF
+     reader's policy, for its reason: the answer is a strict JSON schema, and an
+     upstream that dropped `response_format` would answer in prose that the
+     judge then refuses as unreadable — a figure lost, and money spent, with
+     nothing to say why. No `order`: nothing here is cached. */
+  "pdf-figure-locate": {
+    path: "/v1/chat/completions",
+    wire: "chat",
+    provider: { require_parameters: true, allow_fallbacks: false },
+  },
   embeddings: { path: "/v1/embeddings", wire: "embeddings", provider: {} },
   /* **Forbids fallback — and my first reason for it was wrong.** I wrote that a
      silent fallback would substitute a different *model*; GPT Sol corrected it:

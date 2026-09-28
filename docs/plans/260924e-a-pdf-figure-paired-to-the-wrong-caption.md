@@ -90,7 +90,7 @@ the model's unverified claim. A different page break would bring the same swap b
 to catch it. The check above holds whatever the model says; a prompt change can be added on top,
 but it cannot replace the check.
 
-## Stage 2: recovering these figures, a decision for Greg (not built)
+## Stage 2: recovering these figures, as proposed on 2026-09-24
 
 Stage 1 makes the essay honest, but it leaves all four figures caption-only. Recovering them
 needs something that looks at the page. The spike tried Greg's suggestion: render the claimed page
@@ -155,3 +155,138 @@ re-run without re-buying the transcript.
    would change two figures from the wrong picture to caption-only and leave the other two as they
    are. After stage 2 it would recover all four. It does not re-buy the transcript, and the block
    ids are unchanged. It writes a new revision of his article, so it is his call.
+
+### Greg's answers, 2026-09-28
+
+> For now let's just do it for figures that fail.
+
+> Yes, if you can reprocess the Olah article that would be great. If not, I can do it myself.
+
+So stage 2 is built, only for figures the deterministic routes refuse, and there is no check of
+figures we already recover. The re-run is his: this box has no production credentials, and the
+steps are in the session's debrief.
+
+## Stage 2 as built: a model locates a refused figure
+
+### The test run first
+
+Before building, the rule as first designed was run (`locate-spike.ts` in the session
+scratchpad). It used our own raster reader for where each picture is painted, PDFium for the
+page renders, and the JSON-schema prompt below. Its acceptance rule was the **coverage half**
+only — rules 3 and 4 below and the paint count — not the clip, background, assembly or
+identity rules added after review. There were 10 cases and 3 runs each on
+`google/gemini-3-flash-preview`. The retained raw file holds only the last re-run of the three
+ball-lightning cases, which overwrote the rest (GPT Sol, finding 3), so the final rule was run
+again end to end with fresh responses kept, under § The final run.
+
+| case | right | correctly refused | **wrong** | missed |
+| --- | --- | --- | --- | --- |
+| essay, four figures, each filed one page early (two on pages with two pictures) | 12 | 0 | 0 | 0 |
+| ball-lightning paper, Figure 1 filed one page early; Figure 2 on its page | 6 | 0 | 0 | 0 |
+| analog-cognition, Figure 2 | 3 | 0 | 0 | 0 |
+| negative: a caption from no document, on the essay | 0 | 3 | 0 | 0 |
+| negative: the essay's caption, on the ball-lightning paper | 0 | 3 | 0 | 0 |
+| negative: a vector figure, on a page with no picture | 0 | 3 | 0 | 0 |
+
+That is 30 calls: 21 right, 9 refused correctly, **none wrong**. Each call took a median of about
+1.8 s (the slowest 2.8 s) and cost $0.0013–0.0019. It sends three page images of about
+1,100 × 1,600 px.
+
+Two things changed the design:
+
+- **The first acceptance rule was wrong.** It required the box to cover at least 70% of a picture,
+  and the model habitually boxes only the chart part of a diagram that has a text panel beside
+  it, covering 57–73% of the picture. Since the stored thing is the whole embedded picture, the
+  question is *which* picture the model points at, not how much of it. So the rule is: the box
+  lies almost entirely inside one picture and touches no other.
+- **Cropped pages.** The ball-lightning paper's pages start at (8.5, 8.5), not (0, 0), and PDFium
+  renders the cropped area. The first run sent the model no images at all for those cases. The
+  render now uses the page's own width and height, and the box is mapped back with the offset
+  added.
+
+### Who is asked
+
+A marker goes to the locator only when all of these hold:
+
+- after both existing routes its refusal is `caption-not-in-page-text`, `ambiguous`,
+  `no-raster` or `not-located`. That list is a recall limit, not a principle: `too-complex` and
+  `render-failed` describe the claimed page, not its neighbours (GPT Sol, finding 8, P2, left
+  for later);
+- it has a caption;
+- a window of the claimed page and its neighbours holds a usable picture that the other routes
+  did not already give to a figure.
+
+Windows are read one at a time, in page order, and let go (at most `MAX_LOCATE_LOOKS`, 24).
+There are at most `MAX_LOCATE_CALLS` (8) calls per article, all inside the existing
+`PDF_FIGURES_BUDGET_MS` clock. A held refusal is written only once the route has finished with
+the figure, and if the clock runs out first the figure keeps its own reason, not `out-of-time`.
+
+The call sends the window's pages, each rendered whole by PDFium at its own crop, plus the caption.
+It asks for `{page, box_2d}` or nulls under a strict JSON schema, as job `pdf-figure-locate`
+through `openRouterJson`, so it is metered like every other call.
+
+### The acceptance rule as built — `judgeLocatedBox`
+
+1. the answer has the shape asked for, on a page we sent, with a box in range;
+2. every image on that page is one we can place, meaning no inline image, mask or repeat
+   (`unmeasured-image`);
+3. at least 80% of the box lies inside one visible usable picture, and the box covers at least 30%
+   of it;
+4. no other visible image holds 5% of the box, blank overlays alone excepted;
+5. the picture is painted once, and no soft mask, blend or zero alpha is in force
+   (`unmeasured-image`);
+6. it shows less than 80% of the page (`background`), and no other picture is within 12 pt of it
+   (`assembly`);
+7. its clip is exact and cuts it only within 36 pt of the page edge (`clipped`);
+8. no other figure has it, compared by a hash of the decoded picture, not by pdf.js's key
+   (`already-taken`). Two located markers choosing one picture are both refused.
+
+### GPT Sol's review of this stage, and what was done
+
+Review: `260924e-…-stage2-plan-review-sol.md`. No P0.
+
+| # | finding | done |
+| --- | --- | --- |
+| 1 | a tight box around the **wrong** picture passes every rule | **Accepted as the residual risk, and said so.** No geometric rule can tell a right answer from a wrong one; refusing every page with two pictures would lose two of the essay's four figures. Rules 4 and 6 refuse the layouts where a wrong answer is likeliest to look right. The source header and `article-images.md` state the limit. |
+| 2 | one panel of a composite, and a page background, pass | **Fixed:** `assembly` (another picture within 12 pt) and `background` (over 80% of the page). |
+| 3 | the clip rule refused the essay's own figures; the spike did not exercise the final rule | **Fixed and measured.** Chrome clips each printed page to its print frame, 10 pt inside the right edge and, on page 6, far above the foot. The rule is now *cut only within 36 pt of the page edge*. The final rule was then run end to end with the real model (below). |
+| 4 | repeat, inline and mask images are not placed; masks are not attached to images; `clip: null` counted as shown | **Fixed:** any such image on the page refuses it; `appearanceExact` is carried per image; an empty clip is invisible. |
+| 5 | "taken" compared by pdf.js key | **Fixed:** by a hash of the decoded picture. |
+| 6 | the coordinate frame needs a real seam test | **Done:** a generated PDF with a CropBox inside a larger MediaBox, a non-zero origin and `UserUnit 2`. The locator finds the red picture in the render it was given, and the figure is stored only if every frame agrees. Mutating the offset out of the mapping turns it red. |
+| 7 | the eight-call cap bounded neither reading nor memory | **Fixed:** one window at a time, `MAX_LOCATE_LOOKS`, and nothing retained but the chosen pictures. Measured below. |
+| 8 | the refusal whitelist loses some recoverable figures | Left as a documented recall limit. |
+| 9 | the policy was still `/4`; no invalidation test | **Fixed:** `pdf-figures/5`, and `tests/collect-assets.test.ts` pins the PDF stamp and the web stamp. |
+
+### The final run: the real model, the final rule, real PDFs
+
+`final-run.ts` in the session scratchpad. It calls `collectPdfFigures` itself, with
+`openRouterFigureLocator`, and keeps the raw answers:
+
+| document | markers | stored | located | model calls | time |
+| --- | --- | --- | --- | --- | --- |
+| the rebuilt essay, real markers | 4 | **4** (was 0 after stage 1, and 2 wrong before it) | 4 | 4 | 13.9 s |
+| analog-cognition, real markers | 8 | 8 | 0 | **0** | 1.8 s |
+| entropy-24-00930, real markers | 4 | 4 | 0 | **0** | 1.1 s |
+| ball-lightning: Figure 1 filed a page early, Figure 2 on its page, the essay's caption planted on page 4 | 3 | 2 | 1 | 2 | 8.7 s |
+
+Every stored picture is the right one. The essay's four come back at 1566 × 672, 484, 372 and 412
+px, the sizes of the pictures on pages 2, 3, 4 and 6. The planted caption drew a "none" from the
+model. Calls took 1.8–2.4 s; the requests were 0.5–2.4 MB of page images. Peak process memory was
+the same with the locator on as off (632 MB against 666 MB for this whole script), and PDFium's
+heap went from 19 MB to 50 MB. It never shrinks, which is well inside a Vercel function.
+
+### Deliberately not in v1
+
+- **Vector figures.** A box on a page with no picture is refused.
+- **A picture cropped inside the page**, **rotated pages**, and pages further than one from the
+  claimed page.
+- **Recording in the manifest that a model chose the picture.** The step's log line counts
+  `figuresLocated` and `figuresLocateCalls`; the stored entry looks like any other.
+
+The cost is at most 8 × ~$0.002 per article, and nothing for an article whose figures all pair.
+The locator is a *preview* model: if OpenRouter retires the id, every call fails and those figures
+stay caption-only, which is the state they were already in.
+
+The privacy page's list of models now names `gemini-3-flash-preview` and says what it is shown,
+because `tests/privacy-page.test.ts` requires every model a reader's content can reach to be
+listed there.
