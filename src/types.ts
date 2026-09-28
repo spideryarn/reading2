@@ -1190,6 +1190,104 @@ export interface QuotesResponse {
   profileChanged: boolean;
 }
 
+/* ------------------------------------------------------------- trajectory --
+   A route through the article's Quotes, walked at three depths — the
+   `trajectory` column on `article_revisions`. docs/project/trajectory.md is the
+   vision; docs/plans/260928a-trajectory-mode-skim-a-paper-at-increasing-depth.md
+   is the build.
+
+   Here rather than in src/trajectory.ts for the reason `Quiz` and `Faq` are:
+   the panel needs the shape and `src/web/` may import only the pure leaves.
+
+   **No block ids anywhere in it.** A stop names a quote, and the quote holds
+   the block id (docs/project/block-ids.md). So the route has no ids of its own
+   to keep, and a re-run simply replaces it. */
+
+/** The shallowest pass a stop belongs to. Depth *d* shows every stop with `depth ≤ d`. */
+export type TrajectoryDepth = 1 | 2 | 3;
+
+export interface TrajectoryStop {
+  /** An id in the Quotes artefact. The stop's passage is that quote's block. */
+  quoteId: string;
+  depth: TrajectoryDepth;
+  /**
+   * What the passage **does**, never what it found — at most `MAX_ROLE_CHARS`
+   * (src/trajectory.ts). `null` when the model's was missing, empty or
+   * over-long: a bad role never costs the reader a stop (Sol F8).
+   */
+  role: string | null;
+}
+
+/**
+ * What validation threw away or repaired. Counts only — never a quote or a
+ * role. A dropped stop looks exactly like one the model never offered, which is
+ * why they ride on the artefact and in the log.
+ */
+export interface TrajectoryDrops {
+  /** A stop naming a quote id that is not in the Quotes artefact. */
+  unknownQuote: number;
+  /** A quote named twice; the shallowest occurrence was kept. */
+  duplicate: number;
+  /** A second stop on a block that already had one; the shallowest, then the earlier, was kept. */
+  sameBlock: number;
+  /** Unreadable: not an object, no quote id, or a depth outside 1–3. */
+  malformed: number;
+  /** A role that was missing, empty, not a string or over the cap — set to `null`, the stop kept. */
+  badRole: number;
+  /** Stops past a cumulative cap, dropped in route order — never demoted. */
+  overCap: number;
+}
+
+/** The artefact. The `trajectory` column on `article_revisions`. */
+export interface Trajectory {
+  version: string;
+  generator: string;
+  slug: string;
+  /**
+   * **The quotes hash** — `quotesHash` in src/trajectory.ts, over each quote's
+   * id and block id. Spelled `sourceHash` because that is the name `stampOf`
+   * reads (src/store/artifacts.ts); it is not a hash of the article.
+   */
+  sourceHash: string;
+  /**
+   * The rendered profile's hash, or `null` for none. **In the stamp**, and
+   * compared more strictly than every other artefact's: none → some is stale
+   * here. src/trajectory.ts § `routeProfileIsStale`.
+   */
+  profileHash: string | null;
+  /** **The array order is the route.** Depth *d* shows every stop with `depth ≤ d`, in this order. */
+  stops: TrajectoryStop[];
+  /** How many stops are visible at depth ≤ 1, ≤ 2 and ≤ 3. Growing, by construction. */
+  visible: [number, number, number];
+  /** How many quotes the model was offered — the usable ones, whose block is in the article. */
+  offered: number;
+  dropped: TrajectoryDrops;
+  generatedAt: string;
+  elapsedMs: number;
+}
+
+/** `GET /api/trajectory/:slug`. */
+export interface TrajectoryResponse {
+  trajectory: Trajectory;
+  /**
+   * The Quotes have changed underneath the route — *Find more* added some, or
+   * they were chosen again — or there are none any more.
+   */
+  stale: boolean;
+  /** The Quotes are the same and we would write the route differently now. */
+  outdated: boolean;
+  /**
+   * The profile is not the one the route was written for — **including none →
+   * some**, which the shared `profileIsStale` does not count.
+   */
+  profileChanged: boolean;
+  /** How many of the current Quotes are not a stop on this route, at any depth. */
+  notOnRoute: number;
+}
+
+/** As `QuotesFound`: everything but the one question about the reader. */
+export type TrajectoryFound = Omit<TrajectoryResponse, "profileChanged">;
+
 /**
  * The Sketch diagram as the panel receives it — docs/project/diagram.md § Sketch.
  *
@@ -2532,6 +2630,12 @@ export type StepName =
      Beside `glossary` because the two send byte-identical article bytes at the
      same effort and share one cached prefix. */
   | "quotes"
+  /* A route through the Quotes, at three depths —
+     docs/plans/260928a-trajectory-mode-skim-a-paper-at-increasing-depth.md.
+     Its input is another step's artefact, like `illustrated`: it reads the
+     stored Quotes and never the article's prose, so it is in no cached prefix
+     and is not an `ArticleStage`. */
+  | "trajectory"
   | "ideas"
   /* When the things the piece narrates happened, and how sure it is —
      docs/project/timeline.md. Beside `ideas` because the two send byte-identical

@@ -47,9 +47,11 @@ of compression, down the page for position and across for detail. Read that firs
 - **[new-mode.md](new-mode.md)** — the one checklist for adding a mode: the tables the compiler
   checks, then the residue it does not, for the client and for a generated artefact.
 - **A band names its mode for three seconds after a press, and at no other time** — the name and
-  the catalog's sentence over the top of the band, since the band's own title went and the Dock's
-  words drop on an iPad. No doc of its own;
-  [260915e](../plans/260915e-the-mode-names-itself-briefly-when-a-reader-opens-it.md) and
+  the catalog's sentence in a card at the band's bottom-left, standing on its pinned foot, since the
+  band's own title went and the Dock's words drop on an iPad. No doc of its own;
+  [touch.md § A mode says its name](touch.md#a-mode-says-its-name-when-you-press-it),
+  [260915e](../plans/260915e-the-mode-names-itself-briefly-when-a-reader-opens-it.md),
+  [260928a](../plans/260928a-the-mode-herald-moves-to-the-foot-of-the-band.md) and
   [`ModeHerald.tsx`](../../src/web/ModeHerald.tsx).
 
 ### The article itself
@@ -81,7 +83,7 @@ four of its sub-modes are built, and it is for somebody asked to peer-review the
 readers never are.
 
 - **Structure** — the article's tree with two faces, chosen by the band's width. Where the band is
-  wide enough (389px border-box) it is two linked columns: every part on the left, the sections of
+  wide enough (609px border-box, a 1165px window — [narrow-windows.md](narrow-windows.md)) it is two linked columns: every part on the left, the sections of
   the one you are in on the right. Where it is not, it is a nested list, deep where you are reading
   and shallow everywhere else. It shares the tree with [granularity-zoom.md](granularity-zoom.md)
   rather than having a structure of its own, and there is no `structure.md` yet; the plans are the
@@ -125,6 +127,9 @@ readers never are.
   answered by passages of the piece itself and never by a written answer. Open it for where the
   promise stops: the words are checked, which passage answers which question is not. Owner-only and
   behind the switch for now.
+- **[trajectory.md](trajectory.md)** — skim a paper at increasing depth: one route through its
+  passages, not in the paper's order, walked with a handful of stops, then a dozen, then more. Open
+  it for Greg's dictated brief, verbatim, and the questions still waiting for him.
 
 The last two band modes — **chat** and **remember**, and the quiz that is remember's other half — are
 under the next heading instead, because what they are about is a passage rather than the whole piece.

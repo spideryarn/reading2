@@ -307,8 +307,10 @@ function Row({
               reason. GPT Sol's code review, finding 5. */}
           <span className="struct-num">{row.number}</span>
           <span className="struct-text">{row.text}</span>
+          {/* Inside the title's grid, in its column, so a gist starts where its
+              title does — the list face's `.outln-gist` does the same. */}
+          {row.gist ? <span className="struct-gist">{row.gist}</span> : null}
         </span>
-        {row.gist ? <span className="struct-gist">{row.gist}</span> : null}
       </button>
   );
 

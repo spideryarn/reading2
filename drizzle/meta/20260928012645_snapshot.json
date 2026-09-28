@@ -1,5 +1,5 @@
 {
-  "id": "c1715cb1-a89d-4b6f-b57f-5f6df579b50e",
+  "id": "453dcb12-810e-44a8-b89a-c09c0021b317",
   "prevId": "e1c1a7ca-70fb-4e08-989b-bf161752c30d",
   "version": "7",
   "dialect": "postgresql",
@@ -677,6 +677,12 @@
         },
         "faq": {
           "name": "faq",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "trajectory": {
+          "name": "trajectory",
           "type": "jsonb",
           "primaryKey": false,
           "notNull": false
@@ -4226,126 +4232,6 @@
       },
       "isRLSEnabled": false
     },
-    "spideryarn.revision_phrase_runs": {
-      "name": "revision_phrase_runs",
-      "schema": "spideryarn",
-      "columns": {
-        "revision_id": {
-          "name": "revision_id",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "article_id": {
-          "name": "article_id",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "extractor_version": {
-          "name": "extractor_version",
-          "type": "smallint",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "words": {
-          "name": "words",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "text_hash": {
-          "name": "text_hash",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "skipped": {
-          "name": "skipped",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "candidates": {
-          "name": "candidates",
-          "type": "jsonb",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "computed_at": {
-          "name": "computed_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "now()"
-        }
-      },
-      "indexes": {
-        "revision_phrase_runs_article": {
-          "name": "revision_phrase_runs_article",
-          "columns": [
-            {
-              "expression": "article_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        }
-      },
-      "foreignKeys": {
-        "revision_phrase_runs_revision_fk": {
-          "name": "revision_phrase_runs_revision_fk",
-          "tableFrom": "revision_phrase_runs",
-          "tableTo": "article_revisions",
-          "schemaTo": "spideryarn",
-          "columnsFrom": [
-            "article_id",
-            "revision_id"
-          ],
-          "columnsTo": [
-            "article_id",
-            "id"
-          ],
-          "onDelete": "cascade",
-          "onUpdate": "no action"
-        }
-      },
-      "compositePrimaryKeys": {
-        "revision_phrase_runs_revision_id_extractor_version_pk": {
-          "name": "revision_phrase_runs_revision_id_extractor_version_pk",
-          "columns": [
-            "revision_id",
-            "extractor_version"
-          ]
-        }
-      },
-      "uniqueConstraints": {},
-      "policies": {},
-      "checkConstraints": {
-        "revision_phrase_runs_skipped": {
-          "name": "revision_phrase_runs_skipped",
-          "value": "\"spideryarn\".\"revision_phrase_runs\".\"skipped\" is null or \"spideryarn\".\"revision_phrase_runs\".\"skipped\" in ('not-english','no-text')"
-        },
-        "revision_phrase_runs_words": {
-          "name": "revision_phrase_runs_words",
-          "value": "\"spideryarn\".\"revision_phrase_runs\".\"words\" >= 0"
-        },
-        "revision_phrase_runs_version": {
-          "name": "revision_phrase_runs_version",
-          "value": "\"spideryarn\".\"revision_phrase_runs\".\"extractor_version\" >= 1"
-        },
-        "revision_phrase_runs_candidates_array": {
-          "name": "revision_phrase_runs_candidates_array",
-          "value": "jsonb_typeof(\"spideryarn\".\"revision_phrase_runs\".\"candidates\") = 'array'"
-        }
-      },
-      "isRLSEnabled": false
-    },
     "spideryarn.revision_step_runs": {
       "name": "revision_step_runs",
       "schema": "spideryarn",
@@ -4442,7 +4328,7 @@
       "checkConstraints": {
         "revision_step_runs_step": {
           "name": "revision_step_runs_step",
-          "value": "\"spideryarn\".\"revision_step_runs\".\"step_name\" in ('fetch','extract','blocks','hierarchy','labels','assets','arc','tweets','glossary','quotes','ideas','timeline','quiz','faq','sketch','illustrated','debate','citations')"
+          "value": "\"spideryarn\".\"revision_step_runs\".\"step_name\" in ('fetch','extract','blocks','hierarchy','labels','assets','arc','tweets','glossary','quotes','trajectory','ideas','timeline','quiz','faq','sketch','illustrated','debate','citations')"
         },
         "revision_step_runs_status": {
           "name": "revision_step_runs_status",

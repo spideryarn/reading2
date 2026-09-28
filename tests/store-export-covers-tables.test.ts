@@ -581,6 +581,7 @@ const COLUMNS_LEFT_OUT: Record<BundledTable, Readonly<Record<string, string>>> =
     citations: "Written whole as augmentations/citations.json.",
     quiz: "Written whole as augmentations/quiz.json.",
     faq: "Written whole as augmentations/faq.json.",
+    trajectory: "Written whole as augmentations/trajectory.json.",
     sketch: "Written whole as augmentations/sketch.json.",
     illustrated: "Written whole as augmentations/illustrated.json.",
     labels: "Written whole as augmentations/labels.json.",

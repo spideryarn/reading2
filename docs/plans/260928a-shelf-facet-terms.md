@@ -352,7 +352,7 @@ building:
 - Done when: green, and this plan's § Measurements regenerated from the real code (Sol F14).
 
 **Landed** (2026-09-28): `revision_phrase_runs` (schema.ts, migration
-`20260928023038_shelf_terms_revision_phrase_runs`), `src/store/pg-shelf-terms.ts` (wired as
+`20260928023409_shelf_terms_revision_phrase_runs`), `src/store/pg-shelf-terms.ts` (wired as
 `shelfTermsStore`, guarded as `shelf-terms`), `GET /api/library/terms`, `LibraryTermsResponse`,
 `scripts/shelf-terms-report.ts`, `tests/shelf-terms-pg.test.ts` (10 cases, each of seven deliberate
 breaks of the store or route turned its own case red) and `tests/shelf-terms-warm-path.test.ts`.
