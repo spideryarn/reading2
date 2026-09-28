@@ -360,6 +360,55 @@ measured on the three test articles before anything was kept
   stop, and the gist line was the thing the scrapbook spike dropped for giving the finding away. If
   real reading keeps meeting a skipped section, a plain link to its opening passage is the next step.
 
+### 7. Should opening Trajectory also make the Glossary, FAQ and Timeline?
+
+**What you asked.** *"If there are other modes that should also run first as part of generating
+Trajectory, queue them first too."* (2026-09-28). The Overseer read that as: when Trajectory is
+first opened, also start Glossary, Ideas, FAQ and Timeline for the article if they have not been
+made, so the card under each stop has something in it. **Only part of that was built, so this is
+yours to decide.**
+
+**Background.** Two different things use the other modes:
+
+- **The route itself** — which quotes to stop at, in what order. Since stage 6 this reads the
+  article's **Ideas**, so each pass covers as many key points as it can. So Ideas now *are* made
+  first, in the same job as the Quotes and the route. That part of your request is done.
+- **The card under the current stop** — the terms the passage uses (Glossary), the ideas it bears on
+  (Ideas), the question it answers (FAQ), where it sits in the study (Timeline). Today the card shows
+  whatever of these already exists, and simply leaves out what does not. It never starts a run.
+
+The question is whether opening Trajectory should also **make Glossary, FAQ and Timeline** when they
+are missing, purely so the card fills in.
+
+**Why it was not built.** Nothing was broken. It was left out because:
+
+- **Cost to the reader, on a press they did not make for it.** On the entropy paper, Glossary, FAQ and
+  Timeline together cost about $0.20, against about $0.02 for the route. A first open from nothing
+  is already $0.13 and 95 seconds with Quotes and Ideas (measured on *Cargo Cult Science*); this would
+  roughly double or triple the spend, for modes the reader did not open.
+- **Your words were "run first as part of generating Trajectory"**, and these three do not generate
+  it: the route never reads them. GPT Sol and an Opus arbiter both read the sentence that way.
+- **It needs extra machinery**: a second job, and a way for the card to notice when each of those
+  finishes (the read it uses today does not). FAQ and Timeline are also still behind the experimental
+  switch, so for most readers only Glossary would run anyway.
+
+**Options.**
+
+- **A. As it is now** (default taken). The route makes what it needs (Quotes, Ideas); the card
+  shows whatever else exists. Nothing extra is spent. On a fresh article the card has ideas but no
+  terms, questions or events until the reader opens those modes.
+- **B. Make them automatically on the first open**, as the Overseer read your request: Glossary for
+  everyone, FAQ and Timeline for readers with the switch on. About $0.10–0.20 more per article, said
+  in the empty state before the press, and the card fills in over the next minute or two. The route
+  does not wait for them.
+- **C. A button on the card: "Fill in the card"**, which makes the missing ones on request and says
+  what it will cost first. Nothing is spent unless the reader asks.
+
+**How to choose.** If you want the card to be rich every time without thinking about it, B. If you
+would rather nobody pays for modes they did not open, A, or C to let them choose. **Recommended: C**
+— it gets you the full card when you want it, keeps the rule that a press only buys what it says,
+and is a small build.
+
 ---
 
 Up: [reading-view-overview.md](reading-view-overview.md)
