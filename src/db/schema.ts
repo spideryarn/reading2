@@ -76,6 +76,7 @@ import type { Claim } from "../referee-claims.js";
 import type { Sketch } from "../sketch-scene.js";
 import type { Illustrated } from "../illustrated-plate.js";
 import type { LabelsFile } from "../labels.js";
+import type { Candidate } from "../shelf-terms/extract.js";
 import type {
   Citations,
   Arc,
@@ -86,6 +87,7 @@ import type {
   FeedbackDiagnosticsPayload,
   Glossary,
   Ideas,
+  JobReset,
   JobStep,
   NavLabelStatus,
   Quiz,
@@ -1284,6 +1286,67 @@ export const revisionBlocks = spideryarn.table(
   ],
 );
 
+/* -------------------------------------------------- shelf filter terms -- */
+
+/**
+ * **Step 1 of the shelf's filter terms, stored: one revision's candidate
+ * phrases, per extractor version.** docs/plans/260928a-shelf-facet-terms.md
+ * § Storage; the extractor is src/shelf-terms/extract.ts and the fill is
+ * src/store/pg-shelf-terms.ts.
+ *
+ * - **Keyed on `(revision_id, extractor_version)`**, so a version bump writes a
+ *   new row beside the old one instead of conflicting with it, and two
+ *   deployments of different versions can fill side by side (Sol F1).
+ *   `on conflict do nothing` makes two concurrent fills of one row harmless —
+ *   the function is deterministic, so both would have written the same thing.
+ * - **Keyed on the revision** because a published revision's blocks never
+ *   change (`article_revisions` above). Old revisions are kept on purpose, so
+ *   the fill deletes an article's rows for any revision that is no longer its
+ *   current one (Sol F8) — otherwise this grows by a row per job ever run.
+ * - **`candidates` is JSONB, and argues for itself** under docs/project/sql.md
+ *   § Columns, not JSON: the array is always read whole and never filtered,
+ *   joined, sorted or constrained inside Postgres. Everything that is — the
+ *   revision, the article, the version — is a column. And one row means a fill
+ *   is one insert, so "processed" cannot be committed without its candidates.
+ * - **The composite foreign key** makes a row whose article and revision
+ *   disagree impossible, as `revision_blocks` does (Sol F10); deleting the
+ *   article or the revision takes the row with it.
+ * - **No `owner_id`**: ownership is inherited through the article, like
+ *   `reading_time`. Every read starts from the reader's own current revisions,
+ *   which is the whole of the isolation argument (the plan § The route).
+ */
+export const revisionPhraseRuns = spideryarn.table(
+  "revision_phrase_runs",
+  {
+    revisionId: uuid("revision_id").notNull(),
+    articleId: uuid("article_id").notNull(),
+    extractorVersion: smallint("extractor_version").notNull(),
+    /** Counted prose words, unweighted — the density threshold's denominator. */
+    words: integer("words").notNull(),
+    /** sha256 of the counted text — exact-duplicate grouping (Sol F9). */
+    textHash: text("text_hash").notNull(),
+    /** Null, or why there are no candidates: `SkipReason` in src/shelf-terms/extract.ts. */
+    skipped: text("skipped"),
+    /** `Candidate[]`, ranked, at most ~200; empty when skipped. */
+    candidates: jsonb("candidates").$type<Candidate[]>().notNull(),
+    computedAt: timestamp("computed_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    primaryKey({ columns: [t.revisionId, t.extractorVersion] }),
+    /** For the fill's "delete this article's superseded rows". */
+    index("revision_phrase_runs_article").on(t.articleId),
+    check("revision_phrase_runs_skipped", sql`${t.skipped} is null or ${t.skipped} in ('not-english','no-text')`),
+    check("revision_phrase_runs_words", sql`${t.words} >= 0`),
+    check("revision_phrase_runs_version", sql`${t.extractorVersion} >= 1`),
+    check("revision_phrase_runs_candidates_array", sql`jsonb_typeof(${t.candidates}) = 'array'`),
+    foreignKey({
+      name: "revision_phrase_runs_revision_fk",
+      columns: [t.articleId, t.revisionId],
+      foreignColumns: [articleRevisions.articleId, articleRevisions.id],
+    }).onDelete("cascade"),
+  ],
+);
+
 /* ----------------------------------------------------- referee criteria -- */
 
 /**
@@ -1920,6 +1983,24 @@ export const jobs = spideryarn.table(
      * gap is ever found. docs/project/reader-profile.md.
      */
     profile: text("profile"),
+
+    /**
+     * **This job is a reset**, and what to make again once it publishes — or
+     * null, which is every other job.
+     *
+     * `{ regenerate: StepName[]; profile?: string }` (`JobReset`,
+     * src/types.ts). Read from this row, under the lock each transaction
+     * already takes on it, in the two places that act on it: minting the
+     * draft drops the extras' columns and step runs
+     * (`openOrBeginJobDraft`), and publishing queues one job per
+     * `regenerate` step (`publishRevisionIn`). Nothing threads it through the
+     * session, so there is no second copy to disagree (Sol F7).
+     *
+     * **Immutable, like `work_key`** — it is part of that key when present, and
+     * `retryJob` copies it onto the new job so a retried reset still resets.
+     * docs/plans/260928a-reset-and-regenerate-article.md.
+     */
+    reset: jsonb("reset").$type<JobReset>(),
 
     /**
      * What kind of failure stopped it — and therefore **whether the card offers

@@ -12,7 +12,7 @@
  * that opens this mode sees. This file gives the band a width, by stubbing
  * `offsetWidth` on the band alone, and fires the `ResizeObserver` by hand, so
  * what it proves is the *decision*: which face a given measured width gets, and
- * that a change of width changes it in both directions. Whether 389px is the
+ * that a change of width changes it in both directions. Whether 609px is the
  * width at which two columns actually read is a browser question.
  */
 import { act } from "react";
@@ -20,43 +20,16 @@ import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { MODES, modeFromParam, RETIRED_MODES } from "../src/modes.js";
 import { readMode } from "../src/read-address.js";
-import {
-  StructureBand,
-  structureFace,
-  TWO_COLUMN_CONTENT_MIN,
-} from "../src/web/modes/structure/StructureMode.js";
+import { structureColumnsBand } from "../src/web/layout.js";
+import { StructureBand } from "../src/web/modes/structure/StructureMode.js";
 import { modeParam } from "../src/web/params.js";
 import { buildSections } from "../src/web/position.js";
 import { buildGeometry } from "../src/web/tree.js";
 import type { Article, Block, BlockId, NodeId, Tree, TreeNode } from "../src/types.js";
 
-describe("which face a band gets", () => {
-  /* The container query this replaced asked for 364px of Structure's content
-     box; the band's border box is that plus the border plus 1.5rem of padding.
-     Every case is written as the arithmetic rather than a bare number, so a
-     reader can see which input moved the threshold. */
-  it("draws the columns from 364px of content up, at a 16px root with a 1px border", () => {
-    const at = TWO_COLUMN_CONTENT_MIN + 1 + 24; // 389
-    expect(structureFace(at, 1, 16)).toBe("columns");
-    expect(structureFace(at + 200, 1, 16)).toBe("columns");
-    expect(structureFace(at - 1, 1, 16)).toBe("list");
-    expect(structureFace(288, 1, 16)).toBe("list");
-  });
-
-  it("moves the threshold with the root font size, because the padding is rem", () => {
-    const at = TWO_COLUMN_CONTENT_MIN + 1 + 30; // 395 at a 20px root
-    expect(structureFace(at, 1, 20)).toBe("columns");
-    expect(structureFace(at - 1, 1, 20)).toBe("list");
-    /* 389 is two columns at 16px and not at 20px — the one width that tells a
-       rem-aware threshold from a px constant. */
-    expect(structureFace(389, 1, 20)).toBe("list");
-  });
-
-  it("gives a band that covers the prose, and so has no border, a pixel back", () => {
-    expect(structureFace(388, 0, 16)).toBe("columns");
-    expect(structureFace(388, 1, 16)).toBe("list");
-  });
-});
+/* Which face a given band width gets — the threshold and its agreement with the
+   band `fitMode` hands out — is tests/structure-band-width.test.ts, since
+   2026-09-28, where the threshold moved to layout.ts. */
 
 describe("the retired `outline` mode", () => {
   it("is not a mode any more", () => {
@@ -212,7 +185,7 @@ afterEach(() => {
   bandWidth = 0;
 });
 
-function mount() {
+function mount(proseBeside = true, rootFontPx = 16) {
   act(() => {
     root.render(
       <StructureBand
@@ -222,7 +195,8 @@ function mount() {
         layoutKey="k"
         supplementOf={geometry.supplementOf}
         arcByRow={null}
-        proseBeside={true}
+        proseBeside={proseBeside}
+        rootFontPx={rootFontPx}
         onJump={() => {}}
       />,
     );
@@ -237,13 +211,12 @@ function resizeTo(width: number) {
 }
 
 /**
- * The narrowest band that gets the columns *here*: jsdom loads no stylesheet,
- * so the band has no border, and the root size is whatever jsdom reports —
- * read the way the component reads it rather than assumed.
+ * The narrowest band that gets the columns at the default root used by
+ * `mount`. The component is handed the same value the layout used; it does not
+ * make a second DOM read.
  */
-function edge(): number {
-  const rootPx = Number.parseFloat(getComputedStyle(document.documentElement).fontSize) || 16;
-  return TWO_COLUMN_CONTENT_MIN + 1.5 * rootPx;
+function edge(rootFontPx = 16): number {
+  return structureColumnsBand(rootFontPx).min;
 }
 
 const columns = () => host.querySelector(".mode-band.struct");
@@ -279,6 +252,26 @@ describe("StructureBand", () => {
     resizeTo(edge());
     expect(columns()).not.toBeNull();
     expect(list()).toBeNull();
+  });
+
+  it("draws the list on a band that covers the prose, however wide it is", () => {
+    bandWidth = edge() + 100;
+    mount(false);
+    expect(columns()).toBeNull();
+    expect(list()).not.toBeNull();
+  });
+
+  it("re-evaluates the face when the shared root size changes but the band width does not", () => {
+    bandWidth = 700;
+    mount(true, 16);
+    expect(columns()).not.toBeNull();
+
+    /* At 20px the same 700px border box is below the 759px threshold. No
+       ResizeObserver callback fires: the prop shared with fitView must be
+       enough to change the face. */
+    mount(true, 20);
+    expect(list()).not.toBeNull();
+    expect(columns()).toBeNull();
   });
 
   it("keeps the face it has while the band reports no width", () => {

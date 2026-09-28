@@ -1,6 +1,7 @@
 # Filter terms for the shelf
 
-**Status:** planned, 2026-09-28. Stages below; each updates this file when it lands.
+**Status:** built and on `dev`, 2026-09-28 — all four stages. Not deployed. Assumptions for Greg
+are in § Assumptions pending Greg.
 
 ## What Greg asked for
 
@@ -239,8 +240,8 @@ still too slow, a backfill command that calls the same fill function is the next
 reader's current `(article, revision)` pairs**, and nothing reads a candidate row except through that
 set — so another reader's articles never enter the candidates, the document frequencies or the idf,
 which is the whole of the leak surface ([security-map.md](../project/security-map.md), Sol F10).
-Sent with `Cache-Control: private, no-store`. Registered before the `/api/library/:slug` pattern for
-the same reason `/search` is.
+Sent with `Cache-Control: private, no-store`. It is an exact authenticated route beside `/search`;
+the `/api/library/:slug` routes accept PATCH/DELETE, so their relative order cannot capture this GET.
 
 ```ts
 { terms: { key: string; label: string; articles: { slug: string; count: number }[] }[];
@@ -351,6 +352,66 @@ building:
   required. And a synthetic 1,000-article timing of the warm path (read + choose).
 - Done when: green, and this plan's § Measurements regenerated from the real code (Sol F14).
 
+**Landed** (2026-09-28): `revision_phrase_runs` (schema.ts, migration
+`20260928023409_shelf_terms_revision_phrase_runs`), `src/store/pg-shelf-terms.ts` (wired as
+`shelfTermsStore`, guarded as `shelf-terms`), `GET /api/library/terms`, `LibraryTermsResponse`,
+`scripts/shelf-terms-report.ts`, `tests/shelf-terms-pg.test.ts` (12 cases, each of seven deliberate
+breaks of the store or route turned its own case red) and `tests/shelf-terms-warm-path.test.ts`.
+What differed from the design above, or was decided while building:
+
+- **The owner-scoped set is its own query, not `listArticlesQuery`**, built from the same pieces
+  (`ownedByReader`, `onTheShelf`, the `archived_at` test, the join to the current revision,
+  `ADDED_AT` order), plus SQL equivalents of `listArticles`' post-query tree/block checks.
+  `archived: true` means active **and** archived here, not archived only as in `listArticles`.
+- **A fill always does at least one article**, whatever the budget, so the client's ask-again loop
+  cannot spin. Each fill is one `read committed` transaction: the insert (`on conflict do nothing`),
+  then a delete of the article's rows whose revision is not current in that statement's snapshot.
+  A republication already committed makes the stale insert delete itself without touching a peer's
+  current row, any version; one committing afterwards can leave the old cache row until the new
+  revision's first fill, but current-revision reads cannot select it.
+- **Skipped articles do not go into the chooser** and do not count as works or in report coverage:
+  an article the English extractor cannot classify cannot ever join a topic. They remain visible as
+  `scope.skipped`. `scope.articles` still counts the whole visible shelf, including skipped and
+  pending articles, so that shelf-size label does not shrink while the bounded fill progresses.
+- **The report reads through the route's own set query and extracts in memory**; it imports no write
+  path. The shell's `DATABASE_URL` wins over `.env.local`.
+- **Not applied to the shared local database.** `npm run db:migrate` refuses there: two peer
+  worktrees' unmerged migrations (one is `20260928010007_jobs_reset`) are in that ledger and not in
+  this tree's journal. The migration was first generated as `20260928012942_…`, stamped *below* the
+  newer of those rows, which drizzle would have skipped for ever once they were merged
+  ([database.md § A watermark is not a ledger](../project/database.md)); it was regenerated with the
+  same DDL and a later stamp before it was committed.
+  The Postgres tests are unaffected (they mint a private database from this tree's journal); a dev
+  server in this tree will fail `/api/library/terms` until `db:migrate` runs after that migration
+  reaches `dev`.
+- **Warm path, synthetic 1,000 articles × 200 candidates:** 15.6 MB of candidate JSON, 160 ms to
+  parse, 745 ms to choose (the database transfer itself not measured). Acceptable for v1; if a real
+  shelf gets there, trimming the stored list below 200 is the first lever.
+
+**Measured before the Stage 2 review on the local database** (owner `f4d08b58…`, extractor v1,
+`npm run shelf-terms:report`). These historical rows include the one skipped article in `articles`,
+`works` and the coverage denominator; rerun the report before treating the figures as current:
+
+| scope | articles | works | skipped | K | coverage | per article mean/median | ≥ 2 | Jaccard mean/max |
+|---|---|---|---|---|---|---|---|---|
+| active | 38 | 33 | 1 | 20 | 0.76 | 1.55 / 1 | 0.34 | 0.07 / 0.67 |
+| active | 38 | 33 | 1 | **30** | **0.87** | **2.84 / 2** | **0.71** | **0.07 / 0.67** |
+| active | 38 | 33 | 1 | 40 (33 chosen) | 0.92 | 3.05 / 2 | 0.76 | 0.07 / 0.67 |
+| + archived | 41 | 36 | 1 | 20 | 0.76 | 1.49 / 1 | 0.32 | 0.07 / 0.67 |
+| + archived | 41 | 36 | 1 | 30 | 0.88 | 2.73 / 2 | 0.68 | 0.07 / 0.67 |
+| + archived | 41 | 36 | 1 | 40 (36 chosen) | 0.90 | 3.20 / 2 | 0.83 | 0.07 / 0.67 |
+
+329k prose words active (336k with archived); extraction 6.2 ms per 1k words, about 2 s for the
+whole shelf — so a first visit here fills over two requests. The one skipped article is
+`sample-spya-vgwr6s`, not English. Uncovered at K = 30: that one, two 99-word *stage-e* test pages,
+*todo* (234 words) and *read* (448). The K = 30 active row matches stage 1's throwaway run exactly.
+
+**Rerun after the Stage 2 review** (skipped articles now out of the chooser and the coverage
+denominator), active: 37 eligible of 38, 32 works — **K = 30: coverage 0.89, 2.92 / 2 topics per
+article, 0.73 with ≥ 2, Jaccard 0.07 / 0.67**; K = 20: 0.78; K = 40 (32 chosen): 0.89. Uncovered:
+the two 99-word *stage-e* pages, *todo* and *read*. Choosing takes 20–40 ms; the in-memory
+extraction of the whole shelf 1.8 s (5.5 ms per 1k words).
+
 ### Stage 3 — the shelf UI
 
 - `src/web/ShelfTerms.tsx`, `src/web/useShelfTerms.ts`, params in `params.ts`, the narrowing
@@ -366,9 +427,33 @@ building:
 - Docs: a new `docs/project/shelf-terms.md` under `reading-view-overview.md`, a line in
   [library.md](../project/library.md), the two params in [url-state.md](../project/url-state.md).
 
+**Landed** (2026-09-28): `src/web/ShelfTerms.tsx`, `src/web/shelf-narrow.ts`,
+`src/web/useShelfTerms.ts`, the params, the `rows` change and the archived URL state in
+`Library.tsx`, `docs/project/shelf-terms.md`. Decisions the plan left open: the count line reads
+"4 of 6 articles (3 active + 1 archived)" when the archive is in scope; a chip press toggles against
+the keys the URL asks for, so a key not yet read survives another press; `shelfKey` includes each
+article's word count, so a re-extraction refetches the topics; the page title is unchanged.
+
+**Browser check** (Sonnet subagent, Playwright, 2026-09-28, the local 38-article shelf, desktop
+1280×800 and phone 390×844, after the migration was applied locally): all ten checks passed —
+the row, AND narrowing with the "n of m" count equal to the cards rendered, × and Clear, the tooltip
+unclipped, the All-topics list with no horizontal scroll at 390px, a real touch tap toggling with no
+stuck tooltip, the table view showing the same rows, Back/Forward over `?topics=`, archived in scope
+and still visible and filtered during a search, a bogus `?topics=` key dropped without an empty
+shelf, no console errors, every `GET /api/library/terms` a 200. Chips seen: *AI 11, memory 8,
+neurons 7, scientists 6, window 5, conscious experience 4, information 4, mechanism 4, neural
+networks 4, Turing machine 4, Wagan Watson 4, agents 3*, "All 30 topics".
+
 ### Stage 4 — close
 
-Update this plan with what landed, debrief.
+Update this plan with what landed, debrief. **Done.** The local migration was blocked for a while by a
+peer's unmerged `jobs_reset` ledger row; once that reached `dev` the peer re-chained this migration
+as journal entry 92 after it, and `npm run db:migrate` applied it here.
+
+**For production** (not done here — `main` is written only by `npm run deploy`): the migration is an
+ordinary additive table, so it rides the next deploy. To see what Greg's real shelf would get before
+that: `DATABASE_URL=<production> npm run shelf-terms:report -- --owner <Greg's uuid>` (add
+`--archived` for the archive too). It reads, extracts in memory, and writes nothing.
 
 Every stage: commit, then a GPT Sol code review in the worktree (write-capable, fixes inside the
 stage, reports anything wider), gates rerun, commit its fixes.
@@ -407,3 +492,25 @@ stage, reports anything wider), gates rerun, commit its fixes.
   (a label's forms are aggregated per article, not per occurrence — exact needs per-form counts
   stored), S1-5 (idf counts any stored occurrence, not membership), S1-6 (a long article can still
   lift quality), S1-7 (`stemForOverlap` can conflate *formal*/*form*).
+- **GPT Sol, stage 2 code, round 1** —
+  [260928a-shelf-facet-terms-stage2-review-sol.md](260928a-shelf-facet-terms-stage2-review-sol.md)
+  (prompt: [260928a-shelf-facet-terms-stage2-review-prompt.md](260928a-shelf-facet-terms-stage2-review-prompt.md);
+  the Postgres run it was handed: [260928a-shelf-facet-terms-stage2-pg-run.txt](260928a-shelf-facet-terms-stage2-pg-run.txt)),
+  reviewing ab85237c. *Ready with its fixes*; no P0. It fixed S2-1 (skipped articles counted as
+  works) and S2-2 (the terms set did not apply `listArticles`' tree-and-blocks boundary, so a shelf
+  could have topics for articles it does not show), added S2-4's stale-writer case, and corrected
+  two comments (S2-6, S2-7). Its new Postgres case was not runnable in its sandbox; run here, it
+  exposed a fixture-date interaction with the budget case (the republished revision became the
+  newest article), fixed by dating that revision oldest — 12/12 green, twice. Reported, not fixed:
+  S2-3 (shelf membership has two implementations, now guarded by a parity test) and S2-5 (the
+  low-level helpers trust the caller's revision objects; every current caller gets them from the
+  owner-scoped set).
+- **GPT Sol, stage 3 code, round 1** —
+  [260928a-shelf-facet-terms-stage3-review-sol.md](260928a-shelf-facet-terms-stage3-review-sol.md)
+  (prompt: [260928a-shelf-facet-terms-stage3-review-prompt.md](260928a-shelf-facet-terms-stage3-review-prompt.md)),
+  reviewing ab16dfe3. *Ready with its fixes*; no P0. It fixed S3-1 (while a new scope loaded, the
+  previous scope's topics kept filtering the rows — only an answer matching the current scope and
+  shelf is now used), S3-2 (an empty active shelf hid the Topics row even with enough archived
+  articles in scope), S3-3 (zero-count chips were natively disabled, so a keyboard could not reach
+  their tooltip — now `aria-disabled` and guarded), S3-4 (search and Unread ran twice per keystroke)
+  and S3-5 (a wrong cross-reference). Gates rerun here: 148 shelf tests, typecheck, lint.

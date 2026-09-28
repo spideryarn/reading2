@@ -73,6 +73,7 @@ import type {
   GlossaryFound,
   QuotesFound,
   LibraryEntry,
+  LibraryTermsResponse,
   LibraryHit,
   ListOptions,
   RememberStance,
@@ -739,6 +740,21 @@ export interface LibrarySearch {
     limit: number,
     opts?: LibrarySearchOptions,
   ): Promise<{ hits: LibraryHit[]; capped: boolean }>;
+}
+
+/**
+ * **The shelf's filter topics** — `GET /api/library/terms`.
+ * docs/plans/260928a-shelf-facet-terms.md; the Postgres half is
+ * src/store/pg-shelf-terms.ts, which says why a read may write here.
+ */
+export interface ShelfTermsStore {
+  /**
+   * The ambient reader's topics over the shelf proper, or over active **and**
+   * archived with `archived: true`. Fills missing candidate rows for at most
+   * `budgetMs` (at least one article per call) and says how many are still
+   * `pending`.
+   */
+  terms(scope: { archived: boolean }, opts?: { budgetMs?: number }): Promise<LibraryTermsResponse>;
 }
 
 /**

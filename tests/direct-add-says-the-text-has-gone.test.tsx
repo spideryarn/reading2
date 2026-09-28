@@ -86,6 +86,7 @@ const queue: UseJobs = {
     return uploadQueues ? ({ id: "job-1" } as Job) : null;
   },
   run: async () => null,
+  reset: async () => null,
   cancel: async () => {},
   retry: async () => {},
   forget: async () => {},

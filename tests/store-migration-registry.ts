@@ -1849,6 +1849,17 @@ export const STORE_MIGRATION: Readonly<Record<string, StoreEntry>> = {
       "reach into the condemned modules is the seeder's copy step, as for " +
       "`tests/citation-find-route.test.ts`. Read off the graph, not re-witnessed.",
   },
+  "tests/reset-route.test.ts": {
+    category: "shared-mechanism-collateral",
+    mechanisms: ["fixture-loader"],
+    evidence: "static-only",
+    reason:
+      "Arrived after the witness ran, with stage 1 of reset-and-regenerate (2026-09-28). It " +
+      "seeds two articles with `scratchArticleInPg` and drives `POST /api/article/:slug/reset` " +
+      "through `handleApi`, reading the queued job back out of `jobs` — entirely Postgres. Its " +
+      "reach into the condemned modules is the seeder's copy step, as for " +
+      "`tests/reading-time-route.test.ts`. Read off the graph, not re-witnessed.",
+  },
   "tests/glossary-delete-then-rebuild.test.ts": {
     category: "shared-mechanism-collateral",
     mechanisms: ["step-context-paths"],
@@ -2593,6 +2604,10 @@ export const TEST_LANES: Readonly<Record<string, TestLane>> = {
   /* Seeds three articles and drives the reading-time GET and POST through the
      route, reading rows back out of `reading_time`. No model is called. */
   "tests/reading-time-route.test.ts": "private-postgres",
+  /* The shelf's filter terms, 260928a stage 2. Seeds two owners and their
+     articles by hand, fills `revision_phrase_runs` and drives
+     `GET /api/library/terms` through the route. No model is called. */
+  "tests/shelf-terms-pg.test.ts": "private-postgres",
   /* Written 2026-09-11 for the last slice of the `AUTH_ROUTES` migration. Seeds
      one article and deletes only its own entry's lookup row; no model is called. */
   "tests/glossary-stream-lifetime.test.ts": "private-postgres",
@@ -2821,6 +2836,14 @@ export const TEST_LANES: Readonly<Record<string, TestLane>> = {
      bucket: the owner is the dev one the clone already seeds, so no
      `OWNER_AUDIT` entry either. */
   "tests/reserved-article-address.test.ts": "private-postgres",
+  /* Landed with stage 1 of 260928a (reset and regenerate), 2026-09-28. The
+     first drives reset jobs through a real claim, session and publication
+     and reads the successors back out of `jobs`; the second drives
+     `POST /api/article/:slug/reset` through `handleApi` over scratch
+     articles. Both are Postgres throughout, with their own owners and slugs,
+     so the private lane. */
+  "tests/reset-and-regenerate.test.ts": "private-postgres",
+  "tests/reset-route.test.ts": "private-postgres",
   /* Converted in stage B, 2026-09-04. It seeds five throwaway articles and
      walks a job over each, so it writes articles, revisions, step runs and job
      rows under five fixed slugs — and two of its cases queue a **real** retry,
@@ -3090,6 +3113,12 @@ export const OWNER_AUDIT: Readonly<Record<string, Readonly<Record<string, OwnerV
   "tests/ai-calls-spend-pg.test.ts": {
     "00000000-0000-4000-8000-00000000ad01": { kind: "seeded" },
     "00000000-0000-4000-8000-00000000ad02": { kind: "seeded" },
+  },
+  /* Two readers, both owning articles, so one's request can be shown to
+     leave the other's alone. 260928a stage 2. */
+  "tests/shelf-terms-pg.test.ts": {
+    "00000000-0000-4000-8000-0000000057a1": { kind: "seeded" },
+    "00000000-0000-4000-8000-0000000057b2": { kind: "seeded" },
   },
   /* Two owners, both written under: `rate_limit_events.owner_id` really does
      reference `auth.users(id)` (drizzle/20260905172650), so a made-up uuid can

@@ -33,6 +33,7 @@
  */
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
+import { readFileSync } from "node:fs";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { StructurePanel } from "../src/web/StructurePanel.js";
 import { buildGeometry, buildSummaryTree } from "../src/web/tree.js";
@@ -172,6 +173,22 @@ function columns(band: Element) {
   return { a: textsIn(sides[0]), b: textsIn(sides[1]) };
 }
 
+/* Kept verbatim with structure-mode.css § the deepest marked row. Running the
+   real selector over both the visible grid and its measuring copy catches a
+   selector that chooses two rows, or chooses a different row in the copy whose
+   height drives the rung ladder. */
+const DEEPEST_CURRENT =
+  ".struct-inner .struct-row[aria-current], " +
+  ":is(.struct-grid, .struct-measure):not(:has(> .struct-inner .struct-row[aria-current])) " +
+  "> .struct-side:not(.struct-inner) .struct-row[aria-current]";
+const compact = (text: string) => text.replace(/\s+/g, " ").trim();
+
+function deepestCurrent(band: Element, measuring: boolean): string[] {
+  return [...band.querySelectorAll(DEEPEST_CURRENT)]
+    .filter((row) => (row.closest(".struct-measure") !== null) === measuring)
+    .map((row) => row.querySelector(".struct-text")?.textContent ?? "");
+}
+
 beforeEach(() => {
   host = document.createElement("div");
   document.body.appendChild(host);
@@ -229,6 +246,29 @@ describe("the Structure band", () => {
        disagree about where the reader is; one would mean a column is not
        drawing. */
     expect(marked).toEqual(["PART TWO TITLE", "SECTION 0 TITLE"]);
+  });
+
+  it("selects one deepest current row in both the visible columns and the measuring copy", () => {
+    expect(compact(readFileSync("src/web/styles/structure-mode.css", "utf8"))).toContain(
+      compact(DEEPEST_CURRENT),
+    );
+    let band = render(IN_SECTION_0);
+    expect(deepestCurrent(band, false)).toEqual(["SECTION 0 TITLE"]);
+    expect(deepestCurrent(band, true)).toEqual(["SECTION 0 TITLE"]);
+
+    /* An undivided part has no current row in B, so A is the deepest row in
+       both copies. The apparatus has this same projection shape: it may be
+       current in A and is deliberately never opened into B. */
+    band = render(0);
+    expect(deepestCurrent(band, false)).toEqual(["PART ONE TITLE"]);
+    expect(deepestCurrent(band, true)).toEqual(["PART ONE TITLE"]);
+  });
+
+  it("selects no current row before the first part, because the projection does not invent one", () => {
+    const band = render(-1);
+    expect(deepestCurrent(band, false)).toEqual([]);
+    expect(deepestCurrent(band, true)).toEqual([]);
+    expect(band.textContent).toContain("You are between parts");
   });
 
   it("says where you are rather than drawing an empty box, when you are between parts", () => {

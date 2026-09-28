@@ -290,6 +290,10 @@ real. What to do about it is being decided in
 [260826c-pdf-ingestion.md § What a re-read costs](../plans/260826c-pdf-ingestion.md#what-a-re-read-costs-measured-11-block-ids-of-43),
 and it wants deciding before anything a reader owns is anchored to an id.
 
+**A reset from the Metadata page is a re-extraction too**, with nothing added: it re-reads the
+stored source with `force: ["extract"]`, so every rule here, and every cost above, applies to it
+unchanged ([260928a](../plans/260928a-reset-and-regenerate-article.md)).
+
 Two honest limits:
 
 - **An edited paragraph gets a new id** and loses whatever was anchored to it. We cannot distinguish

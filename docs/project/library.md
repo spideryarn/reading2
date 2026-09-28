@@ -446,6 +446,9 @@ or a health check inflates without anybody deciding to.
 
 ### The tooltip
 
+*The cards view's.* The table has a card of its own, on each title, built differently —
+[§ The table's row card](#the-tables-row-card-whole-titles-and-columns-you-can-hide).
+
 Hovering the date line gives everything the card has no room for: when it was added, where from, how
 often you have opened it, how many questions you have asked, which optional stages have produced
 something, and the size in words, blocks, parts and sections.
@@ -515,6 +518,13 @@ typo-tolerant titles (available, useful, but matcher one already handles titles 
 enabled, Anthropic has no embeddings API so it means a second vendor, and Greg deferred it
 explicitly.
 
+### Topics, and the archive in the same search
+
+Since 2026-09-28 a **Topics** row sits between `ShelfControls` and the "n of m" line: chips picked by
+a program from the articles' own words, which narrow the shelf in both views. With **Show archived**
+open (`?archived=1`), the archived list is narrowed by the same search, Unread and topics, and so no
+longer disappears during a search. All of it is in [shelf-terms.md](shelf-terms.md).
+
 ## Sorting the shelf
 
 > Make the set of docs on the homepage nicely sortable (e.g. by when added, when last opened, how
@@ -554,6 +564,49 @@ Exactly one view is always chosen, which is what the APG's radio pattern is for 
 switching between panels of content. Radix's `RadioGroup` brings the roving tabindex and the arrow
 keys — note that it moves focus in a `setTimeout` and the focus is what selects, so a synchronous
 test of the arrow keys sees nothing and reads exactly like a control that has none.
+
+### The table's row card, whole titles, and columns you can hide
+
+> Oh, and while we're at it, can we improve the Table view on the home page (perhaps delegate to a
+> separate agent):
+> - Include a rich tooltip for each row that shows a bunch of extra stuff about the article. see
+>   @docs/project/tooltips.md
+> - Perhaps always show the full article title on each row? Or at least leave a bit more space - the
+>   titles are too truncated
+> - Maybe I can right-click a column to hide it? but then I'd need a way to reveal it again. Or maybe
+>   they always all re-show on re-opening the table?
+>
+> — Greg, 2026-09-28
+
+The choices and the alternatives passed over are recorded in
+[260928a](../plans/260928a-shelf-table-view-row-card-full-titles-hide-columns.md).
+
+**Titles wrap, whole, and so does the byline line under them.** Wrapping rather than a wider
+column, because a wider column only moves the cut; a clamp still cuts the titles this change is for.
+
+**Pointing at a title — or tabbing to it — opens a card, and the card is defined by subtraction**,
+the rule [Structure's card](tooltips.md#structures-card-which-is-defined-by-subtraction) set: it
+carries only what the current row is not showing. [`rowCardFacts`](../../src/web/library-columns.tsx)
+is the source of truth for those facts, including values whose columns are hidden. The Added cell's
+old `Details` card stays on the cards view; in the table it repeated the row. The title remains the
+one-tap route into the article on touch rather than becoming a reveal-then-commit control.
+
+**The five data columns can be hidden; Article and Actions cannot.** The title is the row's identity
+and route into the article, while Actions are controls rather than a value a card can preserve.
+[`libraryColumns`](../../src/web/library-columns.tsx) owns that distinction. The **Columns** menu is
+the discoverable keyboard-and-touch route; a header's right-click or long-press menu is the shortcut.
+The shortcut opens a one-item menu rather than hiding instantly, and returns focus to a surviving
+header after the chosen one disappears.
+
+A hidden column's value remains available in the row card, and hiding the active sort column leaves
+the sort and its chip alone. The choice is **remembered in this browser**, rather than re-shown on
+every visit or put in the URL: it is a preference about this screen, not a view worth sending to
+someone. The count on Columns keeps that preference discoverable. The guarded persistence and its
+handling of malformed or obsolete values live in
+[`shelf-hidden-columns.ts`](../../src/web/shelf-hidden-columns.ts).
+
+Hiding is **opt-in** in [`DataTable`](../../src/web/lib/DataTable.tsx): a page that passes no
+visibility state — `/admin`'s — gets no menus at all.
 
 ### Both views show a first few, and then ask
 
@@ -942,7 +995,8 @@ the derived tree is regenerated wholesale, so its node ids must never become for
 | [`src/web/library-columns.tsx`](../../src/web/library-columns.tsx) | **what the shelf can be sorted by**, and how each column is drawn — the whole of what this page tells the table |
 | [`src/web/lib/DataTable.tsx`](../../src/web/lib/DataTable.tsx) | **reusable**: the chips, the dense table, and the three TanStack options that are decisions |
 | [`src/web/lib/table-sort.ts`](../../src/web/lib/table-sort.ts) | **reusable**: sorting state ⇄ URL, the collator, and `sinkLast` |
-| [`src/web/ShelfControls.tsx`](../../src/web/ShelfControls.tsx) | the two controls that are the shelf's own: Unread, and cards-or-table |
+| [`src/web/ShelfControls.tsx`](../../src/web/ShelfControls.tsx) | the controls that are the shelf's own: Unread, cards-or-table, and where Columns sits |
+| [`src/web/shelf-hidden-columns.ts`](../../src/web/shelf-hidden-columns.ts) | which table columns this browser has hidden, and the guarded storage behind it |
 | [`src/web/ShelfEntry.tsx`](../../src/web/ShelfEntry.tsx) | the card, the five buttons, rename-in-place, the details tooltip — shared by both views |
 | [`src/web/TitleEditor.tsx`](../../src/web/TitleEditor.tsx) | **renaming, wherever the reader is** — the editor, the `PATCH`, and the heading-with-a-pencil the masthead and the metadata page both use |
 | [`src/web/IconButton.tsx`](../../src/web/IconButton.tsx) | the 28px icon-only button every row of them agrees on |

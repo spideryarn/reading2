@@ -1834,6 +1834,35 @@ export interface LibraryResponse {
 }
 
 /**
+ * The whole body of `GET /api/library/terms` — the shelf's filter topics.
+ * docs/plans/260928a-shelf-facet-terms.md § The route.
+ *
+ * Counts are **physical articles**, never grouped works, so six copies are six
+ * cards and a count of six. The coverage statistics are deliberately not here:
+ * they live in `npm run shelf-terms:report`.
+ */
+export interface LibraryTermsResponse {
+  /** Best first. Empty below 8 distinct works, or while everything is pending. */
+  terms: {
+    /** Lowercased, plural-folded — what `?topics=` names. */
+    key: string;
+    label: string;
+    /** Every member article, by how often it uses the phrase, then slug. */
+    articles: { slug: string; count: number }[];
+  }[];
+  scope: {
+    /** The whole visible shelf, including skipped and pending articles. */
+    articles: number;
+    /** Distinct eligible works (exact counted-text copies are one) among those read. */
+    works: number;
+    /** Read articles the extractor skipped — not English, or no prose. */
+    skipped: number;
+  };
+  /** In-scope articles not yet read; ask again until this is 0. */
+  pending: number;
+}
+
+/**
  * Which half of the shelf to list — `listArticles`.
  *
  * A parameter rather than a second function, so both halves are built by the
@@ -2845,6 +2874,39 @@ export interface Job {
    * two different jobs.
    */
   profile?: string;
+  /**
+   * **Present exactly when this job is a reset** — "as if just imported", with
+   * the extras dropped. `jobs.reset` in src/db/schema.ts; src/reset.ts says
+   * what an extra is. Absent on every other job.
+   */
+  reset?: JobReset;
+}
+
+/**
+ * **What a reset job carries**, written once at the press and never changed.
+ *
+ * `regenerate` is the extras to queue again once the reset publishes, in
+ * `STEP_ORDER` order — the extras the article *had* when the reader asked for
+ * them to be made again, else empty. `profile` is the reader's profile resolved
+ * at that same moment, exactly as `POST /api/jobs` resolves one, so each
+ * regenerated artefact is written for the reader as they were when they pressed
+ * (Sol F2). Neither is interpreted by the reset's own steps: the draft reads
+ * `reset` to drop the extras, and the publication reads it to queue them.
+ * docs/plans/260928a-reset-and-regenerate-article.md.
+ */
+export interface JobReset {
+  regenerate: StepName[];
+  profile?: string;
+}
+
+/**
+ * What `POST /api/article/:slug/reset` answers with (202): the reset job to
+ * follow, and the extras it will queue again once it publishes — empty when
+ * the reader did not ask for them, or the article had none.
+ */
+export interface ResetResponse {
+  jobId: string;
+  regenerate: StepName[];
 }
 
 /* ------------------------------------------------------------------ chat --
