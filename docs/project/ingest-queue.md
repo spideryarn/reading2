@@ -798,7 +798,8 @@ queue rather than about the button
   409 this queue has, and it is there because a first reset's successors, queued at its
   publication, would otherwise run after a second reset and undo it.
 - **It spends no billing slot**, and neither do its successors; it can spend model calls
-  (a PDF's front-matter pass, labels and hierarchy for changed text, and each regenerated mode).
+  (a PDF's front-matter pass; the hierarchy and labels passes, which were measured paying in
+  full — $0.52 and four minutes — on a local fixture; and each regenerated mode).
 
 ### A step is done when *all* its files are there
 

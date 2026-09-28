@@ -357,9 +357,10 @@ function ResetConfirm({
             : null}
         </p>
         <p className="tw:m-0 tw:mb-3 tw:text-ink-faint">
-          <strong className="tw:font-semibold tw:text-ink">Cost:</strong> reading it again is usually
-          free (a PDF costs one model call); the paragraph labels are made again. The article's arc
-          costs another model call when you next open the reading view.
+          <strong className="tw:font-semibold tw:text-ink">Cost:</strong> the article's structure
+          and paragraph labels may be worked out again (a few model calls, and a few minutes on a
+          long piece); a PDF also costs one small call to re-read. The article's arc costs another
+          model call when you next open the reading view.
           {regenerate ? " Most extras cost roughly one model call each." : null}
           {regenerate && extras.includes("debate") ? " Debate uses two." : null}
           {regenerate && extras.includes("sketch") ? " Sketch costs about $0.20." : null}

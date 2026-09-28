@@ -1,8 +1,8 @@
 # Reset an article, and optionally make its extras again
 
-*Status as of 2026-09-28: stage 1 (server) built and committed; stage 2 (the button) not built —
-evidence: `jobs.reset` and `POST /api/article/:slug/reset` exist; no `ResetSection` in
-`src/web/Metadata.tsx`.*
+*Status as of 2026-09-28: built and pushed to `dev`, behind the experimental switch; not deployed
+— evidence: `POST /api/article/:slug/reset`, `jobs.reset` (migration entry 91), `ResetSection` in
+`src/web/Metadata.tsx`, and a browser pass on the box that reset a local article end to end.*
 
 ## The ask
 
@@ -173,6 +173,12 @@ which is true — the text they were made from is the text on the page. Listed f
 - **The reset, PDF**: the transcription chunks replay their checkpoints, but **the front-matter
   pass is always paid again** — one model call.
 - Any text that did change re-buys the hierarchy and labels for the parts that changed.
+- **Measured on the box, 2026-09-28** (local fixture *How to Do Great Work*, stage 3 browser
+  pass): the reset took 4 min 17 s; `hierarchy` made one uncached model call ($0.34, 254 s) and the
+  labels successor eight ($0.18). So "usually free" was too optimistic for the structure passes —
+  at least on a local fixture, which may simply have no checkpoints — and the confirm now says
+  *may be worked out again (a few model calls, and a few minutes)*. Whether production articles
+  replay their checkpoints is unmeasured.
 - **Regenerate**: roughly what opening each of those modes costs — one model call each, except
   debate (two), sketch (~$0.20), and illustrated (a brief plus one image call per plate).
 
@@ -208,21 +214,21 @@ Each is a default we built; say the word and it changes.
 
 ### Stage 1 — the server: a reset job and the route
 
-- [ ] `src/reset.ts`: `RESET_ROLE` (exhaustive over `StepName`), `extraSteps()`, and the columns
+- [x] `src/reset.ts`: `RESET_ROLE` (exhaustive over `StepName`), `extraSteps()`, and the columns
       each extra owns, read from `STORAGE`.
-- [ ] `jobs.reset jsonb` (nullable) `{ regenerate: StepName[]; profile?: string }` — additive
+- [x] `jobs.reset jsonb` (nullable) `{ regenerate: StepName[]; profile?: string }` — additive
       migration via drizzle-kit generate. Carried through `enqueue`/`JobRequest`, **into
       `workKeyFor` and `sameWork` only when present**, and into retry (a retried reset still
       resets, with the same regenerate list and profile).
-- [ ] Draft minting for a `reset` job nulls the extras' columns and deletes their step-run rows,
+- [x] Draft minting for a `reset` job nulls the extras' columns and deletes their step-run rows,
       in the same transaction. Only on the mint branch; a re-opened draft is already reset.
-- [ ] `publishRevisionIn`: when the publishing job has `reset.regenerate`, queue one successor per
+- [x] `publishRevisionIn`: when the publishing job has `reset.regenerate`, queue one successor per
       step, in order, in the same transaction (`enqueueSuccessorIn`, extended with an optional
       profile that goes into the row and its work key).
-- [ ] `POST /api/article/:slug/reset` `{ regenerate }` → resolves the profile as `POST /api/jobs`
+- [x] `POST /api/article/:slug/reset` `{ regenerate }` → resolves the profile as `POST /api/jobs`
       does, reads which extras the current revision has, enqueues the reset job. Returns its id and
       the list it will regenerate. 404 for a slug you do not own. 400 for a non-boolean.
-- [ ] Tests, **red first**, against Postgres:
+- [x] Tests, **red first**, against Postgres:
   - a reset over an article with quotes + glossary + arc publishes a revision with those columns
     null and their step-runs gone; the previous revision still holds them;
   - comments and reading time on unchanged blocks survive with the same block ids;
@@ -238,8 +244,8 @@ Each is a default we built; say the word and it changes.
   - another owner's slug is a 404 and enqueues nothing;
   - `RESET_ROLE` classifies every step (type-level; plus a test that `DEFAULT_INGEST_STEPS` are all
     `import`).
-- [ ] Mutate: remove the null-out; the first test must go red.
-- [ ] Sol code review (writes fixes in stage); commit; update this plan.
+- [x] Mutate: remove the null-out; the first test must go red.
+- [x] Sol code review (writes fixes in stage); commit; update this plan.
 
 **Landed (stage 1).** As planned, with two departures: the route is singular, `/api/article/…`,
 matching its neighbours; and `STORAGE` moved to `src/store/artifact-storage.ts` (re-exported from
@@ -250,21 +256,27 @@ imports — a cycle otherwise. The browser sees `reset.regenerate` on a job but 
 
 ### Stage 2 — the button
 
-- [ ] `ResetSection` in `src/web/Metadata.tsx`, above *Archive this article*, gated by
+- [x] `ResetSection` in `src/web/Metadata.tsx`, above *Archive this article*, gated by
       `useExperimental().on`. Two-click confirm in plain words (lost / kept / cost), a checkbox for
       "also make the extras again" listing which ones by name. After pressing, the jobs show in the
       same progress UI the rerun rows use, and the page re-reads its metadata when they finish.
-- [ ] Copy in the component, not `messages.ts` (it is not a failure — [copy.md](../project/copy.md)).
-- [ ] Component test for the confirm and the request body; browser check in a subagent against the
+- [x] Copy in the component, not `messages.ts` (it is not a failure — [copy.md](../project/copy.md)).
+- [x] Component test for the confirm and the request body; browser check in a subagent against the
       local dev server (Playwright, this box).
-- [ ] Sol code review; commit.
+- [x] Sol code review; commit.
 
 ### Stage 3 — docs
 
-- [ ] [ingest-queue.md](../project/ingest-queue.md): a section beside *A reader can ask for nine of
+- [x] [ingest-queue.md](../project/ingest-queue.md): a section beside *A reader can ask for nine of
       them again*. [experimental-features.md](../project/experimental-features.md): add it to the
       list. [block-ids.md](../project/block-ids.md): one line that a reset is a re-extraction.
-- [ ] Push to `dev`; worktree check; remove.
+- [x] Browser pass on the box (Playwright): gate, placement, checkbox, confirm opens 3/3 and sends
+      nothing, Cancel, a real reset (202 → advance → done), extras gone after reload, the arc
+      starting itself on the reading view, a comment on an unchanged paragraph still attached, a
+      conflicting second press answered by the 409 sentence, no console errors, no overflow at
+      400px. One caveat: the "Reload" prompt is tab state, so a reload during the finish loses it
+      (the article is reset regardless).
+- [x] Push to `dev`; worktree check; remove.
 
 ## Rejected
 
@@ -323,3 +335,9 @@ the rest is re-checked in stage 3.
   successors carry no durable parent-reset id (the scope lives only in the work-key hash), so an
   independent identical job created in the same millisecond is ambiguous to the client.
   [review](260928a-reset-and-regenerate-article-stage2-review-sol-r2.md).
+- **F16 narrow check** — GPT Sol: closed, no new P0/P1. Two residuals, both P2, left: (a) a
+  regenerated mode whose job has already *failed* before a reload is not shown on the Metadata
+  page after it (the mode itself is simply absent, and opening it starts it again); (b) the
+  client's profile comparison compares two empty strings, because `publicJob` strips profiles —
+  harmless, and the same ambiguity as F17.
+  [check](260928a-reset-and-regenerate-article-f16-check-sol.md).
