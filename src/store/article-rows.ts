@@ -425,6 +425,22 @@ export const ARTICLE_TABLE_COVERAGE = {
         "meaningless outside Spideryarn's own pipeline.",
     },
   },
+  /* The shelf's filter terms, step 1 — docs/plans/260928a-shelf-facet-terms.md. */
+  revision_phrase_runs: {
+    rollback: {
+      exported: false,
+      why:
+        "A cache of a deterministic function of the current revision's blocks, " +
+        "which this export writes. Dropped, the next shelf load recomputes it.",
+    },
+    bundle: {
+      exported: false,
+      why:
+        "Candidate phrases counted from the article's own text by a fixed " +
+        "program — derived from the blocks the bundle already carries, and " +
+        "recomputed by Spideryarn on demand.",
+    },
+  },
 } as const satisfies Readonly<Record<string, TableCoverage>>;
 
 /** A table name this record knows about. */

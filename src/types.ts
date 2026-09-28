@@ -1727,6 +1727,35 @@ export interface LibraryResponse {
 }
 
 /**
+ * The whole body of `GET /api/library/terms` — the shelf's filter topics.
+ * docs/plans/260928a-shelf-facet-terms.md § The route.
+ *
+ * Counts are **physical articles**, never grouped works, so six copies are six
+ * cards and a count of six. The coverage statistics are deliberately not here:
+ * they live in `npm run shelf-terms:report`.
+ */
+export interface LibraryTermsResponse {
+  /** Best first. Empty below 8 distinct works, or while everything is pending. */
+  terms: {
+    /** Lowercased, plural-folded — what `?topics=` names. */
+    key: string;
+    label: string;
+    /** Every member article, by how often it uses the phrase, then slug. */
+    articles: { slug: string; count: number }[];
+  }[];
+  scope: {
+    /** In-scope articles: active, or active + archived with `?archived=1`. */
+    articles: number;
+    /** Distinct works (exact counted-text copies are one) among those read. */
+    works: number;
+    /** Articles the extractor skipped — not English, or no prose. */
+    skipped: number;
+  };
+  /** In-scope articles not yet read; ask again until this is 0. */
+  pending: number;
+}
+
+/**
  * Which half of the shelf to list — `listArticles`.
  *
  * A parameter rather than a second function, so both halves are built by the

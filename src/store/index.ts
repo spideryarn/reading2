@@ -86,6 +86,7 @@ import type {
   RefereeCriteriaStore,
   SearchStore,
   ShelfStore,
+  ShelfTermsStore,
   SourceStore,
   VisibilityStore,
 } from "./contracts.js";
@@ -108,6 +109,7 @@ import { pgRefereeClaimsStore } from "./pg-referee-claims.js";
 import { pgRefereeCriteriaStore } from "./pg-referee-criteria.js";
 import { pgSearchStore } from "./pg-searches.js";
 import { pgLibrarySearch, pgShelfStore } from "./pg-shelf.js";
+import { pgShelfTermsStore } from "./pg-shelf-terms.js";
 import { pgSourceStore } from "./pg-source.js";
 import { pgVisibilityStore } from "./pg-visibility.js";
 
@@ -404,6 +406,9 @@ export const commentStore: CommentStore = guarded("comments", pgCommentStore);
 export const shelfStore: ShelfStore = guarded("shelf", pgShelfStore);
 
 export const librarySearch: LibrarySearch = guarded("library", pgLibrarySearch);
+
+/** The shelf's filter topics — docs/plans/260928a-shelf-facet-terms.md. */
+export const shelfTermsStore: ShelfTermsStore = guarded("shelf-terms", pgShelfTermsStore);
 
 /**
  * The reader's global profile — "about you", not scoped to any article.

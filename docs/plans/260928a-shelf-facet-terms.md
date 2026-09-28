@@ -351,6 +351,55 @@ building:
   required. And a synthetic 1,000-article timing of the warm path (read + choose).
 - Done when: green, and this plan's § Measurements regenerated from the real code (Sol F14).
 
+**Landed** (2026-09-28): `revision_phrase_runs` (schema.ts, migration
+`20260928023038_shelf_terms_revision_phrase_runs`), `src/store/pg-shelf-terms.ts` (wired as
+`shelfTermsStore`, guarded as `shelf-terms`), `GET /api/library/terms`, `LibraryTermsResponse`,
+`scripts/shelf-terms-report.ts`, `tests/shelf-terms-pg.test.ts` (10 cases, each of seven deliberate
+breaks of the store or route turned its own case red) and `tests/shelf-terms-warm-path.test.ts`.
+What differed from the design above, or was decided while building:
+
+- **The owner-scoped set is its own query, not `listArticlesQuery`**, built from the same pieces
+  (`ownedByReader`, `onTheShelf`, the `archived_at` test, the join to the current revision,
+  `ADDED_AT` order). It does not repeat `listArticles`' per-row "has a tree and blocks" check, which
+  that function's own comment says has never excluded a published article. `archived: true` means
+  active **and** archived here, not archived only as in `listArticles`.
+- **A fill always does at least one article**, whatever the budget, so the client's ask-again loop
+  cannot spin. Each fill is one `read committed` transaction: the insert (`on conflict do nothing`),
+  then a delete of the article's rows whose revision is not its current one *as it is now* — so a
+  republication mid-fill deletes the stale row just written, not the peer's new one — any version.
+- **Skipped articles go into the chooser** (as stage 1's `ChooseArticle` intends) and so count as
+  works and in the coverage denominator; `scope.articles` counts pending ones too.
+- **The report reads through the route's own set query and extracts in memory**; it imports no write
+  path. The shell's `DATABASE_URL` wins over `.env.local`.
+- **Not applied to the shared local database.** `npm run db:migrate` refuses there: two peer
+  worktrees' unmerged migrations (one is `20260928010007_jobs_reset`) are in that ledger and not in
+  this tree's journal. The migration was first generated as `20260928012942_…`, stamped *below* the
+  newer of those rows, which drizzle would have skipped for ever once they were merged
+  ([database.md § A watermark is not a ledger](../project/database.md)); it was regenerated with the
+  same DDL and a later stamp before it was committed.
+  The Postgres tests are unaffected (they mint a private database from this tree's journal); a dev
+  server in this tree will fail `/api/library/terms` until `db:migrate` runs after that migration
+  reaches `dev`.
+- **Warm path, synthetic 1,000 articles × 200 candidates:** 15.6 MB of candidate JSON, 160 ms to
+  parse, 745 ms to choose (the database transfer itself not measured). Acceptable for v1; if a real
+  shelf gets there, trimming the stored list below 200 is the first lever.
+
+**Measured on the local database** (owner `f4d08b58…`, extractor v1, `npm run shelf-terms:report`):
+
+| scope | articles | works | skipped | K | coverage | per article mean/median | ≥ 2 | Jaccard mean/max |
+|---|---|---|---|---|---|---|---|---|
+| active | 38 | 33 | 1 | 20 | 0.76 | 1.55 / 1 | 0.34 | 0.07 / 0.67 |
+| active | 38 | 33 | 1 | **30** | **0.87** | **2.84 / 2** | **0.71** | **0.07 / 0.67** |
+| active | 38 | 33 | 1 | 40 (33 chosen) | 0.92 | 3.05 / 2 | 0.76 | 0.07 / 0.67 |
+| + archived | 41 | 36 | 1 | 20 | 0.76 | 1.49 / 1 | 0.32 | 0.07 / 0.67 |
+| + archived | 41 | 36 | 1 | 30 | 0.88 | 2.73 / 2 | 0.68 | 0.07 / 0.67 |
+| + archived | 41 | 36 | 1 | 40 (36 chosen) | 0.90 | 3.20 / 2 | 0.83 | 0.07 / 0.67 |
+
+329k prose words active (336k with archived); extraction 6.2 ms per 1k words, about 2 s for the
+whole shelf — so a first visit here fills over two requests. The one skipped article is
+`sample-spya-vgwr6s`, not English. Uncovered at K = 30: that one, two 99-word *stage-e* test pages,
+*todo* (234 words) and *read* (448). The K = 30 active row matches stage 1's throwaway run exactly.
+
 ### Stage 3 — the shelf UI
 
 - `src/web/ShelfTerms.tsx`, `src/web/useShelfTerms.ts`, params in `params.ts`, the narrowing

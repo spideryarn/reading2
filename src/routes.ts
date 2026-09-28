@@ -132,6 +132,7 @@ import {
   refereeCriteriaStore,
   searchStore,
   shelfStore,
+  shelfTermsStore,
   readingTimeStore,
   loadArticle,
   loadGlossary,
@@ -392,6 +393,7 @@ import type {
   IllustratedResponse,
   SketchResponse,
   LibraryResponse,
+  LibraryTermsResponse,
   RememberStance,
   ThreadKind,
   ThreadResponse,
@@ -7047,6 +7049,25 @@ const AUTH_ROUTES: readonly AuthRoute[] = [
     path: "/api/library/search",
     handler: async ({ request: { res, query } }) => {
       send(res, 200, await searchTheLibrary(query));
+    },
+  },
+
+  /* **The shelf's filter topics**, and before the `:slug` pattern for the same
+     reason `search` is: `terms` is a valid slug shape.
+     docs/plans/260928a-shelf-facet-terms.md § The route. A GET that may write
+     — a bounded, idempotent cache fill (src/store/pg-shelf-terms.ts says why
+     that is acceptable here and not for counters). */
+  {
+    kind: "exact",
+    method: "GET",
+    path: "/api/library/terms",
+    handler: async ({ request: { res, query } }) => {
+      /* `=== "1"`, as `/api/library` does. Here it widens to active + archived. */
+      const archived = query.get("archived") === "1";
+      const terms: LibraryTermsResponse = await shelfTermsStore.terms({ archived });
+      /* The reader's own words, derived: never a shared cache's (Sol F10). */
+      res.setHeader("Cache-Control", "private, no-store");
+      send(res, 200, terms);
     },
   },
 

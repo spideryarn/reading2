@@ -59,6 +59,7 @@
     "stripe:check": "tsx scripts/stripe-check.ts",
     "setup": "tsx scripts/setup-local.ts",
     "db:export": "tsx scripts/db-export.ts",
+    "shelf-terms:report": "tsx scripts/shelf-terms-report.ts",
     "db:start": "supabase start",
     "db:stop": "supabase stop",
     "db:status": "supabase status",
