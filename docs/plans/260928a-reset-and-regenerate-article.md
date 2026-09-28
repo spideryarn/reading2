@@ -299,3 +299,19 @@ imports — a cycle otherwise. The browser sees `reset.regenerate` on a job but 
   one is a 409), and a reset's `created_at` is the database clock at insert. Postgres tests run by
   me afterwards: 14 files, 527 tests, exit 0.
   [review](260928a-reset-and-regenerate-article-stage1-review-sol.md).
+- **Stage 2 code, round 1** — GPT Sol (reviewer-fixer), accept after fixes. **Fixed by Sol**: F9
+  P1 (a stale-but-present extra was not named), F10 P1 (the regeneration list vanished on reload —
+  now recovered from `job.reset`), F11 P1 (FAQ, Illustrated and Citations have no rerun row, so
+  their regeneration had no visible progress — now drawn), F12 P1 (cost copy understated debate,
+  sketch, illustrated and arc; kept/lost copy widened), F13 P2 (confirm is a `fieldset`/`legend`).
+  Reported: F14 P2 (`RESET_EXTRA_NAME` duplicates `RESET_ROLE`, held only by a test) — taken in
+  stage 3; F15 P2 (client infers presence from run receipts, server from non-null columns; they
+  agree on normal revisions) — left, noted here.
+  [review](260928a-reset-and-regenerate-article-stage2-review-sol.md).
+
+**Landed (stage 2).** `src/web/ResetArticle.tsx` (its own file: Metadata.tsx is near its
+complexity budget), `ResetSection` in Metadata.tsx, and a `reset` action on `useJobs` that goes
+through the same `act` wrapper as `run`, so a success pokes the job engine. After the reset
+finishes, the page offers a Reload: the reading view holds the article in memory and nothing
+re-fetches it. A first browser pass on the box confirmed the gate, the placement and the checkbox;
+the rest is re-checked in stage 3.

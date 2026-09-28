@@ -113,6 +113,8 @@ const ARTICLE: Article = {
 
 /** Which steps the metadata endpoint currently says have run. */
 let ran: Set<StepName>;
+/** Steps with an artefact that is present but no longer current. */
+let stale: Set<StepName>;
 /** Every body posted to the reset route, parsed, in order. */
 let resets: unknown[];
 /** Every `POST /api/jobs` body — a reset must not go through that route. */
@@ -143,14 +145,18 @@ function stages(): StageState[] {
     step,
     label: `Doing ${step}`,
     outputs: [`data/${SLUG}/${step}.json`],
-    done: ran.has(step),
+    done: ran.has(step) && !stale.has(step),
     ranAt: ran.has(step) ? "2026-09-01T00:00:00.000Z" : null,
     startedAt: ran.has(step) ? "2026-08-31T23:59:52.000Z" : null,
     bytes: null,
   }));
 }
 
-function resetJob(id: string, status: Job["status"] = "queued"): Job {
+function resetJob(
+  id: string,
+  status: Job["status"] = "queued",
+  regenerate: StepName[] = [],
+): Job {
   return {
     id,
     ownerId: "owner" as Job["ownerId"],
@@ -162,7 +168,20 @@ function resetJob(id: string, status: Job["status"] = "queued"): Job {
     })),
     status,
     createdAt: "2026-09-28T00:00:00.000Z",
-    reset: { regenerate: [] },
+    reset: { regenerate },
+  };
+}
+
+function oneStepJob(id: string, step: StepName, status: Job["status"]): Job {
+  return {
+    id,
+    ownerId: "owner" as Job["ownerId"],
+    slug: SLUG,
+    steps: [{ name: step, label: `Doing ${step}`, status: status === "done" ? "done" : "pending" }],
+    status,
+    createdAt: "2026-09-28T00:00:01.000Z",
+    ...(status === "done" ? { finishedAt: "2026-09-28T00:00:02.000Z" } : {}),
+    ...(status === "error" ? { error: `Couldn't make the ${step}.` } : {}),
   };
 }
 
@@ -170,6 +189,7 @@ beforeEach(() => {
   (globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
   experimentalOn = true;
   ran = new Set<StepName>([...IMPORT_STEPS, "arc", "glossary", "quotes", "faq"]);
+  stale = new Set<StepName>();
   resets = [];
   jobPosts = [];
   advances = [];
@@ -307,6 +327,28 @@ describe("the Start this article again section", () => {
     }
   });
 
+  it("names an extra that exists but is stale, as the reset route does", async () => {
+    stale.add("glossary");
+    await open();
+
+    expect(checkbox()?.closest("label")?.textContent).toContain("Glossary");
+  });
+
+  it("refreshes the list when an extra outside the rerun rows finishes in another tab", async () => {
+    await open();
+    await act(async () => jobEngine.receive([]));
+    expect(checkbox()?.closest("label")?.textContent).not.toContain("Citations");
+    const before = metadataReads;
+    ran.add("citations");
+
+    await act(async () => jobEngine.receive([oneStepJob("job-citations", "citations", "running")]));
+    await act(async () => jobEngine.receive([oneStepJob("job-citations", "citations", "done")]));
+    await settle();
+
+    expect(metadataReads).toBeGreaterThan(before);
+    expect(checkbox()?.closest("label")?.textContent).toContain("Citations");
+  });
+
   it("offers no checkbox when the article has no extras", async () => {
     ran = new Set<StepName>(IMPORT_STEPS);
     await open();
@@ -327,6 +369,38 @@ describe("the Start this article again section", () => {
     expect(text).toContain("no longer in this version");
     expect(text).toContain("Cost");
     expect(button("Yes, start again"), "no Yes on the confirm").toBeTruthy();
+  });
+
+  it("describes the guarded press without making the button describe itself", async () => {
+    await open();
+    await press(button("Start again"));
+
+    const yes = button("Yes, start again");
+    const describedBy = yes?.getAttribute("aria-describedby");
+    const description = describedBy ? document.getElementById(describedBy) : null;
+    expect(description, "the guarded press has no description").toBeTruthy();
+    expect(description?.contains(yes ?? null), "the description contains the button itself").toBe(
+      false,
+    );
+    expect(card()?.querySelector("fieldset > legend")?.textContent).toBe(
+      "Start this article again?",
+    );
+    expect(checkbox()?.closest("label")?.textContent).toContain("Also make these again");
+  });
+
+  it("states the exceptional costs of the selected extras", async () => {
+    ran.add("debate");
+    ran.add("sketch");
+    ran.add("illustrated");
+    await open();
+    await press(checkbox());
+    await press(button("Start again"));
+
+    const text = card()?.textContent ?? "";
+    expect(text).toContain("Debate uses two");
+    expect(text).toContain("Sketch costs about $0.20");
+    expect(text).toContain("one image call per plate");
+    expect(text).toContain("arc costs another model call when you next open the reading view");
   });
 
   it("posts regenerate: false when the box is not ticked", async () => {
@@ -385,6 +459,16 @@ describe("the Start this article again section", () => {
     expect(button("Stop"), "the running reset has no Stop").toBeTruthy();
   });
 
+  it("recovers the server's regeneration list with an active reset after reload", async () => {
+    await act(async () =>
+      jobEngine.receive([resetJob("job-reset", "running", ["faq", "citations"])]),
+    );
+    await open();
+
+    expect(button("Start again")).toBeUndefined();
+    expect(card()?.textContent).toContain("Then, one after another: FAQ and Citations.");
+  });
+
   it("reads the metadata again when the reset finishes", async () => {
     await open();
     await act(async () => jobEngine.receive([]));
@@ -397,6 +481,81 @@ describe("the Start this article again section", () => {
     expect(metadataReads).toBeGreaterThan(before);
   });
 
+  it("reads metadata again when a regenerated extra outside the rerun rows finishes", async () => {
+    resetAnswer = () => json({ jobId: "job-reset", regenerate: ["faq"] }, 202);
+    await open();
+    await act(async () => jobEngine.receive([]));
+    await press(checkbox());
+    await press(button("Start again"));
+    await press(button("Yes, start again"));
+    await act(async () =>
+      jobEngine.receive([
+        resetJob("job-reset", "running", ["faq"]),
+        oneStepJob("job-faq", "faq", "queued"),
+      ]),
+    );
+    await act(async () =>
+      jobEngine.receive([
+        resetJob("job-reset", "done", ["faq"]),
+        oneStepJob("job-faq", "faq", "running"),
+      ]),
+    );
+    await settle();
+    const before = metadataReads;
+
+    await act(async () =>
+      jobEngine.receive([
+        resetJob("job-reset", "done", ["faq"]),
+        oneStepJob("job-faq", "faq", "done"),
+      ]),
+    );
+    await settle();
+
+    expect(metadataReads).toBeGreaterThan(before);
+  });
+
+  it("recovers a published reset's active regeneration after reload", async () => {
+    await act(async () =>
+      jobEngine.receive([
+        resetJob("job-reset", "done", ["faq"]),
+        oneStepJob("job-faq", "faq", "running"),
+      ]),
+    );
+    await open();
+    const before = metadataReads;
+
+    await act(async () =>
+      jobEngine.receive([
+        resetJob("job-reset", "done", ["faq"]),
+        oneStepJob("job-faq", "faq", "done"),
+      ]),
+    );
+    await settle();
+
+    expect(metadataReads).toBeGreaterThan(before);
+  });
+
+  it("keeps a failure visible for a regenerated extra with no rerun row", async () => {
+    await act(async () =>
+      jobEngine.receive([
+        resetJob("job-reset", "done", ["faq"]),
+        oneStepJob("job-faq", "faq", "running"),
+      ]),
+    );
+    await open();
+    expect(card()?.textContent).toContain("Doing faq");
+
+    await act(async () =>
+      jobEngine.receive([
+        resetJob("job-reset", "done", ["faq"]),
+        oneStepJob("job-faq", "faq", "error"),
+      ]),
+    );
+    await settle();
+
+    expect(card()?.textContent).toContain("FAQ did not finish: Couldn't make the faq.");
+  });
+
   it("shows the server's own sentence when the reset is refused", async () => {
     resetAnswer = () => json({ error: "That article is not on your shelf." }, 404);
     await open();
@@ -404,5 +563,20 @@ describe("the Start this article again section", () => {
     await press(button("Yes, start again"));
 
     expect(card()?.textContent).toContain("That article is not on your shelf.");
+  });
+
+  it("shows a conflicting reset in plain words", async () => {
+    resetAnswer = () =>
+      json(
+        { error: "A reset with different regeneration options is already queued for this article." },
+        409,
+      );
+    await open();
+    await press(button("Start again"));
+    await press(button("Yes, start again"));
+
+    expect(card()?.textContent).toContain(
+      "A reset with different regeneration options is already queued for this article.",
+    );
   });
 });

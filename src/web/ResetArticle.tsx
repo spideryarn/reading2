@@ -30,16 +30,26 @@
  * something else happened to poll.
  */
 import { RotateCcw } from "lucide-react";
-import { type RefObject, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import {
+  type RefObject,
+  useCallback,
+  useEffect,
+  useId,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 
 import { jobWorthRetrying } from "../job-failure.js";
 import { driverStalled } from "../job-state.js";
 import { worthRetrying } from "../messages.js";
+import { METADATA_RERUN_STEPS } from "../rerun-steps.js";
+import { STEP_ORDER } from "../step-order.js";
 import type { ArticleMetadata, Job, StepName } from "../types.js";
 import { Button } from "@/components/ui/button";
 import { JobProgress } from "./JobProgress.js";
 import { useJobs } from "./useJobs.js";
-import type { StepFailure } from "./useStepJob.js";
+import { useStepJob, type StepFailure } from "./useStepJob.js";
 
 /**
  * **What a reader calls each extra, and `null` for a step that is not one.**
@@ -70,6 +80,12 @@ export const RESET_EXTRA_NAME: Record<StepName, string | null> = {
   citations: "Citations",
 };
 
+/** Extras with no row in Metadata's existing *Generate it again* section. */
+const METADATA_RERUN_STEP_SET = new Set<StepName>(METADATA_RERUN_STEPS);
+const RESET_ONLY_PROGRESS = STEP_ORDER.filter(
+  (step) => RESET_EXTRA_NAME[step] !== null && !METADATA_RERUN_STEP_SET.has(step),
+);
+
 /** `a, b and c` — the names are a list the reader reads, not a CSV. */
 function listed(names: string[]): string {
   if (names.length < 2) return names.join("");
@@ -95,6 +111,9 @@ function isResetOf(job: Job, slug: string): boolean {
  */
 function useResetJob(slug: string, onFinished: () => void) {
   const announced = useRef<Set<string>>(new Set());
+  /** The server's plan, not the checkbox's guess. */
+  const [regenerating, setRegenerating] = useState<StepName[]>([]);
+  const rememberRegenerating = useCallback((steps: StepName[]) => setRegenerating(steps), []);
   /** A reset of this article finished while this page was open. */
   const [finished, setFinished] = useState(false);
   const finish = useCallback(
@@ -107,9 +126,20 @@ function useResetJob(slug: string, onFinished: () => void) {
   );
   const announce = useCallback(
     (job: Job) => {
-      if (isResetOf(job, slug)) finish(job.id);
+      if (job.slug !== slug) return;
+      if (isResetOf(job, slug)) {
+        rememberRegenerating(job.reset?.regenerate ?? []);
+        finish(job.id);
+        return;
+      }
+      /* Regeneration successors are ordinary one-step jobs, and three of them
+         have no row in Metadata's smaller rerun menu. Refresh for every job on
+         this article: it also keeps the pre-confirm list current when FAQ,
+         Illustrated or Citations finishes in another tab. Duplicate refreshes
+         from the nine existing rows are collapsed by useOrderedRead. */
+      onFinished();
     },
-    [slug, finish],
+    [slug, finish, onFinished, rememberRegenerating],
   );
   const queue = useJobs("watches-queue", announce);
 
@@ -124,6 +154,38 @@ function useResetJob(slug: string, onFinished: () => void) {
     );
     return queued[0] ?? null;
   }, [queue.jobs, slug]);
+
+  /**
+   * The plan can outlive the reset row's active state. On a reload after the
+   * reset published, recover it only when one of that reset's promised
+   * successor steps is still active and was queued after the reset. A bare
+   * historical reset must not resurrect a stale "making these again" state.
+   */
+  const recoveredPlan = useMemo<StepName[] | null>(() => {
+    if (job) return job.reset?.regenerate ?? [];
+    const active = queue.jobs.filter(
+      (candidate) =>
+        candidate.slug === slug &&
+        (candidate.status === "queued" || candidate.status === "running"),
+    );
+    let source: Job | null = null;
+    for (const candidate of queue.jobs) {
+      if (!isResetOf(candidate, slug) || candidate.status !== "done") continue;
+      const plan = candidate.reset?.regenerate ?? [];
+      const hasSuccessor = active.some(
+        (successor) =>
+          successor.createdAt >= candidate.createdAt &&
+          successor.steps.some((step) => plan.includes(step.name)),
+      );
+      if (!hasSuccessor) continue;
+      if (!source || candidate.createdAt > source.createdAt) source = candidate;
+    }
+    return source?.reset?.regenerate ?? null;
+  }, [job, queue.jobs, slug]);
+
+  useEffect(() => {
+    if (recoveredPlan !== null) rememberRegenerating(recoveredPlan);
+  }, [recoveredPlan, rememberRegenerating]);
 
   const [postFailure, setPostFailure] = useState<string | null | undefined>(undefined);
   const [watchedId, setWatchedId] = useState<string | null>(null);
@@ -146,9 +208,6 @@ function useResetJob(slug: string, onFinished: () => void) {
     if (seen.status === "done" && !announced.current.has(id)) finish(id);
   }, [queue.jobs, finish]);
 
-  /** The extras the server said it will make again, once the reset publishes. */
-  const [regenerating, setRegenerating] = useState<StepName[]>([]);
-
   const start = useCallback(
     async (regenerate: boolean) => {
       setWatchedId(null);
@@ -157,7 +216,7 @@ function useResetJob(slug: string, onFinished: () => void) {
       const answer = await queue.reset(slug, regenerate);
       if (answer) {
         setPostFailure(undefined);
-        setRegenerating(answer.regenerate);
+        rememberRegenerating(answer.regenerate);
         setWatchedId(answer.jobId);
         startedId.current = answer.jobId;
         return;
@@ -168,7 +227,7 @@ function useResetJob(slug: string, onFinished: () => void) {
       startedId.current = null;
       setStarting(false);
     },
-    [queue, slug],
+    [queue, slug, rememberRegenerating],
   );
 
   const stopped = watchedId ? queue.jobs.find((j) => j.id === watchedId) : undefined;
@@ -213,6 +272,7 @@ function useResetJob(slug: string, onFinished: () => void) {
  */
 function ResetConfirm({
   names,
+  extras,
   lookUps,
   regenerate,
   retry,
@@ -223,6 +283,8 @@ function ResetConfirm({
 }: {
   /** The extras this article has now, by name. */
   names: string[];
+  /** The same extras by server step name, for the exceptional costs. */
+  extras: StepName[];
   /** It has a glossary or citations, whose look-ups and finds hang off entry ids. */
   lookUps: boolean;
   /** The box is ticked and there is something to make again. */
@@ -234,37 +296,42 @@ function ResetConfirm({
   onYes: () => Promise<void>;
   onCancel: () => void;
 }) {
+  const detailsId = useId();
   return (
-    <div
-      id="reset-confirm"
+    <fieldset
       className="tw:rounded-md tw:border tw:border-rule-strong tw:bg-surface-raised tw:p-3"
     >
-      <h3 className="tw:m-0 tw:mb-2 tw:text-sm tw:font-semibold tw:text-ink">
+      <legend className="tw:m-0 tw:mb-2 tw:text-sm tw:font-semibold tw:text-ink">
         Start this article again?
-      </h3>
-      <p className="tw:m-0 tw:mb-2 tw:text-ink-faint">
-        <strong className="tw:font-semibold tw:text-ink">Kept:</strong> your comments, highlights,
-        notes, chat and reading time; the title you gave it; your saved searches and look-ups; the
-        previous version (kept, not shown).
-      </p>
-      <p className="tw:m-0 tw:mb-2 tw:text-ink-faint">
-        <strong className="tw:font-semibold tw:text-ink">Lost or changed:</strong>{" "}
-        {names.length > 0 ? `${listed(names)}, until they are made again. ` : null}A paragraph whose
-        text comes out different gets a new place, so a comment on it moves to the end of Comments
-        as “no longer in this version”. This mostly happens to paragraphs with maths, in articles
-        added before maths was drawn properly.
-        {lookUps
-          ? " Glossary look-ups and found papers stop showing beside entries that are made again."
-          : null}
-      </p>
-      <p className="tw:m-0 tw:mb-3 tw:text-ink-faint">
-        <strong className="tw:font-semibold tw:text-ink">Cost:</strong> reading it again is usually
-        free (a PDF costs one small model call); the paragraph labels and the article's arc are
-        made again.
-        {regenerate
-          ? " Making the extras again is roughly one model call for each, like opening each one."
-          : null}
-      </p>
+      </legend>
+      <div id={detailsId}>
+        <p className="tw:m-0 tw:mb-2 tw:text-ink-faint">
+          <strong className="tw:font-semibold tw:text-ink">Kept:</strong> your comments, highlights,
+          bookmarks, notes, chat and reading time; the title you gave it; your shelf and sharing
+          settings; your saved searches and look-ups; the previous version (kept, not shown).
+        </p>
+        <p className="tw:m-0 tw:mb-2 tw:text-ink-faint">
+          <strong className="tw:font-semibold tw:text-ink">Lost or changed:</strong>{" "}
+          {names.length > 0 ? `${listed(names)}, until they are made again. ` : null}A paragraph
+          whose text comes out different gets a new place, so a comment on it moves to the end of
+          Comments as “no longer in this version”. This mostly happens to paragraphs with maths in
+          older articles; a PDF can also come back slightly differently.
+          {lookUps
+            ? " Glossary look-ups and found papers stop showing beside entries that are made again."
+            : null}
+        </p>
+        <p className="tw:m-0 tw:mb-3 tw:text-ink-faint">
+          <strong className="tw:font-semibold tw:text-ink">Cost:</strong> reading it again is usually
+          free (a PDF costs one model call); the paragraph labels are made again. The article's arc
+          costs another model call when you next open the reading view.
+          {regenerate ? " Most extras cost roughly one model call each." : null}
+          {regenerate && extras.includes("debate") ? " Debate uses two." : null}
+          {regenerate && extras.includes("sketch") ? " Sketch costs about $0.20." : null}
+          {regenerate && extras.includes("illustrated")
+            ? " Illustrated uses a brief plus one image call per plate."
+            : null}
+        </p>
+      </div>
       <div className="tw:flex tw:flex-wrap tw:items-center tw:gap-2">
         <Button
           type="button"
@@ -274,7 +341,7 @@ function ResetConfirm({
           disabled={busy}
           /* The whole panel, so a reader who reaches Yes by keyboard hears what
              it is agreeing to — `RerunRow`'s F13, Metadata.tsx. */
-          aria-describedby="reset-confirm"
+          aria-describedby={detailsId}
           onClick={() => void onYes()}
         >
           {busy ? "Starting…" : retry ? "Yes, try again" : "Yes, start again"}
@@ -283,6 +350,58 @@ function ResetConfirm({
           Cancel
         </Button>
       </div>
+    </fieldset>
+  );
+}
+
+/**
+ * Progress for reset successors the rerun section does not render. The set is
+ * derived above; keeping this to the missing rows avoids two Stop buttons and
+ * two failure messages for one job.
+ */
+function ResetOnlyRegeneration({
+  slug,
+  step,
+  onFinished,
+}: {
+  slug: string;
+  step: StepName;
+  onFinished: () => void;
+}) {
+  const { job, failed, stalled, cancel } = useStepJob(
+    slug,
+    step,
+    onFinished,
+    "watches-queue",
+  );
+  const name = RESET_EXTRA_NAME[step] ?? step;
+
+  if (failed) {
+    return (
+      <p role="alert" className="tw:m-0 tw:text-xs tw:text-alarm-ink">
+        {name} did not finish: {failed.message}
+      </p>
+    );
+  }
+  if (!job) return null;
+
+  return (
+    <div className="tw:flex tw:flex-wrap tw:items-center tw:gap-2">
+      <span className="tw:text-xs tw:text-ink-faint">{name}</span>
+      <JobProgress
+        job={job}
+        failed={null}
+        stalled={stalled}
+        onRun={async () => {
+          throw new Error("A watched regeneration without a job cannot offer a run button.");
+        }}
+        onCancel={cancel}
+        label={`Make ${name}`}
+        step={step}
+        icon={<RotateCcw size={13} />}
+        about={name}
+        runningLabel={`Making ${name}`}
+      />
     </div>
   );
 }
@@ -333,7 +452,9 @@ export function ResetArticle({
      in `STEP_ORDER`. The server makes its own list from the revision when the
      press lands; this one is for the words. */
   const extras = (provenance?.stages ?? [])
-    .filter((stage) => stage.done && RESET_EXTRA_NAME[stage.step] !== null)
+    /* `done` means current, not present. A stale artefact still has a completed
+       run and is still a non-null column, which is what the reset route reads. */
+    .filter((stage) => stage.ranAt !== null && RESET_EXTRA_NAME[stage.step] !== null)
     .map((stage) => stage.step);
   const names = extras.map((step) => RESET_EXTRA_NAME[step] ?? step);
   const regenerate = again && extras.length > 0;
@@ -345,7 +466,7 @@ export function ResetArticle({
     <div data-reset className="tw:flex tw:flex-col tw:gap-3 tw:text-sm">
       <p className="tw:m-0 tw:text-muted-foreground">
         Reads our stored copy of this article again with today's pipeline, as if you had just added
-        it, and removes what the modes made for it.
+        it, and removes the generated extras listed below.
       </p>
 
       {names.length > 0 ? (
@@ -364,6 +485,7 @@ export function ResetArticle({
       {asking ? (
         <ResetConfirm
           names={names}
+          extras={extras}
           lookUps={lookUps}
           regenerate={regenerate}
           retry={asking === "retry"}
@@ -403,6 +525,10 @@ export function ResetArticle({
         </p>
       ) : null}
 
+      {RESET_ONLY_PROGRESS.filter((step) => regenerating.includes(step)).map((step) => (
+        <ResetOnlyRegeneration key={step} slug={slug} step={step} onFinished={onFinished} />
+      ))}
+
       {/* **The article on this tab is the old one.** It is fetched once for all
           three views (article/ArticlePage.tsx) and nothing refetches it, so the
           reading view one click away still holds the text from before the
@@ -410,7 +536,10 @@ export function ResetArticle({
           finding their way back to a page that has quietly not changed. */}
       {finished && job === null ? (
         <p role="status" className="tw:m-0 tw:flex tw:flex-wrap tw:items-center tw:gap-2">
-          <span className="tw:text-foreground">Done. Reload the page to read the new version.</span>
+          <span className="tw:text-foreground">
+            Article reset. Reload the page to read the new version.
+            {regenerating.length > 0 ? " Selected extras run separately in the queue." : null}
+          </span>
           <Button type="button" variant="outline" size="xs" onClick={() => location.reload()}>
             Reload
           </Button>
