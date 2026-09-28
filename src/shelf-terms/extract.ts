@@ -102,7 +102,7 @@ const ENGLISH_MARKERS = new Set(
   ),
 );
 /** Below this share of marker words, the prose is not English. */
-const MIN_ENGLISH_RATIO = 0.12;
+const MIN_ENGLISH_RATIO = 0.1;
 /**
  * Fewer prose tokens than this and the ratio is noise, so the text is not
  * judged at all: a 20-word note is extracted as English whatever it is.
@@ -126,7 +126,13 @@ const STOP = new Set(
  * possessive loses its *'s*.
  */
 export function foldKey(token: string): string {
-  const w = token.toLowerCase().replace(/’/g, "'").replace(/'s$/, "").replace(/'$/, "");
+  const w = token
+    .normalize("NFC")
+    .replace(/[‐‑]/g, "-")
+    .toLowerCase()
+    .replace(/’/g, "'")
+    .replace(/'s$/, "")
+    .replace(/'$/, "");
   if (w.length <= 3) return w;
   if (/ies$/.test(w) && w.length > 4) return `${w.slice(0, -3)}y`;
   if (/(ss|sh|ch|x)es$/.test(w)) return w.slice(0, -2);
@@ -299,11 +305,15 @@ function countProse(segments: Segment[]): { words: number; markers: number } {
 
 /** Split one segment into runs at punctuation and stopwords, and count every n-gram in each run. */
 function tallySegment(tallies: Map<string, Tally>, s: Segment): void {
-  for (const chunk of s.text.split(PUNCT_SPLIT)) {
+  /* NFC keeps canonically equivalent accents under one key. U+2010 and U+2011
+     are word-joining hyphens, so give them the same token form as ASCII `-`;
+     en/em dashes remain punctuation boundaries. */
+  const text = s.text.normalize("NFC").replace(/[‐‑]/g, "-");
+  for (const chunk of text.split(PUNCT_SPLIT)) {
     if (!chunk) continue;
     let run: string[] = [];
     for (const m of chunk.matchAll(TOKEN)) {
-      const token = m[0].replace(/['’]s$/, "").replace(/[-'’]+$/, "");
+      const token = m[0].replace(/['’]s$/i, "").replace(/[-'’]+$/, "");
       if (tokenOk(token)) {
         run.push(token);
         continue;
@@ -356,7 +366,7 @@ export interface SegmentBlock {
  * (the plan § What text is read).
  */
 const BACK_MATTER =
-  /^(?:[\divxlc]+[.)]?\s+)?(?:references|reference list|bibliography|works cited|notes|endnotes|footnotes|notes and references|acknowledge?ments?|further reading|see also|external links|sources|citations)\s*[.:]?$/i;
+  /^(?:(?:\d+(?:\.\d+)*|[ivxlcdm]+|[a-z])[.)]?\s+)?(?:references|reference list|bibliography|works cited|notes|endnotes|footnotes|notes and references|acknowledge?ments?|further reading|see also|external links|sources|citations)\s*[.:]?$/i;
 
 /** Kinds that carry no prose of their own: code, figures, and `other` — which is where tables go (src/blocks.ts). */
 const NOT_PROSE = new Set(["code", "media", "other"]);

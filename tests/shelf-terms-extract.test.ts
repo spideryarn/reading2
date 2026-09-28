@@ -47,6 +47,28 @@ describe("foldKey — light plural folding", () => {
     expect(c?.count).toBe(2);
     expect(byKey(r.candidates, "neural networks")).toBeUndefined();
   });
+
+  it("normalises canonically equivalent accents and word-joining hyphens", () => {
+    const r = extractCandidates([
+      prose(
+        `${FILLER} Café culture. Cafe\u0301 culture. Neural-network systems. Neural‑network systems. ${FILLER}`,
+      ),
+    ]);
+    expect(byKey(r.candidates, "café culture")?.count).toBe(2);
+    expect(byKey(r.candidates, "cafe culture")).toBeUndefined();
+    expect(byKey(r.candidates, "neural-network system")?.count).toBe(2);
+    expect(byKey(r.candidates, "neural network system")).toBeUndefined();
+  });
+
+  it("strips uppercase straight and curly possessives from the displayed surface form", () => {
+    const r = extractCandidates([
+      prose(`${FILLER} TURING'S machine. TURING’S machine. ${FILLER}`),
+    ]);
+    expect(byKey(r.candidates, "turing machine")).toMatchObject({
+      label: "TURING machine",
+      count: 2,
+    });
+  });
 });
 
 describe("runs split at stopwords and punctuation", () => {
@@ -189,6 +211,17 @@ describe("English only, said out loud (Sol F12)", () => {
     expect(r.candidates.length).toBeGreaterThan(0);
   });
 
+  it("does not reject English prose dense with proper nouns", () => {
+    const properNounDense =
+      "Ada Lovelace met Charles Babbage during June 1833. London mathematician Mary Somerville " +
+      "introduced Lovelace to Babbage. Luigi Menabrea later published Sketch of the Analytical " +
+      "Engine. Lovelace translated Menabrea's memoir, adding extensive notes about Bernoulli " +
+      "numbers, Jacquard cards, computation, music, mathematics, and symbolic operations.";
+    const r = extractCandidates([prose(properNounDense)]);
+    expect(r.skipped).toBeNull();
+    expect(r.candidates.length).toBeGreaterThan(0);
+  });
+
   it("says no-text when there is no prose at all", () => {
     const r = extractCandidates([{ text: "Only a title", kind: "title" }]);
     expect(r).toMatchObject({ skipped: "no-text", words: 0, candidates: [] });
@@ -278,6 +311,8 @@ describe("segmentsFromBlocks — what text is read", () => {
       "Works cited",
       "Sources",
       "7. References",
+      "7.1 References",
+      "A. Bibliography",
       "NOTES:",
     ]) {
       const segs = segmentsFromBlocks(null, [

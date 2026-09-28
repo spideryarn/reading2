@@ -316,14 +316,14 @@ Four, after Sol F13 said the first one was carrying too much.
 - Done when: green, typecheck clean, and the numbers reproduced on the local shelf by a throwaway
   run (the report script proper is stage 2).
 
-**Landed** (2026-09-28): `src/shelf-terms/extract.ts`, `src/shelf-terms/choose.ts`, 50 tests;
+**Landed** (2026-09-28): `src/shelf-terms/extract.ts`, `src/shelf-terms/choose.ts`, 53 tests;
 all 11 deliberate breaks of the code turned a test red. What changed from the design above while
 building:
 
 - The **"contains the other phrase" skip was dropped**: at 0.5 it could never fire, because such a
   phrase always shares a word and the shared-word rule's 0.3 is lower.
 - **K = min(30, works).**
-- **The English check**: at least 12% of prose tokens are among ~50 English function words; not
+- **The English check**: at least 10% of prose tokens are among ~50 English function words; not
   judged under 30 prose tokens, so a short note is let through. `no-text` means no prose at all.
 - **Back-matter headings match as a whole heading** (numbering and punctuation allowed), so *Notes on
   the Synthesis of Form* is not skipped; the adapter reads blocks through `isEmbeddable` from
@@ -396,3 +396,14 @@ stage, reports anything wider), gates rerun, commit its fixes.
   set, composite key, `no-store`), F11 (one count formula), F12 (English only), F13 (four stages),
   F14 (regenerate the numbers). **Not taken:** F2's pipeline step and separate backfill command —
   reasoned in § Filling it.
+- **GPT Sol, stage 1 code, round 1** —
+  [260928a-shelf-facet-terms-stage1-review-sol.md](260928a-shelf-facet-terms-stage1-review-sol.md)
+  (prompt: [260928a-shelf-facet-terms-stage1-review-prompt.md](260928a-shelf-facet-terms-stage1-review-prompt.md)),
+  reviewing 3725b94c. *Ready with its fixes*; no P0. It fixed S1-1 (NFC and word-joining hyphens
+  split keys; capitalised possessives leaked into labels), S1-2 (the English threshold rejected
+  English dense with proper nouns: 12% → 10%) and S1-3 (`7.1 References`, `A. Bibliography` were
+  not recognised as back matter). It bumped `EXTRACTOR_VERSION` to 2; put back to 1, because no row
+  was ever stored at 1. Reported, not fixed, and left for the stage 2 measurements to decide: S1-4
+  (a label's forms are aggregated per article, not per occurrence — exact needs per-form counts
+  stored), S1-5 (idf counts any stored occurrence, not membership), S1-6 (a long article can still
+  lift quality), S1-7 (`stemForOverlap` can conflate *formal*/*form*).
