@@ -116,6 +116,42 @@
 }
 .traj-row.current .traj-place { font-weight: 600; color: var(--ink); }
 
+/* **Where the stop sits in the article** — a hairline track and a dot, at the
+   right of each row and the same width on every one, so the dots zig-zag down
+   the list when the route jumps about the paper (the plan's stage 5b). The
+   box is one line of `.traj-place` tall and pinned to the row's top, so the
+   dot stays level with the section path when the current row grows a cue.
+   A hint, not a chart: muted, the current row's dot in the accent. */
+.traj-pos {
+  flex: none;
+  position: relative;
+  align-self: flex-start;
+  width: 2.75rem;
+  height: calc(0.88rem * 1.35);
+  margin-left: auto;
+}
+.traj-pos::before {
+  content: "";
+  position: absolute;
+  inset: 50% 0 auto;
+  height: 1px;
+  background: var(--rule-strong);
+}
+.traj-pos-dot {
+  position: absolute;
+  top: 50%;
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: var(--ink-faint);
+  transform: translate(-50%, -50%);
+}
+.traj-pos-dot.on {
+  width: 7px;
+  height: 7px;
+  background: var(--highlight);
+}
+
 .traj-read-error { margin: 0.4rem 0.7rem 0; }
 .traj-read-error .gloss-error { margin: 0 0 0.5rem; }
 
@@ -128,6 +164,9 @@
   font-size: 0.77rem;
   line-height: 1.35;
 }
+/* **Plan it again**, under the promise: quiet, and in the foot so a thirty-stop
+   list does not have to be scrolled to reach it — `.ideas-again`, `.tl-again`. */
+.traj-again { padding: 0.1rem 0 0.45rem; }
 
 /* ------------------------------------------------------ the door in the prose --
    After the current stop's block, outside `.prose` (TableView.tsx §

@@ -2,13 +2,21 @@
  * **The flash on arrival**: the prose of the block a reader just jumped to
  * washes warm for about a second, so "which one is it" is answered on the page.
  *
- * Called from one place, `beginJump` (keynav.ts), which every history-pushing
- * jump passes through — block links, search hits, the glossary's select, a
- * diagram node, a gist cell. Not from stepping (arrows, swipe, ‹ ›, comment
- * Prev/Next), Back, the return chip or arrival from a pasted link: stepping
- * moves one item at a time and a flash on every step is noise, and the others
- * return the reader to a place they chose to leave. The plan's Sol F7,
+ * Called from `beginJump` (keynav.ts), which every history-pushing jump passes
+ * through — block links, search hits, the glossary's select, a diagram node, a
+ * gist cell. Not from stepping (arrows, swipe, ‹ ›, comment Prev/Next), Back,
+ * the return chip or arrival from a pasted link: stepping moves one item at a
+ * time and a flash on every step is noise, and the others return the reader to
+ * a place they chose to leave. The plan's Sol F7,
  * docs/plans/260928b-one-block-link-component-with-a-rich-tooltip-and-a-flash-on-arrival.md.
+ *
+ * **The named exception is Trajectory** (src/web/modes/trajectory/TrajectoryMode.tsx),
+ * which flashes on every step — ‹ ›, ← →, the door, going round again — and on
+ * a `?stop=` deep link. The rule above is about stepping to the *adjacent*
+ * item; a Trajectory route is out of paper order, so each step lands anywhere
+ * in the article and is a jump in all but name. Greg asked for a flash on
+ * every step, 2026-09-28 — docs/plans/260928a-trajectory-mode-skim-a-paper-at-increasing-depth.md
+ * § 5a. It flashes the same way `beginJump` does, when the scroll settles.
  *
  * **What flashes is the verbatim cell**, `td.text`, never the gist columns: the
  * question is which paragraph, and the gist column already marks the current

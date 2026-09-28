@@ -491,3 +491,338 @@ The Opus second opinion (first round) also gave:
   all of them the known no-build environment reds (`cold-start-lazy-imports`, `pdf-bundle-trace`
   and three fleet tests needing `build:fleet`). None of the five is ours. Pushed to `dev`. **Done:**
   v1 and v2 are built; what is left is Greg's, in trajectory.md § Questions for Greg.
+
+## Stage 5 — flash, position, order, promotion, regenerate, and the card's sources (2026-09-28)
+
+Asked by Greg on 2026-09-28 after v1 and v2 had landed, relayed by the Overseer. His words,
+verbatim, in the order they arrived:
+
+> The Trajectory mode:
+> - Should flash-highlight (in the text) the quote/block being jumped to each time (just as I've asked us to do for all block-links, e.g. in Glossary).
+> - Provide some kind of subtle visual indication in the left-hand Mode column of how far through the article each suggested block-link is.
+
+> And move Quotes mode and Trajectory mode further towards the left (after Summary). And if I try and run Trajectory mode before Quotes has been run, queue that first.
+
+> And maybe add a 'Regenerate' (or similarly-named) button to Trajectory.
+
+> And take Trajectory and Quotes modes out of Experimental features, i.e. into mainstream features.
+
+> If there are other modes that should also run first as part of generating Trajectory, queue them first too.
+
+> — Greg, 2026-09-28
+
+All of it is client-side: no prompt change, no schema change, no new model call of Trajectory's own.
+
+### 5a. The flash on every arrival
+
+**The flash already exists** — `flashBlock(id)` in [`src/web/flash.ts`](../../src/web/flash.ts),
+landed by the block-link work ([260928b](260928b-one-block-link-component-with-a-rich-tooltip-and-a-flash-on-arrival.md)).
+It is reused; no second flash is built.
+
+- **A row press** already flashes: it goes through `onJump` → `beginJump`, which flashes when the
+  scroll settles.
+- **‹ ›, ← →, the Next stop door, going round again, a depth change that moves you** call
+  `scrollToBlock` directly and do not flash today. They get `scrollToBlock(block, "smooth", (o) =>
+  o === "settled" && flashBlock(block))` — the same "flash when the scroll settles, not before" rule
+  `beginJump` follows, so a flash never finishes mid-glide.
+- **A deep link on load** (`?mode=trajectory&stop=…`) flashes once the stop's block is in place.
+- **A depth change that keeps you on the same stop does not flash** — nothing was jumped to.
+- **It does not replace the ring and bar** on the current stop. It is a pulse on arrival, over them.
+
+**This is a deliberate exception to flash.ts's own rule** that stepping does not flash ("stepping
+moves one item at a time and a flash on every step is noise"). That rule is about stepping to the
+*adjacent* item. A Trajectory step is not adjacent: the route is out of paper order, so each ‹ ›
+lands anywhere in the article — a jump, in all but name. Greg asked for it on every step. flash.ts's
+header is updated to name the exception and the reason, so the two rules stay one argument.
+
+### 5b. Where each stop sits in the article
+
+Each stop row gets a **thin track with a dot**: the dot at the stop's position in the article,
+0–100%. Muted, a few pixels tall, under or beside the section path. It is a hint, not a chart.
+
+- **Measured in words, not blocks**: the position is the words before the stop's block plus half
+  its own, over the article's total words (`Block.words`). A block count gives a heading, a caption
+  and a 300-word paragraph equal weight, so a paper with many short blocks up front would look
+  further through than it reads. Words are what "how far through" means to a reader, and they are
+  what the spine's own sizes answer in.
+- **Legible at a glance that the route jumps**: because every row has the same track at the same
+  width, the dots down the list make a zig-zag when the route goes results → methods → introduction.
+- The current row's dot takes the accent; the others are muted. Colours from the tokens
+  ([design-css-overview.md](../project/design-css-overview.md)); checked in dark mode and at 420px.
+- `aria-hidden`, plus a screen-reader phrase on the row: "about 70% of the way through".
+- A pure function, tested: `positionOf(blockId, blocks) → 0..1`.
+
+### 5c. The mode bar order
+
+Quotes, then Trajectory, straight after Summary, in `MODES_UI` ([`Dock.tsx`](../../src/web/Dock.tsx)),
+which is where new-mode.md says the order lives. Update any test or doc that lists the order, and the
+comments on the Quotes and Trajectory rows that explain their old places.
+
+### 5d. Quotes first — verify, then fix only what fails
+
+trajectory.md says the band asks for Quotes and the route in one job when there are none
+(`precededBy: ["quotes"]`). Checked in a real browser on an article with no Quotes, and by reading
+three cases that could break it:
+
+1. **No Quotes** — the ordinary case.
+2. **A Quotes run already in flight** (started in Quotes mode) when Trajectory is opened.
+3. **Stale Quotes** — Quotes exist but the article has changed under them; `noQuotes` is false, so
+   the route would be planned on a stale set.
+
+If any fails, opening Trajectory queues the Quotes run and then the route, and the band says what it
+is waiting for. The result, and which case it was, go in Progress.
+
+### 5e. A Regenerate button
+
+`useTrajectory.regenerate()` exists and is used only by the outdated banner's "Plan it again". It is
+added as a quiet button under a ready route, in the same shape the sibling modes use for theirs —
+Ideas' `ideas-again`, Timeline's `tl-again`: `run("Plan it again", true)` in a small row. **It
+rebuilds the route only, not the Quotes**: `trajectory` is in `FORCE_ONLY_WHEN_NAMED`, so the force
+never sweeps Quotes in, and a reader who wants new Quotes has Quotes' own "Choose them again".
+Rebuilding both would buy Quotes' larger call to get a new order, which is not what the button says.
+
+### 5f. Out of Experimental
+
+**Quotes is already out** — since 2026-09-06 (experimental-features.md § Quotes left the table).
+Nothing changes for it except its place in the bar.
+
+**Trajectory comes out**: `experimental: false` in `MODE_CATALOG`, its row removed from
+experimental-features.md's table with a paragraph saying when and why (Greg's words above), and
+`tests/dock-experimental-modes.test.tsx` § `BEHIND_THE_SWITCH` updated
+([new-mode.md § Moving a mode in or out](../project/new-mode.md#moving-a-mode-in-or-out-of-the-switch)).
+
+**What the switch gated, and what it did not.** The switch only decides whether the button is drawn.
+Owner-only is a separate rule — `POLICY.trajectory` is `owners-only` in
+[`visitor.ts`](../../src/web/visitor.ts) — and it stays. So after this:
+
+- **An owner with the switch off** now sees the button, and pressing it starts a paid run (the route,
+  and Quotes first if there are none), as Glossary, Ideas and Quotes already do.
+- **A visitor** on a shared article or the public shelf sees the button (the bar draws the same modes)
+  and gets the explanatory band, not a run — unchanged. The server's job route refuses a non-owner
+  whatever the client does. Checked, not assumed.
+
+### 5g. The card's sources, queued when Trajectory opens
+
+The route needs only Quotes. The stop card reads Glossary, Ideas, FAQ and Timeline, and until now
+showed only what already existed. Now **the first automatic open of Trajectory also queues whichever
+of those are missing or stale**, each as its own ordinary unforced step job through the existing
+queue (`enqueue`, as each mode's own button does) — not a new mechanism, and not chained into the
+route's job. So:
+
+- **The route does not wait on them.** It shows as soon as Quotes and the ordering are done; the card
+  fills in as each lands (its read hooks revalidate when a job for their step finishes).
+- **Each mode's own gate holds.** A mode is queued only if its control is available to this reader:
+  Timeline and FAQ are behind the experimental switch, so they are queued only for a reader with it
+  on — the same rule `canOpen` applies to the card's links.
+- **Owner only**, as every paid run here; a visitor queues nothing.
+- **Only on the automatic first run**, not on Regenerate, and not again once each has run: an
+  unforced step whose artefact is current is skipped by `stepIsDone`, so a second open buys nothing.
+- **The price is said before it is spent**: the empty state's hint names the extra modes it will make.
+- The read-only hooks stay read-only (Sol F22): the queueing lives in the Trajectory controller, not
+  in the card or its hooks.
+
+**The cost**, measured on the entropy paper in stage 3: Glossary, Ideas, Timeline and FAQ together
+came to $0.35, beside the route's ~$0.02 and Quotes'. That is what a first open adds for a reader with
+the switch on; with it off, Glossary and Ideas only. Re-measured in this stage and recorded in
+Progress.
+
+**The simpler version not built**: leave the card as it was — show only what exists. It costs
+nothing, but on a fresh article the card is simply absent, and Greg asked for the others to run.
+
+### Done when
+
+- tests red first for `positionOf`, the flash on each step path (a spy on `flashBlock`), the order,
+  the promotion table, the regenerate button, and which card sources are queued for which reader;
+- a browser check (Sonnet, Playwright) at 1440, 820 and 420, light and dark: the flash on every step
+  path, the track and dots, the order in the bar, Regenerate, a fresh article opened with the switch
+  off and on, and a visitor;
+- Sol's plan review and code review; the gates; committed and pushed to `dev`.
+
+## Stage 6 — the route sees what the other modes know, so each pass covers the key points (2026-09-28)
+
+Its own stage, after stage 5, because it is a prompt change. Greg, relayed by the Overseer:
+
+> Does Trajectory mode make use of other modes? Perhaps it should. e.g. Glossary, Ideas... The LLM should ensure that each loop round the spiral is rich and covers most of the key points as best we can given the constraints.
+>
+> — Greg, 2026-09-28
+
+**Today the ordering call sees only the Quotes** (their words, section path and priority). It cannot
+tell which key point a quote carries, so it cannot aim each pass at covering them. Stage 6 gives it
+what other modes have already made, addressed by block id, and asks for coverage.
+
+### What the call is given (added to its input)
+
+- **The Ideas** — each idea's name and one-line statement, with the block ids of its passages. These
+  are the article's key points; a quote whose block is in (or next to) an idea's passage carries it.
+- **The outline** — the tree's section titles, and each section's gist where the summaries have one,
+  so the model can see what each part of the paper is for and which parts no quote reaches.
+- **Not the Glossary.** Terms are vocabulary, not points: a pass that covers the key propositions
+  already meets the terms they use, and the card shows the terms at each stop. Adding them costs
+  input, a freshness dependency, and a wait for a whole-article call, for little coverage signal.
+  (If the measurement says otherwise, it is a small addition.)
+
+The call still **never reads the article's prose**, and its stops are still quotes only — no stop is
+invented where Quotes did not go.
+
+### What it is asked to do
+
+Each pass covers as many of the key points as the quotes allow: **Gist** the headline few, **More**
+most of the rest, **Most** as nearly all as the quotes reach — still nested, still one route, still
+out of paper order when that serves. The prompt follows [prompting-guide.md](../project/prompting-guide.md);
+`PROMPT_VERSION` is bumped, so existing routes show as outdated and offer a rebuild.
+
+### Wait for the Ideas, or route on what exists? — wait
+
+**Decided: wait.** The automatic run asks for `quotes` and `ideas` before the route, in one job
+(`precededBy: ["quotes", "ideas"]`; each skipped by `stepIsDone` when current). The alternative —
+plan on what exists and mark the route for rebuild when Ideas land — gives the reader a route and
+then replaces it under them while they are walking it, and pays for the route twice on every fresh
+article. A wait of one Ideas call, once per article, with the job's progress naming it, is the better
+trade. Stage 5's separate Ideas job then goes, since the route's own job makes them.
+
+- `trajectory` moves after `ideas` in `STEP_ORDER` so that `precededBy` can name it. It is in no
+  cache group, but `ideas … sketch` is one contiguous group, so it goes **after the group**, not
+  between `ideas` and `timeline` (`tests/article-cache-group.test.ts`).
+- **Freshness**: the stamp adds a hash of the Ideas it was given. Ideas regenerated ⇒ the route is
+  outdated (offered, not automatic). A route planned without Ideas (a forced run on an article that
+  has none) is outdated once Ideas exist.
+- Summaries and the outline come from ingest and always exist; their hash joins the stamp too.
+
+### Measured, before and after
+
+On the three test articles of stage 1 (the essay, a normal paper, the long sectioned paper), with
+Ideas generated on each:
+
+- **key-point coverage per pass**: the share of Ideas with a stop in, or adjacent to, one of the
+  idea's passage blocks, at Gist, More and Most — the current prompt (`trajectory/6`) vs the new one;
+- **section coverage** per pass (top-level sections with a stop), words per pass, cost, latency;
+- a read of Gist on each: does it give the headline points?
+
+The numbers go in Progress. If coverage does not improve, the prompt change is not kept.
+
+### Done when
+
+- tests red first for the new input rendering, the ideas hash in the stamp, and the step order;
+- the measurement above, before vs after;
+- Sol's plan review and code review; the gates; committed and pushed.
+
+### How stage 5 lands — two pushes (2026-09-28, the deploy at ~15:50 BST takes whatever is on `dev`)
+
+- **5-i**: 5a flash, 5b position, 5c order, 5d Quotes-first (fix if needed), 5e Regenerate. Changes
+  nothing about who can spend; pushed as soon as it is green and reviewed, if that is before ~15:30.
+- **5-ii**: 5f out of Experimental and 5g the card's sources queued — both change who triggers a paid
+  run, so they go in **one push together with tests of the rule** (a visitor on a shared article or
+  the public shelf queues nothing, client and server). Held for the next deploy if not green by 15:30.
+
+### Stage 5 plan review — GPT Sol ([prompt](260928a-trajectory-mode-stage5-plan-review-prompt.md), [answer](260928a-trajectory-mode-stage5-plan-review-sol.md)), verdict *rethink*
+
+| ID | Sev | Finding | Outcome |
+|---|---|---|---|
+| F28 | P1 | a `?stop=` deep link does not scroll today, so it cannot flash on arrival | accepted — a one-shot initial-stop effect keyed to the initial (slug, stop) |
+| F29 | P1 | direct scrolls leave a stale held flash, and ← → / depth changes do not step the band aside | accepted — one movement helper: drop the held flash, scroll, flash on settled, step aside |
+| F30 | P1 | stale Quotes is the broken case: the route is planned on the stale set | accepted — Quotes precede the route when missing **or stale**, on both run and regenerate |
+| F31 | P1 | the card would not fill as the source jobs finish | 5g — see below |
+| F32 | P1 | four card-source runs on one press are undisclosed spend, and not "part of generating" the route | 5g — see below |
+| F33 | P2 | four jobs serialise per article; the route must reach the queue first | 5g — see below |
+| F34 | P2 | the switch gates the Dock **and** the command bar, not only a button | accepted — plan text corrected here; both tested in 5-ii |
+| F35 | P2 | availability for FAQ (no card link) is not defined by `canOpen` | 5g — from the catalog's experimental rule, if built |
+| F36 | P2 | `positionOf` divides by zero on a zero-word article | accepted — block-order midpoint fallback; missing id → `null` |
+
+**The browser check of 5d** (Sonnet, Playwright, two real local articles with no Quotes):
+
+- **No Quotes — works.** A press on the Trajectory button posts `["quotes","trajectory"]`. The band
+  says *Choosing the quotes*, then plans, and the route appears without a reload. A pasted
+  `?mode=trajectory` URL starts nothing and shows *Plan the route* — by design (`useAutoRun` runs
+  only on a press).
+- **A Quotes run in flight — works.** Two jobs (`["quotes"]`, then `["quotes","trajectory"]`); one
+  Quotes call. The second job waits, skips Quotes as done, and plans. No double spend.
+- **Stale Quotes — broken** (code reading, agreeing with Sol F30): the route is planned on whatever
+  of the stale set still resolves, and Quotes are never re-run. Fixed in 5-i.
+
+**Correction (F34):** the switch decides whether Trajectory is drawn in the Dock *and* offered in the
+command bar. Owner-only is a separate rule (`POLICY.trajectory`, and the band is mounted only for
+owners; the job route resolves the article through its owner). Sol found no non-owner paid path.
+
+### Stage 6, widened — Quotes spread, section stops (2026-09-28)
+
+Greg again, on the same subject:
+
+> Re Trajectory:
+> - It might make sense to make a minimal update to Quotes to increase representativeness a bit more widely across sections
+> - And/or allow Summary content as another kind of content? Or just plain blocklinks to important sections?
+>
+> — Greg, 2026-09-28
+
+This answers trajectory.md's question 6 (coverage), which v1 left as a default. Three steps, **each
+measured and kept only if it earns its place**, in this order, cheapest and least intrusive first:
+
+- **6a. Quotes spread across the major sections.** A minimal nudge to the Quotes prompt: prefer at
+  least one line from every major section that has one worth keeping. Quotes' `PROMPT_VERSION` is
+  bumped, so **existing Quotes show as out of date everywhere** (Quotes mode's banner offers a
+  rebuild) — the cost of improving the one shared set. A line in quotes.md.
+- **6b. A section stop where a major section still has no quote.** A stop that is not a quote: a
+  plain link to the section's opening passage (its first body block), stored as
+  `{ kind: "section", nodeId, … }` beside the quote stops, and drawn as a section stop, not a quote
+  (no quote stroke; the ring and bar on the opening passage). The model may use one only for a
+  top-level section with no quote on the offered list. This changes the stored route's shape, which
+  is JSON on the existing column, not a schema change; old routes read as all-quote.
+- **6c. Summary text only as an orientation line on a section stop** — the section's gist, one line,
+  under the cue, never replacing the passage (vision.md: augment, not replace). Taken only with 6b.
+
+**Measured after each**, on the three test articles: key-point coverage per pass (share of Ideas
+with a stop in or next to a passage block), section coverage per pass, words per pass, cost. The
+before/after numbers go in Progress, and trajectory.md § question 6 says what was decided.
+
+**5g is not built (decided 2026-09-28, after Sol F31–F33/F35 and an Opus arbiter).** Greg's words
+were *"other modes that should also run first as part of generating Trajectory"* — modes the route
+needs. After stage 6 that is Ideas, and it runs first in the route's own job (`precededBy`). Glossary,
+FAQ and Timeline only decorate the stop card; queueing them on the first press would be ~$0.35 of
+spend beside a ~$0.02 route, for things the reader did not press, plus a second job, a
+subscription to refresh the read hooks, and a second definition of availability. The card keeps
+showing what already exists. **Question for Greg**: a disclosed one-press "fill the card" button.
+So 5-ii is now 5f alone (out of Experimental), with the Dock and command-bar tests (F34).
+
+### Stage 6 plan review — GPT Sol ([prompt](260928a-trajectory-mode-stage6-plan-review-prompt.md), [answer](260928a-trajectory-mode-stage6-plan-review-sol.md)), verdict *rethink*
+
+| ID | Sev | Finding | Outcome |
+|---|---|---|---|
+| F60 | P1 | block ids alone cannot tell the model which quotes carry an Idea (ids encode no position) | accepted — Ideas labelled `I1…`; each quote annotated in code with the Ideas it shares a block with (exact) or sits next to (adjacent, same top-level section, body blocks) |
+| F61 | P1 | Ideas made by the route's job would not reach the stop card until a reload | accepted — the band's `useIdeasRead` is created first and refreshed from the route job's completion |
+| F62 | P1 | a section stop keyed by `nodeId` breaks the block-id / URL contract | accepted by **deferring 6b** (below); if built later, anchored to a stable block id through `stopKey`/`stopBlockId` |
+| F63 | P2 | the coverage script would undercount section stops | moot while 6b is deferred |
+| F64 | P1 | the wait for Ideas is a longer paid prerequisite, undisclosed before the press | accepted — the empty state names what will be made first (Quotes, Ideas) and that Ideas is the long part |
+| F65 | P2 | before/after must score against the same Ideas; one sample per arm cannot separate prompt from noise | accepted — Ideas regenerated to the current version and snapshotted first; the old route prompt run twice (old-vs-old control); same-block coverage primary; adjacency confined to body blocks in one top-level section; three articles are a smoke set |
+| F66 | P2 | 6a mostly repeats Quotes' existing "across the whole piece" instruction; the bump is wide, and visitors silently keep the old list | accepted — 6a becomes an **offline evaluation arm** first; the version is bumped only if it wins |
+| F67 | P2 | 6c brings back the section gist the scrapbook spike removed for giving the finding away | accepted — 6c is not built |
+| F68 | P2 | freshness needs one input fingerprint over exactly what the prompt renders | accepted — one `trajectoryInputHash` (quotes, Ideas and their associations, top-level outline titles and gists, explicit `null`s); profile hash kept separate |
+| F69 | P3 | gists are optional (a provisional tree has none) | accepted — rendered and hashed as absent |
+
+**Stage 6 as it will be built** (Sol's "simplest worthwhile", which the baseline supports: the
+top-level sections with no quote at all are *Notes*, *Front Matter*, *Future Directions* and
+*Article overview* — mostly not content, so section stops would add little):
+
+1. The route is given the Ideas through code-computed quote↔Idea associations, and the top-level
+   outline (titles, gists where present), fenced as untrusted data. It is asked to cover as many
+   Ideas as the quotes allow, the headline few at Gist. Still quote-only stops, still nested.
+   `trajectory/7`.
+2. The route's job waits for Ideas (`precededBy: ["quotes", "ideas"]`, `trajectory` moved after
+   the `ideas … sketch` group — Sol confirmed the move safe, with `tests/trajectory.test.ts:610`
+   to rewrite); the empty state says so before the press; the card's Ideas read is refreshed.
+3. Measured as F65 says.
+4. 6a (the Quotes nudge) evaluated offline over the same articles; landed only if it wins.
+5. 6b and 6c are **deferred**, with the reason recorded in trajectory.md § question 6.
+
+### Stage 5-i code review — GPT Sol ([prompt](260928a-trajectory-mode-stage5-code-review-prompt.md), [answer](260928a-trajectory-mode-stage5-code-review-sol.md)), write-capable, verdict *accept after fixes*
+
+| ID | Sev | Finding | Outcome |
+|---|---|---|---|
+| F37 | P1 | the deep-link one-shot re-armed when the band remounted | fixed by Sol — the token lives in `Reader` |
+| F38 | P1 | a Quotes read still revalidating could hide stale Quotes; Sol made **every** request name Quotes first | **reverted.** The browser check pressed *Plan it again* on the entropy paper and the job re-chose its Quotes ($0.077 on a $0.022 route) — `stepIsDone` re-runs Quotes whose prompt is merely **outdated**, so a route rebuild replaced the reader's Quotes. Back to "missing or stale" on the client; the race is left, and a route planned on Quotes that turn out stale shows its banner |
+| F39 | P1 | a step that could not resolve its block changed `?stop=` without moving | fixed by Sol |
+| F40 | P2 | positions rescanned the article per row | fixed by Sol — `positionsOf`, one pass |
+
+**Browser check** (Sonnet, Playwright; 1440, 820×1180, 420): all pass — the bar order; a flash on
+every path (‹ ›, ← →, row, door, go round again, deep link), after the scroll settles, ~1.2 s, on
+the ringed block, and none on a depth change that keeps the stop; the band steps aside at 420; the
+dots match their "about N%" text; one *Plan it again*; the rebuild POSTs `force: ["trajectory"]` only.
+The app is dark-only, so the dark-mode leg is the only mode there is.
