@@ -74,11 +74,6 @@ export function structureFace(
   return bandWidth >= structureColumnsBand(rootFontPx).min ? "columns" : "list";
 }
 
-/** The root font size in px, or 16 where nothing is laid out (jsdom). */
-function rootFontPx(): number {
-  return Number.parseFloat(getComputedStyle(document.documentElement).fontSize) || 16;
-}
-
 export function StructureBand({
   article,
   leafDepth,
@@ -87,6 +82,7 @@ export function StructureBand({
   supplementOf,
   arcByRow,
   proseBeside,
+  rootFontPx,
   onJump,
 }: {
   article: Article;
@@ -111,6 +107,12 @@ export function StructureBand({
    * the article, it would.
    */
   proseBeside: boolean;
+  /**
+   * The same measured root size `fitView` used to choose the band's width.
+   * Sharing the value is what makes the fit and the face one decision even when
+   * the root size changes without changing the band's border-box width.
+   */
+  rootFontPx: number;
   onJump(id: BlockId): void;
 }) {
   useRenderCount("StructureBand");
@@ -190,8 +192,11 @@ export function StructureBand({
    * element changes when the face does (each face renders its own `<aside>`
    * through `ModeSurface`), so the state holding it is what re-arms both.
    *
-   * A root font-size change with no change of band width is not observed; it
-   * is rare, and the next resize corrects it.
+   * `rootFontPx` is the value the parent handed to `fitView`, rather than a
+   * second read from the DOM. A ResizeObserver cannot see a root-size change
+   * when the band's fixed-pixel border box stays the same; putting the shared
+   * value in this effect's dependencies keeps the face and the fit together in
+   * that case too.
    */
   const [band, setBand] = useState<HTMLElement | null>(null);
   const [face, setFace] = useState<"columns" | "list">("columns");
@@ -200,13 +205,13 @@ export function StructureBand({
     const measure = () => {
       const width = band.offsetWidth;
       if (width <= 0) return;
-      setFace(structureFace(width, rootFontPx(), proseBeside));
+      setFace(structureFace(width, rootFontPx, proseBeside));
     };
     measure();
     const ro = new ResizeObserver(measure);
     ro.observe(band);
     return () => ro.disconnect();
-  }, [band, proseBeside]);
+  }, [band, proseBeside, rootFontPx]);
 
   if (face === "list") {
     return (

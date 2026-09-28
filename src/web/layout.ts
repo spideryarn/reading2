@@ -255,9 +255,11 @@ export const MODE_MIN = 288; // 18rem — narrower and an answer stops reading a
 export type BandShape = "standard" | "structure";
 
 /**
- * **Structure's two columns, as widths.** In rem, because the columns hold
- * rem-sized type (structure-mode.css) and a larger root needs wider columns for
- * the same line.
+ * **Structure's two columns, as widths.** Calculated from rem, because the
+ * columns hold rem-sized type (structure-mode.css) and a larger root needs
+ * wider columns for the same line. `structureColumnsBand` also floors the
+ * result above the ordinary band's maximum so the two faces cannot overlap at
+ * an unusually small root.
  *
  * The minimum is the rule from Greg's request (2026-09-28): each of the two
  * columns is at least as wide as the one column he calls fine, at its
@@ -296,10 +298,17 @@ export function structureColumnsBand(rootFontPx: number): { min: number; ideal: 
   const track = (columnRem: number) =>
     (columnRem + STRUCT_BRACKET_INSET_REM) * rootFontPx + STRUCT_BRACKET_PX;
   const around = (STRUCT_GUTTER_REM + STRUCT_PAD_X_REM) * rootFontPx + BAND_BORDER_PX;
-  return {
-    min: Math.ceil(2 * track(STRUCT_COLUMN_MIN_REM) + around),
-    ideal: Math.ceil(2 * track(STRUCT_COLUMN_IDEAL_REM) + around),
-  };
+  const measuredMin = Math.ceil(2 * track(STRUCT_COLUMN_MIN_REM) + around);
+  const measuredIdeal = Math.ceil(2 * track(STRUCT_COLUMN_IDEAL_REM) + around);
+  /* An ordinary band reaches MODE_IDEAL. Keep the columns' threshold above it
+     even at an unusually small browser root, or fitMode can take its ordinary
+     branch (because there is not room beside PROSE_MIN) and still hand out a
+     MODE_MIN band that structureFace reads as columns. The 401px floor is inert
+     at every normal root — the measured minimum is already 458px at 12px — and
+     preserves the stated jump from an ordinary band to a columns band for all
+     positive root sizes. */
+  const min = Math.max(MODE_IDEAL + 1, measuredMin);
+  return { min, ideal: Math.max(min, measuredIdeal) };
 }
 
 export type SpineMode = "on" | "off";

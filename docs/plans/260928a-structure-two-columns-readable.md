@@ -155,8 +155,59 @@ One stage; the pieces are small and share the one threshold.
 
 ## Measurements
 
-(filled in from the browser check)
+Chrome via Playwright on the box, 2026-09-28, `fowler-phrenology` (9 parts, 40 sections), height 900,
+rail on unless noted. "chars" is characters of plain English per line at the row's own font, in that
+column's content box. There is no measured "before": the first browser pass ran against a dev server
+that hot-reloaded this change half-way through, so the old numbers above are from the old code, not
+from a browser.
+
+| window | face | band | prose | column A content / chars | column B content / chars | list content / chars |
+|---|---|---|---|---|---|---|
+| 390 | list (covers) | 378 painted | 378 | — | — | 358 / 49 |
+| 430 | list (covers) | 418 painted | 418 | — | — | 398 / 52 |
+| 699 | list (covers) | 687 painted | 687 | — | — | 667 / 87 |
+| 700–834 | list | 288 | 400–534 | — | — | 267 / 35 |
+| 945 | list | 389 | 544 | — | — | 368 / 48 |
+| 1024–1164 | list | 400 | 612–752 | — | — | 379 / 49 |
+| **1165** | **columns** | **609** | 544 | 284 / 37 | **272.4 / 35** | — |
+| 1180 | columns | 624 | 544 | 292 / 38 | 280.4 / 36 | — |
+| 1194 | columns | 638 | 544 | 299 / 39 | 287.4 / 37 | — |
+| 1261–1920 | columns | 705 | 544–1203 | 332 / 43 | 320.4 / 41–44 | — |
+| 1152 `?spine=0` | list | 400 | 752 | — | — | 379 / 49 |
+| **1153** `?spine=0` | **columns** | **609** | 544 | 284 / 37 | 272.4 / 35 | — |
+
+**So at the switch each column holds as many characters a line (35) as the list does in a portrait
+iPad's 288px band** — the rule the minimum was chosen by, confirmed at the rows' real font.
+
+The look, at 1440 (columns) and 1024 (list), same place in the article (part 5, section 5.3):
+
+- Row text 15.68px in both faces (`--structure-tier-near`). The list's `.now` row steps up to
+  16.48px (`tier-cur`); the columns' current row does not, by design — nothing in a column is nearer
+  than anything else.
+- The path row (list `.here`, column A's part) is `--ink` at its level's weight in both; the deepest
+  row (list `.now`, column B's section) is `--highlight-wash` at 650 in both — identical computed
+  values.
+- The rail thumb is `--highlight`, 2px, in both.
+- The current row's gist is 15.04px, reading face, `--ink` in both. Not checked: a non-current gist's
+  `--ink-soft`, since no other row drew one at that height.
+- Hover is `--surface-raised`; the hover card opened fully inside the viewport.
+
+Other modes: Glossary's band is 400 at 1180 and 1440, against Structure's 624 and 705; switching
+between them live reproduces both, with no horizontal scroll at any step.
 
 ## Review
 
-(filled in from GPT Sol)
+**Plan review** (GPT Sol, read-only): APPROVE WITH CHANGES, four P1s, all taken —
+[prompt](260928a-structure-two-columns-readable-plan-review-prompt.md),
+[answer](260928a-structure-two-columns-readable-plan-review-sol.md). The covering band now always
+gets the list; column B's bracket is counted in the threshold (585 → 609); the baseline's phone
+claim was corrected; only the deepest current row is washed.
+
+**Code review** (GPT Sol, fixing in place): APPROVE WITH CHANGES (made) —
+[prompt](260928a-structure-two-columns-readable-code-review-prompt.md),
+[answer](260928a-structure-two-columns-readable-code-review-sol.md). Three fixes: `Reader` hands
+`StructureBand` the same root size it handed `fitView`, so a root-size change with no width change
+re-decides the face; the threshold is floored above `MODE_IDEAL`, so an absurdly small root cannot
+make an ordinary band read as columns; `.struct-line` uses `column-gap`, since moving the gist into
+that grid had added 0.4rem above every gist. One non-finding kept: before the first part nothing is
+marked, deliberately (structure.ts § no current part).

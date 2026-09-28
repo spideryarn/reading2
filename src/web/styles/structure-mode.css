@@ -306,7 +306,10 @@
 .struct-line {
   display: grid;
   grid-template-columns: auto 1fr;
-  gap: 0.4rem;
+  /* Horizontal only. The gist now occupies a second grid row and carries its
+     own vertical margin; `gap` would add another 0.4rem between it and the
+     title, unlike the list face this grid mirrors. */
+  column-gap: 0.4rem;
   align-items: baseline;
 }
 

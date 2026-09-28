@@ -185,7 +185,7 @@ afterEach(() => {
   bandWidth = 0;
 });
 
-function mount(proseBeside = true) {
+function mount(proseBeside = true, rootFontPx = 16) {
   act(() => {
     root.render(
       <StructureBand
@@ -196,6 +196,7 @@ function mount(proseBeside = true) {
         supplementOf={geometry.supplementOf}
         arcByRow={null}
         proseBeside={proseBeside}
+        rootFontPx={rootFontPx}
         onJump={() => {}}
       />,
     );
@@ -210,12 +211,12 @@ function resizeTo(width: number) {
 }
 
 /**
- * The narrowest band that gets the columns *here*: the root size is whatever
- * jsdom reports — read the way the component reads it rather than assumed.
+ * The narrowest band that gets the columns at the default root used by
+ * `mount`. The component is handed the same value the layout used; it does not
+ * make a second DOM read.
  */
-function edge(): number {
-  const rootPx = Number.parseFloat(getComputedStyle(document.documentElement).fontSize) || 16;
-  return structureColumnsBand(rootPx).min;
+function edge(rootFontPx = 16): number {
+  return structureColumnsBand(rootFontPx).min;
 }
 
 const columns = () => host.querySelector(".mode-band.struct");
@@ -258,6 +259,19 @@ describe("StructureBand", () => {
     mount(false);
     expect(columns()).toBeNull();
     expect(list()).not.toBeNull();
+  });
+
+  it("re-evaluates the face when the shared root size changes but the band width does not", () => {
+    bandWidth = 700;
+    mount(true, 16);
+    expect(columns()).not.toBeNull();
+
+    /* At 20px the same 700px border box is below the 759px threshold. No
+       ResizeObserver callback fires: the prop shared with fitView must be
+       enough to change the face. */
+    mount(true, 20);
+    expect(list()).not.toBeNull();
+    expect(columns()).toBeNull();
   });
 
   it("keeps the face it has while the band reports no width", () => {
