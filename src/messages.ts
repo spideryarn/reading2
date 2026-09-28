@@ -4240,6 +4240,10 @@ export const OWNER_MODE_NOTE: Record<Mode, string> = {
      § verifyPassage). */
   faq:
     "The questions the model thought a careful reader would ask this piece, each with the passages where it responds.",
+  /* The stops are the article's own quotes; the order, the depth and the role
+     line are the model's reading (src/trajectory.ts). */
+  trajectory:
+    "A route through this piece's quotes, in the order the model thought best for you, walked a little deeper each time round.",
 };
 
 /* ---------------------------------------------------------------- timeline --

@@ -8,6 +8,30 @@ not come in the paper's order — the results first, say, and then a quick tour 
 [260928a](../plans/260928a-trajectory-mode-skim-a-paper-at-increasing-depth.md). This doc is the
 vision; the plan is the build.
 
+## What shipped
+
+v1, behind the experimental switch and for the article's owner only
+([experimental-features.md](experimental-features.md)):
+
+- **The step**, `trajectory` ([`src/trajectory.ts`](../../src/trajectory.ts)): one small model call
+  over the stored Quotes — their words, section paths and priorities, never the rest of the prose —
+  that orders them into a route and gives each a depth and a short role line. It refuses without
+  Quotes; the band asks for both in one job when there are none.
+- **The band** ([`TrajectoryPanel.tsx`](../../src/web/TrajectoryPanel.tsx),
+  [`modes/trajectory/TrajectoryMode.tsx`](../../src/web/modes/trajectory/TrajectoryMode.tsx)): a
+  pinned head with `‹ Stop k of N ›` and **Gist · More · Most** (only the depths that add stops),
+  then the stops with their section paths, the role shown on the current row only, and a shallower
+  pass's stops dimmed.
+- **In the prose**: the current stop's quote is ringed and barred, scrolled near the top on every
+  step, and followed by a **Next stop ›** door — *Go round again — More ›* at the end of a pass.
+  On a narrow window the band steps aside once a stop is chosen, and the door carries the walk.
+- **Keys and address**: ← / → step the stops while the mode is open
+  ([keyboard.md](keyboard.md) § ← / → in Trajectory); `?depth=` pushes and `?stop=`
+  replaces ([url-state.md](url-state.md)). The rules for where a step or a depth change lands are
+  one pure module, [`trajectory-route.ts`](../../src/web/trajectory-route.ts).
+
+v2, the scrapbook, is the next stage of the plan.
+
 ## What Greg asked for
 
 Dictated on 2026-09-28 and lightly transcribed from speech, so it keeps the repeats and false starts
@@ -188,11 +212,33 @@ you as the rest arrived. So the job shows its progress and the route appears com
 have to be made first, that wait is Quotes', and Quotes stream. Streaming stops one at a time is
 possible later if the wait turns out to matter.
 
-### 5. A route built before you wrote a profile is rebuilt once you have one
+### 5. A route built before you wrote a profile goes out of date once you have one
 
 Elsewhere in the app, an artefact made before you had a profile is left alone when you add one. A
-route is the thing a profile most obviously should change, and it is cheap to rebuild, so Trajectory
-treats "no profile → a profile" as out of date. Say if that surprises you.
+route is the thing a profile most obviously should change, and it is cheap to rebuild (about two
+cents), so Trajectory marks a route as out of date when the profile changes in either direction —
+including "none → a profile" — and the band offers a rebuild. It does not rebuild by itself. Say if
+either half surprises you.
+
+### 6. Should Quotes be made to cover every part of the paper?
+
+**Background.** Because the stops are the Quotes, the route can only go where Quotes went. On the
+three test articles, the deepest pass (Most) covered 19–32% of a paper's words, not the "bigger
+proportion" you described. One paper's biggest section, nearly half its words, had only four quotes,
+and another had a whole section with none. Quotes picks lines worth *keeping*; a plain methods
+paragraph rarely is one.
+
+**Options.**
+
+- **Leave Quotes alone** (default taken). Trajectory v1 goes where Quotes go, and Most is a partial
+  tour.
+- **Ask Quotes to cover every major section** — one sentence in its prompt. Both modes change: the
+  Quotes list gets longer and more even, and some quotes will be less striking.
+- **Let Trajectory add its own stops** where Quotes left a gap — back towards a second set of
+  highlights, which is what you asked us to avoid.
+
+**How to choose.** Try Most on a paper you know. If it skips the part you would have wanted, the
+second option is the one to try, and it is a small change.
 
 ---
 

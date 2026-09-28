@@ -328,6 +328,17 @@ const POLICY: Record<Mode, VisitorPolicy> = {
    * It spends: one model pass over the whole article.
    */
   faq: { kind: "owners-only" },
+  /**
+   * **`owners-only` for v1**, FAQ's staging decision: a visitor branch needs a
+   * public projection of the `trajectory` column and a `PublicArtefacts` flag,
+   * and neither is built. The route is also written for the owner's profile,
+   * which is a second reason to think before showing it to a stranger.
+   * docs/plans/260928a-trajectory-mode-skim-a-paper-at-increasing-depth.md.
+   *
+   * It spends: one small model pass over the Quotes — and the Quotes' own pass
+   * first, when there are none.
+   */
+  trajectory: { kind: "owners-only" },
 };
 
 /**

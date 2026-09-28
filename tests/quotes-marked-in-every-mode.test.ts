@@ -87,6 +87,7 @@ function slots(overrides: Partial<PassageSlots> = {}): PassageSlots {
     timeline: EMPTY,
     referee: EMPTY,
     search: { found: [HEDGED], openKey: null },
+    trajectory: EMPTY,
     ...overrides,
   };
 }
@@ -112,6 +113,25 @@ describe("the quotes are marked wherever the reader is standing", () => {
        an array that changes identity every render. */
     const active = selectPassages("quotes", slots());
     expect(proseFound(active.found, QUOTED)).toBe(QUOTED);
+  });
+
+  it("does not double Trajectory's stop, which is one of the quotes' own marks", () => {
+    /* `resolveTrajectoryStop` hands back the quote's `Found` itself, so the
+       stop is the same object as one of the quotes — and it must be drawn once,
+       with the quotes' array coming back unchanged for `hitMarks`' cache. */
+    const stop = QUOTED[1]!;
+    const active = selectPassages("trajectory", slots({ trajectory: { found: [stop], openKey: stop.key } }));
+    expect(proseFound(active.found, QUOTED)).toBe(QUOTED);
+  });
+
+  it("still draws a stop the quotes' list does not hold — identity, not a key match", () => {
+    /* A stop whose quote the bar has hidden is resolved afresh, so it is not in
+       the quotes' list and has to be added. A copy with the same key is a
+       different object and is kept: a key that happens to match is not proof. */
+    const hidden: Found = { ...QUOTED[0]!, key: "quote-hidden" };
+    const lookalike: Found = { ...QUOTED[0]! };
+    expect(proseFound([hidden], QUOTED)).toEqual([hidden, ...QUOTED]);
+    expect(proseFound([lookalike], QUOTED)).toHaveLength(QUOTED.length + 1);
   });
 
   it("holds every mode to it, so a fifteenth cannot quietly opt out", () => {

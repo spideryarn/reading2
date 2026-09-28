@@ -14,9 +14,12 @@ the revision.
   from the same paragraph. The short essay then failed in the same way. The raw answer showed why:
   the model had copied a quote id back as `"spya-spya-xcg2ub".replace("spya-spya-","spya-")`.
   Quote ids look like block ids, and the model mangles them.
-- **`trajectory/3`** (shipped) shows the model the labels `Q1…Qn` instead of ids, and maps them
+- **`trajectory/3`** (the code-review candidate) shows the model the labels `Q1…Qn` instead of ids, and maps them
   back before validation (`labelOf`/`fromLabels`, with a test that fails without the mapping). All
   3 runs then completed. The tables below are from `/3`.
+- **`trajectory/4`** is the reviewed prompt: it offers only the highest-priority quote from each
+  block and fences each quote record as untrusted article data. This review did not touch the
+  database or network, so the measured runs below remain `/3` evidence.
 
 ## Results
 

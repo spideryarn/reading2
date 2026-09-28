@@ -101,8 +101,8 @@ reusable set of highlights"*.
   depth ≤ 2 ≈ `min(12, ⌈q/2⌉)`, and depth ≤ 3 is every quote worth a stop (≤ 36). The prompt says
   depth 3 should normally include nearly all the quotes. These are hypotheses to measure (F10), not
   product constants.
-- **Freshness, stamped.** The stamp holds `PROMPT_VERSION`, `quotesHash` (a hash of the quote ids and
-  their block ids), and `profileHash`. The route is outdated when:
+- **Freshness, stamped.** The stamp holds `PROMPT_VERSION`, `quotesHash` (a hash of the quote ids,
+  block ids, offered text and priority), and `profileHash`. The route is outdated when:
   - the Quotes set has changed (*Find more* added quotes, or Quotes was regenerated) — the band says
     how many quotes are not on the route, and offers a rebuild;
   - the prompt version has moved on;
@@ -288,3 +288,58 @@ The Opus second opinion (first round) also gave:
   the scrapbook, now a firm stage. Recorded in trajectory.md § Decided.
 - 2026-09-28 — Sol's plan review said *rethink*. The Opus arbiter chose the quote-backed route. The
   plan was rewritten as above.
+- 2026-09-28 — **stage 1 built** by an Opus implementer, committed as `868ae017` and pushed to `dev`
+  (migration `20260928012645_trajectory`).
+  - **Deviations from the plan:**
+    - the model is shown `Q1…Qn` labels rather than quote ids, because it mangled the ids
+      (`trajectory/3`);
+    - the quotes hash is stored as `sourceHash`, which is the name `stampOf` reads;
+    - the profile rule is stale in both directions (none → some, and some → none).
+  - **Real runs** on three articles:
+    [stage1-real-runs](260928a-trajectory-mode-stage1-real-runs.md). The call took 4–12 s and cost
+    $0.009–0.021. Every route started somewhere sensible, and **coverage is the real risk**, as
+    predicted: Most reaches 19–32% of a paper's words, and one paper's biggest section has 4
+    quotes. Quotes' prompt is **not** changed in this build — that is Questions for Greg.
+- 2026-09-28 — **GPT Sol code review 1**
+  ([prompt](260928a-trajectory-mode-code-review-1-prompt.md),
+  [answer](260928a-trajectory-mode-code-review-1-sol.md)). Verdict: accept with fixes. It fixed
+  three things in-stage, committed as `669deefe`:
+  - **F11**: one quote per paragraph is offered, by highest priority (`trajectory/4`);
+  - **F12**: quote records are fenced as untrusted data;
+  - **F13**: the quotes hash covers the offered words and priority.
+
+  F14 (five test tables missing `trajectory`) was the stage-2 work still in progress.
+- 2026-09-28 — **stage 2 built** by an Opus implementer and committed as `64595ca9`. The typecheck
+  exited 0, and the 30 scoped files passed (819 tests).
+  - **The door**: it rides the existing `PdfFigureNotes` after-block slot in `TableView`.
+  - **Narrow windows**: there was no existing way for the band to step aside, so the smallest one
+    was added — a `band-away` flag beside `band-covers`. The band stays mounted.
+  - **Keys**: `useArrowNav` takes an optional horizontal handler.
+  - **Deviations from the plan:**
+    - the icon is lucide `Route`;
+    - pressing a row is a jump, which pushes a history entry — only steps replace one;
+    - `sectionPath` is a **client copy** of the server's `sectionPathOf`, pinned by a test, because
+      `src/trajectory.ts` imports `node:crypto`. That copy is to be removed in review.
+- 2026-09-28 — **browser check** (Sonnet, Playwright) at 1440, 1024×1366, 820×1180 and 420 on the
+  entropy paper. Items 2–8 passed: the pinned head; stepping, marking and scroll-to-top; depth-up
+  going round again; Back undoing a depth change; the door; the keys; the band stepping aside at 420
+  with a way back.
+  - Tap targets are 36px, the house control height.
+  - The one "fail" is a deep link opening the mode with the switch off. That is documented policy
+    (experimental-features.md: hidden from the controls, not unreachable), not a bug.
+- 2026-09-28 — **full suite** after `64595ca9`: 6 of 1,160 files red.
+  - Four are environment: no API or fleet build in a fresh worktree.
+  - One was ours: `last-view.test.ts`. The `depth` and `stop` params had no policy row, and the
+    test's scanner misread a one-line `useQueryStates`.
+- 2026-09-28 — **GPT Sol code review 2**
+  ([prompt](260928a-trajectory-mode-code-review-2-prompt.md),
+  [answer](260928a-trajectory-mode-code-review-2-sol.md)). Verdict: accept after fixes. It fixed:
+  - **F15**: `sectionPathOf` is one pure module, `src/section-path.ts`, and the client copy is gone;
+  - **F16**: a repeated section path is drawn as a muted `〃`, with the full path kept for screen
+    readers;
+  - **F17**: `depth` and `stop` are remembered by last-view, and the scanner-readable
+    `useQueryStates`.
+
+  No other P0/P1 findings: the door is owner- and Trajectory-only, and `bandAway` recovers across
+  resizing and mode changes. Gates re-run here afterwards: typecheck clean apart from the
+  uncommitted `spikes/` scripts, and 8 files / 185 tests passed.

@@ -228,6 +228,10 @@ const MODE_TARGET: Record<Mode, ModeActivation> = {
   debate: { kind: "fixed", target: "debate" },
   citations: { kind: "fixed", target: "citations" },
   faq: { kind: "fixed", target: "faq" },
+  /* The target is the route even when the job it starts writes the Quotes
+     first (`precededBy`, src/web/useTrajectory.ts): the press is for this
+     mode's artefact, and the token is keyed on it. */
+  trajectory: { kind: "fixed", target: "trajectory" },
 
   /* The one delegated row, and the reason the variant carries a function at
      all: the picture a Diagram press lands on is whatever `?diagram=` says, so
