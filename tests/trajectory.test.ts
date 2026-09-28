@@ -15,6 +15,8 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { cascadeForce } from "../src/jobs.js";
+import { readerFailureOf } from "../src/job-failure.js";
+import { TRAJECTORY_ONLY_ABSTRACT_QUOTES } from "../src/messages.js";
 import { DEFAULT_INGEST_STEPS, FORCE_ONLY_WHEN_NAMED, STEP_ORDER, STEPS } from "../src/pipeline.js";
 import type { StepContext } from "../src/pipeline.js";
 import { hashProfile, PROFILE_RULES } from "../src/profile.js";
@@ -941,7 +943,17 @@ const FIRST_TWO = [true, true, false, false, false, false, false, false, false, 
 
 describe("the abstract is left out of the route (Greg, 2026-09-28)", () => {
   it("recognises an Abstract heading however it is numbered, punctuated or cased", () => {
-    for (const title of ["Abstract", "1. Abstract", "ABSTRACT", "Abstract:", "I. Abstract", "Abstract and Keywords"]) {
+    for (const title of [
+      "Abstract",
+      "1. Abstract",
+      "1 Abstract",
+      "(1) Abstract",
+      "2.3 — Abstract",
+      "ABSTRACT",
+      "Abstract:",
+      "I. Abstract",
+      "Abstract and Keywords",
+    ]) {
       expect(isAbstractTitle(title, false), title).toBe(true);
     }
     for (const title of ["Introduction", "Abstract algebra", "Abstracting the model", "Keywords"]) {
@@ -949,8 +961,8 @@ describe("the abstract is left out of the route (Greg, 2026-09-28)", () => {
     }
   });
 
-  it("counts a Summary as the abstract only when it opens the paper", () => {
-    expect(isAbstractTitle("Summary", true)).toBe(true);
+  it("takes Executive Summary only at the opening, while plain Summary needs tree evidence", () => {
+    expect(isAbstractTitle("Summary", true)).toBe(false);
     expect(isAbstractTitle("Executive summary", true)).toBe(true);
     expect(isAbstractTitle("Summary", false)).toBe(false);
     expect(isAbstractTitle("8. Summary", false)).toBe(false);
@@ -979,7 +991,7 @@ describe("the abstract is left out of the route (Greg, 2026-09-28)", () => {
     expect(inAbstractAt(t).slice(0, 3)).toEqual([false, true, false]);
   });
 
-  it("takes an opening Summary, alone or under front matter, and never a closing one", () => {
+  it("takes a Summary before Introduction or under front matter, and never a closing one", () => {
     const opening = treeOf([
       { title: "Summary", lo: 0, hi: 1 },
       ...bodySections,
@@ -1016,6 +1028,30 @@ describe("the abstract is left out of the route (Greg, 2026-09-28)", () => {
     expect(inAbstractAt(closing).every((x) => !x)).toBe(true);
   });
 
+  it("does not mistake an essay's opening Summary, or a Summary inside its Introduction, for an abstract", () => {
+    const openingEssay = treeOf([
+      { title: "Summary", lo: 0, hi: 1 },
+      { title: "The argument", lo: 2, hi: 5 },
+      { title: "Evidence", lo: 6, hi: 11 },
+    ]);
+    expect(inAbstractAt(openingEssay).every((x) => !x)).toBe(true);
+
+    const introductionSummary = treeOf([
+      {
+        title: "Introduction",
+        lo: 0,
+        hi: 1,
+        sub: [
+          { title: "Opening", lo: 0, hi: 0 },
+          { title: "Summary", lo: 1, hi: 1 },
+        ],
+      },
+      ...bodySections,
+      { title: "Results", lo: 10, hi: 11 },
+    ]);
+    expect(inAbstractAt(introductionSummary).every((x) => !x)).toBe(true);
+  });
+
   it("leaves a paper with no abstract heading alone", () => {
     expect(inAbstractAt(tree).every((x) => !x)).toBe(true);
     const input = inputOf(quotesOf(12));
@@ -1037,18 +1073,36 @@ describe("the abstract is left out of the route (Greg, 2026-09-28)", () => {
     expect(trajectoryInputHash(input)).toBe(trajectoryInputHash(without));
   });
 
-  it("tells the model why the abstract is not there", () => {
-    expect(TRAJECTORY_SYSTEM).toMatch(/abstract/i);
-    expect(TRAJECTORY_SYSTEM).toMatch(/left out on purpose/i);
+  it("changes the input hash when a tree re-cut moves the abstract boundary", () => {
+    const before = inputOf(quotesOf(12), null, { tree: abstractFirst() });
+    const recut = treeOf([
+      { title: "Abstract", lo: 0, hi: 0 },
+      { title: "1. Introduction", lo: 1, hi: 5 },
+      { title: "2. Methods", lo: 6, hi: 9 },
+      { title: "3. Results", lo: 10, hi: 11 },
+    ]);
+    const after = inputOf(quotesOf(12), null, { tree: recut });
+    expect(before.offered).toHaveLength(10);
+    expect(after.offered).toHaveLength(11);
+    expect(trajectoryInputHash(after)).not.toBe(trajectoryInputHash(before));
   });
 
-  it("refuses as it does with no quotes, not with a crash, when every quote is in the abstract", async () => {
+  it("tells the model why the abstract is not there", () => {
+    expect(TRAJECTORY_SYSTEM).toMatch(/abstract/i);
+    expect(TRAJECTORY_SYSTEM).toMatch(/if there were any/i);
+    expect(TRAJECTORY_SYSTEM).toMatch(/other opening\s+quotes are still available/i);
+  });
+
+  it("says the quotes are all in the abstract when none can be offered", async () => {
     const t = abstractFirst();
     const onlyAbstract = [quote(0), quote(1)];
     expect(inputOf(onlyAbstract, null, { tree: t }).offered).toEqual([]);
     const store = storeWith(onlyAbstract, null, t);
     expect(await STEPS.trajectory.stamp?.(ctx(), store)).toBeNull();
-    await expect(STEPS.trajectory.run(ctx(), store, nullCheckpointStore())).rejects.toThrow(/quotes/i);
+    const err = await STEPS.trajectory.run(ctx(), store, nullCheckpointStore()).catch((caught) => caught);
+    const failure = readerFailureOf(err, "Planning the route");
+    expect(failure).toEqual(TRAJECTORY_ONLY_ABSTRACT_QUOTES);
+    expect(failure.message).toContain("[jb-only-abstract-quotes]");
     expect(sent).toEqual([]);
   });
 });

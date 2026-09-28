@@ -97,9 +97,12 @@ Stage 6 ([plan § Stage 6](../plans/260928a-trajectory-mode-skim-a-paper-at-incr
 - **The abstract is left out.** Greg, 2026-09-28: *"Slight tweak to Trajectory mode - prefer not to
   include the Abstract as part of a trajectory, since that's kinda obviously already a good place to
   get the gist, and it's dense."* A quote under a section titled *Abstract* (at any level of its
-  path, numbering and case ignored), or *Summary* only in the paper's first top-level section, is
-  never offered (`inAbstract` in `src/trajectory.ts`), and the prompt says why in one sentence. An
-  abstract with no such heading over it is not detected. Not counted in `notOnRoute`.
+  path, numbering and case ignored), or an opening *Executive Summary*, is never offered
+  (`inAbstract` in `src/trajectory.ts`), and the prompt says why briefly. Plain *Summary*
+  needs stronger evidence: either it is under *Front Matter*, or it is the opening top-level section
+  immediately before *Introduction*. That keeps an essay's introductory *Summary* on the route. An
+  untitled or non-English abstract is not detected. Excluded quotes count in neither `notOnRoute`
+  nor the Most pass's denominator.
 
 ### What we tried for v2
 

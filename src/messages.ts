@@ -456,9 +456,10 @@ export const CODE_KINDS: Record<string, FailureKind> = {
   "jb-no-sketch": "blocked",
   "jb-sketch-stale": "blocked",
   "jb-sketch-profile": "blocked",
-  /* The Trajectory's one refusal: its stops are the article's Quotes, and
-     there are none. See `TRAJECTORY_NO_QUOTES`. */
+  /* The Trajectory's two refusals: no usable Quotes, or only abstract Quotes.
+     See `TRAJECTORY_NO_QUOTES` and `TRAJECTORY_ONLY_ABSTRACT_QUOTES`. */
   "jb-no-quotes": "blocked",
+  "jb-only-abstract-quotes": "blocked",
   /* Reading a PDF. The split of prefix is the rule in docs/project/copy.md read
      both ways: `pdf-` for the two refusals that are arithmetic over bytes we
      already hold, `ai-pdf-` for the two that are an answer the service came
@@ -1373,6 +1374,16 @@ export const TRAJECTORY_NO_QUOTES: ReaderFacingFailure = {
     "There are no quotes for this article yet, and the trajectory is a route through its quotes. " +
     "Open Quotes and choose them first, then open this again. Until there are some, this will " +
     "come back the same way. [jb-no-quotes]",
+};
+
+/** Quotes exist, but the route deliberately cannot use the abstract's. */
+export const TRAJECTORY_ONLY_ABSTRACT_QUOTES: ReaderFacingFailure = {
+  kind: "blocked",
+  message:
+    "The only quotes Trajectory can use are in this article's abstract. Trajectory leaves the " +
+    "abstract out, so it has no stops to plan. Planning it again now will come back the same way. " +
+    "Open Quotes and use Find more; once it finds a line from the body, plan the route again. " +
+    "[jb-only-abstract-quotes]",
 };
 
 /**

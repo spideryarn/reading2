@@ -26,7 +26,7 @@ import { useRenderCount } from "../../perf.js";
 import { quoteStroke } from "../../QuotesPanel.js";
 import { dropPendingFlash, flashBlock } from "../../flash.js";
 import { scrollToBlock } from "../../scroll.js";
-import { type Found, resolveTrajectoryStop } from "../../search-hits.js";
+import { type Found, quoteMarkKey, resolveTrajectoryStop } from "../../search-hits.js";
 import {
   countAt,
   currentStop,
@@ -185,7 +185,7 @@ export function TrajectoryBand({
     onControl,
     arrival,
   });
-  return <TrajectoryPanel owner={owner} view={view} quoteCount={quotes.quotes?.quotes.length ?? 0} />;
+  return <TrajectoryPanel owner={owner} view={view} />;
 }
 
 /** What the panel draws — see `TrajectoryPanel`. */
@@ -298,8 +298,8 @@ function useTrajectoryMode({
    * buttons. A row press is not here: it is a jump, through `onJump`.
    */
   const moveTo = useCallback(
-    (block: BlockId) => {
-      arrive(block);
+    (block: BlockId, quoteId: string) => {
+      arrive(block, quoteId);
       if (covers) onAway();
     },
     [covers, onAway],
@@ -315,7 +315,7 @@ function useTrajectoryMode({
          and an older held flash could then surface under the wrong stop. */
       if (block === null) return false;
       void setRoute({ stop: quoteId }, { history: "replace" });
-      moveTo(block);
+      moveTo(block, quoteId);
       return true;
     },
     [setRoute, blockOf, moveTo],
@@ -333,7 +333,7 @@ function useTrajectoryMode({
       /* Scroll — and flash — only when the change moved the reader. Staying
          put is the point of "changing depth keeps your place", and nothing
          was jumped to. */
-      if (block !== null) moveTo(block);
+      if (block !== null && next !== null) moveTo(block, next);
     },
     [depth, stops, current, setRoute, blockOf, moveTo],
   );
@@ -398,7 +398,7 @@ function useTrajectoryMode({
     if (arrival.stop === null || current === null || stopBlock === null) return;
     const named = arrival.stop === current.quoteId;
     arrival.stop = null;
-    if (named) arrive(stopBlock);
+    if (named) arrive(stopBlock, current.quoteId);
   }, [arrival, current, stopBlock]);
 
   const control = useMemo<TrajectoryControl | null>(
@@ -501,13 +501,27 @@ function useTrajectoryMode({
  * `scrollToBlock`, not `jumpTo`: traversal writes no history entry of its own,
  * and `useReadingPosition` replaces `?at=` when the scroll settles —
  * comment-jump.ts § stepToComment, the same argument. A row press is not here:
- * it is a jump, through `onJump` → `beginJump`, which already flashes.
+ * it is a jump, through `onJump` → `beginJump`, which already flashes (the
+ * whole block — `beginJump` is shared and takes no passage).
+ *
+ * **What flashes is the quote's own words** (plan 260928a § 7b): the stop is a
+ * quote, so `flashBlock` is handed its mark key — the one annotate.ts writes
+ * into each fragment's `data-hit` — and falls back to the block if the quote
+ * is not drawn. By the time the scroll settles the new stop's passage has been
+ * published (usePassageLifecycle, before paint), so the marks are there.
+ *
+ * **Where it lands is `scrollToBlock`'s to get right, and it now does**: the
+ * door hangs in the *current* stop's row and moves to the new one when this
+ * step commits, after the press has asked for the scroll — so the destination
+ * is re-measured every frame rather than taken from the click.
+ * docs/postmortems/260928c-a-scroll-aimed-at-a-pixel-not-at-the-element.md.
  */
-function arrive(block: BlockId): void {
+function arrive(block: BlockId, quoteId: string): void {
   /* A landing still held behind a covering band belongs to the step before. */
   dropPendingFlash();
+  const passage = quoteMarkKey(quoteId, block);
   scrollToBlock(block, "smooth", (outcome) => {
-    if (outcome === "settled") flashBlock(block);
+    if (outcome === "settled") flashBlock(block, { passage });
   });
 }
 

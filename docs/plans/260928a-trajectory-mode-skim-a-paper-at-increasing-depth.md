@@ -904,3 +904,13 @@ And, the same afternoon, folded into stage 6's unreleased `trajectory/7` rather 
   shared `scrollToBlock` if it is shared, with the other modes it touches named).
 - **Abstract excluded** (stage 6): a deterministic rule — quotes whose block sits under an Abstract
   heading are not offered to the route — and one sentence in the prompt saying why.
+
+### Abstract rule — GPT Sol ([prompt](260928a-trajectory-mode-abstract-review-prompt.md), [answer](260928a-trajectory-mode-abstract-review-sol.md)), verdict *accept after fixes*
+
+Fixed by Sol: **F80** a plain opening "Summary" counts only under Front Matter or straight before
+an Introduction (an essay's introduction was a false positive), and numbering variants are
+recognised; **F81** the coverage note at Most counts the quotes *offered to the route*, not raw
+Quotes that include never-offered abstract ones; **F82** an article whose only quotes are in the
+abstract gets its own refusal (`[jb-only-abstract-quotes]`); **F83** the prompt sentence keeps other
+opening quotes available. **F84** (known limit, documented): untitled and non-English abstracts are
+not detected — conservative on purpose.

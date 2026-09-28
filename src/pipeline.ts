@@ -151,6 +151,7 @@ import {
   SOURCE_DOCUMENT_DAMAGED,
   SOURCE_DOCUMENT_GONE,
   TRAJECTORY_NO_QUOTES,
+  TRAJECTORY_ONLY_ABSTRACT_QUOTES,
 } from "./messages.js";
 import { type RejectReason, MAX_UPLOAD_BYTES, rejectionFailure, stagingKey } from "./source.js";
 import { readUpload, rejectUpload, settleUpload } from "./upload-records.js";
@@ -4085,7 +4086,12 @@ export const STEPS: { [K in StepName]: PipelineStep<K> } = {
       const article = await readArticle(ctx.slug, store);
       const ideas = await store.read(ctx.slug, "ideas", "ideas");
       const input = trajectoryInput({ quotes, blocks: article.blocks, tree: article.tree, ideas });
-      if (!quotes || input.offered.length === 0) throw stageFailure(TRAJECTORY_NO_QUOTES);
+      if (!quotes || input.offered.length === 0) {
+        if (input.abstractQuoteIds.length > 0) {
+          throw stageFailure(TRAJECTORY_ONLY_ABSTRACT_QUOTES);
+        }
+        throw stageFailure(TRAJECTORY_NO_QUOTES);
+      }
 
       const run = await generateTrajectory({
         slug: ctx.slug,

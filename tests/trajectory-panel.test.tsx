@@ -92,9 +92,11 @@ vi.mock("../src/web/useJobs.js", async (importOriginal) => {
 
 /* Scrolls are recorded — jsdom has no layout, and the claim is that a step
    scrolls rather than pushes. comment-jump.test.ts does the same. */
-const { scrolled, flashed, movement } = vi.hoisted(() => ({
+const { scrolled, flashed, passages, movement } = vi.hoisted(() => ({
   scrolled: [] as string[],
   flashed: [] as string[],
+  /* The passage each flash was narrowed to (plan 260928a § 7b), or null. */
+  passages: [] as (string | null)[],
   movement: { outcome: "settled" as "settled" | "cancelled" | "missing", dropped: 0 },
 }));
 vi.mock("../src/web/scroll.js", async (importOriginal) => {
@@ -117,7 +119,10 @@ vi.mock("../src/web/flash.js", async (importOriginal) => {
   const actual = await importOriginal<typeof import("../src/web/flash.js")>();
   return {
     ...actual,
-    flashBlock: (id: string) => void flashed.push(id),
+    flashBlock: (id: string, target?: { passage?: string | null }) => {
+      flashed.push(id);
+      passages.push(target?.passage ?? null);
+    },
     dropPendingFlash: () => {
       movement.dropped += 1;
     },
@@ -243,6 +248,7 @@ let root: Root;
 beforeEach(() => {
   scrolled.length = 0;
   flashed.length = 0;
+  passages.length = 0;
   movement.outcome = "settled";
   movement.dropped = 0;
   requested.length = 0;
@@ -333,9 +339,9 @@ const CARD: StopCard = {
   events: [{ id: "spya-ev2abc", label: "Recordings made" }],
 };
 
-async function draw(o: UseTrajectory, v: TrajectoryView, quoteCount = 4) {
+async function draw(o: UseTrajectory, v: TrajectoryView) {
   calls.length = 0;
-  await act(async () => root.render(createElement(TrajectoryPanel, { owner: o, view: v, quoteCount })));
+  await act(async () => root.render(createElement(TrajectoryPanel, { owner: o, view: v })));
 }
 
 const text = (sel: string) => host.querySelector(sel)?.textContent ?? null;
@@ -420,10 +426,12 @@ describe("the panel", () => {
       depth: 3,
       rows: [...view().rows, { quoteId: Q[1]!, n: 4, place: "Results", cue: null, seen: false, current: false, missing: false, position: null }],
     });
-    await draw(owner(), most, 4);
-    expect(text(".traj-foot")).toContain("every one of the article's 4 quotes");
-    await draw(owner(), most, 6);
-    expect(text(".traj-foot")).toContain("4 of the article's 6 quotes");
+    /* The live Quotes list may include two abstract quotes; the route records
+       the four it was actually offered, which is the honest denominator. */
+    await draw(owner(), most);
+    expect(text(".traj-foot")).toContain("every one of the 4 quotes offered to this route");
+    await draw(owner({ trajectory: { ...ROUTE, offered: 6 } }), most);
+    expect(text(".traj-foot")).toContain("4 of the 6 quotes offered to this route");
     expect(coverageNote(4, 0)).toBeNull();
   });
 
@@ -850,6 +858,9 @@ describe("the band, walked", () => {
     await act(async () => control!.advance());
     await settled();
     expect(flashed).toEqual([B[0], B[2], B[0]]);
+    /* 7b: each flash is narrowed to the stop's quote — the key annotate.ts
+       writes into the quote's `mark.hit[data-hit]`. */
+    expect(passages).toEqual([`${Q[0]}:${B[0]}:0`, `${Q[2]}:${B[2]}:0`, `${Q[0]}:${B[0]}:0`]);
   });
 
   it("drops a held flash when movement starts and flashes only after a settled scroll", async () => {

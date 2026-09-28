@@ -104,13 +104,17 @@ export function trajectoryPromise(profiled: boolean): string {
 }
 
 /**
- * At Most, how much of the Quotes the route walks — *"every one of the
- * article's N quotes"*, or *"M of N"*. `null` below Most, or with no Quotes.
+ * At Most, how much of the Quotes offered to this route it walks — *"every one
+ * of the N quotes offered to this route"*, or *"M of N"*. The denominator is
+ * the route's stored `offered`, not today's raw Quotes count: abstract quotes
+ * were deliberately never offered. `null` below Most, or with no Quotes.
  */
-export function coverageNote(atMost: number, quotes: number): string | null {
-  if (quotes === 0) return null;
-  if (atMost >= quotes) return `This pass stops at every one of the article's ${quotes} quotes.`;
-  return `This pass stops at ${atMost} of the article's ${quotes} quotes.`;
+export function coverageNote(atMost: number, offered: number): string | null {
+  if (offered === 0) return null;
+  if (atMost >= offered) {
+    return `This pass stops at every one of the ${offered} quotes offered to this route.`;
+  }
+  return `This pass stops at ${atMost} of the ${offered} quotes offered to this route.`;
 }
 
 /**
@@ -218,11 +222,9 @@ function RouteHead({ view, total }: { view: TrajectoryView; total: number }) {
 interface Props {
   owner: UseTrajectory;
   view: TrajectoryView;
-  /** How many quotes the article has now — for the coverage note at Most. */
-  quoteCount: number;
 }
 
-export function TrajectoryPanel({ owner, view, quoteCount }: Props) {
+export function TrajectoryPanel({ owner, view }: Props) {
   useRenderCount("TrajectoryPanel");
   const route = owner.trajectory;
   const ready = route !== null && owner.status === "ready";
@@ -262,8 +264,8 @@ export function TrajectoryPanel({ owner, view, quoteCount }: Props) {
         ready && total > 0 ? (
           <div className="traj-foot">
             <p className="traj-note">{trajectoryPromise(route.profileHash !== null)}</p>
-            {atMost && coverageNote(total, quoteCount) && (
-              <p className="traj-note">{coverageNote(total, quoteCount)}</p>
+            {atMost && coverageNote(total, route.offered) && (
+              <p className="traj-note">{coverageNote(total, route.offered)}</p>
             )}
             {/* **Plan it again**, pinned under the list as Ideas' and
                 Timeline's are — the plan's stage 5e. It rebuilds the route
