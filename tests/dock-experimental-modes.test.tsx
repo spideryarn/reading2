@@ -79,9 +79,9 @@ const BEHIND_THE_SWITCH: readonly Mode[] = [
   /* 2026-09-16: a new mode on an unmeasured prompt —
      docs/project/experimental-features.md. */
   "faq",
-  /* 2026-09-28: a new mode on an unmeasured prompt, and Greg asked for it to
-     stay behind the switch — docs/project/experimental-features.md. */
-  "trajectory",
+  /* Trajectory was here for most of 2026-09-28, a new mode on an unmeasured
+     prompt; Greg took it out the same day ("take Trajectory and Quotes modes
+     out of Experimental features") — docs/project/experimental-features.md. */
   /* 2026-09-12, at Greg's request (SPIDERYARN-READING2-35): Structure is the
      structural view everybody gets, and Hierarchy's columns are for readers
      who have asked for the extra modes. Only the Dock entry points are gated
