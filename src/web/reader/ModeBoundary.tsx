@@ -87,6 +87,7 @@ export const MODE_CONTAINMENT: Record<Mode, Containment> = {
   structure: BAND,
   citations: BAND,
   faq: BAND,
+  trajectory: BAND,
 };
 
 /**

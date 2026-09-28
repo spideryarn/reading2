@@ -911,6 +911,8 @@ const BAND_SAYS: Record<Mode, { where: string | null; says: string | null }> = {
   citations: { where: VISITOR_BAND, says: "Citations is for whoever added this article" },
   /* Owners-only for v1 — src/web/visitor.ts § POLICY.faq. */
   faq: { where: VISITOR_BAND, says: "FAQ is for whoever added this article" },
+  /* Owners-only for v1 — src/web/visitor.ts § POLICY.trajectory. */
+  trajectory: { where: VISITOR_BAND, says: "Trajectory is for whoever added this article" },
 };
 
 /**

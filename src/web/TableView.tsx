@@ -704,6 +704,21 @@ interface Props {
    * string, so it cannot cost this memo a render.
    */
   slug: string;
+  /**
+   * **One thing to hang after one block's prose**, or nothing — the open
+   * mode's door into the rest of the page. Trajectory's "Next stop ›" is the
+   * one user (TrajectoryPanel.tsx § TrajectoryDoor): after the current stop's
+   * block, where a reader who has just read it has their eyes and thumb.
+   *
+   * On the path `PdfFigureNotes` already takes — a sibling after `.prose`,
+   * never markup inside the block, so no comment anchor moves (selection.ts
+   * roots its offsets at `td.text .prose`). One slot rather than a map because
+   * one mode is open at a time and each would hang one thing.
+   *
+   * **Memoise it in the caller**: a fresh object every render costs this memo
+   * every render.
+   */
+  afterBlock?: { blockId: BlockId; node: ReactElement } | null | undefined;
 }
 
 /**
@@ -770,6 +785,7 @@ function TableViewInner({
   layoutKey,
   linkBase,
   slug,
+  afterBlock,
 }: Props) {
   useRenderCount("TableView");
   const { blocks } = article;
@@ -1861,6 +1877,8 @@ function TableViewInner({
                     canOpenSource={canOpenSource}
                   />
                 )}
+                {/* The open mode's door, after its block — `Props.afterBlock`. */}
+                {afterBlock?.blockId === block.id && afterBlock.node}
               </td>
             )}
           </tr>

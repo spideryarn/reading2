@@ -1,0 +1,149 @@
+/* ----------------------------------------------------------- trajectory mode --
+   A route through the article's Quotes, walked at three depths. `.trajectory` is
+   `.gloss` with a class beside it, like `.faq`, so the band shell, the empty,
+   stale and error states, and the scroller (`.tl-scroll`) come from
+   glossary.css and timeline.css unchanged. What is here is the pinned head (the
+   stepper and the depth control), the rows, the foot, and the door the prose
+   carries after the current stop's block.
+
+   **Every control is the house height**, `var(--control-h)` — controls.md, and
+   touch.md: these are pressed with a thumb on an iPad, and there is no swipe.
+
+   Loaded after faq.css; it sets no property the sheets it borrows from set on
+   the same element. TrajectoryPanel.tsx, docs/project/trajectory.md. */
+
+.traj-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.4rem 0.7rem;
+  width: 100%;
+}
+
+.traj-stepper { display: flex; align-items: center; gap: 0.2rem; }
+.traj-count {
+  min-width: 6.5em;
+  text-align: center;
+  color: var(--ink);
+  font-size: 0.87rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.traj-arrow,
+.traj-depth,
+.traj-door-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.3rem;
+  min-height: var(--control-h);
+  border: 1px solid var(--rule-strong);
+  border-radius: var(--radius);
+  background: var(--surface-raised);
+  color: var(--ink);
+  cursor: pointer;
+}
+.traj-arrow { width: var(--control-h); padding: 0; }
+.traj-arrow:disabled { opacity: 0.4; cursor: default; }
+.traj-arrow:not(:disabled):hover,
+.traj-depth:hover,
+.traj-door-btn:hover { border-color: var(--highlight); }
+
+/* **Three segmented buttons**, one box: the middle one's borders are shared. */
+.traj-depths {
+  display: inline-flex;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+.traj-depth {
+  padding: 0 0.6rem;
+  border-radius: 0;
+  font-size: 0.85rem;
+}
+.traj-depth + .traj-depth { margin-left: -1px; }
+.traj-depth:first-child { border-radius: var(--radius) 0 0 var(--radius); }
+.traj-depth:last-child { border-radius: 0 var(--radius) var(--radius) 0; }
+.traj-depth.on {
+  position: relative; /* its border over its neighbours' */
+  border-color: var(--highlight);
+  background: var(--highlight-wash);
+  color: var(--highlight-ink);
+  font-weight: 600;
+}
+.traj-depth-n {
+  color: var(--ink-faint);
+  font-size: 0.75rem;
+  font-variant-numeric: tabular-nums;
+}
+
+/* ------------------------------------------------------------------ rows -- */
+.traj-list { margin: 0.3rem 0 0; padding: 0; list-style: none; }
+.traj-go {
+  display: flex;
+  align-items: baseline;
+  gap: 0.55rem;
+  width: 100%;
+  min-height: var(--control-h);
+  padding: 0.35rem 0.4rem;
+  border: 0;
+  border-radius: var(--radius);
+  background: none;
+  color: var(--ink);
+  text-align: left;
+  cursor: pointer;
+}
+.traj-go:hover { background: var(--surface-raised); }
+.traj-go:disabled { cursor: default; opacity: 0.5; }
+.traj-n {
+  flex: none;
+  min-width: 1.4em;
+  color: var(--ink-faint);
+  font-size: 0.8rem;
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+.traj-what { display: flex; flex-direction: column; min-width: 0; gap: 0.15rem; }
+.traj-place { font-size: 0.88rem; line-height: 1.35; }
+.traj-role { color: var(--ink-soft); font-size: 0.85rem; line-height: 1.35; }
+
+/* A shallower pass's stop, already seen on the way round. */
+.traj-row.seen .traj-go { color: var(--ink-faint); }
+.traj-row.current .traj-go {
+  background: var(--surface-raised);
+  box-shadow: inset 3px 0 0 var(--highlight);
+}
+.traj-row.current .traj-place { font-weight: 600; color: var(--ink); }
+
+.traj-read-error { margin: 0.4rem 0.7rem 0; }
+.traj-read-error .gloss-error { margin: 0 0 0.5rem; }
+
+/* A rule above it, so the promise reads as being about the route rather than
+   the last row's — citations.css's `.cite-foot`. */
+.traj-foot { padding: 0.4rem 0.7rem 0; border-top: 1px solid var(--rule); }
+.traj-note {
+  margin: 0 0 0.3rem;
+  color: var(--ink-faint);
+  font-size: 0.77rem;
+  line-height: 1.35;
+}
+
+/* ------------------------------------------------------ the door in the prose --
+   After the current stop's block, outside `.prose` (TableView.tsx §
+   `afterBlock`). Right-aligned, where the eye lands at the end of a paragraph,
+   and in the UI face so it cannot be mistaken for the author's words. */
+.traj-door {
+  display: flex;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin: 0.5rem 0 0.2rem;
+  font-family: var(--font-ui);
+}
+.traj-door-btn {
+  padding: 0 0.85rem;
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: var(--highlight-ink);
+}
+.traj-door-btn.quiet { font-weight: 400; color: var(--ink); }

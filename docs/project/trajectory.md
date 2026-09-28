@@ -8,6 +8,30 @@ not come in the paper's order — the results first, say, and then a quick tour 
 [260928a](../plans/260928a-trajectory-mode-skim-a-paper-at-increasing-depth.md). This doc is the
 vision; the plan is the build.
 
+## What shipped
+
+v1, behind the experimental switch and for the article's owner only
+([experimental-features.md](experimental-features.md)):
+
+- **The step**, `trajectory` ([`src/trajectory.ts`](../../src/trajectory.ts)): one small model call
+  over the stored Quotes — their words, section paths and priorities, never the rest of the prose —
+  that orders them into a route and gives each a depth and a short role line. It refuses without
+  Quotes; the band asks for both in one job when there are none.
+- **The band** ([`TrajectoryPanel.tsx`](../../src/web/TrajectoryPanel.tsx),
+  [`modes/trajectory/TrajectoryMode.tsx`](../../src/web/modes/trajectory/TrajectoryMode.tsx)): a
+  pinned head with `‹ Stop k of N ›` and **Gist · More · Most** (only the depths that add stops),
+  then the stops with their section paths, the role shown on the current row only, and a shallower
+  pass's stops dimmed.
+- **In the prose**: the current stop's quote is ringed and barred, scrolled near the top on every
+  step, and followed by a **Next stop ›** door — *Go round again — More ›* at the end of a pass.
+  On a narrow window the band steps aside once a stop is chosen, and the door carries the walk.
+- **Keys and address**: ← / → step the stops while the mode is open
+  ([keyboard.md](keyboard.md) § ← / → in Trajectory); `?depth=` pushes and `?stop=`
+  replaces ([url-state.md](url-state.md)). The rules for where a step or a depth change lands are
+  one pure module, [`trajectory-route.ts`](../../src/web/trajectory-route.ts).
+
+v2, the scrapbook, is the next stage of the plan.
+
 ## What Greg asked for
 
 Dictated on 2026-09-28 and lightly transcribed from speech, so it keeps the repeats and false starts

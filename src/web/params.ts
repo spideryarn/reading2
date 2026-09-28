@@ -29,7 +29,7 @@
  * `popstate` for everything else. One query string, one listener.
  */
 import { createParser, debounce } from "nuqs";
-import type { IdentificationLevel } from "../types.js";
+import type { IdentificationLevel, TrajectoryDepth } from "../types.js";
 import { isSpideryarnId } from "../ids.js";
 import { isIdentificationLevel } from "./debate-levels.js";
 import { DIAGRAMS, type DiagramKind } from "./diagram.js";
@@ -436,6 +436,36 @@ export const quoteParam = parseAsBlockId.withOptions({ history: "replace" });
  * already put one entry on the stack for the trip into the mode.
  */
 export const eventParam = parseAsBlockId.withOptions({ history: "replace" });
+
+/**
+ * **Trajectory's depth** — `depth=1|2|3`, Gist · More · Most. Absent is Gist, the
+ * first pass. docs/plans/260928a-trajectory-mode-skim-a-paper-at-increasing-depth.md
+ * § URL.
+ *
+ * `push`: changing depth is choosing a different walk through the piece, and
+ * Back should undo it. It is always written **together with `?stop=`**, in one
+ * `useQueryStates` update (`useTrajectoryMode`), so a depth change and the stop
+ * it lands on are one history entry rather than two.
+ *
+ * A depth the route does not offer is not refused here — this parser cannot see
+ * the route — but `effectiveDepth` (src/web/trajectory-route.ts) draws the
+ * deepest offered pass below it.
+ */
+export const depthParam = createParser<TrajectoryDepth>({
+  parse: (v) => (v === "1" ? 1 : v === "2" ? 2 : v === "3" ? 3 : null),
+  serialize: (v) => String(v),
+}).withOptions({ history: "push" });
+
+/**
+ * **The Trajectory stop the reader is on** — the quote's id, which is minted
+ * by `mintId` and so validated by `parseAsBlockId` like `?quote=`.
+ *
+ * `replace`: stepping along the route is traversal, and twenty stops must not
+ * cost twenty presses of Back — comment-jump.ts's argument for its arrows. A
+ * stop that is not on the current pass (a stale link, a quote chosen again)
+ * falls back to the first stop, in `currentStop`.
+ */
+export const stopParam = parseAsBlockId.withOptions({ history: "replace" });
 
 /**
  * How the quote list is ordered.

@@ -395,8 +395,24 @@ export function useArrowNav(
    * exactly where it left off rather than snapping back to the section.
    */
   enabled = true,
+  /**
+   * **← / → for a mode that has a sideways of its own** — Trajectory's stops,
+   * and nothing else yet (docs/project/keyboard.md § ← / → in Trajectory; the
+   * plan's § Keys, Sol F5). While it is given, ← / → go to it *instead of* the
+   * stride, after every guard below has passed; it answers whether it took the
+   * key, and `false` — the end of the route, which does not wrap — hands the
+   * key back to the browser, the concession ↑ / ↓ make at the ends of the
+   * article. `null` or absent is every other mode, and the stride exactly as it
+   * was.
+   *
+   * Read through a ref, so a handler that is a fresh closure every render does
+   * not tear down and rebuild the listeners every render.
+   */
+  horizontal: ((dir: -1 | 1) => boolean) | null = null,
 ): number {
   const [depth, setDepth] = useState(fallbackDepth);
+  const sideways = useRef(horizontal);
+  sideways.current = horizontal;
   /** Last known pointer position, for a fresh hit-test at keypress time. */
   const pointer = useRef<{ x: number; y: number } | null>(null);
   /** The aimed depth, mirrored out of state so the key handler can't go stale. */
@@ -496,6 +512,14 @@ export function useArrowNav(
        * handler does to say "this key was mine".
        */
       if (e.defaultPrevented) return;
+
+      // A mode that claims ← / → gets them, and the stride does not: the two
+      // meanings never share a press. See `horizontal` above.
+      const mine = sideways.current;
+      if (across !== 0 && mine) {
+        if (mine(across)) e.preventDefault();
+        return;
+      }
 
       // ← / → change the stride rather than taking one: they move the aim
       // across the columns, which is what the pointer does when you slide it

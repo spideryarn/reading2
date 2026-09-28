@@ -767,6 +767,34 @@ export function quoteMarkKey(id: string, blockId: BlockId): string {
 }
 
 /**
+ * **The Trajectory's current stop, as a passage** — the resolver
+ * docs/project/new-mode.md asks a passage-marking mode for, and the plan's F9.
+ *
+ * A stop *is* a quote (src/types.ts § `TrajectoryStop`), so this is not a fourth
+ * way of turning words into spans: it is **the quote's own `Found`**, taken out
+ * of the marks `useQuoteMarks` already built for the prose, so that `proseFound`
+ * can see it is one passage and not draw it twice. Only when the quote is not
+ * among those marks — the Quotes bar has hidden it — is it resolved here, by
+ * `resolveQuotes` itself, so the two paths cannot disagree about the span, the
+ * key or the stroke.
+ *
+ * `null` when the quote's block is not in the article: a stop whose passage has
+ * gone is a row in the band and a ring on nothing, rather than a ring on the
+ * wrong paragraph.
+ */
+export function resolveTrajectoryStop(
+  blocks: Block[],
+  /** The quotes already marked in the prose — `useQuoteMarks`' `found`. */
+  marked: readonly Found[],
+  quote: { id: string; blockId: BlockId; text: string; reason?: string; stroke: QuoteStroke },
+): Found | null {
+  const key = quoteMarkKey(quote.id, quote.blockId);
+  const had = marked.find((f) => f.runId === QUOTES_RUN && f.key === key);
+  if (had) return had;
+  return resolveQuotes(blocks, [quote])[0] ?? null;
+}
+
+/**
  * One timeline event's occurrences, resolved into the same `Found[]` the ideas
  * and the search hits become.
  *

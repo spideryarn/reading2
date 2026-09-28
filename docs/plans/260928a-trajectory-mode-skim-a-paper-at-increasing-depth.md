@@ -288,3 +288,24 @@ The Opus second opinion (first round) also gave:
   the scrapbook, now a firm stage. Recorded in trajectory.md § Decided.
 - 2026-09-28 — Sol's plan review said *rethink*. The Opus arbiter chose the quote-backed route. The
   plan was rewritten as above.
+- 2026-09-28 — **stage 1 built** by an Opus implementer, committed as `868ae017` and pushed to `dev`
+  (migration `20260928012645_trajectory`).
+  - **Deviations from the plan:**
+    - the model is shown `Q1…Qn` labels rather than quote ids, because it mangled the ids
+      (`trajectory/3`);
+    - the quotes hash is stored as `sourceHash`, which is the name `stampOf` reads;
+    - the profile rule is stale in both directions (none → some, and some → none).
+  - **Real runs** on three articles:
+    [stage1-real-runs](260928a-trajectory-mode-stage1-real-runs.md). The call took 4–12 s and cost
+    $0.009–0.021. Every route started somewhere sensible, and **coverage is the real risk**, as
+    predicted: Most reaches 19–32% of a paper's words, and one paper's biggest section has 4
+    quotes. Quotes' prompt is **not** changed in this build — that is Questions for Greg.
+- 2026-09-28 — **GPT Sol code review 1**
+  ([prompt](260928a-trajectory-mode-code-review-1-prompt.md),
+  [answer](260928a-trajectory-mode-code-review-1-sol.md)). Verdict: accept with fixes. It fixed
+  three things in-stage, committed as `669deefe`:
+  - **F11**: one quote per paragraph is offered, by highest priority (`trajectory/4`);
+  - **F12**: quote records are fenced as untrusted data;
+  - **F13**: the quotes hash covers the offered words and priority.
+
+  F14 (five test tables missing `trajectory`) was the stage-2 work still in progress.

@@ -74,6 +74,12 @@ export interface PassageSlots {
   readonly timeline: PassageSlot;
   readonly referee: PassageSlot;
   readonly search: PassageSlot;
+  /**
+   * The Trajectory's current stop, and only it: one quote's passage, rung.
+   * Published by `TrajectoryBand` through `usePassageLifecycle`, so leaving
+   * the mode clears it (src/web/modes/trajectory/TrajectoryMode.tsx).
+   */
+  readonly trajectory: PassageSlot;
 }
 
 /**
@@ -118,6 +124,12 @@ export function selectPassages(mode: Mode, slots: PassageSlots): PassageSlot {
        used to be the end of a ternary chain, and every other mode reached it. */
     case "search":
       return slots.search;
+    /* The stop the reader is standing on — one passage, so the paragraph bar
+       and the rail point at exactly where the route has put them, and the ring
+       says which phrase. docs/plans/260928a-trajectory-mode-skim-a-paper-at-increasing-depth.md
+       § Prose. */
+    case "trajectory":
+      return slots.trajectory;
     /* The ones with nothing to mark. `plain` and `hierarchy` have no band at
        all; `chat`, `glossary`, `summary`, `diagram`, `remember`, `structure`
        and `debate` have one that publishes no passages — verified rather than
@@ -221,5 +233,16 @@ export function proseFound(active: Found[], quotes: Found[]): Found[] {
   if (active === quotes) return active;
   if (quotes.length === 0) return active;
   if (active.length === 0) return quotes;
-  return [...active, ...quotes];
+  /* **Trajectory's passage is a quote's own `Found`**, the same object
+     `useQuoteMarks` built (`resolveTrajectoryStop` in search-hits.ts hands it
+     back rather than resolving a second copy), so concatenating would draw that
+     phrase twice, one mark on top of the other. This is **identity**, not the
+     key comparison the paragraph above refuses: an object that is in both lists
+     is one passage by construction, whereas two keys that happen to match are
+     only a coincidence. When every active passage is already a quote, the
+     quotes come back unchanged, which also keeps `hitMarks`' identity cache. */
+  const inQuotes = new Set(quotes);
+  const extra = active.filter((f) => !inQuotes.has(f));
+  if (extra.length === 0) return quotes;
+  return [...extra, ...quotes];
 }
