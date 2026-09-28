@@ -211,3 +211,11 @@ The `shelf-topics` session is adding topic filters to the same page. Edits to `L
   absolutely positioned with no positioned ancestor, so `overflow-x-auto` did not contain it. Fixed
   with `relative` on `DataTable`'s scroll box (which `/admin` shares). Docs: library.md § The table's
   row card, whole titles, and columns you can hide; the file table in tooltips.md.
+- 2026-09-28 — stage 3 Sol review (write-capable): READY after six fixes, all P2/P3 — library.md
+  overclaimed what moves into the card (S3-1); the Table card still promised five columns (S3-2);
+  Columns had no card while its neighbours did, so it gained a `ControlTip` in their group (S3-3);
+  `useSortedTable`'s visibility pair became a union (S3-4); stale comments and a test title (S3-5/6).
+  Browser re-measure after the `relative` fix: page `scrollWidth === clientWidth` at 390 and 320px on
+  the shelf and on `/admin/users`, with the table's own box still scrolling. Full suite on the merged
+  tree: 1154 files pass; 5 red, all "no build" (`api-dist/`, `tools/fleet/web/dist`), which a fresh
+  worktree lacks. Pushed to `dev` as f55d076f. Assumptions A1–A5 above wait on Greg.
