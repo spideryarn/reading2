@@ -147,6 +147,30 @@ describe("the flash stylesheet", () => {
     )?.[1];
     expect(body).toContain("100vmax");
   });
+
+  it("wins the real cascade against the later search-hit rules", () => {
+    /* The source checks above prove the intended declarations exist; this is
+       the independent half. Load both sheets in their production order and
+       ask the CSS engine which declarations actually win. */
+    const style = document.createElement("style");
+    style.textContent = `${css}\n${readFileSync("src/web/styles/annotations.css", "utf8")}`;
+    document.head.append(style);
+    document.body.innerHTML = `
+      <table><tbody><tr>
+        <td id="literal-still" class="text has-hit block-flash-still"></td>
+        <td id="semantic-still" class="text has-hit block-flash-still" data-hues="1"></td>
+        <td id="literal-moving" class="text has-hit block-flash"></td>
+      </tr></tbody></table>`;
+
+    const literalStill = getComputedStyle(document.querySelector("#literal-still") as Element);
+    const semanticStill = getComputedStyle(document.querySelector("#semantic-still") as Element);
+    const literalMoving = getComputedStyle(document.querySelector("#literal-moving") as Element);
+    expect(literalStill.boxShadow).toContain("inset 3px");
+    expect(literalStill.boxShadow).toContain("100vmax");
+    expect(semanticStill.boxShadow).toContain("100vmax");
+    expect(literalMoving.animationName).toBe("block-flash-with-hit");
+    style.remove();
+  });
 });
 
 describe("a band lying over the prose", () => {

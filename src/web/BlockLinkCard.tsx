@@ -113,10 +113,16 @@ function contentFor(el: HTMLElement, index: BlockLinkIndex): ReactNode | null {
   if (!entry) return null;
   const preview = el.getAttribute("data-block-preview") !== "off";
   const shown = snippet(entry.text);
-  if (entry.section === undefined && !preview) return null;
+  /* By subtraction (tooltips.md): a link whose own words already name its
+     section — a summary entry's title — is not told the section again. */
+  const head =
+    entry.section !== undefined && !(el.textContent ?? "").includes(entry.section)
+      ? entry.section
+      : undefined;
+  if (head === undefined && !preview) return null;
   return (
     <>
-      {entry.section !== undefined && <div className="tip-cite-head">{entry.section}</div>}
+      {head !== undefined && <div className="tip-cite-head">{head}</div>}
       {preview &&
         (shown === "" ? (
           // An image, a figure. Saying so beats an empty card that looks like
@@ -315,8 +321,13 @@ function BlockLinkCard({ index }: { index: BlockLinkIndex }) {
   const drawn = last.current;
 
   if (!isMounted || !drawn) return null;
+  /* A native modal dialog lives in the browser's top layer. A portal under
+     `<body>` cannot paint above it at any z-index, so keep the card inside the
+     open dialog when its own anchor is there. Outside a dialog, FloatingPortal
+     retains its ordinary body root. */
+  const portalRoot = drawn.el.closest<HTMLDialogElement>("dialog[open]") ?? undefined;
   return (
-    <FloatingPortal>
+    <FloatingPortal root={portalRoot}>
       <div
         ref={refs.setFloating}
         id={cardId}

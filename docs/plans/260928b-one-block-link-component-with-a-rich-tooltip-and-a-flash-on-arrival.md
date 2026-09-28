@@ -227,9 +227,10 @@ changes*; all seven taken. **This section overrides the design above where they 
 ## Stage 2 — what landed
 
 Each site checked first: a site migrated only if its click did `onJump(id)` and nothing else.
-Tests: `tests/block-link-migration.test.tsx` (Claims, Sketch) and the placement case in
-`tests/referee-gap.test.tsx` — an `a[data-block-link]` with `at=` in its `href`, one jump on a
-plain click, none on ⌘-click; all red before the change.
+Tests: `tests/block-link-migration.test.tsx` (Claims, Sketch), the placement case in
+`tests/referee-gap.test.tsx`, and Summary's title in `tests/summary-expand.test.tsx` — an
+`a[data-block-link]` with `at=` in its `href`, one jump on a plain click, none on ⌘-click; all
+red before the change.
 
 **Migrated to `BlockRef` with children** (classes kept; each panel's CSS gains a two-class
 `.x.block-ref` rule, because `.block-ref`'s id-chip type in prose.css would otherwise win or lose on
@@ -240,8 +241,12 @@ its strike-through):
   the quote is the link's text.
 - `CriteriaPanel` placement `.crit-jump` (misses and unpaired) — `preview={false}`, same reason.
 - `SketchView` "Go to this passage" `.sk-card-jump` — preview **on**: the Sketch card shows the
-  model's words for the node, never the paragraph. In the Enlarge dialog the block card cannot show
-  (it portals to `<body>`, under the top layer); the link still works there.
+  model's words for the node, never the paragraph. The delegated card portals into an open modal
+  dialog when its anchor is inside one, so it remains above the top layer in Enlarge.
+- `SummaryPanel` `.summ-title` — round 2's inventory grep found the omitted pure jump: the section
+  title did nothing but `onJump(entry.node.range[0])`. Its parent already excludes both `button`
+  and `a` from the widened row click, and the card's preview adds the opening passage the summary
+  row does not show.
 
 **Kept as buttons:**
 

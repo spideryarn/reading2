@@ -19,6 +19,7 @@
  * next to the harness that already renders that band; the stay-button callers
  * are asserted there too where it was cheap.
  */
+import { readFileSync } from "node:fs";
 import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -194,5 +195,28 @@ describe("Sketch: the card's 'Go to this passage'", () => {
     /* The Sketch card shows the node's own words, not the paragraph's, so the
        block card keeps its preview. */
     expect(link?.hasAttribute("data-block-preview")).toBe(false);
+  });
+
+  it("keeps a stale passage struck through when it is hovered", () => {
+    const style = document.createElement("style");
+    /* jsdom cannot force `:hover`; replace only that pseudo-class with an
+       ordinary class, preserving the real selectors, declarations, order and
+       specificity whose interaction this test is about. */
+    style.textContent = [
+      readFileSync("src/web/styles/prose.css", "utf8"),
+      readFileSync("src/web/styles/diagram-sketch.css", "utf8"),
+    ]
+      .join("\n")
+      .replaceAll(":hover", ".test-hover");
+    document.head.append(style);
+    const stale = document.createElement("span");
+    stale.className = "block-ref block-ref-missing sk-card-jump test-hover";
+    host.append(stale);
+
+    const computed = getComputedStyle(stale);
+    expect(computed.cursor).toBe("default");
+    expect(computed.opacity).toBe("0.35");
+    expect(computed.textDecoration).toContain("line-through");
+    style.remove();
   });
 });

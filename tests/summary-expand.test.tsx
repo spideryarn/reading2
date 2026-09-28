@@ -122,6 +122,7 @@ function tree(withApparatus = false): SummaryNode {
 let host: HTMLDivElement;
 let root: Root;
 const deeps: number[] = [];
+const jumps: string[] = [];
 
 /* `deep` is the caller's state in the app, so the harness passes it in and
    records what the panel asks for rather than moving it. */
@@ -131,11 +132,12 @@ const panel = (deep: number, withApparatus = false) =>
     deep,
     onDeep: (d: number) => deeps.push(d),
     atRow: null,
-    onJump: () => {},
+    onJump: (id: string) => jumps.push(id),
   });
 
 beforeEach(() => {
   deeps.length = 0;
+  jumps.length = 0;
   host = document.createElement("div");
   document.body.append(host);
   root = createRoot(host);
@@ -180,6 +182,25 @@ const click = (el: HTMLElement) =>
   });
 
 describe("opening one part past the depth cut-off", () => {
+  it("makes a section title a real block link", () => {
+    const title = host.querySelector<HTMLAnchorElement>(".summ-title");
+    expect(title?.tagName).toBe("A");
+    expect(title?.getAttribute("data-block-link")).toBe("spya-1a");
+    expect(title?.getAttribute("href") ?? "").toContain("at=spya-1a");
+
+    act(() => {
+      title?.dispatchEvent(
+        new MouseEvent("click", { bubbles: true, cancelable: true, button: 0, metaKey: true }),
+      );
+    });
+    expect(jumps).toEqual([]);
+
+    act(() => {
+      title?.dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true, button: 0 }));
+    });
+    expect(jumps).toEqual(["spya-1a"]);
+  });
+
   it("starts with the parts and no sections, and a live badge on each part", () => {
     expect(titles()).toEqual(["1First part", "2Second part"]);
     // The word is the Depth control's own. At `parts` the article row is

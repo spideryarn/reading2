@@ -179,6 +179,20 @@ describe("the card", () => {
     expect(card?.textContent).not.toMatch(/click to go/i);
   });
 
+  it("portals into an open modal dialog when its link is inside one", async () => {
+    paint(
+      <dialog open>
+        <BlockRef id={id("bbbbbb")} />
+      </dialog>,
+    );
+    await hover(link("bbbbbb"));
+    const dialog = host.querySelector("dialog");
+    expect(cards()).toHaveLength(1);
+    expect(cards()[0]?.closest("dialog"), "a body portal sits underneath the dialog top layer").toBe(
+      dialog,
+    );
+  });
+
   it("is the link's description while it is open, and stops being it when shut", async () => {
     paint(<BlockRef id={id("bbbbbb")} />);
     const a = link("bbbbbb");
@@ -197,6 +211,20 @@ describe("the card", () => {
     expect(cards()).toHaveLength(1);
     expect(cards()[0]?.querySelector(".tip-cite-head")?.textContent).toBe("Why it rises");
     expect(cards()[0]?.querySelector(".tip-cite-text")).toBeNull();
+  });
+
+  it("drops the head when the link's own words already name the section", async () => {
+    paint(<BlockRef id={id("bbbbbb")}>2 Why it rises</BlockRef>);
+    await hover(link("bbbbbb"));
+    expect(cards()).toHaveLength(1);
+    expect(cards()[0]?.querySelector(".tip-cite-head")).toBeNull();
+    expect(cards()[0]?.querySelector(".tip-cite-text")?.textContent).toContain("The opening claim.");
+  });
+
+  it("opens no card at all when the head was all it had and the link says it", async () => {
+    paint(<BlockRef id={id("bbbbbb")} preview={false}>Why it rises</BlockRef>);
+    await hover(link("bbbbbb"));
+    expect(cards()).toHaveLength(0);
   });
 
   it("has no head when the section has no title", async () => {
