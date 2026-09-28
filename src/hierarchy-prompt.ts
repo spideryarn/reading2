@@ -93,7 +93,12 @@ import type { Block } from "./types.js";
    first, inheriting through "exactly as with gists", and a blind read showed
    depth-1 questions did not get plainer that way. Everything else in the block
    is still `evals/summaries/variants.md` § V4. New articles only, as before. docs/plans/260926a-plainer-summaries-and-glossary.md. */
-export const PROMPT_VERSION = "toc/8";
+/* **`toc/9`, 2026-09-28**: the depth-1 gist ceiling went from 25 to 30 words
+   (Greg: plain beats short), and SYSTEM gained the shared plain-words core,
+   `plainWords()` from src/plain-words.ts, after OUTPUT so the eval's GISTS and
+   QUESTIONS slices are unchanged. `toc/8` had reached main, so this could not
+   ride on it. docs/plans/260926a-plainer-summaries-and-glossary.md § Stages 2–3. */
+export const PROMPT_VERSION = "toc/9";
 
 /**
  * How hard the model thinks before it starts writing.

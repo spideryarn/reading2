@@ -70,6 +70,7 @@ import {
   type ExpansionExecutor,
 } from "./hierarchy-deepen.js";
 import { log } from "./log.js";
+import { plainWords } from "./plain-words.js";
 
 /**
  * **The three values that moved to [`hierarchy-prompt.ts`](hierarchy-prompt.ts),
@@ -207,7 +208,9 @@ JSON only, no prose, no code fence:
           "range": ["<firstBlockId>", "<lastBlockId>"],
           "sourceHeading": "...", "children": [ ... ]}}
 
-Use only block ids that appear in the input. Do not invent ids.`;
+Use only block ids that appear in the input. Do not invent ids.
+
+${plainWords()}`;
 
 export interface ModelNode {
   title: string;

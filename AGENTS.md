@@ -36,7 +36,9 @@ listed here; the names under each are files in `docs/project/`.
   `article-images.md` (stage 4.5 — the figures the piece came with, hosted by us) ·
   `ingest-queue.md` (paste a URL, get an article) ·
   `ai-gateway.md` (every paid call goes through OpenRouter, bar one declared exception) ·
-  `prompt-caching.md` · `database.md` ·
+  `prompt-caching.md` ·
+  `prompting-guide.md` (the plain-words rule every prompt shares, and how to measure a prompt change) ·
+  `database.md` ·
   `sql.md` (columns over JSON, keys over good intentions) ·
   `export.md` (one article's data, out)
 - **[reading-view-overview.md](docs/project/reading-view-overview.md)** — everything the reader
@@ -423,6 +425,7 @@ nothing else has a copy of.
   stream can end by simply stopping, which looks exactly like finishing.
   [comments.md § streaming](docs/project/comments.md#streaming). A batch call in the pipeline, which
   nobody is watching, doesn't need this.
+- **Writing or changing a prompt?** Read [prompting-guide.md](docs/project/prompting-guide.md) first.
 - **Before writing any Anthropic SDK code**, load the `claude-api` skill for current model ids and
   parameters. Don't hardcode a model from memory.
 - **Before rebuilding something the previous version already solved** — AI headings,

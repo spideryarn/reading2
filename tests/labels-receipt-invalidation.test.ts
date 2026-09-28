@@ -85,7 +85,7 @@ import { closeDb, getDb } from "../src/db/client.js";
 import { articleRevisions, articles, jobs, revisionStepRuns } from "../src/db/schema.js";
 import { loadEnvLocal } from "../src/env.js";
 import { mintId } from "../src/ids.js";
-import type { CompletedLabelsFile, PendingLabelsFile } from "../src/labels.js";
+import { type CompletedLabelsFile, LABELS_PROMPT_VERSION, type PendingLabelsFile } from "../src/labels.js";
 import { STEPS, stepIsDone } from "../src/pipeline.js";
 import type { StepContext } from "../src/pipeline.js";
 import { hashBlocks, structureHash } from "../src/source-hash.js";
@@ -178,9 +178,12 @@ function aDifferentTree(): Tree {
  */
 const STRUCTURE_HASH = structureHash(treeSaying(false));
 
-/** What a real label run leaves behind: provenance, and the calls that made it. */
+/**
+ * What a real label run leaves behind: provenance, and the calls that made it. The version is the
+ * current one, or the step would call it outdated and the premise (it skips) would not hold.
+ */
 const DONE: CompletedLabelsFile = {
-  version: "labels/2",
+  version: LABELS_PROMPT_VERSION,
   generator: "claude-sonnet-5",
   slug: SLUG,
   sourceHash: BLOCKS_HASH,

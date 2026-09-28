@@ -39,6 +39,7 @@ import {
   toQuestions,
   verifyPassage,
 } from "../src/faq.js";
+import { plainWords } from "../src/plain-words.js";
 
 /* ------------------------------------------------------- the stubbed model -- */
 
@@ -386,7 +387,7 @@ describe("the request", () => {
     expect(questionBudget(100_000)).toBe(MAX_QUESTIONS);
     expect(ANSWER_TOKENS).toBeGreaterThan(MAX_QUESTIONS * 400);
     expect(FAQ_SYSTEM).toMatch(/None is fine/);
-    expect(FAQ_SYSTEM).toMatch(/plainer than the article, never further from it/);
+    expect(FAQ_SYSTEM).toContain(plainWords("ask"));
   });
 });
 

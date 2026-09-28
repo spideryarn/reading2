@@ -1,0 +1,113 @@
+/**
+ * **The plain-words rule, once, for every prompt that writes words a reader sees.**
+ *
+ * > we want to make this plainer/simpler language rule common across *all* prompts that generate
+ * > text of any kind. And ideally also in a way that it will apply to all future prompts
+ * >
+ * > — Greg, 2026-09-28
+ *
+ * A prompt interpolates `${plainWords(...)}` as its own section, the way `PROFILE_RULES`
+ * (src/profile.ts) is interpolated, and names the kinds of text it writes. The core — who the
+ * reader is, commoner words for the same meaning, nothing lost, copies untouched, the prompt's own
+ * field rules winning — is in every call; each kind adds only what applies to it, because a single
+ * long rule contradicted prompts it was added to (a question told to explain its own term, a label
+ * told to be a sentence). docs/project/prompting-guide.md is the why, the per-kind trade-off, and
+ * how to measure a change; docs/plans/260926a-plainer-summaries-and-glossary.md is the evidence.
+ *
+ * A prompt that writes no words for a reader — a verdict, a URL, ids, a verbatim transcription —
+ * does not carry it, and says so in `PLAIN_WORDS_EXEMPT` below. tests/plain-words-coverage.test.ts
+ * fails for a file that calls a model and does neither.
+ *
+ * **Every byte here is in many prompts.** An edit changes all of them, so it bumps every stamped
+ * prompt that uses it — the guide says how, and how to measure first.
+ */
+
+/** The kinds of text a prompt writes. A prompt that writes several names them all. */
+export type PlainKind =
+  /** An answer, a summary, a definition, a reason, feedback, a caption. */
+  | "explain"
+  /** A question put to the reader. */
+  | "ask"
+  /** A label, heading or title the model writes. */
+  | "landmark"
+  /** Words to be heard, not read. */
+  | "spoken";
+
+const CORE = `PLAIN WORDS
+
+Write for a curious reader who has not studied this field. If these
+instructions, or the reader's own description, say who the reader is, write
+for them instead: a specialist does not need their own field's terms explained.
+
+Use the commonest word that loses nothing. This changes the words, never the
+meaning: plainer means equally specific. Never drop a number, a direction, a
+comparison, a condition or a hedge ("may", "in mice", "in this sample") that
+the claim depends on; a sentence that is plainer and less exact is worse. It
+never changes which field a fact belongs in, which source may support it, or
+the shape and length these instructions set for each field: where those rules
+are more specific, they win. Text you are told to copy exactly stays exactly as written.`;
+
+const KINDS: Record<PlainKind, string> = {
+  explain: `In what you write to explain — an answer, a summary, a definition, a
+reason, feedback, a caption: say what it means here, in everyday words, first.
+Keep the article's own term where the reader will meet it again in the prose;
+it is their handhold. But a handhold is not an explanation: if this reader
+would not know the term, say what it means where it first appears, as part of
+the sentence. Never explain one hard word with another. A word is not plain
+because the article uses it.
+
+For example, explaining a line in a medical paper:
+BAD: "The trial was underpowered, so its null result is uninformative."
+GOOD: "The trial was underpowered: too small to reliably catch an effect of the
+size it was looking for, so finding no effect tells us little either way."
+
+Before you finish, look at each word you wrote that this reader might not know.
+Either it is the article's term and you have said what it means, or change it.`,
+
+  ask: `In a question you write: keep the article's own term as its topic, and ask
+the rest in ordinary words, so that it makes sense to a reader who does not know
+that term yet. Do not explain the term inside the question, and never give the
+answer away.`,
+
+  landmark: `In a label, heading or title you write: keep the author's key term, with
+ordinary words around it, so the reader can match it to the text. Never replace
+the author's term with your own, and never stack field terms one after another.`,
+
+  spoken: `In words to be heard: short sentences, the meaning before the name, no
+brackets, and never read symbols or notation aloud.`,
+};
+
+const ANCHOR = "Plainer than the article, never further from it: never less exact, and never beyond what it says.";
+
+/**
+ * The rule, for a prompt that writes the given kinds of text. With no kinds, the core alone — for a
+ * prompt whose own sections already carry the per-kind detail, measured (the summary and glossary
+ * prompts).
+ */
+export function plainWords(...kinds: PlainKind[]): string {
+  const seen = [...new Set(kinds)];
+  return [CORE, ...seen.map((k) => KINDS[k]), ANCHOR].join("\n\n");
+}
+
+/**
+ * **Files that call a model and deliberately do not carry the rule**, each with the reason. A file
+ * that calls a model must import `plainWords` or be here — tests/plain-words-coverage.test.ts.
+ * Paths are relative to the repository root.
+ */
+export const PLAIN_WORDS_EXEMPT: Record<string, string> = {
+  "src/quiz-verdict.ts": "writes one word — right, wrong or unclear — that no reader sees",
+  "src/citation-find.ts": "writes a URL or null",
+  "src/pdf-frontmatter.ts": "writes block ids",
+  "src/pdf-figure-locate.ts": "writes a page number and a box for a figure",
+  "src/pdf-read.ts": "transcribes a PDF verbatim; a transcriber told to prefer common words is invited to tidy",
+  "src/transcribe.ts": "speech to text, verbatim, with no prompt at all",
+  "src/messages-stream.ts": "the wire every Messages call goes through, not a prompt",
+  "src/ai-call.ts": "the wire every OpenRouter call goes through, not a prompt",
+  "src/embeddings.ts": "asks for vectors, not words",
+  "src/pipeline.ts": "only builds the PDF front-matter reader, whose prompt is src/pdf-frontmatter.ts",
+  "src/hierarchy-deepen.ts": "sends EXPAND_SYSTEM, which lives in src/hierarchy-expand.ts and carries the rule there",
+  "src/spend-declarations.ts": "names a model call inside a string, and makes none",
+  "scripts/spike-book-structure.ts": "a one-off spike that sends production's own hierarchy prompt",
+  "scripts/spike-expand-section.ts": "a one-off spike that sends production's own expansion prompt",
+  "scripts/gjd-remote-envpolicy.ts": "an internal tool's reason for Greg, not text for a reader",
+};

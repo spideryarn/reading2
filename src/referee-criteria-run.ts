@@ -113,6 +113,7 @@ import {
 } from "./referee-criteria.js";
 import { parseHits } from "./search.js";
 import { hitExtractor } from "./search-hits-stream.js";
+import { plainWords } from "./plain-words.js";
 import type { Block, Citation, Meta } from "./types.js";
 
 /** The job this bills under. Not `search`'s — src/models.ts § `referee-criteria`. */
@@ -219,7 +220,9 @@ THE RULES THAT MATTER
   nothing in this paper bears on gets {"results": []}, and saying so plainly is a
   good answer. Padding a thin result with weak matches is the one thing that
   would make this useless to a referee.
-- At most ${MAX_RESULTS} results.`;
+- At most ${MAX_RESULTS} results.
+
+${plainWords("explain")}`;
 
 /** The shape asked for, per kind. Kept beside the rules that explain it. */
 function shapeFor(config: RefereeCriterionConfig): string {

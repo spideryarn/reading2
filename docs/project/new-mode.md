@@ -261,61 +261,9 @@ Then the residue nothing refuses at compile time:
 
 ## The words the mode puts in front of the reader
 
-Whatever a mode generates for the reader — a gist, a label, an answer, a question,
-a caption — is written to the same rule, and a new one takes it too:
-
-> Make minimal tweaks to the prompts … to use slightly plainer/simpler/easier-to-
-> understand language, while still trying to stay close to the language of the text.
->
-> — Greg, 2026-09-03
-
-Two halves, and the second is what stops the first turning into paraphrase: **the
-article's own words for the things the article names** — those are the reader's
-handholds, and what they meet again on the page — and **ordinary words for
-everything else**. It is not a licence to flatten. A mode that swaps the author's
-distinctive word for a common synonym has taken something from the reader, which is
-[vision.md](vision.md)'s whole objection to summaries.
-
-**A handhold is not an explanation**, and that is the half the first version missed:
-
-> we want the summaries to really use simpler language, because half the problem is we may not
-> know what the jargon means, and the glossary as well especially should explain in simpler
-> language.
->
-> — Greg, 2026-09-26
-
-Every term of art is a thing the article names, so "the article's own words for the things it
-names" exempted exactly the jargon. The rule now reads: keep the name, but make the sentence
-understandable to a reader from outside the field who does not already know it — say it in ordinary
-words instead, or keep it and let the rest of the sentence show what it is. And **plainer means
-equally specific**: the same claim in commoner words, never a looser one. The summary prompts
-(`src/hierarchy.ts`, `src/hierarchy-expand.ts`), the glossary (`src/glossary.ts`), chat
-(`SYSTEM` and the "?" help addendum in `src/converse.ts`) and Explain — which is also the glossary's
-*Check the web* (`src/explain.ts`) — say this, the last two since 2026-09-28 on Greg's word. Where a
-prompt also carries the reader-profile rules, it says *if this reader would not know a term* and
-assumes a reader from outside the field only when no background is given. The other prompts listed
-by the grep below, Remember among them, still carry the 2026-09-03 wording —
-[260926a](../plans/260926a-plainer-summaries-and-glossary.md) § Deferred.
-
-Every prompt that carries it ends on the same phrase, **"plainer than the article,
-never further from it"**, so `grep -rni "lainer than the article" src/` is the list
-of prompts that have it. Put it where the prompt already talks about how to write
-rather than opening a section for it, and cover each field the model actually
-writes: [`src/hierarchy.ts`](../../src/hierarchy.ts) says it under both TITLES and
-GISTS, [`src/quotes.ts`](../../src/quotes.ts) only on `reason` because `text` is
-copied verbatim.
-
-Two kinds of prompt deliberately do **not** have it.
-[`search.ts`](../../src/search.ts) already asks for its one written sentence "in
-plain words", and the four referee prompts ([`referee-candidates-prompt.ts`](../../src/referee-candidates-prompt.ts),
-[`referee-claims-run.ts`](../../src/referee-claims-run.ts),
-[`referee-mirror.ts`](../../src/referee-mirror.ts),
-[`referee-criteria-run.ts`](../../src/referee-criteria-run.ts)) are written for a
-peer reviewer reading in their own field — [referee-mode.md](referee-mode.md).
-
-Watch for the rule fighting one already there. Chat and Remember may bring in what
-they found on the web, so neither may be told to use "no term the piece did not
-use" — that clause was written and then cut for exactly this reason.
+A new mode's prompt takes the shared plain-words rule, `plainWords(...)`, naming each kind of text
+it writes — [prompting-guide.md](prompting-guide.md) is the rule, the trade-off and how to measure a
+change.
 
 ## Retiring a mode
 

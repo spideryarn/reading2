@@ -1,0 +1,858 @@
+{
+  "version": "sketch/3",
+  "title": "Funnel, Converge, Loop",
+  "caption": "The essay funnels a set of psychological biases down into four converging arguments against machine consciousness, then fans that verdict out into practical warnings before looping back, changed, to its opening question of human self-understanding.",
+  "scenes": [
+    {
+      "id": "overview",
+      "title": "Overview",
+      "height": 1460,
+      "items": [
+        {
+          "kind": "node",
+          "id": "fantasies",
+          "shape": "ellipse",
+          "x": 250,
+          "y": 40,
+          "w": 260,
+          "h": 70,
+          "text": "Old dreams of artificial minds",
+          "size": "sm",
+          "detail": "From golems to HAL 9000, we've long imagined machines with real inner lives, and it rarely ends well.",
+          "tone": 0,
+          "block": "spya-u6w37a"
+        },
+        {
+          "kind": "node",
+          "id": "why-matters",
+          "shape": "box",
+          "x": 250,
+          "y": 150,
+          "w": 260,
+          "h": 70,
+          "text": "Consciousness brings moral status",
+          "size": "sm",
+          "detail": "Whether AI truly feels matters for its possible rights, and for our own psychological health.",
+          "tone": 0,
+          "block": "spya-e68t9h"
+        },
+        {
+          "kind": "region",
+          "x": 24,
+          "y": 250,
+          "w": 712,
+          "h": 410,
+          "style": "band",
+          "label": "TEMPTATIONS TO SEE CONSCIOUSNESS",
+          "opens": "inside-temptations",
+          "tone": 1
+        },
+        {
+          "kind": "node",
+          "id": "int-vs-con",
+          "shape": "box",
+          "x": 250,
+          "y": 290,
+          "w": 260,
+          "h": 60,
+          "text": "Intelligence and consciousness differ",
+          "size": "sm",
+          "detail": "Doing (intelligence) and being (consciousness) are separate things we wrongly assume travel together.",
+          "tone": 1,
+          "block": "spya-nj888h"
+        },
+        {
+          "kind": "node",
+          "id": "three-biases",
+          "shape": "box",
+          "x": 250,
+          "y": 380,
+          "w": 260,
+          "h": 60,
+          "text": "Human biases fuel the illusion",
+          "size": "sm",
+          "sub": "anthropocentrism, exceptionalism, anthropomorphism",
+          "detail": "Three ingrained habits push us to see minds in anything that acts a bit human-like.",
+          "tone": 1,
+          "block": "spya-cvaqgs"
+        },
+        {
+          "kind": "node",
+          "id": "language",
+          "shape": "box",
+          "x": 250,
+          "y": 470,
+          "w": 260,
+          "h": 60,
+          "text": "Fluent language fools us most",
+          "size": "sm",
+          "detail": "Chatbots' words trigger our sense of mind more than any other AI skill - even calling errors 'hallucinations' plays along.",
+          "tone": 1,
+          "block": "spya-k6fpme"
+        },
+        {
+          "kind": "node",
+          "id": "exp-hype",
+          "shape": "box",
+          "x": 250,
+          "y": 560,
+          "w": 260,
+          "h": 60,
+          "text": "Exponential hype and techno-rapture",
+          "size": "sm",
+          "detail": "Feeling perpetually on the verge of a breakthrough, plus dreams of digital immortality, inflate the myth further.",
+          "tone": 1,
+          "block": "spya-cke6sj"
+        },
+        {
+          "kind": "node",
+          "id": "assumption",
+          "shape": "box",
+          "x": 250,
+          "y": 700,
+          "w": 260,
+          "h": 70,
+          "text": "Assumption: computation = consciousness",
+          "size": "sm",
+          "detail": "Conscious AI presupposes that running the right computation is enough to create experience - an unproven claim.",
+          "tone": 2,
+          "block": "spya-d3g67c"
+        },
+        {
+          "kind": "region",
+          "x": 24,
+          "y": 800,
+          "w": 712,
+          "h": 150,
+          "style": "band",
+          "label": "FOUR ARGUMENTS AGAINST COMPUTATION",
+          "opens": "inside-arguments",
+          "tone": 2
+        },
+        {
+          "kind": "node",
+          "id": "arg-brains",
+          "shape": "box",
+          "x": 40,
+          "y": 840,
+          "w": 160,
+          "h": 70,
+          "text": "Brains aren't computers",
+          "size": "sm",
+          "detail": "Brains have no clean split between 'software' and 'hardware' the way digital computers do.",
+          "tone": 2,
+          "block": "spya-sk4su6"
+        },
+        {
+          "kind": "node",
+          "id": "arg-other",
+          "shape": "box",
+          "x": 220,
+          "y": 840,
+          "w": 160,
+          "h": 70,
+          "text": "Not just algorithms",
+          "size": "sm",
+          "sub": "analogue & dynamical processes",
+          "detail": "Continuous, random, physical brain dynamics go beyond what Turing-style computing can capture.",
+          "tone": 2,
+          "block": "spya-affgsh"
+        },
+        {
+          "kind": "node",
+          "id": "arg-life",
+          "shape": "box",
+          "x": 400,
+          "y": 840,
+          "w": 160,
+          "h": 70,
+          "text": "Life itself may matter",
+          "size": "sm",
+          "detail": "Consciousness may depend on being a self-sustaining living system, not just processing information.",
+          "tone": 2,
+          "block": "spya-e7jqx4"
+        },
+        {
+          "kind": "node",
+          "id": "arg-sim",
+          "shape": "box",
+          "x": 580,
+          "y": 840,
+          "w": 152,
+          "h": 70,
+          "text": "Simulating isn't creating",
+          "size": "sm",
+          "detail": "A simulated brain creates consciousness only if computation itself is sufficient for it - the very point in question.",
+          "tone": 2,
+          "block": "spya-cqh5wq"
+        },
+        {
+          "kind": "node",
+          "id": "conclusion",
+          "shape": "ellipse",
+          "x": 240,
+          "y": 980,
+          "w": 280,
+          "h": 80,
+          "text": "Functionalism looks shaky, not impossible",
+          "size": "md",
+          "detail": "Together, the four arguments make real machine consciousness look unlikely, though not strictly ruled out.",
+          "tone": 2,
+          "block": "spya-uzr60x"
+        },
+        {
+          "kind": "node",
+          "id": "dont-create",
+          "shape": "box",
+          "x": 60,
+          "y": 1120,
+          "w": 300,
+          "h": 80,
+          "text": "Don't deliberately build conscious AI",
+          "size": "sm",
+          "detail": "Creating new conscious beings capable of suffering, on purpose, would be an ethical disaster.",
+          "tone": 3,
+          "block": "spya-e7fdmb"
+        },
+        {
+          "kind": "node",
+          "id": "seeming",
+          "shape": "box",
+          "x": 400,
+          "y": 1120,
+          "w": 300,
+          "h": 80,
+          "text": "Seeming-conscious AI brings its own risks",
+          "size": "sm",
+          "sub": "no test can settle which is real",
+          "detail": "Whether or not AI truly feels, systems that convincingly seem to distort our ethics either way we treat them.",
+          "tone": 3,
+          "block": "spya-vs0vpj"
+        },
+        {
+          "kind": "node",
+          "id": "future",
+          "shape": "box",
+          "x": 250,
+          "y": 1240,
+          "w": 260,
+          "h": 70,
+          "text": "AI's future is still ours to choose",
+          "size": "sm",
+          "detail": "Nothing about AI's path toward real or apparent consciousness is inevitable.",
+          "tone": 0,
+          "block": "spya-hbueqc"
+        },
+        {
+          "kind": "node",
+          "id": "soul",
+          "shape": "ellipse",
+          "x": 230,
+          "y": 1340,
+          "w": 300,
+          "h": 80,
+          "text": "Recover an embodied sense of self",
+          "size": "md",
+          "sub": "more breath and meat than machine",
+          "detail": "The essay ends by urging a return to a felt, living sense of being, not a disembodied digital soul.",
+          "tone": 0,
+          "block": "spya-zv36xq"
+        },
+        {
+          "kind": "edge",
+          "from": "fantasies",
+          "to": "why-matters",
+          "via": "straight",
+          "line": "solid",
+          "arrow": "end"
+        },
+        {
+          "kind": "edge",
+          "from": "why-matters",
+          "to": "int-vs-con",
+          "via": "straight",
+          "line": "solid",
+          "arrow": "end"
+        },
+        {
+          "kind": "edge",
+          "from": "int-vs-con",
+          "to": "three-biases",
+          "via": "straight",
+          "line": "solid",
+          "arrow": "end"
+        },
+        {
+          "kind": "edge",
+          "from": "three-biases",
+          "to": "language",
+          "via": "straight",
+          "line": "solid",
+          "arrow": "end"
+        },
+        {
+          "kind": "edge",
+          "from": "language",
+          "to": "exp-hype",
+          "via": "straight",
+          "line": "solid",
+          "arrow": "end"
+        },
+        {
+          "kind": "edge",
+          "from": "exp-hype",
+          "to": "assumption",
+          "via": "straight",
+          "line": "solid",
+          "arrow": "end"
+        },
+        {
+          "kind": "edge",
+          "from": "assumption",
+          "to": "arg-brains",
+          "via": "curve",
+          "line": "solid",
+          "arrow": "end"
+        },
+        {
+          "kind": "edge",
+          "from": "assumption",
+          "to": "arg-other",
+          "via": "curve",
+          "line": "solid",
+          "arrow": "end"
+        },
+        {
+          "kind": "edge",
+          "from": "assumption",
+          "to": "arg-life",
+          "via": "curve",
+          "line": "solid",
+          "arrow": "end"
+        },
+        {
+          "kind": "edge",
+          "from": "assumption",
+          "to": "arg-sim",
+          "via": "curve",
+          "line": "solid",
+          "arrow": "end"
+        },
+        {
+          "kind": "edge",
+          "from": "arg-brains",
+          "to": "conclusion",
+          "via": "curve",
+          "line": "solid",
+          "arrow": "end"
+        },
+        {
+          "kind": "edge",
+          "from": "arg-other",
+          "to": "conclusion",
+          "via": "curve",
+          "line": "solid",
+          "arrow": "end"
+        },
+        {
+          "kind": "edge",
+          "from": "arg-life",
+          "to": "conclusion",
+          "via": "curve",
+          "line": "solid",
+          "arrow": "end"
+        },
+        {
+          "kind": "edge",
+          "from": "arg-sim",
+          "to": "conclusion",
+          "via": "curve",
+          "line": "solid",
+          "arrow": "end"
+        },
+        {
+          "kind": "edge",
+          "from": "conclusion",
+          "to": "dont-create",
+          "via": "curve",
+          "line": "solid",
+          "arrow": "end"
+        },
+        {
+          "kind": "edge",
+          "from": "conclusion",
+          "to": "seeming",
+          "via": "curve",
+          "line": "solid",
+          "arrow": "end"
+        },
+        {
+          "kind": "edge",
+          "from": "dont-create",
+          "to": "future",
+          "via": "curve",
+          "line": "solid",
+          "arrow": "end"
+        },
+        {
+          "kind": "edge",
+          "from": "seeming",
+          "to": "future",
+          "via": "curve",
+          "line": "solid",
+          "arrow": "end"
+        },
+        {
+          "kind": "edge",
+          "from": "future",
+          "to": "soul",
+          "via": "straight",
+          "line": "solid",
+          "arrow": "end"
+        },
+        {
+          "kind": "edge",
+          "from": "soul:left",
+          "to": "why-matters:left",
+          "via": "curve",
+          "line": "dashed",
+          "arrow": "end",
+          "label": "echoes the opening question"
+        }
+      ],
+      "caption": "Biases funnel toward one assumption; four arguments converge to undercut it; the verdict fans into two warnings that meet again in a closing return to the opening theme."
+    },
+    {
+      "id": "inside-temptations",
+      "title": "Inside: Temptations To See Consciousness",
+      "height": 1080,
+      "items": [
+        {
+          "kind": "node",
+          "id": "doing",
+          "shape": "box",
+          "x": 40,
+          "y": 60,
+          "w": 300,
+          "h": 70,
+          "text": "Intelligence is about doing",
+          "size": "sm",
+          "detail": "Solving puzzles, assembling furniture, walking to the shop - intelligence is judged by flexible goal-directed action.",
+          "block": "spya-nj888h"
+        },
+        {
+          "kind": "node",
+          "id": "being",
+          "shape": "box",
+          "x": 420,
+          "y": 60,
+          "w": 300,
+          "h": 70,
+          "text": "Consciousness is about being",
+          "size": "sm",
+          "detail": "Philosopher Thomas Nagel: an organism is conscious if there is 'something it is like' to be that organism.",
+          "block": "spya-j0a9rq"
+        },
+        {
+          "kind": "node",
+          "id": "chatgpt",
+          "shape": "box",
+          "x": 230,
+          "y": 170,
+          "w": 300,
+          "h": 70,
+          "text": "Is there something it's like to be ChatGPT?",
+          "size": "sm",
+          "detail": "AI clearly does things, but whether it experiences anything remains genuinely unclear.",
+          "block": "spya-xm96be"
+        },
+        {
+          "kind": "node",
+          "id": "anthropocentrism",
+          "shape": "box",
+          "x": 40,
+          "y": 290,
+          "w": 320,
+          "h": 70,
+          "text": "Anthropocentrism: humans as the default",
+          "size": "sm",
+          "detail": "We take the human case as the definition of mind, rather than one example among many possible ones.",
+          "block": "spya-h4mwb2"
+        },
+        {
+          "kind": "node",
+          "id": "exceptionalism",
+          "shape": "box",
+          "x": 400,
+          "y": 290,
+          "w": 320,
+          "h": 70,
+          "text": "Exceptionalism plus anthropomorphism",
+          "size": "sm",
+          "detail": "We rank humans above all else, then project human traits onto anything that superficially resembles us.",
+          "block": "spya-her4zk"
+        },
+        {
+          "kind": "node",
+          "id": "imbue",
+          "shape": "box",
+          "x": 230,
+          "y": 400,
+          "w": 300,
+          "h": 70,
+          "text": "We imbue clever machines with minds",
+          "size": "sm",
+          "detail": "Once something acts intelligently, we readily assume it also understands and feels.",
+          "block": "spya-nxxnrj"
+        },
+        {
+          "kind": "node",
+          "id": "lang2",
+          "shape": "box",
+          "x": 230,
+          "y": 510,
+          "w": 300,
+          "h": 70,
+          "text": "Fluent chatbots seem conscious",
+          "size": "sm",
+          "detail": "Language models get mistaken for minds far more often than equally complex non-verbal AI, like protein-folder AlphaFold.",
+          "block": "spya-k6fpme"
+        },
+        {
+          "kind": "node",
+          "id": "confab",
+          "shape": "box",
+          "x": 230,
+          "y": 620,
+          "w": 300,
+          "h": 70,
+          "text": "'Hallucinate' implies feeling - try 'confabulate'",
+          "size": "sm",
+          "detail": "Calling AI errors 'hallucinations' quietly smuggles in the idea that the system has experiences to hallucinate.",
+          "block": "spya-t29n67"
+        },
+        {
+          "kind": "node",
+          "id": "hype2",
+          "shape": "box",
+          "x": 230,
+          "y": 730,
+          "w": 300,
+          "h": 70,
+          "text": "Exponential growth feels like a turning point",
+          "size": "sm",
+          "detail": "On any exponential curve every point feels like the cusp of something huge - an illusion built into the math itself.",
+          "block": "spya-cke6sj"
+        },
+        {
+          "kind": "node",
+          "id": "rapture",
+          "shape": "box",
+          "x": 230,
+          "y": 840,
+          "w": 300,
+          "h": 70,
+          "text": "Techno-rapture: the dream of digital godhood",
+          "size": "sm",
+          "detail": "Building a 'conscious' machine can feel like doing the work of gods, immortality in a silicon cloud included.",
+          "block": "spya-v4sduf"
+        },
+        {
+          "kind": "node",
+          "id": "pareidolia",
+          "shape": "box",
+          "x": 230,
+          "y": 950,
+          "w": 300,
+          "h": 70,
+          "text": "Like seeing a face in a piece of toast",
+          "size": "sm",
+          "detail": "Naming this pattern-seeking bias is only the first step - it doesn't settle whether AI could ever really be conscious.",
+          "block": "spya-k850tu"
+        },
+        {
+          "kind": "edge",
+          "from": "doing",
+          "to": "chatgpt",
+          "via": "curve",
+          "line": "solid",
+          "arrow": "end"
+        },
+        {
+          "kind": "edge",
+          "from": "being",
+          "to": "chatgpt",
+          "via": "curve",
+          "line": "solid",
+          "arrow": "end"
+        },
+        {
+          "kind": "edge",
+          "from": "chatgpt",
+          "to": "anthropocentrism",
+          "via": "curve",
+          "line": "solid",
+          "arrow": "end"
+        },
+        {
+          "kind": "edge",
+          "from": "chatgpt",
+          "to": "exceptionalism",
+          "via": "curve",
+          "line": "solid",
+          "arrow": "end"
+        },
+        {
+          "kind": "edge",
+          "from": "anthropocentrism",
+          "to": "imbue",
+          "via": "curve",
+          "line": "solid",
+          "arrow": "end"
+        },
+        {
+          "kind": "edge",
+          "from": "exceptionalism",
+          "to": "imbue",
+          "via": "curve",
+          "line": "solid",
+          "arrow": "end"
+        },
+        {
+          "kind": "edge",
+          "from": "imbue",
+          "to": "lang2",
+          "via": "straight",
+          "line": "solid",
+          "arrow": "end"
+        },
+        {
+          "kind": "edge",
+          "from": "lang2",
+          "to": "confab",
+          "via": "straight",
+          "line": "solid",
+          "arrow": "end"
+        },
+        {
+          "kind": "edge",
+          "from": "confab",
+          "to": "hype2",
+          "via": "straight",
+          "line": "solid",
+          "arrow": "end"
+        },
+        {
+          "kind": "edge",
+          "from": "hype2",
+          "to": "rapture",
+          "via": "straight",
+          "line": "solid",
+          "arrow": "end"
+        },
+        {
+          "kind": "edge",
+          "from": "rapture",
+          "to": "pareidolia",
+          "via": "straight",
+          "line": "solid",
+          "arrow": "end"
+        }
+      ],
+      "caption": "A chain of biases: the doing/being distinction gets blurred, three habits of mind exploit that blur, and language plus hype push the illusion further, ending in a warning that noticing the illusion isn't enough."
+    },
+    {
+      "id": "inside-arguments",
+      "title": "Inside: Four Arguments Against Computation",
+      "height": 460,
+      "items": [
+        {
+          "kind": "node",
+          "id": "split",
+          "shape": "box",
+          "x": 20,
+          "y": 60,
+          "w": 170,
+          "h": 70,
+          "text": "No software/hardware split in brains",
+          "size": "xs",
+          "detail": "Unlike a computer, a brain's biology and its function can't be neatly separated into hardware and software.",
+          "block": "spya-b0086e"
+        },
+        {
+          "kind": "node",
+          "id": "replace",
+          "shape": "box",
+          "x": 20,
+          "y": 180,
+          "w": 170,
+          "h": 70,
+          "text": "Silicon neuron swap fails",
+          "size": "xs",
+          "detail": "You can't perfectly replace one biological neuron with a silicon one - real neurons do things like clearing metabolic waste.",
+          "block": "spya-ahtr6e"
+        },
+        {
+          "kind": "node",
+          "id": "beyond",
+          "shape": "box",
+          "x": 210,
+          "y": 60,
+          "w": 170,
+          "h": 70,
+          "text": "Beyond step-by-step algorithms",
+          "size": "xs",
+          "detail": "Brains are full of continuous and random physical processes that strict algorithms cannot represent.",
+          "block": "spya-n393ru"
+        },
+        {
+          "kind": "node",
+          "id": "governor",
+          "shape": "box",
+          "x": 210,
+          "y": 180,
+          "w": 170,
+          "h": 70,
+          "text": "A steam governor isn't a computer",
+          "size": "xs",
+          "detail": "Some systems just do physics directly - calling them computation is a category error, and brains may be similar.",
+          "block": "spya-sq9v5k"
+        },
+        {
+          "kind": "node",
+          "id": "predict",
+          "shape": "box",
+          "x": 400,
+          "y": 60,
+          "w": 170,
+          "h": 70,
+          "text": "Perception is the brain's best guess",
+          "size": "xs",
+          "detail": "What we consciously see and feel is a running prediction about the world's hidden causes, not raw data.",
+          "block": "spya-dp8sem"
+        },
+        {
+          "kind": "node",
+          "id": "body",
+          "shape": "box",
+          "x": 400,
+          "y": 180,
+          "w": 170,
+          "h": 70,
+          "text": "Predictions exist to keep the body alive",
+          "size": "xs",
+          "detail": "Regulating heart rate, oxygen and other vital signs may be exactly why felt experience exists at all.",
+          "block": "spya-b59nm2"
+        },
+        {
+          "kind": "node",
+          "id": "wet",
+          "shape": "box",
+          "x": 584,
+          "y": 60,
+          "w": 152,
+          "h": 70,
+          "text": "A simulated storm isn't wet",
+          "size": "xs",
+          "detail": "A computer model of a process isn't the same as the process itself actually happening.",
+          "block": "spya-npjt4j"
+        },
+        {
+          "kind": "node",
+          "id": "bostrom",
+          "shape": "box",
+          "x": 584,
+          "y": 180,
+          "w": 152,
+          "h": 70,
+          "text": "Assumes AI consciousness to work",
+          "size": "xs",
+          "detail": "The famous argument that we probably live in a simulation only works if running the right program creates real experience.",
+          "block": "spya-xdy4fe"
+        },
+        {
+          "kind": "node",
+          "id": "together",
+          "shape": "ellipse",
+          "x": 190,
+          "y": 320,
+          "w": 380,
+          "h": 90,
+          "text": "Together: computational functionalism looks shaky",
+          "size": "md",
+          "detail": "No single argument is fully decisive alone, but together they weaken the case that computation alone creates consciousness.",
+          "block": "spya-uzr60x"
+        },
+        {
+          "kind": "edge",
+          "from": "split",
+          "to": "replace",
+          "via": "straight",
+          "line": "solid",
+          "arrow": "end"
+        },
+        {
+          "kind": "edge",
+          "from": "beyond",
+          "to": "governor",
+          "via": "straight",
+          "line": "solid",
+          "arrow": "end"
+        },
+        {
+          "kind": "edge",
+          "from": "predict",
+          "to": "body",
+          "via": "straight",
+          "line": "solid",
+          "arrow": "end"
+        },
+        {
+          "kind": "edge",
+          "from": "wet",
+          "to": "bostrom",
+          "via": "straight",
+          "line": "solid",
+          "arrow": "end"
+        },
+        {
+          "kind": "edge",
+          "from": "replace",
+          "to": "together",
+          "via": "curve",
+          "line": "solid",
+          "arrow": "end"
+        },
+        {
+          "kind": "edge",
+          "from": "governor",
+          "to": "together",
+          "via": "curve",
+          "line": "solid",
+          "arrow": "end"
+        },
+        {
+          "kind": "edge",
+          "from": "body",
+          "to": "together",
+          "via": "curve",
+          "line": "solid",
+          "arrow": "end"
+        },
+        {
+          "kind": "edge",
+          "from": "bostrom",
+          "to": "together",
+          "via": "curve",
+          "line": "solid",
+          "arrow": "end"
+        }
+      ],
+      "caption": "Four independent lines of attack, each running two steps deep, meet at one shared conclusion: the case that computation alone makes consciousness is weaker than it looks."
+    }
+  ],
+  "generator": "claude-sonnet-5",
+  "slug": "noema-mythology-of-conscious-ai",
+  "sourceHash": "be7b898c72125fc5.2fd04a5eb4dc04ad.c739bef19c4aba3e",
+  "profileHash": null
+}

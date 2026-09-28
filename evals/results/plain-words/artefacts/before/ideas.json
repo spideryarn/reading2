@@ -1,0 +1,127 @@
+{
+  "arm": "before",
+  "generator": "ideas",
+  "slug": "noema-mythology-of-conscious-ai",
+  "sourceSha256": {
+    "ideas.ts": "2f1766e5dc6026b35c07905f8d6d7dae9ef659161a35d18c5b01a523fef65229"
+  },
+  "blocksSha256": "350eaeb20348e322b9e7b99c2057a367301483d8cc9abd8f00ac9e48795f183d",
+  "at": "2026-09-28T04:10:50.505Z",
+  "items": [
+    {
+      "key": "#01",
+      "field": "name",
+      "text": "Moral caution should track the likely direction of our attribution errors"
+    },
+    {
+      "key": "#01",
+      "field": "statement",
+      "text": "Because our psychological biases push us toward one kind of mistake more often than the other, how much we worry about wrongly denying versus wrongly granting moral status should depend on which error is more probable for the entity in question, rather than being applied uniformly."
+    },
+    {
+      "key": "#01",
+      "field": "whyYouNeedIt",
+      "text": "The argument that AI is unlikely to repeat the animal-rights mistake only works if the reader accepts that policies toward attributing consciousness should be calibrated to the expected direction of error for a given class of entities, a principle the essay applies but never defends."
+    },
+    {
+      "key": "#02",
+      "field": "name",
+      "text": "Moral uncertainty about suffering should bias action toward not creating it"
+    },
+    {
+      "key": "#02",
+      "field": "statement",
+      "text": "When an action might introduce new capacities for suffering into the world, the mere uncertainty about whether it would succeed is itself a reason not to attempt it, rather than a reason to proceed until proven otherwise."
+    },
+    {
+      "key": "#02",
+      "field": "whyYouNeedIt",
+      "text": "The essay's flat injunction that 'nobody should be deliberately setting out to create conscious AI' only follows if uncertain risk of creating suffering is treated as decisive against action; without this precautionary stance, admitted uncertainty about theories of consciousness would just as easily support cautious experimentation."
+    },
+    {
+      "key": "#03",
+      "field": "name",
+      "text": "Intelligence and consciousness are separable properties"
+    },
+    {
+      "key": "#03",
+      "field": "statement",
+      "text": "Being intelligent (solving problems, achieving goals through flexible behavior) and being conscious (there being something it is like to be a system) are two different properties that happen to co-occur in humans but need not co-occur anywhere else."
+    },
+    {
+      "key": "#03",
+      "field": "analogy",
+      "text": "A thermostat that regulates temperature perfectly well is doing something intelligent, but nobody thinks it feels the room getting cold."
+    },
+    {
+      "key": "#04",
+      "field": "name",
+      "text": "Belief in machine consciousness is driven by bias, not evidence"
+    },
+    {
+      "key": "#04",
+      "field": "statement",
+      "text": "The growing sense that AI systems are or will soon be conscious is best explained by identifiable psychological tendencies—anthropocentrism, human exceptionalism, anthropomorphism, exponential-growth thinking, and techno-rapture fantasies—rather than by evidence about the systems themselves."
+    },
+    {
+      "key": "#05",
+      "field": "name",
+      "text": "Computational functionalism is an unexamined premise"
+    },
+    {
+      "key": "#05",
+      "field": "statement",
+      "text": "The whole prospect of conscious AI rests on computational functionalism—the claim that implementing the right computation is sufficient for consciousness—and this is a substantive, contestable assumption rather than an established fact."
+    },
+    {
+      "key": "#06",
+      "field": "name",
+      "text": "Brains lack a software/hardware separation"
+    },
+    {
+      "key": "#06",
+      "field": "statement",
+      "text": "Unlike digital computers, brains cannot be cleanly divided into an abstract computational layer running on neutral physical hardware; what a brain does is inseparable from the living material it is made of."
+    },
+    {
+      "key": "#07",
+      "field": "name",
+      "text": "Turing computation is only one kind of process among several that might matter"
+    },
+    {
+      "key": "#07",
+      "field": "statement",
+      "text": "Algorithmic, symbol-sequence computation is a limited, specific formalism, and continuous, stochastic, dynamical, or embodied processes that fall outside it may be exactly what is doing the relevant work in brains."
+    },
+    {
+      "key": "#08",
+      "field": "name",
+      "text": "Consciousness may require being alive, not just processing information"
+    },
+    {
+      "key": "#08",
+      "field": "statement",
+      "text": "Because conscious experience of self and emotion seems tied to the brain's regulation of a living, metabolizing body, biological life itself—not merely information processing—may be a necessary condition for consciousness."
+    },
+    {
+      "key": "#09",
+      "field": "name",
+      "text": "Simulating a process does not create the thing simulated"
+    },
+    {
+      "key": "#09",
+      "field": "statement",
+      "text": "A computational model of a phenomenon reproduces its abstract pattern but not its causal powers, so simulating a brain in a computer would only produce consciousness if consciousness itself is a purely computational phenomenon to begin with."
+    },
+    {
+      "key": "#10",
+      "field": "name",
+      "text": "Actually-conscious AI and merely conscious-seeming AI are separate problems"
+    },
+    {
+      "key": "#10",
+      "field": "statement",
+      "text": "Whether or not AI ever becomes truly conscious, systems that convincingly seem conscious already create their own distinct set of ethical hazards, and these two problems require different kinds of response."
+    }
+  ]
+}

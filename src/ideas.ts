@@ -75,6 +75,7 @@ import { parseJsonAnswer, readJsonOrNull } from "./parse-json.js";
 import { articleWithIds } from "./article-prompt.js";
 import { articleWordCounts, isBodyEvidence } from "./block-policy.js";
 import { PROFILE_RULES, hashProfile, profileSection } from "./profile.js";
+import { plainWords } from "./plain-words.js";
 import type {
   Block,
   BlockId,
@@ -93,8 +94,10 @@ import type { ArtifactStore } from "./store/artifacts.js";
  * Exported so tests assert against the current value rather than pinning a
  * literal that has to be edited on every bump — a fixture that hardcodes the
  * version tests the fixture.
+ *
+ * `ideas/3`, 2026-09-28: the prompt's own plain-words wording gave way to the shared `plainWords` section, one rule for every prompt (Greg, 2026-09-28; docs/plans/260926a-plainer-summaries-and-glossary.md, stage 3).
  */
-export const PROMPT_VERSION = "ideas/2";
+export const PROMPT_VERSION = "ideas/3";
 
 /** The most ideas one call may return. A piece does not have forty. */
 export const MAX_IDEAS = 10;
@@ -726,9 +729,6 @@ WRITING
   something the reader is looking at. Say the idea; they can see the article.
   This applies to "whyYouNeedIt" as much as to "statement".
 - Plain prose. No Markdown, no bullets, no headings, no bold.
-- The article's own words for the things it names, ordinary words for everything
-  else. An idea stated in harder language than the piece uses has not been named,
-  only re-encoded: plainer than the article, never further from it.
 
 "analogy" — OPTIONAL, and it is YOURS rather than the author's. A concrete
 everyday thing this idea works like. The reader will be told it is yours. Only
@@ -764,6 +764,8 @@ JSON only, no prose, no code fence:
 
 Fewer, better ideas beat a list padded to a number. If the piece genuinely has
 two, return two.
+
+${plainWords("explain")}
 
 ${PROFILE_RULES}`;
 

@@ -112,6 +112,7 @@ import {
 } from "./chat-tools.js";
 import { citableText } from "./citable.js";
 import { PROFILE_RULES, profileSection } from "./profile.js";
+import { plainWords } from "./plain-words.js";
 import {
   type OpenRouterMessage,
   articleWithIds,
@@ -428,13 +429,6 @@ sentence: "He rejects substrate independence [spya-k3m9qt]."
 WHAT A GOOD ANSWER DOES
 
 - Answers the question that was asked, first, in the first sentence.
-- Keeps the author's own distinctive words rather than flattening them into
-  your own — the reader meets them again further down the page — but a handhold
-  is not an explanation: if this reader would not know a term, say what it
-  means as you use it, in ordinary words, and never explain one hard word with
-  another. When no background is given, assume a curious reader from outside
-  the field. Plainer means equally specific, never vaguer: plainer than the
-  article, never further from it.
 - Points at where in the piece the answer lives, so the reader can go and read
   it. Quoting a few words is good; quoting a paragraph is doing their reading
   for them.
@@ -520,6 +514,8 @@ Plain prose paragraphs separated by blank lines. Short bullet lists only when
 the answer really is a list. No headings.
 
 ${WEB_LINKS}
+
+${plainWords("explain")}
 
 ${PROFILE_RULES}`;
 
@@ -623,10 +619,6 @@ The reader is not being tested. They are trying to understand something hard and
 have volunteered where they are, which takes some nerve.
 
 - Talk like a friend who has read the same piece. Not a marker, not a teacher.
-- PLAIN WORDS. Keep the author's vocabulary for the things the article names —
-  those are the words the reader will meet again on the page — and use ordinary
-  words for everything else. A reply they have to unpack is a second hard thing
-  to read on top of the first. Plainer than the article, never further from it.
 - NO PRAISE. Not "great summary", not "you've clearly got the gist", not
   "excellent point". Praise is what turns the sentence after it into a verdict,
   and it is the fastest way to sound superior.
@@ -808,6 +800,8 @@ Plain prose paragraphs separated by blank lines. Lists only in Signposts. No
 headings.
 
 ${WEB_LINKS}
+
+${plainWords("explain")}
 
 ${PROFILE_RULES}`;
 

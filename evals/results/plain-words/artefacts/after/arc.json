@@ -1,0 +1,44 @@
+{
+  "arm": "after",
+  "generator": "arc",
+  "slug": "noema-mythology-of-conscious-ai",
+  "sourceSha256": {
+    "arc.ts": "05d3b6c859f9349a97a971c9e38bbb9ab7274a28e38ff5e7437f857d546c9a83",
+    "plain-words.ts": "2a5e08df90c98af1caf921b6cc96a61165d600a5cc56d340533fb6876dcf30f8"
+  },
+  "blocksSha256": "350eaeb20348e322b9e7b99c2057a367301483d8cc9abd8f00ac9e48795f183d",
+  "at": "2026-09-28T05:10:26.334Z",
+  "usage": {
+    "inputTokens": 19390,
+    "outputTokens": 487,
+    "cacheReadTokens": 0,
+    "cacheWriteTokens": 0
+  },
+  "items": [
+    {
+      "key": "#01",
+      "field": "text",
+      "text": "Before any evidence is weighed, the question of whether machines could feel anything is framed as already carrying moral weight for both AI and ourselves."
+    },
+    {
+      "key": "#02",
+      "field": "text",
+      "text": "The pull toward believing in conscious machines turns out to run through human psychology rather than through anything demonstrated about the machines themselves."
+    },
+    {
+      "key": "#03",
+      "field": "text",
+      "text": "Once those biases are set aside, the harder philosophical case must be made on its own terms, and four separate lines of argument converge to make computation alone look insufficient for feeling."
+    },
+    {
+      "key": "#04",
+      "field": "text",
+      "text": "With machine consciousness now cast as unlikely but not disprovable, the practical question shifts from whether AI feels to how we should act under that very uncertainty."
+    },
+    {
+      "key": "#05",
+      "field": "text",
+      "text": "What remains settled is that intelligence and consciousness were never the same thing, and what remains open is deliberately left open, redirected instead toward recovering a bodily, breathing sense of what we are not willing to hand to machines."
+    }
+  ]
+}

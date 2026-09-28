@@ -41,6 +41,7 @@ import { streamMessage, wasRefused } from "./messages-stream.js";
 import { CAPABLE_MODEL, effortFor } from "./models.js";
 import { parseJsonAnswer, readJsonOrNull } from "./parse-json.js";
 import { hashProfile, PROFILE_RULES, profileSection } from "./profile.js";
+import { plainWords } from "./plain-words.js";
 import {
   accept,
   CANVAS_W,
@@ -394,11 +395,6 @@ Rules that make the difference between a picture and a mess:
     of contents again.
   - Do not label a node with its section number. The reader cannot see the
     contents page and does not care.
-  - Plain words everywhere you write words — "text", "sub", "detail", a region's
-    label, a scene title, the caption: the article's own for the things it
-    names, ordinary words for the rest. Most of these are read in a glance, in a
-    box, with no room to re-read — plainer than the article, never further from
-    it.
   - If the article has a part that is apparatus — notes, bibliography,
     acknowledgements — leave it out or draw it once, muted, at the bottom.
 
@@ -429,6 +425,8 @@ JSON only, no prose, no code fence, keys in this order:
      "items":[ ... ]}
   ]
 }
+
+${plainWords("explain", "landmark")}
 
 ${PROFILE_RULES}`;
 

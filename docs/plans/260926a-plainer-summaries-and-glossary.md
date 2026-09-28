@@ -2,8 +2,8 @@
 
 From SPIDERYARN-READING2-44, a suggestion from Greg, overseer queue entry `qi-qpsx92kg`.
 
-**Status:** stages 1 and 1b shipped to `dev` 2026-09-26. **Stage 2 (Greg's two answers,
-2026-09-28) planning.** Written before the work, per
+**Status:** stages 1 and 1b shipped to `dev` 2026-09-26; stage 2 committed (`570c5536`) 2026-09-28.
+**Stage 3 (one shared rule for every prompt) built and tested; its `after` arms wait on OpenRouter credit.** Written before the work, per
 [engineering-manager.md](../reusable/engineering-manager.md).
 
 ## What Greg said
@@ -556,6 +556,320 @@ one that opens with the meaning in everyday words, before the formal wording or 
 So the chat/Explain bullet lands now as it is — measured, harmless, and the E1 fix is a real one —
 and **stage 3** replaces the per-prompt copies with one shared rule, planned below.
 
+## Stage 3 — one plain-words rule for every prompt that writes
+
+Greg's widened (a) is quoted above (§ Greg widened (a)). The Overseer's brief, from him: every
+prompt that generates text, one shared rule rather than N copies, so that a new prompt gets it by
+default; the trade-off between plain words and the paper's own wording judged per kind of output
+and written down here; `docs/project/prompting-guide.md` for future prompts; measured per kind.
+And, the same day: *"Stop using Fable. Let's just rely on Opus 5.5 for anything advanced in the
+Claude family."* The second opinions below are Opus.
+
+### The inventory: 32 prompts
+
+Every model call in `src/` that writes text, by the kind of words it writes. The kind decides how
+the rule applies.
+
+| kind | prompts (`src/…`) | what the rule does |
+|---|---|---|
+| **explains** — answers, summaries, definitions, reasons, feedback, captions | chat `SYSTEM` and `REMEMBER_SYSTEM` and the "?" addendum (`converse.ts`); Explain and *Check the web* (`explain.ts`, `DEEP` inherits); summary gists (`hierarchy.ts`, `hierarchy-expand.ts`); glossary `senseHere`/`background`; `arc.ts`; `tweets.ts`; `ideas.ts`; quotes' `reason`; `quiz-mark.ts`; `debate.ts` (`applies`, `limits`); citations' `why`; `link-summary.ts`; `illustrated.ts` `depicts`; `search.ts` `reasoning`; `live.ts` (spoken) | **plain wins** — meaning first in everyday words; the article's term kept as a handhold and explained where it first appears |
+| **asks** — questions | `quiz.ts`, `faq.ts`, summary questions (`hierarchy.ts`, `hierarchy-expand.ts`) | **plain wins**, the topic keeping the article's term (as stage 1b) |
+| **names** — labels, headings, titles the model writes | sidebar labels (`labels.ts`); table-of-contents titles (`hierarchy.ts`, `hierarchy-expand.ts`); sketch node labels and captions (`sketch.ts`); timeline `label` | **the author's term wins** — a short phrase: the author's key term, ordinary words around it; a landmark, not a sentence |
+| **copies** — verbatim | quotes' `text`; glossary `name`; headings the TOC copies unchanged; `pdf-read.ts` transcription | **untouched** — a copy stays a copy |
+| **for a specialist** | the four referee prompts (`referee-candidates-prompt.ts`, `referee-mirror.ts`, `referee-criteria-run.ts`, `referee-claims-run.ts`) | the rule applies, with the reader named: a peer reviewer in the paper's field needs no field term explained; plain words for everything else |
+| **machine-only** | `quiz-verdict.ts` (one word), `citation-find.ts` (a URL), `pdf-frontmatter.ts` (ids), `pdf-read.ts` (verbatim transcription) — and `transcribe.ts`, which has no prompt | **exempt**, with the reason written beside it |
+
+Two had no plain-words wording of any vintage: `illustrated.ts` and `link-summary.ts`. Seventeen
+carry the 2026-09-03 wording; five carry stage 1–2's.
+
+### The trade-off, decided
+
+Greg: *"(a) is more important (especially for summaries, explanations), though perhaps (b) plays
+more of a rule in headings? Not sure. Use your judgment."*
+
+**Plain wins wherever the words explain or ask.** That is what the reader reads *instead of* the
+prose for a moment, and the evidence is on it: 67–16 and 70–13 blind for gists, questions and
+definitions, with fidelity even. What the paper's wording is for — the reader meeting the term again
+in the text — is kept by the handhold: the term stays, and is explained where it first appears.
+
+**The author's term wins in a label, heading or title — but it is not a licence for jargon.** A label
+is a landmark the reader matches against the prose, it has no room for an explanation, and at the
+coarse zoom levels a column of them is a summary in its own right. So: the author's *key* term, with
+ordinary words around it, as a short phrase; never the author's term replaced with ours, and never a
+pile of field nouns (*"Transfer-entropy estimator bias correction"*). Opus's point, and a better one
+than my draft's "no room to explain": a label the *model* writes may carry a plain word beside the
+term; only a heading the author wrote is copied untouched.
+
+**Copies are never touched**, and the verbatim and machine-only prompts do not carry the rule at
+all: a transcriber told to prefer common words is a transcriber invited to tidy (Opus).
+
+**Who the reader is.** The default is a curious reader who has not studied the field. **A reader
+the prompt names, or a reader's own profile, overrides it** — the referee prompts, and anyone who
+says in their profile that they know the field. Named explicitly, because "unless you are told who
+the reader is" collided with `PROFILE_RULES` (Opus).
+
+### One fragment, and what goes in it
+
+`PLAIN_WORDS` in a new `src/plain-words.ts`, interpolated as its own section into each prompt the
+way `PROFILE_RULES` (`src/profile.ts`) already is — the one cross-file prompt fragment the codebase
+has, and the model for this. **One** fragment rather than one per kind: a single prompt often writes
+several kinds (the summary prompt writes titles, gists and questions), and per-kind fragments would
+drift.
+
+The general rule first, then how it applies per kind — then the two things the evidence says a
+bare rule lacks: **one worked BAD/GOOD pair** (an explanatory sentence, on a subject none of the eval
+articles touch) and **a one-line self-check**. The glossary moved only once it had both; chat and
+Explain, with a bullet alone, did not move reliably. About 350 tokens, inside cached system prompts.
+
+The wording to build from (reviewed by Opus: *"lead with what it means here"* rather than *"the
+everyday sense"*, which reads as the word's ordinary meaning and is the glossary's open bug; hedges
+added to what plainer must keep; the anchor phrase kept, because three tests and `new-mode.md`'s
+grep use it, and defined rather than left as a slogan):
+
+```
+PLAIN WORDS
+
+Use the commonest word that loses nothing. What changes is the words, never the
+meaning: plainer means equally specific. Never drop a number, a direction, a
+comparison, a condition or a hedge ("may", "in mice", "in this sample") that
+the claim depends on. A sentence that is plainer and less exact is worse.
+
+Write for a curious reader who has not studied this field. If these
+instructions, or the reader's own description, say who the reader is, write
+for them instead: a specialist does not need their own field's terms explained.
+
+How it applies to what you write:
+- Anything that explains or asks — an answer, a summary, a definition, a
+  reason, feedback, a caption, a question: say what it means here, in everyday
+  words, first. Keep the article's own term where the reader will meet it again
+  in the prose; it is their handhold. But a handhold is not an explanation: if
+  this reader would not know the term, say what it means where it first
+  appears. Never explain one hard word with another. A word is not plain
+  because the article uses it.
+- A label, heading or title you write: a short phrase with the author's key
+  term and ordinary words around it. It is a landmark the reader matches to the
+  text, so never replace the author's term with your own.
+- Anything you copy — a quotation, a name, a heading you were told to keep —
+  stays exactly as written.
+
+For example, explaining a line in a medical paper:
+BAD: "The trial was underpowered, so its null result is uninformative."
+GOOD: "The trial was too small to reliably catch an effect of the size it was
+looking for (it was 'underpowered'), so finding no effect tells us little
+either way."
+
+Before you finish, find each word this reader might not know. Either it is the
+article's term and you have said what it means where it first appears, or
+change it.
+
+Plainer than the article, never further from it: never less exact, and never
+beyond what it says.
+```
+
+**In each prompt:** the prompt's own plain-words bullet (the 2026-09-03 wording, or stage 2's in
+chat and Explain) is **removed** and `${PLAIN_WORDS}` goes in as its own section near the end, so
+there is one rule and not two. **The two measured blocks keep their measured text** — the summary
+GISTS rules (the lengths, one term of art at the root and depth 1, the twin-study example) and the
+glossary WRITING section (the 20-word first sentence, the field-matched worked pairs, the
+self-check) — and gain the fragment; only a sentence that would contradict it is aligned (Opus).
+Live gets one line of its own on top: short spoken sentences, no brackets, never read notation
+aloud.
+
+### The default for future prompts
+
+Two things, because a guide alone is advice:
+
+- **A test** (`tests/plain-words-coverage.test.ts`, in the manner of `doc-links`): it finds every
+  prompt constant in `src/` — every `const …SYSTEM` template, plus the few prompts named otherwise,
+  listed — and fails unless the prompt interpolates `PLAIN_WORDS` or is on the exemption list in
+  `src/plain-words.ts` with its reason beside it. A new prompt is red until someone decides. It has
+  to be seen red: a prompt constant added without the fragment.
+- **`docs/project/prompting-guide.md`**: the rule and the trade-off above, where the fragment lives
+  and how to use or exempt it, the naming convention the test relies on, and how to measure a prompt
+  change the way this plan did (production's own calls, a same-prompt control, shuffled blind pairs,
+  a fidelity question beside the plainness one, a check that the shuffle is balanced). Owner:
+  [architecture.md](../project/architecture.md), which already owns `ai-gateway.md` and
+  `prompt-caching.md`. **The pointer in AGENTS.md is a rule edit**: its exact before and after go to
+  the Overseer for Greg's yes before it is committed.
+
+### Versions, and what readers see
+
+Every prompt with a version stamp whose text changes gets a bump. `toc/8`, `expand/5` and
+`glossary/5` are not on `main`, so they absorb this unbumped, as stage 2 did. The rest move: `arc`,
+`tweets`, `labels`, `ideas`, `quotes`, `sketch`, `timeline`, `illustrated`, `quiz`, `faq`,
+`debate`, `citations`, `link-summary`.
+
+**This is the visible part, named rather than discovered:** ten of those have an `outdated` banner
+(`src/store/pg.ts`), so after the deploy **every owner's existing arc, ideas, quotes, sketch,
+timeline, illustrated, quiz, FAQ, debate and citations artefacts say they were written by a
+different version**, with the mode's own regenerate button — the migration each mode was built
+with, and what the glossary did in stage 1. Each banner's copy is checked for a reason that is only
+true of one old bump (the glossary's was). Labels, tweets, link summaries and the tree regenerate
+when next asked for or when their stage next runs; chat, Explain, search, quiz-mark, live and the
+referee prompts have no stored artefact.
+
+### Measuring it, per kind
+
+| kind | harness | arms | cost |
+|---|---|---|---|
+| gists, questions, definitions | `run.ts` (stage 1) | `after-10` vs `before`, blind | ~$1.5 |
+| answers: chat, Explain, *Check the web* | `answers.ts` (stage 2) | two new samples vs `before`/`before-2`, blind | ~$2 |
+| the rest: arc, tweets, ideas, quotes' reasons, citations' why, illustrated, quiz, FAQ, labels, sketch, timeline, quiz-mark, search | a new `artefacts.ts`: each production generator on **one** article, before and after, prose fields extracted, blind pairs judged for plainness **and**, for labels, whether the author's key term survived | before on the current commit, after once built | ~$2–3 |
+
+About **$6** in all, each run well under a few dollars. **Not measured**, with the reason: `live` (a
+realtime voice session — no headless generator), `debate` (a web search per claim; its text gets the
+same shared fragment and its fields are checked by reading), the four referee prompts (a specialist
+reader, for whom the rule changes little; one output each, read). An Opus subagent judges, blind,
+as before.
+
+### Stages
+
+| | what | ends when |
+|---|---|---|
+| 3.0 | this section; Opus's view; GPT Sol plan review | review answered |
+| 3a | `artefacts.ts`, and its `before` arm on the current prompts | the arm written, before any prompt changes |
+| 3b | `src/plain-words.ts`, wired into every prompt, old bullets out, the coverage test (seen red), version bumps, banner copy; the three `after` arms and blind reads | plainer by kind, fidelity even, or the plan says why not |
+| 3c | `prompting-guide.md`, `new-mode.md`, the AGENTS.md pointer (after the Overseer's yes), the report-44 note | docs link-checked |
+| 3d | GPT Sol code review, gates, push, worktree removed | on `dev`, green |
+
+### GPT Sol on the stage-3 plan, and what changed (2026-09-28)
+
+*Build with changes*; no P0, six P1s. **This section supersedes the fragment wording, the test
+design and the version and banner claims above**, which are kept as what was proposed.
+
+- **H2 — one long fragment contradicted prompts it was added to** (a question told to explain its
+  own term, a label told to be a phrase where `labels.ts` wants a 6–20-word claim, a transcription-
+  style self-check over copied fields, an example with the bracketed aside the summary prompt
+  forbids). **Changed:** one source, `plainWords(...kinds)` in
+  [`src/plain-words.ts`](../../src/plain-words.ts) — a short core in every call (who the reader is;
+  commoner words for the same meaning; nothing lost; *"it never changes which field a fact belongs
+  in, which source may support it, or the shape and length set above for each field: where those
+  rules are more specific, they win"*; copies untouched) plus only the kinds a prompt names:
+  `explain` (meaning first, handhold, the worked pair, the self-check), `ask`, `landmark`, `spoken`.
+  The example has no brackets.
+- **H3 — the glossary's provenance.** The core's field-ownership sentence is the invariant Sol
+  asked for, and the summary and glossary prompts take the **core alone**: their own measured
+  sections already carry the per-kind detail and field-matched examples.
+- **H4 — a naming-based test cannot prove coverage.** **Partly taken.** The test finds model calls
+  by the wire functions that make them (`streamMessage`, `openRouterJson`, `openRouterStream`, …),
+  with comments stripped, not by constant names; a file that calls a model must carry
+  `plainWords(` in code or be in `PLAIN_WORDS_EXEMPT` with a reason; prompt files whose call is made
+  elsewhere (`hierarchy-expand.ts`, `live.ts`, `referee-candidates-prompt.ts`, the changelog) are
+  listed. Seen red before any prompt was wired: 33 files. **Not taken: Sol's typed `plainWords`
+  policy on every outgoing request.** It is the stronger guarantee — it would check the prompt
+  actually sent — and it means changing every wire function's signature and all 30-odd call
+  sites. The test says in its header what it cannot see, and the typed policy is named in
+  § Deferred as the next step.
+- **H5 — `toc/8`, `expand/5` and `glossary/5` are on `main`.** True — stage 1 was deployed. So
+  stage 2's 30-word change needs **`toc/9`**, its glossary profile carve-out **`glossary/6`**, and
+  stage 3 moves `expand` to **`expand/6`**. Checked against `origin/main` again before the commit.
+- **H6 — only seven modes show the `outdated` banner.** Ideas, quotes, timeline, quiz, FAQ,
+  debate and citations do, with copy generic enough for this bump; **arc, sketch and illustrated
+  store the flag and never show it**, so their old artefacts stay on screen unmarked until
+  regenerated. Left that way deliberately: sketch and illustrated redraws cost about $0.20 and
+  $0.40–0.60, and inviting every owner to redo them for a wording change is not worth it. Search
+  runs and referee criteria and claims **are** stored, with no prompt version: old saved runs keep
+  their words.
+- **H7 — no mass rerun.** A bump marks or invalidates; nothing regenerates until a stage runs or a
+  reader asks.
+- **H1 — missed prompts.** The public changelog's copy prompt (`scripts/changelog/`) gets the rule;
+  `scripts/gjd-remote-envpolicy.ts` is an internal tool's reason for Greg and is exempt with that
+  reason. Field-level kinds: each prompt names every kind it writes (sketch writes `explain` and
+  `landmark`; FAQ, quiz and summary questions `ask`).
+- **H8 — one article per generator is a smoke test.** Agreed, and it is called that. Added: a
+  `before-2` same-prompt control for the artefact generators, link summaries, Remember, the "?"
+  help turn and one referee-claims run. Still not run: `live` (no headless session; the `spoken`
+  kind is checked by reading), debate (a web search per claim), `EXPAND_SYSTEM` (only runs on a
+  long article's deepening). Spend: $4–8 across all stage-3 runs, each well under a few dollars.
+
+### What stage 3 built (2026-09-28)
+
+- **`src/plain-words.ts`**: `plainWords(...kinds)` and `PLAIN_WORDS_EXEMPT`. The core says the
+  prompt's own field rules win where *"these instructions set"* them (not *"set above"*: in several
+  prompts the rule sits before a closing output section, and some field rules come after it).
+- **Wired into 27 prompts in 25 files**, each prompt's own old plain-words sentence removed and
+  quoted in the wiring reports: summary, expansion and glossary take the core alone
+  (`plainWords()`, measured sections kept); arc, tweets, ideas, quotes, citations, illustrated,
+  debate (both prompts), Explain, chat, Remember, quiz-mark, search, link summaries, the four
+  referee prompts and the public changelog's copy take `"explain"`; sketch `"explain"` +
+  `"landmark"`; quiz `"ask"` + `"explain"` (it writes reference answers too); FAQ `"ask"`; labels,
+  timeline and trajectory `"landmark"` (timeline's and trajectory's only written field is a short
+  label — a departure from the inventory's first placement of timeline, taken because `"explain"`
+  would tell a ten-word label to explain its terms); live `"explain"` + `"spoken"`. The changelog's
+  copy prompt is a Markdown file a subagent reads, so the rule is written beside the inputs as
+  `copy-plain-words.md` and `copy-brief.md` tells the subagent to read it.
+- **Exempt, with reasons in the file**: the quiz verdict, the citation URL finder, PDF front matter,
+  PDF figure location (merged in from `dev` the same day), PDF transcription, dictation, embeddings,
+  the two wires, the pipeline's factory call, the expansion call site, a string that names a call,
+  two spikes and the environment-policy tool.
+- **Tests**: `tests/plain-words-coverage.test.ts` (red on 33 files before wiring, green after);
+  `tests/plain-words-wiring.test.ts` checks eleven of the interactive prompts' sent text carries the
+  rule exactly once and the old sentence is gone; the phrase assertions in the FAQ, citations and
+  debate tests now assert the prompt contains `plainWords(...)`'s output; the byte pin and key moved
+  to `toc/9`.
+- **Versions**: `toc/9`, `expand/6`, `glossary/6`, `arc/4`, `tweets/4`, `ideas/3`, `quotes/7`,
+  `sketch/3`, `timeline/3`, `illustrated/4`, `quiz/4`, `faq/3`, `citations/3`, `debate/2`,
+  `labels/3`, `trajectory/5`, link summaries `4`.
+- **Docs**: [prompting-guide.md](../project/prompting-guide.md) (the substance), and one-sentence
+  pointers in AGENTS.md (Greg: *"pull most of that out into its own .md file, and signpost from
+  AGENTS.md (and other relevant docs) with a single sentence to it. Then consider this approved."*),
+  `architecture.md`, `ai-gateway.md` and `new-mode.md`, whose rule section is now that sentence.
+
+**The `after` arms waited on credit.** The OpenRouter key hit its $100 cap mid-way through the
+artefacts `before-2` arm (a 402 *no credit*); Greg raised it the same morning, and the arms below
+ran on the committed-to-be prompts. `before-2` has no quotes, illustrated or referee-claims (they
+failed on the cap, and cannot be re-run on the old prompts now). **All reads from here are by a
+blind Opus judge** — Fable was retired mid-stage — so each has its own Opus control, and the
+stage-1/2 Fable reads are not mixed in.
+
+| what | read | new plainer | old plainer | same | fidelity flags new / old |
+|---|---|---:|---:|---:|---:|
+| **answers** (chat, Explain, *Check the web*) | control, `before` vs `before-2` | — | 8 / 10 | 0 | 3 / 3 |
+| | `before` vs `after-3` | **12** | 6 | 0 | 1 / 5 |
+| | `before-2` vs `after-4` | **13** | 5 | 0 | 0 / 3 |
+| **artefacts** (15 generators, one essay) | control, `before` vs `before-2` | — | 51 / 48 | 93 | 5 / 7 |
+| | `before` vs `after` | **77** | 45 | 116 | 12 / 9 |
+| **summaries + glossary** (3 articles) | `before` vs `after-10` | **76** | 14 | 5 | 4 / 1 |
+
+**Answers moved this time.** The stage-2 bullet alone gave 13–5 then 9–9; the shared rule, with
+its example and self-check, gives 12–6 and 13–5 against an 8–10 control, fidelity no worse. By
+kind, pooled: *Check the web* 9–3, Explain on a sentence 8–4, chat 8–4.
+
+**Artefacts moved where they explain, and stayed put where the author's words should win.** Ideas
+14–1, tweets 8–0, citations 5–2, FAQ 3–0, search 4–1; labels 5–6 and timeline 1–0 with most pairs
+the same, which is the landmark rule doing what it says; illustrated 8–9 and quiz 8–6 roughly even;
+**quote reasons 4–7, the one generator that went the other way**. The hard-word screen agrees (tweets
+18.5 → 9.6 hard types per 100 words, sketch 21.3 → 13.2, FAQ 11.2 → 5.8, labels unchanged). **The
+cost**: 12 fidelity flags against the new lines to 9 against the old (the control: 5 and 7), mostly
+small inventions in picture descriptions and labels (*"Nagel recognisable by his scroll"*,
+*"decades before others"*), and items got longer (tweets 30 → 41 words, sketch nodes 7 → 11).
+
+**Summaries and glossary kept their gain with the core added**: 76–14, against stage 1b's 67–16
+from `before` without it.
+
+**Two things this read could not settle, checked separately:**
+
+- **The glossary's people come and go.** `after-9` and `after-10` gave the essay no person entry
+  at all, against six from the old prompt. Two more runs of the current prompt
+  (`evals/plain-words/glossary-people.ts`) gave one person and five. It is sampling, not the rule —
+  and that run with one person had also moved *Müller-Lyer illusion*, *pareidolia* and *Watt
+  governor* under `background`, which is where ordinary meanings belong.
+- **Deep gists overran their 32-word ceiling** in `after-10`: 14 of 65, against 0–3 in every
+  earlier arm. `after-11`, the same prompt again: **1 of 73**, median 27 words as in `after-9`. It
+  was sampling, and the core stays in the summary prompt. The lesson is the one the control arms
+  exist for: a single arm's outlier looks exactly like a regression.
+
+**Referee claims failed on both attempts on the essay** with production errors (*the answer was
+longer than there was room for*, then *ran out of room before it wrote anything*), under the old
+prompt, before any change here — worth a look on its own: an 8,000-word essay may be past what
+`runClaims` can answer.
+
+And **G1–G3** from Sol's stage-2 code review: `answers.ts` now checks the exact set of 18 cases, not
+any 18 (red first, `tests/plain-words-answers.test.ts`); `awaiting-approval.md` shows its "nothing
+resting" line again; and the depth-1 table in § What stage 2 found counts words by whitespace — by
+`run.ts`'s `wordsIn`, which counts a hyphenated compound once, before's ordering is 16/23,
+before-2's over-25 is 1/22 and `after-8`'s is 8/23, and the conclusion does not move.
+
 ## The simpler option passed over
 
 **Just strengthen the existing sentence** — "plainer than the article" → "much plainer" — in place.
@@ -564,6 +878,11 @@ things stays, and the named things are the jargon.
 
 ## Deferred, named
 
+- **A typed plain-words policy on every model request** (GPT Sol, stage-3 plan review H4): every
+  wire function takes a required `plainWords: { kind } | { exempt, reason }`, and a test checks the
+  prompt actually sent. Stronger than the file-level scan that shipped; a signature change across
+  every call site.
+- **Outdated banners for arc, sketch and illustrated**, which store the flag and never show it.
 - **Ordinary definitions labelled as the article's.** The glossary puts what a term ordinarily means
   in `senseHere` (article-only) as often under the new prompt as the old; a worked example against
   it went in during round 2 and did not visibly move it. Worth a change of its own, with a screen

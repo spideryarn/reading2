@@ -46,8 +46,7 @@ paragraph is the part still worth acting on.
 > human happened to be looking. If reader-facing copy is ever to be gated on a person, the gate has
 > to live somewhere the deploy path executes.
 
-| report | what is left for Greg |
-|---|---|
+<!-- Nothing resting with Greg: report 44 was answered on 2026-09-28. -->
 
 **Six rows came off this table on 2026-09-17**, because Greg had already answered them on 2026-09-11
 and they were still sitting here as though he had not: the dictation privacy wording, the Socratic

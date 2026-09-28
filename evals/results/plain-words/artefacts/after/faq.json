@@ -1,0 +1,64 @@
+{
+  "arm": "after",
+  "generator": "faq",
+  "slug": "noema-mythology-of-conscious-ai",
+  "sourceSha256": {
+    "faq.ts": "9c6f7a31f99efcb35ef1416a62d7fd0dd25b6c6687ff88b4619fe2dc74a4e5eb",
+    "plain-words.ts": "2a5e08df90c98af1caf921b6cc96a61165d600a5cc56d340533fb6876dcf30f8"
+  },
+  "blocksSha256": "350eaeb20348e322b9e7b99c2057a367301483d8cc9abd8f00ac9e48795f183d",
+  "at": "2026-09-28T05:11:00.485Z",
+  "usage": {
+    "inputTokens": 20216,
+    "outputTokens": 4772,
+    "cacheReadTokens": 0,
+    "cacheWriteTokens": 0
+  },
+  "items": [
+    {
+      "key": "#01",
+      "field": "question",
+      "text": "Does calling an AI's errors 'hallucinations' quietly smuggle in the assumption that it has real experiences?"
+    },
+    {
+      "key": "#02",
+      "field": "question",
+      "text": "Doesn't the thought experiment of swapping brain parts for silicon ones show consciousness could survive being moved into a machine?"
+    },
+    {
+      "key": "#03",
+      "field": "question",
+      "text": "If a computer simulation can't actually be conscious, what does that do to the idea that we're all living inside a giant simulation?"
+    },
+    {
+      "key": "#04",
+      "field": "question",
+      "text": "Do the four arguments against machine consciousness need each other, or does each stand on its own?"
+    },
+    {
+      "key": "#05",
+      "field": "question",
+      "text": "After arguing that digital computation likely can't produce consciousness, why does the author still leave the door open to artificial consciousness?"
+    },
+    {
+      "key": "#06",
+      "field": "question",
+      "text": "Given how uncertain every theory of consciousness still is, how sure can we really be that computation isn't enough for it?"
+    },
+    {
+      "key": "#07",
+      "field": "question",
+      "text": "If life matters for consciousness, should lab-grown brain tissue worry us more than any chatbot does?"
+    },
+    {
+      "key": "#08",
+      "field": "question",
+      "text": "Even once we're convinced a machine isn't conscious, can we simply stop feeling that it is?"
+    },
+    {
+      "key": "#09",
+      "field": "question",
+      "text": "Given how often we've wrongly denied moral status to animals and other people, might we be making the same mistake with AI?"
+    }
+  ]
+}

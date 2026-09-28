@@ -4,6 +4,9 @@ Every paid model call this app makes goes through **OpenRouter**, and every one 
 *recorded*. Since 2026-08-27 that holds for the pipeline, chat, embeddings, dictation and the PDF
 reader alike.
 
+Writing or changing a prompt that puts words in front of a reader? Its wording rule, and how to
+measure the change, are in [prompting-guide.md](prompting-guide.md).
+
 **There is one exception, and it arrived on 2026-08-31.** Live conversation mode talks to OpenAI
 directly, because OpenRouter has no realtime API to route to — its audio endpoints are batch speech
 and batch transcription, and there is no duplex speech-to-speech. It is not a routing preference; it

@@ -59,6 +59,7 @@ import {
 } from "./source-hash.js";
 import type { ArtifactStore } from "./store/artifacts.js";
 import { budgetFor, truncationFailure } from "./token-budget.js";
+import { plainWords } from "./plain-words.js";
 import {
   type Block,
   type BlockId,
@@ -83,7 +84,8 @@ export type { CitedWork, CitationDrops, CitationPlace, Citations, CitationScoreD
  */
 /* `citations/2`, 2026-09-11: the quote rule forbids "..." and quoting across
    blocks — the stage-1 runs' commonest reason a place failed verification. */
-export const PROMPT_VERSION = "citations/2";
+/* `citations/3`, 2026-09-28: the prompt's own plain-words wording gave way to the shared `plainWords` section, one rule for every prompt (Greg, 2026-09-28; docs/plans/260926a-plainer-summaries-and-glossary.md, stage 3). */
+export const PROMPT_VERSION = "citations/3";
 
 /** Mentions kept per work. The first-cited jump needs one; three is room for the shorthand and the note. */
 export const MAX_MENTIONS = 3;
@@ -1223,8 +1225,7 @@ Leave it out if the article gives none.
 "why" — one plain sentence, at most ${WHY_CAP} characters: what THIS piece uses the
 work for — the finding it builds on, the claim it supports, the view it argues
 against. Not a summary of the work. Do not begin "The article", "The author" or
-"This work". The article's own words for the things it names, ordinary words for
-everything else: plainer than the article, never further from it.
+"This work".
 "relevance" 0-1 — how much THIS piece's argument leans on the work. 1: the piece
 is built on it. 0.5: it carries one step of the argument. 0.1: a passing mention
 or further reading.
@@ -1239,6 +1240,8 @@ HOW MANY
 At most ${MAX_CITATIONS} rows. If the article cites more than ${MAX_CITATIONS} works,
 keep the ${MAX_CITATIONS} it leans on most and set "capped": true. Otherwise
 "capped": false.
+
+${plainWords("explain")}
 
 OUTPUT
 

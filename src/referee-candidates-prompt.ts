@@ -21,6 +21,7 @@
  * docs/plans/260831an-referee-mode-for-peer-reviewers.md § 4.
  */
 import { MAX_SOURCES, SHORTLIST_FENCE } from "./referee-candidates.js";
+import { plainWords } from "./plain-words.js";
 
 /**
  * What Candidates is told, above the `cache_control` breakpoint — so this kind
@@ -163,6 +164,8 @@ WHAT YOU MUST NOT SAY
 - No claim about whether somebody is available, busy, or likely to accept.
 - No praise or criticism of a candidate's work beyond how it meets a
   requirement.
+
+${plainWords("explain")}
 
 THE SHORTLIST BLOCK
 

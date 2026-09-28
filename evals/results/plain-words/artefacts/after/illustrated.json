@@ -1,0 +1,277 @@
+{
+  "arm": "after",
+  "generator": "illustrated",
+  "slug": "noema-mythology-of-conscious-ai",
+  "sourceSha256": {
+    "illustrated.ts": "e30dc2f69d5369555a7b138b14e417f61e05a876bdb8ab8a6b8efa8c4f8237a6",
+    "plain-words.ts": "2a5e08df90c98af1caf921b6cc96a61165d600a5cc56d340533fb6876dcf30f8"
+  },
+  "blocksSha256": "350eaeb20348e322b9e7b99c2057a367301483d8cc9abd8f00ac9e48795f183d",
+  "at": "2026-09-28T05:18:01.999Z",
+  "sketchFrom": "this run",
+  "usage": {
+    "inputTokens": 25039,
+    "outputTokens": 24227,
+    "cacheReadTokens": 0,
+    "cacheWriteTokens": 0
+  },
+  "items": [
+    {
+      "key": "plate 1",
+      "field": "title",
+      "text": "The Mythology Of Conscious AI — Overview"
+    },
+    {
+      "key": "plate 1 vignette 1",
+      "field": "depicts",
+      "text": "A clay golem-like cloned figure standing beside a jointed mechanical android, both half-formed, at the top of the page as the oldest dream of made people.",
+      "context": "With genetic engineering came the prospect of human cloning, and with robotics that of humanlike androids."
+    },
+    {
+      "key": "plate 1 vignette 1",
+      "field": "title",
+      "text": "CLONE AND ANDROID"
+    },
+    {
+      "key": "plate 1 vignette 2",
+      "field": "depicts",
+      "text": "A small seated figure (an AI, drawn as a boxy device with a still, watching face) with a scale-like halo of moral weight above it, as if being weighed for standing among souls.",
+      "context": "with consciousness comes moral status, the potential for suffering and, perhaps, rights."
+    },
+    {
+      "key": "plate 1 vignette 2",
+      "field": "title",
+      "text": "MORAL STATUS AND RIGHTS"
+    },
+    {
+      "key": "plate 1 vignette 3",
+      "field": "depicts",
+      "text": "A gathered crowd of people leaning toward a talking device on a pedestal, projecting ribbon-like breath or spirit onto it from their own mouths, as onlookers pouring their own mindedness into the machine.",
+      "context": "we naturally imbue them with other qualities we feel are characteristically or even distinctively human: understanding, mindedness and consciousness, too."
+    },
+    {
+      "key": "plate 1 vignette 3",
+      "field": "title",
+      "text": "POURING MIND INTO MACHINES"
+    },
+    {
+      "key": "plate 1 vignette 4",
+      "field": "depicts",
+      "text": "The spinning-ball steam governor mechanism, drawn as an old brass engine part with two swinging weights, standing for the whole case that plain mechanism can do what computation cannot.",
+      "context": "The Watt Governor. It’s not a computer."
+    },
+    {
+      "key": "plate 1 vignette 4",
+      "field": "title",
+      "text": "THE WATT GOVERNOR"
+    },
+    {
+      "key": "plate 1 vignette 5",
+      "field": "depicts",
+      "text": "Four thin inked paths — one from the governor, one from a brain, one from a cell, one from a rain-cloud — winding down the vellum and meeting at a single knot.",
+      "context": "Several lines of thought now converge."
+    },
+    {
+      "key": "plate 1 vignette 5",
+      "field": "title",
+      "text": "LINES OF THOUGHT CONVERGE"
+    },
+    {
+      "key": "plate 1 vignette 6",
+      "field": "depicts",
+      "text": "Small round brain-like blobs growing in glass dishes on a bench, tended nervously by a robed figure, as the thing we should worry about more than any chatbot.",
+      "context": "cerebral organoids (brain-like structures typically grown from human embryonic stem cells)"
+    },
+    {
+      "key": "plate 1 vignette 6",
+      "field": "title",
+      "text": "ORGANOIDS IN THE DISH"
+    },
+    {
+      "key": "plate 1 vignette 7",
+      "field": "depicts",
+      "text": "A man in modern dress kneeling before a glowing screen as if before a person, convinced by it, drawn in the same register as a pilgrim before a shrine.",
+      "context": "As the Google engineer Lemoine demonstrated, for some of us, such conscious-seeming systems are already here."
+    },
+    {
+      "key": "plate 1 vignette 7",
+      "field": "title",
+      "text": "LEMOINE'S CLAIM"
+    },
+    {
+      "key": "plate 1 vignette 8",
+      "field": "depicts",
+      "text": "An open book with blank pages stretching off the edge of the vellum, unmarked and waiting, held by no one.",
+      "context": "The future history of AI is not yet written."
+    },
+    {
+      "key": "plate 1 vignette 8",
+      "field": "title",
+      "text": "THE UNWRITTEN FUTURE"
+    },
+    {
+      "key": "plate 1 vignette 9",
+      "field": "depicts",
+      "text": "A single reclining human figure breathing out a visible curl of breath, fleshy and plain, set against a small dark silhouette of a boxy machine for contrast — the essay's closing image of what we really are.",
+      "context": "more breath than thought and more meat than machine."
+    },
+    {
+      "key": "plate 1 vignette 9",
+      "field": "title",
+      "text": "BREATH AND MEAT, NOT MACHINE"
+    },
+    {
+      "key": "plate 2",
+      "field": "title",
+      "text": "Inside: Temptations To See Consciousness"
+    },
+    {
+      "key": "plate 2 vignette 1",
+      "field": "depicts",
+      "text": "A robed philosopher (Thomas Nagel, unnamed but recognisable by his scroll) pointing at a small glowing creature, illustrating the idea that experience is a matter of there being something it is like to be it.",
+      "context": "an organism has conscious mental states if and only if there is something it is like to be that organism."
+    },
+    {
+      "key": "plate 2 vignette 1",
+      "field": "title",
+      "text": "SOMETHING IT IS LIKE"
+    },
+    {
+      "key": "plate 2 vignette 2",
+      "field": "depicts",
+      "text": "A boxy screened device sits where the glowing creature stood in the roundel above, its face blank and unlit, a scholar shrugging uncertainly before it.",
+      "context": "it is harder to say whether there is anything-it-is-like-to-be ChatGPT."
+    },
+    {
+      "key": "plate 2 vignette 2",
+      "field": "title",
+      "text": "ANYTHING-IT-IS-LIKE-TO-BE?"
+    },
+    {
+      "key": "plate 2 vignette 3",
+      "field": "depicts",
+      "text": "A ladder rising from beasts at its foot through a human figure near its top, reaching up toward small angels and a radiant Gods'-throne above — the old ladder of being that puts humankind near the top.",
+      "context": "perhaps closer to angels and Gods than to other animals, as in the medieval Scala naturae"
+    },
+    {
+      "key": "plate 2 vignette 3",
+      "field": "title",
+      "text": "SCALA NATURAE"
+    },
+    {
+      "key": "plate 2 vignette 4",
+      "field": "depicts",
+      "text": "A steeply rising ink curve with a small robed figure standing at several different points along it, each one looking up and believing itself to be at the very edge of the cliff.",
+      "context": "on an exponential curve, every point is an inflection point."
+    },
+    {
+      "key": "plate 2 vignette 4",
+      "field": "title",
+      "text": "EVERY POINT AN EDGE"
+    },
+    {
+      "key": "plate 2 vignette 5",
+      "field": "depicts",
+      "text": "Two men in a bare room, one gesturing toward a standing robotic figure haloed in light, echoing the film scene where a maker is told he has done the work of gods.",
+      "context": "If you’ve created a conscious machine — it’s not the history of man, that’s the history of Gods."
+    },
+    {
+      "key": "plate 2 vignette 5",
+      "field": "title",
+      "text": "THE HISTORY OF GODS"
+    },
+    {
+      "key": "plate 2 vignette 6",
+      "field": "depicts",
+      "text": "A round cinnamon bun on a plate, its swirl of icing shaped uncannily like a face, with small pilgrims kneeling before it — the essay's own picture of how easily we see a mind where there is only pattern.",
+      "context": "seeing patterns in things, like a face in a piece of toast or Mother Teresa in a cinnamon bun"
+    },
+    {
+      "key": "plate 2 vignette 6",
+      "field": "title",
+      "text": "FACE IN THE CINNAMON BUN"
+    },
+    {
+      "key": "plate 3",
+      "field": "title",
+      "text": "Inside: Four Arguments Against Computation"
+    },
+    {
+      "key": "plate 3 vignette 1",
+      "field": "depicts",
+      "text": "A computer drawn split cleanly down the middle into two labeled halves, beside a brain drawn as one single tangled, unsplittable mass with no seam at all.",
+      "context": "there’s no sharp separation between “mindware” and “wetware” as there is between software and hardware in a computer."
+    },
+    {
+      "key": "plate 3 vignette 1",
+      "field": "title",
+      "text": "NO SEAM IN THE BRAIN"
+    },
+    {
+      "key": "plate 3 vignette 2",
+      "field": "depicts",
+      "text": "Loose currents, drifting droplets and faint field-lines swirl around and beyond the edges of a small ruled grid representing an algorithm, spilling outside its lines entirely.",
+      "context": "Electromagnetic fields, the flux of neurotransmitters, and much else besides — all lie beyond the bounds of the algorithmic"
+    },
+    {
+      "key": "plate 3 vignette 2",
+      "field": "title",
+      "text": "BEYOND THE ALGORITHM"
+    },
+    {
+      "key": "plate 3 vignette 3",
+      "field": "depicts",
+      "text": "A brain drawn wired directly into a beating heart, sending a stream of small guessing-arrows down toward it and receiving signals back, keeping the body's condition on course.",
+      "context": "the primary duty of any brain is to keep its body alive, to keep physiological quantities like heart rate"
+    },
+    {
+      "key": "plate 3 vignette 3",
+      "field": "title",
+      "text": "GUESSING TO STAY ALIVE"
+    },
+    {
+      "key": "plate 3 vignette 4",
+      "field": "depicts",
+      "text": "A rain-cloud drawn inside a framed diagram on a scholar's desk, its neat ruled raindrops falling only onto the paper, while beside the desk a real dark cloud pours actual rain onto the ground.",
+      "context": "A simulation of a rainstorm does not make anything actually wet."
+    },
+    {
+      "key": "plate 3 vignette 4",
+      "field": "title",
+      "text": "A STORM THAT ISN'T WET"
+    },
+    {
+      "key": "plate 3 vignette 5",
+      "field": "depicts",
+      "text": "A single neuron drawn shedding small dark specks of waste as it fires, beside an identical-looking silicon neuron sitting inert with no waste to clear at all.",
+      "context": "some neurons fire spikes of activity apparently to clear waste products created by metabolism."
+    },
+    {
+      "key": "plate 3 vignette 5",
+      "field": "title",
+      "text": "CLEARING ITS OWN WASTE"
+    },
+    {
+      "key": "plate 3 vignette 6",
+      "field": "depicts",
+      "text": "The brass steam governor mid-motion, its two weighted balls flung outward by speed, a small valve swinging shut in direct response, all by plain mechanics and no calculation.",
+      "context": "two heavy cantilevered balls swing outwards, which in turn closes a valve, reducing steam flow."
+    },
+    {
+      "key": "plate 3 vignette 6",
+      "field": "title",
+      "text": "THE GOVERNOR AT SPEED"
+    },
+    {
+      "key": "plate 3 vignette 7",
+      "field": "depicts",
+      "text": "A robed philosopher standing on a tower of nested boxes-within-boxes representing simulated worlds, resting his whole argument's weight on one small unproven brick reading nothing but drawn as a single unlabeled cornerstone.",
+      "context": "a computer running a suitable program would be conscious"
+    },
+    {
+      "key": "plate 3 vignette 7",
+      "field": "title",
+      "text": "THE UNPROVEN CORNERSTONE"
+    }
+  ]
+}

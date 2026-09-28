@@ -1,0 +1,157 @@
+{
+  "arm": "after",
+  "generator": "citations",
+  "slug": "noema-mythology-of-conscious-ai",
+  "sourceSha256": {
+    "citations.ts": "4a0e7e43f43b5a0616c9a09e9800a9b6d97d707fa857522fbbbd3fd8c538cc6d",
+    "plain-words.ts": "2a5e08df90c98af1caf921b6cc96a61165d600a5cc56d340533fb6876dcf30f8"
+  },
+  "blocksSha256": "350eaeb20348e322b9e7b99c2057a367301483d8cc9abd8f00ac9e48795f183d",
+  "at": "2026-09-28T05:10:59.291Z",
+  "usage": {
+    "inputTokens": 19833,
+    "outputTokens": 4916,
+    "cacheReadTokens": 0,
+    "cacheWriteTokens": 0
+  },
+  "items": [
+    {
+      "key": "being you: a new science of consciousness",
+      "field": "why",
+      "text": "The author's own earlier book is cited as containing the fuller argument for why life may matter for consciousness.",
+      "context": "Being You: A New Science of Consciousness"
+    },
+    {
+      "key": "frankenstein",
+      "field": "why",
+      "text": "Used as a cultural touchstone for the long, mostly unhappy history of stories about synthetic minds.",
+      "context": "Frankenstein"
+    },
+    {
+      "key": "2001: a space odyssey",
+      "field": "why",
+      "text": "HAL 9000 is cited as a cultural example of a synthetic mind story that ends badly for humans.",
+      "context": "2001: A Space Odyssey"
+    },
+    {
+      "key": "ex machina",
+      "field": "why",
+      "text": "Used repeatedly, including for the 'Garland test' idea, to explore what convinces humans a machine is conscious.",
+      "context": "Ex Machina"
+    },
+    {
+      "key": "klara and the sun",
+      "field": "why",
+      "text": "Cited as another cultural example of a story about an artificial mind that thinks and feels.",
+      "context": "Klara and the Sun"
+    },
+    {
+      "key": "interview in the washington post claiming lamda is conscious",
+      "field": "why",
+      "text": "Cited as an early, controversial claim that a chatbot is conscious, which the essay argues against.",
+      "context": "Interview in The Washington Post claiming LaMDA is conscious"
+    },
+    {
+      "key": "views on machine consciousness (interviews/statements)",
+      "field": "why",
+      "text": "Chalmers's claim that conscious machines may soon be possible, and his neural-replacement thought experiment, are both examined and challenged.",
+      "context": "Views on machine consciousness (interviews/statements)"
+    },
+    {
+      "key": "statements claiming ai systems are already conscious",
+      "field": "why",
+      "text": "Hinton's claim that conscious machines already exist, and his 'mortal computation' idea, are both discussed and disputed.",
+      "context": "Statements claiming AI systems are already conscious"
+    },
+    {
+      "key": "article on the need to take ai welfare seriously",
+      "field": "why",
+      "text": "Cited as evidence that serious thinkers are pushing to treat AI systems as moral patients, a claim the essay questions.",
+      "context": "Article on the need to take AI welfare seriously"
+    },
+    {
+      "key": "what is it like to be a bat?",
+      "field": "why",
+      "text": "Nagel's definition of consciousness as 'something it is like to be' an organism frames the essay's core distinction between consciousness and intelligence.",
+      "context": "What Is It Like to Be a Bat?"
+    },
+    {
+      "key": "more everything forever",
+      "field": "why",
+      "text": "Its idea of pareidolia is used to describe why people wrongly see consciousness in AI, likened to seeing faces in random patterns.",
+      "context": "More Everything Forever"
+    },
+    {
+      "key": "foundational work defining the universal turing machine and computation",
+      "field": "why",
+      "text": "Turing's formal definition of computation underlies the 'computational functionalism' assumption the essay argues against.",
+      "context": "Foundational work defining the universal Turing machine and computation"
+    },
+    {
+      "key": "a logical calculus of the ideas immanent in nervous activity",
+      "field": "why",
+      "text": "Their landmark paper showing simplified neuron networks can do logical operations underlies the brain-as-computer metaphor the essay challenges.",
+      "context": "A Logical Calculus of the Ideas Immanent in Nervous Activity"
+    },
+    {
+      "key": "work showing neural networks with memory are turing complete",
+      "field": "why",
+      "text": "Kleene's demonstration that simple neuron networks with memory can implement any algorithm supports the (later challenged) brain-as-computer view.",
+      "context": "Work showing neural networks with memory are Turing complete"
+    },
+    {
+      "key": "research on neurons spiking to clear metabolic waste",
+      "field": "why",
+      "text": "Their finding that some neurons fire mainly to clear waste products is used to show a silicon copy could never perfectly replace a biological neuron.",
+      "context": "Research on neurons spiking to clear metabolic waste"
+    },
+    {
+      "key": "example of the watt governor as a non-computational system",
+      "field": "why",
+      "text": "Van Gelder's steam-engine governor example is used to argue that not all functional systems are best understood as computational.",
+      "context": "Example of the Watt governor as a non-computational system"
+    },
+    {
+      "key": "biological naturalism (view that life is necessary for consciousness)",
+      "field": "why",
+      "text": "Searle's idea that biological properties are necessary for consciousness is the basis for the essay's 'life matters' argument.",
+      "context": "Biological naturalism (view that life is necessary for consciousness)"
+    },
+    {
+      "key": "recent research paper on life and consciousness",
+      "field": "why",
+      "text": "A research paper by the author is cited alongside the book as fuller support for the life-consciousness connection.",
+      "context": "Recent research paper on life and consciousness"
+    },
+    {
+      "key": "are you living in a computer simulation?",
+      "field": "why",
+      "text": "Bostrom's simulation hypothesis is examined and criticized for assuming, without argument, that a running computer program would be conscious.",
+      "context": "Are You Living in a Computer Simulation?"
+    },
+    {
+      "key": "lectures on ethics",
+      "field": "why",
+      "text": "Kant's argument that treating seemingly-feeling things as feelingless is psychologically harmful supports the essay's point about conscious-seeming AI.",
+      "context": "Lectures on Ethics"
+    },
+    {
+      "key": "public warnings about the dangers of conscious-seeming ai",
+      "field": "why",
+      "text": "Cited as leading AI figures who have begun to flag the risks posed by AI that merely seems conscious.",
+      "context": "Public warnings about the dangers of conscious-seeming AI"
+    },
+    {
+      "key": "description of ai as a mirror reflecting our digitized past",
+      "field": "why",
+      "text": "Vallor's metaphor of AI as a mirror supports the essay's closing point that we see ourselves reflected in, and mistaken for, our algorithms.",
+      "context": "Description of AI as a mirror reflecting our digitized past"
+    },
+    {
+      "key": "quote on technology making us forget what we know about life",
+      "field": "why",
+      "text": "Turkle's remark closes the essay, reinforcing the warning against forgetting the difference between living and artificial minds.",
+      "context": "Quote on technology making us forget what we know about life"
+    }
+  ]
+}

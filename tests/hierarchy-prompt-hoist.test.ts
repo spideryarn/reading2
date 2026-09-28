@@ -63,7 +63,7 @@ const BLOCKS: Block[] = [
 
 describe("hoisting the structure prompt's three values", () => {
   it("moved the stamp and the effort without moving either value", () => {
-    expect(PROMPT_VERSION).toBe("toc/8");
+    expect(PROMPT_VERSION).toBe("toc/9");
     expect(PRODUCTION_EFFORT).toBe("low");
   });
 
@@ -116,11 +116,13 @@ describe("hoisting the structure prompt's three values", () => {
    * under toc/7 is correctly no longer found. It moved once more before
    * shipping, from `ce8affdf587d1925`, on 2026-09-28 when the depth-1 gist
    * ceiling went from 25 to 30 words (plan 260926a § Stage 2, Greg: "plain
-   * beats short").
+   * beats short"). And, because `toc/8` had reached main by then, that
+   * change and the shared plain-words core (`plainWords()`, appended after
+   * OUTPUT) went out as `toc/9`, 2026-09-28 — plan 260926a § Stage 3.
    */
-  it("mints one stable key for the toc/8 structure request", () => {
+  it("mints one stable key for the toc/9 structure request", () => {
     expect(checkpointKey(canonicalStructureRequest(structureRequest(BLOCKS).params))).toBe(
-      "cad30a33766207fe",
+      "749c4a601f07fea7",
     );
   });
 });

@@ -58,6 +58,7 @@ import {
   type MetaFingerprintWithUrl,
 } from "./source-hash.js";
 import { budgetFor, truncationFailure } from "./token-budget.js";
+import { plainWords } from "./plain-words.js";
 import type {
   Block,
   BlockId,
@@ -74,8 +75,10 @@ export type { Faq, FaqDropped, FaqPassage, FaqQuestion } from "./types.js";
 /**
  * Bumped whenever the prompt changes what a question *is*. Exported so tests
  * compare against the constant rather than a literal.
+ *
+ * `faq/3`, 2026-09-28: the prompt's own plain-words wording gave way to the shared `plainWords` section, one rule for every prompt (Greg, 2026-09-28; docs/plans/260926a-plainer-summaries-and-glossary.md, stage 3).
  */
-export const PROMPT_VERSION = "faq/2";
+export const PROMPT_VERSION = "faq/3";
 
 /** The only hard number on quantity. The prompt's budget is an upper bound under it. */
 export const MAX_QUESTIONS = 12;
@@ -445,9 +448,6 @@ WRITING THE QUESTION
 - Ask it as the reader would, not as a description of the page: never "Why does
   the author say…" when "Why…" will do, and never locate it in the document
   ("In the third section…").
-- Use the article's own words for the things the article names — those are the
-  reader's handholds, and what they meet again in the passages — and ordinary
-  words for everything else: plainer than the article, never further from it.
 
 WHERE THE PIECE RESPONDS
 
@@ -471,6 +471,8 @@ HOW MANY
 The user message gives an upper limit. It is a ceiling, not a target. Fewer is
 fine. None is fine: if the piece raises no question worth asking, return an
 empty list. A padded question is worse than a missing one.
+
+${plainWords("ask")}
 
 OUTPUT
 

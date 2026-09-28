@@ -77,6 +77,7 @@ import type { MessagesBody } from "./messages-stream.js";
 import { type Effort, modelFor } from "./models.js";
 import { parseJsonAnswer, MalformedJson } from "./parse-json.js";
 import { budgetFor, THINKING_HEADROOM } from "./token-budget.js";
+import { plainWords } from "./plain-words.js";
 import type { Block } from "./types.js";
 
 /* ------------------------------------------------------------- the prompt */
@@ -120,8 +121,11 @@ import type { Block } from "./types.js";
  * block's final plain-words rule explicit. Provenance again, for the same reason
  * as `expand/4`.
  * docs/plans/260926a-plainer-summaries-and-glossary.md.
+ *
+ * **`expand/6`, 2026-09-28**: EXPAND_SYSTEM gained the shared plain-words core,
+ * `plainWords()` from src/plain-words.ts, at its end. Plan 260926a § Stage 3.
  */
-export const EXPAND_PROMPT_VERSION = "expand/5";
+export const EXPAND_PROMPT_VERSION = "expand/6";
 
 /**
  * **Both prompt versions, as one string** — the wave-1 prompt this outline came
@@ -379,7 +383,9 @@ order you were given them, each naming its own number:
 
 "question" only under ASK QUESTION ON CHILDREN; omit the key entirely otherwise.
 
-Use only block ids that appear in that section's blocks. Do not invent ids.`;
+Use only block ids that appear in that section's blocks. Do not invent ids.
+
+${plainWords()}`;
 
 /* ------------------------------------------------------------ the request */
 
@@ -535,7 +541,7 @@ export interface ExpansionRequest {
    * usage fields. src/labels.ts spent months writing a marker that bought
    * nothing for exactly this reason. The plan's estimate for this prefix was
    * 1,150–1,400, near enough the floor to fall either side; since `expand/4`
-   * added the QUESTIONS block, `EXPAND_SYSTEM` is 1,895 estimated tokens (1,631 until `expand/5`) and
+   * added the QUESTIONS block, `EXPAND_SYSTEM` is 2,114 estimated tokens at `expand/6` (1,631 until `expand/5`) and
    * clears the floor on its own, so this is `true` for every outline including
    * none at all. It is still reported rather than assumed, because that margin
    * is one prompt edit wide. A zero in `cache_read_input_tokens` is also what

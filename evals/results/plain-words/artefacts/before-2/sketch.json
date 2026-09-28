@@ -1,0 +1,387 @@
+{
+  "arm": "before-2",
+  "generator": "sketch",
+  "slug": "noema-mythology-of-conscious-ai",
+  "sourceSha256": {
+    "sketch.ts": "831b7f15977d7f24de0655c2b9f12ac4cb594ecc210d6a052d2ece216b2d53e7",
+    "plain-words.ts": "6c5f318e82acbbd4c6b1955e83fa3f558322a3082b96e74dcd667528cd37ad02"
+  },
+  "blocksSha256": "350eaeb20348e322b9e7b99c2057a367301483d8cc9abd8f00ac9e48795f183d",
+  "at": "2026-09-28T04:34:06.382Z",
+  "usage": {
+    "inputTokens": 25354,
+    "outputTokens": 20764,
+    "cacheReadTokens": 0,
+    "cacheWriteTokens": 0
+  },
+  "items": [
+    {
+      "key": "sketch",
+      "field": "title",
+      "text": "Funnel, Converge, Diverge, Loop"
+    },
+    {
+      "key": "sketch",
+      "field": "caption",
+      "text": "A funnel from the opening question through the psychological biases that inflate belief, into four converging arguments against machine consciousness, then fanning out into distinct ethical risks that converge on a closing call to remember our embodied nature — which loops back to the stakes raised at the start."
+    },
+    {
+      "key": "scene 1",
+      "field": "title",
+      "text": "The Mythology Of Conscious AI"
+    },
+    {
+      "key": "scene 1",
+      "field": "caption",
+      "text": "The essay funnels a big question through our biases, converges four arguments onto one skeptical conclusion, fans that conclusion into distinct ethical risks, then loops back to the human stakes it opened with."
+    },
+    {
+      "key": "scene 1 node 1",
+      "field": "text",
+      "text": "Could AI be conscious?",
+      "context": "The Mythology Of Conscious AI"
+    },
+    {
+      "key": "scene 1 node 1",
+      "field": "sub",
+      "text": "framing the question",
+      "context": "The Mythology Of Conscious AI"
+    },
+    {
+      "key": "scene 1 node 1",
+      "field": "detail",
+      "text": "Cultural fantasies and claims like Blake Lemoine's raise real ethical stakes.",
+      "context": "The Mythology Of Conscious AI"
+    },
+    {
+      "key": "scene 1 node 2",
+      "field": "text",
+      "text": "Stakes: rights & suffering",
+      "context": "How we think about the prospects for conscious AI matters. It matters for the AI systems themselves, since — if they are conscious, whether now or in the future — with consciousness comes moral status, the potential for suffering and, perhaps, rights."
+    },
+    {
+      "key": "scene 1 node 2",
+      "field": "sub",
+      "text": "for AI, and for us",
+      "context": "How we think about the prospects for conscious AI matters. It matters for the AI systems themselves, since — if they are conscious, whether now or in the future — with consciousness comes moral status, the potential for suffering and, perhaps, rights."
+    },
+    {
+      "key": "scene 1 region 1",
+      "field": "label",
+      "text": "TEMPTATIONS INFLATE BELIEF"
+    },
+    {
+      "key": "scene 1 node 3",
+      "field": "text",
+      "text": "Human-centered biases",
+      "context": "The propensity to bundle intelligence and consciousness together can be traced to three baked-in psychological biases."
+    },
+    {
+      "key": "scene 1 node 3",
+      "field": "sub",
+      "text": "anthropocentrism, exceptionalism, anthropomorphism",
+      "context": "The propensity to bundle intelligence and consciousness together can be traced to three baked-in psychological biases."
+    },
+    {
+      "key": "scene 1 node 4",
+      "field": "text",
+      "text": "Language & hype fuel belief",
+      "context": "One aspect of intelligent behavior that’s turned out to be particularly effective at making some people think that AI could be conscious is language. This is likely because language is a cornerstone of human exceptionalism. Large Language Models (LLMs) like OpenAI’s ChatGPT or Anthropic’s Claude have been the focus of most of the excitement about artificial consciousness. Nobody, as far as I know,…"
+    },
+    {
+      "key": "scene 1 node 4",
+      "field": "sub",
+      "text": "fluent chatbots, techno-rapture dreams",
+      "context": "One aspect of intelligent behavior that’s turned out to be particularly effective at making some people think that AI could be conscious is language. This is likely because language is a cornerstone of human exceptionalism. Large Language Models (LLMs) like OpenAI’s ChatGPT or Anthropic’s Claude have been the focus of most of the excitement about artificial consciousness. Nobody, as far as I know,…"
+    },
+    {
+      "key": "scene 1 node 5",
+      "field": "text",
+      "text": "Pareidolia, not proof",
+      "context": "In his book “More Everything Forever,” Adam Becker describes the tendency to project consciousness into AI as a form of pareidolia — the phenomenon of seeing patterns in things, like a face in a piece of toast or Mother Teresa in a cinnamon bun (Figure 1). This is an apt description. But helping you recognize the power of our pareidolia-inducing psychological biases is just the first step in chall…"
+    },
+    {
+      "key": "scene 1 node 5",
+      "field": "sub",
+      "text": "faces in cinnamon buns",
+      "context": "In his book “More Everything Forever,” Adam Becker describes the tendency to project consciousness into AI as a form of pareidolia — the phenomenon of seeing patterns in things, like a face in a piece of toast or Mother Teresa in a cinnamon bun (Figure 1). This is an apt description. But helping you recognize the power of our pareidolia-inducing psychological biases is just the first step in chall…"
+    },
+    {
+      "key": "scene 1 node 6",
+      "field": "text",
+      "text": "The core assumption",
+      "context": "Consciousness & Computation"
+    },
+    {
+      "key": "scene 1 node 6",
+      "field": "sub",
+      "text": "computation is sufficient for consciousness",
+      "context": "Consciousness & Computation"
+    },
+    {
+      "key": "scene 1 region 2",
+      "field": "label",
+      "text": "FOUR ARGUMENTS AGAINST COMPUTATIONALISM"
+    },
+    {
+      "key": "scene 1 node 7",
+      "field": "text",
+      "text": "Brains aren't computers",
+      "context": "1: Brains Are Not Computers"
+    },
+    {
+      "key": "scene 1 node 8",
+      "field": "text",
+      "text": "Other computational forms",
+      "context": "2: Other Games In Town"
+    },
+    {
+      "key": "scene 1 node 9",
+      "field": "text",
+      "text": "Life may be necessary",
+      "context": "3: Life Matters"
+    },
+    {
+      "key": "scene 1 node 10",
+      "field": "text",
+      "text": "Simulation ≠ instantiation",
+      "context": "4: Simulation Is Not Instantiation"
+    },
+    {
+      "key": "scene 1 node 11",
+      "field": "text",
+      "text": "Functionalism looks shaky"
+    },
+    {
+      "key": "scene 1 node 11",
+      "field": "sub",
+      "text": "not disproven, just unsupported"
+    },
+    {
+      "key": "scene 1 region 3",
+      "field": "label",
+      "text": "WHAT (NOT) TO DO"
+    },
+    {
+      "key": "scene 1 node 12",
+      "field": "text",
+      "text": "Never deliberately create it",
+      "context": "What (Not) To Do?"
+    },
+    {
+      "key": "scene 1 node 12",
+      "field": "sub",
+      "text": "would be an ethical disaster",
+      "context": "What (Not) To Do?"
+    },
+    {
+      "key": "scene 1 node 13",
+      "field": "text",
+      "text": "Seeming-conscious AI, risky too",
+      "context": "Even if I’m right that standard digital computers aren’t up to the job, other emerging technologies might yet be, whether alternative forms of computation (analogue, neuromorphic, biological and so on) or rapidly developing methods in synthetic biology. For my money, we ought to be more worried about the accidental emergence of consciousness in cerebral organoids (brain-like structures typically g…"
+    },
+    {
+      "key": "scene 1 node 13",
+      "field": "sub",
+      "text": "illusion persists regardless",
+      "context": "Even if I’m right that standard digital computers aren’t up to the job, other emerging technologies might yet be, whether alternative forms of computation (analogue, neuromorphic, biological and so on) or rapidly developing methods in synthetic biology. For my money, we ought to be more worried about the accidental emergence of consciousness in cerebral organoids (brain-like structures typically g…"
+    },
+    {
+      "key": "scene 1 node 14",
+      "field": "text",
+      "text": "Biases favor false positives",
+      "context": "The importance of taking an informed ethical position despite all these uncertainties spotlights another human habit: our unfortunate track record of withholding moral status from those that deserve it, including from many non-human animals, and sometimes other humans. It is reasonable to wonder whether withholding attributions of consciousness to AI may leave us once again on the wrong side of hi…"
+    },
+    {
+      "key": "scene 1 node 14",
+      "field": "sub",
+      "text": "unlike underestimating animals",
+      "context": "The importance of taking an informed ethical position despite all these uncertainties spotlights another human habit: our unfortunate track record of withholding moral status from those that deserve it, including from many non-human animals, and sometimes other humans. It is reasonable to wonder whether withholding attributions of consciousness to AI may leave us once again on the wrong side of hi…"
+    },
+    {
+      "key": "scene 1 node 15",
+      "field": "text",
+      "text": "Recover an embodied, living self",
+      "context": "Soul Machine"
+    },
+    {
+      "key": "scene 1 node 15",
+      "field": "sub",
+      "text": "more breath than thought, more meat than machine",
+      "context": "Soul Machine"
+    },
+    {
+      "key": "scene 1 edge 22",
+      "field": "label",
+      "text": "echoes stakes"
+    },
+    {
+      "key": "scene 2",
+      "field": "title",
+      "text": "Four Arguments Against Computationalism"
+    },
+    {
+      "key": "scene 2",
+      "field": "caption",
+      "text": "Each argument runs its own short chain from claim to detail, and all four independently converge on the same skeptical conclusion."
+    },
+    {
+      "key": "scene 2 node 1",
+      "field": "text",
+      "text": "Assumption: computation suffices",
+      "context": "The very idea of conscious AI rests on the assumption that consciousness is a matter of computation. More specifically, that implementing the right kind of computation, or information processing, is sufficient for consciousness to arise. This assumption, which philosophers call computational functionalism, is so deeply ingrained that it can be difficult to recognize it as an assumption at all. But…"
+    },
+    {
+      "key": "scene 2 node 2",
+      "field": "text",
+      "text": "Brain-as-computer metaphor",
+      "context": "First, and most important, brains are not computers. The metaphor of the brain as a carbon-based computer has been hugely influential and has immediate appeal: mind as software, brain as hardware. It has also been extremely productive, leading to many insights into brain function and to the vast majority of today’s AI. To understand the power and influence of this metaphor, and to grasp its limita…"
+    },
+    {
+      "key": "scene 2 node 3",
+      "field": "text",
+      "text": "Turing computation is limited",
+      "context": "In the previous section, I noted that Turing computation is powerful but limited. Turing computations — algorithms — map one finite range of discrete numbers (more generally, a string of symbols) onto another, with only the sequence mattering. Turing algorithms are powerful, but there are many kinds of dynamics, many other kinds of functions, that go beyond this kind of computation. Turing himself…"
+    },
+    {
+      "key": "scene 2 node 4",
+      "field": "text",
+      "text": "Biological naturalism: life may be needed",
+      "context": "My third argument is that life (probably) matters. This is the idea — called biological naturalism by the philosopher John Searle— that properties of life are necessary, though not necessarily sufficient, for consciousness. I should say upfront that I don’t have a knock-down argument for this position, nor do I think any such argument yet exists. But it is worth taking seriously, if only for the s…"
+    },
+    {
+      "key": "scene 2 node 5",
+      "field": "text",
+      "text": "Simulating X ≠ creating X",
+      "context": "Finally, simulation is not instantiation. One of the most powerful capabilities of universal, Turing-based computers is that they can simulate a vast range of phenomena — even, and perhaps especially, phenomena that aren’t themselves (digitally) computational, such as continuous and random processes."
+    },
+    {
+      "key": "scene 2 node 6",
+      "field": "text",
+      "text": "No clean software/hardware split",
+      "context": "But here’s where the trouble starts. Inside a brain, there’s no sharp separation between “mindware” and “wetware” as there is between software and hardware in a computer. The more you delve into the intricacies of the biological brain, the more you realize how rich and dynamic it is, compared to the dead sand of silicon."
+    },
+    {
+      "key": "scene 2 node 7",
+      "field": "text",
+      "text": "Dynamical, analog alternatives",
+      "context": "The branch of cognitive science generally known as “dynamical systems,” as well as approaches that emphasize enactive, embodied, embedded and extended aspects of mind (so-called 4E cognitive science), all reject, in ways relating to van Gelder’s insight, the idea that mind and brain can be exhaustively accounted for algorithmically. They all explore alternatives based on the mathematics of continu…"
+    },
+    {
+      "key": "scene 2 node 8",
+      "field": "text",
+      "text": "Prediction tied to metabolism",
+      "context": "Perceptual predictions are good not only for figuring out what’s going on, but (in a call back to mid-20th century cybernetics) also for control and regulation: When you can predict something, you can also control it. This applies above all to predictions about the body’s physiological condition. This is because the primary duty of any brain is to keep its body alive, to keep physiological quantit…"
+    },
+    {
+      "key": "scene 2 node 9",
+      "field": "text",
+      "text": "Mind-uploading dreams misfire",
+      "context": "There is, therefore, something of a contradiction lurking for those who invest their dreams and their venture capital into the prospect of uploading their conscious minds into exquisitely detailed simulations of their brains, so that they can exist forever in silicon rapture. If an exquisitely detailed brain model is needed, then you are no more likely to exist in the simulation than a hailstorm i…"
+    },
+    {
+      "key": "scene 2 node 10",
+      "field": "text",
+      "text": "Functionalism looks shaky"
+    },
+    {
+      "key": "scene 2 node 10",
+      "field": "sub",
+      "text": "independent yet mutually reinforcing"
+    },
+    {
+      "key": "scene 3",
+      "field": "title",
+      "text": "What (Not) To Do"
+    },
+    {
+      "key": "scene 3",
+      "field": "caption",
+      "text": "Uncertainty splits into two live worries — real machine consciousness and merely seeming machine consciousness — which converge on the same unresolved tension over moral status."
+    },
+    {
+      "key": "scene 3 node 1",
+      "field": "text",
+      "text": "Deep uncertainty, hard choices",
+      "context": "What (Not) To Do?"
+    },
+    {
+      "key": "scene 3 node 2",
+      "field": "text",
+      "text": "Never deliberately create conscious AI",
+      "context": "“Many social and psychological factors, including some well-understood cognitive biases, predispose us to overattribute consciousness to machines.”"
+    },
+    {
+      "key": "scene 3 node 2",
+      "field": "sub",
+      "text": "new suffering, at exponential pace",
+      "context": "“Many social and psychological factors, including some well-understood cognitive biases, predispose us to overattribute consciousness to machines.”"
+    },
+    {
+      "key": "scene 3 node 3",
+      "field": "text",
+      "text": "Other tech might still get there",
+      "context": "Even if I’m right that standard digital computers aren’t up to the job, other emerging technologies might yet be, whether alternative forms of computation (analogue, neuromorphic, biological and so on) or rapidly developing methods in synthetic biology. For my money, we ought to be more worried about the accidental emergence of consciousness in cerebral organoids (brain-like structures typically g…"
+    },
+    {
+      "key": "scene 3 node 3",
+      "field": "sub",
+      "text": "worry more about cerebral organoids",
+      "context": "Even if I’m right that standard digital computers aren’t up to the job, other emerging technologies might yet be, whether alternative forms of computation (analogue, neuromorphic, biological and so on) or rapidly developing methods in synthetic biology. For my money, we ought to be more worried about the accidental emergence of consciousness in cerebral organoids (brain-like structures typically g…"
+    },
+    {
+      "key": "scene 3 node 4",
+      "field": "text",
+      "text": "Seeming-conscious AI, distinct risks",
+      "context": "But our worries don’t stop there. When it comes to the impact of AI in society, it is essential to draw a distinction between AI systems that are actually conscious and those that persuasively seem to be conscious but are, in fact, not. While there is inevitable uncertainty about the former, conscious-seeming systems are much, much closer."
+    },
+    {
+      "key": "scene 3 node 4",
+      "field": "sub",
+      "text": "already among us",
+      "context": "But our worries don’t stop there. When it comes to the impact of AI in society, it is essential to draw a distinction between AI systems that are actually conscious and those that persuasively seem to be conscious but are, in fact, not. While there is inevitable uncertainty about the former, conscious-seeming systems are much, much closer."
+    },
+    {
+      "key": "scene 3 node 5",
+      "field": "text",
+      "text": "Feels conscious even when known false",
+      "context": "One overlooked factor here is that even if we know, or believe, that an AI is not conscious, we still might be unable to resist feeling that it is. Illusions of artificial consciousness might be as impenetrable to our minds as some visual illusions. The two lines in the Müller-Lyer illusion (Figure 5) are the same length, but they will always look different. It doesn’t matter how many times you en…"
+    },
+    {
+      "key": "scene 3 node 5",
+      "field": "sub",
+      "text": "like the Müller-Lyer illusion",
+      "context": "One overlooked factor here is that even if we know, or believe, that an AI is not conscious, we still might be unable to resist feeling that it is. Illusions of artificial consciousness might be as impenetrable to our minds as some visual illusions. The two lines in the Müller-Lyer illusion (Figure 5) are the same length, but they will always look different. It doesn’t matter how many times you en…"
+    },
+    {
+      "key": "scene 3 node 6",
+      "field": "text",
+      "text": "No definitive test can settle it",
+      "context": "What’s more, because there’s no consensus over the necessary or sufficient conditions for consciousness, there aren’t any definitive tests for deciding whether an AI is actually conscious. The plot of “Ex Machina” revolves around exactly this dilemma. Riffing on the famous Turing test (which, as Turing well knew, tests for machine intelligence, not consciousness), Nathan — the creator of the robot…"
+    },
+    {
+      "key": "scene 3 node 6",
+      "field": "sub",
+      "text": "the \"Garland test\" from Ex Machina",
+      "context": "What’s more, because there’s no consensus over the necessary or sufficient conditions for consciousness, there aren’t any definitive tests for deciding whether an AI is actually conscious. The plot of “Ex Machina” revolves around exactly this dilemma. Riffing on the famous Turing test (which, as Turing well knew, tests for machine intelligence, not consciousness), Nathan — the creator of the robot…"
+    },
+    {
+      "key": "scene 3 node 7",
+      "field": "text",
+      "text": "History warns against denying moral status",
+      "context": "The importance of taking an informed ethical position despite all these uncertainties spotlights another human habit: our unfortunate track record of withholding moral status from those that deserve it, including from many non-human animals, and sometimes other humans. It is reasonable to wonder whether withholding attributions of consciousness to AI may leave us once again on the wrong side of hi…"
+    },
+    {
+      "key": "scene 3 node 8",
+      "field": "text",
+      "text": "But AI biases favor false positives",
+      "context": "The importance of taking an informed ethical position despite all these uncertainties spotlights another human habit: our unfortunate track record of withholding moral status from those that deserve it, including from many non-human animals, and sometimes other humans. It is reasonable to wonder whether withholding attributions of consciousness to AI may leave us once again on the wrong side of hi…"
+    },
+    {
+      "key": "scene 3 node 8",
+      "field": "sub",
+      "text": "not false negatives, unlike animals",
+      "context": "The importance of taking an informed ethical position despite all these uncertainties spotlights another human habit: our unfortunate track record of withholding moral status from those that deserve it, including from many non-human animals, and sometimes other humans. It is reasonable to wonder whether withholding attributions of consciousness to AI may leave us once again on the wrong side of hi…"
+    }
+  ]
+}

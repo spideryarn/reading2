@@ -68,6 +68,7 @@ import {
   type Section,
 } from "../../src/changelog.js";
 import { isMain } from "../../src/is-main.js";
+import { plainWords } from "../../src/plain-words.js";
 
 /**
  * The file the whole process exists to append to. Relative to the repo root.
@@ -1355,11 +1356,22 @@ function cmdCopyInputs(work: string): void {
     slugs: todo.map((t) => t.slug),
   });
 
+  /* **The shared plain-words rule, as the last section of the copy prompt.**
+     copy-prompt.md is handed to the copy model as a file and cannot interpolate
+     TypeScript, so the rule is written out beside the inputs and the brief
+     below names it as part of the instructions — src/plain-words.ts, and
+     docs/project/prompting-guide.md. copy-prompt.md's own rules (the
+     translation table, the length limits, the banned adjectives) are more
+     specific, and the rule itself says those win. */
+  const plainWordsFile = path.join(work, "copy-plain-words.md");
+  writeFileSync(plainWordsFile, `${plainWords("explain")}\n`);
+
   console.log(`copy calls to make: ${todo.length}   quiet versions: ${quiet.length}`);
   for (const t of todo) console.log(`  ${t.slug}  ${t.label}  ${String(t.changes).padStart(3)} changes`);
   console.log(
     `\nNext: one Opus subagent per file above, briefed from scripts/changelog/copy-brief.md, ` +
       `reading ${inDir}/<slug>.json and writing ${path.join(work, "copy-out")}/<slug>.json. ` +
+      `Tell each that ${plainWordsFile} is the last section of copy-prompt.md's instructions. ` +
       "Launch each ONCE.",
   );
 }

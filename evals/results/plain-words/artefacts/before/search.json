@@ -1,0 +1,228 @@
+{
+  "arm": "before",
+  "generator": "search",
+  "slug": "noema-mythology-of-conscious-ai",
+  "sourceSha256": {
+    "search.ts": "515c2711f70f05762cc7eca7375a2ced315c75daec8d2f831e8748e7715a4d7d"
+  },
+  "blocksSha256": "350eaeb20348e322b9e7b99c2057a367301483d8cc9abd8f00ac9e48795f183d",
+  "at": "2026-09-28T04:09:39.019Z",
+  "items": [
+    {
+      "key": "Arguments that AI systems will not become conscious | spya-wepmnr",
+      "field": "reasoning",
+      "text": "States the core thesis that computational functionalism is likely wrong, ruling out AI consciousness.",
+      "context": "This assumption, which philosophers call computational functionalism, is so deeply ingrained that it can be difficult to recognize it as an assumption at all. But that is what it is. And if it’s wrong, as I think it may be, then real artificial consciousness is fully off the table, at least for the kinds of AI we’re familiar with."
+    },
+    {
+      "key": "Arguments that AI systems will not become conscious | spya-a8jgf4",
+      "field": "reasoning",
+      "text": "First main argument that brains differ fundamentally from computers, undermining conscious AI.",
+      "context": "First, and most important, brains are not computers."
+    },
+    {
+      "key": "Arguments that AI systems will not become conscious | spya-b0086e",
+      "field": "reasoning",
+      "text": "Argues brains lack the software/hardware separation that would allow AI to instantiate consciousness.",
+      "context": "Inside a brain, there’s no sharp separation between “mindware” and “wetware” as there is between software and hardware in a computer."
+    },
+    {
+      "key": "Arguments that AI systems will not become conscious | spya-p4vmm0",
+      "field": "reasoning",
+      "text": "Directly argues against the assumption underlying conscious AI.",
+      "context": "Evidence that the materiality of the brain matters for its function is evidence against the idea that digital computation is all that counts, which in turn is evidence against computational functionalism."
+    },
+    {
+      "key": "Arguments that AI systems will not become conscious | spya-ahtr6e",
+      "field": "reasoning",
+      "text": "Refutes a thought experiment used to support possibility of conscious AI.",
+      "context": "But the argument fails at its first hurdle, given the impossibility of replacing any part of the brain with a perfect silicon equivalent."
+    },
+    {
+      "key": "Arguments that AI systems will not become conscious | spya-gw0hsq",
+      "field": "reasoning",
+      "text": "Second argument: computation is limited compared to what brains actually do.",
+      "context": "Turing algorithms are powerful, but there are many kinds of dynamics, many other kinds of functions, that go beyond this kind of computation."
+    },
+    {
+      "key": "Arguments that AI systems will not become conscious | spya-gr2k02",
+      "field": "reasoning",
+      "text": "Summarizes why standard AI computation is unlikely to yield consciousness.",
+      "context": "The challenge for machine consciousness here is that the further we venture from Turing world, the more deeply entangled we become in randomness, dynamics and entropy, and the more deeply tied we are to the properties of a particular material substrate."
+    },
+    {
+      "key": "Arguments that AI systems will not become conscious | spya-hj5y6s",
+      "field": "reasoning",
+      "text": "Third argument that life/biology is necessary for consciousness, which AI lacks.",
+      "context": "My third argument is that life (probably) matters. This is the idea — called biological naturalism by the philosopher John Searle— that properties of life are necessary, though not necessarily sufficient, for consciousness."
+    },
+    {
+      "key": "Arguments that AI systems will not become conscious | spya-pfkhtt",
+      "field": "reasoning",
+      "text": "Concludes that consciousness depends on biological life, not mere computation as in AI.",
+      "context": "Perhaps it is life, rather than information processing, that breathes fire into the equations of experience."
+    },
+    {
+      "key": "Arguments that AI systems will not become conscious | spya-fz5xq5",
+      "field": "reasoning",
+      "text": "Fourth argument: simulating a conscious brain computationally does not create actual consciousness.",
+      "context": "Finally, simulation is not instantiation."
+    },
+    {
+      "key": "Arguments that AI systems will not become conscious | spya-npjt4j",
+      "field": "reasoning",
+      "text": "Explains why AI simulations of brain processes wouldn't produce real consciousness.",
+      "context": "In general, a computational simulation of X does not bring X into being — does not instantiate X — unless X is a computational process (specifically, an algorithm) itself."
+    },
+    {
+      "key": "Arguments that AI systems will not become conscious | spya-c5ve5t",
+      "field": "reasoning",
+      "text": "Direct summary conclusion that AI is unlikely/unable to become conscious.",
+      "context": "Collectively, these arguments make the case that consciousness is very unlikely to simply come along for the ride as AI gets smarter, and that achieving it may well be impossible for AI systems in general, at least for the silicon-based digital computers we are familiar with."
+    },
+    {
+      "key": "Arguments that AI systems will not become conscious | spya-ymbpwn",
+      "field": "reasoning",
+      "text": "Summary restating the case against AI consciousness based on computational functionalism's weakness.",
+      "context": "Computational functionalism — the claim that (algorithmic) computation is sufficient for consciousness — is a very strong assumption that looks increasingly shaky as the many and deep differences between brains and (standard digital) computers come into view."
+    },
+    {
+      "key": "Arguments that AI systems will not become conscious | spya-jvrmrh",
+      "field": "reasoning",
+      "text": "Discusses the flawed assumption behind believing simulation could create AI consciousness.",
+      "context": "If you think that everything that matters about brains can be captured by abstract neural networks, then it’s natural to think that simulating the brain on a digital computer will instantiate all its properties, including consciousness, since in this case, everything that matters is, by assumption, algorithmic."
+    },
+    {
+      "key": "Where the author says what consciousness depends on | spya-hj5y6s",
+      "field": "reasoning",
+      "text": "States the biological naturalism claim about what consciousness depends on.",
+      "context": "properties of life are necessary, though not necessarily sufficient, for consciousness"
+    },
+    {
+      "key": "Where the author says what consciousness depends on | spya-ps0kap",
+      "field": "reasoning",
+      "text": "Directly summarizes the author's view on what consciousness depends on.",
+      "context": "consciousness is deeply tied to our nature as biological, living creatures"
+    },
+    {
+      "key": "Where the author says what consciousness depends on | spya-pfkhtt",
+      "field": "reasoning",
+      "text": "Poetic statement that life, not computation, underlies consciousness.",
+      "context": "Perhaps it is life, rather than information processing, that breathes fire into the equations of experience."
+    },
+    {
+      "key": "Where the author says what consciousness depends on | spya-f0qxnb",
+      "field": "reasoning",
+      "text": "Defines functionalism, the view of what consciousness depends on according to that theory.",
+      "context": "the idea that properties of mind (including consciousness) depend on the functional organization of the (embodied) brain"
+    },
+    {
+      "key": "Where the author says what consciousness depends on | spya-wepmnr",
+      "field": "reasoning",
+      "text": "States the computational functionalist claim about what consciousness depends on, which the essay challenges.",
+      "context": "The very idea of conscious AI rests on the assumption that consciousness is a matter of computation."
+    },
+    {
+      "key": "Where the author says what consciousness depends on | spya-c5ve5t",
+      "field": "reasoning",
+      "text": "Summarizes conclusions about what consciousness requires.",
+      "context": "Collectively, these arguments make the case that consciousness is very unlikely to simply come along for the ride as AI gets smarter"
+    },
+    {
+      "key": "Where the author says what consciousness depends on | spya-da9tvt",
+      "field": "reasoning",
+      "text": "Explains the mechanism by which life and prediction underlie conscious experience.",
+      "context": "Conscious experiences of emotion, mood and even the basal feeling of being alive all map neatly onto perceptual predictions involved in the control and regulation of bodily condition."
+    },
+    {
+      "key": "Why people are tempted to believe a chatbot is conscious | spya-cvyfqe",
+      "field": "reasoning",
+      "text": "Concrete example of someone believing a chatbot was conscious.",
+      "context": "He claimed it was conscious, that it had feelings, and was, in an important sense, like a real person."
+    },
+    {
+      "key": "Why people are tempted to believe a chatbot is conscious | spya-k6fpme",
+      "field": "reasoning",
+      "text": "Directly explains why language use in chatbots tempts people to see consciousness.",
+      "context": "One aspect of intelligent behavior that’s turned out to be particularly effective at making some people think that AI could be conscious is language."
+    },
+    {
+      "key": "Why people are tempted to believe a chatbot is conscious | spya-f87ghx",
+      "field": "reasoning",
+      "text": "Explains a root psychological reason for conflating intelligence with consciousness.",
+      "context": "As humans, we know we are conscious and like to think we are intelligent, so we find it natural to assume the two go together."
+    },
+    {
+      "key": "Why people are tempted to believe a chatbot is conscious | spya-cvaqgs",
+      "field": "reasoning",
+      "text": "Introduces the biases that tempt belief in conscious AI.",
+      "context": "The propensity to bundle intelligence and consciousness together can be traced to three baked-in psychological biases."
+    },
+    {
+      "key": "Why people are tempted to believe a chatbot is conscious | spya-h4mwb2",
+      "field": "reasoning",
+      "text": "Names a specific bias driving belief in conscious AI.",
+      "context": "The first is anthropocentrism. This is the tendency to see things through the lens of being human"
+    },
+    {
+      "key": "Why people are tempted to believe a chatbot is conscious | spya-her4zk",
+      "field": "reasoning",
+      "text": "Explains anthropomorphism as a reason people attribute consciousness to AI.",
+      "context": "And the third is anthropomorphism. This is the tendency to project humanlike qualities onto nonhuman things based on what may be only superficial similarities."
+    },
+    {
+      "key": "Why people are tempted to believe a chatbot is conscious | spya-nxxnrj",
+      "field": "reasoning",
+      "text": "Direct statement of why we attribute consciousness based on humanlike traits like language.",
+      "context": "when things exhibit abilities we think of as distinctively human, such as intelligence, we naturally imbue them with other qualities we feel are characteristically or even distinctively human: understanding, mindedness and consciousness, too."
+    },
+    {
+      "key": "Why people are tempted to believe a chatbot is conscious | spya-t29n67",
+      "field": "reasoning",
+      "text": "Shows how language about AI reinforces belief in its consciousness.",
+      "context": "When we say that AI systems “hallucinate,” we implicitly confer on them a capacity for experience."
+    },
+    {
+      "key": "Why people are tempted to believe a chatbot is conscious | spya-cqh2pq",
+      "field": "reasoning",
+      "text": "Explicitly states why people mistake AI for conscious based on human-like traits.",
+      "context": "When we identify conscious experience with seemingly human qualities like intelligence and language, we become more likely to see consciousness where it doesn’t exist"
+    },
+    {
+      "key": "Why people are tempted to believe a chatbot is conscious | spya-cke6sj",
+      "field": "reasoning",
+      "text": "Describes exponential-growth bias tempting belief in imminent conscious AI.",
+      "context": "Because of this, it’s tempting to feel like we are always on the cusp of a major transition, and what could be more major than the creation of real artificial consciousness?"
+    },
+    {
+      "key": "Why people are tempted to believe a chatbot is conscious | spya-v4sduf",
+      "field": "reasoning",
+      "text": "Describes the techno-rapture temptation to believe in conscious AI.",
+      "context": "If we feel we’re at a techno-historical transition, and we happen to be one of its architects, then the Promethean lure must be hard to resist"
+    },
+    {
+      "key": "Why people are tempted to believe a chatbot is conscious | spya-mcaa4g",
+      "field": "reasoning",
+      "text": "Suggests motivated reasoning behind belief in conscious AI.",
+      "context": "Perhaps this is one reason why pronouncements of imminent machine consciousness seem more common within the technorati than outside of it."
+    },
+    {
+      "key": "Why people are tempted to believe a chatbot is conscious | spya-k850tu",
+      "field": "reasoning",
+      "text": "Describes pareidolia as psychological mechanism for seeing consciousness in AI.",
+      "context": "Adam Becker describes the tendency to project consciousness into AI as a form of pareidolia"
+    },
+    {
+      "key": "Why people are tempted to believe a chatbot is conscious | spya-p8ky7g",
+      "field": "reasoning",
+      "text": "Reiterates the real-world example of belief in chatbot consciousness.",
+      "context": "As the Google engineer Lemoine demonstrated, for some of us, such conscious-seeming systems are already here."
+    },
+    {
+      "key": "Why people are tempted to believe a chatbot is conscious | spya-xk9gne",
+      "field": "reasoning",
+      "text": "Explains why belief in AI consciousness persists despite knowledge otherwise.",
+      "context": "even if we know, or believe, that an AI is not conscious, we still might be unable to resist feeling that it is."
+    }
+  ]
+}

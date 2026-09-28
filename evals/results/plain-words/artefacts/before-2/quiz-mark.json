@@ -1,0 +1,31 @@
+{
+  "arm": "before-2",
+  "generator": "quiz-mark",
+  "slug": "noema-mythology-of-conscious-ai",
+  "sourceSha256": {
+    "quiz-mark.ts": "e4f246ad3d2e229b1c042e3f064da26a69df0c3dd6f37096be768c6496ef3d68",
+    "plain-words.ts": "6c5f318e82acbbd4c6b1955e83fa3f558322a3082b96e74dcd667528cd37ad02"
+  },
+  "blocksSha256": "350eaeb20348e322b9e7b99c2057a367301483d8cc9abd8f00ac9e48795f183d",
+  "at": "2026-09-28T04:31:07.255Z",
+  "items": [
+    {
+      "key": "computational-functionalism",
+      "field": "reply",
+      "text": "The article defines computational functionalism more precisely: it's the claim that implementing the right kind of computation is *sufficient* for consciousness to arise [spya-wepmnr]. The reader's phrasing about \"the right software\" running \"on any hardware\" captures the substrate-independence angle, but leaves out the \"sufficient for consciousness\" part, which is the load-bearing piece — that's the assumption Seth spends the whole essay attacking.\n\nThe second half of the question, why it matters for the essay, is the part missing. Seth says this assumption is \"so deeply ingrained that it can be difficult to recognize it as an assumption at all,\" and that his entire case rests on challenging it: \"if it's wrong, as I think it may be, then real artificial consciousness is fully off the table, at least for the kinds of AI we're familiar with\" [spya-wepmnr]. His four arguments (brains aren't computers, other non-computational dynamics matter, life may matter, simulation isn't instantiation) are all aimed at undermining this one assumption, and he later summarizes that \"computational functionalism... is a very strong assumption that looks increasingly shaky\" [spya-ymbpwn]. So it's worth naming computational functionalism as the load-bearing premise the whole essay is built to knock down, not just a background idea about brains as computers.",
+      "context": "Q: What is 'computational functionalism' and why does it matter for the whole essay?\nReader's answer: It's the idea that the mind is basically what the brain computes, so the right software could be conscious on any hardware."
+    },
+    {
+      "key": "neural-replacement",
+      "field": "reply",
+      "text": "The article gives a different reason. Seth's objection isn't epistemic (we can't verify whether the person still feels the same) — it's that the thought experiment assumes something physically impossible. The neural replacement argument imagines swapping brain parts for silicon equivalents that function identically, but Seth argues this can't be done: some neurons fire spikes to clear metabolic waste, and a true silicon replacement would require \"inventing a whole new silicon-based metabolism, too, which just isn't the kind of thing silicon is suitable for\" [spya-un9fjn]. He concludes plainly that \"the argument fails at its first hurdle, given the impossibility of replacing any part of the brain with a perfect silicon equivalent\" [spya-ahtr6e].\n\nSo the failure point is that the premise (a perfect silicon substitute) can't be satisfied in the first place, not that we couldn't judge the outcome afterward. Worth rereading the \"Brains Are Not Computers\" section, particularly the passage on autopoiesis and metabolic waste-clearing neurons, since that's where the actual mechanism of the objection sits.",
+      "context": "Q: Why does Seth think the popular 'neural replacement' thought experiment fails to prove consciousness is substrate-independent?\nReader's answer: Because nobody could ever tell whether the person still felt the same after their neurons were swapped — you'd have to take their word for it."
+    },
+    {
+      "key": "simulation-instantiation",
+      "field": "reply",
+      "text": "The rainstorm example is exactly the article's own: \"A simulation of a rainstorm does not make anything actually wet\" [spya-npjt4j]. But the article stops short of the conclusion \"can never be conscious\" — it's conditional, not absolute. Seth says a simulation of X only fails to instantiate X *unless X is itself a computational process, and consciousness is a matter of computation* [spya-npjt4j]. He goes on to say a simulated brain would only give rise to consciousness \"if consciousness is a matter of computation\" [spya-pbcr03] — so simulation-not-instantiation is a conditional argument (hinging on whether computational functionalism is true), not a flat denial that simulated brains can be conscious. Elsewhere he's explicit that this leaves the door open: \"nothing in what I've said rules out the possibility of artificial consciousness altogether\" [spya-rn8y3y].",
+      "context": "Q: What does Seth mean when he says 'simulation is not instantiation'?\nReader's answer: A simulation of a storm doesn't make anything wet, so a simulated brain can never be conscious."
+    }
+  ]
+}

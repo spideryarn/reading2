@@ -1,0 +1,133 @@
+{
+  "arm": "before",
+  "generator": "quiz",
+  "slug": "noema-mythology-of-conscious-ai",
+  "sourceSha256": {
+    "quiz.ts": "9efddeb621b8b59f282f3dc2628ac9a1fe5556cf6838b975e453350eb7967948",
+    "plain-words.ts": "6c5f318e82acbbd4c6b1955e83fa3f558322a3082b96e74dcd667528cd37ad02"
+  },
+  "blocksSha256": "350eaeb20348e322b9e7b99c2057a367301483d8cc9abd8f00ac9e48795f183d",
+  "at": "2026-09-28T04:17:48.651Z",
+  "items": [
+    {
+      "key": "#01",
+      "field": "question",
+      "text": "What distinction does Seth draw between intelligence and consciousness?"
+    },
+    {
+      "key": "#01",
+      "field": "referenceAnswer",
+      "text": "Intelligence is about doing — achieving complex goals by flexible means — while consciousness is about being, or 'what it is like' to have an experience (per Nagel). Seth argues the two are separate properties that happen to go together in humans but need not go together in general."
+    },
+    {
+      "key": "#02",
+      "field": "question",
+      "text": "What is computational functionalism, as Seth defines it?"
+    },
+    {
+      "key": "#02",
+      "field": "referenceAnswer",
+      "text": "It's the assumption that implementing the right kind of computation or information processing is sufficient for consciousness to arise, regardless of the physical substrate. Seth says this assumption underlies the whole idea of conscious AI but is rarely questioned."
+    },
+    {
+      "key": "#03",
+      "field": "question",
+      "text": "Why does Seth say a computer simulation of the brain wouldn't necessarily create consciousness?"
+    },
+    {
+      "key": "#03",
+      "field": "referenceAnswer",
+      "text": "Because simulations generally lack the causal powers of the things they simulate — a simulated rainstorm doesn't make anything wet. A brain simulation would only produce consciousness if computational functionalism is true, which Seth argues is a shaky, unproven assumption rather than a given."
+    },
+    {
+      "key": "#04",
+      "field": "question",
+      "text": "In the essay's closing discussion of the 'soul,' what does Seth suggest actually makes us who we are, as opposed to the Cartesian dream of mind-uploading?"
+    },
+    {
+      "key": "#04",
+      "field": "referenceAnswer",
+      "text": "He suggests our innermost essence isn't a disembodied, rational soul that could be uploaded, but an inchoate feeling of simply being alive — something rooted in breath and embodiment, 'more breath than thought and more meat than machine.'"
+    },
+    {
+      "key": "#05",
+      "field": "question",
+      "text": "Why does Seth object to describing AI errors as 'hallucinations' and suggest 'confabulations' instead?"
+    },
+    {
+      "key": "#05",
+      "field": "referenceAnswer",
+      "text": "Because hallucination in humans implies a conscious experience that has lost its grip on reality, so calling AI errors hallucinations implicitly attributes experience to the system. Confabulation, by contrast, is about making things up without realizing it — a matter of doing, not experiencing."
+    },
+    {
+      "key": "#06",
+      "field": "question",
+      "text": "Why does Seth argue that brains cannot be cleanly separated into 'hardware' and 'software' the way computers can?"
+    },
+    {
+      "key": "#06",
+      "field": "referenceAnswer",
+      "text": "Because brain activity is deeply interwoven across scales, from cortical territories down to neurotransmitters and metabolism, with no sharp boundary between what neurons do and what they are — unlike the human-imposed division between algorithm and machine in computers. He notes evolution had no pressure to create such a clean separation, since it's energetically costly."
+    },
+    {
+      "key": "#07",
+      "field": "question",
+      "text": "Given all the uncertainty about whether AI could be conscious, what does Seth say we should nonetheless avoid doing?"
+    },
+    {
+      "key": "#07",
+      "field": "referenceAnswer",
+      "text": "He says nobody should deliberately set out to create conscious AI, since doing so would risk introducing new moral subjects and new forms of suffering into the world, and could also force us to grant them rights that would limit our ability to control or shut them down."
+    },
+    {
+      "key": "#08",
+      "field": "question",
+      "text": "What are the three psychological biases Seth says lead people to bundle intelligence and consciousness together?"
+    },
+    {
+      "key": "#08",
+      "field": "referenceAnswer",
+      "text": "Anthropocentrism (seeing things through a human lens as definitional), human exceptionalism (placing humans at the top of every hierarchy), and anthropomorphism (projecting humanlike qualities onto nonhuman things based on superficial similarities)."
+    },
+    {
+      "key": "#09",
+      "field": "question",
+      "text": "What point does the example of the steam engine governor illustrate about computation?"
+    },
+    {
+      "key": "#09",
+      "field": "referenceAnswer",
+      "text": "It shows that some systems regulate themselves through simple mechanics and physics without doing anything usefully described as computation at all — building a 'computational governor' that senses, calculates and sends signals would be inefficient and would misunderstand what's actually happening."
+    },
+    {
+      "key": "#10",
+      "field": "question",
+      "text": "Why does Seth think life itself might be necessary for consciousness?"
+    },
+    {
+      "key": "#10",
+      "field": "referenceAnswer",
+      "text": "He links predictive processing theories of perception — where conscious experience arises from the brain's best guesses used to regulate the body — to the fact that this prediction-error minimization reaches into the metabolic, self-producing (autopoietic) nature of living cells. This suggests consciousness may be inseparable from the materiality of biological life rather than being a purely computational process."
+    },
+    {
+      "key": "#11",
+      "field": "question",
+      "text": "Why does Seth say the 'neural replacement' thought experiment (replacing brain parts with functionally identical silicon equivalents) fails to prove consciousness is substrate-independent?"
+    },
+    {
+      "key": "#11",
+      "field": "referenceAnswer",
+      "text": "Because it's impossible in practice to create a perfect silicon replacement for a biological neuron, since neurons do things like clear metabolic waste that would require inventing an entirely new silicon-based metabolism. So the thought experiment fails at its very first step."
+    },
+    {
+      "key": "#12",
+      "field": "question",
+      "text": "Why does Seth argue that conscious-seeming AI poses different ethical problems from actually conscious AI?"
+    },
+    {
+      "key": "#12",
+      "field": "referenceAnswer",
+      "text": "Because with merely conscious-seeming systems we risk two opposite errors: granting them unnecessary rights that hamper our control over them, or dismissing real-seeming distress and 'brutalizing our minds' by treating something that feels conscious to us as if it has no inner life. He notes these illusions of consciousness may be as hard to shake as a visual illusion, regardless of what we intellectually believe."
+    }
+  ]
+}

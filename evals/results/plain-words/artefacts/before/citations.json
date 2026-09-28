@@ -1,0 +1,162 @@
+{
+  "arm": "before",
+  "generator": "citations",
+  "slug": "noema-mythology-of-conscious-ai",
+  "sourceSha256": {
+    "citations.ts": "fcccf8b580d35c1e525fc31ac03c614b5ba48565e27c1fb6ccce0e24e70e4612"
+  },
+  "blocksSha256": "350eaeb20348e322b9e7b99c2057a367301483d8cc9abd8f00ac9e48795f183d",
+  "at": "2026-09-28T04:09:33.342Z",
+  "items": [
+    {
+      "key": "being you: a new science of consciousness",
+      "field": "why",
+      "text": "Seth's own book laying out his biological naturalist account of consciousness, referenced for more detail on why life might matter",
+      "context": "Being You: A New Science of Consciousness"
+    },
+    {
+      "key": "ex machina",
+      "field": "why",
+      "text": "Film used repeatedly as illustration of the techno-rapture temptation and the 'Garland test' for perceived machine consciousness",
+      "context": "Ex Machina"
+    },
+    {
+      "key": "klara and the sun",
+      "field": "why",
+      "text": "Listed among cultural depictions of synthetic minds that inform the mythology of conscious AI",
+      "context": "Klara and the Sun"
+    },
+    {
+      "key": "2001: a space odyssey",
+      "field": "why",
+      "text": "Cited as one of the cultural touchstones for synthetic consciousness stories that rarely end well",
+      "context": "2001: A Space Odyssey"
+    },
+    {
+      "key": "frankenstein",
+      "field": "why",
+      "text": "Cited as a foundational cultural narrative about creating synthetic minds that end badly",
+      "context": "Frankenstein"
+    },
+    {
+      "key": "interview claiming lamda is conscious",
+      "field": "why",
+      "text": "Google engineer's claim that the LaMDA chatbot was conscious, cited as the opening example of overattributing consciousness to AI",
+      "context": "Interview claiming LaMDA is conscious"
+    },
+    {
+      "key": "the neural replacement thought experiment",
+      "field": "why",
+      "text": "Thought experiment used to argue consciousness is substrate independent, which Seth argues fails at its first hurdle",
+      "context": "The neural replacement thought experiment"
+    },
+    {
+      "key": "article on the need to take ai welfare seriously",
+      "field": "why",
+      "text": "Cited as evidence machine consciousness questions are gaining serious institutional attention",
+      "context": "Article on the need to take AI welfare seriously"
+    },
+    {
+      "key": "interview claiming conscious ai already exists",
+      "field": "why",
+      "text": "Nobel laureate's claim that conscious machines already exist, used as an example of the view Seth argues against",
+      "context": "Interview claiming conscious AI already exists"
+    },
+    {
+      "key": "what is it like to be a bat?",
+      "field": "why",
+      "text": "Provides the canonical definition of consciousness as there being something it is like to be an organism",
+      "context": "What Is It Like to Be a Bat?"
+    },
+    {
+      "key": "more everything forever",
+      "field": "why",
+      "text": "Describes the tendency to project consciousness into AI as a form of pareidolia, a framing Seth adopts",
+      "context": "More Everything Forever"
+    },
+    {
+      "key": "computing machinery and intelligence",
+      "field": "why",
+      "text": "Seeded the idea that machines might be intelligent and introduced the Turing test, contrasted with tests for consciousness",
+      "context": "Computing Machinery and Intelligence"
+    },
+    {
+      "key": "a logical calculus of the ideas immanent in nervous activity",
+      "field": "why",
+      "text": "Landmark paper showing networks of simplified abstract neurons can perform logical operations, foundation of neural network computation",
+      "context": "A Logical Calculus of the Ideas Immanent in Nervous Activity"
+    },
+    {
+      "key": "work on turing completeness of neural networks",
+      "field": "why",
+      "text": "Demonstrated that McCulloch-Pitts neural networks with tape-like memory are Turing complete",
+      "context": "Work on Turing completeness of neural networks"
+    },
+    {
+      "key": "neural firing associated with waste clearance research",
+      "field": "why",
+      "text": "Found some neurons fire spikes apparently to clear metabolic waste, showing neurons can't be swapped for silicon equivalents",
+      "context": "Neural firing associated with waste clearance research"
+    },
+    {
+      "key": "mortal computation concept",
+      "field": "why",
+      "text": "Introduced the concept of mortal computation tying algorithms inseparably to their material substrate",
+      "context": "Mortal computation concept"
+    },
+    {
+      "key": "what might cognition be, if not computation?",
+      "field": "why",
+      "text": "Gave the Watt governor example showing some systems act without being usefully described as computational",
+      "context": "What Might Cognition Be, If Not Computation?"
+    },
+    {
+      "key": "biological naturalism (theory of consciousness)",
+      "field": "why",
+      "text": "The philosophical position that properties of life are necessary for consciousness, which Seth builds on",
+      "context": "Biological naturalism (theory of consciousness)"
+    },
+    {
+      "key": "recent research paper on life and consciousness",
+      "field": "why",
+      "text": "Cited as further, more technical support for the idea that life matters for consciousness",
+      "context": "Recent research paper on life and consciousness"
+    },
+    {
+      "key": "are we living in a computer simulation?",
+      "field": "why",
+      "text": "Source of the simulation hypothesis, critiqued for assuming without argument that a running program would be conscious",
+      "context": "Are We Living in a Computer Simulation?"
+    },
+    {
+      "key": "lectures on ethics",
+      "field": "why",
+      "text": "Argued that treating conscious-seeming things as lacking consciousness is psychologically unhealthy",
+      "context": "Lectures on Ethics"
+    },
+    {
+      "key": "comments on the dangers of conscious-seeming ai",
+      "field": "why",
+      "text": "Microsoft AI CEO cited as noticing dangers of conscious-seeming AI",
+      "context": "Comments on the dangers of conscious-seeming AI"
+    },
+    {
+      "key": "comments on the dangers of conscious-seeming ai",
+      "field": "why",
+      "text": "AI researcher cited as noticing dangers of conscious-seeming AI",
+      "context": "Comments on the dangers of conscious-seeming AI"
+    },
+    {
+      "key": "ai as a mirror metaphor",
+      "field": "why",
+      "text": "Philosopher's description of AI as a mirror reflecting our digitized past, used to frame the essay's closing argument",
+      "context": "AI as a mirror metaphor"
+    },
+    {
+      "key": "quote on technology making us forget what we know about life",
+      "field": "why",
+      "text": "Sociologist's remark used to close the essay's argument about remembering what life is",
+      "context": "Quote on technology making us forget what we know about life"
+    }
+  ]
+}

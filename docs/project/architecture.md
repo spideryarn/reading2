@@ -390,6 +390,8 @@ every id permanently, and orphans every note, highlight and gist that pointed at
   file, which will be something outside the store.
 - What the model calls cost, and the three prompt caches that stop us paying for the article twice,
   are in [prompt-caching.md](prompt-caching.md).
+- **Every prompt that writes words for a reader** takes the one shared plain-words rule:
+  [prompting-guide.md](prompting-guide.md).
 - **Where the calls actually go** is [ai-gateway.md](ai-gateway.md): every paid call goes through
   OpenRouter, why the seven pipeline stages kept Anthropic's Messages protocol instead of being
   translated into OpenAI's shape, and the four things on that path that fail without saying so.

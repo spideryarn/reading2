@@ -1,0 +1,37 @@
+{
+  "arm": "before",
+  "generator": "arc",
+  "slug": "noema-mythology-of-conscious-ai",
+  "sourceSha256": {
+    "arc.ts": "090413e89064850568a022ba07b1e58cd18d0ca626ee2d8ebebc0eb43f27521c"
+  },
+  "blocksSha256": "350eaeb20348e322b9e7b99c2057a367301483d8cc9abd8f00ac9e48795f183d",
+  "at": "2026-09-28T04:09:00.165Z",
+  "items": [
+    {
+      "key": "#01",
+      "field": "text",
+      "text": "Whether machines could ever truly feel is still wide open, and everything about their moral status and our own self-understanding hangs on the answer."
+    },
+    {
+      "key": "#02",
+      "field": "text",
+      "text": "Before any structural case can be made, the pull toward seeing minds in machines has to be named as bias rather than evidence."
+    },
+    {
+      "key": "#03",
+      "field": "text",
+      "text": "With the psychological seduction diagnosed, the harder work of testing computational functionalism itself replaces mere suspicion with argument."
+    },
+    {
+      "key": "#04",
+      "field": "text",
+      "text": "Having made real machine consciousness look unlikely but not impossible, the question shifts from what AI is to how we should act under that remaining uncertainty."
+    },
+    {
+      "key": "#05",
+      "field": "text",
+      "text": "Settled: intelligence and consciousness come apart, and computation alone probably cannot manufacture the latter; left open: what, short of mimicking us, would actually count as a soul in silicon."
+    }
+  ]
+}

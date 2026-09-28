@@ -23,6 +23,26 @@ past their 25-word limit more often.
 stage is re-run). Every owner's existing glossary shows a *written by a different version* banner
 with *Find them again*.
 
-**Left for Greg:** the same change for chat, Explain and the glossary's *Check the web* answer, which
-share the older wording; and whether a depth-1 line of 28 plain words is better than one of 24 dense
-ones.
+**Greg answered both open questions on 2026-09-28**, and widened the first:
+
+> 4a Yes, we want to make this plainer/simpler language rule common across *all* prompts that
+> generate text of any kind. And ideally also in a way that it will apply to all future prompts
+
+- **Depth-1 summary lines may run to 30 words** (he said plain beats short). The median stayed at
+  24; a blind read of the new prompt against the original found it plainer in 67 of 87 pairs.
+- **Every prompt that writes words for a reader now shares one plain-words rule**, `plainWords()` in
+  `src/plain-words.ts`: plain words where the text explains or asks, the author's own term in labels
+  and headings, copies untouched, and a reader's stated background respected. A test makes it the
+  default for new prompts, and
+  [prompting-guide.md](../project/prompting-guide.md) is where it is written down, signposted from
+  AGENTS.md. **Not yet measured**: the OpenRouter key ran out of credit before the after-change
+  runs, so the rule's effect on the other modes is expected rather than shown. The plan names the
+  commands to run once credit is back.
+
+**Reaches, since 2026-09-28:** new trees and new glossaries, as before; every owner's existing
+ideas, quotes, timeline, quiz, FAQ, debate and citations show their *outdated* banner with a
+regenerate button. Arc, sketch and illustrated store the flag and do not show it, so their old
+versions stay until regenerated. Chat, Explain, search and the rest use the new rule from the next
+request.
+
+**Left for Greg:** nothing from this report. The plan's § Deferred has what was left on purpose.

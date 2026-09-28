@@ -120,6 +120,7 @@ import {
 } from "./referee-claims.js";
 import { parseHits } from "./search.js";
 import { hitExtractor } from "./search-hits-stream.js";
+import { plainWords } from "./plain-words.js";
 import type { Block, Meta } from "./types.js";
 
 /** The job this bills under. Not `referee-criteria`'s — src/models.ts § `referee-claims`. */
@@ -261,6 +262,8 @@ THE RULES THAT MATTER
 - Only claims the paper makes about ITS OWN work and findings. Not background,
   not what other people have shown, not what future work might show.
 - At most ${MAX_CLAIMS} claims, and at most ${MAX_PASSAGES} passages under each.
+
+${plainWords("explain", "landmark")}
 
 WHAT TO RETURN
 

@@ -78,6 +78,7 @@ import {
 } from "./openrouter-stream.js";
 import { ProviderRefused, classifyEnd, openRouterStream } from "./ai-call.js";
 import { hitExtractor } from "./search-hits-stream.js";
+import { plainWords } from "./plain-words.js";
 import { objectEnd, stripFence } from "./parse-json.js";
 import {
   ANSWER_OVERFLOWED,
@@ -187,7 +188,9 @@ WHAT COUNTS AS A MATCH
 Meaning, not words. "Arguments against the main claim" should find the paragraph
 that objects without ever using the word "argument". "Statistical evidence"
 should find the sentence with the numbers in it. If the reader wanted a literal
-string they would have searched for one.`;
+string they would have searched for one.
+
+${plainWords("explain")}`;
 
 export interface SearchRequest {
   meta: Meta;

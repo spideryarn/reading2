@@ -87,6 +87,7 @@ import {
 } from "./article-prompt.js";
 import type { Block, Meta, QuizEvidence, QuizVerdict } from "./types.js";
 import { classifyVerdict } from "./quiz-verdict.js";
+import { plainWords } from "./plain-words.js";
 
 /**
  * What this call sends: whichever tier src/models.ts puts `quiz-mark` on, or
@@ -300,9 +301,7 @@ FORMAT
 Plain prose paragraphs separated by blank lines. No lists, no headings, no
 preamble.
 
-Plain words too: the article's own for the things it names — those are the words
-the reader will meet again on the page — and ordinary words for everything else.
-Plainer than the article, never further from it.
+${plainWords("explain")}
 
 BEFORE YOU SEND IT, TWO CHECKS
 

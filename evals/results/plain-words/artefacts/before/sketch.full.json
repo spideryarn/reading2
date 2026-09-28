@@ -1,0 +1,775 @@
+{
+  "version": "sketch/2",
+  "title": "Funnel, Converge, Loop",
+  "caption": "The essay funnels from cultural fantasy about thinking machines into two converging arguments — first why we're psychologically fooled, then why digital computation likely can't produce consciousness — before fanning out into practical ethics and looping back to its opening worry that we may be underestimating ourselves.",
+  "scenes": [
+    {
+      "id": "overview",
+      "title": "Overview",
+      "height": 1200,
+      "items": [
+        {
+          "kind": "node",
+          "id": "n1",
+          "shape": "ellipse",
+          "x": 240,
+          "y": 40,
+          "w": 280,
+          "h": 70,
+          "text": "Cultural fantasy of conscious machines",
+          "size": "sm",
+          "detail": "From the Golem to Blake Lemoine, the dream keeps resurfacing.",
+          "tone": 0,
+          "block": "spya-u6w37a"
+        },
+        {
+          "kind": "node",
+          "id": "n2",
+          "shape": "box",
+          "x": 210,
+          "y": 140,
+          "w": 340,
+          "h": 70,
+          "text": "Why it matters: rights, suffering, self-understanding",
+          "size": "sm",
+          "tone": 0,
+          "block": "spya-e68t9h"
+        },
+        {
+          "kind": "region",
+          "x": 24,
+          "y": 240,
+          "w": 712,
+          "h": 260,
+          "style": "band",
+          "label": "TEMPTATIONS: WHY WE'RE FOOLED",
+          "opens": "inside-temptations",
+          "tone": 1
+        },
+        {
+          "kind": "node",
+          "id": "n3",
+          "shape": "box",
+          "x": 60,
+          "y": 300,
+          "w": 220,
+          "h": 70,
+          "text": "Biases blur intelligence & consciousness",
+          "size": "sm",
+          "tone": 1,
+          "block": "spya-cvaqgs"
+        },
+        {
+          "kind": "node",
+          "id": "n4",
+          "shape": "box",
+          "x": 480,
+          "y": 300,
+          "w": 220,
+          "h": 70,
+          "text": "Language & hype inflate belief",
+          "size": "sm",
+          "tone": 1,
+          "block": "spya-k6fpme"
+        },
+        {
+          "kind": "node",
+          "id": "n5",
+          "shape": "hex",
+          "x": 230,
+          "y": 410,
+          "w": 300,
+          "h": 70,
+          "text": "Pareidolia: seeing minds that aren't there",
+          "size": "sm",
+          "tone": 1,
+          "block": "spya-k850tu"
+        },
+        {
+          "kind": "region",
+          "x": 24,
+          "y": 520,
+          "w": 712,
+          "h": 280,
+          "style": "band",
+          "label": "FOUR ARGUMENTS AGAINST COMPUTATION",
+          "opens": "inside-computation",
+          "tone": 2
+        },
+        {
+          "kind": "node",
+          "id": "n6a",
+          "shape": "box",
+          "x": 40,
+          "y": 560,
+          "w": 150,
+          "h": 80,
+          "text": "Brains aren't computers",
+          "size": "xs",
+          "tone": 2,
+          "block": "spya-sk4su6"
+        },
+        {
+          "kind": "node",
+          "id": "n6b",
+          "shape": "box",
+          "x": 215,
+          "y": 560,
+          "w": 150,
+          "h": 80,
+          "text": "Non-algorithmic dynamics matter",
+          "size": "xs",
+          "tone": 2,
+          "block": "spya-affgsh"
+        },
+        {
+          "kind": "node",
+          "id": "n6c",
+          "shape": "box",
+          "x": 390,
+          "y": 560,
+          "w": 150,
+          "h": 80,
+          "text": "Life may be necessary",
+          "size": "xs",
+          "tone": 2,
+          "block": "spya-e7jqx4"
+        },
+        {
+          "kind": "node",
+          "id": "n6d",
+          "shape": "box",
+          "x": 565,
+          "y": 560,
+          "w": 150,
+          "h": 80,
+          "text": "Simulation ≠ instantiation",
+          "size": "xs",
+          "tone": 2,
+          "block": "spya-cqh5wq"
+        },
+        {
+          "kind": "node",
+          "id": "n7",
+          "shape": "box",
+          "x": 230,
+          "y": 680,
+          "w": 300,
+          "h": 80,
+          "text": "Computational functionalism looks shaky",
+          "size": "md",
+          "detail": "Weakened, not disproven — real artificial consciousness isn't ruled out.",
+          "tone": 2,
+          "block": "spya-uzr60x"
+        },
+        {
+          "kind": "region",
+          "x": 24,
+          "y": 840,
+          "w": 712,
+          "h": 220,
+          "style": "band",
+          "label": "WHAT (NOT) TO DO",
+          "tone": 3
+        },
+        {
+          "kind": "node",
+          "id": "n8a",
+          "shape": "box",
+          "x": 100,
+          "y": 890,
+          "w": 260,
+          "h": 80,
+          "text": "Don't deliberately create conscious AI",
+          "size": "sm",
+          "tone": 3,
+          "block": "spya-e7fdmb"
+        },
+        {
+          "kind": "node",
+          "id": "n8b",
+          "shape": "box",
+          "x": 400,
+          "y": 890,
+          "w": 260,
+          "h": 80,
+          "text": "Conscious-seeming AI poses its own risks",
+          "size": "sm",
+          "tone": 3,
+          "block": "spya-vs0vpj"
+        },
+        {
+          "kind": "node",
+          "id": "n9",
+          "shape": "ellipse",
+          "x": 230,
+          "y": 1080,
+          "w": 300,
+          "h": 80,
+          "text": "Recover an embodied soul: meat, not machine",
+          "size": "md",
+          "tone": 4,
+          "block": "spya-zv36xq"
+        },
+        {
+          "kind": "edge",
+          "from": "n2",
+          "to": "n3",
+          "via": "curve",
+          "line": "solid",
+          "arrow": "end"
+        },
+        {
+          "kind": "edge",
+          "from": "n2",
+          "to": "n4",
+          "via": "curve",
+          "line": "solid",
+          "arrow": "end"
+        },
+        {
+          "kind": "edge",
+          "from": "n3",
+          "to": "n5",
+          "via": "curve",
+          "line": "solid",
+          "arrow": "end"
+        },
+        {
+          "kind": "edge",
+          "from": "n4",
+          "to": "n5",
+          "via": "curve",
+          "line": "solid",
+          "arrow": "end"
+        },
+        {
+          "kind": "edge",
+          "from": "n5",
+          "to": "n6a",
+          "via": "curve",
+          "line": "solid",
+          "arrow": "end"
+        },
+        {
+          "kind": "edge",
+          "from": "n5",
+          "to": "n6b",
+          "via": "curve",
+          "line": "solid",
+          "arrow": "end"
+        },
+        {
+          "kind": "edge",
+          "from": "n5",
+          "to": "n6c",
+          "via": "curve",
+          "line": "solid",
+          "arrow": "end"
+        },
+        {
+          "kind": "edge",
+          "from": "n5",
+          "to": "n6d",
+          "via": "curve",
+          "line": "solid",
+          "arrow": "end"
+        },
+        {
+          "kind": "edge",
+          "from": "n6a",
+          "to": "n7",
+          "via": "curve",
+          "line": "solid",
+          "arrow": "end"
+        },
+        {
+          "kind": "edge",
+          "from": "n6b",
+          "to": "n7",
+          "via": "curve",
+          "line": "solid",
+          "arrow": "end"
+        },
+        {
+          "kind": "edge",
+          "from": "n6c",
+          "to": "n7",
+          "via": "curve",
+          "line": "solid",
+          "arrow": "end"
+        },
+        {
+          "kind": "edge",
+          "from": "n6d",
+          "to": "n7",
+          "via": "curve",
+          "line": "solid",
+          "arrow": "end"
+        },
+        {
+          "kind": "edge",
+          "from": "n7",
+          "to": "n8a",
+          "via": "curve",
+          "line": "solid",
+          "arrow": "end"
+        },
+        {
+          "kind": "edge",
+          "from": "n7",
+          "to": "n8b",
+          "via": "curve",
+          "line": "solid",
+          "arrow": "end"
+        },
+        {
+          "kind": "edge",
+          "from": "n8a",
+          "to": "n9",
+          "via": "curve",
+          "line": "solid",
+          "arrow": "end"
+        },
+        {
+          "kind": "edge",
+          "from": "n8b",
+          "to": "n9",
+          "via": "curve",
+          "line": "solid",
+          "arrow": "end"
+        },
+        {
+          "kind": "edge",
+          "from": "n9:left",
+          "to": "n2:left",
+          "via": "curve",
+          "line": "dashed",
+          "arrow": "end",
+          "label": "echoes: don't underestimate ourselves"
+        }
+      ],
+      "caption": "Funnel into framing, two converging cases (temptations, computation), a diverging pair of ethical prescriptions, then a loop back to the opening worry."
+    },
+    {
+      "id": "inside-temptations",
+      "title": "Inside: Why We're Fooled",
+      "height": 660,
+      "items": [
+        {
+          "kind": "node",
+          "id": "h1",
+          "shape": "ellipse",
+          "x": 280,
+          "y": 40,
+          "w": 240,
+          "h": 70,
+          "text": "Intelligence and consciousness differ",
+          "size": "md",
+          "detail": "Intelligence is about doing; consciousness is about being.",
+          "tone": 1,
+          "block": "spya-j0a9rq"
+        },
+        {
+          "kind": "node",
+          "id": "s1",
+          "shape": "box",
+          "x": 60,
+          "y": 180,
+          "w": 220,
+          "h": 70,
+          "text": "Anthropocentrism & human exceptionalism",
+          "size": "sm",
+          "tone": 1,
+          "block": "spya-h4mwb2"
+        },
+        {
+          "kind": "node",
+          "id": "s2",
+          "shape": "box",
+          "x": 480,
+          "y": 180,
+          "w": 220,
+          "h": 70,
+          "text": "Anthropomorphism: projecting human traits",
+          "size": "sm",
+          "tone": 1,
+          "block": "spya-nxxnrj"
+        },
+        {
+          "kind": "node",
+          "id": "s3",
+          "shape": "box",
+          "x": 60,
+          "y": 300,
+          "w": 220,
+          "h": 70,
+          "text": "'Hallucinate' smuggles in feeling",
+          "size": "sm",
+          "tone": 1,
+          "block": "spya-t29n67"
+        },
+        {
+          "kind": "node",
+          "id": "s4",
+          "shape": "box",
+          "x": 480,
+          "y": 300,
+          "w": 220,
+          "h": 70,
+          "text": "Exponential hype always feels imminent",
+          "size": "sm",
+          "tone": 1,
+          "block": "spya-cke6sj"
+        },
+        {
+          "kind": "node",
+          "id": "s5",
+          "shape": "box",
+          "x": 270,
+          "y": 420,
+          "w": 220,
+          "h": 70,
+          "text": "Techno-rapture: dreams of digital godhood",
+          "size": "sm",
+          "tone": 1,
+          "block": "spya-v4sduf"
+        },
+        {
+          "kind": "node",
+          "id": "h2",
+          "shape": "hex",
+          "x": 230,
+          "y": 540,
+          "w": 300,
+          "h": 80,
+          "text": "Pareidolia: seeing minds that aren't there",
+          "size": "md",
+          "detail": "A useful diagnosis, but only the first step — deeper analysis follows.",
+          "tone": 1,
+          "block": "spya-k850tu"
+        },
+        {
+          "kind": "edge",
+          "from": "h1",
+          "to": "s1",
+          "via": "curve",
+          "line": "solid",
+          "arrow": "end"
+        },
+        {
+          "kind": "edge",
+          "from": "h1",
+          "to": "s2",
+          "via": "curve",
+          "line": "solid",
+          "arrow": "end"
+        },
+        {
+          "kind": "edge",
+          "from": "h1",
+          "to": "s3",
+          "via": "curve",
+          "line": "solid",
+          "arrow": "end"
+        },
+        {
+          "kind": "edge",
+          "from": "h1",
+          "to": "s4",
+          "via": "curve",
+          "line": "solid",
+          "arrow": "end"
+        },
+        {
+          "kind": "edge",
+          "from": "h1",
+          "to": "s5",
+          "via": "curve",
+          "line": "solid",
+          "arrow": "end"
+        },
+        {
+          "kind": "edge",
+          "from": "s1",
+          "to": "h2",
+          "via": "curve",
+          "line": "solid",
+          "arrow": "end"
+        },
+        {
+          "kind": "edge",
+          "from": "s2",
+          "to": "h2",
+          "via": "curve",
+          "line": "solid",
+          "arrow": "end"
+        },
+        {
+          "kind": "edge",
+          "from": "s3",
+          "to": "h2",
+          "via": "curve",
+          "line": "solid",
+          "arrow": "end"
+        },
+        {
+          "kind": "edge",
+          "from": "s4",
+          "to": "h2",
+          "via": "curve",
+          "line": "solid",
+          "arrow": "end"
+        },
+        {
+          "kind": "edge",
+          "from": "s5",
+          "to": "h2",
+          "via": "curve",
+          "line": "solid",
+          "arrow": "end"
+        }
+      ],
+      "caption": "One distinction (intelligence isn't consciousness) sits above a fan of independent psychological biases, all of which converge on the same illusion: pareidolia for minds."
+    },
+    {
+      "id": "inside-computation",
+      "title": "Inside: The Four Arguments",
+      "height": 520,
+      "items": [
+        {
+          "kind": "node",
+          "id": "c0",
+          "shape": "ellipse",
+          "x": 230,
+          "y": 40,
+          "w": 300,
+          "h": 70,
+          "text": "Conscious AI assumes computation is enough",
+          "size": "sm",
+          "tone": 2,
+          "block": "spya-d3g67c"
+        },
+        {
+          "kind": "node",
+          "id": "c1a",
+          "shape": "box",
+          "x": 40,
+          "y": 140,
+          "w": 150,
+          "h": 70,
+          "text": "No software/hardware split in the brain",
+          "size": "xs",
+          "tone": 2,
+          "block": "spya-b0086e"
+        },
+        {
+          "kind": "node",
+          "id": "c1b",
+          "shape": "box",
+          "x": 40,
+          "y": 240,
+          "w": 150,
+          "h": 70,
+          "text": "Neuron-swap thought experiment fails",
+          "size": "xs",
+          "tone": 2,
+          "block": "spya-ahtr6e"
+        },
+        {
+          "kind": "node",
+          "id": "c2a",
+          "shape": "box",
+          "x": 215,
+          "y": 140,
+          "w": 150,
+          "h": 70,
+          "text": "Turing computation is limited",
+          "size": "xs",
+          "tone": 2,
+          "block": "spya-gw0hsq"
+        },
+        {
+          "kind": "node",
+          "id": "c2b",
+          "shape": "box",
+          "x": 215,
+          "y": 240,
+          "w": 150,
+          "h": 70,
+          "text": "Dynamical, 4E cognition matters",
+          "size": "xs",
+          "tone": 2,
+          "block": "spya-t54yqa"
+        },
+        {
+          "kind": "node",
+          "id": "c3a",
+          "shape": "box",
+          "x": 390,
+          "y": 140,
+          "w": 150,
+          "h": 70,
+          "text": "Perception as controlled hallucination",
+          "size": "xs",
+          "tone": 2,
+          "block": "spya-xhvztm"
+        },
+        {
+          "kind": "node",
+          "id": "c3b",
+          "shape": "box",
+          "x": 390,
+          "y": 240,
+          "w": 150,
+          "h": 70,
+          "text": "Life and consciousness may be linked",
+          "size": "xs",
+          "tone": 2,
+          "block": "spya-da9tvt"
+        },
+        {
+          "kind": "node",
+          "id": "c4a",
+          "shape": "box",
+          "x": 565,
+          "y": 140,
+          "w": 150,
+          "h": 70,
+          "text": "Simulating X isn't creating X",
+          "size": "xs",
+          "tone": 2,
+          "block": "spya-npjt4j"
+        },
+        {
+          "kind": "node",
+          "id": "c4b",
+          "shape": "box",
+          "x": 565,
+          "y": 240,
+          "w": 150,
+          "h": 70,
+          "text": "Simulation hypothesis assumes the answer",
+          "size": "xs",
+          "tone": 2,
+          "block": "spya-bcnvp2"
+        },
+        {
+          "kind": "node",
+          "id": "c5",
+          "shape": "box",
+          "x": 220,
+          "y": 360,
+          "w": 320,
+          "h": 80,
+          "text": "Functionalism looks shaky, not disproven",
+          "size": "md",
+          "detail": "Real artificial consciousness remains possible in principle, just unlikely for digital computers.",
+          "tone": 2,
+          "block": "spya-c5ve5t"
+        },
+        {
+          "kind": "edge",
+          "from": "c0",
+          "to": "c1a",
+          "via": "curve",
+          "line": "solid",
+          "arrow": "end"
+        },
+        {
+          "kind": "edge",
+          "from": "c0",
+          "to": "c2a",
+          "via": "curve",
+          "line": "solid",
+          "arrow": "end"
+        },
+        {
+          "kind": "edge",
+          "from": "c0",
+          "to": "c3a",
+          "via": "curve",
+          "line": "solid",
+          "arrow": "end"
+        },
+        {
+          "kind": "edge",
+          "from": "c0",
+          "to": "c4a",
+          "via": "curve",
+          "line": "solid",
+          "arrow": "end"
+        },
+        {
+          "kind": "edge",
+          "from": "c1a",
+          "to": "c1b",
+          "via": "straight",
+          "line": "solid",
+          "arrow": "end"
+        },
+        {
+          "kind": "edge",
+          "from": "c2a",
+          "to": "c2b",
+          "via": "straight",
+          "line": "solid",
+          "arrow": "end"
+        },
+        {
+          "kind": "edge",
+          "from": "c3a",
+          "to": "c3b",
+          "via": "straight",
+          "line": "solid",
+          "arrow": "end"
+        },
+        {
+          "kind": "edge",
+          "from": "c4a",
+          "to": "c4b",
+          "via": "straight",
+          "line": "solid",
+          "arrow": "end"
+        },
+        {
+          "kind": "edge",
+          "from": "c1b",
+          "to": "c5",
+          "via": "curve",
+          "line": "solid",
+          "arrow": "end"
+        },
+        {
+          "kind": "edge",
+          "from": "c2b",
+          "to": "c5",
+          "via": "curve",
+          "line": "solid",
+          "arrow": "end"
+        },
+        {
+          "kind": "edge",
+          "from": "c3b",
+          "to": "c5",
+          "via": "curve",
+          "line": "solid",
+          "arrow": "end"
+        },
+        {
+          "kind": "edge",
+          "from": "c4b",
+          "to": "c5",
+          "via": "curve",
+          "line": "solid",
+          "arrow": "end"
+        }
+      ],
+      "caption": "Four independent lines of argument, each with its own inner logic, all feed the same weakened verdict on computational functionalism."
+    }
+  ],
+  "generator": "claude-sonnet-5",
+  "slug": "noema-mythology-of-conscious-ai",
+  "sourceHash": "be7b898c72125fc5.2fd04a5eb4dc04ad.c739bef19c4aba3e",
+  "profileHash": null
+}

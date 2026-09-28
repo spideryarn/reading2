@@ -1,0 +1,359 @@
+{
+  "arm": "before",
+  "generator": "illustrated",
+  "slug": "noema-mythology-of-conscious-ai",
+  "sourceSha256": {
+    "illustrated.ts": "becc3b7c27ffad958792395db2a418064529671b51ea06a44ad0554b823342c3",
+    "plain-words.ts": "6c5f318e82acbbd4c6b1955e83fa3f558322a3082b96e74dcd667528cd37ad02"
+  },
+  "blocksSha256": "350eaeb20348e322b9e7b99c2057a367301483d8cc9abd8f00ac9e48795f183d",
+  "at": "2026-09-28T04:16:46.411Z",
+  "sketchFrom": "this run",
+  "items": [
+    {
+      "key": "plate 1",
+      "field": "title",
+      "text": "The Mythology Of Conscious AI — Overview"
+    },
+    {
+      "key": "plate 1 vignette 1",
+      "field": "depicts",
+      "text": "A robed alchemist-creator in a workshop, shaping a clay humanlike figure with his hands; beside him a glass vessel holds a small cloned form and a jointed wooden android stands waiting.",
+      "context": "playing God by creating artificial versions of human beings"
+    },
+    {
+      "key": "plate 1 vignette 1",
+      "field": "title",
+      "text": "PLAYING GOD"
+    },
+    {
+      "key": "plate 1 vignette 2",
+      "field": "depicts",
+      "text": "A humanoid machine figure with head bowed, an iron collar and slack chain about its neck, faint radiating lines of anguish around it.",
+      "context": "with consciousness comes moral status, the potential for suffering and, perhaps, rights"
+    },
+    {
+      "key": "plate 1 vignette 2",
+      "field": "title",
+      "text": "MORAL STATUS OF MACHINES"
+    },
+    {
+      "key": "plate 1 vignette 3",
+      "field": "depicts",
+      "text": "Two thick corded ropes lying side by side, bound tightly together by three thinner cords wrapped around them like knots.",
+      "context": "bundle intelligence and consciousness together can be traced to three baked-in psychological biases"
+    },
+    {
+      "key": "plate 1 vignette 3",
+      "field": "title",
+      "text": "BINDING THE BUNDLE"
+    },
+    {
+      "key": "plate 1 vignette 4",
+      "field": "depicts",
+      "text": "Two machines side by side: one a speaking terminal ringed with a faint halo of light; the other a model of a twisting protein ribbon, plain and unhaloed.",
+      "context": "Nobody, as far as I know, has claimed that DeepMind's AlphaFold is conscious"
+    },
+    {
+      "key": "plate 1 vignette 4",
+      "field": "title",
+      "text": "ALPHAFOLD FEELS NO HALO"
+    },
+    {
+      "key": "plate 1 vignette 5",
+      "field": "depicts",
+      "text": "A cinnamon bun on a plate with a nun's face visible in its swirled dough, beside a slice of toast bearing a fainter half-formed face.",
+      "context": "seeing patterns in things, like a face in a piece of toast or Mother Teresa in a cinnamon bun"
+    },
+    {
+      "key": "plate 1 vignette 5",
+      "field": "title",
+      "text": "FACE IN THE BUN"
+    },
+    {
+      "key": "plate 1 vignette 6",
+      "field": "depicts",
+      "text": "A cross-section of a single neuron shown mid-pulse, expelling small dark particles of waste like a tiny biological bellows.",
+      "context": "some neurons fire spikes of activity apparently to clear waste products created by metabolism"
+    },
+    {
+      "key": "plate 1 vignette 6",
+      "field": "title",
+      "text": "NEURONS FLUSHING WASTE"
+    },
+    {
+      "key": "plate 1 vignette 7",
+      "field": "depicts",
+      "text": "A Watt governor atop a steam engine: two weighted balls swinging outward on hinged arms, closing a valve as the engine runs.",
+      "context": "the cognitive scientist Tim van Gelder gave an influential example, in the form of the governor of a steam engine"
+    },
+    {
+      "key": "plate 1 vignette 7",
+      "field": "title",
+      "text": "THE STEAM ENGINE GOVERNOR"
+    },
+    {
+      "key": "plate 1 vignette 8",
+      "field": "depicts",
+      "text": "A coffee cup on a table with grey arrows curving inward from a brain-shape toward it, and black arrows curving outward from the cup back toward the brain.",
+      "context": "The conscious experience of a coffee cup is underpinned by the content of the brain's predictions"
+    },
+    {
+      "key": "plate 1 vignette 8",
+      "field": "title",
+      "text": "THE COFFEE CUP OF PREDICTION"
+    },
+    {
+      "key": "plate 1 vignette 9",
+      "field": "depicts",
+      "text": "A weather-office building filled with humming mainframes, above which a small comic hailstorm cloud improbably forms indoors.",
+      "context": "a hailstorm is likely to arise inside the computers of the U.K. meteorological office"
+    },
+    {
+      "key": "plate 1 vignette 9",
+      "field": "title",
+      "text": "HAILSTORM IN THE MAINFRAME"
+    },
+    {
+      "key": "plate 1 vignette 10",
+      "field": "depicts",
+      "text": "A heavy iron gate standing slightly ajar in a stone archway, a thin blade of light spilling through the gap rather than the gate being shut fast.",
+      "context": "nothing in what I've said rules out the possibility of artificial consciousness altogether"
+    },
+    {
+      "key": "plate 1 vignette 10",
+      "field": "title",
+      "text": "THE GATE LEFT AJAR"
+    },
+    {
+      "key": "plate 1 vignette 11",
+      "field": "depicts",
+      "text": "A smith at a forge hammering a humanoid machine into shape, sparks flying while storm clouds and jagged cracks spread across the workshop wall behind him.",
+      "context": "Creating conscious machines would be an ethical disaster."
+    },
+    {
+      "key": "plate 1 vignette 11",
+      "field": "title",
+      "text": "FORGING A DISASTER"
+    },
+    {
+      "key": "plate 1 vignette 12",
+      "field": "depicts",
+      "text": "A glass laboratory vessel holding a small pale brain-like organoid afloat in fluid, faintly glowing, watched warily by a robed scholar, with a plain unremarkable chatbot box set aside.",
+      "context": "the accidental emergence of consciousness in cerebral organoids (brain-like structures typically grown from human embryonic stem cells)"
+    },
+    {
+      "key": "plate 1 vignette 12",
+      "field": "title",
+      "text": "THE ORGANOID IN THE JAR"
+    },
+    {
+      "key": "plate 1 vignette 13",
+      "field": "depicts",
+      "text": "A crude carved stone-age figurine lying beside a faint glowing ghost-shaped silhouette, both examined by a seated scholar with a quill.",
+      "context": "the idea of the soul might seem as outmoded as the Stone Age"
+    },
+    {
+      "key": "plate 1 vignette 13",
+      "field": "title",
+      "text": "THE SOUL AS STONE AGE RELIC"
+    },
+    {
+      "key": "plate 2",
+      "field": "title",
+      "text": "Inside: Why We're Fooled"
+    },
+    {
+      "key": "plate 2 vignette 1",
+      "field": "depicts",
+      "text": "A wide blue sky over open land, and beside it a steaming coffee cup with visible heat-waves rising from it.",
+      "context": "The blueness of the sky on a clear day. The bitter tang and headrush of your first coffee."
+    },
+    {
+      "key": "plate 2 vignette 1",
+      "field": "title",
+      "text": "BLUE SKY, FIRST COFFEE"
+    },
+    {
+      "key": "plate 2 vignette 2",
+      "field": "depicts",
+      "text": "A telescope shaped like a human silhouette, through which a distant landscape is being viewed, everything seen through its human-formed eyepiece.",
+      "context": "the tendency to see things through the lens of being human"
+    },
+    {
+      "key": "plate 2 vignette 2",
+      "field": "title",
+      "text": "THE LENS OF BEING HUMAN"
+    },
+    {
+      "key": "plate 2 vignette 3",
+      "field": "depicts",
+      "text": "A robed hand pouring a glowing golden liquid into a plain mechanical figure, the liquid spreading through it like a dye.",
+      "context": "we naturally imbue them with other qualities we feel are characteristically or even distinctively human"
+    },
+    {
+      "key": "plate 2 vignette 3",
+      "field": "title",
+      "text": "IMBUING THE MACHINE"
+    },
+    {
+      "key": "plate 2 vignette 4",
+      "field": "depicts",
+      "text": "A dim bedroom at night with a translucent ghostly figure standing at the foot of a bed, watched by the person lying in it.",
+      "context": "see a dead relative standing at the foot of the bed"
+    },
+    {
+      "key": "plate 2 vignette 4",
+      "field": "title",
+      "text": "A DEAD RELATIVE AT THE BED"
+    },
+    {
+      "key": "plate 2 vignette 5",
+      "field": "depicts",
+      "text": "A steep curve drawn rising across a chart, with several tiny identical figures standing at different points along it, each equally astonished.",
+      "context": "on an exponential curve, every point is an inflection point"
+    },
+    {
+      "key": "plate 2 vignette 5",
+      "field": "title",
+      "text": "EVERY POINT AN INFLECTION"
+    },
+    {
+      "key": "plate 2 vignette 6",
+      "field": "depicts",
+      "text": "Two figures in a spare room, one gesturing toward a glowing humanoid machine standing between them as if witnessing a birth.",
+      "context": "it's not the history of man, that's the history of Gods"
+    },
+    {
+      "key": "plate 2 vignette 6",
+      "field": "title",
+      "text": "THE HISTORY OF GODS"
+    },
+    {
+      "key": "plate 2 vignette 7",
+      "field": "depicts",
+      "text": "The same cinnamon bun with a nun's face in its swirled dough, beside the faintly-faced slice of toast, echoing the overview's closing scene.",
+      "context": "seeing patterns in things, like a face in a piece of toast or Mother Teresa in a cinnamon bun"
+    },
+    {
+      "key": "plate 2 vignette 7",
+      "field": "title",
+      "text": "FACE IN THE BUN"
+    },
+    {
+      "key": "plate 3",
+      "field": "title",
+      "text": "Inside: The Four Arguments"
+    },
+    {
+      "key": "plate 3 vignette 1",
+      "field": "depicts",
+      "text": "A plank of wood shown in cross-section, its natural grain lines forming deep, embedded rings, as if the assumption were carved into the wood itself.",
+      "context": "so deeply ingrained that it can be difficult to recognize it as an assumption at all"
+    },
+    {
+      "key": "plate 3 vignette 1",
+      "field": "title",
+      "text": "INGRAINED ASSUMPTION"
+    },
+    {
+      "key": "plate 3 vignette 2",
+      "field": "depicts",
+      "text": "A silicon chip half-buried in barren desert sand, dry and cracked, beside a small living green sprout with visible veined tissue.",
+      "context": "compared to the dead sand of silicon"
+    },
+    {
+      "key": "plate 3 vignette 2",
+      "field": "title",
+      "text": "THE DEAD SAND OF SILICON"
+    },
+    {
+      "key": "plate 3 vignette 3",
+      "field": "depicts",
+      "text": "A surgeon's hands lifting a small silicon chip toward an open skull diagram, in place of a single organic cell being removed.",
+      "context": "progressively replacing brain parts with silicon equivalents that function in exactly the same way"
+    },
+    {
+      "key": "plate 3 vignette 3",
+      "field": "title",
+      "text": "SWAPPING NEURON FOR SILICON"
+    },
+    {
+      "key": "plate 3 vignette 4",
+      "field": "depicts",
+      "text": "An old diagram of a Turing machine's tape and reading head, frozen in place, with an hourglass beside it running endlessly and never emptying.",
+      "context": "Turing himself identified various non-computable functions, such as the famous \"halting problem"
+    },
+    {
+      "key": "plate 3 vignette 4",
+      "field": "title",
+      "text": "THE HALTING PROBLEM"
+    },
+    {
+      "key": "plate 3 vignette 5",
+      "field": "depicts",
+      "text": "A swirling spiral vortex drawn over an undulating hilled landscape, suggesting a flow that curves and settles rather than stepping discretely.",
+      "context": "the mathematics of continuous, dynamical processes — involving concepts such as attractors, phase spaces and so on"
+    },
+    {
+      "key": "plate 3 vignette 5",
+      "field": "title",
+      "text": "ATTRACTORS IN THE LANDSCAPE"
+    },
+    {
+      "key": "plate 3 vignette 6",
+      "field": "depicts",
+      "text": "A sleeping head projecting a translucent phantom scene, held in check by visible thin cords tethering it to a beam of light entering from outside.",
+      "context": "Conscious experience in this light is a kind of controlled hallucination"
+    },
+    {
+      "key": "plate 3 vignette 6",
+      "field": "title",
+      "text": "A CONTROLLED HALLUCINATION"
+    },
+    {
+      "key": "plate 3 vignette 7",
+      "field": "depicts",
+      "text": "A glowing heartbeat-line running through a human silhouette's chest, connected by faint arrows to a brain shape making predictions above it.",
+      "context": "the basal feeling of being alive all map neatly onto perceptual predictions"
+    },
+    {
+      "key": "plate 3 vignette 7",
+      "field": "title",
+      "text": "THE BASAL FEELING OF LIFE"
+    },
+    {
+      "key": "plate 3 vignette 8",
+      "field": "depicts",
+      "text": "A screen displaying an animated rainstorm, while a real potted plant standing just beside it remains completely dry and untouched.",
+      "context": "A simulation of a rainstorm does not make anything actually wet"
+    },
+    {
+      "key": "plate 3 vignette 8",
+      "field": "title",
+      "text": "THE SIMULATED RAINSTORM STAYS DRY"
+    },
+    {
+      "key": "plate 3 vignette 9",
+      "field": "depicts",
+      "text": "A robed scholar standing before a large glass orb that contains a miniature nested world within itself, gesturing toward it.",
+      "context": "the \"simulation hypothesis,\" associated most closely with the philosopher Nick Bostrom"
+    },
+    {
+      "key": "plate 3 vignette 9",
+      "field": "title",
+      "text": "BOSTROM'S NESTED WORLD"
+    },
+    {
+      "key": "plate 3 vignette 10",
+      "field": "depicts",
+      "text": "A wagon rolling forward down a road, its bench seat clearly empty of any rider, though the wagon itself moves swiftly onward.",
+      "context": "consciousness is very unlikely to simply come along for the ride as AI gets smarter"
+    },
+    {
+      "key": "plate 3 vignette 10",
+      "field": "title",
+      "text": "NOT ALONG FOR THE RIDE"
+    }
+  ]
+}

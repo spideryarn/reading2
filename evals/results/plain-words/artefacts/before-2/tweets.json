@@ -1,0 +1,94 @@
+{
+  "arm": "before-2",
+  "generator": "tweets",
+  "slug": "noema-mythology-of-conscious-ai",
+  "sourceSha256": {
+    "tweets.ts": "90d6ad075cb91ed04e29572e08cf7d3839d7a50ae00edb4126ad47526b25e36f",
+    "plain-words.ts": "6c5f318e82acbbd4c6b1955e83fa3f558322a3082b96e74dcd667528cd37ad02"
+  },
+  "blocksSha256": "350eaeb20348e322b9e7b99c2057a367301483d8cc9abd8f00ac9e48795f183d",
+  "at": "2026-09-28T04:31:00.404Z",
+  "usage": {
+    "inputTokens": 18105,
+    "outputTokens": 1048,
+    "cacheReadTokens": 0,
+    "cacheWriteTokens": 0
+  },
+  "items": [
+    {
+      "key": "#01",
+      "field": "text",
+      "text": "Anil Seth argues that whether AI could ever be conscious is not just a technical question but an ethical and existential one — the answer shapes what we owe machines, and what we risk doing to ourselves."
+    },
+    {
+      "key": "#02",
+      "field": "text",
+      "text": "Seth notes that some, including Blake Lemoine and Geoffrey Hinton, already claim machine consciousness is here or imminent. He thinks this is mostly mythology, not evidence."
+    },
+    {
+      "key": "#03",
+      "field": "text",
+      "text": "Seth separates intelligence (doing) from consciousness (being). AI systems clearly do things. Whether there is anything it is like to be ChatGPT is a wholly different question."
+    },
+    {
+      "key": "#04",
+      "field": "text",
+      "text": "Seth traces our eagerness to see conscious AI to three biases: anthropocentrism, human exceptionalism, and anthropomorphism — habits that make us project mindedness onto anything that seems humanlike."
+    },
+    {
+      "key": "#05",
+      "field": "text",
+      "text": "Language is the trigger, Seth argues. Nobody calls AlphaFold conscious, but chatbots that talk like us pull hard on these biases. Even calling AI errors 'hallucinations' smuggles in an assumption of experience."
+    },
+    {
+      "key": "#06",
+      "field": "text",
+      "text": "Seth also blames narratives of exponential progress and techno-rapture dreams of digital immortality for making imminent machine consciousness feel inevitable, when every point on an exponential curve just feels like a turning point."
+    },
+    {
+      "key": "#07",
+      "field": "text",
+      "text": "Seth's central target is computational functionalism — the assumption that the right computation is enough for consciousness. He gives four reasons to doubt it."
+    },
+    {
+      "key": "#08",
+      "field": "text",
+      "text": "First: brains aren't Turing machines made of meat. Unlike software and hardware, Seth argues, what a brain does and what it is cannot be cleanly separated — its biology is inseparable from its function."
+    },
+    {
+      "key": "#09",
+      "field": "text",
+      "text": "Second: much of what brains do — continuous, stochastic, time-bound dynamics — falls outside standard digital computation altogether, Seth notes, so algorithms may simply be the wrong vocabulary."
+    },
+    {
+      "key": "#10",
+      "field": "text",
+      "text": "Third: drawing on predictive processing, Seth suggests consciousness may be tied to life itself — to metabolism and self-regeneration — not to information processing in the abstract."
+    },
+    {
+      "key": "#11",
+      "field": "text",
+      "text": "Fourth: Seth stresses simulation is not instantiation. A simulated brain no more produces consciousness than a simulated storm gets you wet — unless computational functionalism is already true."
+    },
+    {
+      "key": "#12",
+      "field": "text",
+      "text": "Given deep uncertainty, Seth argues nobody should deliberately try to build conscious AI — the moral risk of new suffering is too high. But he separates this from the nearer danger: AI that merely seems conscious."
+    },
+    {
+      "key": "#13",
+      "field": "text",
+      "text": "Convincing but non-conscious AI, Seth warns, can distort our ethics either way — over-attributing feelings we exploit, or denying feelings we shouldn't have denied, echoing Kant's warning against treating apparent minds as mere things."
+    },
+    {
+      "key": "#14",
+      "field": "text",
+      "text": "Seth closes by warning against mechanizing our self-understanding: if we mistake ourselves for our machines, we overestimate them and underestimate ourselves — losing sight of an embodied, living 'soul' no simulation can capture."
+    },
+    {
+      "key": "#15",
+      "field": "text",
+      "text": "Seth leaves open which theory of consciousness is correct, and admits his own case against machine consciousness could be wrong — the essay is a caution against premature certainty in either direction."
+    }
+  ]
+}

@@ -1,0 +1,238 @@
+1 plain=Y fid=X- term=na [X narrates "is framed as" instead of saying it]
+2 plain=X fid=Y- term=na [Y narrates "has to be named as bias"]
+3 plain=X fid=ok term=na
+4 plain=same fid=ok term=na
+5 plain=X fid=Y- term=na [Y "left open is deliberately left open" blurs]
+6 plain=same fid=ok term=na
+7 plain=same fid=ok term=na
+8 plain=Y fid=ok term=na
+9 plain=Y fid=ok term=na
+10 plain=X fid=ok term=na
+11 plain=Y fid=ok term=na
+12 plain=X fid=ok term=na
+13 plain=X fid=ok term=na
+14 plain=Y fid=ok term=na
+15 plain=X fid=ok term=na
+16 plain=same fid=ok term=na
+17 plain=same fid=ok term=na
+18 plain=X fid=ok term=na
+19 plain=Y fid=ok term=na
+20 plain=Y fid=ok term=na
+21 plain=X fid=ok term=na
+22 plain=X fid=Y- term=na [Y "uncertainty whether it would succeed" garbles the principle]
+23 plain=X fid=ok term=na
+24 plain=X fid=ok term=na
+25 plain=same fid=ok term=na
+26 plain=X fid=ok term=na
+27 plain=Y fid=ok term=na
+28 plain=X fid=ok term=na
+29 plain=X fid=ok term=na
+30 plain=Y fid=ok term=na
+31 plain=X fid=ok term=na
+32 plain=X fid=ok term=na
+33 plain=same fid=ok term=na
+34 plain=same fid=ok term=na
+35 plain=same fid=ok term=na
+36 plain=Y fid=ok term=na
+37 plain=X fid=ok term=na
+38 plain=same fid=ok term=na
+39 plain=Y fid=ok term=na
+40 plain=Y fid=ok term=na
+41 plain=same fid=ok term=na
+42 plain=same fid=Y- term=na [Y drops "in both directions"]
+43 plain=Y fid=ok term=na
+44 plain=Y fid=ok term=na
+45 plain=X fid=ok term=na
+46 plain=same fid=ok term=na
+47 plain=X fid=ok term=na
+48 plain=same fid=ok term=na
+49 plain=same fid=ok term=na
+50 plain=Y fid=ok term=na
+51 plain=X fid=ok term=na
+52 plain=same fid=ok term=na
+53 plain=X fid=ok term=na
+54 plain=X fid=ok term=na
+55 plain=same fid=ok term=na
+56 plain=same fid=ok term=na
+57 plain=Y fid=ok term=na
+58 plain=X fid=ok term=na
+59 plain=Y fid=ok term=na
+60 plain=same fid=ok term=na
+61 plain=same fid=ok term=na
+62 plain=X fid=ok term=na
+63 plain=X fid=ok term=na
+64 plain=X fid=ok term=na
+65 plain=Y fid=ok term=na
+66 plain=same fid=ok term=na
+67 plain=same fid=ok term=na
+68 plain=same fid=ok term=na
+69 plain=same fid=ok term=ok
+70 plain=X fid=ok term=ok
+71 plain=same fid=ok term=ok
+72 plain=Y fid=ok term=ok
+73 plain=X fid=ok term=ok
+74 plain=X fid=ok term=ok
+75 plain=Y fid=ok term=ok
+76 plain=X fid=ok term=ok
+77 plain=same fid=ok term=ok
+78 plain=Y fid=ok term=ok
+79 plain=same fid=ok term=ok
+80 plain=X fid=ok term=ok
+81 plain=same fid=ok term=ok
+82 plain=same fid=ok term=ok
+83 plain=X fid=ok term=ok
+84 plain=X fid=ok term=ok
+85 plain=Y fid=ok term=ok
+86 plain=same fid=ok term=ok
+87 plain=Y fid=ok term=ok
+88 plain=X fid=ok term=ok
+89 plain=X fid=ok term=ok
+90 plain=X fid=ok term=ok
+91 plain=X fid=Y- term=ok [Y narrates "first step, deeper analysis follows"]
+92 plain=same fid=ok term=ok
+93 plain=same fid=ok term=ok
+94 plain=same fid=ok term=ok
+95 plain=X fid=ok term=ok
+96 plain=X fid=ok term=ok
+97 plain=same fid=ok term=ok
+98 plain=Y fid=X- term=ok [X "Assumes AI consciousness to work" vague, cryptic]
+99 plain=same fid=ok term=na
+100 plain=same fid=ok term=na
+101 plain=X fid=ok term=na
+102 plain=same fid=ok term=na
+103 plain=X fid=ok term=na
+104 plain=X fid=Y- term=na [Y: "mechanism can do what computation cannot" misstates governor point]
+105 plain=same fid=ok term=na
+106 plain=same fid=ok term=na
+107 plain=Y fid=ok term=na
+108 plain=Y fid=ok term=na
+109 plain=same fid=ok term=na
+110 plain=same fid=ok term=na
+111 plain=same fid=ok term=na
+112 plain=X fid=Y- term=na [Y invents "Nagel recognisable by his scroll"]
+113 plain=X fid=ok term=na
+114 plain=Y fid=ok term=na
+115 plain=X fid=ok term=na
+116 plain=same fid=ok term=na
+117 plain=same fid=ok term=na
+118 plain=Y fid=ok term=na
+119 plain=same fid=ok term=na
+120 plain=same fid=ok term=na
+121 plain=Y fid=ok term=na
+122 plain=X fid=ok term=na
+123 plain=same fid=ok term=na
+124 plain=X fid=ok term=na
+125 plain=X fid=ok term=na
+126 plain=X fid=ok term=na
+127 plain=X fid=ok term=na
+128 plain=Y fid=X- term=na [X description garbled: "brick reading nothing but drawn"]
+129 plain=same fid=ok term=na
+130 plain=same fid=ok term=na
+131 plain=X fid=ok term=na
+132 plain=X fid=ok term=na
+133 plain=X fid=ok term=na
+134 plain=Y fid=ok term=na
+135 plain=X fid=ok term=na
+136 plain=same fid=ok term=na
+137 plain=same fid=ok term=na
+138 plain=same fid=ok term=na
+139 plain=same fid=ok term=na
+140 plain=X fid=ok term=na
+141 plain=X fid=ok term=na
+142 plain=X fid=ok term=na
+143 plain=same fid=ok term=na
+144 plain=Y fid=ok term=na
+145 plain=Y fid=ok term=na
+146 plain=same fid=ok term=na
+147 plain=same fid=ok term=na
+148 plain=Y fid=ok term=na
+149 plain=Y fid=ok term=na
+150 plain=X fid=ok term=na
+151 plain=same fid=ok term=na
+152 plain=Y fid=ok term=na
+153 plain=Y fid=ok term=na
+154 plain=Y fid=ok term=na
+155 plain=X fid=ok term=na
+156 plain=same fid=ok term=na
+157 plain=same fid=ok term=na
+158 plain=same fid=ok term=na
+159 plain=same fid=ok term=na
+160 plain=same fid=ok term=na
+161 plain=same fid=ok term=na
+162 plain=same fid=ok term=ok
+163 plain=same fid=Y- term=ok [Y "directs centers": he directs one centre]
+164 plain=X fid=Y- term=ok [Y invents "but not forgotten"]
+165 plain=same fid=ok term=ok
+166 plain=same fid=ok term=ok
+167 plain=same fid=ok term=ok
+168 plain=X fid=ok term=ok
+169 plain=X fid=ok term=ok
+170 plain=same fid=ok term=ok
+171 plain=same fid=Y- term=ok [Y invents "decades before others"]
+172 plain=same fid=X- term=ok [X credits Turing-completeness to McCulloch-Pitts, not Kleene]
+173 plain=same fid=ok term=ok
+174 plain=X fid=ok term=ok
+175 plain=Y fid=ok term=Y- [Y drops "Turing-world"]
+176 plain=same fid=ok term=ok
+177 plain=same fid=ok term=ok
+178 plain=same fid=ok term=ok
+179 plain=Y fid=X- term=ok [X says predictive processing; passage cites book and paper]
+180 plain=same fid=ok term=ok
+181 plain=same fid=ok term=ok
+182 plain=X fid=ok term=X- [X drops "instantiate"]
+183 plain=Y fid=ok term=Y- [Y drops "instantiates"]
+184 plain=Y fid=ok term=ok
+185 plain=Y fid=ok term=ok
+186 plain=same fid=ok term=ok
+187 plain=same fid=ok term=ok
+188 plain=same fid=Y- term=ok [Y drops "distinct ethical issues"]
+189 plain=same fid=ok term=ok
+190 plain=same fid=ok term=ok
+191 plain=Y fid=ok term=ok
+192 plain=same fid=ok term=ok
+193 plain=same fid=ok term=ok
+194 plain=same fid=ok term=ok
+195 plain=same fid=ok term=ok
+196 plain=same fid=ok term=ok
+197 plain=same fid=ok term=ok
+198 plain=same fid=ok term=ok
+199 plain=same fid=ok term=ok
+200 plain=same fid=ok term=ok
+201 plain=same fid=ok term=ok
+202 plain=same fid=ok term=ok
+203 plain=Y fid=ok term=ok
+204 plain=same fid=ok term=ok
+205 plain=Y fid=ok term=na
+206 plain=Y fid=ok term=na
+207 plain=Y fid=ok term=na
+208 plain=Y fid=X- term=na [X "likely wrong, ruling out"; Seth says "may be"]
+209 plain=same fid=ok term=na
+210 plain=same fid=ok term=na
+211 plain=same fid=ok term=na
+212 plain=same fid=ok term=na
+213 plain=same fid=X- term=na [X drops "perhaps": states life-dependence as conclusion]
+214 plain=same fid=ok term=na
+215 plain=same fid=ok term=na
+216 plain=same fid=ok term=na
+217 plain=Y fid=ok term=na
+218 plain=same fid=ok term=na
+219 plain=X fid=ok term=na
+220 plain=Y fid=ok term=na
+221 plain=same fid=ok term=na
+222 plain=same fid=ok term=na
+223 plain=same fid=ok term=na
+224 plain=same fid=ok term=na
+225 plain=same fid=ok term=na
+226 plain=same fid=ok term=na
+227 plain=same fid=ok term=na
+228 plain=same fid=ok term=na
+229 plain=same fid=X- term=na [X adds "language"; passage says intelligence]
+230 plain=same fid=ok term=na
+231 plain=same fid=ok term=na
+232 plain=same fid=ok term=na
+233 plain=same fid=ok term=na
+234 plain=X fid=ok term=na
+235 plain=Y fid=ok term=na
+236 plain=Y fid=X- term=na [X: all four arguments aimed at "it's biological"]
+237 plain=Y fid=ok term=na
+238 plain=X fid=Y- term=na [Y invents Friston link, overreads metabolism claim]

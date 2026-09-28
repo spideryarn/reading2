@@ -80,6 +80,7 @@ import type { CheckpointStore } from "./store/checkpoints.js";
 import { hashBlocks, structureHash } from "./source-hash.js";
 import { budgetFor, truncatedMessage } from "./token-budget.js";
 import type { Block, NodeId, Tree, TreeNode } from "./types.js";
+import { plainWords } from "./plain-words.js";
 
 /**
  * **Exported since 2026-09-06, because the labels are their own step now.**
@@ -89,8 +90,10 @@ import type { Block, NodeId, Tree, TreeNode } from "./types.js";
  * manifest's `version`. Two spellings of one version are free to drift, and the
  * drift shows up as an artefact that never regenerates — the reason `glossary`
  * and `tweets` export theirs rather than letting the pipeline restate it.
+ *
+ * `labels/3`, 2026-09-28: the prompt's own plain-words wording gave way to the shared `plainWords` section, one rule for every prompt (Greg, 2026-09-28; docs/plans/260926a-plainer-summaries-and-glossary.md, stage 3).
  */
-export const LABELS_PROMPT_VERSION = "labels/2";
+export const LABELS_PROMPT_VERSION = "labels/3";
 
 
 /**
@@ -866,9 +869,6 @@ WRITE ONE LABEL PER NUMBERED PARAGRAPH.
   good — it is worse, because the reader is scanning for the word they read.
   If the paragraph says "technorati", your label says "technorati", not
   "technologists". If it says "confabulate", do not write "make things up".
-- Ordinary words for everything else. A label is read at a glance while the
-  reader is scrolling, so it has to land first time — plainer than the article,
-  never further from it.
 - A paragraph marked HEADING gets its heading text copied EXACTLY, and nothing
   else. No prefix, no "Heading:", no "Title:", no rewording, no punctuation you
   did not find there.
@@ -879,6 +879,8 @@ WRITE ONE LABEL PER NUMBERED PARAGRAPH.
 
 Blocks marked CONTEXT, OTHER-SECTION or NOT-GISTABLE are there so you can see
 what surrounds the section. They have no number. Do NOT write labels for them.
+
+${plainWords("landmark")}
 
 OUTPUT
 

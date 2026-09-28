@@ -96,6 +96,7 @@ import { parseJsonAnswer, readJsonOrNull } from "./parse-json.js";
 import { articleText } from "./article-prompt.js";
 import { articleWordCounts, isBodyEvidence } from "./block-policy.js";
 import { PROFILE_RULES, hashProfile, profileSection } from "./profile.js";
+import { plainWords } from "./plain-words.js";
 import {
   MAX_QUOTES_TOTAL,
   type Block,
@@ -151,8 +152,10 @@ import type { ArtifactStore } from "./store/artifacts.js";
  * `MAX_QUOTE_CHARS` went from 400 to 1,200 with it — the prompt alone could not
  * have done it, because three paragraphs in four of the article he was reading
  * were longer than 400. docs/plans/260912e-quotes-long-enough-to-stand-on-their-own.md.
+ *
+ * `quotes/7`, 2026-09-28: the prompt's own plain-words wording gave way to the shared `plainWords` section, one rule for every prompt (Greg, 2026-09-28; docs/plans/260926a-plainer-summaries-and-glossary.md, stage 3). Only `reason` is written; `text` is copied, and the core leaves copies alone.
  */
-export const PROMPT_VERSION = "quotes/6";
+export const PROMPT_VERSION = "quotes/7";
 
 /**
  * The most quotes one call may return — **one pass**, not the whole list.
@@ -1408,9 +1411,7 @@ absent reason is a real answer.
 WRITING
 
 - "text": the article's words, verbatim, nothing else.
-- "reason": one plain sentence, or absent. No Markdown. Ordinary words, with the
-  article's own for the things it names: plainer than the article, never further
-  from it.
+- "reason": one plain sentence, or absent. No Markdown.
 
 OUTPUT
 
@@ -1426,6 +1427,8 @@ JSON only, no prose, no code fence:
 ]}
 
 "reason", "importance" and "striking" may each be omitted. "text" may not.
+
+${plainWords("explain")}
 
 ${PROFILE_RULES}`;
 

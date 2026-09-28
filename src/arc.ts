@@ -48,6 +48,7 @@ import { parseJsonAnswer } from "./parse-json.js";
 import { articleText } from "./article-prompt.js";
 import { isBodyEvidence } from "./block-policy.js";
 import { isSupplementNode } from "./supplement.js";
+import { plainWords } from "./plain-words.js";
 import { articleFingerprint, type BlockFingerprint, type MetaFingerprint } from "./source-hash.js";
 
 /**
@@ -55,8 +56,10 @@ import { articleFingerprint, type BlockFingerprint, type MetaFingerprint } from 
  * without writing the string out a second time. Two copies of a prompt version are
  * free to drift, and the drift shows up as an artefact that never regenerates —
  * which is the reason `tweets` and `glossary` export theirs as well.
+ *
+ * `arc/4`, 2026-09-28: the prompt's own plain-words wording gave way to the shared `plainWords` section, one rule for every prompt (Greg, 2026-09-28; docs/plans/260926a-plainer-summaries-and-glossary.md, stage 3).
  */
-export const PROMPT_VERSION = "arc/3";
+export const PROMPT_VERSION = "arc/4";
 
 const SYSTEM = `You are writing the leftmost, coarsest column of a reading view for a long
 article. The reader sees, side by side: your column, then a one-sentence gist
@@ -100,16 +103,14 @@ RULES
            substrate must be."
 - The first part's sentence says what is at stake and unsettled. The last
   part's says what has been settled and what deliberately has not.
-- Use the author's own distinctive vocabulary. Those words are the reader's
-  handholds. Ordinary words for everything else — a sentence the reader has to
-  read twice has failed, however exactly it names the state of the argument.
-  Plainer than the article, never further from it.
 - No empty meta-narration: never "this section explores", "the author then
   turns to", "we are told that", "then", "next", "goes on to". Naming the state
   of the argument is the job; narrating the prose is not.
 - Every word must carry content. Cut any opening clause that only announces
   that a summary is coming.
 - Say what the ARTICLE argues, not what a reader should feel. No advice.
+
+${plainWords("explain")}
 
 OUTPUT
 

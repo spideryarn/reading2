@@ -1,0 +1,259 @@
+{
+  "arm": "after",
+  "generator": "quotes",
+  "slug": "noema-mythology-of-conscious-ai",
+  "sourceSha256": {
+    "quotes.ts": "75105cfdf4ffbd924b9e656bd8df44f62fb068b8492ce4c19084947a2dbd578a",
+    "plain-words.ts": "2a5e08df90c98af1caf921b6cc96a61165d600a5cc56d340533fb6876dcf30f8"
+  },
+  "blocksSha256": "350eaeb20348e322b9e7b99c2057a367301483d8cc9abd8f00ac9e48795f183d",
+  "at": "2026-09-28T05:11:21.627Z",
+  "usage": {
+    "inputTokens": 19922,
+    "outputTokens": 6884,
+    "cacheReadTokens": 0,
+    "cacheWriteTokens": 0
+  },
+  "items": [
+    {
+      "key": "it matters for us too. what we collectively think about consciousness in ai already carries enormous importance, regardless of the reality. if we feel that our ai companions really feel things, our psychological vulnerabilities can be exploited, our ethical priorities distorted, and our minds brutalized — treating conscious-seeming machines as if they lack feelings is a psychologically unhealthy place to be. and if we do endow our ai creations with rights, we may not be able to turn them off, even if they act against our interests.",
+      "field": "reason",
+      "text": "States why the question matters even before it's answered, setting up the essay's stakes.",
+      "context": "It matters for us too. What we collectively think about consciousness in AI already carries enormous importance, regardless of the reality. If we feel that our AI companions really feel things, our psychological vulnerabilities can be exploited, our ethical priorities distorted, and our minds brutalized — treating conscious-seeming machines as if they lack feelings is a psychologically unhealthy place to be. And if we do endow our AI creations with rights, we may not be able to turn them off, even if they act against our interests."
+    },
+    {
+      "key": "perhaps most of all, the way we think about conscious ai matters for how we understand our own human nature and the nature of the conscious experiences that make our lives worth living. if we confuse ourselves too readily with our machine creations, we not only overestimate them, we also underestimate ourselves.",
+      "field": "reason",
+      "text": "The essay's core thesis about what's really at stake.",
+      "context": "Perhaps most of all, the way we think about conscious AI matters for how we understand our own human nature and the nature of the conscious experiences that make our lives worth living. If we confuse ourselves too readily with our machine creations, we not only overestimate them, we also underestimate ourselves."
+    },
+    {
+      "key": "intelligence is mainly about doing: solving a crossword puzzle, assembling some furniture, navigating a tricky family situation, walking to the shop — all involve intelligent behavior of some kind.",
+      "field": "reason",
+      "text": "Grounds the key distinction between intelligence and consciousness with concrete examples.",
+      "context": "Intelligence is mainly about doing: solving a crossword puzzle, assembling some furniture, navigating a tricky family situation, walking to the shop — all involve intelligent behavior of some kind."
+    },
+    {
+      "key": "consciousness, in contrast to intelligence, is mostly about being.",
+      "field": "reason",
+      "text": "The crisp formulation of the essay's central distinction.",
+      "context": "Consciousness, in contrast to intelligence, is mostly about being."
+    },
+    {
+      "key": "ai systems can reasonably lay claim to intelligence in some form, since they can certainly do things, but it is harder to say whether there is anything-it-is-like-to-be chatgpt.",
+      "field": "reason",
+      "text": "Applies the intelligence/consciousness distinction directly to the technology in question.",
+      "context": "AI systems can reasonably lay claim to intelligence in some form, since they can certainly do things, but it is harder to say whether there is anything-it-is-like-to-be ChatGPT."
+    },
+    {
+      "key": "the first is anthropocentrism. this is the tendency to see things through the lens of being human: to take the human example as definitional, rather than as one example of how different properties might come together.",
+      "field": "reason",
+      "text": "Names the first of three biases the essay uses to explain why people overattribute consciousness to AI.",
+      "context": "The first is anthropocentrism. This is the tendency to see things through the lens of being human: to take the human example as definitional, rather than as one example of how different properties might come together."
+    },
+    {
+      "key": "the second is human exceptionalism: our unfortunate habit of putting the human species at the top of every pile, and sometimes in a different pile altogether (perhaps closer to angels and gods than to other animals, as in the medieval scala naturae). and the third is anthropomorphism. this is the tendency to project humanlike qualities onto nonhuman things based on what may be only superficial similarities.",
+      "field": "reason",
+      "text": "Completes the trio of psychological biases central to Part 2's argument.",
+      "context": "The second is human exceptionalism: our unfortunate habit of putting the human species at the top of every pile, and sometimes in a different pile altogether (perhaps closer to angels and Gods than to other animals, as in the medieval Scala naturae). And the third is anthropomorphism. This is the tendency to project humanlike qualities onto nonhuman things based on what may be only superficial similarities."
+    },
+    {
+      "key": "nobody, as far as i know, has claimed that deepmind’s alphafold is conscious, even though, under the hood, it is rather similar to an llm. all these systems run on silicon and involve artificial neural networks and other fancy algorithmic innovations such as transformers. alphafold, which predicts protein structure rather than words, just doesn’t pull our psychological strings in the same way.",
+      "field": "reason",
+      "text": "A sharp, concrete example showing that it's language specifically, not underlying architecture, that triggers consciousness attributions.",
+      "context": "Nobody, as far as I know, has claimed that DeepMind’s AlphaFold is conscious, even though, under the hood, it is rather similar to an LLM. All these systems run on silicon and involve artificial neural networks and other fancy algorithmic innovations such as transformers. AlphaFold, which predicts protein structure rather than words, just doesn’t pull our psychological strings in the same way."
+    },
+    {
+      "key": "hallucinations in human beings are mainly conscious experiences that have lost their grip on reality (uncontrolled perceptions, one might say). we hallucinate when we hear voices that aren’t there or see a dead relative standing at the foot of the bed. when we say that ai systems “hallucinate,” we implicitly confer on them a capacity for experience. if we must use a human analogy, it would be far better to say that they “confabulate.”",
+      "field": "reason",
+      "text": "Shows how ordinary language choices smuggle in unwarranted assumptions about machine consciousness.",
+      "context": "Hallucinations in human beings are mainly conscious experiences that have lost their grip on reality (uncontrolled perceptions, one might say). We hallucinate when we hear voices that aren’t there or see a dead relative standing at the foot of the bed. When we say that AI systems “hallucinate,” we implicitly confer on them a capacity for experience. If we must use a human analogy, it would be far better to say that they “confabulate.”"
+    },
+    {
+      "key": "when we identify conscious experience with seemingly human qualities like intelligence and language, we become more likely to see consciousness where it doesn’t exist, and to miss seeing it where it does.",
+      "field": "reason",
+      "text": "Summarizes the risk of the biases just described, in both directions.",
+      "context": "When we identify conscious experience with seemingly human qualities like intelligence and language, we become more likely to see consciousness where it doesn’t exist, and to miss seeing it where it does."
+    },
+    {
+      "key": "exponential growth has the psychologically destabilizing property that what’s ahead seems impossibly steep, and what’s behind seems irrelevantly flat. crucially, things seem this way wherever you are on the curve — that’s what makes it exponential.",
+      "field": "reason",
+      "text": "A clean explanation of why exponential AI progress narratives feel more significant than they are.",
+      "context": "Exponential growth has the psychologically destabilizing property that what’s ahead seems impossibly steep, and what’s behind seems irrelevantly flat. Crucially, things seem this way wherever you are on the curve — that’s what makes it exponential."
+    },
+    {
+      "key": "but on an exponential curve, every point is an inflection point.",
+      "field": "reason",
+      "text": "Memorable one-line debunking of the 'we're at a turning point' rhetoric surrounding AI.",
+      "context": "But on an exponential curve, every point is an inflection point."
+    },
+    {
+      "key": "if we feel we’re at a techno-historical transition, and we happen to be one of its architects, then the promethean lure must be hard to resist: the feeling of bringing to humankind that which was once the province of the divine.",
+      "field": "reason",
+      "text": "Diagnoses the self-interested mythology driving claims of imminent machine consciousness.",
+      "context": "If we feel we’re at a techno-historical transition, and we happen to be one of its architects, then the Promethean lure must be hard to resist: the feeling of bringing to humankind that which was once the province of the divine."
+    },
+    {
+      "key": "the very idea of conscious ai rests on the assumption that consciousness is a matter of computation. more specifically, that implementing the right kind of computation, or information processing, is sufficient for consciousness to arise. this assumption, which philosophers call computational functionalism, is so deeply ingrained that it can be difficult to recognize it as an assumption at all. but that is what it is. and if it’s wrong, as i think it may be, then real artificial consciousness is fully off the table, at least for the kinds of ai we’re familiar with.",
+      "field": "reason",
+      "text": "States the pivotal assumption that Part 3's four arguments are built to challenge.",
+      "context": "The very idea of conscious AI rests on the assumption that consciousness is a matter of computation. More specifically, that implementing the right kind of computation, or information processing, is sufficient for consciousness to arise. This assumption, which philosophers call computational functionalism, is so deeply ingrained that it can be difficult to recognize it as an assumption at all. But that is what it is. And if it’s wrong, as I think it may be, then real artificial consciousness is fully off the table, at least for the kinds of AI we’re familiar with."
+    },
+    {
+      "key": "but here’s where the trouble starts. inside a brain, there’s no sharp separation between “mindware” and “wetware” as there is between software and hardware in a computer. the more you delve into the intricacies of the biological brain, the more you realize how rich and dynamic it is, compared to the dead sand of silicon.",
+      "field": "reason",
+      "text": "Marks the turn from explaining the computer metaphor's appeal to dismantling it.",
+      "context": "But here’s where the trouble starts. Inside a brain, there’s no sharp separation between “mindware” and “wetware” as there is between software and hardware in a computer. The more you delve into the intricacies of the biological brain, the more you realize how rich and dynamic it is, compared to the dead sand of silicon."
+    },
+    {
+      "key": "unlike computers, even computers running neural network algorithms, brains are the kinds of things for which it is difficult, and likely impossible, to separate what they do from what they are.",
+      "field": "reason",
+      "text": "The key claim underlying the first of the four arguments against computational functionalism.",
+      "context": "Unlike computers, even computers running neural network algorithms, brains are the kinds of things for which it is difficult, and likely impossible, to separate what they do from what they are."
+    },
+    {
+      "key": "this matters because the idea of the brain as a meat-based (universal) turing machine rests precisely on this sharp separation of scales, on the substrate independence that motivated turing’s definition in the first place. if you cannot separate what brains do from what they are, the mathematical marriage of convenience starts to fall apart, and there is less reason to think of biological wetware as there simply to implement algorithmic mindware.",
+      "field": "reason",
+      "text": "Draws out the consequence of the brain/computer disanalogy for the whole functionalist project.",
+      "context": "This matters because the idea of the brain as a meat-based (universal) Turing machine rests precisely on this sharp separation of scales, on the substrate independence that motivated Turing’s definition in the first place. If you cannot separate what brains do from what they are, the mathematical marriage of convenience starts to fall apart, and there is less reason to think of biological wetware as there simply to implement algorithmic mindware."
+    },
+    {
+      "key": "the only way to seamlessly replace a biological neuron is with another biological neuron — and ideally, the same one.",
+      "field": "reason",
+      "text": "Crisp statement undermining the popular neural-replacement thought experiment used to argue consciousness is substrate-independent.",
+      "context": "The only way to seamlessly replace a biological neuron is with another biological neuron — and ideally, the same one."
+    },
+    {
+      "key": "this thought experiment has become a prominent trope in discussions of artificial consciousness, usually invoked to support its possibility. hinton recently appealed to it in just this way, in an interview where he claimed that conscious ai was already with us. but the argument fails at its first hurdle, given the impossibility of replacing any part of the brain with a perfect silicon equivalent.",
+      "field": "reason",
+      "text": "Directly rebuts a specific, named claim by a prominent AI figure about conscious machines.",
+      "context": "This thought experiment has become a prominent trope in discussions of artificial consciousness, usually invoked to support its possibility. Hinton recently appealed to it in just this way, in an interview where he claimed that conscious AI was already with us. But the argument fails at its first hurdle, given the impossibility of replacing any part of the brain with a perfect silicon equivalent."
+    },
+    {
+      "key": "in turing-world, only sequence matters: a to b, 0 to 1. there could be a microsecond or a million years between any state transition, and it would still be the same algorithm, the same computation.",
+      "field": "reason",
+      "text": "Explains a key structural difference between computation and biological time that underlies the essay's argument.",
+      "context": "In Turing-world, only sequence matters: A to B, 0 to 1. There could be a microsecond or a million years between any state transition, and it would still be the same algorithm, the same computation."
+    },
+    {
+      "key": "living systems must continuously resist the decay and disorder that lies along the trajectory to entropic sameness mandated by the inviolable second law of thermodynamics. this means that neurobiological activity is anchored in continuous time in ways that algorithms, by design, are not.",
+      "field": "reason",
+      "text": "Ties biological time to thermodynamics, a load-bearing point for the essay's argument that brains aren't algorithms.",
+      "context": "Living systems must continuously resist the decay and disorder that lies along the trajectory to entropic sameness mandated by the inviolable second law of thermodynamics. This means that neurobiological activity is anchored in continuous time in ways that algorithms, by design, are not."
+    },
+    {
+      "key": "it does not stutter from one state to another; it flows. abstracting the brain into the arid sequence space of algorithms does justice neither to our biology nor to the phenomenology of the stream of consciousness.",
+      "field": "reason",
+      "text": "A vivid closing image for the temporal argument against computational functionalism.",
+      "context": "It does not stutter from one state to another; it flows. Abstracting the brain into the arid sequence space of algorithms does justice neither to our biology nor to the phenomenology of the stream of consciousness."
+    },
+    {
+      "key": "looking at the brain through “turing glasses” underestimates its biological richness and overestimates the substrate flexibility of what it does. when we see the brain for what it really is, the notion that all its multiscale biological activity is simply implementation infrastructure for some abstract algorithmic acrobatics seems rather naı̈ve. the brain is not a turing machine made of meat.",
+      "field": "reason",
+      "text": "The essay's memorable summary rejection of the brain-as-computer metaphor.",
+      "context": "Looking at the brain through “Turing glasses” underestimates its biological richness and overestimates the substrate flexibility of what it does. When we see the brain for what it really is, the notion that all its multiscale biological activity is simply implementation infrastructure for some abstract algorithmic acrobatics seems rather naı̈ve. The brain is not a Turing machine made of meat."
+    },
+    {
+      "key": "biological systems are rife with continuous and stochastic dynamics, and they are deeply embedded in physical time. it seems presumptuous at the very least to assume that only turing computations matter for consciousness, or indeed for many other aspects of cognition and mind.",
+      "field": "reason",
+      "text": "States the second of the four arguments: that computation beyond Turing's framework may be essential.",
+      "context": "Biological systems are rife with continuous and stochastic dynamics, and they are deeply embedded in physical time. It seems presumptuous at the very least to assume that only Turing computations matter for consciousness, or indeed for many other aspects of cognition and mind."
+    },
+    {
+      "key": "a “computational governor,” sensing engine speed, calculating the necessary actions and then sending precise motor signals to switch actuators on or off, would not only be hopelessly inefficient but would betray a total misunderstanding of what’s really going on.",
+      "field": "reason",
+      "text": "The steam-governor example shows some systems are best understood as non-computational, supporting the argument against pure computationalism.",
+      "context": "A “computational governor,” sensing engine speed, calculating the necessary actions and then sending precise motor signals to switch actuators on or off, would not only be hopelessly inefficient but would betray a total misunderstanding of what’s really going on."
+    },
+    {
+      "key": "the challenge for machine consciousness here is that the further we venture from turing world, the more deeply entangled we become in randomness, dynamics and entropy, and the more deeply tied we are to the properties of a particular material substrate. the question is no longer about which algorithms give rise to consciousness; it’s about how brain-like a system has to be to move the needle on its potential to be conscious.",
+      "field": "reason",
+      "text": "Reframes the whole debate away from algorithms toward biological similarity, a key pivot in the essay.",
+      "context": "The challenge for machine consciousness here is that the further we venture from Turing world, the more deeply entangled we become in randomness, dynamics and entropy, and the more deeply tied we are to the properties of a particular material substrate. The question is no longer about which algorithms give rise to consciousness; it’s about how brain-like a system has to be to move the needle on its potential to be conscious."
+    },
+    {
+      "key": "this is the idea — called biological naturalism by the philosopher john searle— that properties of life are necessary, though not necessarily sufficient, for consciousness. i should say upfront that i don’t have a knock-down argument for this position, nor do i think any such argument yet exists. but it is worth taking seriously, if only for the simple reason mentioned earlier: every candidate for consciousness that most people currently agree on as actually being conscious is also alive.",
+      "field": "reason",
+      "text": "States the third argument (life matters) and honestly flags its evidential limits.",
+      "context": "This is the idea — called biological naturalism by the philosopher John Searle— that properties of life are necessary, though not necessarily sufficient, for consciousness. I should say upfront that I don’t have a knock-down argument for this position, nor do I think any such argument yet exists. But it is worth taking seriously, if only for the simple reason mentioned earlier: every candidate for consciousness that most people currently agree on as actually being conscious is also alive."
+    },
+    {
+      "key": "conscious experience in this light is a kind of controlled hallucination: a top-down inside-out perceptual inference in which the brain’s predictions about what’s going on are continually calibrated by sensory signals coming from the bottom-up (or outside-in).",
+      "field": "reason",
+      "text": "Summarizes Seth's own well-known predictive-processing theory of perception, central to the life-matters argument.",
+      "context": "Conscious experience in this light is a kind of controlled hallucination: a top-down inside-out perceptual inference in which the brain’s predictions about what’s going on are continually calibrated by sensory signals coming from the bottom-up (or outside-in)."
+    },
+    {
+      "key": "this drive to stay alive doesn’t bottom out anywhere in particular. it reaches deep into the interior of each cell, into the molecular furnaces of metabolism. within these whirls of metabolic activity, the ubiquitous process of prediction error minimization becomes inseparable from the materiality of life itself.",
+      "field": "reason",
+      "text": "Vivid statement linking metabolism directly to the mechanisms thought to underlie consciousness.",
+      "context": "This drive to stay alive doesn’t bottom out anywhere in particular. It reaches deep into the interior of each cell, into the molecular furnaces of metabolism. Within these whirls of metabolic activity, the ubiquitous process of prediction error minimization becomes inseparable from the materiality of life itself."
+    },
+    {
+      "key": "we experience the world around us and ourselves within it — with, through and because of our living bodies. perhaps it is life, rather than information processing, that breathes fire into the equations of experience.",
+      "field": "reason",
+      "text": "The essay's poetic summary of the biological-naturalism argument.",
+      "context": "We experience the world around us and ourselves within it — with, through and because of our living bodies. Perhaps it is life, rather than information processing, that breathes fire into the equations of experience."
+    },
+    {
+      "key": "computational simulations generally lack the causal powers and intrinsic properties of the things being simulated. a simulation of the digestive system does not actually digest anything. a simulation of a rainstorm does not make anything actually wet. if we simulate a living creature, we have not created life.",
+      "field": "reason",
+      "text": "States the fourth argument (simulation is not instantiation) with clear, concrete examples.",
+      "context": "Computational simulations generally lack the causal powers and intrinsic properties of the things being simulated. A simulation of the digestive system does not actually digest anything. A simulation of a rainstorm does not make anything actually wet. If we simulate a living creature, we have not created life."
+    },
+    {
+      "key": "in other words, the prospect of instantiating consciousness through some kind of whole-brain emulation, at some arbitrarily high level of detail, already assumes that computational functionalism is true.",
+      "field": "reason",
+      "text": "Shows that whole-brain-emulation and mind-uploading dreams beg the very question the essay is investigating.",
+      "context": "In other words, the prospect of instantiating consciousness through some kind of whole-brain emulation, at some arbitrarily high level of detail, already assumes that computational functionalism is true."
+    },
+    {
+      "key": "there is, therefore, something of a contradiction lurking for those who invest their dreams and their venture capital into the prospect of uploading their conscious minds into exquisitely detailed simulations of their brains, so that they can exist forever in silicon rapture. if an exquisitely detailed brain model is needed, then you are no more likely to exist in the simulation than a hailstorm is likely to arise inside the computers of the u.k. meteorological office.",
+      "field": "reason",
+      "text": "A sharp, memorable rebuttal of mind-uploading fantasies using the simulation/instantiation distinction.",
+      "context": "There is, therefore, something of a contradiction lurking for those who invest their dreams and their venture capital into the prospect of uploading their conscious minds into exquisitely detailed simulations of their brains, so that they can exist forever in silicon rapture. If an exquisitely detailed brain model is needed, then you are no more likely to exist in the simulation than a hailstorm is likely to arise inside the computers of the U.K. meteorological office."
+    },
+    {
+      "key": "that this strong assumption is taken on board without examination in a philosophical discussion that is all about the validity of assumptions is yet another indication of how deeply ingrained the computational view of mind and brain has become. it is also a sign of the existential mess we get ourselves into when we fail to distinguish our models of reality from reality itself.",
+      "field": "reason",
+      "text": "Critiques Bostrom's simulation hypothesis for smuggling in the very assumption the essay contests.",
+      "context": "That this strong assumption is taken on board without examination in a philosophical discussion that is all about the validity of assumptions is yet another indication of how deeply ingrained the computational view of mind and brain has become. It is also a sign of the existential mess we get ourselves into when we fail to distinguish our models of reality from reality itself."
+    },
+    {
+      "key": "computational functionalism — the claim that (algorithmic) computation is sufficient for consciousness — is a very strong assumption that looks increasingly shaky as the many and deep differences between brains and (standard digital) computers come into view.",
+      "field": "reason",
+      "text": "Concise restatement of the essay's central conclusion after the four arguments.",
+      "context": "Computational functionalism — the claim that (algorithmic) computation is sufficient for consciousness — is a very strong assumption that looks increasingly shaky as the many and deep differences between brains and (standard digital) computers come into view."
+    },
+    {
+      "key": "given all this, what should we do?",
+      "field": "reason",
+      "text": "Marks the essay's pivot from theoretical argument to practical ethical recommendations.",
+      "context": "Given all this, what should we do?"
+    },
+    {
+      "key": "as redundant as it may sound, nobody should be deliberately setting out to create conscious ai, whether in the service of some poorly thought-through techno-rapture, or for any other reason. creating conscious machines would be an ethical disaster. we would be introducing into the world new moral subjects, and with them the potential for new forms of suffering, at (potentially) an exponential pace.",
+      "field": "reason",
+      "text": "The essay's central practical recommendation, stated plainly.",
+      "context": "As redundant as it may sound, nobody should be deliberately setting out to create conscious AI, whether in the service of some poorly thought-through techno-rapture, or for any other reason. Creating conscious machines would be an ethical disaster. We would be introducing into the world new moral subjects, and with them the potential for new forms of suffering, at (potentially) an exponential pace."
+    },
+    {
+      "key": "for my money, we ought to be more worried about the accidental emergence of consciousness in cerebral organoids (brain-like structures typically grown from human embryonic stem cells) than in any new wave of llm.",
+      "field": "reason",
+      "text": "A surprising, concrete redirection of where the real risk of accidental machine/biological consciousness may lie.",
+      "context": "For my money, we ought to be more worried about the accidental emergence of consciousness in cerebral organoids (brain-like structures typically grown from human embryonic stem cells) than in any new wave of LLM."
+    },
+    {
+      "key": "when it comes to the impact of ai in society, it is essential to draw a distinction between ai systems that are actually conscious and those that persuasively seem to be conscious but are, in fact, not. while there is inevitable uncertainty about the former, conscious-seeming systems are much, much closer.",
+      "field": "reason",
+      "text": "Introduces the crucial distinction driving Part 4's ethical discussion of conscious-seeming AI.",
+      "context": "When it comes to the impact of AI in society, it is essential to draw a distinction between AI systems that are actually conscious and those that persuasively seem to be conscious but are, in fact, not. While there is inevitable uncertainty about the former, conscious-seeming systems are much, much closer."
+    },
+    {
+      "key": "either we decide to care about conscious-seeming ai, distorting our circles of moral concern, or we decide not to, and risk brutalizing our minds.",
+      "field": "reason",
+      "text": "States the dilemma posed by conscious-seeming (but not actually conscious) AI systems.",
+      "context": "either we decide to care about conscious-seeming AI, distorting our circles of moral concern, or we decide not to, and risk brutalizing our minds."
+    }
+  ]
+}

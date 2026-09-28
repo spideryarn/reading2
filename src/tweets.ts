@@ -54,8 +54,10 @@ import { parseJsonAnswer } from "./parse-json.js";
 import { articleText } from "./article-prompt.js";
 import { articleWordCounts, isBodyEvidence } from "./block-policy.js";
 import { PROFILE_RULES, hashProfile, profileSection } from "./profile.js";
+import { plainWords } from "./plain-words.js";
 
-export const PROMPT_VERSION = "tweets/3";
+/** `tweets/4`, 2026-09-28: the prompt's own plain-words wording gave way to the shared `plainWords` section, one rule for every prompt (Greg, 2026-09-28; docs/plans/260926a-plainer-summaries-and-glossary.md, stage 3). */
+export const PROMPT_VERSION = "tweets/4";
 
 /**
  * The per-post limit, in one place.
@@ -213,9 +215,6 @@ RULES
   says what it has not shown, say so too. A thread that drops an argument's
   limits has changed the argument, and that is the failure this whole thing is
   most likely to commit.
-- Use the author's own distinctive vocabulary. Those words are the reader's
-  handholds if they go on to the article. Ordinary words for everything else —
-  plainer than the article, never further from it.
 - Never introduce a fact that is not in the article. No outside knowledge, no
   numbers you inferred, no examples of your own.
 - No hype. Never "game-changing", "mind-blowing", "this changes everything",
@@ -232,6 +231,8 @@ JSON only, no prose, no code fence:
 
 Each element is one post's text, in order, with no numbering in it. Nothing
 else — no summary, no title, no commentary about the thread.
+
+${plainWords("explain")}
 
 ${PROFILE_RULES}`;
 

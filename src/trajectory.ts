@@ -48,6 +48,7 @@ import { parseJsonAnswer } from "./parse-json.js";
 import { hashProfile, PROFILE_RULES, profileSection } from "./profile.js";
 import { blockIndex, sectionPathOf } from "./section-path.js";
 import { budgetFor, truncationFailure } from "./token-budget.js";
+import { plainWords } from "./plain-words.js";
 import {
   type Block,
   MAX_QUOTES_TOTAL,
@@ -70,8 +71,10 @@ export type {
 /**
  * Bumped whenever the prompt changes what a route *is*. Exported so tests and
  * the read path compare against the constant rather than a literal.
+ *
+ * `trajectory/5`, 2026-09-28: the prompt's own plain-words wording gave way to the shared `plainWords` section, one rule for every prompt (Greg, 2026-09-28; docs/plans/260926a-plainer-summaries-and-glossary.md, stage 3).
  */
-export const PROMPT_VERSION = "trajectory/4";
+export const PROMPT_VERSION = "trajectory/5";
 
 /** A role is a short label, not a sentence about the passage. Over this it becomes `null`. */
 export const MAX_ROLE_CHARS = 80;
@@ -468,9 +471,7 @@ WHAT YOU DECIDE
    BAD: "Sleep improves memory by 20%", "Shows the effect is robust",
    "The author is wrong about X".
    No numbers, no findings, no verdicts: the reader gets those from the
-   passage itself. A role may be the question the passage answers. Use the
-   article's own words for the things it names, and ordinary words for
-   everything else — plainer than the article, never further from it.
+   passage itself. A role may be the question the passage answers.
 
 RULES
 
@@ -492,6 +493,8 @@ JSON only, no prose, no code fence. The array order IS the route:
 THE ANSWER MUST PARSE. Inside a string, a straight double quote ends the
 string: a role never needs one, so do not use one — write the words bare, or
 use single quotes. Never put a real line break inside a string.
+
+${plainWords("landmark")}
 
 ${PROFILE_RULES}`;
 

@@ -1,0 +1,119 @@
+{
+  "arm": "before-2",
+  "generator": "ideas",
+  "slug": "noema-mythology-of-conscious-ai",
+  "sourceSha256": {
+    "ideas.ts": "2f1766e5dc6026b35c07905f8d6d7dae9ef659161a35d18c5b01a523fef65229",
+    "plain-words.ts": "6c5f318e82acbbd4c6b1955e83fa3f558322a3082b96e74dcd667528cd37ad02"
+  },
+  "blocksSha256": "350eaeb20348e322b9e7b99c2057a367301483d8cc9abd8f00ac9e48795f183d",
+  "at": "2026-09-28T04:32:43.857Z",
+  "usage": {
+    "inputTokens": 21020,
+    "outputTokens": 11119,
+    "cacheReadTokens": 0,
+    "cacheWriteTokens": 0
+  },
+  "items": [
+    {
+      "key": "#01",
+      "field": "name",
+      "text": "Moral concern is a finite resource that can be misallocated"
+    },
+    {
+      "key": "#01",
+      "field": "statement",
+      "text": "Attributing or withholding consciousness to AI does not just affect beliefs about machines; it reallocates a limited stock of human ethical attention and care, so getting it wrong distorts how that attention is spent elsewhere."
+    },
+    {
+      "key": "#01",
+      "field": "whyYouNeedIt",
+      "text": "The claim that mistaken attributions 'distort our ethical priorities' or our 'circles of moral concern' only makes sense if moral concern is treated as a scarce, zero-sum resource rather than something that can simply expand to include more objects at no cost."
+    },
+    {
+      "key": "#02",
+      "field": "name",
+      "text": "Under deep uncertainty about machine minds, caution overrides curiosity"
+    },
+    {
+      "key": "#02",
+      "field": "statement",
+      "text": "When we cannot be sure whether creating a system would make it a conscious moral patient, the right response is to refrain from creating it rather than to proceed and find out, even though the same uncertainty could in principle justify either course."
+    },
+    {
+      "key": "#02",
+      "field": "whyYouNeedIt",
+      "text": "The essay moves straight from 'nobody knows for certain' to 'nobody should try' without arguing why uncertainty licenses prohibition rather than permission or neutrality; the reader has to already accept a precautionary stance toward new moral patients for that inference to hold."
+    },
+    {
+      "key": "#03",
+      "field": "name",
+      "text": "Intelligence and consciousness are separate properties"
+    },
+    {
+      "key": "#03",
+      "field": "statement",
+      "text": "Intelligence is about doing — achieving complex goals by flexible means — while consciousness is about being, about there being something it is like to have an experience at all. A system can have one without the other."
+    },
+    {
+      "key": "#04",
+      "field": "name",
+      "text": "Anthropocentric biases make us over-attribute consciousness"
+    },
+    {
+      "key": "#04",
+      "field": "statement",
+      "text": "Three linked biases — anthropocentrism, human exceptionalism, and anthropomorphism — lead people to assume that anything showing humanlike behavior, especially language, must also have humanlike inner experience."
+    },
+    {
+      "key": "#05",
+      "field": "name",
+      "text": "Computational functionalism is an unproven assumption"
+    },
+    {
+      "key": "#05",
+      "field": "statement",
+      "text": "The belief that conscious AI is possible rests on computational functionalism — the claim that implementing the right computation is sufficient for consciousness — which is usually treated as obvious but is actually a contestable philosophical assumption."
+    },
+    {
+      "key": "#06",
+      "field": "name",
+      "text": "Brains cannot be cleanly split into software and hardware"
+    },
+    {
+      "key": "#06",
+      "field": "statement",
+      "text": "Unlike computers, where an algorithm is substrate-independent, a brain's biological materiality (metabolism, autopoiesis, multiscale dynamics) is inseparable from what it does, so there is no 'mindware' that could run equally well on silicon."
+    },
+    {
+      "key": "#07",
+      "field": "name",
+      "text": "Being alive may be necessary for consciousness"
+    },
+    {
+      "key": "#07",
+      "field": "statement",
+      "text": "Biological naturalism holds that the self-sustaining, metabolic, prediction-error-minimizing processes of living systems may be a necessary basis for conscious experience, not just an incidental substrate for computation."
+    },
+    {
+      "key": "#08",
+      "field": "name",
+      "text": "Simulating a process is not the same as instantiating it"
+    },
+    {
+      "key": "#08",
+      "field": "statement",
+      "text": "A computational simulation of X does not bring X into being unless X is itself an algorithmic process; a simulated rainstorm doesn't make anything wet, and a simulated brain wouldn't necessarily be conscious."
+    },
+    {
+      "key": "#09",
+      "field": "name",
+      "text": "Actually-conscious and merely conscious-seeming AI pose different ethical risks"
+    },
+    {
+      "key": "#09",
+      "field": "statement",
+      "text": "Whether or not machines are ever really conscious, systems that merely seem conscious already create distinct ethical dangers — from misplaced rights that hamper control, to psychological harm from treating feeling-seeming things as empty, or vice versa."
+    }
+  ]
+}

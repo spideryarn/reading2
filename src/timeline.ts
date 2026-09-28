@@ -145,14 +145,17 @@ import type {
   Tree,
 } from "./types.js";
 import type { ArtifactStore } from "./store/artifacts.js";
+import { plainWords } from "./plain-words.js";
 
 /**
  * Bumped whenever the prompt changes in a way that changes what an *event* is.
  *
  * Exported so tests assert against the current value rather than pinning a
  * literal — a fixture that hardcodes the version tests the fixture.
+ *
+ * `timeline/3`, 2026-09-28: the prompt's own plain-words wording gave way to the shared `plainWords` section, one rule for every prompt (Greg, 2026-09-28; docs/plans/260926a-plainer-summaries-and-glossary.md, stage 3).
  */
-export const PROMPT_VERSION = "timeline/2";
+export const PROMPT_VERSION = "timeline/3";
 
 /**
  * The most events one call may carry into the artefact.
@@ -1033,9 +1036,6 @@ recognise an event you have already read about. Never write a label a reader
 could substitute for the paragraph. If somebody could follow the whole story
 from your labels alone, they are too long.
 
-Use the article's own words for the things it names and ordinary words for the
-rest — plainer than the article, never further from it.
-
 OCCURRENCES
 
   "blockId" — MUST be one of the ids listed in the article below. Never invent
@@ -1075,6 +1075,8 @@ FIVE WAYS TO GET THIS WRONG
 5. THE PREDICTION FILED AS HISTORY
    BAD:  "Rapid advances continue", modality "happened"
    GOOD: modality "predicted"
+
+${plainWords("landmark")}
 
 OUTPUT
 

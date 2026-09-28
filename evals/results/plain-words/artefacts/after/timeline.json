@@ -1,0 +1,97 @@
+{
+  "arm": "after",
+  "generator": "timeline",
+  "slug": "noema-mythology-of-conscious-ai",
+  "sourceSha256": {
+    "timeline.ts": "7674ea5d3c2777e83647f9596396f373d3dcd3d3da9f98fb0e0256b7848a999a",
+    "plain-words.ts": "2a5e08df90c98af1caf921b6cc96a61165d600a5cc56d340533fb6876dcf30f8"
+  },
+  "blocksSha256": "350eaeb20348e322b9e7b99c2057a367301483d8cc9abd8f00ac9e48795f183d",
+  "at": "2026-09-28T05:11:11.832Z",
+  "usage": {
+    "inputTokens": 21104,
+    "outputTokens": 6616,
+    "cacheReadTokens": 0,
+    "cacheWriteTokens": 0
+  },
+  "items": [
+    {
+      "key": "#01",
+      "field": "label",
+      "text": "Antikythera mechanism built",
+      "context": "The ancient “Antikythera mechanism,” used for astronomical purposes and dating back to around 2,000 BCE, is an excellent example."
+    },
+    {
+      "key": "#02",
+      "field": "label",
+      "text": "Turing formulates definition of computation",
+      "context": "Back in the 1950s, he seeded the idea that machines might be intelligent, and more than a decade earlier, he"
+    },
+    {
+      "key": "#03",
+      "field": "label",
+      "text": "McCulloch and Pitts's landmark paper",
+      "context": "At around the same time that Turing was making his mark, the mathematician Walter Pitts and neurophysiologist Warren McCulloch showed, in a landmark paper, that networks of highly simplified abstract neurons can perform logical operations (Figure 2)."
+    },
+    {
+      "key": "#04",
+      "field": "label",
+      "text": "Turing seeds idea machines might be intelligent",
+      "context": "Back in the 1950s, he seeded the idea that machines might be intelligent, and more than a decade earlier, he"
+    },
+    {
+      "key": "#05",
+      "field": "label",
+      "text": "Kleene shows neural networks are Turing complete",
+      "context": "Later work, by the logician Stephen Kleene among others, demonstrated that artificial neural networks like these, when provided with a tape-like memory (as in the Turing machine), were “Turing complete” — that they could, in principle, implement any Turing machine, any algorithm."
+    },
+    {
+      "key": "#06",
+      "field": "label",
+      "text": "Analogue computers rise with cybernetics",
+      "context": "Analogue computers were again prominent at the birth of AI in the 1950s, in the guise of the long-neglected discipline of cybernetics, where issues of control and regulation of a system are considered more important than abstract symbol manipulation."
+    },
+    {
+      "key": "#07",
+      "field": "label",
+      "text": "Van Gelder gives steam-governor example",
+      "context": "Three decades ago, the cognitive scientist Tim van Gelder gave an influential example, in the form of the governor of a steam engine (Figure 3)."
+    },
+    {
+      "key": "#08",
+      "field": "label",
+      "text": "Lemoine claims LaMDA is conscious",
+      "context": "In a 2022 interview with The Washington Post, Google engineer Blake Lemoine made a startling claim about the AI system he was working on, a chatbot called LaMDA."
+    },
+    {
+      "key": "#09",
+      "field": "label",
+      "text": "Google dismisses Lemoine",
+      "context": "Google dismissed him for violating its confidentiality policies, and the AI bandwagon rolled on."
+    },
+    {
+      "key": "#10",
+      "field": "label",
+      "text": "Hinton claims conscious AI already exists",
+      "context": "Hinton recently appealed to it in just this way, in an interview where he claimed that conscious AI was already with us."
+    },
+    {
+      "key": "#11",
+      "field": "label",
+      "text": "Researchers publish AI welfare article",
+      "context": "In late 2024, a group of prominent researchers wrote a widely publicized article about the need to take the welfare of AI systems seriously."
+    },
+    {
+      "key": "#12",
+      "field": "label",
+      "text": "Chalmers predicts conscious machines",
+      "context": "David Chalmers, one of the foremost thinkers in this area, has suggested that conscious machines may be possible in the not-too-distant future."
+    },
+    {
+      "key": "#13",
+      "field": "label",
+      "text": "Universe as a simulation scenario",
+      "context": "What if everything is a simulation already? What if our whole universe — including the billions of bodies, brains and minds on this planet, as well as its hailstorms and weather forecasting computers — is just an assemblage of code fragments in an advanced computer simulation created by our technologically godlike and genealogically obsessed descendants?"
+    }
+  ]
+}

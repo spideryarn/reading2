@@ -120,6 +120,7 @@ import { hashProfile, profileSection } from "./profile.js";
 import type { Sketch, SketchItem, SketchScene } from "./sketch-scene.js";
 import { budgetFor, truncationFailure } from "./token-budget.js";
 import type { Meta } from "./types.js";
+import { plainWords } from "./plain-words.js";
 
 /**
  * Bumped whenever SYSTEM or `renderPrompt` changes what the model is asked —
@@ -567,6 +568,8 @@ Three rules, and the first is the one that matters:
 
 The title is a caption and not a claim. The checked quote stays in real text beneath the picture,
 where a reader can hold it against the article, and it is not shortened or replaced by the title.
+
+${plainWords("explain")}
 
 ## Output
 

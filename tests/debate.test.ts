@@ -49,6 +49,7 @@ import {
   readClaimGroup,
   readDirectGroup,
 } from "../src/debate.js";
+import { plainWords } from "../src/plain-words.js";
 import { whyUnusable } from "../src/store/artifacts.js";
 import { findQuote } from "../src/quote-match.js";
 import { kindOfMessage, worthRetrying, DEBATE_SEARCH_DID_NOT_RUN } from "../src/messages.js";
@@ -1160,9 +1161,10 @@ describe("what the prompts insist on", () => {
   });
 
   /** docs/project/new-mode.md § The words the mode puts in front of the reader. */
-  it("carries the plainer-than-the-article rule", () => {
+  it("carries the shared plain-words rule, once, in both passes", () => {
     for (const prompt of [DIRECT_SYSTEM, CLAIMS_SYSTEM]) {
-      expect(prompt).toContain("plainer than the article, never further from it");
+      expect(prompt).toContain(plainWords("explain"));
+      expect(prompt.split("PLAIN WORDS").length).toBe(2);
     }
   });
 
@@ -1183,7 +1185,7 @@ describe("what the prompts insist on", () => {
 
 describe("the stamp and the failure copy", () => {
   it("has a prompt version that is one constant", () => {
-    expect(PROMPT_VERSION).toBe("debate/1");
+    expect(PROMPT_VERSION).toBe("debate/2");
   });
 
   /**

@@ -63,6 +63,7 @@ import { parseJsonAnswer, readJsonOrNull } from "./parse-json.js";
 import { articleText } from "./article-prompt.js";
 import { articleWordCounts, isBodyEvidence } from "./block-policy.js";
 import { PROFILE_RULES, hashProfile, profileSection } from "./profile.js";
+import { plainWords } from "./plain-words.js";
 import type {
   Block,
   BlockId,
@@ -87,11 +88,16 @@ import type { ArtifactStore } from "./store/artifacts.js";
  * SPIDERYARN-READING2-44: *"the glossary as well especially should explain in
  * simpler language."* docs/plans/260926a-plainer-summaries-and-glossary.md.
  *
+ * `glossary/6`, 2026-09-28: a reader who has described their own background is
+ * pitched to instead of the outside-the-field default, and SYSTEM gained the
+ * shared plain-words core, `plainWords()` from src/plain-words.ts. `glossary/5`
+ * had reached main. Plan 260926a § Stages 2–3.
+ *
  * Exported so tests can assert against the current value rather than pin a
  * literal that has to be edited on every bump — a fixture that hardcodes the
  * version tests the fixture.
  */
-export const PROMPT_VERSION = "glossary/5";
+export const PROMPT_VERSION = "glossary/6";
 
 /**
  * The most entries one call may return.
@@ -1149,6 +1155,8 @@ rather than guessing — a wrong link is worse than none.
 "senseHere", "background" and "url" may each be omitted, but an entry with
 neither "senseHere" nor "background" says nothing and will be thrown away.
 Nothing else may be omitted.
+
+${plainWords()}
 
 ${PROFILE_RULES}`;
 

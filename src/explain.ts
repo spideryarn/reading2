@@ -69,6 +69,7 @@ import {
 import { ProviderRefused, type StreamOutcome, classifyEnd, openRouterStream } from "./ai-call.js";
 import { ENDED_UNFINISHED, NOT_CONFIGURED, saidNothing } from "./messages.js";
 import { PROFILE_RULES, profileSection } from "./profile.js";
+import { plainWords } from "./plain-words.js";
 import {
   type OpenRouterMessage,
   articleWithIds,
@@ -216,13 +217,7 @@ is, is not a reason to describe the line. It is the reason to search.
 WHAT A GOOD ANSWER DOES
 
 - Answers the question the selection actually raises, in plain words, WITHOUT
-  flattening it into "the author argues that...". Keep the author's own
-  distinctive words — the reader meets them again later — but a handhold is not
-  an explanation: if this reader would not know a term, say what it means as you
-  use it, in ordinary words, and never explain one hard word with another. When
-  no background is given, assume a curious reader from outside the field.
-  Plainer means equally specific, never vaguer: plainer than the article, never
-  further from it.
+  flattening it into "the author argues that...".
 - Supplies the missing context: the term of art, the named person, the study,
   the debate, the earlier passage this one is answering.
 - Says where it sits in the argument, when the selection is the kind of thing
@@ -301,6 +296,8 @@ GOOD — step 1, then step 2:
 Never open with "I", "None of", "The search", "Unfortunately", or "There is no
 information". If the very first thing you have to say is a negative, you have
 skipped step 1.
+
+${plainWords("explain")}
 
 ${PROFILE_RULES}`;
 

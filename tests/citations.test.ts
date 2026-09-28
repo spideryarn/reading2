@@ -53,6 +53,7 @@ import {
   scholarUrl,
   systemPrompt,
 } from "../src/citations.js";
+import { plainWords } from "../src/plain-words.js";
 import type { Block, Tree } from "../src/types.js";
 
 function block(id: string, text: string, over: Partial<Block> = {}): Block {
@@ -627,8 +628,8 @@ describe("generateCitations", () => {
 });
 
 describe("the prompt", () => {
-  it("ends the `why` rule on the house phrase, and forbids addresses", () => {
-    expect(systemPrompt()).toContain("plainer than the article, never further from it");
+  it("carries the shared plain-words rule, and forbids addresses", () => {
+    expect(systemPrompt()).toContain(plainWords("explain"));
     expect(systemPrompt()).toMatch(/Never write a URL, a DOI/);
     /* The ellipsis is how five of twelve places failed on scaling-hypothesis. */
     expect(systemPrompt().replace(/\s+/g, " ")).toMatch(/never join two pieces with "\.\.\."/i);

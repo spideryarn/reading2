@@ -9,7 +9,9 @@ contents even though it sits inside the checkout.
 
 1. Read **`scripts/changelog/copy-prompt.md`** in full. It is your instructions — the audience, the
    output shape, the translation table, the link rules, the banned adjectives, the worked examples.
-   Follow it exactly.
+   Follow it exactly. Then read **`copy-plain-words.md`**, in the work directory beside your input
+   folder (the orchestrator names the path): the shared plain-words rule, the last section of your
+   instructions. Where `copy-prompt.md` is more specific, it wins.
 2. Read your **input file** (given below). It is the `{version, changes}` JSON that prompt describes.
 3. Write **one JSON object** to your **output path**, in the shape that prompt specifies. Nothing
    else in the file — no prose, no code fence.

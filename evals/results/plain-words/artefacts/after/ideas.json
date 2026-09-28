@@ -1,0 +1,114 @@
+{
+  "arm": "after",
+  "generator": "ideas",
+  "slug": "noema-mythology-of-conscious-ai",
+  "sourceSha256": {
+    "ideas.ts": "4b638ad0bf3d0ab623c1f461f8750c09a51dfad3e59a81451c09c8890e3092cc",
+    "plain-words.ts": "2a5e08df90c98af1caf921b6cc96a61165d600a5cc56d340533fb6876dcf30f8"
+  },
+  "blocksSha256": "350eaeb20348e322b9e7b99c2057a367301483d8cc9abd8f00ac9e48795f183d",
+  "at": "2026-09-28T05:12:17.499Z",
+  "usage": {
+    "inputTokens": 21507,
+    "outputTokens": 11263,
+    "cacheReadTokens": 0,
+    "cacheWriteTokens": 0
+  },
+  "items": [
+    {
+      "key": "#01",
+      "field": "name",
+      "text": "Deliberately risking creation of suffering is impermissible even under deep uncertainty"
+    },
+    {
+      "key": "#01",
+      "field": "statement",
+      "text": "When we are genuinely unsure whether an act might bring a new suffering-capable being into existence, the mere possibility is treated as reason enough to refuse to do it, rather than as a question to be settled through cautious experimentation."
+    },
+    {
+      "key": "#01",
+      "field": "whyYouNeedIt",
+      "text": "The essay's flat conclusion that we must simply not try to build conscious AI only follows if uncertain but potentially catastrophic moral risk outweighs the value of finding out; the piece never argues for this weighting, it just applies it."
+    },
+    {
+      "key": "#02",
+      "field": "name",
+      "text": "Intelligence and consciousness are separate properties"
+    },
+    {
+      "key": "#02",
+      "field": "statement",
+      "text": "Being intelligent (able to solve problems and achieve goals) and being conscious (having any subjective experience at all) are two different things that happen to co-occur in humans but need not co-occur in other systems."
+    },
+    {
+      "key": "#03",
+      "field": "name",
+      "text": "Belief in AI consciousness is driven by human self-projection, not evidence"
+    },
+    {
+      "key": "#03",
+      "field": "statement",
+      "text": "People tend to attribute consciousness to machines because of built-in psychological habits — treating the human case as the template, ranking humans above everything else, and projecting human qualities onto anything that superficially resembles us — not because the machines have shown any actual sign of experience."
+    },
+    {
+      "key": "#04",
+      "field": "name",
+      "text": "Exponential progress makes every moment feel like a tipping point"
+    },
+    {
+      "key": "#04",
+      "field": "statement",
+      "text": "On a curve that is genuinely growing exponentially, wherever you happen to stand, the future ahead looks impossibly steep and the past behind looks flat, so it always feels like you are on the verge of some historic transition even though that feeling carries no special information about what is actually about to happen."
+    },
+    {
+      "key": "#05",
+      "field": "name",
+      "text": "Conscious-AI claims secretly assume computation is sufficient for experience"
+    },
+    {
+      "key": "#05",
+      "field": "statement",
+      "text": "The whole idea that a machine could become conscious rests on an unproven premise — computational functionalism — that running the right information-processing pattern is enough to produce subjective experience."
+    },
+    {
+      "key": "#06",
+      "field": "name",
+      "text": "A brain's material and its function cannot be pulled apart"
+    },
+    {
+      "key": "#06",
+      "field": "statement",
+      "text": "In computers the program can be separated from the hardware it runs on, but in a living brain what it does and what it is made of are so entangled that you cannot lift out an abstract algorithm and expect it to keep all the same properties."
+    },
+    {
+      "key": "#07",
+      "field": "name",
+      "text": "Consciousness may require being a living, self-sustaining organism"
+    },
+    {
+      "key": "#07",
+      "field": "statement",
+      "text": "Feelings, moods and selfhood may trace back to a brain's job of predicting and regulating its own body to stay alive, so consciousness could depend on the biological, metabolic fact of being alive rather than on any pattern of information processing alone."
+    },
+    {
+      "key": "#08",
+      "field": "name",
+      "text": "Simulating a thing is not the same as making that thing"
+    },
+    {
+      "key": "#08",
+      "field": "statement",
+      "text": "A model of a process that runs on a computer reproduces its pattern of information, not its underlying reality, so it does not automatically bring about whatever that process actually causes in the world."
+    },
+    {
+      "key": "#09",
+      "field": "name",
+      "text": "Machines that merely seem conscious pose different dangers than machines that really are"
+    },
+    {
+      "key": "#09",
+      "field": "statement",
+      "text": "Separate from the question of whether an AI actually has experience, an AI that convincingly appears conscious creates its own distinct ethical problems — such as misplaced trust, distorted moral priorities, or unnecessary rights — regardless of the underlying truth."
+    }
+  ]
+}

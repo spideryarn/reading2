@@ -1,0 +1,4 @@
+# Opus, blind (read only the pairs file; sides shuffled). Line 2: plain winner per pair. Line 3: fidelity flags (the worse side).
+Y X X Y X same same Y X X X X X same X Y same Y Y Y X same X same same X X X same same X Y Y same Y Y Y Y X same same X same Y Y same same same same same Y same same X same same Y same X same X X Y Y X same Y same Y X X X Y Y X same Y same Y X X same same same Y same X X Y X same X X Y Y same X Y Y X X Y Y X Y same X X Y X Y X Y Y same same same same same same same X X same same same same same X same same same same same same Y Y Y same same same X same X X same same same Y Y Y same X same same same X same same same same same same same same X same same Y same X X same Y same same same same same same same same same same same same Y same same same same same
+fid: 3=Y- 18=X- 51=X- 68=X- 78=X- 125=Y- 141=Y- 142=Y- 158=X- 162=X- 168=X- 190=Y-
+term: 55=Y- 136=Y-

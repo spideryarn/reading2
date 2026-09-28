@@ -47,15 +47,21 @@ const CASES: Record<string, string[]> = {
   "noema-mythology-of-conscious-ai": ["computational functionalism", "autopoiesis"],
 };
 
-/** How many answers an arm must have: every case, every kind. */
-const EXPECTED = Object.values(CASES).reduce((n, terms) => n + terms.length * 3, 0);
+const KINDS = ["term", "sentence", "chat"] as const;
+type Kind = (typeof KINDS)[number];
+
+/** The exact cases an arm must have: every fixed term, asked every fixed way. */
+const EXPECTED_KEYS = new Set(
+  Object.entries(CASES).flatMap(([slug, terms]) =>
+    terms.flatMap((term) => KINDS.map((kind) => `${slug} ${kind} ${term}`)),
+  ),
+);
+const EXPECTED = EXPECTED_KEYS.size;
 
 /** *Check the web*'s accepted endings — src/term-lookup.ts § `refuseUnfinished`. */
 const CHECK_THE_WEB_KEEPS = new Set(["finished", "unknown-finish-reason", "wants-tools"]);
 
-type Kind = "term" | "sentence" | "chat";
-
-interface Answer {
+export interface Answer {
   slug: string;
   term: string;
   kind: Kind;
@@ -159,6 +165,22 @@ async function generate(arm: string): Promise<void> {
 
 const keyOf = (a: Answer) => `${a.slug} ${a.kind} ${a.term}`;
 
+/** Refuse an arm that is incomplete or has a case twice (GPT Sol, E2). */
+export function assertCompleteArm(arm: string, answers: readonly Answer[]): void {
+  const keys = new Set(answers.map(keyOf));
+  const missing = [...EXPECTED_KEYS].filter((key) => !keys.has(key));
+  const unexpected = [...keys].filter((key) => !EXPECTED_KEYS.has(key));
+  if (answers.length !== EXPECTED || keys.size !== EXPECTED || missing.length > 0 || unexpected.length > 0) {
+    throw new Error(
+      [
+        `arm ${arm}: ${answers.length} answers, ${keys.size} distinct cases; expected ${EXPECTED} of each`,
+        ...(missing.length > 0 ? [`missing: ${missing.join(", ")}`] : []),
+        ...(unexpected.length > 0 ? [`unexpected: ${unexpected.join(", ")}`] : []),
+      ].join("\n"),
+    );
+  }
+}
+
 /** Every answer of one arm, refusing an arm that is incomplete or has a case twice (GPT Sol, E2). */
 function readArm(arm: string): { answers: Answer[]; blocks: Map<string, string | undefined> } {
   const dir = path.join(OUT, arm);
@@ -168,10 +190,7 @@ function readArm(arm: string): { answers: Answer[]; blocks: Map<string, string |
     .sort()
     .map((f) => JSON.parse(fs.readFileSync(path.join(dir, f), "utf-8")) as ArmFile);
   const answers = files.flatMap((f) => f.answers);
-  const keys = new Set(answers.map(keyOf));
-  if (answers.length !== EXPECTED || keys.size !== EXPECTED) {
-    throw new Error(`arm ${arm}: ${answers.length} answers, ${keys.size} distinct cases; expected ${EXPECTED} of each`);
-  }
+  assertCompleteArm(arm, answers);
   return { answers, blocks: new Map(files.map((f) => [f.slug, f.blocksSha256])) };
 }
 

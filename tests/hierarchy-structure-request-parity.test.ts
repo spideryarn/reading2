@@ -46,6 +46,11 @@
  * replaced, and nothing else. Once more before `toc/8` shipped, on 2026-09-28:
  * the depth-1 gist ceiling went from 25 to 30 words, because the plain lines
  * needed the room (Greg: "plain beats short"; plan 260926a § Stage 2).
+ * **RE-PINNED 2026-09-28 for `toc/9`**: the shared plain-words core,
+ * `plainWords()` from src/plain-words.ts, now ends SYSTEM, after OUTPUT. The
+ * pin holds its text literally, not by calling `plainWords()`, so an edit to the
+ * shared rule reddens this pin too — which is what it should do, since every
+ * byte of it is sent. Plan 260926a § Stage 3.
  * docs/plans/260926a-plainer-summaries-and-glossary.md.
  */
 
@@ -205,7 +210,23 @@ JSON only, no prose, no code fence:
           "range": ["<firstBlockId>", "<lastBlockId>"],
           "sourceHeading": "...", "children": [ ... ]}}
 
-Use only block ids that appear in the input. Do not invent ids.`;
+Use only block ids that appear in the input. Do not invent ids.
+
+PLAIN WORDS
+
+Write for a curious reader who has not studied this field. If these
+instructions, or the reader's own description, say who the reader is, write
+for them instead: a specialist does not need their own field's terms explained.
+
+Use the commonest word that loses nothing. This changes the words, never the
+meaning: plainer means equally specific. Never drop a number, a direction, a
+comparison, a condition or a hedge ("may", "in mice", "in this sample") that
+the claim depends on; a sentence that is plainer and less exact is worse. It
+never changes which field a fact belongs in, which source may support it, or
+the shape and length these instructions set for each field: where those rules
+are more specific, they win. Text you are told to copy exactly stays exactly as written.
+
+Plainer than the article, never further from it: never less exact, and never beyond what it says.`;
 
 const BLOCKS: Block[] = [
   { id: "spya-par001", tag: "h2", kind: "heading", level: 2, text: "First Part", words: 2, html: "<h2>First Part</h2>", gistable: true },

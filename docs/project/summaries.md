@@ -273,7 +273,7 @@ tension sits, unresolved.
 The gist kept "the article's own words for the things it names", which let every term of art through
 unexplained. It now keeps the name as a handhold but has to make the sentence understandable to a
 reader who does not know it, and plainer means equally specific —
-[new-mode.md § The words the mode puts in front of the reader](new-mode.md) has the rule, and
+[prompting-guide.md](prompting-guide.md) has the rule, and
 [260926a](../plans/260926a-plainer-summaries-and-glossary.md) the measurement. The QUESTIONS block
 changed in one bullet: the topic keeps the author's term, and the question after it must make sense
 to a reader who does not know it. It was left alone at first, to take the rule through "exactly as

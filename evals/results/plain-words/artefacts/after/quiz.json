@@ -1,0 +1,139 @@
+{
+  "arm": "after",
+  "generator": "quiz",
+  "slug": "noema-mythology-of-conscious-ai",
+  "sourceSha256": {
+    "quiz.ts": "81d37c044b4f7dab817c872616836f24b723232aabee0f2d0ceae1e93ced7716",
+    "plain-words.ts": "2a5e08df90c98af1caf921b6cc96a61165d600a5cc56d340533fb6876dcf30f8"
+  },
+  "blocksSha256": "350eaeb20348e322b9e7b99c2057a367301483d8cc9abd8f00ac9e48795f183d",
+  "at": "2026-09-28T05:11:41.261Z",
+  "usage": {
+    "inputTokens": 22101,
+    "outputTokens": 9266,
+    "cacheReadTokens": 0,
+    "cacheWriteTokens": 0
+  },
+  "items": [
+    {
+      "key": "#01",
+      "field": "question",
+      "text": "What key difference does Seth draw between intelligence and consciousness?"
+    },
+    {
+      "key": "#01",
+      "field": "referenceAnswer",
+      "text": "Intelligence is about doing — achieving complex goals by flexible means, like solving problems or getting things done. Consciousness is about being — the subjective experience or felt quality of a mind, the sense that there is 'something it is like' to be that organism."
+    },
+    {
+      "key": "#02",
+      "field": "question",
+      "text": "Why does Seth say nobody should deliberately set out to create conscious AI?"
+    },
+    {
+      "key": "#02",
+      "field": "referenceAnswer",
+      "text": "Because doing so would introduce new moral subjects capable of suffering into the world, potentially at massive scale, making it an ethical disaster. It would also create a dilemma over rights: granting conscious AI systems rights would limit our ability to control or shut them down if needed."
+    },
+    {
+      "key": "#03",
+      "field": "question",
+      "text": "What kind of 'soul' does Seth argue actually matters, in contrast to the disembodied, immortal soul imagined in dreams of uploading minds to computers?"
+    },
+    {
+      "key": "#03",
+      "field": "referenceAnswer",
+      "text": "Not a disembodied, rational essence separable from the body, but an embodied sense of simply being alive — something closer to breath than to abstract thought, and closer to living flesh than to machinery."
+    },
+    {
+      "key": "#04",
+      "field": "question",
+      "text": "Why does Seth suggest that language-based AI like ChatGPT triggers consciousness attributions in a way that a protein-folding tool like AlphaFold doesn't, even though they're built similarly under the hood?"
+    },
+    {
+      "key": "#04",
+      "field": "referenceAnswer",
+      "text": "Because language is seen as a hallmark of distinctively human ability, tied to human exceptionalism, so a system that talks fluently pulls on our psychological biases toward seeing minds and feelings. AlphaFold, doing similar underlying computation but producing protein structures instead of words, doesn't trigger those same biases."
+    },
+    {
+      "key": "#05",
+      "field": "question",
+      "text": "Why does Seth think it's better to say AI systems 'confabulate' rather than 'hallucinate' when they produce falsehoods?"
+    },
+    {
+      "key": "#05",
+      "field": "referenceAnswer",
+      "text": "Hallucination in humans usually refers to a conscious experience that has lost touch with reality, so calling AI errors 'hallucinations' implicitly credits the machine with subjective experience. Confabulation, by contrast, just means making things up without realizing it — a behavioral description that doesn't assume any inner experience."
+    },
+    {
+      "key": "#06",
+      "field": "question",
+      "text": "What are the three psychological biases Seth identifies as causing people to lump consciousness together with intelligence?"
+    },
+    {
+      "key": "#06",
+      "field": "referenceAnswer",
+      "text": "Anthropocentrism (seeing everything through the lens of being human), human exceptionalism (placing humans at the top of every hierarchy), and anthropomorphism (projecting humanlike qualities onto nonhuman things based on superficial similarities)."
+    },
+    {
+      "key": "#07",
+      "field": "question",
+      "text": "What does Seth mean when he says brains lack the clean separation between 'software' and 'hardware' that computers have?"
+    },
+    {
+      "key": "#07",
+      "field": "referenceAnswer",
+      "text": "In computers, an algorithm (software) can run identically on different physical hardware, keeping the abstract program cleanly separable from its material implementation. Seth argues brains don't work this way — biological 'wetware' is so richly interwoven across scales, from molecules to circuits, that you can't cleanly peel off a portable 'mindware' algorithm from what the brain physically is."
+    },
+    {
+      "key": "#08",
+      "field": "question",
+      "text": "According to Seth, why might being alive matter for having conscious experience?"
+    },
+    {
+      "key": "#08",
+      "field": "referenceAnswer",
+      "text": "He argues that conscious experiences like emotion and mood arise from the brain's predictions used to regulate the body's physiology, since a brain's core job is to keep its body alive. This regulatory, prediction-based process is deeply tied to biological, self-sustaining life processes rather than being separable, abstract computation."
+    },
+    {
+      "key": "#09",
+      "field": "question",
+      "text": "Why does Seth say 'simulation is not instantiation' when it comes to consciousness?"
+    },
+    {
+      "key": "#09",
+      "field": "referenceAnswer",
+      "text": "A simulation of something generally lacks the actual causal properties of the real thing — a simulated rainstorm doesn't make anything wet. So a computer simulation of the brain, however detailed, would only produce real consciousness if consciousness itself turns out to be a purely computational process, which is an assumption rather than a proven fact."
+    },
+    {
+      "key": "#10",
+      "field": "question",
+      "text": "Why does Seth argue that the 'neural replacement' thought experiment — swapping brain parts for silicon equivalents — fails to prove consciousness can run on silicon?"
+    },
+    {
+      "key": "#10",
+      "field": "referenceAnswer",
+      "text": "The thought experiment assumes silicon parts could perfectly replicate a biological neuron's function, but Seth argues this is impossible: some neurons' behavior, like firing to clear metabolic waste, is tied to biological processes that silicon simply can't replicate without inventing an entirely new silicon-based metabolism. Since a perfect swap isn't achievable even at the first step, the argument's conclusion that consciousness is substrate-independent doesn't follow."
+    },
+    {
+      "key": "#11",
+      "field": "question",
+      "text": "Why does Seth think we're more likely to wrongly believe AI is conscious than to overlook real consciousness in non-human animals?"
+    },
+    {
+      "key": "#11",
+      "field": "referenceAnswer",
+      "text": "He argues our psychological biases tend to produce false positives rather than false negatives — AI resembles us in ways that don't actually matter for consciousness, like fluent language use, while lacking traits that do matter, like being biologically alive. Animals, by contrast, share the biological traits that may underpin consciousness, making it more likely we underestimate them instead."
+    },
+    {
+      "key": "#12",
+      "field": "question",
+      "text": "Why does Seth criticize Nick Bostrom's 'simulation hypothesis' — the idea that we're probably living inside an advanced computer simulation?"
+    },
+    {
+      "key": "#12",
+      "field": "referenceAnswer",
+      "text": "Seth points out the hypothesis quietly assumes that a computer running the right program would be conscious, the very assumption of computational functionalism that Seth thinks is unproven. If that assumption is false, then the simple fact that we are conscious would actually rule out the possibility that we exist inside a simulation."
+    }
+  ]
+}

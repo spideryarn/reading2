@@ -167,6 +167,7 @@ import {
   type MetaFingerprintWithUrl,
 } from "./source-hash.js";
 import { budgetFor, truncationFailure } from "./token-budget.js";
+import { plainWords } from "./plain-words.js";
 import type {
   Block,
   BlockId,
@@ -195,8 +196,10 @@ import type {
  * about our own failure handling and deliberately did not bump. A reader with a
  * quiz gets the `outdated` sentence and a *Write them again* button, which is
  * the honest offer: theirs is a harder quiz than the one this prompt now sets.
+ *
+ * `quiz/4`, 2026-09-28: the prompt's own plain-words wording gave way to the shared `plainWords` section, one rule for every prompt (Greg, 2026-09-28; docs/plans/260926a-plainer-summaries-and-glossary.md, stage 3).
  */
-export const PROMPT_VERSION = "quiz/3";
+export const PROMPT_VERSION = "quiz/4";
 
 /**
  * The most questions one batch may carry into the artefact.
@@ -843,10 +846,6 @@ WHAT A GOOD QUESTION IS
 - It can be answered in one to three sentences. If a full answer needs a
   paragraph, it is really three questions — ask the best one.
 - It stands on its own. The reader sees the question and nothing else.
-- It uses the article's own vocabulary for the things the article names, and
-  ordinary words for everything else. A question the reader has to parse tests
-  the sentence rather than the piece: plainer than the article, never further
-  from it.
 
 ONE QUESTION MARK, ONE THING ASKED
 
@@ -915,8 +914,6 @@ one.
 
 - Say only what the article says. Where you are stating the author's view rather
   than a fact, say so — "he argues that…".
-- The article's vocabulary for the things it names, ordinary words for the rest.
-  Plainer than the article, never further from it.
 - Include the part of the answer a reader is most likely to leave out.
 - Do not include anything the question did not ask for.
 - Two or three sentences, WITH FULL STOPS. One sentence held together by
@@ -1013,6 +1010,8 @@ gets a short quiz, and that is a correct answer. Do not pad: a padded question
 is a question about nothing, which is worse than a weak one the reader can skip.
 
 Cover the piece. Do not set eight questions on its first third.
+
+${plainWords("ask", "explain")}
 
 OUTPUT
 

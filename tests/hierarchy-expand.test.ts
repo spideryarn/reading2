@@ -336,9 +336,12 @@ describe("the constants a scoped call is made with", () => {
    * also replaced the QUESTIONS block's final bullet with `toc/8`'s explicit
    * plain-words rule. Provenance, as with `expand/4`
    * (docs/plans/260926a-plainer-summaries-and-glossary.md).
+   *
+   * `expand/6`, 2026-09-28: the shared plain-words core, `plainWords()` from
+   * src/plain-words.ts, at the prompt's end (plan 260926a § Stage 3).
    */
-  it("is at expand/5, since fine gists now make a kept term understandable", () => {
-    expect(EXPAND_PROMPT_VERSION).toBe("expand/5");
+  it("is at expand/6, since the prompt carries the shared plain-words core", () => {
+    expect(EXPAND_PROMPT_VERSION).toBe("expand/6");
   });
 
   /**
@@ -354,15 +357,15 @@ describe("the constants a scoped call is made with", () => {
    * checkpoint miss: `canonicalExpansionRequest` hashes the whole wire request,
    * `EXPAND_SYSTEM` included, so a changed prompt already misses.
    */
-  it("stamps toc/8+expand/5, both halves named", () => {
-    expect(EXPANSION_PROMPT_STAMP).toBe("toc/8+expand/5");
+  it("stamps toc/9+expand/6, both halves named", () => {
+    expect(EXPANSION_PROMPT_STAMP).toBe("toc/9+expand/6");
   });
 
   /**
    * The floor is a property of the model, not of us, and the estimate is four
    * characters to a token.
    *
-   * **`EXPAND_SYSTEM` now clears it on its own**, at 1,895 estimated tokens
+   * **`EXPAND_SYSTEM` now clears it on its own**, at 2,114 estimated tokens
    * against 1,024, so `expansionPrefixIsCacheable` is `true` for every outline
    * including none at all. It was 893 until `expand/3`, 1,078 until `expand/4`
    * added the QUESTIONS block, and 1,631 until `expand/5` added the plain-words

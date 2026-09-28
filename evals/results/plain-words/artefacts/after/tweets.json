@@ -1,0 +1,79 @@
+{
+  "arm": "after",
+  "generator": "tweets",
+  "slug": "noema-mythology-of-conscious-ai",
+  "sourceSha256": {
+    "tweets.ts": "0e3fe3152ed56a4c98e25b069f1e98b1aee15eb5c07c054fccf8f2f9f941909c",
+    "plain-words.ts": "2a5e08df90c98af1caf921b6cc96a61165d600a5cc56d340533fb6876dcf30f8"
+  },
+  "blocksSha256": "350eaeb20348e322b9e7b99c2057a367301483d8cc9abd8f00ac9e48795f183d",
+  "at": "2026-09-28T05:10:31.648Z",
+  "usage": {
+    "inputTokens": 18594,
+    "outputTokens": 988,
+    "cacheReadTokens": 0,
+    "cacheWriteTokens": 0
+  },
+  "items": [
+    {
+      "key": "#01",
+      "field": "text",
+      "text": "Anil Seth argues that whether AI could ever be conscious is not just a technical curiosity: if machines really do become conscious, they gain moral status, the capacity to suffer, maybe rights. If we wrongly believe they are, our own minds and ethics get distorted too."
+    },
+    {
+      "key": "#02",
+      "field": "text",
+      "text": "Seth's case: people assume intelligence and consciousness are one package because in humans they happen to come together. But intelligence is about doing things; consciousness is about there being something it feels like to be a thing. They need not travel together."
+    },
+    {
+      "key": "#03",
+      "field": "text",
+      "text": "Seth traces the pull toward believing in conscious AI to three biases: seeing everything through a human lens, ranking humans above all else, and projecting human qualities onto things that merely resemble us on the surface."
+    },
+    {
+      "key": "#04",
+      "field": "text",
+      "text": "Language is the biggest trigger, Seth notes: chatbots that talk fluently feel conscious to us in a way that protein-folding AI never does, even though the underlying methods are similar. Calling AI errors 'hallucinations' quietly implies they have experiences to hallucinate with."
+    },
+    {
+      "key": "#05",
+      "field": "text",
+      "text": "Seth also blames the psychology of exponential hype (every point on an exponential curve feels like a turning point) and a techno-rapture pull among AI's own builders, who may be drawn to feeling godlike, or to keeping investment and salaries justified."
+    },
+    {
+      "key": "#06",
+      "field": "text",
+      "text": "Seth's central argument: consciousness is generally assumed to be computational, meaning the right information-processing alone should produce it. He thinks this assumption is likely wrong, and lays out four separate reasons."
+    },
+    {
+      "key": "#07",
+      "field": "text",
+      "text": "First, brains aren't computers, Seth argues. Unlike software running on hardware, you can't cleanly separate what a brain does from what it's biologically made of. That breaks the assumption that consciousness could run just as well on silicon."
+    },
+    {
+      "key": "#08",
+      "field": "text",
+      "text": "Second, Seth notes, standard computer logic (of the kind that powers today's AI) can't fully capture continuous, random, or physically time-bound processes, and brains are full of those. Consciousness may depend on more than what that logic can express."
+    },
+    {
+      "key": "#09",
+      "field": "text",
+      "text": "Third, Seth floats the idea that being alive itself matters: every being anyone agrees is conscious is also a living organism, and the brain's moment to moment predictions about the body's survival may be inseparable from the feeling of experience itself."
+    },
+    {
+      "key": "#10",
+      "field": "text",
+      "text": "Fourth, Seth stresses that simulating something is not the same as creating it: a simulated storm doesn't make anything wet. A simulated brain would only produce real consciousness if consciousness is computational to begin with, which is exactly the point in question."
+    },
+    {
+      "key": "#11",
+      "field": "text",
+      "text": "Given this deep uncertainty, Seth argues nobody should be deliberately trying to build conscious AI: doing so risks creating new beings capable of suffering. But he says a separate danger is just as urgent: AI that merely seems conscious, which can warp our empathy and ethics either way we respond to it."
+    },
+    {
+      "key": "#12",
+      "field": "text",
+      "text": "Seth closes by warning against mechanizing our sense of self: mistaking our biological, embodied experience for the workings of an algorithm sells ourselves short. He leaves open which theory of consciousness is correct, insisting only that the question remains genuinely unsettled."
+    }
+  ]
+}

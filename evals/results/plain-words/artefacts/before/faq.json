@@ -1,0 +1,57 @@
+{
+  "arm": "before",
+  "generator": "faq",
+  "slug": "noema-mythology-of-conscious-ai",
+  "sourceSha256": {
+    "faq.ts": "adce563f7a8d6c86d30be1dc27918505085bd562487c7cf2cb245cdb998b7cc3"
+  },
+  "blocksSha256": "350eaeb20348e322b9e7b99c2057a367301483d8cc9abd8f00ac9e48795f183d",
+  "at": "2026-09-28T04:09:32.870Z",
+  "items": [
+    {
+      "key": "#01",
+      "field": "question",
+      "text": "Doesn't the impossibility of a perfect silicon neuron replacement fully collapse Chalmers's neural-replacement argument for substrate independence?"
+    },
+    {
+      "key": "#02",
+      "field": "question",
+      "text": "Isn't insisting that life matters for consciousness just another form of the exceptionalism bias the author warns against?"
+    },
+    {
+      "key": "#03",
+      "field": "question",
+      "text": "If simulation never amounts to instantiation, how can Bostrom's simulation hypothesis about our own universe still hold up?"
+    },
+    {
+      "key": "#04",
+      "field": "question",
+      "text": "If human biases explain most claims of AI consciousness, why does the author still admit conscious AI isn't entirely ruled out?"
+    },
+    {
+      "key": "#05",
+      "field": "question",
+      "text": "Why worry more about consciousness accidentally emerging in brain organoids than in the latest LLMs?"
+    },
+    {
+      "key": "#06",
+      "field": "question",
+      "text": "Why does it matter so much to separate actually conscious AI from merely conscious-seeming AI when deciding on rights?"
+    },
+    {
+      "key": "#07",
+      "field": "question",
+      "text": "If our sense of AI consciousness is as involuntary as a visual illusion, can arguments like this one actually change how we treat these systems?"
+    },
+    {
+      "key": "#08",
+      "field": "question",
+      "text": "Given no definitive test for consciousness exists, how can the author be so sure creating conscious AI would be an ethical disaster?"
+    },
+    {
+      "key": "#09",
+      "field": "question",
+      "text": "Since humans have a bad record of denying moral status to animals and other humans, isn't withholding it from AI repeating that mistake?"
+    }
+  ]
+}

@@ -169,6 +169,7 @@ import { anyLost, distinctSources, isDebateDocument } from "./types.js";
    article, both ways round. src/shingles.ts. */
 import { articleShingles, isArticleText, isCopy, shingleOverlap } from "./shingles.js";
 import type { ArticleBlockText, ShingleOverlap } from "./shingles.js";
+import { plainWords } from "./plain-words.js";
 
 export { anyLost, distinctSources, isDebateDocument };
 export type {
@@ -187,8 +188,10 @@ export type {
  *
  * Exported so tests assert against the current value rather than pinning a
  * literal — a fixture that hardcodes the version tests the fixture.
+ *
+ * `debate/2`, 2026-09-28: the prompt's own plain-words wording gave way to the shared `plainWords` section, one rule for every prompt (Greg, 2026-09-28; docs/plans/260926a-plainer-summaries-and-glossary.md, stage 3).
  */
-export const PROMPT_VERSION = "debate/1";
+export const PROMPT_VERSION = "debate/2";
 
 /* ------------------------------------------------------------ the four caps --
    **Their scope is stated because it is otherwise ambiguous** (Sol's F22): one
@@ -1118,10 +1121,7 @@ backing the whole of it — "the stated 10% is wrong; it is at least 30%, which
 makes the warning stronger" disputes and leans-for, truthfully.
 
 "unclear" and "cannot-tell" are correct answers and are drawn as calmly as any
-other. If you cannot tell what a page is doing, say so.
-
-Write plainer than the article, never further from it: use the article's own
-words for the things the article names, and ordinary words for everything else.`;
+other. If you cannot tell what a page is doing, say so.`;
 
 /**
  * Pass A's instructions — the direct-reception search.
@@ -1166,6 +1166,8 @@ not its stance toward some other subject the passage is also about.
 
 Prefer named authors and established venues where you have the choice. No
 ranking by prominence is applied to what you return, and the reader is told so.
+
+${plainWords("explain")}
 
 ANSWER FORMAT
 
@@ -1228,6 +1230,8 @@ not the passage's stance toward some other subject the passage is also about.
 
 Prefer named authors and established venues where you have the choice. No
 ranking by prominence is applied to what you return, and the reader is told so.
+
+${plainWords("explain")}
 
 ANSWER FORMAT
 

@@ -1,0 +1,25 @@
+{
+  "arm": "before-2",
+  "generator": "remember",
+  "slug": "noema-mythology-of-conscious-ai",
+  "sourceSha256": {
+    "converse.ts": "5b830843c35b67a5c1fd1def0cf847a134d01d2d02ba06a4c8593a8eb8623d4a",
+    "plain-words.ts": "6c5f318e82acbbd4c6b1955e83fa3f558322a3082b96e74dcd667528cd37ad02"
+  },
+  "blocksSha256": "350eaeb20348e322b9e7b99c2057a367301483d8cc9abd8f00ac9e48795f183d",
+  "at": "2026-09-28T04:31:21.949Z",
+  "items": [
+    {
+      "key": "mostly-right",
+      "field": "reply",
+      "text": "That \"tied to being a living body\" point is the third of four separate arguments Seth makes against conscious AI, and it's actually the one he's least sure about. He opens it by saying, \"I should say upfront that I don't have a knock-down argument for this position, nor do I think any such argument yet exists\" [spya-hj5y6s], and later calls it \"a minority view\" [spya-qu7j89].\n\nThe argument he leads with, and flags as the big one, is different: \"First, and most important, brains are not computers\" [spya-a8jgf4]. That's about the brain's material, multiscale, non-Turing dynamics — not about life or aliveness per se — and it's separate from the biological-naturalism point about life mattering. He's explicit that these are independent lines of reasoning that don't depend on each other: \"Each of these lines of argument can stand up by itself. You might favor the arguments against computational functionalism while remaining unpersuaded about the merits of biological naturalism\" [spya-nv6tp0].\n\nWorth going back to the \"Brains Are Not Computers\" section [spya-a8jgf4 spya-b0086e spya-p4vmm0] to see how that argument runs on its own, since it's doing more work for his skepticism than the biology-equals-life claim you've landed on.\n\nThe language point holds up fine as you've put it — that's basically what he says about anthropomorphism and why LLMs specifically trigger it [spya-k6fpme].",
+      "context": "Reader's summary: My takeaway: Seth thinks AI probably won't be conscious, because consciousness seems tied to being a living body and not just to running the right software. He also says we're easily fooled because the chatbots talk like us."
+    },
+    {
+      "key": "half-wrong",
+      "field": "reply",
+      "text": "The confabulate/hallucinate point is real, but it's a small piece of the piece's opening argument about psychological biases, not the main point. Seth raises it as one example of how our language \"implicitly confer[s] on them a capacity for experience\" [spya-t29n67] — it's evidence for the larger claim that we're primed to over-attribute consciousness to AI, not the thesis itself.\n\nThe bigger thing worth going back to is the claim that AI becomes conscious once it's complex enough. That's close to the opposite of where Seth lands. He spends most of the essay building the case against what he calls computational functionalism, and sums it up directly: \"Collectively, these arguments make the case that consciousness is very unlikely to simply come along for the ride as AI gets smarter, and that achieving it may well be impossible for AI systems in general, at least for the silicon-based digital computers we are familiar with.\" He says this earlier too, calling out the \"complex enough\" idea by name: \"We certainly should not just assume that consciousness will come along for the ride as AI gets smarter, and if you hear someone saying that real artificial consciousness will magically emerge at the arbitrary threshold of AGI, that's a sure sign of human exceptionalism at work.\"\n\nOn rights, he's also not arguing we should start extending them. His actual position is closer to alarm: \"nobody should be deliberately setting out to create conscious AI, whether in the service of some poorly thought-through techno-rapture, or for any other reason. Creating conscious machines would be an ethical disaster.\" Rights come up mainly as a cost of getting this wrong in either direction — either we wrongly withhold them from something conscious, or we wrongly grant them to something that only seems conscious, which he treats as its own serious problem: \"we might give AI systems 'rights' that they don't actually need, since they would not actually be conscious, restricting our ability to control them for no good reason.\"\n\nWorth rereading the section headed \"Consciousness & Computation\" [spya-d3g67c] and the summary right before \"What (Not) To Do?\" [spya-c5ve5t] — that's where the shape of his actual argument is clearest.",
+      "context": "Reader's summary: I think the main point is that we should stop calling AI mistakes hallucinations, and that AI will become conscious once it is complex enough, so we need to start giving it rights."
+    }
+  ]
+}
