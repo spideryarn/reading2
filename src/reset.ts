@@ -1,28 +1,13 @@
 /**
- * **What a reset does to each step**, in one exhaustive map — and the columns
- * that follows from it.
+ * **What a reset drops**, on the database side — the columns each extra owns,
+ * and which extras an article has now.
  *
- * A reset puts an article back "as if it had just been imported for the first
- * time" (Greg, 2026-09-28): the import steps run again over the stored copy,
- * and everything a *mode* made and stored on the revision is dropped from the
- * new draft. docs/plans/260928a-reset-and-regenerate-article.md is the design;
- * this file is the one place that says which step is which.
- *
- * ## Three roles
- *
- * - **`import`** — `DEFAULT_INGEST_STEPS`. The reset job runs these, with
- *   `extract` forced and `cascadeForce` sweeping the rest in behind it.
- * - **`successor`** — `labels`. Not dropped by hand: a forced `hierarchy`
- *   writes a pending manifest and the reset's publication buys the free labels
- *   job exactly as any import's does.
- * - **`extra`** — everything a mode makes on demand. Dropped from the reset's
- *   draft, columns and step-run rows both; queued again after publication when
- *   the reader asked.
- *
- * `Record<StepName, …>` rather than a list of extras, so a step added to the
- * pipeline is a compile error here until somebody decides what a reset does
- * to it. A list would quietly leave the new step's artefact riding along on a
- * "fresh" article.
+ * Which step is an import, the successor, or an extra is `RESET_ROLE` in
+ * src/reset-role.ts: a leaf, so the browser's reset section reads the same
+ * classification the server acts on rather than a copy of it (Sol F14 on
+ * docs/plans/260928a-reset-and-regenerate-article-stage2-review-sol.md). It is
+ * re-exported here so nothing that imported it from this file had to move.
+ * docs/plans/260928a-reset-and-regenerate-article.md is the design.
  *
  * ## The columns come from `STORAGE`, not from a second list
  *
@@ -35,44 +20,17 @@ import { eq, sql } from "drizzle-orm";
 
 import { getDb } from "./db/client.js";
 import { articleRevisions, articles } from "./db/schema.js";
-import { STEP_ORDER } from "./step-order.js";
+import { extraSteps, type ExtraStep } from "./reset-role.js";
 import { STORAGE, type WholeColumn } from "./store/artifact-storage.js";
 import { ownedSlug } from "./store/owned-slug.js";
-import type { StepName } from "./types.js";
 
-export type ResetRole = "import" | "successor" | "extra";
-
-export const RESET_ROLE: Record<StepName, ResetRole> = {
-  fetch: "import",
-  extract: "import",
-  blocks: "import",
-  hierarchy: "import",
-  labels: "successor",
-  assets: "import",
-  arc: "extra",
-  tweets: "extra",
-  glossary: "extra",
-  quotes: "extra",
-  trajectory: "extra",
-  ideas: "extra",
-  timeline: "extra",
-  quiz: "extra",
-  faq: "extra",
-  sketch: "extra",
-  illustrated: "extra",
-  debate: "extra",
-  citations: "extra",
-};
-
-/** The extra steps, in `STEP_ORDER` order — the order they are queued again in. */
-export function extraSteps(): StepName[] {
-  return STEP_ORDER.filter((step) => RESET_ROLE[step] === "extra");
-}
-
-/** Whether a step is one a reset drops. */
-export function isExtra(step: StepName): boolean {
-  return RESET_ROLE[step] === "extra";
-}
+export {
+  RESET_ROLE,
+  extraSteps,
+  isExtra,
+  type ExtraStep,
+  type ResetRole,
+} from "./reset-role.js";
 
 /**
  * **The `article_revisions` columns each extra step owns**, read off `STORAGE`.
@@ -82,8 +40,8 @@ export function isExtra(step: StepName): boolean {
  * drop, so it throws rather than silently dropping nothing. Checked when first
  * called, which the reset tests do.
  */
-export function extraColumns(): { step: StepName; column: WholeColumn }[] {
-  const out: { step: StepName; column: WholeColumn }[] = [];
+export function extraColumns(): { step: ExtraStep; column: WholeColumn }[] {
+  const out: { step: ExtraStep; column: WholeColumn }[] = [];
   for (const step of extraSteps()) {
     const sites = Object.values(STORAGE[step]);
     if (sites.length === 0) {
@@ -111,7 +69,7 @@ export function extraColumns(): { step: StepName; column: WholeColumn }[] {
  * rather than describing their article; the caller refuses it as a 404 before
  * asking. An article with no published revision has no extras.
  */
-export async function extrasPresent(slug: string): Promise<StepName[]> {
+export async function extrasPresent(slug: string): Promise<ExtraStep[]> {
   const columns = extraColumns();
   /* `is not null` per column rather than the columns: a debate or an
      illustrated brief is a large document, and all this asks is whether it is

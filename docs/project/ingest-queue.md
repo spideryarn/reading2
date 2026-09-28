@@ -785,8 +785,9 @@ queue rather than about the button
 - **The extras are dropped in the draft, when it is minted.** Every artefact column is `carry`, so a
   plain re-run would bring quotes, glossary and the rest along; a reset's draft has them nulled and
   their step-run rows deleted in the minting transaction. The published revision it replaces keeps
-  them. Which steps are extras is `RESET_ROLE` in [`src/reset.ts`](../../src/reset.ts), exhaustive
-  over `StepName`.
+  them. Which steps are extras is `RESET_ROLE` in [`src/reset-role.ts`](../../src/reset-role.ts),
+  exhaustive over `StepName` — a leaf, so the Metadata page's reset section reads the same answer
+  and keeps only the extras' names.
 - **The regeneration is queued by the reset's publication**, beside the labels successor, one
   single-step job per extra the article had — never at the press. Queued at the press, they were
   ordered only by timestamp and could collapse onto an identical job from before the reset.

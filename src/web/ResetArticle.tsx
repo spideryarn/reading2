@@ -44,7 +44,7 @@ import { jobWorthRetrying } from "../job-failure.js";
 import { driverStalled } from "../job-state.js";
 import { worthRetrying } from "../messages.js";
 import { METADATA_RERUN_STEPS } from "../rerun-steps.js";
-import { STEP_ORDER } from "../step-order.js";
+import { extraSteps, isExtra, type ExtraStep } from "../reset-role.js";
 import type { ArticleMetadata, Job, StepName } from "../types.js";
 import { Button } from "@/components/ui/button";
 import { JobProgress } from "./JobProgress.js";
@@ -52,20 +52,14 @@ import { useJobs } from "./useJobs.js";
 import { useStepJob, type StepFailure } from "./useStepJob.js";
 
 /**
- * **What a reader calls each extra, and `null` for a step that is not one.**
+ * **What a reader calls each extra.**
  *
- * Exhaustive over `StepName`, so a new step is a compile error here until
- * somebody names it or says it is not an extra. The *which* is `RESET_ROLE` in
- * src/reset.ts, which the browser cannot import (it reaches the database
- * client); tests/reset-extra-names.test.ts holds the two to the same list.
+ * Only the names live here. *Which* steps are extras is `RESET_ROLE` in
+ * src/reset-role.ts — the same leaf the server acts on — and this map is keyed
+ * by the `ExtraStep` read off it, so a new extra is a compile error here until
+ * somebody names it, and a step that stops being one is an excess key.
  */
-export const RESET_EXTRA_NAME: Record<StepName, string | null> = {
-  fetch: null,
-  extract: null,
-  blocks: null,
-  hierarchy: null,
-  labels: null,
-  assets: null,
+export const RESET_EXTRA_NAME: Record<ExtraStep, string> = {
   arc: "Arc",
   tweets: "Thread",
   glossary: "Glossary",
@@ -81,11 +75,14 @@ export const RESET_EXTRA_NAME: Record<StepName, string | null> = {
   citations: "Citations",
 };
 
+/** A step's reader-facing name if it is an extra, and its step name otherwise. */
+function extraName(step: StepName): string {
+  return isExtra(step) ? RESET_EXTRA_NAME[step] : step;
+}
+
 /** Extras with no row in Metadata's existing *Generate it again* section. */
 const METADATA_RERUN_STEP_SET = new Set<StepName>(METADATA_RERUN_STEPS);
-const RESET_ONLY_PROGRESS = STEP_ORDER.filter(
-  (step) => RESET_EXTRA_NAME[step] !== null && !METADATA_RERUN_STEP_SET.has(step),
-);
+const RESET_ONLY_PROGRESS = extraSteps().filter((step) => !METADATA_RERUN_STEP_SET.has(step));
 
 /** `a, b and c` — the names are a list the reader reads, not a CSV. */
 function listed(names: string[]): string {
@@ -375,7 +372,7 @@ function ResetOnlyRegeneration({
     onFinished,
     "watches-queue",
   );
-  const name = RESET_EXTRA_NAME[step] ?? step;
+  const name = extraName(step);
 
   if (failed) {
     return (
@@ -455,9 +452,9 @@ export function ResetArticle({
   const extras = (provenance?.stages ?? [])
     /* `done` means current, not present. A stale artefact still has a completed
        run and is still a non-null column, which is what the reset route reads. */
-    .filter((stage) => stage.ranAt !== null && RESET_EXTRA_NAME[stage.step] !== null)
+    .filter((stage) => stage.ranAt !== null && isExtra(stage.step))
     .map((stage) => stage.step);
-  const names = extras.map((step) => RESET_EXTRA_NAME[step] ?? step);
+  const names = extras.map(extraName);
   const regenerate = again && extras.length > 0;
   const lookUps = extras.includes("glossary") || extras.includes("citations");
 
@@ -522,7 +519,7 @@ export function ResetArticle({
 
       {job !== null && regenerating.length > 0 ? (
         <p role="status" className="tw:m-0 tw:text-xs tw:text-ink-faint">
-          Then, one after another: {listed(regenerating.map((s) => RESET_EXTRA_NAME[s] ?? s))}.
+          Then, one after another: {listed(regenerating.map(extraName))}.
         </p>
       ) : null}
 
