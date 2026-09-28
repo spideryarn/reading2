@@ -177,6 +177,7 @@ const STEPS = [
   "tweets",
   "glossary",
   "quotes",
+  "trajectory",
   "ideas",
   "timeline",
   "quiz",

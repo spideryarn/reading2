@@ -127,6 +127,9 @@ readers never are.
   answered by passages of the piece itself and never by a written answer. Open it for where the
   promise stops: the words are checked, which passage answers which question is not. Owner-only and
   behind the switch for now.
+- **[trajectory.md](trajectory.md)** — skim a paper at increasing depth: one route through its
+  passages, not in the paper's order, walked with a handful of stops, then a dozen, then more. Open
+  it for Greg's dictated brief, verbatim, and the questions still waiting for him.
 
 The last two band modes — **chat** and **remember**, and the quiz that is remember's other half — are
 under the next heading instead, because what they are about is a passage rather than the whole piece.
