@@ -632,6 +632,36 @@ const MODES_UI = [
     mode: "summary",
     icon: Layers,
   },
+  /* **Straight after Summary, since 2026-09-28**, with Trajectory after it.
+     Greg moved both: *"move Quotes mode and Trajectory mode further towards
+     the left (after Summary)"*. It stood after Ideas before that, on the
+     argument that the bar runs outwards from the article's own words and this
+     is the mode *closest* to them — every row is a sentence out of the piece
+     rather than something a model wrote about it. The move keeps the argument
+     and takes it further: ahead of the "one dimension pulled out" group.
+     docs/project/quotes.md.
+
+     **Not experimental since 2026-09-06**, on Greg's call that the mode is
+     valuable enough to show everybody — so pressing it starts a paid run
+     (activation.ts § MODE_TARGET) for a reader who asked for nothing, as
+     Glossary and Ideas already did. Why, in
+     docs/project/experimental-features.md. */
+  {
+    mode: "quotes",
+    icon: Quote,
+  },
+  /* **Straight after Quotes, since 2026-09-28** — Greg's move, the sentence
+     quoted on the Quotes row above. It is a walk through the article's own
+     Quotes, so it sits beside them. It had been after FAQ, where the plan
+     first put it and Greg had not yet placed it by hand.
+
+     `Route`, used nowhere else — a path with stops on it, which is the mode.
+     Not `ListOrdered`, which is the Tweets link's numbered thread.
+     docs/plans/260928a-trajectory-mode-skim-a-paper-at-increasing-depth.md § 5c. */
+  {
+    mode: "trajectory",
+    icon: Route,
+  },
   {
     mode: "glossary",
     icon: BookA,
@@ -645,26 +675,10 @@ const MODES_UI = [
     mode: "ideas",
     icon: Lightbulb,
   },
-  /* Next again, and it belongs at this end of the order for the same reason
-     Ideas does: the bar runs outwards from the article's own words, and this is
-     the mode that is *closest* to them — every row is a sentence out of the
-     piece rather than something a model wrote about it. Greg set this order by
-     hand, so a new mode goes where it belongs in his reasoning rather than on
-     the end. docs/project/quotes.md.
-
-     **Not experimental since 2026-09-06**, on Greg's call that the mode is
-     valuable enough to show everybody — so pressing it starts a paid run
-     (activation.ts § MODE_TARGET) for a reader who asked for nothing, as
-     Glossary and Ideas already did. Why, in
-     docs/project/experimental-features.md. */
-  {
-    mode: "quotes",
-    icon: Quote,
-  },
   /* **After Ideas and before Search**, which is Greg's placement (2026-08-31)
-     and the reason it lands *here* rather than immediately after the Ideas row:
-     Quotes arrived between the two the same day, and "after Ideas" is a
-     position in the reasoning — with Glossary and Ideas, as a third "here is one
+     and the reason it did not land immediately after the Ideas row: Quotes
+     arrived between the two the same day (it moved to just after Summary on
+     2026-09-28), and "after Ideas" is a position in the reasoning — with Glossary and Ideas, as a third "here is one
      dimension of this piece pulled out" — rather than an array index. It is
      further from the article's own words than either of those, and further than
      Quotes, so it goes at the far end of that group.
@@ -674,7 +688,8 @@ const MODES_UI = [
     icon: Clock,
   },
   /* **After Timeline, at the end of the "one dimension of this piece pulled
-     out" group** — Glossary, Ideas, Quotes, Timeline — because its list is the
+     out" group** — Glossary, Ideas, Timeline; Quotes was in it until
+     2026-09-28 — because its list is the
      piece's own references rather than the web's (that is Debate, further
      out). Greg has not set this one by hand; move it if it is wrong.
 
@@ -697,18 +712,6 @@ const MODES_UI = [
   {
     mode: "faq",
     icon: BadgeQuestionMark,
-  },
-  /* **After FAQ**, as the plan placed it: a walk through the article's own
-     Quotes, so still the article pulled out rather than the web or the
-     reader's own words. Greg has not set this one by hand; move it if it is
-     wrong.
-
-     `Route`, used nowhere else — a path with stops on it, which is the mode.
-     Not `ListOrdered`, which is the Tweets link's numbered thread.
-     docs/plans/260928a-trajectory-mode-skim-a-paper-at-increasing-depth.md. */
-  {
-    mode: "trajectory",
-    icon: Route,
   },
   /* Search was **two** dimmed placeholders in the `SOON` list this file used to
      carry — `Search` and `Highlights`, side by side — and is one mode now. That

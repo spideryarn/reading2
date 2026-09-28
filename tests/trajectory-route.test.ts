@@ -7,13 +7,14 @@
  * plausible implementation gets subtly wrong at the end of a pass.
  */
 import { describe, expect, it } from "vitest";
-import type { TrajectoryStop } from "../src/types.js";
+import type { Block, BlockId, TrajectoryStop } from "../src/types.js";
 import {
   countAt,
   doorAfter,
   effectiveDepth,
   currentStop,
   offeredDepths,
+  positionOf,
   stepStop,
   stopAfterDepthChange,
   visibleRoute,
@@ -173,5 +174,37 @@ describe("the door after the current stop", () => {
 
   it("has nothing to offer at the last stop of the deepest pass", () => {
     expect(doorAfter(ROUTE, 3, "h")).toEqual({ kind: "end" });
+  });
+});
+
+/* Stage 5b: how far through the article each stop sits, for the dot on its row. */
+describe("where a stop sits in the article", () => {
+  const block = (id: string, words: number): Block =>
+    ({ id: id as BlockId, tag: "p", kind: "text", text: "", words, html: "", gistable: true }) as Block;
+  /* 10 + 20 + 60 + 10 = 100 words: a short heading-sized block, then prose. */
+  const BLOCKS = [block("spya-pa2abc", 10), block("spya-pb3def", 20), block("spya-pc4ghj", 60), block("spya-pd5kmn", 10)];
+
+  it("is the words before the block plus half its own, over the whole", () => {
+    expect(positionOf("spya-pa2abc" as BlockId, BLOCKS)).toBeCloseTo(0.05);
+    expect(positionOf("spya-pb3def" as BlockId, BLOCKS)).toBeCloseTo(0.2);
+    expect(positionOf("spya-pc4ghj" as BlockId, BLOCKS)).toBeCloseTo(0.6);
+    expect(positionOf("spya-pd5kmn" as BlockId, BLOCKS)).toBeCloseTo(0.95);
+  });
+
+  it("weighs by words, not by block count", () => {
+    /* Third of four blocks, but most of the words come before its middle. */
+    expect(positionOf("spya-pc4ghj" as BlockId, BLOCKS)).not.toBeCloseTo(2.5 / 4);
+  });
+
+  it("is null for a block it cannot find", () => {
+    expect(positionOf("spya-zz9zzz" as BlockId, BLOCKS)).toBeNull();
+    expect(positionOf("spya-pa2abc" as BlockId, [])).toBeNull();
+  });
+
+  it("falls back to the block's middle by count when the article has no words, never NaN (Sol F36)", () => {
+    const wordless = [block("spya-pa2abc", 0), block("spya-pb3def", 0), block("spya-pc4ghj", 0), block("spya-pd5kmn", 0)];
+    expect(positionOf("spya-pa2abc" as BlockId, wordless)).toBeCloseTo(0.125);
+    expect(positionOf("spya-pc4ghj" as BlockId, wordless)).toBeCloseTo(0.625);
+    expect(positionOf("spya-pa2abc" as BlockId, [block("spya-pa2abc", 0)])).toBeCloseTo(0.5);
   });
 });

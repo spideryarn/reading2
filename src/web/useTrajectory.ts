@@ -9,7 +9,7 @@
  *   the reader writes one (`routeProfileIsStale`, src/trajectory.ts; Sol F7).
  *   `notOnRoute` says how many quotes arrived since — *Find more*, say.
  * - **A prerequisite in the same job.** The step refuses without Quotes, so
- *   when there are none the unforced request is `precededBy: ["quotes"]`, one
+ *   when there are none, or they are stale, the request is `precededBy: ["quotes"]`, one
  *   job that writes both (the mechanism `useIllustrated` uses for the Sketch).
  *   The job's progress names whichever step is running (JobProgress).
  *
@@ -49,16 +49,22 @@ export interface UseTrajectory {
   starting: boolean;
   /** The run in flight was started automatically. `UseFaq.automatic`. */
   automatic: boolean;
+  /**
+   * A run from here would choose the Quotes first — there are none, or they
+   * are stale — so the band can say it will take longer.
+   */
+  quotesFirst: boolean;
   /** Repeat only the GET after a failed read. Never starts a model job. */
   retryRead(): Promise<void>;
   /**
    * **Write it if nobody has** — unforced, for the automatic run and the empty
    * state's button, which must be the same request (useIdeas.ts § `ensure`).
-   * With no Quotes it asks for them first, in the same job.
+   * With no Quotes, or stale ones, it asks for them first, in the same job.
    */
   ensure(): Promise<void>;
   /**
-   * The forced run — the outdated banners' button. It replaces the route.
+   * The forced run — *Plan it again*, under the route and on the outdated
+   * banner. It replaces the route, choosing the Quotes first when `ensure` would.
    * `trajectory` is in FORCE_ONLY_WHEN_NAMED, so forcing it never sweeps the
    * Quotes in (src/pipeline.ts).
    */
@@ -143,16 +149,22 @@ export function useTrajectory(slug: string, quotes: QuotesRead): UseTrajectory {
   }, [refresh, refreshQuotes]);
   const queue = useStepJob(slug, "trajectory", onFinished, "watches-queue");
 
-  /* An unreadable Quotes list is treated as none: the preceding step is
-     unforced, so if the Quotes do exist and are current `stepIsDone` skips it
-     and nothing extra is bought (useStepJob.ts § `precededBy`). */
-  const noQuotes = quotes.status === "none" || quotes.status === "error";
+  /* **The Quotes go first when there are none, or when they are stale** — the
+     article changed under them, so a route planned on them could stop at a
+     passage that has gone (Sol F30 on the plan's stage 5). An unreadable list
+     is treated as none. The preceding step is unforced either way, so Quotes
+     that turn out to exist and be current are skipped by `stepIsDone` and
+     nothing extra is bought (useStepJob.ts § `precededBy`). */
+  const quotesFirst =
+    quotes.status === "none" || quotes.status === "error" || (quotes.status === "ready" && quotes.stale);
   const ensure = useCallback(async () => {
-    await queue.start(noQuotes ? { precededBy: ["quotes"] } : {});
-  }, [queue, noQuotes]);
+    await queue.start(quotesFirst ? { precededBy: ["quotes"] } : {});
+  }, [queue, quotesFirst]);
+  /* Forced on `trajectory` alone — `force` names the step, and `trajectory` is
+     in FORCE_ONLY_WHEN_NAMED — so the Quotes, when they go first, go unforced. */
   const regenerate = useCallback(async () => {
-    await queue.start({ force: true });
-  }, [queue]);
+    await queue.start(quotesFirst ? { force: true, precededBy: ["quotes"] } : { force: true });
+  }, [queue, quotesFirst]);
 
   /**
    * **The automatic run waits for the Quotes' read**, because the request it
@@ -181,6 +193,7 @@ export function useTrajectory(slug: string, quotes: QuotesRead): UseTrajectory {
     stalled: queue.stalled,
     starting: queue.starting,
     automatic: auto && (queue.job !== null || queue.starting),
+    quotesFirst,
     retryRead,
     ensure,
     regenerate,

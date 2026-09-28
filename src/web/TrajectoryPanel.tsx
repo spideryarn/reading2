@@ -67,6 +67,29 @@ export interface TrajectoryRow {
   current: boolean;
   /** Its quote is no longer in the Quotes. */
   missing: boolean;
+  /**
+   * How far through the article the stop's block sits, 0 to 1, in words —
+   * `positionOf` (trajectory-route.ts). `null` when it cannot be placed.
+   */
+  position: number | null;
+}
+
+/**
+ * **Where the stop sits in the article** — a thin track with a dot on it, the
+ * same width on every row, so down the list the dots zig-zag when the route
+ * jumps from the results back to the methods. A hint, not a chart: drawn for
+ * the eye only, and said in words for a screen reader. The plan's stage 5b.
+ */
+function StopPosition({ at, current }: { at: number; current: boolean }) {
+  const pct = Math.round(Math.min(1, Math.max(0, at)) * 100);
+  return (
+    <>
+      <span className="traj-pos" aria-hidden="true">
+        <span className={`traj-pos-dot${current ? " on" : ""}`} style={{ left: `${pct}%` }} />
+      </span>
+      <span className="traj-pos-said sr-only">about {pct}% of the way through</span>
+    </>
+  );
 }
 
 /**
@@ -211,6 +234,13 @@ export function TrajectoryPanel({ owner, view, quoteCount }: Props) {
             {atMost && coverageNote(total, quoteCount) && (
               <p className="traj-note">{coverageNote(total, quoteCount)}</p>
             )}
+            {/* **Plan it again**, pinned under the list as Ideas' and
+                Timeline's are — the plan's stage 5e. It rebuilds the route
+                only: `trajectory` is in `FORCE_ONLY_WHEN_NAMED`, so the force
+                never sweeps the Quotes in; Quotes has its own button for those.
+                Not drawn while the outdated banner is up, which offers the
+                same press already. */}
+            {!outdatedBy(owner) && <div className="traj-again">{run("Plan it again", true)}</div>}
           </div>
         ) : null
       }
@@ -233,8 +263,9 @@ export function TrajectoryPanel({ owner, view, quoteCount }: Props) {
         <div className="gloss-empty">
           <p>Nobody has planned a route through this piece yet.</p>
           <p className="gloss-hint">
-            A short model pass puts the article's Quotes in an order, and takes a few seconds — longer
-            if the Quotes have to be chosen first. Written once and kept.
+            {owner.quotesFirst
+              ? "The article's Quotes are chosen first, then a short model pass puts them in an order — longer than the order alone. Written once and kept."
+              : "A short model pass puts the article's Quotes in an order, and takes a few seconds. Written once and kept."}
           </p>
           {run("Plan the route")}
         </div>
@@ -289,6 +320,7 @@ export function TrajectoryPanel({ owner, view, quoteCount }: Props) {
                           </span>
                           {row.current && row.cue && <span className="traj-cue">{row.cue}</span>}
                         </span>
+                        {row.position !== null && <StopPosition at={row.position} current={row.current} />}
                       </button>
                       {row.current && view.card && !cardIsEmpty(view.card) && (
                         <StopCardView

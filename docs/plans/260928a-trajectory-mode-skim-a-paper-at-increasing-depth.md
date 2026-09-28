@@ -637,3 +637,147 @@ nothing, but on a fresh article the card is simply absent, and Greg asked for th
   path, the track and dots, the order in the bar, Regenerate, a fresh article opened with the switch
   off and on, and a visitor;
 - Sol's plan review and code review; the gates; committed and pushed to `dev`.
+
+## Stage 6 — the route sees what the other modes know, so each pass covers the key points (2026-09-28)
+
+Its own stage, after stage 5, because it is a prompt change. Greg, relayed by the Overseer:
+
+> Does Trajectory mode make use of other modes? Perhaps it should. e.g. Glossary, Ideas... The LLM should ensure that each loop round the spiral is rich and covers most of the key points as best we can given the constraints.
+>
+> — Greg, 2026-09-28
+
+**Today the ordering call sees only the Quotes** (their words, section path and priority). It cannot
+tell which key point a quote carries, so it cannot aim each pass at covering them. Stage 6 gives it
+what other modes have already made, addressed by block id, and asks for coverage.
+
+### What the call is given (added to its input)
+
+- **The Ideas** — each idea's name and one-line statement, with the block ids of its passages. These
+  are the article's key points; a quote whose block is in (or next to) an idea's passage carries it.
+- **The outline** — the tree's section titles, and each section's gist where the summaries have one,
+  so the model can see what each part of the paper is for and which parts no quote reaches.
+- **Not the Glossary.** Terms are vocabulary, not points: a pass that covers the key propositions
+  already meets the terms they use, and the card shows the terms at each stop. Adding them costs
+  input, a freshness dependency, and a wait for a whole-article call, for little coverage signal.
+  (If the measurement says otherwise, it is a small addition.)
+
+The call still **never reads the article's prose**, and its stops are still quotes only — no stop is
+invented where Quotes did not go.
+
+### What it is asked to do
+
+Each pass covers as many of the key points as the quotes allow: **Gist** the headline few, **More**
+most of the rest, **Most** as nearly all as the quotes reach — still nested, still one route, still
+out of paper order when that serves. The prompt follows [prompting-guide.md](../project/prompting-guide.md);
+`PROMPT_VERSION` is bumped, so existing routes show as outdated and offer a rebuild.
+
+### Wait for the Ideas, or route on what exists? — wait
+
+**Decided: wait.** The automatic run asks for `quotes` and `ideas` before the route, in one job
+(`precededBy: ["quotes", "ideas"]`; each skipped by `stepIsDone` when current). The alternative —
+plan on what exists and mark the route for rebuild when Ideas land — gives the reader a route and
+then replaces it under them while they are walking it, and pays for the route twice on every fresh
+article. A wait of one Ideas call, once per article, with the job's progress naming it, is the better
+trade. Stage 5's separate Ideas job then goes, since the route's own job makes them.
+
+- `trajectory` moves after `ideas` in `STEP_ORDER` so that `precededBy` can name it. It is in no
+  cache group, but `ideas … sketch` is one contiguous group, so it goes **after the group**, not
+  between `ideas` and `timeline` (`tests/article-cache-group.test.ts`).
+- **Freshness**: the stamp adds a hash of the Ideas it was given. Ideas regenerated ⇒ the route is
+  outdated (offered, not automatic). A route planned without Ideas (a forced run on an article that
+  has none) is outdated once Ideas exist.
+- Summaries and the outline come from ingest and always exist; their hash joins the stamp too.
+
+### Measured, before and after
+
+On the three test articles of stage 1 (the essay, a normal paper, the long sectioned paper), with
+Ideas generated on each:
+
+- **key-point coverage per pass**: the share of Ideas with a stop in, or adjacent to, one of the
+  idea's passage blocks, at Gist, More and Most — the current prompt (`trajectory/6`) vs the new one;
+- **section coverage** per pass (top-level sections with a stop), words per pass, cost, latency;
+- a read of Gist on each: does it give the headline points?
+
+The numbers go in Progress. If coverage does not improve, the prompt change is not kept.
+
+### Done when
+
+- tests red first for the new input rendering, the ideas hash in the stamp, and the step order;
+- the measurement above, before vs after;
+- Sol's plan review and code review; the gates; committed and pushed.
+
+### How stage 5 lands — two pushes (2026-09-28, the deploy at ~15:50 BST takes whatever is on `dev`)
+
+- **5-i**: 5a flash, 5b position, 5c order, 5d Quotes-first (fix if needed), 5e Regenerate. Changes
+  nothing about who can spend; pushed as soon as it is green and reviewed, if that is before ~15:30.
+- **5-ii**: 5f out of Experimental and 5g the card's sources queued — both change who triggers a paid
+  run, so they go in **one push together with tests of the rule** (a visitor on a shared article or
+  the public shelf queues nothing, client and server). Held for the next deploy if not green by 15:30.
+
+### Stage 5 plan review — GPT Sol ([prompt](260928a-trajectory-mode-stage5-plan-review-prompt.md), [answer](260928a-trajectory-mode-stage5-plan-review-sol.md)), verdict *rethink*
+
+| ID | Sev | Finding | Outcome |
+|---|---|---|---|
+| F28 | P1 | a `?stop=` deep link does not scroll today, so it cannot flash on arrival | accepted — a one-shot initial-stop effect keyed to the initial (slug, stop) |
+| F29 | P1 | direct scrolls leave a stale held flash, and ← → / depth changes do not step the band aside | accepted — one movement helper: drop the held flash, scroll, flash on settled, step aside |
+| F30 | P1 | stale Quotes is the broken case: the route is planned on the stale set | accepted — Quotes precede the route when missing **or stale**, on both run and regenerate |
+| F31 | P1 | the card would not fill as the source jobs finish | 5g — see below |
+| F32 | P1 | four card-source runs on one press are undisclosed spend, and not "part of generating" the route | 5g — see below |
+| F33 | P2 | four jobs serialise per article; the route must reach the queue first | 5g — see below |
+| F34 | P2 | the switch gates the Dock **and** the command bar, not only a button | accepted — plan text corrected here; both tested in 5-ii |
+| F35 | P2 | availability for FAQ (no card link) is not defined by `canOpen` | 5g — from the catalog's experimental rule, if built |
+| F36 | P2 | `positionOf` divides by zero on a zero-word article | accepted — block-order midpoint fallback; missing id → `null` |
+
+**The browser check of 5d** (Sonnet, Playwright, two real local articles with no Quotes):
+
+- **No Quotes — works.** A press on the Trajectory button posts `["quotes","trajectory"]`. The band
+  says *Choosing the quotes*, then plans, and the route appears without a reload. A pasted
+  `?mode=trajectory` URL starts nothing and shows *Plan the route* — by design (`useAutoRun` runs
+  only on a press).
+- **A Quotes run in flight — works.** Two jobs (`["quotes"]`, then `["quotes","trajectory"]`); one
+  Quotes call. The second job waits, skips Quotes as done, and plans. No double spend.
+- **Stale Quotes — broken** (code reading, agreeing with Sol F30): the route is planned on whatever
+  of the stale set still resolves, and Quotes are never re-run. Fixed in 5-i.
+
+**Correction (F34):** the switch decides whether Trajectory is drawn in the Dock *and* offered in the
+command bar. Owner-only is a separate rule (`POLICY.trajectory`, and the band is mounted only for
+owners; the job route resolves the article through its owner). Sol found no non-owner paid path.
+
+### Stage 6, widened — Quotes spread, section stops (2026-09-28)
+
+Greg again, on the same subject:
+
+> Re Trajectory:
+> - It might make sense to make a minimal update to Quotes to increase representativeness a bit more widely across sections
+> - And/or allow Summary content as another kind of content? Or just plain blocklinks to important sections?
+>
+> — Greg, 2026-09-28
+
+This answers trajectory.md's question 6 (coverage), which v1 left as a default. Three steps, **each
+measured and kept only if it earns its place**, in this order, cheapest and least intrusive first:
+
+- **6a. Quotes spread across the major sections.** A minimal nudge to the Quotes prompt: prefer at
+  least one line from every major section that has one worth keeping. Quotes' `PROMPT_VERSION` is
+  bumped, so **existing Quotes show as out of date everywhere** (Quotes mode's banner offers a
+  rebuild) — the cost of improving the one shared set. A line in quotes.md.
+- **6b. A section stop where a major section still has no quote.** A stop that is not a quote: a
+  plain link to the section's opening passage (its first body block), stored as
+  `{ kind: "section", nodeId, … }` beside the quote stops, and drawn as a section stop, not a quote
+  (no quote stroke; the ring and bar on the opening passage). The model may use one only for a
+  top-level section with no quote on the offered list. This changes the stored route's shape, which
+  is JSON on the existing column, not a schema change; old routes read as all-quote.
+- **6c. Summary text only as an orientation line on a section stop** — the section's gist, one line,
+  under the cue, never replacing the passage (vision.md: augment, not replace). Taken only with 6b.
+
+**Measured after each**, on the three test articles: key-point coverage per pass (share of Ideas
+with a stop in or next to a passage block), section coverage per pass, words per pass, cost. The
+before/after numbers go in Progress, and trajectory.md § question 6 says what was decided.
+
+**5g is not built (decided 2026-09-28, after Sol F31–F33/F35 and an Opus arbiter).** Greg's words
+were *"other modes that should also run first as part of generating Trajectory"* — modes the route
+needs. After stage 6 that is Ideas, and it runs first in the route's own job (`precededBy`). Glossary,
+FAQ and Timeline only decorate the stop card; queueing them on the first press would be ~$0.35 of
+spend beside a ~$0.02 route, for things the reader did not press, plus a second job, a
+subscription to refresh the read hooks, and a second definition of availability. The card keeps
+showing what already exists. **Question for Greg**: a disclosed one-press "fill the card" button.
+So 5-ii is now 5f alone (out of Experimental), with the Dock and command-bar tests (F34).

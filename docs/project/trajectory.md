@@ -59,6 +59,27 @@ v2, the scrapbook, is built on top of that:
   it is generated for it: what ties the pieces together is seeing them side by side, not a new
   summary of them.
 
+Stage 5, asked for by Greg on 2026-09-28 (his words are in the
+[plan § Stage 5](../plans/260928a-trajectory-mode-skim-a-paper-at-increasing-depth.md)):
+
+- **A flash on every arrival** — ‹ ›, ← →, the door, going round again, and a depth change that
+  moves you all go through one helper that scrolls to the stop and flashes it with
+  [`flashBlock`](../../src/web/flash.ts) once the scroll settles, and on a narrow window steps the
+  band aside. A row press is a jump and flashes through `beginJump`, once. A `?stop=` link scrolls
+  to its stop and flashes it once when the band opens, leaving the band open. A depth change that
+  keeps your stop does nothing. This is the named exception to flash.ts's "stepping does not
+  flash": the route is out of paper order, so each step is a jump across the article.
+- **Where each stop sits**: a thin muted track with a dot on every row, the same width on each, so
+  the dots zig-zag down the list as the route jumps about. The dot is at the stop's position in
+  words (`positionOf` in [`trajectory-route.ts`](../../src/web/trajectory-route.ts)); the current
+  row's dot is in the accent. A screen reader hears "about 70% of the way through".
+- **Further left in the bar**: Quotes, then Trajectory, straight after Summary (`MODES_UI` in
+  [`Dock.tsx`](../../src/web/Dock.tsx)).
+- **Plan it again**, a quiet button in the foot under a ready route. It rebuilds the route only
+  (`trajectory` is forced by name), and is not drawn while the outdated banner already offers it.
+  **Stale Quotes are chosen again first**, on the automatic run and on this button, as missing ones
+  always were — unforced, so current Quotes cost nothing — and the empty state says when they will be.
+
 ### What we tried for v2
 
 Three static mockups, on real data from the entropy paper

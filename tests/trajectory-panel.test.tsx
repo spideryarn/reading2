@@ -43,12 +43,15 @@ let trajectoryBody: unknown = null;
 let ideasBody: unknown = null;
 /** Every request, so a test can say the card started no job. */
 const requested: { url: string; method: string }[] = [];
+/** The body of every POST, parsed — what a press asked the queue for. */
+const posted: unknown[] = [];
 vi.mock("../src/web/lib/api.js", async () => {
   const real = await vi.importActual<typeof import("../src/web/lib/api.js")>(
     "../src/web/lib/api.js",
   );
   const apiFetch = async (url: string, init?: RequestInit) => {
     requested.push({ url, method: init?.method ?? "GET" });
+    if (init?.method === "POST" && typeof init.body === "string") posted.push(JSON.parse(init.body));
     if (url.startsWith("/api/trajectory/"))
       return trajectoryBody === null
         ? new Response(null, { status: 404 })
@@ -69,10 +72,26 @@ vi.mock("../src/web/lib/api.js", async () => {
 
 /* Scrolls are recorded — jsdom has no layout, and the claim is that a step
    scrolls rather than pushes. comment-jump.test.ts does the same. */
-const { scrolled } = vi.hoisted(() => ({ scrolled: [] as string[] }));
+const { scrolled, flashed } = vi.hoisted(() => ({ scrolled: [] as string[], flashed: [] as string[] }));
 vi.mock("../src/web/scroll.js", async (importOriginal) => {
   const actual = await importOriginal<typeof import("../src/web/scroll.js")>();
-  return { ...actual, scrollToBlock: (id: string) => void scrolled.push(id) };
+  /* The scroll settles at once, so a caller that flashes on "settled" does. */
+  return {
+    ...actual,
+    scrollToBlock: (id: string, _behavior?: ScrollBehavior, done?: (o: "settled") => void) => {
+      scrolled.push(id);
+      done?.("settled");
+    },
+  };
+});
+/* The flash on arrival (stage 5a), recorded: jsdom has no prose to wash. */
+vi.mock("../src/web/flash.js", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("../src/web/flash.js")>();
+  return {
+    ...actual,
+    flashBlock: (id: string) => void flashed.push(id),
+    dropPendingFlash: () => {},
+  };
 });
 
 const { TrajectoryPanel, TrajectoryDoor, coverageNote, trajectoryPromise } = await import(
@@ -189,7 +208,10 @@ let root: Root;
 
 beforeEach(() => {
   scrolled.length = 0;
+  flashed.length = 0;
   requested.length = 0;
+  posted.length = 0;
+  quotesRead = QUOTES_READ;
   ideasBody = null;
   trajectoryBody = { trajectory: ROUTE, stale: false, outdated: false, profileChanged: false, notOnRoute: 0 };
   history.replaceState(null, "", "/read/a-route?mode=trajectory");
@@ -220,6 +242,7 @@ function owner(over: Partial<UseTrajectory> = {}): UseTrajectory {
     stalled: false,
     starting: false,
     automatic: false,
+    quotesFirst: false,
     retryRead: async () => {},
     ensure: async () => {},
     regenerate: async () => {},
@@ -238,9 +261,9 @@ function view(over: Partial<TrajectoryView> = {}): TrajectoryView {
       { depth: 3, label: "Most", count: 4 },
     ],
     rows: [
-      { quoteId: Q[2]!, n: 1, place: "Methods", cue: "What earlier work missed", seen: true, current: false, missing: false },
-      { quoteId: Q[0]!, n: 2, place: "Results", cue: "The headline result", seen: true, current: true, missing: false },
-      { quoteId: Q[3]!, n: 3, place: "Methods", cue: "Where it stops holding", seen: false, current: false, missing: false },
+      { quoteId: Q[2]!, n: 1, place: "Methods", cue: "What earlier work missed", seen: true, current: false, missing: false, position: null },
+      { quoteId: Q[0]!, n: 2, place: "Results", cue: "The headline result", seen: true, current: true, missing: false, position: null },
+      { quoteId: Q[3]!, n: 3, place: "Methods", cue: "Where it stops holding", seen: false, current: false, missing: false, position: null },
     ],
     position: 2,
     card: null,
@@ -315,8 +338,8 @@ describe("the panel", () => {
   it("elides a repeated section path visually but keeps its words for a screen reader", async () => {
     const repeated = view({
       rows: [
-        { quoteId: Q[2]!, n: 1, place: "Methods", cue: null, seen: false, current: false, missing: false },
-        { quoteId: Q[3]!, n: 2, place: "Methods", cue: null, seen: false, current: false, missing: false },
+        { quoteId: Q[2]!, n: 1, place: "Methods", cue: null, seen: false, current: false, missing: false, position: null },
+        { quoteId: Q[3]!, n: 2, place: "Methods", cue: null, seen: false, current: false, missing: false, position: null },
       ],
       position: 1,
     });
@@ -353,10 +376,10 @@ describe("the panel", () => {
 
   it("keeps the promise in the foot, and says how much of the Quotes Most walks", async () => {
     await draw(owner(), view());
-    expect(text(".traj-foot")).toBe(trajectoryPromise(false));
+    expect(text(".traj-foot .traj-note")).toBe(trajectoryPromise(false));
     const most = view({
       depth: 3,
-      rows: [...view().rows, { quoteId: Q[1]!, n: 4, place: "Results", cue: null, seen: false, current: false, missing: false }],
+      rows: [...view().rows, { quoteId: Q[1]!, n: 4, place: "Results", cue: null, seen: false, current: false, missing: false, position: null }],
     });
     await draw(owner(), most, 4);
     expect(text(".traj-foot")).toContain("every one of the article's 4 quotes");
@@ -421,6 +444,57 @@ describe("the panel", () => {
     expect(text(".traj-card")).toContain("Recordings made");
     const links = [...host.querySelectorAll<HTMLButtonElement>(".traj-card .traj-link")];
     expect(links.some((button) => button.textContent?.includes("Recordings made"))).toBe(false);
+  });
+
+  it("offers to plan it again under a ready route, rebuilding the route only (5e)", async () => {
+    let regenerated = 0;
+    let ensured = 0;
+    const o = owner({
+      regenerate: async () => void regenerated++,
+      ensure: async () => void ensured++,
+    });
+    await draw(o, view());
+    const again = [...host.querySelectorAll<HTMLButtonElement>(".traj-again button")];
+    expect(again.map((b) => b.textContent)).toEqual(["Plan it again"]);
+    await act(async () => again[0]!.click());
+    expect([regenerated, ensured]).toEqual([1, 0]);
+  });
+
+  it("does not offer it twice when the outdated banner already does", async () => {
+    await draw(owner({ outdated: true }), view());
+    const buttons = [...host.querySelectorAll<HTMLButtonElement>("button")].filter(
+      (b) => b.textContent === "Plan it again",
+    );
+    expect(buttons).toHaveLength(1);
+    expect(host.querySelector(".traj-again")).toBeNull();
+  });
+
+  it("marks where each stop sits in the article, the current one in the accent (5b)", async () => {
+    const v = view();
+    const positions = [0.8, 0.1, 0.55];
+    await draw(owner(), view({ rows: v.rows.map((r, i) => ({ ...r, position: positions[i]! })) }));
+    const rows = [...host.querySelectorAll<HTMLElement>(".traj-row")];
+    const dots = rows.map((r) => r.querySelector<HTMLElement>(".traj-pos-dot"));
+    expect(dots.map((d) => d?.style.left)).toEqual(["80%", "10%", "55%"]);
+    expect(dots.map((d) => d?.classList.contains("on"))).toEqual([false, true, false]);
+    /* Drawn for the eye; said in words for a screen reader. */
+    expect(rows[0]!.querySelector(".traj-pos")?.getAttribute("aria-hidden")).toBe("true");
+    expect(rows[0]!.querySelector(".traj-pos-said")?.textContent).toBe("about 80% of the way through");
+    expect(rows[1]!.querySelector(".traj-pos-said")?.classList.contains("sr-only")).toBe(true);
+  });
+
+  it("draws no track for a stop it cannot place", async () => {
+    await draw(owner(), view());
+    expect(host.querySelector(".traj-pos")).toBeNull();
+    expect(host.querySelector(".traj-pos-said")).toBeNull();
+  });
+
+  it("says when the Quotes will be chosen first", async () => {
+    const empty = view({ rows: [], position: 0, depth: null });
+    await draw(owner({ status: "none", trajectory: null, quotesFirst: true }), empty);
+    expect(text(".gloss-hint")).toContain("Quotes are chosen first");
+    await draw(owner({ status: "none", trajectory: null }), empty);
+    expect(text(".gloss-hint")).not.toContain("chosen first");
   });
 
   it("offers to plan a route when there is none", async () => {
@@ -494,6 +568,8 @@ const QUOTES_READ: QuotesRead = {
   reload: async () => {},
   refresh: async () => {},
 };
+/** The Quotes read the band is handed; a test may pose it stale. */
+let quotesRead: QuotesRead = QUOTES_READ;
 
 /** The prose's quote marks, as `useQuoteMarks` would have built them. */
 const MARKS: Found[] = resolveQuotes(
@@ -523,7 +599,7 @@ function Harness({ covers = false }: { covers?: boolean }) {
       slug: "a-route",
       blocks: BLOCKS,
       tree: TREE,
-      quotes: QUOTES_READ,
+      quotes: quotesRead,
       quoteMarks: MARKS,
       covers,
       onAway: () => void away++,
@@ -691,6 +767,130 @@ describe("the band, walked", () => {
     expect(away).toBe(1);
     expect(scrolled).toContain(`jump ${B[0]}`);
     expect(param("stop")).toBe(Q[0]);
+  });
+
+  it("places each row's stop in the article by its words (5b)", async () => {
+    history.replaceState(null, "", "/read/a-route?mode=trajectory&depth=3");
+    await mount();
+    /* Four blocks of seven words each; route order is blocks 2, 0, 3, 1. */
+    const left = [...host.querySelectorAll<HTMLElement>(".traj-pos-dot")].map((d) => d.style.left);
+    expect(left).toEqual(["63%", "13%", "88%", "38%"]);
+  });
+
+  it("does not flash on an ordinary open, with no stop in the address (5a)", async () => {
+    await mount();
+    expect(flashed).toEqual([]);
+  });
+
+  it("flashes the stop's block on a step, and on the door's next stop (5a)", async () => {
+    await mount();
+    await act(async () => void control!.step(1));
+    await settled();
+    expect(flashed).toEqual([B[0]]);
+    await act(async () => void control!.step(-1));
+    await settled();
+    expect(flashed).toEqual([B[0], B[2]]);
+    await act(async () => control!.advance());
+    await settled();
+    expect(flashed).toEqual([B[0], B[2], B[0]]);
+  });
+
+  it("flashes on ‹ › in the band too, and steps aside after on a narrow window (5a)", async () => {
+    await mount(true);
+    await act(async () => host.querySelector<HTMLButtonElement>('[aria-label="Next stop"]')!.click());
+    await settled();
+    expect(flashed).toEqual([B[0]]);
+    expect(away).toBe(1);
+  });
+
+  it("steps aside on ← → and on a depth change that moves, as on ‹ › (Sol F29)", async () => {
+    await mount(true);
+    /* A depth change that keeps the stop moves nobody, so the band stays. */
+    await act(async () => host.querySelectorAll<HTMLButtonElement>(".traj-depth")[2]!.click());
+    await settled();
+    expect([param("stop"), flashed, away]).toEqual([Q[2], [], 0]);
+    /* The keys reach the band through the published control, not the panel. */
+    await act(async () => void control!.step(1));
+    await settled();
+    expect([flashed, away]).toEqual([[B[0]], 1]);
+    /* The door, to the next stop on Most. */
+    await act(async () => control!.advance());
+    await settled();
+    expect([flashed, away]).toEqual([[B[0], B[3]], 2]);
+    /* Back to Gist, which does not have that stop: the reader is moved. */
+    await act(async () => host.querySelectorAll<HTMLButtonElement>(".traj-depth")[0]!.click());
+    await settled();
+    expect(param("depth")).toBe("1");
+    expect(flashed).toHaveLength(3);
+    expect(away).toBe(3);
+  });
+
+  it("flashes when going round again moves the reader, and not when a depth change keeps the stop (5a)", async () => {
+    await mount();
+    await act(async () => host.querySelectorAll<HTMLButtonElement>(".traj-depth")[2]!.click());
+    await settled();
+    expect(flashed, "the same stop: nothing was jumped to").toEqual([]);
+
+    history.replaceState(null, "", `/read/a-route?mode=trajectory&depth=1&stop=${Q[0]}`);
+    await mount();
+    flashed.length = 0;
+    await act(async () => control!.advance());
+    await settled();
+    expect(param("stop")).toBe(Q[3]);
+    expect(flashed).toEqual([B[3]]);
+  });
+
+  it("leaves a row press's flash to the jump it makes, so it flashes once (5a)", async () => {
+    await mount();
+    await act(async () => host.querySelectorAll<HTMLButtonElement>(".traj-go")[1]!.click());
+    await settled();
+    /* `onJump` → `beginJump` flashes in the real reader; the band adds none. */
+    expect(scrolled).toEqual([`jump ${B[0]}`]);
+    expect(flashed).toEqual([]);
+  });
+
+  it("brings a deep link's stop into view and flashes it, once (5a, Sol F28)", async () => {
+    history.replaceState(null, "", `/read/a-route?mode=trajectory&depth=2&stop=${Q[3]}`);
+    await mount();
+    expect(scrolled).toEqual([B[3]]);
+    expect(flashed).toEqual([B[3]]);
+    /* Once: a re-render, or the data settling, does not do it again. */
+    await settled();
+    expect([scrolled, flashed]).toEqual([[B[3]], [B[3]]]);
+    /* And a step after it is its own arrival, not a second deep link. */
+    await act(async () => void control!.step(-1));
+    await settled();
+    expect(flashed).toEqual([B[3], B[0]]);
+  });
+
+  it("leaves the band open over a deep link on a narrow window", async () => {
+    /* A shared link opens the band (Reader.tsx § bandAway); the flash is held
+       behind it and fires when the band steps aside (flash.ts). */
+    history.replaceState(null, "", `/read/a-route?mode=trajectory&depth=2&stop=${Q[3]}`);
+    await mount(true);
+    expect([scrolled, away]).toEqual([[B[3]], 0]);
+  });
+
+  it("does nothing for a deep link whose stop is not on the pass", async () => {
+    history.replaceState(null, "", `/read/a-route?mode=trajectory&depth=1&stop=${Q[1]}`);
+    await mount();
+    expect([scrolled, flashed]).toEqual([[], []]);
+  });
+
+  it("plans it again with the route forced, and nothing else when the Quotes are current (5e)", async () => {
+    await mount();
+    await act(async () => host.querySelector<HTMLButtonElement>(".traj-again button")!.click());
+    await settled();
+    expect(posted).toEqual([{ slug: "a-route", steps: ["trajectory"], force: ["trajectory"] }]);
+  });
+
+  it("plans it again with stale Quotes chosen first, unforced (5e, Sol F30)", async () => {
+    quotesRead = { ...QUOTES_READ, stale: true };
+    await mount();
+    await act(async () => host.querySelector<HTMLButtonElement>(".traj-again button")!.click());
+    await settled();
+    /* Only the route is forced; `stepIsDone` decides about the Quotes. */
+    expect(posted).toEqual([{ slug: "a-route", steps: ["quotes", "trajectory"], force: ["trajectory"] }]);
   });
 
   it("takes its passage and its handle with it when it goes", async () => {

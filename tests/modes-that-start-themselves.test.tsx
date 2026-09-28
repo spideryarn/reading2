@@ -661,6 +661,34 @@ describe("a press", () => {
     expect(posts).toEqual([{ slug: "constitution", steps: ["quotes", "trajectory"] }]);
   });
 
+  /* Sol F30 on plan 260928a stage 5: Quotes that exist but are stale — the
+     article changed under them — must be chosen again before the route, or it
+     is planned on passages that may have gone. The preceding step is unforced,
+     so current Quotes are skipped by `stepIsDone` and cost nothing. */
+  it("chooses stale Quotes again before planning the route", async () => {
+    trajectoryQuotes = { ...SETTLED_EMPTY_QUOTES_READ, status: "ready", stale: true };
+    try {
+      await open("plain");
+      await press("Trajectory");
+      await settle();
+      expect(posts).toEqual([{ slug: "constitution", steps: ["quotes", "trajectory"] }]);
+    } finally {
+      trajectoryQuotes = null;
+    }
+  });
+
+  it("plans the route alone when the Quotes are there and current", async () => {
+    trajectoryQuotes = { ...SETTLED_EMPTY_QUOTES_READ, status: "ready" };
+    try {
+      await open("plain");
+      await press("Trajectory");
+      await settle();
+      expect(posts).toEqual([{ slug: "constitution", steps: ["trajectory"] }]);
+    } finally {
+      trajectoryQuotes = null;
+    }
+  });
+
   it("waits for the Quotes' read before deciding what the route press buys", async () => {
     /* The request depends on the answer — the route alone, or the Quotes
        first — so a press made while the Quotes are still loading must spend

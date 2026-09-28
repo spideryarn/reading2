@@ -178,7 +178,9 @@ mode-specific behaviours"* — and the one he asked for in the brief:
 The seam is one optional argument to `useArrowNav` in [`keynav.ts`](../../src/web/keynav.ts): a
 horizontal handler that `Reader` passes only while Trajectory is open, and that is the band's own
 `step` — so the keys, the band's ‹ › and the door in the prose are one rule
-([`trajectory-route.ts`](../../src/web/trajectory-route.ts)). It runs **after every guard** on this
+([`trajectory-route.ts`](../../src/web/trajectory-route.ts)), and each of them flashes the stop it
+lands on and, on a narrow window, steps the band aside (since 2026-09-28,
+[trajectory.md](trajectory.md) § What shipped). It runs **after every guard** on this
 page: no modifiers, not while typing, not when a widget already handled the key, no auto-repeat. The
 route does not wrap, so at either end the handler answers that it took nothing and the key goes back
 to the browser, the same concession ↑ / ↓ make at the ends of the article. A step replaces

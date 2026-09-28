@@ -11,7 +11,7 @@
  * docs/plans/260928a-trajectory-mode-skim-a-paper-at-increasing-depth.md
  * § The mode (client) is the spec every rule below is quoted from.
  */
-import type { TrajectoryDepth, TrajectoryStop } from "../types.js";
+import type { Block, BlockId, TrajectoryDepth, TrajectoryStop } from "../types.js";
 
 /** The three depths, shallowest first. */
 export const DEPTHS: readonly TrajectoryDepth[] = [1, 2, 3];
@@ -178,4 +178,33 @@ export function doorAfter(
   if (next !== null) return { kind: "next", quoteId: next };
   const deeper = offeredDepths(stops).find((d) => d > depth);
   return deeper === undefined ? { kind: "end" } : { kind: "again", depth: deeper };
+}
+
+/**
+ * **How far through the article a block sits**, 0 to 1 — the dot on each stop's
+ * row (the plan's stage 5b). The words of every block before it plus half its
+ * own, over the article's total, so a stop reads at its middle.
+ *
+ * **Words, not blocks**: a heading, a caption and a 300-word paragraph are one
+ * block each, so a paper with many short blocks up front would look further
+ * through than it reads. Words are what "how far through" means to a reader,
+ * and what the spine's own sizes answer in. `null` for a block that is not in
+ * the article.
+ *
+ * **Never NaN** (Sol F36): an article whose blocks all count zero words — a
+ * scan with no text layer, say — falls back to the block's middle by count,
+ * `(index + ½) / count`, rather than dividing by nothing.
+ */
+export function positionOf(blockId: BlockId, blocks: readonly Block[]): number | null {
+  let index = -1;
+  let before = 0;
+  let total = 0;
+  for (const [i, b] of blocks.entries()) {
+    if (index === -1 && b.id === blockId) index = i;
+    else if (index === -1) before += b.words;
+    total += b.words;
+  }
+  if (index === -1) return null;
+  if (total <= 0) return (index + 0.5) / blocks.length;
+  return (before + (blocks[index]?.words ?? 0) / 2) / total;
 }

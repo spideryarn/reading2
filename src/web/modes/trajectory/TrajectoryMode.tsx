@@ -24,6 +24,7 @@ import { depthParam, stopParam } from "../../params.js";
 import { usePassageLifecycle } from "../../passage-lifecycle.js";
 import { useRenderCount } from "../../perf.js";
 import { quoteStroke } from "../../QuotesPanel.js";
+import { dropPendingFlash, flashBlock } from "../../flash.js";
 import { scrollToBlock } from "../../scroll.js";
 import { type Found, resolveTrajectoryStop } from "../../search-hits.js";
 import {
@@ -33,6 +34,7 @@ import {
   doorAfter,
   effectiveDepth,
   offeredDepths,
+  positionOf,
   stepStop,
   stopAfterDepthChange,
   visibleRoute,
@@ -261,18 +263,30 @@ function useTrajectoryMode({
 
   const blockOf = useCallback((quoteId: string) => byId.get(quoteId)?.blockId ?? null, [byId]);
 
-  /** A step along the route: replaces, and always scrolls the stop near the top. */
+  /**
+   * **Every direct movement along the route goes through here** — ‹ ›, ← →,
+   * the door, going round again, a depth change that moves you (Sol F29): the
+   * stop's block scrolled near the top and flashed when the glide settles
+   * (`arrive`), and on a narrow window the band steps aside so the prose it
+   * landed on can be seen. One helper, so the keys cannot do less than the
+   * buttons. A row press is not here: it is a jump, through `onJump`.
+   */
+  const moveTo = useCallback(
+    (block: BlockId) => {
+      arrive(block);
+      if (covers) onAway();
+    },
+    [covers, onAway],
+  );
+
+  /** A step along the route: replaces, and moves the reader to the stop. */
   const goStep = useCallback(
     (quoteId: string) => {
       void setRoute({ stop: quoteId }, { history: "replace" });
-      /* `scrollToBlock`, not `jumpTo`: traversal writes no history entry of its
-         own, and `useReadingPosition` replaces `?at=` when the scroll settles —
-         comment-jump.ts § stepToComment, which is the same argument. It puts
-         the block's top just under the bars, which is "near the top". */
       const block = blockOf(quoteId);
-      if (block) scrollToBlock(block);
+      if (block) moveTo(block);
     },
-    [setRoute, blockOf],
+    [setRoute, blockOf, moveTo],
   );
 
   const changeDepth = useCallback(
@@ -281,14 +295,15 @@ function useTrajectoryMode({
       const next = stopAfterDepthChange(stops, depth, to, current?.quoteId ?? null);
       /* **One update, pushed** — depth and stop together. */
       void setRoute({ depth: to, stop: next }, { history: "push" });
-      /* Scroll only when the change moved the reader. Staying put is the
-         point of "changing depth keeps your place". */
+      /* Scroll — and flash — only when the change moved the reader. Staying
+         put is the point of "changing depth keeps your place", and nothing
+         was jumped to. */
       if (next !== null && next !== current?.quoteId) {
         const block = blockOf(next);
-        if (block) scrollToBlock(block);
+        if (block) moveTo(block);
       }
     },
-    [depth, stops, current, setRoute, blockOf],
+    [depth, stops, current, setRoute, blockOf, moveTo],
   );
 
   const step = useCallback(
@@ -333,6 +348,28 @@ function useTrajectoryMode({
   const stableStep = useCallback((dir: -1 | 1) => latest.current.step(dir), []);
   const stableAdvance = useCallback(() => latest.current.advance(), []);
   const stopBlock = quote?.blockId ?? null;
+
+  /* **A deep link's stop is brought into view and flashed, once** — the
+     plan's stage 5a and Sol F28. `?at=` is the only address the reading view
+     restores (useReadingPosition), so without this a link to a stop opened
+     wherever the page happened to be. The `?stop=` the band opened on is
+     remembered, and the first time a current stop resolves to a block (the
+     route and the Quotes arrive over the wire) it is `arrive`d at if it is
+     that stop, and forgotten either way — a link whose stop fell back to the
+     first one gets nothing. **One-shot, not an effect on `current`**, which
+     would move the reader a second time after every step and row press.
+
+     `arrive`, not `moveTo`: the band does not step aside. A shared link opens
+     the band (Reader.tsx § `bandAway`); on a narrow window the flash is held
+     behind it and fires when the band steps aside (flash.ts). */
+  const linked = useRef(asked.stop);
+  useEffect(() => {
+    if (linked.current === null || current === null || stopBlock === null) return;
+    const named = linked.current === current.quoteId;
+    linked.current = null;
+    if (named) arrive(stopBlock);
+  }, [current, stopBlock]);
+
   const control = useMemo<TrajectoryControl | null>(
     () =>
       current === null
@@ -369,9 +406,11 @@ function useTrajectoryMode({
           /* A stop whose quote is no longer in the Quotes: a row with nowhere
              to go. The stale banner says why. */
           missing: q === undefined,
+          /* How far through the article, in words — the dot on the row (5b). */
+          position: q ? positionOf(q.blockId, blocks) : null,
         };
       }),
-    [route, byId, index, tree, depth, current],
+    [route, byId, index, tree, depth, current, blocks],
   );
 
   /** Choosing a stop in the band: a jump, and on a narrow window the band steps aside. */
@@ -388,11 +427,12 @@ function useTrajectoryMode({
     },
     [setRoute, blockOf, onJump, covers, onAway],
   );
+  /* ‹ › — the band's own buttons. Stepping aside is `moveTo`'s, so the keys get it too. */
   const onStep = useCallback(
     (dir: -1 | 1) => {
-      if (step(dir) && covers) onAway();
+      step(dir);
     },
-    [step, covers, onAway],
+    [step],
   );
 
   /* **The stop card**, gathered for the current stop only, from what the
@@ -416,6 +456,27 @@ function useTrajectoryMode({
     onOpen,
     canOpen,
   };
+}
+
+/**
+ * **Arriving at a stop** — by stepping (`moveTo`, above) or by a deep link:
+ * the block scrolled near the top, and flashed once the glide settles, the
+ * rule `beginJump` (keynav.ts) follows so a flash never finishes mid-glide.
+ * Stepping elsewhere does not flash; a Trajectory step does, because the route
+ * is out of paper order and each step lands anywhere in the article — flash.ts
+ * names the exception. The plan's stage 5a.
+ *
+ * `scrollToBlock`, not `jumpTo`: traversal writes no history entry of its own,
+ * and `useReadingPosition` replaces `?at=` when the scroll settles —
+ * comment-jump.ts § stepToComment, the same argument. A row press is not here:
+ * it is a jump, through `onJump` → `beginJump`, which already flashes.
+ */
+function arrive(block: BlockId): void {
+  /* A landing still held behind a covering band belongs to the step before. */
+  dropPendingFlash();
+  scrollToBlock(block, "smooth", (outcome) => {
+    if (outcome === "settled") flashBlock(block);
+  });
 }
 
 /** A stop's cue, or — on a route written before cues — its role. */
