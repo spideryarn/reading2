@@ -368,6 +368,22 @@ describe("the row", () => {
     // Article, Added, … — the second cell is Added.
     expect(cells[1]?.querySelector("button")).toBeNull();
   });
+
+  /**
+   * **The scroll box is the containing block for the `sr-only` labels inside
+   * it.** Found in the browser at 390px and 320px, 2026-09-28: the Actions
+   * header's `sr-only` span is `position: absolute`, and with no positioned
+   * ancestor its box was placed against the table's full intrinsic width
+   * rather than clipped by the scrolling wrapper — so the *page* scrolled
+   * sideways by ~300px. jsdom has no layout, so this pins the class that fixes
+   * it; the browser check in plan 260928a is the measurement.
+   */
+  it("positions the scroll box, so an sr-only label cannot widen the page", () => {
+    paint();
+    const box = host.querySelector("table")?.parentElement;
+    expect(box?.className).toMatch(/\btw:overflow-x-auto\b/);
+    expect(box?.className).toMatch(/\btw:relative\b/);
+  });
 });
 
 /* ------------------------------------------------------ the Table control -- */

@@ -552,8 +552,17 @@ export function DataTable<T>({
   return (
     /* The table scrolls inside its own box rather than pushing the page
        sideways: a horizontally scrolling *page* makes everything hard to read,
-       not just the table. */
-    <div className="tw:overflow-x-auto tw:rounded-lg tw:border tw:border-border">
+       not just the table.
+
+       **`relative` is half of that promise.** `overflow` clips only the
+       descendants it contains, and an absolutely positioned one — every
+       `sr-only` label in a header or cell — is contained by its nearest
+       *positioned* ancestor, which without this was far outside the table. So
+       the Actions header's hidden label sat against the table's full intrinsic
+       width and the page scrolled ~300px sideways at 390px, with nothing
+       visible to show why. Measured in the browser, 2026-09-28 (plan 260928a);
+       the bug predates that plan and only a narrow window shows it. */
+    <div className="tw:relative tw:overflow-x-auto tw:rounded-lg tw:border tw:border-border">
       <table className="tw:w-full tw:border-collapse tw:text-sm">
         <caption className="tw:sr-only">{caption}</caption>
         <thead>

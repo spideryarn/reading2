@@ -199,3 +199,15 @@ The `shelf-topics` session is adding topic filters to the same page. Edits to `L
   Unknown stored ids are dropped one by one rather than wiping the list. Open for the browser check:
   whether a long-press on a header also sorts on lift, and whether a finger starting a scroll on the
   Columns button opens it (Radix opens on `pointerdown`; `ShelfActionsMenu` works around this).
+- 2026-09-28 — stage 2 landed (f63693cf). Sol code review: ready; fixed S2-1 (P2, a finger starting a
+  scroll on Columns opened it) and S2-2 (P2, lifting after a header long-press also re-sorted) —
+  3d718f12. Both open questions from the stage-2 entry are answered by those fixes.
+- 2026-09-28 — stage 3. Browser check (Sonnet, Playwright, system Chrome, 38 local articles): all five
+  behaviours PASS at 1280/390/320 — whole titles, the row card (one at a time, instant along the
+  titles, `oklch(0.26 0 0)` panel), the card on Tab, Columns and right-click hiding with focus to the
+  neighbouring header and the value moving into the card, persistence across reload, click-to-sort;
+  a real CDP touch long-press opened the header menu without re-sorting. **One FAIL, older than this
+  plan:** at 390 and 320px the page scrolled ~300px sideways — the Actions header's `sr-only` label is
+  absolutely positioned with no positioned ancestor, so `overflow-x-auto` did not contain it. Fixed
+  with `relative` on `DataTable`'s scroll box (which `/admin` shares). Docs: library.md § The table's
+  row card, whole titles, and columns you can hide; the file table in tooltips.md.
