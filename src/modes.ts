@@ -209,6 +209,14 @@ export const MODES = [
      article asks the reader; not Ideas, which are propositions nobody asks.
      docs/plans/260916d-faq-mode.md, docs/project/faq.md. */
   "faq",
+  /* 2026-09-28: a route through the article's own Quotes, walked at three
+     depths — a handful of stops, then a dozen, then most of them — in an order a
+     model chose for this reader rather than the paper's. The stops are the
+     quotes; the mode adds only an order, a depth and a short role line. Behind
+     the experimental switch and owner-only for v1.
+     docs/plans/260928a-trajectory-mode-skim-a-paper-at-increasing-depth.md,
+     docs/project/trajectory.md. */
+  "trajectory",
 ] as const;
 export type Mode = (typeof MODES)[number];
 

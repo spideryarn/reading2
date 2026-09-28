@@ -69,11 +69,12 @@ Write the paths out literally on both commands. In zsh an unquoted `$FILES` is *
 
 ## Deciding what to commit and what to throw away is yours
 
-Greg, 2026-09-10: get input from **Fable** (a subagent with `model: "fable"`) when you cannot tell
+Greg, 2026-09-10: get input from **Opus** (a subagent with `model: "opus"`; Fable until Greg
+retired it on 2026-09-28) when you cannot tell
 whether a batch is finished work, an abandoned experiment, or somebody's scratch — and then decide.
 Do not put the question to Greg. The bar for deleting is higher than for skipping: a batch you skip
 is still there next run, a batch you delete is not, so delete only untracked files that nothing
-references, that no doc or plan says should be committed, and that Fable agrees are not work; say in
+references, that no doc or plan says should be committed, and that Opus agrees are not work; say in
 the report what you deleted and why. A batch whose disposal really is a product call (data that a
 doc says is evidence, results a plan cites) is committed rather than deleted, and the doubt is
 recorded in the message.

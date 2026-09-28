@@ -98,6 +98,7 @@ import type {
   Quotes,
   SearchRun,
   Timeline,
+  Trajectory,
 } from "../src/types.js";
 import type { SavedCriterion } from "../src/saved-criteria.js";
 
@@ -266,6 +267,9 @@ const CITATION_TITLE = "Elements of Episodic Memory";
 /* A question — the row's own content, not the foot's promise, which is a
    constant a panel with no rows would still be free to draw. */
 const FAQ_QUESTION = "Why trust a rig nobody could yet explain?";
+/* The current stop's role — drawn on the current row only, so a panel that
+   drew the stepper and no rows would not satisfy it. */
+const TRAJECTORY_ROLE = "Where the chapter turns";
 const SKETCH_NODE = "The calibrated rig";
 const SEARCH_CRITERION = "wherever the piece leans on an unnamed source";
 const CRITERION_TEXT = "every claim that rests on a single study";
@@ -411,6 +415,21 @@ const FAQ: Faq = {
     overCap: 0,
     malformed: 0,
   },
+  generatedAt: "2026-09-01T09:00:00.000Z",
+  elapsedMs: 1,
+};
+
+/* One stop, on the one quote above — a route is quote ids and nothing else. */
+const TRAJECTORY: Trajectory = {
+  version: "test",
+  generator: "test",
+  slug: SLUG,
+  sourceHash: "hash",
+  profileHash: null,
+  stops: [{ quoteId: "spya-qte234", depth: 1, role: TRAJECTORY_ROLE }],
+  visible: [1, 1, 1],
+  offered: 1,
+  dropped: { unknownQuote: 0, duplicate: 0, sameBlock: 0, malformed: 0, badRole: 0, overCap: 0, collapsed: 0 },
   generatedAt: "2026-09-01T09:00:00.000Z",
   elapsedMs: 1,
 };
@@ -677,6 +696,7 @@ const EVERY_TARGET: Record<AutoRunTarget, true> = {
   debate: true,
   citations: true,
   faq: true,
+  trajectory: true,
   sketch: true,
   illustrated: true,
   tweets: true,
@@ -711,6 +731,10 @@ function artefact(url: string): Response | null {
     return has ? json({ citations: CITATIONS, stale: false, outdated: false }) : GONE();
   if (url.startsWith("/api/faq/"))
     return has ? json({ faq: FAQ, stale: false, outdated: false }) : GONE();
+  if (url.startsWith("/api/trajectory/"))
+    return has
+      ? json({ trajectory: TRAJECTORY, stale: false, outdated: false, profileChanged: false, notOnRoute: 0 })
+      : GONE();
   if (url.startsWith("/api/sketch/"))
     return has || sketchDrawn
       ? json({ sketch: SKETCH, stale: false, outdated: false, profileChanged: false })
@@ -1092,6 +1116,10 @@ const SPENDS: Record<Mode, Spend> = {
   citations: { kind: "posts", steps: ["citations"] },
   /* One model pass over the article, like Ideas. */
   faq: { kind: "posts", steps: ["faq"] },
+  /* **Two steps, and the first is the point**: with no Quotes the route has
+     nothing to order, so the one press asks for the Quotes first in the same
+     job (`precededBy`, src/web/useTrajectory.ts). Phase A serves no Quotes. */
+  trajectory: { kind: "posts", steps: ["quotes", "trajectory"] },
   /* **The one mode where the button and the target are not the same word**,
      and the one row where "what it costs" and "what it arms" are two questions.
 
@@ -1325,6 +1353,7 @@ const DRAWS: Record<Mode, Draws> = {
      foot's sentences, which are constants a panel with no rows still draws. */
   citations: { kind: "band", where: ".mode-band.citations", says: CITATION_TITLE },
   faq: { kind: "band", where: ".mode-band.faq", says: FAQ_QUESTION },
+  trajectory: { kind: "band", where: ".mode-band.trajectory", says: TRAJECTORY_ROLE },
   /* A node **inside** the drawing, not the drawing's title: a title is drawn
      from the artefact's header and survives a scene that painted nothing. */
   diagram: { kind: "band", where: ".mode-band.diag", says: SKETCH_NODE },

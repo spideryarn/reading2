@@ -132,7 +132,7 @@ import { pgJobStore } from "../src/store/pg-jobs.js";
 import { jobWorthRetrying } from "../src/job-failure.js";
 import { parseJobRequest } from "../src/routes.js";
 import { currentOwnerId, DEV_OWNER_ID, runAsOwner } from "../src/owner.js";
-import type { Job, JobStep, StepName } from "../src/types.js";
+import type { Job, JobReset, JobStep, StepName } from "../src/types.js";
 import { bareArticles } from "./helpers/bare-article.js";
 import { pgReady } from "./helpers/pg-ready.js";
 import { FIXTURE_ROOT } from "./helpers/require-fixture.js";
@@ -778,6 +778,7 @@ describe("the work key", () => {
     profile?: string;
     upload?: { id: string; filename: string };
     url?: string;
+    reset?: JobReset;
   }[] = [
     { names: ["fetch"], forced: [] },
     { names: ["fetch"], forced: ["fetch"] },
@@ -803,6 +804,31 @@ describe("the work key", () => {
     /* And the same address spelled differently is the *same* work, which is
        what `urlKey` is for — so these two must agree with each other. */
     { names: ["fetch"], forced: [], url: "http://a.example/news" },
+    /* **A reset, which is a re-read in every other dimension.** Its steps and
+       forcing are exactly a plain `force: ["extract"]` re-read's, so without
+       `reset` in both rules a reset would be handed that queued re-read and
+       reset nothing. Every reset plan below deliberately shares one active-work
+       key: successors are inserted only at publication, so allowing reset B to
+       queue behind reset A lets A's successors cross B. `enqueueReset` checks
+       the full plan after deduplication and refuses a conflicting second press.
+       docs/plans/260928a-reset-and-regenerate-article.md. */
+    { names: ["extract", "blocks"], forced: ["extract", "blocks"] },
+    { names: ["extract", "blocks"], forced: ["extract", "blocks"], reset: { regenerate: [] } },
+    {
+      names: ["extract", "blocks"],
+      forced: ["extract", "blocks"],
+      reset: { regenerate: ["glossary", "quotes"] },
+    },
+    {
+      names: ["extract", "blocks"],
+      forced: ["extract", "blocks"],
+      reset: { regenerate: ["quotes", "glossary"] },
+    },
+    {
+      names: ["extract", "blocks"],
+      forced: ["extract", "blocks"],
+      reset: { regenerate: ["glossary", "quotes"], profile: "a physicist" },
+    },
   ];
 
   const asJob = (g: (typeof GRID)[number]): Job => ({
@@ -818,15 +844,26 @@ describe("the work key", () => {
     ...(g.profile ? { profile: g.profile } : {}),
     ...(g.upload ? { upload: g.upload } : {}),
     ...(g.url ? { url: g.url } : {}),
+    ...(g.reset ? { reset: g.reset } : {}),
   });
+
+  const extrasOf = (g: (typeof GRID)[number]) => (g.reset ? { reset: g.reset } : {});
 
   it("agrees with sameWork on every pair, both ways round", () => {
     for (const a of GRID) {
       for (const b of GRID) {
-        const same = sameWork(asJob(a), b.names, new Set(b.forced), b.profile, b.upload, b.url);
+        const same = sameWork(
+          asJob(a),
+          b.names,
+          new Set(b.forced),
+          b.profile,
+          b.upload,
+          b.url,
+          b.reset,
+        );
         const keysMatch =
-          workKeyFor(a.names, new Set(a.forced), a.profile, a.upload, a.url) ===
-          workKeyFor(b.names, new Set(b.forced), b.profile, b.upload, b.url);
+          workKeyFor(a.names, new Set(a.forced), a.profile, a.upload, a.url, extrasOf(a)) ===
+          workKeyFor(b.names, new Set(b.forced), b.profile, b.upload, b.url, extrasOf(b));
         expect(
           { pair: [a, b], sameWork: same, sameKey: keysMatch },
           `sameWork and workKeyFor disagree`,
@@ -874,6 +911,49 @@ describe("the work key", () => {
     // Same request, one step in.
     const after = workKeyFor(g.names, new Set(g.forced));
     expect(after).toBe(before);
+  });
+
+  /* **Every key minted before `reset` existed must hash exactly as it did**,
+     or every job queued across the deploy would stop de-duplicating against
+     its own twin. Pinned literals, computed from the formula as it stood before
+     2026-09-28 (`sha256(JSON.stringify({steps, upload, profile, source}))`) —
+     an agreement test cannot see a change both sides make together.
+     docs/plans/260928a-reset-and-regenerate-article.md. */
+  it("hashes a job with no reset exactly as it did before resets existed", () => {
+    const reRead = cascadeForce(DEFAULT_INGEST_STEPS, new Set<StepName>(["extract"]));
+    expect(workKeyFor(DEFAULT_INGEST_STEPS, reRead)).toBe(
+      "34a9609c79c0775ecff118cdc95afccb03c279e0d5948389d4f6e17c41978090",
+    );
+    expect(workKeyFor(["quotes"], new Set(), "a physicist")).toBe(
+      "e713781fb7e2b84d579ea2030a740d192194d0e703b4916d6bc84a842f15e488",
+    );
+    /* And an empty extras object is no extras at all. */
+    expect(workKeyFor(["quotes"], new Set(), "a physicist", undefined, undefined, {})).toBe(
+      "e713781fb7e2b84d579ea2030a740d192194d0e703b4916d6bc84a842f15e488",
+    );
+  });
+
+  /* The direct assertion the grid cannot make (it agrees when both sides are
+     wrong): a reset is never the same work as the plain re-read it looks like,
+     and a regeneration scoped to one reset is never the same work as the same
+     step unscoped, or scoped to another reset. Sol F1. */
+  it("keeps a reset, and a reset's regeneration, apart from their plain twins", () => {
+    const reRead = cascadeForce(DEFAULT_INGEST_STEPS, new Set<StepName>(["extract"]));
+    const plain = workKeyFor(DEFAULT_INGEST_STEPS, reRead);
+    const reset = workKeyFor(DEFAULT_INGEST_STEPS, reRead, undefined, undefined, undefined, {
+      reset: { regenerate: [] },
+    });
+    expect(reset).not.toBe(plain);
+
+    const quotes = workKeyFor(["quotes"], new Set());
+    const scoped = workKeyFor(["quotes"], new Set(), undefined, undefined, undefined, {
+      scope: "spya-reset1",
+    });
+    const otherScope = workKeyFor(["quotes"], new Set(), undefined, undefined, undefined, {
+      scope: "spya-reset2",
+    });
+    expect(scoped).not.toBe(quotes);
+    expect(scoped).not.toBe(otherScope);
   });
 });
 

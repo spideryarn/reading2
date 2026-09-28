@@ -365,6 +365,20 @@
    the state the banner is about. src/web/SmallScreenHint.tsx. */
 .reader.band-covers:has(.mode-band) .small-screen-hint { display: none; }
 
+/* **A band that has stepped aside.** `band-away` is written by `Reader` beside
+   `band-covers`, only while that is on, after a reader chooses a Trajectory
+   stop: the band is lying over the whole article, and the stop they chose is
+   in the article. So the band stops painting and the prose is the page again;
+   the door after the stop's block carries the stepping and offers the band
+   back, and so does pressing the mode in the Dock (Reader.tsx § `bandAway`).
+
+   `display: none` rather than unmounting, so the band's stop, its mark and the
+   door all survive — the band is still the one publishing them. The masthead
+   and the notices stay hidden by the rules above, which still match: this is
+   a moment inside a mode, not a return to Plain.
+   docs/plans/260928a-trajectory-mode-skim-a-paper-at-increasing-depth.md (F4). */
+.reader.band-covers.band-away .mode-band { display: none; }
+
 /* ----------------------------------------------------- § a small device ----
    Where a centimetre in *either* direction is worth having.
 

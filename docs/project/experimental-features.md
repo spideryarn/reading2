@@ -182,6 +182,7 @@ Everything a mode is *not* is derivable from `MODES` ([`src/modes.ts`](../../src
 | [Remember](remember-mode.md) | The name suggests saved notes and spaced repetition, neither of which exists; the quiz half is newer still. |
 | [Citations](citations.md) | A new mode on an unmeasured prompt: four local runs so far, and on a long bibliography the list is capped at 80 and chosen by the model. The links are safe by construction — each is one the article gave, or a search that says it is one — but which works make the list, and the two scores, have not been checked against a reader's judgment. |
 | [FAQ](faq.md) | A new mode on an unmeasured prompt: two local runs so far. The quoted words are checked against the article, but whether the questions are the ones a reader would actually have — and whether each passage really answers its question — is unchecked. |
+| [Trajectory](trajectory.md) | A new mode on an unmeasured prompt, and Greg asked for it to stay behind the switch (2026-09-28). The stops are the article's own Quotes, but whether the route's order and its three depths actually give a reader the gist first — and whether the Quotes cover the sections a skim needs — has been looked at on three local articles and nowhere else. |
 | [Hierarchy](granularity-zoom.md) | **Not because it is unfinished.** Greg moved it on 2026-09-12, making Structure the one structural view everybody is given. Only its Dock entry points are gated — see [Hierarchy went in on 2026-09-12](#hierarchy-went-in-on-2026-09-12) for what that does and does not take with it. |
 | [Debate](../plans/260905f-debate-mode-what-the-web-says-about-this-piece.md) | Two metered web searches a run, up to ~$0.27 and rising with article length — the dearest mode press in the bar — and no live run has happened yet, so nothing about what a real list looks like is known. Its content is also the only thing in the band that is not in the article at all, and what the panel can prove about a row stops well short of what a reader will read into it. |
 
@@ -192,6 +193,13 @@ person, so it starts with the readers who asked for the unfinished things. The s
 here, not consent; `/privacy` says we keep it. Fable argued for recording for every owner, since reading
 time cannot be backfilled —
 [260916c § Who, and behind what](../plans/260916c-show-where-you-have-spent-time-reading-in-the-spine-and-gutter.md#who-and-behind-what).
+
+**And one control on the Metadata page: *Start this article again*** (a reset, and optionally
+the modes made again), since 2026-09-28. It re-reads the article with today's pipeline, so a
+paragraph whose text comes out different — mostly maths in articles added before maths was drawn —
+detaches any comment on it, and pressing it with the extras ticked spends a model call per mode. That
+earns a trial before everybody has the button; the route itself is not gated.
+[260928a](../plans/260928a-reset-and-regenerate-article.md).
 
 **Everything else is what everybody sees**, a signed-out visitor included.
 

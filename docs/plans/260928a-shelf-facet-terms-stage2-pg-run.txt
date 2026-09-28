@@ -1,0 +1,10 @@
+ ✓ |private-postgres| tests/shelf-terms-pg.test.ts > the shelf's filter terms in Postgres > fills every current revision once, and a second load reuses the rows rather than re-extracting 142ms
+ ✓ |private-postgres| tests/shelf-terms-pg.test.ts > the shelf's filter terms in Postgres > lets two concurrent fills of the same version both succeed, leaving one row per revision 109ms
+ ✓ |private-postgres| tests/shelf-terms-pg.test.ts > the shelf's filter terms in Postgres > keeps a row of another extractor version beside this one's, and each version reads only its own 15ms
+ ✓ |private-postgres| tests/shelf-terms-pg.test.ts > the shelf's filter terms in Postgres > gives a new current revision its own row, and deletes the superseded revision's rows 38ms
+ ✓ |private-postgres| tests/shelf-terms-pg.test.ts > the shelf's filter terms in Postgres > stops at the budget with pending > 0, and a second call finishes 125ms
+ ✓ |private-postgres| tests/shelf-terms-pg.test.ts > the shelf's filter terms in Postgres > reader A's request writes no row for B, returns no B slug, and no B-only phrase 112ms
+ ✓ |private-postgres| tests/shelf-terms-pg.test.ts > the shelf's filter terms in Postgres > leaves archived articles out by default, and takes them in with archived: true 25ms
+ ✓ |private-postgres| tests/shelf-terms-pg.test.ts > GET /api/library/terms > refuses an unauthenticated request exactly as /api/library does 3ms
+ ✓ |private-postgres| tests/shelf-terms-pg.test.ts > GET /api/library/terms > answers the signed-in reader with the envelope, sent private and no-store 5ms
+ ✓ |private-postgres| tests/shelf-terms-pg.test.ts > GET /api/library/terms > neither returns nor writes anything of this file's owners for the route's reader 6ms

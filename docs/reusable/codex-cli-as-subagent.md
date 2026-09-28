@@ -657,7 +657,7 @@ The only place that turns a family into an id is `scripts/run-codex.ts`, and the
 | `astra` | the hardest things only — see below |
 | `sol` | frontier agentic coding — hard reviews, gnarly implementation. The house default |
 | `terra` | balanced, everyday work |
-| `luna` | fast and cheap — smoke tests, mechanical edits, quick opinions |
+| `luna` | anything lighter — capable and cheap: smoke tests, mechanical edits, quick opinions |
 
 "Offered" is the word that matters. Measured 2026-09-24, `gpt-6-sol` exists on the API, but codex
 on a ChatGPT subscription refuses it with a 400 and `model/list` does not list it — so `sol`

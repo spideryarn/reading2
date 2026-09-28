@@ -29,7 +29,7 @@
  * `popstate` for everything else. One query string, one listener.
  */
 import { createParser, debounce } from "nuqs";
-import type { IdentificationLevel } from "../types.js";
+import type { IdentificationLevel, TrajectoryDepth } from "../types.js";
 import { isSpideryarnId } from "../ids.js";
 import { isIdentificationLevel } from "./debate-levels.js";
 import { DIAGRAMS, type DiagramKind } from "./diagram.js";
@@ -436,6 +436,36 @@ export const quoteParam = parseAsBlockId.withOptions({ history: "replace" });
  * already put one entry on the stack for the trip into the mode.
  */
 export const eventParam = parseAsBlockId.withOptions({ history: "replace" });
+
+/**
+ * **Trajectory's depth** — `depth=1|2|3`, Gist · More · Most. Absent is Gist, the
+ * first pass. docs/plans/260928a-trajectory-mode-skim-a-paper-at-increasing-depth.md
+ * § URL.
+ *
+ * `push`: changing depth is choosing a different walk through the piece, and
+ * Back should undo it. It is always written **together with `?stop=`**, in one
+ * `useQueryStates` update (`useTrajectoryMode`), so a depth change and the stop
+ * it lands on are one history entry rather than two.
+ *
+ * A depth the route does not offer is not refused here — this parser cannot see
+ * the route — but `effectiveDepth` (src/web/trajectory-route.ts) draws the
+ * deepest offered pass below it.
+ */
+export const depthParam = createParser<TrajectoryDepth>({
+  parse: (v) => (v === "1" ? 1 : v === "2" ? 2 : v === "3" ? 3 : null),
+  serialize: (v) => String(v),
+}).withOptions({ history: "push" });
+
+/**
+ * **The Trajectory stop the reader is on** — the quote's id, which is minted
+ * by `mintId` and so validated by `parseAsBlockId` like `?quote=`.
+ *
+ * `replace`: stepping along the route is traversal, and twenty stops must not
+ * cost twenty presses of Back — comment-jump.ts's argument for its arrows. A
+ * stop that is not on the current pass (a stale link, a quote chosen again)
+ * falls back to the first stop, in `currentStop`.
+ */
+export const stopParam = parseAsBlockId.withOptions({ history: "replace" });
 
 /**
  * How the quote list is ordered.
@@ -1469,3 +1499,45 @@ export const libraryShowParam = createParser<ShelfFilter>({
 })
   .withDefault("all")
   .withOptions({ history: "push" });
+
+/**
+ * Which of the shelf's topics are chosen — `topics=neural network,memory`.
+ *
+ * Keys, not labels: the key is lowercased and plural-folded, so it survives a
+ * label changing surface form between two loads (docs/project/shelf-terms.md).
+ * Keys are words joined by spaces and never hold a comma — the extractor splits
+ * at punctuation — so a comma is a safe separator.
+ *
+ * **No validation against the topics here**, because the topics are not known
+ * when the URL is read. A key that is no longer among them is not applied while
+ * they load and is dropped once they have (useShelfTerms.ts § `useChosenTopics`),
+ * which is the only place that knows both halves.
+ *
+ * `push`, like `show`: choosing a topic is the same kind of act as pressing
+ * Unread, and Back should undo it. The drop of a stale key is written with
+ * `replace` at its call site, since it is a correction rather than an act.
+ */
+export const libraryTopicsParam = createParser<string[]>({
+  parse: (v) => {
+    const keys = [...new Set(v.split(",").filter((s) => s.trim() !== ""))];
+    return keys.length ? keys : null;
+  },
+  serialize: (v) => v.join(","),
+  eq: sameList,
+})
+  .withDefault([])
+  .withOptions({ history: "push" });
+
+/**
+ * Whether the archived half of the shelf is in view — `archived=1`.
+ *
+ * It was `useState` inside the "Show archived" disclosure until 2026-09-28,
+ * which was fine while nothing but that disclosure cared. The topics row does:
+ * with this on, topics are chosen over active **and** archived articles, and the
+ * archived list is narrowed by the same search, Unread and topics as the shelf
+ * (docs/project/shelf-terms.md § Archived). A fact two components read belongs
+ * in the URL, and it makes "my archive, narrowed to *memory*" a link.
+ *
+ * `push`: opening the archive is a deliberate act, and Back closes it.
+ */
+export const libraryArchivedParam = parseAsBit.withDefault(false).withOptions({ history: "push" });

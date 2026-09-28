@@ -1,0 +1,163 @@
+// @vitest-environment jsdom
+/**
+ * **← / → handed to a mode, and only while it asks** — `useArrowNav`'s optional
+ * horizontal handler (docs/plans/260928a-trajectory-mode-skim-a-paper-at-increasing-depth.md
+ * § Keys, Sol F5).
+ *
+ * While Trajectory is the mode, ← / → step its stops; everywhere else they move
+ * the stride across the columns, exactly as before. The existing guards hold for
+ * both: no modifiers, not while typing, not when a widget nearer the keypress
+ * has already handled it, and no auto-repeat. ↑ / ↓ are untouched either way.
+ *
+ * A DOM test for keynav-handled.test.ts's reason: the listener is on `window`,
+ * so what decides is a real event travelling up a real DOM.
+ */
+import { act, createElement } from "react";
+import { createRoot, type Root } from "react-dom/client";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import type { Block, BlockId } from "../src/types.js";
+
+const jumps: string[] = [];
+vi.mock("../src/web/scroll.js", async (importOriginal) => {
+  const real = await importOriginal<typeof import("../src/web/scroll.js")>();
+  return { ...real, scrollToBlock: (id: string) => void jumps.push(id) };
+});
+
+const { useArrowNav } = await import("../src/web/keynav.js");
+type NavPlan = import("../src/web/keynav.js").NavPlan;
+
+function block(i: number): Block {
+  return {
+    id: `spya-h${i}` as BlockId,
+    tag: "p",
+    kind: "text",
+    text: `paragraph ${i}`,
+    words: 20,
+    html: "<p></p>",
+    gistable: true,
+  };
+}
+
+const blocks = Array.from({ length: 6 }, (_, i) => block(i));
+/** Two rungs, so → has somewhere to move the stride when nobody else takes it. */
+const plan: NavPlan = { ladder: [0, 1], starts: [[0, 3], [0, 1, 2, 3, 4, 5]] };
+
+let container: HTMLDivElement;
+let root: Root;
+/** Every direction the horizontal handler was asked to step. */
+let asked: number[];
+/** What it answers — whether it took the key. */
+let takes: boolean;
+/** The stride `useArrowNav` reports, so a test can see it did not move. */
+let stride = -1;
+
+function Harness({ withHandler }: { withHandler: boolean }) {
+  stride = useArrowNav(
+    plan,
+    blocks,
+    0,
+    true,
+    withHandler
+      ? (dir) => {
+          asked.push(dir);
+          return takes;
+        }
+      : null,
+  );
+  return null;
+}
+
+async function mount(withHandler: boolean) {
+  container = document.createElement("div");
+  document.body.append(container);
+  root = createRoot(container);
+  await act(async () => {
+    root.render(createElement(Harness, { withHandler }));
+  });
+}
+
+beforeEach(() => {
+  jumps.length = 0;
+  asked = [];
+  takes = true;
+  stride = -1;
+});
+
+afterEach(() => {
+  act(() => root.unmount());
+  container.remove();
+});
+
+function press(
+  key: string,
+  init: KeyboardEventInit = {},
+  target: HTMLElement = document.body,
+  handled = false,
+): KeyboardEvent {
+  const event = new KeyboardEvent("keydown", { key, bubbles: true, cancelable: true, ...init });
+  const el = document.createElement("div");
+  target.append(el);
+  if (handled) el.addEventListener("keydown", (e) => e.preventDefault());
+  act(() => {
+    el.dispatchEvent(event);
+  });
+  el.remove();
+  return event;
+}
+
+describe("with a horizontal handler (Trajectory)", () => {
+  beforeEach(async () => {
+    await mount(true);
+  });
+
+  it("hands ← and → to the handler, not to the stride", () => {
+    const right = press("ArrowRight");
+    const left = press("ArrowLeft");
+    expect(asked).toEqual([1, -1]);
+    expect(right.defaultPrevented && left.defaultPrevented).toBe(true);
+    expect(stride, "the stride must not have moved").toBe(0);
+  });
+
+  it("hands the key back to the browser when the handler has nowhere to go", () => {
+    takes = false;
+    const e = press("ArrowRight");
+    expect(asked).toEqual([1]);
+    expect(e.defaultPrevented).toBe(false);
+    expect(stride).toBe(0);
+  });
+
+  it("keeps every guard", () => {
+    press("ArrowRight", { shiftKey: true });
+    press("ArrowRight", { metaKey: true });
+    press("ArrowRight", { repeat: true });
+    press("ArrowRight", {}, document.body, true);
+    const input = document.createElement("input");
+    document.body.append(input);
+    act(() => {
+      input.dispatchEvent(
+        new KeyboardEvent("keydown", { key: "ArrowRight", bubbles: true, cancelable: true }),
+      );
+    });
+    input.remove();
+    expect(asked).toEqual([]);
+  });
+
+  it("leaves ↑ and ↓ to the article", () => {
+    press("ArrowDown");
+    expect(asked).toEqual([]);
+    expect(jumps).toEqual(["spya-h3"]);
+  });
+});
+
+describe("without one (every other mode)", () => {
+  beforeEach(async () => {
+    await mount(false);
+  });
+
+  it("moves the stride, as it always has", () => {
+    /* The control: the same key, with no handler, is the stride's. */
+    const e = press("ArrowRight");
+    expect(stride).toBe(1);
+    expect(e.defaultPrevented).toBe(true);
+  });
+});

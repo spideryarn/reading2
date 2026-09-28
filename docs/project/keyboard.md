@@ -163,6 +163,30 @@ A zone declares itself with a `data-nav-depth` attribute and nothing else — `k
 with `closest()` from whatever is under the pointer. That is why the spine can join in from outside
 the table by adding one attribute, and why a new panel would too.
 
+## ← / → in Trajectory
+
+**While Trajectory is the mode, ← / → step its stops instead of moving the stride.** Everywhere else
+they move the stride exactly as above, and ↑ / ↓ are the article's in every mode, Trajectory
+included. This is the direction Greg's 2026-08-31 answer pointed — *"we can use left/right for
+mode-specific behaviours"* — and the one he asked for in the brief:
+
+> It would maybe I can also use left and right to trigger the forward and backward buttons to jump
+> to the next sections.
+>
+> — Greg, 2026-09-28 ([trajectory.md](trajectory.md))
+
+The seam is one optional argument to `useArrowNav` in [`keynav.ts`](../../src/web/keynav.ts): a
+horizontal handler that `Reader` passes only while Trajectory is open, and that is the band's own
+`step` — so the keys, the band's ‹ › and the door in the prose are one rule
+([`trajectory-route.ts`](../../src/web/trajectory-route.ts)). It runs **after every guard** on this
+page: no modifiers, not while typing, not when a widget already handled the key, no auto-repeat. The
+route does not wrap, so at either end the handler answers that it took nothing and the key goes back
+to the browser, the same concession ↑ / ↓ make at the ends of the article. A step replaces
+`?stop=` rather than pushing, for [§ A keypress writes no URL of its own](#a-keypress-writes-no-url-of-its-own)'s
+reason. `tests/keynav-horizontal.test.ts` pins both halves — the handler takes the key, and without
+one the stride still moves. The plan is
+[260928a](../plans/260928a-trajectory-mode-skim-a-paper-at-increasing-depth.md) § Keys (Sol F5).
+
 ## The aim is visible before you press anything
 
 An experiment whose behaviour you cannot predict before you commit to it isn't testable by the person

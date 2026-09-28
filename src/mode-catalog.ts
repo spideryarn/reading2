@@ -484,4 +484,28 @@ export const MODE_CATALOG: Record<Mode, ModeCatalogEntry> = {
     /* A new mode on an unmeasured prompt — docs/project/experimental-features.md. */
     experimental: true,
   },
+  trajectory: {
+    description: "A route through the piece's quotes, a little deeper each time round",
+    /* **Checked against the source, claim by claim** (docs/project/new-mode.md §
+       The card on the button):
+       - "a short model pass over its quotes": the `trajectory` step reads the
+         stored Quotes, the tree and the profile; `renderPrompt` in
+         src/trajectory.ts sends each quote's words, section path and priority,
+         and never the article's prose.
+       - "puts them in an order and a depth": `TrajectoryStop` is a quote id, a
+         depth 1–3 and a role line, in array order (src/types.ts).
+       - "for you, if you have said who you are": `profileSection(profile)` in
+         the same prompt, and `routeProfileIsStale` marks the route outdated
+         when the profile changes.
+       - "chosen first when there are none": the step refuses without Quotes
+         (`TRAJECTORY_NO_QUOTES`), and the band asks for `quotes` before it
+         (`precededBy`, src/web/useTrajectory.ts).
+       About the mode, not the press, and no price. */
+    how: "A short model pass over the article's Quotes — never the rest of its prose — puts them in an order and gives each a depth, shaped by your profile if you have one. When there are no Quotes yet, they are chosen first.",
+    /* The two words Greg used for it in the brief — docs/project/trajectory.md. */
+    aliases: ["spiral", "route"],
+    /* A new mode on an unmeasured prompt, and Greg asked for it to stay behind
+       the switch (2026-09-28) — docs/project/experimental-features.md. */
+    experimental: true,
+  },
 };

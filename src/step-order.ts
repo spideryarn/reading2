@@ -83,6 +83,18 @@ export const STEP_ORDER = [
      until 2026-09-03, when `quotes` started sending a breakpoint of its own:
      see `cacheArticleForStep` (src/pipeline.ts). docs/project/quotes.md. */
   "quotes",
+  /* **Straight after `quotes`, because it reads what `quotes` writes** — the
+     second step here whose input is another step's artefact, after
+     `illustrated`. The order does not *pull* the Quotes in; what it buys is
+     that a job naming both (`precededBy: ["quotes"]`, `StepBefore` below)
+     chooses the quotes before it routes through them.
+
+     **In no cache group, so its place breaks no contiguity**: it sends the
+     quotes and never the article, so its bytes match no other stage's, and
+     `quotes` and `ideas` on either side of it were never one group anyway.
+     Off `DEFAULT_INGEST_STEPS` and in `FORCE_ONLY_WHEN_NAMED` (src/pipeline.ts).
+     docs/plans/260928a-trajectory-mode-skim-a-paper-at-increasing-depth.md. */
+  "trajectory",
   "ideas",
   /* Beside `ideas`, and that is the same argument `quotes` makes two rows up:
      the two send byte-identical article bytes at the same effort and the same

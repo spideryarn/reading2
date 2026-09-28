@@ -456,6 +456,9 @@ export const CODE_KINDS: Record<string, FailureKind> = {
   "jb-no-sketch": "blocked",
   "jb-sketch-stale": "blocked",
   "jb-sketch-profile": "blocked",
+  /* The Trajectory's one refusal: its stops are the article's Quotes, and
+     there are none. See `TRAJECTORY_NO_QUOTES`. */
+  "jb-no-quotes": "blocked",
   /* Reading a PDF. The split of prefix is the rule in docs/project/copy.md read
      both ways: `pdf-` for the two refusals that are arithmetic over bytes we
      already hold, `ai-pdf-` for the two that are an answer the service came
@@ -1354,6 +1357,23 @@ export function articleHadNoText(origin: DocumentOrigin): ReaderFacingFailure {
       "from that needs looking at. [jb-no-text]",
   };
 }
+
+/**
+ * **The Trajectory refuses without Quotes**, the way painting refuses without
+ * a Sketch: its stops *are* the quotes, so there is nothing to put in order.
+ * `blocked` because a retry would find the same empty list. The client asks for
+ * `quotes` first in the same job when it knows there are none
+ * (docs/plans/260928a-trajectory-mode-skim-a-paper-at-increasing-depth.md), so
+ * a reader meets this only when Quotes ran and kept nothing, or when the quotes
+ * all sit on paragraphs the article no longer has.
+ */
+export const TRAJECTORY_NO_QUOTES: ReaderFacingFailure = {
+  kind: "blocked",
+  message:
+    "There are no quotes for this article yet, and the trajectory is a route through its quotes. " +
+    "Open Quotes and choose them first, then open this again. Until there are some, this will " +
+    "come back the same way. [jb-no-quotes]",
+};
 
 /**
  * **The three ways painting the argument refuses**, one sentence each.
@@ -3794,6 +3814,9 @@ export const OWNED_ARTEFACT = {
   quotes: "your set of quotes",
   sketch: "your sketch diagram",
   illustrated: "your illustrated diagram",
+  /* Owner-only, and listed all the same, for `illustrated`'s reason: its
+     `profileHash` is the reader's own, and `ProfileCarrying` asks. */
+  trajectory: "your route through the quotes",
   /* `satisfies`, not an annotation. `Partial<Record<StepName, string>>` as the
      declared type makes every value `string | undefined`, and the coverage
      check in tests/messages.test.ts would then be unsatisfiable without a cast
@@ -4217,6 +4240,10 @@ export const OWNER_MODE_NOTE: Record<Mode, string> = {
      § verifyPassage). */
   faq:
     "The questions the model thought a careful reader would ask this piece, each with the passages where it responds.",
+  /* The stops are the article's own quotes; the order, the depth and the role
+     line are the model's reading (src/trajectory.ts). */
+  trajectory:
+    "A route through this piece's quotes, in the order the model thought best for you, walked a little deeper each time round.",
 };
 
 /* ---------------------------------------------------------------- timeline --

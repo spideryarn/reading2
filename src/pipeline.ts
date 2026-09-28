@@ -104,6 +104,12 @@ import {
 } from "./citations.js";
 import { stageFailure } from "./job-failure.js";
 import {
+  generateTrajectory,
+  PROMPT_VERSION as TRAJECTORY_PROMPT_VERSION,
+  quotesHash,
+  usableQuotes,
+} from "./trajectory.js";
+import {
   generateIllustrated,
   inputFingerprint as illustratedFingerprint,
   PROMPT_VERSION as ILLUSTRATED_PROMPT_VERSION,
@@ -144,6 +150,7 @@ import {
   type ReaderFacingFailure,
   SOURCE_DOCUMENT_DAMAGED,
   SOURCE_DOCUMENT_GONE,
+  TRAJECTORY_NO_QUOTES,
 } from "./messages.js";
 import { type RejectReason, MAX_UPLOAD_BYTES, rejectionFailure, stagingKey } from "./source.js";
 import { readUpload, rejectUpload, settleUpload } from "./upload-records.js";
@@ -440,6 +447,14 @@ export const FORCE_ONLY_WHEN_NAMED: ReadonlySet<StepName> = new Set<StepName>([
      arrived by cascade rather than by name would silently lengthen a reader's
      list and spend the call doing it. */
   "quotes",
+  /* It reads the Quotes, and nothing reads what it writes, so the positional
+     cascade would buy a model call for nothing — least of all the one case the
+     cascade is most likely to meet, a forced `quotes` (Find more) one step
+     before it. It does not need the cascade either: its `stamp` hashes the
+     quote identities, offered words and priorities, so when Find more adds quotes it re-runs without
+     being forced. And it replaces rather than appends.
+     docs/plans/260928a-trajectory-mode-skim-a-paper-at-increasing-depth.md. */
+  "trajectory",
   /* Same two reasons as the three above: it reads `blocks.json` and
      `tree.json`, nothing reads what it writes, so the positional cascade would
      buy a model call for nothing. Unlike the glossary, forcing it does not
@@ -3276,6 +3291,93 @@ export const STEPS: { [K in StepName]: PipelineStep<K> } = {
         detail: appended
           ? `${added} more, ${total} in all`
           : `${total} ${total === 1 ? "quote" : "quotes"}`,
+      };
+    },
+  },
+  /**
+   * Stage 5t — **a route through the Quotes, at three depths.**
+   * docs/plans/260928a-trajectory-mode-skim-a-paper-at-increasing-depth.md.
+   *
+   * **The second step whose input is another step's artefact**, after
+   * `illustrated`, and it takes on that step's two obligations:
+   *
+   * 1. **It refuses without Quotes, and does not fetch them.** The client names
+   *    both steps in one job (`precededBy: ["quotes"]`); `STEP_ORDER` puts
+   *    `quotes` first and `stepIsDone` decides whether that half runs at all.
+   *    Unlike `illustrated`, it does not refuse *stale* Quotes: a quote on a
+   *    paragraph that has gone is simply not offered (`usableQuotes`), and the
+   *    route's own freshness is about the quotes, not the article.
+   * 2. **Its fingerprint is the Quotes, not the article** — `quotesHash`, over
+   *    each quote's identity, offered words and priority. So `stamp` reads the Quotes and nothing
+   *    else, and *Find more* adding a quote makes the route not-current without
+   *    anybody forcing it.
+   *
+   * **And the profile is the reader's own, in the stamp** — like `ideas`, and
+   * unlike `illustrated`, which inherits the Sketch's. The route is exactly the
+   * thing a profile should change, and none → some counts: `sameStamp` compares
+   * a recorded `null` against an expected hash as a mismatch, which is the
+   * stricter rule the plan asks for (src/trajectory.ts § `routeProfileIsStale`).
+   */
+  trajectory: {
+    name: "trajectory",
+    label: "Planning the route",
+    produces: ["trajectory"],
+    stamp: async (ctx, store) => {
+      const quotes = await store.read(ctx.slug, "quotes", "quotes");
+      /* `null` is "we cannot tell", which makes the step run — and running is
+         where the refusal is, as `illustrated`'s stamp does for a Sketch. */
+      if (!quotes || !Array.isArray(quotes.quotes) || quotes.quotes.length === 0) return null;
+      return {
+        inputHash: quotesHash(quotes.quotes),
+        promptVersion: TRAJECTORY_PROMPT_VERSION,
+        model: CAPABLE_MODEL,
+        profileHash: ctx.profile ? hashProfile(ctx.profile) : null,
+      };
+    },
+    async run(ctx, store) {
+      const quotes = await store.read(ctx.slug, "quotes", "quotes");
+      /* The tree and the blocks for the section paths only — the prose is
+         never sent. `readArticle` refuses loudly when they are missing. */
+      const article = await readArticle(ctx.slug, store);
+      const usable = usableQuotes(quotes, article.blocks);
+      if (!quotes || usable.length === 0) throw stageFailure(TRAJECTORY_NO_QUOTES);
+
+      const run = await generateTrajectory({
+        slug: ctx.slug,
+        quotes: usable,
+        blocks: article.blocks,
+        tree: article.tree,
+        allQuotes: quotes.quotes,
+        profile: ctx.profile ?? null,
+        onProgress: ctx.report,
+        signal: ctx.signal,
+      });
+      const [gist, more, most] = run.trajectory.visible;
+      plog.info(
+        {
+          slug: ctx.slug,
+          step: "trajectory",
+          model: run.model,
+          inputTokens: run.inputTokens,
+          outputTokens: run.outputTokens,
+          maxTokens: run.maxTokens,
+          ms: run.elapsedMs,
+          offered: run.offered,
+          gist,
+          more,
+          most,
+          /* Counts only — never a quote or a role. `unknownQuote` is the one to
+             watch: the model inventing an id. `overCap` says the targets and
+             the caps disagree with what the model wanted. */
+          ...run.dropped,
+          /* The profile's LENGTH, never the profile. docs/project/logging.md. */
+          profileChars: ctx.profile?.length ?? 0,
+        },
+        `trajectory ${ctx.slug}: ${gist}/${more}/${most} stops over ${run.offered} quotes`,
+      );
+      return {
+        parts: { trajectory: run.trajectory },
+        detail: `${most} ${most === 1 ? "stop" : "stops"} over ${run.offered} quotes`,
       };
     },
   },

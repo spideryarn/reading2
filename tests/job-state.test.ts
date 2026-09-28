@@ -201,6 +201,7 @@ const EXPECTED_THRESHOLD_MS: Record<StepName, number> = {
   glossary: 180_000,
   ideas: 180_000,
   quotes: 180_000,
+  trajectory: 180_000,
   timeline: 180_000,
   quiz: 180_000,
   faq: 180_000,

@@ -73,6 +73,7 @@ import type {
   GlossaryFound,
   QuotesFound,
   LibraryEntry,
+  LibraryTermsResponse,
   LibraryHit,
   ListOptions,
   RememberStance,
@@ -86,6 +87,7 @@ import type {
   SketchFound,
   QuizFound,
   FaqFound,
+  TrajectoryFound,
   TimelineFound,
   ThreadFound,
   ThreadKind,
@@ -277,6 +279,15 @@ export interface ArticleReader {
    * docs/plans/260916d-faq-mode.md.
    */
   loadFaq(slug: string): Promise<FaqFound>;
+
+  /**
+   * The route through the Quotes, plus whether it still matches them — judged
+   * against the Quotes, never the article — and how many quotes it does not
+   * stop at. The profile half is the route's. **Owner-only in v1**, and there
+   * is no public twin.
+   * docs/plans/260928a-trajectory-mode-skim-a-paper-at-increasing-depth.md.
+   */
+  loadTrajectory(slug: string): Promise<TrajectoryFound>;
 
   /**
    * What the rest of the web says about this piece, plus whether the artefact
@@ -729,6 +740,21 @@ export interface LibrarySearch {
     limit: number,
     opts?: LibrarySearchOptions,
   ): Promise<{ hits: LibraryHit[]; capped: boolean }>;
+}
+
+/**
+ * **The shelf's filter topics** — `GET /api/library/terms`.
+ * docs/plans/260928a-shelf-facet-terms.md; the Postgres half is
+ * src/store/pg-shelf-terms.ts, which says why a read may write here.
+ */
+export interface ShelfTermsStore {
+  /**
+   * The ambient reader's topics over the shelf proper, or over active **and**
+   * archived with `archived: true`. Fills missing candidate rows for at most
+   * `budgetMs` (at least one article per call) and says how many are still
+   * `pending`.
+   */
+  terms(scope: { archived: boolean }, opts?: { budgetMs?: number }): Promise<LibraryTermsResponse>;
 }
 
 /**

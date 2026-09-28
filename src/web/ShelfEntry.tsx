@@ -18,6 +18,7 @@ import {
   type Dispatch,
   type MouseEvent as ReactMouseEvent,
   type ReactElement,
+  type ReactNode,
   type SetStateAction,
 } from "react";
 import {
@@ -74,11 +75,19 @@ export type Shelf = ReturnType<typeof useShelf>;
  * Visible text as well as the hover, for the reason `ViewOnlyChip`'s file gives
  * at length: a `title` is unreachable by touch and by keyboard.
  */
-export function SharedBadge() {
+export function SharedBadge({
+  /**
+   * `false` in the table, where the same sentence is in the title's row card
+   * instead and the rows carry no `title` attributes at all (library-columns.tsx
+   * § `rowCardFacts`, plan 260928a). The cards view has no row card, so it keeps
+   * the `title` — `IconButton`'s `titled`, the same switch for the same reason.
+   */
+  titled = true,
+}: { titled?: boolean } = {}) {
   return (
     <span
       className="tw:inline-flex tw:items-center tw:gap-1 tw:rounded tw:border tw:border-highlight/40 tw:px-1.5 tw:py-0.5 tw:text-highlight"
-      title={SHARING_ON}
+      title={titled ? SHARING_ON : undefined}
     >
       <Globe size={11} />
       {SHARING_BADGE}
@@ -98,9 +107,9 @@ export function SharedBadge() {
  * by Comments turns it into "3 comments". Sorting by Added or Length changes
  * nothing, because the card already carries both.
  *
- * That is the "best of all worlds" Greg asked for, and it is the half a dense
- * table cannot give you: the table shows every column and no blurb; the card
- * shows the blurb and whichever column you are currently thinking about.
+ * That is the "best of all worlds" Greg asked for: the cards view keeps the
+ * blurb visible and names the current sort in each card, while the table puts
+ * comparable values in columns and offers its blurb from the title's row card.
  */
 export function ShelfCard({
   entry,
@@ -545,7 +554,8 @@ type ShelfActions = ReturnType<typeof useShelfActions>;
  * scrub rather than five 240ms waits. `keepSide` with it, for the reason
  * Tooltip.tsx § `keepSide` gives about rows specifically — without it a card
  * too wide to centre is thrown onto the cross axis and lands on top of the very
- * buttons the reader is about to hover.
+ * buttons the reader is about to hover. **In the table the group is the
+ * table's**, not this row's — `inTooltipGroup` below, plan 260928a.
  *
  * **And on a pen, the first tap reads a control and the second presses it** —
  * `pressCapture` below. docs/project/touch.md § Reveal, then commit.
@@ -564,10 +574,24 @@ export function Actions({
   entry,
   shelf,
   onEdit,
+  inTooltipGroup = false,
 }: {
   entry: LibraryEntry;
   shelf: Shelf;
   onEdit: () => void;
+  /**
+   * **A `TooltipGroup` is already above this row — join it, do not start one.**
+   *
+   * True in the table, whose whole body is one group (Library.tsx) so that the
+   * titles' row cards scrub like the rail. Two nested groups each keep their own
+   * current member, so the group that closes every other card when one opens
+   * cannot see across the boundary: a title's card held open by focus and an
+   * action's card opened by the pointer would both be up at once (GPT Sol, plan
+   * 260928a review, P-3; tests/shelf-table-row-card.test.tsx). The cards view
+   * has no group above it, so it keeps this row's own — same delays either way,
+   * because the table's group uses these.
+   */
+  inTooltipGroup?: boolean;
 }) {
   const actions = useShelfActions(entry, shelf, onEdit);
   const { copied, rerunning, hasWebUrl, copy, rerun } = actions;
@@ -691,7 +715,7 @@ export function Actions({
       className="tw:relative tw:flex tw:shrink-0 tw:items-center tw:gap-0.5 tw:opacity-0 tw:transition-opacity tw:group-hover:opacity-100 tw:group-focus-within:opacity-100 tw:hover-none:opacity-100 tw:any-pointer-coarse:hidden"
       onClickCapture={pressCapture}
     >
-      <TooltipGroup delay={{ open: 240, close: 90 }} timeoutMs={400}>
+      <RowGroup joined={inTooltipGroup}>
         <ActionTip id="edit" armed={armed} onArm={setArmed} tip={TIPS.edit} commits>
           <IconButton label="Edit title" titled={false} onClick={onEdit}>
             <Pencil size={14} />
@@ -797,10 +821,24 @@ export function Actions({
             <Archive size={14} />
           </IconButton>
         </ActionTip>
-      </TooltipGroup>
+      </RowGroup>
     </div>
     <ShelfActionsMenu entry={entry} actions={actions} />
     </>
+  );
+}
+
+/**
+ * The row's own `TooltipGroup`, unless it has `joined` one above it —
+ * `Actions` § `inTooltipGroup` says why that matters.
+ */
+function RowGroup({ joined, children }: { joined: boolean; children: ReactNode }) {
+  return joined ? (
+    children
+  ) : (
+    <TooltipGroup delay={{ open: 240, close: 90 }} timeoutMs={400}>
+      {children}
+    </TooltipGroup>
   );
 }
 

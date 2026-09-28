@@ -250,4 +250,5 @@ export const MODE_LABEL: Record<Mode, string> = {
   structure: "Structure",
   citations: "Citations",
   faq: "FAQ",
+  trajectory: "Trajectory",
 };
