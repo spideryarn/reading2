@@ -86,15 +86,11 @@ export function ShelfTerms({
 
   const count = (key: string) => counts.get(key) ?? 0;
   const chosen = new Set(selected);
-  const byCount = [...terms].sort(
-    (a, b) => count(b.key) - count(a.key) || a.label.localeCompare(b.label),
-  );
-  /* Chosen first, in the order chosen, so the ones you pressed do not jump about
-     as the counts under them change; then the rest by their current count. */
-  const picked = selected
-    .map((k) => terms.find((t) => t.key === k))
-    .filter((t): t is ShelfTerm => t !== undefined);
-  const rest = byCount.filter((t) => !chosen.has(t.key)).slice(0, COLLAPSED_CHIPS);
+  /* **The server's rank order**, never re-sorted (plan 260928d): the chooser
+     ranks for coverage, so the first few chips are the few that reach most of
+     the shelf, and nothing moves when you press one or the counts change. The
+     first COLLAPSED_CHIPS, plus any chosen topic further down, in its place. */
+  const shown = terms.filter((t, i) => i < COLLAPSED_CHIPS || chosen.has(t.key));
   const scopeWord = archived ? "on the shelf and in the archive" : "on the shelf";
 
   const chip = (t: ShelfTerm) => {
@@ -144,8 +140,7 @@ export function ShelfTerms({
       <div className="tw:flex tw:flex-wrap tw:items-center tw:gap-x-2 tw:gap-y-2">
         <span className="tw:text-xs tw:font-medium tw:text-muted-foreground">Topics</span>
         <TooltipGroup delay={{ open: 300, close: 120 }} timeoutMs={400}>
-          {picked.map(chip)}
-          {rest.map(chip)}
+          {shown.map(chip)}
         </TooltipGroup>
         {selected.length > 0 && (
           <button
@@ -174,7 +169,7 @@ export function ShelfTerms({
            extra metadata" — and the place a phone gets what a tooltip gives a
            mouse. */
         <ul aria-label="All topics" className="tw:m-0 tw:mt-2 tw:flex tw:list-none tw:flex-col tw:gap-1 tw:p-0">
-          {byCount.map((t) => {
+          {terms.map((t) => {
             const on = chosen.has(t.key);
             const n = count(t.key);
             const dead = !on && n === 0;

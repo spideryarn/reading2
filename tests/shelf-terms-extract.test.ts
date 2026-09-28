@@ -39,6 +39,18 @@ describe("foldKey — light plural folding", () => {
     expect(foldKey("Turing's")).toBe("turing");
   });
 
+  it("folds long acronym plurals, and leaves a short one's to the chooser (plan 260928d)", () => {
+    expect(foldKey("LLMs")).toBe("llm");
+    /* Three letters or fewer come back whole, so bus and gas survive — and
+       so does AIs; -us and -os are kept (virus, chaos), so GPUs and NGOs are
+       too. choose.ts merges a short key like these into its singular when
+       both are on the shelf, which needs no EXTRACTOR_VERSION bump. */
+    expect(foldKey("AIs")).toBe("ais");
+    expect(foldKey("GPUs")).toBe("gpus");
+    expect(foldKey("NGOs")).toBe("ngos");
+    expect(foldKey("bus")).toBe("bus");
+  });
+
   it("puts a plural and its singular under one key, counted together", () => {
     const r = extractCandidates([
       prose(`${FILLER} The neural networks learn. A neural network forgets. ${FILLER}`),

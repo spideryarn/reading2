@@ -11,6 +11,8 @@ import {
   type ChooseArticle,
   chooseTerms,
   type ShelfTerm,
+  byArticleCount,
+  shelfTermHeadMetrics,
   shelfTermMetrics,
   stemForOverlap,
 } from "../src/shelf-terms/choose.js";
@@ -224,6 +226,152 @@ describe("redundancy skips", () => {
     const keys = keysOf(chooseTerms(arts).terms);
     expect(keys).toContain("spider");
     expect(keys).toContain("memory");
+  });
+});
+
+describe("containment and coverage first (plan 260928d)", () => {
+  it("skips a small topic sitting inside a big one it shares a word with, though their Jaccard is low", () => {
+    const arts = shelf(24);
+    /* ai system: 3 articles, all inside ai's 11 — Jaccard 0.27, containment 1.0 */
+    give(arts, "ai", range(0, 10));
+    give(arts, "ai system", range(0, 2));
+    const keys = keysOf(chooseTerms(arts).terms);
+    expect(keys).toContain("ai");
+    expect(keys).not.toContain("ai system");
+  });
+
+  it("ranks a topic that reaches uncovered articles ahead of a bigger one that mostly repeats the first", () => {
+    const arts = shelf(24);
+    /* alpha first (dense). beta: 8 articles, 7 of them alpha's — Jaccard
+       0.64, no shared word, so not redundant, only repetitive. gamma: 3
+       articles nobody covers, its idf pulled down by stray mentions. */
+    give(arts, "alpha", range(0, 9), 20);
+    give(arts, "beta", [...range(0, 6), "s10"]);
+    give(arts, "gamma", range(11, 13));
+    give(arts, "gamma", range(14, 17), 1);
+    /* the default product ranking and the lexicographic one agree here */
+    for (const opts of [{}, { qualityExponent: null }]) {
+      const keys = keysOf(chooseTerms(arts, opts).terms);
+      expect(keys[0]).toBe("alpha");
+      expect(keys).toContain("beta");
+      expect(keys.indexOf("gamma")).toBeLessThan(keys.indexOf("beta"));
+    }
+  });
+
+  it("gives a short work no coverage gain under minCoverageWords, though it stays a member", () => {
+    const arts = shelf(10);
+    for (const a of arts.slice(3, 7)) a.words = 100;
+    give(arts, "alpha", range(0, 2));
+    give(arts, "beta", range(3, 6));
+    expect(keysOf(chooseTerms(arts).terms)[0]).toBe("beta");
+    const r = chooseTerms(arts, { minCoverageWords: 500 });
+    expect(keysOf(r.terms)[0]).toBe("alpha");
+    expect(r.terms.find((t) => t.key === "beta")?.articles).toHaveLength(4);
+  });
+
+  it("replaces a chosen topic by a later one that contains it and shares its word, in its place", () => {
+    const arts = shelf(24);
+    give(arts, "zeta", range(12, 16), 20); // first: dense and uncovered
+    give(arts, "ai system", range(0, 2)); // a phrase, so taken before ai
+    give(arts, "ai", range(0, 10));
+    const r = chooseTerms(arts, { maxTerms: 3 });
+    expect(keysOf(r.terms)).toEqual(["zeta", "ai"]);
+  });
+
+  it("replaces a chosen subset even when its shared-word Jaccard with the later superset exceeds 0.3", () => {
+    const arts = shelf(24);
+    give(arts, "zeta", range(12, 16), 20); // first: dense and uncovered
+    give(arts, "ai system", range(0, 3)); // 4/11 of ai: above shared-word Jaccard limit
+    give(arts, "ai", range(0, 10));
+    const r = chooseTerms(arts, { maxTerms: 3 });
+    expect(keysOf(r.terms)).toEqual(["ai", "zeta"]);
+    expect(r.terms[0]?.articles).toEqual(
+      range(0, 10).map((slug) => ({ slug, count: 4 })),
+    );
+    expect(chooseTerms([...arts].reverse(), { maxTerms: 3 })).toEqual(r);
+  });
+
+  it("merges a short plural key into its singular when both are on the shelf, labelled by the singular", () => {
+    const arts = shelf(12);
+    const withLabels = (slug: string, cands: Record<string, [number, string]>) =>
+      art(slug, Object.fromEntries(Object.entries(cands).map(([k, [n]]) => [k, n])), {
+        extra: Object.fromEntries(Object.entries(cands).map(([k, [, label]]) => [k, { label }])),
+      });
+    arts[0] = withLabels("s00", { ai: [4, "AI"], ais: [4, "AIs"] });
+    arts[1] = withLabels("s01", { ai: [4, "AI"] });
+    arts[2] = withLabels("s02", { ai: [4, "AI"] });
+    arts[3] = withLabels("s03", { ais: [9, "AIs"] });
+    arts[4] = withLabels("s04", { ais: [9, "AIs"] });
+    /* one mention of each: neither alone is membership, together they are */
+    arts[5] = withLabels("s05", { ai: [1, "AI"], ais: [1, "AIs"] });
+    /* bus has no bu, so it stays whole */
+    give(arts, "bus", range(6, 8));
+    const terms = chooseTerms(arts).terms;
+    const ai = terms.find((t) => t.key === "ai");
+    expect(ai?.label).toBe("AI");
+    expect(ai?.articles).toEqual([
+      { slug: "s03", count: 9 },
+      { slug: "s04", count: 9 },
+      { slug: "s00", count: 8 },
+      { slug: "s01", count: 4 },
+      { slug: "s02", count: 4 },
+      { slug: "s05", count: 2 },
+    ]);
+    expect(keysOf(terms)).not.toContain("ais");
+    expect(keysOf(terms)).toContain("bus");
+  });
+
+  it("leaves a short plural alone when its singular is not on the shelf", () => {
+    const arts = shelf(10);
+    give(arts, "ais", range(0, 2));
+    give(arts, "gas", range(3, 5));
+    expect(keysOf(chooseTerms(arts).terms).sort()).toEqual(["ais", "gas"]);
+  });
+
+  it("does not merge two real short words merely because one key is the other plus s", () => {
+    const arts = shelf(24);
+    for (const [i, [singular, endingInS]] of (
+      [
+        ["bu", "bus"],
+        ["ga", "gas"],
+        ["it", "its"],
+        ["ye", "yes"],
+        ["up", "ups"],
+      ] as const
+    ).entries()) {
+      give(arts, singular, range(i * 2, i * 2 + 1));
+      give(arts, endingInS, range(12 + i * 2, 13 + i * 2));
+    }
+    expect(keysOf(chooseTerms(arts).terms).sort()).toEqual([
+      "bu",
+      "bus",
+      "ga",
+      "gas",
+      "it",
+      "its",
+      "up",
+      "ups",
+      "ye",
+      "yes",
+    ]);
+  });
+
+  it("measures the first few in the order given", () => {
+    const t = (key: string, slugs: string[]): ShelfTerm => ({
+      key,
+      label: key,
+      articles: slugs.map((slug) => ({ slug, count: 2 })),
+    });
+    const scope = ["a", "b", "c", "d", "e"];
+    const terms = [t("small", ["d"]), t("big", ["a", "b", "c"]), t("inside", ["a", "b"])];
+    const h = shelfTermHeadMetrics(terms, scope);
+    expect(h.coverageAt5).toBe(0.8);
+    /* big/inside: Jaccard 2/3, overlap 1; the other pairs 0 */
+    expect(h.maxOverlap12).toBe(1);
+    expect(h.maxJaccard12).toBeCloseTo(2 / 3, 10);
+    expect(h.meanOverlap12).toBeCloseTo(1 / 3, 10);
+    expect(keysOf(byArticleCount(terms))).toEqual(["big", "inside", "small"]);
+    expect(shelfTermHeadMetrics(byArticleCount(terms).slice(0, 1), scope).coverageAt5).toBe(0.6);
   });
 });
 
