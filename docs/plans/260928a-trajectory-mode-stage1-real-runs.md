@@ -104,3 +104,29 @@ Measure, 5.3, 5.5 ·
   nothing yet are never shown. There are two options: offer only one quote per paragraph, or
   accept the loss.
 - **The growth rule never fired** on these three. The caps never bound.
+
+## Stage 3: the cue prompt, `trajectory/5` (2026-09-28, once credit was restored)
+
+| | Normal paper (entropy) | Short essay (*Life is Short*) |
+|---|---|---|
+| Stops at Gist / More / Most | 5 / 11 / 21 | 2 / 5 / 9 |
+| Call time and cost | 10.5 s, $0.0227 | 5.2 s, $0.0108 |
+| `badCue` | 0 | 0 |
+
+Cues, first five of each:
+
+- **Entropy:** *"Look for how the article frames the challenge of information processing in
+  brains"* · *"Notice what question information transfer alone cannot answer"* · *"Look for how the
+  whole versus sum of parts distinguishes synergy from redundancy"* · *"Look for how rich-club
+  membership relates to information processing"* · *"Look for what synergy implies about how
+  neurons respond to input patterns"*.
+- **Essay:** *"Look for the three-part summary of how to respond to life's shortness"* · *"Notice how
+  counting years in discrete units changes how time feels"* · *"Ask what force the phrase 'life is
+  too short' actually carries"* · *"Look for what habit is recommended toward things you most want
+  to do"* · *"Look for the test proposed for telling real value from fake urgency"*.
+
+**Judgment.** Not one of the 30 cues states a finding. One edges towards it by presupposing a
+finding: entropy stop 18, *"Look for why too much similarity suppresses synergy"*. That is the same
+leak the role line had, and it is much rarer here. The cues are **monotonous**: 26 of the 30 start
+*"Look for"*. They read as a checklist rather than a voice. A prompt nudge towards variety is cheap
+if Greg finds it grating (trajectory.md § Questions for Greg, question 2).

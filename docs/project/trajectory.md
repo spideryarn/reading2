@@ -253,7 +253,9 @@ cost, for a sentence that is sometimes absent.
 the section name.
 
 **How to choose.** If the route feels like a pile of separate stops rather than one walk, the thread
-is what would fix that.
+is what would fix that. One thing already visible in the first real runs: 26 of 30 cues begin
+*"Look for …"*, so they read like a checklist. A one-line prompt nudge towards variety is cheap if
+that grates.
 
 ### 3. Three buttons, not a slider
 

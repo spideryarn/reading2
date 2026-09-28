@@ -483,3 +483,11 @@ The Opus second opinion (first round) also gave:
 
   A worst case of 24 terms × 30 stops gathers in about 2 ms. Gates re-run here afterwards:
   typecheck 0, and 6 files / 97 tests passed.
+- 2026-09-28 — credit was restored, so the held-back **real runs of `trajectory/5`** were made on
+  the entropy paper ($0.023, 10.5 s) and the essay ($0.011, 5.2 s). There were 0 bad cues, and none
+  of the 30 states a finding (one presupposes one). The cues are monotonous: 26 of 30 start
+  *"Look for"*. Details in [stage1-real-runs](260928a-trajectory-mode-stage1-real-runs.md) § Stage 3.
+- 2026-09-28 — **full suite** on the merged tree after stage 3: 1,170 files passed, and 5 failed,
+  all of them the known no-build environment reds (`cold-start-lazy-imports`, `pdf-bundle-trace`
+  and three fleet tests needing `build:fleet`). None of the five is ours. Pushed to `dev`. **Done:**
+  v1 and v2 are built; what is left is Greg's, in trajectory.md § Questions for Greg.
