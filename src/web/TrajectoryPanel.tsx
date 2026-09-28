@@ -39,7 +39,7 @@
  * (`offeredDepths`). Each is a real `<button>` and its own tab stop, with
  * `aria-pressed` — keyboard.md's rule that arrow keys belong to the article.
  */
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { ChevronLeft, ChevronRight, RotateCw, Route, TriangleAlert } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import type { UseTrajectory } from "./useTrajectory.js";
@@ -266,6 +266,14 @@ export function TrajectoryPanel({ owner, view }: Props) {
   const atMost = ready && view.depth !== null && view.depth === deepest && view.depth === 3;
   /** The row whose whole quote is up — one at a time, and only by mouse or focus. */
   const [tipFor, setTipFor] = useState<string | null>(null);
+  /* A depth or route refresh can remove an open row, so its Tooltip unmounts
+     before it can report that it closed. Do not let that stale id reopen if
+     the row later returns. The enabled check also covers words disappearing. */
+  useEffect(() => {
+    if (tipFor === null) return;
+    const row = ready ? view.rows.find((candidate) => candidate.quoteId === tipFor) : undefined;
+    if (row === undefined || !rowWords(row)?.whole) setTipFor(null);
+  }, [ready, tipFor, view.rows]);
 
   /**
    * @param again whether this is the button beside a route already there. The

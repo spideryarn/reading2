@@ -448,6 +448,20 @@ describe("the panel", () => {
       expect(tips()).toHaveLength(0);
     });
 
+    it("handles the 100-character boundary, whitespace, and an unbroken cut", async () => {
+      const exact = "x".repeat(100);
+      const over = "x".repeat(101);
+      await draw(owner(), withWords([exact, " \n\t ", over]));
+
+      expect(words(rowsOf()[0])).toBe(`“${exact}”`);
+      expect(words(rowsOf()[1])).toBeNull();
+      expect(words(rowsOf()[2])).toBe(`“${exact}…”`);
+      await hover(rowsOf()[0]!.querySelector(".traj-go")!);
+      expect(tips()).toHaveLength(0);
+      await hover(rowsOf()[2]!.querySelector(".traj-go")!);
+      expect(tips()[0]?.textContent).toContain(over);
+    });
+
     it("shows the current stop's quote whole, with no tooltip — which is also what a tap reaches", async () => {
       await draw(owner(), withWords([null, LONG, null]));
       expect(words(rowsOf()[1])).toBe(`“${LONG}”`);
@@ -486,6 +500,25 @@ describe("the panel", () => {
       await act(async () => {
         await new Promise((r) => setTimeout(r, 200));
       });
+      expect(tips()).toHaveLength(0);
+    });
+
+    it("forgets an open card when its row leaves the route", async () => {
+      const at = (i: number) => {
+        const v = withWords([LONG, null, null]);
+        return { ...v, rows: v.rows.map((r, j) => ({ ...r, current: j === i })) };
+      };
+      const full = at(1);
+      await draw(owner(), full);
+      await hover(rowsOf()[0]!.querySelector(".traj-go")!);
+      expect(tips()).toHaveLength(1);
+
+      /* A shallower pass can remove the row altogether, so its Tooltip cannot
+         report that it closed. Restoring the deeper pass must not reuse that
+         stale open state. */
+      await draw(owner(), { ...full, rows: full.rows.slice(1) });
+      expect(tips()).toHaveLength(0);
+      await draw(owner(), full);
       expect(tips()).toHaveLength(0);
     });
 
