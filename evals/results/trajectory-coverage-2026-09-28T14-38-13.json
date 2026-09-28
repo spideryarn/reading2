@@ -1,0 +1,2638 @@
+{
+  "oldVersion": "trajectory/6",
+  "newVersion": "trajectory/7",
+  "profile": null,
+  "snapshot": {
+    "vb-spya-vu3xen": {
+      "ideasVersion": "ideas/3",
+      "quotesVersion": "quotes/6",
+      "quotesStale": false,
+      "quotes": 10,
+      "ideas": [
+        {
+          "label": "I1",
+          "id": "spya-j20e8c",
+          "name": "You can usually choose your way out of forced obligations",
+          "statement": "People generally have enough freedom over their jobs, customers, and location to trade money or conventional opportunity for less wasted time, if they decide to prioritize it.",
+          "blocks": [
+            {
+              "blockId": "spya-kuyc7f",
+              "at": 12
+            },
+            {
+              "blockId": "spya-pe76du",
+              "at": 13
+            },
+            {
+              "blockId": "spya-zwayd6",
+              "at": 14
+            }
+          ]
+        },
+        {
+          "label": "I2",
+          "id": "spya-k40naw",
+          "name": "Counting turns abstract time into felt scarcity",
+          "statement": "Time itself is a smooth, continuous thing that's hard to judge as 'a lot' or 'a little.' But once you break it into small countable units — 52 weekends, 8 Christmases — the smallness becomes obvious in a way pure duration never makes clear.",
+          "blocks": [
+            {
+              "blockId": "spya-qxsv87",
+              "at": 5
+            },
+            {
+              "blockId": "spya-fqvdc5",
+              "at": 6
+            },
+            {
+              "blockId": "spya-fqvdc5",
+              "at": 6
+            }
+          ]
+        },
+        {
+          "label": "I3",
+          "id": "spya-bd38tp",
+          "name": "Self-chosen distractions are harder to escape than imposed ones",
+          "statement": "Some time-wasting is forced on you by circumstance, but the kind you fall into voluntarily — arguing online, addictive pastimes — is worse, because it works by hijacking instincts you can't easily override, and getting better at hooking people is exactly what technology keeps doing.",
+          "blocks": [
+            {
+              "blockId": "spya-kuyc7f",
+              "at": 12
+            },
+            {
+              "blockId": "spya-t3g6bt",
+              "at": 15
+            },
+            {
+              "blockId": "spya-x4g875",
+              "at": 17
+            },
+            {
+              "blockId": "spya-y549c6",
+              "at": 19
+            }
+          ]
+        }
+      ]
+    },
+    "entropy-24-00930-spya-pywwkq": {
+      "ideasVersion": "ideas/3",
+      "quotesVersion": "quotes/7",
+      "quotesStale": false,
+      "quotes": 23,
+      "ideas": [
+        {
+          "label": "I1",
+          "id": "spya-ev8yrz",
+          "name": "Statistically inferred links stand in for real circuit wiring",
+          "statement": "When a study labels a connection as 'feedforward', 'feedback', or 'recurrent' after computing it from transfer entropy on spike data, it is treating a statistical dependency inferred from activity as if it corresponded to an actual synaptic or structural connection in the circuit.",
+          "blocks": [
+            {
+              "blockId": "spya-sw5ukx",
+              "at": 50
+            },
+            {
+              "blockId": "spya-xs5660",
+              "at": 59
+            },
+            {
+              "blockId": "spya-j4cy9j",
+              "at": 66
+            }
+          ]
+        },
+        {
+          "label": "I2",
+          "id": "spya-u50rkn",
+          "name": "Undirected similarity versus directed flow",
+          "statement": "Mutual information tells you how much two signals resemble or predict each other with no sense of which one came first, while transfer entropy tells you how much one signal's past specifically reduces uncertainty about another's future, over and above that signal's own history — the first is a measure of similarity, the second of directional influence.",
+          "blocks": [
+            {
+              "blockId": "spya-f6sbgx",
+              "at": 18
+            },
+            {
+              "blockId": "spya-p4pyuy",
+              "at": 19
+            }
+          ]
+        },
+        {
+          "label": "I3",
+          "id": "spya-abvt5y",
+          "name": "Synergy marks genuine computation, not just relay",
+          "statement": "When the joint activity of two or more input neurons tells you more about a target neuron's future than the sum of what each input tells you alone, that extra information (synergy) is evidence the target is combining its inputs into something new, rather than simply passing signals along.",
+          "blocks": [
+            {
+              "blockId": "spya-e94ury",
+              "at": 28
+            },
+            {
+              "blockId": "spya-wer4cd",
+              "at": 23
+            },
+            {
+              "blockId": "spya-s0db2g",
+              "at": 21
+            }
+          ]
+        },
+        {
+          "label": "I4",
+          "id": "spya-x2cw4w",
+          "name": "Shannon theory alone cannot split information into parts; you must supply a redundancy rule",
+          "statement": "Knowing the total information two sources give about a target, plus each source's individual contribution, does not mathematically fix how much of that information is shared, unique, or synergistic — there are more unknowns than equations, so an extra rule for measuring 'shared information' must be chosen before the rest of the decomposition can be computed.",
+          "blocks": [
+            {
+              "blockId": "spya-bgsd4n",
+              "at": 36
+            },
+            {
+              "blockId": "spya-t8mg0s",
+              "at": 40
+            },
+            {
+              "blockId": "spya-rc76qn",
+              "at": 47
+            }
+          ]
+        },
+        {
+          "label": "I5",
+          "id": "spya-kqnfx9",
+          "name": "Computation concentrates in richly connected hubs",
+          "statement": "The small set of neurons that are most densely and mutually interconnected (a 'rich club') account for a disproportionate share of a network's synergistic information processing, far beyond what their numbers alone would predict.",
+          "blocks": [
+            {
+              "blockId": "spya-fud8q3",
+              "at": 56
+            },
+            {
+              "blockId": "spya-fud8q3",
+              "at": 56
+            },
+            {
+              "blockId": "spya-bftp48",
+              "at": 55
+            }
+          ]
+        },
+        {
+          "label": "I6",
+          "id": "spya-etexkk",
+          "name": "Loops among inputs boost synergy more than loops back from the target",
+          "statement": "When the two source neurons feeding a target are themselves connected to each other (recurrent wiring), the target shows more synergistic integration; connections running back from the target to its sources do not produce the same boost and may slightly reduce it.",
+          "blocks": [
+            {
+              "blockId": "spya-sd9fzd",
+              "at": 60
+            },
+            {
+              "blockId": "spya-sd9fzd",
+              "at": 60
+            }
+          ]
+        },
+        {
+          "label": "I7",
+          "id": "spya-rngea8",
+          "name": "Synergy peaks at intermediate input similarity, then gives way to redundancy",
+          "statement": "As two input signals become more correlated, the synergy between them and a shared target first rises, peaks at a modest level of correlation, and then falls as redundancy takes over and dominates at high correlation.",
+          "blocks": [
+            {
+              "blockId": "spya-hkhpex",
+              "at": 62
+            },
+            {
+              "blockId": "spya-ybmve2",
+              "at": 63
+            },
+            {
+              "blockId": "spya-cs9fdy",
+              "at": 64
+            }
+          ]
+        },
+        {
+          "label": "I8",
+          "id": "spya-mpgspp",
+          "name": "The redundancy/synergy balance shifts with what the brain is doing",
+          "statement": "The relative amounts of redundant versus synergistic information carried by neural populations are not fixed properties of a circuit but change with the behavioral task being performed, tracking the functional demands of that moment (such as needing reliable signal duplication during movement).",
+          "blocks": [
+            {
+              "blockId": "spya-t8fayf",
+              "at": 69
+            },
+            {
+              "blockId": "spya-t8fayf",
+              "at": 69
+            },
+            {
+              "blockId": "spya-b32ecw",
+              "at": 70
+            }
+          ]
+        },
+        {
+          "label": "I9",
+          "id": "spya-uykj86",
+          "name": "Information sharing can be resolved moment-by-moment, not just as an average",
+          "statement": "Rather than only computing an expected, averaged amount of redundancy, uniqueness, and synergy over an entire recording, the same decomposition can, with a suitable measure, be applied to each individual moment, producing a time-resolved trace of how information-sharing mode changes over time.",
+          "blocks": [
+            {
+              "blockId": "spya-j6s6fp",
+              "at": 86
+            },
+            {
+              "blockId": "spya-mczhkp",
+              "at": 88
+            }
+          ]
+        },
+        {
+          "label": "I10",
+          "id": "spya-drsv20",
+          "name": "The same decomposition can apply to multiple targets or across time",
+          "statement": "The redundant/unique/synergistic split, originally defined for several sources feeding one target, can be generalized to ask how information is shared across two or more targets at once, or how a system's past constrains its future, opening a wider set of questions than single-target analysis allows.",
+          "blocks": [
+            {
+              "blockId": "spya-cds6mm",
+              "at": 91
+            },
+            {
+              "blockId": "spya-cds6mm",
+              "at": 91
+            }
+          ]
+        }
+      ]
+    },
+    "source-spya-furjgs": {
+      "ideasVersion": "ideas/3",
+      "quotesVersion": "quotes/6",
+      "quotesStale": false,
+      "quotes": 16,
+      "ideas": [
+        {
+          "label": "I1",
+          "id": "spya-e7fnqv",
+          "name": "Physical after-effects as stand-ins for direct measurement",
+          "statement": "When a transient event cannot be measured directly, the marks, residues, or timed sounds it leaves behind can be treated as reliable stand-ins for measuring its physical properties, such as speed, energy, or composition.",
+          "blocks": [
+            {
+              "blockId": "spya-wv7306",
+              "at": 45
+            },
+            {
+              "blockId": "spya-b97cda",
+              "at": 23
+            },
+            {
+              "blockId": "spya-qxc4ev",
+              "at": 28
+            },
+            {
+              "blockId": "spya-g2pyqz",
+              "at": 85
+            },
+            {
+              "blockId": "spya-unyb84",
+              "at": 81
+            }
+          ]
+        },
+        {
+          "label": "I2",
+          "id": "spya-wt0pnp",
+          "name": "Professional training upgrades eyewitness reliability",
+          "statement": "A person's scientific or professional training is presented as making their account of a strange, brief event more trustworthy and more scientifically usable than an ordinary bystander's account.",
+          "blocks": [
+            {
+              "blockId": "spya-vbppvf",
+              "at": 5
+            },
+            {
+              "blockId": "spya-m8dn8n",
+              "at": 12
+            },
+            {
+              "blockId": "spya-mjkcp8",
+              "at": 41
+            }
+          ]
+        },
+        {
+          "label": "I3",
+          "id": "spya-t9eey8",
+          "name": "Popular imagery can outlive and distort the documented facts",
+          "statement": "A dramatic story or picture about a phenomenon can take hold in public imagination and persist as its defining image even after the factual record shows something more mundane.",
+          "blocks": [
+            {
+              "blockId": "spya-vfgg6p",
+              "at": 77
+            },
+            {
+              "blockId": "spya-ru7cd4",
+              "at": 88
+            },
+            {
+              "blockId": "spya-bv3p5r",
+              "at": 9
+            }
+          ]
+        },
+        {
+          "label": "I4",
+          "id": "spya-tp8y8w",
+          "name": "Ball lightning may be several different phenomena",
+          "statement": "The seemingly contradictory reports of ball lightning may not describe one single physical process but several distinct types or mechanisms lumped under one name.",
+          "blocks": [
+            {
+              "blockId": "spya-z7js3a",
+              "at": 10
+            },
+            {
+              "blockId": "spya-c6msyy",
+              "at": 75
+            }
+          ]
+        },
+        {
+          "label": "I5",
+          "id": "spya-rx6dp8",
+          "name": "Isolated, uncoordinated research fragments a field",
+          "statement": "When data collection, theorizing, and laboratory testing on a phenomenon proceed separately without coordination, the result is a scattered, inconclusive body of research rather than a converging science.",
+          "blocks": [
+            {
+              "blockId": "spya-z7js3a",
+              "at": 10
+            },
+            {
+              "blockId": "spya-ru7cd4",
+              "at": 88
+            },
+            {
+              "blockId": "spya-yqu3e3",
+              "at": 87
+            }
+          ]
+        },
+        {
+          "label": "I6",
+          "id": "spya-jcgedz",
+          "name": "Independent lightning-detection data can corroborate testimony",
+          "statement": "Matching an eyewitness account's time and place against automated lightning-location network records provides an independent check on an otherwise unverifiable personal report.",
+          "blocks": [
+            {
+              "blockId": "spya-xmabef",
+              "at": 14
+            },
+            {
+              "blockId": "spya-av7r2n",
+              "at": 61
+            }
+          ]
+        },
+        {
+          "label": "I7",
+          "id": "spya-f8vfu6",
+          "name": "Elite samples reveal reporting biases when compared to mass data",
+          "statement": "Comparing a small set of expert-observer reports against a much larger general public database can expose how the type of observer shapes which characteristics of an event get noticed and recorded.",
+          "blocks": [
+            {
+              "blockId": "spya-u0q53z",
+              "at": 68
+            },
+            {
+              "blockId": "spya-vcfvnz",
+              "at": 69
+            },
+            {
+              "blockId": "spya-udw4jh",
+              "at": 70
+            }
+          ]
+        },
+        {
+          "label": "I8",
+          "id": "spya-kyndvz",
+          "name": "Shock trauma splits into separate immediate and lasting effects",
+          "statement": "A sudden physical shock can produce two distinct kinds of harm that must be diagnosed separately: a short-lived direct physiological disruption and a separate, longer-lasting psychological disorder.",
+          "blocks": [
+            {
+              "blockId": "spya-n2yghq",
+              "at": 78
+            },
+            {
+              "blockId": "spya-heqjzg",
+              "at": 80
+            }
+          ]
+        }
+      ]
+    }
+  },
+  "results": [
+    {
+      "slug": "vb-spya-vu3xen",
+      "arm": "old",
+      "run": 1,
+      "version": "trajectory/6",
+      "offered": 9,
+      "rows": [
+        {
+          "depth": 1,
+          "stops": 2,
+          "words": 123,
+          "wordsPct": 7.291049199762893,
+          "ideasIn": 1,
+          "ideasInOrBeside": 1,
+          "ideasInOrNextPm1": 1,
+          "ideasTotal": 3,
+          "inLabels": [
+            "I2"
+          ],
+          "sectionsWithStop": 2,
+          "contentSections": 6
+        },
+        {
+          "depth": 2,
+          "stops": 6,
+          "words": 519,
+          "wordsPct": 30.76467101363367,
+          "ideasIn": 3,
+          "ideasInOrBeside": 3,
+          "ideasInOrNextPm1": 3,
+          "ideasTotal": 3,
+          "inLabels": [
+            "I1",
+            "I2",
+            "I3"
+          ],
+          "sectionsWithStop": 5,
+          "contentSections": 6
+        },
+        {
+          "depth": 3,
+          "stops": 9,
+          "words": 822,
+          "wordsPct": 48.72554831061055,
+          "ideasIn": 3,
+          "ideasInOrBeside": 3,
+          "ideasInOrNextPm1": 3,
+          "ideasTotal": 3,
+          "inLabels": [
+            "I1",
+            "I2",
+            "I3"
+          ],
+          "sectionsWithStop": 5,
+          "contentSections": 6
+        }
+      ],
+      "costNanos": 11576000,
+      "unpriced": 0,
+      "elapsedMs": 5939,
+      "inputTokens": 3653,
+      "outputTokens": 427,
+      "stops": [
+        {
+          "depth": 1,
+          "quote": "Relentlessly prune bullshit, don't wait to do things that matter, and savor the time you have. That's what you do when life is short.",
+          "cue": "Look for the three-part summary of how to respond to a short life.",
+          "section": "Savoring the Time You Have",
+          "ideasIn": []
+        },
+        {
+          "depth": 1,
+          "quote": "Having kids showed me how to convert a continuous quantity, time, into discrete quantities. You only get 52 weekends with your 2 year old. If Christmas-as-magic lasts from say ages 3 to 10, you only get to watch your child experience it 8 t",
+          "cue": "Notice how turning years into a small countable number changes how time feels.",
+          "section": "Life Actually Is Short",
+          "ideasIn": [
+            "I2"
+          ]
+        },
+        {
+          "depth": 2,
+          "quote": "It means arguments of the form \"Life is too short for x\" have great force. It's not just a figure of speech to say that life is too short for something. It's not just a synonym for annoying. If you find yourself thinking that life is too sh",
+          "cue": "Ask what it means to take the phrase life is too short literally rather than as an expression.",
+          "section": "Eliminating Bullshit",
+          "ideasIn": []
+        },
+        {
+          "depth": 2,
+          "quote": "There are two ways this kind of thing gets into your life: it's either forced on you, or it tricks you.",
+          "cue": "Consider the two routes by which unwanted things end up filling your life.",
+          "section": "Eliminating Bullshit",
+          "ideasIn": [
+            "I1",
+            "I3"
+          ]
+        },
+        {
+          "depth": 2,
+          "quote": "As well as avoiding bullshit, one should actively seek out things that matter. But different things matter to different people, and most have to learn what matters to them.",
+          "cue": "Think about why figuring out what matters to you takes active effort.",
+          "section": "Seeking What Matters",
+          "ideasIn": []
+        },
+        {
+          "depth": 2,
+          "quote": "Cultivate a habit of impatience about the things you most want to do. Don't wait before climbing that mountain or writing that book or visiting your mother. You don't need to be constantly reminding yourself why you shouldn't wait. Just don",
+          "cue": "Look for the advice about timing when it comes to things you truly want to do.",
+          "section": "Surprised by Loss",
+          "ideasIn": []
+        },
+        {
+          "depth": 3,
+          "quote": "But while some amount of bullshit is inevitably forced on you, the bullshit that sneaks into your life by tricking you is no one's fault but your own.",
+          "cue": "Ask who is responsible when something unimportant sneaks into your life by deception.",
+          "section": "Eliminating Bullshit",
+          "ideasIn": [
+            "I3"
+          ]
+        },
+        {
+          "depth": 3,
+          "quote": "One heuristic for distinguishing stuff that matters is to ask yourself whether you'll care about it in the future. Fake stuff that matters usually has a sharp peak of seeming to matter. That's how it tricks you. The area under the curve is ",
+          "cue": "Look for the test involving whether something will still feel important later, and the shape it describes.",
+          "section": "Seeking What Matters",
+          "ideasIn": []
+        },
+        {
+          "depth": 3,
+          "quote": "If life is short, we should expect its shortness to take us by surprise. And that is just what tends to happen. You take things for granted, and then they're gone.",
+          "cue": "Notice why the brevity of life catches people off guard despite being predictable.",
+          "section": "Surprised by Loss",
+          "ideasIn": []
+        }
+      ]
+    },
+    {
+      "slug": "vb-spya-vu3xen",
+      "arm": "new",
+      "run": 1,
+      "version": "trajectory/7",
+      "offered": 9,
+      "rows": [
+        {
+          "depth": 1,
+          "stops": 2,
+          "words": 123,
+          "wordsPct": 7.291049199762893,
+          "ideasIn": 1,
+          "ideasInOrBeside": 1,
+          "ideasInOrNextPm1": 1,
+          "ideasTotal": 3,
+          "inLabels": [
+            "I2"
+          ],
+          "sectionsWithStop": 2,
+          "contentSections": 6
+        },
+        {
+          "depth": 2,
+          "stops": 5,
+          "words": 430,
+          "wordsPct": 25.489033787788973,
+          "ideasIn": 3,
+          "ideasInOrBeside": 3,
+          "ideasInOrNextPm1": 3,
+          "ideasTotal": 3,
+          "inLabels": [
+            "I1",
+            "I2",
+            "I3"
+          ],
+          "sectionsWithStop": 4,
+          "contentSections": 6
+        },
+        {
+          "depth": 3,
+          "stops": 9,
+          "words": 822,
+          "wordsPct": 48.72554831061055,
+          "ideasIn": 3,
+          "ideasInOrBeside": 3,
+          "ideasInOrNextPm1": 3,
+          "ideasTotal": 3,
+          "inLabels": [
+            "I1",
+            "I2",
+            "I3"
+          ],
+          "sectionsWithStop": 5,
+          "contentSections": 6
+        }
+      ],
+      "costNanos": 14006000,
+      "unpriced": 0,
+      "elapsedMs": 5360,
+      "inputTokens": 4993,
+      "outputTokens": 402,
+      "stops": [
+        {
+          "depth": 1,
+          "quote": "Relentlessly prune bullshit, don't wait to do things that matter, and savor the time you have. That's what you do when life is short.",
+          "cue": "What three-part practice does this suggest for treating life as short?",
+          "section": "Savoring the Time You Have",
+          "ideasIn": []
+        },
+        {
+          "depth": 1,
+          "quote": "Having kids showed me how to convert a continuous quantity, time, into discrete quantities. You only get 52 weekends with your 2 year old. If Christmas-as-magic lasts from say ages 3 to 10, you only get to watch your child experience it 8 t",
+          "cue": "How does counting small numbers change how long a stretch of time feels?",
+          "section": "Life Actually Is Short",
+          "ideasIn": [
+            "I2"
+          ]
+        },
+        {
+          "depth": 2,
+          "quote": "It means arguments of the form \"Life is too short for x\" have great force. It's not just a figure of speech to say that life is too short for something. It's not just a synonym for annoying. If you find yourself thinking that life is too sh",
+          "cue": "What weight does the author give to saying life is too short for something?",
+          "section": "Eliminating Bullshit",
+          "ideasIn": []
+        },
+        {
+          "depth": 2,
+          "quote": "There are two ways this kind of thing gets into your life: it's either forced on you, or it tricks you.",
+          "cue": "What two routes let unwanted time-wasters into a life?",
+          "section": "Eliminating Bullshit",
+          "ideasIn": [
+            "I1",
+            "I3"
+          ]
+        },
+        {
+          "depth": 2,
+          "quote": "Cultivate a habit of impatience about the things you most want to do. Don't wait before climbing that mountain or writing that book or visiting your mother. You don't need to be constantly reminding yourself why you shouldn't wait. Just don",
+          "cue": "What habit does the author recommend toward things you most want to do?",
+          "section": "Surprised by Loss",
+          "ideasIn": []
+        },
+        {
+          "depth": 3,
+          "quote": "But while some amount of bullshit is inevitably forced on you, the bullshit that sneaks into your life by tricking you is no one's fault but your own.",
+          "cue": "Why might self-chosen distractions be harder to blame on circumstance?",
+          "section": "Eliminating Bullshit",
+          "ideasIn": [
+            "I3"
+          ]
+        },
+        {
+          "depth": 3,
+          "quote": "As well as avoiding bullshit, one should actively seek out things that matter. But different things matter to different people, and most have to learn what matters to them.",
+          "cue": "How does the author say people come to know what matters to them?",
+          "section": "Seeking What Matters",
+          "ideasIn": []
+        },
+        {
+          "depth": 3,
+          "quote": "One heuristic for distinguishing stuff that matters is to ask yourself whether you'll care about it in the future. Fake stuff that matters usually has a sharp peak of seeming to matter. That's how it tricks you. The area under the curve is ",
+          "cue": "What test does the author suggest for telling real value from fake urgency?",
+          "section": "Seeking What Matters",
+          "ideasIn": []
+        },
+        {
+          "depth": 3,
+          "quote": "If life is short, we should expect its shortness to take us by surprise. And that is just what tends to happen. You take things for granted, and then they're gone.",
+          "cue": "How does life's shortness tend to become apparent to us?",
+          "section": "Surprised by Loss",
+          "ideasIn": []
+        }
+      ]
+    },
+    {
+      "slug": "entropy-24-00930-spya-pywwkq",
+      "arm": "old",
+      "run": 1,
+      "version": "trajectory/6",
+      "offered": 20,
+      "rows": [
+        {
+          "depth": 1,
+          "stops": 4,
+          "words": 572,
+          "wordsPct": 6.666666666666667,
+          "ideasIn": 2,
+          "ideasInOrBeside": 2,
+          "ideasInOrNextPm1": 2,
+          "ideasTotal": 10,
+          "inLabels": [
+            "I3",
+            "I5"
+          ],
+          "sectionsWithStop": 4,
+          "contentSections": 9
+        },
+        {
+          "depth": 2,
+          "stops": 12,
+          "words": 1626,
+          "wordsPct": 18.95104895104895,
+          "ideasIn": 5,
+          "ideasInOrBeside": 6,
+          "ideasInOrNextPm1": 5,
+          "ideasTotal": 10,
+          "inLabels": [
+            "I2",
+            "I3",
+            "I5",
+            "I7",
+            "I8"
+          ],
+          "sectionsWithStop": 7,
+          "contentSections": 9
+        },
+        {
+          "depth": 3,
+          "stops": 20,
+          "words": 2622,
+          "wordsPct": 30.55944055944056,
+          "ideasIn": 7,
+          "ideasInOrBeside": 8,
+          "ideasInOrNextPm1": 8,
+          "ideasTotal": 10,
+          "inLabels": [
+            "I2",
+            "I3",
+            "I4",
+            "I5",
+            "I6",
+            "I7",
+            "I8"
+          ],
+          "sectionsWithStop": 7,
+          "contentSections": 9
+        }
+      ],
+      "costNanos": 21600000,
+      "unpriced": 0,
+      "elapsedMs": 13592,
+      "inputTokens": 5995,
+      "outputTokens": 961,
+      "stops": [
+        {
+          "depth": 1,
+          "quote": "If the left-hand side of Equation (4) (the “whole”) is greater than the right-hand side (the sum of the “parts”), then there is some information about Y that is disclosed by the joint state of all the neurons that is not disclosed by any in",
+          "cue": "Look for how comparing a whole to the sum of its parts defines synergy versus redundancy.",
+          "section": "4. PID: Partial Information Decomposition",
+          "ideasIn": [
+            "I3"
+          ]
+        },
+        {
+          "depth": 1,
+          "quote": "Information transfer captures the overall “flow” of information through the system; however, it is limited in its ability to reveal how different streams of information “interact” and how neurons produce novel or modified information from m",
+          "cue": "Notice what limitation of information transfer motivates a different kind of analysis.",
+          "section": "3. Information Processing in Neural Circuits",
+          "ideasIn": [
+            "I3"
+          ]
+        },
+        {
+          "depth": 1,
+          "quote": "Unambiguously, rich club triads processed more information than triads outside rich clubs. Numerically, the triads inside the rich clubs had 2.7 times the amount of synergy as the triads not in the rich club (Figure 4B).",
+          "cue": "Watch for how densely connected hub groups compare to others in processing information.",
+          "section": "5. PID in Action",
+          "ideasIn": [
+            "I5"
+          ]
+        },
+        {
+          "depth": 1,
+          "quote": "The existence of synergy in empirical data shows us that neurons do not appear to blindly sum the number of inputs and fire in response to the total (as would be expected from a basic threshold model or complex contagion model), but instead",
+          "cue": "Consider what this implies about how neurons respond to patterns of input, not just total input.",
+          "section": "8. Summary and Closing Matter",
+          "ideasIn": []
+        },
+        {
+          "depth": 2,
+          "quote": "It is known, however, that such processes are distributed over integrative interactions in neural circuits throughout the brain and involve large numbers of interacting neurons. We refer to this collective activity as neural information pro",
+          "cue": "Look for how the term for collective neural activity is being defined here.",
+          "section": "1. Introduction",
+          "ideasIn": []
+        },
+        {
+          "depth": 2,
+          "quote": "Historically, there have been two key limitations hindering the study of information processing by neural circuits. The first was a lack of appropriate data, since the analysis of synergistic dynamics requires large amounts of data to accur",
+          "cue": "Look for what two obstacles historically blocked studying this kind of processing.",
+          "section": "1. Introduction",
+          "ideasIn": []
+        },
+        {
+          "depth": 2,
+          "quote": "TE is understood as quantifying how much the past of the source variable reduces our uncertainty about the future of the target variable, after accounting for information disclosed by the target variable’s own past (autocorrelation). Wherea",
+          "cue": "Ask how this measure differs from a simple correlation between two signals.",
+          "section": "2. Tracking Information in Neural Circuits",
+          "ideasIn": [
+            "I2"
+          ]
+        },
+        {
+          "depth": 2,
+          "quote": "This inequality has been recognized for decades; however, it was not until the seminal work of Williams and Beer [1] that it was recognized how to algebraically decompose the total joint mutual information into the particular contributions ",
+          "cue": "Notice what earlier insight had been missing until a particular breakthrough.",
+          "section": "4. PID: Partial Information Decomposition",
+          "ideasIn": []
+        },
+        {
+          "depth": 2,
+          "quote": "The result was unambiguous. The greater the mutual information between source neurons at the synaptic timescale, the greater the synergy [3]. More information processing occurs where similar information streams converge (Figure 4E, the thre",
+          "cue": "Ask what relationship is found between similarity of input signals and synergy.",
+          "section": "5. PID in Action",
+          "ideasIn": [
+            "I7"
+          ]
+        },
+        {
+          "depth": 2,
+          "quote": "Interestingly, synergy only increased up to a point. The peak in synergy occurred when the mutual information was about 7% of the maximal value, regardless of the timescale. Past this level, the synergy began to decrease (this level is mark",
+          "cue": "Look for what happens to synergy once similarity between inputs passes a certain level.",
+          "section": "5. PID in Action",
+          "ideasIn": [
+            "I7"
+          ]
+        },
+        {
+          "depth": 2,
+          "quote": "The researchers found that while brain activity was generally synergy-dominated (as opposed to redundancy-dominated), during movement execution (a reach-and-grasp action) the relative abundance of redundant information increased dramaticall",
+          "cue": "Notice how the balance between synergy and redundancy shifts during an action.",
+          "section": "5. PID in Action",
+          "ideasIn": [
+            "I8"
+          ]
+        },
+        {
+          "depth": 2,
+          "quote": "This sequence of numbers grows appallingly fast: in the case of six parent neurons, there are 7,828,354 distinct PI atoms, the vast majority of which are difficult to interpret.",
+          "cue": "Look for how quickly the complexity of this decomposition grows with more inputs.",
+          "section": "6. Practical Considerations in PID",
+          "ideasIn": []
+        },
+        {
+          "depth": 3,
+          "quote": "I(X;Y) measures how our ability to correctly infer the state of X changes, depending on whether we are accounting for (potentially) shared dependencies with Y. It can be thought of as a nonlinear correlation between two patterns of activity",
+          "cue": "Ask what kind of relationship between two patterns of activity this measure captures.",
+          "section": "2. Tracking Information in Neural Circuits",
+          "ideasIn": [
+            "I2"
+          ]
+        },
+        {
+          "depth": 3,
+          "quote": "Unfortunately, classical Shannon information theory provides no unique solution to any of these, and so considerable work has been devoted to developing formal measures of each.",
+          "cue": "Notice why classical theory leaves this measurement question unresolved.",
+          "section": "4. PID: Partial Information Decomposition",
+          "ideasIn": [
+            "I4"
+          ]
+        },
+        {
+          "depth": 3,
+          "quote": "In the absence of a single accepted measure, different contexts may require the choice of different functions.",
+          "cue": "Look for why different situations might call for different choices of measure.",
+          "section": "4. PID: Partial Information Decomposition",
+          "ideasIn": [
+            "I4"
+          ]
+        },
+        {
+          "depth": 3,
+          "quote": "The implication of this is that feedforward information propagation between source neurons and a target neuron is a reliable predictor of information processing.",
+          "cue": "Ask what assumption justifies using this kind of information flow as a stand-in for processing.",
+          "section": "5. PID in Action",
+          "ideasIn": []
+        },
+        {
+          "depth": 3,
+          "quote": "Using PID, we found that triads with more recurrent connections also had greater synergy [4]. Feedback connections were less predictive of synergy but tended to correlate with reduced synergy.",
+          "cue": "Look for how recurrent versus feedback connections relate to synergy differently.",
+          "section": "5. PID in Action",
+          "ideasIn": [
+            "I6"
+          ]
+        },
+        {
+          "depth": 3,
+          "quote": "This suggests that as the similarity of the converging information grows past some point, it becomes redundant, and the total amount of synergistic output is suppressed.",
+          "cue": "Consider why growing similarity between signals might suppress synergistic output.",
+          "section": "5. PID in Action",
+          "ideasIn": [
+            "I7"
+          ]
+        },
+        {
+          "depth": 3,
+          "quote": "These results show not only that synergistic information dynamics is a feature of ongoing, spontaneous neural activity but also that synergy seems to reflect behaviorally specific patterns of dynamical activity in the cortex.",
+          "cue": "Notice what this suggests about synergy appearing during rest versus during specific behavior.",
+          "section": "5. PID in Action",
+          "ideasIn": [
+            "I8"
+          ]
+        },
+        {
+          "depth": 3,
+          "quote": "One important caveat to note with respect to PID applied to neural data is that while it provides a powerful framework for recognizing statistical dependencies between neurons, it does not necessarily provide a mechanistic explanation for w",
+          "cue": "Look for what this method can and cannot tell you about underlying mechanisms.",
+          "section": "6. Practical Considerations in PID",
+          "ideasIn": []
+        }
+      ]
+    },
+    {
+      "slug": "entropy-24-00930-spya-pywwkq",
+      "arm": "new",
+      "run": 1,
+      "version": "trajectory/7",
+      "offered": 20,
+      "rows": [
+        {
+          "depth": 1,
+          "stops": 4,
+          "words": 679,
+          "wordsPct": 7.913752913752914,
+          "ideasIn": 3,
+          "ideasInOrBeside": 3,
+          "ideasInOrNextPm1": 3,
+          "ideasTotal": 10,
+          "inLabels": [
+            "I3",
+            "I5",
+            "I8"
+          ],
+          "sectionsWithStop": 3,
+          "contentSections": 9
+        },
+        {
+          "depth": 2,
+          "stops": 10,
+          "words": 1557,
+          "wordsPct": 18.146853146853147,
+          "ideasIn": 7,
+          "ideasInOrBeside": 8,
+          "ideasInOrNextPm1": 8,
+          "ideasTotal": 10,
+          "inLabels": [
+            "I2",
+            "I3",
+            "I4",
+            "I5",
+            "I6",
+            "I7",
+            "I8"
+          ],
+          "sectionsWithStop": 6,
+          "contentSections": 9
+        },
+        {
+          "depth": 3,
+          "stops": 20,
+          "words": 2622,
+          "wordsPct": 30.55944055944056,
+          "ideasIn": 7,
+          "ideasInOrBeside": 8,
+          "ideasInOrNextPm1": 8,
+          "ideasTotal": 10,
+          "inLabels": [
+            "I2",
+            "I3",
+            "I4",
+            "I5",
+            "I6",
+            "I7",
+            "I8"
+          ],
+          "sectionsWithStop": 7,
+          "contentSections": 9
+        }
+      ],
+      "costNanos": 29302000,
+      "unpriced": 0,
+      "elapsedMs": 13592,
+      "inputTokens": 8496,
+      "outputTokens": 1231,
+      "stops": [
+        {
+          "depth": 1,
+          "quote": "If the left-hand side of Equation (4) (the “whole”) is greater than the right-hand side (the sum of the “parts”), then there is some information about Y that is disclosed by the joint state of all the neurons that is not disclosed by any in",
+          "cue": "Look for how the joint activity of inputs can reveal more than any input alone.",
+          "section": "4. PID: Partial Information Decomposition",
+          "ideasIn": [
+            "I3"
+          ]
+        },
+        {
+          "depth": 1,
+          "quote": "Unambiguously, rich club triads processed more information than triads outside rich clubs. Numerically, the triads inside the rich clubs had 2.7 times the amount of synergy as the triads not in the rich club (Figure 4B).",
+          "cue": "Notice how densely-connected hub neurons compare to others in processing information.",
+          "section": "5. PID in Action",
+          "ideasIn": [
+            "I5"
+          ]
+        },
+        {
+          "depth": 1,
+          "quote": "The researchers found that while brain activity was generally synergy-dominated (as opposed to redundancy-dominated), during movement execution (a reach-and-grasp action) the relative abundance of redundant information increased dramaticall",
+          "cue": "Watch for how the balance of shared versus combined information shifts during a specific action.",
+          "section": "5. PID in Action",
+          "ideasIn": [
+            "I8"
+          ]
+        },
+        {
+          "depth": 1,
+          "quote": "The existence of synergy in empirical data shows us that neurons do not appear to blindly sum the number of inputs and fire in response to the total (as would be expected from a basic threshold model or complex contagion model), but instead",
+          "cue": "Consider what kind of input-sensitivity this evidence rules out for how neurons respond.",
+          "section": "8. Summary and Closing Matter",
+          "ideasIn": []
+        },
+        {
+          "depth": 2,
+          "quote": "Historically, there have been two key limitations hindering the study of information processing by neural circuits. The first was a lack of appropriate data, since the analysis of synergistic dynamics requires large amounts of data to accur",
+          "cue": "What two obstacles historically blocked studying how circuits combine information?",
+          "section": "1. Introduction",
+          "ideasIn": []
+        },
+        {
+          "depth": 2,
+          "quote": "TE is understood as quantifying how much the past of the source variable reduces our uncertainty about the future of the target variable, after accounting for information disclosed by the target variable’s own past (autocorrelation). Wherea",
+          "cue": "Look for the distinction drawn between a measure of resemblance and one of directed influence.",
+          "section": "2. Tracking Information in Neural Circuits",
+          "ideasIn": [
+            "I2"
+          ]
+        },
+        {
+          "depth": 2,
+          "quote": "Unfortunately, classical Shannon information theory provides no unique solution to any of these, and so considerable work has been devoted to developing formal measures of each.",
+          "cue": "Ask what is missing from classical theory that forces a choice among competing measures.",
+          "section": "4. PID: Partial Information Decomposition",
+          "ideasIn": [
+            "I4"
+          ]
+        },
+        {
+          "depth": 2,
+          "quote": "Using PID, we found that triads with more recurrent connections also had greater synergy [4]. Feedback connections were less predictive of synergy but tended to correlate with reduced synergy.",
+          "cue": "Compare how connections looping among inputs versus looping back from a target affect integration.",
+          "section": "5. PID in Action",
+          "ideasIn": [
+            "I6"
+          ]
+        },
+        {
+          "depth": 2,
+          "quote": "Interestingly, synergy only increased up to a point. The peak in synergy occurred when the mutual information was about 7% of the maximal value, regardless of the timescale. Past this level, the synergy began to decrease (this level is mark",
+          "cue": "Look for where rising similarity between inputs stops helping and starts hurting integration.",
+          "section": "5. PID in Action",
+          "ideasIn": [
+            "I7"
+          ]
+        },
+        {
+          "depth": 2,
+          "quote": "One important caveat to note with respect to PID applied to neural data is that while it provides a powerful framework for recognizing statistical dependencies between neurons, it does not necessarily provide a mechanistic explanation for w",
+          "cue": "What kind of explanation does this method fail to provide, even when it finds a pattern?",
+          "section": "6. Practical Considerations in PID",
+          "ideasIn": []
+        },
+        {
+          "depth": 3,
+          "quote": "It is known, however, that such processes are distributed over integrative interactions in neural circuits throughout the brain and involve large numbers of interacting neurons. We refer to this collective activity as neural information pro",
+          "cue": "Notice how broadly the term for combined neural activity is meant to apply.",
+          "section": "1. Introduction",
+          "ideasIn": []
+        },
+        {
+          "depth": 3,
+          "quote": "I(X;Y) measures how our ability to correctly infer the state of X changes, depending on whether we are accounting for (potentially) shared dependencies with Y. It can be thought of as a nonlinear correlation between two patterns of activity",
+          "cue": "Look for how one signal's uncertainty about another is described here.",
+          "section": "2. Tracking Information in Neural Circuits",
+          "ideasIn": [
+            "I2"
+          ]
+        },
+        {
+          "depth": 3,
+          "quote": "Information transfer captures the overall “flow” of information through the system; however, it is limited in its ability to reveal how different streams of information “interact” and how neurons produce novel or modified information from m",
+          "cue": "What does simple information flow fail to show about how neurons process, not just relay, signals?",
+          "section": "3. Information Processing in Neural Circuits",
+          "ideasIn": [
+            "I3"
+          ]
+        },
+        {
+          "depth": 3,
+          "quote": "This inequality has been recognized for decades; however, it was not until the seminal work of Williams and Beer [1] that it was recognized how to algebraically decompose the total joint mutual information into the particular contributions ",
+          "cue": "Look for how long this basic inequality was known before it was properly broken into parts.",
+          "section": "4. PID: Partial Information Decomposition",
+          "ideasIn": []
+        },
+        {
+          "depth": 3,
+          "quote": "In the absence of a single accepted measure, different contexts may require the choice of different functions.",
+          "cue": "Why might no single formula work across every situation studied?",
+          "section": "4. PID: Partial Information Decomposition",
+          "ideasIn": [
+            "I4"
+          ]
+        },
+        {
+          "depth": 3,
+          "quote": "The implication of this is that feedforward information propagation between source neurons and a target neuron is a reliable predictor of information processing.",
+          "cue": "What relationship between forward signal flow and processing is being proposed here?",
+          "section": "5. PID in Action",
+          "ideasIn": []
+        },
+        {
+          "depth": 3,
+          "quote": "The result was unambiguous. The greater the mutual information between source neurons at the synaptic timescale, the greater the synergy [3]. More information processing occurs where similar information streams converge (Figure 4E, the thre",
+          "cue": "Look for how similarity of two input streams relates to the amount of combined information produced.",
+          "section": "5. PID in Action",
+          "ideasIn": [
+            "I7"
+          ]
+        },
+        {
+          "depth": 3,
+          "quote": "This suggests that as the similarity of the converging information grows past some point, it becomes redundant, and the total amount of synergistic output is suppressed.",
+          "cue": "What happens to combined information once inputs become too alike?",
+          "section": "5. PID in Action",
+          "ideasIn": [
+            "I7"
+          ]
+        },
+        {
+          "depth": 3,
+          "quote": "These results show not only that synergistic information dynamics is a feature of ongoing, spontaneous neural activity but also that synergy seems to reflect behaviorally specific patterns of dynamical activity in the cortex.",
+          "cue": "Look for what this finding suggests about combined information outside of controlled tasks.",
+          "section": "5. PID in Action",
+          "ideasIn": [
+            "I8"
+          ]
+        },
+        {
+          "depth": 3,
+          "quote": "This sequence of numbers grows appallingly fast: in the case of six parent neurons, there are 7,828,354 distinct PI atoms, the vast majority of which are difficult to interpret.",
+          "cue": "Notice how quickly the number of distinct components grows as more inputs are added.",
+          "section": "6. Practical Considerations in PID",
+          "ideasIn": []
+        }
+      ]
+    },
+    {
+      "slug": "source-spya-furjgs",
+      "arm": "old",
+      "run": 1,
+      "version": "trajectory/6",
+      "offered": 13,
+      "rows": [
+        {
+          "depth": 1,
+          "stops": 3,
+          "words": 304,
+          "wordsPct": 3.04152076038019,
+          "ideasIn": 2,
+          "ideasInOrBeside": 2,
+          "ideasInOrNextPm1": 2,
+          "ideasTotal": 8,
+          "inLabels": [
+            "I3",
+            "I5"
+          ],
+          "sectionsWithStop": 2,
+          "contentSections": 8
+        },
+        {
+          "depth": 2,
+          "stops": 7,
+          "words": 955,
+          "wordsPct": 9.554777388694347,
+          "ideasIn": 5,
+          "ideasInOrBeside": 5,
+          "ideasInOrNextPm1": 5,
+          "ideasTotal": 8,
+          "inLabels": [
+            "I1",
+            "I2",
+            "I3",
+            "I4",
+            "I5"
+          ],
+          "sectionsWithStop": 4,
+          "contentSections": 8
+        },
+        {
+          "depth": 3,
+          "stops": 13,
+          "words": 1920,
+          "wordsPct": 19.209604802401202,
+          "ideasIn": 5,
+          "ideasInOrBeside": 6,
+          "ideasInOrNextPm1": 6,
+          "ideasTotal": 8,
+          "inLabels": [
+            "I1",
+            "I2",
+            "I3",
+            "I4",
+            "I5"
+          ],
+          "sectionsWithStop": 7,
+          "contentSections": 8
+        }
+      ],
+      "costNanos": 15398000,
+      "unpriced": 0,
+      "elapsedMs": 9797,
+      "inputTokens": 4674,
+      "outputTokens": 605,
+      "stops": [
+        {
+          "depth": 1,
+          "quote": "Ball lightning appears seemingly random in time and space, lasts a few seconds, and disappears with traces or without. Because of its unpredictable occurrence, most of the collected material remains anecdotal.",
+          "cue": "What makes this phenomenon so hard to pin down scientifically?",
+          "section": "1 Historical outline",
+          "ideasIn": []
+        },
+        {
+          "depth": 1,
+          "quote": "The main difference between modern science and Frankenstein’s laboratory is guiding research paradigms that – in the case of natural phenomena – condition a proper order of systematic data acquisition, formation, and testing of hypotheses a",
+          "cue": "How does the randomness of the phenomenon disrupt normal scientific method?",
+          "section": "7 Conclusions",
+          "ideasIn": [
+            "I3",
+            "I5"
+          ]
+        },
+        {
+          "depth": 1,
+          "quote": "With physical evidence cases like the Dorstone tub, the Poughquag glass, or the Qinghai spectrum as benchmarks and digital material from abundantly present mobile phones and webcams, systematic multidisciplinary case documentation and discu",
+          "cue": "What kind of evidence and tools could finally build a real database?",
+          "section": "7 Conclusions",
+          "ideasIn": []
+        },
+        {
+          "depth": 2,
+          "quote": "Rakov and Uman (2003, p. 656, p. 658) characterized ball lightning as “a phenomenon for which there exists numerous witness reports but little, if any, scientific documentation such as photographs, videotapes, or other scientific recordings",
+          "cue": "What is missing from most reports besides eyewitness testimony?",
+          "section": "1 Historical outline",
+          "ideasIn": [
+            "I4",
+            "I5"
+          ]
+        },
+        {
+          "depth": 2,
+          "quote": "Epistemologically, it would be odd to define a “ball lightning norm” and a priori exclude cases that do not meet this definition. Regardless of all problems with an explanatory theory, detailed case reports should be documented.",
+          "cue": "Why might narrowing the definition of the phenomenon backfire?",
+          "section": "5 Synopsis of cases",
+          "ideasIn": [
+            "I4"
+          ]
+        },
+        {
+          "depth": 2,
+          "quote": "A special category of reports is ball lightning encountered by children who, in their later life, followed a scientific career and then described in detail what they saw. It can be argued that all children have similar observation capabilit",
+          "cue": "Does having scientific training later in life change how reliable a childhood sighting is?",
+          "section": "3 Scientists as ball lightning observers",
+          "ideasIn": [
+            "I2"
+          ]
+        },
+        {
+          "depth": 2,
+          "quote": "Gerlach also mentioned bluish “spraying” of electrical wires and blown fuses in “a whole row of houses” (Gerlach, 1927). His speed calculation of 1225 m s−1 is quite amazing, because it means the object travelled at a speed of Mach 3.6 “sou",
+          "cue": "What puzzling detail about speed and sound does this trained observer report?",
+          "section": "3 Scientists as ball lightning observers",
+          "ideasIn": [
+            "I1"
+          ]
+        },
+        {
+          "depth": 3,
+          "quote": "Chances to monitor the transient phenomenon directly are minimal: Tompkins et al. (1975) searched about 12 000 photographic records of the US Prairie Meteorite Network that observed the night sky daily for over 10 years and found two probab",
+          "cue": "How rare are direct photographic captures, given the scale of the search?",
+          "section": "2 Methodology",
+          "ideasIn": [
+            "I2"
+          ]
+        },
+        {
+          "depth": 3,
+          "quote": "Wilhelm von Haidinger, member of the Imperial Academy of Sciences at Vienna, observed ball lightning from his home at Vienna’s 3rd district Landstrasse on 20 October 1868, in a heavy thunderstorm between 17:15 and 17:30 LT",
+          "cue": "What details does this early academy observer give about timing and setting?",
+          "section": "3 Scientists as ball lightning observers",
+          "ideasIn": []
+        },
+        {
+          "depth": 3,
+          "quote": "Coroner Leopold Breitenecker, later a forensic medicine professor at Vienna University, encountered ball lightning at Ternitz, Lower Austria, in the summer of 1955, 16–17:00 LT.",
+          "cue": "What profession does this observer bring to describing the sighting?",
+          "section": "3 Scientists as ball lightning observers",
+          "ideasIn": []
+        },
+        {
+          "depth": 3,
+          "quote": "The tendency of weather services to do without observers and automate synoptic stations (including German mountain-top observatories) may be justified from an economic standpoint, but it eliminates high-quality observations of rare phenomen",
+          "cue": "What is lost when human weather observers are replaced by automation?",
+          "section": "4 Other trained observers",
+          "ideasIn": []
+        },
+        {
+          "depth": 3,
+          "quote": "Ball lightning acquired a deadly and destructive popular image fed by injuries and damage caused by ordinary cloud–ground strokes.",
+          "cue": "How did ordinary lightning strikes shape the phenomenon's popular reputation?",
+          "section": "6 Other influential or notable cases",
+          "ideasIn": [
+            "I3"
+          ]
+        },
+        {
+          "depth": 3,
+          "quote": "Uman and colleagues call what was produced not ball lightning but point to interesting effects of different materials under the influence of lightning.",
+          "cue": "What did lab attempts actually produce, if not the real phenomenon?",
+          "section": "6 Other influential or notable cases",
+          "ideasIn": []
+        }
+      ]
+    },
+    {
+      "slug": "source-spya-furjgs",
+      "arm": "new",
+      "run": 1,
+      "version": "trajectory/7",
+      "offered": 13,
+      "rows": [
+        {
+          "depth": 1,
+          "stops": 3,
+          "words": 451,
+          "wordsPct": 4.512256128064032,
+          "ideasIn": 3,
+          "ideasInOrBeside": 3,
+          "ideasInOrNextPm1": 3,
+          "ideasTotal": 8,
+          "inLabels": [
+            "I3",
+            "I4",
+            "I5"
+          ],
+          "sectionsWithStop": 3,
+          "contentSections": 8
+        },
+        {
+          "depth": 2,
+          "stops": 7,
+          "words": 778,
+          "wordsPct": 7.783891945972987,
+          "ideasIn": 4,
+          "ideasInOrBeside": 5,
+          "ideasInOrNextPm1": 5,
+          "ideasTotal": 8,
+          "inLabels": [
+            "I2",
+            "I3",
+            "I4",
+            "I5"
+          ],
+          "sectionsWithStop": 5,
+          "contentSections": 8
+        },
+        {
+          "depth": 3,
+          "stops": 13,
+          "words": 1920,
+          "wordsPct": 19.209604802401202,
+          "ideasIn": 5,
+          "ideasInOrBeside": 6,
+          "ideasInOrNextPm1": 6,
+          "ideasTotal": 8,
+          "inLabels": [
+            "I1",
+            "I2",
+            "I3",
+            "I4",
+            "I5"
+          ],
+          "sectionsWithStop": 7,
+          "contentSections": 8
+        }
+      ],
+      "costNanos": 22588000,
+      "unpriced": 0,
+      "elapsedMs": 8834,
+      "inputTokens": 6664,
+      "outputTokens": 926,
+      "stops": [
+        {
+          "depth": 1,
+          "quote": "The main difference between modern science and Frankenstein’s laboratory is guiding research paradigms that – in the case of natural phenomena – condition a proper order of systematic data acquisition, formation, and testing of hypotheses a",
+          "cue": "What does the author say separates real science from chaotic guesswork here?",
+          "section": "7 Conclusions",
+          "ideasIn": [
+            "I3",
+            "I5"
+          ]
+        },
+        {
+          "depth": 1,
+          "quote": "Rakov and Uman (2003, p. 656, p. 658) characterized ball lightning as “a phenomenon for which there exists numerous witness reports but little, if any, scientific documentation such as photographs, videotapes, or other scientific recordings",
+          "cue": "Look for what kind of evidence is said to be missing from ball lightning research.",
+          "section": "1 Historical outline",
+          "ideasIn": [
+            "I4",
+            "I5"
+          ]
+        },
+        {
+          "depth": 1,
+          "quote": "Epistemologically, it would be odd to define a “ball lightning norm” and a priori exclude cases that do not meet this definition. Regardless of all problems with an explanatory theory, detailed case reports should be documented.",
+          "cue": "Consider why the author resists defining a single 'normal' ball lightning case.",
+          "section": "5 Synopsis of cases",
+          "ideasIn": [
+            "I4"
+          ]
+        },
+        {
+          "depth": 2,
+          "quote": "Ball lightning appears seemingly random in time and space, lasts a few seconds, and disappears with traces or without. Because of its unpredictable occurrence, most of the collected material remains anecdotal.",
+          "cue": "Notice what makes this phenomenon so hard to document scientifically.",
+          "section": "1 Historical outline",
+          "ideasIn": []
+        },
+        {
+          "depth": 2,
+          "quote": "A special category of reports is ball lightning encountered by children who, in their later life, followed a scientific career and then described in detail what they saw. It can be argued that all children have similar observation capabilit",
+          "cue": "Ask what quality a witness's later career is said to add to a childhood sighting.",
+          "section": "3 Scientists as ball lightning observers",
+          "ideasIn": [
+            "I2"
+          ]
+        },
+        {
+          "depth": 2,
+          "quote": "Ball lightning acquired a deadly and destructive popular image fed by injuries and damage caused by ordinary cloud–ground strokes.",
+          "cue": "Look for what actually fed the dramatic public image of this phenomenon.",
+          "section": "6 Other influential or notable cases",
+          "ideasIn": [
+            "I3"
+          ]
+        },
+        {
+          "depth": 2,
+          "quote": "With physical evidence cases like the Dorstone tub, the Poughquag glass, or the Qinghai spectrum as benchmarks and digital material from abundantly present mobile phones and webcams, systematic multidisciplinary case documentation and discu",
+          "cue": "Watch for what kinds of physical traces and modern recordings could build a shared evidence base.",
+          "section": "7 Conclusions",
+          "ideasIn": []
+        },
+        {
+          "depth": 3,
+          "quote": "Chances to monitor the transient phenomenon directly are minimal: Tompkins et al. (1975) searched about 12 000 photographic records of the US Prairie Meteorite Network that observed the night sky daily for over 10 years and found two probab",
+          "cue": "Note how rare a direct photographic catch of the event turned out to be.",
+          "section": "2 Methodology",
+          "ideasIn": [
+            "I2"
+          ]
+        },
+        {
+          "depth": 3,
+          "quote": "Wilhelm von Haidinger, member of the Imperial Academy of Sciences at Vienna, observed ball lightning from his home at Vienna’s 3rd district Landstrasse on 20 October 1868, in a heavy thunderstorm between 17:15 and 17:30 LT",
+          "cue": "Look at the observer's title and the exact time recorded — why might that detail matter?",
+          "section": "3 Scientists as ball lightning observers",
+          "ideasIn": []
+        },
+        {
+          "depth": 3,
+          "quote": "Gerlach also mentioned bluish “spraying” of electrical wires and blown fuses in “a whole row of houses” (Gerlach, 1927). His speed calculation of 1225 m s−1 is quite amazing, because it means the object travelled at a speed of Mach 3.6 “sou",
+          "cue": "Look for how an indirect trace was used to estimate the object's speed.",
+          "section": "3 Scientists as ball lightning observers",
+          "ideasIn": [
+            "I1"
+          ]
+        },
+        {
+          "depth": 3,
+          "quote": "Coroner Leopold Breitenecker, later a forensic medicine professor at Vienna University, encountered ball lightning at Ternitz, Lower Austria, in the summer of 1955, 16–17:00 LT.",
+          "cue": "Notice the observer's later profession — why record that alongside the sighting?",
+          "section": "3 Scientists as ball lightning observers",
+          "ideasIn": []
+        },
+        {
+          "depth": 3,
+          "quote": "The tendency of weather services to do without observers and automate synoptic stations (including German mountain-top observatories) may be justified from an economic standpoint, but it eliminates high-quality observations of rare phenomen",
+          "cue": "Consider what is lost when human observers are replaced by automated stations.",
+          "section": "4 Other trained observers",
+          "ideasIn": []
+        },
+        {
+          "depth": 3,
+          "quote": "Uman and colleagues call what was produced not ball lightning but point to interesting effects of different materials under the influence of lightning.",
+          "cue": "Ask what a lab experiment actually demonstrated, and what it stopped short of showing.",
+          "section": "6 Other influential or notable cases",
+          "ideasIn": []
+        }
+      ]
+    },
+    {
+      "slug": "vb-spya-vu3xen",
+      "arm": "old",
+      "run": 2,
+      "version": "trajectory/6",
+      "offered": 9,
+      "rows": [
+        {
+          "depth": 1,
+          "stops": 2,
+          "words": 123,
+          "wordsPct": 7.291049199762893,
+          "ideasIn": 1,
+          "ideasInOrBeside": 1,
+          "ideasInOrNextPm1": 1,
+          "ideasTotal": 3,
+          "inLabels": [
+            "I2"
+          ],
+          "sectionsWithStop": 2,
+          "contentSections": 6
+        },
+        {
+          "depth": 2,
+          "stops": 5,
+          "words": 420,
+          "wordsPct": 24.896265560165975,
+          "ideasIn": 1,
+          "ideasInOrBeside": 1,
+          "ideasInOrNextPm1": 1,
+          "ideasTotal": 3,
+          "inLabels": [
+            "I2"
+          ],
+          "sectionsWithStop": 4,
+          "contentSections": 6
+        },
+        {
+          "depth": 3,
+          "stops": 9,
+          "words": 822,
+          "wordsPct": 48.72554831061055,
+          "ideasIn": 3,
+          "ideasInOrBeside": 3,
+          "ideasInOrNextPm1": 3,
+          "ideasTotal": 3,
+          "inLabels": [
+            "I1",
+            "I2",
+            "I3"
+          ],
+          "sectionsWithStop": 5,
+          "contentSections": 6
+        }
+      ],
+      "costNanos": 11386000,
+      "unpriced": 0,
+      "elapsedMs": 5251,
+      "inputTokens": 3653,
+      "outputTokens": 408,
+      "stops": [
+        {
+          "depth": 1,
+          "quote": "Relentlessly prune bullshit, don't wait to do things that matter, and savor the time you have. That's what you do when life is short.",
+          "cue": "Look for the three-part summary of how to respond to a short life.",
+          "section": "Savoring the Time You Have",
+          "ideasIn": []
+        },
+        {
+          "depth": 1,
+          "quote": "Having kids showed me how to convert a continuous quantity, time, into discrete quantities. You only get 52 weekends with your 2 year old. If Christmas-as-magic lasts from say ages 3 to 10, you only get to watch your child experience it 8 t",
+          "cue": "Notice how turning time into a small countable number changes how it feels.",
+          "section": "Life Actually Is Short",
+          "ideasIn": [
+            "I2"
+          ]
+        },
+        {
+          "depth": 2,
+          "quote": "It means arguments of the form \"Life is too short for x\" have great force. It's not just a figure of speech to say that life is too short for something. It's not just a synonym for annoying. If you find yourself thinking that life is too sh",
+          "cue": "Ask why saying life is too short for something should change your behavior.",
+          "section": "Eliminating Bullshit",
+          "ideasIn": []
+        },
+        {
+          "depth": 2,
+          "quote": "If life is short, we should expect its shortness to take us by surprise. And that is just what tends to happen. You take things for granted, and then they're gone.",
+          "cue": "Consider why running out of time tends to catch people off guard.",
+          "section": "Surprised by Loss",
+          "ideasIn": []
+        },
+        {
+          "depth": 2,
+          "quote": "Cultivate a habit of impatience about the things you most want to do. Don't wait before climbing that mountain or writing that book or visiting your mother. You don't need to be constantly reminding yourself why you shouldn't wait. Just don",
+          "cue": "Look for the advice about timing when it comes to things you care about.",
+          "section": "Surprised by Loss",
+          "ideasIn": []
+        },
+        {
+          "depth": 3,
+          "quote": "There are two ways this kind of thing gets into your life: it's either forced on you, or it tricks you.",
+          "cue": "Look for the two routes by which unwanted distractions enter your life.",
+          "section": "Eliminating Bullshit",
+          "ideasIn": [
+            "I1",
+            "I3"
+          ]
+        },
+        {
+          "depth": 3,
+          "quote": "But while some amount of bullshit is inevitably forced on you, the bullshit that sneaks into your life by tricking you is no one's fault but your own.",
+          "cue": "Ask who is responsible when something sneaks into your life by fooling you.",
+          "section": "Eliminating Bullshit",
+          "ideasIn": [
+            "I3"
+          ]
+        },
+        {
+          "depth": 3,
+          "quote": "As well as avoiding bullshit, one should actively seek out things that matter. But different things matter to different people, and most have to learn what matters to them.",
+          "cue": "Notice why figuring out what matters to you takes active effort.",
+          "section": "Seeking What Matters",
+          "ideasIn": []
+        },
+        {
+          "depth": 3,
+          "quote": "One heuristic for distinguishing stuff that matters is to ask yourself whether you'll care about it in the future. Fake stuff that matters usually has a sharp peak of seeming to matter. That's how it tricks you. The area under the curve is ",
+          "cue": "Look for the test used to tell real value apart from something that only feels urgent.",
+          "section": "Seeking What Matters",
+          "ideasIn": []
+        }
+      ]
+    },
+    {
+      "slug": "vb-spya-vu3xen",
+      "arm": "new",
+      "run": 2,
+      "version": "trajectory/7",
+      "offered": 9,
+      "rows": [
+        {
+          "depth": 1,
+          "stops": 2,
+          "words": 123,
+          "wordsPct": 7.291049199762893,
+          "ideasIn": 1,
+          "ideasInOrBeside": 1,
+          "ideasInOrNextPm1": 1,
+          "ideasTotal": 3,
+          "inLabels": [
+            "I2"
+          ],
+          "sectionsWithStop": 2,
+          "contentSections": 6
+        },
+        {
+          "depth": 2,
+          "stops": 5,
+          "words": 361,
+          "wordsPct": 21.398933017190277,
+          "ideasIn": 1,
+          "ideasInOrBeside": 1,
+          "ideasInOrNextPm1": 1,
+          "ideasTotal": 3,
+          "inLabels": [
+            "I2"
+          ],
+          "sectionsWithStop": 5,
+          "contentSections": 6
+        },
+        {
+          "depth": 3,
+          "stops": 9,
+          "words": 822,
+          "wordsPct": 48.72554831061055,
+          "ideasIn": 3,
+          "ideasInOrBeside": 3,
+          "ideasInOrNextPm1": 3,
+          "ideasTotal": 3,
+          "inLabels": [
+            "I1",
+            "I2",
+            "I3"
+          ],
+          "sectionsWithStop": 5,
+          "contentSections": 6
+        }
+      ],
+      "costNanos": 13946000,
+      "unpriced": 0,
+      "elapsedMs": 5152,
+      "inputTokens": 4993,
+      "outputTokens": 396,
+      "stops": [
+        {
+          "depth": 1,
+          "quote": "Relentlessly prune bullshit, don't wait to do things that matter, and savor the time you have. That's what you do when life is short.",
+          "cue": "What three-part advice does this offer for a short life?",
+          "section": "Savoring the Time You Have",
+          "ideasIn": []
+        },
+        {
+          "depth": 1,
+          "quote": "Having kids showed me how to convert a continuous quantity, time, into discrete quantities. You only get 52 weekends with your 2 year old. If Christmas-as-magic lasts from say ages 3 to 10, you only get to watch your child experience it 8 t",
+          "cue": "How does counting small numbers change how life's length feels?",
+          "section": "Life Actually Is Short",
+          "ideasIn": [
+            "I2"
+          ]
+        },
+        {
+          "depth": 2,
+          "quote": "It means arguments of the form \"Life is too short for x\" have great force. It's not just a figure of speech to say that life is too short for something. It's not just a synonym for annoying. If you find yourself thinking that life is too sh",
+          "cue": "What weight does the phrase life is too short for x actually carry?",
+          "section": "Eliminating Bullshit",
+          "ideasIn": []
+        },
+        {
+          "depth": 2,
+          "quote": "Cultivate a habit of impatience about the things you most want to do. Don't wait before climbing that mountain or writing that book or visiting your mother. You don't need to be constantly reminding yourself why you shouldn't wait. Just don",
+          "cue": "What habit does it recommend toward things you most want to do?",
+          "section": "Surprised by Loss",
+          "ideasIn": []
+        },
+        {
+          "depth": 2,
+          "quote": "One heuristic for distinguishing stuff that matters is to ask yourself whether you'll care about it in the future. Fake stuff that matters usually has a sharp peak of seeming to matter. That's how it tricks you. The area under the curve is ",
+          "cue": "What test tells apart things that truly matter from things that only seem to?",
+          "section": "Seeking What Matters",
+          "ideasIn": []
+        },
+        {
+          "depth": 3,
+          "quote": "There are two ways this kind of thing gets into your life: it's either forced on you, or it tricks you.",
+          "cue": "What are the two routes by which wasted time enters a life?",
+          "section": "Eliminating Bullshit",
+          "ideasIn": [
+            "I1",
+            "I3"
+          ]
+        },
+        {
+          "depth": 3,
+          "quote": "But while some amount of bullshit is inevitably forced on you, the bullshit that sneaks into your life by tricking you is no one's fault but your own.",
+          "cue": "Why might self-chosen distractions be harder to blame on circumstance?",
+          "section": "Eliminating Bullshit",
+          "ideasIn": [
+            "I3"
+          ]
+        },
+        {
+          "depth": 3,
+          "quote": "As well as avoiding bullshit, one should actively seek out things that matter. But different things matter to different people, and most have to learn what matters to them.",
+          "cue": "How do people come to discover what actually matters to them?",
+          "section": "Seeking What Matters",
+          "ideasIn": []
+        },
+        {
+          "depth": 3,
+          "quote": "If life is short, we should expect its shortness to take us by surprise. And that is just what tends to happen. You take things for granted, and then they're gone.",
+          "cue": "In what way does life's shortness typically catch us off guard?",
+          "section": "Surprised by Loss",
+          "ideasIn": []
+        }
+      ]
+    },
+    {
+      "slug": "entropy-24-00930-spya-pywwkq",
+      "arm": "old",
+      "run": 2,
+      "version": "trajectory/6",
+      "offered": 20,
+      "rows": [
+        {
+          "depth": 1,
+          "stops": 4,
+          "words": 572,
+          "wordsPct": 6.666666666666667,
+          "ideasIn": 2,
+          "ideasInOrBeside": 2,
+          "ideasInOrNextPm1": 2,
+          "ideasTotal": 10,
+          "inLabels": [
+            "I3",
+            "I5"
+          ],
+          "sectionsWithStop": 4,
+          "contentSections": 9
+        },
+        {
+          "depth": 2,
+          "stops": 10,
+          "words": 1295,
+          "wordsPct": 15.093240093240093,
+          "ideasIn": 4,
+          "ideasInOrBeside": 5,
+          "ideasInOrNextPm1": 4,
+          "ideasTotal": 10,
+          "inLabels": [
+            "I2",
+            "I3",
+            "I5",
+            "I7"
+          ],
+          "sectionsWithStop": 6,
+          "contentSections": 9
+        },
+        {
+          "depth": 3,
+          "stops": 20,
+          "words": 2622,
+          "wordsPct": 30.55944055944056,
+          "ideasIn": 7,
+          "ideasInOrBeside": 8,
+          "ideasInOrNextPm1": 8,
+          "ideasTotal": 10,
+          "inLabels": [
+            "I2",
+            "I3",
+            "I4",
+            "I5",
+            "I6",
+            "I7",
+            "I8"
+          ],
+          "sectionsWithStop": 7,
+          "contentSections": 9
+        }
+      ],
+      "costNanos": 21710000,
+      "unpriced": 0,
+      "elapsedMs": 10809,
+      "inputTokens": 5995,
+      "outputTokens": 972,
+      "stops": [
+        {
+          "depth": 1,
+          "quote": "If the left-hand side of Equation (4) (the “whole”) is greater than the right-hand side (the sum of the “parts”), then there is some information about Y that is disclosed by the joint state of all the neurons that is not disclosed by any in",
+          "cue": "Look for how the whole compared to the sum of parts distinguishes synergy from redundancy.",
+          "section": "4. PID: Partial Information Decomposition",
+          "ideasIn": [
+            "I3"
+          ]
+        },
+        {
+          "depth": 1,
+          "quote": "Information transfer captures the overall “flow” of information through the system; however, it is limited in its ability to reveal how different streams of information “interact” and how neurons produce novel or modified information from m",
+          "cue": "Notice what tool is proposed to study interaction between information streams, beyond mere flow.",
+          "section": "3. Information Processing in Neural Circuits",
+          "ideasIn": [
+            "I3"
+          ]
+        },
+        {
+          "depth": 1,
+          "quote": "Unambiguously, rich club triads processed more information than triads outside rich clubs. Numerically, the triads inside the rich clubs had 2.7 times the amount of synergy as the triads not in the rich club (Figure 4B).",
+          "cue": "Look for how densely connected hub triads compare to others in processing information.",
+          "section": "5. PID in Action",
+          "ideasIn": [
+            "I5"
+          ]
+        },
+        {
+          "depth": 1,
+          "quote": "The existence of synergy in empirical data shows us that neurons do not appear to blindly sum the number of inputs and fire in response to the total (as would be expected from a basic threshold model or complex contagion model), but instead",
+          "cue": "Consider what this implies about whether neurons just count inputs or read their pattern.",
+          "section": "8. Summary and Closing Matter",
+          "ideasIn": []
+        },
+        {
+          "depth": 2,
+          "quote": "It is known, however, that such processes are distributed over integrative interactions in neural circuits throughout the brain and involve large numbers of interacting neurons. We refer to this collective activity as neural information pro",
+          "cue": "Notice how broadly distributed across the brain this collective activity is described as being.",
+          "section": "1. Introduction",
+          "ideasIn": []
+        },
+        {
+          "depth": 2,
+          "quote": "Historically, there have been two key limitations hindering the study of information processing by neural circuits. The first was a lack of appropriate data, since the analysis of synergistic dynamics requires large amounts of data to accur",
+          "cue": "Look for what two obstacles historically blocked this kind of study.",
+          "section": "1. Introduction",
+          "ideasIn": []
+        },
+        {
+          "depth": 2,
+          "quote": "TE is understood as quantifying how much the past of the source variable reduces our uncertainty about the future of the target variable, after accounting for information disclosed by the target variable’s own past (autocorrelation). Wherea",
+          "cue": "Ask how this measure differs from a simple correlation between two signals.",
+          "section": "2. Tracking Information in Neural Circuits",
+          "ideasIn": [
+            "I2"
+          ]
+        },
+        {
+          "depth": 2,
+          "quote": "This inequality has been recognized for decades; however, it was not until the seminal work of Williams and Beer [1] that it was recognized how to algebraically decompose the total joint mutual information into the particular contributions ",
+          "cue": "Notice what earlier insight lacked before a formal way to split the whole into parts appeared.",
+          "section": "4. PID: Partial Information Decomposition",
+          "ideasIn": []
+        },
+        {
+          "depth": 2,
+          "quote": "The result was unambiguous. The greater the mutual information between source neurons at the synaptic timescale, the greater the synergy [3]. More information processing occurs where similar information streams converge (Figure 4E, the thre",
+          "cue": "Ask how the similarity between two incoming signals relates to the amount of synergy produced.",
+          "section": "5. PID in Action",
+          "ideasIn": [
+            "I7"
+          ]
+        },
+        {
+          "depth": 2,
+          "quote": "Interestingly, synergy only increased up to a point. The peak in synergy occurred when the mutual information was about 7% of the maximal value, regardless of the timescale. Past this level, the synergy began to decrease (this level is mark",
+          "cue": "Look for what happens to synergy once shared information passes a certain level.",
+          "section": "5. PID in Action",
+          "ideasIn": [
+            "I7"
+          ]
+        },
+        {
+          "depth": 3,
+          "quote": "The researchers found that while brain activity was generally synergy-dominated (as opposed to redundancy-dominated), during movement execution (a reach-and-grasp action) the relative abundance of redundant information increased dramaticall",
+          "cue": "Ask how the balance between synergy and redundancy shifts during an actual movement.",
+          "section": "5. PID in Action",
+          "ideasIn": [
+            "I8"
+          ]
+        },
+        {
+          "depth": 3,
+          "quote": "This sequence of numbers grows appallingly fast: in the case of six parent neurons, there are 7,828,354 distinct PI atoms, the vast majority of which are difficult to interpret.",
+          "cue": "Note how quickly the number of distinct pieces to interpret grows with more sources.",
+          "section": "6. Practical Considerations in PID",
+          "ideasIn": []
+        },
+        {
+          "depth": 3,
+          "quote": "I(X;Y) measures how our ability to correctly infer the state of X changes, depending on whether we are accounting for (potentially) shared dependencies with Y. It can be thought of as a nonlinear correlation between two patterns of activity",
+          "cue": "Ask what kind of dependency between two patterns this measure is meant to capture.",
+          "section": "2. Tracking Information in Neural Circuits",
+          "ideasIn": [
+            "I2"
+          ]
+        },
+        {
+          "depth": 3,
+          "quote": "Unfortunately, classical Shannon information theory provides no unique solution to any of these, and so considerable work has been devoted to developing formal measures of each.",
+          "cue": "Notice why classical information theory alone cannot settle how to define these measures.",
+          "section": "4. PID: Partial Information Decomposition",
+          "ideasIn": [
+            "I4"
+          ]
+        },
+        {
+          "depth": 3,
+          "quote": "In the absence of a single accepted measure, different contexts may require the choice of different functions.",
+          "cue": "Ask why no single way of measuring shared information suits every situation.",
+          "section": "4. PID: Partial Information Decomposition",
+          "ideasIn": [
+            "I4"
+          ]
+        },
+        {
+          "depth": 3,
+          "quote": "The implication of this is that feedforward information propagation between source neurons and a target neuron is a reliable predictor of information processing.",
+          "cue": "Look for what assumption links forward flow of information to actual processing.",
+          "section": "5. PID in Action",
+          "ideasIn": []
+        },
+        {
+          "depth": 3,
+          "quote": "Using PID, we found that triads with more recurrent connections also had greater synergy [4]. Feedback connections were less predictive of synergy but tended to correlate with reduced synergy.",
+          "cue": "Ask how recurrent versus feedback connections relate to the amount of synergy found.",
+          "section": "5. PID in Action",
+          "ideasIn": [
+            "I6"
+          ]
+        },
+        {
+          "depth": 3,
+          "quote": "This suggests that as the similarity of the converging information grows past some point, it becomes redundant, and the total amount of synergistic output is suppressed.",
+          "cue": "Consider why growing similarity between signals eventually suppresses synergy.",
+          "section": "5. PID in Action",
+          "ideasIn": [
+            "I7"
+          ]
+        },
+        {
+          "depth": 3,
+          "quote": "These results show not only that synergistic information dynamics is a feature of ongoing, spontaneous neural activity but also that synergy seems to reflect behaviorally specific patterns of dynamical activity in the cortex.",
+          "cue": "Ask whether synergy is only tied to behavior or also appears during rest.",
+          "section": "5. PID in Action",
+          "ideasIn": [
+            "I8"
+          ]
+        },
+        {
+          "depth": 3,
+          "quote": "One important caveat to note with respect to PID applied to neural data is that while it provides a powerful framework for recognizing statistical dependencies between neurons, it does not necessarily provide a mechanistic explanation for w",
+          "cue": "Notice what kind of explanation this method does not by itself provide.",
+          "section": "6. Practical Considerations in PID",
+          "ideasIn": []
+        }
+      ]
+    },
+    {
+      "slug": "entropy-24-00930-spya-pywwkq",
+      "arm": "new",
+      "run": 2,
+      "version": "trajectory/7",
+      "offered": 20,
+      "rows": [
+        {
+          "depth": 1,
+          "stops": 4,
+          "words": 679,
+          "wordsPct": 7.913752913752914,
+          "ideasIn": 3,
+          "ideasInOrBeside": 3,
+          "ideasInOrNextPm1": 3,
+          "ideasTotal": 10,
+          "inLabels": [
+            "I3",
+            "I5",
+            "I8"
+          ],
+          "sectionsWithStop": 3,
+          "contentSections": 9
+        },
+        {
+          "depth": 2,
+          "stops": 10,
+          "words": 1520,
+          "wordsPct": 17.715617715617714,
+          "ideasIn": 7,
+          "ideasInOrBeside": 8,
+          "ideasInOrNextPm1": 8,
+          "ideasTotal": 10,
+          "inLabels": [
+            "I2",
+            "I3",
+            "I4",
+            "I5",
+            "I6",
+            "I7",
+            "I8"
+          ],
+          "sectionsWithStop": 5,
+          "contentSections": 9
+        },
+        {
+          "depth": 3,
+          "stops": 20,
+          "words": 2622,
+          "wordsPct": 30.55944055944056,
+          "ideasIn": 7,
+          "ideasInOrBeside": 8,
+          "ideasInOrNextPm1": 8,
+          "ideasTotal": 10,
+          "inLabels": [
+            "I2",
+            "I3",
+            "I4",
+            "I5",
+            "I6",
+            "I7",
+            "I8"
+          ],
+          "sectionsWithStop": 7,
+          "contentSections": 9
+        }
+      ],
+      "costNanos": 27582000,
+      "unpriced": 0,
+      "elapsedMs": 11068,
+      "inputTokens": 8496,
+      "outputTokens": 1059,
+      "stops": [
+        {
+          "depth": 1,
+          "quote": "If the left-hand side of Equation (4) (the “whole”) is greater than the right-hand side (the sum of the “parts”), then there is some information about Y that is disclosed by the joint state of all the neurons that is not disclosed by any in",
+          "cue": "What does it mean when the whole tells you more than the sum of the parts?",
+          "section": "4. PID: Partial Information Decomposition",
+          "ideasIn": [
+            "I3"
+          ]
+        },
+        {
+          "depth": 1,
+          "quote": "The existence of synergy in empirical data shows us that neurons do not appear to blindly sum the number of inputs and fire in response to the total (as would be expected from a basic threshold model or complex contagion model), but instead",
+          "cue": "Look for how neurons are said to respond to input patterns rather than totals.",
+          "section": "8. Summary and Closing Matter",
+          "ideasIn": []
+        },
+        {
+          "depth": 1,
+          "quote": "Unambiguously, rich club triads processed more information than triads outside rich clubs. Numerically, the triads inside the rich clubs had 2.7 times the amount of synergy as the triads not in the rich club (Figure 4B).",
+          "cue": "How much more synergy do densely connected hub neurons show compared to others?",
+          "section": "5. PID in Action",
+          "ideasIn": [
+            "I5"
+          ]
+        },
+        {
+          "depth": 1,
+          "quote": "The researchers found that while brain activity was generally synergy-dominated (as opposed to redundancy-dominated), during movement execution (a reach-and-grasp action) the relative abundance of redundant information increased dramaticall",
+          "cue": "Notice how the balance of shared versus combined information shifts during movement.",
+          "section": "5. PID in Action",
+          "ideasIn": [
+            "I8"
+          ]
+        },
+        {
+          "depth": 2,
+          "quote": "Information transfer captures the overall “flow” of information through the system; however, it is limited in its ability to reveal how different streams of information “interact” and how neurons produce novel or modified information from m",
+          "cue": "What does simple information flow fail to reveal about how neurons process signals?",
+          "section": "3. Information Processing in Neural Circuits",
+          "ideasIn": [
+            "I3"
+          ]
+        },
+        {
+          "depth": 2,
+          "quote": "Unfortunately, classical Shannon information theory provides no unique solution to any of these, and so considerable work has been devoted to developing formal measures of each.",
+          "cue": "Why can't standard information theory alone tell you how much information is shared?",
+          "section": "4. PID: Partial Information Decomposition",
+          "ideasIn": [
+            "I4"
+          ]
+        },
+        {
+          "depth": 2,
+          "quote": "TE is understood as quantifying how much the past of the source variable reduces our uncertainty about the future of the target variable, after accounting for information disclosed by the target variable’s own past (autocorrelation). Wherea",
+          "cue": "How does this measure differ from simple similarity between two signals?",
+          "section": "2. Tracking Information in Neural Circuits",
+          "ideasIn": [
+            "I2"
+          ]
+        },
+        {
+          "depth": 2,
+          "quote": "The result was unambiguous. The greater the mutual information between source neurons at the synaptic timescale, the greater the synergy [3]. More information processing occurs where similar information streams converge (Figure 4E, the thre",
+          "cue": "Look for how similarity between input signals relates to the amount of synergy.",
+          "section": "5. PID in Action",
+          "ideasIn": [
+            "I7"
+          ]
+        },
+        {
+          "depth": 2,
+          "quote": "Interestingly, synergy only increased up to a point. The peak in synergy occurred when the mutual information was about 7% of the maximal value, regardless of the timescale. Past this level, the synergy began to decrease (this level is mark",
+          "cue": "Watch for the point at which rising similarity stops helping and starts hurting synergy.",
+          "section": "5. PID in Action",
+          "ideasIn": [
+            "I7"
+          ]
+        },
+        {
+          "depth": 2,
+          "quote": "Using PID, we found that triads with more recurrent connections also had greater synergy [4]. Feedback connections were less predictive of synergy but tended to correlate with reduced synergy.",
+          "cue": "Compare how connections among inputs versus connections back from the target affect synergy.",
+          "section": "5. PID in Action",
+          "ideasIn": [
+            "I6"
+          ]
+        },
+        {
+          "depth": 3,
+          "quote": "It is known, however, that such processes are distributed over integrative interactions in neural circuits throughout the brain and involve large numbers of interacting neurons. We refer to this collective activity as neural information pro",
+          "cue": "What scale of neural interaction does this describe as the object of study?",
+          "section": "1. Introduction",
+          "ideasIn": []
+        },
+        {
+          "depth": 3,
+          "quote": "Historically, there have been two key limitations hindering the study of information processing by neural circuits. The first was a lack of appropriate data, since the analysis of synergistic dynamics requires large amounts of data to accur",
+          "cue": "What two obstacles historically blocked progress in studying this kind of processing?",
+          "section": "1. Introduction",
+          "ideasIn": []
+        },
+        {
+          "depth": 3,
+          "quote": "I(X;Y) measures how our ability to correctly infer the state of X changes, depending on whether we are accounting for (potentially) shared dependencies with Y. It can be thought of as a nonlinear correlation between two patterns of activity",
+          "cue": "How is this measure described as a kind of correlation between two activity patterns?",
+          "section": "2. Tracking Information in Neural Circuits",
+          "ideasIn": [
+            "I2"
+          ]
+        },
+        {
+          "depth": 3,
+          "quote": "This inequality has been recognized for decades; however, it was not until the seminal work of Williams and Beer [1] that it was recognized how to algebraically decompose the total joint mutual information into the particular contributions ",
+          "cue": "What breakthrough finally let researchers split total information into separate contributions?",
+          "section": "4. PID: Partial Information Decomposition",
+          "ideasIn": []
+        },
+        {
+          "depth": 3,
+          "quote": "In the absence of a single accepted measure, different contexts may require the choice of different functions.",
+          "cue": "Why might different situations call for different choices of a redundancy rule?",
+          "section": "4. PID: Partial Information Decomposition",
+          "ideasIn": [
+            "I4"
+          ]
+        },
+        {
+          "depth": 3,
+          "quote": "The implication of this is that feedforward information propagation between source neurons and a target neuron is a reliable predictor of information processing.",
+          "cue": "What assumption about feedforward propagation does this setup rely on?",
+          "section": "5. PID in Action",
+          "ideasIn": []
+        },
+        {
+          "depth": 3,
+          "quote": "This suggests that as the similarity of the converging information grows past some point, it becomes redundant, and the total amount of synergistic output is suppressed.",
+          "cue": "Why might information becoming too similar end up suppressing synergy?",
+          "section": "5. PID in Action",
+          "ideasIn": [
+            "I7"
+          ]
+        },
+        {
+          "depth": 3,
+          "quote": "These results show not only that synergistic information dynamics is a feature of ongoing, spontaneous neural activity but also that synergy seems to reflect behaviorally specific patterns of dynamical activity in the cortex.",
+          "cue": "What does this suggest synergy reflects beyond just being present in ongoing activity?",
+          "section": "5. PID in Action",
+          "ideasIn": [
+            "I8"
+          ]
+        },
+        {
+          "depth": 3,
+          "quote": "One important caveat to note with respect to PID applied to neural data is that while it provides a powerful framework for recognizing statistical dependencies between neurons, it does not necessarily provide a mechanistic explanation for w",
+          "cue": "What kind of explanation does this method fail to provide, even when it finds a pattern?",
+          "section": "6. Practical Considerations in PID",
+          "ideasIn": []
+        },
+        {
+          "depth": 3,
+          "quote": "This sequence of numbers grows appallingly fast: in the case of six parent neurons, there are 7,828,354 distinct PI atoms, the vast majority of which are difficult to interpret.",
+          "cue": "Notice how quickly the number of possible information components grows with more inputs.",
+          "section": "6. Practical Considerations in PID",
+          "ideasIn": []
+        }
+      ]
+    },
+    {
+      "slug": "source-spya-furjgs",
+      "arm": "old",
+      "run": 2,
+      "version": "trajectory/6",
+      "offered": 13,
+      "rows": [
+        {
+          "depth": 1,
+          "stops": 3,
+          "words": 304,
+          "wordsPct": 3.04152076038019,
+          "ideasIn": 2,
+          "ideasInOrBeside": 2,
+          "ideasInOrNextPm1": 2,
+          "ideasTotal": 8,
+          "inLabels": [
+            "I3",
+            "I5"
+          ],
+          "sectionsWithStop": 2,
+          "contentSections": 8
+        },
+        {
+          "depth": 2,
+          "stops": 7,
+          "words": 793,
+          "wordsPct": 7.933966983491746,
+          "ideasIn": 4,
+          "ideasInOrBeside": 4,
+          "ideasInOrNextPm1": 4,
+          "ideasTotal": 8,
+          "inLabels": [
+            "I2",
+            "I3",
+            "I4",
+            "I5"
+          ],
+          "sectionsWithStop": 5,
+          "contentSections": 8
+        },
+        {
+          "depth": 3,
+          "stops": 13,
+          "words": 1920,
+          "wordsPct": 19.209604802401202,
+          "ideasIn": 5,
+          "ideasInOrBeside": 6,
+          "ideasInOrNextPm1": 6,
+          "ideasTotal": 8,
+          "inLabels": [
+            "I1",
+            "I2",
+            "I3",
+            "I4",
+            "I5"
+          ],
+          "sectionsWithStop": 7,
+          "contentSections": 8
+        }
+      ],
+      "costNanos": 17958000,
+      "unpriced": 0,
+      "elapsedMs": 10194,
+      "inputTokens": 4674,
+      "outputTokens": 861,
+      "stops": [
+        {
+          "depth": 1,
+          "quote": "Ball lightning appears seemingly random in time and space, lasts a few seconds, and disappears with traces or without. Because of its unpredictable occurrence, most of the collected material remains anecdotal.",
+          "cue": "What makes this phenomenon so hard to document scientifically?",
+          "section": "1 Historical outline",
+          "ideasIn": []
+        },
+        {
+          "depth": 2,
+          "quote": "Rakov and Uman (2003, p. 656, p. 658) characterized ball lightning as “a phenomenon for which there exists numerous witness reports but little, if any, scientific documentation such as photographs, videotapes, or other scientific recordings",
+          "cue": "What kind of evidence is missing despite many witness accounts?",
+          "section": "1 Historical outline",
+          "ideasIn": [
+            "I4",
+            "I5"
+          ]
+        },
+        {
+          "depth": 2,
+          "quote": "Chances to monitor the transient phenomenon directly are minimal: Tompkins et al. (1975) searched about 12 000 photographic records of the US Prairie Meteorite Network that observed the night sky daily for over 10 years and found two probab",
+          "cue": "How rare is a genuine photographic capture, even with long-term monitoring?",
+          "section": "2 Methodology",
+          "ideasIn": [
+            "I2"
+          ]
+        },
+        {
+          "depth": 2,
+          "quote": "A special category of reports is ball lightning encountered by children who, in their later life, followed a scientific career and then described in detail what they saw. It can be argued that all children have similar observation capabilit",
+          "cue": "Why might childhood sightings by future scientists be especially valuable?",
+          "section": "3 Scientists as ball lightning observers",
+          "ideasIn": [
+            "I2"
+          ]
+        },
+        {
+          "depth": 3,
+          "quote": "Gerlach also mentioned bluish “spraying” of electrical wires and blown fuses in “a whole row of houses” (Gerlach, 1927). His speed calculation of 1225 m s−1 is quite amazing, because it means the object travelled at a speed of Mach 3.6 “sou",
+          "cue": "What unusual physical detail did this trained observer manage to measure?",
+          "section": "3 Scientists as ball lightning observers",
+          "ideasIn": [
+            "I1"
+          ]
+        },
+        {
+          "depth": 3,
+          "quote": "Wilhelm von Haidinger, member of the Imperial Academy of Sciences at Vienna, observed ball lightning from his home at Vienna’s 3rd district Landstrasse on 20 October 1868, in a heavy thunderstorm between 17:15 and 17:30 LT",
+          "cue": "What circumstances let this early academic witness the event closely?",
+          "section": "3 Scientists as ball lightning observers",
+          "ideasIn": []
+        },
+        {
+          "depth": 3,
+          "quote": "Coroner Leopold Breitenecker, later a forensic medicine professor at Vienna University, encountered ball lightning at Ternitz, Lower Austria, in the summer of 1955, 16–17:00 LT.",
+          "cue": "What professional background shaped how this witness reported the event?",
+          "section": "3 Scientists as ball lightning observers",
+          "ideasIn": []
+        },
+        {
+          "depth": 3,
+          "quote": "The tendency of weather services to do without observers and automate synoptic stations (including German mountain-top observatories) may be justified from an economic standpoint, but it eliminates high-quality observations of rare phenomen",
+          "cue": "What is lost when trained weather observers are replaced by automation?",
+          "section": "4 Other trained observers",
+          "ideasIn": []
+        },
+        {
+          "depth": 2,
+          "quote": "Epistemologically, it would be odd to define a “ball lightning norm” and a priori exclude cases that do not meet this definition. Regardless of all problems with an explanatory theory, detailed case reports should be documented.",
+          "cue": "Why might it be wrong to filter out cases that seem atypical?",
+          "section": "5 Synopsis of cases",
+          "ideasIn": [
+            "I4"
+          ]
+        },
+        {
+          "depth": 3,
+          "quote": "Ball lightning acquired a deadly and destructive popular image fed by injuries and damage caused by ordinary cloud–ground strokes.",
+          "cue": "How did ordinary lightning strikes color public perception of this phenomenon?",
+          "section": "6 Other influential or notable cases",
+          "ideasIn": [
+            "I3"
+          ]
+        },
+        {
+          "depth": 3,
+          "quote": "Uman and colleagues call what was produced not ball lightning but point to interesting effects of different materials under the influence of lightning.",
+          "cue": "What did lab attempts to recreate the effect actually demonstrate instead?",
+          "section": "6 Other influential or notable cases",
+          "ideasIn": []
+        },
+        {
+          "depth": 1,
+          "quote": "The main difference between modern science and Frankenstein’s laboratory is guiding research paradigms that – in the case of natural phenomena – condition a proper order of systematic data acquisition, formation, and testing of hypotheses a",
+          "cue": "What normal scientific process breaks down when studying this phenomenon, and why?",
+          "section": "7 Conclusions",
+          "ideasIn": [
+            "I3",
+            "I5"
+          ]
+        },
+        {
+          "depth": 1,
+          "quote": "With physical evidence cases like the Dorstone tub, the Poughquag glass, or the Qinghai spectrum as benchmarks and digital material from abundantly present mobile phones and webcams, systematic multidisciplinary case documentation and discu",
+          "cue": "What kinds of physical evidence and modern tools could build a better case record?",
+          "section": "7 Conclusions",
+          "ideasIn": []
+        }
+      ]
+    },
+    {
+      "slug": "source-spya-furjgs",
+      "arm": "new",
+      "run": 2,
+      "version": "trajectory/7",
+      "offered": 13,
+      "rows": [
+        {
+          "depth": 1,
+          "stops": 3,
+          "words": 451,
+          "wordsPct": 4.512256128064032,
+          "ideasIn": 3,
+          "ideasInOrBeside": 3,
+          "ideasInOrNextPm1": 3,
+          "ideasTotal": 8,
+          "inLabels": [
+            "I3",
+            "I4",
+            "I5"
+          ],
+          "sectionsWithStop": 3,
+          "contentSections": 8
+        },
+        {
+          "depth": 2,
+          "stops": 7,
+          "words": 989,
+          "wordsPct": 9.894947473736869,
+          "ideasIn": 5,
+          "ideasInOrBeside": 6,
+          "ideasInOrNextPm1": 6,
+          "ideasTotal": 8,
+          "inLabels": [
+            "I1",
+            "I2",
+            "I3",
+            "I4",
+            "I5"
+          ],
+          "sectionsWithStop": 5,
+          "contentSections": 8
+        },
+        {
+          "depth": 3,
+          "stops": 13,
+          "words": 1920,
+          "wordsPct": 19.209604802401202,
+          "ideasIn": 5,
+          "ideasInOrBeside": 6,
+          "ideasInOrNextPm1": 6,
+          "ideasTotal": 8,
+          "inLabels": [
+            "I1",
+            "I2",
+            "I3",
+            "I4",
+            "I5"
+          ],
+          "sectionsWithStop": 7,
+          "contentSections": 8
+        }
+      ],
+      "costNanos": 24428000,
+      "unpriced": 0,
+      "elapsedMs": 11657,
+      "inputTokens": 6664,
+      "outputTokens": 1110,
+      "stops": [
+        {
+          "depth": 1,
+          "quote": "The main difference between modern science and Frankenstein’s laboratory is guiding research paradigms that – in the case of natural phenomena – condition a proper order of systematic data acquisition, formation, and testing of hypotheses a",
+          "cue": "What does the author say is missing from ball lightning research compared to normal science?",
+          "section": "7 Conclusions",
+          "ideasIn": [
+            "I3",
+            "I5"
+          ]
+        },
+        {
+          "depth": 1,
+          "quote": "Rakov and Uman (2003, p. 656, p. 658) characterized ball lightning as “a phenomenon for which there exists numerous witness reports but little, if any, scientific documentation such as photographs, videotapes, or other scientific recordings",
+          "cue": "Look for what kind of evidence reviewers say is lacking, despite many witness reports.",
+          "section": "1 Historical outline",
+          "ideasIn": [
+            "I4",
+            "I5"
+          ]
+        },
+        {
+          "depth": 1,
+          "quote": "Epistemologically, it would be odd to define a “ball lightning norm” and a priori exclude cases that do not meet this definition. Regardless of all problems with an explanatory theory, detailed case reports should be documented.",
+          "cue": "Ask why the author resists defining one strict 'norm' for what counts as ball lightning.",
+          "section": "5 Synopsis of cases",
+          "ideasIn": [
+            "I4"
+          ]
+        },
+        {
+          "depth": 2,
+          "quote": "Ball lightning appears seemingly random in time and space, lasts a few seconds, and disappears with traces or without. Because of its unpredictable occurrence, most of the collected material remains anecdotal.",
+          "cue": "Notice why the phenomenon's unpredictability shapes the kind of evidence that exists.",
+          "section": "1 Historical outline",
+          "ideasIn": []
+        },
+        {
+          "depth": 2,
+          "quote": "Ball lightning acquired a deadly and destructive popular image fed by injuries and damage caused by ordinary cloud–ground strokes.",
+          "cue": "Consider what other, more common event may have shaped ball lightning's popular reputation.",
+          "section": "6 Other influential or notable cases",
+          "ideasIn": [
+            "I3"
+          ]
+        },
+        {
+          "depth": 2,
+          "quote": "A special category of reports is ball lightning encountered by children who, in their later life, followed a scientific career and then described in detail what they saw. It can be argued that all children have similar observation capabilit",
+          "cue": "Think about why a witness's later career might affect how much we trust their childhood account.",
+          "section": "3 Scientists as ball lightning observers",
+          "ideasIn": [
+            "I2"
+          ]
+        },
+        {
+          "depth": 2,
+          "quote": "Gerlach also mentioned bluish “spraying” of electrical wires and blown fuses in “a whole row of houses” (Gerlach, 1927). His speed calculation of 1225 m s−1 is quite amazing, because it means the object travelled at a speed of Mach 3.6 “sou",
+          "cue": "Look for what indirect clues let the physicist estimate the object's speed without seeing it directly.",
+          "section": "3 Scientists as ball lightning observers",
+          "ideasIn": [
+            "I1"
+          ]
+        },
+        {
+          "depth": 3,
+          "quote": "Chances to monitor the transient phenomenon directly are minimal: Tompkins et al. (1975) searched about 12 000 photographic records of the US Prairie Meteorite Network that observed the night sky daily for over 10 years and found two probab",
+          "cue": "Note how many photographic records were searched and how few possible events turned up.",
+          "section": "2 Methodology",
+          "ideasIn": [
+            "I2"
+          ]
+        },
+        {
+          "depth": 3,
+          "quote": "Wilhelm von Haidinger, member of the Imperial Academy of Sciences at Vienna, observed ball lightning from his home at Vienna’s 3rd district Landstrasse on 20 October 1868, in a heavy thunderstorm between 17:15 and 17:30 LT",
+          "cue": "Look at the observer's institutional role — why might that matter for how the account is used?",
+          "section": "3 Scientists as ball lightning observers",
+          "ideasIn": []
+        },
+        {
+          "depth": 3,
+          "quote": "Coroner Leopold Breitenecker, later a forensic medicine professor at Vienna University, encountered ball lightning at Ternitz, Lower Austria, in the summer of 1955, 16–17:00 LT.",
+          "cue": "Notice the observer's profession — what later expertise might lend weight to this account?",
+          "section": "3 Scientists as ball lightning observers",
+          "ideasIn": []
+        },
+        {
+          "depth": 3,
+          "quote": "The tendency of weather services to do without observers and automate synoptic stations (including German mountain-top observatories) may be justified from an economic standpoint, but it eliminates high-quality observations of rare phenomen",
+          "cue": "Consider what is lost scientifically when stations replace trained human observers with automation.",
+          "section": "4 Other trained observers",
+          "ideasIn": []
+        },
+        {
+          "depth": 3,
+          "quote": "Uman and colleagues call what was produced not ball lightning but point to interesting effects of different materials under the influence of lightning.",
+          "cue": "Look for what the researchers actually produced in the lab, and how it differs from real ball lightning.",
+          "section": "6 Other influential or notable cases",
+          "ideasIn": []
+        },
+        {
+          "depth": 3,
+          "quote": "With physical evidence cases like the Dorstone tub, the Poughquag glass, or the Qinghai spectrum as benchmarks and digital material from abundantly present mobile phones and webcams, systematic multidisciplinary case documentation and discu",
+          "cue": "Look for what kinds of physical evidence and modern recording tools could build a better dataset.",
+          "section": "7 Conclusions",
+          "ideasIn": []
+        }
+      ]
+    }
+  ]
+}

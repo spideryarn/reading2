@@ -853,3 +853,27 @@ and 23 content sections: sections with no quote 3/3 (control) vs 3/5 (nudge); Id
 the same block 15/14 vs 13/11; in or beside 16/16 vs 16/15. Flat to worse, as Sol F66 predicted,
 and one nudge run lost 5 quotes to the verbatim check. The one real gap — the entropy paper's
 *Future Directions*, 636 words — got no quote in any run. Quotes keeps `quotes/7`; no version bump.
+
+### Stage 6 measured: **kept**
+
+[Before vs after](260928a-trajectory-mode-stage6-coverage-after.md) (Opus, offline, same Ideas
+snapshot and Quotes for both arms, each arm twice; $0.39 including one article's Ideas brought up
+to date). Summed over the three articles' 21 Ideas, stops in the same block as an Idea:
+
+| | Gist | More | Most |
+|---|---|---|---|
+| `trajectory/6`, runs 1 / 2 | 5 / 5 | 13 / 9 | 15 / 15 |
+| `trajectory/7`, runs 1 / 2 | 7 / 7 | 14 / 13 | 15 / 15 |
+
+Gist gains beyond noise (each arm picked the same stops both times); More a little, clearly on the
+normal paper only; Most cannot move (every quote is a stop there) — only Quotes could, and 6a did not
+help. Sections and words no worse. +$0.005–0.008 per route (+37–43% input tokens), same latency. The
+long paper's Gist still misses the idea its title is about, though two quotes carry it — a route
+choice, left for real reading to judge. 6b/6c not built; trajectory.md § question 6 says why.
+
+**Stage 6 browser check** (Sonnet, Playwright, switch **off**, on a fresh article with no Quotes or
+Ideas — *Cargo Cult Science*, 3,822 words): all pass. The empty state says the Quotes and Ideas come
+first and that the Ideas are the long part; a press posts `["quotes","ideas","trajectory"]`; the band
+shows *Choosing the quotes* (17.7 s, $0.036), *Finding the ideas* (69.7 s, $0.075), then the route
+(7.6 s, $0.018) — **95 s and $0.13 for a first open from nothing**; the card shows *Ideas it bears on*
+without a reload; *Plan it again* posts `["trajectory"]` forced and re-runs nothing else ($0.019).

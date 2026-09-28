@@ -340,6 +340,26 @@ paragraph rarely is one.
 **How to choose.** Try Most on a paper you know. If it skips the part you would have wanted, the
 second option is the one to try, and it is a small change.
 
+**What happened next (2026-09-28).** You answered: *"It might make sense to make a minimal update
+to Quotes to increase representativeness a bit more widely across sections — And/or allow Summary
+content as another kind of content? Or just plain blocklinks to important sections?"* Each was
+measured on the three test articles before anything was kept
+([plan § Stage 6](../plans/260928a-trajectory-mode-skim-a-paper-at-increasing-depth.md)):
+
+- **The route now reads the Ideas and the outline (kept).** It sees which quotes carry which of the
+  article's Ideas, and aims each pass at covering as many as it can. Gist now lands on 7 of the
+  three articles' 21 Ideas, against 5 before, the same in both runs of each; More gains a little;
+  Most cannot change, because at Most every quote is already a stop. About half a cent more per
+  route. A fresh article now makes its Ideas before the route, which is the longer wait.
+- **The Quotes nudge (not kept).** One added sentence asking Quotes to cover the main sections, run
+  twice against the current prompt run twice: no better than the current prompt's own run-to-run
+  noise, and slightly worse on Ideas. Quotes' prompt is unchanged, so no existing Quotes went out of date.
+- **Section stops and a summary line (not built, for now).** The top-level sections with no quote
+  on the three articles are *Notes*, *Front Matter*, *Article overview* and one real one, the
+  entropy paper's *Future Directions*. One section in three papers did not justify a second kind of
+  stop, and the gist line was the thing the scrapbook spike dropped for giving the finding away. If
+  real reading keeps meeting a skipped section, a plain link to its opening passage is the next step.
+
 ---
 
 Up: [reading-view-overview.md](reading-view-overview.md)
