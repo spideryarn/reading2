@@ -12,8 +12,9 @@
  * docs/plans/260928b-one-block-link-component-with-a-rich-tooltip-and-a-flash-on-arrival.md.
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { readFileSync } from "node:fs";
 
-const { FLASH_MS, dropPendingFlash, flashBlock, flushPendingFlash } = await import(
+const { FLASH_MS, dropPendingFlash, flashBlock, flushPendingFlash, resetFlash } = await import(
   "../src/web/flash.js"
 );
 
@@ -86,6 +87,15 @@ describe("flashBlock", () => {
     expect(prose("spya-bbbbbb")?.classList.contains("block-flash")).toBe(true);
   });
 
+  it("clears the live wash and its timer when the reading view leaves", () => {
+    layOut();
+    flashBlock("spya-aaaaaa");
+    expect(vi.getTimerCount()).toBe(1);
+    resetFlash();
+    expect(prose("spya-aaaaaa")?.classList.contains("block-flash")).toBe(false);
+    expect(vi.getTimerCount()).toBe(0);
+  });
+
   it("holds a still wash under reduced motion, for the same time", () => {
     reduceMotion(true);
     layOut();
@@ -111,6 +121,31 @@ describe("flashBlock", () => {
     layOut();
     flashBlock("spya-zzzzzz");
     expect(document.querySelector(".block-flash, .block-flash-still")).toBeNull();
+  });
+});
+
+describe("the flash stylesheet", () => {
+  const css = readFileSync("src/web/styles/prose.css", "utf8");
+
+  it("composes the still wash with a literal search-hit rail", () => {
+    const body = css.match(
+      /td\.text\.has-hit:not\(\[data-hues\]\)\.block-flash-still\s*\{([^}]*)\}/,
+    )?.[1];
+    expect(body).toContain("inset 3px");
+    expect(body).toContain("100vmax");
+  });
+
+  it("composes the animated wash with a literal search-hit rail", () => {
+    const keyframes = css.match(/@keyframes block-flash-with-hit\s*\{([\s\S]*?)\n\}/)?.[1];
+    expect(keyframes).toContain("inset 3px");
+    expect(keyframes).toContain("100vmax");
+  });
+
+  it("keeps the still wash over a semantic search rail", () => {
+    const body = css.match(
+      /td\.text\.has-hit\[data-hues\]\.block-flash-still\s*\{([^}]*)\}/,
+    )?.[1];
+    expect(body).toContain("100vmax");
   });
 });
 

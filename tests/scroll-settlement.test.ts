@@ -135,6 +135,20 @@ describe("scrollToBlock says how it ended", () => {
     expect(first.outcomes, "the first is told once").toEqual(["cancelled"]);
   });
 
+  it("is cancelled by a newer scroll whose target is missing", () => {
+    const first = recorder();
+    const second = recorder();
+    scrollToBlock("spya-far", "smooth", first.done);
+    flush(50);
+    scrollToBlock("spya-nowhere", "smooth", second.done);
+    expect(first.outcomes, "the newer request owns settlement even when it cannot move").toEqual([
+      "cancelled",
+    ]);
+    expect(second.outcomes).toEqual(["missing"]);
+    flush(500);
+    expect(first.outcomes, "the cancelled frame cannot settle later").toEqual(["cancelled"]);
+  });
+
   it("is cancelled by abandonScroll and by scrollToTop", () => {
     const a = recorder();
     scrollToBlock("spya-far", "smooth", a.done);

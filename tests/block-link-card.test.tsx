@@ -52,6 +52,7 @@ const SECTIONS: Section[] = [
   { row: 1, blockId: id("bbbbbb"), nodeId: "n1" as NodeId, title: "Why it rises" },
   { row: 4, blockId: id("eeeeee"), nodeId: "n2" as NodeId, title: "   " },
 ];
+const INDEX = buildBlockLinkIndex(BLOCKS, SECTIONS);
 
 let host: HTMLDivElement;
 let root: Root;
@@ -73,9 +74,8 @@ afterEach(() => {
 });
 
 function paint(children: ReactNode, withProvider = true): void {
-  const index = buildBlockLinkIndex(BLOCKS, SECTIONS);
   act(() =>
-    root.render(withProvider ? <BlockLinkProvider index={index}>{children}</BlockLinkProvider> : children),
+    root.render(withProvider ? <BlockLinkProvider index={INDEX}>{children}</BlockLinkProvider> : children),
   );
 }
 
@@ -243,9 +243,64 @@ describe("the card", () => {
     expect(cards()).toEqual([]);
   });
 
+  it("dismisses an open card when a finger takes over", async () => {
+    paint(<BlockRef id={id("bbbbbb")} />);
+    await hover(link("bbbbbb"));
+    expect(cards()).toHaveLength(1);
+    await hover(link("bbbbbb"), "touch");
+    await act(async () => {
+      vi.advanceTimersByTime(AFTER_THE_DELAY);
+    });
+    expect(cards()).toEqual([]);
+  });
+
+  it("cancels hover intent when Escape is pressed before the card opens", async () => {
+    paint(<BlockRef id={id("bbbbbb")} />);
+    link("bbbbbb")?.dispatchEvent(
+      new PointerEvent("pointerover", { bubbles: true, pointerType: "mouse" }),
+    );
+    document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
+    await act(async () => {
+      vi.advanceTimersByTime(AFTER_THE_DELAY);
+    });
+    expect(cards()).toEqual([]);
+  });
+
+  it("closes when React detaches the anchor without a pointerout", async () => {
+    paint(<BlockRef id={id("bbbbbb")} />);
+    await hover(link("bbbbbb"));
+    expect(cards()).toHaveLength(1);
+
+    paint(<span>the link is gone</span>);
+    await act(async () => Promise.resolve());
+    await act(async () => {
+      vi.advanceTimersByTime(AFTER_THE_DELAY);
+    });
+    expect(cards()).toEqual([]);
+  });
+
+  it("refreshes an open card when the article index changes under the same anchor", async () => {
+    paint(<BlockRef id={id("bbbbbb")} />);
+    await hover(link("bbbbbb"));
+    expect(cards()[0]?.textContent).toContain("The opening claim.");
+
+    const changed = new Map(INDEX);
+    changed.set(id("bbbbbb"), { text: "Replacement article text.", section: "A new section" });
+    act(() =>
+      root.render(
+        <BlockLinkProvider index={changed}>
+          <BlockRef id={id("bbbbbb")} />
+        </BlockLinkProvider>,
+      ),
+    );
+    expect(cards()[0]?.textContent).toContain("Replacement article text.");
+    expect(cards()[0]?.textContent).toContain("A new section");
+  });
+
   it("opens for the keyboard, on focus", async () => {
     paint(<BlockRef id={id("cccccc")} />);
     await act(async () => {
+      document.dispatchEvent(new KeyboardEvent("keydown", { key: "Tab", bubbles: true }));
       link("cccccc")?.focus();
       vi.advanceTimersByTime(AFTER_THE_DELAY);
     });

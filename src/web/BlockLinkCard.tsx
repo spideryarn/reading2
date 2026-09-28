@@ -143,6 +143,7 @@ function BlockLinkCard({ index }: { index: BlockLinkIndex }) {
   const [shown, setShown] = useState<{ el: HTMLElement; content: ReactNode } | null>(null);
   const cardId = useId();
   const arrowRef = useRef<SVGSVGElement>(null);
+  const currentRef = useRef<HTMLElement | null>(null);
   const indexRef = useRef(index);
   indexRef.current = index;
 
@@ -177,6 +178,41 @@ function BlockLinkCard({ index }: { index: BlockLinkIndex }) {
     };
   }, [shown, cardId]);
 
+  /* React can remove a hovered link without sending `pointerout` — closing a
+     dialog and replacing a streamed answer both do it. Floating UI otherwise
+     keeps the detached node as its reference and leaves the card at its last
+     coordinates. Observe only while a card is open, and dismiss only the card
+     whose own anchor disappeared. */
+  useEffect(() => {
+    const el = shown?.el;
+    if (!el) return;
+    const closeIfDetached = () => {
+      if (el.isConnected || currentRef.current !== el) return;
+      currentRef.current = null;
+      setShown((open) => (open?.el === el ? null : open));
+    };
+    closeIfDetached();
+    const observer = new MutationObserver(closeIfDetached);
+    observer.observe(document.documentElement, { childList: true, subtree: true });
+    return () => observer.disconnect();
+  }, [shown]);
+
+  /* A new article/index can change the words under an anchor even if React
+     preserves that node. Refresh the open card from the new source; the real
+     Reader keeps this map stable across position renders, so this runs only
+     when its source changes. */
+  useEffect(() => {
+    const el = currentRef.current;
+    if (!el) return;
+    const content = contentFor(el, index);
+    if (content === null) {
+      currentRef.current = null;
+      setShown(null);
+    } else {
+      setShown({ el, content });
+    }
+  }, [index]);
+
   /* Delegated on the document: the links are in every panel and come and go
      with them, and one listener pair costs the same however many there are.
      Hysteresis as in useHoverCard.ts: `pending` is the link an open timer is
@@ -185,31 +221,30 @@ function BlockLinkCard({ index }: { index: BlockLinkIndex }) {
     let openTimer: ReturnType<typeof setTimeout> | undefined;
     let closeTimer: ReturnType<typeof setTimeout> | undefined;
     let pending: HTMLElement | null = null;
-    let current: HTMLElement | null = null;
 
     const shut = () => {
-      current = null;
+      currentRef.current = null;
       setShown(null);
     };
     const close = () => {
       clearTimeout(openTimer);
       pending = null;
       clearTimeout(closeTimer);
-      if (current) closeTimer = setTimeout(shut, DELAY.close);
+      if (currentRef.current) closeTimer = setTimeout(shut, DELAY.close);
     };
     const show = (el: HTMLElement) => {
       pending = null;
-      if (!el.isConnected) return;
+      if (!el.isConnected) return shut();
       const content = contentFor(el, indexRef.current);
-      if (content === null) return;
-      current = el;
+      if (content === null) return shut();
+      currentRef.current = el;
       // Before the state, so the reference exists when the panel mounts.
       refs.setPositionReference(el);
       setShown({ el, content });
     };
     const arm = (el: HTMLElement, wait: number) => {
       clearTimeout(closeTimer);
-      if (el === current || el === pending) return;
+      if (el === currentRef.current || el === pending) return;
       clearTimeout(openTimer);
       pending = el;
       openTimer = setTimeout(() => show(el), wait);
@@ -222,9 +257,9 @@ function BlockLinkCard({ index }: { index: BlockLinkIndex }) {
       /* A finger fires `pointerover` too, on the tap that follows the link. No
          card for it: the flash and the return chip are the confirmation, and a
          card left behind over the panel would be one more thing to dismiss. */
-      if (e.pointerType === "touch") return;
+      if (e.pointerType === "touch") return close();
       const el = hit(e.target);
-      if (el) arm(el, current ? 0 : DELAY.open);
+      if (el) arm(el, currentRef.current ? 0 : DELAY.open);
       else close();
     };
     const out = (e: PointerEvent) => {
@@ -245,8 +280,9 @@ function BlockLinkCard({ index }: { index: BlockLinkIndex }) {
       if (hit(e.target)) close();
     };
     const key = (e: KeyboardEvent) => {
-      if (e.key === "Escape" && current) {
+      if (e.key === "Escape" && (currentRef.current || pending)) {
         clearTimeout(openTimer);
+        pending = null;
         clearTimeout(closeTimer);
         shut();
       }
@@ -260,6 +296,7 @@ function BlockLinkCard({ index }: { index: BlockLinkIndex }) {
     return () => {
       clearTimeout(openTimer);
       clearTimeout(closeTimer);
+      currentRef.current = null;
       document.removeEventListener("pointerover", over);
       document.removeEventListener("pointerout", out);
       document.removeEventListener("focusin", focusIn);

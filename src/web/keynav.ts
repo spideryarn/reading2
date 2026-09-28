@@ -61,7 +61,7 @@ import { useEffect, useRef, useState } from "react";
 import type { Block, BlockId } from "../types.js";
 import { armJump, clearArmedJump, type JumpOrigin } from "./jump-history.js";
 import { activeSectionIndex } from "./position.js";
-import { flashBlock } from "./flash.js";
+import { dropPendingFlash, flashBlock } from "./flash.js";
 import { SCROLL_MS, abandonScroll, scrollToBlock, stickyOffset } from "./scroll.js";
 import { navigableItems, type Cell, type Geometry } from "./tree.js";
 
@@ -351,6 +351,11 @@ export function beginJump(
   push: (id: BlockId) => void,
 ): boolean {
   clearArmedJump();
+  /* A held landing belongs to the last jump. Supersede it when the next jump
+     begins, not only if that next scroll eventually settles: if the reader
+     cancels the newer glide, exposing the prose must not resurrect the older
+     destination. */
+  dropPendingFlash();
   const origin = measureOrigin(blocks);
   if (origin.kind === "block" && origin.blockId === target) {
     abandonScroll();

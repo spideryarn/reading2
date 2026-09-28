@@ -142,6 +142,35 @@ tr.row-active td.text { background: var(--panel); }
 td.text.block-flash { animation: block-flash 1.2s ease-out; }
 td.text.block-flash-still { box-shadow: inset 0 0 0 100vmax var(--highlight-wash); }
 
+/* Literal search paints its find-at-speed rail with this same property
+   (annotations.css § has-hit). Preserve it as a second shadow: an animation
+   otherwise wins the cascade while moving, and the later search rule wins the
+   equal-specificity still wash under reduced motion — making that flash
+   completely invisible. Semantic-search rails use `background-image`; their
+   later `box-shadow: none` also needs the specific still rule below, while the
+   animated wash already wins through animation precedence. */
+@keyframes block-flash-with-hit {
+  0%, 35% {
+    box-shadow:
+      inset 3px 0 0 rgb(var(--hit-rgb) / calc(min(1, var(--hit-a) * 1.5))),
+      inset 0 0 0 100vmax var(--highlight-wash);
+  }
+  100% {
+    box-shadow:
+      inset 3px 0 0 rgb(var(--hit-rgb) / calc(min(1, var(--hit-a) * 1.5))),
+      inset 0 0 0 100vmax transparent;
+  }
+}
+td.text.has-hit:not([data-hues]).block-flash { animation-name: block-flash-with-hit; }
+td.text.has-hit:not([data-hues]).block-flash-still {
+  box-shadow:
+    inset 3px 0 0 rgb(var(--hit-rgb) / calc(min(1, var(--hit-a) * 1.5))),
+    inset 0 0 0 100vmax var(--highlight-wash);
+}
+td.text.has-hit[data-hues].block-flash-still {
+  box-shadow: inset 0 0 0 100vmax var(--highlight-wash);
+}
+
 /* `.block-id` was here, positioning six characters of Courier in an 83px
    gutter. The gutter is icons now and the id has moved into their `title`, so
    the rule has gone rather than been kept "in case" — a class nothing renders
@@ -731,4 +760,3 @@ td.gist.leaf:hover { background: var(--highlight-wash); }
 .reading td.gist.leaf .sticky { padding: 0.75rem 0.9rem 0.5rem; }
 .reading td.gist.leaf .nav-label { font-size: 0.75rem; color: var(--ink-faint); }
 .reading tr.row-active td.gist.leaf .nav-label { color: var(--ink-soft); }
-

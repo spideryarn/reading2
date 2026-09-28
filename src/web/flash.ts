@@ -81,7 +81,13 @@ export function flushPendingFlash(): void {
   flashBlock(id);
 }
 
-/** Forget a held flash — the reading view is going away. */
+/** A newer jump has begun: forget the older landing held behind the band. */
 export function dropPendingFlash(): void {
   pending = null;
+}
+
+/** The reading view is leaving: forget held work and cancel the live timer. */
+export function resetFlash(): void {
+  pending = null;
+  stop();
 }

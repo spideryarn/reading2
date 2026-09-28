@@ -43,7 +43,7 @@ vi.mock("../src/web/scroll.js", async (importOriginal) => {
 });
 
 const { beginJump, useArrowNav } = await import("../src/web/keynav.js");
-const { dropPendingFlash } = await import("../src/web/flash.js");
+const { dropPendingFlash, flashBlock, flushPendingFlash } = await import("../src/web/flash.js");
 
 const block = (i: number) => `spya-b${String(i).padStart(5, "0")}` as BlockId;
 const BLOCKS: Block[] = Array.from({ length: 30 }, (_, i) => ({
@@ -118,6 +118,23 @@ describe("beginJump and the flash", () => {
     control.outcome = "missing";
     jump(block(20));
     expect(flashed()).toEqual([]);
+  });
+
+  it("drops an older covered landing when a newer jump begins but is cancelled", () => {
+    const table = document.querySelector("table");
+    const reader = document.createElement("div");
+    reader.className = "reader band-covers";
+    reader.innerHTML = '<aside class="mode-band"></aside>';
+    if (table) reader.append(table);
+    document.body.replaceChildren(reader);
+
+    flashBlock(block(19));
+    control.outcome = "cancelled";
+    jump(block(20));
+
+    reader.querySelector(".mode-band")?.remove();
+    flushPendingFlash();
+    expect(flashed(), "the superseded landing must not reappear when prose is exposed").toEqual([]);
   });
 
   it("already there: pushes nothing, moves nothing, stops a glide in flight, and flashes", () => {

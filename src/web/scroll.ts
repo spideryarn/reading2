@@ -777,7 +777,14 @@ export function scrollToBlock(
   done?: (outcome: ScrollOutcome) => void,
 ) {
   const row = blockRow(id);
-  if (!row) return done?.("missing");
+  /* A request that cannot move is still a newer request. Letting the old glide
+     carry on would make its callback report `settled` after this one has
+     already reported `missing`, so the older jump could flash as though it
+     were the destination the reader most recently chose. */
+  if (!row) {
+    cancel();
+    return done?.("missing");
+  }
   // Explicit and clamped rather than scrollIntoView(): we want the row's own
   // top edge, offset to clear the bars, and no surprise when the row sits
   // inside a cell that spans dozens of others.

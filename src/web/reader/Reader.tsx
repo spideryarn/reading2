@@ -101,7 +101,7 @@ import { navPlan, useArrowNav } from "../keynav.js";
 import { paragraphLabelNotice, paragraphPill } from "../nav-labels.js";
 import { ReturnChip } from "../ReturnChip.js";
 import { BlockLinkProvider, buildBlockLinkIndex } from "../BlockLinkCard.js";
-import { dropPendingFlash, flushPendingFlash } from "../flash.js";
+import { flushPendingFlash, resetFlash } from "../flash.js";
 import { ViewportProbe } from "../ViewportProbe.js";
 import { useSwipeNav } from "../swipe.js";
 import { ChatDialog, type ChatTarget } from "../ChatDialog.js";
@@ -518,8 +518,10 @@ export function Reader({
   useEffect(() => {
     if (!bandOverProse) flushPendingFlash();
   }, [bandOverProse]);
-  // A held flash belongs to this article and must not fire on the next one.
-  useEffect(() => dropPendingFlash, []);
+  /* A held or live flash belongs to this article. ArticlePage keys the reader
+     by slug, so leaving it unmounts here; clear both the pending id and the live
+     removal timer rather than retaining a detached prose cell for 1.2s. */
+  useEffect(() => resetFlash, []);
   const { at, jumpTo, rowOf } = useReadingPosition(sections, article.blocks, layoutKey);
 
   /**
