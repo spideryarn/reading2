@@ -309,9 +309,9 @@ function view(over: Partial<TrajectoryView> = {}): TrajectoryView {
       { depth: 3, label: "Most", count: 4 },
     ],
     rows: [
-      { quoteId: Q[2]!, n: 1, place: "Methods", cue: "What earlier work missed", seen: true, current: false, missing: false, position: null },
-      { quoteId: Q[0]!, n: 2, place: "Results", cue: "The headline result", seen: true, current: true, missing: false, position: null },
-      { quoteId: Q[3]!, n: 3, place: "Methods", cue: "Where it stops holding", seen: false, current: false, missing: false, position: null },
+      { quoteId: Q[2]!, n: 1, place: "Methods", cue: "What earlier work missed", seen: true, current: false, missing: false, position: null, words: null },
+      { quoteId: Q[0]!, n: 2, place: "Results", cue: "The headline result", seen: true, current: true, missing: false, position: null, words: null },
+      { quoteId: Q[3]!, n: 3, place: "Methods", cue: "Where it stops holding", seen: false, current: false, missing: false, position: null, words: null },
     ],
     position: 2,
     card: null,
@@ -383,20 +383,116 @@ describe("the panel", () => {
     expect(host.textContent).not.toContain("What earlier work missed");
   });
 
-  it("elides a repeated section path visually but keeps its words for a screen reader", async () => {
+  it("draws a repeated section path for a screen reader only — no ditto mark beside a quote (260928e)", async () => {
     const repeated = view({
       rows: [
-        { quoteId: Q[2]!, n: 1, place: "Methods", cue: null, seen: false, current: false, missing: false, position: null },
-        { quoteId: Q[3]!, n: 2, place: "Methods", cue: null, seen: false, current: false, missing: false, position: null },
+        { quoteId: Q[2]!, n: 1, place: "Methods", cue: null, seen: false, current: false, missing: false, position: null, words: "First." },
+        { quoteId: Q[3]!, n: 2, place: "Methods", cue: null, seen: false, current: false, missing: false, position: null, words: "Second." },
       ],
       position: 1,
     });
     await draw(owner(), repeated);
 
-    const places = [...host.querySelectorAll<HTMLElement>(".traj-place")];
-    expect(places[0]?.textContent).toBe("Methods");
-    expect(places[1]?.querySelector('[aria-hidden="true"]')?.textContent).toBe("〃");
-    expect(places[1]?.querySelector(".sr-only")?.textContent).toBe("Methods");
+    const rows = [...host.querySelectorAll<HTMLElement>(".traj-row")];
+    expect(rows[0]?.querySelector(".traj-place")?.textContent).toBe("Methods");
+    expect(rows[1]?.querySelector(".traj-place")).toBeNull();
+    expect(rows[1]?.querySelector(".sr-only")?.textContent).toBe("Methods");
+    /* The report: a column of `〃` read as a column of quotation marks. */
+    expect(host.textContent).not.toContain("〃");
+  });
+
+  describe("the quote's words on each row (260928e)", () => {
+    const LONG =
+      "Across all five datasets the effect held within two per cent, even after the rich-club nodes were removed and the comparison was repeated from scratch.";
+    const words = (r: Element | undefined) => r?.querySelector(".traj-words")?.textContent ?? null;
+    const rowsOf = () => [...host.querySelectorAll<HTMLElement>(".traj-row")];
+    const tips = () => document.querySelectorAll('[role="tooltip"]');
+    async function hover(el: Element) {
+      el.dispatchEvent(new MouseEvent("mouseenter"));
+      await act(async () => {
+        await new Promise((r) => setTimeout(r, 400));
+      });
+    }
+    async function unhover(el: Element) {
+      el.dispatchEvent(new MouseEvent("mouseleave"));
+      el.dispatchEvent(new MouseEvent("mouseout", { bubbles: true, relatedTarget: document.body }));
+      for (const _ of [0, 1]) {
+        await act(async () => {
+          await new Promise((r) => setTimeout(r, 300));
+        });
+      }
+    }
+    const withWords = (w: [string | null, string | null, string | null]) =>
+      view({ rows: view().rows.map((r, i) => ({ ...r, words: w[i]! })) });
+
+    it("cuts a long quote short, in quotation marks, and shows the whole of it on hover", async () => {
+      await draw(owner(), withWords([LONG, null, "Short and whole."]));
+      const first = words(rowsOf()[0]);
+      expect(first?.startsWith("“")).toBe(true);
+      expect(first?.endsWith("…”")).toBe(true);
+      expect(first!.length).toBeLessThan(LONG.length);
+      expect(LONG.startsWith(first!.slice(1, -2))).toBe(true);
+
+      const go = rowsOf()[0]!.querySelector(".traj-go")!;
+      await hover(go);
+      expect(tips()).toHaveLength(1);
+      expect(tips()[0]?.textContent).toContain(LONG);
+      await unhover(go);
+      expect(tips()).toHaveLength(0);
+    });
+
+    it("shows a quote that fits whole, with no tooltip to repeat it", async () => {
+      await draw(owner(), withWords([LONG, null, "Short and whole."]));
+      expect(words(rowsOf()[2])).toBe("“Short and whole.”");
+      await hover(rowsOf()[2]!.querySelector(".traj-go")!);
+      expect(tips()).toHaveLength(0);
+    });
+
+    it("shows the current stop's quote whole, with no tooltip — which is also what a tap reaches", async () => {
+      await draw(owner(), withWords([null, LONG, null]));
+      expect(words(rowsOf()[1])).toBe(`“${LONG}”`);
+      await hover(rowsOf()[1]!.querySelector(".traj-go")!);
+      expect(tips()).toHaveLength(0);
+    });
+
+    it("keeps the same button, and its focus, when a cut row becomes current", async () => {
+      await draw(owner(), withWords([LONG, null, null]));
+      const before = rowsOf()[0]!.querySelector<HTMLButtonElement>(".traj-go")!;
+      before.focus();
+      const moved = withWords([LONG, null, null]);
+      await draw(owner(), { ...moved, rows: moved.rows.map((r, i) => ({ ...r, current: i === 0 })) });
+      const after = rowsOf()[0]!.querySelector<HTMLButtonElement>(".traj-go")!;
+      expect(after).toBe(before);
+      expect(document.activeElement).toBe(after);
+      expect(words(rowsOf()[0])).toBe(`“${LONG}”`);
+      expect(tips()).toHaveLength(0);
+    });
+
+    it("does not pop a card back up when a row it was open on stops being current", async () => {
+      const at = (i: number) => {
+        const v = withWords([LONG, null, null]);
+        return { ...v, rows: v.rows.map((r, j) => ({ ...r, current: j === i })) };
+      };
+      await draw(owner(), at(1));
+      await hover(rowsOf()[0]!.querySelector(".traj-go")!);
+      expect(tips()).toHaveLength(1);
+      /* → onto it: current, whole, no card. Then → off it, pointer long gone. */
+      await draw(owner(), at(0));
+      await act(async () => {
+        await new Promise((r) => setTimeout(r, 200));
+      });
+      expect(tips()).toHaveLength(0);
+      await draw(owner(), at(2));
+      await act(async () => {
+        await new Promise((r) => setTimeout(r, 200));
+      });
+      expect(tips()).toHaveLength(0);
+    });
+
+    it("draws no words for a row whose quote has gone", async () => {
+      await draw(owner(), withWords([null, null, null]));
+      expect(rowsOf().map(words)).toEqual([null, null, null]);
+    });
   });
 
   it("dims the stops of a shallower pass", async () => {
@@ -427,7 +523,7 @@ describe("the panel", () => {
     expect(text(".traj-foot .traj-note")).toBe(trajectoryPromise(false));
     const most = view({
       depth: 3,
-      rows: [...view().rows, { quoteId: Q[1]!, n: 4, place: "Results", cue: null, seen: false, current: false, missing: false, position: null }],
+      rows: [...view().rows, { quoteId: Q[1]!, n: 4, place: "Results", cue: null, seen: false, current: false, missing: false, position: null, words: null }],
     });
     /* The live Quotes list may include two abstract quotes; the route records
        the four it was actually offered, which is the honest denominator. */

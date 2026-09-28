@@ -24,7 +24,7 @@
  *    positioned in percentages and would otherwise spill), which would clip any
  *    tooltip rendered inside it to the width of the rail.
  */
-import { cloneElement, useRef, useState, type ReactElement, type ReactNode, type Ref } from "react";
+import { cloneElement, useEffect, useRef, useState, type ReactElement, type ReactNode, type Ref } from "react";
 import {
   FloatingArrow,
   FloatingDelayGroup,
@@ -95,6 +95,14 @@ interface BaseProps {
   keepSide?: boolean;
   /** Extra class on the panel, for per-use sizing or accents. */
   className?: string;
+  /**
+   * **`false` keeps the wrapper and opens nothing.** For a trigger that has a
+   * card only some of the time: wrapping it conditionally changes the element
+   * type at that slot, so React remounts the trigger and a keyboard user's
+   * focus drops to `<body>` — a Trajectory row losing its card as it becomes
+   * current (plan 260928e). Default `true`.
+   */
+  enabled?: boolean;
 }
 
 /**
@@ -128,12 +136,20 @@ export function Tooltip({
   placement = "right",
   keepSide = false,
   className,
+  enabled = true,
   open: controlledOpen,
   onOpenChange,
 }: Props) {
   const [uncontrolledOpen, setUncontrolledOpen] = useState(false);
-  const open = controlledOpen ?? uncontrolledOpen;
+  const open = enabled && (controlledOpen ?? uncontrolledOpen);
   const setOpen = onOpenChange ?? setUncontrolledOpen;
+  /* Disabling closes it, and tells a controlling parent so: a disabled
+     trigger's hover never reports leaving, so an open state left standing
+     would pop the card back up the moment it is enabled again. */
+  const disabledWhileOpen = !enabled && (controlledOpen ?? uncontrolledOpen);
+  useEffect(() => {
+    if (disabledWhileOpen) setOpen(false);
+  }, [disabledWhileOpen, setOpen]);
   const arrowRef = useRef<SVGSVGElement>(null);
 
   const { refs, floatingStyles, context } = useFloating({
@@ -167,6 +183,7 @@ export function Tooltip({
 
   const interactions = useInteractions([
     useHover(context, {
+      enabled,
       delay: groupDelay || DELAY,
       move: false,
       /**
@@ -198,8 +215,8 @@ export function Tooltip({
     }),
     // Keyboard parity: the spine's bands are real buttons, so tabbing through
     // them should show the same detail hovering does.
-    useFocus(context),
-    useDismiss(context),
+    useFocus(context, { enabled }),
+    useDismiss(context, { enabled }),
     useRole(context, { role: "tooltip" }),
   ]);
   const { getReferenceProps, getFloatingProps } = interactions;

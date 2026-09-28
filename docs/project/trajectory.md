@@ -21,7 +21,7 @@ v1, for the article's owner only, and behind the experimental switch until later
 - **The band** ([`TrajectoryPanel.tsx`](../../src/web/TrajectoryPanel.tsx),
   [`modes/trajectory/TrajectoryMode.tsx`](../../src/web/modes/trajectory/TrajectoryMode.tsx)): a
   pinned head with `‹ Stop k of N ›` and **Gist · More · Most** (only the depths that add stops),
-  then the stops with their section paths, the role shown on the current row only, and a shallower
+  then the stops with their section paths and (since 260928e) their words, the role shown on the current row only, and a shallower
   pass's stops dimmed.
 - **In the prose**: the current stop's quote is ringed and barred, scrolled near the top on every
   step, and followed by a **Next stop ›** door — *Go round again — More ›* at the end of a pass.
@@ -103,6 +103,15 @@ Stage 6 ([plan § Stage 6](../plans/260928a-trajectory-mode-skim-a-paper-at-incr
   immediately before *Introduction*. That keeps an essay's introductory *Summary* on the route. An
   untitled or non-English abstract is not detected. Excluded quotes count in neither `notOnRoute`
   nor the Most pass's denominator.
+
+**Every row shows its quote's words**
+([plan 260928e](../plans/260928e-trajectory-rows-show-the-quote-words.md)), from a report of Greg's
+on 2026-09-28: *"include summarised and/or truncated version (with tooltip for full version) of the
+quote itself in the left-hand column, not just the double-quotes symbol"*. The words are the Quote's
+own, cut at about 100 characters with the whole of them in a tooltip; the current row shows them
+whole, which is also what a tap reaches on touch. The `〃` that stood for a repeated section path is
+gone — beside a quotation it read as another quotation mark — and a repeated path is now said to a
+screen reader only. A model-written summary per stop is deferred, with the reason, in the plan.
 
 ### What we tried for v2
 
