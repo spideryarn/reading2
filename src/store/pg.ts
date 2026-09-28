@@ -3382,9 +3382,9 @@ const rawPgArticleReader: ArticleReader = {
    * **Judged against its own input, never the article's prose**: `stale` when
    * `trajectoryInputHash` has moved (*Find more* added quotes, they were chosen
    * again, the Ideas were regenerated or arrived, the outline changed) or there
-   * are no quotes at all; `notOnRoute` counts the current quotes
-   * the route does not stop at, which is the number the band gives when it
-   * offers a rebuild. The profile half is the route's (`withTrajectoryProfile`
+   * are no quotes at all; `notOnRoute` counts the current quotes the route does
+   * not stop at. It is a coverage fact, not evidence of which input changed.
+   * The profile half is the route's (`withTrajectoryProfile`
    * in src/routes.ts), because a store adapter does not read the profile.
    *
    * **A 404 is the ordinary case** — the step is off `DEFAULT_INGEST_STEPS`.

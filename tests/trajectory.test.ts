@@ -26,6 +26,7 @@ import {
   ANSWER_TOKENS,
   DEPTH_CAPS,
   MAX_CUE_CHARS,
+  MAX_IDEA_PROMPT_CHARS,
   PROMPT_VERSION,
   TRAJECTORY_SYSTEM,
   buildTrajectory,
@@ -523,6 +524,24 @@ describe("freshness", () => {
     expect(hash(reworded)).not.toBe(base);
   });
 
+  it("does not move the input hash for score precision the prompt does not render", () => {
+    const a = quotesOf(10).map((q, i) => (i === 3 ? { ...q, importance: 0.501 } : q));
+    const b = quotesOf(10).map((q, i) => (i === 3 ? { ...q, importance: 0.504 } : q));
+    expect(renderPrompt({ input: inputOf(a), profile: null })).toBe(
+      renderPrompt({ input: inputOf(b), profile: null }),
+    );
+    expect(trajectoryInputHash(inputOf(a))).toBe(trajectoryInputHash(inputOf(b)));
+  });
+
+  it("does not move the input hash when a quote moves but its rendered record does not", () => {
+    const here = [quote(0)];
+    const moved = [{ ...quote(0), blockId: bid(1) }];
+    expect(renderPrompt({ input: inputOf(here), profile: null })).toBe(
+      renderPrompt({ input: inputOf(moved), profile: null }),
+    );
+    expect(trajectoryInputHash(inputOf(here))).toBe(trajectoryInputHash(inputOf(moved)));
+  });
+
   it("moves the input hash when an Idea, its passages or the outline change (Sol F68)", () => {
     const quotes = quotesOf(10);
     const ideas = ideasArtefact([idea(1, [2]), idea(2, [8])]);
@@ -641,12 +660,31 @@ describe("the prompt, with and without Ideas", () => {
 
   it("says there are none, and plans on the quotes alone, without Ideas", () => {
     const prompt = renderPrompt({ input: inputOf(quotesOf(10), null), profile: null });
-    expect(prompt).toContain("=== THE KEY IDEAS ===\n\n(none — no key ideas have been found");
+    expect(prompt).toContain("=== THE KEY IDEAS ===\n\n(unavailable — the Ideas step has not run");
     expect(prompt).not.toContain("UNTRUSTED KEY IDEAS");
     expect(prompt).not.toContain(" · carries ");
     expect(prompt).not.toContain(" · beside ");
     /* The outline is still there. */
     expect(prompt).toContain("2. Methods · 4 quotes\nMethods gist.");
+  });
+
+  it("distinguishes no Ideas artefact from an Ideas run that found none", () => {
+    const absent = renderPrompt({ input: inputOf(quotesOf(10), null), profile: null });
+    const empty = renderPrompt({ input: inputOf(quotesOf(10), ideasArtefact([])), profile: null });
+    expect(empty).toContain("(none — the Ideas step found no key ideas");
+    expect(empty).not.toBe(absent);
+  });
+
+  it("bounds section titles and quote paths as well as gists", () => {
+    const long = "section ".repeat(200);
+    const verbose = makeTree();
+    verbose.nodes["intro" as NodeId] = {
+      ...verbose.nodes["intro" as NodeId]!,
+      title: long,
+    };
+    const input = inputOf(quotesOf(10), null, { tree: verbose });
+    expect(input.outline[0]!.title.length).toBeLessThanOrEqual(MAX_IDEA_PROMPT_CHARS + 1);
+    expect(input.records[0]!.path[0]!.length).toBeLessThanOrEqual(MAX_IDEA_PROMPT_CHARS + 1);
   });
 
   it("says where a section has no summary, rather than leaving a gap (Sol F69)", () => {
@@ -750,7 +788,7 @@ describe("the step", () => {
     sent.length = 0;
     const bare = storeWith(quotesOf(10));
     const plannedBare = (await STEPS.trajectory.run(ctx(), bare, nullCheckpointStore())).parts?.trajectory;
-    expect(JSON.stringify(sent[0]!.body)).toContain("(none — no key ideas have been found");
+    expect(JSON.stringify(sent[0]!.body)).toContain("(unavailable — the Ideas step has not run");
     expect(sameStamp(stampOf(plannedBare), (await STEPS.trajectory.stamp?.(ctx(), bare))!)).toBe(true);
     bare.plant(SLUG, "ideas", "ideas", ideas);
     expect(sameStamp(stampOf(plannedBare), (await STEPS.trajectory.stamp?.(ctx(), bare))!)).toBe(false);

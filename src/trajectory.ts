@@ -176,7 +176,7 @@ export function targetsFor(q: number): { gist: number; more: number; most: numbe
 
 /* ------------------------------------------------------ what it is given -- */
 
-/** How much of an Idea's name, an Idea's statement, or a section's gist the prompt carries. */
+/** How much of any Idea or outline text field the prompt carries. */
 export const MAX_IDEA_PROMPT_CHARS = 300;
 
 /**
@@ -229,7 +229,7 @@ export interface TrajectoryInput {
   /** Usable quotes left out because a higher-priority one shares their block. */
   collapsed: number;
   /**
-   * `null` when the article has no Ideas artefact — rendered as "none", and
+   * `null` when the article has no Ideas artefact — rendered as "unavailable",
    * hashed as `null`, so a route planned without Ideas is not current once they
    * exist. `[]` is a real answer (the Ideas step found none) and differs.
    */
@@ -340,8 +340,12 @@ export function trajectoryInput(opts: {
     const p = priorityOf(quote);
     return {
       quote,
-      path: sectionPathOf(quote.blockId, index, tree),
-      priority: p === undefined ? null : p,
+      path: sectionPathOf(quote.blockId, index, tree).map((title) =>
+        clip(title, MAX_IDEA_PROMPT_CHARS),
+      ),
+      /* The prompt prints two decimal places. Keep that rendered value in the
+         input too, so invisible score precision cannot make a route stale. */
+      priority: p === undefined ? null : Number(p.toFixed(2)),
       text: quotePromptText(quote.text),
       carries: carries.sort(byLabel),
       beside: beside.sort(byLabel),
@@ -355,7 +359,7 @@ export function trajectoryInput(opts: {
     collapsed,
     ideas,
     outline: listed.map(({ node }, i) => ({
-      title: node.title,
+      title: clip(node.title, MAX_IDEA_PROMPT_CHARS),
       gist: typeof node.gist === "string" && node.gist.trim() ? clip(node.gist, MAX_IDEA_PROMPT_CHARS) : null,
       quotes: inSection[i]!,
     })),
@@ -368,11 +372,18 @@ export function trajectoryInput(opts: {
  * stage's written `sourceHash`, and the store's freshness read all call this,
  * over `trajectoryInput`, so write and read agree by construction (Sol F68).
  *
- * Over exactly what the prompt renders: each offered quote's id, block, section
- * path, priority, words, and the Ideas it carries or sits beside; each Idea's
- * name and statement, or `null` for no Ideas at all; the outline's titles,
- * gists (`null` when absent) and quote counts. Not the profile — that is
- * `profileHash`, kept separate with its own stricter rule. Not timestamps.
+ * Over exactly what the prompt renders, plus the quote id each Q-label resolves
+ * to: each offered quote's label mapping, section path, rendered priority,
+ * words, and the Ideas it carries or sits beside; each Idea's name and
+ * statement, or `null` for no Ideas at all; the outline's titles, gists (`null`
+ * when absent) and quote counts. The label mapping is operational input to the
+ * stored route even though the model sees only Q1, Q2, …; a changed id would
+ * otherwise leave a current-looking route whose stops resolve nowhere. A block
+ * id is not included separately: when moving the quote changes a rendered path
+ * or association those fields move the hash, and when it changes neither the
+ * model receives the same input and the existing quote id still resolves.
+ * Not the profile — that is `profileHash`, kept separate with its own stricter
+ * rule. Not timestamps.
  *
  * Quotes can inherit ids when an outdated list is chosen again, while their
  * scores change; the priority is in the prompt and decides which same-block
@@ -383,7 +394,6 @@ export function trajectoryInputHash(input: TrajectoryInput): string {
   const canonical = JSON.stringify({
     quotes: input.records.map((r) => [
       r.quote.id,
-      r.quote.blockId,
       r.path,
       r.priority,
       r.text,
@@ -792,12 +802,14 @@ export function renderPromptParts(opts: {
   const t = targetsFor(count);
 
   const ideas =
-    input.ideas === null || input.ideas.length === 0
-      ? "(none — no key ideas have been found for this article. Plan on the quotes alone.)"
-      : untrustedRecord(
+    input.ideas === null
+      ? "(unavailable — the Ideas step has not run for this article. Plan on the quotes alone.)"
+      : input.ideas.length === 0
+        ? "(none — the Ideas step found no key ideas for this article. Plan on the quotes alone.)"
+        : untrustedRecord(
           "KEY IDEAS",
           input.ideas.map((i) => `${i.label} · ${i.name}\n${i.statement}`).join("\n\n"),
-        );
+          );
 
   const outlineLines = input.outline.map((s, i) => {
     const n = s.quotes === 0 ? "no quotes" : s.quotes === 1 ? "1 quote" : `${s.quotes} quotes`;

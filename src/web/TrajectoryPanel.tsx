@@ -149,13 +149,14 @@ export function emptyHint(owner: Pick<UseTrajectory, "quotesFirst" | "ideasFirst
 }
 
 export function outdatedBy(
-  owner: Pick<UseTrajectory, "stale" | "notOnRoute" | "profileChanged" | "outdated">,
+  owner: Pick<UseTrajectory, "stale" | "profileChanged" | "outdated">,
 ): string | null {
   if (owner.stale) {
-    const n = owner.notOnRoute;
-    return n > 0
-      ? `The Quotes have changed since this route was planned, and ${n} ${n === 1 ? "is" : "are"} not on it.`
-      : "The Quotes or the Ideas have changed since this route was planned.";
+    /* One input hash covers all three, so this read cannot honestly attribute
+       the mismatch to Quotes. `notOnRoute` is also only a present-day count: a
+       route may deliberately omit a quote, so it is not evidence that quote
+       arrived later. */
+    return "The Quotes, Ideas, or outline have changed since this route was planned.";
   }
   if (owner.profileChanged) return "This route was planned before your profile said what it says now.";
   if (owner.outdated) return "This route was planned by an older version of the prompt.";

@@ -834,3 +834,22 @@ Trajectory back in `BEHIND_THE_SWITCH` alone reds 6 tests; setting `POLICY.traje
 `available` reds 5 visitor-protection tests, including three network traces that assert no POST for
 signed-out and signed-in non-owner readers. The server side is `tests/enqueue-owns-the-article.test.ts`
 (404 and no job row for an article the caller does not own), run here against Postgres: green.
+
+### Stage 6 code review — GPT Sol ([prompt](260928a-trajectory-mode-stage6-code-review-prompt.md), [answer](260928a-trajectory-mode-stage6-code-review-sol.md)), write-capable, verdict *accept after fixes*
+
+All six fixed by Sol, red-first: **F70** (P1) *Plan it again* pressed while Ideas were loading
+posted the route alone — now waits for both reads; **F71** priority hashed at raw precision but
+rendered at two decimals; **F72** raw block id in the hash though never rendered; **F73** "no Ideas
+artefact" and "Ideas found none" hashed differently but rendered the same — now "unavailable" vs
+"none"; **F74** section titles and paths capped at 300 characters; **F75** the stale banner names
+all three sources (Quotes, Ideas, outline). Gates here afterwards: typecheck 0; 13 files, 411
+tests, including the Postgres freshness test.
+
+### 6a — the Quotes spread nudge, measured offline: **not kept**
+
+[The eval](260928a-trajectory-mode-stage6a-quotes-spread-eval.md): the production generator with
+`previous: null` on the three articles, control twice and nudge twice ($0.70). Summed over 19 Ideas
+and 23 content sections: sections with no quote 3/3 (control) vs 3/5 (nudge); Ideas with a quote in
+the same block 15/14 vs 13/11; in or beside 16/16 vs 16/15. Flat to worse, as Sol F66 predicted,
+and one nudge run lost 5 quotes to the verbatim check. The one real gap — the entropy paper's
+*Future Directions*, 636 words — got no quote in any run. Quotes keeps `quotes/7`; no version bump.

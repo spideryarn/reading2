@@ -1270,12 +1270,13 @@ export interface Trajectory {
   slug: string;
   /**
    * **The input hash** — `trajectoryInputHash` in src/trajectory.ts, over
-   * exactly what the prompt rendered: the offered quotes (id, block, section
-   * path, priority, words, the Ideas each carries), the Ideas (or `null` for
-   * none) and the top-level outline. Spelled `sourceHash` because that is the
-   * name `stampOf` reads (src/store/artifacts.ts); it is not a hash of the
-   * article. Routes before `trajectory/7` hold the old quotes-only hash, which
-   * never matches; `loadTrajectory` reports them outdated, not stale.
+   * exactly what the prompt rendered, plus the quote id each Q-label resolves
+   * to: the offered quotes' section paths, priorities, words and Idea
+   * associations, the Ideas (or `null` for none), and the top-level outline.
+   * Spelled `sourceHash` because that is the name `stampOf` reads
+   * (src/store/artifacts.ts); it is not a hash of the article. Routes before
+   * `trajectory/7` hold the old quotes-only hash, which never matches;
+   * `loadTrajectory` reports them outdated, not stale.
    */
   sourceHash: string;
   /**

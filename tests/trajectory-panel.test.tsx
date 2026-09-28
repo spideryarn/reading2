@@ -45,6 +45,8 @@ import type {
 let trajectoryBody: unknown = null;
 /** The Ideas the stop card may show, or `null` for none (404). */
 let ideasBody: unknown = null;
+/** A held Ideas read, for the prerequisite-loading race. */
+let ideasReply: Promise<Response> | null = null;
 /** Every request, so a test can say the card started no job. */
 const requested: { url: string; method: string }[] = [];
 /** The body of every POST, parsed — what a press asked the queue for. */
@@ -61,9 +63,9 @@ vi.mock("../src/web/lib/api.js", async () => {
         ? new Response(null, { status: 404 })
         : new Response(JSON.stringify(trajectoryBody), { status: 200 });
     if (url.startsWith("/api/ideas/"))
-      return ideasBody === null
+      return ideasReply ?? (ideasBody === null
         ? new Response(null, { status: 404 })
-        : new Response(JSON.stringify(ideasBody), { status: 200 });
+        : new Response(JSON.stringify(ideasBody), { status: 200 }));
     if (url.startsWith("/api/jobs")) return new Response(JSON.stringify({ jobs: [] }), { status: 200 });
     return new Response(null, { status: 404 });
   };
@@ -247,6 +249,7 @@ beforeEach(() => {
   posted.length = 0;
   quotesRead = QUOTES_READ;
   ideasBody = null;
+  ideasReply = null;
   finishers.length = 0;
   trajectoryBody = { trajectory: ROUTE, stale: false, outdated: false, profileChanged: false, notOnRoute: 0 };
   history.replaceState(null, "", "/read/a-route?mode=trajectory");
@@ -424,9 +427,10 @@ describe("the panel", () => {
     expect(coverageNote(4, 0)).toBeNull();
   });
 
-  it("says how many quotes are not on a stale route, and offers to plan it again", async () => {
+  it("does not blame the Quotes when the Ideas or outline may have made the route stale", async () => {
     await draw(owner({ stale: true, notOnRoute: 3 }), view());
-    expect(text(".gloss-stale")).toContain("3 are not on it");
+    expect(text(".gloss-stale")).toContain("Quotes, Ideas, or outline");
+    expect(text(".gloss-stale")).not.toContain("Quotes have changed");
   });
 
   it("draws the stop card under the current row only, and no card when there is nothing", async () => {
@@ -1026,6 +1030,26 @@ describe("the band, walked", () => {
     await settled();
     /* Only the route is forced; `stepIsDone` decides about the Quotes. */
     expect(posted).toEqual([{ slug: "a-route", steps: ["quotes", "trajectory"], force: ["trajectory"] }]);
+  });
+
+  it("keeps a route press pending until the Ideas read says whether it is stale", async () => {
+    let answerIdeas!: (response: Response) => void;
+    ideasReply = new Promise<Response>((resolve) => {
+      answerIdeas = resolve;
+    });
+    await mount();
+
+    await act(async () => host.querySelector<HTMLButtonElement>(".traj-again button")!.click());
+    await settled();
+    expect(posted, "must not plan against Ideas whose freshness is still unknown").toEqual([]);
+
+    answerIdeas(
+      new Response(JSON.stringify({ ...IDEAS_BODY, stale: true, outdated: false }), { status: 200 }),
+    );
+    await settled();
+    expect(posted).toEqual([
+      { slug: "a-route", steps: ["ideas", "trajectory"], force: ["trajectory"] },
+    ]);
   });
 
   it("takes its passage and its handle with it when it goes", async () => {

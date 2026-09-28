@@ -7,7 +7,8 @@
  * - **Three staleness facts, not two**, and the third is stricter than every
  *   other artefact's: a route written with no profile is outdated the moment
  *   the reader writes one (`routeProfileIsStale`, src/trajectory.ts; Sol F7).
- *   `notOnRoute` says how many quotes arrived since — *Find more*, say.
+ *   `notOnRoute` says how many current quotes are absent from every pass. It
+ *   does not prove they arrived after this route was planned.
  * - **Prerequisites in the same job.** The step refuses without Quotes, and
  *   since stage 6 plans around the Ideas, so when either is missing or stale
  *   the request names it in `precededBy` — `["quotes", "ideas"]` at most — one
@@ -38,9 +39,9 @@ type TrajectoryStatus = "loading" | "none" | "ready" | "error";
 export interface UseTrajectory {
   status: TrajectoryStatus;
   trajectory: Trajectory | null;
-  /** The Quotes changed under the route — more were found, or they were chosen again. */
+  /** The Quotes, Ideas, or outline changed under the route. */
   stale: boolean;
-  /** The Quotes are the same, and the current prompt would order them differently. */
+  /** The route was written by an older prompt or model. */
   outdated: boolean;
   /** The route was written for another profile — including none, when you now have one. */
   profileChanged: boolean;
@@ -91,6 +92,10 @@ export function useTrajectory(slug: string, quotes: QuotesRead, ideas: IdeasRead
   const [profileChanged, setProfileChanged] = useState(false);
   const [notOnRoute, setNotOnRoute] = useState(0);
   const [error, setError] = useState<string | null>(null);
+  /* A manual press made while a prerequisite read is unresolved. Keep the
+     intent, not a guessed request: once both reads answer, the request below
+     can name exactly the missing or stale prerequisites. */
+  const [waitingRun, setWaitingRun] = useState<"ensure" | "regenerate" | null>(null);
 
   /* The read. `current()` after every `await`: src/web/useOrderedRead.ts. */
   const load = useCallback(
@@ -189,15 +194,44 @@ export function useTrajectory(slug: string, quotes: QuotesRead, ideas: IdeasRead
     () => [...(quotesFirst ? (["quotes"] as const) : []), ...(ideasFirst ? (["ideas"] as const) : [])],
     [quotesFirst, ideasFirst],
   );
+  const prerequisitesLoading = quotes.status === "loading" || ideas.status === "loading";
+  const startReady = useCallback(
+    async (kind: "ensure" | "regenerate") => {
+      await queue.start({
+        ...(kind === "regenerate" ? { force: true } : {}),
+        ...(precededBy.length > 0 ? { precededBy } : {}),
+      });
+    },
+    [queue, precededBy],
+  );
   const ensure = useCallback(async () => {
-    await queue.start(precededBy.length > 0 ? { precededBy } : {});
-  }, [queue, precededBy]);
+    if (prerequisitesLoading) {
+      setWaitingRun("ensure");
+      return;
+    }
+    await startReady("ensure");
+  }, [prerequisitesLoading, startReady]);
   /* `useStepJob` names only this hook's own step in `force`, so Quotes and
      Ideas stay unforced. `FORCE_ONLY_WHEN_NAMED` protects the other direction:
      forcing either elsewhere must not sweep Trajectory into that job. */
   const regenerate = useCallback(async () => {
-    await queue.start(precededBy.length > 0 ? { force: true, precededBy } : { force: true });
-  }, [queue, precededBy]);
+    if (prerequisitesLoading) {
+      setWaitingRun("regenerate");
+      return;
+    }
+    await startReady("regenerate");
+  }, [prerequisitesLoading, startReady]);
+
+  /* A visible button can be pressed after the route read settles but before
+     Quotes or Ideas does. Start exactly once when the last prerequisite read
+     answers, using that render's stale/none decision. If the band goes away,
+     the state and the press go with it. */
+  useEffect(() => {
+    if (waitingRun === null || prerequisitesLoading) return;
+    const kind = waitingRun;
+    setWaitingRun(null);
+    void startReady(kind);
+  }, [waitingRun, prerequisitesLoading, startReady]);
 
   /**
    * **The automatic run waits for the Quotes' and the Ideas' reads**, because
@@ -223,8 +257,8 @@ export function useTrajectory(slug: string, quotes: QuotesRead, ideas: IdeasRead
     job: queue.job,
     failed: queue.failed,
     stalled: queue.stalled,
-    starting: queue.starting,
-    automatic: auto && (queue.job !== null || queue.starting),
+    starting: queue.starting || waitingRun !== null,
+    automatic: auto && (queue.job !== null || queue.starting || waitingRun !== null),
     quotesFirst,
     ideasFirst,
     retryRead,
