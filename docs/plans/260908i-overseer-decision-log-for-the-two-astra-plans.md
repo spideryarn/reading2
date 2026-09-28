@@ -924,3 +924,13 @@ Sonnet for web research, latest Luna for lighter work; no version numbers → se
 alone; re-pins a pinned doc only if it edits it). Sol 6 still needs the API key, which Greg declined
 on 09-24, so "latest Sol" resolves to the subscription's Sol for now. The five running sessions were
 told to use Opus wherever their brief said Fable.
+
+### 2026-09-28 — mode title, Structure columns, Trajectory mode; Sol stays 5.6
+
+Three more Greg requests delegated: `mode-title-placement` (the 3Q mode-name card covers content;
+try bottom-left or better), `structure-two-columns` (switch to two columns later, give them room,
+make both faces look alike), and `trajectory-mode` (his dictated brief saved verbatim into a vision
+doc `docs/project/trajectory.md`; v1 built autonomously, v2 only if confident; questions gathered in
+the doc; default behind the experimental switch). Greg: *"5.6 is fine for now, but ideally write
+things in a way that it'll automatically use the latest"* → model-roles-latest makes `--model sol`
+resolve to the newest Sol the subscription serves, never the paid key.

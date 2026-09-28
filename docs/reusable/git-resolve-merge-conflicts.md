@@ -27,14 +27,15 @@ side, not just the file:
 
 - **GPT Sol**, via [codex-cli-as-subagent.md](codex-cli-as-subagent.md):
   `npx tsx scripts/run-codex.ts --model sol --effort high --prompt-file … --output …`
-- and perhaps **Fable** too — a subagent with `model: "fable"`.
+- and perhaps **Opus** too — a subagent with `model: "opus"` (this was Fable until Greg retired it,
+  2026-09-28).
 
 **Make a proposal. Don't make changes yet.**
 
-**Who agrees the proposal.** Greg, 2026-09-10: resolve it yourself, with GPT Sol and/or Fable where
+**Who agrees the proposal.** Greg, 2026-09-10: resolve it yourself, with GPT Sol and/or Opus where
 the conflict is complex or risky, and do not put it to him *"unless there are real, major,
 unresolvable conflicts that involve product tradeoffs"*. So: write the proposal down (in the merge
-commit message, and in the plan if the work has one), have Sol or Fable check it when you are not
+commit message, and in the plan if the work has one), have Sol or Opus check it when you are not
 sure, then resolve. An append-append, two independent additions to one function, or a union of
 imports never needs anyone else. Only a conflict where the two sides want different *product*
 behaviour and neither can be kept goes to Greg — and it goes as a question he can answer, per

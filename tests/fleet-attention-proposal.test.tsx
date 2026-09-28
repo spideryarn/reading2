@@ -179,7 +179,7 @@ describe("the card", () => {
   it("draws the proposal, its reason, its quote and its attribution — and adds no control", () => {
     draw([proseItem(PROPOSED)]);
     const text = host.textContent ?? "";
-    expect(text).toContain("Proposed: ask Fable");
+    expect(text).toContain("Proposed: ask Opus");
     expect(text).toContain("it is a question of wording, which Fable is for");
     expect(text).toContain(QUOTE);
     expect(text).toContain("openai/gpt-5.6-luna");
