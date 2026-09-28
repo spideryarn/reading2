@@ -914,3 +914,13 @@ only if a clean low-complexity version exists, otherwise a write-up for later. T
 tooltips, fuller titles, hiding columns) → `shelf-table-view`. Both touch the home page, so each is
 told about the other. Defaults set as assumptions: column hiding needs a non-right-click route
 (iPad), remembered per viewer in browser storage.
+
+### 2026-09-28 — model roles: latest-family names, Fable retired
+
+Greg: *"Stop using Fable. Let's just rely on Opus 5.5 for anything advanced in the Claude family"*;
+latest GPT Sol is the cross-family default, latest Astra only for complicated or critical work,
+Sonnet for web research, latest Luna for lighter work; no version numbers → session
+`model-roles-latest` (engineering-manager.md, AGENTS.md and related instruction docs; history left
+alone; re-pins a pinned doc only if it edits it). Sol 6 still needs the API key, which Greg declined
+on 09-24, so "latest Sol" resolves to the subscription's Sol for now. The five running sessions were
+told to use Opus wherever their brief said Fable.
