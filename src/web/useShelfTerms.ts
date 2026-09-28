@@ -27,7 +27,7 @@
 import { useEffect, useMemo, useState } from "react";
 import type { LibraryEntry, LibraryTermsResponse } from "../types.js";
 import { apiFetch, readJson } from "./lib/api.js";
-import { chosenTopics, narrowBeforeTopics, topicCounts, topicMembers } from "./shelf-narrow.js";
+import { chosenTopics, topicMembers } from "./shelf-narrow.js";
 
 /** How long to wait before asking again while articles are still being read. */
 export const PENDING_RETRY_MS = 400;
@@ -114,17 +114,23 @@ export function useShelfTerms({
     };
   }, [archived, shelfKey, round]);
 
-  return useMemo(
-    () => ({
-      data: answer?.data ?? null,
-      settled:
-        !!answer?.data &&
-        answer.archived === archived &&
-        answer.shelfKey === shelfKey &&
-        answer.data.pending === 0,
-    }),
-    [answer, archived, shelfKey],
-  );
+  return useMemo(() => {
+    /* Do not expose yesterday's answer as today's while the replacement is in
+       flight. Besides making the row describe the wrong scope, its member sets
+       would filter newly loaded archived articles (or a newly finished job)
+       against a question that never included them. An absent current answer
+       means no topic narrowing, just as it does on the first load. */
+    const current =
+      shelfKey !== null &&
+      answer?.archived === archived &&
+      answer.shelfKey === shelfKey
+        ? answer.data
+        : null;
+    return {
+      data: current,
+      settled: !!current && current.pending === 0,
+    };
+  }, [answer, archived, shelfKey]);
 }
 
 /**
@@ -160,20 +166,18 @@ export function useChosenTopics(
 }
 
 /**
- * **Everything the shelf page needs from its topics, in one call**: the answer,
- * the chosen keys that apply, their member sets for `narrowShelf`, and each
- * chip's count by the one formula (shelf-narrow.ts § topicCounts).
+ * **The shared topic state the shelf page needs in one call**: the answer, the
+ * chosen keys that apply, their member sets for `narrowShelf`, and the scope
+ * and titles used by the row's detail.
  *
- * Here rather than inline in Library.tsx so the page gains one call and not
- * forty lines; the narrowing itself — the `rows` memo — stays on the page,
- * above the cards/table branch, where the search and Unread already were.
+ * Here rather than inline in Library.tsx so fetching and selection stay one
+ * unit. The narrowing and the counts stay on the page: the latter consume the
+ * already-narrowed rows, so typing a search does not scan every article twice.
  */
 export function useShelfTopics({
   articles,
   archivedList,
   archivedOn,
-  query,
-  unread,
   requested,
   drop,
 }: {
@@ -183,8 +187,6 @@ export function useShelfTopics({
   archivedList: readonly LibraryEntry[] | null;
   /** `?archived=1`. */
   archivedOn: boolean;
-  query: string;
-  unread: boolean;
   /** `?topics=`, as the URL has it. */
   requested: readonly string[];
   /** Write the kept keys back, with `replace` — see `useChosenTopics`. */
@@ -204,19 +206,11 @@ export function useShelfTopics({
 
   /* `inScope` is every slug the topics were chosen over that is on a list
      loaded here — the tooltip's "of 38". */
-  const { counts, inScope } = useMemo(() => {
+  const inScope = useMemo(() => {
     const active = articles ?? [];
     const archived = inArchive ?? [];
-    const narrowing = { query, unread };
-    const before = [
-      ...narrowBeforeTopics(active, narrowing),
-      ...narrowBeforeTopics(archived, narrowing),
-    ].map((e) => e.slug);
-    return {
-      counts: topicCounts(before, topics, termList ?? []),
-      inScope: new Set([...active, ...archived].map((e) => e.slug)),
-    };
-  }, [articles, inArchive, query, unread, topics, termList]);
+    return new Set([...active, ...archived].map((e) => e.slug));
+  }, [articles, inArchive]);
 
   /* The card's own title: `LibraryEntry.title`, which the server has already
      resolved through the title fallback (library.md). */
@@ -226,5 +220,5 @@ export function useShelfTopics({
     return (slug: string) => bySlug.get(slug);
   }, [articles, archivedList]);
 
-  return { terms, inArchive, topics, members, counts, inScope, titleOf };
+  return { terms, inArchive, topics, members, inScope, titleOf };
 }

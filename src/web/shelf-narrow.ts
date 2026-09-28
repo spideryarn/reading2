@@ -133,7 +133,18 @@ export function topicCounts(
     [...visibleBeforeTopics].map((slug) => ({ slug })),
     topicMembers(terms, selected),
   );
-  const shown = new Set(visible.map((v) => v.slug));
+  return topicCountsForVisible(
+    visible.map((v) => v.slug),
+    terms,
+  );
+}
+
+/** Count each term in rows that have already passed every narrowing. */
+export function topicCountsForVisible(
+  visible: Iterable<string>,
+  terms: readonly ShelfTerm[],
+): Map<string, number> {
+  const shown = new Set(visible);
   const counts = new Map<string, number>();
   for (const term of terms) {
     let n = 0;

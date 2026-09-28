@@ -73,7 +73,7 @@ import {
   libraryViewParam,
   sortDirParam,
 } from "./params.js";
-import { narrowShelf } from "./shelf-narrow.js";
+import { narrowShelf, topicCountsForVisible } from "./shelf-narrow.js";
 import { ShelfTerms } from "./ShelfTerms.js";
 import { useShelfTopics } from "./useShelfTerms.js";
 import { pageTitle, useDocumentTitle } from "./page-title.js";
@@ -220,8 +220,6 @@ export function Library({
     articles,
     archivedList: shelf.archived,
     archivedOn,
-    query,
-    unread: show === "unread",
     requested: requestedTopics,
     drop: dropTopics,
   });
@@ -245,6 +243,16 @@ export function Library({
   const archivedRows = useMemo(
     () => (inArchive ? narrowShelf(inArchive, { query, unread: show === "unread", topics: members }) : null),
     [inArchive, query, show, members],
+  );
+  /* The expensive search has already run in the two row memos. Count from
+     their result instead of repeating it over every article on each keypress. */
+  const counts = useMemo(
+    () =>
+      topicCountsForVisible(
+        [...(rows ?? []), ...(archivedRows ?? [])].map((entry) => entry.slug),
+        terms.data?.terms ?? [],
+      ),
+    [rows, archivedRows, terms.data?.terms],
   );
 
   /* Toggled against what the URL asks for rather than what applies, so a key
@@ -602,10 +610,10 @@ export function Library({
       {/* Between the controls and the count, so the count is visibly the
           result of everything above it. Only once there is a shelf and an
           answer: a failed request draws nothing (useShelfTerms.ts). */}
-      {total > 0 && terms.data && (
+      {total + archivedTotal > 0 && terms.data && (
         <ShelfTerms
           data={terms.data}
-          counts={shelfTopics.counts}
+          counts={counts}
           selected={topics}
           onToggle={toggleTopic}
           onClear={() => pushView(() => void setTopics(null))}

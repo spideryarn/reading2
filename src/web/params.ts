@@ -1480,7 +1480,7 @@ export const libraryShowParam = createParser<ShelfFilter>({
  *
  * **No validation against the topics here**, because the topics are not known
  * when the URL is read. A key that is no longer among them is not applied while
- * they load and is dropped once they have (ShelfTerms.tsx § `useTopicSelection`),
+ * they load and is dropped once they have (useShelfTerms.ts § `useChosenTopics`),
  * which is the only place that knows both halves.
  *
  * `push`, like `show`: choosing a topic is the same kind of act as pressing

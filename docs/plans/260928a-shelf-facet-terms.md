@@ -480,3 +480,12 @@ stage, reports anything wider), gates rerun, commit its fixes.
   S2-3 (shelf membership has two implementations, now guarded by a parity test) and S2-5 (the
   low-level helpers trust the caller's revision objects; every current caller gets them from the
   owner-scoped set).
+- **GPT Sol, stage 3 code, round 1** —
+  [260928a-shelf-facet-terms-stage3-review-sol.md](260928a-shelf-facet-terms-stage3-review-sol.md)
+  (prompt: [260928a-shelf-facet-terms-stage3-review-prompt.md](260928a-shelf-facet-terms-stage3-review-prompt.md)),
+  reviewing ab16dfe3. *Ready with its fixes*; no P0. It fixed S3-1 (while a new scope loaded, the
+  previous scope's topics kept filtering the rows — only an answer matching the current scope and
+  shelf is now used), S3-2 (an empty active shelf hid the Topics row even with enough archived
+  articles in scope), S3-3 (zero-count chips were natively disabled, so a keyboard could not reach
+  their tooltip — now `aria-disabled` and guarded), S3-4 (search and Unread ran twice per keystroke)
+  and S3-5 (a wrong cross-reference). Gates rerun here: 148 shelf tests, typecheck, lint.

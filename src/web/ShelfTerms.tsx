@@ -100,10 +100,17 @@ export function ShelfTerms({
   const chip = (t: ShelfTerm) => {
     const on = chosen.has(t.key);
     const n = count(t.key);
-    /* An unchosen chip at zero is greyed and disabled in place, rather than
-       removed — a row that reshuffles under the pointer is worse than a dead
-       chip. A chosen one at zero stays pressable, or it could not be removed. */
+    /* An unchosen chip at zero is greyed and aria-disabled in place, rather
+       than removed — a row that reshuffles under the pointer is worse than a
+       dead chip. It remains focusable so its explanatory tooltip is available
+       from the keyboard; the handler enforces the disabled state. A chosen one
+       at zero stays pressable, or it could not be removed. */
     const dead = !on && n === 0;
+    const action = dead
+      ? "unavailable because no articles match the current view"
+      : on
+        ? "chosen; activate to remove"
+        : "show only articles about this";
     return (
       <Tooltip
         key={t.key}
@@ -113,13 +120,15 @@ export function ShelfTerms({
       >
         <button
           type="button"
-          onClick={() => onToggle(t.key)}
-          disabled={dead}
+          onClick={() => {
+            if (!dead) onToggle(t.key);
+          }}
+          aria-disabled={dead}
           aria-pressed={on}
           /* Begins with what is on the chip, so a reader driving the page by
              voice can say what they see (WCAG 2.5.3) — the rule ShelfControls
              states for Unread. */
-          aria-label={`${t.label} ${n} — ${on ? "chosen; activate to remove" : "show only articles about this"}`}
+          aria-label={`${t.label} ${n} — ${action}`}
           className={`${chipClass(on)} ${dead ? "tw:cursor-default tw:opacity-40" : ""}`}
         >
           {t.label}
@@ -168,15 +177,25 @@ export function ShelfTerms({
           {byCount.map((t) => {
             const on = chosen.has(t.key);
             const n = count(t.key);
+            const dead = !on && n === 0;
             const top = topArticles(t, inScope, ROW_ARTICLES);
             return (
               <li key={t.key} className="tw:flex tw:flex-wrap tw:items-baseline tw:gap-x-2 tw:text-xs">
                 <button
                   type="button"
-                  onClick={() => onToggle(t.key)}
-                  disabled={!on && n === 0}
+                  onClick={() => {
+                    if (!dead) onToggle(t.key);
+                  }}
+                  aria-disabled={dead}
                   aria-pressed={on}
-                  className={`${chipClass(on)} ${!on && n === 0 ? "tw:cursor-default tw:opacity-40" : ""}`}
+                  aria-label={`${t.label} ${n} — ${
+                    dead
+                      ? "unavailable because no articles match the current view"
+                      : on
+                        ? "chosen; activate to remove"
+                        : "show only articles about this"
+                  }`}
+                  className={`${chipClass(on)} ${dead ? "tw:cursor-default tw:opacity-40" : ""}`}
                 >
                   {t.label}
                   <span className="tw:tabular-nums tw:opacity-70">{n}</span>

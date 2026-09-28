@@ -23,7 +23,7 @@
  */
 import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
-import { NuqsAdapter } from "nuqs/adapters/react";
+import { enableHistorySync, NuqsAdapter } from "nuqs/adapters/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { LibraryEntry, LibraryTermsResponse } from "../src/types.js";
 
@@ -54,6 +54,8 @@ const ARCHIVED: LibraryEntry[] = [
   entry("old-memory", "An old piece on memory"),
   entry("old-other", "Something else archived"),
 ];
+let activeArticles = ACTIVE;
+let archivedArticles = ARCHIVED;
 
 const term = (key: string, ...members: [string, number][]) => ({
   key,
@@ -104,10 +106,10 @@ vi.mock("../src/web/useShelf.js", async () => {
   return {
     useShelf: () => {
       const [archived, setArchived] = React.useState<LibraryEntry[] | null>(null);
-      const loadArchived = React.useCallback(async () => setArchived(ARCHIVED), []);
+      const loadArchived = React.useCallback(async () => setArchived(archivedArticles), []);
       return React.useMemo(
         () => ({
-          articles: ACTIVE,
+          articles: activeArticles,
           error: null,
           reload: async () => {},
           undoable: null,
@@ -157,6 +159,7 @@ Object.defineProperty(window, "matchMedia", {
 });
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+enableHistorySync();
 
 const { Library } = await import("../src/web/Library.js");
 
@@ -165,6 +168,8 @@ let root: Root;
 
 beforeEach(() => {
   asked = [];
+  activeArticles = ACTIVE;
+  archivedArticles = ARCHIVED;
   answer = async (url) => (url.includes("archived=1") ? ALL_TERMS : ACTIVE_TERMS);
 });
 
@@ -232,6 +237,25 @@ function click(el: HTMLElement) {
   act(() => el.click());
 }
 
+function typeIn(el: HTMLInputElement, value: string) {
+  const set = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set;
+  act(() => {
+    set?.call(el, value);
+    el.dispatchEvent(new Event("input", { bubbles: true }));
+  });
+}
+
+async function traverse(go: () => void) {
+  const landed = new Promise<void>((resolve) =>
+    window.addEventListener("popstate", () => resolve(), { once: true }),
+  );
+  await act(async () => {
+    go();
+    await landed;
+  });
+  await settle();
+}
+
 describe("the Topics row", () => {
   it("draws a chip per topic with counts that follow the view", async () => {
     await show("/");
@@ -258,13 +282,17 @@ describe("the Topics row", () => {
 
   it("greys and disables an unchosen chip at zero, and keeps a chosen one at zero removable", async () => {
     await show("/?topics=memory");
-    expect(chip("startup").disabled).toBe(true);
+    const unavailable = chip("startup");
+    expect(unavailable.getAttribute("aria-disabled")).toBe("true");
+    click(unavailable);
+    await settle();
+    expect(params().get("topics")).toBe("memory");
 
     await act(async () => root.unmount());
     host.remove();
     await show("/?topics=startup&show=unread");
     expect(chipCount("startup")).toBe(0);
-    expect(chip("startup").disabled).toBe(false);
+    expect(chip("startup").getAttribute("aria-disabled")).toBe("false");
     click(chip("startup"));
     await settle();
     expect(params().get("topics")).toBeNull();
@@ -297,6 +325,40 @@ describe("the Topics row", () => {
     expect(cards()).toHaveLength(3);
   });
 
+  it("carries a half-typed search into a topic history entry", async () => {
+    await show("/");
+    typeIn(host.querySelector<HTMLInputElement>('[aria-label="Search the library"]')!, "memory");
+    click(chip("memory"));
+    await settle(300);
+    expect(params().get("q")).toBe("memory");
+    expect(params().get("topics")).toBe("memory");
+    expect(cards().sort()).toEqual(["Memory and the brain", "Memory palaces"]);
+  });
+
+  it("restores topic presses and the archive switch through Back and Forward", async () => {
+    await show("/");
+    click(chip("memory"));
+    await settle();
+    click(chip("neuron"));
+    await settle();
+    expect(params().get("topics")).toBe("memory,neuron");
+    expect(cards()).toHaveLength(2);
+
+    await traverse(() => history.back());
+    expect(params().get("topics")).toBe("memory");
+    expect(cards()).toHaveLength(3);
+    await traverse(() => history.forward());
+    expect(params().get("topics")).toBe("memory,neuron");
+    expect(cards()).toHaveLength(2);
+
+    click([...host.querySelectorAll("button")].find((b) => b.textContent === "Show archived")!);
+    await settle();
+    expect(params().get("archived")).toBe("1");
+    await traverse(() => history.back());
+    expect(params().get("archived")).toBeNull();
+    expect(params().get("topics")).toBe("memory,neuron");
+  });
+
   it("lists every topic with the articles that use it most", async () => {
     await show("/");
     const toggle = [...host.querySelectorAll("button")].find((b) => b.textContent?.startsWith("All 3 topics"));
@@ -321,6 +383,18 @@ describe("the Topics row", () => {
     expect(text).toContain("2 match this view · 3 of 4 on the shelf");
     expect(text).toContain("Memory palaces — used 9 times");
     expect(text).toContain("nobody wrote this list");
+  });
+
+  it("keeps a zero-count disabled chip's tooltip available to keyboard users", async () => {
+    await show("/?topics=memory");
+    const target = chip("startup");
+    expect(target.disabled).toBe(false);
+    expect(target.getAttribute("aria-disabled")).toBe("true");
+    await act(async () => {
+      target.focus();
+    });
+    await settle(500);
+    expect(document.body.textContent).toContain("0 match this view · 1 of 4 on the shelf");
   });
 
   it("says it is still reading, and asks again until nothing is pending", async () => {
@@ -353,6 +427,29 @@ describe("the Topics row", () => {
 });
 
 describe("the archive in scope", () => {
+  it("stops applying the old scope's topics while the widened scope loads", async () => {
+    let releaseArchive: (body: LibraryTermsResponse) => void = () => {};
+    answer = (url) =>
+      url.includes("archived=1")
+        ? new Promise((resolve) => {
+            releaseArchive = resolve;
+          })
+        : Promise.resolve(ACTIVE_TERMS);
+    await show("/?topics=memory");
+    expect(cards()).toHaveLength(3);
+
+    const toggle = [...host.querySelectorAll("button")].find((b) => b.textContent === "Show archived");
+    click(toggle as HTMLButtonElement);
+    await settle();
+
+    expect(asked).toContain("/api/library/terms?archived=1");
+    expect(chips()).toHaveLength(0);
+    expect(cards()).toHaveLength(4);
+    expect(archivedRows()).toHaveLength(2);
+
+    await act(async () => releaseArchive(ALL_TERMS));
+  });
+
   it("widens the topics to active + archived and narrows the archived list with them", async () => {
     await show("/?archived=1&topics=memory");
     expect(asked.some((u) => u === "/api/library/terms?archived=1")).toBe(true);
@@ -360,6 +457,14 @@ describe("the archive in scope", () => {
     expect(chipCount("memory")).toBe(4);
     expect(archivedRows()).toHaveLength(1);
     expect(archivedRows()[0]).toContain("An old piece on memory");
+    expect(countLine()).toMatch(/^4 of 6 articles \(3 active \+ 1 archived\)/);
+  });
+
+  it("keeps the combined count equal to the table rows and archived rows", async () => {
+    await show("/?view=table&archived=1&topics=memory");
+    await waitFor(() => archivedRows().length > 0, "the archived list");
+    expect(host.querySelectorAll("tbody tr")).toHaveLength(3);
+    expect(archivedRows()).toHaveLength(1);
     expect(countLine()).toMatch(/^4 of 6 articles \(3 active \+ 1 archived\)/);
   });
 
@@ -379,5 +484,21 @@ describe("the archive in scope", () => {
     await settle();
     expect(params().get("archived")).toBe("1");
     await waitFor(() => archivedRows().length === 2, "the archived list");
+  });
+
+  it("shows topics when every article is archived and the active shelf is empty", async () => {
+    activeArticles = [];
+    archivedArticles = [
+      entry("old-memory", "An old piece on memory"),
+      ...Array.from({ length: 7 }, (_, i) => entry(`old-${i}`, `Old article ${i}`)),
+    ];
+    answer = async () => ({
+      terms: [term("memory", ["old-memory", 4])],
+      scope: { articles: 8, works: 8, skipped: 0 },
+      pending: 0,
+    });
+    await show("/?archived=1");
+    await waitFor(() => archivedRows().length === 8, "the archived list");
+    expect(chipCount("memory")).toBe(1);
   });
 });
