@@ -66,8 +66,6 @@ export interface CardIdea {
 export interface CardQuestion {
   id: string;
   question: string;
-  /** Where its passage is — this stop's block. The card's jump goes there. */
-  blockId: BlockId;
 }
 
 export interface CardEvent {
@@ -183,7 +181,7 @@ function questionsAt(faq: Faq | null, blockId: BlockId): CardQuestion[] {
   if (!faq) return [];
   return faq.questions
     .filter((q) => q.passages.some((p) => p.blockId === blockId))
-    .map((q) => ({ id: q.id, question: q.question, blockId }));
+    .map((q) => ({ id: q.id, question: q.question }));
 }
 
 function eventsAt(timeline: Timeline | null, blockId: BlockId): CardEvent[] {

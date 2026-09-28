@@ -177,7 +177,7 @@ describe("ideas, the FAQ and the timeline, by block id", () => {
   it("gathers each once, and only what touches this block", () => {
     const card = gatherStopCard({ blockId: B[1]!, blocks, route: [B[1]!], sources: fresh });
     expect(card.ideas).toEqual([{ id: "spya-id2abc", name: "Synergy is not redundancy" }]);
-    expect(card.questions).toEqual([{ id: "q1", question: "How was synergy measured?", blockId: B[1] }]);
+    expect(card.questions).toEqual([{ id: "q1", question: "How was synergy measured?" }]);
     expect(card.events).toEqual([{ id: "spya-ev2abc", label: "Recordings made" }]);
     expect(cardIsEmpty(card)).toBe(false);
   });

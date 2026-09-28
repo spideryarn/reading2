@@ -364,7 +364,11 @@ All eight findings were taken. **This section overrides items 1–3 above wherev
 - **F23** — terms are found by scanning `renderedText(block.html)` with `formsOf`/`termPattern`/
   `termAppears` from `src/term-match.ts` over **every** glossary entry, not restricted to
   `entry.blocks`. Tests cover inflection, alias, plural, possessive and a Unicode boundary.
-- **F24** — the FAQ question is shown as text, with a jump to its passage. No `?question=` param.
+- **F24** — the FAQ question is shown as text, with no `?question=` param. The planned passage jump
+  was removed in code review 3: matching is by the current stop's block, so it could only jump to
+  the paragraph the reader is already on.
+- Card links follow the target mode's experimental-control rule. In particular, a Timeline event
+  remains useful scrapbook text while Timeline is hidden, but it is not a control into that mode.
 
 ## Review ledger — GPT Sol on the plan, 2026-09-28 (read-only; verdict *rethink*)
 
@@ -453,3 +457,29 @@ The Opus second opinion (first round) also gave:
   No other P0/P1 findings: the door is owner- and Trajectory-only, and `bandAway` recovers across
   resizing and mode changes. Gates re-run here afterwards: typecheck clean apart from the
   uncommitted `spikes/` scripts, and 8 files / 185 tests passed.
+- 2026-09-28 — **scrapbook spikes**: three static mockups on the entropy paper's real data. The
+  glossary, ideas, timeline and FAQ were generated first, for $0.35. Shape C (threaded) plus a
+  trimmed A was chosen; see § Stage 3 in detail. **GPT Sol's stage-3 plan review**: approve with
+  changes, F18–F25, all taken — the relational thread was replaced by a context-free cue.
+- 2026-09-28 — **stage 3 built** by an Opus implementer and committed as `eeb16ed7`:
+  - the cue (`trajectory/5`);
+  - read-only `useIdeasRead` / `useFaqRead` / `useTimelineRead`;
+  - `src/web/stop-card.ts`;
+  - the card under the current row, and the next stop's cue under the door.
+
+  **The real model run of `trajectory/5` could not be made**: the box's OpenRouter key hit its $100
+  per-key cap (402 `[ai-no-credit]`). That was reported to the Overseer for Greg, and the cue prompt
+  is unmeasured until then. The **browser check** (Sonnet, Playwright, at 1440, 820 and 420) passed
+  every item:
+  - only non-empty clusters are drawn;
+  - the links land on the right item, and Back returns to the stop;
+  - "also at stop k" is correct;
+  - only GETs are made for the four artefacts — no job POSTs.
+- 2026-09-28 — **GPT Sol code review 3**
+  ([prompt](260928a-trajectory-mode-code-review-3-prompt.md),
+  [answer](260928a-trajectory-mode-code-review-3-sol.md)). Verdict: accept. It fixed:
+  - **F26**: the FAQ question's no-op passage jump was removed;
+  - **F27**: Timeline links follow that mode's experimental rule and fall back to text.
+
+  A worst case of 24 terms × 30 stops gathers in about 2 ms. Gates re-run here afterwards:
+  typecheck 0, and 6 files / 97 tests passed.

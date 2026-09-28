@@ -24,7 +24,9 @@ import {
 } from "react";
 import { useQueryState } from "nuqs";
 import type { Article, BlockId, CitedWork, GlossaryEntry } from "../../types.js";
+import { MODE_CATALOG } from "../../mode-catalog.js";
 import { useExperimental } from "../useExperimental.js";
+import { shownBehindTheSwitch } from "../experimental-visibility.js";
 import { ReadingTimeStyle } from "../ReadingTimeStyle.js";
 import { addressWithout, useAddress } from "../router.js";
 import { IdeasBand, VisitorIdeasBand } from "../modes/ideas/IdeasMode.js";
@@ -884,15 +886,31 @@ export function Reader({
 
   /**
    * **A link on Trajectory's stop card** — into Glossary on `?term=`, Ideas on
-   * `?idea=`, or Timeline on `?event=`. A term goes through
-   * `openTermInGlossary` for the gate it may need to lower; the other two are
-   * the same two writes, through setters on the parameters those bands read,
-   * exactly as `?term=` above is. src/web/stop-card.ts.
+   * `?idea=`, or Timeline on `?event=` when that experimental control is
+   * available. A term goes through `openTermInGlossary` for the gate it may
+   * need to lower; the other two are the same two writes, through setters on
+   * the parameters those bands read, exactly as `?term=` above is.
+   * src/web/stop-card.ts.
    */
   const [, setIdeaId] = useQueryState("idea", ideaParam);
   const [, setEventId] = useQueryState("event", eventParam);
+  const canOpenFromStopCard = useCallback(
+    (target: CardTarget) => {
+      const targetMode =
+        target.kind === "term" ? "glossary" : target.kind === "idea" ? "ideas" : "timeline";
+      return shownBehindTheSwitch({
+        experimental: MODE_CATALOG[targetMode].experimental,
+        on: experimental.on,
+        current: mode === targetMode,
+      });
+    },
+    [experimental.on, mode],
+  );
   const openFromStopCard = useCallback(
     (target: CardTarget) => {
+      /* The event stays useful scrapbook text while Timeline's control is
+         hidden. Guard the action too, across the render where the switch flips. */
+      if (!canOpenFromStopCard(target)) return;
       switch (target.kind) {
         case "term":
           openTermInGlossary(target.id);
@@ -911,7 +929,7 @@ export function Reader({
         }
       }
     },
-    [openTermInGlossary, setIdeaId, setEventId, setMode],
+    [canOpenFromStopCard, openTermInGlossary, setIdeaId, setEventId, setMode],
   );
 
   /**
@@ -1916,6 +1934,7 @@ export function Reader({
             onControl={setTrajectoryControl}
             glossary={owner.glossary}
             onOpen={openFromStopCard}
+            canOpen={canOpenFromStopCard}
           />
         ) : null;
       /* **The owner/visitor pair, since 2026-09-04.** It was the owner alone

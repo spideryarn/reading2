@@ -93,6 +93,7 @@ export function TrajectoryBand({
   onControl,
   glossary,
   onOpen,
+  canOpen,
 }: {
   slug: string;
   blocks: Block[];
@@ -103,6 +104,8 @@ export function TrajectoryBand({
   glossary: GlossaryRead;
   /** A card link: open that mode on that selection. */
   onOpen(target: CardTarget): void;
+  /** Whether that target mode's control is available to this reader. */
+  canOpen(target: CardTarget): boolean;
   /** The quotes already marked in the prose — `useQuoteMarks`' `found`. */
   quoteMarks: readonly Found[];
   /** The band is lying over the prose (a narrow window) — `fit.modeW === 0`. */
@@ -148,6 +151,7 @@ export function TrajectoryBand({
   const view = useTrajectoryMode({
     sources,
     onOpen,
+    canOpen,
     stops: owner.trajectory?.stops ?? NO_STOPS,
     quotes: quotes.quotes?.quotes ?? NO_QUOTES,
     blocks,
@@ -180,13 +184,14 @@ export interface TrajectoryView {
   onStep(dir: -1 | 1): void;
   /** A card link into another mode. */
   onOpen(target: CardTarget): void;
-  /** The card's FAQ question: take the prose to its passage. */
-  onPassage(blockId: BlockId): void;
+  /** The shared experimental-control rule for the target mode. */
+  canOpen(target: CardTarget): boolean;
 }
 
 function useTrajectoryMode({
   sources,
   onOpen,
+  canOpen,
   stops,
   quotes,
   blocks,
@@ -202,6 +207,7 @@ function useTrajectoryMode({
 }: {
   sources: CardSources;
   onOpen(target: CardTarget): void;
+  canOpen(target: CardTarget): boolean;
   stops: TrajectoryStop[];
   quotes: Quote[];
   blocks: Block[];
@@ -408,7 +414,7 @@ function useTrajectoryMode({
     onRow,
     onStep,
     onOpen,
-    onPassage: onJump,
+    canOpen,
   };
 }
 

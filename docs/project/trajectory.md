@@ -48,8 +48,10 @@ v2, the scrapbook, is built on top of that:
     They are found in the prose the reader sees, by the glossary's own matcher, over every term. A
     term an earlier stop on this pass also uses says *"also at stop k"*;
   - the ideas it bears on, as links into Ideas;
-  - the FAQ question it answers, as text with a jump to its passage;
-  - where it sits in the study, as links into Timeline.
+  - the FAQ question it answers, as text. There is no passage jump: matching the question to the
+    stop already proves that its passage is the paragraph the reader is on;
+  - where it sits in the study, as links into Timeline when that experimental control is available,
+    and as text when it is hidden.
 
   An artefact that is stale contributes nothing. When nothing is there, there is no card, and no
   sentence asking you to make one. The card reads through read-only hooks (`useIdeasRead`,

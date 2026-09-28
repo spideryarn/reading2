@@ -248,7 +248,7 @@ function view(over: Partial<TrajectoryView> = {}): TrajectoryView {
     onRow: (id) => void calls.push(`row ${id}`),
     onStep: (dir) => void calls.push(`step ${dir}`),
     onOpen: (target) => void calls.push(`open ${target.kind} ${target.id}`),
-    onPassage: (id) => void calls.push(`passage ${id}`),
+    canOpen: () => true,
     ...over,
   };
 }
@@ -267,7 +267,7 @@ const CARD: StopCard = {
     { entry: { ...TERM, id: "spya-te3def", name: "synergy", senseHere: "Information only the pair carries." }, alsoAt: null },
   ],
   ideas: [{ id: "spya-id2abc", name: "Synergy is not redundancy" }],
-  questions: [{ id: "q1", question: "How was synergy measured?", blockId: B[0]! }],
+  questions: [{ id: "q1", question: "How was synergy measured?" }],
   events: [{ id: "spya-ev2abc", label: "Recordings made" }],
 };
 
@@ -400,14 +400,27 @@ describe("the panel", () => {
     expect(calls).toEqual([`open term ${TERM.id}`]);
   });
 
-  it("links an idea and an event into their modes, and jumps to the FAQ question's passage", async () => {
+  it("links an idea and an event into their modes, and leaves the FAQ question as text", async () => {
     await draw(owner(), view({ card: CARD }));
     const buttons = [...host.querySelectorAll<HTMLButtonElement>(".traj-card .traj-link")];
     const byText = (t: string) => buttons.find((b) => b.textContent?.includes(t))!;
     await act(async () => byText("Synergy is not redundancy").click());
     await act(async () => byText("Recordings made").click());
-    await act(async () => byText("the passage").click());
-    expect(calls).toEqual(["open idea spya-id2abc", "open event spya-ev2abc", `passage ${B[0]}`]);
+    expect(byText("the passage")).toBeUndefined();
+    expect(calls).toEqual(["open idea spya-id2abc", "open event spya-ev2abc"]);
+  });
+
+  it("keeps an experimental event as scrapbook text when its mode control is hidden", async () => {
+    await draw(
+      owner(),
+      view({
+        card: CARD,
+        canOpen: (target) => target.kind !== "event",
+      }),
+    );
+    expect(text(".traj-card")).toContain("Recordings made");
+    const links = [...host.querySelectorAll<HTMLButtonElement>(".traj-card .traj-link")];
+    expect(links.some((button) => button.textContent?.includes("Recordings made"))).toBe(false);
   });
 
   it("offers to plan a route when there is none", async () => {
@@ -521,6 +534,7 @@ function Harness({ covers = false }: { covers?: boolean }) {
       onControl,
       glossary: glossaryRead,
       onOpen: (target: { kind: string; id: string }) => void opened.push(`${target.kind} ${target.id}`),
+      canOpen: () => true,
     }),
   );
 }

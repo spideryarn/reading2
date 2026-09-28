@@ -22,7 +22,8 @@
  * *already* written about this paragraph — src/web/stop-card.ts gathers it.
  * Nothing on it is generated for it, nothing starts a run, and when there is
  * nothing there is no card and no sentence asking for one. The term chips
- * open to one line and a link; the rest are links into their modes. The
+ * open to one line and a link; ideas and events link into their modes, while
+ * the FAQ question is text because its passage is the stop already open. The
  * tying-together is the juxtaposition, not a synthesis (Sol F21).
  *
  * ## The head is pinned
@@ -294,7 +295,7 @@ export function TrajectoryPanel({ owner, view, quoteCount }: Props) {
                           key={row.quoteId}
                           card={view.card}
                           onOpen={view.onOpen}
-                          onPassage={view.onPassage}
+                          canOpen={view.canOpen}
                         />
                       )}
                     </li>
@@ -320,11 +321,11 @@ export function TrajectoryPanel({ owner, view, quoteCount }: Props) {
 function StopCardView({
   card,
   onOpen,
-  onPassage,
+  canOpen,
 }: {
   card: StopCard;
   onOpen(target: CardTarget): void;
-  onPassage(blockId: StopCard["questions"][number]["blockId"]): void;
+  canOpen(target: CardTarget): boolean;
 }) {
   const [openTerm, setOpenTerm] = useState<string | null>(null);
   const open = card.terms.find((t) => t.entry.id === openTerm) ?? null;
@@ -351,13 +352,15 @@ function StopCardView({
           {open && (
             <div className="traj-sense">
               {lead && <p>{lead}</p>}
-              <button
-                type="button"
-                className="traj-link"
-                onClick={() => onOpen({ kind: "term", id: open.entry.id })}
-              >
-                In the glossary ›
-              </button>
+              {canOpen({ kind: "term", id: open.entry.id }) && (
+                <button
+                  type="button"
+                  className="traj-link"
+                  onClick={() => onOpen({ kind: "term", id: open.entry.id })}
+                >
+                  In the glossary ›
+                </button>
+              )}
             </div>
           )}
         </section>
@@ -368,9 +371,13 @@ function StopCardView({
           <ul>
             {card.ideas.map((idea) => (
               <li key={idea.id}>
-                <button type="button" className="traj-link" onClick={() => onOpen({ kind: "idea", id: idea.id })}>
-                  {idea.name}
-                </button>
+                {canOpen({ kind: "idea", id: idea.id }) ? (
+                  <button type="button" className="traj-link" onClick={() => onOpen({ kind: "idea", id: idea.id })}>
+                    {idea.name}
+                  </button>
+                ) : (
+                  <span>{idea.name}</span>
+                )}
               </li>
             ))}
           </ul>
@@ -384,10 +391,7 @@ function StopCardView({
           <ul>
             {card.questions.map((q) => (
               <li key={q.id}>
-                <span className="traj-question">{q.question}</span>{" "}
-                <button type="button" className="traj-link" onClick={() => onPassage(q.blockId)}>
-                  To the passage ›
-                </button>
+                <span className="traj-question">{q.question}</span>
               </li>
             ))}
           </ul>
@@ -399,9 +403,13 @@ function StopCardView({
           <ul>
             {card.events.map((event) => (
               <li key={event.id}>
-                <button type="button" className="traj-link" onClick={() => onOpen({ kind: "event", id: event.id })}>
-                  {event.label}
-                </button>
+                {canOpen({ kind: "event", id: event.id }) ? (
+                  <button type="button" className="traj-link" onClick={() => onOpen({ kind: "event", id: event.id })}>
+                    {event.label}
+                  </button>
+                ) : (
+                  <span>{event.label}</span>
+                )}
               </li>
             ))}
           </ul>
