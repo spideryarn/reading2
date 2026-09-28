@@ -1,6 +1,7 @@
 # Filter terms for the shelf
 
-**Status:** planned, 2026-09-28. Stages below; each updates this file when it lands.
+**Status:** built and on `dev`, 2026-09-28 — all four stages. Not deployed. Assumptions for Greg
+are in § Assumptions pending Greg.
 
 ## What Greg asked for
 
@@ -426,9 +427,33 @@ extraction of the whole shelf 1.8 s (5.5 ms per 1k words).
 - Docs: a new `docs/project/shelf-terms.md` under `reading-view-overview.md`, a line in
   [library.md](../project/library.md), the two params in [url-state.md](../project/url-state.md).
 
+**Landed** (2026-09-28): `src/web/ShelfTerms.tsx`, `src/web/shelf-narrow.ts`,
+`src/web/useShelfTerms.ts`, the params, the `rows` change and the archived URL state in
+`Library.tsx`, `docs/project/shelf-terms.md`. Decisions the plan left open: the count line reads
+"4 of 6 articles (3 active + 1 archived)" when the archive is in scope; a chip press toggles against
+the keys the URL asks for, so a key not yet read survives another press; `shelfKey` includes each
+article's word count, so a re-extraction refetches the topics; the page title is unchanged.
+
+**Browser check** (Sonnet subagent, Playwright, 2026-09-28, the local 38-article shelf, desktop
+1280×800 and phone 390×844, after the migration was applied locally): all ten checks passed —
+the row, AND narrowing with the "n of m" count equal to the cards rendered, × and Clear, the tooltip
+unclipped, the All-topics list with no horizontal scroll at 390px, a real touch tap toggling with no
+stuck tooltip, the table view showing the same rows, Back/Forward over `?topics=`, archived in scope
+and still visible and filtered during a search, a bogus `?topics=` key dropped without an empty
+shelf, no console errors, every `GET /api/library/terms` a 200. Chips seen: *AI 11, memory 8,
+neurons 7, scientists 6, window 5, conscious experience 4, information 4, mechanism 4, neural
+networks 4, Turing machine 4, Wagan Watson 4, agents 3*, "All 30 topics".
+
 ### Stage 4 — close
 
-Update this plan with what landed, debrief.
+Update this plan with what landed, debrief. **Done.** The local migration was blocked for a while by a
+peer's unmerged `jobs_reset` ledger row; once that reached `dev` the peer re-chained this migration
+as journal entry 92 after it, and `npm run db:migrate` applied it here.
+
+**For production** (not done here — `main` is written only by `npm run deploy`): the migration is an
+ordinary additive table, so it rides the next deploy. To see what Greg's real shelf would get before
+that: `DATABASE_URL=<production> npm run shelf-terms:report -- --owner <Greg's uuid>` (add
+`--archived` for the archive too). It reads, extracts in memory, and writes nothing.
 
 Every stage: commit, then a GPT Sol code review in the worktree (write-capable, fixes inside the
 stage, reports anything wider), gates rerun, commit its fixes.
