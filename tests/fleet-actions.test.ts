@@ -299,6 +299,9 @@ describe("every spoken message can actually be delivered", () => {
   it("asks for judgment rather than obedience when routing to another model", () => {
     expect(spokenNamed("ask-fable").text).toContain("use your own judgment");
     expect(spokenNamed("ask-fable").text).toContain("arbitrate");
+    // Fable is retired (Greg, 2026-09-28); the id stays, the model it spawns is Opus.
+    expect(spokenNamed("ask-fable").text).toContain('model: "opus"');
+    expect(spokenNamed("ask-fable").text).not.toMatch(/fable/i);
     expect(spokenNamed("ask-sol").text).toContain("use your own judgment");
     // The trap that cost a session a stale review.
     expect(spokenNamed("ask-sol").text).toContain("fresh --output path");
