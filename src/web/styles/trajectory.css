@@ -109,6 +109,22 @@
 .traj-place { font-size: 0.88rem; line-height: 1.35; }
 .traj-place-repeat { color: var(--ink-faint); }
 .traj-cue { color: var(--ink-soft); font-size: 0.85rem; line-height: 1.35; }
+/* The quote's own words (plan 260928e) — cut short on every row but the
+   current one, whose row shows them whole. A touch smaller than the path,
+   so the section still reads as the row's heading. */
+.traj-words { color: var(--ink-soft); font-size: 0.84rem; line-height: 1.4; overflow-wrap: anywhere; }
+.traj-row.seen .traj-words { color: var(--ink-faint); }
+.traj-row.current .traj-words { color: var(--ink); }
+/* A quote may run to 1,200 characters (src/quotes.ts), so the card is wider
+   than the shared 22rem and breaks an unbroken token. At that width the
+   longest quote is about twenty lines, which fits any window the band is
+   drawn beside. The card takes no pointer, so nothing in it could scroll. */
+.traj-words-tip {
+  max-width: min(30rem, calc(100vw - 1.75rem));
+  overflow-wrap: anywhere;
+  font-size: 0.84rem;
+  line-height: 1.4;
+}
 
 /* A shallower pass's stop, already seen on the way round. */
 .traj-row.seen .traj-go { color: var(--ink-faint); }

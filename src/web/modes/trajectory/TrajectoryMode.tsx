@@ -441,9 +441,11 @@ function useTrajectoryMode({
           missing: block === null,
           /* How far through the article, in words — the dot on the row (5b). */
           position: block === null ? null : (positions.get(block) ?? null),
+          /* The quote's own words, for the row (plan 260928e). */
+          words: byId.get(stop.quoteId)?.text ?? null,
         };
       }),
-    [route, blockOf, index, tree, depth, current, positions],
+    [route, blockOf, index, tree, depth, current, positions, byId],
   );
 
   /** Choosing a stop in the band: a jump, and on a narrow window the band steps aside. */

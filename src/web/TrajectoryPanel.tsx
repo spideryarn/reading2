@@ -39,7 +39,7 @@
  * (`offeredDepths`). Each is a real `<button>` and its own tab stop, with
  * `aria-pressed` — keyboard.md's rule that arrow keys belong to the article.
  */
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { ChevronLeft, ChevronRight, RotateCw, Route, TriangleAlert } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import type { UseTrajectory } from "./useTrajectory.js";
@@ -48,6 +48,8 @@ import { entryProse } from "./GlossaryPanel.js";
 import { JobProgress } from "./JobProgress.js";
 import { ModeSurface } from "./ModeSurface.js";
 import { useRenderCount } from "./perf.js";
+import { snippet } from "./citations.js";
+import { Tooltip, TooltipGroup } from "./Tooltip.js";
 import { type CardTarget, cardIsEmpty, type StopCard } from "./stop-card.js";
 
 /** One row of the list. Built by `useTrajectoryMode`, drawn here. */
@@ -72,6 +74,37 @@ export interface TrajectoryRow {
    * `positionOf` (trajectory-route.ts). `null` when it cannot be placed.
    */
   position: number | null;
+  /**
+   * The quote's own words — `Quote.text`, the article's characters, never a
+   * model's. `null` when its quote has gone. Drawn cut short on every row but
+   * the current one, the whole of it in a tooltip (plan 260928e).
+   */
+  words: string | null;
+}
+
+/**
+ * **How much of a quote a row shows** before it is cut, in characters — about
+ * two lines at the band's width. The current row shows all of it.
+ */
+export const WORDS_ON_A_ROW = 100;
+
+/**
+ * **The quote on a row**, in quotation marks: the whole of it on the current
+ * row, otherwise cut on a word boundary with the whole of it in a tooltip —
+ * on hover, and on focus since the row is a button. A quote that fits gets no
+ * tooltip, which would only repeat it. Touch has no hover, so what a finger
+ * gets is the tap: that makes the row current, and the current row is whole.
+ *
+ * Why a character cut and not CSS `line-clamp`: the clamp cannot say whether
+ * it cut, and this decides whether there is a tooltip at all.
+ */
+function rowWords(row: TrajectoryRow): { shown: string; whole: string | null } | null {
+  if (row.words === null) return null;
+  const clean = row.words.replace(/\s+/g, " ").trim();
+  if (clean === "") return null;
+  if (row.current) return { shown: clean, whole: null };
+  const cut = snippet(clean, WORDS_ON_A_ROW);
+  return { shown: cut, whole: cut === clean ? null : clean };
 }
 
 /**
@@ -231,6 +264,16 @@ export function TrajectoryPanel({ owner, view }: Props) {
   const total = view.rows.length;
   const deepest = view.depths.at(-1)?.depth ?? null;
   const atMost = ready && view.depth !== null && view.depth === deepest && view.depth === 3;
+  /** The row whose whole quote is up — one at a time, and only by mouse or focus. */
+  const [tipFor, setTipFor] = useState<string | null>(null);
+  /* A depth or route refresh can remove an open row, so its Tooltip unmounts
+     before it can report that it closed. Do not let that stale id reopen if
+     the row later returns. The enabled check also covers words disappearing. */
+  useEffect(() => {
+    if (tipFor === null) return;
+    const row = ready ? view.rows.find((candidate) => candidate.quoteId === tipFor) : undefined;
+    if (row === undefined || !rowWords(row)?.whole) setTipFor(null);
+  }, [ready, tipFor, view.rows]);
 
   /**
    * @param again whether this is the button beside a route already there. The
@@ -317,16 +360,13 @@ export function TrajectoryPanel({ owner, view }: Props) {
 
           {total > 0 && (
             <div className="tl-scroll">
-              <ol className="traj-list">
-                {view.rows.map((row, index) => {
-                  const repeatedPlace =
-                    row.place !== null && row.place === view.rows[index - 1]?.place;
-                  return (
-                    <li
-                      key={row.quoteId}
-                      className={`traj-row${row.current ? " current" : ""}${row.seen ? " seen" : ""}`}
-                      data-stop={row.quoteId}
-                    >
+              <TooltipGroup delay={{ open: 240, close: 90 }} timeoutMs={400}>
+                <ol className="traj-list">
+                  {view.rows.map((row, index) => {
+                    const repeatedPlace =
+                      row.place !== null && row.place === view.rows[index - 1]?.place;
+                    const words = rowWords(row);
+                    const go = (
                       <button
                         type="button"
                         className="traj-go"
@@ -336,34 +376,54 @@ export function TrajectoryPanel({ owner, view }: Props) {
                       >
                         <span className="traj-n">{row.n}</span>
                         <span className="traj-what">
-                          <span className="traj-place">
-                            {repeatedPlace ? (
-                              <>
-                                <span className="traj-place-repeat" aria-hidden="true">
-                                  〃
-                                </span>
-                                <span className="sr-only">{row.place}</span>
-                              </>
-                            ) : (
-                              (row.place ?? "—")
-                            )}
-                          </span>
+                          {/* A repeated section is said, not drawn: a ditto mark
+                              beside a quotation reads as another quotation mark,
+                              which is the report behind plan 260928e. */}
+                          {repeatedPlace ? (
+                            <span className="sr-only">{row.place}</span>
+                          ) : (
+                            <span className="traj-place">{row.place ?? "—"}</span>
+                          )}
+                          {words && <span className="traj-words">“{words.shown}”</span>}
                           {row.current && row.cue && <span className="traj-cue">{row.cue}</span>}
                         </span>
                         {row.position !== null && <StopPosition at={row.position} current={row.current} />}
                       </button>
-                      {row.current && view.card && !cardIsEmpty(view.card) && (
-                        <StopCardView
-                          key={row.quoteId}
-                          card={view.card}
-                          onOpen={view.onOpen}
-                          canOpen={view.canOpen}
-                        />
-                      )}
-                    </li>
-                  );
-                })}
-              </ol>
+                    );
+                    return (
+                      <li
+                        key={row.quoteId}
+                        className={`traj-row${row.current ? " current" : ""}${row.seen ? " seen" : ""}`}
+                        data-stop={row.quoteId}
+                      >
+                        {/* Always wrapped, enabled only while the row is cut, so the
+                            button is never remounted as its row becomes current.
+                            Controlled, which makes it mouse-only: a tap's
+                            synthetic hover must not flash it (Sol, plan review). */}
+                        <Tooltip
+                          content={words?.whole ? <p>“{words.whole}”</p> : null}
+                          enabled={Boolean(words?.whole)}
+                          open={tipFor === row.quoteId}
+                          onOpenChange={(open) =>
+                            setTipFor((was) => (open ? row.quoteId : was === row.quoteId ? null : was))
+                          }
+                          className="traj-words-tip"
+                        >
+                          {go}
+                        </Tooltip>
+                        {row.current && view.card && !cardIsEmpty(view.card) && (
+                          <StopCardView
+                            key={row.quoteId}
+                            card={view.card}
+                            onOpen={view.onOpen}
+                            canOpen={view.canOpen}
+                          />
+                        )}
+                      </li>
+                    );
+                  })}
+                </ol>
+              </TooltipGroup>
             </div>
           )}
         </>
