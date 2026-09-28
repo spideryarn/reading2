@@ -2,6 +2,9 @@
 
 SPIDERYARN-READING2-3Q, from Greg on an iPad, 2026-09-12 (an admin, so trusted input). Build it.
 
+**Since 2026-09-28 the card is at the band's bottom-left, not its top** — Greg found the top got in
+the way: [260928a](260928a-the-mode-herald-moves-to-the-foot-of-the-band.md).
+
 > It's just occurred to me that in an effort to try and make things more compact and quick, we've
 > actually got rid of all of the clues that would help a beginner reader understand what each mode
 > is. So if I'm on an iPad and I click on a mode, there's no tooltip, there's no heading, there's no

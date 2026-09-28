@@ -169,16 +169,27 @@
    *"there's no tooltip, there's no heading, there's no explanation."*
    src/web/ModeHerald.tsx; docs/plans/260915e-the-mode-names-itself-briefly-when-a-reader-opens-it.md.
 
+   **At the bottom-left, standing on the band's foot** — Greg, 2026-09-28:
+   *"it gets in the way. Perhaps show it at the bottom-left (instead of the
+   top-right) of the Mode column"*. The top was the band's first row: Search's
+   box, Glossary's controls, the first of every list. The bottom edge is not
+   free either — eight bands end in a row a reader presses (*Find more*, Chat's
+   composer) — so the card sits on that row, never over it. ModeHerald.tsx
+   measures the row (`footRoom`) and writes it here as `--herald-foot`.
+   docs/plans/260928a-the-mode-herald-moves-to-the-foot-of-the-band.md.
+
    **It lies over the band rather than in it**, so it moves nothing: not the
    scroller, not a count row, not Search's zero-slack fit. That is also why it
    is a sibling of `.mode-band` rather than a child — `ModeSurface` adds no DOM,
    and says why at length.
 
-   **So its geometry is the band's, repeated from the same inputs.** Left, top
-   and width are `.mode-band`'s three at the top of this file, and the width
-   under `.band-covers` is narrow-window.css § a band with no room. Change one of
-   those and change this — and the `top` transition that lets it follow a bar
-   sliding away is in shell.css's one list of those, beside `.mode-band`.
+   **So its geometry is the band's, repeated from the same inputs.** Left, top,
+   bottom and width are `.mode-band`'s four at the top of this file, and the
+   width under `.band-covers` is narrow-window.css § a band with no room. Change
+   one of those and change this — and the `top` transition that lets it follow a
+   bar sliding away is in shell.css's one list of those, beside `.mode-band`.
+   The slot is the band's whole box and the card is pushed to its foot; the
+   slot takes no taps, so the band under it works as ever.
 
    **Neither the slot nor the card ever takes a tap.** A press meant for what
    the card covers goes through to it, and ModeHerald.tsx clears the card on any
@@ -189,11 +200,26 @@
   position: fixed;
   left: calc(var(--spine-w) + var(--safe-left));
   top: var(--bar-bottom);
+  /* `.mode-band`'s bottom, and its reason: it follows the Dock sliding away and
+     stops short of the home indicator and the install hint. */
+  bottom: calc(max(var(--dock-bottom), var(--safe-bottom)) + var(--hint-now));
   width: var(--mode-w);
   /* Above the band (44) and the spine (45, which it never overlaps), below
      every dialog (70), the drawer and its scrim (92/95) and the Dock (96). */
   z-index: 46;
   pointer-events: none;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  align-items: flex-start;
+  /* The foot's room, then a little inset so it reads as a card lying on the
+     band rather than as one more pinned row. Plus `--kb-inset`, iOS's keyboard
+     (ModeHerald.tsx): simply added, so with the keys up the card stands a
+     foot's height higher than it strictly needs to — the foot is under the
+     keyboard then — which is the price of not re-deriving the band's bottom
+     inside a `max()` here. */
+  padding: 0 0.6rem calc(var(--herald-foot, 0px) + var(--kb-inset, 0px) + 0.6rem);
+  box-sizing: border-box;
 }
 /* **Right edge rather than a second copy of the band's width**, which is not a
    style choice: `tests/spine-width.test.ts` finds the covering rule by looking
@@ -203,12 +229,26 @@
 .reader.band-covers .mode-herald-slot {
   right: var(--safe-right);
   width: auto;
+  /* **And the way-back chip's room.** The chip stands at the band's right edge
+     (dock.css § the way back), which is the window's left edge when the band
+     covers it — this card's corner. `--return-chip-h` is 0 with no chip, so
+     this is the foot's room whenever there is nothing to clear; a foot taller
+     than the chip already lifts the card past it. GPT Sol, 2026-09-28. */
+  padding-bottom: calc(max(var(--herald-foot, 0px), var(--return-chip-h)) + var(--kb-inset, 0px) + 0.6rem);
 }
+/* **A toast, not a strip.** Full width with a bottom rule was right while it
+   stood in for the title row; down here that shape reads as another pinned row.
+   As wide as its words, never wider than the band, and a `--highlight` edge so
+   it still catches the eye at the bottom of the column. */
 .mode-herald {
-  padding: 0.55rem 0.7rem 0.6rem;
+  max-width: 100%;
+  box-sizing: border-box;
+  padding: 0.55rem 0.8rem 0.6rem 0.7rem;
   background: var(--panel);
-  border-bottom: 1px solid var(--rule-strong);
-  box-shadow: 0 6px 14px -8px oklch(0 0 0 / 0.45);
+  border: 1px solid var(--rule-strong);
+  border-left: 3px solid var(--highlight);
+  border-radius: var(--radius);
+  box-shadow: 0 8px 22px -6px oklch(0 0 0 / 0.55);
   font-family: var(--font-ui);
   /* 3s, which is `HERALD_MS`: held for the first 2.5, faded over the last 0.5.
      The timer in ModeHerald.tsx is what removes it; this is only how it looks

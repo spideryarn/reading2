@@ -47,9 +47,11 @@ of compression, down the page for position and across for detail. Read that firs
 - **[new-mode.md](new-mode.md)** — the one checklist for adding a mode: the tables the compiler
   checks, then the residue it does not, for the client and for a generated artefact.
 - **A band names its mode for three seconds after a press, and at no other time** — the name and
-  the catalog's sentence over the top of the band, since the band's own title went and the Dock's
-  words drop on an iPad. No doc of its own;
-  [260915e](../plans/260915e-the-mode-names-itself-briefly-when-a-reader-opens-it.md) and
+  the catalog's sentence in a card at the band's bottom-left, standing on its pinned foot, since the
+  band's own title went and the Dock's words drop on an iPad. No doc of its own;
+  [touch.md § A mode says its name](touch.md#a-mode-says-its-name-when-you-press-it),
+  [260915e](../plans/260915e-the-mode-names-itself-briefly-when-a-reader-opens-it.md),
+  [260928a](../plans/260928a-the-mode-herald-moves-to-the-foot-of-the-band.md) and
   [`ModeHerald.tsx`](../../src/web/ModeHerald.tsx).
 
 ### The article itself
