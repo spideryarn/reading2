@@ -229,3 +229,9 @@ stays e = 1. The call left open: e = 1.5 trades @8 (0.70 → 0.54) for fewer vag
   before `admit` saw it, so a 4-article *AI system* kept out an 11-article *AI*). Rerun here: the
   shelf-terms suites 78/78, typecheck clean (bar the screenshot agent's scratch scripts), the report's
   numbers and first-12 list unchanged on the local shelf.
+- **GPT Sol, stage 2 code** —
+  [260928d-shelf-topics-diversity-coverage-and-detail-view-stage2-review-sol.md](260928d-shelf-topics-diversity-coverage-and-detail-view-stage2-review-sol.md)
+  (prompt: [260928d-shelf-topics-diversity-coverage-and-detail-view-stage2-review-prompt.md](260928d-shelf-topics-diversity-coverage-and-detail-view-stage2-review-sol.md)),
+  reviewing 9af75f80, time-boxed. **No findings, no changes**, after a short run (about two
+  minutes) — which is weaker evidence than a review that found something, so the final shape was
+  also checked in a real browser (below).
