@@ -113,11 +113,14 @@ describe("hoisting the structure prompt's three values", () => {
    * words). It was briefly `da076a41758df064`, with the GISTS change alone,
    * before the QUESTIONS bullet joined it; neither shipped. Only SYSTEM
    * changed — not `renderBlocks`, not `EFFORT` — so a checkpoint written
-   * under toc/7 is correctly no longer found.
+   * under toc/7 is correctly no longer found. It moved once more before
+   * shipping, from `ce8affdf587d1925`, on 2026-09-28 when the depth-1 gist
+   * ceiling went from 25 to 30 words (plan 260926a § Stage 2, Greg: "plain
+   * beats short").
    */
   it("mints one stable key for the toc/8 structure request", () => {
     expect(checkpointKey(canonicalStructureRequest(structureRequest(BLOCKS).params))).toBe(
-      "ce8affdf587d1925",
+      "cad30a33766207fe",
     );
   });
 });

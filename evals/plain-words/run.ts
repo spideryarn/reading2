@@ -141,7 +141,7 @@ const FIELDS: Field[] = ["root gist", "d1 gist", "d2+ gist", "root question", "d
 /** The ceiling each field's prompt sets, in words. The d2+ floor (22) is not checked. */
 const LIMIT: Partial<Record<Field, number>> = {
   "root gist": 18,
-  "d1 gist": 25,
+  "d1 gist": 30,
   "d2+ gist": 32,
   "root question": 20,
   "d1 question": 20,

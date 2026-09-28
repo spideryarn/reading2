@@ -43,7 +43,9 @@
  * to a reader who does not know that term — because a blind eval showed
  * depth-1 questions did not get plainer from the GISTS cross-reference alone.
  * So QUESTIONS is now `evals/summaries/variants.md` § V4 with that one bullet
- * replaced, and nothing else.
+ * replaced, and nothing else. Once more before `toc/8` shipped, on 2026-09-28:
+ * the depth-1 gist ceiling went from 25 to 30 words, because the plain lines
+ * needed the room (Greg: "plain beats short"; plan 260926a § Stage 2).
  * docs/plans/260926a-plainer-summaries-and-glossary.md.
  */
 
@@ -123,7 +125,7 @@ GISTS (internal nodes)
       shorter than any chapter's gist. A root that runs "X stems from A and B,
       so we should C while reaffirming D" is four gists wearing one full stop.
       Pick the claim they add up to and stop there.
-    - depth 1: AT MOST 25 words. Chapter-level orientation.
+    - depth 1: AT MOST 30 words. Chapter-level orientation.
     - deeper than that: AT LEAST 22 words, and at most 32. The floor is the
       half that will feel wrong, so obey it: down here a one-clause gist is too
       SHORT, not admirably terse. A reader at this zoom is reading your sentence

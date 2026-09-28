@@ -2,8 +2,8 @@
 
 From SPIDERYARN-READING2-44, a suggestion from Greg, overseer queue entry `qi-qpsx92kg`.
 
-**Status:** shipped to `dev` — stages 1 and 1b, two rounds of GPT Sol code review, the second
-ending *"ship after my fixes"*. Written before the work, per
+**Status:** stages 1 and 1b shipped to `dev` 2026-09-26. **Stage 2 (Greg's two answers,
+2026-09-28) planning.** Written before the work, per
 [engineering-manager.md](../reusable/engineering-manager.md).
 
 ## What Greg said
@@ -418,6 +418,144 @@ QUESTIONS bullet was not pinned by any test (now it is); D2 — the plan and `gl
 the example fixes awaited a rerun, and miscounted the unhashed arms. It recomputed every `after-8`
 and control table from the key and judged files and found them exact. Discovery closed there.
 
+## Stage 2 — Greg's answers to the two open questions (2026-09-28)
+
+Relayed by the Overseer, from Greg, on the two decisions this plan left open:
+
+> a. Yes: give chat, Explain and the glossary's "Check the web" answer the same plain-words rule.
+> Keep each prompt change as small as you can, and measure before/after the way you did for
+> summaries.
+> b. Plain beats short: keep the plainer depth-1 line and raise the word limit a little (the
+> smallest raise that fits the plain version, about 30), rather than squeezing it back under 25.
+> Update anything that enforces or tests the 25.
+>
+> — Greg, 2026-09-28, via the Overseer
+
+### a. Chat, Explain and *Check the web*
+
+**Two prompts, not three.** *Check the web* is `explainStream` on the term's own words
+([`src/term-lookup.ts`](../../src/term-lookup.ts)), so it and Explain are one `SYSTEM` in
+[`src/explain.ts`](../../src/explain.ts). Chat is `SYSTEM` in [`src/converse.ts`](../../src/converse.ts).
+`REMEMBER_SYSTEM` in the same file carries the same old wording and is **not** changed: Greg named
+three surfaces, and Remember is a fourth.
+
+**The change is one bullet in each**, the one that already carries the 2026-09-03 rule — Explain's
+*"Keep the author's own distinctive vocabulary … Ordinary words for everything else"* and chat's
+*"Keeps the author's own distinctive vocabulary …"*. Each becomes the stage-1 rule in that prompt's
+voice:
+
+> Keep the author's own distinctive words — the reader meets them again on the page — but a
+> handhold is not an explanation: if a reader from outside the field would not know a term, say
+> what it means as you use it, in ordinary words. Never explain one hard word with another.
+> Plainer means equally specific, never vaguer: plainer than the article, never further from it.
+
+Nothing else in either prompt moves. Neither has a version stamp or an `outdated` flag (answers are
+generated on request; stored *Check the web* answers keep the text they were written with, and a
+reader who asks again gets the new one), and no test pins either prompt's text. Both are cached
+system prompts, so the first call after the deploy pays one cache write.
+
+**Why not also the worked example or the self-check** that the glossary needed: those were added
+because the glossary rule alone did not land, which the eval showed. The same eval decides here —
+the smallest change first, and more only if the numbers say it did nothing.
+
+**The eval**: [`evals/plain-words/answers.ts`](../../evals/plain-words/answers.ts), the same design
+as `run.ts` — production's own calls (`explainStream`; `converse` with `kind: "chat"` and tools on),
+fixed cases, arms separated in time, a `before-2` control, and blind shuffled pairs judged by a
+fresh Fable. Per article, two terms the old glossary defined with other hard words, each asked about
+three ways: Explain on the bare term (the *Check the web* shape), Explain on the sentence around it,
+and a chat question naming it — 18 answers an arm. Web search stays on, because it is part of what
+an answer is; the control is what separates its variance from the prompt's effect. Cost: about 18
+calls with the whole article as a cached prefix, a few cents each — under two dollars an arm.
+
+### b. Depth-1 gists: 25 → 30 words
+
+The plain depth-1 lines in `after-7` and `after-8` ran to 31 and 34 words with a limit of 25; the old
+prompt's ran to 26 and 27. **30** is Greg's number and fits all but the tail. `SYSTEM`'s
+*"depth 1: AT MOST 25 words"* becomes 30; the root (18) and the deeper band (22–32) are unchanged,
+so the ordering Greg asked for on 2026-09-06 — coarser lines shorter — still holds (18 < 30 ≤ 32).
+
+What enforces or tests the 25: only the prompt itself, the byte pin in
+`tests/hierarchy-structure-request-parity.test.ts` (and the key in `tests/hierarchy-prompt-hoist.test.ts`
+that hashes it), and `LIMIT["d1 gist"]` in `evals/plain-words/run.ts`. **No code enforces a gist
+length.** `evals/summaries/variants.md` and `arms.ts` keep 25, because they describe blocks that
+shipped at `toc/6` and `toc/7`.
+
+**No version bump.** `toc/8` is on `dev` and not on `main` (checked 2026-09-28), so no reader has a
+tree built under the 25; this is still `toc/8` before it ships, as stage 1b was.
+
+The risk is the one the limit was there for: a ceiling of 30 may pull every depth-1 line up towards
+30 rather than just letting the plain ones through. `after-9` measures it — the depth-1 length
+distribution against `after-8`'s, and the blind read against `before`.
+
+### Stages
+
+| | what | ends when |
+|---|---|---|
+| 2.0 | this section; `before` and `before-2` answer arms on the current prompts | Sol's plan review answered |
+| 2a | the two bullets; the `after` answer arm; blind reads (`before` vs `after`, `before` vs `before-2`) | the read says plainer, fidelity even, or the plan says why not |
+| 2b | 25 → 30, the pins, `after-9` summaries arm and its read | depth-1 lengths and the read recorded |
+| 2c | Sol code review, gates, the report-44 note, its row out of `awaiting-approval.md`, push | on `dev`, worktree removed |
+
+### GPT Sol on the stage-2 plan (2026-09-28)
+
+No P0; two P1s, all seven accepted. **E1** — chat's "?" help addendum carried the old exemption as a
+later, user-level instruction, which would likely have beaten the new `SYSTEM` bullet; it now says
+the new rule, and `tests/help-prompt.test.ts` asserts it (red on the old line, green on the new).
+**E2** — `answers.ts` could silently pair mismatched or incomplete arms; it now refuses an arm that
+is not exactly 18 distinct cases, records a digest of the article's blocks, and throws on a missing
+partner or a changed question. **E3** — "assume a reader from outside the field" contradicted the
+reader-profile rules for a reader who says they are expert; the bullet now reads *if this reader
+would not know a term … when no background is given, assume a curious reader from outside the
+field*, and the glossary's WHO READS AN ENTRY got the same carve-out. **E4** — the `term` arm applies
+*Check the web*'s accepted endings; the quote matcher differs from `anchorIn` and says so. **E5** —
+citation ids and link targets are stripped before scoring, and searches are reported (nearly zero
+in every arm: this eval says nothing about answers built from web results). **E6** — `18 < 30 ≤ 32`
+proved nothing about ordering; measured below instead. **E7** — § Deferred rewritten.
+
+### What stage 2 found
+
+**b. Depth-1 at 30 words — as hoped.** The ceiling did not pull lines up to it:
+
+| | depth-1 median | max | over 30 | over 25 | depth-1 shorter than its children's mean |
+|---|---:|---:|---:|---:|---:|
+| before | 21 | 26 | 0 | 1/23 | 17/23 |
+| before-2 | 21 | 27 | 0 | 2/22 | 11/20 |
+| `after-8` (limit 25) | 24 | 34 | 3 | 9/23 | 12/19 |
+| **`after-9` (limit 30)** | **24** | 33 | **1** | 6/22 | 13/22 |
+
+The ordering Greg asked for on 2026-09-06 is inside the old prompt's own wobble. The blind read of
+`after-9` against `before` (87 pairs, shuffled): **67 plainer, 16 old, 4 same** — `after-8` was
+70–13 — with depth-1 questions 10–0 and `senseHere` 31–3, and fidelity flags 2 against the old
+lines and 1 against the new.
+
+**a. Chat, Explain, *Check the web* — the one-bullet change did not show a reliable effect.**
+
+| read (18 answers, shuffled) | new plainer | old plainer | same | fidelity flags new / old |
+|---|---:|---:|---:|---:|
+| control: `before` vs `before-2` | — | 6 / 9 | 3 | 6 across both |
+| `before` vs `after` | 13 | 5 | 0 | 2 / 4 |
+| `before-2` vs `after-2` (a second, independent sample of each) | 9 | 9 | 0 | 4 / 3 |
+
+Pooled, 22–14 for the new wording against a 6–9 control, and the hard-word screen moved a little
+(7.5–8.2 hard types per 100 words against 8.2–9.3). That is not the 67–16 the summaries show, and
+it is not honest to call it an effect. Both judges gave the same reason for which answer won: *the
+one that opens with the meaning in everyday words, before the formal wording or the quotation.*
+
+### Greg widened (a), mid-stage, the same day
+
+> 4a Yes, we want to make this plainer/simpler language rule common across *all* prompts that
+> generate text of any kind. And ideally also in a way that it will apply to all future prompts
+> (e.g. maybe we need a prompting-guide.md signposted from AGENTS.md). P.S. I do think this is a
+> subtle goal, because a) on the one hand we really want to use simple language; b) on the other,
+> we'd like to stay true to the wording of the paper. I think perhaps (a) is more important
+> (especially for summaries, explanations), though perhaps (b) plays more of a rule in headings? Not
+> sure. Use your judgment.
+>
+> — Greg, 2026-09-28, via the Overseer
+
+So the chat/Explain bullet lands now as it is — measured, harmless, and the E1 fix is a real one —
+and **stage 3** replaces the per-prompt copies with one shared rule, planned below.
+
 ## The simpler option passed over
 
 **Just strengthen the existing sentence** — "plainer than the article" → "much plainer" — in place.
@@ -430,16 +568,10 @@ things stays, and the named things are the jargon.
   in `senseHere` (article-only) as often under the new prompt as the old; a worked example against
   it went in during round 2 and did not visibly move it. Worth a change of its own, with a screen
   that checks the label rather than counting fields.
-- **Depth-1 gists run past 25 words** in about a third of cases against one in twenty before. Greg's
-  call whether 28 plain words beat 24 dense ones.
-
-- **The other eleven prompts** carrying the 2026-09-03 rule (converse, quiz, quiz-mark, arc, labels,
-  ideas, sketch, explain, live, quotes' `reason`, timeline's `label`). Greg named summaries and the
-  glossary; the same split probably belongs in chat and explain next, and that is for him to say.
 - **Backfilling trees.** New articles only, per Greg twice.
-- **The two lookup answers** — *Check the web* and a typed term — both run `explainStream`
-  ([`src/term-lookup.ts`](../../src/term-lookup.ts) → [`src/explain.ts`](../../src/explain.ts)),
-  which is also Explain mode's prompt and still carries the 2026-09-03 wording. Changing it changes
-  Explain mode, which Greg did not name, so it is deferred rather than folded in. Stored lookup
-  answers survive a glossary rewrite by term id, so a newly plain entry can open onto an older,
-  denser checked answer until the reader asks again.
+- **Stored *Check the web* answers** keep the text they were written with. They survive a glossary
+  rewrite by term id, so a newly plain entry can open onto an older, denser checked answer until the
+  reader asks again.
+
+*Answered by Greg on 2026-09-28, and so no longer here: the depth-1 limit (30 — § Stage 2) and the
+other prompts (all of them — § Stage 3).*

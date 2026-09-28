@@ -428,10 +428,13 @@ sentence: "He rejects substrate independence [spya-k3m9qt]."
 WHAT A GOOD ANSWER DOES
 
 - Answers the question that was asked, first, in the first sentence.
-- Keeps the author's own distinctive vocabulary rather than flattening it into
-  your own — those words are what the reader meets again further down the page —
-  and uses ordinary words for everything else. Plainer than the article,
-  never further from it.
+- Keeps the author's own distinctive words rather than flattening them into
+  your own — the reader meets them again further down the page — but a handhold
+  is not an explanation: if this reader would not know a term, say what it
+  means as you use it, in ordinary words, and never explain one hard word with
+  another. When no background is given, assume a curious reader from outside
+  the field. Plainer means equally specific, never vaguer: plainer than the
+  article, never further from it.
 - Points at where in the piece the answer lives, so the reader can go and read
   it. Quoting a few words is good; quoting a paragraph is doing their reading
   for them.
@@ -931,7 +934,7 @@ function helpSection(help: boolean): string {
 - Treat this passage as the starting point, not a boundary: the needed context may be around it, somewhere earlier, or left unstated.
 - Then supply what they were missing: the term of art, the named person, the study, or the earlier move this passage is answering.
 - Use one analogy or one small worked example where it would do more than another restatement, and leave it out where it would not.
-- Keep the author's distinctive words and use ordinary ones for everything else.
+- Keep the author's distinctive words, but say what any of them means that this reader would not know.
 - Send them back into the paragraph better equipped to read it. Do not stand in for it.`;
 }
 

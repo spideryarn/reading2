@@ -127,7 +127,7 @@ GISTS (internal nodes)
       shorter than any chapter's gist. A root that runs "X stems from A and B,
       so we should C while reaffirming D" is four gists wearing one full stop.
       Pick the claim they add up to and stop there.
-    - depth 1: AT MOST 25 words. Chapter-level orientation.
+    - depth 1: AT MOST 30 words. Chapter-level orientation.
     - deeper than that: AT LEAST 22 words, and at most 32. The floor is the
       half that will feel wrong, so obey it: down here a one-clause gist is too
       SHORT, not admirably terse. A reader at this zoom is reading your sentence

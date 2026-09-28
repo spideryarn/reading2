@@ -118,6 +118,17 @@ describe("what the addendum says", () => {
     expect(text).toContain("Send them back into the paragraph better equipped to read it");
   });
 
+  /* **The plain-words rule, and not the exemption it replaced** (plan 260926a
+     § Stage 2, GPT Sol's E1). This line arrives as the last user turn, after
+     `SYSTEM`, so a weaker copy here would win: the old "keep the author's
+     distinctive words and use ordinary ones for everything else" left every
+     term of art unexplained, which is the complaint in SPIDERYARN-READING2-44. */
+  it("keeps the author's terms but asks for the ones this reader would not know to be explained", () => {
+    const text = finalUser(help());
+    expect(text).toContain("say what any of them means that this reader would not know");
+    expect(text).not.toContain("use ordinary ones for everything else");
+  });
+
   /* **Both reaches, now that the reader's sentence is only "Help me
      understand."** (report 3W, 2026-09-12). They used to ride in that sentence;
      they are Greg's, on two days, and moved here rather than dropped.

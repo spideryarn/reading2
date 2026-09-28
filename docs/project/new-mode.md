@@ -288,9 +288,13 @@ Every term of art is a thing the article names, so "the article's own words for 
 names" exempted exactly the jargon. The rule now reads: keep the name, but make the sentence
 understandable to a reader from outside the field who does not already know it — say it in ordinary
 words instead, or keep it and let the rest of the sentence show what it is. And **plainer means
-equally specific**: the same claim in commoner words, never a looser one. So far only the summary
-prompts (`src/hierarchy.ts`, `src/hierarchy-expand.ts`) and the glossary (`src/glossary.ts`) say
-this; the other prompts listed by the grep below still carry the 2026-09-03 wording —
+equally specific**: the same claim in commoner words, never a looser one. The summary prompts
+(`src/hierarchy.ts`, `src/hierarchy-expand.ts`), the glossary (`src/glossary.ts`), chat
+(`SYSTEM` and the "?" help addendum in `src/converse.ts`) and Explain — which is also the glossary's
+*Check the web* (`src/explain.ts`) — say this, the last two since 2026-09-28 on Greg's word. Where a
+prompt also carries the reader-profile rules, it says *if this reader would not know a term* and
+assumes a reader from outside the field only when no background is given. The other prompts listed
+by the grep below, Remember among them, still carry the 2026-09-03 wording —
 [260926a](../plans/260926a-plainer-summaries-and-glossary.md) § Deferred.
 
 Every prompt that carries it ends on the same phrase, **"plainer than the article,

@@ -1,0 +1,64 @@
+{
+  "arm": "after",
+  "slug": "olah-a4-spya-ujr7p0",
+  "sourceSha256": {
+    "explain.ts": "543f04af785f1f0e7c5e8c59cdf2a822b39516617e1c73404c4145d6c6f98db7",
+    "converse.ts": "5b830843c35b67a5c1fd1def0cf847a134d01d2d02ba06a4c8593a8eb8623d4a"
+  },
+  "blocksSha256": "de51419e69cc1397215a6dd8646b6c68c035f81600eb1bfde671cc14e538a28a",
+  "at": "2026-09-28T00:16:22.040Z",
+  "answers": [
+    {
+      "slug": "olah-a4-spya-ujr7p0",
+      "term": "superposition",
+      "kind": "term",
+      "asked": "superposition",
+      "text": "\"Superposition\" is the technical idea this whole piece is built around, and it comes from earlier work by Chris Olah's team (Anthropic's interpretability research, notably the paper *Toy Models of Superposition*, mentioned later in the article). It refers to a neural network cramming more distinct features into its neurons than it has neurons to spare — packing them in non-orthogonal, overlapping ways rather than giving each feature its own dedicated neuron.\n\nThe article's own worked example is the clearest gloss on it: \"there's another kind of distributed representation that can represent all colored shapes with only 4 neurons (just as 4 bits can represent 16 numbers)\", and \"Dense codes like this have a very cool advantage: they can represent far more, totally unrelated objects than there are neurons.\" The catch is that you lose the ability to cleanly read out any single feature with a simple linear check — \"It isn't possible to generically select most colors or shapes with a linear probe, let alone sets.\" — because the features are tangled together and can only be untangled again using a nonlinearity.\n\nThe reason superposition matters to Olah is stated up front: decomposing representations into independent components is necessary to escape the curse of dimensionality and understand neural networks. The rest of the article's job is to argue that \"superposition\" is one of two things people conflate under the umbrella term \"distributed representation,\" the other being \"composition,\" and that the two are actually in tension with each other rather than being points on a single spectrum.",
+      "searches": 0,
+      "ending": "finished"
+    },
+    {
+      "slug": "olah-a4-spya-ujr7p0",
+      "term": "superposition",
+      "kind": "sentence",
+      "asked": "An informal note on the relationship between superposition and distributed representations by Chris Olah.",
+      "text": "Chris Olah is one of the co-founders of Anthropic, an AI lab focused on the safety of large models, who previously led interpretability research at OpenAI, worked at Google Brain, and co-founded Distill, a scientific journal focused on outstanding communication. He is credited with coining the term \"mechanistic interpretability\" as a description of his work in circuit analysis — the broader research program this piece belongs to, which tries to reverse-engineer what's actually happening inside neural networks rather than just observing their inputs and outputs.\n\n\"Superposition\" and \"distributed representations\" are the two technical ideas the note sets out to untangle, and the article itself explains why in the next block: this isn't a polished paper but, as the piece later notes, an informal note allowing the authors to publish ideas that aren't as refined and developed as a full paper, closer to a colleague thinking out loud than a finished result. The \"Transformer Circuits Thread\" mentioned just above the title is the venue — a running series of interpretability write-ups from Olah's team — where such informal notes get posted alongside more rigorous papers.",
+      "searches": 1,
+      "ending": "finished"
+    },
+    {
+      "slug": "olah-a4-spya-ujr7p0",
+      "term": "superposition",
+      "kind": "chat",
+      "asked": "What does \"superposition\" mean here, and why does it matter to the argument?",
+      "text": "In this piece, \"superposition\" names one of two distinct things people lump together under \"distributed representations\" — the other being \"composition.\" Superposition is the strategy of packing more features into a layer than it has neurons, by giving up on each neuron (or even each direction) cleanly standing for one thing. The clearest illustration is the \"dense\" code for colored shapes: a distributed representation that can represent all colored shapes with only 4 neurons, in the same way 4 bits can represent 16 numbers, and such codes can represent far more, totally unrelated objects than there are neurons. The catch is that this comes at a real cost: it isn't possible to generically select most colors or shapes with a linear probe, let alone sets, and you also generally can't represent objects \"between\" these features — retrieving what's stored needs a non-linearity, not just a linear readout.\n\nThe article stresses that superposition requires giving up composition: it needs a non-composing set of features, because maximal superposition is only possible if there isn't composition. This is spelled out as a volume argument: if one has m bits to encode stimuli, there is exp(m) volume; storing n features which arbitrarily compose together requires exp(n) volume, so one can only store fully composable features in m bits — but if there's no composition, one can instead store exp(m) items in superposition, although a non-linearity is required to retrieve them. So composition and superposition are framed as two different ways to allocate the exponential volume, and the paper's earlier \"Toy Models of Superposition\" work is described as exploring exactly this trade-off, though phrased there in terms of feature sparsity [spya-jzkekc].\n\nWhy it matters to the argument: the whole piece is built around showing that \"distributed representation\" is really two different, competing ideas that people conflate, and superposition is the half that makes interpretability hard. Sometimes distributed representations are described as providing both the benefits of non-local generalization and representing more features than neurons, but these properties seem to actually trade-off because one is associated with composition and the other with superposition. Since the whole project of understanding neural networks depends on decomposing them into interpretable pieces, the author's closing point is that composition (linear, independent features) is what supports understanding, while superposition is the mechanism that hides features from that kind of analysis: when neural network representations are distributed in the sense we call \"composition,\" it is possible to understand them in terms of a linear number of independent features rather than an exponential amount of volume. This seems critical if we hope to truly understand neural networks.\n\nThe article also shows the two can partially coexist — sparse composition leaves \"holes\" that superposition can exploit [spya-ajbh7f spya-qbuyka] — but that nuance doesn't undo the basic tension the piece is arguing for: composition buys interpretability, superposition buys capacity, and you can't maximize both at once [spya-fyxmks spya-st3tz8].",
+      "searches": 0
+    },
+    {
+      "slug": "olah-a4-spya-ujr7p0",
+      "term": "monosemantic",
+      "kind": "term",
+      "asked": "monosemantic",
+      "text": "\"Monosemantic\" is the opposite of \"polysemantic\" — a term Anthropic's interpretability work uses for individual neurons. A monosemantic neuron responds to (and can be understood as representing) essentially one thing; a polysemantic neuron responds to a jumble of unrelated things, which is what makes many real neural network neurons hard to interpret.\n\nHere the word is doing precise work: in the \"local code\" just described, there's a neuron for each (shape, color) pair, and in our language, this model is \"monosemantic\" and doesn't have any superposition. That is, every neuron has exactly one clean meaning — this neuron means \"red circle,\" that one means \"blue square,\" and so on — because nothing is being packed together or shared. This sets up the contrast running through the rest of the piece: superposition is precisely the phenomenon where neurons stop being monosemantic and become polysemantic, because more features are being stored than there are neurons to hold them cleanly. So flagging this first example as monosemantic is a deliberate baseline — it's the code with no superposition at all, against which the later \"semi-local,\" \"dense,\" and \"semi-distributed\" codes (which do involve superposition, and hence polysemantic neurons) will be measured.",
+      "searches": 0,
+      "ending": "finished"
+    },
+    {
+      "slug": "olah-a4-spya-ujr7p0",
+      "term": "monosemantic",
+      "kind": "sentence",
+      "asked": "In our language, this model is \"monosemantic\" and doesn't have any superposition.",
+      "text": "This is the article introducing its own technical vocabulary, applying it to the \"local code\" example just described — one neuron per (shape, color) pair, so a neuron for \"red circle,\" another for \"blue square,\" and so on.\n\n\"Monosemantic\" means each neuron has exactly one meaning: it fires for one specific thing and nothing else. Here that's easy to see, since every neuron is dedicated to a single (shape, color) combination — the \"red circle\" neuron only ever means red circle. This is the opposite of \"polysemantic,\" where a single neuron would respond to several unrelated things, which is a problem the authors' broader research program is concerned with.\n\n\"Superposition\" is the article's term for a network cramming more features into its neurons than it has neurons for, by having each neuron take on multiple, overlapping meanings (so that a group of neurons can encode more items than there are neurons, at the cost of needing a nonlinearity to read them back out cleanly, as explained later in the piece). Since this local code uses one neuron per combination, with nothing overlapping or sharing, there's no compression of that kind happening — hence \"doesn't have any superposition.\" The sentence is essentially setting the baseline case (no superposition, fully monosemantic) against which the more space-efficient but messier codes described later in the article — the \"semi-local,\" \"dense,\" and \"semi-distributed\" codes — will be contrasted.",
+      "searches": 0,
+      "ending": "finished"
+    },
+    {
+      "slug": "olah-a4-spya-ujr7p0",
+      "term": "monosemantic",
+      "kind": "chat",
+      "asked": "What does \"monosemantic\" mean here, and why does it matter to the argument?",
+      "text": "In this piece \"monosemantic\" describes a neuron that stands for exactly one thing — in the \"local code\" example, there is a separate neuron for each single (shape, color) pair, so each neuron's firing has one fixed meaning and no other meaning gets layered onto it. The article says of this setup: \"there's a neuron for each (shape, color) pair. In our language, this model is 'monosemantic' and doesn't have any superposition.\"\n\nIt matters to the argument because monosemanticity is the baseline the whole piece measures against. \"Superposition\" is what happens when a network needs to represent more distinct things than it has neurons, so a single neuron ends up doing double (or quadruple) duty for several unrelated features at once — becoming polysemantic rather than monosemantic. Later in the piece, when the \"semi-distributed\" code puts color and shape features into mutual superposition, the article notes the resulting units \"begin to have some meaning – they're polysemantic, but only respond to a few features\", and it says that in that case it's more natural to think of features as living in linear combinations of neurons (directions) rather than in single neurons.\n\nSo the monosemantic/local code is the clean, interpretable extreme — one neuron, one meaning, no superposition — that the whole essay uses as a reference point before showing how composition and superposition each move away from it in different directions, and why that move costs interpretability. My inference is that this is why the piece opens with the local code before introducing composition and superposition: it needs an unambiguous case of \"no superposition at all\" to make the later trade-off legible.",
+      "searches": 0
+    }
+  ]
+}

@@ -929,7 +929,8 @@ A curious, well-read reader who has never studied this field, stopped
 mid-sentence by one word. An entry has worked if, after reading it once, they
 understand the word well enough to carry on reading — and could explain it to a
 friend. A definition a specialist would write for another specialist has
-failed, however accurate it is.
+failed, however accurate it is. If the reader has described their own
+background (see the end of these instructions), pitch to that instead.
 
 WHAT BELONGS IN IT
 
