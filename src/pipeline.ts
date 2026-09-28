@@ -450,7 +450,7 @@ export const FORCE_ONLY_WHEN_NAMED: ReadonlySet<StepName> = new Set<StepName>([
      cascade would buy a model call for nothing — least of all the one case the
      cascade is most likely to meet, a forced `quotes` (Find more) one step
      before it. It does not need the cascade either: its `stamp` hashes the
-     quote ids and block ids, so when Find more adds quotes it re-runs without
+     quote identities, offered words and priorities, so when Find more adds quotes it re-runs without
      being forced. And it replaces rather than appends.
      docs/plans/260928a-trajectory-mode-skim-a-paper-at-increasing-depth.md. */
   "trajectory",
@@ -3287,7 +3287,7 @@ export const STEPS: { [K in StepName]: PipelineStep<K> } = {
    *    paragraph that has gone is simply not offered (`usableQuotes`), and the
    *    route's own freshness is about the quotes, not the article.
    * 2. **Its fingerprint is the Quotes, not the article** — `quotesHash`, over
-   *    each quote's id and block id. So `stamp` reads the Quotes and nothing
+   *    each quote's identity, offered words and priority. So `stamp` reads the Quotes and nothing
    *    else, and *Find more* adding a quote makes the route not-current without
    *    anybody forcing it.
    *

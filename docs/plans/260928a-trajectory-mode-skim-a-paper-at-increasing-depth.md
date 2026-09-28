@@ -101,8 +101,8 @@ reusable set of highlights"*.
   depth ≤ 2 ≈ `min(12, ⌈q/2⌉)`, and depth ≤ 3 is every quote worth a stop (≤ 36). The prompt says
   depth 3 should normally include nearly all the quotes. These are hypotheses to measure (F10), not
   product constants.
-- **Freshness, stamped.** The stamp holds `PROMPT_VERSION`, `quotesHash` (a hash of the quote ids and
-  their block ids), and `profileHash`. The route is outdated when:
+- **Freshness, stamped.** The stamp holds `PROMPT_VERSION`, `quotesHash` (a hash of the quote ids,
+  block ids, offered text and priority), and `profileHash`. The route is outdated when:
   - the Quotes set has changed (*Find more* added quotes, or Quotes was regenerated) — the band says
     how many quotes are not on the route, and offers a rebuild;
   - the prompt version has moved on;

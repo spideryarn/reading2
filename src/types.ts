@@ -1219,11 +1219,16 @@ export interface TrajectoryStop {
 }
 
 /**
- * What validation threw away or repaired. Counts only — never a quote or a
- * role. A dropped stop looks exactly like one the model never offered, which is
- * why they ride on the artefact and in the log.
+ * What preprocessing or validation threw away or repaired. Counts only — never
+ * a quote or a role. A dropped stop looks exactly like one the model never
+ * offered, which is why they ride on the artefact and in the log.
  */
 export interface TrajectoryDrops {
+  /**
+   * Usable Quotes omitted before the call because a higher-priority quote
+   * shares their block.
+   */
+  collapsed: number;
   /** A stop naming a quote id that is not in the Quotes artefact. */
   unknownQuote: number;
   /** A quote named twice; the shallowest occurrence was kept. */
@@ -1245,8 +1250,9 @@ export interface Trajectory {
   slug: string;
   /**
    * **The quotes hash** — `quotesHash` in src/trajectory.ts, over each quote's
-   * id and block id. Spelled `sourceHash` because that is the name `stampOf`
-   * reads (src/store/artifacts.ts); it is not a hash of the article.
+   * id, block id, offered text and priority. Spelled `sourceHash` because that
+   * is the name `stampOf` reads (src/store/artifacts.ts); it is not a hash of
+   * the article.
    */
   sourceHash: string;
   /**
@@ -1259,7 +1265,10 @@ export interface Trajectory {
   stops: TrajectoryStop[];
   /** How many stops are visible at depth ≤ 1, ≤ 2 and ≤ 3. Growing, by construction. */
   visible: [number, number, number];
-  /** How many quotes the model was offered — the usable ones, whose block is in the article. */
+  /**
+   * How many quotes the model was offered — one per represented block, after
+   * unusable ones were removed.
+   */
   offered: number;
   dropped: TrajectoryDrops;
   generatedAt: string;

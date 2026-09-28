@@ -615,13 +615,15 @@ function writeWholeArticle(store: MemoryArtifactStore): void {
   });
   /* **A route over the one quote planted above**, and its `sourceHash` is the
      quotes hash rather than any article fingerprint — so it is computed from
-     that quote's id and block id, through the stage's own function. `null`
+     the inputs Trajectory reads, through the stage's own function. `null`
      profile, for `ideas`' "deliberately without a profile" reason: `ctxOf`
      carries none, and the stamp compares it. */
   store.plant(SLUG, "trajectory", "trajectory", {
     generator: CAPABLE_MODEL,
     slug: SLUG,
-    sourceHash: trajectoryQuotesHash([{ id: "spya-qqqqqq", blockId: BODY.id }]),
+    sourceHash: trajectoryQuotesHash([
+      { id: "spya-qqqqqq", blockId: BODY.id, text: "One paragraph of something to hash." },
+    ]),
     version: TRAJECTORY_VERSION,
     profileHash: null,
     stops: [{ quoteId: "spya-qqqqqq", depth: 1, role: "The one line" }],
