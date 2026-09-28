@@ -1088,14 +1088,14 @@ the override:
   always yes; "are the tests red because of me?" is answered by checking other trees; "is the box
   overloaded?" from vitals it already has; and a question already answered today for another session
   gets the same answer.
-- **Sol** for technical questions whose evidence is in the tree; **Fable** for wording, defaults, and
-  whether a case can be dropped.
+- **Sol** for technical questions whose evidence is in the tree; **Opus** (Fable until Greg retired it,
+  2026-09-28) for wording, defaults, and whether a case can be dropped.
 - **Greg** for anything irreversible or externally visible, anything changing a rule doc, anything
   where the routed model *disagreed with the agent's own recommendation* (**disagreement is the
   signal, not a low score**), and any question of the form *would a small product tweak remove a lot
   of this engineering?* — because his answer to those is often a fifth option nobody offered.
 
-Two disciplines keep this honest: every non-Greg answer is **attributed** on delivery ("Fable via the
+Two disciplines keep this honest: every non-Greg answer is **attributed** on delivery ("Opus via the
 Overseer, not Greg") so the agent weights it correctly, and every one is **vetoable after the fact**
 from the log. A veto is just a steering message.
 
