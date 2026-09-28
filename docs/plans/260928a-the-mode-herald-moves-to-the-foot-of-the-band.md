@@ -140,4 +140,27 @@ measurement is about twenty lines in one component.
   cleanup, and the slot's inline style. Its sandbox could not launch Chrome, so the geometry tests
   were run here: all green.
 
+## Browser check, 2026-09-28
+
+Playwright on the box, article `writes`, at 1440×900, 834×1194 (touch) and 390×844 (touch), pressing
+Glossary, Quotes, Chat, Summary, Search and Diagram (Sketch) at each: the card never touched the
+band's first row or the Dock, sat inside the band at its left, stood clear of Glossary's and Quotes'
+*Find more*, Chat's composer and the Sketch card (about 10px above each), faded by three seconds, and
+went at once on a tap inside the band. In Summary and Search it lies over the last lines of the
+scroller, as designed. On the phone, with the way-back chip showing after a Structure jump, a
+Summary press put the card 11px above the chip.
+
 ## Assumptions
+
+Small calls Greg's words did not settle, taken here:
+
+- **"Bottom-left" is read as the bottom-left of the band's reading area**, above any pinned row,
+  rather than the band's literal corner — because the literal corner is *Find more* or the composer.
+- **A toast rather than a full-width strip**, with a `--highlight` left edge for salience at the
+  bottom. Width is the words' own, capped at the band.
+- **Three seconds, the fade and every dismissal rule are unchanged** from 260915e.
+- **Chat's *Latest* button** may sit under the card for its three seconds when Chat is pressed
+  again while scrolled up a thread; not handled (Plan review, above).
+- **Offline strip** may lie over the card's lower edge while offline; offline outranks it.
+- **With iOS's keyboard up the card stands a foot's height higher than strictly needed**, the price
+  of not re-deriving the band's bottom inside a CSS `max()`.
