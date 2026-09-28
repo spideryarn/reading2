@@ -253,6 +253,12 @@ const READS = [
      `quiz`: it sends `articleWithIds` over the body and the skeleton.
      docs/plans/260916d-faq-mode.md. */
   "faq",
+  /* Added 2026-09-28 with the `trajectory` stage. Its own column and the
+     `quotes` column — the second read to take another artefact's column, after
+     `illustrated` — and **no fingerprint columns**, because the route never
+     read the article.
+     docs/plans/260928a-trajectory-mode-skim-a-paper-at-increasing-depth.md. */
+  "trajectory",
   /* Added 2026-09-06 with `pgArticleReader.loadAssets`, for the route that
      serves one asset's bytes (src/routes.ts § `sendArticleAsset`). The
      narrowest projection in the map — one `jsonb` column and the id, and no
