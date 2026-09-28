@@ -55,6 +55,7 @@ import type { Block, Citation, Meta } from "./types.js";
 import { loadEnvLocal } from "./env.js";
 import { modelFor } from "./models.js";
 import { errorFields, log, since } from "./log.js";
+import { blockRefLeaks, rawIds } from "./block-ref-leak.js";
 import {
 
   type SearchUsagePath,
@@ -271,6 +272,10 @@ FORMAT
 Plain prose paragraphs, separated by blank lines. No headings, no bullet lists,
 no preamble like "This passage means". Begin with the explanation itself.
 
+Your answer is shown as plain text, so a block id in it reaches the reader as a
+meaningless code. Never write one. When you point to another part of the
+article, say what it says: "where mutual information is defined".
+
 Do not narrate your own process. The reader is separately told whether you
 searched; a sentence about your tools is a sentence not about their question.
 
@@ -435,7 +440,7 @@ export function buildExplainMessages(
              the job and the job should be the final thing read. `DEEP` sits
              after it for the same reason it always did. */
           type: "text",
-          text: `${readerPositionLine(blockId)}${who ? `\n\n${who}` : ""}\n\nThe reader has selected this passage, inside block ${blockId}:\n\n"""\n${quote}\n"""\n\nExplain it.${deep ? `\n\n${DEEP}` : ""}`,
+          text: `${readerPositionLine(blockId)}${who ? `\n\n${who}` : ""}\n\nThe reader has selected this passage:\n\n"""\n${quote}\n"""\n\nExplain it.${deep ? `\n\n${DEEP}` : ""}`,
         },
       ],
     },
@@ -834,6 +839,14 @@ export async function* explainStream({
         finishReason,
         citations: citations.size,
         answerChars: answer.length,
+        /* **Our handles, shown to a reader.** This answer is rendered as plain
+           text (src/web/CommentDialog.tsx), so any id in it arrives as
+           `spya-f6sbgx`, and "in block 39" points at a number the reader never
+           saw. The prompt says not to; these say whether it worked. 4 of 72
+           answers did it before the fix —
+           docs/plans/260928c-block-refs-shown-to-readers.md. */
+        blockRefLeaks: blockRefLeaks(answer).length,
+        rawIds: rawIds(answer).length,
       },
       `explained a selection with ${used} (${searches} web search${searches === 1 ? "" : "es"})`,
     );

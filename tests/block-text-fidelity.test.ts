@@ -70,7 +70,7 @@ describe("a code block keeps its lines", () => {
    * The first version of `codeText` filtered blank lines out, on the argument
    * that `articleWithIds` and `articleText` (src/article-prompt.ts) join blocks
    * with `"\n\n"`, so a block carrying one would split itself in two inside a
-   * prompt and the second half would arrive with no `[i] spya-…:` prefix.
+   * prompt and the second half would arrive with no `spya-…:` prefix.
    *
    * That argument did not survive review (GPT Sol, 2026-09-05). Nothing in
    * production parses those prompts by splitting on `"\n\n"`, and the two stages
