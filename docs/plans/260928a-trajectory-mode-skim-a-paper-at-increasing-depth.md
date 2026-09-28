@@ -491,3 +491,149 @@ The Opus second opinion (first round) also gave:
   all of them the known no-build environment reds (`cold-start-lazy-imports`, `pdf-bundle-trace`
   and three fleet tests needing `build:fleet`). None of the five is ours. Pushed to `dev`. **Done:**
   v1 and v2 are built; what is left is Greg's, in trajectory.md § Questions for Greg.
+
+## Stage 5 — flash, position, order, promotion, regenerate, and the card's sources (2026-09-28)
+
+Asked by Greg on 2026-09-28 after v1 and v2 had landed, relayed by the Overseer. His words,
+verbatim, in the order they arrived:
+
+> The Trajectory mode:
+> - Should flash-highlight (in the text) the quote/block being jumped to each time (just as I've asked us to do for all block-links, e.g. in Glossary).
+> - Provide some kind of subtle visual indication in the left-hand Mode column of how far through the article each suggested block-link is.
+
+> And move Quotes mode and Trajectory mode further towards the left (after Summary). And if I try and run Trajectory mode before Quotes has been run, queue that first.
+
+> And maybe add a 'Regenerate' (or similarly-named) button to Trajectory.
+
+> And take Trajectory and Quotes modes out of Experimental features, i.e. into mainstream features.
+
+> If there are other modes that should also run first as part of generating Trajectory, queue them first too.
+
+> — Greg, 2026-09-28
+
+All of it is client-side: no prompt change, no schema change, no new model call of Trajectory's own.
+
+### 5a. The flash on every arrival
+
+**The flash already exists** — `flashBlock(id)` in [`src/web/flash.ts`](../../src/web/flash.ts),
+landed by the block-link work ([260928b](260928b-one-block-link-component-with-a-rich-tooltip-and-a-flash-on-arrival.md)).
+It is reused; no second flash is built.
+
+- **A row press** already flashes: it goes through `onJump` → `beginJump`, which flashes when the
+  scroll settles.
+- **‹ ›, ← →, the Next stop door, going round again, a depth change that moves you** call
+  `scrollToBlock` directly and do not flash today. They get `scrollToBlock(block, "smooth", (o) =>
+  o === "settled" && flashBlock(block))` — the same "flash when the scroll settles, not before" rule
+  `beginJump` follows, so a flash never finishes mid-glide.
+- **A deep link on load** (`?mode=trajectory&stop=…`) flashes once the stop's block is in place.
+- **A depth change that keeps you on the same stop does not flash** — nothing was jumped to.
+- **It does not replace the ring and bar** on the current stop. It is a pulse on arrival, over them.
+
+**This is a deliberate exception to flash.ts's own rule** that stepping does not flash ("stepping
+moves one item at a time and a flash on every step is noise"). That rule is about stepping to the
+*adjacent* item. A Trajectory step is not adjacent: the route is out of paper order, so each ‹ ›
+lands anywhere in the article — a jump, in all but name. Greg asked for it on every step. flash.ts's
+header is updated to name the exception and the reason, so the two rules stay one argument.
+
+### 5b. Where each stop sits in the article
+
+Each stop row gets a **thin track with a dot**: the dot at the stop's position in the article,
+0–100%. Muted, a few pixels tall, under or beside the section path. It is a hint, not a chart.
+
+- **Measured in words, not blocks**: the position is the words before the stop's block plus half
+  its own, over the article's total words (`Block.words`). A block count gives a heading, a caption
+  and a 300-word paragraph equal weight, so a paper with many short blocks up front would look
+  further through than it reads. Words are what "how far through" means to a reader, and they are
+  what the spine's own sizes answer in.
+- **Legible at a glance that the route jumps**: because every row has the same track at the same
+  width, the dots down the list make a zig-zag when the route goes results → methods → introduction.
+- The current row's dot takes the accent; the others are muted. Colours from the tokens
+  ([design-css-overview.md](../project/design-css-overview.md)); checked in dark mode and at 420px.
+- `aria-hidden`, plus a screen-reader phrase on the row: "about 70% of the way through".
+- A pure function, tested: `positionOf(blockId, blocks) → 0..1`.
+
+### 5c. The mode bar order
+
+Quotes, then Trajectory, straight after Summary, in `MODES_UI` ([`Dock.tsx`](../../src/web/Dock.tsx)),
+which is where new-mode.md says the order lives. Update any test or doc that lists the order, and the
+comments on the Quotes and Trajectory rows that explain their old places.
+
+### 5d. Quotes first — verify, then fix only what fails
+
+trajectory.md says the band asks for Quotes and the route in one job when there are none
+(`precededBy: ["quotes"]`). Checked in a real browser on an article with no Quotes, and by reading
+three cases that could break it:
+
+1. **No Quotes** — the ordinary case.
+2. **A Quotes run already in flight** (started in Quotes mode) when Trajectory is opened.
+3. **Stale Quotes** — Quotes exist but the article has changed under them; `noQuotes` is false, so
+   the route would be planned on a stale set.
+
+If any fails, opening Trajectory queues the Quotes run and then the route, and the band says what it
+is waiting for. The result, and which case it was, go in Progress.
+
+### 5e. A Regenerate button
+
+`useTrajectory.regenerate()` exists and is used only by the outdated banner's "Plan it again". It is
+added as a quiet button under a ready route, in the same shape the sibling modes use for theirs —
+Ideas' `ideas-again`, Timeline's `tl-again`: `run("Plan it again", true)` in a small row. **It
+rebuilds the route only, not the Quotes**: `trajectory` is in `FORCE_ONLY_WHEN_NAMED`, so the force
+never sweeps Quotes in, and a reader who wants new Quotes has Quotes' own "Choose them again".
+Rebuilding both would buy Quotes' larger call to get a new order, which is not what the button says.
+
+### 5f. Out of Experimental
+
+**Quotes is already out** — since 2026-09-06 (experimental-features.md § Quotes left the table).
+Nothing changes for it except its place in the bar.
+
+**Trajectory comes out**: `experimental: false` in `MODE_CATALOG`, its row removed from
+experimental-features.md's table with a paragraph saying when and why (Greg's words above), and
+`tests/dock-experimental-modes.test.tsx` § `BEHIND_THE_SWITCH` updated
+([new-mode.md § Moving a mode in or out](../project/new-mode.md#moving-a-mode-in-or-out-of-the-switch)).
+
+**What the switch gated, and what it did not.** The switch only decides whether the button is drawn.
+Owner-only is a separate rule — `POLICY.trajectory` is `owners-only` in
+[`visitor.ts`](../../src/web/visitor.ts) — and it stays. So after this:
+
+- **An owner with the switch off** now sees the button, and pressing it starts a paid run (the route,
+  and Quotes first if there are none), as Glossary, Ideas and Quotes already do.
+- **A visitor** on a shared article or the public shelf sees the button (the bar draws the same modes)
+  and gets the explanatory band, not a run — unchanged. The server's job route refuses a non-owner
+  whatever the client does. Checked, not assumed.
+
+### 5g. The card's sources, queued when Trajectory opens
+
+The route needs only Quotes. The stop card reads Glossary, Ideas, FAQ and Timeline, and until now
+showed only what already existed. Now **the first automatic open of Trajectory also queues whichever
+of those are missing or stale**, each as its own ordinary unforced step job through the existing
+queue (`enqueue`, as each mode's own button does) — not a new mechanism, and not chained into the
+route's job. So:
+
+- **The route does not wait on them.** It shows as soon as Quotes and the ordering are done; the card
+  fills in as each lands (its read hooks revalidate when a job for their step finishes).
+- **Each mode's own gate holds.** A mode is queued only if its control is available to this reader:
+  Timeline and FAQ are behind the experimental switch, so they are queued only for a reader with it
+  on — the same rule `canOpen` applies to the card's links.
+- **Owner only**, as every paid run here; a visitor queues nothing.
+- **Only on the automatic first run**, not on Regenerate, and not again once each has run: an
+  unforced step whose artefact is current is skipped by `stepIsDone`, so a second open buys nothing.
+- **The price is said before it is spent**: the empty state's hint names the extra modes it will make.
+- The read-only hooks stay read-only (Sol F22): the queueing lives in the Trajectory controller, not
+  in the card or its hooks.
+
+**The cost**, measured on the entropy paper in stage 3: Glossary, Ideas, Timeline and FAQ together
+came to $0.35, beside the route's ~$0.02 and Quotes'. That is what a first open adds for a reader with
+the switch on; with it off, Glossary and Ideas only. Re-measured in this stage and recorded in
+Progress.
+
+**The simpler version not built**: leave the card as it was — show only what exists. It costs
+nothing, but on a fresh article the card is simply absent, and Greg asked for the others to run.
+
+### Done when
+
+- tests red first for `positionOf`, the flash on each step path (a spy on `flashBlock`), the order,
+  the promotion table, the regenerate button, and which card sources are queued for which reader;
+- a browser check (Sonnet, Playwright) at 1440, 820 and 420, light and dark: the flash on every step
+  path, the track and dots, the order in the bar, Regenerate, a fresh article opened with the switch
+  off and on, and a visitor;
+- Sol's plan review and code review; the gates; committed and pushed to `dev`.
