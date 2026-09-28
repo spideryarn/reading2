@@ -395,7 +395,10 @@ export function PrivacyPage() {
           The default models, as of the date above: <code>claude-sonnet-5</code> for most of the reading
           aids, chat and search; <code>gpt-5.6-luna</code> for quick jobs and for reading PDFs;{" "}
           <code>voyage-4</code> to turn passages into the numbers that make search-by-meaning work;{" "}
-          <code>gpt-transcribe</code> for dictation; and{" "}
+          <code>gpt-transcribe</code> for dictation;{" "}
+          <code>gemini-3-flash-preview</code> to find a figure in a PDF when the page alone
+          cannot say which picture belongs to which caption, for which it is shown images of those
+          pages; and{" "}
           <code>gpt-realtime-2.1</code> with <code>gpt-live-transcribe</code> for the live voice
           mode.
         </p>

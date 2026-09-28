@@ -156,6 +156,75 @@ describe("graphics-state interpretation", () => {
   });
 });
 
+describe("where each image is painted", () => {
+  /* docs/plans/260924e-a-pdf-figure-paired-to-the-wrong-caption.md, stage 2:
+     a model's box names a region, and the region has to be matched to a
+     decoded picture by where that picture was painted. An image is drawn into
+     the unit square through the current transform. */
+  it("records an image's key, its box through the transform, and the clip it was painted under", () => {
+    const summary = run([
+      [C.save],
+      [C.transform, [400, 0, 0, 200, 50, 500]],
+      [C.paintImageXObject, ["img_p1_1", 1566, 672]],
+      [C.restore],
+    ]);
+    expect(summary.images).toEqual([
+      {
+        op: "xobject",
+        key: "img_p1_1",
+        box: { x0: 50, y0: 500, x1: 450, y1: 700 },
+        clip: { x0: 0, y0: 0, x1: 595, y1: 842 },
+        clipExact: true,
+        appearanceExact: true,
+      },
+    ]);
+    expect(summary.imageOps).toBe(1);
+  });
+
+  it("says when what shows of an image is not simply the image — a soft mask, a blend, zero alpha", () => {
+    const summary = run([
+      [C.save],
+      [C.setGState, [[["SMask", { mask: true }]]]],
+      [C.transform, [100, 0, 0, 100, 0, 0]],
+      [C.paintImageXObject, ["masked", 10, 10]],
+      [C.restore],
+      [C.transform, [100, 0, 0, 100, 0, 0]],
+      [C.paintImageXObject, ["plain", 10, 10]],
+    ]);
+    expect(summary.images.map((i) => [i.key, i.appearanceExact])).toEqual([
+      ["masked", false],
+      ["plain", true],
+    ]);
+  });
+
+  it("carries a rectangular clip, and says when a clip could not be measured", () => {
+    const summary = run([
+      [C.clip],
+      rect(C.endPath, 100, 100, 300, 300),
+      [C.transform, [400, 0, 0, 400, 0, 0]],
+      [C.paintImageXObject, ["a", 10, 10]],
+    ]);
+    expect(summary.images[0]).toMatchObject({ clip: { x0: 100, y0: 100, x1: 300, y1: 300 }, clipExact: true });
+
+    const triangle = [0, 0, 0, 1, 100, 0, 1, 50, 80, 4];
+    const odd = run([
+      [C.clip],
+      [C.constructPath, [C.endPath, [triangle], [0, 0, 100, 80]]],
+      [C.transform, [400, 0, 0, 400, 0, 0]],
+      [C.paintImageXObject, ["b", 10, 10]],
+    ]);
+    expect(odd.images[0]).toMatchObject({ key: "b", clipExact: false });
+  });
+
+  it("names every other kind of image paint without a key it could be matched on", () => {
+    const summary = run([[C.paintInlineImageXObject, [{}]], [C.paintImageMaskXObject, [{}]]]);
+    expect(summary.images.map((i) => [i.op, i.key])).toEqual([
+      ["other", null],
+      ["other", null],
+    ]);
+  });
+});
+
 describe("path and stroke measurement", () => {
   it("recognises a closed rectangle, and nothing else, as one", () => {
     expect(isRectangle(rectBuffer(0, 0, 10, 20), IDENTITY)).toBe(true);

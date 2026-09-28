@@ -165,7 +165,7 @@ describe("the render's paint must lie inside what was measured (Sol F35)", () =>
     expect(result).toEqual({ ok: false, failure: "unmeasured-paint" });
 
     const blobs = fakeBlobs();
-    const run = await collectPdfFigures({ markers: [MARKER], pdf, blobs, captions: new Map([[MARKER.ref, CAPTION]]) });
+    const run = await collectPdfFigures({ locate: null, markers: [MARKER], pdf, blobs, captions: new Map([[MARKER.ref, CAPTION]]) });
     expect(run.entries).toEqual([expect.objectContaining({ status: "failed", reason: "not-located" })]);
     expect(blobs.objects.size).toBe(0);
   }, 60_000);
