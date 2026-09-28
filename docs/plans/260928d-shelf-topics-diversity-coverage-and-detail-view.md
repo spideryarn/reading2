@@ -82,6 +82,30 @@ numbers go in § Measurements.
   the screenshots as evidence, put them in this plan, and delete the others.
 - State: `?topicsView=detail` in the URL, per url-state.md.
 
+### The detail view: three shapes, and the pick
+
+Mocked behind a temporary `?topicsMock=` and screenshotted by a Sonnet subagent (Playwright, the
+local 38-article shelf, 1280 and 390 wide, 2026-09-28 14:36 BST): colours real, bars proportional,
+titles real links, no horizontal scroll at 390px, no console errors, for all three.
+
+| Shape | Desktop |
+|---|---|
+| **A — compact rows, bars in one column (chosen)** | ![A](260928d-shots/detail-a-desktop.png) |
+| B — cards in a grid | ![B](260928d-shots/detail-b-desktop.png) |
+| C — two-line rows | ![C](260928d-shots/detail-c-desktop.png) |
+
+**A, because the bars line up**: every bar starts at the same x, so counts compare down one column
+at a glance — which is the point of a per-row view with extra detail. It is the most compact and the
+nearest to the "per-row" table Greg described. C (the subagent's pick, and the builder's default)
+starts each bar where its label ends, so the eye cannot compare lengths; B is the most colourful
+and spends the most height, with titles squeezed into narrow cards. On a phone all three collapse to
+nearly the same thing ([A at 390px](260928d-shots/detail-a-phone.png)).
+
+All three screenshots showed the same flaw: **physical copies of one article repeat its title**
+(*A brief history of ball lightning…* ×3). The rows and the tooltip now list distinct titles; the
+counts stay physical. The pill row, collapsed and expanded in place:
+[collapsed](260928d-shots/pills-collapsed-desktop.png), [all 30](260928d-shots/pills-expanded-desktop.png).
+
 ## Stages and gates
 
 1. **Selection** — extract/choose changes, metrics, tests red first (acronym plural; subset
@@ -205,3 +229,9 @@ stays e = 1. The call left open: e = 1.5 trades @8 (0.70 → 0.54) for fewer vag
   before `admit` saw it, so a 4-article *AI system* kept out an 11-article *AI*). Rerun here: the
   shelf-terms suites 78/78, typecheck clean (bar the screenshot agent's scratch scripts), the report's
   numbers and first-12 list unchanged on the local shelf.
+- **GPT Sol, stage 2 code** —
+  [260928d-shelf-topics-diversity-coverage-and-detail-view-stage2-review-sol.md](260928d-shelf-topics-diversity-coverage-and-detail-view-stage2-review-sol.md)
+  (prompt: [260928d-shelf-topics-diversity-coverage-and-detail-view-stage2-review-prompt.md](260928d-shelf-topics-diversity-coverage-and-detail-view-stage2-review-sol.md)),
+  reviewing 9af75f80, time-boxed. **No findings, no changes**, after a short run (about two
+  minutes) — which is weaker evidence than a review that found something, so the final shape was
+  also checked in a real browser (below).

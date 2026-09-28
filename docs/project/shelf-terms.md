@@ -65,17 +65,48 @@ so it could only have been wrong. The count line names both halves — *"4 of 41
 archived)"*. Passage search still covers active articles only. Reusing the existing control rather
 than adding a second switch is an **assumption pending Greg** (plan § Assumptions pending Greg).
 
+## Two views: pills, and More detail
+
+> - the "All N topics" should show all the terms, without changing the nature of their display
+> - then there should be a different way to show "More detail" or similar, that turns them into
+>   per-row-with-extra-detail rather than pills-on-the-same-row
+>
+> — Greg, 2026-09-28
+
+- **Pills**, the default: the first twelve topics in the server's rank order, plus any chosen one
+  further down, in its own place — never re-sorted by count, so nothing moves when you press one.
+  **"All N topics"** expands the same row to every pill; it is shown only when there are more than
+  twelve.
+- **More detail** (`?topicsView=detail`): every topic, in rank order, one compact row each — a colour
+  swatch, the chip, a bar for its live count (relative to the largest count shown, so the bars line
+  up in one column and compare at a glance), *"7 of 38 on the shelf"*, and the three articles that
+  use it most, as links. The chip in a row **is** the pill (`TermChip`): the same toggle, the same
+  `aria-pressed`, the same tooltip. The toggle between the views stays in one place, so focus stays
+  on it. Chosen over cards and two-line rows from screenshots, plan
+  [260928d](../plans/260928d-shelf-topics-diversity-coverage-and-detail-view.md) § Stage 2.
+
+**Colour is decoration, keyed to rank**: a topic's colour is its position in the server's order
+mapped onto the categorical palette ([colour-scales.md](colour-scales.md)) — the seven colour-blind-safe
+hues first, the neutral grey skipped, repeating after fifteen. The same colour is the dot on its pill
+and the swatch on its row. Stable across reloads; it changes when the shelf changes enough to re-rank
+the topic. The label is always drawn, and swatches and bars are `aria-hidden`.
+
+**Titles, not copies.** A row and a tooltip name articles **one per title** — the first slug of each —
+so three copies of one piece are named once. Only the naming is deduplicated; every count stays
+physical ([§ The count](#the-count-one-formula)).
+
 ## Touch
 
 The shared `Tooltip` opens on hover and focus, not on a tap, and a chip cannot both toggle and hold a
-card open on one tap (Sol, F5). So a tap toggles, and **"All N topics"** opens a list with one row per
-topic — its label, its count, and the two or three articles that use it most. That is Greg's *"each
-filter-term gets its own row with extra metadata"*, and the phone's way to what a mouse gets from
-hovering.
+card open on one tap (Sol, F5). So a tap toggles, and **More detail** writes into each row what the
+tooltip would have said — the count, how many on the shelf use it, and the articles that use it most.
+That is Greg's *"each filter-term gets its own row with extra metadata"*, and the phone's way to what a
+mouse gets from hovering.
 
 ## The URL
 
-`?topics=<key>,<key>` (push) and `?archived=1` (push) — [url-state.md](url-state.md). A key is the
+`?topics=<key>,<key>` (push), `?archived=1` (push) and `?topicsView=detail` (push, absent means
+pills) — [url-state.md](url-state.md). A key is the
 lowercased, plural-folded phrase, so it survives a label changing surface form. A key in the URL that
 is not among the topics is **never applied while they load** — so a stale link cannot flash an empty
 shelf — and is **dropped, with `replace`, once an answer arrives with nothing pending**. Not before:
@@ -91,7 +122,10 @@ while articles are still being read, a topic can be absent from one answer and p
 | `GET /api/library/terms` (`?archived=1` for active + archived), `private, no-store` | [`src/routes.ts`](../../src/routes.ts); the shape is `LibraryTermsResponse` in [`src/types.ts`](../../src/types.ts) |
 | the fetch, the ask-again loop, which URL keys apply | [`src/web/useShelfTerms.ts`](../../src/web/useShelfTerms.ts) |
 | the narrowing and the count formula, pure | [`src/web/shelf-narrow.ts`](../../src/web/shelf-narrow.ts) |
-| the row, the tooltip, the All-topics list | [`src/web/ShelfTerms.tsx`](../../src/web/ShelfTerms.tsx) |
+| the row: the two views, "All N topics", the More-detail toggle and `?topicsView` | [`src/web/ShelfTerms.tsx`](../../src/web/ShelfTerms.tsx) |
+| one topic's chip and its tooltip, shared by both views; `topArticles` (one per title) | [`src/web/ShelfTermChip.tsx`](../../src/web/ShelfTermChip.tsx) |
+| the More-detail rows: swatch, chip, count bar, links | [`src/web/ShelfTermsDetail.tsx`](../../src/web/ShelfTermsDetail.tsx) |
+| a topic's colour from its rank | [`src/web/topic-colour.ts`](../../src/web/topic-colour.ts) |
 | where it is wired into the page | [`src/web/Library.tsx`](../../src/web/Library.tsx) |
 
 ## Measuring a real shelf
