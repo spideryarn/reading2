@@ -74,6 +74,20 @@ vi.mock("../src/web/lib/api.js", async () => {
   };
 });
 
+/* The queue is the real one; only its completion callbacks are kept, so a test
+   can say "the route's job finished" without a poll (Sol F61). */
+const { finishers } = vi.hoisted(() => ({ finishers: [] as ((job: unknown) => void)[] }));
+vi.mock("../src/web/useJobs.js", async (importOriginal) => {
+  const real = await importOriginal<typeof import("../src/web/useJobs.js")>();
+  return {
+    ...real,
+    useJobs: (cadence: Parameters<typeof real.useJobs>[0], cb?: Parameters<typeof real.useJobs>[1]) => {
+      if (cb) finishers.push(cb as (job: unknown) => void);
+      return real.useJobs(cadence, cb);
+    },
+  };
+});
+
 /* Scrolls are recorded — jsdom has no layout, and the claim is that a step
    scrolls rather than pushes. comment-jump.test.ts does the same. */
 const { scrolled, flashed, movement } = vi.hoisted(() => ({
@@ -233,6 +247,7 @@ beforeEach(() => {
   posted.length = 0;
   quotesRead = QUOTES_READ;
   ideasBody = null;
+  finishers.length = 0;
   trajectoryBody = { trajectory: ROUTE, stale: false, outdated: false, profileChanged: false, notOnRoute: 0 };
   history.replaceState(null, "", "/read/a-route?mode=trajectory");
   host = document.createElement("div");
@@ -263,6 +278,7 @@ function owner(over: Partial<UseTrajectory> = {}): UseTrajectory {
     starting: false,
     automatic: false,
     quotesFirst: false,
+    ideasFirst: false,
     retryRead: async () => {},
     ensure: async () => {},
     regenerate: async () => {},
@@ -515,6 +531,19 @@ describe("the panel", () => {
     expect(text(".gloss-hint")).toContain("Quotes are chosen first");
     await draw(owner({ status: "none", trajectory: null }), empty);
     expect(text(".gloss-hint")).not.toContain("chosen first");
+  });
+
+  it("says before the press that the Ideas are found first, and that they are the long part (Sol F64)", async () => {
+    const empty = view({ rows: [], position: 0, depth: null });
+    await draw(owner({ status: "none", trajectory: null, quotesFirst: true, ideasFirst: true }), empty);
+    expect(text(".gloss-hint")).toContain("Quotes are chosen and its key Ideas found");
+    expect(text(".gloss-hint")).toContain("finding the Ideas is the long part");
+    await draw(owner({ status: "none", trajectory: null, ideasFirst: true }), empty);
+    expect(text(".gloss-hint")).toContain("key Ideas are found — the long part");
+    expect(text(".gloss-hint")).not.toContain("Quotes are chosen");
+    await draw(owner({ status: "none", trajectory: null }), empty);
+    expect(text(".gloss-hint")).not.toContain("Ideas");
+    expect(text(".gloss-hint")).toContain("a few seconds");
   });
 
   it("offers to plan a route when there is none", async () => {
@@ -973,15 +1002,25 @@ describe("the band, walked", () => {
     /* Not `["quotes", "trajectory"]`: the server re-runs Quotes whose prompt
        version is merely outdated, so naming them on every press re-bought and
        replaced a reader's Quotes on a route rebuild (browser check, 2026-09-28;
-       the plan's F38). */
+       the plan's F38). The Ideas are there too — outdated, which is not a
+       reason to name them either. */
+    ideasBody = IDEAS_BODY;
     await mount();
     await act(async () => host.querySelector<HTMLButtonElement>(".traj-again button")!.click());
     await settled();
     expect(posted).toEqual([{ slug: "a-route", steps: ["trajectory"], force: ["trajectory"] }]);
   });
 
+  it("plans it again with the Ideas found first, unforced, when there are none (stage 6)", async () => {
+    await mount();
+    await act(async () => host.querySelector<HTMLButtonElement>(".traj-again button")!.click());
+    await settled();
+    expect(posted).toEqual([{ slug: "a-route", steps: ["ideas", "trajectory"], force: ["trajectory"] }]);
+  });
+
   it("plans it again with stale Quotes chosen first, unforced (5e, Sol F30)", async () => {
     quotesRead = { ...QUOTES_READ, stale: true };
+    ideasBody = IDEAS_BODY;
     await mount();
     await act(async () => host.querySelector<HTMLButtonElement>(".traj-again button")!.click());
     await settled();
@@ -1021,6 +1060,27 @@ describe("the scrapbook, walked", () => {
         .click();
     });
     expect(opened).toEqual(["idea spya-id4ghj"]);
+  });
+
+  it("shows the Ideas the route's own job found, without a reload (Sol F61)", async () => {
+    /* A fresh article: no Ideas when the band mounts. */
+    await mount();
+    const ideaReads = () => requested.filter((r) => r.url.startsWith("/api/ideas/")).length;
+    const before = ideaReads();
+    expect(before).toBeGreaterThan(0);
+    expect(host.querySelector(".traj-row.current .traj-card")?.textContent ?? "").not.toContain(
+      "Fieldwork is the test",
+    );
+
+    /* The route's job finishes, having found the Ideas on its way. */
+    ideasBody = IDEAS_BODY;
+    expect(finishers.length).toBeGreaterThan(0);
+    await act(async () => {
+      finishers.at(-1)!({ id: "job-t", slug: "a-route", status: "done", steps: [{ name: "ideas" }, { name: "trajectory" }] });
+    });
+    await settled();
+    expect(ideaReads()).toBeGreaterThan(before);
+    expect(host.querySelector(".traj-row.current .traj-card")?.textContent).toContain("Fieldwork is the test");
   });
 
   it("finds a plural the stored list never named, and draws no card from a stale glossary", async () => {

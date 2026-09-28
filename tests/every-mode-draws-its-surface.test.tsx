@@ -1116,10 +1116,11 @@ const SPENDS: Record<Mode, Spend> = {
   citations: { kind: "posts", steps: ["citations"] },
   /* One model pass over the article, like Ideas. */
   faq: { kind: "posts", steps: ["faq"] },
-  /* **Two steps, and the first is the point**: with no Quotes the route has
-     nothing to order, so the one press asks for the Quotes first in the same
-     job (`precededBy`, src/web/useTrajectory.ts). Phase A serves no Quotes. */
-  trajectory: { kind: "posts", steps: ["quotes", "trajectory"] },
+  /* **Three steps, and the first two are the point**: with no Quotes the
+     route has nothing to order, and since stage 6 of plan 260928a it plans
+     around the Ideas, so the one press asks for both first in the same job
+     (`precededBy`, src/web/useTrajectory.ts). Phase A serves neither. */
+  trajectory: { kind: "posts", steps: ["quotes", "ideas", "trajectory"] },
   /* **The one mode where the button and the target are not the same word**,
      and the one row where "what it costs" and "what it arms" are two questions.
 

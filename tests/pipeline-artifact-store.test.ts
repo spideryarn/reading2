@@ -114,7 +114,8 @@ import { PROMPT_VERSION as QUOTES_VERSION } from "../src/quotes.js";
 import {
   emptyDrops as emptyTrajectoryDrops,
   PROMPT_VERSION as TRAJECTORY_VERSION,
-  quotesHash as trajectoryQuotesHash,
+  trajectoryInput,
+  trajectoryInputHash,
 } from "../src/trajectory.js";
 import { PROMPT_VERSION as TWEETS_VERSION } from "../src/tweets.js";
 import { splitIntoBlocks } from "../src/blocks.js";
@@ -130,7 +131,7 @@ import { articleText, articleWithIds } from "../src/article-prompt.js";
 import { metaRawSha256, sameStamp } from "../src/store/artifacts.js";
 import type { ArtifactKind, ArtifactMap, ArtifactReads } from "../src/store/artifacts.js";
 import type { StepContext } from "../src/pipeline.js";
-import type { Block, Meta, StepName, Tree } from "../src/types.js";
+import type { Block, Ideas, Meta, Quotes, StepName, Tree } from "../src/types.js";
 import { memoryArtefacts, type MemoryArtifactStore } from "./helpers/memory-artefacts.js";
 import { fixturePath, requireFixture } from "./helpers/require-fixture.js";
 
@@ -614,16 +615,24 @@ function writeWholeArticle(store: MemoryArtifactStore): void {
     elapsedMs: 1,
   });
   /* **A route over the one quote planted above**, and its `sourceHash` is the
-     quotes hash rather than any article fingerprint — so it is computed from
-     the inputs Trajectory reads, through the stage's own function. `null`
-     profile, for `ideas`' "deliberately without a profile" reason: `ctxOf`
-     carries none, and the stamp compares it. */
+     route's input hash rather than any article fingerprint — the quote, the
+     (empty) Ideas list and the tree's outline, exactly what its prompt renders
+     — so it is computed from the inputs Trajectory reads, through the stage's
+     own functions. `null` profile, for `ideas`' "deliberately without a
+     profile" reason: `ctxOf` carries none, and the stamp compares it. */
   store.plant(SLUG, "trajectory", "trajectory", {
     generator: CAPABLE_MODEL,
     slug: SLUG,
-    sourceHash: trajectoryQuotesHash([
-      { id: "spya-qqqqqq", blockId: BODY.id, text: "One paragraph of something to hash." },
-    ]),
+    sourceHash: trajectoryInputHash(
+      trajectoryInput({
+        quotes: {
+          quotes: [{ id: "spya-qqqqqq", blockId: BODY.id, text: "One paragraph of something to hash." }],
+        } as Quotes,
+        blocks: BLOCKS,
+        tree: TREE as Tree,
+        ideas: { ideas: [] } as unknown as Ideas,
+      }),
+    ),
     version: TRAJECTORY_VERSION,
     profileHash: null,
     stops: [{ quoteId: "spya-qqqqqq", depth: 1, role: "The one line" }],

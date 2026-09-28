@@ -118,6 +118,36 @@ export function coverageNote(atMost: number, quotes: number): string | null {
  * most serious first: stale can mean a stop's passage has gone; the other two
  * only that we would plan it differently now.
  */
+/**
+ * **What pressing *Plan the route* will make, said before the press** (Sol
+ * F64). Since stage 6 the route waits for the Ideas, a whole-article call of
+ * tens of seconds beside a route of a few, so the sentence names what goes
+ * first and which part is the long one.
+ */
+export function emptyHint(owner: Pick<UseTrajectory, "quotesFirst" | "ideasFirst">): string {
+  const kept = "Written once and kept.";
+  if (owner.quotesFirst && owner.ideasFirst) {
+    return (
+      "First the article's Quotes are chosen and its key Ideas found — finding the Ideas is the " +
+      "long part, tens of seconds — then a short model pass puts the Quotes in an order that " +
+      `covers the Ideas. ${kept}`
+    );
+  }
+  if (owner.ideasFirst) {
+    return (
+      "First the article's key Ideas are found — the long part, tens of seconds — then a short " +
+      `model pass puts its Quotes in an order that covers them. ${kept}`
+    );
+  }
+  if (owner.quotesFirst) {
+    return (
+      "The article's Quotes are chosen first, then a short model pass puts them in an order — " +
+      `longer than the order alone. ${kept}`
+    );
+  }
+  return `A short model pass puts the article's Quotes in an order, and takes a few seconds. ${kept}`;
+}
+
 export function outdatedBy(
   owner: Pick<UseTrajectory, "stale" | "notOnRoute" | "profileChanged" | "outdated">,
 ): string | null {
@@ -125,7 +155,7 @@ export function outdatedBy(
     const n = owner.notOnRoute;
     return n > 0
       ? `The Quotes have changed since this route was planned, and ${n} ${n === 1 ? "is" : "are"} not on it.`
-      : "The Quotes have changed since this route was planned.";
+      : "The Quotes or the Ideas have changed since this route was planned.";
   }
   if (owner.profileChanged) return "This route was planned before your profile said what it says now.";
   if (owner.outdated) return "This route was planned by an older version of the prompt.";
@@ -263,11 +293,7 @@ export function TrajectoryPanel({ owner, view, quoteCount }: Props) {
       {owner.status === "none" && (
         <div className="gloss-empty">
           <p>Nobody has planned a route through this piece yet.</p>
-          <p className="gloss-hint">
-            {owner.quotesFirst
-              ? "The article's Quotes are chosen first, then a short model pass puts them in an order — longer than the order alone. Written once and kept."
-              : "A short model pass puts the article's Quotes in an order, and takes a few seconds. Written once and kept."}
-          </p>
+          <p className="gloss-hint">{emptyHint(owner)}</p>
           {run("Plan the route")}
         </div>
       )}

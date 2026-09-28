@@ -133,11 +133,16 @@ export function TrajectoryBand({
   onControl(control: TrajectoryControl | null): void;
 }) {
   useRenderCount("TrajectoryBand");
-  const owner = useTrajectory(slug, quotes);
-  /* **The scrapbook's sources, read and never written.** The read-only hooks
-     carry no job machinery at all, so the card cannot be the reason any of
-     these is generated (Sol F22). The glossary is `Reader`'s own read. */
+  /* **The Ideas read comes first, and the route's hook is handed it** (Sol
+     F61): since stage 6 the route's own job finds the Ideas when there are
+     none, so its completion has to refresh this read — the one the stop card
+     draws from — or a fresh article's card shows no Ideas until a reload. */
   const ideas = useIdeasRead(slug);
+  const owner = useTrajectory(slug, quotes, ideas);
+  /* **The scrapbook's other sources, read and never written.** The read-only
+     hooks carry no job machinery at all, so the card cannot be the reason any
+     of these is generated (Sol F22). The glossary is `Reader`'s own read. The
+     Ideas are the exception above: made by the route's job, never by the card. */
   const faq = useFaqRead(slug);
   const timeline = useTimelineRead(slug);
   const sources = useMemo<CardSources>(

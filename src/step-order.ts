@@ -83,18 +83,6 @@ export const STEP_ORDER = [
      until 2026-09-03, when `quotes` started sending a breakpoint of its own:
      see `cacheArticleForStep` (src/pipeline.ts). docs/project/quotes.md. */
   "quotes",
-  /* **Straight after `quotes`, because it reads what `quotes` writes** — the
-     second step here whose input is another step's artefact, after
-     `illustrated`. The order does not *pull* the Quotes in; what it buys is
-     that a job naming both (`precededBy: ["quotes"]`, `StepBefore` below)
-     chooses the quotes before it routes through them.
-
-     **In no cache group, so its place breaks no contiguity**: it sends the
-     quotes and never the article, so its bytes match no other stage's, and
-     `quotes` and `ideas` on either side of it were never one group anyway.
-     Off `DEFAULT_INGEST_STEPS` and in `FORCE_ONLY_WHEN_NAMED` (src/pipeline.ts).
-     docs/plans/260928a-trajectory-mode-skim-a-paper-at-increasing-depth.md. */
-  "trajectory",
   "ideas",
   /* Beside `ideas`, and that is the same argument `quotes` makes two rows up:
      the two send byte-identical article bytes at the same effort and the same
@@ -136,6 +124,22 @@ export const STEP_ORDER = [
      buys is that a run naming both draws before it paints.
      docs/project/diagram.md § Illustrated. */
   "illustrated",
+  /* **After both of the things it reads — `quotes` and `ideas`** — the second
+     step here whose input is other steps' artefacts. The order does not *pull*
+     them in; what it buys is that a job naming all three (`precededBy:
+     ["quotes", "ideas"]`, `StepBefore` below) chooses the quotes and finds the
+     ideas before it routes through them. It sat straight after `quotes` until
+     stage 6 of plan 260928a gave it the Ideas.
+
+     **After the whole `ideas` … `sketch` cache group, not inside it**: it sends
+     the quotes and never the article, so its bytes match no other stage's, and
+     a place between `ideas` and `timeline` would break that group's contiguity
+     (tests/article-cache-group.test.ts). After `illustrated` too, so that step
+     stays beside the `sketch` it paints. Only named steps run, so this place
+     never makes a job run the steps between.
+     Off `DEFAULT_INGEST_STEPS` and in `FORCE_ONLY_WHEN_NAMED` (src/pipeline.ts).
+     docs/plans/260928a-trajectory-mode-skim-a-paper-at-increasing-depth.md. */
+  "trajectory",
   /* **Last, and it depends on nothing in this list.** Every other name here
      reads an artefact something before it wrote; this one goes to the open web
      and comes back with pages that answer the piece. It is last because it has

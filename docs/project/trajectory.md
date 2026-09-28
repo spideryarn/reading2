@@ -80,6 +80,21 @@ Stage 5, asked for by Greg on 2026-09-28 (his words are in the
   **Stale Quotes are chosen again first**, on the automatic run and on this button, as missing ones
   always were — unforced, so current Quotes cost nothing — and the empty state says when they will be.
 
+Stage 6 ([plan § Stage 6](../plans/260928a-trajectory-mode-skim-a-paper-at-increasing-depth.md)),
+`trajectory/7`:
+
+- **The route sees the Ideas and the outline.** The call is also given the article's Ideas
+  (`I1…`, name and statement) and its top-level sections (title, gist where there is one), fenced
+  as data. Which Ideas each quote *carries* (same block) or sits *beside* (the nearest body
+  paragraph either side, same top-level section) is worked out in code, never by the model. It is
+  asked to cover as many Ideas as the quotes allow at each pass. Stops are still quotes only.
+- **It waits for the Ideas.** The automatic run and *Plan it again* find the Ideas first, in the
+  same job, when they are missing or stale; the empty state says so before the press, and that
+  finding them is the long part. The job's end refreshes the stop card's Ideas.
+- **One input hash** (`trajectoryInputHash`) over exactly what the prompt renders is both the stamp
+  and the read's freshness check, so regenerated Ideas, or Ideas arriving after a route planned
+  without them, mark the route stale.
+
 ### What we tried for v2
 
 Three static mockups, on real data from the entropy paper
