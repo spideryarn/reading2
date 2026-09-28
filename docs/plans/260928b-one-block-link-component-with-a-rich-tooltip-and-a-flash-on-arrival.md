@@ -292,6 +292,7 @@ text already contains it** (a Summary title), and opens no card at all if that h
 - `ProseHoverCard`'s foot button and the other kept buttons above — deliberate.
 - Group C (spine, Structure, Outline, gist cells, diagram nodes, drawer rows) and group D (the
   article's own links in the prose, lightbox, note card) have no new card, by design; they flash.
-- `tests/client-imports.test.ts` fails on dev independently of this work: Trajectory's
-  `TrajectoryMode.tsx` imports `../../../section-path.js`, which the client-imports rule does not
-  allow. Not ours; left for the Trajectory session.
+- The full suite in the worktree: 25,208 passed, 6 files red, none this work's —
+  `cold-start-lazy-imports` and `pdf-bundle-trace` want `npm run build`, the three `fleet-*` files
+  want the fleet dashboard's `dist/`, and `client-imports` was Trajectory's `section-path.js`
+  import, which passes again after merging origin/dev.
