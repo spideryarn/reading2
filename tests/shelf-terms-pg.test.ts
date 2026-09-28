@@ -9,12 +9,16 @@
  * 2. **Concurrent same-version fills** both succeed and leave one row each.
  * 3. **A v1 and a v2 row coexist**, and each version reads only its own.
  * 4. **A new current revision gets its own row, and the superseded one goes.**
- * 5. **The budget** leaves `pending > 0`, and a second call finishes.
- * 6. **Reader A's request creates no row for B, returns no B slug, and no
+ * 5. **A stale writer after republication** deletes itself without deleting a
+ *    current-revision row written by another extractor version.
+ * 6. **The budget** leaves `pending > 0`, and a second call finishes.
+ * 7. **Reader A's request creates no row for B, returns no B slug, and no
  *    B-only phrase** — with the control that B's own request does return it,
  *    so the absence is not the phrase merely failing to be a topic.
- * 7. **Archived scope**, in and out.
- * 8. **The route**: auth as `/api/library`, `private, no-store`, the shape.
+ * 8. **Archived scope**, in and out.
+ * 9. **Shelf parity**: an unreadable published revision is absent from both
+ *    the library and the terms set, and receives no cache row.
+ * 10. **The route**: auth as `/api/library`, `private, no-store`, the shape.
  *
  * Two owners of this file's own, seeded here, so the shelves under test hold
  * exactly what this file put on them.
@@ -37,12 +41,15 @@ import { runAsOwner, type OwnerId } from "../src/owner.js";
 import { EXTRACTOR_VERSION } from "../src/shelf-terms/extract.js";
 import {
   currentShelfRevisions,
+  extractRevision,
   fillPhraseRuns,
   missingRuns,
   readPhraseRuns,
   shelfTerms,
+  writePhraseRun,
 } from "../src/store/pg-shelf-terms.js";
-import type { LibraryTermsResponse } from "../src/types.js";
+import { listArticles } from "../src/store/index.js";
+import type { LibraryTermsResponse, Tree } from "../src/types.js";
 import { acceptAny, AUTHED_HEADERS } from "./helpers/authed.js";
 import { pgReady } from "./helpers/pg-ready.js";
 import { seedAuthUser } from "./helpers/seed-auth-user.js";
@@ -94,10 +101,33 @@ const db = () => getDb();
 let blockCounter = 0;
 
 /** A published revision with these paragraphs; returns its id. */
-async function addRevision(articleId: string, title: string, paras: string[], fetchedAt: Date): Promise<string> {
+async function addRevision(
+  articleId: string,
+  title: string,
+  paras: string[],
+  fetchedAt: Date,
+  readable = true,
+): Promise<string> {
   const [rev] = await db()
     .insert(articleRevisions)
-    .values({ articleId, status: "published", title, fetchedAt })
+    .values({
+      articleId,
+      status: "published",
+      title,
+      fetchedAt,
+      ...(readable
+        ? {
+            /* Presence is the shelf boundary under test. All cached scalars
+               are supplied, so listArticles never interprets this minimal
+               legacy-shaped fixture. */
+            tree: { rootId: "r", nodes: { r: { id: "r", depth: 0 } } } as unknown as Tree,
+            wordCount: paras.join(" ").split(/\s+/).length,
+            blockCount: paras.length,
+            partCount: 0,
+            sectionCount: 0,
+          }
+        : {}),
+    })
     .returning({ id: articleRevisions.id });
   if (!rev) throw new Error("no revision");
   const ids = paras.map(() => blockId("t", blockCounter++));
@@ -131,7 +161,7 @@ async function makeArticle(
   owner: OwnerId,
   slug: string,
   paras: string[],
-  opts: { archived?: boolean; day: number },
+  opts: { archived?: boolean; day: number; readable?: boolean },
 ): Promise<Made> {
   const [a] = await db()
     .insert(articles)
@@ -139,7 +169,7 @@ async function makeArticle(
     .returning({ id: articles.id });
   if (!a) throw new Error("no article");
   const fetchedAt = new Date(Date.UTC(2026, 0, 1 + opts.day));
-  const revisionId = await addRevision(a.id, slug, paras, fetchedAt);
+  const revisionId = await addRevision(a.id, slug, paras, fetchedAt, opts.readable ?? true);
   await db().update(articles).set({ currentRevisionId: revisionId }).where(eq(articles.id, a.id));
   return { slug, articleId: a.id, revisionId };
 }
@@ -230,6 +260,8 @@ describe("the shelf's filter terms in Postgres", () => {
 
     const second = await asA(() => shelfTerms({ archived: false }));
     expect(second.pending).toBe(0);
+    expect(second.scope.articles).toBe(10);
+    expect(second.scope.works).toBe(9);
     expect(second.scope.skipped).toBe(1);
     const after = await rowsFor(ids);
     expect(after).toHaveLength(10);
@@ -311,6 +343,45 @@ describe("the shelf's filter terms in Postgres", () => {
     expect(rows.map((r) => r.revisionId)).toEqual([newRevision]);
   });
 
+  it("makes a stale post-publication writer delete itself without deleting the current revision's other version", async () => {
+    const target = aActive[3];
+    if (!target) throw new Error("no article");
+    await clearRows([target.articleId]);
+    const oldEntry = (await asA(() => currentShelfRevisions({ archived: false }))).find(
+      (entry) => entry.articleId === target.articleId,
+    );
+    if (!oldEntry) throw new Error("old revision is not on the shelf");
+    const oldRun = await asA(() => extractRevision(oldEntry));
+
+    const newRevision = await addRevision(
+      target.articleId,
+      target.slug,
+      paragraphs([A_TOPICS[1] ?? "", A_TOPICS[5] ?? ""], "concurrent-republication"),
+      /* Older than every fixture, so this republication does not become the
+         shelf's newest article and move the budget case's "newest first". */
+      new Date(Date.UTC(2025, 11, 1)),
+    );
+    await db().update(articles).set({ currentRevisionId: newRevision }).where(eq(articles.id, target.articleId));
+    target.revisionId = newRevision;
+    const newEntry = (await asA(() => currentShelfRevisions({ archived: false }))).find(
+      (entry) => entry.articleId === target.articleId,
+    );
+    if (!newEntry) throw new Error("new revision is not on the shelf");
+    const newRun = await asA(() => extractRevision(newEntry));
+
+    const otherVersion = EXTRACTOR_VERSION + 1;
+    await asA(() => writePhraseRun(newEntry, newRun, otherVersion));
+    await asA(() => writePhraseRun(oldEntry, oldRun));
+    expect((await rowsFor([target.articleId])).map((r) => [r.revisionId, r.extractorVersion])).toEqual([
+      [newRevision, otherVersion],
+    ]);
+
+    await asA(() => writePhraseRun(newEntry, newRun));
+    expect(
+      (await rowsFor([target.articleId])).map((r) => r.extractorVersion).sort((a, b) => a - b),
+    ).toEqual([EXTRACTOR_VERSION, otherVersion]);
+  });
+
   it("stops at the budget with pending > 0, and a second call finishes", async () => {
     const ids = aActive.map((a) => a.articleId);
     await clearRows(ids);
@@ -367,6 +438,25 @@ describe("the shelf's filter terms in Postgres", () => {
     expect(both.pending).toBe(0);
     expect(await rowsFor([aArchived.articleId])).toHaveLength(1);
     expect(JSON.stringify(both)).toContain(aArchived.slug);
+  });
+
+  it("uses the same readable-revision set as the library shelf", async () => {
+    const hidden = await makeArticle(
+      OWNER_A,
+      `${PREFIX}a-no-tree`,
+      paragraphs([A_TOPICS[0] ?? "", A_TOPICS[1] ?? ""], "treeless"),
+      { day: 30, readable: false },
+    );
+    try {
+      const [set, shelf] = await asA(() =>
+        Promise.all([currentShelfRevisions({ archived: false }), listArticles({ archived: false })]),
+      );
+      expect(set.some((a) => a.slug === hidden.slug)).toBe(false);
+      expect(shelf.some((a) => a.slug === hidden.slug)).toBe(false);
+      expect(await rowsFor([hidden.articleId])).toHaveLength(0);
+    } finally {
+      await db().delete(articles).where(eq(articles.id, hidden.articleId));
+    }
   });
 });
 

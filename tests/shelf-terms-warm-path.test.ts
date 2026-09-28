@@ -11,13 +11,68 @@
  * printed so a regression is visible long before it trips.
  */
 import { describe, expect, it } from "vitest";
+import { QueryBuilder } from "drizzle-orm/pg-core";
 
 import { chooseTerms, type ChooseArticle } from "../src/shelf-terms/choose.js";
-import type { Candidate } from "../src/shelf-terms/extract.js";
+import type { Candidate, Extraction } from "../src/shelf-terms/extract.js";
+import {
+  chooseInput,
+  shelfRevisionsQuery,
+  type ShelfRevision,
+} from "../src/store/pg-shelf-terms.js";
 
 const ARTICLES = 1000;
 const PER_ARTICLE = 200;
 const VOCAB = 6000;
+
+function shelfRevision(n: number): ShelfRevision {
+  return {
+    articleId: `00000000-0000-4000-8000-${String(n).padStart(12, "0")}`,
+    revisionId: `10000000-0000-4000-8000-${String(n).padStart(12, "0")}`,
+    slug: `article-${n}`,
+    archived: false,
+    title: null,
+  };
+}
+
+function extraction(n: number, skipped: Extraction["skipped"] = null): Extraction {
+  return {
+    words: 1000,
+    textHash: `hash-${n}`,
+    skipped,
+    candidates: skipped
+      ? []
+      : n < 3
+        ? [{ key: "shared phrase", label: "shared phrase", count: 3, bodyCount: 3, score: 3 }]
+        : [],
+  };
+}
+
+describe("the chooser input built from stored runs", () => {
+  it("excludes skipped articles from the work count and the eight-work threshold", () => {
+    const set = Array.from({ length: 8 }, (_, i) => shelfRevision(i));
+    const runs = new Map(set.map((s, i) => [s.revisionId, extraction(i, i === 7 ? "not-english" : null)]));
+
+    const input = chooseInput(set, runs);
+    const result = chooseTerms(input);
+
+    expect(input.map((a) => a.slug)).toEqual(set.slice(0, 7).map((s) => s.slug));
+    expect(result.works).toBe(7);
+    expect(result.terms).toEqual([]);
+  });
+});
+
+describe("the owner-scoped terms set", () => {
+  it("uses the same readable-revision boundary as the library shelf", () => {
+    const sql = shelfRevisionsQuery(new QueryBuilder() as never, {
+      archived: false,
+    }).toSQL().sql;
+
+    expect(sql).toContain('"tree" is not null');
+    expect(sql).toMatch(/coalesce\(\s*"spideryarn"\."article_revisions"\."block_count"/);
+    expect(sql).toContain('from "spideryarn"."revision_blocks"');
+  });
+});
 
 /** mulberry32: small, seeded, good enough to spread a vocabulary. */
 function rng(seed: number): () => number {

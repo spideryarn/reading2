@@ -85,14 +85,23 @@ async function main(): Promise<void> {
       readMs += r1 - r0;
       extractMs += r2 - r1;
       words += run.words;
-      if (run.skipped) skipped.push({ slug: entry.slug, why: run.skipped });
-      input.push({ slug: entry.slug, words: run.words, textHash: run.textHash, candidates: run.candidates });
+      if (run.skipped) {
+        skipped.push({ slug: entry.slug, why: run.skipped });
+      } else {
+        input.push({ slug: entry.slug, words: run.words, textHash: run.textHash, candidates: run.candidates });
+      }
     }
-    const slugs = set.map((s) => s.slug);
+    /* Coverage describes articles the English extractor can classify. A
+       skipped article can never join a topic, so including it would make the
+       denominator depend on unsupported input rather than topic quality. */
+    const slugs = input.map((a) => a.slug);
     const wordsOf = new Map(input.map((a) => [a.slug, a.words]));
 
     const works = new Set(input.map((a) => a.textHash)).size;
-    console.log(`Articles ${set.length}   works ${works}   skipped ${skipped.length}   prose words ${words.toLocaleString("en-GB")}`);
+    console.log(
+      `Articles ${set.length - skipped.length} eligible / ${set.length} on shelf   ` +
+        `works ${works}   skipped ${skipped.length}   prose words ${words.toLocaleString("en-GB")}`,
+    );
     for (const s of skipped) console.log(`  skipped: ${s.slug} (${s.why})`);
     console.log("");
 

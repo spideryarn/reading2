@@ -7056,8 +7056,10 @@ const AUTH_ROUTES: readonly AuthRoute[] = [
     },
   },
 
-  /* **The shelf's filter topics**, and before the `:slug` pattern for the same
-     reason `search` is: `terms` is a valid slug shape.
+  /* **The shelf's filter topics**. It sits with the other exact library reads
+     before the `:slug` mutations. The order is not an auth or routing defence:
+     those patterns accept PATCH/DELETE, while this row accepts GET, and the
+     dispatcher checks the method before the path.
      docs/plans/260928a-shelf-facet-terms.md § The route. A GET that may write
      — a bounded, idempotent cache fill (src/store/pg-shelf-terms.ts says why
      that is acceptable here and not for counters). */

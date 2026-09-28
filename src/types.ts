@@ -1842,11 +1842,11 @@ export interface LibraryTermsResponse {
     articles: { slug: string; count: number }[];
   }[];
   scope: {
-    /** In-scope articles: active, or active + archived with `?archived=1`. */
+    /** The whole visible shelf, including skipped and pending articles. */
     articles: number;
-    /** Distinct works (exact counted-text copies are one) among those read. */
+    /** Distinct eligible works (exact counted-text copies are one) among those read. */
     works: number;
-    /** Articles the extractor skipped — not English, or no prose. */
+    /** Read articles the extractor skipped — not English, or no prose. */
     skipped: number;
   };
   /** In-scope articles not yet read; ask again until this is 0. */

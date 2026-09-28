@@ -239,8 +239,8 @@ still too slow, a backfill command that calls the same fill function is the next
 reader's current `(article, revision)` pairs**, and nothing reads a candidate row except through that
 set — so another reader's articles never enter the candidates, the document frequencies or the idf,
 which is the whole of the leak surface ([security-map.md](../project/security-map.md), Sol F10).
-Sent with `Cache-Control: private, no-store`. Registered before the `/api/library/:slug` pattern for
-the same reason `/search` is.
+Sent with `Cache-Control: private, no-store`. It is an exact authenticated route beside `/search`;
+the `/api/library/:slug` routes accept PATCH/DELETE, so their relative order cannot capture this GET.
 
 ```ts
 { terms: { key: string; label: string; articles: { slug: string; count: number }[] }[];
@@ -354,21 +354,24 @@ building:
 **Landed** (2026-09-28): `revision_phrase_runs` (schema.ts, migration
 `20260928023409_shelf_terms_revision_phrase_runs`), `src/store/pg-shelf-terms.ts` (wired as
 `shelfTermsStore`, guarded as `shelf-terms`), `GET /api/library/terms`, `LibraryTermsResponse`,
-`scripts/shelf-terms-report.ts`, `tests/shelf-terms-pg.test.ts` (10 cases, each of seven deliberate
+`scripts/shelf-terms-report.ts`, `tests/shelf-terms-pg.test.ts` (12 cases, each of seven deliberate
 breaks of the store or route turned its own case red) and `tests/shelf-terms-warm-path.test.ts`.
 What differed from the design above, or was decided while building:
 
 - **The owner-scoped set is its own query, not `listArticlesQuery`**, built from the same pieces
   (`ownedByReader`, `onTheShelf`, the `archived_at` test, the join to the current revision,
-  `ADDED_AT` order). It does not repeat `listArticles`' per-row "has a tree and blocks" check, which
-  that function's own comment says has never excluded a published article. `archived: true` means
-  active **and** archived here, not archived only as in `listArticles`.
+  `ADDED_AT` order), plus SQL equivalents of `listArticles`' post-query tree/block checks.
+  `archived: true` means active **and** archived here, not archived only as in `listArticles`.
 - **A fill always does at least one article**, whatever the budget, so the client's ask-again loop
   cannot spin. Each fill is one `read committed` transaction: the insert (`on conflict do nothing`),
-  then a delete of the article's rows whose revision is not its current one *as it is now* — so a
-  republication mid-fill deletes the stale row just written, not the peer's new one — any version.
-- **Skipped articles go into the chooser** (as stage 1's `ChooseArticle` intends) and so count as
-  works and in the coverage denominator; `scope.articles` counts pending ones too.
+  then a delete of the article's rows whose revision is not current in that statement's snapshot.
+  A republication already committed makes the stale insert delete itself without touching a peer's
+  current row, any version; one committing afterwards can leave the old cache row until the new
+  revision's first fill, but current-revision reads cannot select it.
+- **Skipped articles do not go into the chooser** and do not count as works or in report coverage:
+  an article the English extractor cannot classify cannot ever join a topic. They remain visible as
+  `scope.skipped`. `scope.articles` still counts the whole visible shelf, including skipped and
+  pending articles, so that shelf-size label does not shrink while the bounded fill progresses.
 - **The report reads through the route's own set query and extracts in memory**; it imports no write
   path. The shell's `DATABASE_URL` wins over `.env.local`.
 - **Not applied to the shared local database.** `npm run db:migrate` refuses there: two peer
@@ -384,7 +387,9 @@ What differed from the design above, or was decided while building:
   parse, 745 ms to choose (the database transfer itself not measured). Acceptable for v1; if a real
   shelf gets there, trimming the stored list below 200 is the first lever.
 
-**Measured on the local database** (owner `f4d08b58…`, extractor v1, `npm run shelf-terms:report`):
+**Measured before the Stage 2 review on the local database** (owner `f4d08b58…`, extractor v1,
+`npm run shelf-terms:report`). These historical rows include the one skipped article in `articles`,
+`works` and the coverage denominator; rerun the report before treating the figures as current:
 
 | scope | articles | works | skipped | K | coverage | per article mean/median | ≥ 2 | Jaccard mean/max |
 |---|---|---|---|---|---|---|---|---|
@@ -399,6 +404,12 @@ What differed from the design above, or was decided while building:
 whole shelf — so a first visit here fills over two requests. The one skipped article is
 `sample-spya-vgwr6s`, not English. Uncovered at K = 30: that one, two 99-word *stage-e* test pages,
 *todo* (234 words) and *read* (448). The K = 30 active row matches stage 1's throwaway run exactly.
+
+**Rerun after the Stage 2 review** (skipped articles now out of the chooser and the coverage
+denominator), active: 37 eligible of 38, 32 works — **K = 30: coverage 0.89, 2.92 / 2 topics per
+article, 0.73 with ≥ 2, Jaccard 0.07 / 0.67**; K = 20: 0.78; K = 40 (32 chosen): 0.89. Uncovered:
+the two 99-word *stage-e* pages, *todo* and *read*. Choosing takes 20–40 ms; the in-memory
+extraction of the whole shelf 1.8 s (5.5 ms per 1k words).
 
 ### Stage 3 — the shelf UI
 
@@ -456,3 +467,16 @@ stage, reports anything wider), gates rerun, commit its fixes.
   (a label's forms are aggregated per article, not per occurrence — exact needs per-form counts
   stored), S1-5 (idf counts any stored occurrence, not membership), S1-6 (a long article can still
   lift quality), S1-7 (`stemForOverlap` can conflate *formal*/*form*).
+- **GPT Sol, stage 2 code, round 1** —
+  [260928a-shelf-facet-terms-stage2-review-sol.md](260928a-shelf-facet-terms-stage2-review-sol.md)
+  (prompt: [260928a-shelf-facet-terms-stage2-review-prompt.md](260928a-shelf-facet-terms-stage2-review-prompt.md);
+  the Postgres run it was handed: [260928a-shelf-facet-terms-stage2-pg-run.txt](260928a-shelf-facet-terms-stage2-pg-run.txt)),
+  reviewing ab85237c. *Ready with its fixes*; no P0. It fixed S2-1 (skipped articles counted as
+  works) and S2-2 (the terms set did not apply `listArticles`' tree-and-blocks boundary, so a shelf
+  could have topics for articles it does not show), added S2-4's stale-writer case, and corrected
+  two comments (S2-6, S2-7). Its new Postgres case was not runnable in its sandbox; run here, it
+  exposed a fixture-date interaction with the budget case (the republished revision became the
+  newest article), fixed by dating that revision oldest — 12/12 green, twice. Reported, not fixed:
+  S2-3 (shelf membership has two implementations, now guarded by a parity test) and S2-5 (the
+  low-level helpers trust the caller's revision objects; every current caller gets them from the
+  owner-scoped set).

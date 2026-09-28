@@ -84,6 +84,18 @@ export function shelfRevisionsQuery(db: Pick<Db, "select">, scope: ShelfScope) {
       and(
         ownedByReader(),
         onTheShelf(),
+        /* `listArticles` drops these two cases after its query. Mirror that
+           exact readable-revision boundary here so a slug cannot receive a
+           topic while having no card (or get a cache row for a revision the
+           shelf does not expose). The scalar fallback is the same one
+           `scalarsForShelf` uses: a stored count wins; older rows with no
+           count are judged by their actual block rows. */
+        sql`${articleRevisions.tree} is not null`,
+        sql`coalesce(
+          ${articleRevisions.blockCount},
+          (select count(*)::integer from ${revisionBlocks}
+           where ${revisionBlocks.revisionId} = ${articleRevisions.id})
+        ) > 0`,
         /* `=== "1"` upstream; here, both halves or the shelf proper. */
         scope.archived ? undefined : isNull(articles.archivedAt),
       ),
@@ -184,12 +196,14 @@ export async function extractRevision(entry: ShelfRevision): Promise<Extraction>
  * longer its current one. One transaction, `read committed` like every
  * transaction in this store (isolation.ts).
  *
- * The delete compares against the article's current revision **as it is now**,
- * not against `entry.revisionId`: if the article was republished while this
- * fill ran, the row just written is the stale one, and it goes; the new
- * revision's row, if a peer already wrote it, stays. The owner is in the
- * subquery too, so a revision id that somehow was not the reader's deletes
- * nothing.
+ * The delete compares against the article's current revision in that
+ * statement's `read committed` snapshot, not against `entry.revisionId`: if a
+ * republication committed before cleanup, the row just written is stale and
+ * goes; the new revision's row, if a peer already wrote it, stays. A
+ * publication after that snapshot can leave the old cache row until the new
+ * revision's first fill, but no read can select it because reads start from the
+ * current-revision set. The owner is in the subquery too, so a revision id that
+ * somehow was not the reader's deletes nothing.
  */
 export async function writePhraseRun(
   entry: ShelfRevision,
@@ -261,7 +275,8 @@ export function chooseInput(
   const out: ChooseArticle[] = [];
   for (const s of set) {
     const run = runs.get(s.revisionId);
-    if (run) out.push({ slug: s.slug, words: run.words, textHash: run.textHash, candidates: run.candidates });
+    if (run && !run.skipped)
+      out.push({ slug: s.slug, words: run.words, textHash: run.textHash, candidates: run.candidates });
   }
   return out;
 }
