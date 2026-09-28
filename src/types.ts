@@ -1316,7 +1316,10 @@ export interface TrajectoryResponse {
    * some**, which the shared `profileIsStale` does not count.
    */
   profileChanged: boolean;
-  /** How many of the current Quotes are not a stop on this route, at any depth. */
+  /**
+   * How many of the current Quotes are not a stop on this route, at any depth —
+   * not counting those in the abstract, which are left out on purpose.
+   */
   notOnRoute: number;
 }
 

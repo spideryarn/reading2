@@ -163,7 +163,7 @@ function route(withIdeas: Ideas | null, version = PROMPT_VERSION): Trajectory {
 
 let revisionId = "";
 
-async function setColumns(values: { ideas?: Ideas | null; trajectory?: Trajectory }): Promise<void> {
+async function setColumns(values: { ideas?: Ideas | null; trajectory?: Trajectory; tree?: Tree }): Promise<void> {
   await getDb().update(articleRevisions).set(values).where(eq(articleRevisions.id, revisionId));
 }
 
@@ -245,5 +245,29 @@ describe("loadTrajectory, judged on what the route's prompt rendered", () => {
     const found = await loadTrajectory(SLUG);
     expect(found.outdated).toBe(true);
     expect(found.stale).toBe(false);
+  });
+
+  it("does not count a quote left out as the abstract's as missing from the route", async () => {
+    const now = ideas("A claim, stated plainly.");
+    /* The route stops only at the second quote, so the first is not on it. */
+    const secondOnly = (tree: Tree): Trajectory => ({
+      ...route(now),
+      sourceHash: trajectoryInputHash(trajectoryInput({ quotes: QUOTES, blocks: BLOCKS, tree, ideas: now })),
+      stops: [{ quoteId: "spya-tfq3de", depth: 1, role: null, cue: "Where does it stop holding?" }],
+    });
+    /* The control: with no abstract, the first quote is simply not on the route. */
+    await setColumns({ ideas: now, tree: TREE, trajectory: secondOnly(TREE) });
+    const control = await loadTrajectory(SLUG);
+    expect(control.stale).toBe(false);
+    expect(control.notOnRoute).toBe(1);
+
+    const nodes = TREE.nodes as Record<string, Tree["nodes"][string]>;
+    const withAbstract = { ...TREE, nodes: { ...nodes, n1: { ...nodes.n1!, title: "Abstract" } } } as Tree;
+    await setColumns({ tree: withAbstract, trajectory: secondOnly(withAbstract) });
+    const found = await loadTrajectory(SLUG);
+    /* Stamped and read over the same input, so current — and nothing missing. */
+    expect(found.stale).toBe(false);
+    expect(found.notOnRoute).toBe(0);
+    await setColumns({ tree: TREE });
   });
 });

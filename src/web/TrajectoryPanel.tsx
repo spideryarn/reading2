@@ -178,7 +178,7 @@ function RouteHead({ view, total }: { view: TrajectoryView; total: number }) {
           disabled={view.position <= 1}
           onClick={() => view.onStep(-1)}
         >
-          <ChevronLeft size={16} />
+          <ChevronLeft size={20} />
         </button>
         <span className="traj-count" aria-live="polite">
           Stop {view.position} of {total}
@@ -190,7 +190,7 @@ function RouteHead({ view, total }: { view: TrajectoryView; total: number }) {
           disabled={view.position >= total}
           onClick={() => view.onStep(1)}
         >
-          <ChevronRight size={16} />
+          <ChevronRight size={20} />
         </button>
       </div>
       {view.depths.length > 1 && (

@@ -144,3 +144,28 @@ but does not say which Ideas are the headline ones, so the model picks by its ow
 
 Results: `evals/results/trajectory-coverage-2026-09-28T14-38-13.json` (every run's stops, cues,
 per-stop Ideas and metrics, and the Ideas snapshot).
+
+## Abstract excluded
+
+Greg, 2026-09-28: *"Slight tweak to Trajectory mode - prefer not to include the Abstract as part of
+a trajectory, since that's kinda obviously already a good place to get the gist, and it's dense."*
+Folded into `trajectory/7` (unreleased): quotes under an *Abstract* heading (or an opening
+*Summary*) are not offered (`inAbstract`), and the prompt says why. One NEW-only run per article,
+`npx tsx scripts/eval/trajectory-coverage-eval.ts --runs=1 --new-only`, $0.072.
+
+**On these three articles it changes nothing the route can stop at.** The two papers do have an
+abstract under a heading — *Front Matter › Abstract and Keywords* (normal paper) and *Article
+overview › Abstract* (long paper), both detected — but Quotes chose no quote in either, so 0 offered
+quotes were excluded on each; the essay has no abstract. The stage-6 NEW runs had 0 abstract stops at
+every depth for the same reason, and so does this run. Only the prompt's new sentence differs.
+
+| Article | Quotes in abstract (excluded) | Abstract stops, stage 6 NEW → now | Ideas "in", Gist / More / Most: stage 6 NEW (runs 1, 2) → now |
+|---|---|---|---|
+| Essay | 0 | 0/0/0 → 0/0/0 | 1,1 / 3,1 / 3,3 → 1 / 1 / 3 |
+| Normal paper | 0 | 0/0/0 → 0/0/0 | 3,3 / 7,7 / 7,7 → 3 / 7 / 7 |
+| Long paper | 0 | 0/0/0 → 0/0/0 | 3,3 / 4,5 / 5,5 → 3 / 4 / 5 |
+
+Every number sits inside the stage-6 NEW range, as it should for an unchanged set of offered
+quotes. The exclusion itself is pinned by tests/trajectory.test.ts, not by this run.
+
+Results: `evals/results/trajectory-coverage-2026-09-28T15-39-48.json`.

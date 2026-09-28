@@ -43,7 +43,9 @@
   color: var(--ink);
   cursor: pointer;
 }
-.traj-arrow { width: var(--control-h); padding: 0; }
+/* **The stepper is the mode's main control**, so a size up from the house 36px — Greg, 2026-09-28:
+   "Make the back/forward buttons a bit bigger". `--control-h-lg`, controls.md § The numbers. */
+.traj-arrow { width: var(--control-h-lg); height: var(--control-h-lg); padding: 0; }
 .traj-arrow:disabled { opacity: 0.4; cursor: default; }
 .traj-arrow:not(:disabled):hover,
 .traj-depth:hover,

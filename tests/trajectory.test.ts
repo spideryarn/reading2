@@ -34,6 +34,8 @@ import {
   emptyDrops,
   growthFailure,
   ideaLabelOf,
+  inAbstract,
+  isAbstractTitle,
   trajectoryInput,
   trajectoryInputHash,
   routeProfileIsStale,
@@ -706,10 +708,10 @@ describe("the prompt, with and without Ideas", () => {
 
 /* ----------------------------------------------------------- the step itself -- */
 
-function storeWith(quotes: Quote[] | null, ideas: Ideas | null = null) {
+function storeWith(quotes: Quote[] | null, ideas: Ideas | null = null, withTree: Tree = tree) {
   const store = memoryArtefacts();
   store.plant(SLUG, "hierarchy", "blocks", { blocks });
-  store.plant(SLUG, "hierarchy", "tree", tree);
+  store.plant(SLUG, "hierarchy", "tree", withTree);
   if (ideas) store.plant(SLUG, "ideas", "ideas", ideas);
   if (quotes) {
     store.plant(SLUG, "quotes", "quotes", {
@@ -871,5 +873,182 @@ describe("registration", () => {
     expect(cascadeForce([...STEP_ORDER], new Set(["fetch"])).has("trajectory")).toBe(false);
     expect(cascadeForce(["quotes", "trajectory"], new Set(["quotes"])).has("trajectory")).toBe(false);
     expect(cascadeForce(["quotes", "trajectory"], new Set(["trajectory"])).has("trajectory")).toBe(true);
+  });
+});
+
+/* ------------------------------------------------- the abstract, left out -- */
+
+interface SectionSpec {
+  title: string;
+  lo: number;
+  hi: number;
+  sub?: { title: string; lo: number; hi: number }[];
+}
+
+/** A tree over the twelve fixture blocks, with the given top-level sections and one leaf per block. */
+function treeOf(sections: SectionSpec[]): Tree {
+  const nodes: Record<string, TreeNode> = {};
+  const put = (
+    id: string,
+    depth: number,
+    parent: string | null,
+    children: string[],
+    lo: number,
+    hi: number,
+    title: string,
+  ): void => {
+    nodes[id] = {
+      id: id as NodeId,
+      depth,
+      parent: parent as NodeId | null,
+      children: children as NodeId[],
+      range: [bid(lo), bid(hi)],
+      title,
+    } as TreeNode;
+  };
+  const leaves = (parent: string, depth: number, lo: number, hi: number): string[] => {
+    const ids: string[] = [];
+    for (let i = lo; i <= hi; i++) {
+      put(`l${i}`, depth, parent, [], i, i, `Leaf ${i}`);
+      ids.push(`l${i}`);
+    }
+    return ids;
+  };
+  put("root", 0, null, sections.map((_, k) => `s${k}`), 0, 11, "Whole article");
+  sections.forEach((s, k) => {
+    const children = s.sub
+      ? s.sub.map((u, j) => {
+          put(`s${k}u${j}`, 2, `s${k}`, leaves(`s${k}u${j}`, 3, u.lo, u.hi), u.lo, u.hi, u.title);
+          return `s${k}u${j}`;
+        })
+      : leaves(`s${k}`, 2, s.lo, s.hi);
+    put(`s${k}`, 1, "root", children, s.lo, s.hi, s.title);
+  });
+  return { version: "t", generator: "t", slug: SLUG, rootId: "root" as NodeId, nodes };
+}
+
+const bodySections: SectionSpec[] = [
+  { title: "1. Introduction", lo: 2, hi: 5 },
+  { title: "2. Methods", lo: 6, hi: 9 },
+];
+const abstractFirst = (): Tree =>
+  treeOf([{ title: "Abstract", lo: 0, hi: 1 }, ...bodySections, { title: "3. Results", lo: 10, hi: 11 }]);
+const inAbstractAt = (t: Tree): boolean[] => {
+  const index = blockIndex(blocks);
+  return blocks.map((b) => inAbstract(b.id, index, t));
+};
+const FIRST_TWO = [true, true, false, false, false, false, false, false, false, false, false, false];
+
+describe("the abstract is left out of the route (Greg, 2026-09-28)", () => {
+  it("recognises an Abstract heading however it is numbered, punctuated or cased", () => {
+    for (const title of ["Abstract", "1. Abstract", "ABSTRACT", "Abstract:", "I. Abstract", "Abstract and Keywords"]) {
+      expect(isAbstractTitle(title, false), title).toBe(true);
+    }
+    for (const title of ["Introduction", "Abstract algebra", "Abstracting the model", "Keywords"]) {
+      expect(isAbstractTitle(title, true), title).toBe(false);
+    }
+  });
+
+  it("counts a Summary as the abstract only when it opens the paper", () => {
+    expect(isAbstractTitle("Summary", true)).toBe(true);
+    expect(isAbstractTitle("Executive summary", true)).toBe(true);
+    expect(isAbstractTitle("Summary", false)).toBe(false);
+    expect(isAbstractTitle("8. Summary", false)).toBe(false);
+    expect(isAbstractTitle("Summary and conclusions", true)).toBe(false);
+    expect(isAbstractTitle("Summary and conclusions", false)).toBe(false);
+  });
+
+  it("finds the blocks under a top-level Abstract, by block position", () => {
+    expect(inAbstractAt(abstractFirst())).toEqual(FIRST_TWO);
+  });
+
+  it("finds an abstract nested under front matter, and not the title block beside it", () => {
+    const t = treeOf([
+      {
+        title: "Front Matter",
+        lo: 0,
+        hi: 1,
+        sub: [
+          { title: "Title and Authors", lo: 0, hi: 0 },
+          { title: "1. Abstract", lo: 1, hi: 1 },
+        ],
+      },
+      ...bodySections,
+      { title: "3. Results", lo: 10, hi: 11 },
+    ]);
+    expect(inAbstractAt(t).slice(0, 3)).toEqual([false, true, false]);
+  });
+
+  it("takes an opening Summary, alone or under front matter, and never a closing one", () => {
+    const opening = treeOf([
+      { title: "Summary", lo: 0, hi: 1 },
+      ...bodySections,
+      { title: "3. Summary and conclusions", lo: 10, hi: 11 },
+    ]);
+    expect(inAbstractAt(opening)).toEqual(FIRST_TWO);
+    const nested = treeOf([
+      {
+        title: "Front Matter",
+        lo: 0,
+        hi: 1,
+        sub: [
+          { title: "Title", lo: 0, hi: 0 },
+          { title: "Summary", lo: 1, hi: 1 },
+        ],
+      },
+      ...bodySections,
+      { title: "3. Results", lo: 10, hi: 11 },
+    ]);
+    expect(inAbstractAt(nested).slice(0, 3)).toEqual([false, true, false]);
+    const closing = treeOf([
+      { title: "Introduction", lo: 0, hi: 1 },
+      ...bodySections,
+      {
+        title: "8. Summary and Closing Matter",
+        lo: 10,
+        hi: 11,
+        sub: [
+          { title: "8. Summary", lo: 10, hi: 10 },
+          { title: "Credits", lo: 11, hi: 11 },
+        ],
+      },
+    ]);
+    expect(inAbstractAt(closing).every((x) => !x)).toBe(true);
+  });
+
+  it("leaves a paper with no abstract heading alone", () => {
+    expect(inAbstractAt(tree).every((x) => !x)).toBe(true);
+    const input = inputOf(quotesOf(12));
+    expect(input.abstractQuoteIds).toEqual([]);
+    expect(input.offered).toHaveLength(12);
+  });
+
+  it("does not offer the model a quote that sits in the abstract, nor count it as collapsed", () => {
+    const t = abstractFirst();
+    /* Quotes 12 and 13 share blocks 0 and 1 with quotes 0 and 1. */
+    const input = inputOf(quotesOf(14), null, { tree: t });
+    expect(input.offered.map((q) => q.id)).toEqual(quotesOf(12).slice(2).map((q) => q.id));
+    expect(input.abstractQuoteIds).toEqual([qid(0), qid(1), qid(12), qid(13)]);
+    expect(input.collapsed).toBe(0);
+    expect(input.outline[0]).toMatchObject({ title: "Abstract", quotes: 0 });
+    expect(renderPrompt({ input, profile: null })).not.toContain("Paragraph 0 of the trajectory fixture");
+    /* The hash follows what is rendered: the abstract's quotes are not in it. */
+    const without = inputOf(quotesOf(12).slice(2), null, { tree: t });
+    expect(trajectoryInputHash(input)).toBe(trajectoryInputHash(without));
+  });
+
+  it("tells the model why the abstract is not there", () => {
+    expect(TRAJECTORY_SYSTEM).toMatch(/abstract/i);
+    expect(TRAJECTORY_SYSTEM).toMatch(/left out on purpose/i);
+  });
+
+  it("refuses as it does with no quotes, not with a crash, when every quote is in the abstract", async () => {
+    const t = abstractFirst();
+    const onlyAbstract = [quote(0), quote(1)];
+    expect(inputOf(onlyAbstract, null, { tree: t }).offered).toEqual([]);
+    const store = storeWith(onlyAbstract, null, t);
+    expect(await STEPS.trajectory.stamp?.(ctx(), store)).toBeNull();
+    await expect(STEPS.trajectory.run(ctx(), store, nullCheckpointStore())).rejects.toThrow(/quotes/i);
+    expect(sent).toEqual([]);
   });
 });

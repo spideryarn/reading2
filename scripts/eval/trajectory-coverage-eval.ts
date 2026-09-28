@@ -5,7 +5,7 @@
  * An offline eval — plan 260928a § "Stage 6 as it will be built", item 3, and
  * Sol's F65.
  *
- *     npx tsx scripts/eval/trajectory-coverage-eval.ts [--runs=2] [--old=<module>] [slug …]
+ *     npx tsx scripts/eval/trajectory-coverage-eval.ts [--runs=2] [--old=<module>] [--new-only] [slug …]
  *
  * Results: docs/plans/260928a-trajectory-mode-stage6-coverage-after.md.
  *
@@ -60,6 +60,10 @@ const runsArg = args.find((a) => a.startsWith("--runs="));
 const RUNS = runsArg ? Number(runsArg.slice("--runs=".length)) : 2;
 const oldArg = args.find((a) => a.startsWith("--old="));
 const OLD_MODULE = oldArg ? oldArg.slice("--old=".length) : "src/trajectory-v6-eval-tmp.ts";
+/* `--new-only`: the NEW arm alone, with no old module to write first — for
+   measuring a change to `trajectory/7` against the stage-6 NEW numbers. */
+const NEW_ONLY = args.includes("--new-only");
+const ARMS = NEW_ONLY ? (["new"] as const) : (["old", "new"] as const);
 const slugArgs = args.filter((a) => !a.startsWith("--"));
 const SLUGS = slugArgs.length > 0 ? slugArgs : ["vb-spya-vu3xen", "entropy-24-00930-spya-pywwkq", "source-spya-furjgs"];
 
@@ -72,7 +76,7 @@ const { collectSpend, totalSpend } = await import("../../src/ai-spend.js");
 const NEW = await import("../../src/trajectory.js");
 /* The old module, loaded by path so nothing in the repo imports a file that
    exists only for the length of one eval. */
-const OLD = (await import(pathToFileURL(resolve(OLD_MODULE)).href)) as {
+type OldModule = {
   PROMPT_VERSION: string;
   usableQuotes: (q: Quotes | null, b: readonly Block[]) => Quote[];
   generateTrajectory: (opts: {
@@ -84,7 +88,10 @@ const OLD = (await import(pathToFileURL(resolve(OLD_MODULE)).href)) as {
     profile: string | null;
   }) => Promise<{ trajectory: Trajectory; offered: number; inputTokens: number; outputTokens: number; elapsedMs: number }>;
 };
-if (OLD.PROMPT_VERSION !== "trajectory/6") throw new Error(`old module is ${OLD.PROMPT_VERSION}, expected trajectory/6`);
+const OLD: OldModule | null = NEW_ONLY
+  ? null
+  : ((await import(pathToFileURL(resolve(OLD_MODULE)).href)) as OldModule);
+if (OLD && OLD.PROMPT_VERSION !== "trajectory/6") throw new Error(`old module is ${OLD.PROMPT_VERSION}, expected trajectory/6`);
 if (NEW.PROMPT_VERSION !== "trajectory/7") throw new Error(`new module is ${NEW.PROMPT_VERSION}, expected trajectory/7`);
 
 import type { Article, Block, Idea, Ideas, Quote, Quotes, Trajectory, TrajectoryDepth } from "../../src/types.js";
@@ -212,6 +219,10 @@ interface RunResult {
   inputTokens: number;
   outputTokens: number;
   stops: { depth: TrajectoryDepth; quote: string; cue: string | null; section: string; ideasIn: string[] }[];
+  /** Stored quotes under an abstract heading (`NEW.inAbstract`), whichever arm — the NEW arm does not offer them. */
+  abstractQuotes: number;
+  /** Stops visible at depth ≤ 1, ≤ 2, ≤ 3 that sit under an abstract heading. */
+  abstractStops: [number, number, number];
 }
 
 async function runOne(inp: Input, arm: Arm, run: number): Promise<RunResult> {
@@ -222,6 +233,7 @@ async function runOne(inp: Input, arm: Arm, run: number): Promise<RunResult> {
         const input = NEW.trajectoryInput({ quotes, blocks: article.blocks, tree: article.tree, ideas });
         return NEW.generateTrajectory({ slug, input, profile: null });
       }
+      if (!OLD) throw new Error("the old arm needs the old module (drop --new-only)");
       return OLD.generateTrajectory({
         slug,
         quotes: OLD.usableQuotes(quotes, article.blocks),
@@ -244,7 +256,13 @@ async function runOne(inp: Input, arm: Arm, run: number): Promise<RunResult> {
     return { blockId: q.blockId, depth: s.depth, quote: q, cue: s.cue ?? null };
   });
   const spent = totalSpend(report.calls);
+  const isAbs = (blockId: string) => NEW.inAbstract(blockId, idx, article.tree);
+  const abstractStops = ([1, 2, 3] as const).map(
+    (d) => stopBlocks.filter((s) => s.depth <= d && isAbs(s.blockId)).length,
+  ) as [number, number, number];
   return {
+    abstractQuotes: quotes.quotes.filter((q) => idx.has(q.blockId) && isAbs(q.blockId)).length,
+    abstractStops,
     slug,
     arm,
     run,
@@ -307,7 +325,7 @@ async function main(): Promise<void> {
     for (let run = 1; run <= RUNS; run++) {
       const batch = await Promise.all(
         inputs.flatMap((inp) =>
-          (["old", "new"] as const).map((arm) =>
+          ARMS.map((arm) =>
             runOne(inp, arm, run).catch((err: unknown) => {
               console.error(`${inp.slug} ${arm}#${run}: ${err instanceof Error ? err.message : String(err)}`);
               return null;
@@ -322,14 +340,15 @@ async function main(): Promise<void> {
           .map((w) => `d${w.depth}: ${w.stops} stops, in ${w.ideasIn}/${w.ideasTotal}, beside ${w.ideasInOrBeside}, sec ${w.sectionsWithStop}/${w.contentSections}, ${w.wordsPct.toFixed(1)}%`)
           .join(" | ");
         console.log(`${r.slug} ${r.arm}#${r.run} (${r.version}): ${cells} — $${(r.costNanos / 1e9).toFixed(4)}, ${(r.elapsedMs / 1000).toFixed(1)}s, ${r.inputTokens} in`);
+        console.log(`  offered ${r.offered}; ${r.abstractQuotes} stored quotes in the abstract; abstract stops at d1/d2/d3: ${r.abstractStops.join("/")}`);
       }
-      writeFileSync(out, JSON.stringify({ oldVersion: OLD.PROMPT_VERSION, newVersion: NEW.PROMPT_VERSION, profile: null, snapshot, results }, null, 2));
+      writeFileSync(out, JSON.stringify({ oldVersion: OLD?.PROMPT_VERSION ?? null, newVersion: NEW.PROMPT_VERSION, profile: null, snapshot, results }, null, 2));
     }
   });
 
   const total = results.reduce((s, r) => s + r.costNanos, 0);
   console.log(`\n${results.length} calls, total $${(total / 1e9).toFixed(4)}; wrote ${out}`);
-  if (results.length !== SLUGS.length * RUNS * 2) process.exitCode = 1;
+  if (results.length !== SLUGS.length * RUNS * ARMS.length) process.exitCode = 1;
 }
 
 try {

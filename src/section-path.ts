@@ -26,6 +26,15 @@ export function sectionPathOf(
   index: ReadonlyMap<string, number>,
   tree: Tree,
 ): string[] {
+  return sectionNodesOf(blockId, index, tree).map((node) => node.title);
+}
+
+/** `sectionPathOf`'s nodes rather than their titles — for a rule that needs where a section sits. */
+export function sectionNodesOf(
+  blockId: string,
+  index: ReadonlyMap<string, number>,
+  tree: Tree,
+): TreeNode[] {
   const at = index.get(blockId);
   if (at === undefined) return [];
   const contains = (node: TreeNode): boolean => {
@@ -44,5 +53,5 @@ export function sectionPathOf(
   if (path.length === 0) return [];
   const leaf = path.at(-1)!;
   const ancestors = leaf.children.length === 0 ? path.slice(0, -1) : path;
-  return (ancestors.length > 0 ? ancestors : [leaf]).map((ancestor) => ancestor.title);
+  return ancestors.length > 0 ? ancestors : [leaf];
 }

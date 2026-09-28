@@ -94,6 +94,12 @@ Stage 6 ([plan § Stage 6](../plans/260928a-trajectory-mode-skim-a-paper-at-incr
 - **One input hash** (`trajectoryInputHash`) over exactly what the prompt renders is both the stamp
   and the read's freshness check, so regenerated Ideas, or Ideas arriving after a route planned
   without them, mark the route stale.
+- **The abstract is left out.** Greg, 2026-09-28: *"Slight tweak to Trajectory mode - prefer not to
+  include the Abstract as part of a trajectory, since that's kinda obviously already a good place to
+  get the gist, and it's dense."* A quote under a section titled *Abstract* (at any level of its
+  path, numbering and case ignored), or *Summary* only in the paper's first top-level section, is
+  never offered (`inAbstract` in `src/trajectory.ts`), and the prompt says why in one sentence. An
+  abstract with no such heading over it is not detected. Not counted in `notOnRoute`.
 
 ### What we tried for v2
 

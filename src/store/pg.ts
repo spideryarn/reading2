@@ -3383,7 +3383,7 @@ const rawPgArticleReader: ArticleReader = {
    * `trajectoryInputHash` has moved (*Find more* added quotes, they were chosen
    * again, the Ideas were regenerated or arrived, the outline changed) or there
    * are no quotes at all; `notOnRoute` counts the current quotes the route does
-   * not stop at. It is a coverage fact, not evidence of which input changed.
+   * not stop at, other than the abstract's, which were never offered. It is a coverage fact, not evidence of which input changed.
    * The profile half is the route's (`withTrajectoryProfile`
    * in src/routes.ts), because a store adapter does not read the profile.
    *
@@ -3411,6 +3411,10 @@ const rawPgArticleReader: ArticleReader = {
     /* The blocks for positions only — which quote carries which Idea, and
        which section each sits in. `trajectoryInput` reads no prose. */
     const blocks = current.length > 0 && tree ? await blocksFor(found.revision.id) : [];
+    const input = tree ? trajectoryInput({ quotes, blocks, tree, ideas }) : null;
+    /* A quote left out because it sits in the abstract is not missing from
+       the route — it was never offered (`inAbstract` in src/trajectory.ts). */
+    const leftOut = new Set(input?.abstractQuoteIds ?? []);
     return {
       trajectory,
       /* No quotes any more counts as stale, the same way round as its
@@ -3423,12 +3427,11 @@ const rawPgArticleReader: ArticleReader = {
          changed is us — `outdated` says that. */
       stale:
         current.length === 0 ||
-        !tree ||
+        !input ||
         (trajectory.version === TRAJECTORY_PROMPT_VERSION &&
-          trajectory.sourceHash !==
-            trajectoryInputHash(trajectoryInput({ quotes, blocks, tree, ideas }))),
+          trajectory.sourceHash !== trajectoryInputHash(input)),
       outdated: trajectory.version !== TRAJECTORY_PROMPT_VERSION,
-      notOnRoute: current.filter((q) => !onRoute.has(q.id)).length,
+      notOnRoute: current.filter((q) => !onRoute.has(q.id) && !leftOut.has(q.id)).length,
     };
   },
 

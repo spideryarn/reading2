@@ -877,3 +877,30 @@ first and that the Ideas are the long part; a press posts `["quotes","ideas","tr
 shows *Choosing the quotes* (17.7 s, $0.036), *Finding the ideas* (69.7 s, $0.075), then the route
 (7.6 s, $0.018) — **95 s and $0.13 for a first open from nothing**; the card shows *Ideas it bears on*
 without a reload; *Plan it again* posts `["trajectory"]` forced and re-runs nothing else ($0.019).
+
+## Stage 7 — bigger ‹ ›, flash the quote's words, and the scroll that cuts the stop off (2026-09-28)
+
+Greg, from using it in production:
+
+> Trajectory mode:
+> - Make the back/forward buttons a bit bigger
+> - And somehow, when I clicked to go to the next Stop, it correctly flashed the block (though I think I was hoping it would flash the specific Quote if that's really what we're jumping to?), but somehow the scrolling wasn't quite right, i.e. the page was scrolled down a bit and I think the Quote was cutoff at the top. Maybe this is a problem with the general block-links rather than Trajectory mode itself, I don't know.
+>
+> — Greg, 2026-09-28
+
+And, the same afternoon, folded into stage 6's unreleased `trajectory/7` rather than a second bump:
+
+> Slight tweak to Trajectory mode - prefer not to include the Abstract as part of a trajectory, since that's kinda obviously already a good place to get the gist, and it's dense.
+>
+> — Greg, 2026-09-28
+
+- **7a. Bigger ‹ ›** — to the house sizes in [controls.md](../project/controls.md).
+- **7b. Flash the quote's words**, not the whole block, when the stop is a quote. `flashBlock` washes
+  the whole `td.text`; the quote's marked span already exists in the prose (the quote stroke), so the
+  flash targets that span when there is one and falls back to the block. It stays one flash
+  helper — a target argument, not a second flash.
+- **7c. The scroll bug** — reproduced in a real browser first, a failing test, then the fix; the
+  root cause in a subagent, a postmortem naming the class, and the fix wherever the cause lives (the
+  shared `scrollToBlock` if it is shared, with the other modes it touches named).
+- **Abstract excluded** (stage 6): a deterministic rule — quotes whose block sits under an Abstract
+  heading are not offered to the route — and one sentence in the prompt saying why.
