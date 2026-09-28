@@ -750,9 +750,10 @@ design and the version and banner claims above**, which are kept as what was pro
 - **H3 — the glossary's provenance.** The core's field-ownership sentence is the invariant Sol
   asked for, and the summary and glossary prompts take the **core alone**: their own measured
   sections already carry the per-kind detail and field-matched examples.
-- **H4 — a naming-based test cannot prove coverage.** **Partly taken.** The test finds model calls
-  by the wire functions that make them (`streamMessage`, `openRouterJson`, `openRouterStream`, …),
-  with comments stripped, not by constant names; a file that calls a model must carry
+- **H4 — a naming-based test cannot prove coverage.** **Partly taken.** The test parses the source
+  and finds calls to the wire functions that make them (`streamMessage`, `openRouterJson`,
+  `openRouterStream`, …), rather than matching constant names or stripping comments with a regex;
+  a file that calls a model must carry
   `plainWords(` in code or be in `PLAIN_WORDS_EXEMPT` with a reason; prompt files whose call is made
   elsewhere (`hierarchy-expand.ts`, `live.ts`, `referee-candidates-prompt.ts`, the changelog) are
   listed. Seen red before any prompt was wired: 33 files. **Not taken: Sol's typed `plainWords`
@@ -787,7 +788,7 @@ design and the version and banner claims above**, which are kept as what was pro
 - **`src/plain-words.ts`**: `plainWords(...kinds)` and `PLAIN_WORDS_EXEMPT`. The core says the
   prompt's own field rules win where *"these instructions set"* them (not *"set above"*: in several
   prompts the rule sits before a closing output section, and some field rules come after it).
-- **Wired into 27 prompts in 25 files**, each prompt's own old plain-words sentence removed and
+- **Wired into 29 prompts in 27 files**, each prompt's own old plain-words sentence removed and
   quoted in the wiring reports: summary, expansion and glossary take the core alone
   (`plainWords()`, measured sections kept); arc, tweets, ideas, quotes, citations, illustrated,
   debate (both prompts), Explain, chat, Remember, quiz-mark, search, link summaries, the four

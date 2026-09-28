@@ -19,14 +19,13 @@ import { describe, expect, it, vi } from "vitest";
 import { main as changelogMain } from "../scripts/changelog/changelog.js";
 import { buildConverseMessages } from "../src/converse.js";
 import { buildExplainMessages } from "../src/explain.js";
-import { SYSTEM as LINK_SUMMARY_SYSTEM, LINK_SUMMARY_PROMPT_VERSION } from "../src/link-summary.js";
-import { LIVE_SYSTEM } from "../src/live.js";
+import { buildSummaryMessages, LINK_SUMMARY_PROMPT_VERSION } from "../src/link-summary.js";
+import { liveInstructions } from "../src/live.js";
 import { plainWords, type PlainKind } from "../src/plain-words.js";
-import { QUIZ_MARK_SYSTEM } from "../src/quiz-mark.js";
-import { CANDIDATES_SYSTEM } from "../src/referee-candidates-prompt.js";
-import { CLAIMS_SYSTEM } from "../src/referee-claims-run.js";
-import { criteriaSystemPrompt } from "../src/referee-criteria-run.js";
-import { MIRROR_SYSTEM } from "../src/referee-mirror.js";
+import { buildMarkMessages } from "../src/quiz-mark.js";
+import { buildClaimsMessages } from "../src/referee-claims-run.js";
+import { buildCriterionMessages } from "../src/referee-criteria-run.js";
+import { buildMirrorMessages } from "../src/referee-mirror.js";
 import { buildSearchMessages } from "../src/search.js";
 import type { Block, ChatMessage, Meta } from "../src/types.js";
 
@@ -63,23 +62,48 @@ const prompts: { name: string; text: () => string; kinds: PlainKind[]; oldSenten
     kinds: ["explain"],
     oldSentence: "PLAIN WORDS. Keep the author's vocabulary",
   },
-  { name: "quiz mark", text: () => QUIZ_MARK_SYSTEM, kinds: ["explain"], oldSentence: "Plain words too:" },
+  {
+    name: "quiz mark",
+    text: () => textOf(buildMarkMessages({ meta, blocks, question: "Why?", referenceAnswer: "Because.", evidence: [], answer: "Maybe." })[0]?.content),
+    kinds: ["explain"],
+    oldSentence: "Plain words too:",
+  },
   {
     name: "search",
     text: () => textOf(buildSearchMessages(meta, blocks, "anything")[0]?.content),
     kinds: ["explain"],
   },
-  { name: "link summary", text: () => LINK_SUMMARY_SYSTEM, kinds: ["explain"] },
+  {
+    name: "link summary",
+    text: () => textOf(buildSummaryMessages("The article", "The destination", null)[0]?.content),
+    kinds: ["explain"],
+  },
   {
     name: "live",
-    text: () => LIVE_SYSTEM,
+    text: () => liveInstructions({ meta, blocks }),
     kinds: ["explain", "spoken"],
     oldSentence: "Ordinary words for everything else",
   },
-  { name: "referee candidates", text: () => CANDIDATES_SYSTEM, kinds: ["explain"] },
-  { name: "referee mirror", text: () => MIRROR_SYSTEM, kinds: ["explain"] },
-  { name: "referee criteria", text: () => criteriaSystemPrompt({ kind: "single" }), kinds: ["explain"] },
-  { name: "referee claims", text: () => CLAIMS_SYSTEM, kinds: ["explain", "landmark"] },
+  {
+    name: "referee candidates",
+    text: () => textOf(buildConverseMessages({ ...chatBase, kind: "candidates" })[0]?.content),
+    kinds: ["explain"],
+  },
+  {
+    name: "referee mirror",
+    text: () => textOf(buildMirrorMessages([], [])[0]?.content),
+    kinds: ["explain"],
+  },
+  {
+    name: "referee criteria",
+    text: () => textOf(buildCriterionMessages(meta, blocks, "Is the method sound?", { kind: "single" })[0]?.content),
+    kinds: ["explain"],
+  },
+  {
+    name: "referee claims",
+    text: () => textOf(buildClaimsMessages(meta, blocks)[0]?.content),
+    kinds: ["explain", "landmark"],
+  },
 ];
 
 describe("each explaining prompt carries the shared rule, once", () => {

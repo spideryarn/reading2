@@ -18,6 +18,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
 import { PLAIN_WORDS_EXEMPT, plainWords } from "../src/plain-words.js";
+import { parseSource, walkAst, type AstNode } from "./helpers/ts-ast.js";
 
 const ROOT = path.join(import.meta.dirname, "..");
 
@@ -44,11 +45,25 @@ const PROMPT_FILES_WITHOUT_A_CALL = [
   "scripts/changelog/changelog.ts", // the public changelog's copy prompt, sent through the claude CLI
 ];
 
-const CALL = new RegExp(`(?<!function )(?<![\\w.])(?:${MODEL_CALLS.join("|")})\\(`);
+const MODEL_CALL_SET: ReadonlySet<string> = new Set(MODEL_CALLS);
+const FACTS = new Map<string, { modelCall: boolean; plainWordsCall: boolean }>();
 
-/** Source with its comments removed, so a call named in a comment is not a call. */
-export function code(source: string): string {
-  return source.replace(/\/\*[\s\S]*?\*\//g, "").replace(/(^|[^:"'`])\/\/.*$/gm, "$1");
+/** Calls in executable code, found by syntax rather than by stripping comments with a regex. */
+function sourceFacts(source: string): { modelCall: boolean; plainWordsCall: boolean } {
+  const cached = FACTS.get(source);
+  if (cached) return cached;
+  let modelCall = false;
+  let plainWordsCall = false;
+  walkAst(parseSource(source).program, (node) => {
+    if (node.type !== "CallExpression") return;
+    const callee = node.callee as AstNode | undefined;
+    if (callee?.type !== "Identifier" || typeof callee.name !== "string") return;
+    if (MODEL_CALL_SET.has(callee.name)) modelCall = true;
+    if (callee.name === "plainWords") plainWordsCall = true;
+  });
+  const facts = { modelCall, plainWordsCall };
+  FACTS.set(source, facts);
+  return facts;
 }
 
 function files(dir: string): string[] {
@@ -59,11 +74,18 @@ function files(dir: string): string[] {
   });
 }
 
-const carries = (source: string) => /\bplainWords\(/.test(code(source));
+const carries = (source: string) => sourceFacts(source).plainWordsCall;
+
+function uncoveredCallingFiles(sources: ReadonlyMap<string, string>): string[] {
+  return [...sources]
+    .filter(([f, source]) => sourceFacts(source).modelCall && !PLAIN_WORDS_EXEMPT[f] && !carries(source))
+    .map(([f]) => f);
+}
 
 describe("the plain-words rule is the default for every prompt", () => {
   const all = [...files("src"), ...files("scripts")].filter((f) => f !== "src/plain-words.ts");
-  const calling = all.filter((f) => CALL.test(code(fs.readFileSync(path.join(ROOT, f), "utf-8"))));
+  const sources = new Map(all.map((f) => [f, fs.readFileSync(path.join(ROOT, f), "utf-8")]));
+  const calling = all.filter((f) => sourceFacts(sources.get(f)!).modelCall);
 
   it("finds the model calls it is meant to find", () => {
     /* A scan that finds nothing passes everything. These are known to call a model today. */
@@ -73,9 +95,7 @@ describe("the plain-words rule is the default for every prompt", () => {
   });
 
   it("every file that calls a model carries the rule or is exempt with a reason", () => {
-    const missing = calling.filter(
-      (f) => !PLAIN_WORDS_EXEMPT[f] && !carries(fs.readFileSync(path.join(ROOT, f), "utf-8")),
-    );
+    const missing = uncoveredCallingFiles(sources);
     expect(missing, "add plainWords(...) to the prompt, or an entry with a reason to PLAIN_WORDS_EXEMPT in src/plain-words.ts").toEqual([]);
   });
 
@@ -92,9 +112,20 @@ describe("the plain-words rule is the default for every prompt", () => {
   });
 
   it("does not count a call or a rule that only appears in a comment", () => {
-    expect(CALL.test(code("// streamMessage(\"x\")\n/* openRouterJson( */"))).toBe(false);
-    expect(carries("/* ${plainWords('explain')} */")).toBe(false);
-    expect(carries("const S = `${plainWords('explain')}`;")).toBe(true);
+    expect(sourceFacts("// streamMessage(\"x\")\n/* openRouterJson( */").modelCall).toBe(false);
+    expect(carries(["/* $", "{plainWords('explain')} */"].join(""))).toBe(false);
+    expect(carries(["const S = `$", "{plainWords('explain')}`;"].join(""))).toBe(true);
+  });
+
+  it("does not mistake URL-like text in a template literal for a comment", () => {
+    const source = ["const url = `it is $", "{protocol}//, not https://`; openRouterJson({});"].join("");
+    expect(sourceFacts(source).modelCall).toBe(true);
+  });
+
+  it("would reject a new model-calling file until it carries the rule", () => {
+    expect(uncoveredCallingFiles(new Map([["src/a-new-prompt.ts", "openRouterJson({});"]]))).toEqual([
+      "src/a-new-prompt.ts",
+    ]);
   });
 });
 

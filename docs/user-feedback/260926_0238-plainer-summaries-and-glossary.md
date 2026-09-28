@@ -35,9 +35,10 @@ with *Find them again*.
   and headings, copies untouched, and a reader's stated background respected. A test makes it the
   default for new prompts, and
   [prompting-guide.md](../project/prompting-guide.md) is where it is written down, signposted from
-  AGENTS.md. **Not yet measured**: the OpenRouter key ran out of credit before the after-change
-  runs, so the rule's effect on the other modes is expected rather than shown. The plan names the
-  commands to run once credit is back.
+  AGENTS.md. After credit was restored, blind reads found the new answers plainer in 25 of 36
+  pairs, against an 8–10 same-prompt control; the other generated artefacts moved 77–45, with 116
+  ties, against a 51–48 control with 93 ties. Fidelity was roughly even. The full per-kind results,
+  caveats and saved evidence are in the plan.
 
 **Reaches, since 2026-09-28:** new trees and new glossaries, as before; every owner's existing
 ideas, quotes, timeline, quiz, FAQ, debate and citations show their *outdated* banner with a
