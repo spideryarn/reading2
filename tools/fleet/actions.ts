@@ -178,8 +178,8 @@ function sleepText(hours: number): string {
   return `Pause for about ${hours} hours before you do anything else, and say so in your reply. Do not use a foreground sleep — the Bash tool caps at 600 seconds — and do not use a background waiter or a Monitor: this box OOM-kills background waiters without warning, and Monitor caps at an hour. Arm two CronCreate one-shots a few minutes apart, both about ${hours} hours from now, so that one dying silently does not lose the wait; tell me the two times you set, then stop your turn. When you wake, merge origin/dev first and re-read whatever you were part way through, because the tree will have moved.`;
 }
 
-const ASK_FABLE_TEXT =
-  "Get Fable's input on the decision in front of you, then use your own judgment. Spawn a subagent with model: \"fable\" and hand it the actual evidence — the diff, the file, the two options and what each costs — rather than a summary of them, and ask it to arbitrate between them rather than to agree with you. Then tell me what it said, whether you are taking it, and why. Fable is a different model, not a different family, so this is product and design input; it is not the cross-family technical review, which is GPT Sol's job.";
+const ASK_OPUS_TEXT =
+  "Get Opus's input on the decision in front of you, then use your own judgment. Spawn a subagent with model: \"opus\" and hand it the actual evidence — the diff, the file, the two options and what each costs — rather than a summary of them, and ask it to arbitrate between them rather than to agree with you. Then tell me what it said, whether you are taking it, and why. Opus is the same family as you, so this is product and design input; it is not the cross-family technical review, which is GPT Sol's job.";
 
 const ASK_SOL_TEXT =
   "Get GPT Sol's input on the decision in front of you, then use your own judgment: npx tsx scripts/run-codex.ts --model sol --effort high --timeout-minutes 45 --prompt-file <prompt> --output <answer>, with a fresh --output path, because a killed run still writes its answer file and a stale review is indistinguishable from a new one. Hand it the scoped diff, the results file and the script that produced any number you are quoting, not just prose. Check the exit code AND that the answer arrived, since a review that returned nothing looks exactly like one that found nothing. Then check each finding yourself — some are wrong — and tell me which you are taking and which you are refusing, and why.";
@@ -326,11 +326,12 @@ const SPOKEN: readonly SpokenAction[] = [
   },
   {
     effect: "spoken",
+    // The id predates Fable's retirement (Greg, 2026-09-28); it stays because it is on the wire.
     id: "ask-fable",
     scope: "session",
-    label: "Ask Fable",
-    summary: "Product judgment from Fable, then use your own.",
-    text: ASK_FABLE_TEXT,
+    label: "Ask Opus",
+    summary: "Product judgment from Opus, then use your own.",
+    text: ASK_OPUS_TEXT,
     form: "prose",
     needsConfirm: false,
   },

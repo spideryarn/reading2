@@ -459,8 +459,8 @@ function proposalAuthor(model: string): ProposalAuthor {
  * usage reading the caller hands in, and never remembered (D14), so a limit
  * that lifts reaches the next card at no cost.
  *
- * **Missing capability is shown, never substituted**: a Fable question whose
- * Fable is limited still names Fable, with `unavailable`. And where nothing is
+ * **Missing capability is shown, never substituted**: a `fable` question (Opus
+ * since 2026-09-28) whose Claude limit is hit still names it, with `unavailable`. And where nothing is
  * measured it says `not-checked` rather than hoping — the checkpoint carries
  * no Codex reading and nothing reads the Overseer's own capacity.
  */
@@ -482,7 +482,7 @@ export function projectReach(recipient: ProposalRecipient, usage: UsageVerdict |
         why:
           usage === null
             ? "the checkpoint holds no usage reading"
-            : "only a hit usage limit is checked; nothing checks that Fable can take a question now",
+            : "only a hit usage limit is checked; nothing checks that Opus can take a question now",
       };
     }
     case "sol":
