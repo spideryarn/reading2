@@ -126,8 +126,8 @@ lead, not a diagnosis. Then fix it, if three things hold: you are confident it i
 the fix sits with [what this product is for](vision.md), and it doesn't drag much complexity in
 behind it. If it fails one of those, it is a suggestion, so treat it as one.
 
-**From a reader, and it's a suggestion: this is where the judgment is.** Ask **Fable** — the product
-call is what Fable is for — and **GPT Sol**
+**From a reader, and it's a suggestion: this is where the judgment is.** Ask **Opus** — a subagent with
+`model: "opus"`, for the product call — and **GPT Sol**
 ([codex-cli-as-subagent.md](../reusable/codex-cli-as-subagent.md)) where the question is whether the
 effort buys the benefit. Between them: does this make it better for readers who never asked for it,
 is it what we are trying to build, and what does it cost us if we are wrong? The bar for building is
@@ -275,7 +275,7 @@ sessions of the 2026-09-06 sweep predate it and are named for their work, of whi
 
    Verified end to end from the box on 2026-09-05, with no `GJD_REMOTE_HOST` anywhere: session
    created, Claude started, prompt answered, session killed.
-3. **Each agent decides for itself** what to build, using § Who sent it above — Fable and GPT Sol are
+3. **Each agent decides for itself** what to build, using § Who sent it above — Opus and GPT Sol are
    its calls to make, not this loop's.
 4. **It lands on `dev` and stops there**: green tests, a GPT Sol review of the code,
    `git push origin HEAD:dev`. **The loop never deploys.** Production is `npm run deploy`, and it
