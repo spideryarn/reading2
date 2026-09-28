@@ -601,7 +601,15 @@ export function Library({
       {sorted.length > 0 && (
         <>
           {view === "table" ? (
-            <DataTable table={table} rows={capped.shown} caption="Your articles" />
+            /* **One `TooltipGroup` for the whole table**, so running the pointer
+               down the titles opens each row card instantly after the first,
+               and so the row's action buttons join it rather than nesting a
+               group of their own (`Actions` § `inTooltipGroup`) — two groups
+               could hold a title's card and an action's open together. The
+               actions' own delays, which they had before. Plan 260928a. */
+            <TooltipGroup delay={{ open: 240, close: 90 }} timeoutMs={400}>
+              <DataTable table={table} rows={capped.shown} caption="Your articles" />
+            </TooltipGroup>
           ) : (
             <ul className="tw:m-0 tw:flex tw:list-none tw:flex-col tw:gap-3 tw:p-0">
               {capped.shown.map((row) => (

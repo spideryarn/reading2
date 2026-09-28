@@ -244,8 +244,18 @@ function ViewOption({
  * The second paragraph is the one a reader could not have worked out by pressing
  * the button, which is the rule for this card: not "it shows a table", but what
  * that costs and what it does not promise.
+ *
+ * **The Table card was rewritten on 2026-09-28**, because two of its promises
+ * stopped being true in plan 260928a: it said "every column at once" and "No
+ * blurb", and the table now puts the blurb in a card on each title and lets
+ * columns be hidden. What pressing tells you (rows and columns) stays first;
+ * the two things pressing does not — where the blurb went, and that a hidden
+ * column is remembered here and not lost — are the second paragraph (Sol P-2).
+ * The Columns control and the right-click are stage 2 of that plan, which
+ * lands in the same push; if either is renamed, this sentence names it.
+ * Exported for tests/shelf-table-row-card.test.tsx.
  */
-const VIEW_TIPS = {
+export const VIEW_TIPS = {
   cards: {
     head: "Cards",
     what: "One card per article, with the blurb — the tree root's own sentence about the whole piece.",
@@ -253,7 +263,7 @@ const VIEW_TIPS = {
   },
   table: {
     head: "Table",
-    what: "One row per article, with every column at once: when it was added, when you last opened it, how many times, how many comments, how long it is.",
-    how: "No blurb — this is the view for comparing and finding rather than for choosing. Both views share one sort, so switching keeps your place in the order.",
+    what: "One row per article, with a column each for when it was added, when you last opened it, how many times, how many comments, and how long it is.",
+    how: "The blurb is not on the row: point at a title, or tab to it, for a card with the blurb and the exact dates. A column you hide, from Columns or by right-clicking its header, stays hidden in this browser and its value moves into that card. Both views share one sort, so switching keeps your place in the order.",
   },
 } as const;

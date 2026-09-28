@@ -221,6 +221,34 @@
   font-style: italic;
 }
 
+/* **The shelf table's row card** — library-columns.tsx § RowCard, plan 260928a.
+
+   Defined by subtraction like Structure's, so it has no title line: the title
+   is the link the reader is pointing at. That makes the gist the first thing in
+   the panel, where `.tip-gist`'s top margin — spacing it off a title — would
+   only be a gap. Then a two-column list of what the row does not show, ruled off
+   from the gist the way `.tip-kids` rules off a band's children, in the same
+   faint-label, soft-value pair the band card's footer and list use. */
+.tip-gist:first-child { margin-top: 0; }
+
+.tip-facts {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 0.2rem 0.75rem;
+  margin: 0;
+  font-size: 0.74rem;
+  line-height: 1.45;
+}
+
+.tip-gist + .tip-facts {
+  margin-top: 0.45rem;
+  padding-top: 0.4rem;
+  border-top: 1px solid var(--rule);
+}
+
+.tip-facts dt { color: var(--ink-faint); }
+.tip-facts dd { margin: 0; color: var(--ink-soft); }
+
 /* Somebody who has asked not to be moved gets the panel, not the animation.
    Floating UI's transition styles are inline, so this has to !important its
    way past them. */

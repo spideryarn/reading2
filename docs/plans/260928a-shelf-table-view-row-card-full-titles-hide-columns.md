@@ -37,7 +37,10 @@ simplest default and listed under [§ Assumptions waiting on Greg](#assumptions-
 ### 1. Titles wrap, whole — not a wider column
 
 Take the ellipsis off the title and let it wrap (`overflow-wrap: anywhere`, for a title with a long
-unbroken word). The byline line under it stays one truncated line.
+unbroken word). **The byline line under it wraps too** (revised after Sol P-1): it carries the site
+name, which the Added cell's `Details` card used to be the only way to read in full once a long byline
+pushed it past the ellipsis. Wrapping both is simpler than teaching the card which half of a truncated
+line the reader could not see.
 
 Why wrap rather than widen: a wider column only moves the cut — at 1100px the fixed columns plus the
 five action buttons already take most of the width, and at 390px the column is at its 224px floor
@@ -59,7 +62,8 @@ showing** — the rule Structure's card set ([tooltips.md § Structure's card](.
 - **renamed by you**, when the title is an override;
 - **the value of every hidden column** (after stage 2): a column you hid is not on the row, so its
   fact goes back into the card. That is subtraction applied to the reader's own choice, and it is what
-  makes hiding safe — nothing becomes unreachable.
+  makes hiding safe — nothing becomes unreachable. (Actions are not a value and are not hideable —
+  below.)
 
 Nothing already printed on the row is repeated: not the title, byline, site, minutes, shared badge,
 nor any visible column's value. No card at all if that leaves nothing (in practice there is always an
@@ -74,6 +78,10 @@ Trigger on the title link rather than the whole `<tr>`: the row also holds five 
 cards of their own, and a row-wide trigger would open two cards at once over them. The link is
 focusable, so the keyboard gets the card that the mouse does. The table body is wrapped in one
 `TooltipGroup`, so running the pointer down the titles opens each card instantly after the first.
+**The action buttons join that one group in table rows** rather than keeping the private group
+`Actions` makes for itself (it keeps it on the cards view): two nested groups each keep their own
+current member, so a title card and an action card could be open together (Sol P-3). `Actions` takes a
+prop saying "a group is already above you".
 Placement below the title, `keepSide`, so it flips to above rather than over the date columns.
 
 **Touch: none**, the same call Structure's rows and `OutlinePanel` made — a tap on a title opens the
@@ -88,14 +96,20 @@ on the em dash — becomes an `sr-only` span.
 ### 3. Hiding columns: a Columns menu, right-click as a shortcut, remembered per browser
 
 - A **Columns** control beside the cards/table switch, drawn only in table view: a Radix
-  `DropdownMenu` of checkboxes, one per hideable column. This is the route that works on iPad, on a
+  `DropdownMenu` of checkboxes, one per hideable column, exported from `DataTable.tsx` and placed by
+  `ShelfControls`. This is the route that works on iPad, on a
   keyboard and for anyone who never thinks to right-click. It shows how many are hidden
-  ("Columns · 2 hidden"), which is also the answer to "where did my column go?".
+  (a small count badge on the button, not a long label, so the phone row does not overflow — Sol P-8;
+the right-hand control group is allowed to wrap), which is also the answer to "where did my column
+go?".
 - **Right-click a column header** (long-press on touch, which Radix `ContextMenu` gives for free)
   opens a one-item menu: *Hide "Words"*. A menu rather than an instant hide, so a stray right-click
-  costs nothing.
-- **Article cannot be hidden** — a row with no title is not a row. Every other column can, including
-  the actions.
+  costs nothing. **Focus after hiding goes to the neighbouring visible header's sort button** (next,
+  else previous) — the header that opened the menu no longer exists, and Radix would otherwise return
+  focus to a removed node (Sol P-4; `ShelfActionsMenu` hit the same thing). Both the menu and the
+  Columns list live in `DataTable.tsx`, so that focus rule is local to the file that draws the headers.
+- **Article and Actions cannot be hidden** — a row with no title is not a row, and the actions are
+  five controls, not a value the card could carry back (Sol P-5). The four data columns can.
 - **Remembered in `localStorage`** under one key, wrapped in try/catch the way
   [`small-screen-hint.ts`](../../src/web/small-screen-hint.ts) does it; unreadable storage, junk, or
   an id we no longer have all land on "everything shown". Per browser, not per account and not in the
@@ -112,23 +126,37 @@ control being always visible and saying how many are hidden. Assumption A2.
 A hidden column that is the current sort key stays the sort key — the chips still show it, and the
 row card still carries its value.
 
+**The Table control's own card changes too** (Sol P-2). `VIEW_TIPS.table` in `ShelfControls.tsx`
+promises "every column at once" and "No blurb", and both stop being true: the blurb is in the row
+card and columns can be hidden.
+
 ## Stages
 
 Each ends green and committable.
 
 1. **Whole titles and the row card.** `library-columns.tsx` (title cell, new `RowCard`, Added cell
    loses `Details`, "Never opened" loses `title`), a `TooltipGroup` round the table in `Library.tsx`.
+   `Actions` joins the table group; `VIEW_TIPS.table` rewritten.
    Tests red first: the card opens on hover and on focus, carries the gist and exact dates, repeats
-   no visible column's value, only one card open at a time; no `title` attribute anywhere in the
-   table body; the title link is not truncated.
+   no visible column's value; exactly one card open under `document.body` across title→action and
+   action→title, including a focused title plus a hovered action; no `title` attribute anywhere in the
+   table body; the title and byline are not truncated. The jsdom recipe in
+   [tooltips.md § Three things about testing a card in jsdom](../project/tooltips.md#three-things-about-testing-a-card-in-jsdom)
+   — native `mouseenter` to open, bubbling `mouseout` plus two `act` blocks to close, a third to wait
+   out the group — copied from `tests/dock-mode-tooltips.test.tsx`'s `cardFor`.
 2. **Hiding columns.** `DataTable.tsx` (opt-in visibility, header context menu), a small
    `useHiddenColumns` storage module, the Columns menu in `ShelfControls.tsx`, two lines in
    `Library.tsx`, and the row card learning to carry hidden columns. Tests red first: hide via menu
-   and via right-click; restored after remount; bad storage → all shown; Article is never offered;
-   `/admin`'s table has no hide affordance; a hidden column's value appears in the card.
+   and via right-click; focus lands on a neighbouring header after a right-click hide; restored after
+   remount; bad storage → all shown; Article and Actions are never offered; a hidden column's value
+   appears in the card. Sol P-6: hide the **active primary sort column** and assert order,
+   missing-last, chip state and direction are unchanged; `/admin`'s table keeps every header and cell,
+   still sorts, and offers no menu. Visibility is optional state — the column-definition array is
+   never filtered.
 3. **Browser check and docs.** A Sonnet subagent at desktop and phone widths
    ([browser-control.md](../project/browser-control.md), then
-   [browser-testing.md](../project/browser-testing.md)). Update
+   [browser-testing.md](../project/browser-testing.md)) at 1280, 390 and 320px, asserting
+   `documentElement.scrollWidth === clientWidth` on the controls row. Update
    [library.md](../project/library.md) and the file table in
    [tooltips.md](../project/tooltips.md).
 
@@ -150,9 +178,15 @@ The `shelf-topics` session is adding topic filters to the same page. Edits to `L
 - **A1.** No row card on touch; a tap on a title still opens the article straight away.
 - **A2.** Hidden columns are remembered in this browser (not re-shown on every visit, not synced
   across devices).
-- **A3.** Right-click opens a one-item "Hide" menu rather than hiding instantly.
+- **A3.** Right-click opens a one-item "Hide" menu rather than hiding instantly. Sol suggested
+  cutting right-click from v1 (P-4) for the focus problem; kept because Greg named it, with the focus
+  rule above.
+- **A5.** The Article and Actions columns cannot be hidden.
 - **A4.** Titles wrap in full rather than the column being widened or clamped.
 
 ## Log
 
-- 2026-09-28 — plan written.
+- 2026-09-28 — plan written. GPT Sol plan review (read-only): four P1s, four P2s, all taken —
+  byline wraps too (P-1), Table control's card rewritten (P-2), one tooltip group per table (P-3),
+  focus after a right-click hide (P-4), Actions not hideable (P-5), sort-while-hidden and `/admin`
+  tests (P-6), the jsdom recipe (P-7), phone-width controls row (P-8).
