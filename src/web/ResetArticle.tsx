@@ -49,7 +49,7 @@ import type { ArticleMetadata, Job, StepName } from "../types.js";
 import { Button } from "@/components/ui/button";
 import { JobProgress } from "./JobProgress.js";
 import { useJobs } from "./useJobs.js";
-import { useStepJob, type StepFailure } from "./useStepJob.js";
+import type { StepFailure } from "./useStepJob.js";
 
 /**
  * **What a reader calls each extra.**
@@ -83,6 +83,7 @@ function extraName(step: StepName): string {
 /** Extras with no row in Metadata's existing *Generate it again* section. */
 const METADATA_RERUN_STEP_SET = new Set<StepName>(METADATA_RERUN_STEPS);
 const RESET_ONLY_PROGRESS = extraSteps().filter((step) => !METADATA_RERUN_STEP_SET.has(step));
+const RESET_ONLY_PROGRESS_SET = new Set<StepName>(RESET_ONLY_PROGRESS);
 
 /** `a, b and c` — the names are a list the reader reads, not a CSV. */
 function listed(names: string[]): string {
@@ -93,6 +94,36 @@ function listed(names: string[]): string {
 /** Is this job a reset of this article? `reset` is on a job exactly when it is one (src/types.ts § Job). */
 function isResetOf(job: Job, slug: string): boolean {
   return job.slug === slug && job.reset !== undefined;
+}
+
+/**
+ * The reset successor this row can be, from the facts carried on `Job`.
+ *
+ * Publication inserts every regeneration in the same transaction that marks
+ * the reset done: successor i gets `finishedAt + (i + 1) microseconds`
+ * (src/store/pg-revisions.ts). The wire preserves milliseconds, so the allowed
+ * window is the plan length rounded up from microseconds to milliseconds.
+ * Requiring that transaction-sized window is what distinguishes a successor
+ * from an ordinary run of the same step five minutes or five days later; step
+ * overlap alone cannot.
+ *
+ * This is not a durable parent id: the reset scope is folded into the work-key
+ * hash but is not stored on or serialised with the successor. An independently
+ * queued, same-step, same-profile job in this same millisecond is therefore
+ * indistinguishable here. Carrying the parent id would close that last ambiguity,
+ * but is a server/store contract change rather than a client recovery fix.
+ */
+function resetSuccessorStep(reset: Job, candidate: Job): ExtraStep | null {
+  if (reset.status !== "done" || !reset.finishedAt || candidate.reset !== undefined) return null;
+  if (candidate.slug !== reset.slug || candidate.steps.length !== 1) return null;
+  if ((candidate.profile ?? "") !== (reset.reset?.profile ?? "")) return null;
+  const step = candidate.steps[0]?.name;
+  if (!step || !isExtra(step) || !reset.reset?.regenerate.includes(step)) return null;
+  const finished = Date.parse(reset.finishedAt);
+  const created = Date.parse(candidate.createdAt);
+  if (!Number.isFinite(finished) || !Number.isFinite(created)) return null;
+  const windowMs = Math.ceil(reset.reset.regenerate.length / 1000);
+  return created >= finished && created <= finished + windowMs ? step : null;
 }
 
 /**
@@ -130,12 +161,11 @@ function useResetJob(slug: string, onFinished: () => void) {
         finish(job.id);
         return;
       }
-      /* Regeneration successors are ordinary one-step jobs, and three of them
-         have no row in Metadata's smaller rerun menu. Refresh for every job on
-         this article: it also keeps the pre-confirm list current when FAQ,
-         Illustrated or Citations finishes in another tab. Duplicate refreshes
-         from the nine existing rows are collapsed by useOrderedRead. */
-      onFinished();
+      /* Existing rerun rows announce their own nine steps. These are the extras
+         with no such row, whether they came from a reset or another tab. Keeping
+         the sets disjoint avoids turning one completion into a trailing second
+         metadata read in useOrderedRead. */
+      if (job.steps.some((step) => RESET_ONLY_PROGRESS_SET.has(step.name))) onFinished();
     },
     [slug, finish, onFinished, rememberRegenerating],
   );
@@ -153,46 +183,43 @@ function useResetJob(slug: string, onFinished: () => void) {
     return queued[0] ?? null;
   }, [queue.jobs, slug]);
 
+  const [postFailure, setPostFailure] = useState<string | null | undefined>(undefined);
+  const [watchedId, setWatchedId] = useState<string | null>(null);
+
   /**
-   * The plan can outlive the reset row's active state. On a reload after the
-   * reset published, recover it only when one of that reset's promised
-   * successor steps is still active and was queued after the reset. A bare
-   * historical reset must not resurrect a stale "making these again" state.
+   * Recover only the reset that could have minted an active successor. The
+   * timestamp/profile/one-step checks in `resetSuccessorStep` are the missing
+   * identity: "a later job happens to run FAQ" is not enough.
    */
-  const recoveredPlan = useMemo<StepName[] | null>(() => {
-    if (job) return job.reset?.regenerate ?? [];
-    const active = queue.jobs.filter(
-      (candidate) =>
-        candidate.slug === slug &&
-        (candidate.status === "queued" || candidate.status === "running"),
-    );
+  const recoveredReset = useMemo<Job | null>(() => {
+    if (job) return null;
     let source: Job | null = null;
     for (const candidate of queue.jobs) {
       if (!isResetOf(candidate, slug) || candidate.status !== "done") continue;
-      const plan = candidate.reset?.regenerate ?? [];
-      const hasSuccessor = active.some(
+      const hasActiveSuccessor = queue.jobs.some(
         (successor) =>
-          successor.createdAt >= candidate.createdAt &&
-          successor.steps.some((step) => plan.includes(step.name)),
+          (successor.status === "queued" || successor.status === "running") &&
+          resetSuccessorStep(candidate, successor) !== null,
       );
-      if (!hasSuccessor) continue;
+      if (!hasActiveSuccessor) continue;
       if (!source || candidate.createdAt > source.createdAt) source = candidate;
     }
-    return source?.reset?.regenerate ?? null;
+    return source;
   }, [job, queue.jobs, slug]);
 
   useEffect(() => {
-    if (recoveredPlan !== null) rememberRegenerating(recoveredPlan);
-  }, [recoveredPlan, rememberRegenerating]);
+    if (!recoveredReset) return;
+    rememberRegenerating(recoveredReset.reset?.regenerate ?? []);
+    setWatchedId(recoveredReset.id);
+  }, [recoveredReset, rememberRegenerating]);
 
-  const [postFailure, setPostFailure] = useState<string | null | undefined>(undefined);
-  const [watchedId, setWatchedId] = useState<string | null>(null);
   useEffect(() => {
     if (!job) return;
+    rememberRegenerating(job.reset?.regenerate ?? []);
     setWatchedId(job.id);
     setPostFailure(undefined);
     setFinished(false);
-  }, [job]);
+  }, [job, rememberRegenerating]);
 
   const startedId = useRef<string | null>(null);
   const [starting, setStarting] = useState(false);
@@ -229,6 +256,15 @@ function useResetJob(slug: string, onFinished: () => void) {
   );
 
   const stopped = watchedId ? queue.jobs.find((j) => j.id === watchedId) : undefined;
+  const watchedReset = stopped && isResetOf(stopped, slug) ? stopped : null;
+  const successorSource = job ?? watchedReset ?? recoveredReset;
+  const regenerationJobs = useMemo(
+    () =>
+      successorSource
+        ? queue.jobs.filter((candidate) => resetSuccessorStep(successorSource, candidate) !== null)
+        : [],
+    [queue.jobs, successorSource],
+  );
   const failed: StepFailure | null =
     postFailure !== undefined
       ? {
@@ -253,6 +289,8 @@ function useResetJob(slug: string, onFinished: () => void) {
     starting: starting && job === null,
     finished,
     regenerating,
+    regenerationJobs,
+    regenerationStalled: (id: string) => driverStalled(queue.driverFailures, id),
     start,
     cancel: (id: string) => void queue.cancel(id),
   };
@@ -358,30 +396,26 @@ function ResetConfirm({
  * two failure messages for one job.
  */
 function ResetOnlyRegeneration({
-  slug,
-  step,
-  onFinished,
+  job,
+  stalled,
+  onCancel,
 }: {
-  slug: string;
-  step: StepName;
-  onFinished: () => void;
+  job: Job;
+  stalled: boolean;
+  onCancel: (id: string) => void;
 }) {
-  const { job, failed, stalled, cancel } = useStepJob(
-    slug,
-    step,
-    onFinished,
-    "watches-queue",
-  );
+  const step = job.steps[0]?.name;
+  if (!step || !isExtra(step)) return null;
   const name = extraName(step);
 
-  if (failed) {
+  if (job.status === "error" || job.status === "cancelled") {
     return (
       <p role="alert" className="tw:m-0 tw:text-xs tw:text-alarm-ink">
-        {name} did not finish: {failed.message}
+        {name} did not finish: {job.status === "cancelled" ? "Stopped." : (job.error ?? "The job failed.")}
       </p>
     );
   }
-  if (!job) return null;
+  if (job.status === "done") return null;
 
   return (
     <div className="tw:flex tw:flex-wrap tw:items-center tw:gap-2">
@@ -393,7 +427,7 @@ function ResetOnlyRegeneration({
         onRun={async () => {
           throw new Error("A watched regeneration without a job cannot offer a run button.");
         }}
-        onCancel={cancel}
+        onCancel={onCancel}
         label={`Make ${name}`}
         step={step}
         icon={<RotateCcw size={13} />}
@@ -424,10 +458,18 @@ export function ResetArticle({
   /** `refresh`, never `reload` — see `RerunSection` in Metadata.tsx. */
   onFinished: () => void;
 }) {
-  const { job, failed, stalled, starting, finished, regenerating, start, cancel } = useResetJob(
-    slug,
-    onFinished,
-  );
+  const {
+    job,
+    failed,
+    stalled,
+    starting,
+    finished,
+    regenerating,
+    regenerationJobs,
+    regenerationStalled,
+    start,
+    cancel,
+  } = useResetJob(slug, onFinished);
   const [again, setAgain] = useState(false);
   const [pending, setPending] = useState<null | "run" | "retry">(null);
   const [busy, setBusy] = useState(false);
@@ -523,9 +565,19 @@ export function ResetArticle({
         </p>
       ) : null}
 
-      {RESET_ONLY_PROGRESS.filter((step) => regenerating.includes(step)).map((step) => (
-        <ResetOnlyRegeneration key={step} slug={slug} step={step} onFinished={onFinished} />
-      ))}
+      {regenerationJobs
+        .filter((candidate) => {
+          const step = candidate.steps[0]?.name;
+          return step !== undefined && RESET_ONLY_PROGRESS_SET.has(step);
+        })
+        .map((candidate) => (
+          <ResetOnlyRegeneration
+            key={candidate.id}
+            job={candidate}
+            stalled={regenerationStalled(candidate.id)}
+            onCancel={cancel}
+          />
+        ))}
 
       {/* **The article on this tab is the old one.** It is fetched once for all
           three views (article/ArticlePage.tsx) and nothing refetches it, so the
@@ -536,7 +588,7 @@ export function ResetArticle({
         <p role="status" className="tw:m-0 tw:flex tw:flex-wrap tw:items-center tw:gap-2">
           <span className="tw:text-foreground">
             Article reset. Reload the page to read the new version.
-            {regenerating.length > 0 ? " Selected extras run separately in the queue." : null}
+            {regenerating.length > 0 ? " Selected extras were queued separately." : null}
           </span>
           <Button type="button" variant="outline" size="xs" onClick={() => location.reload()}>
             Reload

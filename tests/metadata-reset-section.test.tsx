@@ -168,18 +168,24 @@ function resetJob(
     })),
     status,
     createdAt: "2026-09-28T00:00:00.000Z",
+    ...(status === "done" ? { finishedAt: "2026-09-28T00:00:01.000Z" } : {}),
     reset: { regenerate },
   };
 }
 
-function oneStepJob(id: string, step: StepName, status: Job["status"]): Job {
+function oneStepJob(
+  id: string,
+  step: StepName,
+  status: Job["status"],
+  createdAt = "2026-09-28T00:00:01.000Z",
+): Job {
   return {
     id,
     ownerId: "owner" as Job["ownerId"],
     slug: SLUG,
     steps: [{ name: step, label: `Doing ${step}`, status: status === "done" ? "done" : "pending" }],
     status,
-    createdAt: "2026-09-28T00:00:01.000Z",
+    createdAt,
     ...(status === "done" ? { finishedAt: "2026-09-28T00:00:02.000Z" } : {}),
     ...(status === "error" ? { error: `Couldn't make the ${step}.` } : {}),
   };
@@ -533,6 +539,66 @@ describe("the Start this article again section", () => {
     await settle();
 
     expect(metadataReads).toBeGreaterThan(before);
+  });
+
+  it("does not mistake a later ordinary run for an old reset's successor", async () => {
+    await act(async () =>
+      jobEngine.receive([
+        resetJob("job-reset", "done", ["faq"]),
+        oneStepJob("job-faq-later", "faq", "running", "2026-09-28T00:05:00.000Z"),
+      ]),
+    );
+    await open();
+
+    expect(card()?.textContent).not.toContain("Doing faq");
+    expect(button("Stop")).toBeUndefined();
+  });
+
+  it("does not show one multi-step job once for every planned extra", async () => {
+    const combined: Job = {
+      ...oneStepJob("job-combined", "faq", "running"),
+      steps: ["faq", "citations"].map((name) => ({
+        name: name as StepName,
+        label: `Doing ${name}`,
+        status: "pending" as const,
+      })),
+    };
+    await act(async () =>
+      jobEngine.receive([resetJob("job-reset", "done", ["faq", "citations"]), combined]),
+    );
+    await open();
+
+    expect([...(card()?.querySelectorAll("button") ?? [])].filter((b) => b.textContent === "Stop"))
+      .toHaveLength(0);
+  });
+
+  it("stops associating later work after the reset's successor finishes", async () => {
+    await act(async () =>
+      jobEngine.receive([
+        resetJob("job-reset", "done", ["faq"]),
+        oneStepJob("job-faq", "faq", "running"),
+      ]),
+    );
+    await open();
+    expect(card()?.textContent).toContain("Doing faq");
+
+    await act(async () =>
+      jobEngine.receive([
+        resetJob("job-reset", "done", ["faq"]),
+        oneStepJob("job-faq", "faq", "done"),
+      ]),
+    );
+    await act(async () =>
+      jobEngine.receive([
+        resetJob("job-reset", "done", ["faq"]),
+        oneStepJob("job-faq", "faq", "done"),
+        oneStepJob("job-faq-later", "faq", "running", "2026-09-28T00:05:00.000Z"),
+      ]),
+    );
+    await settle();
+
+    expect(card()?.textContent).not.toContain("Doing faq");
+    expect(button("Stop")).toBeUndefined();
   });
 
   it("keeps a failure visible for a regenerated extra with no rerun row", async () => {

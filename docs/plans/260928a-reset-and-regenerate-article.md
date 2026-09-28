@@ -315,3 +315,11 @@ through the same `act` wrapper as `run`, so a success pokes the job engine. Afte
 finishes, the page offers a Reload: the reading view holds the article in memory and nothing
 re-fetches it. A first browser pass on the box confirmed the gate, the placement and the checkbox;
 the rest is re-checked in stage 3.
+- **Stage 2 round 2 + merge + F14** — GPT Sol (reviewer-fixer), accept after fixes. Confirmed
+  `trajectory` (new on dev) is an extra, the renumbered migration (entry 91, after trajectory's 90)
+  and the F14 leaf `src/reset-role.ts`. **F16 P1 fixed by Sol**: after a reload, any later
+  same-step job was taken for a reset successor and watched indefinitely; successors are now
+  matched to the reset's completion, plan, profile and one-step shape. F17 P2 reported, left:
+  successors carry no durable parent-reset id (the scope lives only in the work-key hash), so an
+  independent identical job created in the same millisecond is ambiguous to the client.
+  [review](260928a-reset-and-regenerate-article-stage2-review-sol-r2.md).
