@@ -20,9 +20,10 @@
  * ## What the model decides, and what it is not trusted with
  *
  * The stops are the quotes that already exist; the model **orders** them into
- * a route and gives each a depth and a one-line role. Its ids are never
- * trusted: `validateRoute` drops what does not resolve, keeps the shallowest of
- * any repeat, allows one stop per block, nulls a bad role without dropping the
+ * a route and gives each a depth and a one-line **cue** — what to look for in
+ * that passage, never what it found. Its ids are never trusted:
+ * `validateRoute` drops what does not resolve, keeps the shallowest of any
+ * repeat, allows one stop per block, nulls a bad cue without dropping the
  * stop, and applies the caps to the cumulative counts in route order. Nothing
  * is ever demoted or relabelled (Sol F2, F8). Then the passes must grow, or the
  * job fails and writes nothing.
@@ -72,12 +73,27 @@ export type {
  * Bumped whenever the prompt changes what a route *is*. Exported so tests and
  * the read path compare against the constant rather than a literal.
  *
- * `trajectory/5`, 2026-09-28: the prompt's own plain-words wording gave way to the shared `plainWords` section, one rule for every prompt (Greg, 2026-09-28; docs/plans/260926a-plainer-summaries-and-glossary.md, stage 3).
+ * `trajectory/5`, 2026-09-28: the role became a cue (`MAX_CUE_CHARS`, below).
+ *
+ * `trajectory/6`, 2026-09-28: the prompt's own plain-words wording gave way to
+ * the shared `plainWords("ask")` section — a cue is a question or an
+ * instruction to the reader — one rule for every prompt (Greg, 2026-09-28;
+ * docs/plans/260926a-plainer-summaries-and-glossary.md, stage 3). The cue had
+ * taken `trajectory/5` on its own branch, so this merge goes to 6.
  */
-export const PROMPT_VERSION = "trajectory/5";
+export const PROMPT_VERSION = "trajectory/6";
 
-/** A role is a short label, not a sentence about the passage. Over this it becomes `null`. */
-export const MAX_ROLE_CHARS = 80;
+/**
+ * **A cue is one line, not a paragraph about the passage**: an instruction or
+ * a question naming what to look for there, never what it found. Over this it
+ * becomes `null` and the stop is kept (Sol F25). 140 is the plan's number —
+ * room for *"Look for how rich-club membership changes the comparison."*, too
+ * little to carry the finding as well.
+ *
+ * It replaced the role (`trajectory/4` and before, 80 characters), which old
+ * routes still carry and the band still draws when there is no cue.
+ */
+export const MAX_CUE_CHARS = 140;
 
 /** How much of each quote the prompt carries. Quotes are rarely longer. */
 export const MAX_QUOTE_PROMPT_CHARS = 1200;
@@ -103,12 +119,14 @@ const EFFORT: Effort = "low";
 
 /**
  * The answer budget in tokens: a base for the JSON around the list, plus per
- * stop the quote id, the depth and a role at the cap, at a conservative three
+ * stop the label, the depth and a cue at the cap, at a conservative three
  * characters a token — for every quote the list can hold, because the prompt
  * says depth 3 should include nearly all of them and a model may list past the
  * cap. Undersizing does not degrade: it throws `truncationFailure`.
+ * tests/trajectory.test.ts builds the largest permitted answer and checks it
+ * fits.
  */
-export const ANSWER_TOKENS = 300 + MAX_QUOTES_TOTAL * Math.ceil((MAX_ROLE_CHARS + 60) / 3);
+export const ANSWER_TOKENS = 300 + MAX_QUOTES_TOTAL * Math.ceil((MAX_CUE_CHARS + 60) / 3);
 
 /* ------------------------------------------------------------ pure helpers -- */
 
@@ -120,6 +138,7 @@ export function emptyDrops(): TrajectoryDrops {
     sameBlock: 0,
     malformed: 0,
     badRole: 0,
+    badCue: 0,
     overCap: 0,
   };
 }
@@ -229,17 +248,17 @@ export function collapseQuotes(quotes: readonly Quote[]): { quotes: Quote[]; col
 interface RawStop {
   quote?: unknown;
   depth?: unknown;
-  role?: unknown;
+  cue?: unknown;
 }
 
 function isDepth(value: unknown): value is TrajectoryDepth {
   return value === 1 || value === 2 || value === 3;
 }
 
-function roleOf(value: unknown): string | null {
+function cueOf(value: unknown): string | null {
   if (typeof value !== "string") return null;
-  const role = value.trim();
-  return role.length === 0 || role.length > MAX_ROLE_CHARS ? null : role;
+  const cue = value.trim();
+  return cue.length === 0 || cue.length > MAX_CUE_CHARS ? null : cue;
 }
 
 /**
@@ -248,7 +267,9 @@ function roleOf(value: unknown): string | null {
  *
  * 1. not an object, no quote id, or a depth outside 1–3 → dropped (`malformed`);
  * 2. a quote id not in `quotes` → dropped (`unknownQuote`);
- * 3. a bad role → `null`, **the stop kept** (`badRole`);
+ * 3. a bad cue — not a string, empty, or over `MAX_CUE_CHARS` once trimmed →
+ *    `null`, **the stop kept** (`badCue`). A role is no longer asked for or
+ *    read: every new stop's is `null`, and that is not counted (Sol F25);
  * 4. a quote named twice → its **shallowest** occurrence kept, in that
  *    occurrence's place; the earlier on a tie (`duplicate`);
  * 5. two stops on one block → the shallowest, then the earlier (`sameBlock`) —
@@ -285,9 +306,13 @@ export function validateRoute(
       dropped.unknownQuote++;
       continue;
     }
-    const role = roleOf(r.role);
-    if (role === null) dropped.badRole++;
-    read.push({ stop: { quoteId: quote.id, depth: r.depth, role }, blockId: quote.blockId, index });
+    const cue = cueOf(r.cue);
+    if (cue === null) dropped.badCue = (dropped.badCue ?? 0) + 1;
+    read.push({
+      stop: { quoteId: quote.id, depth: r.depth, role: null, cue },
+      blockId: quote.blockId,
+      index,
+    });
   }
 
   /* 4 and 5 are the same rule over two keys: of the candidates sharing a key,
@@ -464,14 +489,20 @@ WHAT YOU DECIDE
    is simply one the reader meets on every pass.
    Each pass must ADD stops to the one before it.
 
-3. A ROLE for each stop: a label, at most ${MAX_ROLE_CHARS} characters, that
-   says what the passage DOES in the piece — NEVER what it found or says.
-   GOOD: "The headline result", "How they measured it", "What earlier work
-   missed", "Does it hold outside the lab?", "Where the argument turns".
-   BAD: "Sleep improves memory by 20%", "Shows the effect is robust",
-   "The author is wrong about X".
-   No numbers, no findings, no verdicts: the reader gets those from the
-   passage itself. A role may be the question the passage answers.
+3. A CUE for each stop: one line, at most ${MAX_CUE_CHARS} characters, that
+   tells the reader what to LOOK FOR in this passage — an instruction or a
+   question — and NEVER what it found or says.
+   GOOD: "Look for how rich-club membership changes the comparison.",
+   "Which measure do they choose, and what do they give up for it?",
+   "Notice what they say earlier work could not do.",
+   "Does the effect hold outside the lab? Note the number."
+   BAD: "Synergy is concentrated in the rich club.", "Shows the effect is
+   robust.", "Sleep improves memory by 20%.", "The author is wrong about X."
+   Pointing at a number or a result is fine ("note the number"); stating it
+   is not. No findings, no verdicts: the reader gets those from the passage.
+   Each cue stands on its own. Never refer to another stop ("next", "as
+   before", "the previous stop", "now"), because a reader can arrive at any
+   stop from anywhere.
 
 RULES
 
@@ -487,14 +518,14 @@ OUTPUT
 JSON only, no prose, no code fence. The array order IS the route:
 
 {"stops": [
-  {"quote": "Q7", "depth": 1, "role": "..."}
+  {"quote": "Q7", "depth": 1, "cue": "..."}
 ]}
 
 THE ANSWER MUST PARSE. Inside a string, a straight double quote ends the
-string: a role never needs one, so do not use one — write the words bare, or
+string: a cue never needs one, so do not use one — write the words bare, or
 use single quotes. Never put a real line break inside a string.
 
-${plainWords("landmark")}
+${plainWords("ask")}
 
 ${PROFILE_RULES}`;
 

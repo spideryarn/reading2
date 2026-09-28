@@ -849,6 +849,10 @@ describe("the jump transaction", () => {
    * whole jump is abandoned.
    */
   it("does nothing at all when the target is the block at the reading line", async () => {
+    /* "Nothing" is the history and the scroll: since 2026-09-28 this branch
+       also flashes the block (tests/begin-jump-flash.test.ts), which looks the
+       row up with `CSS.escape` — absent from jsdom. The ids are `[a-z0-9-]`. */
+    globalThis.CSS ??= { escape: (s: string) => s } as unknown as typeof globalThis.CSS;
     layOut(READING_AT_15);
     const entries = history.length;
     expect(jump(block(15))).toBe(false);

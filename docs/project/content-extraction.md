@@ -563,6 +563,23 @@ The whole of it, including a cross-family review that found three P0s in the pla
 was written, is in
 [../plans/260905b-pdf-front-matter-and-the-title-it-stole.md](../plans/260905b-pdf-front-matter-and-the-title-it-stole.md).
 
+## The byline, and the authors Readability drops
+
+A web page's byline is Readability's, with one exception. Readability keeps **one value per
+`<meta>` name**, the last one it saw, and never reads `citation_author`. So a scholarly page that
+lists each author in its own tag lost all of them but one: a 25-author Nature paper was stored as
+"Hasson, Uri", PLOS kept its first author, and arXiv stored its submission dateline.
+[`src/meta-authors.ts`](../../src/meta-authors.ts) reads every `citation_author` (or a repeated
+`dc.creator`) before Readability runs. It replaces Readability's byline only where that byline
+leaves out one of those authors, so a page whose JSON-LD Readability already reads in full keeps
+the byline it had. The list is joined with `"; "` because Referee mode's `authorKeys` reads
+`"Jane Doe, John Smith"` as one person. **The general point**: when this stage takes one string from Readability for
+something that can be plural, read how Readability chose the one. That is where this bug was, in
+plain sight. The reasoning is in
+[../plans/260928b-multi-author-bylines-from-citation-meta.md](../plans/260928b-multi-author-bylines-from-citation-meta.md)
+and the class in
+[../postmortems/260928a-a-library-field-that-holds-one-value-for-a-list-keeps-one.md](../postmortems/260928a-a-library-field-that-holds-one-value-for-a-list-keeps-one.md).
+
 ## What it gets wrong, and how we know
 
 **An accordion is closed, not absent — and Readability cannot tell.** It skips

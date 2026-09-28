@@ -81,7 +81,7 @@
 import { type MouseEvent, useRef, useState } from "react";
 import { ChevronRight } from "lucide-react";
 import type { BlockId } from "../types.js";
-import { BlockRange } from "./BlockRef.js";
+import { BlockRange, BlockRef } from "./BlockRef.js";
 import { ModeSurface } from "./ModeSurface.js";
 import { TooltipGroup } from "./Tooltip.js";
 import { MAX_SUMMARY_DEPTH } from "./params.js";
@@ -417,18 +417,20 @@ function Entry({
             >
               <ChevronRight size={12} />
             </button>
-            <button
-              type="button"
+            {/* This title only goes to the section, so it is the same block
+                link as the range beneath it: a real address for modified
+                clicks, with the section's opening passage in its card. */}
+            <BlockRef
+              id={entry.node.range[0]}
+              onJump={onJump}
               className="summ-title"
-              title="Go to this section in the article"
-              onClick={() => onJump(entry.node.range[0])}
             >
               {/* The apparatus wears no number: it is not part N of the
                   argument, and numbering it was how "Notes" became part 3.
                   src/web/tree.ts § buildSummaryTree. */}
               {!entry.supplement && <span className="summ-number">{entry.number}</span>}
               {entry.node.title}
-            </button>
+            </BlockRef>
             {/* "How much is under this" — the gap their "+N hidden" badge filled
                 and our gist columns still cannot: a section holding forty
                 paragraphs and one holding three look identical in an L2 cell.

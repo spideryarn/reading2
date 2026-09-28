@@ -794,9 +794,11 @@ design and the version and banner claims above**, which are kept as what was pro
   debate (both prompts), Explain, chat, Remember, quiz-mark, search, link summaries, the four
   referee prompts and the public changelog's copy take `"explain"`; sketch `"explain"` +
   `"landmark"`; quiz `"ask"` + `"explain"` (it writes reference answers too); FAQ `"ask"`; labels,
-  timeline and trajectory `"landmark"` (timeline's and trajectory's only written field is a short
+  timeline `"landmark"` and trajectory `"ask"` (timeline's only written field is a short
   label — a departure from the inventory's first placement of timeline, taken because `"explain"`
-  would tell a ten-word label to explain its terms); live `"explain"` + `"spoken"`. The changelog's
+  would tell a ten-word label to explain its terms; trajectory was `"landmark"` for its old "role"
+  label until the merge of `dev` brought the trajectory mode's "cue", a question or instruction to
+  the reader, so `"ask"` and `trajectory/6`); live `"explain"` + `"spoken"`. The changelog's
   copy prompt is a Markdown file a subagent reads, so the rule is written beside the inputs as
   `copy-plain-words.md` and `copy-brief.md` tells the subagent to read it.
 - **Exempt, with reasons in the file**: the quiz verdict, the citation URL finder, PDF front matter,

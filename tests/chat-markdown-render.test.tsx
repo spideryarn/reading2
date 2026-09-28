@@ -65,7 +65,6 @@ function painting(text: string): void {
         blocks: BLOCKS,
         onJump: () => {},
         links: true,
-        live: true,
         partial: true,
       }),
     );

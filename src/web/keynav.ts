@@ -61,7 +61,8 @@ import { useEffect, useRef, useState } from "react";
 import type { Block, BlockId } from "../types.js";
 import { armJump, clearArmedJump, type JumpOrigin } from "./jump-history.js";
 import { activeSectionIndex } from "./position.js";
-import { SCROLL_MS, scrollToBlock, stickyOffset } from "./scroll.js";
+import { dropPendingFlash, flashBlock } from "./flash.js";
+import { SCROLL_MS, abandonScroll, scrollToBlock, stickyOffset } from "./scroll.js";
 import { navigableItems, type Cell, type Geometry } from "./tree.js";
 
 /**
@@ -325,12 +326,24 @@ export function measureOrigin(blocks: Block[]): JumpOrigin {
  * is already on screen (App.tsx), which makes that reachable, and the reader
  * would be moved with no chip and no way back.
  *
- * **The visible consequence, which is deliberate: clicking a search result for
- * the paragraph you are already reading now does nothing at all.** Accepted by
- * the team lead on 2026-09-06 rather than papered over — do not "fix" it by
- * putting the scroll back, because that reintroduces an irreversible move.
- * Making that motion reversible needs a finer origin than a block id, which is
- * a design, not a patch. GPT Sol F10.
+ * **So clicking a search result for the paragraph you are already reading
+ * moves nothing and pushes nothing — but it flashes.** Until 2026-09-28 it did
+ * nothing at all, accepted on 2026-09-06 as the price of not making an
+ * irreversible move; do not "fix" it by putting the scroll back, because that
+ * reintroduces the move (making it reversible needs a finer origin than a
+ * block id — a design, not a patch; GPT Sol F10). The flash answers "which one
+ * is it" without moving anybody and without costing a Back. Any glide still in
+ * flight is stopped first, so a block the page is being carried past does not
+ * flash and then leave (Sol F1 on
+ * docs/plans/260928b-one-block-link-component-with-a-rich-tooltip-and-a-flash-on-arrival.md).
+ *
+ * ## The flash, on both branches
+ *
+ * The moved branch flashes when the scroll reports `settled` and not before —
+ * a flash that finishes mid-glide is a flash nobody saw, and one whose glide
+ * the reader's wheel cancelled would be in the wrong place (scroll.ts §
+ * `ScrollOutcome`). Only this function flashes: stepping calls `scrollToBlock`
+ * directly and stays quiet (flash.ts).
  */
 export function beginJump(
   blocks: Block[],
@@ -338,8 +351,17 @@ export function beginJump(
   push: (id: BlockId) => void,
 ): boolean {
   clearArmedJump();
+  /* A held landing belongs to the last jump. Supersede it when the next jump
+     begins, not only if that next scroll eventually settles: if the reader
+     cancels the newer glide, exposing the prose must not resurrect the older
+     destination. */
+  dropPendingFlash();
   const origin = measureOrigin(blocks);
-  if (origin.kind === "block" && origin.blockId === target) return false;
+  if (origin.kind === "block" && origin.blockId === target) {
+    abandonScroll();
+    flashBlock(target);
+    return false;
+  }
   /* `from` is the whole address, not just the path: it is what lets the wrapper
      tell this jump's push from one made after the reader has been somewhere
      else and come back. jump-history.ts § `from`. */
@@ -350,7 +372,9 @@ export function beginJump(
     target,
   });
   push(target);
-  scrollToBlock(target);
+  scrollToBlock(target, "smooth", (outcome) => {
+    if (outcome === "settled") flashBlock(target);
+  });
   return true;
 }
 

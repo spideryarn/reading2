@@ -44,6 +44,7 @@ import {
 } from "./protect.js";
 /* The namespace and its scrub — src/reserved.ts is the only file allowed to
    name one of these attributes. See `stampSourceIds`. */
+import { chooseByline, metaAuthors } from "./meta-authors.js";
 import { RESERVED_ATTRS, scrubReserved } from "./reserved.js";
 import { sanitizeHtml } from "./sanitize.js";
 import type { Meta } from "./types.js";
@@ -388,6 +389,12 @@ export function readArticle(
   url: string | null,
 ): {
   article: ReturnType<Readability["parse"]>;
+  /**
+   * Every author the page's metadata declares, or `null` to leave the byline to
+   * Readability — src/meta-authors.ts. Kept apart from `article` so an eval
+   * asking what Readability said still gets what Readability said.
+   */
+  authors: string[] | null;
   refusal: TooLittleTextToRead | null;
   notes: NoteStats;
   callouts: CalloutStats;
@@ -404,6 +411,7 @@ export function readArticle(
   const shipped = armThatKeptTheProse(readingArm(html, url, {}), (opts) => readingArm(html, url, opts));
   return {
     article: shipped.article,
+    authors: shipped.authors,
     refusal: capabilityFloor(shipped.article),
     notes: shipped.notes,
     callouts: shipped.callouts,
@@ -427,6 +435,7 @@ function readingArm(
   protect: ProtectOptions,
 ): ProtectedArm & {
   article: ReturnType<Readability["parse"]>;
+  authors: string[] | null;
   notes: NoteStats;
   callouts: CalloutStats;
   removed: FurnitureRemovals;
@@ -454,9 +463,13 @@ function readingArm(
      given, and `keepClasses: false` takes the `noprint` class off whatever
      survives. See `notForPrintText` (src/protect.ts). */
   const notForPrint = notForPrintText(dom.window.document);
+  /* Before the parse for the same reason: every author the page declares,
+     which Readability collapses to one — src/meta-authors.ts. */
+  const authors = metaAuthors(dom.window.document);
   const article = new Readability(dom.window.document).parse();
   return {
     article,
+    authors,
     notes,
     callouts,
     removed,
@@ -1175,7 +1188,7 @@ export async function runExtract(opts: {
      Found by a GPT Sol review that reproduced it, 2026-08-26 — the fourth round
      of the same class, and the first one where the leak was a dependency's
      rather than ours. See docs/project/logging.md. */
-  const { article, refusal, notes, callouts, removed, kept } = readArticle(opts.html, opts.url);
+  const { article, authors, refusal, notes, callouts, removed, kept } = readArticle(opts.html, opts.url);
   if (!article) {
     throw new ReadabilityRefused();
   }
@@ -1198,8 +1211,11 @@ export async function runExtract(opts: {
      `fetchedAt`, and `publicationDate` above why it is not converted to UTC. */
   const publishedAt = publicationDate(article.publishedTime);
   /* The page's own line breaks taken back out — `tidyMetaText` above says why,
-     and why it stops there rather than guessing at a missing separator. */
-  const byline = tidyMetaText(article.byline);
+     and why it stops there rather than guessing at a missing separator. The
+     page's declared author list replaces it where it has dropped somebody,
+     because Readability keeps only the last of a repeated tag —
+     src/meta-authors.ts. */
+  const byline = chooseByline(authors, tidyMetaText(article.byline));
   const meta: Meta = {
     slug,
     title: article.title ?? slug,

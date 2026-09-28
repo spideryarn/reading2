@@ -21,10 +21,11 @@ import { hashProfile, PROFILE_RULES } from "../src/profile.js";
 import { blockIndex, sectionPathOf } from "../src/section-path.js";
 import { nullCheckpointStore } from "../src/store/checkpoints.js";
 import { SHAPE, sameStamp, stampOf } from "../src/store/artifacts.js";
-import type { Block, BlockId, NodeId, Quote, Quotes, Tree, TreeNode } from "../src/types.js";
+import { type Block, type BlockId, MAX_QUOTES_TOTAL, type NodeId, type Quote, type Quotes, type Tree, type TreeNode } from "../src/types.js";
 import {
+  ANSWER_TOKENS,
   DEPTH_CAPS,
-  MAX_ROLE_CHARS,
+  MAX_CUE_CHARS,
   PROMPT_VERSION,
   TRAJECTORY_SYSTEM,
   buildTrajectory,
@@ -156,18 +157,18 @@ const quote = (n: number): Quote => ({
 const quotesOf = (n: number): Quote[] => Array.from({ length: n }, (_, i) => quote(i));
 const qid = (n: number): string => quote(n).id;
 
-const stop = (n: number, depth: unknown, role: unknown = "What the passage does") => ({
+const stop = (n: number, depth: unknown, cue: unknown = "Look for what this passage does.") => ({
   quote: qid(n),
   depth,
-  role,
+  cue,
 });
 
 /** A growing route over the first ten quotes, on ten different blocks. */
 const goodRoute = [
-  stop(8, 1, "The headline result"),
-  stop(9, 1, "Does it hold elsewhere?"),
-  stop(4, 2, "How they measured it"),
-  stop(0, 2, "What earlier work missed"),
+  stop(8, 1, "Look for the headline comparison."),
+  stop(9, 1, "Does it hold outside the lab?"),
+  stop(4, 2, "Notice how they measured it."),
+  stop(0, 2, "What does earlier work miss, by their account?"),
   stop(5, 2),
   stop(1, 3),
   stop(2, 3),
@@ -239,17 +240,62 @@ describe("validating the model's route", () => {
     expect(d.malformed).toBe(7);
   });
 
-  it("keeps a stop whose role is bad, with the role set to null", () => {
+  it("keeps a stop whose cue is bad, with the cue set to null and counted as badCue", () => {
     const d = emptyDrops();
-    const long = "x".repeat(MAX_ROLE_CHARS + 1);
-    const exact = "y".repeat(MAX_ROLE_CHARS);
+    const long = "x".repeat(MAX_CUE_CHARS + 1);
+    const exact = "y".repeat(MAX_CUE_CHARS);
     const stops = validateRoute(
-      [stop(0, 1, long), stop(1, 1, ""), stop(2, 2, "   "), stop(3, 2, 42), { quote: qid(4), depth: 3 }, stop(5, 3, exact), stop(6, 3, "  Trimmed  ")],
+      [
+        stop(0, 1, long),
+        stop(1, 1, ""),
+        stop(2, 2, "   "),
+        stop(3, 2, 42),
+        { quote: qid(4), depth: 3 },
+        stop(5, 3, exact),
+        stop(6, 3, "  Trimmed?  "),
+        stop(7, 3, ["an", "array"]),
+      ],
       quotesOf(10),
       d,
     );
-    expect(stops.map((s) => s.role)).toEqual([null, null, null, null, null, exact, "Trimmed"]);
-    expect(d.badRole).toBe(5);
+    expect(stops.map((s) => s.quoteId)).toHaveLength(8);
+    expect(stops.map((s) => s.cue)).toEqual([null, null, null, null, null, exact, "Trimmed?", null]);
+    expect(d.badCue).toBe(6);
+  });
+
+  it("no longer asks for a role, so a missing one is null and is not counted as badRole", () => {
+    const d = emptyDrops();
+    const stops = validateRoute(
+      [stop(0, 1, "Look for the comparison."), { quote: qid(1), depth: 2, cue: "Why this measure?" }],
+      quotesOf(10),
+      d,
+    );
+    expect(stops.map((s) => s.role)).toEqual([null, null]);
+    expect(d.badRole).toBe(0);
+    expect(d.badCue).toBe(0);
+    /* An old answer's role is not believed either: the prompt did not ask for it. */
+    const old = validateRoute([{ quote: qid(2), depth: 1, role: "The headline result" }], quotesOf(10), d);
+    expect(old[0]!.role).toBeNull();
+    expect(d.badRole).toBe(0);
+    expect(d.badCue).toBe(1);
+  });
+
+  it("budgets for the largest permitted answer: every quote the list can hold, each with a cue at the cap", () => {
+    /* The widest the model may legitimately answer: MAX_QUOTES_TOTAL stops,
+       three-digit labels, a cue at the cap, one stop a line in the layout the
+       prompt's OUTPUT section shows. */
+    const cue = "w".repeat(MAX_CUE_CHARS);
+    const lines = Array.from(
+      { length: MAX_QUOTES_TOTAL },
+      (_, i) => `  {"quote": "Q${i + 1}", "depth": 3, "cue": "${cue}"}`,
+    );
+    const largest = `{"stops": [\n${lines.join(",\n")}\n]}`;
+    expect(JSON.parse(largest).stops).toHaveLength(MAX_QUOTES_TOTAL);
+    /* The budget's own assumption, three characters a token, applied to it. */
+    expect(Math.ceil(largest.length / 3)).toBeLessThanOrEqual(ANSWER_TOKENS);
+    /* A control that the check can fail: a cue at twice the cap does not fit. */
+    const over = largest.replaceAll("w".repeat(MAX_CUE_CHARS), "w".repeat(MAX_CUE_CHARS * 2));
+    expect(Math.ceil(over.length / 3)).toBeGreaterThan(ANSWER_TOKENS);
   });
 
   it("applies the caps to the cumulative counts, dropping the excess in route order", () => {
@@ -383,6 +429,18 @@ describe("what the prompt is given", () => {
     expect(collapsed.collapsed).toBe(2);
   });
 
+  it("asks for a context-free cue, not a role, under a new prompt version (Sol F18, F25)", () => {
+    expect(PROMPT_VERSION).toBe("trajectory/6");
+    expect(TRAJECTORY_SYSTEM).toContain(`"cue": "..."`);
+    expect(TRAJECTORY_SYSTEM).not.toContain(`"role"`);
+    expect(TRAJECTORY_SYSTEM).toContain(`at most ${MAX_CUE_CHARS} characters`);
+    /* The two halves of the rule: what to look for, never what it found; and
+       no reference to another stop, because a reader arrives from anywhere. */
+    expect(TRAJECTORY_SYSTEM).toMatch(/LOOK FOR/);
+    expect(TRAJECTORY_SYSTEM).toMatch(/NEVER what it found/);
+    expect(TRAJECTORY_SYSTEM).toMatch(/Never refer to another stop/);
+  });
+
   it("marks quote text as untrusted data and prevents it from closing its prompt fence", () => {
     const injected = {
       ...quote(0),
@@ -510,7 +568,7 @@ describe("the labels the model answers in", () => {
     const store = storeWith(quotesOf(10));
     /* Q9/Q10 are quotes 8 and 9; the rest of `goodRoute` by label, bar one. */
     const byLabel = goodRoute.map((s) => ({ ...s, quote: `Q${Number(s.quote.slice(2)) + 1}` }));
-    byLabel.push({ quote: "spya-spya-q1", depth: 3, role: "Mangled" });
+    byLabel.push({ quote: "spya-spya-q1", depth: 3, cue: "Mangled?" });
     answer = JSON.stringify({ stops: byLabel });
     const result = await STEPS.trajectory.run(ctx(), store, nullCheckpointStore());
     const written = result.parts?.trajectory;

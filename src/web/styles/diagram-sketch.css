@@ -350,7 +350,26 @@
   background: none; border: none; cursor: pointer;
   font-family: inherit; font-size: 0.79rem; color: var(--highlight);
 }
-.sk-card-jump:hover { text-decoration: underline; }
+/* Only the interactive forms underline. A missing BlockRef is a `<span>` and
+   keeps the generic dimmed strike-through when pointed at. */
+a.sk-card-jump:hover,
+button.sk-card-jump:hover { text-decoration: underline; }
+/* The card's "Go to this passage" is a block link (plan 260928b); "Bring it
+   back" is still a button. The link is also `.block-ref`, whose id-chip type
+   prose.css sets, so two classes put the button's look back on it — including
+   `inline-block`, without which the margin above does nothing. Colour, opacity
+   and underline only on the `<a>`: a node pointing at a block this version of
+   the article no longer has draws a span, which keeps `.block-ref-missing`'s
+   dimmed strike-through. */
+.sk-card-jump.block-ref {
+  display: inline-block;
+  font-family: inherit;
+  font-size: 0.79rem;
+  line-height: normal;
+  letter-spacing: normal;
+}
+a.sk-card-jump.block-ref { color: var(--highlight); opacity: 1; text-decoration: none; }
+a.sk-card-jump.block-ref:hover { color: var(--highlight); text-decoration: underline; }
 
 /* ---- before there is a picture ---- */
 
@@ -386,4 +405,3 @@
 .sk-empty p { margin: 0 0 0.5rem; line-height: 1.45; }
 .sk-empty-why { font-size: 0.81rem; color: var(--ink-faint); }
 .sk-run { display: flex; flex-direction: column; gap: 0.4rem; align-items: flex-start; }
-

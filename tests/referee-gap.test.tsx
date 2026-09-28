@@ -565,10 +565,28 @@ describe("the referee's placements the model never returned", () => {
     });
     await flush();
 
-    const jump = misses()[0]?.querySelector("button");
+    /* A block link since plan 260928b stage 2 — an anchor with the block in its
+       href, so ⌘-click opens it in a tab — and still a jump in place on a plain
+       click. Not a button: this row only goes there, it selects nothing. */
+    const jump = misses()[0]?.querySelector(`a.crit-jump[data-block-link="${MISSED}"]`);
     expect(jump, "a miss with no way into the prose is a dead end").toBeTruthy();
+    expect(jump?.getAttribute("href") ?? "").toContain(`at=${MISSED}`);
+    // The quote is beside the link already, so its card says only where.
+    expect(jump?.getAttribute("data-block-preview")).toBe("off");
+    if (jump) {
+      act(() => {
+        jump.dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true, metaKey: true }));
+      });
+    }
+    expect(jumped, "a ⌘-click is the browser's, not a jump in place").toEqual([]);
     if (jump) click(jump);
     expect(jumped).toEqual([MISSED]);
+    /* The model's own rows stay buttons: they open the row as well as going
+       there, and an anchor's ⌘-click would skip the opening. */
+    expect(rows().length, "no model row, so the loop below proves nothing").toBeGreaterThan(0);
+    for (const row of rows()) {
+      expect(row.querySelector(".crit-jump")?.tagName).toBe("BUTTON");
+    }
   });
 
   it("does not call them misses while the model has not answered", async () => {

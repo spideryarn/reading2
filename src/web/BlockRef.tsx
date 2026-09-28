@@ -1,33 +1,44 @@
 /**
  * A block id, drawn the way you want to read one and behaving the way you want
- * to click one.
+ * to click one — **the one block link**, for an id or for a phrase.
  *
  * Ids are drawn as characters in four places — the range under a gist in both
  * the table's cells and a column panel, the same range under each entry of the
  * summary panel, and the ids the model cites inside a chat answer or a summary
- * (Cited.tsx) — so they get one component rather than four spans that drift
- * apart.
+ * (Cited.tsx) — and every panel that lists where something occurs (Glossary,
+ * Quotes, Timeline, …) links to it the same way. One component rather than
+ * spans that drift apart.
  *
- * **The gutter beside every paragraph was the fifth and is no longer one of
- * them.** Since 2026-08-31 it is a permalink icon with the id in its `title`
- * (BlockGutter.tsx), which uses `blockHref` below and renders none of this.
- * The gutter is also the one place a plain left-click no longer jumps, so read
- * the third bullet as being about the four that are left.
+ * **The gutter beside every paragraph is not one of them.** Since 2026-08-31 it
+ * is a permalink icon (BlockGutter.tsx), which uses `blockHref` below and
+ * renders none of this. It is also the one place a plain left-click does not
+ * jump.
  *
- * Three things it does:
+ * What it does:
  *
  *  - **Drops the `spya-` prefix.** Every id on screen has it, so it carries no
  *    information and costs five characters of the six that do. The full id is
- *    still in the `title`, and still in the `href`, which is where anything
- *    that needs to be pasted comes from anyway.
+ *    the link's `aria-label` on this default rendering and is in the `href`,
+ *    which is where anything that needs to be pasted comes from anyway. Given
+ *    `children`, it draws those instead and they name the link.
  *  - **Renders a real `<a href>`**, so the browser's own affordances work:
  *    the status bar shows where it goes, right-click offers "copy link
  *    address", ⌘-click opens the block in a new tab. That was the point of the
  *    change — see docs/project/block-ids.md#showing-an-id.
  *  - **Left-click jumps in place.** A reload to move down the page you are
  *    already on would be a waste, so a plain left-click hands off to the same
- *    `onJump` a gist cell uses: push history, scroll smoothly. Every other kind
- *    of click is left to the browser.
+ *    `onJump` a gist cell uses: push history, scroll smoothly, and flash the
+ *    paragraph on arrival (keynav.ts § `beginJump`). Every other kind of click
+ *    is left to the browser.
+ *  - **Has a card, and no `title`.** `data-block-link` is what the one card for
+ *    the whole page listens for (BlockLinkCard.tsx): the section the block is
+ *    in, then the paragraph cut short. `preview={false}` leaves the paragraph
+ *    out, for a caller that already shows the words beside the link.
+ *  - **Is not a link to a block the article does not have** — a re-extraction
+ *    can take one away. Inside the reading view, where `BlockLinkProvider` can
+ *    say, such an id is a dimmed span that says so, to a screen reader as well
+ *    as in the card. Outside it (a test, a page with no provider) nothing can
+ *    know, and it stays a link.
  *
  * It always stops the click from bubbling. Both range links sit inside a cell
  * whose own handler jumps to the *start* of the range, so without that, clicking
@@ -41,9 +52,10 @@
  * `blockPermalink` below is the same address with an origin on it, for the one
  * caller that puts it on the clipboard rather than in an `href`.
  */
-import type { MouseEvent } from "react";
+import type { MouseEvent, ReactNode } from "react";
 import { ID_PREFIX } from "../ids.js";
 import type { BlockId } from "../types.js";
+import { MISSING_BLOCK, useBlockLinks } from "./BlockLinkCard.js";
 import { addressAt, addressWithout, navigate } from "./router.js";
 
 /** `spya-k3m9qt` → `k3m9qt`. Anything not ours is shown untouched. */
@@ -134,9 +146,30 @@ interface RefProps {
    * the address bar, which is still correct there.
    */
   linkBase?: string;
+  /** What to draw instead of the short id — a quote, a phrase. It names the link. */
+  children?: ReactNode;
+  /**
+   * `false` when the caller already shows the passage beside the link: the card
+   * then says only where it is, rather than repeating the words.
+   */
+  preview?: boolean;
 }
 
-export function BlockRef({ id, onJump, className, linkBase }: RefProps) {
+export function BlockRef({ id, onJump, className, linkBase, children, preview = true }: RefProps) {
+  const known = useBlockLinks();
+  const classes = ["block-ref", className].filter(Boolean).join(" ");
+  /* A block this article does not have, and a provider that can say so. Not a
+     link: pressing it could only scroll nowhere, which looks exactly like a bug
+     in the scrolling. The sentence is `sr-only` as well as in the card because
+     a span takes no focus, so a keyboard can never open its card. */
+  if (known !== null && !known.has(id)) {
+    return (
+      <span className={`${classes} block-ref-missing`} data-block-link={id} data-block-missing="">
+        {children ?? shortBlockId(id)}
+        <span className="sr-only"> ({MISSING_BLOCK})</span>
+      </span>
+    );
+  }
   const href = blockHref(id, linkBase);
   function handle(event: MouseEvent<HTMLAnchorElement>) {
     // Never let an ancestor's jump handler see this click, whatever we do with
@@ -153,12 +186,16 @@ export function BlockRef({ id, onJump, className, linkBase }: RefProps) {
   }
   return (
     <a
-      className={["block-ref", className].filter(Boolean).join(" ")}
+      className={classes}
       href={href}
-      title={id}
+      data-block-link={id}
+      {...(preview ? {} : { "data-block-preview": "off" })}
+      /* The full id for a screen reader, on the default rendering only: six
+         characters of it read as nonsense, and children name themselves. */
+      {...(children === undefined ? { "aria-label": id } : {})}
       onClick={handle}
     >
-      {shortBlockId(id)}
+      {children ?? shortBlockId(id)}
     </a>
   );
 }

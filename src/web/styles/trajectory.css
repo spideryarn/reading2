@@ -106,7 +106,7 @@
 .traj-what { display: flex; flex-direction: column; min-width: 0; gap: 0.15rem; }
 .traj-place { font-size: 0.88rem; line-height: 1.35; }
 .traj-place-repeat { color: var(--ink-faint); }
-.traj-role { color: var(--ink-soft); font-size: 0.85rem; line-height: 1.35; }
+.traj-cue { color: var(--ink-soft); font-size: 0.85rem; line-height: 1.35; }
 
 /* A shallower pass's stop, already seen on the way round. */
 .traj-row.seen .traj-go { color: var(--ink-faint); }
@@ -135,11 +135,28 @@
    and in the UI face so it cannot be mistaken for the author's words. */
 .traj-door {
   display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 0.25rem;
+  margin: 0.5rem 0 0.2rem;
+  font-family: var(--font-ui);
+}
+.traj-door-row {
+  display: flex;
   justify-content: flex-end;
   flex-wrap: wrap;
   gap: 0.5rem;
-  margin: 0.5rem 0 0.2rem;
-  font-family: var(--font-ui);
+}
+/* **Where the door leads**: the next stop's cue, small, muted and italic, so
+   it reads as a signpost rather than as the author's words or a summary. */
+.traj-door-cue {
+  max-width: 32em;
+  margin: 0;
+  color: var(--ink-faint);
+  font-size: 0.8rem;
+  font-style: italic;
+  line-height: 1.35;
+  text-align: right;
 }
 .traj-door-btn {
   padding: 0 0.85rem;
@@ -148,3 +165,66 @@
   color: var(--highlight-ink);
 }
 .traj-door-btn.quiet { font-weight: 400; color: var(--ink); }
+
+/* -------------------------------------------------------------- the stop card --
+   Under the current row only: what the other modes already wrote about this
+   paragraph (src/web/stop-card.ts). Indented to the row's text, under the
+   row's left bar, and quieter than the row so it reads as notes on it. */
+.traj-card {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  margin: 0 0 0.4rem;
+  padding: 0.35rem 0.5rem 0.45rem calc(0.4rem + 1.4em + 0.55rem);
+  border-radius: 0 0 var(--radius) var(--radius);
+  background: var(--surface-raised);
+  box-shadow: inset 3px 0 0 var(--highlight);
+  font-size: 0.85rem;
+  line-height: 1.4;
+}
+.traj-cluster ul { margin: 0; padding: 0; list-style: none; }
+.traj-cluster li + li { margin-top: 0.15rem; }
+.traj-cluster-h {
+  margin: 0 0 0.2rem;
+  color: var(--ink-faint);
+  font-size: 0.72rem;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+.traj-chips { display: flex; flex-wrap: wrap; gap: 0.3rem; }
+.traj-chip {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 0.35rem;
+  min-height: var(--control-h);
+  padding: 0 0.6rem;
+  border: 1px solid var(--rule-strong);
+  border-radius: var(--radius);
+  background: var(--page);
+  color: var(--ink);
+  font-size: 0.85rem;
+  line-height: calc(var(--control-h) - 2px);
+  cursor: pointer;
+}
+.traj-chip:hover,
+.traj-chip.on { border-color: var(--highlight); }
+.traj-also { color: var(--ink-faint); font-size: 0.75rem; }
+.traj-sense {
+  margin-top: 0.35rem;
+  padding-left: 0.5rem;
+  border-left: 2px solid var(--rule-strong);
+}
+.traj-sense p { margin: 0 0 0.15rem; color: var(--ink-soft); }
+.traj-question { color: var(--ink); }
+/* A link's look on a real button: these open another mode or move the prose. */
+.traj-link {
+  display: inline;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--highlight-ink);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.traj-link:hover { text-decoration: underline; }

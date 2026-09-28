@@ -226,7 +226,13 @@
   text-align: left;
   cursor: pointer;
 }
-.summ-title:hover { color: var(--highlight-ink); }
+/* The title is a BlockRef as well as the row's full-size link. Restore the
+   prose type after prose.css's id-chip rule, without touching the dimmed
+   missing-block span; only a live anchor takes the hover treatment. */
+.summ-title.block-ref { letter-spacing: inherit; }
+a.summ-title.block-ref,
+a.summ-title.block-ref:hover { opacity: 1; text-decoration: none; }
+a.summ-title:hover { color: var(--highlight-ink); }
 .summ-number {
   margin-right: 0.4rem;
   color: var(--ink-faint);
@@ -346,5 +352,4 @@
    artefact to be stale, and no shorter rung to fall back to
    (docs/plans/260831s-gist-only-summaries.md). Its run button had gone earlier, on
    2026-08-26, into the shared src/web/JobProgress.tsx. */
-
 

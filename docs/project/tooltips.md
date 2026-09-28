@@ -73,6 +73,7 @@ Sources, read 2026-08-25: [Floating UI docs](https://floating-ui.com/docs/react)
 | [`src/web/Tooltip.tsx`](../../src/web/Tooltip.tsx) | the wrapper: `<Tooltip content={…}>{trigger}</Tooltip>`, plus `TooltipGroup` and `TipNote` — the latter being the panel's text where the panel is only a sentence, which is most of them outside the reading view |
 | [`src/web/Spine.tsx`](../../src/web/Spine.tsx) | `BandCard` — what a spine band actually says |
 | [`src/web/ProseHoverCard.tsx`](../../src/web/ProseHoverCard.tsx) | the other one — see below |
+| [`src/web/BlockLinkCard.tsx`](../../src/web/BlockLinkCard.tsx) | the card every block link shares — section, then the paragraph cut short — one panel for the whole reading view, mounted by Reader. See below |
 | [`src/web/StructurePanel.tsx`](../../src/web/StructurePanel.tsx) | `RowCard` — what a row of Structure's two columns says on hover, and the only card here whose *contents* are decided by a projection rather than written beside the JSX. See [§ Structure's card](#structures-card-which-is-defined-by-subtraction) |
 | [`src/web/Dock.tsx`](../../src/web/Dock.tsx) | the bottom bar — the mode buttons, twice over, and the experimental switch. See [§ The bar](#the-bar-and-the-two-shapes-of-the-same-modes) |
 | [`src/mode-catalog.ts`](../../src/mode-catalog.ts) | the words in those fourteen cards, both paragraphs of each — the bar holds none of its own copy |
@@ -118,6 +119,19 @@ and a button in; every other one is `pointer-events: none` so that a panel can n
 pointer and keep itself open. If a third customer ever has both properties — many triggers that are
 not React elements — that is the point at which this becomes a shared hook rather than a second file.
 [glossary.md § The hover card](glossary.md#the-hover-card) has the rest.
+
+**The third customer arrived on 2026-09-28, and still did not get the hook.**
+[`BlockLinkCard.tsx`](../../src/web/BlockLinkCard.tsx) is the card on every `BlockRef` — a
+citation chip, a glossary occurrence, both ends of a gist's range — and it has the first property:
+thousands of triggers (the glossary draws a link per occurrence, the table two per gist cell), so one
+panel, a delegated `pointerover` / `focusin` on `[data-block-link]`, and `setPositionReference`. It
+lacks the second: its triggers *are* React elements, and its card holds nothing to click, so it is
+`pointer-events: none` like every `Tooltip` and a tap on a link simply follows it. Sharing
+`useHoverCard` would mean taking its interactive card and its tap-to-reveal gesture and switching
+both off, so it is a small file of its own, drawn with `Tooltip`'s classes and delays so it looks
+like every other card
+([260928b](../plans/260928b-one-block-link-component-with-a-rich-tooltip-and-a-flash-on-arrival.md)
+§ Plan review, F4).
 
 ## `ControlTip`, which is what most of them are now
 

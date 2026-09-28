@@ -470,6 +470,17 @@ Two consequences worth knowing:
   a browser restore. A cap would take a working way back away for a feeling, and the reader already
   has the × .
 
+#### A jump flashes where it lands
+
+Since 2026-09-28 the prose of the block a deliberate jump lands on washes warm for about a second
+([`flash.ts`](../../src/web/flash.ts), called from `beginJump`), so "which one is it" is answered on
+the page. It fires when the scroll reports it has **settled** — a glide the reader's wheel cancelled
+flashes nothing — and it also fires when the reader is **already there**, which used to do nothing at
+all and now answers the question without moving them or costing a Back. The same line as the push:
+stepping, Back, the return chip and a pasted link do not flash. Under a band that covers the article
+it waits until the prose is exposed; with the prose column off there is nothing to flash.
+[260928b](../plans/260928b-one-block-link-component-with-a-rich-tooltip-and-a-flash-on-arrival.md).
+
 ### Debounced, not throttled
 
 Greg's suggestion, and the right one. Mid-flick the URL is of no use to anybody, so there is nothing

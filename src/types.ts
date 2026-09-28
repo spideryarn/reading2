@@ -1211,11 +1211,21 @@ export interface TrajectoryStop {
   quoteId: string;
   depth: TrajectoryDepth;
   /**
-   * What the passage **does**, never what it found — at most `MAX_ROLE_CHARS`
-   * (src/trajectory.ts). `null` when the model's was missing, empty or
-   * over-long: a bad role never costs the reader a stop (Sol F8).
+   * **Routes written before `trajectory/5` only**: what the passage *does*, at
+   * most 80 characters. The prompt no longer asks for it and every new stop's
+   * is `null`; kept so an old route still draws — the band falls back to it
+   * when there is no `cue`.
    */
   role: string | null;
+  /**
+   * What to **look for** in this passage — an instruction or a question, never
+   * what it found — at most `MAX_CUE_CHARS` (src/trajectory.ts). Context-free
+   * on purpose: a reader can reach a stop from anywhere, so it never says how
+   * this stop follows another (Sol F18). `null` when the model's was missing,
+   * empty or over-long, and the stop is kept (F8, F25). **Absent** on routes
+   * written before `trajectory/5`.
+   */
+  cue?: string | null;
 }
 
 /**
@@ -1237,8 +1247,18 @@ export interface TrajectoryDrops {
   sameBlock: number;
   /** Unreadable: not an object, no quote id, or a depth outside 1–3. */
   malformed: number;
-  /** A role that was missing, empty, not a string or over the cap — set to `null`, the stop kept. */
+  /**
+   * A role that was missing, empty, not a string or over the cap — set to
+   * `null`, the stop kept. **Only routes before `trajectory/5` count these**;
+   * the prompt no longer asks for a role, so a new route's is always 0.
+   */
   badRole: number;
+  /**
+   * A cue that was missing, empty, not a string or over the cap — set to
+   * `null`, the stop kept. **Absent on routes before `trajectory/5`**, which
+   * had no cue; read it as 0.
+   */
+  badCue?: number;
   /** Stops past a cumulative cap, dropped in route order — never demoted. */
   overCap: number;
 }

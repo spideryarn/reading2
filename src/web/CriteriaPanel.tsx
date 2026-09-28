@@ -114,6 +114,7 @@ import type {
   RefereeResult,
 } from "../referee-criteria.js";
 import type { Block, BlockId, Comment } from "../types.js";
+import { BlockRef } from "./BlockRef.js";
 import { assignSlots, PALETTE_BY_HUE } from "./hit-colours.js";
 import { usePassageLifecycle } from "./passage-lifecycle.js";
 import { critsParam, refScaleParam } from "./params.js";
@@ -1438,9 +1439,13 @@ function Yours({
       <ul className={css.list}>
         {placements.map((p) => (
           <li className={css.one} key={p.id}>
-            <button type="button" className="crit-jump" onClick={() => onJump(p.blockId)}>
+            {/* A block link (plan 260928b): unlike `CriterionResult`'s row,
+                which opens itself as well as jumping and so stays a button,
+                this one only goes there. The quote is its text, so the card
+                says only where. */}
+            <BlockRef id={p.blockId} onJump={onJump} preview={false} className="crit-jump">
               <span className="crit-quote">{p.quote}</span>
-            </button>
+            </BlockRef>
             {/* `crit-yours` and not `crit-gap`: there is no gap here, because
                 there is only one judgement. The class is the difference, and
                 tests/referee-gap.test.tsx counts on it — a shared class would
