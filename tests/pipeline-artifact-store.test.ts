@@ -111,6 +111,11 @@ import {
   PROMPT_VERSION as FAQ_VERSION,
 } from "../src/faq.js";
 import { PROMPT_VERSION as QUOTES_VERSION } from "../src/quotes.js";
+import {
+  emptyDrops as emptyTrajectoryDrops,
+  PROMPT_VERSION as TRAJECTORY_VERSION,
+  quotesHash as trajectoryQuotesHash,
+} from "../src/trajectory.js";
 import { PROMPT_VERSION as TWEETS_VERSION } from "../src/tweets.js";
 import { splitIntoBlocks } from "../src/blocks.js";
 import { STEP_ORDER, STEPS, stepIsDone } from "../src/pipeline.js";
@@ -605,6 +610,24 @@ function writeWholeArticle(store: MemoryArtifactStore): void {
     version: FAQ_VERSION,
     questions: [],
     dropped: emptyFaqDropped(),
+    generatedAt: new Date().toISOString(),
+    elapsedMs: 1,
+  });
+  /* **A route over the one quote planted above**, and its `sourceHash` is the
+     quotes hash rather than any article fingerprint — so it is computed from
+     that quote's id and block id, through the stage's own function. `null`
+     profile, for `ideas`' "deliberately without a profile" reason: `ctxOf`
+     carries none, and the stamp compares it. */
+  store.plant(SLUG, "trajectory", "trajectory", {
+    generator: CAPABLE_MODEL,
+    slug: SLUG,
+    sourceHash: trajectoryQuotesHash([{ id: "spya-qqqqqq", blockId: BODY.id }]),
+    version: TRAJECTORY_VERSION,
+    profileHash: null,
+    stops: [{ quoteId: "spya-qqqqqq", depth: 1, role: "The one line" }],
+    visible: [1, 1, 1],
+    offered: 1,
+    dropped: emptyTrajectoryDrops(),
     generatedAt: new Date().toISOString(),
     elapsedMs: 1,
   });

@@ -35,6 +35,34 @@ let band: HTMLElement;
 let pressMode: (mode: Mode) => void = () => {};
 let done = 0;
 
+/** A controllable ResizeObserver: jsdom has no layout observer of its own. */
+const resizeObservers = new Set<TestResizeObserver>();
+class TestResizeObserver {
+  readonly observed = new Set<Element>();
+  private readonly callback: ResizeObserverCallback;
+
+  constructor(callback: ResizeObserverCallback) {
+    this.callback = callback;
+    resizeObservers.add(this);
+  }
+  observe(element: Element): void {
+    this.observed.add(element);
+  }
+  unobserve(element: Element): void {
+    this.observed.delete(element);
+  }
+  disconnect(): void {
+    this.observed.clear();
+  }
+  fire(element: Element): void {
+    if (this.observed.has(element)) this.callback([], this as unknown as ResizeObserver);
+  }
+}
+
+const resized = (element: Element) => {
+  for (const observer of [...resizeObservers]) observer.fire(element);
+};
+
 function StandIn() {
   const [press, setPress] = useState<HeraldPress | null>(null);
   pressMode = (mode) => setPress((prev) => ({ mode, nonce: (prev?.nonce ?? 0) + 1 }));
@@ -50,6 +78,8 @@ function StandIn() {
 beforeEach(() => {
   (globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
   vi.useFakeTimers();
+  resizeObservers.clear();
+  vi.stubGlobal("ResizeObserver", TestResizeObserver);
   done = 0;
   band = document.createElement("aside");
   band.className = "mode-band";
@@ -65,6 +95,8 @@ afterEach(() => {
   act(() => root.unmount());
   host.remove();
   band.remove();
+  vi.unstubAllGlobals();
+  resizeObservers.clear();
   vi.useRealTimers();
 });
 
@@ -153,5 +185,216 @@ describe("the herald", () => {
     wait(HERALD_MS);
     expect(shown()).toBe("");
     expect(done).toBe(1);
+  });
+});
+
+/**
+ * **It stands on the band's pinned foot rather than over it** — Greg,
+ * 2026-09-28, moved it to the bottom-left of the band, and eleven modes can end
+ * in pinned furniture (*Find more*, Chat's composer, Diagram's step row and
+ * card). The room it leaves is the band's bottom minus the bottom of the band's
+ * last growing child, written onto the slot as `--herald-foot`;
+ * tests/mode-herald-in-chrome.test.tsx is what that does to the card on a
+ * laid-out page.
+ * docs/plans/260928a-the-mode-herald-moves-to-the-foot-of-the-band.md.
+ */
+describe("the herald's room for the band's foot", () => {
+  const rect = (el: Element, top: number, bottom: number) => {
+    el.getBoundingClientRect = () =>
+      ({ top, bottom, left: 0, right: 300, width: 300, height: bottom - top, x: 0, y: top }) as DOMRect;
+  };
+  const room = (): string =>
+    host.querySelector<HTMLElement>(".mode-herald-slot")?.style.getPropertyValue("--herald-foot") ?? "";
+  /** Mutation observers report on a microtask, which fake timers do not run. */
+  const settle = () => act(async () => {});
+
+  function footRow() {
+    const foot = document.createElement("div");
+    rect(foot, 740, 800);
+    return foot;
+  }
+  function build(withFoot: boolean) {
+    band.innerHTML = "";
+    rect(band, 0, 800);
+    const head = document.createElement("div");
+    rect(head, 0, 40);
+    const scroller = document.createElement("div");
+    scroller.style.flexGrow = "1";
+    rect(scroller, 40, withFoot ? 740 : 800);
+    band.append(head, scroller);
+    if (withFoot) band.append(footRow());
+    return scroller;
+  }
+
+  it("leaves the foot's height below the card", () => {
+    build(true);
+    press("glossary");
+    expect(room()).toBe("60px");
+  });
+
+  it("leaves none in a band whose scroller runs to the bottom", () => {
+    build(false);
+    press("summary");
+    expect(room()).toBe("0px");
+  });
+
+  it("leaves none in a band with nothing that grows, rather than guessing", () => {
+    band.innerHTML = "";
+    rect(band, 0, 800);
+    const list = document.createElement("div");
+    rect(list, 0, 300);
+    band.append(list);
+    press("search");
+    expect(room()).toBe("0px");
+  });
+
+  /* Sketch: the band's grower is `.sk`, which does not scroll; its own grower
+     `.sk-scroll` does, and the pinned `.sk-card` sits after it, inside `.sk`.
+     GPT Sol's plan review, 2026-09-28. */
+  it("follows a grower that does not scroll down to the one that does — Sketch's nested card", () => {
+    band.innerHTML = "";
+    rect(band, 0, 800);
+    const sk = document.createElement("div");
+    sk.style.flexGrow = "1";
+    rect(sk, 0, 800);
+    const scroll = document.createElement("div");
+    scroll.style.flexGrow = "1";
+    scroll.style.overflowY = "auto";
+    rect(scroll, 30, 690);
+    const card = document.createElement("div");
+    rect(card, 690, 800);
+    sk.append(scroll, card);
+    band.append(sk);
+    press("diagram");
+    expect(room()).toBe("110px");
+  });
+
+  it("does not look inside a scroller, whose children are content rather than furniture", () => {
+    band.innerHTML = "";
+    rect(band, 0, 800);
+    const scroller = document.createElement("div");
+    scroller.style.flexGrow = "1";
+    scroller.style.overflowY = "auto";
+    rect(scroller, 40, 740);
+    const tallItem = document.createElement("div");
+    tallItem.style.flexGrow = "1";
+    rect(tallItem, 40, 2000);
+    scroller.append(tallItem);
+    band.append(scroller, footRow());
+    press("glossary");
+    expect(room()).toBe("60px");
+  });
+
+  it("leaves all furniture after a direct scroller — Diagram's step row and detail card", () => {
+    band.innerHTML = "";
+    rect(band, 0, 800);
+    const scroll = document.createElement("div");
+    scroll.style.flexGrow = "1";
+    scroll.style.overflowY = "auto";
+    rect(scroll, 40, 620);
+    const step = document.createElement("div");
+    rect(step, 620, 680);
+    const detail = document.createElement("div");
+    rect(detail, 680, 800);
+    band.append(scroll, step, detail);
+    press("diagram");
+    expect(room()).toBe("180px");
+  });
+
+  it("leaves none for a nested scroller that reaches its wrapper's bottom — Illustrated", () => {
+    band.innerHTML = "";
+    rect(band, 0, 800);
+    const illustrated = document.createElement("div");
+    illustrated.style.flexGrow = "1";
+    rect(illustrated, 0, 800);
+    const bar = document.createElement("div");
+    rect(bar, 0, 60);
+    const scroll = document.createElement("div");
+    scroll.style.flexGrow = "1";
+    scroll.style.overflowY = "auto";
+    rect(scroll, 60, 800);
+    illustrated.append(bar, scroll);
+    band.append(illustrated);
+    press("diagram");
+    expect(room()).toBe("0px");
+  });
+
+  it("makes room for a foot that arrives after the card does — the list loads, then Find more", async () => {
+    const scroller = build(false);
+    press("glossary");
+    expect(room()).toBe("0px");
+    rect(scroller, 40, 740);
+    band.append(footRow());
+    await settle();
+    expect(room()).toBe("60px");
+  });
+
+  it("makes room when a foot arrives inside a non-scrolling grower — Sketch finishes loading", async () => {
+    band.innerHTML = "";
+    rect(band, 0, 800);
+    const sk = document.createElement("div");
+    sk.style.flexGrow = "1";
+    rect(sk, 0, 800);
+    const scroll = document.createElement("div");
+    scroll.style.flexGrow = "1";
+    scroll.style.overflowY = "auto";
+    rect(scroll, 30, 800);
+    sk.append(scroll);
+    band.append(sk);
+    press("diagram");
+    expect(room()).toBe("0px");
+
+    rect(scroll, 30, 690);
+    const card = document.createElement("div");
+    rect(card, 690, 800);
+    sk.append(card);
+    await settle();
+    expect(room()).toBe("110px");
+  });
+
+  it("remeasures when the nested grower changes size — Sketch's card changes height", () => {
+    band.innerHTML = "";
+    rect(band, 0, 800);
+    const sk = document.createElement("div");
+    sk.style.flexGrow = "1";
+    rect(sk, 0, 800);
+    const scroll = document.createElement("div");
+    scroll.style.flexGrow = "1";
+    scroll.style.overflowY = "auto";
+    rect(scroll, 30, 690);
+    const card = document.createElement("div");
+    rect(card, 690, 800);
+    sk.append(scroll, card);
+    band.append(sk);
+    press("diagram");
+    expect(room()).toBe("110px");
+
+    rect(scroll, 30, 650);
+    rect(card, 650, 800);
+    act(() => resized(scroll));
+    expect(room()).toBe("150px");
+  });
+
+  it("removes its measured custom property when the card goes", () => {
+    build(true);
+    press("glossary");
+    expect(room()).toBe("60px");
+    pointerDownOn(band);
+    expect(room()).toBe("");
+  });
+
+  it("keeps the measured property when React writes the keyboard inset onto the same style", async () => {
+    vi.stubGlobal("visualViewport", {
+      height: 500,
+      offsetTop: 0,
+      addEventListener() {},
+      removeEventListener() {},
+    });
+    build(true);
+    press("search");
+    await settle();
+    const slot = host.querySelector<HTMLElement>(".mode-herald-slot");
+    expect(slot?.style.getPropertyValue("--kb-inset")).not.toBe("");
+    expect(room()).toBe("60px");
   });
 });
