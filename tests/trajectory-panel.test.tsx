@@ -28,6 +28,9 @@ import type {
   Tree,
   TreeNode,
 } from "../src/types.js";
+import type { GlossaryEntry } from "../src/types.js";
+import type { GlossaryRead } from "../src/web/useGlossary.js";
+import type { StopCard } from "../src/web/stop-card.js";
 import type { Found } from "../src/web/search-hits.js";
 import type { UseTrajectory } from "../src/web/useTrajectory.js";
 import type { QuotesRead } from "../src/web/useQuotes.js";
@@ -36,22 +39,31 @@ import type { TrajectoryControl, TrajectoryView } from "../src/web/modes/traject
 /* ------------------------------------------------------------ the network -- */
 
 let trajectoryBody: unknown = null;
+/** The Ideas the stop card may show, or `null` for none (404). */
+let ideasBody: unknown = null;
+/** Every request, so a test can say the card started no job. */
+const requested: { url: string; method: string }[] = [];
 vi.mock("../src/web/lib/api.js", async () => {
   const real = await vi.importActual<typeof import("../src/web/lib/api.js")>(
     "../src/web/lib/api.js",
   );
-  const apiFetch = async (url: string) => {
+  const apiFetch = async (url: string, init?: RequestInit) => {
+    requested.push({ url, method: init?.method ?? "GET" });
     if (url.startsWith("/api/trajectory/"))
       return trajectoryBody === null
         ? new Response(null, { status: 404 })
         : new Response(JSON.stringify(trajectoryBody), { status: 200 });
+    if (url.startsWith("/api/ideas/"))
+      return ideasBody === null
+        ? new Response(null, { status: 404 })
+        : new Response(JSON.stringify(ideasBody), { status: 200 });
     if (url.startsWith("/api/jobs")) return new Response(JSON.stringify({ jobs: [] }), { status: 200 });
     return new Response(null, { status: 404 });
   };
   return {
     ...real,
     apiFetch,
-    fetchOk: async (url: string) => apiFetch(url),
+    fetchOk: async (url: string, init?: RequestInit) => apiFetch(url, init),
   };
 });
 
@@ -149,9 +161,10 @@ const QUOTES: Quotes = {
  * Route order q2 q0 q3 q1; Gist is q2 and q0, More adds q3, Most adds q1.
  */
 const STOPS: TrajectoryStop[] = [
-  { quoteId: Q[2]!, depth: 1, role: "What earlier work missed" },
-  { quoteId: Q[0]!, depth: 1, role: "The headline result" },
-  { quoteId: Q[3]!, depth: 2, role: "Where it stops holding" },
+  { quoteId: Q[2]!, depth: 1, role: null, cue: "What does earlier work miss, by their account?" },
+  { quoteId: Q[0]!, depth: 1, role: null, cue: "Look for the headline comparison." },
+  { quoteId: Q[3]!, depth: 2, role: null, cue: "Where does it stop holding?" },
+  /* A stop from a route written before cues: the band falls back to its role. */
   { quoteId: Q[1]!, depth: 3, role: "How they measured it" },
 ];
 
@@ -176,6 +189,8 @@ let root: Root;
 
 beforeEach(() => {
   scrolled.length = 0;
+  requested.length = 0;
+  ideasBody = null;
   trajectoryBody = { trajectory: ROUTE, stale: false, outdated: false, profileChanged: false, notOnRoute: 0 };
   history.replaceState(null, "", "/read/a-route?mode=trajectory");
   host = document.createElement("div");
@@ -223,17 +238,38 @@ function view(over: Partial<TrajectoryView> = {}): TrajectoryView {
       { depth: 3, label: "Most", count: 4 },
     ],
     rows: [
-      { quoteId: Q[2]!, n: 1, place: "Methods", role: "What earlier work missed", seen: true, current: false, missing: false },
-      { quoteId: Q[0]!, n: 2, place: "Results", role: "The headline result", seen: true, current: true, missing: false },
-      { quoteId: Q[3]!, n: 3, place: "Methods", role: "Where it stops holding", seen: false, current: false, missing: false },
+      { quoteId: Q[2]!, n: 1, place: "Methods", cue: "What earlier work missed", seen: true, current: false, missing: false },
+      { quoteId: Q[0]!, n: 2, place: "Results", cue: "The headline result", seen: true, current: true, missing: false },
+      { quoteId: Q[3]!, n: 3, place: "Methods", cue: "Where it stops holding", seen: false, current: false, missing: false },
     ],
     position: 2,
+    card: null,
     onDepth: (d) => void calls.push(`depth ${d}`),
     onRow: (id) => void calls.push(`row ${id}`),
     onStep: (dir) => void calls.push(`step ${dir}`),
+    onOpen: (target) => void calls.push(`open ${target.kind} ${target.id}`),
+    canOpen: () => true,
     ...over,
   };
 }
+
+const TERM: GlossaryEntry = {
+  id: "spya-te2abc",
+  name: "transfer entropy",
+  kind: "concept",
+  aliases: [],
+  senseHere: "How much a source's past says about a target's future.",
+  blocks: [],
+};
+const CARD: StopCard = {
+  terms: [
+    { entry: TERM, alsoAt: 1 },
+    { entry: { ...TERM, id: "spya-te3def", name: "synergy", senseHere: "Information only the pair carries." }, alsoAt: null },
+  ],
+  ideas: [{ id: "spya-id2abc", name: "Synergy is not redundancy" }],
+  questions: [{ id: "q1", question: "How was synergy measured?" }],
+  events: [{ id: "spya-ev2abc", label: "Recordings made" }],
+};
 
 async function draw(o: UseTrajectory, v: TrajectoryView, quoteCount = 4) {
   calls.length = 0;
@@ -260,7 +296,7 @@ describe("the panel", () => {
     expect(text(".band-head")).toContain("Stop 2 of 3");
   });
 
-  it("shows the role on the current row only, and the place on every row", async () => {
+  it("shows the cue on the current row only, and the place on every row", async () => {
     await draw(owner(), view());
     const rows = [...host.querySelectorAll<HTMLElement>(".traj-row")];
     expect(rows.map((r) => r.querySelector(".traj-place")?.textContent)).toEqual([
@@ -268,7 +304,7 @@ describe("the panel", () => {
       "Results",
       "Methods",
     ]);
-    expect(rows.map((r) => r.querySelector(".traj-role")?.textContent ?? null)).toEqual([
+    expect(rows.map((r) => r.querySelector(".traj-cue")?.textContent ?? null)).toEqual([
       null,
       "The headline result",
       null,
@@ -279,8 +315,8 @@ describe("the panel", () => {
   it("elides a repeated section path visually but keeps its words for a screen reader", async () => {
     const repeated = view({
       rows: [
-        { quoteId: Q[2]!, n: 1, place: "Methods", role: null, seen: false, current: false, missing: false },
-        { quoteId: Q[3]!, n: 2, place: "Methods", role: null, seen: false, current: false, missing: false },
+        { quoteId: Q[2]!, n: 1, place: "Methods", cue: null, seen: false, current: false, missing: false },
+        { quoteId: Q[3]!, n: 2, place: "Methods", cue: null, seen: false, current: false, missing: false },
       ],
       position: 1,
     });
@@ -320,7 +356,7 @@ describe("the panel", () => {
     expect(text(".traj-foot")).toBe(trajectoryPromise(false));
     const most = view({
       depth: 3,
-      rows: [...view().rows, { quoteId: Q[1]!, n: 4, place: "Results", role: null, seen: false, current: false, missing: false }],
+      rows: [...view().rows, { quoteId: Q[1]!, n: 4, place: "Results", cue: null, seen: false, current: false, missing: false }],
     });
     await draw(owner(), most, 4);
     expect(text(".traj-foot")).toContain("every one of the article's 4 quotes");
@@ -332,6 +368,59 @@ describe("the panel", () => {
   it("says how many quotes are not on a stale route, and offers to plan it again", async () => {
     await draw(owner({ stale: true, notOnRoute: 3 }), view());
     expect(text(".gloss-stale")).toContain("3 are not on it");
+  });
+
+  it("draws the stop card under the current row only, and no card when there is nothing", async () => {
+    await draw(owner(), view());
+    expect(host.querySelector(".traj-card")).toBeNull();
+    expect(host.textContent).not.toMatch(/glossary|generate/i);
+
+    await draw(owner(), view({ card: CARD }));
+    const cards = [...host.querySelectorAll(".traj-card")];
+    expect(cards).toHaveLength(1);
+    expect(cards[0]!.closest(".traj-row")?.classList.contains("current")).toBe(true);
+    /* Outside the row's button: a button cannot hold other controls. */
+    expect(cards[0]!.closest("button")).toBeNull();
+    const chips = [...host.querySelectorAll<HTMLButtonElement>(".traj-chip")];
+    expect(chips.map((c) => c.textContent)).toEqual(["transfer entropyalso at stop 1", "synergy"]);
+    expect(text(".traj-card")).toContain("Synergy is not redundancy");
+    expect(text(".traj-card")).toContain("How was synergy measured?");
+    expect(text(".traj-card")).toContain("Recordings made");
+    expect(text(".traj-card")).not.toContain(TERM.senseHere!);
+  });
+
+  it("opens a term chip to its one-line sense and a link into Glossary", async () => {
+    await draw(owner(), view({ card: CARD }));
+    const chip = host.querySelector<HTMLButtonElement>(".traj-chip")!;
+    expect(chip.getAttribute("aria-expanded")).toBe("false");
+    await act(async () => chip.click());
+    expect(chip.getAttribute("aria-expanded")).toBe("true");
+    expect(text(".traj-sense")).toContain(TERM.senseHere!);
+    await act(async () => host.querySelector<HTMLButtonElement>(".traj-sense .traj-link")!.click());
+    expect(calls).toEqual([`open term ${TERM.id}`]);
+  });
+
+  it("links an idea and an event into their modes, and leaves the FAQ question as text", async () => {
+    await draw(owner(), view({ card: CARD }));
+    const buttons = [...host.querySelectorAll<HTMLButtonElement>(".traj-card .traj-link")];
+    const byText = (t: string) => buttons.find((b) => b.textContent?.includes(t))!;
+    await act(async () => byText("Synergy is not redundancy").click());
+    await act(async () => byText("Recordings made").click());
+    expect(byText("the passage")).toBeUndefined();
+    expect(calls).toEqual(["open idea spya-id2abc", "open event spya-ev2abc"]);
+  });
+
+  it("keeps an experimental event as scrapbook text when its mode control is hidden", async () => {
+    await draw(
+      owner(),
+      view({
+        card: CARD,
+        canOpen: (target) => target.kind !== "event",
+      }),
+    );
+    expect(text(".traj-card")).toContain("Recordings made");
+    const links = [...host.querySelectorAll<HTMLButtonElement>(".traj-card .traj-link")];
+    expect(links.some((button) => button.textContent?.includes("Recordings made"))).toBe(false);
   });
 
   it("offers to plan a route when there is none", async () => {
@@ -346,13 +435,14 @@ describe("the door in the prose", () => {
     let pressed = 0;
     let back = 0;
     await act(async () =>
-      root.render(createElement(TrajectoryDoor, { label: "Next stop ›", onPress: () => void pressed++, onRoute: null })),
+      root.render(createElement(TrajectoryDoor, { label: "Next stop ›", cue: null, onPress: () => void pressed++, onRoute: null })),
     );
     expect([...host.querySelectorAll("button")].map((b) => b.textContent)).toEqual(["Next stop ›"]);
     await act(async () =>
       root.render(
         createElement(TrajectoryDoor, {
           label: "Go round again — More ›",
+          cue: null,
           onPress: () => void pressed++,
           onRoute: () => void back++,
         }),
@@ -365,9 +455,27 @@ describe("the door in the prose", () => {
     expect([pressed, back]).toEqual([1, 1]);
   });
 
+  it("says under the door where it leads — the next stop's cue, small and muted", async () => {
+    await act(async () =>
+      root.render(
+        createElement(TrajectoryDoor, {
+          label: "Next stop ›",
+          cue: "Look for the headline comparison.",
+          onPress: () => {},
+          onRoute: null,
+        }),
+      ),
+    );
+    expect(text(".traj-door-cue")).toBe("Look for the headline comparison.");
+    await act(async () =>
+      root.render(createElement(TrajectoryDoor, { label: "Next stop ›", cue: null, onPress: () => {}, onRoute: null })),
+    );
+    expect(host.querySelector(".traj-door-cue")).toBeNull();
+  });
+
   it("draws nothing at the end of the deepest pass", async () => {
     await act(async () =>
-      root.render(createElement(TrajectoryDoor, { label: null, onPress: () => {}, onRoute: null })),
+      root.render(createElement(TrajectoryDoor, { label: null, cue: null, onPress: () => {}, onRoute: null })),
     );
     expect(host.innerHTML).toBe("");
   });
@@ -424,9 +532,65 @@ function Harness({ covers = false }: { covers?: boolean }) {
       openKey,
       onOpenKey: setOpenKey,
       onControl,
+      glossary: glossaryRead,
+      onOpen: (target: { kind: string; id: string }) => void opened.push(`${target.kind} ${target.id}`),
+      canOpen: () => true,
     }),
   );
 }
+
+/**
+ * The glossary as `Reader` holds it — `useGlossaryRead`, posed. "cohort" is in
+ * block 0 only as its plural; "laboratory" is in block 2. Neither entry lists a
+ * block: the card scans the prose, not the stored lists (F23).
+ */
+const GLOSSARY_READ: GlossaryRead = {
+  status: "ready",
+  glossary: {
+    version: "g",
+    generator: "g",
+    slug: "a-route",
+    sourceHash: "h",
+    entries: [
+      { id: "spya-gc2abc", name: "cohort", kind: "concept", aliases: [], blocks: [], senseHere: "A group followed over time." },
+      { id: "spya-gc3def", name: "laboratory", kind: "concept", aliases: ["lab"], blocks: [] },
+    ],
+  } as unknown as GlossaryRead["glossary"],
+  stale: false,
+  outdated: false,
+  profiled: false,
+  profileChanged: false,
+  error: null,
+  reload: async () => {},
+  refresh: async () => {},
+  patchEntry: () => {},
+};
+let glossaryRead: GlossaryRead = GLOSSARY_READ;
+const opened: string[] = [];
+
+const IDEAS_BODY = {
+  ideas: {
+    version: "ideas/t",
+    generator: "t",
+    slug: "a-route",
+    sourceHash: "h",
+    profileHash: null,
+    ideas: [
+      {
+        id: "spya-id4ghj",
+        name: "Fieldwork is the test",
+        provenance: "assumed",
+        statement: "S.",
+        occurrences: [{ blockId: B[2]!, quote: "never left the laboratory", reasoning: "r" }],
+      },
+    ],
+    generatedAt: "",
+    elapsedMs: 0,
+  },
+  stale: false,
+  outdated: true,
+  profileChanged: false,
+};
 
 async function settled(): Promise<void> {
   await act(async () => {
@@ -535,5 +699,59 @@ describe("the band, walked", () => {
     await act(async () => root.render(createElement(NuqsAdapter, null, createElement("div"))));
     expect(control).toBeNull();
     expect(published).toEqual([]);
+  });
+});
+
+describe("the scrapbook, walked", () => {
+  beforeEach(() => {
+    glossaryRead = GLOSSARY_READ;
+    opened.length = 0;
+  });
+
+  it("gathers the card from what already exists, and starts no job doing it", async () => {
+    ideasBody = IDEAS_BODY;
+    await mount();
+    expect(current()).toBe(Q[2]);
+    const card = host.querySelector(".traj-row.current .traj-card");
+    expect([...(card?.querySelectorAll(".traj-chip") ?? [])].map((c) => c.textContent)).toEqual(["laboratory"]);
+    /* Outdated, not stale, so it is shown (F19). */
+    expect(card?.textContent).toContain("Fieldwork is the test");
+    expect(requested.some((r) => r.url.startsWith("/api/ideas/"))).toBe(true);
+    expect(requested.filter((r) => r.method !== "GET")).toEqual([]);
+
+    await act(async () => {
+      [...host.querySelectorAll<HTMLButtonElement>(".traj-card .traj-link")]
+        .find((b) => b.textContent?.includes("Fieldwork"))!
+        .click();
+    });
+    expect(opened).toEqual(["idea spya-id4ghj"]);
+  });
+
+  it("finds a plural the stored list never named, and draws no card from a stale glossary", async () => {
+    history.replaceState(null, "", `/read/a-route?mode=trajectory&depth=1&stop=${Q[0]}`);
+    await mount();
+    expect([...host.querySelectorAll(".traj-row.current .traj-chip")].map((c) => c.textContent)).toEqual([
+      "cohort",
+    ]);
+    glossaryRead = { ...GLOSSARY_READ, stale: true };
+    await mount();
+    expect(host.querySelector(".traj-card")).toBeNull();
+  });
+
+  it("shows the cue on the current row, and an old route's role where there is no cue", async () => {
+    await mount();
+    expect(text(".traj-row.current .traj-cue")).toBe("What does earlier work miss, by their account?");
+    history.replaceState(null, "", `/read/a-route?mode=trajectory&depth=3&stop=${Q[1]}`);
+    await mount();
+    expect(text(".traj-row.current .traj-cue")).toBe("How they measured it");
+  });
+
+  it("hands the door the cue of the stop it leads to — the next one, or the first new one round again", async () => {
+    await mount();
+    expect(control?.doorCue).toBe("Look for the headline comparison.");
+    await act(async () => void control!.step(1));
+    await settled();
+    expect(control?.door).toBe("Go round again — More ›");
+    expect(control?.doorCue).toBe("Where does it stop holding?");
   });
 });

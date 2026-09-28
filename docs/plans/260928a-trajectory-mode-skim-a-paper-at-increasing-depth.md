@@ -256,6 +256,120 @@ reusable set of highlights"*.
 4. **Full suite, push, clean up.** The full suite through `scripts/tmux-job.ts`, push to `dev`,
    `npm run worktree:check`, and remove the worktree.
 
+## Stage 3 in detail — the scrapbook (written after the spikes, 2026-09-28)
+
+**The spikes.** Three static mockups were built on real data from the entropy paper:
+
+- glossary, ideas, timeline and FAQ were generated first, for $0.35;
+- each stop was then gathered from every artefact that touches its paragraph or its section;
+- each shape was screenshotted at desktop and iPad widths.
+
+The shapes, with a screenshot of each:
+
+- **A. The stop card** ([screenshot](260928a-trajectory-scrapbook-spike-stop-card.png)) — under the
+  current row: terms it uses, ideas, the FAQ question it answers, where it sits in the study, the
+  section's gist, and the quote's reason.
+  - The term chips and the FAQ question earned their place.
+  - The **section gist** often gave away the finding (*"account for the vast majority of
+    network-wide synergy"*). It is the one piece that reads as a summary standing in for the
+    paper.
+  - The quote's *why this line* mostly repeated the role.
+- **B. The skim sheet** ([screenshot](260928a-trajectory-scrapbook-spike-skim-sheet.png)) — one
+  page per depth, one card per stop.
+  - It feels most like a scrapbook.
+  - It is also the most readable *replacement* for the paper: More is 643 of 8,580 words.
+  - And this route ran almost in paper order, so the reordering hardly showed.
+- **C. Threaded** ([screenshot](260928a-trajectory-scrapbook-spike-threaded.png)) — A plus **one
+  short generated line per stop**. The line says how this stop follows the one before, and points at
+  a term or at what to notice, never at what the passage found. For example: *"From the definition
+  to real recordings. The first place the paper looks for synergy is its network's rich club —
+  note the number."* It did the most to tie the disparate pieces together, which is what Greg asked
+  for, and the next stop's line shown under **Next stop ›** read as a door.
+
+**What stage 3 builds: C, with A trimmed.**
+
+1. **A thread line replaces the role line**, written by the same trajectory call. There is no
+   second call and no second artefact: the call already sees every quote's words and section, and
+   the line needs nothing else.
+   - **Per stop per depth.** The previous stop differs by depth, so a stop visible at
+     depths 1–3 has up to three lines. Stored as `thread: { "1"?: string, "2"?: string, "3"?:
+     string }`, where each key is a depth at which the stop is visible. A missing or invalid line is
+     simply absent, and the stop is kept (F8's rule).
+   - **Cap: 160 characters.** It follows the same plain-words rule, and never states a finding,
+     number or verdict — pointing at one ("note the number") is fine.
+   - **Cost:** an estimated +~1k output tokens, about +$0.01 on a ~$0.02 call. `PROMPT_VERSION`
+     is bumped, so existing routes show as outdated and offer a rebuild.
+   - `role` stays readable in the type for routes written before, and the band falls back to it,
+     but the prompt no longer asks for it.
+2. **The band.** The current row shows the thread line for the current depth. Under **Next stop ›**
+   in the prose, the next stop's line appears in small italics, so the door says where it leads.
+3. **The stop card**, under the current row, gathered on the client from what **already exists**:
+   - **Terms it uses.** A chip per glossary term that appears in the stop's paragraph; a tap opens
+     its one-line sense and a link into Glossary.
+     - Found the way the Glossary mode finds its underlines in the prose, **not** from the stored
+       per-term block list, which the spike showed misses word forms.
+     - A term met at an earlier stop of the current pass is marked *"met at stop k"*. There is **no
+       "new" marker**: absence of a match is not evidence, and a wrong "new" is worse than none.
+   - **Ideas** whose passages include the paragraph — name only, as a link into Ideas.
+   - **The FAQ question** this paragraph answers, if any — as a link into FAQ.
+   - **Where it sits in the study**, from Timeline — events whose passages are in this paragraph.
+   - **Not shown:** the section gist (the summary risk) and the quote's reason (a repeat).
+   - **Every cluster is shown only if its artefact exists and has something for this paragraph.**
+     Nothing here starts a run, and nothing is fetched that the reading view does not already know
+     how to fetch. When nothing is there, there is no card — and no "generate the glossary to see
+     terms" nag either; that is a Question for Greg.
+4. **Not built in stage 3**: the skim sheet (B), kept as a later toggle on the same data; the
+   gist; the word-form fix in the glossary's stored block lists (Glossary's own business, and not
+   needed because the card uses the prose matcher).
+
+**Done when:**
+
+- tests are red first for the thread-line validation and for the card's gathering (a pure function
+  from the artefacts plus a block id to the clusters);
+- a real run confirms the lines follow the rule;
+- a browser check has been run at the same widths;
+- Sol has reviewed it.
+
+### Revised after GPT Sol's stage-3 plan review ([review](260928a-trajectory-mode-stage3-plan-review-sol.md), *approve with changes*)
+
+All eight findings were taken. **This section overrides items 1–3 above wherever they differ.**
+
+- **F18 — the relational thread is not built; a context-free cue is.** One stop at one depth can
+  be reached from several places: a deep link, "go round again", a row press, or Back. So a line
+  that says how the stop follows "the previous one" is false half the time. Instead, each stop gets
+  one **`cue`**: at most 140 characters, imperative or a question, naming what to look for in this
+  passage, and never what it found. For example: *"Look for how rich-club membership changes the
+  comparison."* It replaces `role` in the prompt. The field is new, so old routes (with `role`,
+  and outdated by the `PROMPT_VERSION` bump) still draw. The relational version is recorded in
+  trajectory.md as tried in the spike and deferred; it would need a line per `{from, to}` edge,
+  shown only when that edge is the reader's actual step.
+- **F21 — the cue is a route cue, not a synthesis of the scrapbook.** The call never sees the
+  glossary, ideas, FAQ or timeline, and it must not: that would braid their freshness and their
+  generation into the route's. The tying-together is done by **juxtaposition** on the card —
+  and by the next stop's cue under **Next stop ›**.
+- **F25 — cue validation, spelled out.**
+  - A non-string, empty or over-cap cue becomes `null`, and the stop is kept. It is counted as
+    `badCue`, a new counter that defaults to 0 for old artefacts.
+  - `role` is no longer asked for. A new answer's missing role is `null`, and it is **not**
+    counted as `badRole`.
+  - `ANSWER_TOKENS` is recomputed from the cue cap, and the largest permitted answer is tested.
+- **F19** — a card cluster whose artefact is `stale` is **not shown**. An `outdated` one (the
+  article unchanged, an older prompt) is shown.
+- **F20** — the marker reads **"also at stop k"**, never "met". The client does not know what the
+  reader has read.
+- **F22** — **read-only hooks**: `useIdeasRead`, `useFaqRead` and `useTimelineRead` are split out
+  of their mode hooks, following `useGlossaryRead`. The card uses only those, so "nothing here
+  starts a run" is structural rather than an accident of activation. The mode hooks layer their jobs
+  on the read hooks, and behave exactly as before.
+- **F23** — terms are found by scanning `renderedText(block.html)` with `formsOf`/`termPattern`/
+  `termAppears` from `src/term-match.ts` over **every** glossary entry, not restricted to
+  `entry.blocks`. Tests cover inflection, alias, plural, possessive and a Unicode boundary.
+- **F24** — the FAQ question is shown as text, with no `?question=` param. The planned passage jump
+  was removed in code review 3: matching is by the current stop's block, so it could only jump to
+  the paragraph the reader is already on.
+- Card links follow the target mode's experimental-control rule. In particular, a Timeline event
+  remains useful scrapbook text while Timeline is hidden, but it is not a control into that mode.
+
 ## Review ledger — GPT Sol on the plan, 2026-09-28 (read-only; verdict *rethink*)
 
 | ID | Sev | Finding | Outcome |
@@ -343,3 +457,37 @@ The Opus second opinion (first round) also gave:
   No other P0/P1 findings: the door is owner- and Trajectory-only, and `bandAway` recovers across
   resizing and mode changes. Gates re-run here afterwards: typecheck clean apart from the
   uncommitted `spikes/` scripts, and 8 files / 185 tests passed.
+- 2026-09-28 — **scrapbook spikes**: three static mockups on the entropy paper's real data. The
+  glossary, ideas, timeline and FAQ were generated first, for $0.35. Shape C (threaded) plus a
+  trimmed A was chosen; see § Stage 3 in detail. **GPT Sol's stage-3 plan review**: approve with
+  changes, F18–F25, all taken — the relational thread was replaced by a context-free cue.
+- 2026-09-28 — **stage 3 built** by an Opus implementer and committed as `eeb16ed7`:
+  - the cue (`trajectory/5`);
+  - read-only `useIdeasRead` / `useFaqRead` / `useTimelineRead`;
+  - `src/web/stop-card.ts`;
+  - the card under the current row, and the next stop's cue under the door.
+
+  **The real model run of `trajectory/5` could not be made**: the box's OpenRouter key hit its $100
+  per-key cap (402 `[ai-no-credit]`). That was reported to the Overseer for Greg, and the cue prompt
+  is unmeasured until then. The **browser check** (Sonnet, Playwright, at 1440, 820 and 420) passed
+  every item:
+  - only non-empty clusters are drawn;
+  - the links land on the right item, and Back returns to the stop;
+  - "also at stop k" is correct;
+  - only GETs are made for the four artefacts — no job POSTs.
+- 2026-09-28 — **GPT Sol code review 3**
+  ([prompt](260928a-trajectory-mode-code-review-3-prompt.md),
+  [answer](260928a-trajectory-mode-code-review-3-sol.md)). Verdict: accept. It fixed:
+  - **F26**: the FAQ question's no-op passage jump was removed;
+  - **F27**: Timeline links follow that mode's experimental rule and fall back to text.
+
+  A worst case of 24 terms × 30 stops gathers in about 2 ms. Gates re-run here afterwards:
+  typecheck 0, and 6 files / 97 tests passed.
+- 2026-09-28 — credit was restored, so the held-back **real runs of `trajectory/5`** were made on
+  the entropy paper ($0.023, 10.5 s) and the essay ($0.011, 5.2 s). There were 0 bad cues, and none
+  of the 30 states a finding (one presupposes one). The cues are monotonous: 26 of 30 start
+  *"Look for"*. Details in [stage1-real-runs](260928a-trajectory-mode-stage1-real-runs.md) § Stage 3.
+- 2026-09-28 — **full suite** on the merged tree after stage 3: 1,170 files passed, and 5 failed,
+  all of them the known no-build environment reds (`cold-start-lazy-imports`, `pdf-bundle-trace`
+  and three fleet tests needing `build:fleet`). None of the five is ours. Pushed to `dev`. **Done:**
+  v1 and v2 are built; what is left is Greg's, in trajectory.md § Questions for Greg.

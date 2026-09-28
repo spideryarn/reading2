@@ -65,7 +65,29 @@ export interface UseFaq {
   cancel(id: string): void;
 }
 
-export function useFaq(slug: string): UseFaq {
+/**
+ * **The read alone** — `GET /api/faq/:slug` and what it said, with no job
+ * machinery: no `useStepJob`, no `useAutoRun`, no verb that spends.
+ *
+ * Split out for Trajectory's stop card (Sol F22), which shows the question a
+ * passage answers only when the FAQ already exists. `useGlossaryRead` is the
+ * model; `useFaq` layers its job on this and behaves exactly as before.
+ */
+export interface FaqRead {
+  status: FaqStatus;
+  faq: Faq | null;
+  stale: boolean;
+  outdated: boolean;
+  error: string | null;
+  /** Repeat only the GET after a failed read. `UseFaq.retryRead`. */
+  retryRead(): Promise<void>;
+  /** Join a read in flight, or start one. `OrderedRead.reload`. */
+  reload(): Promise<void>;
+  /** Read again because the list has just changed. `OrderedRead.refresh`. */
+  refresh(): Promise<void>;
+}
+
+export function useFaqRead(slug: string): FaqRead {
   const [status, setStatus] = useState<FaqStatus>("loading");
   const [faq, setFaq] = useState<Faq | null>(null);
   const [stale, setStale] = useState(false);
@@ -128,6 +150,13 @@ export function useFaq(slug: string): UseFaq {
     void reload();
   }, [reload]);
 
+  return { status, faq, stale, outdated, error, retryRead, reload, refresh };
+}
+
+export function useFaq(slug: string): UseFaq {
+  const read = useFaqRead(slug);
+  const { status, reload, refresh } = read;
+
   /* `refresh`, not `reload`: a finished job has just written a new list, and a
      request already in flight read the old one. */
   const queue = useStepJob(slug, "faq", refresh, "watches-queue");
@@ -146,17 +175,17 @@ export function useFaq(slug: string): UseFaq {
 
   return {
     status,
-    faq,
-    stale,
-    outdated,
+    faq: read.faq,
+    stale: read.stale,
+    outdated: read.outdated,
     slug,
-    error,
+    error: read.error,
     job: queue.job,
     failed: queue.failed,
     stalled: queue.stalled,
     starting: queue.starting,
     automatic: auto && (queue.job !== null || queue.starting),
-    retryRead,
+    retryRead: read.retryRead,
     ensure,
     regenerate,
     cancel: queue.cancel,

@@ -40,6 +40,11 @@ import {
 import type { QuotesRead } from "../../useQuotes.js";
 import { useTrajectory } from "../../useTrajectory.js";
 import { TrajectoryPanel, type TrajectoryRow } from "../../TrajectoryPanel.js";
+import { type CardSources, type CardTarget, gatherStopCard, type StopCard } from "../../stop-card.js";
+import type { GlossaryRead } from "../../useGlossary.js";
+import { useIdeasRead } from "../../useIdeas.js";
+import { useFaqRead } from "../../useFaq.js";
+import { useTimelineRead } from "../../useTimeline.js";
 
 /**
  * **What `Reader` holds of the band**: where the current stop is, what the door
@@ -57,6 +62,11 @@ export interface TrajectoryControl {
   blockId: BlockId | null;
   /** The door's words, or `null` at the end of the deepest pass. */
   door: string | null;
+  /**
+   * The cue of the stop the door leads to — the next one, or the first new one
+   * when it goes round again — drawn under the door. `null` without one.
+   */
+  doorCue: string | null;
   /** ← / →. `false` at either end of the pass, which does not wrap. */
   step(dir: -1 | 1): boolean;
   /** The door: the next stop, or round again one depth deeper. */
@@ -81,12 +91,21 @@ export function TrajectoryBand({
   openKey,
   onOpenKey,
   onControl,
+  glossary,
+  onOpen,
+  canOpen,
 }: {
   slug: string;
   blocks: Block[];
   tree: Tree;
   /** The Quotes read `OwnedReader` holds — the stops' words and blocks. */
   quotes: QuotesRead;
+  /** The glossary read `Reader` already holds for the underlines — the card's terms. */
+  glossary: GlossaryRead;
+  /** A card link: open that mode on that selection. */
+  onOpen(target: CardTarget): void;
+  /** Whether that target mode's control is available to this reader. */
+  canOpen(target: CardTarget): boolean;
   /** The quotes already marked in the prose — `useQuoteMarks`' `found`. */
   quoteMarks: readonly Found[];
   /** The band is lying over the prose (a narrow window) — `fit.modeW === 0`. */
@@ -101,7 +120,38 @@ export function TrajectoryBand({
 }) {
   useRenderCount("TrajectoryBand");
   const owner = useTrajectory(slug, quotes);
+  /* **The scrapbook's sources, read and never written.** The read-only hooks
+     carry no job machinery at all, so the card cannot be the reason any of
+     these is generated (Sol F22). The glossary is `Reader`'s own read. */
+  const ideas = useIdeasRead(slug);
+  const faq = useFaqRead(slug);
+  const timeline = useTimelineRead(slug);
+  const sources = useMemo<CardSources>(
+    () => ({
+      glossary: { value: glossary.status === "ready" ? glossary.glossary : null, stale: glossary.stale },
+      ideas: { value: ideas.status === "ready" ? ideas.ideas : null, stale: ideas.stale },
+      faq: { value: faq.status === "ready" ? faq.faq : null, stale: faq.stale },
+      timeline: { value: timeline.status === "ready" ? timeline.timeline : null, stale: timeline.stale },
+    }),
+    [
+      glossary.status,
+      glossary.glossary,
+      glossary.stale,
+      ideas.status,
+      ideas.ideas,
+      ideas.stale,
+      faq.status,
+      faq.faq,
+      faq.stale,
+      timeline.status,
+      timeline.timeline,
+      timeline.stale,
+    ],
+  );
   const view = useTrajectoryMode({
+    sources,
+    onOpen,
+    canOpen,
     stops: owner.trajectory?.stops ?? NO_STOPS,
     quotes: quotes.quotes?.quotes ?? NO_QUOTES,
     blocks,
@@ -127,12 +177,21 @@ export interface TrajectoryView {
   rows: TrajectoryRow[];
   /** 1-based position of the current stop on this pass, or 0 for none. */
   position: number;
+  /** What sits under the current stop — src/web/stop-card.ts. `null` without a current stop. */
+  card: StopCard | null;
   onDepth(depth: TrajectoryDepth): void;
   onRow(quoteId: string): void;
   onStep(dir: -1 | 1): void;
+  /** A card link into another mode. */
+  onOpen(target: CardTarget): void;
+  /** The shared experimental-control rule for the target mode. */
+  canOpen(target: CardTarget): boolean;
 }
 
 function useTrajectoryMode({
+  sources,
+  onOpen,
+  canOpen,
   stops,
   quotes,
   blocks,
@@ -146,6 +205,9 @@ function useTrajectoryMode({
   onOpenKey,
   onControl,
 }: {
+  sources: CardSources;
+  onOpen(target: CardTarget): void;
+  canOpen(target: CardTarget): boolean;
   stops: TrajectoryStop[];
   quotes: Quote[];
   blocks: Block[];
@@ -251,6 +313,17 @@ function useTrajectoryMode({
       : door.kind === "next"
         ? "Next stop ›"
         : `Go round again — ${DEPTH_LABEL[door.depth]} ›`;
+  /* **Where the door leads**, in the words of that stop's cue: the next stop,
+     or the one going round again lands on — `stopAfterDepthChange`, the rule
+     `advance` itself follows, so the line and the press cannot disagree. */
+  const doorTarget =
+    door === null || depth === null || door.kind === "end"
+      ? null
+      : door.kind === "next"
+        ? door.quoteId
+        : stopAfterDepthChange(stops, depth, door.depth, current?.quoteId ?? null);
+  const doorStop = doorTarget === null ? undefined : stops.find((s) => s.quoteId === doorTarget);
+  const doorCue = doorStop ? cueOf(doorStop) : null;
 
   /* ------------------------------------------------ published upward --
      The verbs through a ref, so the published object is stable and changes
@@ -264,8 +337,8 @@ function useTrajectoryMode({
     () =>
       current === null
         ? null
-        : { blockId: stopBlock, door: doorWords, step: stableStep, advance: stableAdvance },
-    [current, stopBlock, doorWords, stableStep, stableAdvance],
+        : { blockId: stopBlock, door: doorWords, doorCue, step: stableStep, advance: stableAdvance },
+    [current, stopBlock, doorWords, doorCue, stableStep, stableAdvance],
   );
   useLayoutEffect(() => {
     onControl(control);
@@ -289,7 +362,7 @@ function useTrajectoryMode({
           quoteId: stop.quoteId,
           n: i + 1,
           place: path.length > 0 ? path.join(" › ") : null,
-          role: stop.role,
+          cue: cueOf(stop),
           /* A shallower pass's stop, already seen on the way round. */
           seen: depth !== null && stop.depth < depth,
           current: stop.quoteId === current?.quoteId,
@@ -322,13 +395,30 @@ function useTrajectoryMode({
     [step, covers, onAway],
   );
 
+  /* **The stop card**, gathered for the current stop only, from what the
+     other modes have already written. "Also at stop k" counts along this
+     pass, so the route goes in as its stops' blocks. */
+  const routeBlocks = useMemo(() => route.map((s) => blockOf(s.quoteId)), [route, blockOf]);
+  const card = useMemo(
+    () => (stopBlock === null ? null : gatherStopCard({ blockId: stopBlock, blocks, route: routeBlocks, sources })),
+    [stopBlock, blocks, routeBlocks, sources],
+  );
+
   return {
     depth,
     depths,
     rows,
     position: current ? route.indexOf(current) + 1 : 0,
+    card,
     onDepth: changeDepth,
     onRow,
     onStep,
+    onOpen,
+    canOpen,
   };
+}
+
+/** A stop's cue, or — on a route written before cues — its role. */
+function cueOf(stop: TrajectoryStop): string | null {
+  return stop.cue ?? stop.role;
 }

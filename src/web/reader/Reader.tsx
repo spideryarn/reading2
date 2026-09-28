@@ -24,7 +24,9 @@ import {
 } from "react";
 import { useQueryState } from "nuqs";
 import type { Article, BlockId, CitedWork, GlossaryEntry } from "../../types.js";
+import { MODE_CATALOG } from "../../mode-catalog.js";
 import { useExperimental } from "../useExperimental.js";
+import { shownBehindTheSwitch } from "../experimental-visibility.js";
 import { ReadingTimeStyle } from "../ReadingTimeStyle.js";
 import { addressWithout, useAddress } from "../router.js";
 import { IdeasBand, VisitorIdeasBand } from "../modes/ideas/IdeasMode.js";
@@ -36,6 +38,7 @@ import { CitationsBand } from "../modes/citations/CitationsMode.js";
 import { FaqBand } from "../modes/faq/FaqMode.js";
 import { TrajectoryBand, type TrajectoryControl } from "../modes/trajectory/TrajectoryMode.js";
 import { TrajectoryDoor } from "../TrajectoryPanel.js";
+import type { CardTarget } from "../stop-card.js";
 import { GlossaryBand, VisitorGlossaryBand } from "../modes/glossary/GlossaryMode.js";
 import { SearchBand, VisitorSearchBand } from "../modes/search/SearchMode.js";
 import { StructureBand } from "../modes/structure/StructureMode.js";
@@ -87,6 +90,8 @@ import {
   gateParam,
   refScaleParam,
   termParam,
+  ideaParam,
+  eventParam,
   spineParam,
   textParam,
   threadParam,
@@ -895,6 +900,54 @@ export function Reader({
   );
 
   /**
+   * **A link on Trajectory's stop card** — into Glossary on `?term=`, Ideas on
+   * `?idea=`, or Timeline on `?event=` when that experimental control is
+   * available. A term goes through `openTermInGlossary` for the gate it may
+   * need to lower; the other two are the same two writes, through setters on
+   * the parameters those bands read, exactly as `?term=` above is.
+   * src/web/stop-card.ts.
+   */
+  const [, setIdeaId] = useQueryState("idea", ideaParam);
+  const [, setEventId] = useQueryState("event", eventParam);
+  const canOpenFromStopCard = useCallback(
+    (target: CardTarget) => {
+      const targetMode =
+        target.kind === "term" ? "glossary" : target.kind === "idea" ? "ideas" : "timeline";
+      return shownBehindTheSwitch({
+        experimental: MODE_CATALOG[targetMode].experimental,
+        on: experimental.on,
+        current: mode === targetMode,
+      });
+    },
+    [experimental.on, mode],
+  );
+  const openFromStopCard = useCallback(
+    (target: CardTarget) => {
+      /* The event stays useful scrapbook text while Timeline's control is
+         hidden. Guard the action too, across the render where the switch flips. */
+      if (!canOpenFromStopCard(target)) return;
+      switch (target.kind) {
+        case "term":
+          openTermInGlossary(target.id);
+          return;
+        case "idea":
+          void setIdeaId(target.id);
+          void setMode("ideas");
+          return;
+        case "event":
+          void setEventId(target.id);
+          void setMode("timeline");
+          return;
+        default: {
+          const never: never = target;
+          return never;
+        }
+      }
+    },
+    [canOpenFromStopCard, openTermInGlossary, setIdeaId, setEventId, setMode],
+  );
+
+  /**
    * The search results whose marks are drawn in the prose, and which of them
    * the reader last pressed.
    *
@@ -1121,6 +1174,7 @@ export function Reader({
       node: (
         <TrajectoryDoor
           label={trajectoryControl.door}
+          cue={trajectoryControl.doorCue}
           onPress={trajectoryControl.advance}
           onRoute={bandBack ? () => setBandAway(false) : null}
         />
@@ -1904,6 +1958,9 @@ export function Reader({
             openKey={openTrajectoryKey}
             onOpenKey={setOpenTrajectoryKey}
             onControl={setTrajectoryControl}
+            glossary={owner.glossary}
+            onOpen={openFromStopCard}
+            canOpen={canOpenFromStopCard}
           />
         ) : null;
       /* **The owner/visitor pair, since 2026-09-04.** It was the owner alone

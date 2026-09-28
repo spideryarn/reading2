@@ -110,7 +110,32 @@ export interface UseIdeas {
   cancel(id: string): void;
 }
 
-export function useIdeas(slug: string): UseIdeas {
+/**
+ * **The read alone** — `GET /api/ideas/:slug` and what it said, and no job
+ * machinery at all: no `useStepJob`, no `useAutoRun`, no verb that spends.
+ *
+ * Split out for Trajectory's stop card (Sol F22), which shows ideas that
+ * already exist and must never be the reason one is written. With the mode
+ * hook that promise held only because `useAutoRun` does not fire for another
+ * mode's activation; here it holds because there is nothing to fire.
+ * `useGlossaryRead` is the model. `useIdeas` layers its job on this, and
+ * behaves exactly as it did before the split.
+ */
+export interface IdeasRead {
+  status: IdeasStatus;
+  ideas: Ideas | null;
+  stale: boolean;
+  outdated: boolean;
+  profiled: boolean;
+  profileChanged: boolean;
+  error: string | null;
+  /** Join a read in flight, or start one. `OrderedRead.reload`. */
+  reload(): Promise<void>;
+  /** Read again because the list has just changed. `OrderedRead.refresh`. */
+  refresh(): Promise<void>;
+}
+
+export function useIdeasRead(slug: string): IdeasRead {
   const [status, setStatus] = useState<IdeasStatus>("loading");
   const [ideas, setIdeas] = useState<Ideas | null>(null);
   const [stale, setStale] = useState(false);
@@ -177,6 +202,13 @@ export function useIdeas(slug: string): UseIdeas {
     void reload();
   }, [reload]);
 
+  return { status, ideas, stale, outdated, profiled, profileChanged, error, reload, refresh };
+}
+
+export function useIdeas(slug: string): UseIdeas {
+  const read = useIdeasRead(slug);
+  const { status, reload, refresh } = read;
+
   /* The job half — the poll, the running job, and what a refused or dead run
      says to the reader — is src/web/useStepJob.ts, shared with the glossary and
      the summaries. It carries the reasoning that used to be copied here. */
@@ -207,13 +239,13 @@ export function useIdeas(slug: string): UseIdeas {
 
   return {
     status,
-    ideas,
-    stale,
-    outdated,
-    profiled,
-    profileChanged,
+    ideas: read.ideas,
+    stale: read.stale,
+    outdated: read.outdated,
+    profiled: read.profiled,
+    profileChanged: read.profileChanged,
     slug,
-    error,
+    error: read.error,
     job: queue.job,
     failed: queue.failed,
     stalled: queue.stalled,
