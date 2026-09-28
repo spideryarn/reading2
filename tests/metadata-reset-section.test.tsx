@@ -1,0 +1,408 @@
+// @vitest-environment jsdom
+/**
+ * **The *Start this article again* section on the Metadata page** — stage 2 of
+ * docs/plans/260928a-reset-and-regenerate-article.md.
+ *
+ * Mounted through `Metadata` for the reason tests/metadata-rerun-section.test.tsx
+ * gives: what goes wrong with a control like this is the wiring — the gate, the
+ * slug in the URL, the body, and whether the job it makes is ever driven.
+ *
+ * The things here that are about money or a reader's article rather than React:
+ *
+ *  - **Behind the experimental switch** (assumption 5 of the plan): absent when
+ *    it is off, present when it is on.
+ *  - **The first press asks and posts nothing.** A reset re-reads the article
+ *    and can detach comments on maths, so a one-click control is the wrong shape.
+ *  - **Yes posts exactly `{ regenerate: false }` or `{ regenerate: true }`** to
+ *    `/api/article/<slug>/reset` — the server rejects any other field, and the
+ *    client may not name steps.
+ *  - **The job is driven.** The browser is the worker (ingest-queue.md § The
+ *    browser is the worker): a reset nobody drives sits queued for ever while
+ *    the page says it has started. So the test asserts the `/advance` for the
+ *    returned id, not merely that the POST happened.
+ */
+import { act, createElement } from "react";
+import { NuqsAdapter } from "nuqs/adapters/react";
+import { createRoot, type Root } from "react-dom/client";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+
+import { STEP_ORDER } from "../src/step-order.js";
+import type { Article, Job, StageState, StepName } from "../src/types.js";
+
+vi.mock("../src/web/lib/supabase.js", () => ({
+  supabase: {
+    auth: {
+      getSession: async () => ({ data: { session: { access_token: "t" } } }),
+      refreshSession: async () => ({ data: { session: { access_token: "t" } } }),
+      onAuthStateChange: () => ({ data: { subscription: { unsubscribe() {} } } }),
+    },
+  },
+  googleSignInAvailable: false,
+}));
+
+/* The bar is not what is under test, and with the switch on it would draw the
+   experimental modes too. */
+vi.mock("../src/web/Dock.js", () => ({ Dock: () => null }));
+
+/** Whether the experimental switch reads as on. */
+let experimentalOn = true;
+vi.mock("../src/web/useExperimental.js", () => ({
+  useExperimental: () => ({
+    on: experimentalOn,
+    since: experimentalOn ? "2026-09-01T00:00:00.000Z" : null,
+    loaded: true,
+    signedIn: true,
+    saving: false,
+    error: null,
+  }),
+}));
+
+Object.defineProperty(window, "matchMedia", {
+  writable: true,
+  value: (q: string) => ({
+    matches: false,
+    media: q,
+    addEventListener() {},
+    removeEventListener() {},
+    addListener() {},
+    removeListener() {},
+    onchange: null,
+    dispatchEvent: () => false,
+  }),
+});
+
+const { Metadata } = await import("../src/web/Metadata.js");
+const { jobEngine } = await import("../src/web/jobEngine.js");
+
+const SLUG = "a-piece";
+const RESET_URL = `/api/article/${SLUG}/reset`;
+const IMPORT_STEPS: StepName[] = ["fetch", "extract", "blocks", "hierarchy", "labels", "assets"];
+
+const ARTICLE: Article = {
+  meta: { slug: SLUG, title: "A piece" },
+  blocks: [
+    {
+      id: "spya-aaaaaa",
+      tag: "p",
+      kind: "text",
+      text: "The first paragraph.",
+      words: 3,
+      html: "<p>The first paragraph.</p>",
+      gistable: true,
+    },
+  ],
+  assets: undefined,
+  navLabelStatus: "ready",
+  tree: {
+    version: "t",
+    generator: "t",
+    slug: SLUG,
+    rootId: "n0",
+    nodes: {
+      n0: {
+        id: "n0",
+        depth: 0,
+        parent: null,
+        children: [],
+        range: ["spya-aaaaaa", "spya-aaaaaa"],
+        title: "A piece",
+      },
+    },
+  },
+};
+
+/** Which steps the metadata endpoint currently says have run. */
+let ran: Set<StepName>;
+/** Every body posted to the reset route, parsed, in order. */
+let resets: unknown[];
+/** Every `POST /api/jobs` body — a reset must not go through that route. */
+let jobPosts: unknown[];
+/** The id of every `POST /api/jobs/:id/advance`, in order. */
+let advances: string[];
+/** How many `GET /api/jobs` have been made. */
+let jobListReads: number;
+/** What `GET /api/jobs` answers. */
+let jobList: Job[];
+/** What the reset route answers, when it is not the ordinary 202. */
+let resetAnswer: (() => Response) | null;
+/** How many times `GET /api/metadata/:slug` has been asked for. */
+let metadataReads: number;
+
+let host: HTMLDivElement;
+let root: Root;
+
+function json(body: unknown, status = 200): Response {
+  return new Response(JSON.stringify(body), {
+    status,
+    headers: { "content-type": "application/json" },
+  });
+}
+
+function stages(): StageState[] {
+  return STEP_ORDER.map((step) => ({
+    step,
+    label: `Doing ${step}`,
+    outputs: [`data/${SLUG}/${step}.json`],
+    done: ran.has(step),
+    ranAt: ran.has(step) ? "2026-09-01T00:00:00.000Z" : null,
+    startedAt: ran.has(step) ? "2026-08-31T23:59:52.000Z" : null,
+    bytes: null,
+  }));
+}
+
+function resetJob(id: string, status: Job["status"] = "queued"): Job {
+  return {
+    id,
+    ownerId: "owner" as Job["ownerId"],
+    slug: SLUG,
+    steps: ["fetch", "extract", "blocks", "hierarchy", "assets"].map((name) => ({
+      name: name as StepName,
+      label: `Doing ${name}`,
+      status: "pending" as const,
+    })),
+    status,
+    createdAt: "2026-09-28T00:00:00.000Z",
+    reset: { regenerate: [] },
+  };
+}
+
+beforeEach(() => {
+  (globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+  experimentalOn = true;
+  ran = new Set<StepName>([...IMPORT_STEPS, "arc", "glossary", "quotes", "faq"]);
+  resets = [];
+  jobPosts = [];
+  advances = [];
+  jobListReads = 0;
+  jobList = [];
+  resetAnswer = null;
+  metadataReads = 0;
+  jobEngine.reset();
+
+  vi.stubGlobal("fetch", (input: RequestInfo | URL, init?: RequestInit) => {
+    const url = String(input);
+    const method = init?.method ?? "GET";
+    if (url.startsWith("/api/metadata/")) {
+      metadataReads++;
+      return Promise.resolve(
+        json({
+          slug: SLUG,
+          dir: `data/${SLUG}`,
+          stages: stages(),
+          comments: 0,
+          profile: null,
+          purpose: null,
+          archivedAt: null,
+        }),
+      );
+    }
+    if (url === RESET_URL && method === "POST") {
+      resets.push(JSON.parse(String(init?.body ?? "null")));
+      if (resetAnswer) return Promise.resolve(resetAnswer());
+      return Promise.resolve(json({ jobId: "job-reset", regenerate: [] }, 202));
+    }
+    const advanced = /^\/api\/jobs\/([^/]+)\/advance$/.exec(url);
+    if (advanced && method === "POST") {
+      advances.push(advanced[1] ?? "");
+      const job = jobList.find((j) => j.id === advanced[1]) ?? resetJob(advanced[1] ?? "");
+      /* Busy, so the drive loop waits rather than spinning inside the test. */
+      return Promise.resolve(json({ job, ran: null, busy: true, done: false }));
+    }
+    if (url === "/api/jobs" && method === "POST") {
+      jobPosts.push(JSON.parse(String(init?.body ?? "null")));
+      return Promise.resolve(json({}));
+    }
+    if (url === "/api/jobs") {
+      jobListReads++;
+      return Promise.resolve(json({ jobs: jobList }));
+    }
+    return Promise.resolve(json({}));
+  });
+
+  host = document.createElement("div");
+  document.body.append(host);
+  root = createRoot(host);
+});
+
+afterEach(async () => {
+  await act(async () => root.unmount());
+  host.remove();
+  jobEngine.reset();
+  vi.unstubAllGlobals();
+  vi.restoreAllMocks();
+});
+
+async function open(): Promise<void> {
+  history.replaceState(null, "", `/read/${SLUG}/metadata`);
+  await act(async () => {
+    root.render(
+      createElement(
+        NuqsAdapter,
+        null,
+        createElement(Metadata, {
+          slug: SLUG,
+          article: ARTICLE,
+          onRenamed: () => {},
+          onVisibility: () => {},
+        }),
+      ),
+    );
+  });
+  await settle();
+}
+
+async function settle(): Promise<void> {
+  for (let i = 0; i < 5; i++) {
+    await act(async () => {
+      await new Promise((go) => setTimeout(go, 0));
+    });
+  }
+}
+
+const card = (): HTMLElement | null => host.querySelector<HTMLElement>("[data-reset]");
+const sections = (): (string | undefined)[] =>
+  [...host.querySelectorAll<HTMLElement>("[data-section]")].map((el) => el.dataset.section);
+
+function button(text: string): HTMLButtonElement | undefined {
+  return [...(card()?.querySelectorAll("button") ?? [])].find((b) =>
+    (b.textContent ?? "").includes(text),
+  );
+}
+const checkbox = (): HTMLInputElement | null =>
+  card()?.querySelector<HTMLInputElement>('input[type="checkbox"]') ?? null;
+
+async function press(b: HTMLButtonElement | HTMLInputElement | undefined | null): Promise<void> {
+  expect(b, "nothing to press").toBeTruthy();
+  await act(async () => b?.click());
+  await settle();
+}
+
+describe("the Start this article again section", () => {
+  it("is not on the page when experimental features are off", async () => {
+    experimentalOn = false;
+    await open();
+    expect(card()).toBeNull();
+    expect(sections()).not.toContain("Start this article again");
+  });
+
+  it("is on the page, just above Archive, when they are on", async () => {
+    await open();
+    expect(card()).toBeTruthy();
+    const order = sections();
+    expect(order.indexOf("Start this article again")).toBe(
+      order.indexOf("Archive this article") - 1,
+    );
+  });
+
+  it("names the extras this article has beside the checkbox, and no others", async () => {
+    await open();
+    const box = checkbox();
+    expect(box, "no checkbox").toBeTruthy();
+    expect(box?.checked, "the checkbox starts ticked").toBe(false);
+    const label = box?.closest("label")?.textContent ?? "";
+    for (const name of ["Arc", "Glossary", "Quotes", "FAQ"]) expect(label).toContain(name);
+    /* Not an extra the article lacks, and not an import step. */
+    for (const name of ["Ideas", "Quiz", "Sketch", "Hierarchy", "assets"]) {
+      expect(label).not.toContain(name);
+    }
+  });
+
+  it("offers no checkbox when the article has no extras", async () => {
+    ran = new Set<StepName>(IMPORT_STEPS);
+    await open();
+    expect(card(), "the section went with the checkbox").toBeTruthy();
+    expect(checkbox()).toBeNull();
+  });
+
+  it("asks before it does anything, and says what is kept, lost and paid", async () => {
+    await open();
+    await press(button("Start again"));
+
+    expect(resets).toEqual([]);
+    expect(jobPosts).toEqual([]);
+    const text = card()?.textContent ?? "";
+    expect(text).toContain("Kept");
+    expect(text).toContain("comments");
+    expect(text).toContain("Lost");
+    expect(text).toContain("no longer in this version");
+    expect(text).toContain("Cost");
+    expect(button("Yes, start again"), "no Yes on the confirm").toBeTruthy();
+  });
+
+  it("posts regenerate: false when the box is not ticked", async () => {
+    await open();
+    await press(button("Start again"));
+    await press(button("Yes, start again"));
+
+    expect(resets).toEqual([{ regenerate: false }]);
+    expect(jobPosts, "a reset went through POST /api/jobs").toEqual([]);
+  });
+
+  it("posts regenerate: true when the box is ticked", async () => {
+    await open();
+    await press(checkbox());
+    await press(button("Start again"));
+    await press(button("Yes, start again"));
+
+    expect(resets).toEqual([{ regenerate: true }]);
+  });
+
+  it("goes back to the plain button on Cancel, having sent nothing", async () => {
+    await open();
+    await press(button("Start again"));
+    await press(button("Cancel"));
+    expect(resets).toEqual([]);
+    expect(button("Yes, start again")).toBeUndefined();
+    expect(button("Start again")).toBeTruthy();
+  });
+
+  /**
+   * **A queued job nobody drives never runs.** The POST is answered with an id,
+   * and the only thing that finds the job and starts `/advance` on it is the
+   * engine's poll — which only an action's poke starts, at rest. So: the list
+   * is read after the press, and the reset job is advanced.
+   */
+  it("pokes the tab's engine, which then drives the reset job", async () => {
+    jobEngine.start("reader-1");
+    await open();
+    await press(button("Start again"));
+    const readsBefore = jobListReads;
+    jobList = [resetJob("job-reset")];
+    await press(button("Yes, start again"));
+
+    expect(jobListReads, "nothing asked the queue about the new job").toBeGreaterThan(readsBefore);
+    expect(advances, "the reset job was never driven").toContain("job-reset");
+  });
+
+  it("shows the job's progress in place of the button while it runs", async () => {
+    await open();
+    await act(async () => jobEngine.receive([]));
+    await act(async () => jobEngine.receive([resetJob("job-reset", "running")]));
+    await settle();
+
+    expect(button("Start again"), "the button is still offered over a running reset")
+      .toBeUndefined();
+    expect(button("Stop"), "the running reset has no Stop").toBeTruthy();
+  });
+
+  it("reads the metadata again when the reset finishes", async () => {
+    await open();
+    await act(async () => jobEngine.receive([]));
+    await act(async () => jobEngine.receive([resetJob("job-reset", "running")]));
+    await settle();
+    const before = metadataReads;
+    await act(async () => jobEngine.receive([resetJob("job-reset", "done")]));
+    await settle();
+
+    expect(metadataReads).toBeGreaterThan(before);
+  });
+
+  it("shows the server's own sentence when the reset is refused", async () => {
+    resetAnswer = () => json({ error: "That article is not on your shelf." }, 404);
+    await open();
+    await press(button("Start again"));
+    await press(button("Yes, start again"));
+
+    expect(card()?.textContent).toContain("That article is not on your shelf.");
+  });
+});
