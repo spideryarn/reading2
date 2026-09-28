@@ -686,14 +686,12 @@ function Mark({
               somewhere a hostile page can steer a reader
               (docs/project/security.md).
 
-              `live` while the mark is arriving suppresses a Floating UI instance
-              per chip on every token; `partial` says only the tail is
+              `partial` while the mark is arriving says only the tail is
               half-written. */}
           <CitedText
             text={attempt.reply}
             blocks={blocks}
             onJump={onJump}
-            live={attempt.status === "marking"}
             partial={attempt.status === "marking"}
           />
         </p>

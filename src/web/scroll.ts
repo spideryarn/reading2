@@ -616,8 +616,20 @@ function markOurScroll(ms = SCROLL_MS + 150) {
   quietUntil = performance.now() + ms;
 }
 
-/** Abandon any jump in flight — a newer one, or the reader taking over. */
-function cancel() {
+/**
+ * **Who is waiting to hear how the jump in flight ends** — `scrollToBlock`'s
+ * `done`, held while a glide runs. At most one, because at most one glide runs:
+ * starting another cancels this one first, which tells its caller so.
+ */
+let landing: ((outcome: ScrollOutcome) => void) | null = null;
+
+/**
+ * Abandon any jump in flight — a newer one, or the reader taking over.
+ *
+ * `outcome` is what the jump's caller is told, and it is `settled` only from
+ * the glide's own last frame, which ends the animation through here too.
+ */
+function cancel(outcome: "settled" | "cancelled" = "cancelled") {
   /* **The reader taking over ends the quiet window, and must.** `cancel` is what
      a wheel, a touch or a `pointercancel` runs (see `bail` below), so past this
      line the page is moving because *they* are moving it — and leaving
@@ -631,6 +643,11 @@ function cancel() {
   aiming = null;
   release?.();
   release = null;
+  /* Told last, after the state above is clear, so a caller that starts a new
+     movement from inside `done` is not cancelled by the tail of this one. */
+  const done = landing;
+  landing = null;
+  done?.(outcome);
 }
 
 /** Where the current jump is going, or null if nothing is in flight. */
@@ -638,17 +655,19 @@ export function glideTarget(): number | null {
   return aiming;
 }
 
-function glide(to: number) {
+function glide(to: number, done?: (outcome: ScrollOutcome) => void) {
   cancel();
   const from = window.scrollY;
   const distance = to - from;
-  if (Math.abs(distance) < 1) return;
+  // Already there is a landing: the reader is looking at the row right now.
+  if (Math.abs(distance) < 1) return done?.("settled");
   // AFTER the early return, not before it: a jump to where we already are moves
   // nothing, and opening the quiet window for it would deafen the bar to a third
   // of a second of the reader's own scrolling for no reason at all.
   markOurScroll();
   const started = performance.now();
   aiming = to;
+  landing = done ?? null;
 
   // The browser's own smooth scroll gives up the moment you touch the wheel.
   // Ours has to be told, or we would drag the reader back to a destination they
@@ -703,7 +722,7 @@ function glide(to: number) {
     // because a deep tree scrolls the table sideways (layout.ts § overflowing).
     window.scrollTo({ top: from + distance * ease(t), behavior: "auto" });
     if (t < 1) frame = requestAnimationFrame(tick);
-    else cancel();
+    else cancel("settled");
   };
   frame = requestAnimationFrame(tick);
 }
@@ -734,20 +753,43 @@ export function scrollToTop() {
   window.scrollTo({ top: 0, behavior: "auto" });
 }
 
-export function scrollToBlock(id: string, behavior: ScrollBehavior = "smooth") {
+/**
+ * **How a `scrollToBlock` ended**, for a caller that has something to do on
+ * arrival — the flash (flash.ts, called from keynav.ts § `beginJump`).
+ *
+ *  - `settled`: the row is where it was sent. At once for an instant move, a
+ *    reduced-motion one or a move of less than a pixel; otherwise on the
+ *    glide's last frame.
+ *  - `cancelled`: the reader's wheel or touch stopped the glide, or a newer
+ *    movement replaced it (another jump, an arrow key, Back, `abandonScroll`).
+ *  - `missing`: there is no row for that id — nothing moved.
+ *
+ * Reported rather than guessed with a timer, because a timer set to
+ * `SCROLL_MS` fires just the same when the reader has already taken the page
+ * somewhere else. GPT Sol F1 on
+ * docs/plans/260928b-one-block-link-component-with-a-rich-tooltip-and-a-flash-on-arrival.md.
+ */
+export type ScrollOutcome = "settled" | "cancelled" | "missing";
+
+export function scrollToBlock(
+  id: string,
+  behavior: ScrollBehavior = "smooth",
+  done?: (outcome: ScrollOutcome) => void,
+) {
   const row = blockRow(id);
-  if (!row) return;
+  if (!row) return done?.("missing");
   // Explicit and clamped rather than scrollIntoView(): we want the row's own
   // top edge, offset to clear the bars, and no surprise when the row sits
   // inside a cell that spans dozens of others.
   const top = row.getBoundingClientRect().top + window.scrollY - stickyDestination();
   const max = document.documentElement.scrollHeight - window.innerHeight;
   const target = Math.max(0, Math.min(top, max));
-  if (behavior === "smooth" && !reducedMotion()) glide(target);
+  if (behavior === "smooth" && !reducedMotion()) glide(target, done);
   else {
     cancel();
     markOurScroll(150); // instant, so only the event it fires needs covering
     window.scrollTo({ top: target, behavior: "auto" });
+    done?.("settled");
   }
 }
 

@@ -362,14 +362,15 @@ describe("a '?' answer streaming into the floating dialog", () => {
 
   it("does not loop when a landed citation is hovered and focused", async () => {
     await pressAndStream(GREG);
-    const chips = [...host.querySelectorAll<HTMLElement>(".chat-dialog .cite-hit")];
+    /* The chips share one delegated card since 2026-09-28 (BlockLinkCard.tsx),
+       opened by a bubbling `pointerover` or a `focusin`, not by a per-chip
+       `mouseenter`. */
+    const chips = [...host.querySelectorAll<HTMLElement>(".chat-dialog .cite [data-block-link]")];
     expect(chips.length, "the landed answer must draw its citation chips").toBeGreaterThan(0);
     for (const chip of chips) {
       await act(async () => {
-        chip.dispatchEvent(new MouseEvent("mouseenter", { bubbles: true }));
-        chip.dispatchEvent(new PointerEvent("pointerenter", { bubbles: true, pointerType: "mouse" }));
+        chip.dispatchEvent(new PointerEvent("pointerover", { bubbles: true, pointerType: "mouse" }));
         chip.focus();
-        chip.querySelector<HTMLElement>("a")?.focus();
       });
       await settle(3);
     }

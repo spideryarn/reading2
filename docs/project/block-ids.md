@@ -484,16 +484,25 @@ beside the prose the id is a thing you copy rather than a thing you read
 ([prose-gutter-icons.md](../plans/prose-gutter-icons.md)). Everything below about *what a shown id
 is* still holds; what changed is that one of the five stopped showing characters.
 
-A cited id is drawn as a **chip with a hover card carrying the paragraph itself**, which is the one
-thing that makes a model's claim checkable without leaving the sentence you are reading — see
-[summaries.md § A summary is a door](summaries.md#a-summary-is-a-door). An id the article does not
-have is rendered as plain text rather than a link that goes nowhere: a dead chip is worse than
-visible noise, because pressing it does nothing and nothing distinguishes that from a bug in the
-scrolling.
+**Every block link has a hover card carrying the section it sits in and the paragraph itself**,
+which is the one thing that makes a model's claim checkable without leaving the sentence you are
+reading — see [summaries.md § A summary is a door](summaries.md#a-summary-is-a-door). It was the
+citation chips' alone until 2026-09-28; now it is one card for the whole reading view
+([`BlockLinkCard.tsx`](../../src/web/BlockLinkCard.tsx)), shared by every `BlockRef`, and it replaced
+the native `title` the others had. A link whose panel already shows the passage passes
+`preview={false}` and its card says only where it is
+([260928b](../plans/260928b-one-block-link-component-with-a-rich-tooltip-and-a-flash-on-arrival.md)).
+
+**An id the article does not have is not a link**, because a dead chip is worse than visible noise:
+pressing it does nothing and nothing distinguishes that from a bug in the scrolling. In model prose
+`Cited` draws it as plain text. Anywhere else in the reading view `BlockRef` draws it as a dimmed
+span whose card — and `sr-only` text, since a span takes no focus — says the passage is not in this
+version of the article, which is what a re-extraction that dropped a block looks like. Outside the
+reading view there is no index to ask, and it stays a link.
 
 **The `spya-` prefix is not shown.** Every id on screen has it, so it costs five characters and
-carries nothing. It is still in the `title` attribute and still in the link's address, which is
-where anything anybody pastes comes from. The prefix earns its keep in the *data* — it is what makes
+carries nothing. It is still the link's `aria-label` and still in its address, which is where
+anything anybody pastes comes from. The prefix earns its keep in the *data* — it is what makes
 "is this id ours?" decidable when stage 3 re-reads a page (above) — not in the reading view.
 
 **An id is a link.** Greg, 2026-08-25:

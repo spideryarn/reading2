@@ -55,9 +55,8 @@
 import { createElement, Fragment, useMemo, type ReactElement, type ReactNode } from "react";
 import { fromMarkdown } from "mdast-util-from-markdown";
 import type { Nodes, PhrasingContent, Root, RootContent, Text } from "mdast";
-import { BlockRef, shortBlockId } from "./BlockRef.js";
-import { Tooltip } from "./Tooltip.js";
-import { snippet, splitCitations, splitLinks } from "./citations.js";
+import { BlockRef } from "./BlockRef.js";
+import { splitCitations, splitLinks } from "./citations.js";
 import type { BlockId } from "../types.js";
 import { hasCredentials, hostOf, isWebUrl } from "../urls.js";
 
@@ -68,23 +67,12 @@ interface Props {
   blocks: Map<string, string>;
   onJump(id: BlockId): void;
   /**
-   * The answer is still arriving.
-   *
-   * **No tooltip while it is.** A streamed answer re-renders on every token, so
-   * a Floating UI instance per chip would be a dozen `useFloating` hooks
-   * created and torn down a hundred times during one reply. Once the text has
-   * landed it re-renders no more and the tooltips cost nothing — which is also
-   * the only time anybody is reading carefully enough to hover one. `BlockRef`'s
-   * native `title` covers the gap. Nothing in summary mode streams, so this
-   * defaults off.
-   */
-  live?: boolean;
-  /**
    * The **end** of this text may be half-written — the answer is still arriving.
    *
-   * A separate flag from `live`, and deliberately: `live` is about how much
-   * machinery to mount while the text keeps changing, and this is about trusting
-   * the last few characters. Only a bare address needs it — a `[label](url)` is
+   * There used to be a `live` flag beside this one, which took the per-chip
+   * tooltips away while an answer streamed. The chips share one card now
+   * (BlockLinkCard.tsx), which costs nothing per chip, so it went. Only a bare
+   * address needs this one — a `[label](url)` is
    * proof its own address finished, and so is `<https://…>` — so it reaches
    * exactly one place, the last `text` node in the tree. See `splitLinks`.
    */
@@ -114,7 +102,6 @@ interface Props {
 interface Ctx {
   blocks: Map<string, string>;
   onJump(id: BlockId): void;
-  live: boolean;
   links: boolean;
   className: string | undefined;
   /** The source, for drawing a node as the characters the model wrote. */
@@ -156,7 +143,6 @@ function Drawn({
   text,
   blocks,
   onJump,
-  live = false,
   partial = false,
   links = false,
   className,
@@ -170,7 +156,6 @@ function Drawn({
   const ctx: Ctx = {
     blocks,
     onJump,
-    live,
     links,
     className,
     source: text,
@@ -522,59 +507,15 @@ function cited(text: string, ctx: Ctx): ReactNode {
         // biome-ignore lint/suspicious/noArrayIndexKey: one immutable answer, rebuilt whole
         key={`c${i}`}
       >
-        {seg.ids.map((id) =>
-          ctx.live ? (
-            <BlockRef key={id} id={id} onJump={ctx.onJump} />
-          ) : (
-            <Tooltip
-              key={id}
-              placement="top"
-              className="tip-cite"
-              content={<CitedBlock id={id} text={ctx.blocks.get(id) ?? ""} />}
-            >
-              <span className="cite-hit">
-                <BlockRef id={id} onJump={ctx.onJump} />
-              </span>
-            </Tooltip>
-          ),
-        )}
+        {/* The card on hover — the paragraph itself, so a claim can be checked
+            against the article without leaving the sentence (summaries.md § A
+            summary is a door) — is `BlockRef`'s now, one card shared with every
+            other block link on the page (BlockLinkCard.tsx). It was this
+            file's own `CitedBlock`, one `Tooltip` per chip, until 2026-09-28. */}
+        {seg.ids.map((id) => (
+          <BlockRef key={id} id={id} onJump={ctx.onJump} />
+        ))}
       </span>
     ),
-  );
-}
-
-/**
- * What a citation chip shows on hover: **the paragraph itself**.
- *
- * Greg asked for a rich tooltip here, 2026-08-26, and the only content worth
- * putting in one is the thing the citation points at. A chip saying "go to this
- * passage" tells the reader what clicking does; a chip showing the passage lets
- * them decide whether to click at all — and, more to the point, lets them check
- * the model against the article without leaving the sentence they are reading.
- * That check is the whole justification for both features that use this
- * (docs/plans/260826a-chat-mode.md § Say the awkward thing first, and
- * docs/project/summaries.md § A summary is a door), and until it existed it
- * cost a jump and a scroll back.
- *
- * Truncated, deliberately and not generously. Enough to recognise the paragraph
- * and see whether it says what the summary claims; not enough to read instead of
- * going there. The original version learned the same thing about search results
- * and kept two lengths for it —
- * docs/project/original-version/search-and-chat.md.
- */
-function CitedBlock({ id, text }: { id: BlockId; text: string }) {
-  const shown = snippet(text);
-  return (
-    <>
-      <div className="tip-cite-head">{shortBlockId(id)}</div>
-      {shown === "" ? (
-        // A block with no text of its own — an image, a figure. Saying so beats
-        // an empty card that looks like a tooltip that failed to load.
-        <p className="tip-cite-empty">This block has no text of its own.</p>
-      ) : (
-        <p className="tip-cite-text">{shown}</p>
-      )}
-      <div className="tip-cite-go">Click to go there</div>
-    </>
   );
 }

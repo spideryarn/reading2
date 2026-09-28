@@ -95,7 +95,6 @@ import type { LiveApi } from "./live/useLiveConversation.js";
 import { sendForTranscription } from "./dictation-upload.js";
 import { useDictationField } from "./useDictationField.js";
 import { hostOf, isWebUrl } from "../urls.js";
-import { TooltipGroup } from "./Tooltip.js";
 import { exactly, timeAgo } from "./relative-time.js";
 import { useNow } from "./useNow.js";
 import { useSlow } from "./useSlow.js";
@@ -1807,34 +1806,30 @@ function Answer({
   blocks: Map<string, string>;
   live: boolean;
 }) {
+  /* The blocks, the chips, the web links and the marks all live in Cited.tsx,
+     shared with the summary panel. Two copies of what a citation looks like
+     would drift, and a chip that means something slightly different depending
+     on which band it is in is worse than either version. The chips' hover card
+     is the one every block link shares (BlockLinkCard.tsx), which also moves
+     from chip to chip without a second wait — what a `TooltipGroup` here used
+     to do. */
   return (
-    /* One group for the whole answer, so moving along a row of citations shows
-       each card immediately instead of waiting out the open delay again. Same
-       reason the dock's placeholder buttons share one — Tooltip.tsx. */
-    <TooltipGroup delay={{ open: 350, close: 120 }} timeoutMs={500}>
-      {/* The blocks, the chips, the hover cards, the web links and the marks
-          all live in Cited.tsx, shared with the summary panel. Two copies of
-          what a citation looks like would drift, and a chip that means
-          something slightly different depending on which band it is in is
-          worse than either version. */}
-      <CitedMarkdown
-        text={text}
-        blocks={blocks}
-        onJump={onJump}
-        live={live}
-        /* Only the **end** of an answer still arriving can be half-written, and
-           a bare URL cut in half is a link that goes somewhere wrong for the
-           second before the rest lands. Everything above it is finished text.
-           citations.ts § splitLinks, Cited.tsx § drawBlocks. */
-        partial={live}
-        /* Chat, and only chat, for both of the opt-in flags. The prompt here
-           has a rule governing what a model may link (converse.ts § LINKING TO
-           THE WEB) and asks for the shapes this draws; the summary prompt asks
-           for plain sentences and has neither. Cited.tsx § links,
-           Cited.tsx § CitedMarkdown. */
-        links
-      />
-    </TooltipGroup>
+    <CitedMarkdown
+      text={text}
+      blocks={blocks}
+      onJump={onJump}
+      /* Only the **end** of an answer still arriving can be half-written, and
+         a bare URL cut in half is a link that goes somewhere wrong for the
+         second before the rest lands. Everything above it is finished text.
+         citations.ts § splitLinks, Cited.tsx § drawBlocks. */
+      partial={live}
+      /* Chat, and only chat, for both of the opt-in flags. The prompt here
+         has a rule governing what a model may link (converse.ts § LINKING TO
+         THE WEB) and asks for the shapes this draws; the summary prompt asks
+         for plain sentences and has neither. Cited.tsx § links,
+         Cited.tsx § CitedMarkdown. */
+      links
+    />
   );
 }
 

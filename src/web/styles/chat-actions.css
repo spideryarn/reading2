@@ -44,19 +44,17 @@
   color: var(--ink);
 }
 
-/* The hit area a citation tooltip anchors to. `inline-flex` so the anchor is
-   exactly the chip and not a full-width line box — a tooltip hung off a line
-   box points at whitespace. */
-.cite-hit { display: inline-flex; }
-
-/* The card itself: the paragraph the chip points at, so a claim can be checked
-   without leaving the sentence you are reading. */
+/* The card every block link shares (BlockLinkCard.tsx): the section the block
+   sits in, then the paragraph itself, so a claim can be checked without leaving
+   the sentence you are reading. The `tip-cite` names are from when it was the
+   citation chips' alone. */
 .tooltip.tip-cite { max-width: 26rem; }
 .tip-cite-head {
-  /* `--font-id`, the token tokens.css reserves for "block ids, and only block
-     ids" — this is one, and BlockRef beside it uses the same. */
-  font-family: var(--font-id);
+  /* The section's title — words, so the UI face; it used to be the block id,
+     in `--font-id`, which the id's own link already shows. */
+  font-family: var(--font-ui);
   font-size: 0.83rem;
+  font-weight: 600;
   color: var(--ink-faint);
   margin-bottom: 0.3rem;
 }
@@ -73,14 +71,6 @@
   margin: 0;
   font-size: 0.91rem;
   font-style: italic;
-  color: var(--ink-faint);
-}
-.tip-cite-go {
-  margin-top: 0.45rem;
-  padding-top: 0.35rem;
-  border-top: 1px solid var(--rule);
-  font-family: var(--font-ui);
-  font-size: 0.83rem;
   color: var(--ink-faint);
 }
 

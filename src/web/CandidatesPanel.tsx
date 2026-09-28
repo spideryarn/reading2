@@ -765,7 +765,6 @@ function Turn({
             text={prose}
             blocks={blocks}
             onJump={onJump}
-            live={message.status === "pending"}
             partial={message.status === "pending"}
             /* Chat's `LINKING TO THE WEB` rule governs this prompt too — it is
                interpolated into all three — so an address in the prose is one a

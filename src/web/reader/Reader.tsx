@@ -100,6 +100,8 @@ import { bandCoversProse, barHasContent, fitView, offerableGists, proseVisible }
 import { navPlan, useArrowNav } from "../keynav.js";
 import { paragraphLabelNotice, paragraphPill } from "../nav-labels.js";
 import { ReturnChip } from "../ReturnChip.js";
+import { BlockLinkProvider, buildBlockLinkIndex } from "../BlockLinkCard.js";
+import { dropPendingFlash, flushPendingFlash } from "../flash.js";
 import { ViewportProbe } from "../ViewportProbe.js";
 import { useSwipeNav } from "../swipe.js";
 import { ChatDialog, type ChatTarget } from "../ChatDialog.js";
@@ -503,10 +505,21 @@ export function Reader({
    */
   const setReadingCounting = owner?.readingTime.setCounting;
   /* A band that has stepped aside (`bandAway`) is not lying over anything. */
-  const proseOnScreen = proseOn && !(bandOpen && fit.modeW === 0 && !bandAway);
+  const bandOverProse = bandOpen && fit.modeW === 0 && !bandAway;
+  const proseOnScreen = proseOn && !bandOverProse;
   useEffect(() => {
     setReadingCounting?.(proseOnScreen);
   }, [setReadingCounting, proseOnScreen]);
+  /* **A jump made while a band lay over the prose flashes when the prose comes
+     back** — the band closed or stepped aside. flash.ts holds it until then,
+     reading the same fact off the DOM (`.band-covers`, a `.mode-band`, no
+     `.band-away`), which this effect runs after. Sol F2 on
+     docs/plans/260928b-one-block-link-component-with-a-rich-tooltip-and-a-flash-on-arrival.md. */
+  useEffect(() => {
+    if (!bandOverProse) flushPendingFlash();
+  }, [bandOverProse]);
+  // A held flash belongs to this article and must not fire on the next one.
+  useEffect(() => dropPendingFlash, []);
   const { at, jumpTo, rowOf } = useReadingPosition(sections, article.blocks, layoutKey);
 
   /**
@@ -1236,6 +1249,17 @@ export function Reader({
   const blockText = useMemo(
     () => new Map(article.blocks.map((b) => [b.id, b.text])),
     [article.blocks],
+  );
+
+  /**
+   * **What every block link's card says** — each block's text and the section
+   * it sits in, in one pass (BlockLinkCard.tsx). Memoised on the article alone,
+   * so the provider's value is the same object while the reader scrolls and
+   * nothing under it re-renders for it, `memo(TableView)` included.
+   */
+  const blockLinks = useMemo(
+    () => buildBlockLinkIndex(article.blocks, sections),
+    [article.blocks, sections],
   );
 
   /**
@@ -1987,6 +2011,10 @@ export function Reader({
   }
 
   return (
+    /* Every block link inside — panels, chips, the chat dialog through its
+       portal — reads its card and its "is this block real" answer from here.
+       BlockLinkCard.tsx. */
+    <BlockLinkProvider index={blockLinks}>
     <div
       /* `text-alone` says the article is the only thing on the page, so the
          stylesheet can centre the reading column and put the masthead over it
@@ -2713,5 +2741,6 @@ export function Reader({
           is over the bars it is measuring. ViewportProbe.tsx. */}
       <ViewportProbe laidOutWidth={windowWidth} />
     </div>
+    </BlockLinkProvider>
   );
 }
