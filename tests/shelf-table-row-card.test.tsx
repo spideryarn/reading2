@@ -378,7 +378,7 @@ describe("the row", () => {
    * sideways by ~300px. jsdom has no layout, so this pins the class that fixes
    * it; the browser check in plan 260928a is the measurement.
    */
-  it("positions the scroll box, so an sr-only label cannot widen the page", () => {
+  it("keeps the positioned scroll-box class from the browser regression", () => {
     paint();
     const box = host.querySelector("table")?.parentElement;
     expect(box?.className).toMatch(/\btw:overflow-x-auto\b/);
@@ -389,10 +389,11 @@ describe("the row", () => {
 /* ------------------------------------------------------ the Table control -- */
 
 describe("the Table control's own card", () => {
-  it("no longer promises every column, nor no blurb", () => {
+  it("describes the columns the reader chose, rather than promising every one", () => {
     const all = `${VIEW_TIPS.table.what} ${VIEW_TIPS.table.how}`;
     expect(all).not.toContain("every column at once");
     expect(all).not.toContain("No blurb");
+    expect(VIEW_TIPS.table.what).toContain("chosen to show");
   });
 
   it("does not promise a missing blurb or claim an already-present fact moves", () => {

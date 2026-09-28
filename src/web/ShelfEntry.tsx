@@ -107,9 +107,9 @@ export function SharedBadge({
  * by Comments turns it into "3 comments". Sorting by Added or Length changes
  * nothing, because the card already carries both.
  *
- * That is the "best of all worlds" Greg asked for, and it is the half a dense
- * table cannot give you: the table shows every column and no blurb; the card
- * shows the blurb and whichever column you are currently thinking about.
+ * That is the "best of all worlds" Greg asked for: the cards view keeps the
+ * blurb visible and names the current sort in each card, while the table puts
+ * comparable values in columns and offers its blurb from the title's row card.
  */
 export function ShelfCard({
   entry,

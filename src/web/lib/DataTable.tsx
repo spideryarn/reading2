@@ -74,6 +74,7 @@ import {
 } from "@tanstack/react-table";
 import { ArrowDown, ArrowUp, Check, Columns3, EyeOff } from "lucide-react";
 import { ContextMenu, DropdownMenu } from "radix-ui";
+import { ControlTip, Tooltip } from "../Tooltip.js";
 import type { NaturalDirections } from "./table-sort.js";
 
 /**
@@ -200,6 +201,26 @@ const FLUID_CELL = "tw:w-full tw:max-w-0 tw:min-w-56";
 /** Everything a non-fluid cell gets: its own width, on one line, quieter than the title. */
 const FIXED_CELL = "tw:whitespace-nowrap tw:text-xs tw:text-muted-foreground";
 
+/**
+ * **Column hiding is controlled state: pass both halves or neither.** With
+ * neither, hiding is switched off outright (`enableHiding: false`), so a page
+ * that never asked — `/admin` — gets no header menu and no Columns control. A
+ * union makes the half-controlled state a compile error rather than a table
+ * whose hiding controls silently do nothing.
+ *
+ * `columnVisibility` must keep its identity between changes, for the same
+ * reason as `sorting`: TanStack keys its visible-column memos on it. Hold it in
+ * React state, as shelf-hidden-columns.ts does. A column opts out with
+ * TanStack's `enableHiding: false`; hidden columns remain available to sorting
+ * and to the chip row because the definition array is never filtered.
+ */
+type VisibilityControl =
+  | { columnVisibility?: undefined; onColumnVisibilityChange?: undefined }
+  | {
+      columnVisibility: VisibilityState;
+      onColumnVisibilityChange: OnChangeFn<VisibilityState>;
+    };
+
 export function useSortedTable<T>({
   data,
   columns,
@@ -215,25 +236,7 @@ export function useSortedTable<T>({
   onSortingChange: OnChangeFn<SortingState>;
   /** A unique, stable id per row — and the tiebreak. See the header comment. */
   rowId: (row: T) => string;
-  /**
-   * **Column hiding, opt-in: pass both or neither.** With neither, hiding is
-   * switched off outright (`enableHiding: false`), so a page that never asked —
-   * `/admin` — gets no header menu and no Columns control, and its table is
-   * exactly what it was. The shelf passes both (plan 260928a, Decision 3).
-   *
-   * **`columnVisibility` must keep its identity between changes**, for the
-   * same reason as `sorting`: TanStack keys its visible-column memos on it, and
-   * this file's render-loop history (`autoResetPageIndex` below) is what a
-   * fresh object per render costs. Hold it in React state, as
-   * shelf-hidden-columns.ts does.
-   *
-   * A column says it cannot be hidden with TanStack's own `enableHiding:
-   * false`. The column array is never filtered: a hidden column still sorts,
-   * still has its values, and stays in the chip row.
-   */
-  columnVisibility?: VisibilityState;
-  onColumnVisibilityChange?: OnChangeFn<VisibilityState>;
-}): Table<T> {
+} & VisibilityControl): Table<T> {
   /* Sorted by id before TanStack sees it, so its `rowA.index` fallback is a
      real total order rather than whatever the server happened to send. */
   const ordered = useMemo(
@@ -440,6 +443,12 @@ const MENU_ITEM =
  */
 export function ColumnsMenu<T>({ table }: { table: Table<T> }) {
   const [open, setOpen] = useState(false);
+  const [tipOpen, setTipOpen] = useState(false);
+  /* Opening the menu dismisses its card. Keep it suppressed while Radix
+     returns focus to the trigger; otherwise closing the menu immediately opens
+     a tooltip over the control. A later pointer entry, or leaving by keyboard,
+     starts a fresh visit. */
+  const suppressTip = useRef(false);
   /* Radix toggles a dropdown on `pointerdown`, before a finger has shown
      whether it means to tap or scroll. Keep the pointer's real type here — an
      iOS finger's later click may call itself a mouse — and let the completed
@@ -458,36 +467,66 @@ export function ColumnsMenu<T>({ table }: { table: Table<T> }) {
     hidden === 0
       ? "Columns — choose which the table shows"
       : `Columns, ${hidden} hidden — choose which the table shows`;
+  const changeMenuOpen = (next: boolean) => {
+    if (next) {
+      suppressTip.current = true;
+      setTipOpen(false);
+    }
+    setOpen(next);
+  };
 
   return (
-    <DropdownMenu.Root open={open} onOpenChange={setOpen}>
-      <DropdownMenu.Trigger
-        aria-label={describe}
-        onPointerDown={(e) => {
-          const finger = e.pointerType === "touch" || e.pointerType === "pen";
-          fingerPress.current = finger ? { wasOpen: open } : null;
-          if (finger) e.preventDefault();
+    <DropdownMenu.Root open={open} onOpenChange={changeMenuOpen}>
+      <Tooltip
+        content={
+          <ControlTip
+            head="Columns"
+            what="Choose which data columns the table shows. The number on this button is how many are hidden."
+            how="Hiding changes only what the table draws: it does not change the current sort, and this menu is always the way to bring a column back."
+          />
+        }
+        placement="bottom"
+        open={tipOpen}
+        onOpenChange={(next) => {
+          if (!next) setTipOpen(false);
+          else if (!open && !suppressTip.current) setTipOpen(true);
         }}
-        onPointerCancel={() => {
-          fingerPress.current = null;
-        }}
-        onClick={(e) => {
-          const press = fingerPress.current;
-          fingerPress.current = null;
-          /* Keyboard activation (`detail === 0`) has already gone through
-             Radix's key handler and must not be toggled a second time. */
-          if (press && e.detail !== 0) setOpen(!press.wasOpen);
-        }}
-        className={chipClass(hidden > 0)}
       >
-        <Columns3 size={12} aria-hidden="true" />
-        Columns
-        {hidden > 0 && (
-          <span className="tw:rounded-full tw:bg-highlight/20 tw:px-1.5 tw:text-[10px] tw:leading-4 tw:tabular-nums">
-            {hidden}
-          </span>
-        )}
-      </DropdownMenu.Trigger>
+        <DropdownMenu.Trigger
+          aria-label={describe}
+          onPointerEnter={() => {
+            if (!open) suppressTip.current = false;
+          }}
+          onPointerDown={(e) => {
+            setTipOpen(false);
+            const finger = e.pointerType === "touch" || e.pointerType === "pen";
+            fingerPress.current = finger ? { wasOpen: open } : null;
+            if (finger) e.preventDefault();
+          }}
+          onPointerCancel={() => {
+            fingerPress.current = null;
+          }}
+          onBlur={() => {
+            if (!open) suppressTip.current = false;
+          }}
+          onClick={(e) => {
+            const press = fingerPress.current;
+            fingerPress.current = null;
+            /* Keyboard activation (`detail === 0`) has already gone through
+               Radix's key handler and must not be toggled a second time. */
+            if (press && e.detail !== 0) changeMenuOpen(!press.wasOpen);
+          }}
+          className={chipClass(hidden > 0)}
+        >
+          <Columns3 size={12} aria-hidden="true" />
+          Columns
+          {hidden > 0 && (
+            <span className="tw:rounded-full tw:bg-highlight/20 tw:px-1.5 tw:text-[10px] tw:leading-4 tw:tabular-nums">
+              {hidden}
+            </span>
+          )}
+        </DropdownMenu.Trigger>
+      </Tooltip>
       <DropdownMenu.Portal>
         <DropdownMenu.Content
           align="end"
@@ -554,14 +593,12 @@ export function DataTable<T>({
        sideways: a horizontally scrolling *page* makes everything hard to read,
        not just the table.
 
-       **`relative` is half of that promise.** `overflow` clips only the
-       descendants it contains, and an absolutely positioned one — every
-       `sr-only` label in a header or cell — is contained by its nearest
-       *positioned* ancestor, which without this was far outside the table. So
-       the Actions header's hidden label sat against the table's full intrinsic
-       width and the page scrolled ~300px sideways at 390px, with nothing
-       visible to show why. Measured in the browser, 2026-09-28 (plan 260928a);
-       the bug predates that plan and only a narrow window shows it. */
+       Tailwind's `sr-only` labels are absolutely positioned. `relative` makes
+       this wrapper their containing block, so its `overflow` clip contains
+       them too. Without it, the Actions label's static position at the table's
+       intrinsic right edge contributed to page overflow outside this box; the
+       page measured ~300px too wide at 390px. Browser measurement, 2026-09-28
+       (plan 260928a). `relative` with no z-index creates no stacking context. */
     <div className="tw:relative tw:overflow-x-auto tw:rounded-lg tw:border tw:border-border">
       <table className="tw:w-full tw:border-collapse tw:text-sm">
         <caption className="tw:sr-only">{caption}</caption>

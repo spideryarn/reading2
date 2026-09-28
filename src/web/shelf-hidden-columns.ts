@@ -17,11 +17,11 @@
  *
  * ## Everything unreadable lands on "everything shown"
  *
- * Storage that throws, a value that is not JSON, not an array, or names a
- * column we no longer have — each is read as nothing hidden (an unknown id is
- * dropped on its own, so one stale id does not cost the reader the rest). The
- * failure that matters is the other direction: a list that hid the title would
- * leave rows with nothing to click. So the list is filtered against the
+ * Storage that throws, or a value that is not JSON or not an array, is read as
+ * nothing hidden. Inside a valid array, non-string and unknown ids are dropped
+ * one by one, so one stale id does not cost the reader the rest. The failure
+ * that matters is the other direction: a list that hid the title would leave
+ * rows with nothing to click. So the list is filtered against the
  * columns that say they *can* be hidden — `enableHiding: false` on Article and
  * Actions in library-columns.tsx — and those two can never come back out of
  * here, whatever the store holds.

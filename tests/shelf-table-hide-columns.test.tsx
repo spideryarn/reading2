@@ -111,6 +111,19 @@ const shelf = {
 
 const slugOf = (e: LibraryEntry) => e.slug;
 
+/* Column visibility is controlled state: accepting only one half would compile
+   a caller whose hiding controls silently do nothing. */
+// @ts-expect-error visibility state requires its change handler
+const HALF_CONTROLLED_TABLE: Parameters<typeof useSortedTable<LibraryEntry>>[0] = {
+  data: [],
+  columns: [],
+  sorting: [],
+  onSortingChange: () => {},
+  rowId: slugOf,
+  columnVisibility: {},
+};
+void HALF_CONTROLLED_TABLE;
+
 /** Library.tsx's table, without the page — see the file comment. */
 function ShelfTable({ entries }: { entries: LibraryEntry[] }): ReactElement {
   const columns = useMemo(() => libraryColumns(shelf, NOW), []);
@@ -320,9 +333,8 @@ const ALL_HEADERS = ["Article", "Added", "Last opened", "Opens", "Comments", "Wo
 
 describe("the Columns menu", () => {
   /**
-   * **Five, not four.** The plan says "the four data columns"; the table has
-   * five — Added is one of them, and `rowCardFacts` already treats it as
-   * hideable (its exact date is in the card whatever you do).
+   * **Five data columns.** Added belongs in the menu even though its exact date
+   * is already in the card; hiding it removes the relative date from the row.
    */
   it("offers every data column and never Article or Actions", () => {
     paint();
@@ -367,6 +379,25 @@ describe("the Columns menu", () => {
     const after = columnsTrigger();
     expect(after.getAttribute("aria-label")).toMatch(/^Columns\b.*\b2 hidden\b/);
     expect(flat(after.textContent)).toMatch(/^Columns\s*2$/);
+  });
+
+  it("carries a rich card explaining what hiding does not change", async () => {
+    paint();
+    columnsTrigger().dispatchEvent(new MouseEvent("mouseenter"));
+    await wait(400);
+
+    const card = document.body.querySelector<HTMLElement>(".tooltip");
+    expect(card, "hovering Columns opened no explanatory card").not.toBeNull();
+    expect(flat(card?.textContent)).toContain("Hiding changes only what the table draws");
+    expect(flat(card?.textContent)).toContain("does not change the current sort");
+
+    pointerDown(columnsTrigger());
+    expect(menu(), "pressing Columns did not open its menu").not.toBeNull();
+    await wait(100); // the tooltip's close transition keeps an opacity-zero node for 80ms
+    expect(
+      document.body.querySelector(".tooltip"),
+      "the Columns card stayed open over its menu",
+    ).toBeNull();
   });
 
   it("waits for a finger tap instead of opening when a scroll starts on the trigger", () => {

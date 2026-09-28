@@ -27,7 +27,7 @@
  * | lib/DataTable.tsx | **reusable**: the chips, the dense table, the TanStack options that are decisions |
  * | lib/table-sort.ts | **reusable**: sorting state ⇄ URL, the collator, `sinkLast` |
  * | library-columns.tsx | what the shelf can be sorted by, and how each column draws |
- * | ShelfControls.tsx | the two controls that are the shelf's own: Unread, cards-or-table |
+ * | ShelfControls.tsx | the shelf's own filtering, column-visibility and view controls |
  * | ShelfEntry.tsx | the card, the five buttons, rename-in-place, the tooltip |
  *
  * **One sort state, two renderers**, which is the shape Greg asked for when he

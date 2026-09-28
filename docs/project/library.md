@@ -560,57 +560,46 @@ test of the arrow keys sees nothing and reads exactly like a control that has no
 
 ### The table's row card, whole titles, and columns you can hide
 
-> can we improve the Table view on the home page … Include a rich tooltip for each row that shows a
-> bunch of extra stuff about the article … Perhaps always show the full article title on each row?
-> Or at least leave a bit more space - the titles are too truncated … Maybe I can right-click a
-> column to hide it? but then I'd need a way to reveal it again. Or maybe they always all re-show on
-> re-opening the table?
+> Oh, and while we're at it, can we improve the Table view on the home page (perhaps delegate to a
+> separate agent):
+> - Include a rich tooltip for each row that shows a bunch of extra stuff about the article. see
+>   @docs/project/tooltips.md
+> - Perhaps always show the full article title on each row? Or at least leave a bit more space - the
+>   titles are too truncated
+> - Maybe I can right-click a column to hide it? but then I'd need a way to reveal it again. Or maybe
+>   they always all re-show on re-opening the table?
 >
 > — Greg, 2026-09-28
 
-Three changes, all in [260928a](../plans/260928a-shelf-table-view-row-card-full-titles-hide-columns.md).
+The choices and the alternatives passed over are recorded in
+[260928a](../plans/260928a-shelf-table-view-row-card-full-titles-hide-columns.md).
 
 **Titles wrap, whole, and so does the byline line under them.** Wrapping rather than a wider
-column, because a wider column only moves the cut: at desktop widths the fixed columns and the
-action buttons take most of the row, and at phone width the Article column is at its floor whatever
-we do. A long title costs its own row some height and nothing else.
+column, because a wider column only moves the cut; a clamp still cuts the titles this change is for.
 
 **Pointing at a title — or tabbing to it — opens a card, and the card is defined by subtraction**,
 the rule [Structure's card](tooltips.md#structures-card-which-is-defined-by-subtraction) set: it
-carries only what the row is not already showing. That is the gist (the cards view's blurb, which
-the table otherwise gives up), the exact date and time behind "3 days ago", the size in parts,
-sections and blocks, what has been built, whether you renamed it, and what "Shared" means. The facts
-are computed by `rowCardFacts` in [`library-columns.tsx`](../../src/web/library-columns.tsx), so
-they are tested as data. The Added cell's old `Details` card left the table with it — it repeated
-the row twice over — and stays on the cards view. The table body carries no `title` attributes. No
-card on touch: a tap on a title opens the article, as Structure's rows decided for the same reason.
-The action buttons join the table's one `TooltipGroup`, so a title card and an action card are never
-open together.
+carries only what the current row is not showing. [`rowCardFacts`](../../src/web/library-columns.tsx)
+is the source of truth for those facts, including values whose columns are hidden. The Added cell's
+old `Details` card stays on the cards view; in the table it repeated the row. The title remains the
+one-tap route into the article on touch rather than becoming a reveal-then-commit control.
 
-**Any of the five data columns can be hidden** — Added, Last opened, Opens, Comments, Words; not the
-Article column and not the actions. Two routes: a **Columns** menu beside the cards/table switch,
-shown in table view only, which ticks columns on and off and carries a count of how many are hidden;
-and a **right-click on a header** (a long-press on a touchscreen), which offers *Hide "Words"*.
-Columns is the route that works on an iPad and from a keyboard; the right-click is the shortcut Greg
-asked for, and it is a one-item menu rather than an instant hide so a stray click costs nothing.
-Focus moves to the neighbouring header afterwards, because the one you right-clicked is gone.
+**The five data columns can be hidden; Article and Actions cannot.** The title is the row's identity
+and route into the article, while Actions are controls rather than a value a card can preserve.
+[`libraryColumns`](../../src/web/library-columns.tsx) owns that distinction. The **Columns** menu is
+the discoverable keyboard-and-touch route; a header's right-click or long-press menu is the shortcut.
+The shortcut opens a one-item menu rather than hiding instantly, and returns focus to a surviving
+header after the chosen one disappears.
 
-A hidden column's value **moves into the row card**, so hiding never makes a fact unreachable. The
-choice is **remembered in this browser** ([`shelf-hidden-columns.ts`](../../src/web/shelf-hidden-columns.ts),
-every storage access wrapped, junk read as nothing hidden) rather than re-shown on every visit:
-somebody who hides Opens hides it because they never want it, and the Columns count is what stops a
-hidden column being a trap. Not in the URL — it is a preference about a screen, not a view worth
-sending to someone. Hiding the column you are sorted by leaves the sort alone; the chips still say
-what it is.
+A hidden column's value remains available in the row card, and hiding the active sort column leaves
+the sort and its chip alone. The choice is **remembered in this browser**, rather than re-shown on
+every visit or put in the URL: it is a preference about this screen, not a view worth sending to
+someone. The count on Columns keeps that preference discoverable. The guarded persistence and its
+handling of malformed or obsolete values live in
+[`shelf-hidden-columns.ts`](../../src/web/shelf-hidden-columns.ts).
 
 Hiding is **opt-in** in [`DataTable`](../../src/web/lib/DataTable.tsx): a page that passes no
 visibility state — `/admin`'s — gets no menus at all.
-
-Two touch details that a mouse never shows, both found by GPT Sol reading Radix's source: a menu
-button opens on `pointerdown`, so a finger starting a scroll on Columns would open it (the completed
-tap decides now, as on the card's "⋯"); and lifting the finger after a header long-press also
-clicked the sort button inside the header, re-sorting the shelf under the menu (that one click is
-swallowed now).
 
 ### Both views show a first few, and then ask
 

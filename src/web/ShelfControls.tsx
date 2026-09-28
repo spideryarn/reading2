@@ -12,13 +12,12 @@
  * the order — the pattern Raindrop and Notion both settled on, where a view is
  * a way of painting one list rather than a list of its own. The cards keep the
  * blurb and say what they are sorted by (ShelfEntry.tsx § the note); the table
- * moves the blurb into a card on each title and shows a column per key, any of
- * which the reader can hide (plan 260928a). Neither is a fallback for the other.
+ * offers the blurb from a card on each title and lets the reader hide any of
+ * its five data columns (plan 260928a). Neither is a fallback for the other.
  *
  * The chips themselves are `SortChips` from lib/DataTable.tsx and know nothing
  * about the library — they are built from the table's own columns. What is left
- * here is the two controls that are the shelf's own: which half of it to show,
- * and which way to draw it.
+ * here is the shelf's own filtering, column-visibility and view controls.
  *
  * Chips rather than a dropdown, deliberately: six keys fit on a line at this
  * width, one click beats two, and the current order is readable without opening
@@ -63,36 +62,38 @@ export function ShelfControls({
           pushes the page sideways rather than taking a second line (plan
           260928a, Sol P-8). `justify-end` so a wrapped control stays at the
           right, under the others. */}
-      <div className="tw:ml-auto tw:flex tw:flex-wrap tw:items-center tw:justify-end tw:gap-2">
-        <Chip
-          pressed={filter === "unread"}
-          /* Every accessible name here **begins with the visible text**, so
-             that somebody driving the page by voice can say what they can see —
-             `aria-label` replaces the button's own words outright, and WCAG
-             2.5.3 Label in Name is what that fails. The first version of this
-             one said "Showing only articles you have never opened" and never
-             contained the word "Unread". Caught by a cross-family review,
-             2026-08-26. */
-          describe={
-            filter === "unread"
-              ? "Unread — showing only articles you have never opened. Activate to show all."
-              : "Unread — show only articles you have never opened"
-          }
-          onClick={() => onFilter(filter === "unread" ? "all" : "unread")}
-        >
-          <EyeOff size={12} />
-          Unread
-        </Chip>
+      <TooltipGroup delay={{ open: 240, close: 90 }} timeoutMs={400}>
+        <div className="tw:ml-auto tw:flex tw:flex-wrap tw:items-center tw:justify-end tw:gap-2">
+          <Chip
+            pressed={filter === "unread"}
+            /* Every accessible name here **begins with the visible text**, so
+               that somebody driving the page by voice can say what they can see —
+               `aria-label` replaces the button's own words outright, and WCAG
+               2.5.3 Label in Name is what that fails. The first version of this
+               one said "Showing only articles you have never opened" and never
+               contained the word "Unread". Caught by a cross-family review,
+               2026-08-26. */
+            describe={
+              filter === "unread"
+                ? "Unread — showing only articles you have never opened. Activate to show all."
+                : "Unread — show only articles you have never opened"
+            }
+            onClick={() => onFilter(filter === "unread" ? "all" : "unread")}
+          >
+            <EyeOff size={12} />
+            Unread
+          </Chip>
 
-        {/* **Columns, in table view only** — the cards have no columns to
-            hide. Beside the switch, because which columns the table shows is a
-            question about how the shelf is drawn, the same as the switch.
-            The way back from a right-click hide, and the route that works on a
-            finger (lib/DataTable.tsx § ColumnsMenu; plan 260928a, Decision 3). */}
-        {view === "table" && <ColumnsMenu table={table} />}
+          {/* **Columns, in table view only** — the cards have no columns to
+              hide. Beside the switch, because which columns the table shows is a
+              question about how the shelf is drawn, the same as the switch.
+              The way back from a right-click hide, and the route that works on a
+              finger (lib/DataTable.tsx § ColumnsMenu; plan 260928a, Decision 3). */}
+          {view === "table" && <ColumnsMenu table={table} />}
 
-        <ViewSwitch view={view} onView={onView} />
-      </div>
+          <ViewSwitch view={view} onView={onView} />
+        </div>
+      </TooltipGroup>
     </div>
   );
 }
@@ -179,24 +180,22 @@ function ViewSwitch({ view, onView }: { view: ShelfView; onView: (v: ShelfView) 
        `rounded-sm` inside `rounded-md` is still not a guess: an inner radius is
        the outer one minus the padding between them, 8 − 2 = 6px, which is what
        `radius-sm` resolves to. */
-    <TooltipGroup delay={{ open: 240, close: 90 }} timeoutMs={400}>
-      <RadioGroup.Root
-        value={view}
-        onValueChange={(v) => onView(v as ShelfView)}
-        /* Horizontal, so ← and → drive it rather than ↑ and ↓ — the arrows that
-           match the way the two sit on screen. */
-        orientation="horizontal"
-        aria-label="How the shelf is shown"
-        className="tw:flex tw:h-8 tw:items-center tw:gap-0.5 tw:rounded-md tw:border tw:border-border tw:p-px"
-      >
-        <ViewOption value="cards" tip={VIEW_TIPS.cards} current={view}>
-          <Rows3 size={14} />
-        </ViewOption>
-        <ViewOption value="table" tip={VIEW_TIPS.table} current={view}>
-          <TableIcon size={14} />
-        </ViewOption>
-      </RadioGroup.Root>
-    </TooltipGroup>
+    <RadioGroup.Root
+      value={view}
+      onValueChange={(v) => onView(v as ShelfView)}
+      /* Horizontal, so ← and → drive it rather than ↑ and ↓ — the arrows that
+         match the way the two sit on screen. */
+      orientation="horizontal"
+      aria-label="How the shelf is shown"
+      className="tw:flex tw:h-8 tw:items-center tw:gap-0.5 tw:rounded-md tw:border tw:border-border tw:p-px"
+    >
+      <ViewOption value="cards" tip={VIEW_TIPS.cards} current={view}>
+        <Rows3 size={14} />
+      </ViewOption>
+      <ViewOption value="table" tip={VIEW_TIPS.table} current={view}>
+        <TableIcon size={14} />
+      </ViewOption>
+    </RadioGroup.Root>
   );
 }
 
@@ -261,12 +260,7 @@ function ViewOption({
  *
  * **The Table card was rewritten on 2026-09-28**, because two of its promises
  * stopped being true in plan 260928a: it said "every column at once" and "No
- * blurb", and the table now puts the blurb in a card on each title and lets
- * columns be hidden. What pressing tells you (rows and columns) stays first;
- * the two things pressing does not — where the blurb went, and that a hidden
- * column is remembered here and not lost — are the second paragraph (Sol P-2).
- * The Columns control and the right-click are stage 2 of that plan, which
- * lands in the same push; if either is renamed, this sentence names it.
+ * blurb". It now says where the blurb went and what hiding leaves unchanged.
  * Exported for tests/shelf-table-row-card.test.tsx.
  */
 export const VIEW_TIPS = {
@@ -277,7 +271,7 @@ export const VIEW_TIPS = {
   },
   table: {
     head: "Table",
-    what: "One row per article, with a column each for when it was added, when you last opened it, how many times, how many comments, and how long it is.",
+    what: "One compact row per article, with its title and the data columns you have chosen to show.",
     how: "The blurb is not on the row: point at a title, or tab to it. The card shows its blurb when there is one, plus the date and time behind each date the row has. A column you hide, from Columns or by right-clicking its header, stays available in that card. Both views share one sort, so switching keeps your place in the order.",
   },
 } as const;
