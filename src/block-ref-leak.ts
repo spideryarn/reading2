@@ -1,12 +1,13 @@
 /**
  * **A passage named by our handle for it, in words a reader sees.**
  *
- * A model that is shown the article as numbered, id-tagged blocks
- * (`articleWithIds`, src/article-prompt.ts) sometimes names a passage by that
- * machinery instead of by what it says: *"you can see it again later, in block
- * 39"*, *"Block [spya-dfqq59] gives the publication details"*. The number is
- * one the reader has never seen, and an id becomes a chip showing six random
- * characters, so the sentence points at nothing they can recognise.
+ * Until 2026-09-28, `articleWithIds` (src/article-prompt.ts) showed the article
+ * as numbered, id-tagged blocks; the hierarchy prompts still do. A model shown
+ * that machinery sometimes names a passage by it instead of by what it says:
+ * *"you can see it again later, in block 39"*, *"Block [spya-dfqq59] gives the
+ * publication details"*. The number is one the reader has never seen, and an
+ * id becomes a chip showing six random characters, so the sentence points at
+ * nothing they can recognise.
  * docs/plans/260928c-block-refs-shown-to-readers.md.
  *
  * This is the one definition of that leak, used by the tests and by the log
@@ -18,8 +19,8 @@
  * so it is a screen for a log line, never a guard that rewrites an answer.
  */
 
-/** "block 39", "blocks 27–28", "block #3" — an ordinal only the prompt carried. */
-const BLOCK_NUMBER = /\bblocks?\s+#?\d+/gi;
+/** "block 39", "block [39]", "blocks 27–28", "block #3" — a prompt ordinal. */
+const BLOCK_NUMBER = /\bblocks?\s+(?:#\s*\d+|\[\s*\d+\s*\]|\d+)/gi;
 
 /**
  * "block spya-dfqq59", "Block [spya-dfqq59]", "the next block, spya-f6sbgx" —

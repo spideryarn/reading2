@@ -51,8 +51,8 @@ rendered as plain text. **Nothing reads the `[i]` back**: every answer is keyed 
    article just above the blocks: the ids are for these instructions, not for the reader; put one
    only where asked for an id or a citation; never name a passage as "block 12" or
    "block spya-k3m9qt"; say what it says. It travels with the ids, so every prompt shown them, now
-   and later, is told, and no prompt shown none is. The hierarchy and expansion SYSTEMs, which
-   render their own blocks, carry one sentence saying the same. **Explain**, whose answer is shown
+   and later, is told, and no prompt shown none is. The hierarchy and expansion prompts, which render their own numbered blocks, are **not** told
+   yet: see *Hierarchy: left for the next `toc` bump* below. **Explain**, whose answer is shown
    as plain text, is told a block id there reaches the reader as a meaningless code, and its user
    message no longer says "inside block spya-…" a second time after the position line.
 3. **Count it in production.** `blockRefLeaks(text)` (`src/block-ref-leak.ts`): the word *block*
@@ -70,7 +70,7 @@ rendered as plain text. **Nothing reads the `[i]` back**: every answer is keyed 
 - **P1, stamps.** A change to the plain-words core reaches seventeen stamped prompts, and the guide
   says to bump them all. *Taken by moving the rule*: it no longer touches `plainWords()`, so arc,
   glossary, link summaries, quotes, trajectory and tweets do not change by a byte. The stamps of the
-  ten id-bearing stamped stages are still not bumped — see below.
+  eight id-bearing stamped stages are still not bumped — see below.
 - **P2, wording.** "The reader sees no id" is false in chat, where an id is a link, and would fight
   chat's citation rule. *Taken*: the note says where an id may go rather than that none is seen.
   And Explain's duplicate "inside block …" is gone.
@@ -81,7 +81,7 @@ rendered as plain text. **Nothing reads the `[i]` back**: every answer is keyed 
 
 - **The plain-words core as the rule's home** — the first version of this plan. It reaches every
   prompt, including the many shown no ids, and moves seventeen stamps for a rule that concerns
-  ten. The note beside the ids reaches exactly the prompts that need it.
+  eight. The note beside the ids reaches exactly the prompts that need it.
 - **A guard that rewrites the answer** (strip "block 39", or turn it into a link by mapping the
   index back to an id). Stripping leaves a broken sentence ("you can see it again later, in ,
   where…"); mapping trusts the model to have counted with our index. Both would run in twenty
@@ -91,8 +91,8 @@ rendered as plain text. **Nothing reads the `[i]` back**: every answer is keyed 
 
 ## Stamps: not bumped, deliberately
 
-The id-bearing stamped stages — faq, ideas, debate, citations, sketch, illustrated, quiz, timeline,
-toc, expand — now send different bytes. A bump regenerates each of them for every article on every
+The id-bearing stamped stages that now send different bytes — faq, ideas, debate, citations,
+sketch, illustrated, quiz, timeline (toc and expand do not; see below). A bump regenerates each of them for every article on every
 shelf the next time it is opened: a real paid run in production, to fix a leak seen in a few per
 cent of answers and in none of the stored artefacts the local scan could find (every hit was in
 chat). New generations get the note; old ones keep what they had, which is the same output
@@ -100,12 +100,22 @@ contract. **For Greg:** if you would rather pay for a clean sweep, it is one com
 bumps. The fingerprints do not move either way: `articleWithIdsFingerprint` hashes the blocks, not
 the rendered string, so the change retires warm prompt caches once and stales nothing.
 
+## Hierarchy: left for the next `toc` bump
+
+The first build gave the hierarchy and expansion SYSTEMs a sentence too. The full suite went red on
+two pins that exist for exactly this — `tests/hierarchy-structure-request-parity.test.ts` pins the
+bytes, and `tests/hierarchy-prompt-hoist.test.ts` pins the checkpoint key — and every earlier
+SYSTEM change there has gone out with a `toc/N` bump, which regenerates every tree. No hierarchy
+output has been seen to leak (the gists and questions of the local corpus have none), so the
+sentence came out again. **For Greg, or whoever next bumps `toc`**: add "The numbers and ids are
+for you, not for the reader: a title, gist or question never names a passage as "block 12" or by
+its id." to both SYSTEMs in the same bump.
+
 ## Tests
 
 - `tests/block-ref-leak.test.ts` — the detector finds every leak in the table above, verbatim, and
   passes "Section 4", "[10]", "building blocks" and a bracketed citation. `articleWithIds` has no
-  `[n]` ordinal and carries `BLOCK_ID_NOTE`; the hierarchy and expansion SYSTEMs and Explain's
-  carry their sentences. Red before the fix.
+  `[n]` ordinal and carries `BLOCK_ID_NOTE`; Explain's SYSTEM carries its sentence. Red before the fix.
 - `tests/block-ref-leak-log.test.ts` — chat and Explain, with a stubbed model answering "in block
   39" or "Block spya-… then defines", log `blockRefLeaks: 1`, and `0` for a clean answer. Red
   before the fix (the field did not exist).

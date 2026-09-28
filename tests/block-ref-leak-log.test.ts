@@ -58,11 +58,11 @@ function says(text: string) {
   });
 }
 
-/** The count on the line that carries it, which must exist. */
-function logged(): unknown {
+/** The finished-answer line carrying the leak counters, which must exist. */
+function logged(): Record<string, unknown> {
   const line = infos.find((f) => "blockRefLeaks" in f);
   if (!line) throw new Error(`no log line carried blockRefLeaks: ${JSON.stringify(infos)}`);
-  return line.blockRefLeaks;
+  return line;
 }
 
 beforeEach(() => {
@@ -94,24 +94,24 @@ describe("the finished-answer line counts leaked block references", () => {
   it("chat: one leak", async () => {
     vi.stubGlobal("fetch", says("You can see it again later, in block 39 [spya-k3m9qt]."));
     await chat();
-    expect(logged()).toBe(1);
+    expect(logged().blockRefLeaks).toBe(1);
   });
 
   it("chat: none", async () => {
     vi.stubGlobal("fetch", says("He says so where he defines alpha [spya-k3m9qt]."));
     await chat();
-    expect(logged()).toBe(0);
+    expect(logged().blockRefLeaks).toBe(0);
   });
 
   it("explain: one leak", async () => {
     vi.stubGlobal("fetch", says("Block spya-aaaaaa then defines beta."));
     await explained();
-    expect(logged()).toBe(1);
+    expect(logged()).toMatchObject({ blockRefLeaks: 1, rawIds: 1 });
   });
 
   it("explain: none", async () => {
     vi.stubGlobal("fetch", says("It is defined in the next paragraph."));
     await explained();
-    expect(logged()).toBe(0);
+    expect(logged()).toMatchObject({ blockRefLeaks: 0, rawIds: 0 });
   });
 });

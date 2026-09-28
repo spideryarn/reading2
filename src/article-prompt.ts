@@ -125,13 +125,16 @@ function head(meta: Meta, identity: ArticleIdentity): string {
  * It lives in the article rather than in each prompt so that every prompt that
  * is shown ids, including one written next year, is told in the same breath,
  * and a prompt that is shown none (the glossary, the arc) is not. The
- * hierarchy prompts render their own blocks (src/hierarchy-prompt.ts) and carry
- * the same sentence in their SYSTEM.
+ * hierarchy prompts render their own numbered blocks (src/hierarchy-prompt.ts)
+ * and are not told yet: their request bytes are pinned to `toc/9`, and a
+ * sentence there is a version bump that regenerates every tree. No hierarchy
+ * leak has been seen; add it at the next bump —
+ * docs/plans/260928c-block-refs-shown-to-readers.md.
  */
 export const BLOCK_ID_NOTE = `Each block below starts with its id. The ids are for these instructions, not
 for the reader: put one only where you are asked for an id or a citation, and
 never name a passage in your own words as "block 12" or "block spya-k3m9qt".
-Say what the passage says instead: "where he defines mutual information".`;
+Say what the passage says instead: "where mutual information is defined".`;
 
 /**
  * The article for prompts whose answers cite blocks by id — search, explain and

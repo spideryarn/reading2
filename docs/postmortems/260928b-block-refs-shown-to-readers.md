@@ -44,9 +44,10 @@ resolve, and the leak is in the prose. Each handle needs its audience said out l
 - `articleWithIds` no longer prints `[i]`; a number the model never sees it cannot quote.
 - `BLOCK_ID_NOTE`, printed in the article just above the blocks, says the ids are for the
   instructions, not the reader, and gives the bad and good wording. It travels with the ids, so
-  every prompt shown them — now twenty, and any added later — is told, and no prompt shown none is.
-  The hierarchy prompts, which render their own numbered blocks and keep the numbers, carry the
-  same sentence in their SYSTEM. Explain is told its answer is plain text, so any id is a leak.
+  every `articleWithIds` prompt — seventeen today, and any added later — is told, and no prompt shown none is.
+  The hierarchy prompts, which number their own blocks, are pinned to `toc/9` and are not told
+  yet; the plan leaves the sentence for the next bump. Explain is told any id in its plain-text
+  answer is a leak.
 - Chat and Explain log `blockRefLeaks` (and Explain `rawIds`) on their finished-answer line, so
   whether the rule holds is a number, not a hope.
 

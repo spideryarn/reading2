@@ -16,8 +16,6 @@ import { describe, expect, it } from "vitest";
 import { BLOCK_ID_NOTE, articleWithIds } from "../src/article-prompt.js";
 import { blockRefLeaks, rawIds } from "../src/block-ref-leak.js";
 import { buildExplainMessages } from "../src/explain.js";
-import { EXPAND_SYSTEM } from "../src/hierarchy-expand.js";
-import { structureRequest } from "../src/hierarchy.js";
 import type { Block, Meta } from "../src/types.js";
 
 describe("blockRefLeaks", () => {
@@ -40,6 +38,7 @@ describe("blockRefLeaks", () => {
     ["This sentence is the hinge before block spya-da9tvt, where he explicitly draws", ["block spya-da9tvt"]],
     ["Block [spya-dfqq59] just gives the publication details: London : W. Tweedie", ["Block [spya-dfqq59"]],
     ["as the article says in Block #3.", ["Block #3"]],
+    ["as the article says in block [39].", ["block [39]"]],
     [
       "the actual definitions come next, in the next block, spya-f6sbgx and spya-p4pyuy",
       ["block, spya-f6sbgx"],
@@ -90,13 +89,6 @@ describe("what the prompts are told", () => {
     ] as unknown as Block[]);
     expect(article).toContain(BLOCK_ID_NOTE);
     expect(blockRefLeaks(BLOCK_ID_NOTE).length).toBe(2);
-  });
-
-  it("the hierarchy prompts, which render their own numbered blocks, say it too", () => {
-    const body = [{ id: "spya-aaaaaa", tag: "p", text: "One.", html: "<p>One.</p>", gistable: true }];
-    for (const system of [structureRequest(body as unknown as Block[]).system, EXPAND_SYSTEM]) {
-      expect(system).toMatch(/never names a passage as "block 12" or by its id/);
-    }
   });
 
   it("Explain, whose answer is shown as plain text, is told never to write an id", () => {

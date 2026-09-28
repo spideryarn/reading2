@@ -92,7 +92,8 @@ ${PROFILE_RULES}`;
 - **Block ids and numbers are not words for a reader either, and that rule lives with the ids.**
   `BLOCK_ID_NOTE` in [`src/article-prompt.ts`](../../src/article-prompt.ts) is printed in every
   `articleWithIds` article, so a prompt shown ids is told not to write "block 39" or "block
-  spya-…" in prose, and a prompt shown none is not. The hierarchy prompts say it in their SYSTEM.
+  spya-…" in prose, and a prompt shown none is not. The hierarchy prompts, which number their
+  own blocks, do not say it yet: their bytes are pinned to `toc/9`, so it waits for the next bump.
   Why it is not in the core above:
   [260928c](../plans/260928c-block-refs-shown-to-readers.md).
 - **No words for a reader, no rule.** A prompt whose output is a verdict, a URL, ids or a verbatim
