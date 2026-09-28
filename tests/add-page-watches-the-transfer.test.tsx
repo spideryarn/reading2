@@ -40,6 +40,7 @@ const queue: UseJobs = {
   add: async () => null,
   addUpload: async () => null,
   run: async () => null,
+  reset: async () => null,
   cancel: async () => {},
   retry: async () => {},
   forget: async () => {},

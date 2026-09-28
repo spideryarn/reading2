@@ -27,7 +27,7 @@
  * | lib/DataTable.tsx | **reusable**: the chips, the dense table, the TanStack options that are decisions |
  * | lib/table-sort.ts | **reusable**: sorting state ⇄ URL, the collator, `sinkLast` |
  * | library-columns.tsx | what the shelf can be sorted by, and how each column draws |
- * | ShelfControls.tsx | the two controls that are the shelf's own: Unread, cards-or-table |
+ * | ShelfControls.tsx | the shelf's own filtering, column-visibility and view controls |
  * | ShelfEntry.tsx | the card, the five buttons, rename-in-place, the tooltip |
  *
  * **One sort state, two renderers**, which is the shape Greg asked for when he
@@ -63,18 +63,24 @@ import { capRows } from "./lib/row-cap.js";
 import { isAllNatural, sinkLast, sortingFromUrl, sortingToUrl } from "./lib/table-sort.js";
 import { Link } from "./Link.js";
 import { useLogoAnimation } from "./logo-animation.js";
-import { fold, foldWithMap, libraryHitHref, queryTerms } from "./library-hits.js";
+import { foldWithMap, libraryHitHref, queryTerms } from "./library-hits.js";
 import {
+  libraryArchivedParam,
   libraryByParam,
   libraryQueryParam,
   libraryShowParam,
+  libraryTopicsParam,
   libraryViewParam,
   sortDirParam,
 } from "./params.js";
+import { narrowShelf, topicCountsForVisible } from "./shelf-narrow.js";
+import { ShelfTerms } from "./ShelfTerms.js";
+import { useShelfTopics } from "./useShelfTerms.js";
 import { pageTitle, useDocumentTitle } from "./page-title.js";
 import { ADMIN_HREF, PROFILE_HREF } from "./router.js";
 import { ShelfCard } from "./ShelfEntry.js";
 import { ShelfControls, type ShelfFilter } from "./ShelfControls.js";
+import { useShelfHiddenColumns } from "./shelf-hidden-columns.js";
 import { SiteFooter } from "./SiteFooter.js";
 import { Tooltip, TooltipGroup } from "./Tooltip.js";
 import { useJobs } from "./useJobs.js";
@@ -122,6 +128,9 @@ export function Library({
   const [rawDir, setDir] = useQueryState("dir", sortDirParam);
   const [view, setView] = useQueryState("view", libraryViewParam);
   const [show, setShow] = useQueryState("show", libraryShowParam);
+  /* The topics row and the archive switch — docs/project/shelf-terms.md. */
+  const [requestedTopics, setTopics] = useQueryState("topics", libraryTopicsParam);
+  const [archivedOn, setArchivedOn] = useQueryState("archived", libraryArchivedParam);
 
   /**
    * Whether the shelf is showing every row or only the first `SHELF_ROW_CAP`.
@@ -200,18 +209,65 @@ export function Library({
     [by, rawDir, natural],
   );
 
+  /* The topics: which exist (from the server, over active — or active and
+     archived with `?archived=1`), and which of the ones in the URL apply. A
+     key applies only once topics have loaded, and one missing from a settled
+     answer is dropped from the URL with `replace` — useShelfTerms.ts. */
+  const dropTopics = useCallback(
+    (kept: string[]) => void setTopics(kept.length ? kept : null, { history: "replace" }),
+    [setTopics],
+  );
+  const shelfTopics = useShelfTopics({
+    articles,
+    archivedList: shelf.archived,
+    archivedOn,
+    requested: requestedTopics,
+    drop: dropTopics,
+  });
+  const { terms, inArchive, topics, members } = shelfTopics;
+
   /* Matcher one: the shelf itself, filtered in the browser, then narrowed by
-     the Unread chip. The *order* is no longer ours — TanStack owns it below —
-     but which rows exist still is.
+     the Unread chip, then by every chosen topic — one function, in one order,
+     for this list and for the archived one (shelf-narrow.ts). The *order* is no
+     longer ours — TanStack owns it below — but which rows exist still is.
 
      `useMemo` because this runs on every keystroke over every article, and
      because the identity of the array it returns is what decides whether the
      whole table is rebuilt. */
-  const rows = useMemo(() => {
-    if (!articles) return null;
-    const found = filterEntries(articles, query);
-    return show === "unread" ? found.filter((a) => a.opens === 0) : found;
-  }, [articles, query, show]);
+  const rows = useMemo(
+    () => (articles ? narrowShelf(articles, { query, unread: show === "unread", topics: members }) : null),
+    [articles, query, show, members],
+  );
+  /* The archived half, narrowed by the same function — search and Unread
+     included — whenever it is in scope. `null` while it is out of scope or
+     still loading. */
+  const archivedRows = useMemo(
+    () => (inArchive ? narrowShelf(inArchive, { query, unread: show === "unread", topics: members }) : null),
+    [inArchive, query, show, members],
+  );
+  /* The expensive search has already run in the two row memos. Count from
+     their result instead of repeating it over every article on each keypress. */
+  const counts = useMemo(
+    () =>
+      topicCountsForVisible(
+        [...(rows ?? []), ...(archivedRows ?? [])].map((entry) => entry.slug),
+        terms.data?.terms ?? [],
+      ),
+    [rows, archivedRows, terms.data?.terms],
+  );
+
+  /* Toggled against what the URL asks for rather than what applies, so a key
+     the server has not reached yet (`pending > 0`) is not lost by pressing a
+     different chip. */
+  const toggleTopic = useCallback(
+    (key: string) =>
+      pushView(() => {
+        const was = requestedTopics;
+        const next = was.includes(key) ? was.filter((k) => k !== key) : [...was, key];
+        void setTopics(next.length ? next : null);
+      }),
+    [pushView, requestedTopics, setTopics],
+  );
 
   /**
    * The sorting state, written straight back to the address bar.
@@ -244,12 +300,18 @@ export function Library({
     [sorting, natural, pushView, setBy, setDir],
   );
 
+  /* The columns the reader has hidden in table view, remembered in this
+     browser — shelf-hidden-columns.ts; plan 260928a, Decision 3. */
+  const [columnVisibility, onColumnVisibilityChange] = useShelfHiddenColumns(columns);
+
   const table = useSortedTable({
     data: rows ?? EMPTY,
     columns,
     sorting,
     onSortingChange,
     rowId: slugOf,
+    columnVisibility,
+    onColumnVisibilityChange,
   });
 
   /* The fixture last, in every order and both directions. It is a committed
@@ -291,8 +353,13 @@ export function Library({
   const searching = query.trim().length > 0;
   const total = articles?.length ?? 0;
   const showing = rows?.length ?? 0;
+  /* The archived half's share, when it is in scope and loaded; zeros otherwise. */
+  const archivedTotal = inArchive?.length ?? 0;
+  const archivedShowing = archivedRows?.length ?? 0;
   // Said only when something is actually being hidden. "12 of 12" is noise.
-  const narrowed = (searching || show === "unread") && showing !== total;
+  const narrowed =
+    (searching || show === "unread" || topics.length > 0) &&
+    (showing !== total || archivedShowing !== archivedTotal);
 
   /* The slugs the Unread chip lets through, whatever the search box says — the
      passages are the answer to the search, so narrowing them by the search
@@ -547,9 +614,30 @@ export function Library({
         />
       )}
 
+      {/* Between the controls and the count, so the count is visibly the
+          result of everything above it. Only once there is a shelf and an
+          answer: a failed request draws nothing (useShelfTerms.ts). */}
+      {total + archivedTotal > 0 && terms.data && (
+        <ShelfTerms
+          data={terms.data}
+          counts={counts}
+          selected={topics}
+          onToggle={toggleTopic}
+          onClear={() => pushView(() => void setTopics(null))}
+          titleOf={shelfTopics.titleOf}
+          inScope={shelfTopics.inScope}
+          archived={archivedOn}
+        />
+      )}
+
+      {/* The same count the chips use: a chosen chip's number is this line's
+          first number (shelf-narrow.ts § topicCounts). With the archive in
+          scope, both halves are counted and each is named. */}
       {narrowed && (
         <p className="tw:mb-3 tw:mt-0 tw:text-xs tw:text-muted-foreground">
-          {showing} of {total} {total === 1 ? "article" : "articles"}
+          {showing + archivedShowing} of {total + archivedTotal}{" "}
+          {total + archivedTotal === 1 ? "article" : "articles"}
+          {inArchive && ` (${showing} active + ${archivedShowing} archived)`}
         </p>
       )}
 
@@ -566,7 +654,9 @@ export function Library({
         </p>
       )}
       {showing === 0 && total > 0 && (
-        <p className="tw:text-sm tw:text-muted-foreground">{nothingLeft(query, show)}</p>
+        <p className="tw:text-sm tw:text-muted-foreground">
+          {nothingLeft(query, show, topics.length > 0)}
+        </p>
       )}
 
       {/* One list, two renderers. The sort, the filter and the search are all
@@ -601,7 +691,15 @@ export function Library({
       {sorted.length > 0 && (
         <>
           {view === "table" ? (
-            <DataTable table={table} rows={capped.shown} caption="Your articles" />
+            /* **One `TooltipGroup` for the whole table**, so running the pointer
+               down the titles opens each row card instantly after the first,
+               and so the row's action buttons join it rather than nesting a
+               group of their own (`Actions` § `inTooltipGroup`) — two groups
+               could hold a title's card and an action's open together. The
+               actions' own delays, which they had before. Plan 260928a. */
+            <TooltipGroup delay={{ open: 240, close: 90 }} timeoutMs={400}>
+              <DataTable table={table} rows={capped.shown} caption="Your articles" />
+            </TooltipGroup>
           ) : (
             <ul className="tw:m-0 tw:flex tw:list-none tw:flex-col tw:gap-3 tw:p-0">
               {capped.shown.map((row) => (
@@ -631,7 +729,17 @@ export function Library({
           something you have already read" is the useful half of that answer. */}
       {searching && <Passages state={passages} query={query} only={unread} />}
 
-      {!searching && <Archived shelf={shelf} />}
+      {/* Drawn during a search too, since 2026-09-28: the archived list is now
+          narrowed by the same search, Unread and topics as the shelf, so there
+          is an honest answer to show (docs/project/shelf-terms.md). The
+          passages above still search active articles only. */}
+      <Archived
+        shelf={shelf}
+        open={archivedOn}
+        onToggle={() => pushView(() => void setArchivedOn(archivedOn ? null : true))}
+        rows={archivedRows}
+      />
+
 
       {/* Greg's own example of a signed-in page that should carry one
           (2026-09-03). The shelf has a bottom, and it is where a reader who has
@@ -661,8 +769,14 @@ export function Library({
  * otherwise pressing Unread on a shelf you have read all of looks like the
  * search box has broken.
  */
-function nothingLeft(query: string, show: ShelfFilter): string {
+function nothingLeft(query: string, show: ShelfFilter, topics: boolean): string {
   const q = query.trim();
+  /* Named first when it is on: of the three narrowings, a topic chosen from a
+     link is the one a reader is least likely to remember is there. */
+  if (topics) {
+    if (q || show === "unread") return "Nothing on the shelf matches everything chosen above.";
+    return "No article on the shelf has every topic chosen.";
+  }
   if (q && show === "unread") return `No unopened article matches “${q}”.`;
   if (q) return `No article's title, author or blurb matches “${q}”.`;
   return "You have opened all of them.";
@@ -732,22 +846,8 @@ function ShowAllRows({ total, onShowAll }: { total: number; onShowAll: () => voi
 
 /* ------------------------------------------------------------- searching -- */
 
-/**
- * The cards whose visible words contain every term typed.
- *
- * AND across terms, substring within one — so "seth noema" finds the article by
- * that author on that site, and "consc" finds "consciousness" while you are
- * still typing it. Deliberately over exactly the four fields a card renders:
- * matching something invisible would look like a bug from the outside.
- */
-function filterEntries(articles: LibraryEntry[], query: string): LibraryEntry[] {
-  const terms = queryTerms(query);
-  if (terms.length === 0) return articles;
-  return articles.filter((a) => {
-    const hay = fold([a.title, a.byline, a.siteName, a.gist].filter(Boolean).join(" "));
-    return terms.every((t) => hay.includes(t));
-  });
-}
+/* The cards' own matcher — `filterEntries` — lives in shelf-narrow.ts since
+   2026-09-28, so the archived list is searched by the same rule. */
 
 function SearchBox({ value, onChange }: { value: string; onChange: (v: string) => void }) {
   return (
@@ -999,11 +1099,29 @@ function marked(text: string, query: string) {
  *
  * Closed by default, and it does not fetch until opened: most sessions never
  * archive anything, and a request per homepage load to say "nothing here" is a
- * request nobody asked for. Hidden entirely while searching, because the search
- * deliberately does not look in here.
+ * request nobody asked for.
+ *
+ * **Open or closed is `?archived=1` since 2026-09-28**, not `useState`, because
+ * the topics row reads it too: with the archive open, topics are chosen over
+ * active and archived articles, and this list is narrowed by the same search,
+ * Unread and topics as the shelf (shelf-narrow.ts). That is also why it is no
+ * longer hidden during a search — until then the search did not look in here,
+ * so the list could only have been wrong; now it is the search's answer for
+ * the archive. The passages under the cards still search active articles only.
+ * docs/project/shelf-terms.md.
  */
-function Archived({ shelf }: { shelf: ReturnType<typeof useShelf> }) {
-  const [open, setOpen] = useState(false);
+function Archived({
+  shelf,
+  open,
+  onToggle,
+  rows,
+}: {
+  shelf: ReturnType<typeof useShelf>;
+  open: boolean;
+  onToggle: () => void;
+  /** `shelf.archived` narrowed, or `null` while closed or still loading. */
+  rows: LibraryEntry[] | null;
+}) {
   const { archived, loadArchived } = shelf;
 
   /* An effect rather than a call in the click handler, because the list is also
@@ -1025,7 +1143,7 @@ function Archived({ shelf }: { shelf: ReturnType<typeof useShelf> }) {
           label right. */}
       <button
         type="button"
-        onClick={() => setOpen((v) => !v)}
+        onClick={onToggle}
         aria-expanded={open}
         className="tw:-ml-2 tw:inline-flex tw:h-7 tw:items-center tw:gap-1.5 tw:rounded-md tw:bg-transparent tw:px-2 tw:text-xs tw:text-muted-foreground tw:transition-colors tw:hover:bg-highlight/10 tw:hover:text-foreground"
       >
@@ -1042,9 +1160,17 @@ function Archived({ shelf }: { shelf: ReturnType<typeof useShelf> }) {
       {open && archived?.length === 0 && (
         <p className="tw:mt-2 tw:text-sm tw:text-muted-foreground">Nothing archived.</p>
       )}
-      {open && !!archived?.length && (
-        <ul className="tw:m-0 tw:mt-3 tw:flex tw:list-none tw:flex-col tw:gap-2 tw:p-0">
-          {archived.map((a) => (
+      {open && !!archived?.length && rows?.length === 0 && (
+        <p className="tw:mt-2 tw:text-sm tw:text-muted-foreground">
+          Nothing archived matches what is chosen above.
+        </p>
+      )}
+      {open && !!rows?.length && (
+        <ul
+          aria-label="Archived articles"
+          className="tw:m-0 tw:mt-3 tw:flex tw:list-none tw:flex-col tw:gap-2 tw:p-0"
+        >
+          {rows.map((a) => (
             <li
               key={a.slug}
               className="tw:flex tw:items-center tw:gap-3 tw:rounded-md tw:border tw:border-border tw:px-4 tw:py-2 tw:text-sm"

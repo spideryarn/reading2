@@ -32,6 +32,7 @@ import {
   ASSETS_BUDGET_MS,
   ASSETS_VERSION,
   assetsInputHash,
+  PDF_FIGURE_RECOVERY_POLICY,
   collectAssets,
   describeStorageFailure,
   GATE,
@@ -1344,6 +1345,18 @@ describe("assetsInputHash", () => {
    * first line this test would pass against a hash of the whole block list, and
    * without the second it would pass against a hash of a constant.
    */
+  it("stales a PDF article, and only a PDF article, when the figure policy changes", () => {
+    /* `pdf-figures/5` is the located route
+       (docs/plans/260924e-a-pdf-figure-paired-to-the-wrong-caption.md § Stage 2):
+       an article stored under `/4` has figures a model could now place, and
+       must read stale rather than current. A web article's stamp must not move
+       with it. Both values pinned, so the next bump is a decision somebody
+       makes here rather than a side effect. GPT Sol, stage 2 plan review, 9. */
+    expect(PDF_FIGURE_RECOVERY_POLICY).toBe("pdf-figures/5");
+    expect(assetsInputHash([figure(3)])).toBe("fdabd9d7621e139c");
+    expect(assetsInputHash([img("https://cdn.test/a.png")])).toBe("440878edf3cb0169");
+  });
+
   it("notices a figure marker arriving, which hashBlocks does not", () => {
     const before = [block("<figure><figcaption>Fig 3</figcaption></figure>")];
     const after = [figure(3)];

@@ -872,3 +872,65 @@ Greg: "Make it permanent" (the new status line) → session `statusline-permanen
 time we change how this box works, we want it to be permanent" → written into
 hetzner-remote-server-box.md § A change to the box is a change to a file. AGENTS.md's matching line
 still says "ask Greg"; its rewording is shown to him before and after, per edit-important-docs.
+
+### 2026-09-28 — Greg answers the figure, re-process and report 44 questions; sweep doc re-pinned
+
+Greg: *"For now let's just do it for figures that fail"* → pdf-figure-fs7zvp builds stage 2 (Gemini 3
+Flash locates a figure the caption check refuses; no check of recovered figures). *"if you can
+reprocess the Olah article that would be great. If not, I can do it myself"* → the box has no
+production access, so the session writes the steps for Greg to re-run the figure step himself after
+the deploy that carries stage 2. His third answer (*"if you're confident this makes sense then go
+for it. If in doubt, explain more"*) is ambiguous between the sweep-doc re-pin and report 44; I am
+confident on both, so both proceed: fix-dev-test-reds re-pins feedback-reports.md to a33eafae
+(covers 02a63b7b only), and fb44 extends the plain-words rule to chat, Explain and Check the web and
+keeps the plain depth-1 line with the word limit raised to about 30. Pressed 1 twice on fb44's
+memory-write prompts (its own memory file and index, outside the working directory).
+
+### 2026-09-28 — plain words for every prompt, and a prompting guide
+
+Greg: *"we want to make this plainer/simpler language rule common across *all* prompts that generate
+text of any kind … maybe we need a prompting-guide.md signposted from AGENTS.md … perhaps (a) is more
+important (especially for summaries, explanations), though perhaps (b) plays more of a rule in
+headings? Not sure. Use your judgment."* → fb44 widened: one shared rule every generating prompt draws
+on, the plain-vs-faithful call made per kind of output (Fable + Sol on the plan), and
+`docs/project/prompting-guide.md`. The AGENTS.md pointer comes back to Greg as a before/after.
+
+### 2026-09-28 — reset-and-regenerate button in Metadata mode
+
+Greg asked for a new agent: *"a reset-and-regenerate button in the lower part of Metadata mode
+(perhaps the default is just to reset as if it had just been imported for the first time, and
+there's an option to regenerate any extra stuff that had been generated for the article with a
+queue)"* → session `reset-regenerate-metadata`. Defaults set as assumptions pending Greg: owner and
+admin see it; a plain confirm; behind the experimental switch if cost or data risk is non-trivial;
+old revision kept. Hard line in the brief: reader-written data survives, and it stops and asks
+before any design that deletes it.
+
+### 2026-09-28 — shelf topics and the Table view, two sessions
+
+Greg asked for keyword/clustering filters on his shelf (overlapping subsets, near-full coverage,
+no LLM by default, rich tooltips, active/archived switch, Sonnet web research, Sol input and review)
+→ `shelf-topics`. His academic bulk-import idea goes to the same session as a judgement: build it
+only if a clean low-complexity version exists, otherwise a write-up for later. The Table view (row
+tooltips, fuller titles, hiding columns) → `shelf-table-view`. Both touch the home page, so each is
+told about the other. Defaults set as assumptions: column hiding needs a non-right-click route
+(iPad), remembered per viewer in browser storage.
+
+### 2026-09-28 — model roles: latest-family names, Fable retired
+
+Greg: *"Stop using Fable. Let's just rely on Opus 5.5 for anything advanced in the Claude family"*;
+latest GPT Sol is the cross-family default, latest Astra only for complicated or critical work,
+Sonnet for web research, latest Luna for lighter work; no version numbers → session
+`model-roles-latest` (engineering-manager.md, AGENTS.md and related instruction docs; history left
+alone; re-pins a pinned doc only if it edits it). Sol 6 still needs the API key, which Greg declined
+on 09-24, so "latest Sol" resolves to the subscription's Sol for now. The five running sessions were
+told to use Opus wherever their brief said Fable.
+
+### 2026-09-28 — mode title, Structure columns, Trajectory mode; Sol stays 5.6
+
+Three more Greg requests delegated: `mode-title-placement` (the 3Q mode-name card covers content;
+try bottom-left or better), `structure-two-columns` (switch to two columns later, give them room,
+make both faces look alike), and `trajectory-mode` (his dictated brief saved verbatim into a vision
+doc `docs/project/trajectory.md`; v1 built autonomously, v2 only if confident; questions gathered in
+the doc; default behind the experimental switch). Greg: *"5.6 is fine for now, but ideally write
+things in a way that it'll automatically use the latest"* → model-roles-latest makes `--model sol`
+resolve to the newest Sol the subscription serves, never the paid key.

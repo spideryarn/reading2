@@ -56,19 +56,19 @@ asked. In a shared tree, name your files on both commands —
 plan itself is wrong — that the stage costs more than it's worth, that a smaller version gets most
 of the value, or that the whole thing should be reframed or dropped. Reframing, reducing or
 cancelling is a legitimate conclusion, and reaching it is your job: you are running the work, not
-executing a ticket. When the call is genuinely balanced, ask Fable to arbitrate before you commit to
-it. When it changes what the user gets, it is a product call — say so and ask. Either way, write the
+executing a ticket. When the call is genuinely balanced, ask Opus (a subagent with `model: "opus"`) to arbitrate
+before you commit to it. When it changes what the user gets, it is a product call — say so and ask. Either way, write the
 reasoning into the plan doc, including the version you decided not to build.
 
 **Two rounds per stage, then you decide.** The cadence above is right; what goes wrong is that
 nothing ends it. Refusing costs a reviewer nothing and P2s are infinite, so chains here have run to
 round seven and round twelve without converging. After two rounds, settle it yourself and write
 *"Sol still objects to X; overruled because Y"* in the plan doc — an overruled P0 or P1 goes to
-Fable or Greg first, not straight past.
+Opus or Greg first, not straight past.
 
 After round two, **discovery closes** — but any established P0 or P1 whose final fix was not in the
 round-two snapshot still gets a narrowly scoped check *of that fix*, and if it comes back still
-open, settle or overrule it through Fable or Greg before landing. This does not reopen general
+open, settle or overrule it through Opus or Greg before landing. This does not reopen general
 discovery.
 
 Say "whose fix was not in the snapshot" rather than "newly found": the sequence that gets missed is
@@ -98,11 +98,20 @@ plan review stays read-only (`--sandbox review`) — there is nothing to fix but
 
 ## Delegate
 
-The orchestrator should do **little of the implementation**. Hand the main work to Opus subagents,
-and the low-level work — research, repo-wide trawls, browser automation, running tests and reading
-logs — to Sonnet. GPT Luna via [codex-cli-as-subagent.md](codex-cli-as-subagent.md) is the cheap tier
-for the same low-level and token-heavy work, and it's a different model family, so the variety is
-free. Those are defaults, not rules; use your judgment about what a given piece of work needs.
+The orchestrator should do **little of the implementation**. Always the latest version of each
+family — never pin a version number here:
+
+- **Opus** — the main work, and anything advanced on the Claude side, arbitration included.
+- **Sonnet** — web research, and the low-level work: repo-wide trawls, browser automation, running
+  tests and reading logs.
+- **GPT Sol** — the default for cross-family input and review (above).
+- **GPT Astra** — only for really complicated or critical work.
+- **GPT Luna** — anything lighter; capable and cheap, and a different family, so the variety is free.
+
+The GPT models run through [codex-cli-as-subagent.md](codex-cli-as-subagent.md). Only a GPT model is
+the cross-family check; an Opus second opinion is a different mind, not a different family. Greg,
+2026-09-28: *"Stop using Fable. Let's just rely on Opus 5.5 for anything advanced in the Claude
+family."* Those are defaults, not rules; use your judgment about what a given piece of work needs.
 
 Keep for yourself: the plan, the stage boundaries, the briefs, reading the diffs, deciding what the
 reviews were right about, and the commits.

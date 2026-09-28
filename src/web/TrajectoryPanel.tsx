@@ -1,0 +1,324 @@
+/**
+ * The Trajectory, in the band between the spine and the prose: a route through
+ * the article's own Quotes, walked at three depths. The stops are read in the
+ * prose, where they sit; this band only says where to stand and in what order.
+ *
+ * docs/plans/260928a-trajectory-mode-skim-a-paper-at-increasing-depth.md
+ * § The mode (client) is the design; docs/project/trajectory.md the vision.
+ * Three things to know before changing anything here:
+ *
+ * ## The role line is shown in full on the current row only
+ *
+ * Every other row shows where its stop is — the section path, read from the
+ * tree — and not its role. At Most there can be thirty rows, and thirty
+ * generated lines would be a summary a reader could read *instead of* the
+ * paper, which is vision.md's anti-goal exactly. The role names what the
+ * passage does, never what it found (src/trajectory.ts), and one at a time.
+ *
+ * ## The head is pinned
+ *
+ * `‹ Stop k of N ›` and the depth control sit in `ModeSurface`'s head, which is
+ * outside the scroller (`.band-head` is `flex: none`), so they stay put while
+ * the list scrolls.
+ *
+ * ## The depth control is three buttons, not a slider
+ *
+ * There are exactly three positions, and three buttons are easier to hit on an
+ * iPad (Sol and Opus agreed). Only the depths that add stops are drawn
+ * (`offeredDepths`). Each is a real `<button>` and its own tab stop, with
+ * `aria-pressed` — keyboard.md's rule that arrow keys belong to the article.
+ */
+import { ChevronLeft, ChevronRight, RotateCw, Route, TriangleAlert } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import type { UseTrajectory } from "./useTrajectory.js";
+import type { TrajectoryView } from "./modes/trajectory/TrajectoryMode.js";
+import { JobProgress } from "./JobProgress.js";
+import { ModeSurface } from "./ModeSurface.js";
+import { useRenderCount } from "./perf.js";
+
+/** One row of the list. Built by `useTrajectoryMode`, drawn here. */
+export interface TrajectoryRow {
+  quoteId: string;
+  /** Its number on this pass, from 1. */
+  n: number;
+  /** The section path, `Results › Robustness`, or `null` if the tree does not cover it. */
+  place: string | null;
+  /** What the passage does. Drawn on the current row only. */
+  role: string | null;
+  /** From a shallower pass — already seen on the way round. Dimmed. */
+  seen: boolean;
+  current: boolean;
+  /** Its quote is no longer in the Quotes. */
+  missing: boolean;
+}
+
+/**
+ * **The honest promise**, pinned under the list. The first half is what the
+ * mode can prove — the passages are the Quotes' own, checked against the
+ * article by that step; the second is what it cannot.
+ */
+export function trajectoryPromise(profiled: boolean): string {
+  return profiled
+    ? "The passages are the article's own words, chosen by Quotes. The order and the roles are the model's reading, shaped by your profile."
+    : "The passages are the article's own words, chosen by Quotes. The order and the roles are the model's reading, for somebody reading the piece for the first time.";
+}
+
+/**
+ * At Most, how much of the Quotes the route walks — *"every one of the
+ * article's N quotes"*, or *"M of N"*. `null` below Most, or with no Quotes.
+ */
+export function coverageNote(atMost: number, quotes: number): string | null {
+  if (quotes === 0) return null;
+  if (atMost >= quotes) return `This pass stops at every one of the article's ${quotes} quotes.`;
+  return `This pass stops at ${atMost} of the article's ${quotes} quotes.`;
+}
+
+/**
+ * **Why the route is out of date, in one sentence — or `null`.** One banner, the
+ * most serious first: stale can mean a stop's passage has gone; the other two
+ * only that we would plan it differently now.
+ */
+export function outdatedBy(
+  owner: Pick<UseTrajectory, "stale" | "notOnRoute" | "profileChanged" | "outdated">,
+): string | null {
+  if (owner.stale) {
+    const n = owner.notOnRoute;
+    return n > 0
+      ? `The Quotes have changed since this route was planned, and ${n} ${n === 1 ? "is" : "are"} not on it.`
+      : "The Quotes have changed since this route was planned.";
+  }
+  if (owner.profileChanged) return "This route was planned before your profile said what it says now.";
+  if (owner.outdated) return "This route was planned by an older version of the prompt.";
+  return null;
+}
+
+/**
+ * **The pinned head**: the stepper, and the depth control when there is more
+ * than one depth to offer.
+ */
+function RouteHead({ view, total }: { view: TrajectoryView; total: number }) {
+  return (
+    <div className="traj-head">
+      <div className="traj-stepper">
+        <button
+          type="button"
+          className="traj-arrow"
+          aria-label="Previous stop"
+          disabled={view.position <= 1}
+          onClick={() => view.onStep(-1)}
+        >
+          <ChevronLeft size={16} />
+        </button>
+        <span className="traj-count" aria-live="polite">
+          Stop {view.position} of {total}
+        </span>
+        <button
+          type="button"
+          className="traj-arrow"
+          aria-label="Next stop"
+          disabled={view.position >= total}
+          onClick={() => view.onStep(1)}
+        >
+          <ChevronRight size={16} />
+        </button>
+      </div>
+      {view.depths.length > 1 && (
+        <fieldset className="traj-depths" aria-label="How deep">
+          {view.depths.map((d) => (
+            <button
+              key={d.depth}
+              type="button"
+              className={`traj-depth${d.depth === view.depth ? " on" : ""}`}
+              aria-pressed={d.depth === view.depth}
+              onClick={() => {
+                if (d.depth !== view.depth) view.onDepth(d.depth);
+              }}
+            >
+              <span>{d.label}</span>
+              <span className="traj-depth-n">{d.count}</span>
+            </button>
+          ))}
+        </fieldset>
+      )}
+    </div>
+  );
+}
+
+interface Props {
+  owner: UseTrajectory;
+  view: TrajectoryView;
+  /** How many quotes the article has now — for the coverage note at Most. */
+  quoteCount: number;
+}
+
+export function TrajectoryPanel({ owner, view, quoteCount }: Props) {
+  useRenderCount("TrajectoryPanel");
+  const route = owner.trajectory;
+  const ready = route !== null && owner.status === "ready";
+  const total = view.rows.length;
+  const deepest = view.depths.at(-1)?.depth ?? null;
+  const atMost = ready && view.depth !== null && view.depth === deepest && view.depth === 3;
+
+  /**
+   * @param again whether this is the button beside a route already there. The
+   *   empty state's must be `ensure`, the automatic run's own request, or it
+   *   buys a second model call — useIdeas.ts § `ensure`.
+   */
+  const run = (label: string, again = false) => (
+    <JobProgress
+      job={owner.job}
+      starting={owner.starting}
+      failed={owner.failed}
+      stalled={owner.stalled}
+      onRun={() => (again ? owner.regenerate() : owner.ensure())}
+      onCancel={owner.cancel}
+      label={label}
+      step="trajectory"
+      icon={<Route size={13} />}
+      runningLabel="Planning the route…"
+    />
+  );
+
+  return (
+    <ModeSurface
+      label="Trajectory"
+      feature="gloss trajectory"
+      /* **A head that stays put**: the stepper and the depth control, pinned
+         above the scroller. Present only when there is a route to step — no
+         empty row over the loading sentence (new-mode.md § the header row). */
+      head={ready && total > 0 && view.depth !== null ? <RouteHead view={view} total={total} /> : null}
+      foot={
+        ready && total > 0 ? (
+          <div className="traj-foot">
+            <p className="traj-note">{trajectoryPromise(route.profileHash !== null)}</p>
+            {atMost && coverageNote(total, quoteCount) && (
+              <p className="traj-note">{coverageNote(total, quoteCount)}</p>
+            )}
+          </div>
+        ) : null
+      }
+    >
+      {owner.error && (
+        <div className="traj-read-error">
+          <p className="gloss-error" role="alert">
+            {owner.error}
+          </p>
+          <Button type="button" variant="outline" size="sm" onClick={() => void owner.retryRead()}>
+            <RotateCw size={13} />
+            Try again
+          </Button>
+        </div>
+      )}
+
+      {owner.status === "loading" && <p className="gloss-quiet">Looking for the route…</p>}
+
+      {owner.status === "none" && (
+        <div className="gloss-empty">
+          <p>Nobody has planned a route through this piece yet.</p>
+          <p className="gloss-hint">
+            A short model pass puts the article's Quotes in an order, and takes a few seconds — longer
+            if the Quotes have to be chosen first. Written once and kept.
+          </p>
+          {run("Plan the route")}
+        </div>
+      )}
+
+      {ready && (
+        <>
+          {outdatedBy(owner) && (
+            <div className="gloss-stale">
+              <p>
+                <TriangleAlert size={13} />
+                {outdatedBy(owner)}
+              </p>
+              {run("Plan it again", true)}
+            </div>
+          )}
+
+          {total === 0 && <p className="gloss-quiet">This route has no stops.</p>}
+
+          {total > 0 && (
+            <div className="tl-scroll">
+              <ol className="traj-list">
+                {view.rows.map((row, index) => {
+                  const repeatedPlace =
+                    row.place !== null && row.place === view.rows[index - 1]?.place;
+                  return (
+                    <li
+                      key={row.quoteId}
+                      className={`traj-row${row.current ? " current" : ""}${row.seen ? " seen" : ""}`}
+                      data-stop={row.quoteId}
+                    >
+                      <button
+                        type="button"
+                        className="traj-go"
+                        aria-current={row.current ? "step" : undefined}
+                        disabled={row.missing}
+                        onClick={() => view.onRow(row.quoteId)}
+                      >
+                        <span className="traj-n">{row.n}</span>
+                        <span className="traj-what">
+                          <span className="traj-place">
+                            {repeatedPlace ? (
+                              <>
+                                <span className="traj-place-repeat" aria-hidden="true">
+                                  〃
+                                </span>
+                                <span className="sr-only">{row.place}</span>
+                              </>
+                            ) : (
+                              (row.place ?? "—")
+                            )}
+                          </span>
+                          {row.current && row.role && <span className="traj-role">{row.role}</span>}
+                        </span>
+                      </button>
+                    </li>
+                  );
+                })}
+              </ol>
+            </div>
+          )}
+        </>
+      )}
+    </ModeSurface>
+  );
+}
+
+/**
+ * **The door after the current stop's block** — "Next stop ›", or at the end
+ * of a pass "Go round again — More ›". It is there because on an iPad the
+ * reader's eyes and thumb are in the prose after reading a stop, and on a
+ * narrow window the band has stepped aside altogether (F4).
+ *
+ * Drawn by `TableView` after the block's prose, outside `.prose`, on the path
+ * `PdfFigureNotes` already uses (TableView.tsx § After the prose) — so it
+ * shifts no comment anchor.
+ */
+export function TrajectoryDoor({
+  label,
+  onPress,
+  onRoute,
+}: {
+  label: string | null;
+  onPress(): void;
+  /** Bring the band back — offered only while it has stepped aside. */
+  onRoute: (() => void) | null;
+}) {
+  if (label === null && onRoute === null) return null;
+  return (
+    <div className="traj-door">
+      {onRoute && (
+        <button type="button" className="traj-door-btn quiet" onClick={onRoute}>
+          <Route size={14} />
+          All stops
+        </button>
+      )}
+      {label && (
+        <button type="button" className="traj-door-btn" onClick={onPress}>
+          {label}
+        </button>
+      )}
+    </div>
+  );
+}

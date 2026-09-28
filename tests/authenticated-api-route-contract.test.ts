@@ -389,6 +389,13 @@ const EXPECTED_AUTH_ROUTES: ExpectedRoute[] = [
     witnesses: ["/api/library/search"],
   },
   {
+    /* The shelf's filter topics, 260928a — the same overlap with `shelfEntry`
+       as `search`, separated by the method. */
+    match: { kind: "literal", path: "/api/library/terms" },
+    methods: ["GET"],
+    witnesses: ["/api/library/terms"],
+  },
+  {
     /* **`DELETE` joined `PATCH` on 2026-09-06**, and they are one matcher with
        two arms rather than two matchers: the same `shelfEntry` regex, branching
        on the method. The permanent delete —
@@ -443,6 +450,11 @@ const EXPECTED_AUTH_ROUTES: ExpectedRoute[] = [
     match: { kind: "regex", source: "^\\/api\\/article\\/([\\w.%-]+)\\/visibility$", flags: "" },
     methods: ["PUT"],
     witnesses: ["/api/article/w1/visibility"],
+  },
+  {
+    match: { kind: "regex", source: "^\\/api\\/article\\/([\\w.%-]+)\\/reset$", flags: "" },
+    methods: ["POST"],
+    witnesses: ["/api/article/w1/reset"],
   },
   {
     match: { kind: "regex", source: "^\\/api\\/metadata\\/([\\w.%-]+)$", flags: "" },
@@ -504,6 +516,11 @@ const EXPECTED_AUTH_ROUTES: ExpectedRoute[] = [
     match: { kind: "regex", source: "^\\/api\\/faq\\/([\\w.%-]+)$", flags: "" },
     methods: ["GET"],
     witnesses: ["/api/faq/w1"],
+  },
+  {
+    match: { kind: "regex", source: "^\\/api\\/trajectory\\/([\\w.%-]+)$", flags: "" },
+    methods: ["GET"],
+    witnesses: ["/api/trajectory/w1"],
   },
   {
     match: { kind: "regex", source: "^\\/api\\/debate\\/([\\w.%-]+)$", flags: "" },
@@ -785,8 +802,8 @@ const EXPECTED_AUTH_ROUTES: ExpectedRoute[] = [
 ];
 
 /** Loud failure controls. Never the oracle — see the header. */
-const EXPECTED_MATCHER_COUNT = 71;
-const EXPECTED_GUARD_COUNT = 88;
+const EXPECTED_MATCHER_COUNT = 74;
+const EXPECTED_GUARD_COUNT = 91;
 
 /* ------------------------------------------------------------- the source read */
 
@@ -1734,6 +1751,8 @@ const OVERLAP_PROBES = [
   /* GET is the library search; PATCH is the shelf entry for a slug that happens
      to read `search`. */
   "/api/library/search",
+  /* GET is the shelf's topics; PATCH is the shelf entry for a slug `terms`. */
+  "/api/library/terms",
   /* POST is the live tool; PATCH and DELETE are the thread whose id happens to
      read `live-tool`. */
   "/api/chat/w1/live-tool",
@@ -1899,6 +1918,7 @@ describe("the authenticated API's route contract", () => {
         "GET regex /^\\/api\\/admin\\/feedback\\/([\\w-]+)\\/([\\w-]+)\\/screenshot$/",
         "GET literal /api/library",
         "GET literal /api/library/search",
+        "GET literal /api/library/terms",
         "PATCH regex /^\\/api\\/library\\/([\\w.%-]+)$/",
         "DELETE regex /^\\/api\\/library\\/([\\w.%-]+)$/",
         "GET literal /api/models",
@@ -1914,6 +1934,8 @@ describe("the authenticated API's route contract", () => {
         "GET literal /api/link-preview",
         "GET literal /api/link-summary",
         "PUT regex /^\\/api\\/article\\/([\\w.%-]+)\\/visibility$/",
+        // reset and regenerate, 260928a — beside visibility, the other article sub-resource
+        "POST regex /^\\/api\\/article\\/([\\w.%-]+)\\/reset$/",
         "GET regex /^\\/api\\/source\\/([\\w.%-]+)$/",
         "GET regex /^\\/api\\/asset\\/([\\w.%-]+)\\/([0-9a-f]{64})\\.(png|jpeg|gif)$/",
         "GET regex /^\\/api\\/export\\/([\\w.%-]+)$/",
@@ -1930,6 +1952,7 @@ describe("the authenticated API's route contract", () => {
         "GET regex /^\\/api\\/timeline\\/([\\w.%-]+)$/",
         "GET regex /^\\/api\\/quiz\\/([\\w.%-]+)$/",
         "GET regex /^\\/api\\/faq\\/([\\w.%-]+)$/",
+        "GET regex /^\\/api\\/trajectory\\/([\\w.%-]+)$/",
         "GET regex /^\\/api\\/debate\\/([\\w.%-]+)$/",
         "GET regex /^\\/api\\/citations\\/([\\w.%-]+)$/",
         "POST regex /^\\/api\\/citations\\/([\\w.%-]+)\\/([\\w.%-]+)\\/find$/",

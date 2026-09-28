@@ -304,8 +304,10 @@ describe("what a visitor is told, mode by mode", () => {
        src/web/visitor.ts § POLICY.citations. */
     /* `faq` joined on 2026-09-16, owners-only for the same reason —
        src/web/visitor.ts § POLICY.faq. */
+    /* `trajectory` joined on 2026-09-28, owners-only for the same reason —
+       src/web/visitor.ts § POLICY.trajectory. */
     expect([...markedModes(EVERYTHING_BUILT).keys()].sort()).toEqual(
-      ["chat", "citations", "debate", "faq", "referee", "remember"].sort(),
+      ["chat", "citations", "debate", "faq", "referee", "remember", "trajectory"].sort(),
     );
     /* And one at a time, so a mode reading the wrong flag shows up. */
     for (const built of ["glossary", "ideas", "quotes", "timeline"] as const) {

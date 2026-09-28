@@ -193,6 +193,7 @@ function toJob(row: Row): Job {
     ...(row.url !== null && { url: row.url }),
     ...(row.title !== null && { title: row.title }),
     ...(row.profile !== null && { profile: row.profile }),
+    ...(row.reset !== null && { reset: row.reset }),
     ...(row.error !== null && { error: row.error }),
     ...(row.failureKind !== null && { failureKind: row.failureKind as FailureKind }),
     ...(row.startedAt !== null && { startedAt: row.startedAt.toISOString() }),
@@ -585,10 +586,21 @@ async function enqueueIn(
          charge for it. src/db/schema.ts § `ingest_events`, *Provenance lives on
          the job*. Null for everything that spends no quota. */
       ingestEventId: ticket.ingestEventId ?? null,
-      createdAt: new Date(job.createdAt),
+      /* A reset is single-flight only while an earlier reset is active. Use the
+         database clock at the INSERT for it, not the application timestamp
+         minted before this transaction waited for the article lock: an earlier
+         reset can publish, enqueue its regenerations and become terminal while
+         this insert is waiting. Reusing the pre-lock timestamp would then put
+         the new reset ahead of those regenerations and recreate the very
+         successor crossing the single-flight key prevents. `clock_timestamp()`
+         advances while the statement waits; `now()` would retain the
+         transaction-start version of the same bug. Ordinary jobs keep their
+         existing semantics. */
+      createdAt: job.reset ? sql`clock_timestamp()` : new Date(job.createdAt),
       url: job.url ?? null,
       title: job.title ?? null,
       profile: job.profile ?? null,
+      reset: job.reset ?? null,
       uploadId: job.upload?.id ?? null,
       uploadFilename: job.upload?.filename ?? null,
     })

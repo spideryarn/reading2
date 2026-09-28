@@ -34,6 +34,8 @@ import { useQuoteMarks } from "./useQuoteMarks.js";
 import { DebateBand } from "../modes/debate/DebateMode.js";
 import { CitationsBand } from "../modes/citations/CitationsMode.js";
 import { FaqBand } from "../modes/faq/FaqMode.js";
+import { TrajectoryBand, type TrajectoryControl } from "../modes/trajectory/TrajectoryMode.js";
+import { TrajectoryDoor } from "../TrajectoryPanel.js";
 import { GlossaryBand, VisitorGlossaryBand } from "../modes/glossary/GlossaryMode.js";
 import { SearchBand, VisitorSearchBand } from "../modes/search/SearchMode.js";
 import { StructureBand } from "../modes/structure/StructureMode.js";
@@ -353,6 +355,25 @@ export function Reader({
    */
   const bandOpen = inMode && mode !== "plain";
   /**
+   * **The band has stepped aside from the prose** — on a narrow window, where
+   * it lies over the whole article (`band-covers`), after the reader chooses a
+   * Trajectory stop. The band stays mounted, so its stop, its marks and the
+   * door in the prose all survive; only its paint goes (narrow-window.css §
+   * a band that has stepped aside). The door carries the stepping from there
+   * (TrajectoryPanel.tsx § TrajectoryDoor), and offers the band back.
+   *
+   * Component state, not the URL: it is about this window at this moment, and
+   * a reload or a shared link should open the band. Cleared whenever the mode
+   * changes and on any press of the Dock — pressing the mode you are in is
+   * how you ask for its band back. The plan's F4.
+   */
+  const [bandAway, setBandAway] = useState(false);
+  const bandStepsAside = useCallback(() => setBandAway(true), []);
+  // biome-ignore lint/correctness/useExhaustiveDependencies: `mode` is the trigger, not an input — a new mode brings its band back.
+  useEffect(() => {
+    setBandAway(false);
+  }, [mode]);
+  /**
    * **The mode the reader has just pressed, for `ModeHerald` to name.**
    *
    * Set in the Dock's `onMode` below and nowhere else, because that is the one
@@ -431,10 +452,14 @@ export function Reader({
         showText: proseOn,
         chosen: plainCols,
         modeBand: bandOpen,
+        /* Structure's two columns want a band of their own width where they
+           fit (layout.ts § `structureColumnsBand`); every other band is the
+           ordinary one. docs/plans/260928a-structure-two-columns-readable.md. */
+        bandShape: mode === "structure" ? "structure" : "standard",
         rootFontPx,
         showSpine,
       }),
-    [windowWidth, rootFontPx, gistDepths, geometry.leafDepth, proseOn, plainCols, bandOpen, showSpine],
+    [windowWidth, rootFontPx, gistDepths, geometry.leafDepth, proseOn, plainCols, bandOpen, showSpine, mode],
   );
 
   /**
@@ -477,7 +502,8 @@ export function Reader({
    * § What counts as a second.
    */
   const setReadingCounting = owner?.readingTime.setCounting;
-  const proseOnScreen = proseOn && !(bandOpen && fit.modeW === 0);
+  /* A band that has stepped aside (`bandAway`) is not lying over anything. */
+  const proseOnScreen = proseOn && !(bandOpen && fit.modeW === 0 && !bandAway);
   useEffect(() => {
     setReadingCounting?.(proseOnScreen);
   }, [setReadingCounting, proseOnScreen]);
@@ -939,6 +965,17 @@ export function Reader({
      docs/plans/260902f-make-referee-mode-understandable.md. */
   const [refereeFound, setRefereeFound] = useState<Found[]>([]);
   const [openRefereeKey, setOpenRefereeKey] = useState<string | null>(null);
+  /* **A sixth, for Trajectory's current stop**, for the reason the others have
+     their own. It holds one passage — the quote the reader is standing on —
+     and `proseFound` sees that it is the quote's own mark and draws it once.
+     docs/plans/260928a-trajectory-mode-skim-a-paper-at-increasing-depth.md
+     § Prose (F9). */
+  const [trajectoryFound, setTrajectoryFound] = useState<Found[]>([]);
+  const [openTrajectoryKey, setOpenTrajectoryKey] = useState<string | null>(null);
+  /* **And the band's handle**, for the two things outside it that step the
+     route: ← / → (`useArrowNav` below) and the door after the stop's block
+     (`TableView`'s `afterBlock`). `TrajectoryControl` says why it is stable. */
+  const [trajectoryControl, setTrajectoryControl] = useState<TrajectoryControl | null>(null);
 
   /* Two maps, memoised separately from everything else on the page. `found`
      changes on every keystroke in words mode, and recomputing every comment's
@@ -967,6 +1004,7 @@ export function Reader({
     timeline: { found: timelineFound, openKey: openTimelineKey },
     referee: { found: refereeFound, openKey: openRefereeKey },
     search: { found, openKey: openHit },
+    trajectory: { found: trajectoryFound, openKey: openTrajectoryKey },
   });
   /**
    * **The marks under the phrases are the open mode's passages PLUS the
@@ -1042,12 +1080,38 @@ export function Reader({
     () => navPlan(geometry, fit.columns, proseOn),
     [geometry, fit.columns, proseOn],
   );
+  /* **← / → step Trajectory's stops while it is the mode**, and move the
+     stride everywhere else — keyboard.md § ← / → in Trajectory. The handler is
+     the band's own `step`, so the keys, the band's arrows and the door are one
+     rule. `null` in every other mode, which is the stride as it was. */
+  const trajectoryKeys =
+    mode === "trajectory" && trajectoryControl ? trajectoryControl.step : null;
   const navDepth = useArrowNav(
     nav,
     article.blocks,
     sectionDepth(geometry),
     !drawerOpen,
+    trajectoryKeys,
   );
+
+  /* **The door after the current stop's block** — TrajectoryPanel.tsx §
+     TrajectoryDoor. Memoised on the control, which changes only with the stop
+     and the door's words, so `memo(TableView)` holds between them. It also
+     offers the band back while it has stepped aside on a narrow window. */
+  const bandBack = bandAway && fit.modeW === 0;
+  const afterBlock = useMemo(() => {
+    if (mode !== "trajectory" || !trajectoryControl?.blockId) return null;
+    return {
+      blockId: trajectoryControl.blockId,
+      node: (
+        <TrajectoryDoor
+          label={trajectoryControl.door}
+          onPress={trajectoryControl.advance}
+          onRoute={bandBack ? () => setBandAway(false) : null}
+        />
+      ),
+    };
+  }, [mode, trajectoryControl, bandBack]);
 
   /**
    * The same step, taken with a finger — Greg, 2026-08-26: "jumps step-by-step
@@ -1663,6 +1727,7 @@ export function Reader({
             layoutKey={layoutKey}
             supplementOf={geometry.supplementOf}
             arcByRow={arcCells}
+            rootFontPx={rootFontPx}
             /* `modeW` is 0 exactly when the band covers the prose instead of
                sitting beside it (layout.ts) — a phone, since 2026-09-06; it was
                iPad portrait and below until the crossover fell to 700. That is
@@ -1793,6 +1858,28 @@ export function Reader({
          is a jump, not a selection. docs/plans/260916d-faq-mode.md. */
       case "faq":
         return owner ? <FaqBand slug={slug} onJump={jumpTo} /> : null;
+      /* **The owner alone** — `POLICY.trajectory` is `owners-only` for v1. A
+         passage producer (the current stop) and a controller (← / → and the
+         door after the stop's block), both published up here and both cleared
+         when the band unmounts.
+         docs/plans/260928a-trajectory-mode-skim-a-paper-at-increasing-depth.md. */
+      case "trajectory":
+        return owner ? (
+          <TrajectoryBand
+            slug={slug}
+            blocks={article.blocks}
+            tree={article.tree}
+            quotes={owner.quotes}
+            quoteMarks={quotes.found}
+            covers={fit.modeW === 0}
+            onAway={bandStepsAside}
+            onJump={jumpTo}
+            onFound={setTrajectoryFound}
+            openKey={openTrajectoryKey}
+            onOpenKey={setOpenTrajectoryKey}
+            onControl={setTrajectoryControl}
+          />
+        ) : null;
       /* **The owner/visitor pair, since 2026-09-04.** It was the owner alone
          until then, because search is the one mode where the reader's own
          question is the artefact. Greg drew the line at *making* one: a
@@ -1925,7 +2012,7 @@ export function Reader({
          tests/spine-width.test.ts. */
       className={`reader spine-${fit.spine}${fit.alone ? " text-alone" : ""}${
         fit.modeW === 0 ? " band-covers" : ""
-      }`}
+      }${bandBack ? " band-away" : ""}`}
       /* **Which column ← / → are pointed at** — styles.css § the aimed column,
          keyboard.md. It is here rather than on the table for two reasons, and
          the first is the one that forced it: the fisheye panels are `position:
@@ -2198,6 +2285,7 @@ export function Reader({
            article. Gated on `owner` for the reason above; the two doors are one
            capability. */
         onHelp={owner ? helpAboutBlock : undefined}
+        afterBlock={afterBlock}
         /* The owner's, and only once the opening read has landed without error
            — `bookmarkBlock` says why. */
         onBookmark={
@@ -2521,6 +2609,9 @@ export function Reader({
         mode={mode}
         onMode={(next) => {
           void setMode(next);
+          /* Pressing the mode you are in brings its band back if it had stepped
+             aside — `bandAway` above. */
+          setBandAway(false);
           /* A new nonce every press, so pressing the mode you are in shows it
              again and a second press restarts the three seconds. */
           setHerald((prev) => ({ mode: next, nonce: (prev?.nonce ?? 0) + 1 }));

@@ -94,6 +94,14 @@ const SHARED = new Set([
      See src/rerun-steps.ts and
      docs/plans/260907d-re-run-any-generated-mode-from-the-metadata-page.md. */
   "rerun-steps.js",
+  /* What a reset does to each step — import, successor or extra. Beside
+     `rerun-steps.js` for its reason: it imports `step-order.js` and a type and
+     nothing else, and it was split out of src/reset.ts (which reaches the
+     database client) **because of this rule**, so the Metadata page's reset
+     section reads the classification the server acts on instead of keeping a
+     second copy held to the first by a test. See src/reset-role.ts and Sol's
+     F14 on docs/plans/260928a-reset-and-regenerate-article-stage2-review-sol.md. */
+  "reset-role.js",
   // Whether a saved search still describes the article. The panel puts a
   // warning on a row and the server answers the same question at the read seam;
   // src/source-hash.ts computes the fingerprints and needs `node:crypto`, so

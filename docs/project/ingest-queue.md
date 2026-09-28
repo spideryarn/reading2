@@ -768,6 +768,39 @@ and the debate's, because it is **two separately metered calls** and the dearest
 generic *"another model call"* is a true sentence about those six and a false one about debate, which
 is the gap a cross-family review of the built code walked through.
 
+### A reader can start an article again, and have its modes made again after it
+
+> And a new agent to add a reset-and-regenerate button in the lower part of Metadata mode (perhaps
+> the default is just to reset as if it had just been imported for the first time, and there's an
+> option to regenerate any extra stuff that had been generated for the article with a queue).
+>
+> — Greg, 2026-09-28
+
+`POST /api/article/<slug>/reset` with `{ regenerate }` is **one ordinary job on this queue** —
+`DEFAULT_INGEST_STEPS` with `force: ["extract"]`, so it re-reads the stored copy rather than
+fetching again — carrying one extra fact, `jobs.reset`. Four things about it are facts about this
+queue rather than about the button
+([260928a](../plans/260928a-reset-and-regenerate-article.md) has the reasoning and three reviews):
+
+- **The extras are dropped in the draft, when it is minted.** Every artefact column is `carry`, so a
+  plain re-run would bring quotes, glossary and the rest along; a reset's draft has them nulled and
+  their step-run rows deleted in the minting transaction. The published revision it replaces keeps
+  them. Which steps are extras is `RESET_ROLE` in [`src/reset-role.ts`](../../src/reset-role.ts),
+  exhaustive over `StepName` — a leaf, so the Metadata page's reset section reads the same answer
+  and keeps only the extras' names.
+- **The regeneration is queued by the reset's publication**, beside the labels successor, one
+  single-step job per extra the article had — never at the press. Queued at the press, they were
+  ordered only by timestamp and could collapse onto an identical job from before the reset.
+  Each one's work key is **scoped to the reset**, and they are stamped a microsecond apart so
+  `sketch` is claimed before `illustrated`.
+- **One active reset per article.** A reset's work key carries a plain marker rather than its plan,
+  so a second press with the same choice shares the first and a different one is a 409 — the one
+  409 this queue has, and it is there because a first reset's successors, queued at its
+  publication, would otherwise run after a second reset and undo it.
+- **It spends no billing slot**, and neither do its successors; it can spend model calls
+  (a PDF's front-matter pass; the hierarchy and labels passes, which were measured paying in
+  full — $0.52 and four minutes — on a local fixture; and each regenerated mode).
+
 ### A step is done when *all* its files are there
 
 `extract` makes the HTML **and** the metadata. `hierarchy` makes the tree, the labels manifest

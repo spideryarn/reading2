@@ -540,6 +540,7 @@ const GENERATES: Record<Mode, boolean> = {
   diagram: true,
   citations: true,
   faq: true,
+  trajectory: true,
 };
 
 /**

@@ -45,7 +45,7 @@ require you to get tooooo involved in the details of all the other agents."*
 
 **Oversee; do not do.** Anything beyond a one-line fix or a doc edit is delegated — to a session
 briefed with [engineering-manager.md](../reusable/engineering-manager.md) and told to take technical
-guidance from GPT Sol and product or wording arbitration from Fable rather than from you — so that
+guidance from GPT Sol and product or wording arbitration from Opus rather than from you — so that
 your context stays a record of the fleet and not of one job's details. The same goes for your own
 tooling: when you find yourself repeating a recipe, specify a tool in a brief and let an agent build
 and test it (the `overseer` CLI in `scripts/overseer.ts` is where such things live — `overseer tick` is the
@@ -105,7 +105,7 @@ is the cadence [engineering-manager.md](../reusable/engineering-manager.md) alre
   vitals you already hold. A question you answered today for another session gets the same answer,
   and the second identical answer is a sign that a **policy** is missing — say so in the log.
 - **Judgement you route.** GPT Sol for technical questions whose evidence is in the tree
-  ([codex-cli-as-subagent.md](../reusable/codex-cli-as-subagent.md)); Fable for wording, defaults, and
+  ([codex-cli-as-subagent.md](../reusable/codex-cli-as-subagent.md)); Opus for wording, defaults, and
   whether two options that both work are really the same option.
 - **Product questions you default and log.** Take the simplest thing that works end to end
   ([vision.md § Simpler first](vision.md#simpler-first)), record it as an **assumption pending Greg**,
@@ -144,11 +144,11 @@ is the cadence [engineering-manager.md](../reusable/engineering-manager.md) alre
   of things and chains here have run to round twelve; treat a P2 disagreement as information, not as
   a reason to wake anyone.
 - **Four things Greg settled on 2026-09-10 so they are never asked again.** A **merge conflict** is
-  the agent's to resolve, with Sol or Fable when unsure, and reaches Greg only if it is a real
+  the agent's to resolve, with Sol or Opus when unsure, and reaches Greg only if it is a real
   product trade-off neither side can keep —
   [git-resolve-merge-conflicts.md](../reusable/git-resolve-merge-conflicts.md); you settle the
   technical ones on his behalf and log them. **What to commit and what to throw away** in a drifted
-  tree is the agent's, with Fable —
+  tree is the agent's, with Opus —
   [git-commit-changes.md](../reusable/git-commit-changes.md). **The changelog is written whether or
   not anyone can deploy it**, and a missing Vercel credential has a stated fallback —
   [changelog.md § Running it](changelog.md#running-it). **A Sol review's time wall is 90 minutes**
@@ -434,7 +434,7 @@ The vocabulary is already built, in [`tools/fleet/actions.ts`](../../tools/fleet
 should call it rather than growing a second way:
 
 - **spoken** — `continue`, `compact`, `pull`, `push`, `run-checks`, `report-status`, `ease-off`,
-  `sleep-1h/3h/5h/10h`, `ask-fable`, `ask-sol`, `wrap-up`, `stop-and-ask`. These are sentences you
+  `sleep-1h/3h/5h/10h`, `ask-fable` (its id; it now asks Opus), `ask-sol`, `wrap-up`, `stop-and-ask`. These are sentences you
   would have typed, delivered as a user turn.
 - **enacted** — `remove-worktree`, `kill-session`, `kill-test-suites`, `kill-safe-processes`. These
   have an effect outside the conversation and carry four gates of their own.

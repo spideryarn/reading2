@@ -37,6 +37,7 @@
  *   GET    /api/timeline/:slug   when the piece says things happened, and staleness
  *   GET    /api/quiz/:slug       the questions the piece can ask you back, and staleness
  *   GET    /api/faq/:slug        the questions a careful reader would put to the piece, where it responds, and staleness
+ *   GET    /api/trajectory/:slug a route through the quotes at three depths, whether it still matches them, and the profile
  *   GET    /api/debate/:slug     what the rest of the web says about this piece, and staleness
  *   GET    /api/citations/:slug  every work the piece cites, with a link the article gave, and staleness
  *   GET    /api/reading-time/:slug   → { seconds: { <block id>: n } }, the owner's time on each block
@@ -132,6 +133,7 @@ import {
   refereeCriteriaStore,
   searchStore,
   shelfStore,
+  shelfTermsStore,
   readingTimeStore,
   loadArticle,
   loadGlossary,
@@ -145,6 +147,7 @@ import {
   loadSketch,
   loadQuiz,
   loadFaq,
+  loadTrajectory,
   loadDebate,
   loadCitations,
   findCitation,
@@ -295,6 +298,7 @@ import {
   advanceJob,
   cancelJob,
   enqueue,
+  enqueueReset,
   forgetJob,
   getJob,
   listJobs,
@@ -357,6 +361,7 @@ import { processSingleton } from "./process-state.js";
 import { captureFailure, setMonitoringUser } from "./monitoring.js";
 import { isStepName, type StepName } from "./pipeline.js";
 import { hashProfile, normaliseProfileText, profileIsStale, renderProfile } from "./profile.js";
+import { routeProfileIsStale } from "./trajectory.js";
 import {
   type ArticleStage,
   NON_TASK_MODELS,
@@ -389,9 +394,11 @@ import type {
   IdeasResponse,
   QuizFound,
   QuotesResponse,
+  TrajectoryResponse,
   IllustratedResponse,
   SketchResponse,
   LibraryResponse,
+  LibraryTermsResponse,
   RememberStance,
   ThreadKind,
   ThreadResponse,
@@ -426,7 +433,7 @@ import {
    with the client's picker so a fifth stance cannot be accepted here and
    missing from the menu. src/types.ts § REMEMBER_STANCES. */
 import { REMEMBER_STANCES } from "./types.js";
-import type { CommentAnchor } from "./types.js";
+import type { CommentAnchor, ResetResponse } from "./types.js";
 
 /** Big enough for any selection, small enough that nothing can wedge the server. */
 const MAX_BODY_BYTES = 64 * 1024;
@@ -4881,6 +4888,27 @@ export function parseVisibilityRequest(body: unknown): {
   return { visibility, rightsConfirmed: true };
 }
 
+/**
+ * The body of `POST /api/article/:slug/reset`: `{ regenerate: boolean }`, and
+ * nothing else. A boolean and not a list on purpose — which extras to make
+ * again is the server's to read off the revision, not the client's to name
+ * (docs/plans/260928a-reset-and-regenerate-article.md § *A server route*).
+ */
+export function parseResetRequest(body: unknown): { regenerate: boolean } {
+  if (body === null || typeof body !== "object" || Array.isArray(body)) {
+    throw httpError(400, "Expected an object with regenerate");
+  }
+  const { regenerate, ...rest } = body as Record<string, unknown>;
+  if (Object.keys(rest).length) {
+    /* Not interpolated, for `parseVisibilityRequest`'s reason. */
+    throw httpError(400, "That request had fields this endpoint does not accept");
+  }
+  if (typeof regenerate !== "boolean") {
+    throw httpError(400, "regenerate must be true or false");
+  }
+  return { regenerate };
+}
+
 export function parseJobRequest(body: unknown): {
   slug: string;
   url?: string;
@@ -5462,8 +5490,11 @@ function publicJob(job: Job): Omit<Job, "profile" | "ownerId"> {
   /* `ownerId` goes too. The client never needs it — it can only ever be looking
      at its own jobs now — and an `auth.users` uuid on the wire is one more
      thing that has to not end up in a log, a bug report or a screenshot. */
-  const { profile: _hidden, ownerId: _whose, ...rest } = job;
-  return rest;
+  const { profile: _hidden, ownerId: _whose, reset, ...rest } = job;
+  /* A reset's profile snapshot is the same text as `profile`, so it goes for
+     the same reason; which extras it will make again stays, because that is a
+     fact about the job a card can say. */
+  return { ...rest, ...(reset ? { reset: { regenerate: reset.regenerate } } : {}) };
 }
 
 /**
@@ -7050,6 +7081,27 @@ const AUTH_ROUTES: readonly AuthRoute[] = [
     },
   },
 
+  /* **The shelf's filter topics**. It sits with the other exact library reads
+     before the `:slug` mutations. The order is not an auth or routing defence:
+     those patterns accept PATCH/DELETE, while this row accepts GET, and the
+     dispatcher checks the method before the path.
+     docs/plans/260928a-shelf-facet-terms.md § The route. A GET that may write
+     — a bounded, idempotent cache fill (src/store/pg-shelf-terms.ts says why
+     that is acceptable here and not for counters). */
+  {
+    kind: "exact",
+    method: "GET",
+    path: "/api/library/terms",
+    handler: async ({ request: { res, query } }) => {
+      /* `=== "1"`, as `/api/library` does. Here it widens to active + archived. */
+      const archived = query.get("archived") === "1";
+      const terms: LibraryTermsResponse = await shelfTermsStore.terms({ archived });
+      /* The reader's own words, derived: never a shared cache's (Sol F10). */
+      res.setHeader("Cache-Control", "private, no-store");
+      send(res, 200, terms);
+    },
+  },
+
   /* PATCH rather than PUT: both fields are optional and the client sends
      whichever the reader changed. A PUT would mean "here is the whole shelf
      record", and a client that forgot one field would silently clear it. */
@@ -7378,6 +7430,38 @@ const AUTH_ROUTES: readonly AuthRoute[] = [
     },
   },
 
+  /**
+   * **Reset the article, and optionally make its extras again** — the import
+   * over the stored copy, with every mode's artefact dropped from the new
+   * revision (src/reset.ts). docs/plans/260928a-reset-and-regenerate-article.md.
+   *
+   * **A sub-resource of the article, like `visibility` above**, and a POST
+   * because it queues work. The profile is resolved here, once, exactly as
+   * `POST /api/jobs` resolves one for a slug, and the regenerations carry that
+   * snapshot (Sol F2). Everything else is `enqueueReset`: the 404 for a slug
+   * that is not this reader's, which extras the revision has, and the one job.
+   * No URL goes in, so no quota slot is spent — a re-run, not a new ingest.
+   *
+   * 202 with `ResetResponse`: the job to follow and the list it will regenerate.
+   */
+  {
+    kind: "pattern",
+    method: "POST",
+    pattern: /^\/api\/article\/([\w.%-]+)\/reset$/,
+    handler: async ({ request: { req, res } }, captures) => {
+      const asked = parseResetRequest(await readBody(req));
+      const slug = slugPart(captures, 1);
+      const profile = await resolveProfile(slug);
+      const { job, regenerate } = await enqueueReset({
+        slug,
+        regenerate: asked.regenerate,
+        ...(profile ? { profile } : {}),
+      });
+      const body: ResetResponse = { jobId: job.id, regenerate };
+      send(res, 202, body);
+    },
+  },
+
   {
     kind: "pattern",
     method: "GET",
@@ -7650,6 +7734,33 @@ const AUTH_ROUTES: readonly AuthRoute[] = [
       /* **No `withProfileChanged`**, for `quiz`'s reason: this artefact is not
          written for a profile. `FaqResponse` in src/types.ts has two fields. */
       send(res, 200, await loadFaq(slugPart(captures, 1)));
+    },
+  },
+
+  /* The route through the Quotes —
+     docs/plans/260928a-trajectory-mode-skim-a-paper-at-increasing-depth.md. GET
+     only, and no DELETE: the step replaces, so asking again is
+     POST /api/jobs { slug, steps: ["trajectory"] }. This route never spends. */
+  {
+    kind: "pattern",
+    method: "GET",
+    pattern: /^\/api\/trajectory\/([\w.%-]+)$/,
+    handler: async ({ request: { res } }, captures) => {
+      const at = slugPart(captures, 1);
+      /* **Not `withProfileChanged`**, whose rule calls an artefact written
+         without a profile never stale. A route is exactly what a profile should
+         change, so none → some counts here — `routeProfileIsStale`, the same
+         comparison `sameStamp` makes on the stamp (src/trajectory.ts). Both
+         reads start before either is awaited. */
+      const [found, now] = await Promise.all([loadTrajectory(at), resolveProfile(at)]);
+      const body: TrajectoryResponse = {
+        ...found,
+        profileChanged: routeProfileIsStale(
+          found.trajectory.profileHash,
+          now ? hashProfile(now) : null,
+        ),
+      };
+      send(res, 200, body);
     },
   },
 

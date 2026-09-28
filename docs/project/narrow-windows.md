@@ -83,6 +83,21 @@ Three things worth carrying to whatever is built next:
   times and the compiler checks none of them. **It was six until 2026-09-03**, and the one that went
   is the interesting one — see the paragraph above: a derived breakpoint that is only correct in one
   spine state is not a copy to keep in step, it is a copy to delete.
+- **Structure's switch point is derived the same way, and it is the one band that is not
+  `MODE_MIN`–`MODE_IDEAL` wide.** Its two columns need 17rem of content each, column B's bracket
+  inside its track, a 1rem gutter, the band's padding and border — **609px at a 16px root**, so a
+  **1165px window** with the rail, 1153 without. Below that Structure's band is the ordinary one with
+  the list face in it; at and above it the band jumps to 609 and grows to 705, while the prose keeps
+  `PROSE_MIN`. One function says so, `structureColumnsBand` in
+  [`layout.ts`](../../src/web/layout.ts): `fitMode` sizes the band from it and `structureFace` picks
+  the face from it, and `tests/structure-band-width.test.ts` sweeps every width to hold the two
+  together. **A band that covers the article is always the list**, whatever width it is painted at —
+  otherwise a 620–699px window would get the columns and a 700px one the list. It was a 389px band, a
+  945px window and — through the covering band — a 400px phone until 2026-09-28, which is why the
+  columns were 181px at most on any screen
+  ([260928a](../plans/260928a-structure-two-columns-readable.md)). On an iPad in Safari: portrait is
+  the list at every size; landscape is the columns on an 11" or 13" (1180px and up) and the list on a
+  mini (1133) or a 10.2" (1080).
 - **A row that does not fit must scroll, never clip.** `.dock-modes` had `overflow: hidden` for a
   good reason (rounded corners on a segmented control) and it quietly turned into a machine for
   deleting buttons: 48px of clip over a 245px control, five of six modes unpressable, no scrollbar

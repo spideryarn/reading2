@@ -411,6 +411,36 @@ address with no way out, so it is rewritten to `?mode=structure` on arrival (`?m
 2026-09-10) ([url-state.md](url-state.md)). Structure mode is where a whole-article overview lives
 now — its nested-list face was Outline mode until then — and it has its own shareable address. `#<blockid>` still opens at a paragraph.
 
+### Structure's two faces, and the width between them
+
+Structure draws the same tree two ways: **two linked columns** (`StructurePanel`, every part on the
+left and the sections of the one you are in on the right) where the band is wide enough for them,
+and **the nested list** (`OutlinePanel`, which was Outline mode) where it is not
+([260910g](../plans/260910g-structure-mode-subsumes-outline.md)). Greg, 2026-09-28:
+
+> The 1-column mode is fine. But the 2-column mode is a little hard to read because the text is
+> small the columns are really narrow. Perhaps we only switch to 2-column mode when the window is a
+> little wider, and provide more space for the 2 columns, etc. And also make the visuals a bit more
+> consistent (e.g. colours, highlighting) etc across 1- and 2-column modes.
+
+Three things follow from that, and each has one home:
+
+- **The columns get a band of their own width.** Every other mode's band is 288–400px, and until
+  that day so was Structure's, which is why its columns were never wider than 181px. Now each column
+  is at least as wide as the list face's content box at its narrowest (17rem), and the band jumps to
+  hold them — **609px, a 1165px window** — or stays the ordinary band with the list in it.
+  `structureColumnsBand` in [`layout.ts`](../../src/web/layout.ts) is the one statement of it;
+  [narrow-windows.md](narrow-windows.md) has the arithmetic and what it means on an iPad.
+- **One type scale for both faces**: `--structure-tier-*`, declared once in
+  [`outline-mode.css`](../../src/web/styles/outline-mode.css). The list steps through all four with
+  distance; the columns use `near` for rows and `mid` for paragraphs and gists.
+- **One "you are here"**: the `--highlight-wash` ground at weight 650, and a 2px `--highlight` thumb
+  on the rail — the list's `.now` and the columns' `aria-current` rows look the same. Rails and
+  brackets are `--rule-strong` in both; the hover is `--surface-raised` in both.
+
+The list of what differed and what each became is in
+[260928a § One look](../plans/260928a-structure-two-columns-readable.md#3-one-look-across-the-two-faces).
+
 ### Both at once: the paragraph outline beside the prose
 
 > I really like the Outline 1-sentence-paragraphs. But I also always want to be able to see the full

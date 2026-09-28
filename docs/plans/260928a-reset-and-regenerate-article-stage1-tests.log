@@ -1,0 +1,11 @@
+
+ RUN  v4.1.11 /home/greg/code/spideryarn2/.claude/worktrees/metadata-reset-regenerate
+
+  [private lane] spideryarn_test_260928012416_dc2ee67e31d1473989d72f23dec8e656 in 4.2s, leased as spideryarn-test-lease-1629719, priced reader/researcher
+
+ Test Files  8 passed (8)
+      Tests  497 passed (497)
+   Start at  02:24:15
+   Duration  46.49s (transform 13.58s, setup 1.36s, import 24.77s, tests 24.47s, environment 2ms)
+
+  [private lane] dropped spideryarn_test_260928012416_dc2ee67e31d1473989d72f23dec8e656

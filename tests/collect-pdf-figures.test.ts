@@ -20,7 +20,7 @@
 import { describe, expect, it } from "vitest";
 import { readFile } from "node:fs/promises";
 import { inflateSync } from "node:zlib";
-import { PDFDocument, StandardFonts } from "pdf-lib";
+import { PDFDocument, PDFName, PDFNumber, StandardFonts } from "pdf-lib";
 
 import {
   collectPdfFigures,
@@ -30,12 +30,13 @@ import {
 } from "../src/collect-pdf-figures.js";
 import { sniffImage, type Assets } from "../src/assets.js";
 import type { Block } from "../src/types.js";
-import { MAX_FIGURE_EDGE } from "../src/pdf-figures.js";
+import { encodeFigurePng, MAX_FIGURE_EDGE } from "../src/pdf-figures.js";
 import { RawDocumentUnavailable } from "../src/fetch.js";
 import { recoverPdfFigures, STEPS } from "../src/pipeline.js";
 import { memoryArtefacts } from "./helpers/memory-artefacts.js";
 import { nullCheckpointStore } from "../src/store/checkpoints.js";
 import type { BlobHead, PutResult, RawSourceStore } from "../src/store/blobs.js";
+import type { FigureLocator } from "../src/pdf-figure-locate.js";
 
 const HARDER = "evals/pdf/harder/source.pdf";
 
@@ -110,6 +111,7 @@ describe("a real paper with four figures and a masthead", () => {
        step hands the text layer through to the rule. */
     const misfiled = marker(3);
     const run = await collectPdfFigures({
+      locate: null,
       captions: new Map([[misfiled.ref, PRINTED_ON_HARDER.get(6)!]]),
       markers: [misfiled],
       pdf: await bytes(HARDER),
@@ -123,6 +125,7 @@ describe("a real paper with four figures and a masthead", () => {
 
   it("recovers the figure on a page that has exactly one of each", async () => {
     const run = await collectPdfFigures({
+      locate: null,
       captions: HARDER_CAPTIONS,
       markers: [marker(3)],
       pdf: await bytes(HARDER),
@@ -166,7 +169,7 @@ describe("a real paper with four figures and a masthead", () => {
        landed under. A manifest that says `png` over bytes that are not one is
        the failure content addressing exists to make impossible. */
     const blobs = fakeBlobs();
-    const run = await collectPdfFigures({ captions: HARDER_CAPTIONS, markers: [marker(6)], pdf: await bytes(HARDER), blobs });
+    const run = await collectPdfFigures({ locate: null, captions: HARDER_CAPTIONS, markers: [marker(6)], pdf: await bytes(HARDER), blobs });
     const entry = run.entries[0]!;
     expect(entry.status).toBe("stored");
     if (entry.status !== "stored") return;
@@ -184,6 +187,7 @@ describe("a real paper with four figures and a masthead", () => {
        src/pdf-figure-read.ts § 1), which is why the reason is `no-raster` and
        not "this figure is vector art". */
     const run = await collectPdfFigures({
+      locate: null,
       captions: HARDER_CAPTIONS,
       markers: [marker(2)],
       pdf: await bytes(HARDER),
@@ -200,6 +204,7 @@ describe("a real paper with four figures and a masthead", () => {
        behind it, and the reader cannot detect it. A missing figure is visible.
        Both markers are refused and both are recorded. */
     const run = await collectPdfFigures({
+      locate: null,
       captions: HARDER_CAPTIONS,
       markers: [marker(3, 1), marker(3, 2)],
       pdf: await bytes(HARDER),
@@ -216,6 +221,7 @@ describe("a real paper with four figures and a masthead", () => {
        bytes here are not a PDF: reaching pdf.js with them would throw or
        report a failure, and a run of zero entries is the proof it did not. */
     const run = await collectPdfFigures({
+      locate: null,
       captions: HARDER_CAPTIONS,
       markers: [],
       pdf: new TextEncoder().encode("not a PDF at all"),
@@ -240,6 +246,7 @@ describe("every marker gets an entry, whatever went wrong", () => {
        we looked inside. */
     const markers = [marker(1), marker(2), marker(3)];
     const run = await collectPdfFigures({
+      locate: null,
       captions: HARDER_CAPTIONS,
       markers,
       pdf: new TextEncoder().encode("%PDF-1.4 but not really"),
@@ -260,6 +267,7 @@ describe("every marker gets an entry, whatever went wrong", () => {
        is running slow today*. GPT Sol, C-4. */
     const markers = Array.from({ length: 5 }, (_, i) => marker(i + 1));
     const run = await collectPdfFigures({
+      locate: null,
       captions: HARDER_CAPTIONS,
       markers,
       pdf: await bytes(HARDER),
@@ -280,6 +288,7 @@ describe("every marker gets an entry, whatever went wrong", () => {
       throw new Error("Storage put failed (503)");
     };
     const run = await collectPdfFigures({
+      locate: null,
       captions: HARDER_CAPTIONS,
       markers: [marker(3), marker(6)],
       pdf: await bytes(HARDER),
@@ -294,6 +303,7 @@ describe("every marker gets an entry, whatever went wrong", () => {
 
   it("records a figure too big to deliver rather than storing it", async () => {
     const run = await collectPdfFigures({
+      locate: null,
       captions: HARDER_CAPTIONS,
       markers: [marker(3)],
       pdf: await bytes(HARDER),
@@ -319,6 +329,7 @@ describe("every marker gets an entry, whatever went wrong", () => {
     aborted.abort();
     const markers = [marker(3), marker(6)];
     const run = await collectPdfFigures({
+      locate: null,
       captions: HARDER_CAPTIONS,
       markers,
       pdf: await bytes(HARDER),
@@ -341,6 +352,7 @@ describe("the step's own deadline", () => {
     const drawn = marker(2);
     const bitmap = marker(3);
     const run = await collectPdfFigures({
+      locate: null,
       markers: [drawn, bitmap],
       pdf: await bytes(HARDER),
       blobs: fakeBlobs(),
@@ -376,6 +388,7 @@ describe("the step's own deadline", () => {
     blobs.putIfAbsent = () => new Promise<PutResult>(() => {});
     const markers = [marker(3), marker(6)];
     const run = await collectPdfFigures({
+      locate: null,
       captions: HARDER_CAPTIONS,
       markers,
       pdf: await bytes(HARDER),
@@ -396,6 +409,7 @@ describe("the step's own deadline", () => {
        *after* whatever was in flight has had time to finish and try. */
     const blobs = fakeBlobs();
     const run = await collectPdfFigures({
+      locate: null,
       captions: HARDER_CAPTIONS,
       markers: [marker(3)],
       pdf: await bytes(HARDER),
@@ -435,6 +449,7 @@ describe("the step's own deadline", () => {
       });
 
     const run = await collectPdfFigures({
+      locate: null,
       captions: HARDER_CAPTIONS,
       markers: [marker(3)],
       pdf: await bytes(HARDER),
@@ -471,6 +486,7 @@ describe("the article's shared byte budget", () => {
        second is recorded `budget` — *this article is enormous*, which is a
        different fact with a different fix from `out-of-time`. */
     const generous = await collectPdfFigures({
+      locate: null,
       captions: HARDER_CAPTIONS,
       markers: [marker(3)],
       pdf: await bytes(HARDER),
@@ -482,6 +498,7 @@ describe("the article's shared byte budget", () => {
 
     const blobs = fakeBlobs();
     const run = await collectPdfFigures({
+      locate: null,
       captions: HARDER_CAPTIONS,
       markers: [marker(3), marker(6)],
       pdf: await bytes(HARDER),
@@ -542,6 +559,7 @@ describe("a figure drawn rather than pictured", () => {
     const figure = marker(1);
     const blobs = fakeBlobs();
     const run = await collectPdfFigures({
+      locate: null,
       markers: [figure],
       pdf: await bytes(MDPI_P8),
       blobs,
@@ -576,6 +594,7 @@ describe("a figure drawn rather than pictured", () => {
     const two = marker(3);
     const blobs = fakeBlobs();
     const run = await collectPdfFigures({
+      locate: null,
       markers: [one, two],
       pdf: await bytes(ARXIV),
       blobs,
@@ -610,6 +629,7 @@ describe("a figure drawn rather than pictured", () => {
     const figure = marker(1);
     const blobs = fakeBlobs();
     const run = await collectPdfFigures({
+      locate: null,
       markers: [figure],
       pdf: await bytes(MDPI_P8),
       blobs,
@@ -624,6 +644,7 @@ describe("a figure drawn rather than pictured", () => {
   it("uses the same per-figure and article byte caps as the bitmap route", async () => {
     const figure = marker(1);
     const options = {
+      locate: null,
       markers: [figure],
       pdf: await bytes(MDPI_P8),
       captions: new Map([
@@ -653,6 +674,7 @@ describe("a figure drawn rather than pictured", () => {
       return "stored";
     };
     const run = await collectPdfFigures({
+      locate: null,
       markers: [figure],
       pdf: await bytes(MDPI_P8),
       blobs,
@@ -740,7 +762,7 @@ describe("recoverPdfFigures", () => {
    */
   it("records every marker when there is no raw manifest at all", async () => {
     const store = memoryArtefacts();
-    const run = await recoverPdfFigures(CTX, store, blocks);
+    const run = await recoverPdfFigures(CTX, store, blocks, { locate: null });
     expect(run?.entries).toHaveLength(2);
     expect(run?.entries.every((e) => e.status === "failed" && e.reason === "no-source")).toBe(true);
   });
@@ -748,7 +770,7 @@ describe("recoverPdfFigures", () => {
   it("records every marker when the article did not come from a PDF", async () => {
     const store = memoryArtefacts();
     store.plant("a", "fetch", "raw", { file: "raw.html", kind: "html" });
-    const run = await recoverPdfFigures(CTX, store, blocks);
+    const run = await recoverPdfFigures(CTX, store, blocks, { locate: null });
     expect(run?.entries).toHaveLength(2);
     expect(run?.entries.every((e) => e.status === "failed" && e.reason === "no-source")).toBe(true);
   });
@@ -757,7 +779,7 @@ describe("recoverPdfFigures", () => {
     /* `undefined`, not an empty run: *there was nothing here to look at* has to
        stay distinguishable from *we looked and could not*. src/assets.ts. */
     const store = memoryArtefacts();
-    expect(await recoverPdfFigures(CTX, store, [])).toBeUndefined();
+    expect(await recoverPdfFigures(CTX, store, [], { locate: null })).toBeUndefined();
   });
 
   it("forwards the marker's own caption into the drawn route", async () => {
@@ -770,6 +792,7 @@ describe("recoverPdfFigures", () => {
     store.plant("a", "fetch", "raw", { file: "raw.pdf", kind: "pdf", storedSha256: "f".repeat(64) });
     const run = await recoverPdfFigures(CTX, store, [figureBlockWithCaption(figure.ref, caption)], {
       readBytes: async () => captionOnlyPdf(caption),
+      locate: null,
     });
     expect(run?.entries).toEqual([
       expect.objectContaining({ ref: figure.ref, status: "failed", reason: "not-located" }),
@@ -787,6 +810,7 @@ describe("recoverPdfFigures", () => {
     store.plant("a", "fetch", "raw", { file: "raw.pdf", kind: "pdf", storedSha256: "f".repeat(64) });
 
     const gone = await recoverPdfFigures(CTX, store, blocks, {
+      locate: null,
       readBytes: () => {
         throw new RawDocumentUnavailable("missing", "the object is not there");
       },
@@ -794,6 +818,7 @@ describe("recoverPdfFigures", () => {
     expect(gone?.entries.every((e) => e.status === "failed" && e.reason === "no-source")).toBe(true);
 
     const down = await recoverPdfFigures(CTX, store, blocks, {
+      locate: null,
       readBytes: () => {
         throw new Error("Storage get failed (503): upstream connect error");
       },
@@ -813,4 +838,258 @@ describe("recoverPdfFigures", () => {
     expect(assets.pdfFigures).toHaveLength(2);
     expect(assets.pdfFigures?.every((e) => e.status === "failed")).toBe(true);
   });
+});
+
+/* ------------------------------------------------------------------ *
+ * The located route — stage 2 of
+ * docs/plans/260924e-a-pdf-figure-paired-to-the-wrong-caption.md
+ * ------------------------------------------------------------------ */
+
+/**
+ * A locator that answers from a script rather than a model, and remembers what
+ * it was asked. The box is the one Gemini 3 Flash returned for Figure 1 of
+ * evals/pdf/harder in the test run, three times out of three.
+ */
+function scriptedLocator(answers: readonly unknown[]) {
+  const asked: { caption: string; pages: number[] }[] = [];
+  const locate: FigureLocator = async (request) => {
+    asked.push({ caption: request.caption, pages: request.pages.map((p) => p.page) });
+    const answer = answers[Math.min(asked.length - 1, answers.length - 1)];
+    return answer === "fail" ? { ok: false } : { ok: true, answer };
+  };
+  return { locate, asked };
+}
+
+const FIGURE_1_ON_PAGE_3 = { page: 3, box_2d: [85, 80, 342, 481] };
+
+describe("a figure the page could not place, located", () => {
+  it("stores the picture the model points at, for a figure the transcript filed a page early", async () => {
+    const misfiled = marker(2);
+    const { locate, asked } = scriptedLocator([FIGURE_1_ON_PAGE_3]);
+    const run = await collectPdfFigures({
+      locate,
+      captions: new Map([[misfiled.ref, PRINTED_ON_HARDER.get(3)!]]),
+      markers: [misfiled],
+      pdf: await bytes(HARDER),
+      blobs: fakeBlobs(),
+    });
+    expect(asked).toEqual([{ caption: PRINTED_ON_HARDER.get(3), pages: [1, 2, 3] }]);
+    const entry = run.entries[0]!;
+    expect(entry).toMatchObject({ ref: misfiled.ref, page: 2, status: "stored" });
+    /* The same picture, downscaled the same way, as the bitmap route stores
+       from page 3 in the first test of this file. */
+    if (entry.status === "stored") expect([entry.width, entry.height]).toEqual([1034, 871]);
+    expect(run.located).toBe(1);
+    expect(run.locateCalls).toBe(1);
+  }, 120_000);
+
+  it("keeps the refusal it had when the answer does not point at one picture", async () => {
+    const misfiled = marker(2);
+    const without = await collectPdfFigures({
+      locate: null,
+      captions: new Map([[misfiled.ref, PRINTED_ON_HARDER.get(3)!]]),
+      markers: [misfiled],
+      pdf: await bytes(HARDER),
+      blobs: fakeBlobs(),
+    });
+    const before = without.entries[0]!;
+    expect(before.status).toBe("failed");
+
+    /* A box over the prose at the foot of page 3, and then a call that fails. */
+    for (const answer of [{ page: 3, box_2d: [700, 80, 900, 900] }, "fail", { page: null, box_2d: null }]) {
+      const { locate } = scriptedLocator([answer]);
+      const run = await collectPdfFigures({
+        locate,
+        captions: new Map([[misfiled.ref, PRINTED_ON_HARDER.get(3)!]]),
+        markers: [misfiled],
+        pdf: await bytes(HARDER),
+        blobs: fakeBlobs(),
+      });
+      expect(run.entries).toEqual([expect.objectContaining({ status: "failed", reason: (before as { reason: string }).reason })]);
+      expect(run.located).toBe(0);
+    }
+  }, 120_000);
+
+  it("keeps the refusal it had when the locator throws", async () => {
+    const misfiled = marker(2);
+    const without = await collectPdfFigures({
+      locate: null,
+      captions: new Map([[misfiled.ref, PRINTED_ON_HARDER.get(3)!]]),
+      markers: [misfiled],
+      pdf: await bytes(HARDER),
+      blobs: fakeBlobs(),
+    });
+    const locate: FigureLocator = async () => {
+      throw new Error("locator failed before returning a result");
+    };
+    const run = await collectPdfFigures({
+      locate,
+      captions: new Map([[misfiled.ref, PRINTED_ON_HARDER.get(3)!]]),
+      markers: [misfiled],
+      pdf: await bytes(HARDER),
+      blobs: fakeBlobs(),
+    });
+    expect(run.entries).toEqual([
+      expect.objectContaining({ status: "failed", reason: (without.entries[0] as { reason: string }).reason }),
+    ]);
+  }, 120_000);
+
+  it("never asks about a figure the page already placed", async () => {
+    const placed = marker(3);
+    const { locate, asked } = scriptedLocator([FIGURE_1_ON_PAGE_3]);
+    const run = await collectPdfFigures({
+      locate,
+      captions: HARDER_CAPTIONS,
+      markers: [placed],
+      pdf: await bytes(HARDER),
+      blobs: fakeBlobs(),
+    });
+    expect(run.entries[0]?.status).toBe("stored");
+    expect(asked).toEqual([]);
+    expect(run.locateCalls).toBe(0);
+  }, 120_000);
+
+  it("gives the picture to neither figure when two point at it", async () => {
+    const one = marker(2);
+    const two = marker(4);
+    const { locate, asked } = scriptedLocator([FIGURE_1_ON_PAGE_3]);
+    const run = await collectPdfFigures({
+      locate,
+      captions: new Map([
+        [one.ref, PRINTED_ON_HARDER.get(3)!],
+        [two.ref, "Figure 9. A caption that page 4 does not print."],
+      ]),
+      markers: [one, two],
+      pdf: await bytes(HARDER),
+      blobs: fakeBlobs(),
+    });
+    expect(asked).toHaveLength(2);
+    expect(run.entries.map((e) => e.status)).toEqual(["failed", "failed"]);
+    expect(run.located).toBe(0);
+  }, 120_000);
+
+  it("does not give a located figure a picture another figure already has", async () => {
+    /* Page 3's picture is Figure 1's by the bitmap route; a second marker the
+       model also points at it must not get it too. */
+    const placed = marker(3);
+    const misfiled = marker(2);
+    const { locate } = scriptedLocator([FIGURE_1_ON_PAGE_3]);
+    const run = await collectPdfFigures({
+      locate,
+      captions: new Map([
+        [placed.ref, PRINTED_ON_HARDER.get(3)!],
+        [misfiled.ref, "Figure 9. A caption that page 2 does not print."],
+      ]),
+      markers: [misfiled, placed],
+      pdf: await bytes(HARDER),
+      blobs: fakeBlobs(),
+    });
+    expect(run.entries.map((e) => e.status)).toEqual(["failed", "stored"]);
+    expect(run.located).toBe(0);
+  }, 120_000);
+
+  it("asks at most maxLocateCalls times in one article", async () => {
+    const markers = [marker(1), marker(2), marker(4)];
+    const { locate, asked } = scriptedLocator([{ page: null, box_2d: null }]);
+    const run = await collectPdfFigures({
+      locate,
+      maxLocateCalls: 2,
+      captions: new Map(markers.map((m) => [m.ref, `Figure on page ${m.page}, printed nowhere.`])),
+      markers,
+      pdf: await bytes(HARDER),
+      blobs: fakeBlobs(),
+    });
+    expect(asked).toHaveLength(2);
+    expect(run.locateCalls).toBe(2);
+    expect(run.entries.every((e) => e.status === "failed" && e.reason !== "out-of-time")).toBe(true);
+  }, 120_000);
+
+  it("keeps the refusal it had, not out-of-time, when the clock runs out mid-question", async () => {
+    const misfiled = marker(2);
+    const hung: FigureLocator = () => new Promise(() => {});
+    const without = await collectPdfFigures({
+      locate: null,
+      captions: new Map([[misfiled.ref, PRINTED_ON_HARDER.get(3)!]]),
+      markers: [misfiled],
+      pdf: await bytes(HARDER),
+      blobs: fakeBlobs(),
+    });
+    const run = await collectPdfFigures({
+      locate: hung,
+      budgetMs: 8_000,
+      captions: new Map([[misfiled.ref, PRINTED_ON_HARDER.get(3)!]]),
+      markers: [misfiled],
+      pdf: await bytes(HARDER),
+      blobs: fakeBlobs(),
+    });
+    expect(run.entries).toEqual([
+      expect.objectContaining({ status: "failed", reason: (without.entries[0] as { reason: string }).reason }),
+    ]);
+  }, 120_000);
+});
+
+describe("the located route's frame, end to end", () => {
+  /**
+   * **One coordinate frame from the model's eyes to the stored picture** —
+   * GPT Sol, stage 2 plan review, finding 6. The page is cropped inside a
+   * larger MediaBox with its origin away from (0, 0), and says `UserUnit 2`;
+   * the picture is pure red at a known place. The locator is honest rather
+   * than scripted: it finds the red pixels in the render it was handed and
+   * reports their box. So the figure is stored only if the render, the
+   * mapping of box_2d back to points and the paint's own box all agree.
+   */
+  async function croppedPage(): Promise<Uint8Array> {
+    const doc = await PDFDocument.create();
+    const font = await doc.embedFont(StandardFonts.Helvetica);
+    const page = doc.addPage([700, 900]);
+    page.setCropBox(50, 60, 550, 740);
+    page.node.set(PDFName.of("UserUnit"), PDFNumber.of(2));
+    const pixels = new Uint8Array(60 * 30 * 3);
+    for (let i = 0; i < pixels.length; i += 3) pixels[i] = 255;
+    const image = await doc.embedPng(await encodeFigurePng({ kind: "rgb", width: 60, height: 30, data: pixels }));
+    page.drawImage(image, { x: 200, y: 450, width: 240, height: 120 });
+    for (let line = 0; line < 6; line++) {
+      page.drawText("Prose that surrounds the figure on this page, enough words to read as text.", {
+        x: 80,
+        y: 780 - line * 14 - (line >= 3 ? 250 : 0),
+        size: 9,
+        font,
+      });
+    }
+    return doc.save();
+  }
+
+  const seeingLocator: FigureLocator = async (request) => {
+    const shown = request.pages[0]!;
+    const { width, height, channels, data } = pngPixels(shown.png);
+    let [x0, y0, x1, y1] = [width, height, -1, -1];
+    for (let y = 0; y < height; y++) {
+      for (let x = 0; x < width; x++) {
+        const at = (y * width + x) * channels;
+        if (data[at]! > 200 && data[at + 1]! < 60 && data[at + 2]! < 60) {
+          x0 = Math.min(x0, x);
+          y0 = Math.min(y0, y);
+          x1 = Math.max(x1, x);
+          y1 = Math.max(y1, y);
+        }
+      }
+    }
+    if (x1 < 0) return { ok: true, answer: { page: null, box_2d: null } };
+    const n = (v: number, of: number) => Math.round((v / of) * 1000);
+    return { ok: true, answer: { page: shown.page, box_2d: [n(y0, height), n(x0, width), n(y1 + 1, height), n(x1 + 1, width)] } };
+  };
+
+  it("stores the red picture when the model sees it where the paint says it is", async () => {
+    const figure = marker(1);
+    const run = await collectPdfFigures({
+      locate: seeingLocator,
+      captions: new Map([[figure.ref, "Figure 1. A caption this page does not print."]]),
+      markers: [figure],
+      pdf: await croppedPage(),
+      blobs: fakeBlobs(),
+    });
+    expect(run.locateCalls).toBe(1);
+    expect(run.entries).toEqual([expect.objectContaining({ status: "stored", width: 60, height: 30 })]);
+    expect(run.located).toBe(1);
+  }, 120_000);
 });

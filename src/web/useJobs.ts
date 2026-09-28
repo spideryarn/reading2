@@ -21,7 +21,7 @@
  * The queue itself is src/jobs.ts; the routes are in src/routes.ts.
  */
 import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react";
-import type { Job, StepName } from "../types.js";
+import type { Job, ResetResponse, StepName } from "../types.js";
 import { jobEngine, send } from "./jobEngine.js";
 import { uploadEngine } from "./uploadEngine.js";
 import { statusOf } from "./lib/api.js";
@@ -151,6 +151,20 @@ export interface UseJobs {
      */
     useProfile?: boolean;
   }): Promise<Job | null>;
+  /**
+   * **Start an article again** — `POST /api/article/:slug/reset`, the import
+   * over our stored copy with every mode's artefact dropped, and optionally the
+   * extras it had queued again after it (docs/plans/260928a-reset-and-regenerate-article.md).
+   *
+   * An action here rather than a fetch in the section, **because the browser is
+   * the worker**: the route answers with an id and nothing more, and the job
+   * runs only once this tab's engine has found it and started `/advance` on it.
+   * `act` is what pokes the engine after the POST, exactly as it does for
+   * `run`, so a reset goes through the one path that is known to get driven.
+   *
+   * Null on failure, with the server's sentence in `lastFailure()`.
+   */
+  reset(slug: string, regenerate: boolean): Promise<ResetResponse | null>;
   cancel(id: string): Promise<void>;
   retry(id: string): Promise<void>;
   forget(id: string): Promise<void>;
@@ -374,6 +388,14 @@ export function useJobs(cadence: QueueCadence, onFinished?: (job: Job) => void):
     add: (url) => act(() => post({ url })),
     addUpload: (uploadId) => act(() => post<Job | AlreadyAnArticle>({ uploadId })),
     run: (request) => act(() => post(request)),
+    reset: (slug, regenerate) =>
+      act(() =>
+        send<ResetResponse>(`/api/article/${encodeURIComponent(slug)}/reset`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ regenerate }),
+        }),
+      ),
     cancel: async (id) => {
       await act(() => send(`/api/jobs/${id}/cancel`, { method: "POST" }));
     },

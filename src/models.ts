@@ -268,6 +268,26 @@ export const QUICK_MODEL_OPENROUTER = "openai/gpt-5.6-luna";
 export const PDF_READER_MODEL = "openai/gpt-5.6-luna";
 
 /**
+ * **What finds a figure the PDF itself could not place** — the model shown a
+ * refused figure's page and its neighbours and asked for the page and box of
+ * the figure with this caption (src/pdf-figure-locate.ts). Not on a tier,
+ * for the PDF reader's reason: a tier is a judgment about how much reasoning a
+ * job needs, and this one needs eyes and a coordinate convention.
+ *
+ * Chosen by measurement, 2026-09-24 and 2026-09-28: a Sonnet subagent's
+ * research found Gemini's `box_2d` convention the documented, trained one, and
+ * of five models tried on the same page only this one and Luna returned the
+ * right box (Claude's was too tall, Gemini 2.5 Pro's and Qwen's had x and y
+ * swapped). Then 30 calls with the real acceptance rule: 21 right, 9 correctly
+ * refused, none wrong, ~1.8 s and ~$0.002 a call. The table is in
+ * docs/plans/260924e-a-pdf-figure-paired-to-the-wrong-caption.md § Stage 2.
+ * It is a *preview* model; if OpenRouter retires the id, every call fails and
+ * every figure it would have found stays caption-only — the state it was
+ * already in.
+ */
+export const PDF_FIGURE_LOCATOR_MODEL = "google/gemini-3-flash-preview";
+
+/**
  * **What turns a dictation into text.** Not on a tier, for the same reason the
  * PDF reader is not: a tier is a judgment about how much reasoning a job needs,
  * and this one needs none — it needs ears and a vocabulary list.
@@ -422,6 +442,10 @@ export type Task =
      where it responds — docs/plans/260916d-faq-mode.md. Article-reading like
      `ideas`, naming block ids, so `articleWithIds` and that cached prefix. */
   | "faq"
+  /* A route through the Quotes — docs/plans/260928a-trajectory-mode-skim-a-paper-at-increasing-depth.md.
+     **Not article-reading**: it sends the quotes and never the article, so it
+     is no `ArticleStage` and its effort is a constant in src/trajectory.ts. */
+  | "trajectory"
   | "explain"
   | "chat"
   /* **Marking a reader's answer, and its own job rather than a mode of `quiz`.**
@@ -578,7 +602,7 @@ export type Task =
  * the inventory the profile page shows and the jobs the meter can name are the
  * same three by construction.
  */
-export type NonTaskAiJob = "pdf" | "embeddings" | "dictation";
+export type NonTaskAiJob = "pdf" | "embeddings" | "dictation" | "pdf-figure-locate";
 
 /**
  * **Every model call this app pays for**, whether or not it is a tier decision.
@@ -741,6 +765,7 @@ export const TASK_TIER: Record<Task, Tier> = {
   illustrated: "capable",
   quiz: "capable",
   faq: "capable",
+  trajectory: "capable",
   explain: "capable",
   chat: "capable",
   "quiz-mark": "capable",
@@ -952,6 +977,7 @@ export const TASK_WIRE: Record<Task, Wire> = {
   illustrated: "messages",
   quiz: "messages",
   faq: "messages",
+  trajectory: "messages",
   explain: "chat",
   chat: "chat",
   "quiz-mark": "chat",
@@ -995,6 +1021,7 @@ export function wireFor(task: Task): Wire {
 export const AI_JOB_WIRE: Record<AiJob, Wire> = {
   ...TASK_WIRE,
   pdf: "chat",
+  "pdf-figure-locate": "chat",
   dictation: "transcription",
   embeddings: "embeddings",
   /* **What an eval would use if it went through the gateway** — and `rescue`,
@@ -1054,6 +1081,7 @@ export const MODEL_ENV_VAR: Record<Task, string | null> = {
   illustrated: null,
   quiz: null,
   faq: null,
+  trajectory: null,
   citations: null,
   /* It has one because it is on the chat wire, and every chat-wire task does —
      `REQUEST_PATH_TASKS` is derived from `TASK_WIRE`, and tests/models.test.ts
@@ -1184,6 +1212,7 @@ export const DISPLAY_NAME: Record<string, string> = {
      keeps a model nobody calls tells the next reader of /privacy that their text
      reaches somewhere it does not. docs/plans/260907c-dictation-onto-an-openai-transcriber.md. */
   "openai/gpt-transcribe": "gpt-transcribe",
+  "google/gemini-3-flash-preview": "gemini-3-flash-preview",
 };
 
 /**
@@ -1214,6 +1243,7 @@ export const NON_TASK_MODELS: readonly {
   { job: "pdf", id: PDF_READER_MODEL, provider: "openrouter" },
   { job: "embeddings", id: EMBEDDING_MODEL, provider: "openrouter" },
   { job: "dictation", id: DICTATION_MODEL, provider: "openrouter" },
+  { job: "pdf-figure-locate", id: PDF_FIGURE_LOCATOR_MODEL, provider: "openrouter" },
 ];
 
 /**

@@ -243,11 +243,26 @@
   overflow: hidden;
 }
 
+/* **Structure's type scale, declared once for both of its faces.** The list
+   below steps through all four with distance; the two columns
+   (structure-mode.css) use `near` for their rows and `mid` for paragraphs and
+   gists, so a title is the same size whichever face is drawing it. Since
+   2026-09-28, when Greg asked for the faces to look alike and the columns were
+   still at 13px — docs/plans/260928a-structure-two-columns-readable.md. The
+   values are the list's own, unchanged. */
+.mode-band.outln,
+.mode-band.struct {
+  --structure-tier-cur: 1.03rem;
+  --structure-tier-near: 0.98rem;
+  --structure-tier-mid: 0.94rem;
+  --structure-tier-far: 0.91rem;
+}
+
 /* The tiers. Size and colour only — see the header. */
-.outln-row.tier-cur  { font-size: 1.03rem; }
-.outln-row.tier-near { font-size: 0.98rem; }
-.outln-row.tier-mid  { font-size: 0.94rem; }
-.outln-row.tier-far  { font-size: 0.91rem; color: var(--ink-faint); }
+.outln-row.tier-cur  { font-size: var(--structure-tier-cur); }
+.outln-row.tier-near { font-size: var(--structure-tier-near); }
+.outln-row.tier-mid  { font-size: var(--structure-tier-mid); }
+.outln-row.tier-far  { font-size: var(--structure-tier-far); color: var(--ink-faint); }
 
 /* Where the reader is. `.here` is the whole ancestor chain and `.now` is the
    one deepest drawn row — two marks because at a shallow rung the part is the
@@ -314,7 +329,7 @@
   grid-column: 2;
   margin: 0.2rem 0 0.1rem;
   font-family: var(--font-reading);
-  font-size: 0.94rem;
+  font-size: var(--structure-tier-mid);
   font-weight: 400;
   line-height: 1.4;
   color: var(--ink);

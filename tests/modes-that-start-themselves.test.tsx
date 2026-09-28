@@ -155,6 +155,7 @@ const { useTimeline } = await import("../src/web/useTimeline.js");
 const { useGlossary } = await import("../src/web/useGlossary.js");
 const { useDebate } = await import("../src/web/useDebate.js");
 const { useFaq } = await import("../src/web/useFaq.js");
+const { useTrajectory } = await import("../src/web/useTrajectory.js");
 const { useSketch } = await import("../src/web/useSketch.js");
 const { useIllustrated } = await import("../src/web/useIllustrated.js");
 const { diagramInSearch } = await import("../src/web/params.js");
@@ -259,6 +260,24 @@ function FaqBand({ slug }: { slug: string }): ReactElement {
   return createElement(
     "div",
     { "data-band": "faq" },
+    view.automatic ? "auto" : view.starting ? "starting" : view.status,
+  );
+}
+
+/**
+ * **Trajectory, a positive control for the one press that buys two steps**
+ * (2026-09-28). It stands on the Quotes, which `OwnedReader` reads; the read is
+ * posed here as `trajectoryQuotes`, so a test can hold it at "loading" and see
+ * the press wait rather than guess. Remove the `useAutoRun` call in
+ * useTrajectory.ts, or its `precededBy`, and only the tests below go red.
+ * docs/plans/260928a-trajectory-mode-skim-a-paper-at-increasing-depth.md.
+ */
+let trajectoryQuotes: import("../src/web/useQuotes.js").QuotesRead | null = null;
+function TrajectoryBand({ slug }: { slug: string }): ReactElement {
+  const view = useTrajectory(slug, trajectoryQuotes ?? SETTLED_EMPTY_QUOTES_READ);
+  return createElement(
+    "div",
+    { "data-band": "trajectory" },
     view.automatic ? "auto" : view.starting ? "starting" : view.status,
   );
 }
@@ -387,6 +406,7 @@ function Reading({ slug, start }: { slug: string; start: Mode }): ReactElement {
     mode === "glossary" ? createElement(GlossaryBand, { slug }) : null,
     mode === "debate" ? createElement(DebateBand, { slug }) : null,
     mode === "faq" ? createElement(FaqBand, { slug }) : null,
+    mode === "trajectory" ? createElement(TrajectoryBand, { slug }) : null,
     /* **The band Diagram opens is whichever picture the address bar names**, and
        that is the whole point of these two arms — the real `DiagramBand` does
        exactly this with `?diagram=`, and a test that always mounted the Sketch
@@ -628,6 +648,37 @@ describe("a press", () => {
 
     expect(artefactGets("faq").length).toBeGreaterThan(0);
     expect(posts).toEqual([{ slug: "constitution", steps: ["faq"] }]);
+  });
+
+  /* The sixth. See TrajectoryBand above: with no Quotes, one press asks for
+     them first, in the same job. */
+  it("plans the route, choosing the Quotes first when there are none", async () => {
+    await open("plain");
+    await press("Trajectory");
+    await settle();
+
+    expect(artefactGets("trajectory").length).toBeGreaterThan(0);
+    expect(posts).toEqual([{ slug: "constitution", steps: ["quotes", "trajectory"] }]);
+  });
+
+  it("waits for the Quotes' read before deciding what the route press buys", async () => {
+    /* The request depends on the answer — the route alone, or the Quotes
+       first — so a press made while the Quotes are still loading must spend
+       nothing yet, and spend exactly once when they answer. */
+    trajectoryQuotes = { ...SETTLED_EMPTY_QUOTES_READ, status: "loading" };
+    try {
+      await open("plain");
+      await press("Trajectory");
+      await settle();
+      expect(posts, "spent before the Quotes had answered").toEqual([]);
+
+      trajectoryQuotes = null;
+      await reopen("constitution", "trajectory");
+      await settle();
+      expect(posts).toEqual([{ slug: "constitution", steps: ["quotes", "trajectory"] }]);
+    } finally {
+      trajectoryQuotes = null;
+    }
   });
 
   it("draws the sketch, which is the picture Diagram opens on", async () => {

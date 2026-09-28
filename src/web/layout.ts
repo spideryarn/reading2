@@ -247,6 +247,70 @@ export const DEFAULT_ROOT_PX = 16;
 export const MODE_IDEAL = 400; // 25rem
 export const MODE_MIN = 288; // 18rem — narrower and an answer stops reading as prose
 
+/**
+ * **Which band a mode gets.** Every mode's band is `MODE_MIN`–`MODE_IDEAL` wide,
+ * except Structure's while its two columns are on screen — see
+ * `structureColumnsBand`.
+ */
+export type BandShape = "standard" | "structure";
+
+/**
+ * **Structure's two columns, as widths.** Calculated from rem, because the
+ * columns hold rem-sized type (structure-mode.css) and a larger root needs
+ * wider columns for the same line. `structureColumnsBand` also floors the
+ * result above the ordinary band's maximum so the two faces cannot overlap at
+ * an unusually small root.
+ *
+ * The minimum is the rule from Greg's request (2026-09-28): each of the two
+ * columns is at least as wide as the one column he calls fine, at its
+ * narrowest — Structure's list face in a `MODE_MIN` band has a 267px content
+ * box, and 17rem is the rem step that clears it. Until then the columns shared
+ * the ordinary band and were never wider than ~181px, on any screen.
+ * docs/plans/260928a-structure-two-columns-readable.md.
+ */
+export const STRUCT_COLUMN_MIN_REM = 17; // 272px
+export const STRUCT_COLUMN_IDEAL_REM = 20; // 320px — ~40 characters; wider only costs the prose
+/** The gap between the columns — structure-mode.css § `.struct-grid`. Change both. */
+export const STRUCT_GUTTER_REM = 1;
+/** Structure's padding on the band, both sides — structure-mode.css § `.mode-band.struct`. Change both. */
+export const STRUCT_PAD_X_REM = 1.5;
+/**
+ * Column B's bracket — structure-mode.css § `.struct-inner`, its padding and its
+ * border. Change both. It comes out of column B's track, and the tracks are
+ * equal, so both tracks carry it: without it the threshold gave column B 260px
+ * of its 272 (GPT Sol's plan review, finding 2).
+ */
+export const STRUCT_BRACKET_INSET_REM = 0.6;
+export const STRUCT_BRACKET_PX = 2;
+/** `.mode-band`'s one border (mode-band.css, `border-right`). */
+const BAND_BORDER_PX = 1;
+
+/**
+ * **The band border-box widths Structure's columns need**: `min` to draw them at
+ * all, `ideal` beyond which the room goes back to the prose.
+ *
+ * The one statement of Structure's switch point. `fitMode` sizes the band from
+ * it and `structureFace` (StructureMode.tsx) picks the face from it, so the band
+ * handed out and the face drawn in it cannot disagree —
+ * tests/structure-band-width.test.ts sweeps every width for exactly that.
+ */
+export function structureColumnsBand(rootFontPx: number): { min: number; ideal: number } {
+  const track = (columnRem: number) =>
+    (columnRem + STRUCT_BRACKET_INSET_REM) * rootFontPx + STRUCT_BRACKET_PX;
+  const around = (STRUCT_GUTTER_REM + STRUCT_PAD_X_REM) * rootFontPx + BAND_BORDER_PX;
+  const measuredMin = Math.ceil(2 * track(STRUCT_COLUMN_MIN_REM) + around);
+  const measuredIdeal = Math.ceil(2 * track(STRUCT_COLUMN_IDEAL_REM) + around);
+  /* An ordinary band reaches MODE_IDEAL. Keep the columns' threshold above it
+     even at an unusually small browser root, or fitMode can take its ordinary
+     branch (because there is not room beside PROSE_MIN) and still hand out a
+     MODE_MIN band that structureFace reads as columns. The 401px floor is inert
+     at every normal root — the measured minimum is already 458px at 12px — and
+     preserves the stated jump from an ordinary band to a columns band for all
+     positive root sizes. */
+  const min = Math.max(MODE_IDEAL + 1, measuredMin);
+  return { min, ideal: Math.max(min, measuredIdeal) };
+}
+
 export type SpineMode = "on" | "off";
 
 export interface Layout {
@@ -517,13 +581,19 @@ export interface FitInput {
    * The root font size this page is painted at, in px — `useRootFontPx()` in
    * App.tsx, `DEFAULT_ROOT_PX` for anything that has no DOM to ask.
    *
-   * Only `PROSE_ALONE_MAX_REM` needs it, and only because that one number is a
-   * measure of type rather than of screen. Every other constant in this file is
-   * a *screen* width — how narrow a gist still reads at, how much room a chat
-   * answer needs — and those are px on purpose, because they are compared with
-   * a window measured in px.
+   * Two things need it, and only because each is a measure of type rather than
+   * of screen: `PROSE_ALONE_MAX_REM`, and Structure's columns
+   * (`structureColumnsBand`). Every other constant in this file is a *screen*
+   * width — how narrow a gist still reads at, how much room a chat answer needs
+   * — and those are px on purpose, because they are compared with a window
+   * measured in px.
    */
   rootFontPx?: number;
+  /**
+   * Which band is open, when `modeBand` is — see `BandShape`. Ignored without a
+   * band.
+   */
+  bandShape?: BandShape;
 }
 
 export function fitView({
@@ -535,6 +605,7 @@ export function fitView({
   modeBand = false,
   showSpine = null,
   rootFontPx = DEFAULT_ROOT_PX,
+  bandShape = "standard",
 }: FitInput): Fit {
   /* A mode owns the middle band, so there are no gist columns to fit and no
      choice for the reader to have made about them. Handled first and returned
@@ -545,7 +616,7 @@ export function fitView({
      Note what this does NOT do: it does not consult `chosen`. `?cols=` survives
      the trip through chat untouched and means what it always meant when the
      reader comes back. */
-  if (modeBand) return fitMode(windowWidth, showSpine);
+  if (modeBand) return fitMode(windowWidth, showSpine, bandShape, rootFontPx);
 
   // Outline mode has no prose; the leaf column is the detail column, and it
   // holds nav labels rather than paragraphs, so it needs far less room.
@@ -751,12 +822,20 @@ export function fitView({
  *    and covers the article instead. **The page never overflows and never
  *    scrolls sideways**; it said it did until 2026-09-06, and that was already
  *    only reachable in the branch the cover check had made unreachable.
+ *  - **Structure's columns are the one band that can be wider**, and only once
+ *    they fit beside `PROSE_MIN` — `bandWidth` below, and
+ *    `structureColumnsBand` above it.
  *  - **The prose is always on**, which is `proseVisible`'s job rather than this
  *    function's. It used to be asserted here and nowhere else, and that is
  *    exactly how the outline-mode bug got in: a comment claiming a fact the
  *    only other caller did not know about.
  */
-function fitMode(windowWidth: number, showSpine: boolean | null = null): Fit {
+function fitMode(
+  windowWidth: number,
+  showSpine: boolean | null,
+  bandShape: BandShape,
+  rootFontPx: number,
+): Fit {
   const spine = modeSpine(showSpine);
   const avail = Math.max(0, windowWidth - spineWidth(spine));
 
@@ -861,7 +940,7 @@ function fitMode(windowWidth: number, showSpine: boolean | null = null): Fit {
      identical to what it was when there was one constant. Below 688 the branch
      above has already taken the covering path, so `proseW` is never less than
      `MODE_PROSE_FLOOR` and the sum is never more than `avail`. */
-  const modeW = clamp(avail - PROSE_MIN, MODE_MIN, MODE_IDEAL);
+  const modeW = bandWidth(avail, bandShape, rootFontPx);
   const proseW = Math.max(MODE_PROSE_FLOOR, avail - modeW);
   return {
     // The table is the prose column and nothing else. Its own `pin-left` and
@@ -876,4 +955,26 @@ function fitMode(windowWidth: number, showSpine: boolean | null = null): Fit {
     modeW,
     alone: false,
   };
+}
+
+/**
+ * **The band's width beside the prose**, for a window that is not covered.
+ *
+ * Structure asks one question first: is there room beside `PROSE_MIN` for its
+ * two columns (`structureColumnsBand`)? If so it takes that room, up to the
+ * columns' ideal; if not, it gets exactly what every other mode gets, and
+ * `structureFace` draws the list in it. So the band **jumps** from `MODE_IDEAL`
+ * to the columns' minimum rather than growing through the widths between —
+ * a list face in a 500px band would be a look Greg has not seen, and he called
+ * the one column fine as it is (260928a § Assumptions 1).
+ *
+ * The prose keeps `PROSE_MIN` at the switch: the columns take only room the
+ * reading column was not defending.
+ */
+function bandWidth(avail: number, bandShape: BandShape, rootFontPx: number): number {
+  if (bandShape === "structure") {
+    const { min, ideal } = structureColumnsBand(rootFontPx);
+    if (avail - PROSE_MIN >= min) return Math.min(avail - PROSE_MIN, ideal);
+  }
+  return clamp(avail - PROSE_MIN, MODE_MIN, MODE_IDEAL);
 }

@@ -180,6 +180,10 @@ const MANIFEST = [
      beside it, borrowing glossary.css and timeline.css, and setting nothing they
      set on the same element — faq.css's header. */
   "faq.css",
+  /* After faq.css, and for its reason: `.trajectory` is `.gloss` with a class
+     beside it, and sets nothing the sheets it borrows from set on the same
+     element — trajectory.css's header. */
+  "trajectory.css",
   "quiz.css",
   "feedback.css",
   "site.css",

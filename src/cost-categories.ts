@@ -182,6 +182,7 @@ export const JOB_DISPOSITION: Record<AiJob, JobDisposition> = {
   illustrated: "step-driven",
   quiz: "step-driven",
   faq: "step-driven",
+  trajectory: "step-driven",
   debate: "step-driven",
   citations: "step-driven",
   /* Three tasks a reader waits on with the page open. */
@@ -223,6 +224,8 @@ export const JOB_DISPOSITION: Record<AiJob, JobDisposition> = {
      never true of a single row. GPT Sol, F4. */
   pdf: "step-driven",
   "pdf-frontmatter": "step-driven",
+  /* A refused figure, located inside the `assets` step. src/pdf-figure-locate.ts. */
+  "pdf-figure-locate": "step-driven",
   /* The Illustrated sub-mode's plate, bought inside the `illustrated` step. */
   illustrate: "step-driven",
   /* Both halves of a live session, told apart by `requested_model`. Priced on

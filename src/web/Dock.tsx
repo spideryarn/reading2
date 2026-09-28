@@ -186,6 +186,7 @@ import {
   Quote,
   BookText,
   BadgeQuestionMark,
+  Route,
 } from "lucide-react";
 /* The one name each mode has, and the one sentence about what it is — and the
    bar is one of four places that used to spell the name out for itself. Both
@@ -696,6 +697,18 @@ const MODES_UI = [
   {
     mode: "faq",
     icon: BadgeQuestionMark,
+  },
+  /* **After FAQ**, as the plan placed it: a walk through the article's own
+     Quotes, so still the article pulled out rather than the web or the
+     reader's own words. Greg has not set this one by hand; move it if it is
+     wrong.
+
+     `Route`, used nowhere else — a path with stops on it, which is the mode.
+     Not `ListOrdered`, which is the Tweets link's numbered thread.
+     docs/plans/260928a-trajectory-mode-skim-a-paper-at-increasing-depth.md. */
+  {
+    mode: "trajectory",
+    icon: Route,
   },
   /* Search was **two** dimmed placeholders in the `SOON` list this file used to
      carry — `Search` and `Highlights`, side by side — and is one mode now. That

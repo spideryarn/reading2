@@ -104,6 +104,7 @@ describe("an article", () => {
       debate: "Debate",
       citations: "Citations",
       faq: "FAQ",
+      trajectory: "Trajectory",
     };
     for (const mode of MODES) {
       const t = pageTitle({ kind: "read", title, view: "article", mode });

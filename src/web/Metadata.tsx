@@ -231,6 +231,7 @@ import {
   Paintbrush,
   PenLine,
   RefreshCw,
+  Route,
   ScanLine,
   Tag,
   Target,
@@ -279,6 +280,7 @@ import { ProfileBox } from "./ProfileBox.js";
 import { PageContents } from "./PageContents.js";
 import { Button } from "@/components/ui/button";
 import { JobProgress } from "./JobProgress.js";
+import { ResetArticle } from "./ResetArticle.js";
 import { SKETCH_PRICE, SKETCH_WAIT } from "./sketch-cost.js";
 import { useOrderedRead, type ArtefactRead } from "./useOrderedRead.js";
 import { useStepJob } from "./useStepJob.js";
@@ -334,6 +336,9 @@ const STAGE_ICONS: Record<StepName, ComponentType<{ size?: number }>> = {
   glossary: BookA,
   ideas: Lightbulb,
   quotes: Quote,
+  /* A route: the stops are the quotes one row up, in an order. The Trajectory
+     band is stage 2 of docs/plans/260928a and may choose its own glyph. */
+  trajectory: Route,
   /* The same clock the Dock puts on the Timeline button, so the stage row and
      the mode button a reader has already met say the same thing. */
   timeline: Clock,
@@ -1077,6 +1082,19 @@ export function Metadata({
           arcGenerator={arc ? `${arc.generator} · ${arc.version}` : undefined}
         />
 
+        {/* ------------------------------------------ 9½. starting it again --
+            Just above Archive: it is the other act here that changes the
+            article itself rather than reading about it, and it belongs past
+            everything somebody came to read. Behind the experimental switch
+            while it earns a trial — docs/plans/260928a-reset-and-regenerate-article.md,
+            assumption 5. */}
+        <ResetSection
+          on={experimental.on}
+          slug={slug}
+          provenance={provenance}
+          onFinished={refresh}
+        />
+
         {/* ---------------------------------------------- 10. archiving it --
             Last on the page, and last on purpose: the control that takes the
             article off the shelf belongs past everything somebody might have
@@ -1193,6 +1211,36 @@ function SharingSection({
           sharing={sharing}
           onVisibility={onVisibility}
         />
+      </div>
+    </Section>
+  );
+}
+
+/**
+ * **Start this article again** — the section, and the experimental gate on it.
+ *
+ * A component rather than a `{experimental.on && …}` in the page body, for
+ * `SharingSection`'s reason: the body is at the edge of its complexity budget.
+ * The control itself is ./ResetArticle.tsx.
+ */
+function ResetSection({
+  on,
+  slug,
+  provenance,
+  onFinished,
+}: {
+  /** `useExperimental().on` — the section does not exist without it. */
+  on: boolean;
+  slug: string;
+  provenance: ArticleMetadata | null;
+  /** `refresh`, never `reload` — see `RerunSection` below. */
+  onFinished: () => void;
+}) {
+  if (!on) return null;
+  return (
+    <Section label="Start this article again">
+      <div className={`${CARD} tw:p-4`}>
+        <ResetArticle slug={slug} provenance={provenance} onFinished={onFinished} />
       </div>
     </Section>
   );

@@ -635,6 +635,16 @@ export const AI_JOB_ROUTE: Record<RoutedJob, Route> = {
     wire: "chat",
     provider: { require_parameters: true, allow_fallbacks: false },
   },
+  /* **A refused PDF figure, located** (src/pdf-figure-locate.ts). The PDF
+     reader's policy, for its reason: the answer is a strict JSON schema, and an
+     upstream that dropped `response_format` would answer in prose that the
+     judge then refuses as unreadable — a figure lost, and money spent, with
+     nothing to say why. No `order`: nothing here is cached. */
+  "pdf-figure-locate": {
+    path: "/v1/chat/completions",
+    wire: "chat",
+    provider: { require_parameters: true, allow_fallbacks: false },
+  },
   embeddings: { path: "/v1/embeddings", wire: "embeddings", provider: {} },
   /* **Forbids fallback — and my first reason for it was wrong.** I wrote that a
      silent fallback would substitute a different *model*; GPT Sol corrected it:
@@ -750,6 +760,8 @@ export type ChatJob = Exclude<
      request-path call on chat/completions and needs a route below. */
   | "quiz"
   | "faq"
+  /* Generation, on the Messages wire like `faq`. src/trajectory.ts. */
+  | "trajectory"
   /* **Not a pipeline stage, and still not on this wire.** A live session is a
      WebRTC connection the browser holds open to OpenAI; this file never sends
      it anything and never sees a response, so there is no OpenRouter path to

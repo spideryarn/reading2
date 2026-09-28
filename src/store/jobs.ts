@@ -52,7 +52,7 @@ import { createHash, randomUUID } from "node:crypto";
 
 import { urlKey } from "../ingest.js";
 import type { FailureKind } from "../messages.js";
-import type { Job, JobStatus, JobStep, JobUpload, OwnerId, StepName } from "../types.js";
+import type { Job, JobReset, JobStatus, JobStep, JobUpload, OwnerId, StepName } from "../types.js";
 
 /**
  * A fingerprint of exactly what `sameWork` compares, computed once.
@@ -84,6 +84,7 @@ export function workKeyFor(
   profile?: string,
   upload?: JobUpload,
   url?: string,
+  more: WorkKeyExtras = {},
 ): string {
   return createHash("sha256")
     .update(
@@ -97,9 +98,50 @@ export function workKeyFor(
            spellings of one address two pieces of work, and the dedup this key
            exists for would stop working for the commonest case of all. */
         source: url ? urlKey(url) : "",
+        /* **Only when present**, so every key minted before these existed —
+           every job that is not a reset or a reset's regeneration — hashes to
+           exactly what it always did. `WorkKeyExtras` says why each is here. */
+        /* **One active reset per article**, whatever regeneration plan it
+           carries. A reset queues its successors only when it publishes. If a
+           second reset could sit behind it, the first reset's successors would
+           be inserted behind the second and could recreate extras the later
+           reset asked to leave absent. `enqueueReset` compares the plan on the
+           returned holder and answers 409 when the two presses disagree. */
+        ...(more.reset !== undefined && { reset: true }),
+        ...(more.scope !== undefined && { scope: more.scope }),
       }),
     )
     .digest("hex");
+}
+
+/**
+ * **The two ingredients of a work key that most jobs never have.**
+ * docs/plans/260928a-reset-and-regenerate-article.md.
+ */
+export interface WorkKeyExtras {
+  /**
+   * The job's `reset`, so a reset never de-duplicates onto a queued plain
+   * "re-read" (`force: ["extract"]`) and silently resets nothing. Its value is
+   * deliberately represented as the boolean `true` in the hash: only one reset
+   * may be active on an article, because the first one's publication-time
+   * successors would otherwise cross a second reset already waiting in line.
+   * The full plan still lives on the job row; `enqueueReset` refuses a
+   * conflicting second press rather than pretending it asked for the first.
+   */
+  reset?: JobReset;
+  /**
+   * **The id of the reset whose publication queued this job**, and set by
+   * `enqueueSuccessorIn` alone. A regeneration must never collapse onto an
+   * identical job from before the reset: a queued one would run first and be
+   * wiped by the reset, and an active one with a draft on the old base can
+   * never publish over it (`boundToOlderBase`, Sol F1). Scoping the key to the
+   * reset makes both a different piece of work.
+   *
+   * Not on `Job` and so not in `sameWork`, deliberately: nothing reaches
+   * `enqueue` with a scope, and the only minting of it is inside a
+   * publication's transaction.
+   */
+  scope?: string;
 }
 
 /**

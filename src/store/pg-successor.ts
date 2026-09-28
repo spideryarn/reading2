@@ -16,7 +16,7 @@
  * docs/plans/260906a-labels-leave-the-blocking-hierarchy-step.md.
  */
 
-import { and, eq, inArray, not } from "drizzle-orm";
+import { and, eq, inArray, not, sql } from "drizzle-orm";
 
 import type { getDb } from "../db/client.js";
 import { jobs } from "../db/schema.js";
@@ -93,8 +93,10 @@ export type SuccessorOutcome =
  *
  * `reservesName: false` and `urlKey: null`, so the row sits outside
  * `jobs_reserved_slug` and `jobs_active_source` and simply queues behind
- * whatever is already on this article. No `profile`: the steps a successor runs
- * take none, and putting one on would give identical work distinct work keys.
+ * whatever is already on this article. No `profile` for the labels successor:
+ * its step takes none, and putting one on would give identical work distinct
+ * work keys. A reset's regenerations are the exception, and carry the one the
+ * reset snapshotted — see the parameters below.
  * No `url`: the job is about an article, not an address, and `enqueue`'s
  * `urlForSlug` normalisation is exactly the thing that makes `Job.url` useless
  * for telling free work from paid.
@@ -108,15 +110,52 @@ export type SuccessorOutcome =
  */
 export async function enqueueSuccessorIn(
   tx: Tx,
-  successor: { ownerId: OwnerId; slug: string; steps: StepName[] },
+  successor: {
+    ownerId: OwnerId;
+    slug: string;
+    steps: StepName[];
+    /**
+     * The reader's profile to run under — a reset's regeneration only, which
+     * carries the snapshot the reset took at the press (Sol F2). On the row and
+     * in the work key, the way `enqueue` puts it on both. The labels successor
+     * passes none: its step takes no profile, and one would give identical work
+     * distinct keys.
+     */
+    profile?: string;
+    /**
+     * **The id of the reset that queued this**, folded into the work key so it
+     * can never collapse onto an identical job from before that reset — see
+     * `WorkKeyExtras.scope` (src/store/jobs.ts) for the two ways that loses the
+     * regeneration (Sol F1). Absent for the labels successor, whose dedupe is
+     * exactly what it wants.
+     */
+    scope?: string;
+    /**
+     * **Microseconds after this transaction's `now()`** to stamp `created_at`
+     * with, so several successors queued in one transaction claim in the order
+     * they were asked for. `now()` is fixed for the whole transaction, and the
+     * line is ordered on `(created_at, id)` with a random id
+     * (`blockedByAnother`, src/store/pg-jobs.ts) — without this `illustrated`
+     * could claim before the `sketch` it paints (Sol F6). Postgres keeps
+     * microseconds, so one apart is enough. Absent means the column default.
+     */
+    after?: number;
+  },
 ): Promise<SuccessorOutcome> {
-  const { ownerId, slug, steps } = successor;
+  const { ownerId, slug, steps, profile, scope, after } = successor;
   /* **The canonical builder, not a second hashing of the same question.**
      `sameWork` (src/jobs.ts) is the prose specification it satisfies, and
-     `tests/jobs.test.ts` holds the two together. No profile, no upload and no
-     URL, so this is a constant per step list — which is precisely what makes the
-     conflict below the dedupe we want. */
-  const workKey = workKeyFor(steps, new Set());
+     `tests/jobs.test.ts` holds the two together. With no profile and no scope —
+     the labels successor — this is a constant per step list, which is precisely
+     what makes the conflict below the dedupe we want. */
+  const workKey = workKeyFor(
+    steps,
+    new Set(),
+    profile,
+    undefined,
+    undefined,
+    scope === undefined ? {} : { scope },
+  );
 
   /**
    * **Two attempts, and the second one is not optimism.**
@@ -157,6 +196,10 @@ export async function enqueueSuccessorIn(
         reservesName: false,
         urlKey: null,
         ingestEventId: null,
+        ...(profile !== undefined && { profile }),
+        ...(after !== undefined && {
+          createdAt: sql`now() + make_interval(secs => ${after}::double precision / 1000000)`,
+        }),
       })
       /* Broad on purpose, and immediately narrowed by the read below. `on
          conflict do nothing` covers **every** unique index on the table, so the
