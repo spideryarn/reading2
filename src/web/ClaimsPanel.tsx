@@ -127,6 +127,7 @@ import {
   withheldNote,
 } from "../referee-claims.js";
 import type { Block, BlockId } from "../types.js";
+import { BlockRef } from "./BlockRef.js";
 import { assignSlots } from "./hit-colours.js";
 import { usePassageLifecycle } from "./passage-lifecycle.js";
 import { type Found, resolveClaim } from "./search-hits.js";
@@ -522,9 +523,9 @@ function OtherTextInQuotes({
       <ul className="clm-passages">
         {rows.map((row) => (
           <li className={"clm-passage"} key={`${row.blockId}:${row.start}`}>
-            <button type="button" className="clm-jump" onClick={() => onJump(row.blockId)}>
+            <BlockRef id={row.blockId} onJump={onJump} preview={false} className="clm-jump">
               <span className="clm-quote">{row.text}</span>
-            </button>
+            </BlockRef>
           </li>
         ))}
       </ul>
@@ -589,9 +590,13 @@ function ClaimRow({
         <p className="clm-claim">{claim.claim}</p>
       )}
 
-      <button type="button" className="clm-jump" onClick={() => onJump(claim.blockId)}>
+      {/* A block link, not a button (plan 260928b): it only goes there, so it
+          gets an address, ⌘-click and the card. `preview={false}` because the
+          paper's words are already the link's text — the card says only which
+          section they are in. */}
+      <BlockRef id={claim.blockId} onJump={onJump} preview={false} className="clm-jump">
         <span className="clm-quote">{claim.quote}</span>
-      </button>
+      </BlockRef>
 
       {claim.passages.length > 0 && (
         /* The card is on the `<label>` rather than on the `<input>`: the box is a
@@ -649,9 +654,9 @@ function ClaimRow({
             key={`${p.blockId}:${i}`}
             className="clm-passage"
           >
-            <button type="button" className="clm-jump" onClick={() => onJump(p.blockId)}>
+            <BlockRef id={p.blockId} onJump={onJump} preview={false} className="clm-jump">
               <span className="clm-quote">{p.quote}</span>
-            </button>
+            </BlockRef>
             {p.reasoning && <p className="clm-why">{p.reasoning}</p>}
             {/* Never both: `validateClaims` blanks the line as it sets the flag.
                 The sentence is a value in src/referee-claims.ts so the copy test

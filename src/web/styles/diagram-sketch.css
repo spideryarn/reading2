@@ -351,6 +351,22 @@
   font-family: inherit; font-size: 0.79rem; color: var(--highlight);
 }
 .sk-card-jump:hover { text-decoration: underline; }
+/* The card's "Go to this passage" is a block link (plan 260928b); "Bring it
+   back" is still a button. The link is also `.block-ref`, whose id-chip type
+   prose.css sets, so two classes put the button's look back on it — including
+   `inline-block`, without which the margin above does nothing. Colour, opacity
+   and underline only on the `<a>`: a node pointing at a block this version of
+   the article no longer has draws a span, which keeps `.block-ref-missing`'s
+   dimmed strike-through. */
+.sk-card-jump.block-ref {
+  display: inline-block;
+  font-family: inherit;
+  font-size: 0.79rem;
+  line-height: normal;
+  letter-spacing: normal;
+}
+a.sk-card-jump.block-ref { color: var(--highlight); opacity: 1; text-decoration: none; }
+a.sk-card-jump.block-ref:hover { color: var(--highlight); text-decoration: underline; }
 
 /* ---- before there is a picture ---- */
 

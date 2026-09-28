@@ -563,6 +563,16 @@
   cursor: pointer;
   padding: 0;
 }
+/* The placement rows' `.crit-jump` is a block link (plan 260928b), and so also
+   `.block-ref` — whose id-chip type (Courier, 0.58rem, faint, half opacity)
+   prose.css sets, and which would win or lose on stylesheet order against the
+   rule above. Two classes win outright, so the anchor looks like the button the
+   model's rows still are. The colour, opacity and underline only on the `<a>`:
+   a block this version of the article no longer has is a span, and keeps
+   `.block-ref-missing`'s dimmed strike-through. */
+.crit-jump.block-ref { font: inherit; letter-spacing: inherit; }
+a.crit-jump.block-ref,
+a.crit-jump.block-ref:hover { color: var(--ink); opacity: 1; text-decoration: none; }
 /* **The rank leads, and it is large** — the plan's § 1. It is the first thing
    in the row and the first thing in the accessible name. */
 .crit-rank {
@@ -700,19 +710,25 @@
    the evidence that the paper said it, in that order. */
 .clm-claim { margin: 0 0 0.15rem; font-size: 0.91rem; font-weight: 600; color: var(--ink); }
 
-.clm-jump {
+/* A block link (BlockRef.tsx, plan 260928b), so it is also `.block-ref`, whose
+   id-chip type prose.css sets: Courier at 0.58rem, faint, half opacity, and an
+   underline and a colour on hover. Written as two classes so it wins that on
+   specificity rather than on which stylesheet loads last; the underline belongs
+   to the quote inside, as it did when this was a button. Colour, opacity and
+   underline only on the `<a>`: a block this version of the article no longer
+   has is a span, and keeps `.block-ref-missing`'s dimmed strike-through. */
+.clm-jump.block-ref {
   display: block;
   width: 100%;
   padding: 0;
-  border: 0;
-  background: none;
-  color: inherit;
   font: inherit;
+  letter-spacing: inherit;
   text-align: left;
-  cursor: pointer;
 }
-.clm-jump:hover .clm-quote { text-decoration: underline; }
-.clm-jump:focus-visible { outline: 2px solid var(--highlight); outline-offset: 1px; }
+a.clm-jump.block-ref,
+a.clm-jump.block-ref:hover { color: inherit; opacity: 1; text-decoration: none; }
+a.clm-jump:hover .clm-quote { text-decoration: underline; }
+a.clm-jump.block-ref:focus-visible { outline: 2px solid var(--highlight); outline-offset: 1px; }
 .clm-quote { font-size: 0.88rem; color: var(--ink); }
 
 .clm-tick { display: flex; align-items: center; gap: 0.3rem; margin-top: 0.25rem; font-size: 0.81rem; color: var(--ink-faint); cursor: pointer; }

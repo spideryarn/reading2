@@ -223,3 +223,34 @@ changes*; all seven taken. **This section overrides the design above where they 
   initial arrival, the return chip, or stepping (arrows, swipe, ‹ ›, comment Prev/Next, Trajectory
   Prev/Next). Stepping moves one item at a time and a flash on every step is noise; Back and the
   return chip return you to a place you chose to leave. Tested as exclusions.
+
+## Stage 2 — what landed
+
+Each site checked first: a site migrated only if its click did `onJump(id)` and nothing else.
+Tests: `tests/block-link-migration.test.tsx` (Claims, Sketch) and the placement case in
+`tests/referee-gap.test.tsx` — an `a[data-block-link]` with `at=` in its `href`, one jump on a
+plain click, none on ⌘-click; all red before the change.
+
+**Migrated to `BlockRef` with children** (classes kept; each panel's CSS gains a two-class
+`.x.block-ref` rule, because `.block-ref`'s id-chip type in prose.css would otherwise win or lose on
+stylesheet order; colour, opacity and underline go on `a.x` only, so the missing-block span keeps
+its strike-through):
+
+- `ClaimsPanel` ×3 `.clm-jump` — the claim's quote, each passage, the other text — `preview={false}`:
+  the quote is the link's text.
+- `CriteriaPanel` placement `.crit-jump` (misses and unpaired) — `preview={false}`, same reason.
+- `SketchView` "Go to this passage" `.sk-card-jump` — preview **on**: the Sketch card shows the
+  model's words for the node, never the paragraph. In the Enlarge dialog the block card cannot show
+  (it portals to `<body>`, under the top layer); the link still works there.
+
+**Kept as buttons:**
+
+- `CriteriaPanel`'s composite result — opens the row (`onOpen`) as well as jumping; ⌘-click would
+  skip the opening. Asserted in `referee-gap.test.tsx`.
+- `ProseHoverCard`'s "go there" / "back to the passage" — it sits inside an interactive card that
+  already shows the destination's words. As a `BlockRef` it would open the block card on top of that
+  card, and `preview={false}` still draws the section heading, so it is still a card on a card.
+  Moving the pointer onto that second card could also count as leaving the first, which would close
+  it. `BlockRef` has no way to switch its card off, so this stays a button. If we want the `href`
+  here, the fix is a `card={false}` on `BlockRef`, which is stage 1's file.
+- Search hits, Ideas and Timeline quote buttons, Trajectory stops, and Mirror are unchanged, per F3.

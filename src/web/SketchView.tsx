@@ -80,6 +80,7 @@ import {
 import { CANVAS_W, type Sketch, type SketchNode } from "../sketch-scene.js";
 import type { Block, BlockId } from "../types.js";
 import type { PublicSketch } from "../public-types.js";
+import { BlockRef } from "./BlockRef.js";
 import { JobProgress } from "./JobProgress.js";
 import { ControlTip, Tooltip, TooltipGroup } from "./Tooltip.js";
 import { SKETCH_PRICE, SKETCH_WAIT } from "./sketch-cost.js";
@@ -140,9 +141,14 @@ function SketchCard({
         </p>
       )}
       {node.block && (
-        <button type="button" className="sk-card-jump" onClick={() => onJump(node.block as BlockId)}>
+        /* A block link (plan 260928b), with its card's preview on: this card
+           shows the model's words for the node, never the paragraph's, so the
+           block card is the only place the passage itself appears. In the
+           Enlarge dialog the block card cannot show — it portals to <body>,
+           under the top layer — and the link still works. */
+        <BlockRef id={node.block} onJump={onJump} className="sk-card-jump">
           Go to this passage
-        </button>
+        </BlockRef>
       )}
     </div>
   );

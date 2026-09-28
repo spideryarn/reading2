@@ -253,9 +253,10 @@ describe("what the panel says a row is", () => {
     expect(render([THICK]).querySelector(".clm-order")?.textContent ?? "").toMatch(/not ranked|nothing here is ranked/i);
   });
 
-  it("makes every claim and every passage a button into the prose", () => {
-    /* Rule 2 of the whole mode: every row is an index into the piece. One button
-       for the claim's own sentence and one per passage. */
+  it("makes every claim and every passage a link into the prose", () => {
+    /* Rule 2 of the whole mode: every row is an index into the piece. One link
+       for the claim's own sentence and one per passage — block links since plan
+       260928b, tests/block-link-migration.test.tsx. */
     const panel = render([THICK]);
     expect(panel.querySelectorAll(".clm-jump")).toHaveLength(3);
   });
