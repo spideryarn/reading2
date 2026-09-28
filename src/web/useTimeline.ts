@@ -97,7 +97,28 @@ export interface UseTimeline {
   cancel(id: string): void;
 }
 
-export function useTimeline(slug: string): UseTimeline {
+/**
+ * **The read alone** — `GET /api/timeline/:slug` and what it said, with no job
+ * machinery: no `useStepJob`, no `useAutoRun`, no verb that spends.
+ *
+ * Split out for Trajectory's stop card (Sol F22), which shows where a passage
+ * sits in the study only when the timeline already exists. `useGlossaryRead`
+ * is the model; `useTimeline` layers its job on this and behaves exactly as
+ * before.
+ */
+export interface TimelineRead {
+  status: TimelineStatus;
+  timeline: Timeline | null;
+  stale: boolean;
+  outdated: boolean;
+  error: string | null;
+  /** Join a read in flight, or start one. `OrderedRead.reload`. */
+  reload(): Promise<void>;
+  /** Read again because the list has just changed. `OrderedRead.refresh`. */
+  refresh(): Promise<void>;
+}
+
+export function useTimelineRead(slug: string): TimelineRead {
   const [status, setStatus] = useState<TimelineStatus>("loading");
   const [timeline, setTimeline] = useState<Timeline | null>(null);
   const [stale, setStale] = useState(false);
@@ -157,6 +178,13 @@ export function useTimeline(slug: string): UseTimeline {
     void reload();
   }, [reload]);
 
+  return { status, timeline, stale, outdated, error, reload, refresh };
+}
+
+export function useTimeline(slug: string): UseTimeline {
+  const read = useTimelineRead(slug);
+  const { status, reload, refresh } = read;
+
   /* The job half — the poll, the running job, and what a refused or dead run
      says to the reader — is src/web/useStepJob.ts, shared with the glossary,
      the summaries and the ideas. */
@@ -176,11 +204,11 @@ export function useTimeline(slug: string): UseTimeline {
 
   return {
     status,
-    timeline,
-    stale,
-    outdated,
+    timeline: read.timeline,
+    stale: read.stale,
+    outdated: read.outdated,
     slug,
-    error,
+    error: read.error,
     job: queue.job,
     failed: queue.failed,
     stalled: queue.stalled,

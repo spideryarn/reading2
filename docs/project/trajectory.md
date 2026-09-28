@@ -15,7 +15,8 @@ v1, behind the experimental switch and for the article's owner only
 
 - **The step**, `trajectory` ([`src/trajectory.ts`](../../src/trajectory.ts)): one small model call
   over the stored Quotes — their words, section paths and priorities, never the rest of the prose —
-  that orders them into a route and gives each a depth and a short role line. It refuses without
+  that orders them into a route and gives each a depth and a short role line (a cue since v2,
+  below). It refuses without
   Quotes; the band asks for both in one job when there are none.
 - **The band** ([`TrajectoryPanel.tsx`](../../src/web/TrajectoryPanel.tsx),
   [`modes/trajectory/TrajectoryMode.tsx`](../../src/web/modes/trajectory/TrajectoryMode.tsx)): a
@@ -30,7 +31,50 @@ v1, behind the experimental switch and for the article's owner only
   replaces ([url-state.md](url-state.md)). The rules for where a step or a depth change lands are
   one pure module, [`trajectory-route.ts`](../../src/web/trajectory-route.ts).
 
-v2, the scrapbook, is the next stage of the plan.
+v2, the scrapbook, is built on top of that:
+
+- **A cue instead of a role.** The same call now gives each stop one **cue**: at most 140
+  characters, an instruction or a question naming what to *look for* in the passage, never what it
+  found — *"Look for how rich-club membership changes the comparison."* It stands on its own and
+  never mentions another stop, because a reader can arrive at a stop from anywhere. The current row
+  shows it, and a route written before cues shows its old role instead (`PROMPT_VERSION`
+  `trajectory/5` marks those as out of date).
+- **The next stop's cue under the door.** Under **Next stop ›** in the prose, in small muted
+  italics, so the door says where it leads. Going round again shows the cue of the stop it lands on.
+- **The stop card**, under the current row only
+  ([`stop-card.ts`](../../src/web/stop-card.ts) gathers it; the panel draws it). It holds whatever
+  the other modes have **already** written about this paragraph:
+  - the glossary terms it uses, as chips that open to a one-line sense and a link into Glossary.
+    They are found in the prose the reader sees, by the glossary's own matcher, over every term. A
+    term an earlier stop on this pass also uses says *"also at stop k"*;
+  - the ideas it bears on, as links into Ideas;
+  - the FAQ question it answers, as text with a jump to its passage;
+  - where it sits in the study, as links into Timeline.
+
+  An artefact that is stale contributes nothing. When nothing is there, there is no card, and no
+  sentence asking you to make one. The card reads through read-only hooks (`useIdeasRead`,
+  `useFaqRead`, `useTimelineRead`, beside `useGlossaryRead`), so it cannot start a run. Nothing on
+  it is generated for it: what ties the pieces together is seeing them side by side, not a new
+  summary of them.
+
+### What we tried for v2
+
+Three static mockups, on real data from the entropy paper
+([plan § Stage 3 in detail](../plans/260928a-trajectory-mode-skim-a-paper-at-increasing-depth.md)):
+
+- **The stop card** ([screenshot](../plans/260928a-trajectory-scrapbook-spike-stop-card.png)) — what
+  was built, trimmed. The section's gist was dropped because it gave the finding away, and the
+  quote's reason because it repeated the role.
+- **The skim sheet** ([screenshot](../plans/260928a-trajectory-scrapbook-spike-skim-sheet.png)) — one
+  page per depth, a card per stop. It felt most like a scrapbook, and it was also the most readable
+  *replacement* for the paper. **Kept for later**, as a toggle over the same data.
+- **Threaded** ([screenshot](../plans/260928a-trajectory-scrapbook-spike-threaded.png)) — the card
+  plus a generated line per stop saying how it follows the one before. It tied the pieces together
+  best. **The relational line was deferred** after GPT Sol's review (F18): one stop at one depth can
+  be reached from several places — a deep link, going round again, pressing a row, Back — so a line
+  about "the previous stop" would be false about half the time. Doing it properly needs a line per
+  actual step from one stop to another, shown only when that is the step the reader took. The
+  context-free cue is what survived of it.
 
 ## What Greg asked for
 
@@ -187,15 +231,27 @@ article that picks its own passages for the route.
 so. The first fix to try is to make Quotes cover every major section, which improves both modes.
 Only if that fails would a second set be worth it.
 
-### 2. Is the role line helping, or is it a summary by the back door?
+### 2. The one generated line per stop: a cue, or a thread?
 
-**Background.** Each stop gets one generated line, at most 80 characters. It names what the passage
-*does* — "The headline result", "How they measured it", "What earlier work missed". It never says
-what the passage found. It is shown in full only on the current stop, so the list never turns into
-thirty lines you could read instead of the paper.
+**Background.** Each stop gets one short generated line, shown on the current stop and, in small
+italics, under the **Next stop ›** door, so the door says where it leads. v1 wrote a *role* (what
+the passage does: "The headline result"). v2 writes a **cue** instead, at most 140 characters, saying
+what to look for in the passage ("Look for how rich-club membership changes the comparison"). Like
+the role, it never says what the passage found.
 
-**Options.** Keep it as it is; drop it, and show only the section name; or show it on every row.
-**Default taken:** keep it, current row only.
+**The option we tried and did not build: a thread.** This was a line tying each stop to the one
+before it ("From the definition to real recordings — note the number"). In the spike it did the most
+to make the route feel like one walk (spike C, linked above). It was dropped because a reader
+reaches a stop from many places — a link, a row press, *go round again*, Back — so a line about
+"the previous stop" is often about a stop they never came from. Doing it properly means one line per
+step between two stops, shown only when that is the step you actually took: more lines and more
+cost, for a sentence that is sometimes absent.
+
+**Options.** The cue (default taken); the thread, done properly; or no line at all, leaving just
+the section name.
+
+**How to choose.** If the route feels like a pile of separate stops rather than one walk, the thread
+is what would fix that.
 
 ### 3. Three buttons, not a slider
 

@@ -7,13 +7,23 @@
  * § The mode (client) is the design; docs/project/trajectory.md the vision.
  * Three things to know before changing anything here:
  *
- * ## The role line is shown in full on the current row only
+ * ## The cue is shown on the current row only
  *
  * Every other row shows where its stop is — the section path, read from the
- * tree — and not its role. At Most there can be thirty rows, and thirty
+ * tree — and not its cue. At Most there can be thirty rows, and thirty
  * generated lines would be a summary a reader could read *instead of* the
- * paper, which is vision.md's anti-goal exactly. The role names what the
- * passage does, never what it found (src/trajectory.ts), and one at a time.
+ * paper, which is vision.md's anti-goal exactly. The cue names what to look
+ * for, never what the passage found (src/trajectory.ts), and one at a time. An
+ * old route has a role instead, and that is drawn in its place.
+ *
+ * ## The stop card: the scrapbook, by juxtaposition
+ *
+ * Under the current row, and only there, whatever the other modes have
+ * *already* written about this paragraph — src/web/stop-card.ts gathers it.
+ * Nothing on it is generated for it, nothing starts a run, and when there is
+ * nothing there is no card and no sentence asking for one. The term chips
+ * open to one line and a link; the rest are links into their modes. The
+ * tying-together is the juxtaposition, not a synthesis (Sol F21).
  *
  * ## The head is pinned
  *
@@ -28,13 +38,16 @@
  * (`offeredDepths`). Each is a real `<button>` and its own tab stop, with
  * `aria-pressed` — keyboard.md's rule that arrow keys belong to the article.
  */
+import { useState } from "react";
 import { ChevronLeft, ChevronRight, RotateCw, Route, TriangleAlert } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import type { UseTrajectory } from "./useTrajectory.js";
 import type { TrajectoryView } from "./modes/trajectory/TrajectoryMode.js";
+import { entryProse } from "./GlossaryPanel.js";
 import { JobProgress } from "./JobProgress.js";
 import { ModeSurface } from "./ModeSurface.js";
 import { useRenderCount } from "./perf.js";
+import { type CardTarget, cardIsEmpty, type StopCard } from "./stop-card.js";
 
 /** One row of the list. Built by `useTrajectoryMode`, drawn here. */
 export interface TrajectoryRow {
@@ -43,8 +56,11 @@ export interface TrajectoryRow {
   n: number;
   /** The section path, `Results › Robustness`, or `null` if the tree does not cover it. */
   place: string | null;
-  /** What the passage does. Drawn on the current row only. */
-  role: string | null;
+  /**
+   * What to look for in the passage — the stop's cue, or an old route's role
+   * where it has no cue. Drawn on the current row only.
+   */
+  cue: string | null;
   /** From a shallower pass — already seen on the way round. Dimmed. */
   seen: boolean;
   current: boolean;
@@ -59,8 +75,8 @@ export interface TrajectoryRow {
  */
 export function trajectoryPromise(profiled: boolean): string {
   return profiled
-    ? "The passages are the article's own words, chosen by Quotes. The order and the roles are the model's reading, shaped by your profile."
-    : "The passages are the article's own words, chosen by Quotes. The order and the roles are the model's reading, for somebody reading the piece for the first time.";
+    ? "The passages are the article's own words, chosen by Quotes. The order and the cues are the model's reading, shaped by your profile."
+    : "The passages are the article's own words, chosen by Quotes. The order and the cues are the model's reading, for somebody reading the piece for the first time.";
 }
 
 /**
@@ -270,9 +286,17 @@ export function TrajectoryPanel({ owner, view, quoteCount }: Props) {
                               (row.place ?? "—")
                             )}
                           </span>
-                          {row.current && row.role && <span className="traj-role">{row.role}</span>}
+                          {row.current && row.cue && <span className="traj-cue">{row.cue}</span>}
                         </span>
                       </button>
+                      {row.current && view.card && !cardIsEmpty(view.card) && (
+                        <StopCardView
+                          key={row.quoteId}
+                          card={view.card}
+                          onOpen={view.onOpen}
+                          onPassage={view.onPassage}
+                        />
+                      )}
                     </li>
                   );
                 })}
@@ -282,6 +306,108 @@ export function TrajectoryPanel({ owner, view, quoteCount }: Props) {
         </>
       )}
     </ModeSurface>
+  );
+}
+
+/**
+ * **The stop card** — see the file header. One cluster per artefact that has
+ * something for this paragraph, in a fixed order: the words first (they are
+ * what trips a skimmer), then the ideas, the question, and the study.
+ *
+ * Keyed on the stop by its caller, so an open chip closes when the reader
+ * steps on.
+ */
+function StopCardView({
+  card,
+  onOpen,
+  onPassage,
+}: {
+  card: StopCard;
+  onOpen(target: CardTarget): void;
+  onPassage(blockId: StopCard["questions"][number]["blockId"]): void;
+}) {
+  const [openTerm, setOpenTerm] = useState<string | null>(null);
+  const open = card.terms.find((t) => t.entry.id === openTerm) ?? null;
+  const lead = open ? entryProse(open.entry).lead : "";
+  return (
+    <div className="traj-card">
+      {card.terms.length > 0 && (
+        <section className="traj-cluster" aria-label="Terms it uses">
+          <p className="traj-cluster-h">Terms it uses</p>
+          <div className="traj-chips">
+            {card.terms.map(({ entry, alsoAt }) => (
+              <button
+                key={entry.id}
+                type="button"
+                className={`traj-chip${entry.id === openTerm ? " on" : ""}`}
+                aria-expanded={entry.id === openTerm}
+                onClick={() => setOpenTerm((was) => (was === entry.id ? null : entry.id))}
+              >
+                {entry.name}
+                {alsoAt !== null && <span className="traj-also">also at stop {alsoAt}</span>}
+              </button>
+            ))}
+          </div>
+          {open && (
+            <div className="traj-sense">
+              {lead && <p>{lead}</p>}
+              <button
+                type="button"
+                className="traj-link"
+                onClick={() => onOpen({ kind: "term", id: open.entry.id })}
+              >
+                In the glossary ›
+              </button>
+            </div>
+          )}
+        </section>
+      )}
+      {card.ideas.length > 0 && (
+        <section className="traj-cluster" aria-label="Ideas it bears on">
+          <p className="traj-cluster-h">Ideas it bears on</p>
+          <ul>
+            {card.ideas.map((idea) => (
+              <li key={idea.id}>
+                <button type="button" className="traj-link" onClick={() => onOpen({ kind: "idea", id: idea.id })}>
+                  {idea.name}
+                </button>
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
+      {card.questions.length > 0 && (
+        <section className="traj-cluster" aria-label="The question it answers">
+          <p className="traj-cluster-h">
+            {card.questions.length === 1 ? "The question it answers" : "Questions it answers"}
+          </p>
+          <ul>
+            {card.questions.map((q) => (
+              <li key={q.id}>
+                <span className="traj-question">{q.question}</span>{" "}
+                <button type="button" className="traj-link" onClick={() => onPassage(q.blockId)}>
+                  To the passage ›
+                </button>
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
+      {card.events.length > 0 && (
+        <section className="traj-cluster" aria-label="Where it sits in the study">
+          <p className="traj-cluster-h">Where it sits in the study</p>
+          <ul>
+            {card.events.map((event) => (
+              <li key={event.id}>
+                <button type="button" className="traj-link" onClick={() => onOpen({ kind: "event", id: event.id })}>
+                  {event.label}
+                </button>
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
+    </div>
   );
 }
 
@@ -297,10 +423,16 @@ export function TrajectoryPanel({ owner, view, quoteCount }: Props) {
  */
 export function TrajectoryDoor({
   label,
+  cue,
   onPress,
   onRoute,
 }: {
   label: string | null;
+  /**
+   * The cue of the stop the door leads to, drawn small and muted under it, so
+   * the door says where it goes. `null` for none, or an old route.
+   */
+  cue: string | null;
   onPress(): void;
   /** Bring the band back — offered only while it has stepped aside. */
   onRoute: (() => void) | null;
@@ -308,17 +440,20 @@ export function TrajectoryDoor({
   if (label === null && onRoute === null) return null;
   return (
     <div className="traj-door">
-      {onRoute && (
-        <button type="button" className="traj-door-btn quiet" onClick={onRoute}>
-          <Route size={14} />
-          All stops
-        </button>
-      )}
-      {label && (
-        <button type="button" className="traj-door-btn" onClick={onPress}>
-          {label}
-        </button>
-      )}
+      <div className="traj-door-row">
+        {onRoute && (
+          <button type="button" className="traj-door-btn quiet" onClick={onRoute}>
+            <Route size={14} />
+            All stops
+          </button>
+        )}
+        {label && (
+          <button type="button" className="traj-door-btn" onClick={onPress}>
+            {label}
+          </button>
+        )}
+      </div>
+      {label && cue && <p className="traj-door-cue">{cue}</p>}
     </div>
   );
 }
