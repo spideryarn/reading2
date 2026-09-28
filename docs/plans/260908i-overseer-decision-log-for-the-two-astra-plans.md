@@ -885,3 +885,12 @@ confident on both, so both proceed: fix-dev-test-reds re-pins feedback-reports.m
 (covers 02a63b7b only), and fb44 extends the plain-words rule to chat, Explain and Check the web and
 keeps the plain depth-1 line with the word limit raised to about 30. Pressed 1 twice on fb44's
 memory-write prompts (its own memory file and index, outside the working directory).
+
+### 2026-09-28 — plain words for every prompt, and a prompting guide
+
+Greg: *"we want to make this plainer/simpler language rule common across *all* prompts that generate
+text of any kind … maybe we need a prompting-guide.md signposted from AGENTS.md … perhaps (a) is more
+important (especially for summaries, explanations), though perhaps (b) plays more of a rule in
+headings? Not sure. Use your judgment."* → fb44 widened: one shared rule every generating prompt draws
+on, the plain-vs-faithful call made per kind of output (Fable + Sol on the plan), and
+`docs/project/prompting-guide.md`. The AGENTS.md pointer comes back to Greg as a before/after.
