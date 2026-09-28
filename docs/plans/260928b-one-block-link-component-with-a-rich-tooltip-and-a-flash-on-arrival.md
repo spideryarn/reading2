@@ -296,3 +296,5 @@ text already contains it** (a Summary title), and opens no card at all if that h
   `cold-start-lazy-imports` and `pdf-bundle-trace` want `npm run build`, the three `fleet-*` files
   want the fleet dashboard's `dist/`, and `client-imports` was Trajectory's `section-path.js`
   import, which passes again after merging origin/dev.
+
+The wash, cropped: [before](260928b-block-link-flash-before.png), [150ms after landing](260928b-block-link-flash-at-150ms.png).
