@@ -37,6 +37,7 @@
  *   GET    /api/timeline/:slug   when the piece says things happened, and staleness
  *   GET    /api/quiz/:slug       the questions the piece can ask you back, and staleness
  *   GET    /api/faq/:slug        the questions a careful reader would put to the piece, where it responds, and staleness
+ *   GET    /api/trajectory/:slug a route through the quotes at three depths, whether it still matches them, and the profile
  *   GET    /api/debate/:slug     what the rest of the web says about this piece, and staleness
  *   GET    /api/citations/:slug  every work the piece cites, with a link the article gave, and staleness
  *   GET    /api/reading-time/:slug   → { seconds: { <block id>: n } }, the owner's time on each block
@@ -145,6 +146,7 @@ import {
   loadSketch,
   loadQuiz,
   loadFaq,
+  loadTrajectory,
   loadDebate,
   loadCitations,
   findCitation,
@@ -357,6 +359,7 @@ import { processSingleton } from "./process-state.js";
 import { captureFailure, setMonitoringUser } from "./monitoring.js";
 import { isStepName, type StepName } from "./pipeline.js";
 import { hashProfile, normaliseProfileText, profileIsStale, renderProfile } from "./profile.js";
+import { routeProfileIsStale } from "./trajectory.js";
 import {
   type ArticleStage,
   NON_TASK_MODELS,
@@ -389,6 +392,7 @@ import type {
   IdeasResponse,
   QuizFound,
   QuotesResponse,
+  TrajectoryResponse,
   IllustratedResponse,
   SketchResponse,
   LibraryResponse,
@@ -7650,6 +7654,33 @@ const AUTH_ROUTES: readonly AuthRoute[] = [
       /* **No `withProfileChanged`**, for `quiz`'s reason: this artefact is not
          written for a profile. `FaqResponse` in src/types.ts has two fields. */
       send(res, 200, await loadFaq(slugPart(captures, 1)));
+    },
+  },
+
+  /* The route through the Quotes —
+     docs/plans/260928a-trajectory-mode-skim-a-paper-at-increasing-depth.md. GET
+     only, and no DELETE: the step replaces, so asking again is
+     POST /api/jobs { slug, steps: ["trajectory"] }. This route never spends. */
+  {
+    kind: "pattern",
+    method: "GET",
+    pattern: /^\/api\/trajectory\/([\w.%-]+)$/,
+    handler: async ({ request: { res } }, captures) => {
+      const at = slugPart(captures, 1);
+      /* **Not `withProfileChanged`**, whose rule calls an artefact written
+         without a profile never stale. A route is exactly what a profile should
+         change, so none → some counts here — `routeProfileIsStale`, the same
+         comparison `sameStamp` makes on the stamp (src/trajectory.ts). Both
+         reads start before either is awaited. */
+      const [found, now] = await Promise.all([loadTrajectory(at), resolveProfile(at)]);
+      const body: TrajectoryResponse = {
+        ...found,
+        profileChanged: routeProfileIsStale(
+          found.trajectory.profileHash,
+          now ? hashProfile(now) : null,
+        ),
+      };
+      send(res, 200, body);
     },
   },
 

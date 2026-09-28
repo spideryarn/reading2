@@ -168,6 +168,7 @@ type WholeColumn =
   | "timeline"
   | "quiz"
   | "faq"
+  | "trajectory"
   | "sketch"
   | "illustrated"
   | "debate"
@@ -261,6 +262,7 @@ export const STORAGE: {
   timeline: { timeline: { at: "column", column: "timeline" } },
   quiz: { quiz: { at: "column", column: "quiz" } },
   faq: { faq: { at: "column", column: "faq" } },
+  trajectory: { trajectory: { at: "column", column: "trajectory" } },
   sketch: { sketch: { at: "column", column: "sketch" } },
   illustrated: { illustrated: { at: "column", column: "illustrated" } },
   debate: { debate: { at: "column", column: "debate" } },
