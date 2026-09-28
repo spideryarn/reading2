@@ -309,3 +309,37 @@ The Opus second opinion (first round) also gave:
   - **F13**: the quotes hash covers the offered words and priority.
 
   F14 (five test tables missing `trajectory`) was the stage-2 work still in progress.
+- 2026-09-28 — **stage 2 built** by an Opus implementer and committed as `64595ca9`. The typecheck
+  exited 0, and the 30 scoped files passed (819 tests).
+  - **The door**: it rides the existing `PdfFigureNotes` after-block slot in `TableView`.
+  - **Narrow windows**: there was no existing way for the band to step aside, so the smallest one
+    was added — a `band-away` flag beside `band-covers`. The band stays mounted.
+  - **Keys**: `useArrowNav` takes an optional horizontal handler.
+  - **Deviations from the plan:**
+    - the icon is lucide `Route`;
+    - pressing a row is a jump, which pushes a history entry — only steps replace one;
+    - `sectionPath` is a **client copy** of the server's `sectionPathOf`, pinned by a test, because
+      `src/trajectory.ts` imports `node:crypto`. That copy is to be removed in review.
+- 2026-09-28 — **browser check** (Sonnet, Playwright) at 1440, 1024×1366, 820×1180 and 420 on the
+  entropy paper. Items 2–8 passed: the pinned head; stepping, marking and scroll-to-top; depth-up
+  going round again; Back undoing a depth change; the door; the keys; the band stepping aside at 420
+  with a way back.
+  - Tap targets are 36px, the house control height.
+  - The one "fail" is a deep link opening the mode with the switch off. That is documented policy
+    (experimental-features.md: hidden from the controls, not unreachable), not a bug.
+- 2026-09-28 — **full suite** after `64595ca9`: 6 of 1,160 files red.
+  - Four are environment: no API or fleet build in a fresh worktree.
+  - One was ours: `last-view.test.ts`. The `depth` and `stop` params had no policy row, and the
+    test's scanner misread a one-line `useQueryStates`.
+- 2026-09-28 — **GPT Sol code review 2**
+  ([prompt](260928a-trajectory-mode-code-review-2-prompt.md),
+  [answer](260928a-trajectory-mode-code-review-2-sol.md)). Verdict: accept after fixes. It fixed:
+  - **F15**: `sectionPathOf` is one pure module, `src/section-path.ts`, and the client copy is gone;
+  - **F16**: a repeated section path is drawn as a muted `〃`, with the full path kept for screen
+    readers;
+  - **F17**: `depth` and `stop` are remembered by last-view, and the scanner-readable
+    `useQueryStates`.
+
+  No other P0/P1 findings: the door is owner- and Trajectory-only, and `bandAway` recovers across
+  resizing and mode changes. Gates re-run here afterwards: typecheck clean apart from the
+  uncommitted `spikes/` scripts, and 8 files / 185 tests passed.

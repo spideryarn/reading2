@@ -11,7 +11,7 @@
  * docs/plans/260928a-trajectory-mode-skim-a-paper-at-increasing-depth.md
  * § The mode (client) is the spec every rule below is quoted from.
  */
-import type { Block, Tree, TreeNode, TrajectoryDepth, TrajectoryStop } from "../types.js";
+import type { TrajectoryDepth, TrajectoryStop } from "../types.js";
 
 /** The three depths, shallowest first. */
 export const DEPTHS: readonly TrajectoryDepth[] = [1, 2, 3];
@@ -178,52 +178,4 @@ export function doorAfter(
   if (next !== null) return { kind: "next", quoteId: next };
   const deeper = offeredDepths(stops).find((d) => d > depth);
   return deeper === undefined ? { kind: "end" } : { kind: "again", depth: deeper };
-}
-
-/**
- * **The titles of the non-root ancestors of the leaf that holds this block** —
- * `["Results", "Robustness"]`. In a flat tree, where the leaf hangs off the
- * root, it is the leaf's own title. `[]` for a block the tree does not cover.
- *
- * The client's copy of `sectionPathOf` in src/trajectory.ts, which is the path
- * the model was shown — so the band says where a stop is in the same words the
- * route was planned in. A copy rather than an import because that module pulls
- * `node:crypto` and the Anthropic SDK, and src/web may import only pure leaves;
- * tests/trajectory-route.test.ts pins the two against one tree.
- *
- * Resolved by **block index**, never by comparing id strings
- * (docs/project/block-ids.md). Takes the index so a list of thirty stops builds
- * it once.
- */
-export function sectionPath(
-  blockId: string,
-  index: ReadonlyMap<string, number>,
-  tree: Tree,
-): string[] {
-  const at = index.get(blockId);
-  if (at === undefined) return [];
-  const contains = (n: TreeNode): boolean => {
-    const lo = index.get(n.range[0]);
-    const hi = index.get(n.range[1]);
-    return lo !== undefined && hi !== undefined && lo <= at && at <= hi;
-  };
-  const path: TreeNode[] = [];
-  let node = tree.nodes[tree.rootId];
-  while (node && node.children.length > 0) {
-    const next = node.children.map((id) => tree.nodes[id]).find((c) => c && contains(c));
-    if (!next) break;
-    path.push(next);
-    node = next;
-  }
-  if (path.length === 0) return [];
-  const leaf = path.at(-1)!;
-  const ancestors = leaf.children.length === 0 ? path.slice(0, -1) : path;
-  return (ancestors.length > 0 ? ancestors : [leaf]).map((n) => n.title);
-}
-
-/** Block id → position, for `sectionPath`. */
-export function blockIndex(blocks: readonly Block[]): Map<string, number> {
-  const index = new Map<string, number>();
-  for (const [i, b] of blocks.entries()) index.set(b.id, i);
-  return index;
 }

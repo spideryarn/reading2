@@ -7,16 +7,13 @@
  * plausible implementation gets subtly wrong at the end of a pass.
  */
 import { describe, expect, it } from "vitest";
-import type { Block, BlockId, NodeId, Tree, TreeNode, TrajectoryStop } from "../src/types.js";
-import { sectionPathOf } from "../src/trajectory.js";
+import type { TrajectoryStop } from "../src/types.js";
 import {
-  blockIndex,
   countAt,
   doorAfter,
   effectiveDepth,
   currentStop,
   offeredDepths,
-  sectionPath,
   stepStop,
   stopAfterDepthChange,
   visibleRoute,
@@ -176,66 +173,5 @@ describe("the door after the current stop", () => {
 
   it("has nothing to offer at the last stop of the deepest pass", () => {
     expect(doorAfter(ROUTE, 3, "h")).toEqual({ kind: "end" });
-  });
-});
-
-describe("the section path", () => {
-  const b = (n: number): Block => ({
-    id: `spya-sp000${n}` as BlockId,
-    tag: "p",
-    kind: "text",
-    text: `paragraph ${n}`,
-    words: 2,
-    html: "<p></p>",
-    gistable: true,
-  });
-  const blocks = [b(0), b(1), b(2), b(3)];
-  const node = (
-    id: string,
-    depth: number,
-    parent: string | null,
-    children: string[],
-    range: [number, number],
-    title: string,
-  ): TreeNode => ({
-    id: id as NodeId,
-    depth,
-    parent: parent as NodeId | null,
-    children: children as NodeId[],
-    range: [blocks[range[0]]!.id, blocks[range[1]]!.id],
-    title,
-  });
-  const tree: Tree = {
-    version: "t",
-    generator: "t",
-    slug: "t",
-    rootId: "root" as NodeId,
-    nodes: {
-      root: node("root", 0, null, ["s1", "s2"], [0, 3], "Whole"),
-      s1: node("s1", 1, "root", ["s1a"], [0, 1], "Results"),
-      s1a: node("s1a", 2, "s1", ["l0", "l1"], [0, 1], "Robustness"),
-      l0: node("l0", 3, "s1a", [], [0, 0], "Leaf zero"),
-      l1: node("l1", 3, "s1a", [], [1, 1], "Leaf one"),
-      s2: node("s2", 1, "root", ["l2", "l3"], [2, 3], "Methods"),
-      l2: node("l2", 2, "s2", [], [2, 2], "Leaf two"),
-      l3: node("l3", 2, "s2", [], [3, 3], "Leaf three"),
-    } as Record<NodeId, TreeNode>,
-  };
-
-  it("names the ancestors of the block's leaf, not the leaf", () => {
-    const index = blockIndex(blocks);
-    expect(sectionPath(blocks[1]!.id, index, tree)).toEqual(["Results", "Robustness"]);
-    expect(sectionPath(blocks[2]!.id, index, tree)).toEqual(["Methods"]);
-    expect(sectionPath("spya-nowhere", index, tree)).toEqual([]);
-  });
-
-  it("says exactly what the server showed the model", () => {
-    /* The client's copy of the server's walk. If either changes, the band
-       would name a stop's place in different words from the ones the route was
-       planned in. */
-    const index = blockIndex(blocks);
-    for (const block of blocks) {
-      expect(sectionPath(block.id, index, tree)).toEqual(sectionPathOf(block.id, blocks, tree));
-    }
   });
 });

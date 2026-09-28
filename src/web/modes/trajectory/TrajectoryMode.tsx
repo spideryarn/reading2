@@ -19,6 +19,7 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef } from "react";
 import { useQueryStates } from "nuqs";
 import type { Block, BlockId, Quote, Tree, TrajectoryDepth, TrajectoryStop } from "../../../types.js";
+import { blockIndex, sectionPathOf } from "../../../section-path.js";
 import { depthParam, stopParam } from "../../params.js";
 import { usePassageLifecycle } from "../../passage-lifecycle.js";
 import { useRenderCount } from "../../perf.js";
@@ -26,14 +27,12 @@ import { quoteStroke } from "../../QuotesPanel.js";
 import { scrollToBlock } from "../../scroll.js";
 import { type Found, resolveTrajectoryStop } from "../../search-hits.js";
 import {
-  blockIndex,
   countAt,
   currentStop,
   DEPTH_LABEL,
   doorAfter,
   effectiveDepth,
   offeredDepths,
-  sectionPath,
   stepStop,
   stopAfterDepthChange,
   visibleRoute,
@@ -163,7 +162,10 @@ function useTrajectoryMode({
   /* **One `useQueryStates`, so a depth change and the stop it lands on are one
      URL update** — the plan's § URL, F9. The per-call history option decides:
      a depth change pushes, a step replaces. */
-  const [asked, setRoute] = useQueryStates({ depth: depthParam, stop: stopParam });
+  const [asked, setRoute] = useQueryStates({
+    depth: depthParam,
+    stop: stopParam,
+  });
 
   const depth = effectiveDepth(stops, asked.depth);
   const route = useMemo(() => (depth === null ? NO_STOPS : visibleRoute(stops, depth)), [stops, depth]);
@@ -282,7 +284,7 @@ function useTrajectoryMode({
     () =>
       route.map((stop, i) => {
         const q = byId.get(stop.quoteId);
-        const path = q ? sectionPath(q.blockId, index, tree) : [];
+        const path = q ? sectionPathOf(q.blockId, index, tree) : [];
         return {
           quoteId: stop.quoteId,
           n: i + 1,

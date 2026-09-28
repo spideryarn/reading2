@@ -46,6 +46,7 @@ import { streamMessage, wasRefused } from "./messages-stream.js";
 import { CAPABLE_MODEL, type Effort } from "./models.js";
 import { parseJsonAnswer } from "./parse-json.js";
 import { hashProfile, PROFILE_RULES, profileSection } from "./profile.js";
+import { blockIndex, sectionPathOf } from "./section-path.js";
 import { budgetFor, truncationFailure } from "./token-budget.js";
 import {
   type Block,
@@ -57,7 +58,6 @@ import {
   type TrajectoryDrops,
   type TrajectoryStop,
   type Tree,
-  type TreeNode,
 } from "./types.js";
 
 export type {
@@ -221,47 +221,6 @@ export function collapseQuotes(quotes: readonly Quote[]): { quotes: Quote[]; col
     .sort((a, b) => a.index - b.index)
     .map((entry) => entry.quote);
   return { quotes: selected, collapsed: quotes.length - selected.length };
-}
-
-/**
- * **The titles of the non-root ancestors of the leaf that holds this block** —
- * e.g. `["Results", "Robustness"]`. In a flat tree, where the leaf hangs off the
- * root, it is the leaf's own title. `[]` for a block the tree does not cover.
- *
- * Resolved by **block index**, never by comparing id strings: a range is two
- * ids, and "between" means between their positions in the blocks array
- * (docs/project/block-ids.md).
- */
-export function sectionPathOf(blockId: string, blocks: readonly Block[], tree: Tree): string[] {
-  const index = new Map<string, number>();
-  for (const [i, b] of blocks.entries()) index.set(b.id, i);
-  return sectionPathAt(index.get(blockId), index, tree);
-}
-
-function sectionPathAt(
-  at: number | undefined,
-  index: ReadonlyMap<string, number>,
-  tree: Tree,
-): string[] {
-  if (at === undefined) return [];
-  const contains = (n: TreeNode): boolean => {
-    const lo = index.get(n.range[0]);
-    const hi = index.get(n.range[1]);
-    return lo !== undefined && hi !== undefined && lo <= at && at <= hi;
-  };
-  /* Walk down from the root, choosing the child whose range holds the block. */
-  const path: TreeNode[] = [];
-  let node = tree.nodes[tree.rootId];
-  while (node && node.children.length > 0) {
-    const next = node.children.map((id) => tree.nodes[id]).find((c) => c && contains(c));
-    if (!next) break;
-    path.push(next);
-    node = next;
-  }
-  if (path.length === 0) return [];
-  const leaf = path.at(-1)!;
-  const ancestors = leaf.children.length === 0 ? path.slice(0, -1) : path;
-  return (ancestors.length > 0 ? ancestors : [leaf]).map((n) => n.title);
 }
 
 interface RawStop {
@@ -550,12 +509,11 @@ export function renderPrompt(opts: {
 }): string {
   const { quotes, blocks, tree } = opts;
   const t = targetsFor(quotes.length);
-  const index = new Map<string, number>();
-  for (const [i, b] of blocks.entries()) index.set(b.id, i);
+  const index = blockIndex(blocks);
   const listed = quotes
     .map((q, i) => {
       const label = labelOf(i);
-      const path = sectionPathAt(index.get(q.blockId), index, tree);
+      const path = sectionPathOf(q.blockId, index, tree);
       const where = path.length > 0 ? path.join(" › ") : "(no section)";
       const p = priorityOf(q);
       const priority = p === undefined ? "" : ` · priority ${p.toFixed(2)}`;

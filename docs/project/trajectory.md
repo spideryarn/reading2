@@ -212,11 +212,33 @@ you as the rest arrived. So the job shows its progress and the route appears com
 have to be made first, that wait is Quotes', and Quotes stream. Streaming stops one at a time is
 possible later if the wait turns out to matter.
 
-### 5. A route built before you wrote a profile is rebuilt once you have one
+### 5. A route built before you wrote a profile goes out of date once you have one
 
 Elsewhere in the app, an artefact made before you had a profile is left alone when you add one. A
-route is the thing a profile most obviously should change, and it is cheap to rebuild, so Trajectory
-treats "no profile → a profile" as out of date. Say if that surprises you.
+route is the thing a profile most obviously should change, and it is cheap to rebuild (about two
+cents), so Trajectory marks a route as out of date when the profile changes in either direction —
+including "none → a profile" — and the band offers a rebuild. It does not rebuild by itself. Say if
+either half surprises you.
+
+### 6. Should Quotes be made to cover every part of the paper?
+
+**Background.** Because the stops are the Quotes, the route can only go where Quotes went. On the
+three test articles, the deepest pass (Most) covered 19–32% of a paper's words, not the "bigger
+proportion" you described. One paper's biggest section, nearly half its words, had only four quotes,
+and another had a whole section with none. Quotes picks lines worth *keeping*; a plain methods
+paragraph rarely is one.
+
+**Options.**
+
+- **Leave Quotes alone** (default taken). Trajectory v1 goes where Quotes go, and Most is a partial
+  tour.
+- **Ask Quotes to cover every major section** — one sentence in its prompt. Both modes change: the
+  Quotes list gets longer and more even, and some quotes will be less striking.
+- **Let Trajectory add its own stops** where Quotes left a gap — back towards a second set of
+  highlights, which is what you asked us to avoid.
+
+**How to choose.** Try Most on a paper you know. If it skips the part you would have wanted, the
+second option is the one to try, and it is a small change.
 
 ---
 

@@ -276,6 +276,22 @@ describe("the panel", () => {
     expect(host.textContent).not.toContain("What earlier work missed");
   });
 
+  it("elides a repeated section path visually but keeps its words for a screen reader", async () => {
+    const repeated = view({
+      rows: [
+        { quoteId: Q[2]!, n: 1, place: "Methods", role: null, seen: false, current: false, missing: false },
+        { quoteId: Q[3]!, n: 2, place: "Methods", role: null, seen: false, current: false, missing: false },
+      ],
+      position: 1,
+    });
+    await draw(owner(), repeated);
+
+    const places = [...host.querySelectorAll<HTMLElement>(".traj-place")];
+    expect(places[0]?.textContent).toBe("Methods");
+    expect(places[1]?.querySelector('[aria-hidden="true"]')?.textContent).toBe("〃");
+    expect(places[1]?.querySelector(".sr-only")?.textContent).toBe("Methods");
+  });
+
   it("dims the stops of a shallower pass", async () => {
     await draw(owner(), view());
     const rows = [...host.querySelectorAll<HTMLElement>(".traj-row")];

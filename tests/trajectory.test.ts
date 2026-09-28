@@ -18,6 +18,7 @@ import { cascadeForce } from "../src/jobs.js";
 import { DEFAULT_INGEST_STEPS, FORCE_ONLY_WHEN_NAMED, STEP_ORDER, STEPS } from "../src/pipeline.js";
 import type { StepContext } from "../src/pipeline.js";
 import { hashProfile, PROFILE_RULES } from "../src/profile.js";
+import { blockIndex, sectionPathOf } from "../src/section-path.js";
 import { nullCheckpointStore } from "../src/store/checkpoints.js";
 import { SHAPE, sameStamp, stampOf } from "../src/store/artifacts.js";
 import type { Block, BlockId, NodeId, Quote, Quotes, Tree, TreeNode } from "../src/types.js";
@@ -33,7 +34,6 @@ import {
   quotesHash,
   routeProfileIsStale,
   renderPrompt,
-  sectionPathOf,
   targetsFor,
   usableQuotes,
   validateRoute,
@@ -349,10 +349,11 @@ describe("what the prompt is given", () => {
   });
 
   it("builds each quote's section path from the tree, by block index", () => {
-    expect(sectionPathOf(bid(1), blocks, tree)).toEqual(["Introduction"]);
-    expect(sectionPathOf(bid(6), blocks, tree)).toEqual(["Methods"]);
-    expect(sectionPathOf(bid(10), blocks, tree)).toEqual(["Results", "Robustness"]);
-    expect(sectionPathOf("spya-absent" as BlockId, blocks, tree)).toEqual([]);
+    const index = blockIndex(blocks);
+    expect(sectionPathOf(bid(1), index, tree)).toEqual(["Introduction"]);
+    expect(sectionPathOf(bid(6), index, tree)).toEqual(["Methods"]);
+    expect(sectionPathOf(bid(10), index, tree)).toEqual(["Results", "Robustness"]);
+    expect(sectionPathOf("spya-absent" as BlockId, index, tree)).toEqual([]);
   });
 
   it("offers only the quotes whose block is in the article", () => {

@@ -240,27 +240,42 @@ export function TrajectoryPanel({ owner, view, quoteCount }: Props) {
           {total > 0 && (
             <div className="tl-scroll">
               <ol className="traj-list">
-                {view.rows.map((row) => (
-                  <li
-                    key={row.quoteId}
-                    className={`traj-row${row.current ? " current" : ""}${row.seen ? " seen" : ""}`}
-                    data-stop={row.quoteId}
-                  >
-                    <button
-                      type="button"
-                      className="traj-go"
-                      aria-current={row.current ? "step" : undefined}
-                      disabled={row.missing}
-                      onClick={() => view.onRow(row.quoteId)}
+                {view.rows.map((row, index) => {
+                  const repeatedPlace =
+                    row.place !== null && row.place === view.rows[index - 1]?.place;
+                  return (
+                    <li
+                      key={row.quoteId}
+                      className={`traj-row${row.current ? " current" : ""}${row.seen ? " seen" : ""}`}
+                      data-stop={row.quoteId}
                     >
-                      <span className="traj-n">{row.n}</span>
-                      <span className="traj-what">
-                        <span className="traj-place">{row.place ?? "—"}</span>
-                        {row.current && row.role && <span className="traj-role">{row.role}</span>}
-                      </span>
-                    </button>
-                  </li>
-                ))}
+                      <button
+                        type="button"
+                        className="traj-go"
+                        aria-current={row.current ? "step" : undefined}
+                        disabled={row.missing}
+                        onClick={() => view.onRow(row.quoteId)}
+                      >
+                        <span className="traj-n">{row.n}</span>
+                        <span className="traj-what">
+                          <span className="traj-place">
+                            {repeatedPlace ? (
+                              <>
+                                <span className="traj-place-repeat" aria-hidden="true">
+                                  〃
+                                </span>
+                                <span className="sr-only">{row.place}</span>
+                              </>
+                            ) : (
+                              (row.place ?? "—")
+                            )}
+                          </span>
+                          {row.current && row.role && <span className="traj-role">{row.role}</span>}
+                        </span>
+                      </button>
+                    </li>
+                  );
+                })}
               </ol>
             </div>
           )}
