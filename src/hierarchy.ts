@@ -88,7 +88,9 @@ const SYSTEM = `You are building a nested table of contents for an article. It g
 way down to individual paragraphs, and it will be rendered as a navigation sidebar.
 
 You receive the article as a numbered list of blocks. Each block has an id
-(e.g. spya-k3m9qt), a tag, and its text. Some are marked NOT-GISTABLE.
+(e.g. spya-k3m9qt), a tag, and its text. Some are marked NOT-GISTABLE. The
+numbers and ids are for you, not for the reader: a title, gist or question
+never names a passage as "block 12" or by its id.
 
 STRUCTURE
 

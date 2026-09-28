@@ -89,6 +89,12 @@ ${PROFILE_RULES}`;
 - **Watch for the rule fighting one already there.** Chat and Remember may bring in what they
   found on the web, so neither may be told to use "no term the piece did not use"; that clause was
   written once and cut for exactly this reason.
+- **Block ids and numbers are not words for a reader either, and that rule lives with the ids.**
+  `BLOCK_ID_NOTE` in [`src/article-prompt.ts`](../../src/article-prompt.ts) is printed in every
+  `articleWithIds` article, so a prompt shown ids is told not to write "block 39" or "block
+  spya-…" in prose, and a prompt shown none is not. The hierarchy prompts say it in their SYSTEM.
+  Why it is not in the core above:
+  [260928c](../plans/260928c-block-refs-shown-to-readers.md).
 - **No words for a reader, no rule.** A prompt whose output is a verdict, a URL, ids or a verbatim
   transcription is listed in `PLAIN_WORDS_EXEMPT` in the same file, with its reason. A transcriber
   told to prefer common words is a transcriber invited to tidy.

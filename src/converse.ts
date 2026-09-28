@@ -110,6 +110,7 @@ import {
   parseToolArgs,
   runTool,
 } from "./chat-tools.js";
+import { blockRefLeaks } from "./block-ref-leak.js";
 import { citableText } from "./citable.js";
 import { PROFILE_RULES, profileSection } from "./profile.js";
 import { plainWords } from "./plain-words.js";
@@ -2487,6 +2488,11 @@ export async function* converse({
         answerChars: answer.length,
         historyTurns: recentHistory(history).length,
         unknownIds: unknownIds.length,
+        /* A passage named by our handle — "in block 39", "Block [spya-…]
+           gives…". An id here becomes a link, but the sentence still names the
+           passage by six random characters, and a number is one the reader
+           never saw. docs/plans/260928c-block-refs-shown-to-readers.md. */
+        blockRefLeaks: blockRefLeaks(answer).length,
         /* `rounds` and `tools` come from `turnSoFar()` above, and they answer
            different questions: `rounds` is how many times the whole article was
            re-sent, which is what a slow turn and a large bill are both made of;

@@ -264,7 +264,8 @@ Each block has an id (e.g. spya-k3m9qt), a tag, and its text. Some are marked
 NOT-GISTABLE, and a few of those are withheld and show no text at all — use
 their ids where a boundary needs them, and say nothing about prose you cannot
 see. Block numbers restart at 0 in each section and are only a reading aid; the
-ids are what you answer with.
+ids are what you answer with. Neither is for the reader: a title, gist or
+question never names a passage as "block 12" or by its id.
 
 BOUNDARIES
 

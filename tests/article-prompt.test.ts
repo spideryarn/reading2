@@ -22,6 +22,7 @@
  */
 import { describe, expect, it } from "vitest";
 import {
+  BLOCK_ID_NOTE,
   CACHE_FLOOR_TOKENS,
   articleText,
   articleWithIds,
@@ -124,16 +125,20 @@ describe("articleWithIds identity", () => {
        proves only that the default is wired up — it cannot notice a head that
        moved for *both* of them. This literal was copied from the output on
        2026-08-31, before the option landed. If it goes red, every warm cache
-       in the app has just been retired and somebody meant to do that. */
+       in the app has just been retired and somebody meant to do that.
+       Somebody did on 2026-09-28: the `[i]` before each id went, and
+       `BLOCK_ID_NOTE` came in, because models were quoting that number to
+       readers as "in block 39" — docs/plans/260928c-block-refs-shown-to-readers.md. */
     expect(articleWithIds(meta, blocks)).toBe(
       "TITLE: An Example Article\n" +
         "BY: A. Writer\n" +
         "PUBLISHED IN: Somewhere\n" +
         "URL: https://example.com/piece\n" +
         "\n---\n\n" +
-        "[0] spya-aaaaaa: The first paragraph says one thing.\n\n" +
-        "[1] spya-bbbbbb: The second paragraph says another.\n\n" +
-        "[2] spya-cccccc: The third paragraph disagrees with both.",
+        `${BLOCK_ID_NOTE}\n\n` +
+        "spya-aaaaaa: The first paragraph says one thing.\n\n" +
+        "spya-bbbbbb: The second paragraph says another.\n\n" +
+        "spya-cccccc: The third paragraph disagrees with both.",
     );
   });
 

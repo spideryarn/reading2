@@ -114,10 +114,32 @@ function head(meta: Meta, identity: ArticleIdentity): string {
 }
 
 /**
+ * **What a model shown the ids is told about them, next to the ids themselves.**
+ *
+ * The reader never sees our handles for a passage. A `[39]` existed only in the
+ * prompt, and an id reaches a reader either as a chip showing six random
+ * characters (chat, quiz marking) or raw (every other panel). Models shown them
+ * wrote "in block 39" and "Block [spya-dfqq59] gives the publication details" —
+ * docs/plans/260928c-block-refs-shown-to-readers.md.
+ *
+ * It lives in the article rather than in each prompt so that every prompt that
+ * is shown ids, including one written next year, is told in the same breath,
+ * and a prompt that is shown none (the glossary, the arc) is not. The
+ * hierarchy prompts render their own blocks (src/hierarchy-prompt.ts) and carry
+ * the same sentence in their SYSTEM.
+ */
+export const BLOCK_ID_NOTE = `Each block below starts with its id. The ids are for these instructions, not
+for the reader: put one only where you are asked for an id or a citation, and
+never name a passage in your own words as "block 12" or "block spya-k3m9qt".
+Say what the passage says instead: "where he defines mutual information".`;
+
+/**
  * The article for prompts whose answers cite blocks by id — search, explain and
  * converse.
  *
- * Every block carries its index and its id. **Nothing here depends on the
+ * Every block carries its id, and `BLOCK_ID_NOTE` says what the ids are for.
+ * **No index**: until 2026-09-28 each block was `[39] spya-…: text`, nothing
+ * read the number back, and it was the number models quoted to readers. **Nothing here depends on the
  * call**: no reading position, no selection, no timestamp. That is the whole
  * contract of this function, and `tests/article-prompt.test.ts` holds it to it.
  *
@@ -139,8 +161,8 @@ export function articleWithIds(
   blocks: Block[],
   identity: ArticleIdentity = "named",
 ): string {
-  const body = blocks.map((b, i) => `[${i}] ${b.id}: ${b.text}`).join("\n\n");
-  return `${head(meta, identity)}\n\n---\n\n${body}`;
+  const body = blocks.map((b) => `${b.id}: ${b.text}`).join("\n\n");
+  return `${head(meta, identity)}\n\n---\n\n${BLOCK_ID_NOTE}\n\n${body}`;
 }
 
 /**
