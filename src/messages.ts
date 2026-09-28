@@ -324,7 +324,7 @@ export const CODE_KINDS: Record<string, FailureKind> = {
      the precedent this follows. */
   "ai-overflowed-no-ask": "retry",
   "ai-filtered": "blocked",
-  "ai-no-room": "blocked",
+  "ai-no-room": "retry",
   "ai-empty": "retry",
   /* **Raised outside this file**, by `CLAIMS_UNUSABLE` (src/referee-claims-run.ts)
      and `ANSWER_UNUSABLE` (src/referee-criteria-run.ts): the model answered and
@@ -2599,27 +2599,29 @@ export function saidNothing(finishReason: string | null): ReaderFacingFailure {
   if (finishReason === "content_filter") return FILTER_STOPPED_IT;
   /* **What `length` with no text actually means.** Not that the input was too
      big — the input does not count against `max_tokens` at all, and a prompt
-     too long for the model is refused before anything streams. On every model
-     this app sends, the ceiling covers the model's *thinking* as well as its
-     answer, and a model that thinks by default can spend the whole allowance
-     before writing a word. That is what happened on every long paper Referee
-     Claims was given until 2026-09-28
+     too long for the model is refused before anything streams. The completion
+     allowance was used before this caller received text. Reasoning is one way
+     that happens, and it is what happened on every long paper Referee Claims
+     was given until 2026-09-28
      (docs/postmortems/260928b-a-lesson-kept-in-a-helper-does-not-reach-the-other-wire.md).
      The sentence here used to blame the input and advise asking about a
      shorter stretch — a control that Claims, Criteria and Mirror do not have,
-     and a diagnosis that was false for every caller.
+     and a diagnosis that was false for every caller. It must not replace that
+     diagnosis with "thinking", either: `saidNothing` is shared by callers that
+     can receive tool-call and other non-text deltas, and it is not passed the
+     usage counters that could distinguish them.
 
-     `blocked`, not `retry`: the ceiling and the effort are ours, and resending
-     the same request makes the same decision about how long to think. It can
-     come out differently — thinking varies run to run — so the sentence says
-     *likely*, not *will*. Offering the button would promise more than that. */
+     `retry`, because the amount of reasoning varies between otherwise
+     identical runs — 2.4x in the long-paper measurement — and these fixed-ask
+     callers give the reader no way to make a narrower request. `blocked` means
+     an unchanged request will be refused again; that is not known here. */
   if (finishReason === "length") {
     return {
-      kind: "blocked",
+      kind: "retry",
       message:
-        "The AI service spent all the room it had working out its answer and ran out before it " +
-        "wrote any of it. That is a limit on our side rather than anything about the article, and " +
-        "sending the same request again is likely to hit it again. [ai-no-room]",
+        "The AI service used all the room it had before it produced any text. That is a limit on " +
+        "our side rather than anything about the article, and trying again can come out " +
+        "differently. [ai-no-room]",
     };
   }
   return {

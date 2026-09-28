@@ -402,6 +402,17 @@ describe("saying nothing", () => {
   it("keeps a plain empty answer retryable", () => {
     expect(saidNothing(null).kind).toBe("retry");
   });
+
+  it("keeps a token-ceiling empty answer retryable without claiming the tokens were reasoning", () => {
+    /* A `length` finish says the completion allowance was used. It does not
+       say whether those tokens were reasoning, tool arguments, or another
+       non-text field. It also does not make the next sample deterministic:
+       reasoning varied 2.4x on identical input in the claims measurements. */
+    const empty = saidNothing("length");
+    expect(empty.kind).toBe("retry");
+    expect(empty.message).toContain("before it produced any text");
+    expect(empty.message).not.toMatch(/working out|thinking|reasoning/i);
+  });
 });
 
 describe("naming what was written for your reader profile", () => {

@@ -27,6 +27,8 @@
  * exist to stop the rules being deleted by somebody tidying the prompt, which is
  * a different and much likelier failure.
  */
+import { readFileSync } from "node:fs";
+import { fileURLToPath } from "node:url";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import {
@@ -226,6 +228,19 @@ describe("the request", () => {
     expect(CLAIMS_THINKING_ROOM).toBeGreaterThanOrEqual(12_000);
     expect(CLAIMS_MAX_TOKENS).toBeLessThanOrEqual(MODEL_MAX_TOKENS);
   });
+
+  it("keeps the prompt-ablation eval on the production token ceiling", () => {
+    /* The ablated call is meant to change only the prompt. It cannot import
+       this test's fetch seam without making a paid eval runnable under Vitest,
+       so pin the source-level request instead: the old literal 12,000 stayed
+       behind when production moved to CLAIMS_MAX_TOKENS. */
+    const source = readFileSync(
+      fileURLToPath(new URL("../evals/referee-claims.ts", import.meta.url)),
+      "utf8",
+    );
+    expect(source).toMatch(/\{ model, max_tokens: CLAIMS_MAX_TOKENS, messages \}/);
+    expect(source).not.toMatch(/\{ model, max_tokens: 12000, messages \}/);
+  });
 });
 
 /* ------------------------------------------------------ reading it back -- */
@@ -323,6 +338,24 @@ describe("reading the answer back", () => {
  * docs/plans/260901g-one-stream-end-classification-shared-by-five-callers.md.
  */
 describe("what the provider says about how it stopped", () => {
+  it("refuses a reasoning-only length stop rather than returning an empty panel", async () => {
+    fetchMock.mockResolvedValue(
+      sse(
+        frame({ choices: [{ delta: { reasoning: "thinking" } }] }) +
+          frame({ choices: [{ finish_reason: "length", delta: {} }] }) +
+          frame({
+            choices: [],
+            usage: {
+              completion_tokens: 12_345,
+              completion_tokens_details: { reasoning_tokens: 12_345 },
+            },
+          }) +
+          "data: [DONE]\n\n",
+      ),
+    );
+    await expect(runClaims({ meta, blocks: BLOCKS })).rejects.toThrow(/\[ai-no-room\]/);
+  });
+
   it("refuses a run the provider itself said it errored out of, even though it parses", async () => {
     /* **The one behaviour the shared classifier changed here.** The object is
        complete and `[DONE]` arrives, so every other witness says this is a good

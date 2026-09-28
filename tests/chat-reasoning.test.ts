@@ -16,7 +16,21 @@ import {
   type ChatJob,
   effortOf,
   openRouterJson,
+  type ReasoningEffort,
 } from "../src/ai-call.js";
+
+/* OpenRouter's whole documented ladder. This is primarily a compile-time
+   assertion: omitting a supported rung from `ReasoningEffort` prevents a job
+   from choosing it even though the gateway accepts it. */
+const ALL_REASONING_EFFORTS: ReasoningEffort[] = [
+  "none",
+  "minimal",
+  "low",
+  "medium",
+  "high",
+  "xhigh",
+  "max",
+];
 
 let fetchMock: ReturnType<typeof vi.fn>;
 beforeEach(() => {
@@ -43,6 +57,10 @@ async function sent(job: ChatJob, body: Record<string, unknown> = {}): Promise<R
 const JOBS = Object.keys(CHAT_REASONING) as ChatJob[];
 
 describe("what each chat job sends about thinking", () => {
+  it("models the whole effort ladder the chat wire accepts", () => {
+    expect(ALL_REASONING_EFFORTS).toHaveLength(7);
+  });
+
   it("covers the jobs this change decided, with the efforts it decided", () => {
     expect(effortOf("referee-claims")).toBe("medium");
     expect(effortOf("referee-criteria")).toBe("medium");

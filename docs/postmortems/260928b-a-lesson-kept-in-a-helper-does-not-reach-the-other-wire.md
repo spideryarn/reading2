@@ -84,8 +84,10 @@ Shipped:
 3. **The gateway warns**, for any streamed chat job, when a stream stops on `length` having spent
    reasoning tokens, with the job and the ceiling. That is the line that would have named this bug
    the first time it happened.
-4. **The reader's sentence is true now.** It says the AI spent its room working the answer out, and
-   that this is a limit on our side. It is still `blocked`, and it gives no advice to narrow.
+4. **The reader's sentence is true now.** It says only that the allowance was used before this
+   caller received text, without guessing whether the missing text was preceded by reasoning, a
+   tool call or another non-text field. It is `retry`: reasoning varied 2.4× on identical input,
+   and these fixed-ask callers offer the reader no narrower request.
 
 **That is also the long-term shape**, with one thing left open: the budget arithmetic still lives
 with each caller, which is right, since only the caller knows the shape of its answer. But a caller
@@ -96,7 +98,9 @@ reports it when it goes wrong.
 ## What would have caught it, ranked by ease against value
 
 1. **Say how hard the model thinks, at the seam, for every job** — done. It is the table above.
-   Cheap, and the only one of these that stops the next instance before it ships.
+   Cheap, and the only one of these that forces the next caller to make the decision before it
+   ships. It does not prove the chosen effort or budget is good; the measurements below do that for
+   Claims and Criteria.
 2. **Log reasoning tokens wherever a `length` is logged** — done centrally, and on the claims lines.
    It cost two fields and would have turned a day's confusion into one log line.
 3. **Run one long article through any new whole-article call before it ships.** A habit rather than

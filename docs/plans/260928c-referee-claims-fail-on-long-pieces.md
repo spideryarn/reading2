@@ -1,6 +1,6 @@
 # Referee claims fail on long pieces
 
-**Status, 2026-09-28: all three stages built and measured; code review below.**
+**Status, 2026-09-28: done — three stages built, measured, reviewed twice by GPT Sol, and on `dev`.**
 
 Found by the plain-words session
 ([260926a-plainer-summaries-and-glossary.md](260926a-plainer-summaries-and-glossary.md) § the
@@ -124,7 +124,9 @@ GPT Sol, read-only, on the plan and the stage-1 draft:
 - **F4 (P1) — the no-text sentence.** `saidNothing("length")` told every caller's reader the AI
   "was given too much at once" and to "ask about a shorter stretch". The first is false for every
   caller — the input does not count against `max_tokens` — and the second is a control Claims,
-  Criteria and Mirror do not have. One sentence now, true for all of them, still `blocked`
+  Criteria and Mirror do not have. The replacement says only what `finish_reason: "length"` proves:
+  the allowance was used before this caller received text. It is `retry`, because identical runs
+  have varied 2.4× in their reasoning and these fixed-ask callers offer no narrower request
   ([src/messages.ts](../../src/messages.ts) § `saidNothing`).
 - **F5 — criteria's literature kind is different** (tools, 6,000, its own clocks) and was not
   measured. Measured before deciding; see § Siblings.
@@ -218,9 +220,10 @@ two are sized together.
   [260928b](../postmortems/260928b-a-lesson-kept-in-a-helper-does-not-reach-the-other-wire.md).
 - **Tests**, each watched red: the claims request (effort, budget, deadline), the criteria request
   for all three kinds, the reasoning-only `length` stream in a child process (log line, gateway
-  warning, reader sentence), the fail-safe restatement, and `tests/chat-reasoning.test.ts` — every
-  row of the table read off the wire. Mutation checks: removing the gateway's injection reds 8
-  tests; removing the warning or the claims log field reds the child-process test.
+  warning), its reader sentence and throw in-process, the fail-safe restatement, and
+  `tests/chat-reasoning.test.ts` — every row of the table read off the wire. Mutation checks:
+  removing the gateway's injection reds 8 tests; removing the warning or the claims log field reds
+  the child-process test.
 - **Caught by the full suite, not by me**: `CRITERION_ORPHAN_GRACE_MS` (src/routes.ts), how long
   another process waits before burying a `pending` criterion, was a flat 150 s with a module-load
   assertion that it outlast `LITERATURE_TIMEOUT_MS`. The new 274 s deadline tripped it in 71 test
@@ -233,3 +236,34 @@ two are sized together.
   `tools/fleet/web/dist`).
 - **Spend**: roughly $3–4 of dev-scale model calls in all (estimated, not reconciled), most of it the 152,000-word PDF's cache
   write.
+
+## Code review
+
+GPT Sol, write-capable, on `29ec8f2d`:
+[260928c-referee-claims-fail-on-long-pieces-code-review-sol.md](260928c-referee-claims-fail-on-long-pieces-code-review-sol.md)
+— **ship with the fixes made**. Its fixes were read, re-gated (typecheck; the twelve affected test
+files, 215 tests) and one mutation re-run, then committed as its own commit:
+
+- **C1 (P1)** — the `[ai-no-room]` sentence still guessed at a cause (*"working out its answer"*)
+  that `saidNothing` cannot know, since some callers receive tool-call deltas and none pass usage
+  in; and `blocked` was too strong given 2.4× variance on identical input. Now it says only that the
+  room ran out before any text, and it is `retry`. **Every caller of `saidNothing` now offers Retry
+  on this code**, which none did before.
+- **C2** — the eval's prompt ablation still sent 12,000, which would confound prompt with budget;
+  it imports `CLAIMS_MAX_TOKENS` now.
+- **C3** — `ReasoningEffort` lacked `xhigh` and `max`.
+- **C4** — the child-process test ran the `tsx` CLI (needs an IPC socket) and accepted a child that
+  logged and then crashed; it now runs `node --import tsx` and requires a clean exit.
+- **C7** — the postmortem said the table *stops* the next instance; it forces the decision, and
+  does not prove the decision good.
+
+Not fixed, and left open deliberately:
+
+- **C5 — a trickling stream now takes longer to fail.** The stall clock resets on every raw read,
+  keepalives included, so a connection that trickles without progress waits out the whole deadline —
+  now 181 s for a criterion where it was 60 s. The right fix is a clock on *progress* (content or
+  reasoning tokens), not on bytes, and it belongs in `sseChunks` for every caller, not here.
+- **C6 — a model override that does not support `reasoning` now fails closed.** With
+  `require_parameters: true`, pointing `SPIDERYARN_REFEREE_CLAIMS_MODEL` (or criteria's, or
+  link-summary's) at a model with no reasoning control gets a refusal rather than an answer. That is
+  the intended behaviour — an unleashed answer is the bug — and it touches no default.

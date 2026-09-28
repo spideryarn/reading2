@@ -136,6 +136,7 @@ import {
 } from "../src/referee-claims.js";
 import {
   buildClaimsMessages,
+  CLAIMS_MAX_TOKENS,
   CLAIMS_SYSTEM,
   CLAIMS_TIMEOUT_MS,
   defaultModel,
@@ -936,7 +937,7 @@ async function ablated(
   const end: StreamEnd = { terminated: false };
   for await (const chunk of openRouterStream(
     "referee-claims",
-    { model, max_tokens: 12000, messages },
+    { model, max_tokens: CLAIMS_MAX_TOKENS, messages },
     { signal: deadline, onActivity: () => {}, end },
   )) {
     /* A 200 carrying an error in the stream. It arrives as **data** and never

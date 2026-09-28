@@ -22,7 +22,6 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { beforeAll, describe, expect, it } from "vitest";
 
-const TSX = fileURLToPath(new URL("../node_modules/.bin/tsx", import.meta.url));
 const ROOT = fileURLToPath(new URL("..", import.meta.url));
 const src = (file: string) => JSON.stringify(path.join(ROOT, "src", file));
 
@@ -33,7 +32,7 @@ let stdout = "";
 let stderr = "";
 
 beforeAll(() => {
-  const body = `void (async () => {
+  const body = `await (async () => {
     const { runClaims } = await import(${src("referee-claims-run.ts")});
     const frame = (payload) => "data: " + JSON.stringify(payload) + "\\n\\n";
     globalThis.fetch = async () => ({
@@ -63,9 +62,12 @@ beforeAll(() => {
         meta: { title: "A long essay" },
         blocks: [{ id: "spya-anc234", text: "We show that the method halves annotation time." }],
       });
-      console.log(JSON.stringify({ level: "marker", outcome: "returned" }));
-    } catch (err) {
-      console.log(JSON.stringify({ level: "marker", outcome: "threw", message: String(err && err.message) }));
+      /* A return is the one way this fixture is invalid. Use the process status
+         rather than a marker written after Pino's synchronous destination: the
+         status is also what proves the child itself completed successfully. */
+      process.exitCode = 2;
+    } catch {
+      // Expected. The in-process claims test pins the reader-facing throw.
     }
   })();`;
 
@@ -75,9 +77,26 @@ beforeAll(() => {
   // Nothing is sent anywhere — `fetch` is replaced above.
   env.OPENROUTER_API_KEY = "test-key-not-a-real-one";
 
-  const child = spawnSync(TSX, ["-e", body], { env, encoding: "utf8", maxBuffer: 32 * 1024 * 1024 });
+  /* Node's loader path, rather than the `tsx` CLI: the CLI opens an IPC socket
+     even for `-e`, which is forbidden in the same sandbox this test is meant
+     to work in and made the test fail before it exercised a log line. */
+  const child = spawnSync(
+    process.execPath,
+    ["--import", "tsx", "--input-type=module", "--eval", body],
+    {
+      env,
+      encoding: "utf8",
+      maxBuffer: 32 * 1024 * 1024,
+    },
+  );
   stdout = child.stdout ?? "";
   stderr = child.stderr ?? "";
+  if (child.signal || child.status !== 0) {
+    throw new Error(
+      `the log-test child failed (status ${String(child.status)}, signal ${String(child.signal)}): ` +
+        `${child.error ? String(child.error) : ""}\nstdout:\n${stdout}\nstderr:\n${stderr}`,
+    );
+  }
 }, 120_000);
 
 function lines(): Record<string, unknown>[] {
@@ -93,17 +112,7 @@ function noTextLine(): Record<string, unknown> {
   return found;
 }
 
-function outcome(): Record<string, unknown> {
-  const found = lines().find((l) => l.level === "marker");
-  if (!found) throw new Error(`the child never finished.\nstdout:\n${stdout}\nstderr:\n${stderr}`);
-  return found;
-}
-
 describe("a claims run that spent its whole allowance thinking", () => {
-  it("fails rather than returning an empty panel", () => {
-    expect(outcome().outcome).toBe("threw");
-  });
-
   it("logs how much of the allowance went on thinking", () => {
     const line = noTextLine();
     expect(line.finishReason).toBe("length");
@@ -123,14 +132,5 @@ describe("a claims run that spent its whole allowance thinking", () => {
     expect(warn?.reasoningTokens).toBe(THOUGHT);
     expect(warn?.effort).toBe("medium");
     expect(warn?.ceiling).toBeGreaterThan(THOUGHT);
-  });
-
-  it("tells the referee something true, and nothing they cannot act on", () => {
-    const message = String(outcome().message);
-    expect(message).toContain("[ai-no-room]");
-    // The old sentence blamed the input, which does not count against the
-    // ceiling, and advised a narrower ask — a control Claims does not have.
-    expect(message).not.toMatch(/too much at once/);
-    expect(message).not.toMatch(/shorter stretch/);
   });
 });

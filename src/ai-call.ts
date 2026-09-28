@@ -716,7 +716,14 @@ export const AI_JOB_ROUTE: Record<RoutedJob, Route> = {
 };
 
 /** The values OpenRouter's chat wire takes for `reasoning.effort` (docs/project/ai-gateway.md). */
-export type ReasoningEffort = "none" | "minimal" | "low" | "medium" | "high";
+export type ReasoningEffort =
+  | "none"
+  | "minimal"
+  | "low"
+  | "medium"
+  | "high"
+  | "xhigh"
+  | "max";
 
 /**
  * How hard a chat job's model thinks: a named effort, or the provider's
