@@ -53,6 +53,7 @@ export const RESET_ROLE: Record<StepName, ResetRole> = {
   tweets: "extra",
   glossary: "extra",
   quotes: "extra",
+  trajectory: "extra",
   ideas: "extra",
   timeline: "extra",
   quiz: "extra",
@@ -104,7 +105,7 @@ export function extraColumns(): { step: StepName; column: WholeColumn }[] {
  * **The extras this reader's article has now** — every extra step with a
  * non-null column on the current published revision, in `STEP_ORDER` order.
  * This is what "regenerate" makes again (assumption 7 of the plan: only the
- * extras the article had, not all twelve).
+ * extras the article had, not every extra there is).
  *
  * Owner-scoped through `ownedSlug`, so somebody else's slug answers `[]`
  * rather than describing their article; the caller refuses it as a 404 before

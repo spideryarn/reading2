@@ -656,6 +656,12 @@ export const STEP_BUDGET_MS: Record<StepName, number> = {
      up to 40 a pass, and a Find more carries the taken list in its prompt
      (docs/plans/260911a-quotes-find-more-and-a-fade-that-carries-priority.md). */
   quotes: 240_000,
+  /* **MEASURED 2026-09-28**, six stage-1 calls over three unlike articles:
+     4–12s, one Messages call at `low` effort over the quotes alone. 120s is ten
+     times the slowest, because three articles are evidence rather than a
+     distribution and being under kills a call the reader has already bought.
+     docs/plans/260928a-trajectory-mode-stage1-real-runs.md. */
+  trajectory: 120_000,
   /* GUESS, in `glossary`'s family and never measured on its own. */
   ideas: 120_000,
   /* **MEASURED** 2026-08-31, four runs of the stage on the test article, read

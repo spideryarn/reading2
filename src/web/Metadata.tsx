@@ -231,6 +231,7 @@ import {
   Paintbrush,
   PenLine,
   RefreshCw,
+  Route,
   ScanLine,
   Tag,
   Target,
@@ -335,6 +336,9 @@ const STAGE_ICONS: Record<StepName, ComponentType<{ size?: number }>> = {
   glossary: BookA,
   ideas: Lightbulb,
   quotes: Quote,
+  /* A route: the stops are the quotes one row up, in an order. The Trajectory
+     band is stage 2 of docs/plans/260928a and may choose its own glyph. */
+  trajectory: Route,
   /* The same clock the Dock puts on the Timeline button, so the stage row and
      the mode button a reader has already met say the same thing. */
   timeline: Clock,

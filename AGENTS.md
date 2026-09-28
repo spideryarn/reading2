@@ -51,6 +51,7 @@ listed here; the names under each are files in `docs/project/`.
   `timeline.md` (when the piece says these things happened) ·
   `citations.md` (the works the piece cites, and where each link came from) ·
   `faq.md` (the questions a careful reader would ask, answered only by the piece's own passages) ·
+  `trajectory.md` (skim a paper at increasing depth: a route through its quotes, walked three times) ·
   `search.md` · `referee-mode.md` (helping a peer reviewer, without reading for them) ·
   `diagram.md` ·
   `comments.md` (bookmark or annotate a passage; the AI is a tick-box) ·
@@ -299,7 +300,7 @@ nothing else has a copy of.
   across the whole tree for six hours. Do not reinvent it.
   [version-control.md](docs/project/version-control.md) has the accidents and the reproductions.
 - **A merge conflict is a proposal before it is an edit.** Read the history behind both sides, keep
-  the best of both, write the proposal down, and resolve it yourself — with GPT Sol or Fable when
+  the best of both, write the proposal down, and resolve it yourself — with GPT Sol or Opus when
   unsure. It goes to Greg only if it is a real product trade-off neither side can keep (Greg,
   2026-09-10) — [git-resolve-merge-conflicts.md](docs/reusable/git-resolve-merge-conflicts.md).
 - **Commit when the work is done**, or when you reach a good stopping point, without being asked —
@@ -351,12 +352,13 @@ nothing else has a copy of.
   not the page dumps. **Which automation you get is decided by the machine, not by preference** —
   the Claude-in-Chrome extension on Greg's laptop, Playwright against system Chrome on the remote
   box, and the extension cannot follow you there.
-- **Ask another model while you are still thinking, not only when you are reviewing.** GPT Sol
+- **Ask another model while you are still thinking, not only when you are reviewing.** The latest GPT Sol
   ([codex-cli-as-subagent.md](docs/reusable/codex-cli-as-subagent.md)) for design calls and tricky
-  bugs, and **Fable** — a subagent with `model: "fable"` — especially when the requirements are
-  unclear or you need someone to arbitrate between two options that both look fine. Fable is a
-  different **model**, not a different **family**, so it is never the cross-family check; only Sol
-  is that. And no subagent is read-only by construction — an `Explore` lacks `Edit` and `Write` but
+  bugs, and **Opus** — a subagent with `model: "opus"` — especially when the requirements are
+  unclear or you need someone to arbitrate between two options that both look fine. Opus is the
+  same **family** as you, so it is never the cross-family check; only a GPT model is that. Fable is
+  retired (Greg, 2026-09-28); which model does what, always the latest of each, is in
+  [engineering-manager.md § Delegate](docs/reusable/engineering-manager.md#delegate). And no subagent is read-only by construction — an `Explore` lacks `Edit` and `Write` but
   keeps an unrestricted `Bash`, so "don't edit" is a brief you write, not a boundary you get
   ([engineering-manager.md § Delegate](docs/reusable/engineering-manager.md#delegate)).
 - **From outside a Claude session** — a script, a cron job, a Codex-primary run, the box — dispatch

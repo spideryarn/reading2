@@ -70,6 +70,7 @@ export const RESET_EXTRA_NAME: Record<StepName, string | null> = {
   tweets: "Thread",
   glossary: "Glossary",
   quotes: "Quotes",
+  trajectory: "Trajectory",
   ideas: "Ideas",
   timeline: "Timeline",
   quiz: "Quiz",

@@ -47,6 +47,7 @@ import type {
   Citations,
   Debate,
   Faq,
+  Trajectory,
   Glossary,
   Ideas,
   Meta,
@@ -95,6 +96,7 @@ export type ArtifactKind =
   | "timeline"
   | "quiz"
   | "faq"
+  | "trajectory"
   | "sketch"
   | "illustrated"
   | "debate"
@@ -166,6 +168,12 @@ export interface ArtifactMap {
    * docs/plans/260916d-faq-mode.md.
    */
   faq: Faq;
+  /**
+   * A route through the Quotes, at three depths — `Trajectory`, src/types.ts,
+   * written by the `trajectory` step.
+   * docs/plans/260928a-trajectory-mode-skim-a-paper-at-increasing-depth.md.
+   */
+  trajectory: Trajectory;
   sketch: Sketch;
   /**
    * The same argument painted — `Illustrated`, src/illustrated-plate.ts,
@@ -343,6 +351,12 @@ export const SHAPE: Record<ArtifactKind, ShapeCheck> = {
      model named questions and validation dropped every one.
      docs/plans/260916d-faq-mode.md (Sol F8). */
   faq: { field: "questions", ok: isArray },
+  /* A `stops` array, and **an empty one is NOT usable** — the opposite call
+     from `faq` directly above. There is always a route through a non-empty set
+     of quotes, so `buildTrajectory` (src/trajectory.ts) throws on every empty
+     outcome, and this refuses one at the store boundary too.
+     docs/plans/260928a-trajectory-mode-skim-a-paper-at-increasing-depth.md. */
+  trajectory: { field: "stops", ok: (v) => isArray(v) && (v as unknown[]).length > 0 },
   /* **`scenes`, and an empty one is NOT usable**, unlike the assets manifest
      two rows up. An article with no images legitimately has an empty list; a
      picture with no scenes is not a picture, and `accept` in
@@ -903,6 +917,10 @@ export const STAMP_SOURCE: Record<StepName, ArtifactKind | null> = {
   /* **And deliberately NO `BASELINE` row**, like `quiz`: ids are minted fresh
      per run because nothing addresses a question yet (Sol F6). */
   faq: "faq",
+  /* **And deliberately NO `BASELINE` row**: the route holds only quote ids and
+     has no ids of its own to inherit, so a re-run simply replaces it. Its
+     `sourceHash` is the quotes hash, not an article fingerprint. */
+  trajectory: "trajectory",
   sketch: "sketch",
   illustrated: "illustrated",
   /* **And deliberately NO `BASELINE` row**, like `quiz` above and for the same

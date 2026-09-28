@@ -422,6 +422,10 @@ export type Task =
      where it responds — docs/plans/260916d-faq-mode.md. Article-reading like
      `ideas`, naming block ids, so `articleWithIds` and that cached prefix. */
   | "faq"
+  /* A route through the Quotes — docs/plans/260928a-trajectory-mode-skim-a-paper-at-increasing-depth.md.
+     **Not article-reading**: it sends the quotes and never the article, so it
+     is no `ArticleStage` and its effort is a constant in src/trajectory.ts. */
+  | "trajectory"
   | "explain"
   | "chat"
   /* **Marking a reader's answer, and its own job rather than a mode of `quiz`.**
@@ -741,6 +745,7 @@ export const TASK_TIER: Record<Task, Tier> = {
   illustrated: "capable",
   quiz: "capable",
   faq: "capable",
+  trajectory: "capable",
   explain: "capable",
   chat: "capable",
   "quiz-mark": "capable",
@@ -952,6 +957,7 @@ export const TASK_WIRE: Record<Task, Wire> = {
   illustrated: "messages",
   quiz: "messages",
   faq: "messages",
+  trajectory: "messages",
   explain: "chat",
   chat: "chat",
   "quiz-mark": "chat",
@@ -1054,6 +1060,7 @@ export const MODEL_ENV_VAR: Record<Task, string | null> = {
   illustrated: null,
   quiz: null,
   faq: null,
+  trajectory: null,
   citations: null,
   /* It has one because it is on the chat wire, and every chat-wire task does —
      `REQUEST_PATH_TASKS` is derived from `TASK_WIRE`, and tests/models.test.ts

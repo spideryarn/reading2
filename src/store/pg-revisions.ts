@@ -322,6 +322,14 @@ export const REVISION_CARRY_POLICY: Record<
      questions are still worth reading, and minting would empty the band until
      somebody paid for the call again. docs/plans/260916d-faq-mode.md. */
   faq: "carry",
+  /* **Carries, like `quotes`, which it is made of.** It holds quote ids and no
+     block ids, and the `quotes` column carries beside it — so a new draft's
+     route still names quotes the draft has. Whether those quotes still stand on
+     the article is Quotes' own `stale`; whether the route still matches the
+     quotes is its `sourceHash`, answered at read time. Minting would empty the
+     band until somebody paid for the call again.
+     docs/plans/260928a-trajectory-mode-skim-a-paper-at-increasing-depth.md. */
+  trajectory: "carry",
   /* Carries like the seven above, and it is the one where carrying costs
      nothing at all: the plates are content-addressed objects in the blob store
      and the column holds only their hashes, so a new draft inherits pictures
