@@ -434,7 +434,7 @@ describe("RESET_ROLE", () => {
     expect(extraSteps()).toEqual(
       STEP_ORDER.filter((s) => !DEFAULT_INGEST_STEPS.includes(s) && s !== "labels"),
     );
-    expect(extraSteps()).toHaveLength(12);
+    expect(extraSteps()).toHaveLength(13);
   });
 
   it("finds every extra's column in STORAGE, one whole column each", () => {

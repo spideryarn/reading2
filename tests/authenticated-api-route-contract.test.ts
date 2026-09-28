@@ -795,8 +795,8 @@ const EXPECTED_AUTH_ROUTES: ExpectedRoute[] = [
 ];
 
 /** Loud failure controls. Never the oracle — see the header. */
-const EXPECTED_MATCHER_COUNT = 72;
-const EXPECTED_GUARD_COUNT = 89;
+const EXPECTED_MATCHER_COUNT = 73;
+const EXPECTED_GUARD_COUNT = 90;
 
 /* ------------------------------------------------------------- the source read */
 
