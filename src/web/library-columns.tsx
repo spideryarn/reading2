@@ -30,6 +30,7 @@
  * banished to the bottom with the unknowns.
  */
 
+import type { Table } from "@tanstack/react-table";
 import { SHARING_ON } from "../messages.js";
 import type { LibraryEntry } from "../types.js";
 import type { SortableColumn } from "./lib/DataTable.js";
@@ -143,7 +144,14 @@ export function libraryColumns(shelf: Shelf, now: number): SortableColumn<Librar
         ends: ["A to Z", "Z to A"],
         fluid: true,
       },
-      cell: ({ row }) => <TitleCell entry={row.original} shelf={shelf} />,
+      /* **Never hideable** (plan 260928a, Sol P-5): a row with no title is not
+         a row — it is the link, and it is where the row card hangs. */
+      enableHiding: false,
+      /* `table` from the cell's context, so the row card can carry back the
+         value of every column the reader has hidden. */
+      cell: ({ row, table }) => (
+        <TitleCell entry={row.original} shelf={shelf} hidden={hiddenColumns(table)} />
+      ),
     },
     {
       id: "added",
@@ -237,6 +245,9 @@ export function libraryColumns(shelf: Shelf, now: number): SortableColumn<Librar
       id: "actions",
       header: () => <span className="tw:sr-only">Actions</span>,
       enableSorting: false as const,
+      /* **Never hideable** (Sol P-5): five controls, not a value the row card
+         could carry back, so hiding them would make them unreachable. */
+      enableHiding: false,
       meta: { label: "Actions", hint: "", ends: ["", ""], noChip: true },
       cell: ({ row }) => <RowActions entry={row.original} shelf={shelf} />,
     },
@@ -245,7 +256,16 @@ export function libraryColumns(shelf: Shelf, now: number): SortableColumn<Librar
 
 /* ----------------------------------------------------------------- cells -- */
 
-function TitleCell({ entry, shelf }: { entry: LibraryEntry; shelf: Shelf }) {
+function TitleCell({
+  entry,
+  shelf,
+  hidden,
+}: {
+  entry: LibraryEntry;
+  shelf: Shelf;
+  /** The ids of the columns the reader has hidden — `rowCardFacts`. */
+  hidden: readonly string[];
+}) {
   const sub = [entry.byline, entry.siteName, `~${entry.minutes} min`].filter(Boolean).join(" · ");
 
   /* The same in-place rename the card offers, and deliberately the same
@@ -272,7 +292,7 @@ function TitleCell({ entry, shelf }: { entry: LibraryEntry; shelf: Shelf }) {
     );
   }
 
-  const facts = rowCardFacts(entry, NONE_HIDDEN);
+  const facts = rowCardFacts(entry, hidden);
 
   /* No stretched link here: a whole row as one click target would swallow
      the buttons at the end of it, and the card already learned that lesson
@@ -355,8 +375,19 @@ function TitleCell({ entry, shelf }: { entry: LibraryEntry; shelf: Shelf }) {
 
 /* -------------------------------------------------------------- row card -- */
 
-/** Stage 1 of plan 260928a hides nothing; stage 2 passes the reader's hidden columns. */
-const NONE_HIDDEN: readonly string[] = [];
+/**
+ * The ids of the columns the reader has hidden, read off the table rather than
+ * passed down, so the row card cannot disagree with the header row about which
+ * columns are showing. Asked per column (`getIsVisible`) rather than read from
+ * the raw visibility state, which only records the columns somebody toggled.
+ * Plan 260928a, stage 2.
+ */
+function hiddenColumns(table: Table<LibraryEntry>): string[] {
+  return table
+    .getAllLeafColumns()
+    .filter((c) => !c.getIsVisible())
+    .map((c) => c.id);
+}
 
 /** One line of the row card: a label, and what it says. */
 export interface RowCardFact {
@@ -417,7 +448,7 @@ function count(n: number, one: string): string {
  *   longer draws.
  *
  * **`hidden` is the ids of the columns the reader has hidden** (stage 2 of the
- * plan; stage 1 passes none). A hidden column is not on the row, so its value
+ * plan; `hiddenColumns` reads them off the table). A hidden column is not on the row, so its value
  * comes back here — subtraction applied to the reader's own choice, and what
  * makes hiding safe: nothing becomes unreachable. Added is already exact above,
  * so hiding it adds nothing; hiding Last opened adds only "never", for an

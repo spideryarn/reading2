@@ -75,6 +75,7 @@ import { pageTitle, useDocumentTitle } from "./page-title.js";
 import { ADMIN_HREF, PROFILE_HREF } from "./router.js";
 import { ShelfCard } from "./ShelfEntry.js";
 import { ShelfControls, type ShelfFilter } from "./ShelfControls.js";
+import { useShelfHiddenColumns } from "./shelf-hidden-columns.js";
 import { SiteFooter } from "./SiteFooter.js";
 import { Tooltip, TooltipGroup } from "./Tooltip.js";
 import { useJobs } from "./useJobs.js";
@@ -244,12 +245,18 @@ export function Library({
     [sorting, natural, pushView, setBy, setDir],
   );
 
+  /* The columns the reader has hidden in table view, remembered in this
+     browser — shelf-hidden-columns.ts; plan 260928a, Decision 3. */
+  const [columnVisibility, onColumnVisibilityChange] = useShelfHiddenColumns(columns);
+
   const table = useSortedTable({
     data: rows ?? EMPTY,
     columns,
     sorting,
     onSortingChange,
     rowId: slugOf,
+    columnVisibility,
+    onColumnVisibilityChange,
   });
 
   /* The fixture last, in every order and both directions. It is a committed

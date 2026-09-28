@@ -109,7 +109,7 @@ go?".
   focus to a removed node (Sol P-4; `ShelfActionsMenu` hit the same thing). Both the menu and the
   Columns list live in `DataTable.tsx`, so that focus rule is local to the file that draws the headers.
 - **Article and Actions cannot be hidden** — a row with no title is not a row, and the actions are
-  five controls, not a value the card could carry back (Sol P-5). The four data columns can.
+  five controls, not a value the card could carry back (Sol P-5). The five data columns can — Added, Last opened, Opens, Comments, Words.
 - **Remembered in `localStorage`** under one key, wrapped in try/catch the way
   [`small-screen-hint.ts`](../../src/web/small-screen-hint.ts) does it; unreadable storage, junk, or
   an id we no longer have all land on "everything shown". Per browser, not per account and not in the
@@ -190,3 +190,12 @@ The `shelf-topics` session is adding topic filters to the same page. Edits to `L
   byline wraps too (P-1), Table control's card rewritten (P-2), one tooltip group per table (P-3),
   focus after a right-click hide (P-4), Actions not hideable (P-5), sort-while-hidden and `/admin`
   tests (P-6), the jsdom recipe (P-7), phone-width controls row (P-8).
+- 2026-09-28 — stage 1 landed (714cc95b). Sol code review: ready; fixed S1-1 (P1, the Table control's
+  card overpromised a blurb on every row) and S1-2 (P2, a wrapping test that survived its mutation) —
+  8322b8a0. The builder found the `Shared` badge's `title` in rows too, so the badge's sentence moved
+  into the card.
+- 2026-09-28 — stage 2 built. "Four data columns" was wrong — there are five. Missing-last lives in
+  `Library.tsx`'s `sorted` memo, not `DataTable`, so the P-6 test copies the two `sinkLast` passes.
+  Unknown stored ids are dropped one by one rather than wiping the list. Open for the browser check:
+  whether a long-press on a header also sorts on lift, and whether a finger starting a scroll on the
+  Columns button opens it (Radix opens on `pointerdown`; `ShelfActionsMenu` works around this).

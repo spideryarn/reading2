@@ -12,8 +12,8 @@
  * the order — the pattern Raindrop and Notion both settled on, where a view is
  * a way of painting one list rather than a list of its own. The cards keep the
  * blurb and say what they are sorted by (ShelfEntry.tsx § the note); the table
- * gives up the blurb and shows every column at once. Neither is a fallback for
- * the other.
+ * moves the blurb into a card on each title and shows a column per key, any of
+ * which the reader can hide (plan 260928a). Neither is a fallback for the other.
  *
  * The chips themselves are `SortChips` from lib/DataTable.tsx and know nothing
  * about the library — they are built from the table's own columns. What is left
@@ -23,14 +23,16 @@
  * Chips rather than a dropdown, deliberately: six keys fit on a line at this
  * width, one click beats two, and the current order is readable without opening
  * anything. Linear's "Display options" popover is the right answer at three
- * times this many dimensions, and is what to reach for if grouping or column
- * visibility ever arrive — see docs/project/library.md § Sorting the shelf.
+ * times this many dimensions, and is what to reach for if grouping arrives —
+ * see docs/project/library.md § Sorting the shelf. Column visibility arrived
+ * first (2026-09-28) and got one small menu of its own, `ColumnsMenu`, shown
+ * in table view only: one dimension did not yet earn a popover of popovers.
  */
 import { EyeOff, Rows3, Table as TableIcon } from "lucide-react";
 import { RadioGroup } from "radix-ui";
 import type { Table } from "@tanstack/react-table";
 import type { LibraryEntry } from "../types.js";
-import { chipClass, SortChips } from "./lib/DataTable.js";
+import { chipClass, ColumnsMenu, SortChips } from "./lib/DataTable.js";
 import { ControlTip, Tooltip, TooltipGroup } from "./Tooltip.js";
 
 export type ShelfView = "cards" | "table";
@@ -56,7 +58,12 @@ export function ShelfControls({
     <div className="tw:mb-4 tw:flex tw:flex-wrap tw:items-center tw:gap-x-3 tw:gap-y-2">
       <SortChips table={table} order={chipOrder} />
 
-      <div className="tw:ml-auto tw:flex tw:items-center tw:gap-2">
+      {/* `flex-wrap` since 2026-09-28: with Columns beside the view switch the
+          group is four controls, and at phone width a group that cannot wrap
+          pushes the page sideways rather than taking a second line (plan
+          260928a, Sol P-8). `justify-end` so a wrapped control stays at the
+          right, under the others. */}
+      <div className="tw:ml-auto tw:flex tw:flex-wrap tw:items-center tw:justify-end tw:gap-2">
         <Chip
           pressed={filter === "unread"}
           /* Every accessible name here **begins with the visible text**, so
@@ -76,6 +83,13 @@ export function ShelfControls({
           <EyeOff size={12} />
           Unread
         </Chip>
+
+        {/* **Columns, in table view only** — the cards have no columns to
+            hide. Beside the switch, because which columns the table shows is a
+            question about how the shelf is drawn, the same as the switch.
+            The way back from a right-click hide, and the route that works on a
+            finger (lib/DataTable.tsx § ColumnsMenu; plan 260928a, Decision 3). */}
+        {view === "table" && <ColumnsMenu table={table} />}
 
         <ViewSwitch view={view} onView={onView} />
       </div>

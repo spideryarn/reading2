@@ -56,8 +56,9 @@
  * attribute to every sorted header is not what WAI-ARIA asks for. Only the
  * first key carries it; the rest say where they are through the chip ordinal.
  */
-import { useMemo } from "react";
+import { useMemo, useRef } from "react";
 import {
+  type Column,
   type ColumnDef,
   flexRender,
   type Header,
@@ -69,8 +70,10 @@ import {
   type SortingState,
   type Table,
   useReactTable,
+  type VisibilityState,
 } from "@tanstack/react-table";
-import { ArrowDown, ArrowUp } from "lucide-react";
+import { ArrowDown, ArrowUp, Check, Columns3, EyeOff } from "lucide-react";
+import { ContextMenu, DropdownMenu } from "radix-ui";
 import type { NaturalDirections } from "./table-sort.js";
 
 /**
@@ -203,6 +206,8 @@ export function useSortedTable<T>({
   sorting,
   onSortingChange,
   rowId,
+  columnVisibility,
+  onColumnVisibilityChange,
 }: {
   data: T[];
   columns: SortableColumn<T>[];
@@ -210,6 +215,24 @@ export function useSortedTable<T>({
   onSortingChange: OnChangeFn<SortingState>;
   /** A unique, stable id per row — and the tiebreak. See the header comment. */
   rowId: (row: T) => string;
+  /**
+   * **Column hiding, opt-in: pass both or neither.** With neither, hiding is
+   * switched off outright (`enableHiding: false`), so a page that never asked —
+   * `/admin` — gets no header menu and no Columns control, and its table is
+   * exactly what it was. The shelf passes both (plan 260928a, Decision 3).
+   *
+   * **`columnVisibility` must keep its identity between changes**, for the
+   * same reason as `sorting`: TanStack keys its visible-column memos on it, and
+   * this file's render-loop history (`autoResetPageIndex` below) is what a
+   * fresh object per render costs. Hold it in React state, as
+   * shelf-hidden-columns.ts does.
+   *
+   * A column says it cannot be hidden with TanStack's own `enableHiding:
+   * false`. The column array is never filtered: a hidden column still sorts,
+   * still has its values, and stays in the chip row.
+   */
+  columnVisibility?: VisibilityState;
+  onColumnVisibilityChange?: OnChangeFn<VisibilityState>;
 }): Table<T> {
   /* Sorted by id before TanStack sees it, so its `rowA.index` fallback is a
      real total order rather than whatever the server happened to send. */
@@ -218,11 +241,17 @@ export function useSortedTable<T>({
     [data, rowId],
   );
 
+  const hiding = columnVisibility !== undefined && onColumnVisibilityChange !== undefined;
+
   return useReactTable({
     data: ordered,
     columns,
-    state: { sorting },
+    /* The spread keeps `columnVisibility` out of `state` altogether when hiding
+       is off, so TanStack's own internal (empty) visibility state stands. */
+    state: hiding ? { sorting, columnVisibility } : { sorting },
     onSortingChange,
+    ...(hiding ? { onColumnVisibilityChange } : {}),
+    enableHiding: hiding,
     getRowId: rowId,
     getCoreRowModel: getCoreRowModel(),
     getSortedRowModel: getSortedRowModel(),
@@ -372,6 +401,97 @@ export function SortChips<T>({
   );
 }
 
+/* ------------------------------------------------------ hiding columns --- */
+
+/**
+ * The surface both menus in this file draw on: the tooltip card's tokens —
+ * raised, opaque, the strong rule, the same shadow — and `z-[100]` to sit
+ * frontmost. The same classes as `ShelfActionsMenu` in ShelfEntry.tsx, whose
+ * comment has the reasoning; repeated rather than imported because this file
+ * is the lower layer and must not reach up into a page's components.
+ */
+const MENU_SURFACE =
+  "tw:z-[100] tw:min-w-[12rem] tw:max-w-[min(22rem,calc(100vw-1.75rem))] tw:rounded-[5px] tw:border tw:border-rule-strong tw:bg-surface-raised tw:p-1 tw:shadow-[0_1px_2px_rgb(0_0_0/0.5),0_8px_24px_-6px_rgb(0_0_0/0.65)]";
+
+/** One row of either menu — `ShelfActionsMenu`'s `ITEM`, for the same reason. */
+const MENU_ITEM =
+  "tw:flex tw:min-h-10 tw:cursor-default tw:select-none tw:items-center tw:gap-2.5 tw:rounded-[3px] tw:px-2.5 tw:py-1.5 tw:text-sm tw:leading-snug tw:text-foreground tw:outline-none tw:data-highlighted:bg-highlight/10 tw:data-disabled:text-muted-foreground";
+
+/**
+ * **Which columns the table shows: one checkbox per column that can be
+ * hidden.** Plan 260928a, Decision 3.
+ *
+ * This is the way back from a right-click hide, and the route that works on a
+ * finger, on a keyboard, and for anybody who never thinks to right-click. It
+ * draws nothing for a table that did not opt in to hiding (`useSortedTable`),
+ * so a page can place it unconditionally.
+ *
+ * **It says how many are hidden**, which is the answer to "where did my column
+ * go?": a count badge rather than a longer label, so the shelf's controls row
+ * still fits a phone (Sol P-8), and the count in the accessible name, which
+ * begins with the visible word (WCAG 2.5.3 Label in Name, as the chips).
+ *
+ * Each box is labelled with the chip's name (`meta.label`), not the header's
+ * shorter one, because the chip row sits right beside this control and reads
+ * the same list of columns.
+ *
+ * **Ticking a box keeps the menu open** (`onSelect` prevented) — hiding three
+ * columns should not take three trips to the button.
+ */
+export function ColumnsMenu<T>({ table }: { table: Table<T> }) {
+  const hideable = table
+    .getAllLeafColumns()
+    .filter((c) => c.getCanHide() && c.columnDef.meta !== undefined);
+  if (hideable.length === 0) return null;
+
+  const hidden = hideable.filter((c) => !c.getIsVisible()).length;
+  const describe =
+    hidden === 0
+      ? "Columns — choose which the table shows"
+      : `Columns, ${hidden} hidden — choose which the table shows`;
+
+  return (
+    <DropdownMenu.Root>
+      <DropdownMenu.Trigger aria-label={describe} className={chipClass(hidden > 0)}>
+        <Columns3 size={12} aria-hidden="true" />
+        Columns
+        {hidden > 0 && (
+          <span className="tw:rounded-full tw:bg-highlight/20 tw:px-1.5 tw:text-[10px] tw:leading-4 tw:tabular-nums">
+            {hidden}
+          </span>
+        )}
+      </DropdownMenu.Trigger>
+      <DropdownMenu.Portal>
+        <DropdownMenu.Content
+          align="end"
+          sideOffset={4}
+          collisionPadding={10}
+          className={MENU_SURFACE}
+        >
+          {hideable.map((column) => (
+            <DropdownMenu.CheckboxItem
+              key={column.id}
+              checked={column.getIsVisible()}
+              onCheckedChange={(on) => column.toggleVisibility(on === true)}
+              onSelect={(e) => e.preventDefault()}
+              className={MENU_ITEM}
+            >
+              {/* A fixed box, so the words line up whether or not a tick is
+                  drawn beside them. */}
+              <span className="tw:inline-flex tw:size-4 tw:shrink-0 tw:items-center tw:justify-center">
+                <DropdownMenu.ItemIndicator>
+                  <Check size={14} aria-hidden="true" />
+                </DropdownMenu.ItemIndicator>
+              </span>
+              <span>{column.columnDef.meta?.label}</span>
+            </DropdownMenu.CheckboxItem>
+          ))}
+        </DropdownMenu.Content>
+      </DropdownMenu.Portal>
+    </DropdownMenu.Root>
+  );
+}
+
 /* ------------------------------------------------------------ the table --- */
 
 /**
@@ -476,9 +596,18 @@ function HeaderCell<T>({ table, header }: { table: Table<T>; header: Header<T, u
      secondary keys say where they are through the chip ordinal instead. */
   const primary = table.getState().sorting[0]?.id === header.column.id;
 
-  return (
+  /* Set by the Hide item and read once by `onCloseAutoFocus` — see there. A
+     ref rather than state because it has to outlive this component: by the
+     time Radix asks where focus should go, this header has been unmounted. */
+  const thRef = useRef<HTMLTableCellElement>(null);
+  const afterHide = useRef<{ table: HTMLTableElement | null; next: string | null } | null>(null);
+
+  const cell = (
     <th
+      ref={thRef}
       scope="col"
+      /* What `focusSortButton` finds the neighbouring header by. */
+      data-column-id={header.column.id}
       aria-sort={primary && sorted ? (sorted === "asc" ? "ascending" : "descending") : undefined}
       /* `CELL_X` rather than its own padding, so a header and the column under
          it cannot drift apart by one of the two being edited. The minimum on
@@ -512,6 +641,97 @@ function HeaderCell<T>({ table, header }: { table: Table<T>; header: Header<T, u
       )}
     </th>
   );
+
+  /* **No menu at all unless this column can be hidden** — which is false for
+     every column of a table that did not opt in (`useSortedTable`), and for
+     Article and Actions on the shelf. A right-click there gets the browser's
+     own menu, as it always did. */
+  if (!header.column.getCanHide()) return cell;
+
+  return (
+    /* **Right-click a header: a one-item menu, not an instant hide**, so a
+       stray right-click costs nothing (plan 260928a, assumption A3). Radix's
+       `ContextMenu` also opens on a long press for a finger or a pen, which
+       is the touch route for free — the Columns control is the other one.
+       The trigger is the `<th>` itself (`asChild`), so a plain click on the
+       sort button inside it still sorts: the menu listens only for
+       `contextmenu` and for a held touch. */
+    <ContextMenu.Root>
+      <ContextMenu.Trigger asChild>{cell}</ContextMenu.Trigger>
+      <ContextMenu.Portal>
+        <ContextMenu.Content
+          collisionPadding={10}
+          className={MENU_SURFACE}
+          /* **Focus after a hide goes to the neighbouring header's sort
+             button** — Sol P-4, and the same problem `ShelfActionsMenu` hit
+             with Edit title. The header that opened this menu no longer
+             exists, and Radix's default would return focus to whatever held it
+             before the menu opened: a removed node, or something elsewhere on
+             the page. Radix fires this after the header has unmounted (it keeps
+             the latest handler in a ref), which is why `afterHide` is a ref.
+             A menu closed without hiding — Escape, a click outside — keeps
+             Radix's own behaviour. */
+          onCloseAutoFocus={(e) => {
+            const done = afterHide.current;
+            if (!done) return;
+            afterHide.current = null;
+            e.preventDefault();
+            focusSortButton(done.table, done.next);
+          }}
+        >
+          <ContextMenu.Item
+            className={MENU_ITEM}
+            onSelect={() => {
+              afterHide.current = {
+                table: thRef.current?.closest("table") ?? null,
+                next: neighbourToFocus(table, header.column.id),
+              };
+              header.column.toggleVisibility(false);
+            }}
+          >
+            <EyeOff size={16} aria-hidden="true" className="tw:shrink-0" />
+            <span>Hide "{shown}"</span>
+          </ContextMenu.Item>
+        </ContextMenu.Content>
+      </ContextMenu.Portal>
+    </ContextMenu.Root>
+  );
+}
+
+/**
+ * The column whose header should take focus once `id` is hidden: **the next
+ * one along that has a sort button, else the previous one.** "Has a sort
+ * button" rather than just "next", because the shelf's last column is Actions,
+ * whose header is a hidden word with nothing to focus — so hiding Words, the
+ * column before it, lands on Comments.
+ */
+function neighbourToFocus<T>(table: Table<T>, id: string): string | null {
+  const visible = table.getVisibleLeafColumns();
+  const at = visible.findIndex((c) => c.id === id);
+  const focusable = (c: Column<T, unknown> | undefined): c is Column<T, unknown> =>
+    c !== undefined && c.id !== id && c.getCanSort() && c.columnDef.meta !== undefined;
+  for (let i = at + 1; i < visible.length; i++) {
+    const c = visible[i];
+    if (focusable(c)) return c.id;
+  }
+  for (let i = at - 1; i >= 0; i--) {
+    const c = visible[i];
+    if (focusable(c)) return c.id;
+  }
+  return null;
+}
+
+/** Focus the sort button in the header of column `id`, if it is drawn. */
+function focusSortButton(tableEl: HTMLTableElement | null, id: string | null): void {
+  if (!tableEl || id === null) return;
+  /* Compared attribute by attribute rather than built into a selector, so an
+     id with a quote in it cannot break the query. */
+  for (const th of tableEl.querySelectorAll<HTMLElement>("th[data-column-id]")) {
+    if (th.dataset.columnId === id) {
+      th.querySelector<HTMLButtonElement>("button")?.focus();
+      return;
+    }
+  }
 }
 
 /** Where an id sits in the preferred order, with unknown ids after the known ones. */
