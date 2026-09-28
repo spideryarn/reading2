@@ -834,3 +834,107 @@ Trajectory back in `BEHIND_THE_SWITCH` alone reds 6 tests; setting `POLICY.traje
 `available` reds 5 visitor-protection tests, including three network traces that assert no POST for
 signed-out and signed-in non-owner readers. The server side is `tests/enqueue-owns-the-article.test.ts`
 (404 and no job row for an article the caller does not own), run here against Postgres: green.
+
+### Stage 6 code review — GPT Sol ([prompt](260928a-trajectory-mode-stage6-code-review-prompt.md), [answer](260928a-trajectory-mode-stage6-code-review-sol.md)), write-capable, verdict *accept after fixes*
+
+All six fixed by Sol, red-first: **F70** (P1) *Plan it again* pressed while Ideas were loading
+posted the route alone — now waits for both reads; **F71** priority hashed at raw precision but
+rendered at two decimals; **F72** raw block id in the hash though never rendered; **F73** "no Ideas
+artefact" and "Ideas found none" hashed differently but rendered the same — now "unavailable" vs
+"none"; **F74** section titles and paths capped at 300 characters; **F75** the stale banner names
+all three sources (Quotes, Ideas, outline). Gates here afterwards: typecheck 0; 13 files, 411
+tests, including the Postgres freshness test.
+
+### 6a — the Quotes spread nudge, measured offline: **not kept**
+
+[The eval](260928a-trajectory-mode-stage6a-quotes-spread-eval.md): the production generator with
+`previous: null` on the three articles, control twice and nudge twice ($0.70). Summed over 19 Ideas
+and 23 content sections: sections with no quote 3/3 (control) vs 3/5 (nudge); Ideas with a quote in
+the same block 15/14 vs 13/11; in or beside 16/16 vs 16/15. Flat to worse, as Sol F66 predicted,
+and one nudge run lost 5 quotes to the verbatim check. The one real gap — the entropy paper's
+*Future Directions*, 636 words — got no quote in any run. Quotes keeps `quotes/7`; no version bump.
+
+### Stage 6 measured: **kept**
+
+[Before vs after](260928a-trajectory-mode-stage6-coverage-after.md) (Opus, offline, same Ideas
+snapshot and Quotes for both arms, each arm twice; $0.39 including one article's Ideas brought up
+to date). Summed over the three articles' 21 Ideas, stops in the same block as an Idea:
+
+| | Gist | More | Most |
+|---|---|---|---|
+| `trajectory/6`, runs 1 / 2 | 5 / 5 | 13 / 9 | 15 / 15 |
+| `trajectory/7`, runs 1 / 2 | 7 / 7 | 14 / 13 | 15 / 15 |
+
+Gist gains beyond noise (each arm picked the same stops both times); More a little, clearly on the
+normal paper only; Most cannot move (every quote is a stop there) — only Quotes could, and 6a did not
+help. Sections and words no worse. +$0.005–0.008 per route (+37–43% input tokens), same latency. The
+long paper's Gist still misses the idea its title is about, though two quotes carry it — a route
+choice, left for real reading to judge. 6b/6c not built; trajectory.md § question 6 says why.
+
+**Stage 6 browser check** (Sonnet, Playwright, switch **off**, on a fresh article with no Quotes or
+Ideas — *Cargo Cult Science*, 3,822 words): all pass. The empty state says the Quotes and Ideas come
+first and that the Ideas are the long part; a press posts `["quotes","ideas","trajectory"]`; the band
+shows *Choosing the quotes* (17.7 s, $0.036), *Finding the ideas* (69.7 s, $0.075), then the route
+(7.6 s, $0.018) — **95 s and $0.13 for a first open from nothing**; the card shows *Ideas it bears on*
+without a reload; *Plan it again* posts `["trajectory"]` forced and re-runs nothing else ($0.019).
+
+## Stage 7 — bigger ‹ ›, flash the quote's words, and the scroll that cuts the stop off (2026-09-28)
+
+Greg, from using it in production:
+
+> Trajectory mode:
+> - Make the back/forward buttons a bit bigger
+> - And somehow, when I clicked to go to the next Stop, it correctly flashed the block (though I think I was hoping it would flash the specific Quote if that's really what we're jumping to?), but somehow the scrolling wasn't quite right, i.e. the page was scrolled down a bit and I think the Quote was cutoff at the top. Maybe this is a problem with the general block-links rather than Trajectory mode itself, I don't know.
+>
+> — Greg, 2026-09-28
+
+And, the same afternoon, folded into stage 6's unreleased `trajectory/7` rather than a second bump:
+
+> Slight tweak to Trajectory mode - prefer not to include the Abstract as part of a trajectory, since that's kinda obviously already a good place to get the gist, and it's dense.
+>
+> — Greg, 2026-09-28
+
+- **7a. Bigger ‹ ›** — to the house sizes in [controls.md](../project/controls.md).
+- **7b. Flash the quote's words**, not the whole block, when the stop is a quote. `flashBlock` washes
+  the whole `td.text`; the quote's marked span already exists in the prose (the quote stroke), so the
+  flash targets that span when there is one and falls back to the block. It stays one flash
+  helper — a target argument, not a second flash.
+- **7c. The scroll bug** — reproduced in a real browser first, a failing test, then the fix; the
+  root cause in a subagent, a postmortem naming the class, and the fix wherever the cause lives (the
+  shared `scrollToBlock` if it is shared, with the other modes it touches named).
+- **Abstract excluded** (stage 6): a deterministic rule — quotes whose block sits under an Abstract
+  heading are not offered to the route — and one sentence in the prompt saying why.
+
+### Abstract rule — GPT Sol ([prompt](260928a-trajectory-mode-abstract-review-prompt.md), [answer](260928a-trajectory-mode-abstract-review-sol.md)), verdict *accept after fixes*
+
+Fixed by Sol: **F80** a plain opening "Summary" counts only under Front Matter or straight before
+an Introduction (an essay's introduction was a false positive), and numbering variants are
+recognised; **F81** the coverage note at Most counts the quotes *offered to the route*, not raw
+Quotes that include never-offered abstract ones; **F82** an article whose only quotes are in the
+abstract gets its own refusal (`[jb-only-abstract-quotes]`); **F83** the prompt sentence keeps other
+opening quotes available. **F84** (known limit, documented): untitled and non-English abstracts are
+not detected — conservative on purpose.
+
+### Stage 7 — what landed
+
+- **The scroll** ([postmortem](../postmortems/260928c-a-scroll-aimed-at-a-pixel-not-at-the-element.md)):
+  reproduced in Playwright — a step to a stop *below* the current one settled ~86px too far, at
+  every width, because the "Next stop" door moved out from above the target after `scrollToBlock`
+  measured it. Fixed in the shared helper: the glide re-measures the element each frame (chasing
+  bounded to 200 ms), the instant path corrects once after the commit. The class, named: *a scroll
+  destination measured once for a journey the layout does not hold still for*.
+- **The flash**: `flashBlock(id, { passage })` washes the quote's own fragments, falling back to the
+  block. Trajectory's steps and (after Sol's F90) its row press pass it; every other caller still
+  washes the block.
+- **Bigger ‹ ›**: 44px through `--control-h-lg`.
+
+**GPT Sol code review** ([prompt](260928a-trajectory-mode-stage7-code-review-prompt.md),
+[answer](260928a-trajectory-mode-stage7-code-review-sol.md)), *accept after fixes*: F90 the row
+press flashes the quote too (an optional passage through `jumpTo`/`beginJump`); F91 a row removed
+mid-glide reports `missing`, not `settled`.
+
+**Browser check after** (Playwright, 1440, 1024×1366, 820×1180; ‹ ›, →, door, row press; above and
+below): row top −0.4 to +0.1px, the quote's first fragment 7.5–62px below it, no drift after 1 s,
+the quote's words flashed on every path. Regressions: a Glossary passage link lands at +0.5px and
+flashes its block as before; `?at=` restores; a wheel mid-glide stops it. Search was not exercised
+(no hits for the probe word).

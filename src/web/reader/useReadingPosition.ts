@@ -246,10 +246,10 @@ export function useReadingPosition(sections: Section[], blocks: Block[], layoutK
   // must leave it alone, or the restore effect would stop recognising the
   // position the reader is actually standing at.
   const jumpTo = useCallback(
-    (blockId: BlockId) => {
+    (blockId: BlockId, passage?: string) => {
       const moved = beginJump(blocks, blockId, (id) => {
         void setAt(id, { history: "push", limitUrlUpdates: throttle(0) });
-      });
+      }, passage);
       if (moved) synced.current = blockId;
     },
     [blocks, setAt],

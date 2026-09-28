@@ -344,11 +344,16 @@ export function measureOrigin(blocks: Block[]): JumpOrigin {
  * the reader's wheel cancelled would be in the wrong place (scroll.ts §
  * `ScrollOutcome`). Only this function flashes: stepping calls `scrollToBlock`
  * directly and stays quiet (flash.ts).
+ *
+ * `passage` narrows that flash for the one history-pushing jump whose
+ * destination is finer than a block: a Trajectory row is a quote. Omitted by
+ * every other caller, so their block wash is unchanged (plan 260928a § 7b).
  */
 export function beginJump(
   blocks: Block[],
   target: BlockId,
   push: (id: BlockId) => void,
+  passage?: string,
 ): boolean {
   clearArmedJump();
   /* A held landing belongs to the last jump. Supersede it when the next jump
@@ -359,7 +364,7 @@ export function beginJump(
   const origin = measureOrigin(blocks);
   if (origin.kind === "block" && origin.blockId === target) {
     abandonScroll();
-    flashBlock(target);
+    flashBlock(target, { passage });
     return false;
   }
   /* `from` is the whole address, not just the path: it is what lets the wrapper
@@ -373,7 +378,7 @@ export function beginJump(
   });
   push(target);
   scrollToBlock(target, "smooth", (outcome) => {
-    if (outcome === "settled") flashBlock(target);
+    if (outcome === "settled") flashBlock(target, { passage });
   });
   return true;
 }

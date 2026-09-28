@@ -2825,6 +2825,11 @@ export const TEST_LANES: Readonly<Record<string, TestLane>> = {
      `loadQuotes` — the reader's own path — so there is no honest version of it
      without a database. */
   "tests/rerun-failure-keeps-the-old-artefact.test.ts": "private-postgres",
+  /* Plan 260928a stage 6: `loadTrajectory` judges a route on the `quotes` and
+     `ideas` columns, the tree and the blocks rows beside it — the read path
+     that has to agree with the pipeline's stamp, and there is no honest
+     version of that without the rows. */
+  "tests/trajectory-freshness-pg.test.ts": "private-postgres",
   /* Landed 2026-09-04 with the reservation of `/read/public`
      (docs/plans/260904b-pricing-page-and-public-showcase.md § Stage 3a). Two of
      its three enforcers are pure functions and need nothing; the third is

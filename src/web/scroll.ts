@@ -216,8 +216,10 @@ export function stickyOffset(): number {
  * for months. They part company only while the bar is travelling — 180ms, and
  * only since it started doing that on laptops as well as phones.
  *
- * **Why the destination half is needed.** `scrollToBlock` calls this **once**
- * and hands the number to `glide()` as a fixed target; `markOurScroll` stops
+ * **Why the destination half is needed.** `scrollToBlock` used to call this
+ * **once** and hand the number to `glide()` as a fixed target (since 2026-09-28
+ * it is asked every frame — `aimAt` — but the frames early in a glide still
+ * need a prediction rather than a half-slid bar); `markOurScroll` stops
  * the bar *reacting* to the jump but cannot stop a transition already in
  * flight. So a reader who scrolled up — starting the reveal — and clicked a
  * gist 90ms later got a target computed against half a bar, and the row they
@@ -629,7 +631,7 @@ let landing: ((outcome: ScrollOutcome) => void) | null = null;
  * `outcome` is what the jump's caller is told, and it is `settled` only from
  * the glide's own last frame, which ends the animation through here too.
  */
-function cancel(outcome: "settled" | "cancelled" = "cancelled") {
+function cancel(outcome: ScrollOutcome = "cancelled") {
   /* **The reader taking over ends the quiet window, and must.** `cancel` is what
      a wheel, a touch or a `pointercancel` runs (see `bail` below), so past this
      line the page is moving because *they* are moving it — and leaving
@@ -655,19 +657,48 @@ export function glideTarget(): number | null {
   return aiming;
 }
 
-function glide(to: number, done?: (outcome: ScrollOutcome) => void) {
+/**
+ * **Travel to wherever `aim()` says, asking it again on every frame.**
+ *
+ * `aim` is a question, not a number, and that is the whole of the fix for
+ * docs/postmortems/260928c-a-scroll-aimed-at-a-pixel-not-at-the-element.md.
+ * This used to take the destination as a pixel measured once, at the moment of
+ * asking — and the layout above a row is not obliged to hold still for 200ms.
+ * Trajectory's "Next stop ›" door leaves the row above its target when React
+ * commits the step, *after* the press measured the target; an image can load, a
+ * band can open. Each of those moved the row and left the glide landing on the
+ * place it used to be, with nothing reporting anything but `settled`. Asking
+ * each frame makes the last frame land where the row *is*.
+ *
+ * `ms === 0` is the instant move (reduced motion, `behavior: "auto"`): the page
+ * moves now, synchronously, as it always did, and one frame later — after
+ * whatever render the caller's click also started has committed — it is asked
+ * again and corrected, and only then is the move reported `settled`.
+ *
+ * A caller whose destination really is a number (`scrollByScreen`) passes a
+ * function that returns it.
+ */
+function glide(
+  aim: () => number,
+  done?: (outcome: ScrollOutcome) => void,
+  ms: number = SCROLL_MS,
+  finish: () => "settled" | "missing" = () => "settled",
+) {
   cancel();
   const from = window.scrollY;
-  const distance = to - from;
+  const first = aim();
   // Already there is a landing: the reader is looking at the row right now.
-  if (Math.abs(distance) < 1) return done?.("settled");
+  if (Math.abs(first - from) < 1) return done?.("settled");
   // AFTER the early return, not before it: a jump to where we already are moves
   // nothing, and opening the quiet window for it would deafen the bar to a third
   // of a second of the reader's own scrolling for no reason at all.
-  markOurScroll();
+  markOurScroll(ms + 150);
   const started = performance.now();
-  aiming = to;
+  /* An instant move has already arrived as far as a chained gesture is
+     concerned (`glideTarget`, `scrollByScreen`): the re-check only corrects. */
+  aiming = ms > 0 ? first : null;
   landing = done ?? null;
+  if (ms === 0) window.scrollTo({ top: first, behavior: "auto" });
 
   // The browser's own smooth scroll gives up the moment you touch the wheel.
   // Ours has to be told, or we would drag the reader back to a destination they
@@ -717,12 +748,20 @@ function glide(to: number, done?: (outcome: ScrollOutcome) => void) {
   };
 
   const tick = (now: number) => {
-    const t = Math.min(1, (now - started) / SCROLL_MS);
+    const t = ms <= 0 ? 1 : Math.min(1, (now - started) / ms);
+    /* Re-aimed every frame: the eased fraction of the way from where we began
+       to where the row is *now*, so at t = 1 it is exactly there. */
+    const to = aim();
+    if (ms > 0) aiming = to;
+    const top = from + (to - from) * ease(t);
+    /* Only when it moves anything: the instant path's re-check usually finds
+       the page already right, and a no-op `scrollTo` is still a scroll event
+       for every listener on the page. */
     // `top` only: omitting `left` keeps the horizontal position, which matters
     // because a deep tree scrolls the table sideways (layout.ts § overflowing).
-    window.scrollTo({ top: from + distance * ease(t), behavior: "auto" });
+    if (Math.abs(top - window.scrollY) >= 0.5) window.scrollTo({ top, behavior: "auto" });
     if (t < 1) frame = requestAnimationFrame(tick);
-    else cancel("settled");
+    else cancel(finish());
   };
   frame = requestAnimationFrame(tick);
 }
@@ -757,12 +796,16 @@ export function scrollToTop() {
  * **How a `scrollToBlock` ended**, for a caller that has something to do on
  * arrival — the flash (flash.ts, called from keynav.ts § `beginJump`).
  *
- *  - `settled`: the row is where it was sent. At once for an instant move, a
- *    reduced-motion one or a move of less than a pixel; otherwise on the
- *    glide's last frame.
+ *  - `settled`: the row is where it was sent — where it is *then*, re-measured,
+ *    not where it was when asked. At once only for a move of less than a
+ *    pixel; on the glide's last frame; and for an instant move (reduced motion,
+ *    `"auto"`) one frame after it, when the post-commit re-check has run.
+ *    docs/postmortems/260928c-a-scroll-aimed-at-a-pixel-not-at-the-element.md.
  *  - `cancelled`: the reader's wheel or touch stopped the glide, or a newer
  *    movement replaced it (another jump, an arrow key, Back, `abandonScroll`).
- *  - `missing`: there is no row for that id — nothing moved.
+ *  - `missing`: there is no row for that id when asked, or it disappeared and
+ *    was not replaced before the last frame. In the latter case the glide may
+ *    have moved toward its last known position, but no arrival action fires.
  *
  * Reported rather than guessed with a timer, because a timer set to
  * `SCROLL_MS` fires just the same when the reader has already taken the page
@@ -785,19 +828,53 @@ export function scrollToBlock(
     cancel();
     return done?.("missing");
   }
-  // Explicit and clamped rather than scrollIntoView(): we want the row's own
-  // top edge, offset to clear the bars, and no surprise when the row sits
-  // inside a cell that spans dozens of others.
-  const top = row.getBoundingClientRect().top + window.scrollY - stickyDestination();
-  const max = document.documentElement.scrollHeight - window.innerHeight;
-  const target = Math.max(0, Math.min(top, max));
-  if (behavior === "smooth" && !reducedMotion()) glide(target, done);
-  else {
-    cancel();
-    markOurScroll(150); // instant, so only the event it fires needs covering
-    window.scrollTo({ top: target, behavior: "auto" });
-    done?.("settled");
-  }
+  const aim = aimAt(id, row);
+  glide(
+    aim.read,
+    done,
+    behavior === "smooth" && !reducedMotion() ? SCROLL_MS : 0,
+    aim.finish,
+  );
+}
+
+/**
+ * **Where the page must be for `id`'s row to sit under the bars — asked, not
+ * remembered.** `glide` calls it every frame (see there for why).
+ *
+ * Explicit and clamped rather than scrollIntoView(): we want the row's own top
+ * edge, offset to clear the bars, and no surprise when the row sits inside a
+ * cell that spans dozens of others.
+ *
+ * A row React has replaced mid-glide is found again by its id; a row that has
+ * gone altogether keeps the last answer rather than aiming at a detached
+ * node's zero rectangle, but reports `missing` rather than claiming that stale
+ * pixel was an arrival.
+ */
+function aimAt(
+  id: string,
+  first: HTMLElement,
+): { read: () => number; finish: () => "settled" | "missing" } {
+  let row = first;
+  let last: number | null = null;
+  let present = true;
+  return {
+    read: () => {
+      if (!row.isConnected) {
+        const again = blockRow(id);
+        if (!again) {
+          present = false;
+          return last ?? window.scrollY;
+        }
+        row = again;
+      }
+      present = true;
+      const top = row.getBoundingClientRect().top + window.scrollY - stickyDestination();
+      const max = document.documentElement.scrollHeight - window.innerHeight;
+      last = Math.max(0, Math.min(top, max));
+      return last;
+    },
+    finish: () => (present ? "settled" : "missing"),
+  };
 }
 
 /**
@@ -866,7 +943,7 @@ export function scrollByScreen(dir: -1 | 1) {
     cancel();
     markOurScroll(150); // instant, so only the event it fires needs covering
     window.scrollTo({ top: target, behavior: "auto" });
-  } else glide(target);
+  } else glide(() => target);
 }
 
 /**

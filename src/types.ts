@@ -1269,10 +1269,14 @@ export interface Trajectory {
   generator: string;
   slug: string;
   /**
-   * **The quotes hash** — `quotesHash` in src/trajectory.ts, over each quote's
-   * id, block id, offered text and priority. Spelled `sourceHash` because that
-   * is the name `stampOf` reads (src/store/artifacts.ts); it is not a hash of
-   * the article.
+   * **The input hash** — `trajectoryInputHash` in src/trajectory.ts, over
+   * exactly what the prompt rendered, plus the quote id each Q-label resolves
+   * to: the offered quotes' section paths, priorities, words and Idea
+   * associations, the Ideas (or `null` for none), and the top-level outline.
+   * Spelled `sourceHash` because that is the name `stampOf` reads
+   * (src/store/artifacts.ts); it is not a hash of the article. Routes before
+   * `trajectory/7` hold the old quotes-only hash, which never matches;
+   * `loadTrajectory` reports them outdated, not stale.
    */
   sourceHash: string;
   /**
@@ -1299,18 +1303,23 @@ export interface Trajectory {
 export interface TrajectoryResponse {
   trajectory: Trajectory;
   /**
-   * The Quotes have changed underneath the route — *Find more* added some, or
-   * they were chosen again — or there are none any more.
+   * What the route was planned from has changed underneath it — the Quotes
+   * (*Find more* added some, or they were chosen again), the Ideas (found
+   * again, or found for the first time after the route), or the outline — or
+   * there are no Quotes any more.
    */
   stale: boolean;
-  /** The Quotes are the same and we would write the route differently now. */
+  /** Its input is the same and we would write the route differently now. */
   outdated: boolean;
   /**
    * The profile is not the one the route was written for — **including none →
    * some**, which the shared `profileIsStale` does not count.
    */
   profileChanged: boolean;
-  /** How many of the current Quotes are not a stop on this route, at any depth. */
+  /**
+   * How many of the current Quotes are not a stop on this route, at any depth —
+   * not counting those in the abstract, which are left out on purpose.
+   */
   notOnRoute: number;
 }
 

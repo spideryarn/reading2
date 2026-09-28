@@ -171,6 +171,23 @@ td.text.has-hit[data-hues].block-flash-still {
   box-shadow: inset 0 0 0 100vmax var(--highlight-wash);
 }
 
+/* **The same flash on a passage's own words** — Trajectory's stop is a quote,
+   so flash.ts washes its `mark.hit` fragments instead of the cell (plan
+   260928a § 7b). `background-color`, not `box-shadow`: the quote's outline IS
+   its box-shadow (annotations.css § quotes), and the wash must sit inside it
+   rather than replace it.
+
+   **No `100%` keyframe**, on purpose: an omitted end keyframe animates back to
+   the element's own value, which for the current stop is the rung quote's
+   0.18 tint (`mark.hit[data-quote][data-hit-open]`) — so the wash fades into
+   the ring instead of dropping to transparent and snapping back. The still
+   rule is `td.text`-scoped so it outranks that later, equal-weight rule. */
+@keyframes passage-flash {
+  0%, 35% { background-color: var(--highlight-wash); }
+}
+td.text mark.hit.passage-flash { animation: passage-flash 1.2s ease-out; }
+td.text mark.hit.passage-flash-still { background-color: var(--highlight-wash); }
+
 /* `.block-id` was here, positioning six characters of Courier in an 83px
    gutter. The gutter is icons now and the id has moved into their `title`, so
    the rule has gone rather than been kept "in case" — a class nothing renders

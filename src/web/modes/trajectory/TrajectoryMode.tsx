@@ -26,7 +26,7 @@ import { useRenderCount } from "../../perf.js";
 import { quoteStroke } from "../../QuotesPanel.js";
 import { dropPendingFlash, flashBlock } from "../../flash.js";
 import { scrollToBlock } from "../../scroll.js";
-import { type Found, resolveTrajectoryStop } from "../../search-hits.js";
+import { type Found, quoteMarkKey, resolveTrajectoryStop } from "../../search-hits.js";
 import {
   countAt,
   currentStop,
@@ -126,18 +126,24 @@ export function TrajectoryBand({
   covers: boolean;
   /** Get out of the way of the prose. Only meaningful while `covers`. */
   onAway(): void;
-  onJump(id: BlockId): void;
+  /** A row press is a block jump narrowed to that stop's quote. */
+  onJump(id: BlockId, passage?: string): void;
   onFound(found: Found[]): void;
   openKey: string | null;
   onOpenKey(key: string | null): void;
   onControl(control: TrajectoryControl | null): void;
 }) {
   useRenderCount("TrajectoryBand");
-  const owner = useTrajectory(slug, quotes);
-  /* **The scrapbook's sources, read and never written.** The read-only hooks
-     carry no job machinery at all, so the card cannot be the reason any of
-     these is generated (Sol F22). The glossary is `Reader`'s own read. */
+  /* **The Ideas read comes first, and the route's hook is handed it** (Sol
+     F61): since stage 6 the route's own job finds the Ideas when there are
+     none, so its completion has to refresh this read — the one the stop card
+     draws from — or a fresh article's card shows no Ideas until a reload. */
   const ideas = useIdeasRead(slug);
+  const owner = useTrajectory(slug, quotes, ideas);
+  /* **The scrapbook's other sources, read and never written.** The read-only
+     hooks carry no job machinery at all, so the card cannot be the reason any
+     of these is generated (Sol F22). The glossary is `Reader`'s own read. The
+     Ideas are the exception above: made by the route's job, never by the card. */
   const faq = useFaqRead(slug);
   const timeline = useTimelineRead(slug);
   const sources = useMemo<CardSources>(
@@ -180,7 +186,7 @@ export function TrajectoryBand({
     onControl,
     arrival,
   });
-  return <TrajectoryPanel owner={owner} view={view} quoteCount={quotes.quotes?.quotes.length ?? 0} />;
+  return <TrajectoryPanel owner={owner} view={view} />;
 }
 
 /** What the panel draws — see `TrajectoryPanel`. */
@@ -231,7 +237,7 @@ function useTrajectoryMode({
   quoteMarks: readonly Found[];
   covers: boolean;
   onAway(): void;
-  onJump(id: BlockId): void;
+  onJump(id: BlockId, passage?: string): void;
   onFound(found: Found[]): void;
   openKey: string | null;
   onOpenKey(key: string | null): void;
@@ -293,8 +299,8 @@ function useTrajectoryMode({
    * buttons. A row press is not here: it is a jump, through `onJump`.
    */
   const moveTo = useCallback(
-    (block: BlockId) => {
-      arrive(block);
+    (block: BlockId, quoteId: string) => {
+      arrive(block, quoteId);
       if (covers) onAway();
     },
     [covers, onAway],
@@ -310,7 +316,7 @@ function useTrajectoryMode({
          and an older held flash could then surface under the wrong stop. */
       if (block === null) return false;
       void setRoute({ stop: quoteId }, { history: "replace" });
-      moveTo(block);
+      moveTo(block, quoteId);
       return true;
     },
     [setRoute, blockOf, moveTo],
@@ -328,7 +334,7 @@ function useTrajectoryMode({
       /* Scroll — and flash — only when the change moved the reader. Staying
          put is the point of "changing depth keeps your place", and nothing
          was jumped to. */
-      if (block !== null) moveTo(block);
+      if (block !== null && next !== null) moveTo(block, next);
     },
     [depth, stops, current, setRoute, blockOf, moveTo],
   );
@@ -393,7 +399,7 @@ function useTrajectoryMode({
     if (arrival.stop === null || current === null || stopBlock === null) return;
     const named = arrival.stop === current.quoteId;
     arrival.stop = null;
-    if (named) arrive(stopBlock);
+    if (named) arrive(stopBlock, current.quoteId);
   }, [arrival, current, stopBlock]);
 
   const control = useMemo<TrajectoryControl | null>(
@@ -449,7 +455,7 @@ function useTrajectoryMode({
          upgrades the combined flush to the push, so both land on one entry. */
       void setRoute({ stop: quoteId }, { history: "replace" });
       const block = blockOf(quoteId);
-      if (block) onJump(block);
+      if (block) onJump(block, quoteMarkKey(quoteId, block));
       if (covers) onAway();
     },
     [setRoute, blockOf, onJump, covers, onAway],
@@ -496,13 +502,27 @@ function useTrajectoryMode({
  * `scrollToBlock`, not `jumpTo`: traversal writes no history entry of its own,
  * and `useReadingPosition` replaces `?at=` when the scroll settles —
  * comment-jump.ts § stepToComment, the same argument. A row press is not here:
- * it is a jump, through `onJump` → `beginJump`, which already flashes.
+ * it is a jump, through `onJump` → `beginJump`, handed the same passage key so
+ * its history-pushing arrival flashes the quote too.
+ *
+ * **What flashes is the quote's own words** (plan 260928a § 7b): the stop is a
+ * quote, so `flashBlock` is handed its mark key — the one annotate.ts writes
+ * into each fragment's `data-hit` — and falls back to the block if the quote
+ * is not drawn. By the time the scroll settles the new stop's passage has been
+ * published (usePassageLifecycle, before paint), so the marks are there.
+ *
+ * **Where it lands is `scrollToBlock`'s to get right, and it now does**: the
+ * door hangs in the *current* stop's row and moves to the new one when this
+ * step commits, after the press has asked for the scroll — so the destination
+ * is re-measured every frame rather than taken from the click.
+ * docs/postmortems/260928c-a-scroll-aimed-at-a-pixel-not-at-the-element.md.
  */
-function arrive(block: BlockId): void {
+function arrive(block: BlockId, quoteId: string): void {
   /* A landing still held behind a covering band belongs to the step before. */
   dropPendingFlash();
+  const passage = quoteMarkKey(quoteId, block);
   scrollToBlock(block, "smooth", (outcome) => {
-    if (outcome === "settled") flashBlock(block);
+    if (outcome === "settled") flashBlock(block, { passage });
   });
 }
 

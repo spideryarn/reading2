@@ -229,3 +229,107 @@ describe("a band lying over the prose", () => {
     expect(document.querySelector(".block-flash")).toBeNull();
   });
 });
+
+/**
+ * **A passage, not the block** — the optional target Trajectory passes
+ * (plan 260928a § 7b; Greg, 2026-09-28: "I was hoping it would flash the
+ * specific Quote"). The quote is drawn as `mark.hit` fragments whose
+ * `data-hit` lists the Found keys covering them (annotate.ts), possibly split
+ * across an `<em>`, possibly shared with another key.
+ */
+describe("flashBlock with a passage", () => {
+  const KEY = "q-1:spya-aaaaaa:0";
+  function withQuote({ covers = false } = {}): void {
+    layOut({ covers });
+    const td = prose("spya-aaaaaa");
+    if (td)
+      td.innerHTML = `<div class="prose"><p>Before <mark class="hit" data-hit="${KEY}">the quote </mark><em><mark class="hit" data-hit="other ${KEY}">itself</mark></em> and <mark class="hit" data-hit="other">another</mark>.</p></div>`;
+  }
+  const washed = () =>
+    [...document.querySelectorAll<HTMLElement>(".passage-flash, .passage-flash-still")].map(
+      (m) => m.textContent,
+    );
+
+  it("washes every fragment of the passage, and not the cell", () => {
+    withQuote();
+    flashBlock("spya-aaaaaa", { passage: KEY });
+    expect(washed()).toEqual(["the quote ", "itself"]);
+    expect(prose("spya-aaaaaa")?.classList.contains("block-flash")).toBe(false);
+    vi.advanceTimersByTime(FLASH_MS);
+    expect(washed()).toEqual([]);
+  });
+
+  it("restarts a passage flash on the newer clock", () => {
+    withQuote();
+    flashBlock("spya-aaaaaa", { passage: KEY });
+    vi.advanceTimersByTime(FLASH_MS - 100);
+    flashBlock("spya-aaaaaa", { passage: KEY });
+    vi.advanceTimersByTime(200);
+    expect(washed(), "still on the second clock").toEqual(["the quote ", "itself"]);
+    vi.advanceTimersByTime(FLASH_MS);
+    expect(washed()).toEqual([]);
+  });
+
+  it("falls back to the block when the passage is not drawn", () => {
+    layOut();
+    flashBlock("spya-aaaaaa", { passage: KEY });
+    expect(prose("spya-aaaaaa")?.classList.contains("block-flash")).toBe(true);
+  });
+
+  it("is still under reduced motion", () => {
+    reduceMotion(true);
+    withQuote();
+    flashBlock("spya-aaaaaa", { passage: KEY });
+    expect(document.querySelectorAll(".passage-flash-still")).toHaveLength(2);
+    expect(document.querySelector(".passage-flash")).toBeNull();
+  });
+
+  it("is held behind a band with its passage, and a newer flash replaces it", () => {
+    withQuote({ covers: true });
+    flashBlock("spya-aaaaaa", { passage: KEY });
+    expect(washed()).toEqual([]);
+    document.querySelector(".mode-band")?.remove();
+    flushPendingFlash();
+    expect(washed()).toEqual(["the quote ", "itself"]);
+    flashBlock("spya-bbbbbb");
+    expect(washed(), "a newer flash takes the older one off").toEqual([]);
+    expect(prose("spya-bbbbbb")?.classList.contains("block-flash")).toBe(true);
+  });
+
+  it("has a wash in the stylesheet that beats the rung quote's own background", () => {
+    /* jsdom will not resolve `var()` inside a colour, so both colours are made
+       literal — the wash and the rung quote's tint — or the competing rule
+       would simply be dropped and the cascade would never be asked.
+
+       And jsdom lets a LATER, LESS specific `background: none` shorthand beat an
+       earlier, more specific `background-color` longhand, which no browser
+       does (probed 2026-09-28: the same two rules gave `rgba(0, 0, 0, 0)` with
+       the shorthand, `rgb(1, 2, 3)` with `background-color: transparent`). So
+       `mark.hit`'s reset is spelled as the longhand it amounts to here. */
+    const annotations = readFileSync("src/web/styles/annotations.css", "utf8");
+    const ring = "rgb(var(--quote-stroke-rgb) / 0.18)";
+    expect(annotations, "the rung quote's tint this test competes against").toContain(ring);
+    const css = `${readFileSync("src/web/styles/prose.css", "utf8")}\n${annotations}`
+      .replaceAll("var(--highlight-wash)", "rgb(1, 2, 3)")
+      .replaceAll(ring, "rgb(9, 9, 9)")
+      .replaceAll("background: none;", "background-color: transparent;");
+    const style = document.createElement("style");
+    style.textContent = css;
+    document.head.append(style);
+    document.body.innerHTML = `<table><tbody><tr><td class="text">
+      <mark id="m" class="hit passage-flash-still" data-hit="q" data-quote="2" data-hit-open="">x</mark>
+      <mark id="c" class="hit" data-hit="q" data-quote="2" data-hit-open="">x</mark>
+      <mark id="n" class="hit passage-flash" data-hit="q" data-quote="2">y</mark></td></tr></tbody></table>`;
+    const style$ = (id: string) => getComputedStyle(document.querySelector(id) as Element);
+    expect(style$("#c").backgroundColor, "control: the ring's tint applies unwashed").toBe("rgb(9, 9, 9)");
+    expect(style$("#m").backgroundColor).toBe("rgb(1, 2, 3)");
+    /* jsdom does not expand the `animation` shorthand, so the moving rule is
+       read from the source, beside its block twin. */
+    expect(style$("#n").backgroundColor, "the moving wash is the animation's, not a rule's").toBe(
+      "rgba(0, 0, 0, 0)",
+    );
+    expect(css).toMatch(/td\.text mark\.hit\.passage-flash\s*\{\s*animation:\s*passage-flash 1\.2s/);
+    expect(css).toMatch(/@keyframes passage-flash\s*\{[^}]*background-color: rgb\(1, 2, 3\)/);
+    style.remove();
+  });
+});

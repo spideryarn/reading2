@@ -21,7 +21,9 @@
  * **What flashes is the verbatim cell**, `td.text`, never the gist columns: the
  * question is which paragraph, and the gist column already marks the current
  * row its own way. With the prose column off (`?text=0`) there is nothing to
- * flash and nothing is kept for later.
+ * flash and nothing is kept for later. **Trajectory narrows it to the quote's
+ * own words** (`FlashTarget.passage`, plan 260928a § 7b), because its stop is
+ * a quote rather than a paragraph; every other caller washes the cell.
  *
  * **A flash nobody can see is held, not spent.** On a narrow window a mode's
  * band lies over the whole article (`.reader.band-covers`), so a flash fired
@@ -41,14 +43,30 @@ import { reducedMotion } from "./scroll.js";
 /** "A second or so" — Greg, 2026-09-28. The CSS animation runs the same length. */
 export const FLASH_MS = 1200;
 
-/** The animated wash, and the still one reduced motion gets instead. */
+/** The animated wash, and the still one reduced motion gets instead — on a cell. */
 const MOVING = "block-flash";
 const STILL = "block-flash-still";
+/** The same pair on a passage's own `mark.hit` fragments (prose.css § the flash). */
+const PASSAGE_MOVING = "passage-flash";
+const PASSAGE_STILL = "passage-flash-still";
 
-/** The cell washing now, and the timer that will take the wash off it. */
-let live: { cell: HTMLElement; timer: ReturnType<typeof setTimeout> } | null = null;
+/**
+ * **What to wash inside the block.** Omitted, the whole prose cell — every
+ * caller but one. `passage` is a Found key (search-hits.ts § `Found.key`), the
+ * id annotate.ts writes into each `mark.hit`'s `data-hit`: Trajectory passes
+ * its stop's quote so the flash lands on the words it is taking you to, not
+ * the paragraph around them (Greg, 2026-09-28; plan 260928a § 7b). A passage
+ * that is not drawn — the quote not marked yet, or its text no longer found —
+ * falls back to the cell, so a flash is never lost to a missing mark.
+ */
+export interface FlashTarget {
+  passage?: string | null | undefined;
+}
+
+/** What is washing now, and the timer that will take the wash off. */
+let live: { els: HTMLElement[]; timer: ReturnType<typeof setTimeout> } | null = null;
 /** A flash waiting for the prose to be exposed. */
-let pending: BlockId | null = null;
+let pending: { id: BlockId; target: FlashTarget } | null = null;
 
 /** A band is open and lying over the prose, not stepped aside. */
 function proseCovered(): boolean {
@@ -58,35 +76,48 @@ function proseCovered(): boolean {
 function stop(): void {
   if (!live) return;
   clearTimeout(live.timer);
-  live.cell.classList.remove(MOVING, STILL);
+  for (const el of live.els) el.classList.remove(MOVING, STILL, PASSAGE_MOVING, PASSAGE_STILL);
   live = null;
 }
 
-export function flashBlock(id: BlockId): void {
+/** Every fragment of the passage `key` in this cell — split across an `<em>`, it is several. */
+function passageMarks(cell: HTMLElement, key: string): HTMLElement[] {
+  /* `data-hit` is a space-separated list, and a key is `quote:block:n` — split
+     and compare rather than build a `~=` selector that would need escaping. */
+  return [...cell.querySelectorAll<HTMLElement>("mark.hit[data-hit]")].filter((m) =>
+    (m.dataset.hit ?? "").split(" ").includes(key),
+  );
+}
+
+export function flashBlock(id: BlockId, target: FlashTarget = {}): void {
   pending = null;
   const cell = blockRow(id)?.querySelector<HTMLElement>("td.text") ?? null;
   if (!cell) return;
   if (proseCovered()) {
-    pending = id;
+    pending = { id, target };
     return;
   }
   stop();
+  const marks = target.passage ? passageMarks(cell, target.passage) : [];
+  const els = marks.length > 0 ? marks : [cell];
+  const still = reducedMotion();
+  const cls = marks.length > 0 ? (still ? PASSAGE_STILL : PASSAGE_MOVING) : still ? STILL : MOVING;
   /* **Restartable**: take the class off, make the browser notice, put it back.
      Without the reflow the removal and the re-add land in one style pass and
      the animation does not start again, so a second click on the same link
      would look like nothing happened. */
-  cell.classList.remove(MOVING, STILL);
+  for (const el of els) el.classList.remove(MOVING, STILL, PASSAGE_MOVING, PASSAGE_STILL);
   void cell.offsetWidth;
-  cell.classList.add(reducedMotion() ? STILL : MOVING);
-  live = { cell, timer: setTimeout(stop, FLASH_MS) };
+  for (const el of els) el.classList.add(cls);
+  live = { els, timer: setTimeout(stop, FLASH_MS) };
 }
 
 /** The prose is exposed again: fire whatever was held for it. */
 export function flushPendingFlash(): void {
   if (pending === null) return;
-  const id = pending;
+  const { id, target } = pending;
   pending = null;
-  flashBlock(id);
+  flashBlock(id, target);
 }
 
 /** A newer jump has begun: forget the older landing held behind the band. */

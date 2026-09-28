@@ -201,6 +201,10 @@
     /* The default control height: shadcn's size="default", and the one-line input beside it.
        docs/project/controls.md § The numbers has the 28px and 32px rows, which have no token yet. */
     --control-h: 2.25rem;
+    /* One step up, for a control that is the main thing a thumb presses: Trajectory's ‹ ›, which
+       Greg asked to be "a bit bigger" (2026-09-28). 44px, the usual touch-target minimum.
+       docs/project/controls.md § The numbers. */
+    --control-h-lg: 2.75rem;
     --header-height: 4rem;
 
     /* ---- type -------------------------------------------------------- */

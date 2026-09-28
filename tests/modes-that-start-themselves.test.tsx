@@ -273,8 +273,14 @@ function FaqBand({ slug }: { slug: string }): ReactElement {
  * docs/plans/260928a-trajectory-mode-skim-a-paper-at-increasing-depth.md.
  */
 let trajectoryQuotes: import("../src/web/useQuotes.js").QuotesRead | null = null;
+/** The Ideas read, posed the same way — since stage 6 the route waits for them too. */
+let trajectoryIdeas: import("../src/web/useIdeas.js").IdeasRead | null = null;
 function TrajectoryBand({ slug }: { slug: string }): ReactElement {
-  const view = useTrajectory(slug, trajectoryQuotes ?? SETTLED_EMPTY_QUOTES_READ);
+  const view = useTrajectory(
+    slug,
+    trajectoryQuotes ?? SETTLED_EMPTY_QUOTES_READ,
+    trajectoryIdeas ?? SETTLED_EMPTY_IDEAS_READ,
+  );
   return createElement(
     "div",
     { "data-band": "trajectory" },
@@ -365,6 +371,19 @@ const SETTLED_EMPTY_READ = {
 const SETTLED_EMPTY_QUOTES_READ = {
   status: "none" as const,
   quotes: null,
+  stale: false,
+  outdated: false,
+  profiled: false,
+  profileChanged: false,
+  error: null,
+  reload: async () => {},
+  refresh: async () => {},
+};
+
+/** `SETTLED_EMPTY_QUOTES_READ`'s twin for the Ideas: read, and there are none. */
+const SETTLED_EMPTY_IDEAS_READ = {
+  status: "none" as const,
+  ideas: null,
   stale: false,
   outdated: false,
   profiled: false,
@@ -650,15 +669,41 @@ describe("a press", () => {
     expect(posts).toEqual([{ slug: "constitution", steps: ["faq"] }]);
   });
 
-  /* The sixth. See TrajectoryBand above: with no Quotes, one press asks for
-     them first, in the same job. */
-  it("plans the route, choosing the Quotes first when there are none", async () => {
+  /* The sixth. See TrajectoryBand above: with no Quotes and no Ideas, one
+     press asks for both first, in the same job (plan 260928a stage 6). */
+  it("plans the route, choosing the Quotes and finding the Ideas first when there are none", async () => {
     await open("plain");
     await press("Trajectory");
     await settle();
 
     expect(artefactGets("trajectory").length).toBeGreaterThan(0);
-    expect(posts).toEqual([{ slug: "constitution", steps: ["quotes", "trajectory"] }]);
+    expect(posts).toEqual([{ slug: "constitution", steps: ["quotes", "ideas", "trajectory"] }]);
+  });
+
+  it("finds the Ideas first when only they are missing", async () => {
+    trajectoryQuotes = { ...SETTLED_EMPTY_QUOTES_READ, status: "ready" };
+    try {
+      await open("plain");
+      await press("Trajectory");
+      await settle();
+      expect(posts).toEqual([{ slug: "constitution", steps: ["ideas", "trajectory"] }]);
+    } finally {
+      trajectoryQuotes = null;
+    }
+  });
+
+  it("finds stale Ideas again before planning the route", async () => {
+    trajectoryQuotes = { ...SETTLED_EMPTY_QUOTES_READ, status: "ready" };
+    trajectoryIdeas = { ...SETTLED_EMPTY_IDEAS_READ, status: "ready", stale: true };
+    try {
+      await open("plain");
+      await press("Trajectory");
+      await settle();
+      expect(posts).toEqual([{ slug: "constitution", steps: ["ideas", "trajectory"] }]);
+    } finally {
+      trajectoryQuotes = null;
+      trajectoryIdeas = null;
+    }
   });
 
   /* Sol F30 on plan 260928a stage 5: Quotes that exist but are stale — the
@@ -667,6 +712,7 @@ describe("a press", () => {
      so current Quotes are skipped by `stepIsDone` and cost nothing. */
   it("chooses stale Quotes again before planning the route", async () => {
     trajectoryQuotes = { ...SETTLED_EMPTY_QUOTES_READ, status: "ready", stale: true };
+    trajectoryIdeas = { ...SETTLED_EMPTY_IDEAS_READ, status: "ready" };
     try {
       await open("plain");
       await press("Trajectory");
@@ -674,11 +720,14 @@ describe("a press", () => {
       expect(posts).toEqual([{ slug: "constitution", steps: ["quotes", "trajectory"] }]);
     } finally {
       trajectoryQuotes = null;
+      trajectoryIdeas = null;
     }
   });
 
-  it("plans the route alone when the Quotes are there and current", async () => {
+  it("plans the route alone when the Quotes and the Ideas are there and current", async () => {
     trajectoryQuotes = { ...SETTLED_EMPTY_QUOTES_READ, status: "ready" };
+    /* Merely outdated Ideas are not named: `stepIsDone` would re-run them. */
+    trajectoryIdeas = { ...SETTLED_EMPTY_IDEAS_READ, status: "ready", outdated: true };
     try {
       await open("plain");
       await press("Trajectory");
@@ -686,6 +735,7 @@ describe("a press", () => {
       expect(posts).toEqual([{ slug: "constitution", steps: ["trajectory"] }]);
     } finally {
       trajectoryQuotes = null;
+      trajectoryIdeas = null;
     }
   });
 
@@ -704,9 +754,28 @@ describe("a press", () => {
       trajectoryQuotes = null;
       await reopen("constitution", "trajectory");
       await settle();
-      expect(posts).toEqual([{ slug: "constitution", steps: ["quotes", "trajectory"] }]);
+      expect(posts).toEqual([{ slug: "constitution", steps: ["quotes", "ideas", "trajectory"] }]);
     } finally {
       trajectoryQuotes = null;
+    }
+  });
+
+  it("waits for the Ideas' read too before deciding what the route press buys", async () => {
+    trajectoryQuotes = { ...SETTLED_EMPTY_QUOTES_READ, status: "ready" };
+    trajectoryIdeas = { ...SETTLED_EMPTY_IDEAS_READ, status: "loading" };
+    try {
+      await open("plain");
+      await press("Trajectory");
+      await settle();
+      expect(posts, "spent before the Ideas had answered").toEqual([]);
+
+      trajectoryIdeas = { ...SETTLED_EMPTY_IDEAS_READ, status: "ready" };
+      await reopen("constitution", "trajectory");
+      await settle();
+      expect(posts).toEqual([{ slug: "constitution", steps: ["trajectory"] }]);
+    } finally {
+      trajectoryQuotes = null;
+      trajectoryIdeas = null;
     }
   });
 

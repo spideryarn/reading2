@@ -104,13 +104,17 @@ export function trajectoryPromise(profiled: boolean): string {
 }
 
 /**
- * At Most, how much of the Quotes the route walks — *"every one of the
- * article's N quotes"*, or *"M of N"*. `null` below Most, or with no Quotes.
+ * At Most, how much of the Quotes offered to this route it walks — *"every one
+ * of the N quotes offered to this route"*, or *"M of N"*. The denominator is
+ * the route's stored `offered`, not today's raw Quotes count: abstract quotes
+ * were deliberately never offered. `null` below Most, or with no Quotes.
  */
-export function coverageNote(atMost: number, quotes: number): string | null {
-  if (quotes === 0) return null;
-  if (atMost >= quotes) return `This pass stops at every one of the article's ${quotes} quotes.`;
-  return `This pass stops at ${atMost} of the article's ${quotes} quotes.`;
+export function coverageNote(atMost: number, offered: number): string | null {
+  if (offered === 0) return null;
+  if (atMost >= offered) {
+    return `This pass stops at every one of the ${offered} quotes offered to this route.`;
+  }
+  return `This pass stops at ${atMost} of the ${offered} quotes offered to this route.`;
 }
 
 /**
@@ -118,14 +122,45 @@ export function coverageNote(atMost: number, quotes: number): string | null {
  * most serious first: stale can mean a stop's passage has gone; the other two
  * only that we would plan it differently now.
  */
+/**
+ * **What pressing *Plan the route* will make, said before the press** (Sol
+ * F64). Since stage 6 the route waits for the Ideas, a whole-article call of
+ * tens of seconds beside a route of a few, so the sentence names what goes
+ * first and which part is the long one.
+ */
+export function emptyHint(owner: Pick<UseTrajectory, "quotesFirst" | "ideasFirst">): string {
+  const kept = "Written once and kept.";
+  if (owner.quotesFirst && owner.ideasFirst) {
+    return (
+      "First the article's Quotes are chosen and its key Ideas found — finding the Ideas is the " +
+      "long part, tens of seconds — then a short model pass puts the Quotes in an order that " +
+      `covers the Ideas. ${kept}`
+    );
+  }
+  if (owner.ideasFirst) {
+    return (
+      "First the article's key Ideas are found — the long part, tens of seconds — then a short " +
+      `model pass puts its Quotes in an order that covers them. ${kept}`
+    );
+  }
+  if (owner.quotesFirst) {
+    return (
+      "The article's Quotes are chosen first, then a short model pass puts them in an order — " +
+      `longer than the order alone. ${kept}`
+    );
+  }
+  return `A short model pass puts the article's Quotes in an order, and takes a few seconds. ${kept}`;
+}
+
 export function outdatedBy(
-  owner: Pick<UseTrajectory, "stale" | "notOnRoute" | "profileChanged" | "outdated">,
+  owner: Pick<UseTrajectory, "stale" | "profileChanged" | "outdated">,
 ): string | null {
   if (owner.stale) {
-    const n = owner.notOnRoute;
-    return n > 0
-      ? `The Quotes have changed since this route was planned, and ${n} ${n === 1 ? "is" : "are"} not on it.`
-      : "The Quotes have changed since this route was planned.";
+    /* One input hash covers all three, so this read cannot honestly attribute
+       the mismatch to Quotes. `notOnRoute` is also only a present-day count: a
+       route may deliberately omit a quote, so it is not evidence that quote
+       arrived later. */
+    return "The Quotes, Ideas, or outline have changed since this route was planned.";
   }
   if (owner.profileChanged) return "This route was planned before your profile said what it says now.";
   if (owner.outdated) return "This route was planned by an older version of the prompt.";
@@ -147,7 +182,7 @@ function RouteHead({ view, total }: { view: TrajectoryView; total: number }) {
           disabled={view.position <= 1}
           onClick={() => view.onStep(-1)}
         >
-          <ChevronLeft size={16} />
+          <ChevronLeft size={20} />
         </button>
         <span className="traj-count" aria-live="polite">
           Stop {view.position} of {total}
@@ -159,7 +194,7 @@ function RouteHead({ view, total }: { view: TrajectoryView; total: number }) {
           disabled={view.position >= total}
           onClick={() => view.onStep(1)}
         >
-          <ChevronRight size={16} />
+          <ChevronRight size={20} />
         </button>
       </div>
       {view.depths.length > 1 && (
@@ -187,11 +222,9 @@ function RouteHead({ view, total }: { view: TrajectoryView; total: number }) {
 interface Props {
   owner: UseTrajectory;
   view: TrajectoryView;
-  /** How many quotes the article has now — for the coverage note at Most. */
-  quoteCount: number;
 }
 
-export function TrajectoryPanel({ owner, view, quoteCount }: Props) {
+export function TrajectoryPanel({ owner, view }: Props) {
   useRenderCount("TrajectoryPanel");
   const route = owner.trajectory;
   const ready = route !== null && owner.status === "ready";
@@ -231,8 +264,8 @@ export function TrajectoryPanel({ owner, view, quoteCount }: Props) {
         ready && total > 0 ? (
           <div className="traj-foot">
             <p className="traj-note">{trajectoryPromise(route.profileHash !== null)}</p>
-            {atMost && coverageNote(total, quoteCount) && (
-              <p className="traj-note">{coverageNote(total, quoteCount)}</p>
+            {atMost && coverageNote(total, route.offered) && (
+              <p className="traj-note">{coverageNote(total, route.offered)}</p>
             )}
             {/* **Plan it again**, pinned under the list as Ideas' and
                 Timeline's are — the plan's stage 5e. It rebuilds the route
@@ -263,11 +296,7 @@ export function TrajectoryPanel({ owner, view, quoteCount }: Props) {
       {owner.status === "none" && (
         <div className="gloss-empty">
           <p>Nobody has planned a route through this piece yet.</p>
-          <p className="gloss-hint">
-            {owner.quotesFirst
-              ? "The article's Quotes are chosen first, then a short model pass puts them in an order — longer than the order alone. Written once and kept."
-              : "A short model pass puts the article's Quotes in an order, and takes a few seconds. Written once and kept."}
-          </p>
+          <p className="gloss-hint">{emptyHint(owner)}</p>
           {run("Plan the route")}
         </div>
       )}

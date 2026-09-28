@@ -72,7 +72,8 @@ import {
 } from "../faq.js";
 import {
   PROMPT_VERSION as TRAJECTORY_PROMPT_VERSION,
-  quotesHash,
+  trajectoryInput,
+  trajectoryInputHash,
 } from "../trajectory.js";
 import {
   inputFingerprint as debateFingerprint,
@@ -687,6 +688,10 @@ const REVISION_READ_POLICY: Record<
        well as its own, and answering that needs exactly what the `sketch` read
        needs. src/store/pg.ts § `REVISION_PROJECTIONS.illustrated`. */
     illustrated: "value",
+    /* The route's prompt prints each quote's section path and the top-level
+       outline with its gists, and says which quotes carry which Idea by
+       position in it — all hashed into its `sourceHash` (plan 260928a stage 6). */
+    trajectory: "value",
     library: "presence",
   },
   arc: { article: "value", library: "presence", metadata: "value", arc: "value" },
@@ -730,11 +735,14 @@ const REVISION_READ_POLICY: Record<
     quotes: "value",
     /* **The Trajectory read takes the QUOTES**, as the Illustrated read takes
        the Sketch: the route's `sourceHash` is a hash of this column, and the
-       band says how many quotes are not on the route. It needs nothing else —
-       no fingerprint columns, because the route never read the article. */
+       band says how many quotes are not on the route. No fingerprint columns,
+       because the route never read the article's prose; since stage 6 it
+       takes the Ideas and the tree as well (their entries). */
     trajectory: "value",
   },
-  ideas: { metadata: "value", ideas: "value" },
+  /* The Trajectory read takes the Ideas since stage 6 of plan 260928a: the
+     route's prompt is given them, so its `sourceHash` covers them. */
+  ideas: { metadata: "value", ideas: "value", trajectory: "value" },
   /* Its own reader and the metadata page, and **not the library**, on the same
      call `quotes` and `sketch` make: a card shows four ticks and a fifth would
      not fit. */
@@ -1159,15 +1167,19 @@ export const REVISION_PROJECTIONS = {
     ...CITED_FINGERPRINT_COLUMNS,
   },
   /**
-   * **The second projection that takes another artefact's column**, after
-   * `illustrated`, and **no fingerprint columns at all**: the route's
-   * `sourceHash` is a hash of the quotes, and it never read the article. The
-   * quotes are the whole of what `loadTrajectory` compares against.
+   * **The second projection that takes other artefacts' columns**, after
+   * `illustrated`, and **no fingerprint columns**: the route's `sourceHash` is
+   * `trajectoryInputHash` — over the quotes, the Ideas they carry and the
+   * top-level outline — and it never read the article's prose. So it takes the
+   * `quotes` and `ideas` columns and the tree; `loadTrajectory` reads the
+   * blocks beside it, for the positions the Idea associations are made from.
    */
   trajectory: {
     id: articleRevisions.id,
     trajectory: articleRevisions.trajectory,
     quotes: articleRevisions.quotes,
+    ideas: articleRevisions.ideas,
+    tree: articleRevisions.tree,
   },
   /**
    * **The one projection that takes another artefact's column**, and it takes
@@ -2933,16 +2945,18 @@ const rawPgArticleReader: ArticleReader = {
             },
           );
         }
-        /* **Judged against the Quotes, not the article** — the route's
-           `sourceHash` is `quotesHash` over the `quotes` column beside it, the
-           same value `STEPS.trajectory.stamp` computes. The profile is the
-           artefact's own on both sides, for the reason `ideasAreCurrent` gives:
-           this read has no access to the profile a job would stamp with today,
-           and `loadTrajectory` is where a changed profile is reported. */
+        /* **Judged against what its prompt renders, not the article** — the
+           route's `sourceHash` is `trajectoryInputHash` over the `quotes` and
+           `ideas` columns beside it and the tree, the same value
+           `STEPS.trajectory.stamp` computes. The profile is the artefact's own
+           on both sides, for the reason `ideasAreCurrent` gives: this read has
+           no access to the profile a job would stamp with today, and
+           `loadTrajectory` is where a changed profile is reported. */
         case "trajectory": {
           const trajectory = revision.trajectory as Trajectory | null;
           const quotes = revision.quotes as Quotes | null;
-          if (!trajectory || !quotes || !Array.isArray(quotes.quotes)) return false;
+          if (!trajectory || !quotes || !Array.isArray(quotes.quotes) || !tree) return false;
+          const ideas = revision.ideas as Ideas | null;
           return sameStamp(
             {
               inputHash: trajectory.sourceHash,
@@ -2950,7 +2964,7 @@ const rawPgArticleReader: ArticleReader = {
               model: trajectory.generator,
             },
             {
-              inputHash: quotesHash(quotes.quotes),
+              inputHash: trajectoryInputHash(trajectoryInput({ quotes, blocks, tree, ideas })),
               promptVersion: TRAJECTORY_PROMPT_VERSION,
               model: CAPABLE_MODEL,
             },
@@ -3365,11 +3379,12 @@ const rawPgArticleReader: ArticleReader = {
   /**
    * The route through the Quotes — the Postgres half of `loadTrajectory`.
    *
-   * **Judged against the Quotes beside it, never the article**: `stale` when
-   * the quotes hash has moved (*Find more* added quotes, or they were chosen
-   * again) or there are no quotes at all; `notOnRoute` counts the current quotes
-   * the route does not stop at, which is the number the band gives when it
-   * offers a rebuild. The profile half is the route's (`withTrajectoryProfile`
+   * **Judged against its own input, never the article's prose**: `stale` when
+   * `trajectoryInputHash` has moved (*Find more* added quotes, they were chosen
+   * again, the Ideas were regenerated or arrived, the outline changed) or there
+   * are no quotes at all; `notOnRoute` counts the current quotes the route does
+   * not stop at, other than the abstract's, which were never offered. It is a coverage fact, not evidence of which input changed.
+   * The profile half is the route's (`withTrajectoryProfile`
    * in src/routes.ts), because a store adapter does not read the profile.
    *
    * **A 404 is the ordinary case** — the step is off `DEFAULT_INGEST_STEPS`.
@@ -3383,7 +3398,7 @@ const rawPgArticleReader: ArticleReader = {
       throw Object.assign(
         new Error(
           `No trajectory for "${slug}" yet. Build it with ` +
-            `POST /api/jobs { "slug": "${slug}", "steps": ["quotes", "trajectory"] }.`,
+            `POST /api/jobs { "slug": "${slug}", "steps": ["quotes", "ideas", "trajectory"] }.`,
         ),
         { status: 404 },
       );
@@ -3391,12 +3406,32 @@ const rawPgArticleReader: ArticleReader = {
     const quotes = found.revision.quotes as Quotes | null;
     const current = quotes && Array.isArray(quotes.quotes) ? quotes.quotes : [];
     const onRoute = new Set(trajectory.stops.map((s) => s.quoteId));
+    const tree = found.revision.tree as Tree | null;
+    const ideas = found.revision.ideas as Ideas | null;
+    /* The blocks for positions only — which quote carries which Idea, and
+       which section each sits in. `trajectoryInput` reads no prose. */
+    const blocks = current.length > 0 && tree ? await blocksFor(found.revision.id) : [];
+    const input = tree ? trajectoryInput({ quotes, blocks, tree, ideas }) : null;
+    /* A quote left out because it sits in the abstract is not missing from
+       the route — it was never offered (`inAbstract` in src/trajectory.ts). */
+    const leftOut = new Set(input?.abstractQuoteIds ?? []);
     return {
       trajectory,
-      // No quotes any more counts as stale, the same way round as its neighbours.
-      stale: current.length === 0 || trajectory.sourceHash !== quotesHash(current),
+      /* No quotes any more counts as stale, the same way round as its
+         neighbours; so does no tree. Otherwise stale when anything the prompt
+         would render has moved — the Quotes, the Ideas (regenerated, or
+         arrived after a route planned without them), or the outline.
+         **Only for a route of this prompt version**: one from before
+         `trajectory/7` holds a quotes-only hash that can never match, and
+         calling it stale would tell the reader their Quotes changed when what
+         changed is us — `outdated` says that. */
+      stale:
+        current.length === 0 ||
+        !input ||
+        (trajectory.version === TRAJECTORY_PROMPT_VERSION &&
+          trajectory.sourceHash !== trajectoryInputHash(input)),
       outdated: trajectory.version !== TRAJECTORY_PROMPT_VERSION,
-      notOnRoute: current.filter((q) => !onRoute.has(q.id)).length,
+      notOnRoute: current.filter((q) => !onRoute.has(q.id) && !leftOut.has(q.id)).length,
     };
   },
 

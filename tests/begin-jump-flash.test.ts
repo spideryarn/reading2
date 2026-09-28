@@ -81,7 +81,8 @@ const flashed = () =>
   );
 
 let pushed: BlockId[] = [];
-const jump = (target: BlockId) => beginJump(BLOCKS, target, (id) => void pushed.push(id));
+const jump = (target: BlockId, passage?: string) =>
+  beginJump(BLOCKS, target, (id) => void pushed.push(id), passage);
 
 beforeEach(() => {
   vi.useFakeTimers();
@@ -143,6 +144,30 @@ describe("beginJump and the flash", () => {
     expect(calls.scrolled).toEqual([]);
     expect(calls.abandoned, "a glide carrying the reader past must be stopped").toBe(1);
     expect(flashed()).toEqual([block(15)]);
+  });
+
+  it("narrows an arrival to an optional passage without changing ordinary jumps", () => {
+    const key = `quote-20:${block(20)}:0`;
+    const cell = document
+      .querySelector(`tr[data-block="${block(20)}"]`)
+      ?.querySelector<HTMLElement>("td.text");
+    if (cell) cell.innerHTML = `<mark class="hit" data-hit="${key}">the quote</mark> around it`;
+
+    expect(jump(block(20), key)).toBe(true);
+    expect(cell?.classList.contains("block-flash")).toBe(false);
+    expect(cell?.querySelector("mark")?.classList.contains("passage-flash")).toBe(true);
+  });
+
+  it("narrows the no-movement branch to the passage too", () => {
+    const key = `quote-15:${block(15)}:0`;
+    const cell = document
+      .querySelector(`tr[data-block="${block(15)}"]`)
+      ?.querySelector<HTMLElement>("td.text");
+    if (cell) cell.innerHTML = `<mark class="hit" data-hit="${key}">the current quote</mark>`;
+
+    expect(jump(block(15), key)).toBe(false);
+    expect(cell?.classList.contains("block-flash")).toBe(false);
+    expect(cell?.querySelector("mark")?.classList.contains("passage-flash")).toBe(true);
   });
 });
 

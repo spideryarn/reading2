@@ -45,6 +45,8 @@ import type {
 let trajectoryBody: unknown = null;
 /** The Ideas the stop card may show, or `null` for none (404). */
 let ideasBody: unknown = null;
+/** A held Ideas read, for the prerequisite-loading race. */
+let ideasReply: Promise<Response> | null = null;
 /** Every request, so a test can say the card started no job. */
 const requested: { url: string; method: string }[] = [];
 /** The body of every POST, parsed — what a press asked the queue for. */
@@ -61,9 +63,9 @@ vi.mock("../src/web/lib/api.js", async () => {
         ? new Response(null, { status: 404 })
         : new Response(JSON.stringify(trajectoryBody), { status: 200 });
     if (url.startsWith("/api/ideas/"))
-      return ideasBody === null
+      return ideasReply ?? (ideasBody === null
         ? new Response(null, { status: 404 })
-        : new Response(JSON.stringify(ideasBody), { status: 200 });
+        : new Response(JSON.stringify(ideasBody), { status: 200 }));
     if (url.startsWith("/api/jobs")) return new Response(JSON.stringify({ jobs: [] }), { status: 200 });
     return new Response(null, { status: 404 });
   };
@@ -74,11 +76,29 @@ vi.mock("../src/web/lib/api.js", async () => {
   };
 });
 
+/* The queue is the real one; only its completion callbacks are kept, so a test
+   can say "the route's job finished" without a poll (Sol F61). */
+const { finishers } = vi.hoisted(() => ({ finishers: [] as ((job: unknown) => void)[] }));
+vi.mock("../src/web/useJobs.js", async (importOriginal) => {
+  const real = await importOriginal<typeof import("../src/web/useJobs.js")>();
+  return {
+    ...real,
+    useJobs: (cadence: Parameters<typeof real.useJobs>[0], cb?: Parameters<typeof real.useJobs>[1]) => {
+      if (cb) finishers.push(cb as (job: unknown) => void);
+      return real.useJobs(cadence, cb);
+    },
+  };
+});
+
 /* Scrolls are recorded — jsdom has no layout, and the claim is that a step
    scrolls rather than pushes. comment-jump.test.ts does the same. */
-const { scrolled, flashed, movement } = vi.hoisted(() => ({
+const { scrolled, flashed, passages, jumpPassages, movement } = vi.hoisted(() => ({
   scrolled: [] as string[],
   flashed: [] as string[],
+  /* The passage each flash was narrowed to (plan 260928a § 7b), or null. */
+  passages: [] as (string | null)[],
+  /* The passage a history-pushing row jump asks `beginJump` to flash. */
+  jumpPassages: [] as (string | null)[],
   movement: { outcome: "settled" as "settled" | "cancelled" | "missing", dropped: 0 },
 }));
 vi.mock("../src/web/scroll.js", async (importOriginal) => {
@@ -101,7 +121,10 @@ vi.mock("../src/web/flash.js", async (importOriginal) => {
   const actual = await importOriginal<typeof import("../src/web/flash.js")>();
   return {
     ...actual,
-    flashBlock: (id: string) => void flashed.push(id),
+    flashBlock: (id: string, target?: { passage?: string | null }) => {
+      flashed.push(id);
+      passages.push(target?.passage ?? null);
+    },
     dropPendingFlash: () => {
       movement.dropped += 1;
     },
@@ -227,12 +250,16 @@ let root: Root;
 beforeEach(() => {
   scrolled.length = 0;
   flashed.length = 0;
+  passages.length = 0;
+  jumpPassages.length = 0;
   movement.outcome = "settled";
   movement.dropped = 0;
   requested.length = 0;
   posted.length = 0;
   quotesRead = QUOTES_READ;
   ideasBody = null;
+  ideasReply = null;
+  finishers.length = 0;
   trajectoryBody = { trajectory: ROUTE, stale: false, outdated: false, profileChanged: false, notOnRoute: 0 };
   history.replaceState(null, "", "/read/a-route?mode=trajectory");
   host = document.createElement("div");
@@ -263,6 +290,7 @@ function owner(over: Partial<UseTrajectory> = {}): UseTrajectory {
     starting: false,
     automatic: false,
     quotesFirst: false,
+    ideasFirst: false,
     retryRead: async () => {},
     ensure: async () => {},
     regenerate: async () => {},
@@ -314,9 +342,9 @@ const CARD: StopCard = {
   events: [{ id: "spya-ev2abc", label: "Recordings made" }],
 };
 
-async function draw(o: UseTrajectory, v: TrajectoryView, quoteCount = 4) {
+async function draw(o: UseTrajectory, v: TrajectoryView) {
   calls.length = 0;
-  await act(async () => root.render(createElement(TrajectoryPanel, { owner: o, view: v, quoteCount })));
+  await act(async () => root.render(createElement(TrajectoryPanel, { owner: o, view: v })));
 }
 
 const text = (sel: string) => host.querySelector(sel)?.textContent ?? null;
@@ -401,16 +429,19 @@ describe("the panel", () => {
       depth: 3,
       rows: [...view().rows, { quoteId: Q[1]!, n: 4, place: "Results", cue: null, seen: false, current: false, missing: false, position: null }],
     });
-    await draw(owner(), most, 4);
-    expect(text(".traj-foot")).toContain("every one of the article's 4 quotes");
-    await draw(owner(), most, 6);
-    expect(text(".traj-foot")).toContain("4 of the article's 6 quotes");
+    /* The live Quotes list may include two abstract quotes; the route records
+       the four it was actually offered, which is the honest denominator. */
+    await draw(owner(), most);
+    expect(text(".traj-foot")).toContain("every one of the 4 quotes offered to this route");
+    await draw(owner({ trajectory: { ...ROUTE, offered: 6 } }), most);
+    expect(text(".traj-foot")).toContain("4 of the 6 quotes offered to this route");
     expect(coverageNote(4, 0)).toBeNull();
   });
 
-  it("says how many quotes are not on a stale route, and offers to plan it again", async () => {
+  it("does not blame the Quotes when the Ideas or outline may have made the route stale", async () => {
     await draw(owner({ stale: true, notOnRoute: 3 }), view());
-    expect(text(".gloss-stale")).toContain("3 are not on it");
+    expect(text(".gloss-stale")).toContain("Quotes, Ideas, or outline");
+    expect(text(".gloss-stale")).not.toContain("Quotes have changed");
   });
 
   it("draws the stop card under the current row only, and no card when there is nothing", async () => {
@@ -515,6 +546,19 @@ describe("the panel", () => {
     expect(text(".gloss-hint")).toContain("Quotes are chosen first");
     await draw(owner({ status: "none", trajectory: null }), empty);
     expect(text(".gloss-hint")).not.toContain("chosen first");
+  });
+
+  it("says before the press that the Ideas are found first, and that they are the long part (Sol F64)", async () => {
+    const empty = view({ rows: [], position: 0, depth: null });
+    await draw(owner({ status: "none", trajectory: null, quotesFirst: true, ideasFirst: true }), empty);
+    expect(text(".gloss-hint")).toContain("Quotes are chosen and its key Ideas found");
+    expect(text(".gloss-hint")).toContain("finding the Ideas is the long part");
+    await draw(owner({ status: "none", trajectory: null, ideasFirst: true }), empty);
+    expect(text(".gloss-hint")).toContain("key Ideas are found — the long part");
+    expect(text(".gloss-hint")).not.toContain("Quotes are chosen");
+    await draw(owner({ status: "none", trajectory: null }), empty);
+    expect(text(".gloss-hint")).not.toContain("Ideas");
+    expect(text(".gloss-hint")).toContain("a few seconds");
   });
 
   it("offers to plan a route when there is none", async () => {
@@ -626,7 +670,10 @@ function Harness({ covers = false, arrival }: { covers?: boolean; arrival?: Traj
       quoteMarks: MARKS,
       covers,
       onAway: () => void away++,
-      onJump: (id: BlockId) => void scrolled.push(`jump ${id}`),
+      onJump: (id: BlockId, passage?: string) => {
+        scrolled.push(`jump ${id}`);
+        jumpPassages.push(passage ?? null);
+      },
       onFound,
       openKey,
       onOpenKey: setOpenKey,
@@ -817,6 +864,9 @@ describe("the band, walked", () => {
     await act(async () => control!.advance());
     await settled();
     expect(flashed).toEqual([B[0], B[2], B[0]]);
+    /* 7b: each flash is narrowed to the stop's quote — the key annotate.ts
+       writes into the quote's `mark.hit[data-hit]`. */
+    expect(passages).toEqual([`${Q[0]}:${B[0]}:0`, `${Q[2]}:${B[2]}:0`, `${Q[0]}:${B[0]}:0`]);
   });
 
   it("drops a held flash when movement starts and flashes only after a settled scroll", async () => {
@@ -875,12 +925,13 @@ describe("the band, walked", () => {
     expect(flashed).toEqual([B[3]]);
   });
 
-  it("leaves a row press's flash to the jump it makes, so it flashes once (5a)", async () => {
+  it("leaves a row press's quote flash to the jump it makes, so it flashes once (5a, 7b)", async () => {
     await mount();
     await act(async () => host.querySelectorAll<HTMLButtonElement>(".traj-go")[1]!.click());
     await settled();
     /* `onJump` → `beginJump` flashes in the real reader; the band adds none. */
     expect(scrolled).toEqual([`jump ${B[0]}`]);
+    expect(jumpPassages).toEqual([`${Q[0]}:${B[0]}:0`]);
     expect(flashed).toEqual([]);
   });
 
@@ -973,20 +1024,50 @@ describe("the band, walked", () => {
     /* Not `["quotes", "trajectory"]`: the server re-runs Quotes whose prompt
        version is merely outdated, so naming them on every press re-bought and
        replaced a reader's Quotes on a route rebuild (browser check, 2026-09-28;
-       the plan's F38). */
+       the plan's F38). The Ideas are there too — outdated, which is not a
+       reason to name them either. */
+    ideasBody = IDEAS_BODY;
     await mount();
     await act(async () => host.querySelector<HTMLButtonElement>(".traj-again button")!.click());
     await settled();
     expect(posted).toEqual([{ slug: "a-route", steps: ["trajectory"], force: ["trajectory"] }]);
   });
 
+  it("plans it again with the Ideas found first, unforced, when there are none (stage 6)", async () => {
+    await mount();
+    await act(async () => host.querySelector<HTMLButtonElement>(".traj-again button")!.click());
+    await settled();
+    expect(posted).toEqual([{ slug: "a-route", steps: ["ideas", "trajectory"], force: ["trajectory"] }]);
+  });
+
   it("plans it again with stale Quotes chosen first, unforced (5e, Sol F30)", async () => {
     quotesRead = { ...QUOTES_READ, stale: true };
+    ideasBody = IDEAS_BODY;
     await mount();
     await act(async () => host.querySelector<HTMLButtonElement>(".traj-again button")!.click());
     await settled();
     /* Only the route is forced; `stepIsDone` decides about the Quotes. */
     expect(posted).toEqual([{ slug: "a-route", steps: ["quotes", "trajectory"], force: ["trajectory"] }]);
+  });
+
+  it("keeps a route press pending until the Ideas read says whether it is stale", async () => {
+    let answerIdeas!: (response: Response) => void;
+    ideasReply = new Promise<Response>((resolve) => {
+      answerIdeas = resolve;
+    });
+    await mount();
+
+    await act(async () => host.querySelector<HTMLButtonElement>(".traj-again button")!.click());
+    await settled();
+    expect(posted, "must not plan against Ideas whose freshness is still unknown").toEqual([]);
+
+    answerIdeas(
+      new Response(JSON.stringify({ ...IDEAS_BODY, stale: true, outdated: false }), { status: 200 }),
+    );
+    await settled();
+    expect(posted).toEqual([
+      { slug: "a-route", steps: ["ideas", "trajectory"], force: ["trajectory"] },
+    ]);
   });
 
   it("takes its passage and its handle with it when it goes", async () => {
@@ -1021,6 +1102,27 @@ describe("the scrapbook, walked", () => {
         .click();
     });
     expect(opened).toEqual(["idea spya-id4ghj"]);
+  });
+
+  it("shows the Ideas the route's own job found, without a reload (Sol F61)", async () => {
+    /* A fresh article: no Ideas when the band mounts. */
+    await mount();
+    const ideaReads = () => requested.filter((r) => r.url.startsWith("/api/ideas/")).length;
+    const before = ideaReads();
+    expect(before).toBeGreaterThan(0);
+    expect(host.querySelector(".traj-row.current .traj-card")?.textContent ?? "").not.toContain(
+      "Fieldwork is the test",
+    );
+
+    /* The route's job finishes, having found the Ideas on its way. */
+    ideasBody = IDEAS_BODY;
+    expect(finishers.length).toBeGreaterThan(0);
+    await act(async () => {
+      finishers.at(-1)!({ id: "job-t", slug: "a-route", status: "done", steps: [{ name: "ideas" }, { name: "trajectory" }] });
+    });
+    await settled();
+    expect(ideaReads()).toBeGreaterThan(before);
+    expect(host.querySelector(".traj-row.current .traj-card")?.textContent).toContain("Fieldwork is the test");
   });
 
   it("finds a plural the stored list never named, and draws no card from a stale glossary", async () => {

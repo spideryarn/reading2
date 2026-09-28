@@ -501,7 +501,7 @@ export const MODE_CATALOG: Record<Mode, ModeCatalogEntry> = {
          (`TRAJECTORY_NO_QUOTES`), and the band asks for `quotes` before it
          (`precededBy`, src/web/useTrajectory.ts).
        About the mode, not the press, and no price. */
-    how: "A short model pass over the article's Quotes — never the rest of its prose — puts them in an order and gives each a depth, shaped by your profile if you have one. When there are no Quotes yet, they are chosen first.",
+    how: "A short model pass over the article's Quotes and its key Ideas — never the rest of its prose — puts the Quotes in an order and gives each a depth, so each pass covers as many of the Ideas as the quotes reach, shaped by your profile if you have one. When there are no Quotes or Ideas yet, they are made first; finding the Ideas is the longer part.",
     /* The two words Greg used for it in the brief — docs/project/trajectory.md. */
     aliases: ["spiral", "route"],
     /* Behind the switch from 2026-09-28 until later that day, when Greg asked
