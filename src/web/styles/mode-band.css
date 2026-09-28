@@ -173,9 +173,10 @@
    *"it gets in the way. Perhaps show it at the bottom-left (instead of the
    top-right) of the Mode column"*. The top was the band's first row: Search's
    box, Glossary's controls, the first of every list. The bottom edge is not
-   free either — eight bands end in a row a reader presses (*Find more*, Chat's
-   composer) — so the card sits on that row, never over it. ModeHerald.tsx
-   measures the row (`footRoom`) and writes it here as `--herald-foot`.
+   free either — eleven modes can end in pinned furniture (*Find more*, Chat's
+   composer, Diagram's step row and card) — so the card sits on it, never over
+   it. ModeHerald.tsx measures that room (`footRoom`) and writes it here as
+   `--herald-foot`.
    docs/plans/260928a-the-mode-herald-moves-to-the-foot-of-the-band.md.
 
    **It lies over the band rather than in it**, so it moves nothing: not the

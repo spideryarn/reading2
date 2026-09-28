@@ -27,10 +27,11 @@ Chat's first thread titles and Summary's first line were all under the card for 
 ## Where it goes: the bottom-left — of the band's reading area, not of the band
 
 Greg's suggestion, taken, with one correction the recon forced. **The literal bottom of the band is
-not free.** Ten bands end in a pinned control row: Chat and Remember's composer, and the `foot`
-that `ModeSurface` places for Glossary, Quotes, Ideas, Timeline, Debate, Quiz, Citations and FAQ —
-mostly *Find more* / *Write them again*. A card at the band's bottom edge would have moved the
-occlusion from the top controls to the bottom ones, which Greg asked us not to do.
+not free.** Eleven modes can end in pinned furniture: Chat and Remember's composer; the `foot` that
+`ModeSurface` places for Glossary, Quotes, Ideas, Timeline, Debate, Quiz, Citations and FAQ — mostly
+*Find more* / *Write them again*; and Diagram's step row and detail card (or Sketch's nested card).
+A card at the band's bottom edge would have moved the occlusion from the top controls to the bottom
+ones, which Greg asked us not to do.
 
 So the card **stands on the foot**: its bottom edge is the bottom of the band's scrolling area, and
 beneath it the composer or *Find more* stays in view and pressable.
@@ -128,6 +129,15 @@ measurement is about twenty lines in one component.
 - **Plan, GPT Sol, 2026-09-28** — *"Sound direction, but not ready."* Five findings: Sketch's nested
   card, the way-back chip on a covering phone, iOS's keyboard, and fixtures that assumed the happy
   shape — all four built above, each with a test that went red first; Chat's *Latest* button,
-  accepted with its reason. Also a miscount (ten bands, not eight), fixed.
+  accepted with its reason. It also caught a miscount (ten modes, not eight); the built-code review
+  caught the remaining omission, Diagram, and corrected that to eleven modes that can have pinned
+  furniture.
+
+- **Code, GPT Sol, 2026-09-28** — *"Pass after the nested-observer fix."* One medium finding, fixed by
+  the reviewer with two tests that went red first: Sketch's nested card could arrive or change height
+  without the outer `.sk` changing, so the observers now watch every non-scrolling level `footRoom`
+  reads, stopping at the scroller. It also added fixtures for the standard and illustrated Diagram,
+  cleanup, and the slot's inline style. Its sandbox could not launch Chrome, so the geometry tests
+  were run here: all green.
 
 ## Assumptions

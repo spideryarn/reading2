@@ -24,10 +24,10 @@
  *
  * The top was the band's first row — Search's box, Glossary's controls, the
  * first items of every list — which is what a reader who has just opened a mode
- * looks at first. But the band's literal bottom is no freer: eight bands end in
- * a pinned row the reader presses (*Find more*, Chat's composer). So the card
- * stands **on** that row, at the bottom-left of the scroller, and `footRoom`
- * below is how it knows how tall the row is.
+ * looks at first. But the band's literal bottom is no freer: eleven modes can
+ * end in pinned furniture (*Find more*, Chat's composer, Diagram's step row and
+ * card). So the card stands **on** it, at the bottom-left of the scroller, and
+ * `footRoom` below is how it knows how much room it takes.
  * docs/plans/260928a-the-mode-herald-moves-to-the-foot-of-the-band.md.
  *
  * ## What decides whether it shows is not in here
@@ -105,8 +105,8 @@ export function ModeHerald({ press, onDone }: { press: HeraldPress | null; onDon
  *
  * Every band is a flex column whose scroller is the child with `flex: 1`, and a
  * pinned row — `ModeSurface`'s `foot`, Chat's and Remember's composer — is a
- * direct child after it. Reading the layout rather than naming the eight foot
- * classes is what lets a ninth band be right without anyone remembering this.
+ * direct child after it. Reading the layout rather than naming the foot classes
+ * is what lets a new band be right without anyone remembering this.
  * A band where nothing grows gets `0` rather than a guess: its content ends
  * where it ends, and the card goes to the band's bottom edge.
  *
@@ -156,18 +156,32 @@ function Card({ mode, onDone }: { mode: Mode; onDone(): void }) {
     const measure = () => slot.style.setProperty("--herald-foot", `${band ? footRoom(band) : 0}px`);
     measure();
     const resized = band && typeof ResizeObserver !== "undefined" ? new ResizeObserver(measure) : null;
-    const watch = () => {
-      if (!band || !resized) return;
-      resized.disconnect();
-      resized.observe(band);
-      for (const child of band.children) resized.observe(child);
-    };
-    watch();
     const mutated = new MutationObserver(() => {
       measure();
       watch();
     });
-    if (band) mutated.observe(band, { childList: true });
+    const watch = () => {
+      if (!band) return;
+      resized?.disconnect();
+      mutated.disconnect();
+
+      /* Watch every layout level `footRoom` reads, but stop at the scroller.
+         Sketch's `.sk` is the reason the direct children were not enough: its
+         outer box always fills the band, while `.sk-scroll` shrinks when the
+         nested `.sk-card` arrives or changes height. Observing into a scroller
+         would instead turn every streaming chat token and expanding list row
+         into a measurement of furniture that cannot affect the foot. */
+      let parent: Element | null = band;
+      while (parent) {
+        resized?.observe(parent);
+        mutated.observe(parent, { childList: true });
+        const grows = lastGrower(parent);
+        if (grows === null) break;
+        for (const child of parent.children) resized?.observe(child);
+        parent = !scrolls(grows) ? grows : null;
+      }
+    };
+    watch();
     return () => {
       mutated.disconnect();
       resized?.disconnect();
