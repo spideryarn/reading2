@@ -330,6 +330,42 @@ The shapes, with a screenshot of each:
 - a browser check has been run at the same widths;
 - Sol has reviewed it.
 
+### Revised after GPT Sol's stage-3 plan review ([review](260928a-trajectory-mode-stage3-plan-review-sol.md), *approve with changes*)
+
+All eight findings were taken. **This section overrides items 1–3 above wherever they differ.**
+
+- **F18 — the relational thread is not built; a context-free cue is.** One stop at one depth can
+  be reached from several places: a deep link, "go round again", a row press, or Back. So a line
+  that says how the stop follows "the previous one" is false half the time. Instead, each stop gets
+  one **`cue`**: at most 140 characters, imperative or a question, naming what to look for in this
+  passage, and never what it found. For example: *"Look for how rich-club membership changes the
+  comparison."* It replaces `role` in the prompt. The field is new, so old routes (with `role`,
+  and outdated by the `PROMPT_VERSION` bump) still draw. The relational version is recorded in
+  trajectory.md as tried in the spike and deferred; it would need a line per `{from, to}` edge,
+  shown only when that edge is the reader's actual step.
+- **F21 — the cue is a route cue, not a synthesis of the scrapbook.** The call never sees the
+  glossary, ideas, FAQ or timeline, and it must not: that would braid their freshness and their
+  generation into the route's. The tying-together is done by **juxtaposition** on the card —
+  and by the next stop's cue under **Next stop ›**.
+- **F25 — cue validation, spelled out.**
+  - A non-string, empty or over-cap cue becomes `null`, and the stop is kept. It is counted as
+    `badCue`, a new counter that defaults to 0 for old artefacts.
+  - `role` is no longer asked for. A new answer's missing role is `null`, and it is **not**
+    counted as `badRole`.
+  - `ANSWER_TOKENS` is recomputed from the cue cap, and the largest permitted answer is tested.
+- **F19** — a card cluster whose artefact is `stale` is **not shown**. An `outdated` one (the
+  article unchanged, an older prompt) is shown.
+- **F20** — the marker reads **"also at stop k"**, never "met". The client does not know what the
+  reader has read.
+- **F22** — **read-only hooks**: `useIdeasRead`, `useFaqRead` and `useTimelineRead` are split out
+  of their mode hooks, following `useGlossaryRead`. The card uses only those, so "nothing here
+  starts a run" is structural rather than an accident of activation. The mode hooks layer their jobs
+  on the read hooks, and behave exactly as before.
+- **F23** — terms are found by scanning `renderedText(block.html)` with `formsOf`/`termPattern`/
+  `termAppears` from `src/term-match.ts` over **every** glossary entry, not restricted to
+  `entry.blocks`. Tests cover inflection, alias, plural, possessive and a Unicode boundary.
+- **F24** — the FAQ question is shown as text, with a jump to its passage. No `?question=` param.
+
 ## Review ledger — GPT Sol on the plan, 2026-09-28 (read-only; verdict *rethink*)
 
 | ID | Sev | Finding | Outcome |
