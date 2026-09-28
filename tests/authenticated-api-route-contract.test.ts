@@ -445,6 +445,11 @@ const EXPECTED_AUTH_ROUTES: ExpectedRoute[] = [
     witnesses: ["/api/article/w1/visibility"],
   },
   {
+    match: { kind: "regex", source: "^\\/api\\/article\\/([\\w.%-]+)\\/reset$", flags: "" },
+    methods: ["POST"],
+    witnesses: ["/api/article/w1/reset"],
+  },
+  {
     match: { kind: "regex", source: "^\\/api\\/metadata\\/([\\w.%-]+)$", flags: "" },
     methods: ["GET"],
     witnesses: ["/api/metadata/w1"],
@@ -785,8 +790,8 @@ const EXPECTED_AUTH_ROUTES: ExpectedRoute[] = [
 ];
 
 /** Loud failure controls. Never the oracle — see the header. */
-const EXPECTED_MATCHER_COUNT = 71;
-const EXPECTED_GUARD_COUNT = 88;
+const EXPECTED_MATCHER_COUNT = 72;
+const EXPECTED_GUARD_COUNT = 89;
 
 /* ------------------------------------------------------------- the source read */
 
@@ -1914,6 +1919,8 @@ describe("the authenticated API's route contract", () => {
         "GET literal /api/link-preview",
         "GET literal /api/link-summary",
         "PUT regex /^\\/api\\/article\\/([\\w.%-]+)\\/visibility$/",
+        // reset and regenerate, 260928a — beside visibility, the other article sub-resource
+        "POST regex /^\\/api\\/article\\/([\\w.%-]+)\\/reset$/",
         "GET regex /^\\/api\\/source\\/([\\w.%-]+)$/",
         "GET regex /^\\/api\\/asset\\/([\\w.%-]+)\\/([0-9a-f]{64})\\.(png|jpeg|gif)$/",
         "GET regex /^\\/api\\/export\\/([\\w.%-]+)$/",

@@ -295,6 +295,7 @@ import {
   advanceJob,
   cancelJob,
   enqueue,
+  enqueueReset,
   forgetJob,
   getJob,
   listJobs,
@@ -426,7 +427,7 @@ import {
    with the client's picker so a fifth stance cannot be accepted here and
    missing from the menu. src/types.ts § REMEMBER_STANCES. */
 import { REMEMBER_STANCES } from "./types.js";
-import type { CommentAnchor } from "./types.js";
+import type { CommentAnchor, ResetResponse } from "./types.js";
 
 /** Big enough for any selection, small enough that nothing can wedge the server. */
 const MAX_BODY_BYTES = 64 * 1024;
@@ -4881,6 +4882,27 @@ export function parseVisibilityRequest(body: unknown): {
   return { visibility, rightsConfirmed: true };
 }
 
+/**
+ * The body of `POST /api/article/:slug/reset`: `{ regenerate: boolean }`, and
+ * nothing else. A boolean and not a list on purpose — which extras to make
+ * again is the server's to read off the revision, not the client's to name
+ * (docs/plans/260928a-reset-and-regenerate-article.md § *A server route*).
+ */
+export function parseResetRequest(body: unknown): { regenerate: boolean } {
+  if (body === null || typeof body !== "object" || Array.isArray(body)) {
+    throw httpError(400, "Expected an object with regenerate");
+  }
+  const { regenerate, ...rest } = body as Record<string, unknown>;
+  if (Object.keys(rest).length) {
+    /* Not interpolated, for `parseVisibilityRequest`'s reason. */
+    throw httpError(400, "That request had fields this endpoint does not accept");
+  }
+  if (typeof regenerate !== "boolean") {
+    throw httpError(400, "regenerate must be true or false");
+  }
+  return { regenerate };
+}
+
 export function parseJobRequest(body: unknown): {
   slug: string;
   url?: string;
@@ -5462,8 +5484,11 @@ function publicJob(job: Job): Omit<Job, "profile" | "ownerId"> {
   /* `ownerId` goes too. The client never needs it — it can only ever be looking
      at its own jobs now — and an `auth.users` uuid on the wire is one more
      thing that has to not end up in a log, a bug report or a screenshot. */
-  const { profile: _hidden, ownerId: _whose, ...rest } = job;
-  return rest;
+  const { profile: _hidden, ownerId: _whose, reset, ...rest } = job;
+  /* A reset's profile snapshot is the same text as `profile`, so it goes for
+     the same reason; which extras it will make again stays, because that is a
+     fact about the job a card can say. */
+  return { ...rest, ...(reset ? { reset: { regenerate: reset.regenerate } } : {}) };
 }
 
 /**
@@ -7375,6 +7400,38 @@ const AUTH_ROUTES: readonly AuthRoute[] = [
         200,
         await visibilityStore.set(slugPart(captures, 1), asked.visibility, asked.rightsConfirmed),
       );
+    },
+  },
+
+  /**
+   * **Reset the article, and optionally make its extras again** — the import
+   * over the stored copy, with every mode's artefact dropped from the new
+   * revision (src/reset.ts). docs/plans/260928a-reset-and-regenerate-article.md.
+   *
+   * **A sub-resource of the article, like `visibility` above**, and a POST
+   * because it queues work. The profile is resolved here, once, exactly as
+   * `POST /api/jobs` resolves one for a slug, and the regenerations carry that
+   * snapshot (Sol F2). Everything else is `enqueueReset`: the 404 for a slug
+   * that is not this reader's, which extras the revision has, and the one job.
+   * No URL goes in, so no quota slot is spent — a re-run, not a new ingest.
+   *
+   * 202 with `ResetResponse`: the job to follow and the list it will regenerate.
+   */
+  {
+    kind: "pattern",
+    method: "POST",
+    pattern: /^\/api\/article\/([\w.%-]+)\/reset$/,
+    handler: async ({ request: { req, res } }, captures) => {
+      const asked = parseResetRequest(await readBody(req));
+      const slug = slugPart(captures, 1);
+      const profile = await resolveProfile(slug);
+      const { job, regenerate } = await enqueueReset({
+        slug,
+        regenerate: asked.regenerate,
+        ...(profile ? { profile } : {}),
+      });
+      const body: ResetResponse = { jobId: job.id, regenerate };
+      send(res, 202, body);
     },
   },
 

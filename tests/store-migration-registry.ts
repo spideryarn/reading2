@@ -1849,6 +1849,17 @@ export const STORE_MIGRATION: Readonly<Record<string, StoreEntry>> = {
       "reach into the condemned modules is the seeder's copy step, as for " +
       "`tests/citation-find-route.test.ts`. Read off the graph, not re-witnessed.",
   },
+  "tests/reset-route.test.ts": {
+    category: "shared-mechanism-collateral",
+    mechanisms: ["fixture-loader"],
+    evidence: "static-only",
+    reason:
+      "Arrived after the witness ran, with stage 1 of reset-and-regenerate (2026-09-28). It " +
+      "seeds two articles with `scratchArticleInPg` and drives `POST /api/article/:slug/reset` " +
+      "through `handleApi`, reading the queued job back out of `jobs` — entirely Postgres. Its " +
+      "reach into the condemned modules is the seeder's copy step, as for " +
+      "`tests/reading-time-route.test.ts`. Read off the graph, not re-witnessed.",
+  },
   "tests/glossary-delete-then-rebuild.test.ts": {
     category: "shared-mechanism-collateral",
     mechanisms: ["step-context-paths"],
@@ -2821,6 +2832,14 @@ export const TEST_LANES: Readonly<Record<string, TestLane>> = {
      bucket: the owner is the dev one the clone already seeds, so no
      `OWNER_AUDIT` entry either. */
   "tests/reserved-article-address.test.ts": "private-postgres",
+  /* Landed with stage 1 of 260928a (reset and regenerate), 2026-09-28. The
+     first drives reset jobs through a real claim, session and publication
+     and reads the successors back out of `jobs`; the second drives
+     `POST /api/article/:slug/reset` through `handleApi` over scratch
+     articles. Both are Postgres throughout, with their own owners and slugs,
+     so the private lane. */
+  "tests/reset-and-regenerate.test.ts": "private-postgres",
+  "tests/reset-route.test.ts": "private-postgres",
   /* Converted in stage B, 2026-09-04. It seeds five throwaway articles and
      walks a job over each, so it writes articles, revisions, step runs and job
      rows under five fixed slugs — and two of its cases queue a **real** retry,

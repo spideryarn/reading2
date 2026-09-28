@@ -1,0 +1,1 @@
+ALTER TABLE "spideryarn"."jobs" ADD COLUMN "reset" jsonb;

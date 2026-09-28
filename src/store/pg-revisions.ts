@@ -87,8 +87,9 @@ import {
 import { currentOwnerId } from "../owner.js";
 import { hashBlocks } from "../source-hash.js";
 import { checkTree } from "../tree-invariants.js";
-import type { Block, OwnerId, StepName, Tree } from "../types.js";
+import type { Block, JobReset, OwnerId, StepName, Tree } from "../types.js";
 import { deriveLibraryScalars } from "../library-scalars.js";
+import { extraColumns, extraSteps } from "../reset.js";
 import { READ_COMMITTED } from "./isolation.js";
 import { REVISION_PROJECTIONS, ownedSlug, requireSlug } from "./pg.js";
 import { slugIsTaken } from "./slug-is-taken.js";
@@ -860,14 +861,20 @@ async function fenceJob(
   jobId: string,
   attemptId: string,
   draftRevisionId: string | null,
-): Promise<void> {
-  const result = await tx
+): Promise<{ reset: JobReset | null }> {
+  /* `returning` the job's `reset` because publication has to know whether it
+     is a reset's, and this statement already holds that row's lock — so the
+     answer comes off the fenced row itself rather than a second read (Sol F7). */
+  const fenced = await tx
     .update(jobs)
     .set({ draftRevisionId })
-    .where(liveAttempt(jobId, attemptId));
-  // `rowCount === 1`, never `>= 1` and never ignored: zero rows here is the
+    .where(liveAttempt(jobId, attemptId))
+    .returning({ reset: jobs.reset });
+  // Exactly one row, never `>= 1` and never ignored: zero rows here is the
   // fence doing its job, and it must reach the caller as a failure.
-  if (result.rowCount !== 1) throw new NotTheLiveAttempt(jobId);
+  const [row] = fenced;
+  if (fenced.length !== 1 || !row) throw new NotTheLiveAttempt(jobId);
+  return row;
 }
 
 /* ----------------------------------------------------------- beginRevision -- */
@@ -1206,7 +1213,7 @@ export async function openOrBeginJobDraft(opts: {
      * on the time before it waited. src/store/job-fence.ts.
      */
     const [row] = await tx
-      .select({ draftRevisionId: jobs.draftRevisionId, slug: jobs.slug })
+      .select({ draftRevisionId: jobs.draftRevisionId, slug: jobs.slug, reset: jobs.reset })
       .from(jobs)
       .where(liveAttempt(job.id, job.attemptId))
       .limit(1)
@@ -1306,11 +1313,42 @@ export async function openOrBeginJobDraft(opts: {
       mode: STEP_START_DRAFT_SWEEP,
       ...opts.sweep,
     });
-    return { ...(await beginDraftIn(tx, { slug, job })), created: true, sweep };
+    const begun = await beginDraftIn(tx, { slug, job });
+    /* **A reset's draft starts without the extras**, in the transaction that
+       copied them, so there is no moment at which the draft has them. Read off
+       the job row locked above rather than carried through the session — one
+       copy of the fact, under the lock (Sol F7). Only here, on the mint: a
+       reopened draft was reset when it was minted, and reopening copies
+       nothing back. docs/plans/260928a-reset-and-regenerate-article.md. */
+    if (row.reset) await dropExtrasIn(tx, begun.revisionId);
+    return { ...begun, created: true, sweep };
   }, READ_COMMITTED);
 
   if (opened.sweep) logDraftSweep(slug, opened.articleId, opened.sweep);
   return opened;
+}
+
+/**
+ * **Take every extra out of a freshly minted draft** — its columns set to null
+ * and its `revision_step_runs` rows deleted, which is what "not made yet" is to
+ * `hasArtefacts`: no run row and no column. Which steps are extras, and which
+ * columns each owns, is src/reset.ts, read off `STORAGE`.
+ *
+ * Only ever on a draft, never on a published revision: the revision the reset
+ * replaces keeps its extras, which is what leaves an undo possible later. The
+ * caller's transaction, so the draft never exists with them.
+ */
+async function dropExtrasIn(tx: Tx, revisionId: string): Promise<void> {
+  const nulls = Object.fromEntries(extraColumns().map(({ column }) => [column, null]));
+  await tx.update(articleRevisions).set(nulls).where(eq(articleRevisions.id, revisionId));
+  await tx
+    .delete(revisionStepRuns)
+    .where(
+      and(
+        eq(revisionStepRuns.revisionId, revisionId),
+        inArray(revisionStepRuns.stepName, extraSteps()),
+      ),
+    );
 }
 
 /* --------------------------------------------------------- recordStepRun -- */
@@ -1914,6 +1952,14 @@ export interface PublishRevisionResult {
    * `logPublication` is the only reader. Nothing decides anything on it.
    */
   readonly successor: SuccessorOutcome | null;
+  /**
+   * **What a reset's publication queued to make its extras again**, one
+   * outcome per step of `jobs.reset.regenerate`, in that order. Empty for every
+   * publication that is not a reset's, and for a reset that asked for none.
+   * Separate from `successor`, which stays the labels job and nothing else.
+   * docs/plans/260928a-reset-and-regenerate-article.md.
+   */
+  readonly regenerated: readonly SuccessorOutcome[];
 }
 
 /** What `reasonsNotToPublish` decided: what refuses, and what merely worries. */
@@ -2167,7 +2213,7 @@ export async function publishRevisionIn(
   // The fence, before the pointer. A job that is no longer the live attempt
   // throws here, and the whole transaction — including the status change
   // above — rolls back with it.
-  if (opts.job) await fenceJob(tx, opts.job.id, opts.job.attemptId, null);
+  const fenced = opts.job ? await fenceJob(tx, opts.job.id, opts.job.attemptId, null) : null;
 
   await tx
     .update(articles)
@@ -2211,6 +2257,41 @@ export async function publishRevisionIn(
         })
       : null;
 
+  /**
+   * **A reset that publishes queues the extras it was asked to make again** —
+   * here, in the transaction that published it, for the reason the labels
+   * successor above is here: the regenerations exist only if the reset
+   * published, and are created strictly after it.
+   * docs/plans/260928a-reset-and-regenerate-article.md.
+   *
+   * `reset` comes off the job row the fence above has just locked and written
+   * (Sol F7), so a standalone publication with no job never has one.
+   *
+   * One job per step, **scoped to this reset** (Sol F1: an identical job from
+   * before the reset must not absorb it) and **stamped one microsecond apart
+   * after the labels successor**, in `STEP_ORDER` order, so they claim in that
+   * order whatever their random ids (Sol F6: `illustrated` reads the `sketch`).
+   * Each carries the profile the reset snapshotted at the press (Sol F2).
+   * Unforced: the reset deleted their run rows, so they run for real, and a
+   * forced glossary would append rather than replace.
+   */
+  const regenerated: SuccessorOutcome[] = [];
+  const reset = fenced?.reset ?? null;
+  if (reset && opts.job) {
+    for (const [i, step] of reset.regenerate.entries()) {
+      regenerated.push(
+        await enqueueSuccessorIn(tx, {
+          ownerId: article.ownerId as OwnerId,
+          slug,
+          steps: [step],
+          ...(reset.profile !== undefined && { profile: reset.profile }),
+          scope: opts.job.id,
+          after: i + 1,
+        }),
+      );
+    }
+  }
+
   return {
     revisionId,
     previousRevisionId: article.currentRevisionId,
@@ -2219,6 +2300,7 @@ export async function publishRevisionIn(
     /* Carried out of the transaction whole, so `logPublication` can say the
        right thing about it after the commit. See `SuccessorOutcome`. */
     successor,
+    regenerated,
   };
 }
 
@@ -2245,6 +2327,16 @@ export function logPublication(
          finishes them — see `publishRevisionIn`. */
       ...(published.successor?.kind === "queued"
         ? { successorJobId: published.successor.jobId }
+        : {}),
+      /* Present only on a reset's publication that asked for its extras to be
+         made again: which jobs it queued, by id and outcome. Ids only. */
+      ...(published.regenerated.length
+        ? {
+            regenerated: published.regenerated.map((outcome) => ({
+              kind: outcome.kind,
+              jobId: outcome.jobId,
+            })),
+          }
         : {}),
     },
     "revision published",

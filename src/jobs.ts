@@ -65,6 +65,7 @@ import { pgJobStore } from "./store/pg-jobs.js";
    article and ends the job with something a person can act on, the other is a
    500. See `walkClaim`. */
 import { PublishRefused } from "./store/pg-revisions.js";
+import { extrasPresent } from "./reset.js";
 import {
   DraftGoneError,
   mintAttempt,
@@ -107,7 +108,7 @@ import {
   type ReaderFacingFailure,
   STEP_STOPPED,
 } from "./messages.js";
-import type { Job, JobStep, JobUpload, StepName } from "./types.js";
+import type { Job, JobReset, JobStep, JobUpload, StepName } from "./types.js";
 
 /* `JobStatus` and `StepStatus` were on this line too and nothing imported them
    from either module — they are only ever used structurally, inside types.ts,
@@ -2960,6 +2961,12 @@ export interface EnqueueRequest {
    */
   retryOf?: string;
   /**
+   * **This job is a reset** — see `JobReset` (src/types.ts) and src/reset.ts.
+   * Set by `enqueueReset` below and carried by `retryJob`; stored on the row,
+   * and part of the work key when present.
+   */
+  reset?: JobReset;
+  /**
    * **Whether to start driving the job in this process.** Defaults to true,
    * which is what every route wants: a reader who presses Add should not have
    * to keep a tab open for anything to happen.
@@ -2979,6 +2986,62 @@ export interface EnqueueRequest {
    * docs/plans/260903f-delete-the-spideryarn-store-flag-and-the-filesystem-store.md.
    */
   pump?: boolean;
+}
+
+/** What `POST /api/article/:slug/reset` asks for, once the route has resolved the profile. */
+export interface ResetRequest {
+  slug: string;
+  /** Make the extras the article has now again, once the reset publishes. */
+  regenerate: boolean;
+  /**
+   * The reader's profile, resolved **once, at the press**, the way
+   * `POST /api/jobs` resolves one — carried to every regeneration (Sol F2).
+   */
+  profile?: string;
+  /** `EnqueueRequest.pump`; tests that drive the job themselves pass `false`. */
+  pump?: boolean;
+}
+
+export interface ResetQueued {
+  job: Job;
+  /** The extras the reset will queue again when it publishes, in `STEP_ORDER`. */
+  regenerate: StepName[];
+}
+
+/**
+ * **Queue a reset**: the import again over the stored copy, with the extras
+ * dropped from its draft and, if asked, queued again once it publishes.
+ *
+ * One job, `DEFAULT_INGEST_STEPS` with `extract` forced — `cascadeForce`
+ * sweeps the rest in behind it, and `fetch` is already done, so the page is
+ * not fetched again. Everything that makes it a reset rather than a re-read is
+ * `reset` on the row: the draft reads it when it is minted, and the
+ * publication reads it when it queues the regenerations (Sol F7).
+ *
+ * **404 before anything is read** for a slug this reader does not own, with
+ * the sentence `enqueue` uses, so it says nothing about whether the article
+ * exists. No URL on the request, so no quota slot — the same as any re-run
+ * (docs/project/billing.md).
+ *
+ * docs/plans/260928a-reset-and-regenerate-article.md.
+ */
+export async function enqueueReset(request: ResetRequest): Promise<ResetQueued> {
+  if (!(await articleExists(request.slug))) {
+    throw Object.assign(new Error("No such article."), { status: 404 });
+  }
+  const regenerate = request.regenerate ? await extrasPresent(request.slug) : [];
+  const reset: JobReset = {
+    regenerate,
+    ...(request.profile ? { profile: request.profile } : {}),
+  };
+  const job = await enqueue({
+    slug: request.slug,
+    steps: DEFAULT_INGEST_STEPS,
+    force: ["extract"],
+    reset,
+    ...(request.pump === false ? { pump: false } : {}),
+  });
+  return { job, regenerate };
 }
 
 /**
@@ -3008,7 +3071,14 @@ export async function enqueue(request: EnqueueRequest): Promise<Job> {
      the job gets one from `meta.json` — and the key has to be a property of the
      *request*, or two callers asking for the same thing would hash differently
      depending on what happened to be on disk when each of them asked. */
-  const workKey = workKeyFor(names, forced, request.profile, request.upload, request.url);
+  const workKey = workKeyFor(
+    names,
+    forced,
+    request.profile,
+    request.upload,
+    request.url,
+    request.reset ? { reset: request.reset } : {},
+  );
   /* **Every exit from this function honours it**, including the two that hand
      back somebody else's job — a caller driving its own loop does not want a
      second driver on a job it is about to take over either. See `pump` on
@@ -3173,6 +3243,7 @@ export async function enqueue(request: EnqueueRequest): Promise<Job> {
       status: "queued",
       createdAt: new Date().toISOString(),
       ...(request.profile ? { profile: request.profile } : {}),
+      ...(request.reset ? { reset: request.reset } : {}),
     };
 
     const outcome = await store.enqueueOrGet(wanted, {
@@ -3484,8 +3555,16 @@ export function sameWork(
   profile?: string,
   upload?: JobUpload,
   url?: string,
+  reset?: JobReset,
 ): boolean {
   if (job.steps.length !== names.length) return false;
+  /* **A reset is not a re-read**, though its steps and forcing are exactly
+     those of one (`force: ["extract"]`). Handed a queued plain re-read, the
+     reader would watch a job succeed and reset nothing. And two resets asking
+     for different regenerations — or for one reader profile against another —
+     are two pieces of work. `workKeyFor`'s `WorkKeyExtras.reset`.
+     docs/plans/260928a-reset-and-regenerate-article.md. */
+  if (!sameReset(job.reset, reset)) return false;
   /* **Two uploads are never one piece of work**, whatever they are called and
      whatever steps they name. This is belt and braces — a minted short id
      never hands two attempts the same slug, so `activeFor` should not have
@@ -3518,6 +3597,20 @@ export function sameWork(
   if ((job.profile ?? "") !== (profile ?? "")) return false;
   return job.steps.every(
     (s, i) => s.name === names[i] && (s.force === true) === forced.has(s.name),
+  );
+}
+
+/**
+ * Two `reset`s are one piece of work when both are absent, or both ask for the
+ * same regeneration list, in the same order, under the same profile — `?? ""`
+ * on the profile for the reason `sameWork` gives.
+ */
+function sameReset(a: JobReset | undefined, b: JobReset | undefined): boolean {
+  if (a === undefined || b === undefined) return a === b;
+  return (
+    a.regenerate.length === b.regenerate.length &&
+    a.regenerate.every((step, i) => step === b.regenerate[i]) &&
+    (a.profile ?? "") === (b.profile ?? "")
   );
 }
 
@@ -4077,6 +4170,11 @@ export async function retryJob(
     // Copied, unlike force. The steer is not a thing the first attempt used up
     // — a retry of a summary run that was steered is still that run.
     ...(old.profile ? { profile: old.profile } : {}),
+    /* **A retried reset still resets**, with the same list and the same profile
+       snapshot. Without this the retry is a plain re-read: it mints a fresh
+       draft copied from the published revision, extras and all, and publishes
+       them straight back. docs/plans/260928a-reset-and-regenerate-article.md. */
+    ...(old.reset ? { reset: old.reset } : {}),
     ...slot,
   });
 }

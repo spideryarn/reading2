@@ -85,6 +85,7 @@ import type {
   FeedbackDiagnosticsPayload,
   Glossary,
   Ideas,
+  JobReset,
   JobStep,
   NavLabelStatus,
   Quiz,
@@ -1907,6 +1908,24 @@ export const jobs = spideryarn.table(
      * gap is ever found. docs/project/reader-profile.md.
      */
     profile: text("profile"),
+
+    /**
+     * **This job is a reset**, and what to make again once it publishes — or
+     * null, which is every other job.
+     *
+     * `{ regenerate: StepName[]; profile?: string }` (`JobReset`,
+     * src/types.ts). Read from this row, under the lock each transaction
+     * already takes on it, in the two places that act on it: minting the
+     * draft drops the extras' columns and step runs
+     * (`openOrBeginJobDraft`), and publishing queues one job per
+     * `regenerate` step (`publishRevisionIn`). Nothing threads it through the
+     * session, so there is no second copy to disagree (Sol F7).
+     *
+     * **Immutable, like `work_key`** — it is part of that key when present, and
+     * `retryJob` copies it onto the new job so a retried reset still resets.
+     * docs/plans/260928a-reset-and-regenerate-article.md.
+     */
+    reset: jsonb("reset").$type<JobReset>(),
 
     /**
      * What kind of failure stopped it — and therefore **whether the card offers

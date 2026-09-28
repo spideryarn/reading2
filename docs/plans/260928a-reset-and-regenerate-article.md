@@ -1,7 +1,8 @@
 # Reset an article, and optionally make its extras again
 
-*Status as of 2026-09-28: planned, not built — evidence: no `resets` column on `jobs`, no
-`/api/articles/:slug/reset` route.*
+*Status as of 2026-09-28: stage 1 (server) built and committed; stage 2 (the button) not built —
+evidence: `jobs.reset` and `POST /api/article/:slug/reset` exist; no `ResetSection` in
+`src/web/Metadata.tsx`.*
 
 ## The ask
 
@@ -49,7 +50,7 @@ migration.
 
 ## The design
 
-**One new server action, `POST /api/articles/:slug/reset`, body `{ regenerate: boolean }`.** It
+**One new server action, `POST /api/article/:slug/reset`, body `{ regenerate: boolean }`.** It
 enqueues **one job**, the reset:
 
 - steps `DEFAULT_INGEST_STEPS`, `force: ["extract"]`. `cascadeForce` sweeps blocks, hierarchy and
@@ -193,7 +194,7 @@ Each is a default we built; say the word and it changes.
 6. **The old revision is kept, with no undo button in v1.** Revisions already make it free to keep;
    an undo is a pointer move plus the questions of what an undo does to comments made since — its
    own small feature if you want it.
-7. **Regenerate remakes only the extras the article had**, not all eleven.
+7. **Regenerate remakes only the extras the article had**, not all twelve.
 8. **Reset clears the modes' generated artefacts, not things you asked for.** Saved concept
    searches, referee criteria and their claims, chat, glossary look-ups and citation finds are left
    as they are (see *What "the extras" covers*). The alternative — clearing referee claims too,
@@ -214,7 +215,7 @@ Each is a default we built; say the word and it changes.
 - [ ] `publishRevisionIn`: when the publishing job has `reset.regenerate`, queue one successor per
       step, in order, in the same transaction (`enqueueSuccessorIn`, extended with an optional
       profile that goes into the row and its work key).
-- [ ] `POST /api/articles/:slug/reset` `{ regenerate }` → resolves the profile as `POST /api/jobs`
+- [ ] `POST /api/article/:slug/reset` `{ regenerate }` → resolves the profile as `POST /api/jobs`
       does, reads which extras the current revision has, enqueues the reset job. Returns its id and
       the list it will regenerate. 404 for a slug you do not own. 400 for a non-boolean.
 - [ ] Tests, **red first**, against Postgres:
@@ -235,6 +236,13 @@ Each is a default we built; say the word and it changes.
     `import`).
 - [ ] Mutate: remove the null-out; the first test must go red.
 - [ ] Sol code review (writes fixes in stage); commit; update this plan.
+
+**Landed (stage 1).** As planned, with two departures: the route is singular, `/api/article/…`,
+matching its neighbours; and `STORAGE` moved to `src/store/artifact-storage.ts` (re-exported from
+`artifacts-pg.ts`), because `src/reset.ts` is imported by `pg-revisions.ts`, which `artifacts-pg.ts`
+imports — a cycle otherwise. The browser sees `reset.regenerate` on a job but never its profile
+(`publicJob`). Every test was seen red first; four mutations (null-out, successor scope, explicit
+`created_at`, `reset` on retry) each turned a named test red.
 
 ### Stage 2 — the button
 

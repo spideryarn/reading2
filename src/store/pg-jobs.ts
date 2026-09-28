@@ -193,6 +193,7 @@ function toJob(row: Row): Job {
     ...(row.url !== null && { url: row.url }),
     ...(row.title !== null && { title: row.title }),
     ...(row.profile !== null && { profile: row.profile }),
+    ...(row.reset !== null && { reset: row.reset }),
     ...(row.error !== null && { error: row.error }),
     ...(row.failureKind !== null && { failureKind: row.failureKind as FailureKind }),
     ...(row.startedAt !== null && { startedAt: row.startedAt.toISOString() }),
@@ -589,6 +590,7 @@ async function enqueueIn(
       url: job.url ?? null,
       title: job.title ?? null,
       profile: job.profile ?? null,
+      reset: job.reset ?? null,
       uploadId: job.upload?.id ?? null,
       uploadFilename: job.upload?.filename ?? null,
     })
