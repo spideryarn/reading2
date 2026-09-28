@@ -196,3 +196,12 @@ stays e = 1. The call left open: e = 1.5 trades @8 (0.70 → 0.54) for fewer vag
   coverage reward did not fix that (the pages being chased are longer), and e = 1.5 / 2 trade
   coverage for different vague words. The real fix is a shipped English word-frequency list as a
   fixed background, replacing the hand-written generic list — the next step, not done today.
+- **GPT Sol, stage 1 code** —
+  [260928d-shelf-topics-diversity-coverage-and-detail-view-stage1-review-sol.md](260928d-shelf-topics-diversity-coverage-and-detail-view-stage1-review-sol.md)
+  (prompt: [260928d-shelf-topics-diversity-coverage-and-detail-view-stage1-review-prompt.md](260928d-shelf-topics-diversity-coverage-and-detail-view-stage1-review-prompt.md)),
+  reviewing 37cb66bd, time-boxed. It fixed S1-1 (the short-plural merge also merged real words —
+  *bus*/*bu*, *its*/*it*, *ups*/*up* — now only when the surface forms are an acronym and its
+  plural, *AI*/*AIs*) and S1-2 (the shared-word Jaccard rule could reject a larger containing topic
+  before `admit` saw it, so a 4-article *AI system* kept out an 11-article *AI*). Rerun here: the
+  shelf-terms suites 78/78, typecheck clean (bar the screenshot agent's scratch scripts), the report's
+  numbers and first-12 list unchanged on the local shelf.

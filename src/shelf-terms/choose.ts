@@ -209,18 +209,26 @@ function collect(articles: ChooseArticle[], densityPer1000: number): Collected {
  * **Short plurals the extractor cannot fold** (plan 260928d): `foldKey` returns
  * three letters or fewer whole, and keeps *-us* and *-os* (*virus*, *chaos*), so
  * *AIs*, *UIs*, *GPUs* and *NGOs* key as `ais`, `uis`, `gpus`, `ngos`. A key of
- * at most four characters ending in *s* whose singular is also a key somewhere
- * on this shelf is that singular. Folding here rather than in the extractor
- * leaves every stored candidate row valid — no `EXTRACTOR_VERSION` bump. *bus*
- * and *gas* survive because no shelf has *bu* or *ga* as a key.
+ * at most four characters ending in *s* aliases to its singular only when the
+ * shelf has matching acronym surface forms (`AI` and `AIs`). The surface-form
+ * evidence matters: two real keys such as *bu* and *bus* must stay distinct.
+ * Folding here rather than in the extractor leaves every stored candidate row
+ * valid — no `EXTRACTOR_VERSION` bump.
  */
 function shortPluralAliases(articles: ChooseArticle[]): Map<string, string> {
-  const keys = new Set<string>();
-  for (const a of articles) for (const c of a.candidates) keys.add(c.key);
+  const forms = new Map<string, Set<string>>();
+  for (const a of articles)
+    for (const c of a.candidates) getOrSet(forms, c.key, () => new Set<string>()).add(c.label);
   const alias = new Map<string, string>();
-  for (const k of keys)
-    if (k.length <= 4 && k.endsWith("s") && !k.includes(" ") && keys.has(k.slice(0, -1)))
-      alias.set(k, k.slice(0, -1));
+  for (const [k, pluralForms] of forms) {
+    const singular = k.slice(0, -1);
+    const singularForms = forms.get(singular);
+    if (k.length > 4 || !k.endsWith("s") || k.includes(" ") || !singularForms) continue;
+    const hasAcronymPair = [...singularForms].some(
+      (form) => /^[A-Z][A-Z0-9]+$/.test(form) && pluralForms.has(`${form}s`),
+    );
+    if (hasAcronymPair) alias.set(k, singular);
+  }
   return alias;
 }
 
@@ -326,6 +334,14 @@ function isRedundant(
   return chosen.some((t) => {
     const j = jaccard(t.workSet, pick.workSet);
     const shared = sharesWord(t.key, pick.key);
+    /* A genuinely larger later candidate may replace this chosen subset in
+       `admit`; do not let the symmetric Jaccard rule discard it first. */
+    if (
+      shared &&
+      pick.works.length > t.works.length &&
+      containment(t, pick) >= o.sharedWordContainmentMax
+    )
+      return false;
     if (j > o.jaccardMax || (shared && j > o.sharedWordJaccardMax)) return true;
     if (newWorks > 1) return false;
     const inside = containment(pick, t);
