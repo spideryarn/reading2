@@ -894,3 +894,13 @@ important (especially for summaries, explanations), though perhaps (b) plays mor
 headings? Not sure. Use your judgment."* → fb44 widened: one shared rule every generating prompt draws
 on, the plain-vs-faithful call made per kind of output (Fable + Sol on the plan), and
 `docs/project/prompting-guide.md`. The AGENTS.md pointer comes back to Greg as a before/after.
+
+### 2026-09-28 — reset-and-regenerate button in Metadata mode
+
+Greg asked for a new agent: *"a reset-and-regenerate button in the lower part of Metadata mode
+(perhaps the default is just to reset as if it had just been imported for the first time, and
+there's an option to regenerate any extra stuff that had been generated for the article with a
+queue)"* → session `reset-regenerate-metadata`. Defaults set as assumptions pending Greg: owner and
+admin see it; a plain confirm; behind the experimental switch if cost or data risk is non-trivial;
+old revision kept. Hard line in the brief: reader-written data survives, and it stops and asks
+before any design that deletes it.
