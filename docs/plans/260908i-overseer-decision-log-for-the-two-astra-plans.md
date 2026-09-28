@@ -872,3 +872,16 @@ Greg: "Make it permanent" (the new status line) → session `statusline-permanen
 time we change how this box works, we want it to be permanent" → written into
 hetzner-remote-server-box.md § A change to the box is a change to a file. AGENTS.md's matching line
 still says "ask Greg"; its rewording is shown to him before and after, per edit-important-docs.
+
+### 2026-09-28 — Greg answers the figure, re-process and report 44 questions; sweep doc re-pinned
+
+Greg: *"For now let's just do it for figures that fail"* → pdf-figure-fs7zvp builds stage 2 (Gemini 3
+Flash locates a figure the caption check refuses; no check of recovered figures). *"if you can
+reprocess the Olah article that would be great. If not, I can do it myself"* → the box has no
+production access, so the session writes the steps for Greg to re-run the figure step himself after
+the deploy that carries stage 2. His third answer (*"if you're confident this makes sense then go
+for it. If in doubt, explain more"*) is ambiguous between the sweep-doc re-pin and report 44; I am
+confident on both, so both proceed: fix-dev-test-reds re-pins feedback-reports.md to a33eafae
+(covers 02a63b7b only), and fb44 extends the plain-words rule to chat, Explain and Check the web and
+keeps the plain depth-1 line with the word limit raised to about 30. Pressed 1 twice on fb44's
+memory-write prompts (its own memory file and index, outside the working directory).
