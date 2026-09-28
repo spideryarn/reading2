@@ -641,10 +641,11 @@ const HOLDERS: Record<ProposalRecipient, { line: string; name: string; what: str
     name: "Sol",
     what: "A technical question whose evidence is in the code — Sol reads the tree and can find the answer.",
   },
+  // `fable` is the wire token from before Greg retired Fable (2026-09-28); the question now goes to Opus.
   fable: {
-    line: "ask Fable",
-    name: "Fable",
-    what: "A question of wording, a default, or whether a case can be dropped — what Fable is for.",
+    line: "ask Opus",
+    name: "Opus",
+    what: "A question of wording, a default, or whether a case can be dropped — what Opus is for.",
   },
   greg: {
     line: "this one is yours",
