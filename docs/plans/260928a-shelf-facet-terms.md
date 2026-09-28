@@ -73,7 +73,8 @@ inside each run. Key = lowercased tokens with light plural folding (`networks` �
 `studies` → `study`, not `analysis`); the label shown is the most frequent surface form, lowercase
 winning ties so a heading's Title Case does not become the label. A single word must pass a
 "nounish" test (not on a generic-English list, not an irregular verb, not ending in *-ly*/*-ed*); a
-phrase's last word must pass the same test.
+phrase's last word gets only the shape test (not an irregular verb, not *-ly*/*-ed*) — the
+generic-word list applies to single words, or *conscious experience* and *neural activity* would go.
 
 **Three numbers per candidate, not one** (Sol F3 — the spike folded the title weight into the count,
 so one title occurrence read as "used 3 times" and passed membership on its own):
@@ -99,7 +100,7 @@ links, See also, Further reading, Notes. The spike found these as headings in 12
 articles, not flagged as footnotes, and they fill the candidates with author surnames and journal
 names.
 
-**One entry point takes plain text**: `extractCandidates(segments: { text; weight }[])`. The block
+**One entry point takes plain text**: `extractCandidates(segments: { text; kind: "title" | "heading" | "prose" }[])`. The block
 reading is a separate adapter. That is so a later non-article item (a bibliography entry's title and
 abstract — the academic write-up's option A) can feed the same function without a second path.
 
@@ -129,7 +130,7 @@ whole group of articles (coverage 0.71 vs 0.92), and emits junk heads of its own
 - **Greedy coverage with overlap allowed** — repeatedly take the candidate with the largest
   `quality × sqrt(Σ over its works of 1 / (1 + times already covered))`. Discounting rather than
   removing covered works is what lets topics overlap. Skip a candidate whose work set has Jaccard
-  > 0.7 with a chosen topic, > 0.5 when one phrase contains the other, or > 0.3 when they share a
+  > 0.7 with a chosen topic, or > 0.3 when they share a
   word. "Shares a word" compares words after a crude suffix strip (*-ness*, *-ity*, *-al*, plurals),
   so *conscious* and *consciousness* count as sharing one; the spike's exact-token comparison let
   *conscious AI*, *conscious experience* and *consciousness* all through (Sol F4). If the strip
@@ -314,6 +315,26 @@ Four, after Sol F13 said the first one was carrying too much.
   *conscious*/*consciousness* case, fewer than 8 works → none, **shuffled-input determinism**.
 - Done when: green, typecheck clean, and the numbers reproduced on the local shelf by a throwaway
   run (the report script proper is stage 2).
+
+**Landed** (2026-09-28): `src/shelf-terms/extract.ts`, `src/shelf-terms/choose.ts`, 50 tests;
+all 11 deliberate breaks of the code turned a test red. What changed from the design above while
+building:
+
+- The **"contains the other phrase" skip was dropped**: at 0.5 it could never fire, because such a
+  phrase always shares a word and the shared-word rule's 0.3 is lower.
+- **K = min(30, works).**
+- **The English check**: at least 12% of prose tokens are among ~50 English function words; not
+  judged under 30 prose tokens, so a short note is let through. `no-text` means no prose at all.
+- **Back-matter headings match as a whole heading** (numbering and punctuation allowed), so *Notes on
+  the Synthesis of Form* is not skipped; the adapter reads blocks through `isEmbeddable` from
+  `src/block-policy.ts` rather than `gistable`, so a change there must bump `EXTRACTOR_VERSION`.
+- **Local shelf, active, K = 30: coverage 0.87, 2.84 / 2 topics per article, 0.71 with ≥ 2,
+  Jaccard 0.07 / 0.67** (38 articles, 33 works, 329k prose words; extraction 6 ms per 1k words).
+  Lower than the spike's 0.92 because exact-hash grouping leaves **re-ingested near-copies** apart:
+  three *ball lightning* copies differ by a few words, and the six *Forms of Memory* copies are four
+  hashes, which makes *Wagan Watson* — a person in that one work — a four-article topic. That is the
+  v2 trigger for fuzzy grouping, firing on a shelf of test ingests; the report script will say
+  whether Greg's real shelf has the same problem.
 
 ### Stage 2 — storage, fill, route, report
 
