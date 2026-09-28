@@ -53,7 +53,10 @@ const { closeDb, getDb } = await import("../src/db/client.js");
 const { runAsOwner } = await import("../src/owner.js");
 const { currentShelfRevisions, readRevisionBlocks } = await import("../src/store/pg-shelf-terms.js");
 const { extractCandidates, segmentsFromBlocks, EXTRACTOR_VERSION } = await import("../src/shelf-terms/extract.js");
-const { chooseTerms, shelfTermMetrics } = await import("../src/shelf-terms/choose.js");
+const { byArticleCount, candidateTopics, chooseTerms, maxCoverageOrder, shelfTermHeadMetrics, shelfTermMetrics } =
+  await import(
+  "../src/shelf-terms/choose.js"
+);
 const { sql } = await import("drizzle-orm");
 
 const ms = (n: number) => `${n.toFixed(0)} ms`;
@@ -135,12 +138,93 @@ async function main(): Promise<void> {
       for (const s of m.uncovered) console.log(`  ${s} (${wordsOf.get(s) ?? 0} words)`);
     }
 
+    firstFew(input, slugs);
+
     const per1k = words ? (extractMs / words) * 1000 : 0;
     console.log(
       `\nTimings: shelf query ${ms(t1 - t0)}, block reads ${ms(readMs)}, ` +
         `extraction ${ms(extractMs)} (${per1k.toFixed(1)} ms per 1k words)`,
     );
   });
+}
+
+/**
+ * Plan 260928d § Stage 1: what the reader sees first, in two orders — by
+ * article count (how the row drew them before 260928d) and rank (the
+ * chooser's order, which the row draws since) — for the ranking and
+ * phrase-bonus variants the plan asks to measure; then the ceiling and an
+ * unweighted max-coverage baseline (Sol R5).
+ */
+function firstFew(input: Parameters<typeof chooseTerms>[0], slugs: string[]): void {
+  console.log("\nThe first few (K = 30): coverage@5/8/12, first-12 Jaccard and overlap coefficient mean/max");
+  console.log(" variant         | order | total cov | @5   | @8   | @12  | Jaccard mean/max | overlap mean/max");
+  console.log("-----------------|-------|-----------|------|------|------|------------------|-----------------");
+  const lists: string[] = [];
+  /* e = quality exponent (the default ranking: discounted coverage × quality^e);
+     lex = lexicographic (new works, discounted, quality) over the q best by
+     quality; p = phrase bonus; -sw = the shared-word Jaccard rule off (a
+     threshold above 1 never fires) */
+  const all = Number.POSITIVE_INFINITY;
+  const variants: [string, Parameters<typeof chooseTerms>[1]][] = [["default", {}]];
+  for (const e of [0.5, 1, 2])
+    for (const p of [1, 0.5, 0])
+      variants.push([`e${e} p${p}`, { phraseBonus: p, qualityPool: all, qualityExponent: e }]);
+  for (const q of [60, 90, all])
+    for (const p of [1, 0.5, 0])
+      variants.push([`lex p${p} q${q}`, { phraseBonus: p, qualityPool: q, qualityExponent: null }]);
+  variants.push(["e1 p1 -sw", { phraseBonus: 1, qualityPool: all, qualityExponent: 1, sharedWordJaccardMax: 2 }]);
+  for (const [variant, opts] of variants) {
+    const r = chooseTerms(input, { maxTerms: 30, ...opts });
+    const total = shelfTermMetrics(r.terms, slugs).coverage;
+    for (const [name, order] of [
+      ["count", byArticleCount(r.terms)],
+      ["rank", r.terms],
+    ] as const) {
+      const h = shelfTermHeadMetrics(order, slugs);
+      console.log(
+        ` ${variant.padEnd(16)}| ${name.padEnd(5)} | ${pct(total).padStart(9)} | ` +
+          `${pct(h.coverageAt5)} | ${pct(h.coverageAt8)} | ${pct(h.coverageAt12)} | ` +
+          `${`${pct(h.meanJaccard12)} / ${pct(h.maxJaccard12)}`.padStart(16)} | ` +
+          `${pct(h.meanOverlap12)} / ${pct(h.maxOverlap12)}`,
+      );
+      const head = order.slice(0, 12).map((t) => `${t.label} ${t.articles.length}`);
+      lists.push(`  ${variant}, ${name} order (${r.terms.length} topics): ${head.join(", ")}`);
+    }
+    const keys = new Set(r.terms.map((t) => t.key));
+    const pairs = [...keys].filter((k) => keys.has(`${k}s`)).map((k) => `${k}/${k}s`);
+    lists.push(`  ${variant}: key + "s" pairs both present: ${pairs.length ? pairs.join(", ") : "none"}`);
+  }
+  /* Works under 500 words earn no coverage gain: coverage over all eligible
+     articles and over the ≥ 500-word ones, rank order. */
+  const long = input.filter((a) => a.words >= 500).map((a) => a.slug);
+  console.log(`\nShort works earn no coverage (min 500 words; ${long.length} of ${slugs.length} articles are ≥ 500)`);
+  for (const e of [1, 1.5, 2])
+    for (const minCoverageWords of [0, 500]) {
+      const r = chooseTerms(input, { maxTerms: 30, qualityExponent: e, minCoverageWords });
+      const a = shelfTermHeadMetrics(r.terms, slugs);
+      const b = shelfTermHeadMetrics(r.terms, long);
+      console.log(
+        `  e${e} min${minCoverageWords}: all @5/8/12 ${pct(a.coverageAt5)} ${pct(a.coverageAt8)} ${pct(a.coverageAt12)}` +
+          `  ≥500 @5/8/12 ${pct(b.coverageAt5)} ${pct(b.coverageAt8)} ${pct(b.coverageAt12)}` +
+          `  total ≥500 ${pct(shelfTermMetrics(r.terms, long).coverage)}  overlap max ${pct(a.maxOverlap12)}` +
+          `\n    ${r.terms
+            .slice(0, 12)
+            .map((t) => `${t.label} ${t.articles.length}`)
+            .join(", ")}`,
+      );
+    }
+  for (const qualityPool of [all, 60]) {
+    const pool = candidateTopics(input, { qualityPool });
+    const ceiling = shelfTermMetrics(pool, slugs).coverage;
+    const order = maxCoverageOrder(pool, slugs, 12);
+    const base = shelfTermHeadMetrics(order, slugs);
+    console.log(
+      `\nCandidates, quality pool ${qualityPool}: ${pool.length}; ceiling ${pct(ceiling)} of eligible articles in any` +
+        `\n  unweighted max-coverage baseline: @5 ${pct(base.coverageAt5)}  @8 ${pct(base.coverageAt8)}  @12 ${pct(base.coverageAt12)}` +
+        `\n  its first 12: ${order.map((t) => `${t.label} ${t.articles.length}`).join(", ")}`,
+    );
+  }
+  console.log(`\nFirst 12\n${lists.join("\n")}`);
 }
 
 try {

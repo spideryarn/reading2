@@ -486,6 +486,33 @@ describe("the archive in scope", () => {
     await waitFor(() => archivedRows().length === 2, "the archived list");
   });
 
+  it("draws chips in the server's rank order, not by count, and pressing one moves nothing (plan 260928d)", async () => {
+    /* rank order startup (1 article), neuron (2), memory (3) — the reverse of count order */
+    answer = async () => ({ ...ACTIVE_TERMS, terms: [...ACTIVE_TERMS.terms].reverse() });
+    await show("/");
+    const order = () => chips().map((b) => (b.getAttribute("aria-label") ?? "").split(" ")[0]);
+    expect(order()).toEqual(["startup", "neuron", "memory"]);
+    click(chip("memory"));
+    await settle();
+    expect(order()).toEqual(["startup", "neuron", "memory"]);
+  });
+
+  it("draws the first twelve by rank, plus a chosen one further down in its own place", async () => {
+    const keys = Array.from({ length: 14 }, (_, i) => `topic${String(i).padStart(2, "0")}`);
+    answer = async () => ({
+      ...ACTIVE_TERMS,
+      terms: keys.map((k) => term(k, ["palaces", 3], ["neurons", 2])),
+    });
+    await show("/?topics=topic13");
+    const order = () =>
+      [...host.querySelectorAll<HTMLButtonElement>("button[aria-pressed]")]
+        .filter((b) => !b.closest('[aria-label="All topics"]'))
+        .map((b) => (b.getAttribute("aria-label") ?? "").split(" ")[0])
+        .filter((k) => /^topic\d\d$/.test(k ?? ""));
+    await waitFor(() => order().length > 0, "the chips");
+    expect(order()).toEqual([...keys.slice(0, 12), "topic13"]);
+  });
+
   it("shows topics when every article is archived and the active shelf is empty", async () => {
     activeArticles = [];
     archivedArticles = [
