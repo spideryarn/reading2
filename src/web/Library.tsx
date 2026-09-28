@@ -27,7 +27,7 @@
  * | lib/DataTable.tsx | **reusable**: the chips, the dense table, the TanStack options that are decisions |
  * | lib/table-sort.ts | **reusable**: sorting state ⇄ URL, the collator, `sinkLast` |
  * | library-columns.tsx | what the shelf can be sorted by, and how each column draws |
- * | ShelfControls.tsx | the two controls that are the shelf's own: Unread, cards-or-table |
+ * | ShelfControls.tsx | the shelf's own filtering, column-visibility and view controls |
  * | ShelfEntry.tsx | the card, the five buttons, rename-in-place, the tooltip |
  *
  * **One sort state, two renderers**, which is the shape Greg asked for when he
@@ -80,6 +80,7 @@ import { pageTitle, useDocumentTitle } from "./page-title.js";
 import { ADMIN_HREF, PROFILE_HREF } from "./router.js";
 import { ShelfCard } from "./ShelfEntry.js";
 import { ShelfControls, type ShelfFilter } from "./ShelfControls.js";
+import { useShelfHiddenColumns } from "./shelf-hidden-columns.js";
 import { SiteFooter } from "./SiteFooter.js";
 import { Tooltip, TooltipGroup } from "./Tooltip.js";
 import { useJobs } from "./useJobs.js";
@@ -299,12 +300,18 @@ export function Library({
     [sorting, natural, pushView, setBy, setDir],
   );
 
+  /* The columns the reader has hidden in table view, remembered in this
+     browser — shelf-hidden-columns.ts; plan 260928a, Decision 3. */
+  const [columnVisibility, onColumnVisibilityChange] = useShelfHiddenColumns(columns);
+
   const table = useSortedTable({
     data: rows ?? EMPTY,
     columns,
     sorting,
     onSortingChange,
     rowId: slugOf,
+    columnVisibility,
+    onColumnVisibilityChange,
   });
 
   /* The fixture last, in every order and both directions. It is a committed
@@ -684,7 +691,15 @@ export function Library({
       {sorted.length > 0 && (
         <>
           {view === "table" ? (
-            <DataTable table={table} rows={capped.shown} caption="Your articles" />
+            /* **One `TooltipGroup` for the whole table**, so running the pointer
+               down the titles opens each row card instantly after the first,
+               and so the row's action buttons join it rather than nesting a
+               group of their own (`Actions` § `inTooltipGroup`) — two groups
+               could hold a title's card and an action's open together. The
+               actions' own delays, which they had before. Plan 260928a. */
+            <TooltipGroup delay={{ open: 240, close: 90 }} timeoutMs={400}>
+              <DataTable table={table} rows={capped.shown} caption="Your articles" />
+            </TooltipGroup>
           ) : (
             <ul className="tw:m-0 tw:flex tw:list-none tw:flex-col tw:gap-3 tw:p-0">
               {capped.shown.map((row) => (

@@ -30,13 +30,15 @@
  * banished to the bottom with the unknowns.
  */
 
+import type { Table } from "@tanstack/react-table";
+import { SHARING_ON } from "../messages.js";
 import type { LibraryEntry } from "../types.js";
 import type { SortableColumn } from "./lib/DataTable.js";
 import { at, localeText, numberOrMissing } from "./lib/table-sort.js";
 import { Link } from "./Link.js";
-import { timeAgo } from "./relative-time.js";
+import { exactly, timeAgo } from "./relative-time.js";
 import { readHref } from "./router.js";
-import { Actions, Details, SharedBadge } from "./ShelfEntry.js";
+import { Actions, SharedBadge } from "./ShelfEntry.js";
 import type { Shelf } from "./ShelfEntry.js";
 import { TitleEditor } from "./TitleEditor.js";
 import { Tooltip } from "./Tooltip.js";
@@ -142,7 +144,14 @@ export function libraryColumns(shelf: Shelf, now: number): SortableColumn<Librar
         ends: ["A to Z", "Z to A"],
         fluid: true,
       },
-      cell: ({ row }) => <TitleCell entry={row.original} shelf={shelf} />,
+      /* **Never hideable** (plan 260928a, Sol P-5): a row with no title is not
+         a row — it is the link, and it is where the row card hangs. */
+      enableHiding: false,
+      /* `table` from the cell's context, so the row card can carry back the
+         value of every column the reader has hidden. */
+      cell: ({ row, table }) => (
+        <TitleCell entry={row.original} shelf={shelf} hidden={hiddenColumns(table)} />
+      ),
     },
     {
       id: "added",
@@ -155,24 +164,15 @@ export function libraryColumns(shelf: Shelf, now: number): SortableColumn<Librar
         hint: "When the article was fetched and built",
         ends: ["oldest first", "newest first"],
       },
-      /* The details tooltip hangs off this cell, which is where the card puts
-         it too — one trigger, one place to look. The accessible name starts
-         with the visible text, or `aria-label` would replace the date the
-         reader can see with words they cannot say back. */
-      cell: ({ row }) => {
-        const when = timeAgo(row.original.addedAt, now) ?? "unknown";
-        return (
-          <Tooltip content={<Details entry={row.original} />} placement="top">
-            <button
-              type="button"
-              aria-label={`${when} — details of ${row.original.title}`}
-              className="tw:cursor-help tw:border-b tw:border-dotted tw:border-border tw:bg-transparent tw:p-0 tw:text-xs tw:text-muted-foreground tw:outline-none tw:focus-visible:text-highlight"
-            >
-              {when}
-            </button>
-          </Tooltip>
-        );
-      },
+      /* **Plain text since 2026-09-28.** This cell carried the cards view's
+         `Details` card until then, and in a table that card was the row a
+         second time — opens and comments are columns beside it — while the
+         title's card below now holds the one thing it had that the row did
+         not, the exact date. Two cards per row, one repeating the other and
+         both repeating the row, is the failure docs/project/tooltips.md
+         § Structure's card describes. `Details` stays on the cards view, which
+         has no columns to repeat. Plan 260928a, Decision 2. */
+      cell: ({ row }) => timeAgo(row.original.addedAt, now) ?? "unknown",
     },
     {
       id: "opened",
@@ -186,9 +186,18 @@ export function libraryColumns(shelf: Shelf, now: number): SortableColumn<Librar
         ends: ["longest ago first", "most recent first"],
       },
       /* An em dash rather than a blank: an empty cell reads as data we failed
-         to load, and "never opened" is a fact. */
+         to load, and "never opened" is a fact. **The words are an `sr-only`
+         span, not a `title`**, since 2026-09-28: a `title` is unreachable by
+         touch and by keyboard, and a screen reader meeting a bare "—" hears
+         "dash" or nothing. The dash itself is `aria-hidden` so it is not read
+         as well. Plan 260928a. */
       cell: ({ row }) =>
-        timeAgo(row.original.lastOpenedAt, now) ?? <span title="Never opened">—</span>,
+        timeAgo(row.original.lastOpenedAt, now) ?? (
+          <>
+            <span aria-hidden="true">—</span>
+            <span className="tw:sr-only">never opened</span>
+          </>
+        ),
     },
     {
       id: "opens",
@@ -236,6 +245,9 @@ export function libraryColumns(shelf: Shelf, now: number): SortableColumn<Librar
       id: "actions",
       header: () => <span className="tw:sr-only">Actions</span>,
       enableSorting: false as const,
+      /* **Never hideable** (Sol P-5): five controls, not a value the row card
+         could carry back, so hiding them would make them unreachable. */
+      enableHiding: false,
       meta: { label: "Actions", hint: "", ends: ["", ""], noChip: true },
       cell: ({ row }) => <RowActions entry={row.original} shelf={shelf} />,
     },
@@ -244,7 +256,16 @@ export function libraryColumns(shelf: Shelf, now: number): SortableColumn<Librar
 
 /* ----------------------------------------------------------------- cells -- */
 
-function TitleCell({ entry, shelf }: { entry: LibraryEntry; shelf: Shelf }) {
+function TitleCell({
+  entry,
+  shelf,
+  hidden,
+}: {
+  entry: LibraryEntry;
+  shelf: Shelf;
+  /** The ids of the columns the reader has hidden — `rowCardFacts`. */
+  hidden: readonly string[];
+}) {
   const sub = [entry.byline, entry.siteName, `~${entry.minutes} min`].filter(Boolean).join(" · ");
 
   /* The same in-place rename the card offers, and deliberately the same
@@ -271,26 +292,73 @@ function TitleCell({ entry, shelf }: { entry: LibraryEntry; shelf: Shelf }) {
     );
   }
 
+  const facts = rowCardFacts(entry, hidden);
+
+  /* No stretched link here: a whole row as one click target would swallow
+     the buttons at the end of it, and the card already learned that lesson
+     (library.md § The card is no longer one big link). The title is the
+     link, and only the title.
+
+     **It wraps, whole**, since 2026-09-28 — Greg: *"Perhaps always show the
+     full article title on each row? … the titles are too truncated"*. It was
+     `truncate`, one line and an ellipsis. Wrapping rather than widening the
+     column, because a wider column only moves the cut: at 1100px the fixed
+     columns and the five action buttons already take most of the width, and
+     at 390px this column is at its `min-w-56` floor whatever we do. Wrapping
+     costs height only on the rows whose title is long. `wrap-anywhere` for the
+     title that is one unbroken word — a URL pasted as a title — which would
+     otherwise hold the column open past its floor. A two-line clamp was the
+     simpler option passed over: it still cuts exactly the titles that were the
+     complaint. Plan 260928a, Decision 1. */
+  const link = (
+    <Link
+      href={readHref(entry.slug)}
+      className="tw:block tw:wrap-anywhere tw:text-foreground tw:no-underline tw:hover:text-highlight"
+    >
+      {entry.title}
+    </Link>
+  );
+
   return (
     <>
-      {/* No stretched link here: a whole row as one click target would swallow
-          the buttons at the end of it, and the card already learned that lesson
-          (library.md § The card is no longer one big link). The title is the
-          link, and only the title. */}
-      <Link
-        href={readHref(entry.slug)}
-        className="tw:block tw:truncate tw:text-foreground tw:no-underline tw:hover:text-highlight"
-      >
-        {entry.title}
-      </Link>
+      {/* **The row card hangs off the title**, not off the `<tr>`: the row also
+          holds five action buttons with cards of their own, and a row-wide
+          trigger would open two cards at once over them. The link is
+          focusable, so the keyboard gets the card the mouse does. Below, and
+          `keepSide`, so a card that cannot fit underneath flips to above
+          rather than out sideways over the date columns — Tooltip.tsx
+          § `keepSide`. `bottom-start` so it hangs from the start of the title,
+          which is where the eye already is. No touch route, the call
+          Structure's rows made: a tap on a title opens the article, and
+          making that tap reveal-then-commit would slow the thing a tap on a
+          shelf is for (plan 260928a, assumption A1). In practice the card is
+          never empty — every entry has an added date — but a card with
+          nothing in it would be a hover that opens a blank box, so the guard
+          is here rather than assumed. */}
+      {facts.gist || facts.facts.length > 0 ? (
+        <Tooltip content={<RowCard facts={facts} />} placement="bottom-start" keepSide>
+          {link}
+        </Tooltip>
+      ) : (
+        link
+      )}
       {(sub || entry.visibility === "public" || entry.fixture) && (
-        <span className="tw:block tw:truncate tw:text-xs tw:text-muted-foreground">
-          {/* **First on the line, unlike on the card**, because this line
-              truncates: the byline and the site name can afford to run out of
-              room and "anyone can read this" cannot. */}
+        <span className="tw:block tw:wrap-anywhere tw:text-xs tw:text-muted-foreground">
+          {/* **First on the line, unlike on the card.** It went first because
+              this line used to truncate, and the byline and the site name could
+              afford to run out of room where "anyone can read this" could not.
+              The line wraps now — for the title's reason, and because the Added
+              cell's card used to be the only place a site name pushed past the
+              ellipsis could be read in full (plan 260928a, Sol P-1) — but first
+              is still the right place for the one fact on it about who can see
+              the article.
+
+              **No `title` on the badge here.** Its hover sentence is in the row
+              card instead, which a keyboard can reach and a `title` cannot; the
+              table body carries no `title` attributes at all. */}
           {entry.visibility === "public" && (
             <>
-              <SharedBadge />{" "}
+              <SharedBadge titled={false} />{" "}
             </>
           )}
           {sub}
@@ -300,6 +368,153 @@ function TitleCell({ entry, shelf }: { entry: LibraryEntry; shelf: Shelf }) {
             </span>
           )}
         </span>
+      )}
+    </>
+  );
+}
+
+/* -------------------------------------------------------------- row card -- */
+
+/**
+ * The ids of the columns the reader has hidden, read off the table rather than
+ * passed down, so the row card cannot disagree with the header row about which
+ * columns are showing. Asked per column (`getIsVisible`) rather than read from
+ * the raw visibility state, which only records the columns somebody toggled.
+ * Plan 260928a, stage 2.
+ */
+function hiddenColumns(table: Table<LibraryEntry>): string[] {
+  return table
+    .getAllLeafColumns()
+    .filter((c) => !c.getIsVisible())
+    .map((c) => c.id);
+}
+
+/** One line of the row card: a label, and what it says. */
+export interface RowCardFact {
+  label: string;
+  value: string;
+}
+
+/**
+ * What the row card says — **as data, so it can be checked as data.**
+ *
+ * `gist` is the one sentence the cards view shows as its blurb and the table
+ * gave up; `facts` is the rest, in reading order.
+ */
+export interface RowCardFacts {
+  gist: string | undefined;
+  facts: RowCardFact[];
+}
+
+/** `4 parts`, `1 part`. */
+function count(n: number, one: string): string {
+  return `${n.toLocaleString()} ${one}${n === 1 ? "" : "s"}`;
+}
+
+/**
+ * **What a row of the table is not already showing, and nothing else.**
+ *
+ * Greg, 2026-09-28: *"Include a rich tooltip for each row that shows a bunch of
+ * extra stuff about the article."* The *extra* is the whole design. A row
+ * prints the title, the byline, the site, the minutes, the shared badge, both
+ * dates as "3 days ago", and three counts; a card that repeats any of that makes
+ * a hover cost the reader a second to discover they knew it already, which
+ * docs/project/tooltips.md calls worse than no card. So this is **defined by
+ * subtraction**, the rule Structure's card set (tooltips.md § Structure's card,
+ * which is defined by subtraction), and each line is here because the row
+ * cannot say it:
+ *
+ * - **The gist** — the tree root's one sentence (`LibraryEntry.gist`). The
+ *   cards view's blurb, the thing the table gave up for its columns, and the
+ *   main reason the card is worth a hover.
+ * - **Added** and **Last opened, exactly** — the row says "3 days ago", or a
+ *   bare date past a month (relative-time.ts § `timeAgo`); `exactly` gives the
+ *   day and the minute. **An article never opened gets no Last opened line**
+ *   while that column is showing: the row's em dash already says never, and
+ *   saying it again is the row twice.
+ * - **Size beyond words** — parts, sections and blocks. Words is a column.
+ * - **Built** — which of the arc, the tweet thread and the glossary exist,
+ *   named as `Details` names them ("thread" for tweets). Presence, not
+ *   freshness: the flags are `is not null` on the revision's columns
+ *   (store/pg.ts § `PRESENCE_OF`), so one built before a re-fetch still counts,
+ *   and "built" is the word that claims no more than that. **Omitted when none
+ *   is**, rather than `Details`' "nothing beyond the tree", because the entry
+ *   carries no flag for the tree and that sentence would be a claim this
+ *   function cannot check.
+ * - **Renamed by you**, when the title is the reader's own
+ *   (`titleOverridden`) — the row shows the title, not whose it is.
+ * - **Shared** — the badge's own sentence (`SHARING_ON`). The row shows the
+ *   word "Shared"; what it means was the badge's `title`, which the table no
+ *   longer draws.
+ *
+ * **`hidden` is the ids of the columns the reader has hidden** (stage 2 of the
+ * plan; `hiddenColumns` reads them off the table). A hidden column is not on the row, so its value
+ * comes back here — subtraction applied to the reader's own choice, and what
+ * makes hiding safe: nothing becomes unreachable. Added is already exact above,
+ * so hiding it adds nothing; hiding Last opened adds only "never", for an
+ * article never opened; the three counts come back as themselves.
+ */
+export function rowCardFacts(entry: LibraryEntry, hidden: readonly string[]): RowCardFacts {
+  const facts: RowCardFact[] = [];
+  const isHidden = (id: string) => hidden.includes(id);
+
+  const added = exactly(entry.addedAt);
+  if (added) facts.push({ label: "Added", value: added });
+
+  const opened = exactly(entry.lastOpenedAt);
+  if (opened) facts.push({ label: "Last opened", value: opened });
+  else if (isHidden("opened")) facts.push({ label: "Last opened", value: "never" });
+
+  if (isHidden("opens")) {
+    facts.push({
+      label: "Opened",
+      value: entry.opens === 0 ? "never" : entry.opens === 1 ? "once" : `${entry.opens} times`,
+    });
+  }
+  if (isHidden("questions")) {
+    facts.push({ label: "Comments", value: entry.comments.toLocaleString() });
+  }
+
+  const size = [
+    ...(isHidden("length") ? [count(entry.words, "word")] : []),
+    count(entry.parts, "part"),
+    count(entry.sections, "section"),
+    count(entry.blocks, "block"),
+  ];
+  facts.push({ label: "Size", value: size.join(" · ") });
+
+  const built = [
+    entry.has.arc && "arc",
+    entry.has.tweets && "thread",
+    entry.has.glossary && "glossary",
+  ].filter((b): b is string => Boolean(b));
+  if (built.length > 0) facts.push({ label: "Built", value: built.join(" · ") });
+
+  if (entry.titleOverridden) facts.push({ label: "Title", value: "renamed by you" });
+  if (entry.visibility === "public") facts.push({ label: "Shared", value: SHARING_ON });
+
+  return { gist: entry.gist, facts };
+}
+
+/**
+ * The row card, drawn with the `.tip-*` classes the spine's and Structure's
+ * cards use, so it reads as the same kind of thing. **No title line**, unlike
+ * those two: the title is the link the reader is pointing at, printed in full
+ * on the row. tooltip.css § the shelf table's row card.
+ */
+function RowCard({ facts }: { facts: RowCardFacts }) {
+  return (
+    <>
+      {facts.gist && <p className="tip-gist">{facts.gist}</p>}
+      {facts.facts.length > 0 && (
+        <dl className="tip-facts">
+          {facts.facts.map(({ label, value }) => (
+            <div key={label} className="tw:contents">
+              <dt>{label}</dt>
+              <dd>{value}</dd>
+            </div>
+          ))}
+        </dl>
       )}
     </>
   );
@@ -324,7 +539,20 @@ function Count({ value, highlight }: { value: number; highlight?: boolean }) {
   );
 }
 
-/** The five buttons, in a cell. Rename opens in place, exactly as on the card. */
+/**
+ * The five buttons, in a cell. Rename opens in place, exactly as on the card.
+ *
+ * `inTooltipGroup`: the table body is one `TooltipGroup` (Library.tsx), and the
+ * buttons join it rather than nesting a group of their own, so a title's row
+ * card and an action's card can never be open together. Plan 260928a, Sol P-3.
+ */
 function RowActions({ entry, shelf }: { entry: LibraryEntry; shelf: Shelf }) {
-  return <Actions entry={entry} shelf={shelf} onEdit={() => shelf.beginRename(entry.slug)} />;
+  return (
+    <Actions
+      entry={entry}
+      shelf={shelf}
+      onEdit={() => shelf.beginRename(entry.slug)}
+      inTooltipGroup
+    />
+  );
 }
