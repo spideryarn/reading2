@@ -95,6 +95,11 @@ sent to anybody. Now:
 | `dir` | `asc` or `desc`, paired with `by` by position. **May be shorter than `by`, or absent, and the rest fall back to each column's own natural end** — newest first for a date, longest first for a length, A-to-Z for a title | push | `?dir=desc,asc` |
 | `view` | `cards` (the default) or `table` — the same list, painted the other way | push | `?view=table` |
 | `show` | `all` (the default) or `unread`, which is "never opened" | push | `?show=unread` |
+| `topics` | the chosen topics' keys, ANDed. A key not among the shelf's topics is never applied while they load, and is dropped — with `replace` — once they have — [shelf-terms.md](shelf-terms.md) | push | `?topics=memory,neural network` |
+| `archived` | `1` when the archived list is open; it then joins the topics' scope and is narrowed with the shelf | push | `?archived=1` |
+
+Seven since 2026-09-28, when `topics` and `archived` arrived; the heading keeps "five" because other
+docs and source comments link to its anchor.
 
 **A list rather than one value**, because a shift-click adds a second sort key, and a compound order
 the URL cannot carry is an order you cannot reload into or send to anybody. One key is a list of one.

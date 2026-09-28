@@ -237,6 +237,9 @@ The key itself, and the four things the chord refuses to do, are
 
 - **[library.md](library.md)** — the shelf: `/read/<slug>`, what a card says, what you can do to
   one, and three sorting rules that look right in a browser and are wrong.
+- **[shelf-terms.md](shelf-terms.md)** — the Topics row above the shelf: phrases picked by a
+  program from the articles' own words, one count formula for every chip, and why the archived list
+  now stays up during a search.
 - **[public-shelf.md](public-shelf.md)** — the *other* shelf: `/read/public`, every article anybody
   has shared, listed for strangers. Why it is not the owner's shelf narrowed, and what listing it
   changed about what sharing promises.

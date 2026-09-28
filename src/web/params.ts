@@ -1469,3 +1469,45 @@ export const libraryShowParam = createParser<ShelfFilter>({
 })
   .withDefault("all")
   .withOptions({ history: "push" });
+
+/**
+ * Which of the shelf's topics are chosen — `topics=neural network,memory`.
+ *
+ * Keys, not labels: the key is lowercased and plural-folded, so it survives a
+ * label changing surface form between two loads (docs/project/shelf-terms.md).
+ * Keys are words joined by spaces and never hold a comma — the extractor splits
+ * at punctuation — so a comma is a safe separator.
+ *
+ * **No validation against the topics here**, because the topics are not known
+ * when the URL is read. A key that is no longer among them is not applied while
+ * they load and is dropped once they have (ShelfTerms.tsx § `useTopicSelection`),
+ * which is the only place that knows both halves.
+ *
+ * `push`, like `show`: choosing a topic is the same kind of act as pressing
+ * Unread, and Back should undo it. The drop of a stale key is written with
+ * `replace` at its call site, since it is a correction rather than an act.
+ */
+export const libraryTopicsParam = createParser<string[]>({
+  parse: (v) => {
+    const keys = [...new Set(v.split(",").filter((s) => s.trim() !== ""))];
+    return keys.length ? keys : null;
+  },
+  serialize: (v) => v.join(","),
+  eq: sameList,
+})
+  .withDefault([])
+  .withOptions({ history: "push" });
+
+/**
+ * Whether the archived half of the shelf is in view — `archived=1`.
+ *
+ * It was `useState` inside the "Show archived" disclosure until 2026-09-28,
+ * which was fine while nothing but that disclosure cared. The topics row does:
+ * with this on, topics are chosen over active **and** archived articles, and the
+ * archived list is narrowed by the same search, Unread and topics as the shelf
+ * (docs/project/shelf-terms.md § Archived). A fact two components read belongs
+ * in the URL, and it makes "my archive, narrowed to *memory*" a link.
+ *
+ * `push`: opening the archive is a deliberate act, and Back closes it.
+ */
+export const libraryArchivedParam = parseAsBit.withDefault(false).withOptions({ history: "push" });

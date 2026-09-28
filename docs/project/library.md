@@ -515,6 +515,13 @@ typo-tolerant titles (available, useful, but matcher one already handles titles 
 enabled, Anthropic has no embeddings API so it means a second vendor, and Greg deferred it
 explicitly.
 
+### Topics, and the archive in the same search
+
+Since 2026-09-28 a **Topics** row sits between `ShelfControls` and the "n of m" line: chips picked by
+a program from the articles' own words, which narrow the shelf in both views. With **Show archived**
+open (`?archived=1`), the archived list is narrowed by the same search, Unread and topics, and so no
+longer disappears during a search. All of it is in [shelf-terms.md](shelf-terms.md).
+
 ## Sorting the shelf
 
 > Make the set of docs on the homepage nicely sortable (e.g. by when added, when last opened, how
