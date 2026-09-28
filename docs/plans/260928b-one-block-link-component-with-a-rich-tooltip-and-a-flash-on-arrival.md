@@ -9,8 +9,9 @@
 >
 > — Greg, 2026-09-28
 
-Status: **planned, reviewed by GPT Sol (build with changes — all seven taken, § Plan review), not
-built.** Run unattended by an Overseer-started session; the calls Greg's
+Status: **built, 2026-09-28** — stages 1–3 below; Sol plan review *build with changes* (all
+seven taken), code reviews round 1 and round 2 both *approve with the working-tree fixes*; browser
+check passed at desktop and iPad widths. Run unattended by an Overseer-started session; the calls Greg's
 words do not settle are recorded under [Assumptions](#assumptions).
 
 ## What exists, and the decision to build on it
@@ -259,3 +260,38 @@ its strike-through):
   it. `BlockRef` has no way to switch its card off, so this stays a button. If we want the `href`
   here, the fix is a `card={false}` on `BlockRef`, which is stage 1's file.
 - Search hits, Ideas and Timeline quote buttons, Trajectory stops, and Mirror are unchanged, per F3.
+
+## Stage 3 — the browser check, and the close
+
+Sonnet, Playwright on the box, local stack, articles `writes` (glossary, summary) and
+`openai-huggingface` (glossary, quotes). Measured, not eyeballed:
+
+- **Card**: one `.tooltip-anchor` on hover, section + preview, `.tooltip` background
+  `oklch(0.26 0 0)`; no `title` attribute. Opens on keyboard focus; a tap opens none.
+- **Flash**: `td.text.block-flash` 46–73ms after the click (the glide is short), gone at ~1.25s;
+  the wash is an inset shadow of `--highlight-wash` (~0.257 oklab lightness against the page's
+  0.145), `.prose` transparent over it. Visible in a crop as a warm brown fill; subtle next to the
+  green search marks in a full-page shot, which is the house wash and left as it is.
+- **Already there**: a second click flashes with `scrollY` unchanged.
+- **Reduced motion**: `block-flash-still`.
+- **Return chip**: appears after a jump.
+- **Covered band**: at the two iPad widths (768, 1024) the Glossary band never covers the prose —
+  `bandCoversProse` covers only below ~688px net of the spine — so the deferral was exercised at
+  650px instead: no flash while covered, and it fired on pressing Plain.
+- **Summary titles**: normal panel type; the card omits the section head where the title is the
+  section (1.1, 1.2) and keeps it on a Part whose first block sits in a differently named section,
+  which is correct.
+- **Not checked**: Referee (Claims/Criteria) — the local fixtures have no referee data; covered by
+  unit tests only. Console: one pre-existing `SignedIn` setState warning on sign-in, unrelated.
+
+After round 2, one change of mine, red first: **the card drops its section head when the link's own
+text already contains it** (a Summary title), and opens no card at all if that head was all it had.
+
+### What is left over
+
+- `ProseHoverCard`'s foot button and the other kept buttons above — deliberate.
+- Group C (spine, Structure, Outline, gist cells, diagram nodes, drawer rows) and group D (the
+  article's own links in the prose, lightbox, note card) have no new card, by design; they flash.
+- `tests/client-imports.test.ts` fails on dev independently of this work: Trajectory's
+  `TrajectoryMode.tsx` imports `../../../section-path.js`, which the client-imports rule does not
+  allow. Not ours; left for the Trajectory session.
