@@ -431,10 +431,14 @@ export function Reader({
         showText: proseOn,
         chosen: plainCols,
         modeBand: bandOpen,
+        /* Structure's two columns want a band of their own width where they
+           fit (layout.ts § `structureColumnsBand`); every other band is the
+           ordinary one. docs/plans/260928a-structure-two-columns-readable.md. */
+        bandShape: mode === "structure" ? "structure" : "standard",
         rootFontPx,
         showSpine,
       }),
-    [windowWidth, rootFontPx, gistDepths, geometry.leafDepth, proseOn, plainCols, bandOpen, showSpine],
+    [windowWidth, rootFontPx, gistDepths, geometry.leafDepth, proseOn, plainCols, bandOpen, showSpine, mode],
   );
 
   /**

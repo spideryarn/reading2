@@ -30,6 +30,7 @@ import { paragraphLabelsReady } from "../../nav-labels.js";
 import { OutlinePanel } from "../../OutlinePanel.js";
 import { useRenderCount } from "../../perf.js";
 import { StructurePanel } from "../../StructurePanel.js";
+import { structureColumnsBand } from "../../layout.js";
 import { type ArcCell, buildSummaryTree } from "../../tree.js";
 import { useColumnContext } from "../../useColumnContext.js";
 import type { Section } from "../../position.js";
@@ -38,51 +39,39 @@ import type { Section } from "../../position.js";
 const EMPTY_DEPTHS: number[] = [];
 
 /**
- * **The content width, in CSS px, that Structure's two columns need.**
- *
- * Two `GIST_MIN` (176px) tracks and the 12px gutter between them — the number
- * Structure's container query stacked its columns below, until this replaced
- * it. Kept to the pixel, so every band that showed two columns still does, and
- * every band that showed the stacked pair Greg called "very confusing" now shows
- * the list. At a 16px root with the band's 1px border that is a 389px band,
- * which fits inside `MODE_IDEAL` (400) and not inside `MODE_MIN` (288), the two
- * ends of the band's width in layout.ts.
- */
-export const TWO_COLUMN_CONTENT_MIN = 364;
-
-/**
- * Structure's horizontal padding on the band, both sides together, in rem —
- * structure-mode.css § `.mode-band.struct`, `0.75rem` a side. **Change one, change
- * both**; the stylesheet's comment says so from its end.
- */
-const STRUCTURE_PAD_X_REM = 1.5;
-
-/**
  * **Which face a band gets**, from its border-box width. Pure, for the test.
  *
- * The question is *would Structure's content box be at least
- * `TWO_COLUMN_CONTENT_MIN`* — the question the container query asked — and it
- * is answered from the **border box** with Structure's own padding taken off,
- * whichever face is on screen. That is the one trap here. The two faces pad the
- * band differently (Structure 12px + 12px, Outline 12px + 8px), so reading the
- * mounted face's actual content box would call one 387px band 362px under
- * Structure (→ the list) and 366px under Outline (→ the columns), and flip
- * between them for ever. The border box and the borders are set by the layout,
- * never by the face, so the answer cannot move its own measurement.
+ * The threshold is `structureColumnsBand` in layout.ts — the same number
+ * `fitMode` sizes Structure's band from, so a band handed out for the columns
+ * is always drawn as the columns and a band too narrow for them is the ordinary
+ * one with the list in it. Since 2026-09-28 that is two columns of 17rem of
+ * content each, a 609px band at a 16px root (a 1165px window beside the prose);
+ * it was two 176px tracks, a 389px band, until then — Greg found the columns
+ * "really narrow". docs/plans/260928a-structure-two-columns-readable.md.
  *
- * `borderX` and `rootFontPx` are measured rather than assumed, because each
- * moves the threshold and GPT Sol's review of the plan found both: the padding
- * is in rem, so a 20px root needs a 395px band rather than 389 (layout.ts § the
- * root size is not locked), and a band that covers the prose loses its border
- * (narrow-window.css § `.band-covers`).
+ * **A band that covers the article always gets the list**, however wide it is
+ * painted. Below `bandCoversProse`'s crossover the band is the whole window less
+ * the rail, so measuring it would draw the columns in a 620–699px window and the
+ * list in a 288px band at 700 — a wider window, a narrower face. GPT Sol's plan
+ * review, finding 1. It is also what keeps the columns off a phone.
+ *
+ * It is answered from the **border box**, whichever face is on screen. The two
+ * faces pad the band differently (Structure 12px + 12px, Outline 12px + 8px), so
+ * reading the mounted face's content box would give one band two answers
+ * depending on which face measured it, and flip between them for ever. The
+ * border box is set by the layout — it is `--mode-w`, exactly the number
+ * `fitMode` chose — never by the face.
+ *
+ * `rootFontPx` is measured rather than assumed: the columns are in rem, so a
+ * 20px root needs a wider band (layout.ts § the root size is not locked).
  */
 export function structureFace(
   bandWidth: number,
-  borderX: number,
   rootFontPx: number,
+  proseBeside: boolean,
 ): "columns" | "list" {
-  const content = bandWidth - borderX - STRUCTURE_PAD_X_REM * rootFontPx;
-  return content >= TWO_COLUMN_CONTENT_MIN ? "columns" : "list";
+  if (!proseBeside) return "list";
+  return bandWidth >= structureColumnsBand(rootFontPx).min ? "columns" : "list";
 }
 
 /** The root font size in px, or 16 where nothing is laid out (jsdom). */
@@ -211,17 +200,13 @@ export function StructureBand({
     const measure = () => {
       const width = band.offsetWidth;
       if (width <= 0) return;
-      const style = getComputedStyle(band);
-      const borderX =
-        (Number.parseFloat(style.borderLeftWidth) || 0) +
-        (Number.parseFloat(style.borderRightWidth) || 0);
-      setFace(structureFace(width, borderX, rootFontPx()));
+      setFace(structureFace(width, rootFontPx(), proseBeside));
     };
     measure();
     const ro = new ResizeObserver(measure);
     ro.observe(band);
     return () => ro.disconnect();
-  }, [band]);
+  }, [band, proseBeside]);
 
   if (face === "list") {
     return (
