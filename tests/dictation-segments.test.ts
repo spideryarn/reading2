@@ -20,13 +20,14 @@
  * docs/plans/260929f-feedback-thank-you-as-a-toast-and-dictation-that-never-runs-out-of-tape.md
  * § Part B, revised after review.
  */
-import { act, createElement, type ReactNode } from "react";
+import { act, createElement, type ReactNode, useRef, useState } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { resetMicrophoneLock } from "../src/web/mic-lock.js";
 import { PART_MS } from "../src/web/mic-recording.js";
 import type { TranscriptionResult } from "../src/web/transcriber.js";
 import { joinTranscripts, useDictation } from "../src/web/useDictation.js";
+import { useDictationField } from "../src/web/useDictationField.js";
 
 /* ------------------------------------------------------------- the fakes -- */
 
@@ -41,6 +42,7 @@ class FakeRecorder {
   ondataavailable: ((e: { data: Blob }) => void) | null = null;
   onstop: (() => void) | null = null;
   onerror: (() => void) | null = null;
+  failOnStop = false;
   constructor() {
     FakeRecorder.instances.push(this);
   }
@@ -50,10 +52,14 @@ class FakeRecorder {
   stop() {
     if (this.state === "inactive") return;
     this.state = "inactive";
-    setTimeout(() => this.onstop?.(), 0);
+    setTimeout(() => (this.failOnStop ? this.onerror?.() : this.onstop?.()), 0);
   }
   emit(bytes: number) {
     this.ondataavailable?.({ data: new Blob([new Uint8Array(bytes)]) });
+  }
+  fail() {
+    this.state = "inactive";
+    this.onerror?.();
   }
 }
 
@@ -218,7 +224,7 @@ afterEach(() => {
 
 /* ----------------------------------------------------------- the harness -- */
 
-function drive() {
+function drive(send = transcribe) {
   const transcripts: string[] = [];
   const ends: number[] = [];
   let state: ReturnType<typeof useDictation> | null = null;
@@ -228,7 +234,7 @@ function drive() {
       onTranscript: (t) => transcripts.push(t),
       onEnd: () => ends.push(1),
       context: { kind: "profile" },
-      transcribe,
+      transcribe: send,
     });
     return null;
   }
@@ -245,6 +251,48 @@ function drive() {
     get: () => {
       if (!state) throw new Error("the hook never rendered");
       return state;
+    },
+    unmount: () => act(() => root.unmount()),
+  };
+}
+
+function driveField() {
+  let field: ReturnType<typeof useDictationField> | null = null;
+  let value = "Before";
+  function Probe(): ReactNode {
+    const [text, setText] = useState(value);
+    const box = useRef<HTMLTextAreaElement>(null);
+    value = text;
+    field = useDictationField({
+      value: text,
+      onChange: setText,
+      box,
+      context: { kind: "profile" },
+      transcribe,
+    });
+    return createElement("textarea", {
+      ref: box,
+      value: text,
+      readOnly: field.readOnly,
+      onChange: () => {},
+    });
+  }
+  const host = document.createElement("div");
+  document.body.appendChild(host);
+  let root: Root;
+  act(() => {
+    root = createRoot(host);
+    root.render(createElement(Probe));
+  });
+  const box = host.querySelector("textarea");
+  if (!box) throw new Error("the field never rendered");
+  box.setSelectionRange(value.length, value.length);
+  return {
+    box,
+    value: () => value,
+    get: () => {
+      if (!field) throw new Error("the field hook never rendered");
+      return field;
     },
     unmount: () => act(() => root.unmount()),
   };
@@ -398,14 +446,56 @@ describe.each<Path>(["recogniser", "no recogniser"])("a long dictation, %s", (pa
     expect(calls).toHaveLength(1);
     // A suspended tab's backlog, in one chunk too big for any request.
     talk(1000, 2_200_000);
+    // No recogniser `onend` is needed before a request nobody can use is cancelled.
+    expect(calls[0]?.signal?.aborted).toBe(true);
     if (path === "recogniser") act(() => recognition().onend?.());
     await settle();
     expect(h.get().armed).toBe(false);
     expect(h.get().error).toContain("[mic-broken]");
-    expect(calls[0]?.signal?.aborted).toBe(true);
     expect(h.get().recording?.parts.map((p) => p.blob.size)).toEqual([1000]);
     expect(h.get().canRetry).toBe(false);
     expect(h.transcripts).toEqual([]);
+    h.unmount();
+  });
+
+  it("reports a recorder error while flushing the only part as [mic-broken], not [mic-empty]", async () => {
+    const h = drive();
+    await press(h, path);
+    talk(5000, 1000);
+    recorder().failOnStop = true;
+    await stop(h, path);
+    expect(h.get().error).toContain("[mic-broken]");
+    expect(h.get().error).not.toContain("[mic-empty]");
+    expect(calls).toHaveLength(0);
+    expect(h.get().recording).toBeNull();
+    h.unmount();
+  });
+
+  it("turns a synchronously throwing transcriber into [mic-unexpected] and keeps the audio", async () => {
+    const h = drive(() => {
+      throw new Error("caller broke its promise contract");
+    });
+    await press(h, path);
+    talk(5000, 1000);
+    await stop(h, path);
+    expect(h.get().error).toContain("[mic-unexpected]");
+    expect(h.get().recording?.parts.map((p) => p.blob.size)).toEqual([1000]);
+    expect(h.get().canRetry).toBe(false);
+    h.unmount();
+  });
+
+  it("ends as [mic-no-tape] when every advertised container asynchronously refuses", async () => {
+    const h = drive();
+    await press(h, path);
+    act(() => recorder().fail());
+    act(() => recorder().fail());
+    await settle();
+    if (path === "recogniser") act(() => recognition().onend?.());
+    await settle();
+    expect(h.get().armed).toBe(false);
+    expect(h.get().error).toContain("[mic-no-tape]");
+    expect(h.get().error).not.toContain("[mic-empty]");
+    expect(calls).toHaveLength(0);
     h.unmount();
   });
 
@@ -523,5 +613,146 @@ describe.each<Path>(["recogniser", "no recogniser"])("a long dictation, %s", (pa
     h.unmount();
     expect(retryCall?.signal?.aborted).toBe(true);
     expect(h.transcripts).toEqual([]);
+  });
+
+  it("a new dictation aborts a retry that it supersedes", async () => {
+    const h = drive();
+    await longDictation(h, path);
+    await stop(h, path);
+    await answer(0, ok("one"));
+    await answer(1, failed(true));
+    await answer(2, ok("three"));
+    act(() => h.get().retry());
+    await settle();
+    const retryCall = calls[3];
+    expect(retryCall?.signal?.aborted).toBe(false);
+    act(() => h.get().toggle());
+    await settle();
+    expect(retryCall?.signal?.aborted).toBe(true);
+    expect(h.transcripts).toEqual([]);
+    h.unmount();
+  });
+
+  it("discarding the recording aborts its retry and hands the box back", async () => {
+    const h = drive();
+    await longDictation(h, path);
+    await stop(h, path);
+    await answer(0, ok("one"));
+    await answer(1, failed(true));
+    await answer(2, ok("three"));
+    act(() => h.get().retry());
+    await settle();
+    const retryCall = calls[3];
+    act(() => h.get().clearRecording());
+    await settle();
+    expect(retryCall?.signal?.aborted).toBe(true);
+    expect(h.get().recording).toBeNull();
+    expect(h.get().phase).toBe("idle");
+    expect(h.transcripts).toEqual([]);
+    h.unmount();
+  });
+
+  it("contains a synchronous throw on Retry as [mic-unexpected]", async () => {
+    let attempt = 0;
+    const h = drive(() => {
+      attempt++;
+      if (attempt === 1) return Promise.resolve(failed(true));
+      throw new Error("caller broke its promise contract");
+    });
+    await press(h, path);
+    talk(5000, 1000);
+    await stop(h, path);
+    expect(h.get().canRetry).toBe(true);
+    act(() => h.get().retry());
+    await settle();
+    expect(h.get().error).toContain("[mic-unexpected]");
+    expect(h.get().canRetry).toBe(false);
+    expect(h.get().recording?.parts.map((p) => p.blob.size)).toEqual([1000]);
+    expect(h.get().phase).toBe("idle");
+    h.unmount();
+  });
+});
+
+describe("the field's live-word span", () => {
+  beforeEach(() => install("recogniser"));
+
+  it("keeps the superseded session's rough words outside the new session's replacement span", async () => {
+    const h = driveField();
+    act(() => h.get().toggle());
+    await settle();
+    const first = recognition();
+    act(() => first.onaudiostart?.());
+    act(() =>
+      first.onresult?.({
+        resultIndex: 0,
+        results: [{ isFinal: true, 0: { transcript: "old rough" } }],
+      }),
+    );
+    expect(h.value()).toBe("Before old rough");
+    talk(5000, 1000);
+
+    // Stop, then supersede it before the recogniser's final `onend` arrives.
+    act(() => h.get().toggle());
+    h.box.setSelectionRange(h.value().length, h.value().length);
+    act(() => h.get().toggle());
+    act(() =>
+      first.onresult?.({
+        resultIndex: 0,
+        results: [{ isFinal: true, 0: { transcript: "stale phrase" } }],
+      }),
+    );
+    act(() => first.onend?.());
+    await settle();
+
+    const second = recognition();
+    act(() => second.onaudiostart?.());
+    act(() =>
+      second.onresult?.({
+        resultIndex: 0,
+        results: [{ isFinal: true, 0: { transcript: "new rough" } }],
+      }),
+    );
+    talk(5000, 2000);
+    act(() => h.get().toggle());
+    act(() => second.onend?.());
+    await settle();
+    expect(calls).toHaveLength(1);
+    await answer(0, ok("NEW FINAL"));
+    expect(h.value()).toBe("Before old rough NEW FINAL");
+    h.unmount();
+  });
+
+  it("continues after a device change at the end of the words already kept", async () => {
+    const h = driveField();
+    act(() => h.get().toggle());
+    await settle();
+    const first = recognition();
+    act(() => first.onaudiostart?.());
+    act(() =>
+      first.onresult?.({
+        resultIndex: 0,
+        results: [{ isFinal: true, 0: { transcript: "old rough" } }],
+      }),
+    );
+    expect(h.value()).toBe("Before old rough");
+
+    act(() => h.get().dictation.chooseDevice("another-mic"));
+    await settle();
+    const second = recognition();
+    act(() => second.onaudiostart?.());
+    act(() =>
+      second.onresult?.({
+        resultIndex: 0,
+        results: [{ isFinal: true, 0: { transcript: "new rough" } }],
+      }),
+    );
+    talk(5000, 2000);
+    act(() => h.get().toggle());
+    act(() => second.onend?.());
+    await settle();
+    expect(calls).toHaveLength(1);
+    await answer(0, ok("NEW FINAL"));
+    expect(h.value()).toBe("Before old rough NEW FINAL");
+    h.unmount();
   });
 });

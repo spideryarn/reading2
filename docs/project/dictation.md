@@ -390,9 +390,9 @@ button. Reuse the machinery, write the chrome — worth knowing before adding a 
 The old design's selling point was that no audio of the reader's voice crossed anything of ours.
 That is over, deliberately, and Greg made the call with the trade put to him in those words.
 
-What is true: the recording is held in memory for one request, base64'd into one OpenRouter call,
-never written to disk by us and never logged — the same rule that keeps a reader's question and
-the article's prose out of a log line covers a transcript exactly as well
+What is true: each recording part is held in memory for one request, base64'd into one OpenRouter
+call, never written to disk by us and never logged — the same rule that keeps a reader's question
+and the article's prose out of a log line covers a transcript exactly as well
 ([logging.md](logging.md)).
 
 **What stopped being true on 2026-09-07 is the second half of that.** The call used to send
@@ -435,8 +435,8 @@ up). Each part is sent to `POST /api/transcribe` **the moment it closes, while t
 on talking**, so the wait after Stop is only the last part's. At Stop the hook waits for every part,
 joins their words in order with a space, and calls `onTranscript` **once** — so the one-span
 replace in [`useDictationField`](../../src/web/useDictationField.ts) is unchanged. No request is
-bigger than before, no server change, no new cost: transcription is paid per second of audio
-however it is split.
+bigger than before and there is no server change; the provider meters transcription by seconds of
+audio rather than by the number of parts.
 
 The rules that make it safe, each a decision in
 [260929f § Part B, revised after review](../plans/260929f-feedback-thank-you-as-a-toast-and-dictation-that-never-runs-out-of-tape.md#part-b-revised-after-review):
@@ -448,8 +448,9 @@ The rules that make it safe, each a decision in
   save (one **Save part N** button each), and **Try again** re-sends only the parts that failed.
 - **A part that loses audio breaks the tape** — a recorder that errors after recording, a flush that
   never finishes, or one chunk too big for any request (a tab suspended for minutes and handed its
-  backlog at once). The dictation ends there with `[mic-broken]`, nothing is transcribed, and the
-  complete parts before it are offered to save. Not retryable: the broken part has no whole file.
+  backlog at once). The dictation ends there with `[mic-broken]`, no final transcript is delivered,
+  and the complete parts before it are offered to save. Not retryable: the broken part has no whole
+  file.
 - **The two-second minimum is for the dictation, not the part**, so a one-second tail after a
   rotation is kept. A tail with no bytes at all is simply absent.
 - **Stop, the ceiling and another box taking the microphone keep the parts' uploads; a second press

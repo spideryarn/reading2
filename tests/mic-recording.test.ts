@@ -182,6 +182,12 @@ describe("the filename", () => {
       "spideryarn dictation 2026-08-27 14-32-05.m4a",
     );
   });
+
+  it("numbers a multipart dictation before the extension", () => {
+    expect(recordingFilename(new Date("2026-08-27T14:32:05"), "webm", 3)).toBe(
+      "spideryarn dictation 2026-08-27 14-32-05 part 3.webm",
+    );
+  });
 });
 
 describe("m:ss", () => {
@@ -586,6 +592,24 @@ describe("recording in parts", () => {
     expect(parts).toEqual([0]);
   });
 
+  it("keeps the old recorder when the handoff will not start, then retries on the next chunk", async () => {
+    const tape = recordTrack(track);
+    const first = latest();
+    vi.setSystemTime(Date.now() + PART_MS);
+    FakeRecorder.failToStart = true;
+    first.emit(1000);
+    expect(first.state).toBe("recording");
+
+    FakeRecorder.failToStart = false;
+    vi.setSystemTime(Date.now() + 1000);
+    first.emit(1000);
+    expect(first.state).toBe("inactive");
+    latest().emit(500);
+    const out = await tape?.stop();
+    expect(out?.broken).toBe(false);
+    expect(out?.parts.map((p) => p.blob.size)).toEqual([2000, 500]);
+  });
+
   it("hands every part back at stop, in order, each its own file", async () => {
     const tape = recordTrack(track);
     talk(1000, 500);
@@ -687,7 +711,8 @@ describe("recording a track, continued", () => {
      what it was holding is not a finished file and must not be offered as one.
      GPT Sol's code review, item 3. */
   it("offers nothing when the recorder never finished flushing", async () => {
-    const tape = recordTrack(track);
+    const broke: number[] = [];
+    const tape = recordTrack(track, { onBroken: () => broke.push(1) });
     latest().emit(65_536);
     vi.setSystemTime(new Date("2026-08-27T14:32:20"));
     // A recorder that goes inactive and simply never fires `onstop`.
@@ -695,6 +720,7 @@ describe("recording a track, continued", () => {
     const pending = tape?.stop();
     await vi.advanceTimersByTimeAsync(4000);
     expect(await pending).toBeNull();
+    expect(broke).toEqual([1]);
   });
 
   it("never stops the track it was given", async () => {

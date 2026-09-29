@@ -119,6 +119,8 @@ export interface TapeEvents {
    * lost.
    */
   onBroken?(): void;
+  /** Every advertised container refused before the tape captured a byte. */
+  onUnavailable?(): void;
 }
 
 /** A recording in progress. Exactly one of `stop` / `cancel` is called, once. */
@@ -501,13 +503,18 @@ export function recordTrack(track: MediaStreamTrack, events: TapeEvents = {}): M
    */
   const fail = (p: Part) => {
     if (p.state === "failed" || p.state === "abandoned") return;
+    const firstFailure = !dead;
     p.state = "failed";
     p.endedAt = Date.now();
     p.settle();
     dead = true;
     window.clearTimeout(ceiling);
     for (const q of parts) halt(q);
-    if (!stopping && !cancelled) events.onBroken?.();
+    /* Tell the owner even when this happened during `stop()`. A failed flush of
+       the first/only part leaves no `TapeEnding` to carry `broken: true`, so the
+       event is the only way to distinguish it from a short or empty recording.
+       The owner's callback is idempotent once the session is already finishing. */
+    if (firstFailure && !cancelled) events.onBroken?.();
   };
 
   const onData = (p: Part, data: Blob) => {
@@ -566,6 +573,9 @@ export function recordTrack(track: MediaStreamTrack, events: TapeEvents = {}): M
       /* Nothing left to try, and nothing was ever held — so there is no hole,
          only no tape. Not `fail`: that is for audio lost part-way. */
       p.state = "failed";
+      dead = true;
+      window.clearTimeout(ceiling);
+      if (!cancelled) events.onUnavailable?.();
       return;
     }
     fail(p);
@@ -708,7 +718,9 @@ export function recordTrack(track: MediaStreamTrack, events: TapeEvents = {}): M
         Promise.all(parts.map((q) => q.done)),
         new Promise<void>((resolve) => window.setTimeout(resolve, FLUSH_TIMEOUT_MS)),
       ]);
-      for (const q of parts) if (q.state === "closing" || q.state === "recording") q.state = "failed";
+      for (const q of parts) {
+        if (q.state === "closing" || q.state === "recording") fail(q);
+      }
       if (cancelled) return null;
       const ending = collect();
       for (const q of parts) q.chunks.length = 0;

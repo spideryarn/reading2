@@ -120,7 +120,8 @@ import { useAudioLevel } from "./useAudioLevel.js";
  * when it happens and when the dictation ends. Plan 260929f, R5.
  */
 const TAPE_BROKE =
-  "The recording broke off part-way, so none of it was transcribed. Press the microphone and try again. [mic-broken]";
+  "The recording broke off part-way, so it couldn't produce a complete transcript. Press the microphone and try again. [mic-broken]";
+const TRANSCRIPTION_UNEXPECTED = "Something went wrong while transcribing that. [mic-unexpected]";
 
 /* The API is prefixed in Safari and unprefixed in Chrome, and neither spelling
    is in TypeScript's DOM library — it is not a standard. Declared narrowly:
@@ -455,15 +456,28 @@ function sendPart<C>(
 ): Promise<TranscriptionResult> {
   const known = s.sent.get(index);
   if (known) return known;
-  const pending = transcribe(part.blob, part.mimeType, s.where, s.upload.signal).catch(
-    (): TranscriptionResult => ({
-      ok: false,
-      message: "Something went wrong while transcribing that. [mic-unexpected]",
-      retryable: false,
-    }),
-  );
+  const pending = callTranscriber(transcribe, part, s.where, s.upload.signal);
   s.sent.set(index, pending);
   return pending;
+}
+
+/** A transcriber is an application seam: contain both rejected promises and synchronous throws. */
+function callTranscriber<C>(
+  transcribe: Transcriber<C>,
+  part: MicRecording,
+  where: C,
+  signal: AbortSignal,
+): Promise<TranscriptionResult> {
+  const failed = (): TranscriptionResult => ({
+    ok: false,
+    message: TRANSCRIPTION_UNEXPECTED,
+    retryable: false,
+  });
+  try {
+    return transcribe(part.blob, part.mimeType, where, signal).catch(failed);
+  } catch {
+    return Promise.resolve(failed());
+  }
 }
 
 /**
@@ -897,7 +911,7 @@ export function useDictation<C>(options: DictationOptions<C>): UseDictation {
          happened. */
       t?.stop();
       free();
-      if (stillOurs()) setError("Something went wrong while transcribing that. [mic-unexpected]");
+      if (stillOurs()) setError(TRANSCRIPTION_UNEXPECTED);
       done();
     });
   }, []);
@@ -1004,9 +1018,24 @@ export function useDictation<C>(options: DictationOptions<C>): UseDictation {
       /* The tape lost audio part-way, so nothing said from here can be joined
          to what came before. End it now, the ordinary way, and say why. */
       onBroken: () => {
-        if (session.current !== s || s.finished) return;
+        /* This may arrive while `finish()` is already draining the tape. Set the
+           fact before its terminal guard: when the only part fails to flush,
+           `stop()` has no complete file with which to carry `broken: true`.
+           Abort rotated-part uploads immediately as well; no ending can publish
+           them once capture has a hole. */
         s.broke = true;
+        s.upload.abort();
+        if (session.current !== s || s.finished) return;
         setError(TAPE_BROKE);
+        stopRef.current();
+      },
+      /* The ladder started, so `armTape` received a tape, but every container
+         then failed before producing a byte. Turn it back into the same no-tape
+         ending as a synchronous construction/start refusal. */
+      onUnavailable: () => {
+        if (session.current !== s || s.finished) return;
+        s.tape?.cancel();
+        s.tape = null;
         stopRef.current();
       },
     };
@@ -1064,12 +1093,11 @@ export function useDictation<C>(options: DictationOptions<C>): UseDictation {
       };
 
       r.onresult = (e) => {
-        /* Guarded on **this session having finished**, not on it being the
-           current one. A session we have asked to stop is still entitled to
-           deliver the words the reader already said — that is the entire point of
-           waiting for `onend` — and those words belong in the same box whether or
-           not somebody has since pressed the button again. */
-        if (s.finished) return;
+        /* A stopped session may deliver its final phrase until another press
+           supersedes it. After that press the box has a new live-word span, and
+           letting the stale recogniser append would mix two sessions whenever
+           the new authoritative pass failed. */
+        if (s.finished || session.current !== s) return;
         /* **We have given up on this recogniser**, so anything else it emits is
            a guess we have already stopped showing. Letting a late phrase in
            would put words in the box under a strip that says they are not
@@ -1224,6 +1252,11 @@ export function useDictation<C>(options: DictationOptions<C>): UseDictation {
        block since 2026-09-29, so Safari and Firefox get it too (plan 260929f,
        R4); it used to be inside it. */
     newest.current?.upload.abort();
+    /* A retry has no Session and therefore is not reached by the line above.
+       Starting a real dictation supersedes it just as completely: its answer is
+       generation-guarded already, and its paid request should not keep running. */
+    retryUpload.current?.abort();
+    retryUpload.current = null;
 
     session.current = s;
     newest.current = s;
@@ -1365,11 +1398,18 @@ export function useDictation<C>(options: DictationOptions<C>): UseDictation {
   );
 
   const clearRecording = useCallback(() => {
+    /* Discard is also a cancellation when Retry is still in flight. Otherwise
+       the reader can throw the audio away and still have its transcript arrive
+       later, after the row that explained it has gone. */
+    retryUpload.current?.abort();
+    retryUpload.current = null;
+    retryGeneration.current++;
     setRecording(null);
     /* The offer goes with the audio. A Retry button over a `Blob` the reader
        has just discarded is a button that cannot work. */
     retryable.current = null;
     setCanRetry(false);
+    setPhase("idle");
   }, []);
 
   /**
@@ -1390,6 +1430,9 @@ export function useDictation<C>(options: DictationOptions<C>): UseDictation {
   const retry = useCallback(() => {
     const held = retryable.current;
     if (!held) return;
+    /* Defensive against a second programmatic press while the button is gone:
+       never pay for two retries of the same failed parts at once. */
+    retryUpload.current?.abort();
     setCanRetry(false);
     setError(null);
     setPhase("transcribing");
@@ -1412,7 +1455,7 @@ export function useDictation<C>(options: DictationOptions<C>): UseDictation {
           const text = held.texts[i];
           return text != null
             ? Promise.resolve({ ok: true, text })
-            : transcribe.current(part.blob, part.mimeType, held.where, cancel.signal);
+            : callTranscriber(transcribe.current, part, held.where, cancel.signal);
         }),
       );
       /* **Three ways this is no longer ours**, and every one of them ends in
