@@ -41,6 +41,8 @@ const NOTHING: PublicArtefacts = {
   timeline: false,
   sketch: false,
   trajectory: false,
+  faq: false,
+  citations: false,
 };
 const EVERYTHING: PublicArtefacts = {
   arc: true,
@@ -51,6 +53,8 @@ const EVERYTHING: PublicArtefacts = {
   timeline: true,
   sketch: true,
   trajectory: true,
+  faq: true,
+  citations: true,
 };
 
 const keys = (items: InventoryItem[]): string[] => items.map((i) => i.key);
@@ -72,6 +76,9 @@ const keys = (items: InventoryItem[]): string[] => items.map((i) => i.key);
  * `owners-only` until a visitor to a public article with a stored route was
  * refused it (SPIDERYARN-READING2-56).
  * docs/plans/260929c-a-visitor-sees-every-stored-mode-on-a-public-article.md.
+ *
+ * `faq` and `citations` are the eighth and ninth, the same day and by the same
+ * move (plan 260929c stages 2 and 3).
  */
 const FLAG = {
   glossary: "glossary",
@@ -81,6 +88,8 @@ const FLAG = {
   tweets: "tweets",
   timeline: "timeline",
   trajectory: "trajectory",
+  faq: "faq",
+  citations: "citations",
 } as const satisfies Record<string, keyof PublicArtefacts>;
 const ROWS = Object.keys(FLAG) as (keyof typeof FLAG)[];
 
@@ -303,6 +312,11 @@ const WIRE_ROW = {
   /* The stored route, since 2026-09-29 — its own mode, like the timeline.
      docs/plans/260929c-a-visitor-sees-every-stored-mode-on-a-public-article.md. */
   trajectory: "trajectory",
+  /* The FAQ and the Citations list, the same day and the same way.
+     A cited work's address is re-judged on its way out (src/public/dto.ts §
+     `publicCitedWork`), which is invisible to this table. */
+  faq: "faq",
+  citations: "citations",
   /* Not a mode: comments have no button in the bar and are swept by neither
      `MODES` nor `visitorGap`. Their row is the prose one that moved out of
      `NEVER_SHARED` on 2026-09-04.
@@ -350,6 +364,8 @@ describe("reading the flags off the wire", () => {
       timeline: true,
       sketch: true,
       trajectory: true,
+      faq: true,
+      citations: true,
     };
     expect([...ARTEFACT_KEYS].sort()).toEqual(Object.keys(probe).sort());
   });
@@ -365,7 +381,7 @@ describe("reading the flags off the wire", () => {
    * typo — it compiles, and an all-true fixture accepts it. GPT Sol listed it,
    * 2026-09-02. A one-hot body is the only shape that catches a cross-wire.
    */
-  it.each(["arc", "tweets", "glossary", "ideas", "quotes", "trajectory"] as const)(
+  it.each(["arc", "tweets", "glossary", "ideas", "quotes", "trajectory", "faq", "citations"] as const)(
     "reads %s from its own key and not another's",
     (key) => {
       const oneOn = { ...NOTHING, [key]: true };
@@ -376,7 +392,7 @@ describe("reading the flags off the wire", () => {
   /* **A missing key is not a `false`.** Defaulting would tell an owner their
      glossary stays private, which is the exact sentence this slice exists to
      stop being guessed at. */
-  it.each(["arc", "tweets", "glossary", "ideas", "quotes", "trajectory"])(
+  it.each(["arc", "tweets", "glossary", "ideas", "quotes", "trajectory", "faq", "citations"])(
     "refuses a body with no %s, rather than defaulting it",
     (missing) => {
       const partial: Record<string, unknown> = { ...EVERYTHING };
@@ -426,6 +442,8 @@ describe("what counts as shareable", () => {
       timeline: null,
       sketch: null,
       trajectory: null,
+      faq: null,
+      citations: null,
       glossary: STALE,
       ideas: null,
       quotes: null,
@@ -444,6 +462,8 @@ describe("what counts as shareable", () => {
       timeline: null,
       sketch: null,
       trajectory: null,
+      faq: null,
+      citations: null,
       glossary: { ...STALE, entries: [] },
       ideas: null,
       quotes: null,
@@ -455,6 +475,8 @@ describe("what counts as shareable", () => {
       timeline: null,
       sketch: null,
       trajectory: null,
+      faq: null,
+      citations: null,
       glossary: null,
       ideas: null,
       quotes: null,

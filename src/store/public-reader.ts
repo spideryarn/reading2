@@ -333,6 +333,15 @@ const PUBLIC_PROJECTIONS = {
        `publicTrajectory` in ../public/dto.ts.
        docs/plans/260929c-a-visitor-sees-every-stored-mode-on-a-public-article.md. */
     trajectory: articleRevisions.trajectory,
+    /* **The ninth and tenth, 2026-09-29: the FAQ and the Citations list**, two
+       more `jsonb` columns on this row, withheld until then for the cost of
+       *making* them (SPIDERYARN-READING2-56). Neither carries a profile. Every
+       cited work's address is re-judged by `publicCitationUrl`, and its `key`
+       and the owner's *Find it* results stay behind — `publicCitationsList` in
+       ../public/dto.ts. The finds are a separate table this read never joins.
+       docs/plans/260929c-a-visitor-sees-every-stored-mode-on-a-public-article.md. */
+    faq: articleRevisions.faq,
+    citations: articleRevisions.citations,
     /* **The seventh, and the one that cost real money to make.** A visitor sees
        the Sketch the owner already paid for; nothing on their side can start
        another. docs/project/security-map.md § the hazard this section is really
@@ -759,6 +768,8 @@ export const pgPublicReader: PublicArticleReader = {
         tweets: found.revision.tweets,
         timeline: found.revision.timeline,
         trajectory: found.revision.trajectory,
+        faq: found.revision.faq,
+        citations: found.revision.citations,
         sketch: found.revision.sketch,
         navLabelStatus: found.revision.navLabelStatus,
         /* `null` columns become absent keys, exactly as the artefacts do — the

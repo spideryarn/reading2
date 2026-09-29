@@ -70,6 +70,8 @@ const NOTHING_BUILT: PublicArtefacts = {
   timeline: false,
   sketch: false,
   trajectory: false,
+  faq: false,
+  citations: false,
 };
 const EVERYTHING_BUILT: PublicArtefacts = {
   arc: true,
@@ -80,6 +82,8 @@ const EVERYTHING_BUILT: PublicArtefacts = {
   timeline: true,
   sketch: true,
   trajectory: true,
+  faq: true,
+  citations: true,
 };
 
 /**
@@ -111,6 +115,8 @@ function only(built: keyof PublicArtefacts): PublicArtefacts {
     timeline: built === "timeline",
     sketch: built === "sketch",
     trajectory: built === "trajectory",
+    faq: built === "faq",
+    citations: built === "citations",
   };
 }
 
@@ -302,21 +308,21 @@ describe("what a visitor is told, mode by mode", () => {
        public projection its rows must not bypass, at which point it drops out
        with the glossary and the quotes and this line loses a word.
        src/web/visitor.ts § POLICY.debate. */
-    /* `citations` joined on 2026-09-11, owners-only for Debate's reason and
-       expected to leave the same way once a public projection exists —
-       src/web/visitor.ts § POLICY.citations. */
-    /* `faq` joined on 2026-09-16, owners-only for the same reason —
-       src/web/visitor.ts § POLICY.faq. */
+    /* `citations` joined on 2026-09-11, owners-only for Debate's reason, and
+       `faq` on 2026-09-16 for the same one. **Both left on 2026-09-29** with
+       `trajectory` below: a stored FAQ and a stored list ride the public
+       payload now, each with its flag (plan 260929c stages 2 and 3,
+       src/web/visitor.ts § POLICY.faq and § POLICY.citations). */
     /* `trajectory` joined on 2026-09-28, owners-only for the same reason, and
        **left on 2026-09-29** the way `timeline` did: a stored route is on the
        public payload now, with a `PublicArtefacts` flag to drop out on
        (SPIDERYARN-READING2-56, src/web/visitor.ts § POLICY.trajectory,
        docs/plans/260929c-a-visitor-sees-every-stored-mode-on-a-public-article.md). */
     expect([...markedModes(EVERYTHING_BUILT).keys()].sort()).toEqual(
-      ["chat", "citations", "debate", "faq", "referee", "remember"].sort(),
+      ["chat", "debate", "referee", "remember"].sort(),
     );
     /* And one at a time, so a mode reading the wrong flag shows up. */
-    for (const built of ["glossary", "ideas", "quotes", "timeline", "trajectory"] as const) {
+    for (const built of ["glossary", "ideas", "quotes", "timeline", "trajectory", "faq", "citations"] as const) {
       expect([...markedModes(only(built)).keys()], built).not.toContain(built);
     }
   });
@@ -340,6 +346,10 @@ describe("what a visitor is told, mode by mode", () => {
         /* An artefact mode since 2026-09-29, like the timeline: the stored
            route rides on the payload (SPIDERYARN-READING2-56). */
         mode === "trajectory" ||
+        /* And the FAQ and the Citations list, the same day, the same way
+           (plan 260929c stages 2 and 3). */
+        mode === "faq" ||
+        mode === "citations" ||
         /* Free since 2026-09-04: the picture is drawn from the tree in the
            payload, and the panel's visitor arm buys nothing.
            docs/plans/260904c-more-modes-on-a-shared-link.md § Stage 2. */
@@ -455,6 +465,8 @@ describe("what the payload says it has", () => {
       timeline: false,
       sketch: false,
       trajectory: false,
+      faq: false,
+      citations: false,
     });
     expect(
       artefactsIn({

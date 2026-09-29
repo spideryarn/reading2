@@ -58,7 +58,12 @@ import type {
   Block,
   BlockKind,
   Citation,
+  CitationPlace,
+  Citations,
+  CitedWork,
   Comment,
+  Faq,
+  FaqQuestion,
   Glossary,
   Idea,
   Ideas,
@@ -82,6 +87,9 @@ import { anchorFields } from "../types.js";
 import type {
   PublicArticle,
   PublicBlock,
+  PublicCitations,
+  PublicCitedWork,
+  PublicFaq,
   PublicGlossary,
   PublicGlossaryEntry,
   PublicIdeas,
@@ -459,6 +467,80 @@ function publicTrajectory(trajectory: Trajectory): PublicTrajectory {
 }
 
 /**
+ * **The FAQ, rebuilt question by question and passage by passage** — since
+ * 2026-09-29 (SPIDERYARN-READING2-56, plan 260929c stage 2).
+ *
+ * The question and the article's own passages, and nothing else: `dropped` is
+ * our checking's tally and the rest is pipeline provenance.
+ * src/public-types.ts § `PublicFaq` is the argument.
+ */
+function publicFaq(faq: Faq): PublicFaq {
+  return {
+    questions: faq.questions.map(
+      (q): FaqQuestion => ({
+        id: q.id,
+        question: q.question,
+        passages: q.passages.map(publicPlace),
+      }),
+    ),
+  };
+}
+
+/** One quoted place in the article — the FAQ's passage and a citation's mention share the shape. */
+function publicPlace(place: CitationPlace): CitationPlace {
+  return { blockId: place.blockId, quote: place.quote, start: place.start };
+}
+
+/**
+ * **One cited work, rebuilt field by field** — since 2026-09-29 (plan 260929c
+ * stage 3).
+ *
+ * **`url` goes through `publicCitationUrl`** (src/urls.ts), as a comment's
+ * citations do, but a refusal here drops the *link* and keeps the row: a work
+ * the piece cites is still cited without an address, where a comment's
+ * citation *is* its address. **A `web` link is dropped outright** without
+ * being judged: that rule means the owner's own *Find it* found it, and the
+ * finds are private (plan 260929c § What stays owner-only). The stored column
+ * never holds one — the owner's read attaches finds from `citation_finds` —
+ * so this is the second of two, for the day something writes one back.
+ *
+ * `key` and `found` are not named, so they do not cross. src/public-types.ts §
+ * `PublicCitedWork` has why for each.
+ */
+function publicCitedWork(work: CitedWork): PublicCitedWork {
+  /* A named const, so the shorthand `{ url }` below ties the key to it —
+     `publicMeta`'s idiom, since `opt()` copies a field and this computes one. */
+  const url = work.linkFrom === "web" ? null : publicCitationUrl(work.url);
+  return {
+    id: work.id,
+    title: work.title,
+    ...opt(work, "authors"),
+    ...opt(work, "year"),
+    why: work.why,
+    ...opt(work, "relevance"),
+    ...opt(work, "influence"),
+    ...(work.reference === undefined ? {} : { reference: publicPlace(work.reference) }),
+    mentions: work.mentions.map(publicPlace),
+    citedAt: [...work.citedAt],
+    firstCited: work.firstCited,
+    citedInBody: work.citedInBody,
+    ...(url === null ? {} : { url }),
+    linkFrom: work.linkFrom,
+  };
+}
+
+/**
+ * **The Citations list** — the works, and `capped` because the panel prints it.
+ * src/public-types.ts § `PublicCitations`.
+ */
+function publicCitationList(citations: Citations): PublicCitations {
+  return {
+    citations: citations.citations.map(publicCitedWork),
+    capped: citations.capped,
+  };
+}
+
+/**
  * The owner's comments, rebuilt comment by comment and citation by citation.
  *
  * **The filtering is not here**, and that is deliberate rather than an
@@ -657,6 +739,8 @@ export function publicArticle(row: {
   tweets: TweetThread | null;
   timeline: Timeline | null;
   trajectory: Trajectory | null;
+  faq: Faq | null;
+  citations: Citations | null;
   comments: readonly Comment[];
   searches: readonly (SearchRun & { stale: boolean })[];
   sketch: Sketch | null;
@@ -704,6 +788,8 @@ export function publicArticle(row: {
     ...(row.tweets !== null ? { tweets: publicTweets(row.tweets) } : {}),
     ...(row.timeline !== null ? { timeline: publicTimeline(row.timeline) } : {}),
     ...(row.trajectory !== null ? { trajectory: publicTrajectory(row.trajectory) } : {}),
+    ...(row.faq !== null ? { faq: publicFaq(row.faq) } : {}),
+    ...(row.citations !== null ? { citations: publicCitationList(row.citations) } : {}),
     ...(row.sketch !== null ? { sketch: publicSketch(row.sketch) } : {}),
     /* **A required key, so leaving this line out is a type error** — unlike the
        artefacts above it, where an absent key is the meaning. An article with

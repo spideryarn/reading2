@@ -387,6 +387,8 @@ describe("a mode a visitor cannot have", () => {
       timeline: false,
       sketch: false,
       trajectory: false,
+      faq: false,
+      citations: false,
     };
     const marked = markedModes(available);
     const gapped = [...marked.keys()];

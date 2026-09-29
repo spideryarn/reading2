@@ -33,6 +33,8 @@ import type {
   Arc,
   Block,
   BlockId,
+  Citations,
+  Faq,
   Glossary,
   Ideas,
   Quotes,
@@ -59,6 +61,8 @@ const NO_ARTEFACTS = {
   tweets: null,
   timeline: null,
   trajectory: null,
+  faq: null,
+  citations: null,
   /* **An empty array, not `null`** — comments are not an artefact, so there is
      no "nobody built one" state for them to be in. src/public-types.ts
      § PublicArticle.comments. */
@@ -989,6 +993,101 @@ describe("the artefacts a shared link carries", () => {
   };
 
   /**
+   * **A stored FAQ with every field set**, `dropped` above all: the owner's
+   * panel prints it and a visitor's must not be sent it. Plan 260929c stage 2.
+   */
+  const FAQ: Faq = {
+    version: "faq/3",
+    generator: "some-model",
+    slug: "noema",
+    sourceHash: "abc123",
+    questions: [
+      {
+        id: "q-one",
+        question: "What does the measurement have to carry?",
+        passages: [{ blockId: "spya-bbbbbb" as BlockId, quote: "the measurement", start: 4 }],
+      },
+    ],
+    dropped: { unknownIds: 1, unquoted: 2, tooLong: 0, duplicate: 0, unanchored: 3, overCap: 0, malformed: 0 },
+    generatedAt: "2026-09-29T10:00:00.000Z",
+    elapsedMs: 9_000,
+  };
+
+  /**
+   * **A stored Citations list with every field set, and three addresses** — a
+   * clean DOI, one carrying a credential, and one on a private host. The two
+   * bad links must be gone from the wire and their rows kept (plan 260929c
+   * stage 3). `key` embeds the credentialled address too, and `found` is set on
+   * a row the way the owner's read attaches it: neither may cross.
+   */
+  const CITATIONS: Citations = {
+    version: "citations/4",
+    generator: "some-model",
+    slug: "noema",
+    sourceHash: "abc123",
+    citations: [
+      {
+        id: "w-clean",
+        key: "doi:10.1/abc",
+        title: "A clean work",
+        authors: "Somebody",
+        year: "2004",
+        why: "The piece leans on it.",
+        relevance: 0.9,
+        influence: 0.7,
+        reference: { blockId: "spya-bbbbbb" as BlockId, quote: "Somebody 2004", start: 0 },
+        mentions: [{ blockId: "spya-bbbbbb" as BlockId, quote: "Somebody", start: 0 }],
+        citedAt: ["spya-bbbbbb" as BlockId],
+        firstCited: "spya-bbbbbb" as BlockId,
+        citedInBody: true,
+        url: "https://doi.org/10.1/abc",
+        linkFrom: "doi",
+        found: { host: "found.example", searches: 1, model: "m", at: "2026-09-29T10:00:00.000Z" },
+      },
+      {
+        id: "w-cred",
+        key: "url:https://user:pw@x.org/paper",
+        title: "A credentialled work",
+        why: "Cited once.",
+        mentions: [],
+        citedAt: [],
+        firstCited: "spya-bbbbbb" as BlockId,
+        citedInBody: false,
+        url: "https://user:pw@x.org/paper",
+        linkFrom: "article",
+      },
+      {
+        id: "w-private",
+        key: "url:http://192.168.0.1/paper",
+        title: "A work on a private host",
+        why: "Cited twice.",
+        mentions: [],
+        citedAt: [],
+        firstCited: "spya-bbbbbb" as BlockId,
+        citedInBody: false,
+        url: "http://192.168.0.1/paper",
+        linkFrom: "article",
+      },
+      {
+        /* A `web` link is the owner's own *Find it*: dropped unjudged. */
+        id: "w-web",
+        key: "work:found|x|2001",
+        title: "A work the owner found",
+        why: "Background.",
+        mentions: [],
+        citedAt: [],
+        firstCited: "spya-bbbbbb" as BlockId,
+        citedInBody: false,
+        url: "https://owners-find.example/paper",
+        linkFrom: "web",
+      },
+    ],
+    capped: true,
+    generatedAt: "2026-09-29T10:00:00.000Z",
+    elapsedMs: 30_000,
+  };
+
+  /**
    * Everything `publicArticle` needs that is not the thing under test, so the
    * comment cases below can name only their comments.
    */
@@ -1020,6 +1119,8 @@ describe("the artefacts a shared link carries", () => {
     tweets: THREAD,
     timeline: TIMELINE,
     trajectory: TRAJECTORY,
+    faq: FAQ,
+    citations: CITATIONS,
     comments: [],
     searches: [],
     sketch: null,
@@ -1441,6 +1542,81 @@ describe("the artefacts a shared link carries", () => {
     expect(json).not.toContain("profile-of-a-person");
   });
 
+  /** The questions and the article's passages, and not our checking's tally. */
+  it("carries the faq's questions and passages, and not what checking dropped", () => {
+    expect(pathsUnder("faq")).toEqual(
+      [
+        "questions",
+        "questions[].id",
+        "questions[].passages",
+        "questions[].passages[].blockId",
+        "questions[].passages[].quote",
+        "questions[].passages[].start",
+        "questions[].question",
+      ].sort(),
+    );
+    expect(built.faq).toEqual({ questions: FAQ.questions });
+    expect(JSON.stringify(built.faq)).not.toContain("dropped");
+  });
+
+  /**
+   * **Each cited work minus `key` and `found`, and every address re-judged.**
+   * Exact nested keys against a list with every field set, so a spread of the
+   * work would show up as `key` and `found…` here.
+   */
+  it("carries each cited work without its key or the owner's finds", () => {
+    expect(pathsUnder("citations")).toEqual(
+      [
+        "capped",
+        "citations",
+        "citations[].authors",
+        "citations[].citedAt",
+        "citations[].citedInBody",
+        "citations[].firstCited",
+        "citations[].id",
+        "citations[].influence",
+        "citations[].linkFrom",
+        "citations[].mentions",
+        "citations[].mentions[].blockId",
+        "citations[].mentions[].quote",
+        "citations[].mentions[].start",
+        "citations[].reference",
+        "citations[].reference.blockId",
+        "citations[].reference.quote",
+        "citations[].reference.start",
+        "citations[].relevance",
+        "citations[].title",
+        "citations[].url",
+        "citations[].why",
+        "citations[].year",
+      ].sort(),
+    );
+    const json = JSON.stringify(built.citations);
+    expect(json).not.toContain("found.example");
+    expect(json).not.toContain('"key"');
+    expect(built.citations?.capped).toBe(true);
+  });
+
+  /**
+   * **A refused address takes the link off the row, not the row** — the
+   * mutation-style case plan 260929c asks for. A credential and a private host
+   * are both absent from the whole payload, and both rows survive with their
+   * titles; so does the row whose `web` link was the owner's own find.
+   */
+  it("drops a credentialled or private-host link and keeps the row", () => {
+    const json = JSON.stringify(built);
+    expect(json).not.toContain("user:pw");
+    expect(json).not.toContain("192.168.0.1");
+    expect(json).not.toContain("owners-find.example");
+    const byId = new Map((built.citations?.citations ?? []).map((w) => [w.id, w]));
+    expect([...byId.keys()]).toEqual(["w-clean", "w-cred", "w-private", "w-web"]);
+    expect(byId.get("w-clean")?.url).toBe("https://doi.org/10.1/abc");
+    for (const id of ["w-cred", "w-private", "w-web"]) {
+      expect("url" in (byId.get(id) ?? {}), id).toBe(false);
+      expect(byId.get(id)?.title, id).toBeTruthy();
+    }
+  });
+
   /**
    * **And the artefacts are really there**, which every assertion above passes
    * without. A DTO returning `{}` for all four satisfies every key set and
@@ -1499,6 +1675,8 @@ describe("the artefacts a shared link carries", () => {
       tweets: null,
       timeline: null,
       trajectory: null,
+      faq: null,
+      citations: null,
       comments: [],
       searches: [],
       sketch: null,
@@ -1527,7 +1705,7 @@ describe("the artefacts a shared link carries", () => {
       assets: null,
       ...NO_ARTEFACTS,
     });
-    for (const key of ["glossary", "ideas", "tweets", "trajectory"]) {
+    for (const key of ["glossary", "ideas", "tweets", "trajectory", "faq", "citations"]) {
       expect(key in bare, key).toBe(false);
     }
   });

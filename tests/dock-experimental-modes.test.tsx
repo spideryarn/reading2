@@ -320,6 +320,8 @@ const NOTHING_SHARED: PublicArtefacts = {
   timeline: false,
   sketch: false,
   trajectory: false,
+  faq: false,
+  citations: false,
 };
 const EVERYTHING_SHARED: PublicArtefacts = {
   arc: true,
@@ -330,6 +332,8 @@ const EVERYTHING_SHARED: PublicArtefacts = {
   timeline: true,
   sketch: true,
   trajectory: true,
+  faq: true,
+  citations: true,
 };
 
 /**

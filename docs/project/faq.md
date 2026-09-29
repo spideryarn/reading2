@@ -45,14 +45,16 @@ answered by a model now. FAQ never marks the reader and never writes an answer.
 
 ## Who sees it
 
-Owner-only, and behind the [experimental switch](experimental-features.md). A visitor gets the
-explanatory band — no public projection of the `faq` column is built.
+Asking for one is owner-only, and behind the [experimental switch](experimental-features.md). **Since
+2026-09-29 a visitor to a public article sees a stored FAQ**, drawn from the page's own payload with
+no way to ask for another; with none stored they are told nobody has built one (SPIDERYARN-READING2-56,
+[260929c](../plans/260929c-a-visitor-sees-every-stored-mode-on-a-public-article.md)).
 
 ## Deferred
 
 A written short answer; questions the piece leaves open; inherited question ids; *Ask about this*, a
 per-row button into an anchored Chat; marks in the prose and a `?faq=` selection; the reader's
-profile shaping the questions; a visitor's list; real FAQs from readers' own comments. Each is in the
+profile shaping the questions; real FAQs from readers' own comments. Each is in the
 plan's § Deferred, with the reason.
 
 ## The code

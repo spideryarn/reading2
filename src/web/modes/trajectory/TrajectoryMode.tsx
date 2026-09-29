@@ -26,6 +26,7 @@ import { useCallback, useEffect, useLayoutEffect, useMemo, useRef } from "react"
 import { useQueryStates } from "nuqs";
 import type { Block, BlockId, Quote, Tree, TrajectoryDepth, TrajectoryStop } from "../../../types.js";
 import type {
+  PublicFaq,
   PublicGlossary,
   PublicIdeas,
   PublicTimeline,
@@ -324,6 +325,7 @@ export function VisitorTrajectoryBand({
   glossary,
   ideas,
   timeline,
+  faq,
   ...walk
 }: WalkProps & {
   route: PublicTrajectory;
@@ -331,16 +333,18 @@ export function VisitorTrajectoryBand({
   glossary: PublicGlossary | undefined;
   ideas: PublicIdeas | undefined;
   timeline: PublicTimeline | undefined;
+  /** The payload's FAQ, since 2026-09-29 (plan 260929c stage 2). */
+  faq: PublicFaq | undefined;
 }) {
   useRenderCount("VisitorTrajectoryBand");
   const sources = useMemo<CardSources>(
     () => ({
       glossary: { value: glossary ?? null, stale: false },
       ideas: { value: ideas ?? null, stale: false },
-      faq: { value: null, stale: false },
+      faq: { value: faq ?? null, stale: false },
       timeline: { value: timeline ?? null, stale: false },
     }),
-    [glossary, ideas, timeline],
+    [glossary, ideas, timeline, faq],
   );
   const { away, ...rest } = walk;
   const view = useTrajectoryMode({ ...rest, sources, stops: route.stops, quotes });

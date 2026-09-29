@@ -118,8 +118,9 @@ citation has no second-tap commit, because the card's action is the link it carr
 words are also the author's internal or outbound link, that link keeps its established second-tap
 jump or open.
 
-**Owner-only by construction.** The list is read in `OwnedReader`, so a visitor has no works, hence
-no marks and no card section — § Who sees it, satisfied without a check.
+**The marks are owner-only by construction.** The list they are drawn from is read in `OwnedReader`,
+so a visitor — who since 2026-09-29 sees the stored list in the band — has no marks in the prose and
+no card section.
 
 ## Find it on the web
 
@@ -176,8 +177,12 @@ behind it. [chat-tools.md](chat-tools.md) has the tool.
 
 ## Who sees it
 
-Owner-only, and behind the [experimental switch](experimental-features.md). A visitor gets the
-explanatory band — the public projection its rows' URLs would pass through is not built.
+Making the list, and *Find it*, are owner-only, and behind the
+[experimental switch](experimental-features.md). **Since 2026-09-29 a visitor to a public article
+sees a stored list** in the band, from the page's own payload: each work's address re-judged by
+`publicCitationUrl` (a refused one takes the link off the row, not the row), its dedupe `key` left
+behind, and the owner's *Find it* results kept private (SPIDERYARN-READING2-56,
+[260929c](../plans/260929c-a-visitor-sees-every-stored-mode-on-a-public-article.md)).
 
 ## Deferred
 
@@ -185,8 +190,7 @@ Selecting a work to mark every passage that cites it (`?cite=`), and with it the
 button on the hover card and the threshold reveal it would need; marking every occurrence of a
 mention in its block rather than only an unambiguous one; joining the citation section to the *link*
 and *note* cards, so a work cited by a hyperlink or a footnote marker gets it too; *Find more* past
-the cap; real influence from a citation database; searching every unlinked row at once; a visitor's
-list. Each is in one of the two plans' lists of what is deliberately not built, with the reason.
+the cap; real influence from a citation database; searching every unlinked row at once; marks in the prose for a visitor. Each is in one of the two plans' lists of what is deliberately not built, with the reason.
 
 ## The code
 

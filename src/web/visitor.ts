@@ -92,6 +92,8 @@ export const NOUN: Record<keyof PublicArtefacts, string> = {
   tweets: "a tweet thread",
   timeline: "a timeline",
   trajectory: "a trajectory",
+  faq: "an FAQ",
+  citations: "a list of citations",
   sketch: "a sketch",
 };
 
@@ -308,27 +310,30 @@ const POLICY: Record<Mode, VisitorPolicy> = {
    */
   debate: { kind: "owners-only" },
   /**
-   * **`owners-only` for v1, and like Debate a staging decision.** The list is
-   * one artefact column and a visitor branch is "a projection away" — but that
-   * projection is `PUBLIC_PROJECTIONS`, the public DTO, and a `PublicArtefacts`
-   * flag, none of which exist yet, and the rows carry outbound URLs a public
-   * boundary should re-judge before a stranger is handed them. Until that is
-   * built a visitor meets the explanatory band rather than an empty one.
-   * docs/plans/260911g-citations-mode.md § What is deliberately not built.
+   * **An artefact mode since 2026-09-29.** It was `owners-only` as a staging
+   * decision — the public projection its rows' URLs had to pass through was
+   * not built — and a comment here that said *"It spends: one model pass over
+   * the whole article"*, true of *making* the list and nothing to do with
+   * *showing* one. Greg, SPIDERYARN-READING2-56, on the Trajectory: *"It's a
+   * public article, and the Trajectory has already been generated, so it
+   * should show it"* — and the rule he gave was for every mode.
    *
-   * It spends: one model pass over the whole article.
+   * The projection is built now: every address re-judged by
+   * `publicCitationUrl`, a refused one taking the link off the row, the dedupe
+   * `key` left behind (src/public/dto.ts § `publicCitedWork`). The visitor gets
+   * `VisitorCitationsBand`, which mounts no `useCitations` and draws no *Find
+   * it*, whose results stay the owner's.
+   * docs/plans/260929c-a-visitor-sees-every-stored-mode-on-a-public-article.md.
    */
-  citations: { kind: "owners-only" },
+  citations: { kind: "artefact", key: "citations" },
   /**
-   * **`owners-only` for v1**, a staging decision like Citations': a visitor
-   * branch needs `PUBLIC_PROJECTIONS`, the public DTO and a `PublicArtefacts`
-   * flag for the `faq` column, and none is built. Until then a visitor meets
-   * the explanatory band rather than an empty one.
-   * docs/plans/260916d-faq-mode.md § Deferred.
-   *
-   * It spends: one model pass over the whole article.
+   * **An artefact mode since 2026-09-29**, for Citations' reason above: it was
+   * `owners-only` for the cost of *asking* for an FAQ, which a visitor never
+   * pays. The visitor gets `VisitorFaqBand`, which mounts no `useFaq`; no
+   * profile is in this stage. SPIDERYARN-READING2-56,
+   * docs/plans/260929c-a-visitor-sees-every-stored-mode-on-a-public-article.md.
    */
-  faq: { kind: "owners-only" },
+  faq: { kind: "artefact", key: "faq" },
   /**
    * **An artefact mode since 2026-09-29**, and it was `owners-only` for the
    * wrong reason. The comment here said *"It spends: one small model pass over

@@ -45,6 +45,8 @@ const NOTHING_BUILT: PublicArtefacts = {
   timeline: false,
   sketch: false,
   trajectory: false,
+  faq: false,
+  citations: false,
 };
 
 describe("adding an article no longer writes an arc", () => {

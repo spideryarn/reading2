@@ -59,10 +59,13 @@ import type { SketchScene } from "./sketch-scene.js";
 import type {
   Arc,
   Citation,
+  CitationLinkFrom,
+  CitationPlace,
   BlockContext,
   BlockId,
   BlockKind,
   CommentAnchor,
+  FaqQuestion,
   GlossaryKind,
   Idea,
   NavLabelStatus,
@@ -299,6 +302,8 @@ export interface PublicArtefactSet {
   tweets?: PublicTweets;
   timeline?: PublicTimeline;
   trajectory?: PublicTrajectory;
+  faq?: PublicFaq;
+  citations?: PublicCitations;
   sketch?: PublicSketch;
 }
 
@@ -443,6 +448,77 @@ export interface PublicTimeline {
 export interface PublicTrajectory {
   stops: TrajectoryStop[];
   offered: number;
+}
+
+/**
+ * **The FAQ, as a visitor gets it** — since 2026-09-29, the second mode plan
+ * 260929c moved off `owners-only` (SPIDERYARN-READING2-56). Showing the stored
+ * questions costs nothing; only asking the model for them spends.
+ * docs/plans/260929c-a-visitor-sees-every-stored-mode-on-a-public-article.md.
+ *
+ * **The questions cross field by field** — `{ id, question, passages }`, and
+ * each passage `{ blockId, quote, start }`: the model's question and the
+ * article's own characters, all of it about the piece. No profile is in this
+ * stage at all ("No profile in v1", src/faq.ts), so there is nothing about a
+ * person to drop.
+ *
+ * **What does not cross** is the pipeline, as everywhere in this file:
+ * `version`, `generator`, `slug`, `sourceHash`, `generatedAt`, `elapsedMs` —
+ * and `dropped`, the counts validation threw away, which the owner's panel
+ * prints under the list and a visitor's does not: a fact about our checking,
+ * not about the piece.
+ */
+export interface PublicFaq {
+  questions: FaqQuestion[];
+}
+
+/**
+ * **One cited work, as a visitor gets it** — `CitedWork` minus three things.
+ *
+ * - **`key` does not cross.** It is our dedupe key, and it can embed an address
+ *   (`url:…`) that never went through the check `url` goes through below.
+ * - **`found` does not cross.** It is the owner's own *Find it* — a paid search
+ *   they ran, from the per-owner `citation_finds` table — and a record of their
+ *   activity, like a glossary lookup (plan 260929c § What stays owner-only). It
+ *   is never in the stored column anyway; the owner's read attaches it.
+ * - **`url` is optional here, and required on `CitedWork`.** Every address is
+ *   re-judged by `publicCitationUrl` (src/urls.ts) at the boundary, and a
+ *   refused one takes the *link* off the row, not the row: a citation is still
+ *   a citation without an address, unlike a Debate row, which is its source.
+ *
+ * `reference` and `mentions` carry the article's own characters, sliced out of
+ * blocks the payload already carries whole, so they add nothing a visitor
+ * could not read in the prose.
+ */
+export interface PublicCitedWork {
+  id: string;
+  title: string;
+  authors?: string;
+  year?: string;
+  why: string;
+  relevance?: number;
+  influence?: number;
+  reference?: CitationPlace;
+  mentions: CitationPlace[];
+  citedAt: BlockId[];
+  firstCited: BlockId;
+  citedInBody: boolean;
+  url?: string;
+  linkFrom: CitationLinkFrom;
+}
+
+/**
+ * **The Citations list, as a visitor gets it** — since 2026-09-29, the third
+ * mode plan 260929c moved off `owners-only` (SPIDERYARN-READING2-56).
+ *
+ * `capped` crosses for `PublicQuotes.discarded`'s reason: the panel prints it
+ * (*"This piece cites more than 80 works…"*), so a visitor is shown it. The
+ * pipeline facts do not: `version`, `generator`, `slug`, `sourceHash`,
+ * `generatedAt`, `elapsedMs`. No profile is in this stage.
+ */
+export interface PublicCitations {
+  citations: PublicCitedWork[];
+  capped: boolean;
 }
 
 /**

@@ -54,7 +54,7 @@ import { pgPublicReader } from "../src/store/public-reader.js";
 import { documentTitle } from "../src/title-text.js";
 import { safePublicCanonical } from "../src/urls.js";
 import { currentOwnerId, type OwnerId, runInRequest } from "../src/owner.js";
-import type { Glossary, Ideas, Trajectory, TweetThread } from "../src/types.js";
+import type { Citations, Faq, Glossary, Ideas, Trajectory, TweetThread } from "../src/types.js";
 
 loadEnvLocal();
 
@@ -103,6 +103,11 @@ const PUBLIC_IDEA = "You cannot theorise about what you have no way to measure."
 const PUBLIC_TWEET = "The first post of the thread.";
 /** A stored Trajectory stop's cue — on the wire once published, never before. */
 const PUBLIC_CUE = "Look for what the measurement is being asked to carry.";
+/** A stored FAQ question and a stored cited work's title — the same, since plan 260929c stages 2 and 3. */
+const PUBLIC_QUESTION = "What would a measurement of consciousness have to show?";
+const PUBLIC_WORK = "Consciousness as integrated information";
+/** A cited work's address carrying a credential: its row crosses, the address never does. */
+const CREDENTIALLED_URL = "https://reader:hunter2@papers.example.org/phi.pdf";
 
 /* ── The owner's own work, which crosses since 2026-09-04 ────────────────────
    Four strings a visitor must see and six rows they must not. Real prose in
@@ -156,6 +161,8 @@ const ARTEFACTS: {
   ideas: Ideas;
   tweets: TweetThread;
   trajectory: Trajectory;
+  faq: Faq;
+  citations: Citations;
 } = {
   glossary: {
     version: "glossary/2",
@@ -238,6 +245,45 @@ const ARTEFACTS: {
       badCue: 0,
       overCap: 0,
     },
+    generatedAt: "2026-02-02T00:00:00.000Z",
+    elapsedMs: 1,
+  },
+  /* **The stored FAQ and Citations list, since 2026-09-29** (plan 260929c).
+     Neither stage takes a profile, so neither carries a `profileHash` and the
+     `personalised` list below does not move. The one cited work's address
+     carries a credential, so a real row proves the boundary drops it. */
+  faq: {
+    version: "faq/3",
+    generator: "test",
+    slug: SLUG,
+    sourceHash: "abc",
+    questions: [
+      { id: "q1", question: PUBLIC_QUESTION, passages: [{ blockId: "spya-wpvvqq", quote: "the", start: 0 }] },
+    ],
+    dropped: { unknownIds: 0, unquoted: 0, tooLong: 0, duplicate: 0, unanchored: 0, overCap: 0, malformed: 0 },
+    generatedAt: "2026-02-02T00:00:00.000Z",
+    elapsedMs: 1,
+  },
+  citations: {
+    version: "citations/4",
+    generator: "test",
+    slug: SLUG,
+    sourceHash: "abc",
+    citations: [
+      {
+        id: "w1",
+        key: `url:${CREDENTIALLED_URL}`,
+        title: PUBLIC_WORK,
+        why: "The theory under discussion.",
+        mentions: [],
+        citedAt: [],
+        firstCited: "spya-wpvvqq",
+        citedInBody: false,
+        url: CREDENTIALLED_URL,
+        linkFrom: "article",
+      },
+    ],
+    capped: false,
     generatedAt: "2026-02-02T00:00:00.000Z",
     elapsedMs: 1,
   },
@@ -678,7 +724,8 @@ describe("sharing one article", { timeout: 60_000 }, () => {
        down would not notice, because they all run after publication. */
     /* The route's cue joined 2026-09-29: a private article's stored
        Trajectory is on this row too, and must not be readable either. */
-    for (const canary of [PUBLIC_TERM, PUBLIC_IDEA, PUBLIC_TWEET, PUBLIC_CUE]) {
+    /* The FAQ's question and the cited work's title joined the same day. */
+    for (const canary of [PUBLIC_TERM, PUBLIC_IDEA, PUBLIC_TWEET, PUBLIC_CUE, PUBLIC_QUESTION, PUBLIC_WORK]) {
       expect(r.text, canary).not.toContain(canary);
     }
   });
@@ -932,6 +979,29 @@ describe("sharing one article", { timeout: 60_000 }, () => {
     expect(r.text).toContain(PUBLIC_CUE);
     expect(JSON.stringify(body.trajectory)).not.toContain("profileHash");
     expect(r.text).not.toContain(PRIVATE_PROFILE_HASH);
+  });
+
+  /**
+   * **The stored FAQ and Citations list, since 2026-09-29** (plan 260929c
+   * stages 2 and 3), off a real row for the reason the trajectory's case above
+   * gives: only a row answers whether the public `select` fetches the column.
+   * The cited work crosses with its address taken off — a credential in it —
+   * and without its `key`, which embeds the same address.
+   */
+  it("serves the stored faq and citations, and not a credentialled address", async () => {
+    const r = await call("GET", `/api/public/article/${SLUG}`);
+    expect(r.status).toBe(200);
+    const body = r.body as {
+      faq?: { questions: { question: string }[] };
+      citations?: { citations: Record<string, unknown>[]; capped: boolean };
+    };
+    expect(body.faq?.questions.map((q) => q.question)).toEqual([PUBLIC_QUESTION]);
+    expect(body.citations?.capped).toBe(false);
+    expect(body.citations?.citations.map((w) => w.title)).toEqual([PUBLIC_WORK]);
+    expect("url" in (body.citations?.citations[0] ?? {})).toBe(false);
+    expect("key" in (body.citations?.citations[0] ?? {})).toBe(false);
+    expect(r.text).not.toContain("hunter2");
+    expect(JSON.stringify(body.faq)).not.toContain("dropped");
   });
 
   /**
@@ -1192,7 +1262,7 @@ describe("sharing one article", { timeout: 60_000 }, () => {
        * only place that claim is checked end to end.
        *
        * `shareableArtefacts` (src/store/pg.ts) reads presence off the revision
-       * row, and the fixture plants four artefacts and not the rest — so
+       * row, and the fixture plants six artefacts and not the rest — so
        * this asymmetry is the assertion. A unit test cannot make it: the whole
        * question is whether the columns the projection publishes are the
        * columns this field reports, and only a row answers that.
@@ -1218,6 +1288,8 @@ describe("sharing one article", { timeout: 60_000 }, () => {
         sketch: false,
         /* Planted since 2026-09-29, so present. */
         trajectory: true,
+        faq: true,
+        citations: true,
       },
     });
   });

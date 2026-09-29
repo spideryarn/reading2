@@ -67,6 +67,8 @@ export function artefactsOf(article: PublicArticle): PublicArtefactSet {
     ...(article.tweets === undefined ? {} : { tweets: article.tweets }),
     ...(article.timeline === undefined ? {} : { timeline: article.timeline }),
     ...(article.trajectory === undefined ? {} : { trajectory: article.trajectory }),
+    ...(article.faq === undefined ? {} : { faq: article.faq }),
+    ...(article.citations === undefined ? {} : { citations: article.citations }),
     ...(article.sketch === undefined ? {} : { sketch: article.sketch }),
   };
 }
@@ -87,6 +89,8 @@ export function artefactsIn(article: PublicArticle): PublicArtefacts {
     quotes: article.quotes !== undefined,
     timeline: article.timeline !== undefined,
     trajectory: article.trajectory !== undefined,
+    faq: article.faq !== undefined,
+    citations: article.citations !== undefined,
     sketch: article.sketch !== undefined,
   };
 }

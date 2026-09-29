@@ -179,7 +179,7 @@ async function draw(o: UseCitations, bar: number | null = null) {
   await act(async () =>
     root.render(
       createElement(CitationsPanel, {
-        owner: o,
+        access: { kind: "owner", owner: o },
         order: "prioritised",
         onOrder: () => {},
         bar,

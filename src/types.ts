@@ -2187,6 +2187,18 @@ export interface PublicArtefacts {
    * docs/plans/260929c-a-visitor-sees-every-stored-mode-on-a-public-article.md.
    */
   trajectory: boolean;
+  /**
+   * **The ninth, since 2026-09-29** — a stored FAQ. `owners-only` until then
+   * for the cost of *asking* for one; showing one is a column on the row the
+   * public read already fetches. SPIDERYARN-READING2-56, plan 260929c stage 2.
+   */
+  faq: boolean;
+  /**
+   * **The tenth, since 2026-09-29** — a stored Citations list, each work's
+   * address re-judged at the boundary and the owner's *Find it* results left
+   * behind. SPIDERYARN-READING2-56, plan 260929c stage 3.
+   */
+  citations: boolean;
 }
 
 export interface ArticleSharing extends VisibilityState {

@@ -61,12 +61,30 @@ POST — and nothing asked whether a visitor with a stored route could see it. T
 Two calls Greg's rule did not settle, put to the Overseer rather than guessed, and answered as
 assumptions for Greg to overturn:
 
-- **Remember's Quiz goes read-only for visitors** — questions, a *show answer* button and the
-  passage; no answer box, no marking. Built last, as its own commit.
+- **Remember's Quiz stays owner-only — excluded from public articles for now.** Greg, via the
+  Overseer:
+
+  > read-only Quiz sounds quite a neat solution. If you can implement this without much complexity
+  > then go for it. But for simplicity I'd be happy instead to just exclude Quiz mode from public
+  > articles for now.
+  >
+  > — Greg, 2026-09-29
+
+  It is not small, so it is excluded. Quiz is not a mode but Remember's second half
+  (`?mode=remember&remember=quiz`, `REMEMBER_VIEWS` in src/web/params.ts), and `POLICY` decides per
+  *mode*: a visitor quiz means a per-sub-view policy for Remember (whose Recall half must stay
+  private), a new public artefact end to end, and a visitor arm on an 889-line `QuizPanel` that has
+  none. A visitor following a quiz link gets Remember's owners-only band, which sends nothing —
+  pinned by a hostile-URL case in `tests/public-network-trace.test.tsx`.
+- **Experimental is not a gate for any of this.** Remember is behind the experimental switch and
+  Diagram is about to be (report 4R); the switch only hides a button
+  ([experimental-features.md](../project/experimental-features.md) § *Hidden means hidden from the
+  controls, not unreachable*), so every visitor rule here holds with it on or off, and nothing in this
+  plan reads it.
 - **Diagram's Illustrated plates stay out of this fix**, a named follow-up.
 - **Citations' *Find it* results stay private.**
 - **Ordering:** Trajectory, FAQ, Citations and Debate go to `dev` together once their gates and the
-  Sol code review pass, and the Overseer gets that commit for Greg to deploy; the Quiz follows.
+  Sol code review pass, and the Overseer gets that commit for Greg to deploy.
 
 ## The audit: every mode against Greg's rule
 
@@ -90,7 +108,7 @@ puts the explanatory band in the slot and it sends nothing.
 | **debate** | **no** | yes (`useDebate`, on press) | **no** | Stage 4 |
 | chat | no | yes — every turn | yes — Greg's own example | nothing |
 | remember — Recall | no | yes — a conversation | yes — below | nothing |
-| **remember — Quiz** | **no** | marking is `POST /api/quiz/:slug/mark`, a model call; the questions and reference answers are stored | **arguably no** (Sol, plan review 2) | Stage 5, a read-only quiz — pending the Overseer |
+| remember — Quiz | no | marking is `POST /api/quiz/:slug/mark`, a model call; the questions and reference answers are stored | arguably no (Sol, plan review 2) — **excluded by Greg's choice**, above | nothing |
 | referee | no | yes | yes — below | nothing |
 
 ### What stays owner-only, and why it is not a judgement call
@@ -99,11 +117,9 @@ puts the explanatory band in the slot and it sends nothing.
   profile. Greg named it.
 - **Remember's Recall** — the owner's own answers, in a conversation built with their profile
   (`profileSection`, src/converse.ts): a reader's private data.
-- **Remember's Quiz is the close call, and it went to the Overseer.** It stores questions, reference
-  answers and evidence with no profile and no URLs; only *marking* an answer spends. I first wrote it
-  off as half a feature; GPT Sol's plan review (finding 2) argued that under Greg's rule the stored
-  questions and answers are exactly what a visitor should see, read-only, with no answer box and no
-  marking. Default if nobody says otherwise: Stage 5, built last.
+- **Remember's Quiz was the close call.** It stores questions, reference answers and evidence with
+  no profile and no URLs; only *marking* spends. GPT Sol argued a read-only quiz follows Greg's rule;
+  Greg allowed it if small and preferred excluding it otherwise — see *Decided*, above.
 - **Citations' *Find it* results** (`citation_finds`) — keyed to the owner, and a record of the
   owner's own activity, like a glossary lookup (Sol, plan review 5). Private, not merely deferred.
 - **Referee** — everything it stores is keyed to the owner and made from what they typed: criteria and
@@ -215,11 +231,6 @@ crossing, and a mutation test with a credentialled and a private-host URL.
 
 Its own plan's Stage 4 contract, on `DebatePanel`'s existing `DebateAccess` union, plus the nested
 `identifies[].url` and `articleReferenceQuote` handling above.
-
-### Stage 5 — Remember's Quiz, read-only (pending the Overseer)
-
-A data-only visitor branch for `?remember=quiz`: the questions, the reference answers and their
-evidence, with no `useQuiz`, no answer box, no dictation, no job state and no marking.
 
 ### What every stage owes (Sol, plan review 4)
 

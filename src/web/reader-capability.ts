@@ -262,4 +262,6 @@ export const OWNER_HAS_EVERYTHING: PublicArtefacts = {
   timeline: true,
   sketch: true,
   trajectory: true,
+  faq: true,
+  citations: true,
 };

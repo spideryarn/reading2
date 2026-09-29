@@ -35,8 +35,8 @@ import { TimelineBand, VisitorTimelineBand } from "../modes/timeline/TimelineMod
 import { QuotesBand, VisitorQuotesBand } from "../modes/quotes/QuotesMode.js";
 import { useQuoteMarks } from "./useQuoteMarks.js";
 import { DebateBand } from "../modes/debate/DebateMode.js";
-import { CitationsBand } from "../modes/citations/CitationsMode.js";
-import { FaqBand } from "../modes/faq/FaqMode.js";
+import { CitationsBand, VisitorCitationsBand } from "../modes/citations/CitationsMode.js";
+import { FaqBand, VisitorFaqBand } from "../modes/faq/FaqMode.js";
 import {
   armTrajectoryOpening,
   firstTrajectoryArrival,
@@ -1950,19 +1950,29 @@ export function Reader({
          docs/plans/260905f-debate-mode-what-the-web-says-about-this-piece.md § Stage 4. */
       case "debate":
         return owner ? <DebateBand slug={slug} onJump={jumpTo} /> : null;
-      /* **The owner alone, for Debate's reason**: a visitor's rows would carry
-         outbound URLs through a public projection that is not built, so
-         `POLICY.citations` is `owners-only` and a visitor meets the boundary
-         sentence rather than an empty band. No passages either — the row's
-         "first cited" is a jump, not a selection.
-         docs/plans/260911g-citations-mode.md. */
+      /* **The owner/visitor pair, since 2026-09-29.** It was the owner alone
+         until a public article's stored Trajectory was refused to a signed-out
+         reader (SPIDERYARN-READING2-56); a stored list is the same case. The
+         visitor's rows arrive with every address re-judged by
+         `publicCitationUrl` (src/public/dto.ts § `publicCitedWork`), and the
+         branch is gated on the list itself, like the timeline's: an absent key
+         means `visitorGap` said `not-built` and the `VisitorBand` is in the
+         slot. No passages — the row's "first cited" is a jump, not a selection.
+         docs/plans/260911g-citations-mode.md,
+         docs/plans/260929c-a-visitor-sees-every-stored-mode-on-a-public-article.md. */
       case "citations":
-        return owner ? <CitationsBand slug={slug} read={owner.citations} onJump={jumpTo} /> : null;
-      /* **The owner alone** — `POLICY.faq` is `owners-only` for v1, so a visitor
-         meets the boundary sentence. No passages: each passage under a question
-         is a jump, not a selection. docs/plans/260916d-faq-mode.md. */
+        if (!owner)
+          return artefacts?.citations ? (
+            <VisitorCitationsBand citations={artefacts.citations} onJump={jumpTo} />
+          ) : null;
+        return <CitationsBand slug={slug} read={owner.citations} onJump={jumpTo} />;
+      /* **The owner/visitor pair, since 2026-09-29**, for the citations' reason
+         above. No passages: each passage under a question is a jump, not a
+         selection. docs/plans/260916d-faq-mode.md,
+         docs/plans/260929c-a-visitor-sees-every-stored-mode-on-a-public-article.md. */
       case "faq":
-        return owner ? <FaqBand slug={slug} onJump={jumpTo} /> : null;
+        if (!owner) return artefacts?.faq ? <VisitorFaqBand faq={artefacts.faq} onJump={jumpTo} /> : null;
+        return <FaqBand slug={slug} onJump={jumpTo} />;
       /* **The owner/visitor pair, since 2026-09-29.** A passage producer (the
          current stop) and a controller (← / → and the door after the stop's
          block), both published up here and both cleared when the band
@@ -1983,6 +1993,7 @@ export function Reader({
               glossary={artefacts.glossary}
               ideas={artefacts.ideas}
               timeline={artefacts.timeline}
+              faq={artefacts.faq}
               blocks={article.blocks}
               tree={article.tree}
               quoteMarks={quotes.found}
