@@ -51,12 +51,20 @@ import {
 } from "./threshold.js";
 
 /**
- * The two orders — `?faqby=` in the URL (params.ts § faqOrderParam). Here
- * rather than in params.ts so this module stays importable from Node (the
- * eval) without the client-only modules params.ts pulls in.
+ * The two orders — `?faqby=` in the URL. **The type lives here and the runtime
+ * list, `FAQ_ORDERS`, in params.ts**, which checks the two agree both ways.
+ *
+ * Split like that for two reasons that pull in opposite directions. params.ts
+ * is on the reader's startup path (main.tsx → App.tsx → Library.tsx →
+ * params.ts), so a *value* import from it would drag this module — FAQ-only
+ * code — into every reader's first load; tests/eager-client-graph.test.ts
+ * failed on exactly that (2026-09-29, it blocked a deploy). And this module
+ * must not import params.ts either, not even for a type: the eval imports it
+ * from Node, and the server's tsconfig cannot type-check params.ts's `.tsx`
+ * neighbours. A type-only import in params.ts is erased, so neither graph
+ * sees an edge.
  */
-export const FAQ_ORDERS = ["prioritised", "document"] as const;
-export type FaqOrder = (typeof FAQ_ORDERS)[number];
+export type FaqOrder = "prioritised" | "document";
 
 /** The two scores the order reads — structurally, so a visitor's question and the eval's both fit. */
 type Scored = Pick<FaqQuestion, "difficulty" | "centrality">;
