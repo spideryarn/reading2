@@ -23,6 +23,7 @@ import {
   deployBranchProblem,
   DEPLOY_SOURCE_BRANCHES,
   describeRedirect,
+  failingTestsFromReport,
   findSecretsInBundle,
   GATE_FIXTURE_ROOT,
   GATE_FIXTURES,
@@ -1203,3 +1204,98 @@ describe("postApplyProblems", () => {
   });
 });
 
+/* ------------------------------------------------------------------ */
+/* The test gate's list of failures                                    */
+/* ------------------------------------------------------------------ */
+
+describe("failingTestsFromReport", () => {
+  /* The shape vitest 4.1.11's own `json` reporter wrote for scratch files: one
+     with a nested failing test, a top-level failing test and a passing one; one
+     whose import failed, so it has a message and no assertions at all. */
+  const TREE = "/tmp/gate/tree";
+  const report = JSON.stringify({
+    numFailedTests: 2,
+    success: false,
+    testResults: [
+      {
+        name: `${TREE}/tests/a.test.ts`,
+        status: "failed",
+        message: "",
+        assertionResults: [
+          { ancestorTitles: ["outer", "inner"], title: "fails here", status: "failed" },
+          { ancestorTitles: ["outer"], title: "passes", status: "passed" },
+          { ancestorTitles: [], title: "top-level fails", status: "failed" },
+        ],
+      },
+      {
+        name: `${TREE}/tests/b.test.ts`,
+        status: "failed",
+        message: `Cannot find module './gone.js' imported from ${TREE}/tests/b.test.ts\nmore detail`,
+        assertionResults: [],
+      },
+      {
+        name: `${TREE}/tests/c.test.ts`,
+        status: "passed",
+        message: "",
+        assertionResults: [{ ancestorTitles: [], title: "fine", status: "passed" }],
+      },
+    ],
+  });
+
+  it("lists every failing test, file > describe > test, and a file that failed to load", () => {
+    expect(failingTestsFromReport(report, TREE)).toEqual({
+      ok: true,
+      failing: [
+        "tests/a.test.ts > outer > inner > fails here",
+        "tests/a.test.ts > top-level fails",
+        "tests/b.test.ts > (failed outside a test: Cannot find module './gone.js' imported from tests/b.test.ts)",
+      ],
+    });
+  });
+
+  it("says so when there is no report, rather than listing nothing", () => {
+    expect(failingTestsFromReport(null, TREE).ok).toBe(false);
+  });
+
+  it("says so when the report is not JSON vitest wrote", () => {
+    expect(failingTestsFromReport("{not json", TREE).ok).toBe(false);
+    expect(failingTestsFromReport("null", TREE).ok).toBe(false);
+    expect(failingTestsFromReport(JSON.stringify({ hello: 1 }), TREE).ok).toBe(false);
+    expect(
+      failingTestsFromReport(JSON.stringify({ numFailedTests: 0, testResults: [null] }), TREE).ok,
+    ).toBe(false);
+  });
+
+  it("does not present a partial list when vitest's failure count disagrees", () => {
+    const incomplete = JSON.parse(report);
+    incomplete.numFailedTests = 3;
+    expect(failingTestsFromReport(JSON.stringify(incomplete), TREE)).toEqual({
+      ok: false,
+      why: "vitest's JSON report says 3 test(s) failed but names 2",
+    });
+  });
+
+  it("does not mistake a suite-hook failure for a file-load failure", () => {
+    const hook = JSON.stringify({
+      numFailedTests: 0,
+      success: false,
+      testResults: [
+        {
+          name: `${TREE}/tests/hook.test.ts`,
+          status: "failed",
+          message: "",
+          assertionResults: [{ ancestorTitles: ["outer"], title: "never ran", status: "skipped" }],
+        },
+      ],
+    });
+    expect(failingTestsFromReport(hook, `${TREE}/`)).toEqual({
+      ok: true,
+      failing: ["tests/hook.test.ts > (failed outside a test: see full vitest output)"],
+    });
+  });
+
+  it("an all-green report is an empty list, not an error", () => {
+    const green = JSON.stringify({ numFailedTests: 0, success: true, testResults: [] });
+    expect(failingTestsFromReport(green, TREE)).toEqual({ ok: true, failing: [] });
+  });
+});
