@@ -1780,7 +1780,46 @@ export interface Article {
    * insist on.
    */
   visibility?: Visibility;
+
+  /**
+   * **Our guess at where an uploaded paper lives on the web** — `SourceGuess`
+   * below, off `upload_source_guesses`.
+   * docs/plans/260929g-canonical-link-for-an-uploaded-paper.md.
+   *
+   * **A required key holding `SourceGuess | undefined`**, for `assets`' reason:
+   * a projection that forgot it would typecheck and the reader would simply
+   * never see a guess. `undefined` is the real answer *nobody has looked yet*
+   * (and every article that is not an upload).
+   *
+   * **Owner-only.** The public projection (src/public/dto.ts) is a hand-built
+   * allowlist and does not carry it; a visitor sees no guess (plan § Decisions
+   * 4).
+   */
+  sourceGuess: SourceGuess | undefined;
 }
+
+/**
+ * **What we found when we searched the web for an uploaded paper**, as the
+ * owner's reading view needs it. `searching` means a claim is live, or went
+ * stale and will be reclaimed on the next open; the client fires
+ * `POST /api/source-guess/:slug` whenever this is neither `found` nor `none`.
+ *
+ * `found.kind` is `canonical` when a DOI or arXiv id was verified and `url` is
+ * the link built from it (*probably the original*), and `matching` when the
+ * text agreed and `url` is the search result's own address (*a page that
+ * matches this paper*). src/source-guess.ts decides; the reasons for a `none`
+ * are logged, not shown.
+ */
+export type SourceGuess =
+  | {
+      status: "found";
+      url: string;
+      host: string;
+      kind: "canonical" | "matching";
+      matchedBy: "doi" | "arxiv" | "content";
+    }
+  | { status: "none" }
+  | { status: "searching" };
 
 /**
  * One article as the library lists it — see docs/project/library.md.
@@ -4196,6 +4235,17 @@ export interface FaqQuestion {
   question: string;
   /** 1–3, deduplicated on `{blockId, start, end}`, in document order. */
   passages: FaqPassage[];
+  /**
+   * 0–1, the model's judgment: how much of the piece, and how much technical
+   * detail, a reader needs before this question makes sense. Low is a question
+   * anyone would ask on meeting the main claim; high is one that only arises
+   * inside a detail. **Optional, and absent on every list before `faq/4`** —
+   * such a list is drawn in reading order with no threshold
+   * (docs/plans/260929g-faq-difficulty-centrality-and-a-threshold.md).
+   */
+  difficulty?: number;
+  /** 0–1, the model's judgment: how much of the piece's argument turns on the answer. Optional as above. */
+  centrality?: number;
 }
 
 /**

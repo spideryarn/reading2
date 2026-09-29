@@ -1,6 +1,6 @@
 {
-  "id": "812083f3-eebb-4085-9fa4-5680ab8b54d5",
-  "prevId": "168510b0-8135-4c85-b49f-37bae9fe6c98",
+  "id": "67b2485b-0582-47dd-a464-19a41243317b",
+  "prevId": "9af498d9-b9e8-4049-81cd-060d6d08a8b9",
   "version": "7",
   "dialect": "postgresql",
   "tables": {
@@ -3517,7 +3517,7 @@
       "checkConstraints": {
         "rate_limit_events_bucket": {
           "name": "rate_limit_events_bucket",
-          "value": "\"spideryarn\".\"rate_limit_events\".\"bucket\" in ('link-preview-fetch', 'link-summary-fill', 'citation-find', 'shelf-topics')"
+          "value": "\"spideryarn\".\"rate_limit_events\".\"bucket\" in ('link-preview-fetch', 'link-summary-fill', 'citation-find', 'shelf-topics', 'upload-source-guess')"
         }
       },
       "isRLSEnabled": false
@@ -4777,6 +4777,154 @@
         "shelf_topic_scores_claim": {
           "name": "shelf_topic_scores_claim",
           "value": "num_nonnulls(\"spideryarn\".\"shelf_topic_scores\".\"claim_id\", \"spideryarn\".\"shelf_topic_scores\".\"claim_hash\", \"spideryarn\".\"shelf_topic_scores\".\"claimed_until\") in (0, 3)"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "spideryarn.upload_source_guesses": {
+      "name": "upload_source_guesses",
+      "schema": "spideryarn",
+      "columns": {
+        "article_id": {
+          "name": "article_id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "status": {
+          "name": "status",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "url": {
+          "name": "url",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "host": {
+          "name": "host",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "kind": {
+          "name": "kind",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "matched_by": {
+          "name": "matched_by",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "why": {
+          "name": "why",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "claim_token": {
+          "name": "claim_token",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "attempts": {
+          "name": "attempts",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 0
+        },
+        "searches": {
+          "name": "searches",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "model": {
+          "name": "model",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "claimed_at": {
+          "name": "claimed_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "finished_at": {
+          "name": "finished_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "upload_source_guesses_article_id_articles_id_fk": {
+          "name": "upload_source_guesses_article_id_articles_id_fk",
+          "tableFrom": "upload_source_guesses",
+          "tableTo": "articles",
+          "schemaTo": "spideryarn",
+          "columnsFrom": [
+            "article_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {
+        "upload_source_guesses_status": {
+          "name": "upload_source_guesses_status",
+          "value": "\"spideryarn\".\"upload_source_guesses\".\"status\" in ('searching', 'found', 'none')"
+        },
+        "upload_source_guesses_kind": {
+          "name": "upload_source_guesses_kind",
+          "value": "\"spideryarn\".\"upload_source_guesses\".\"kind\" is null or \"spideryarn\".\"upload_source_guesses\".\"kind\" in ('canonical', 'matching')"
+        },
+        "upload_source_guesses_matched_by": {
+          "name": "upload_source_guesses_matched_by",
+          "value": "\"spideryarn\".\"upload_source_guesses\".\"matched_by\" is null or \"spideryarn\".\"upload_source_guesses\".\"matched_by\" in ('doi', 'arxiv', 'content')"
+        },
+        "upload_source_guesses_kind_matches": {
+          "name": "upload_source_guesses_kind_matches",
+          "value": "\"spideryarn\".\"upload_source_guesses\".\"kind\" is null or (\"spideryarn\".\"upload_source_guesses\".\"kind\" = 'canonical') = (\"spideryarn\".\"upload_source_guesses\".\"matched_by\" in ('doi', 'arxiv'))"
+        },
+        "upload_source_guesses_url_scheme": {
+          "name": "upload_source_guesses_url_scheme",
+          "value": "\"spideryarn\".\"upload_source_guesses\".\"url\" is null or \"spideryarn\".\"upload_source_guesses\".\"url\" ~ '^https?://'"
+        },
+        "upload_source_guesses_attempts": {
+          "name": "upload_source_guesses_attempts",
+          "value": "\"spideryarn\".\"upload_source_guesses\".\"attempts\" between 0 and 2"
+        },
+        "upload_source_guesses_searches": {
+          "name": "upload_source_guesses_searches",
+          "value": "\"spideryarn\".\"upload_source_guesses\".\"searches\" is null or \"spideryarn\".\"upload_source_guesses\".\"searches\" >= 0"
+        },
+        "upload_source_guesses_searching": {
+          "name": "upload_source_guesses_searching",
+          "value": "\"spideryarn\".\"upload_source_guesses\".\"status\" <> 'searching' or (\"spideryarn\".\"upload_source_guesses\".\"claim_token\" is not null and \"spideryarn\".\"upload_source_guesses\".\"claimed_at\" is not null\n        and \"spideryarn\".\"upload_source_guesses\".\"finished_at\" is null and \"spideryarn\".\"upload_source_guesses\".\"url\" is null and \"spideryarn\".\"upload_source_guesses\".\"host\" is null and \"spideryarn\".\"upload_source_guesses\".\"kind\" is null\n        and \"spideryarn\".\"upload_source_guesses\".\"matched_by\" is null and \"spideryarn\".\"upload_source_guesses\".\"why\" is null)"
+        },
+        "upload_source_guesses_found": {
+          "name": "upload_source_guesses_found",
+          "value": "\"spideryarn\".\"upload_source_guesses\".\"status\" <> 'found' or (\"spideryarn\".\"upload_source_guesses\".\"url\" is not null and \"spideryarn\".\"upload_source_guesses\".\"host\" is not null and \"spideryarn\".\"upload_source_guesses\".\"kind\" is not null\n        and \"spideryarn\".\"upload_source_guesses\".\"matched_by\" is not null and \"spideryarn\".\"upload_source_guesses\".\"why\" is null and \"spideryarn\".\"upload_source_guesses\".\"claim_token\" is null\n        and \"spideryarn\".\"upload_source_guesses\".\"finished_at\" is not null)"
+        },
+        "upload_source_guesses_none": {
+          "name": "upload_source_guesses_none",
+          "value": "\"spideryarn\".\"upload_source_guesses\".\"status\" <> 'none' or (\"spideryarn\".\"upload_source_guesses\".\"why\" is not null and \"spideryarn\".\"upload_source_guesses\".\"url\" is null and \"spideryarn\".\"upload_source_guesses\".\"host\" is null\n        and \"spideryarn\".\"upload_source_guesses\".\"kind\" is null and \"spideryarn\".\"upload_source_guesses\".\"matched_by\" is null and \"spideryarn\".\"upload_source_guesses\".\"claim_token\" is null\n        and \"spideryarn\".\"upload_source_guesses\".\"finished_at\" is not null)"
         }
       },
       "isRLSEnabled": false

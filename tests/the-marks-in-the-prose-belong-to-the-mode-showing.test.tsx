@@ -296,6 +296,7 @@ const ARTICLES: Record<string, Article> = {
        "ready" is what every writer produces today (src/types.ts). Nothing
        in this test reads it — it draws marks, not rung 5. */
     navLabelStatus: "ready",
+    sourceGuess: undefined,
   },
   [B]: {
     meta: { slug: B, title: "Another piece", url: "https://example.com/b", byline: "Somebody" },
@@ -306,6 +307,7 @@ const ARTICLES: Record<string, Article> = {
        "ready" is what every writer produces today (src/types.ts). Nothing
        in this test reads it — it draws marks, not rung 5. */
     navLabelStatus: "ready",
+    sourceGuess: undefined,
   },
 };
 

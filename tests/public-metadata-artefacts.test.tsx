@@ -61,6 +61,7 @@ const ARTICLE: Article = {
   ],
   assets: undefined,
   navLabelStatus: "ready",
+  sourceGuess: undefined,
   tree: {
     version: "1",
     generator: "test",

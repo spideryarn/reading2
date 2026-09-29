@@ -35,6 +35,7 @@ import { useComments } from "../useComments.js";
 import { useChatAnchors } from "../useChatAnchors.js";
 import { useExperimental } from "../useExperimental.js";
 import { useReadingTime } from "../useReadingTime.js";
+import { useSourceGuess } from "../useSourceGuess.js";
 import { articleWaitTitle, useDocumentTitle } from "../page-title.js";
 import { apiFetch } from "../lib/api.js";
 import type { PublicArtefactSet, PublicArtefacts } from "../../public-types.js";
@@ -295,12 +296,24 @@ function OwnedArticle({
   );
   const visibility = shared?.slug === slug ? shared.visibility : null;
 
+  /**
+   * **Where an uploaded paper probably lives on the web, once somebody has
+   * looked** — the third thing layered over the payload, for the rename's
+   * reason: it is drawn in the masthead and on the metadata page, and the
+   * payload is fetched once for both. `null` until a settled answer arrives,
+   * so the payload is untouched (and `Reader` not rebuilt) on every open but
+   * the first. src/web/useSourceGuess.ts, which is also why it is mounted here
+   * and not in `OwnedReader`.
+   */
+  const guessed = useSourceGuess(slug, fetched);
+
   const article = useMemo(() => {
     /* `!== null`, not truthiness: clearing an override restores the
        extractor's title, and `Meta.title` may be the empty string. Read as
        truthy that would silently fall through to `fetched`, which is still
        carrying the override that was just cleared. */
-    const named = title !== null ? { ...fetched, meta: { ...fetched.meta, title } } : fetched;
+    const titled = title !== null ? { ...fetched, meta: { ...fetched.meta, title } } : fetched;
+    const named = guessed !== null ? { ...titled, sourceGuess: guessed } : titled;
     if (visibility === null) return named;
     if (visibility === "unknown") {
       /* Deleted rather than set to `undefined`: `exactOptionalPropertyTypes`
@@ -310,7 +323,7 @@ function OwnedArticle({
       return rest;
     }
     return { ...named, visibility };
-  }, [fetched, title, visibility]);
+  }, [fetched, title, guessed, visibility]);
 
   const renameTo = useCallback(
     (forSlug: string, next: string) => setRenamed({ slug: forSlug, title: next }),

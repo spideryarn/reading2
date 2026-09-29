@@ -1,0 +1,146 @@
+{
+  "arm": "after",
+  "slug": "entropy-24-00930-spya-pywwkq",
+  "version": "faq/4",
+  "faqSha256": "8ded5d816427dcaf28f5660edff111ea37fab6673cce50e81c790ff6d72f1cfc",
+  "at": "2026-09-29T17:57:07.483Z",
+  "tokens": {
+    "input": 21638,
+    "output": 2658,
+    "cacheRead": 0,
+    "cacheWrite": 0
+  },
+  "questions": [
+    {
+      "id": "spya-sxutcu",
+      "question": "Mutual information is said to measure similarity, not transfer, so why introduce it as a tool for tracking information flow before transfer entropy?",
+      "passages": [
+        {
+          "blockId": "spya-f6sbgx",
+          "quote": "It does not, however, quantify information transfer between the neurons, as it is an undirected measure that describes the instantaneous dependency between two variables",
+          "start": 626
+        },
+        {
+          "blockId": "spya-p4pyuy",
+          "quote": "transfer entropy provides a measure of information propagation",
+          "start": 904
+        }
+      ],
+      "difficulty": 0.3,
+      "centrality": 0.5
+    },
+    {
+      "id": "spya-fbzeme",
+      "question": "If there's no single accepted way to define redundant information, how can PID results from different studies be compared or trusted?",
+      "passages": [
+        {
+          "blockId": "spya-bgsd4n",
+          "quote": "Unfortunately, classical Shannon information theory provides no unique solution to any of these, and so considerable work has been devoted to developing formal measures of each.",
+          "start": 257
+        },
+        {
+          "blockId": "spya-rc76qn",
+          "quote": "There are, at present, close to a dozen competing redundancy functions",
+          "start": 375
+        }
+      ],
+      "difficulty": 0.4,
+      "centrality": 0.8
+    },
+    {
+      "id": "spya-t0drw7",
+      "question": "If bivariate transfer entropy is known to overestimate the significance of connections, doesn't that undercut the triad selection used in the cortical culture synergy findings?",
+      "passages": [
+        {
+          "blockId": "spya-j4cy9j",
+          "quote": "it has been shown that bivariate analyses overestimate the significance of bivariate edges",
+          "start": 315
+        },
+        {
+          "blockId": "spya-wr7f6y",
+          "quote": "the authors used a serial conditioning algorithm to infer the multivariate TE networks",
+          "start": 592
+        }
+      ],
+      "difficulty": 0.6,
+      "centrality": 0.6
+    },
+    {
+      "id": "spya-q5avpx",
+      "question": "If synergy is treated as the hallmark of neural computation, why would redundancy dominate during a demanding task like motor execution?",
+      "passages": [
+        {
+          "blockId": "spya-t8fayf",
+          "quote": "during movement execution (a reach-and-grasp action) the relative abundance of redundant information increased dramatically",
+          "start": 307
+        },
+        {
+          "blockId": "spya-b32ecw",
+          "quote": "synergy seems to reflect behaviorally specific patterns of dynamical activity in the cortex.",
+          "start": 133
+        }
+      ],
+      "difficulty": 0.5,
+      "centrality": 0.6
+    },
+    {
+      "id": "spya-k979uy",
+      "question": "Since naive entropy estimates from finite data are known to overstate mutual information, how much of the reported synergy could be an artifact of undersampling?",
+      "passages": [
+        {
+          "blockId": "spya-tz99zn",
+          "quote": "undersampling and finite-size effects can severely compromise the estimated entropies and mutual information data",
+          "start": 818
+        },
+        {
+          "blockId": "spya-qa7gt2",
+          "quote": "it is known that the plug-in estimator for the Shannon entropy consistently underestimates the true entropy and overestimates the mutual information",
+          "start": 226
+        }
+      ],
+      "difficulty": 0.5,
+      "centrality": 0.6
+    },
+    {
+      "id": "spya-d3s8ky",
+      "question": "Even after finding statistical synergy in neurons, can we say anything about why or how biologically it arises, or is that left completely open?",
+      "passages": [
+        {
+          "blockId": "spya-spdx0y",
+          "quote": "it does not necessarily provide a mechanistic explanation for why particular neurons are synergy-dominated or redundancy-dominated",
+          "start": 177
+        }
+      ],
+      "difficulty": 0.3,
+      "centrality": 0.6
+    },
+    {
+      "id": "spya-c6wg45",
+      "question": "Given that the number of information atoms explodes combinatorially with more parent neurons, how could this framework ever describe a real neuron with thousands of inputs?",
+      "passages": [
+        {
+          "blockId": "spya-aby2dp",
+          "quote": "This sequence of numbers grows appallingly fast: in the case of six parent neurons, there are 7,828,354 distinct PI atoms, the vast majority of which are difficult to interpret.",
+          "start": 302
+        }
+      ],
+      "difficulty": 0.5,
+      "centrality": 0.7
+    }
+  ],
+  "dropped": {
+    "unknownIds": 0,
+    "unquoted": 0,
+    "tooLong": 0,
+    "duplicate": 0,
+    "unanchored": 0,
+    "overCap": 0,
+    "malformed": 1
+  },
+  "scoreDrops": {
+    "difficultyAbsent": 0,
+    "difficultyRejected": 0,
+    "centralityAbsent": 0,
+    "centralityRejected": 0
+  }
+}

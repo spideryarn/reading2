@@ -220,3 +220,133 @@ ChatGPT plan, and the partner lists above are exactly the companies that have be
 - Whether our code can set a spending limit on an OpenRouter OAuth key.
 - Whether OpenRouter OAuth keys use the account's BYOK keys.
 - The Anthropic credit-pool rules, taken only from news reports.
+
+## Second round, 2026-09-29: the ChatGPT route in detail
+
+Greg answered the first plan the same day (quoted in full in
+[260929g](../plans/260929g-bring-your-own-ai-subscription.md#what-greg-decided)). He wants the
+ChatGPT route planned in detail, on the assumption that OpenAI lets us in. This section is the
+research that plan rests on. All of it was fetched on 2026-09-29.
+
+The OpenAI docs were read by a Sonnet subagent through a tool that summarises each page, so the
+quoted strings are close to OpenAI's words but may not be exact. Re-read the raw pages before
+writing code against them.
+
+### How connecting works (primary, `developers.openai.com/siwc/token-sharing-open-source/*`)
+
+- **Signing in.** The documented flow is for a *public* client: OAuth 2.0 with OIDC and PKCE
+  (S256), a loopback redirect `http://127.0.0.1:{port}/callback`, and no client secret.
+  - Scopes: `openid profile email offline_access resource.invoke chatgpt.tokens.use.direct`.
+  - Resource: `https://api.openai.com/v1`.
+  - The first sign-in registers a client dynamically, with `client_id=dynamic_agent_client`, and
+    gets back an issued `oaiapp_…` id. A persistent `ext_agent_host_id` is required.
+
+  The *identity-only* website flow does support confidential clients with registered callback URLs
+  (`/siwc/website`). A hosted app like ours would need that kind of client with the token-sharing
+  scopes. **That combination is not documented**, and is presumably what the interest form leads
+  to.
+- **Tokens** (`/token-reference`, `/profiles-and-sessions`).
+  - An access token lasts 1 hour.
+  - A refresh token lasts 30 days, and each refresh replaces it with a fresh 30 days.
+  - The token response carries `earliest_refresh_at`.
+  - We must always store the newest refresh token and never refresh twice at once, because
+    reusing an old one fails with `refresh_token_reused`.
+  - Revoking is a POST to the discovery document's `revocation_endpoint`.
+  - The user is identified by `sub`.
+- **OpenAI does not tell us when a reader disconnects the app.** We find out only when a call or a
+  refresh fails (`/profiles-and-sessions`). And signing out of our app does not disconnect it on
+  ChatGPT's side (secondary, Help Center snippet).
+- **Eligible plans: Plus and Pro** (`/siwc/quickstart`). Business and Enterprise are not mentioned.
+  `subscription_sharing_user_not_eligible` covers the rest.
+
+### What a call may contain (`/models-and-inference`, `/preview-limitations`)
+
+- **Only `POST /v1/responses` is allowed.** The model list comes from `GET /v1/models`, filtered to
+  `visibility == "list"`, and the docs' example slug is `gpt-6.1-sol`.
+- Every request must set `store: false` and `stream: true`, and `input` must be an array.
+  Instructions go in `instructions` or developer messages, because the `system` role is not
+  accepted.
+- **Rejected fields:** `max_output_tokens`, `temperature`, `top_p`, `metadata`, `background`,
+  `conversation`, `prompt`, `prompt_cache_retention`, `truncation`, `user`, `safety_identifier`,
+  `moderation`, `max_tool_calls`, `top_logprobs`, `multi_agent`. And `previous_response_id` cannot
+  be used over HTTP.
+- **Unsupported:** audio and video input, the Files API, transcription, image generation, file
+  search, Code Interpreter, and hosted connectors. Realtime and embeddings are not mentioned, but
+  only `/v1/responses` is an allowed route, so they are out.
+- **Whether a server may call on the reader's behalf in a background job, while they are not
+  there, is not documented.** The docs cover open-source and locally hosted apps. The self-hosted
+  VM page moves a credential file to a remote machine, and says that "host-specific usage
+  attribution and revocation … for transferred sessions are not yet available".
+
+### Errors (`/errors-and-recovery`)
+
+| code | HTTP | what the docs say to do |
+|---|---|---|
+| `subscription_sharing_usage_limit_exceeded` | 429, or `response.failed` mid-stream | pause requests on the plan; link to ChatGPT Settings → Usage |
+| `subscription_sharing_usage_unavailable` | 503, or mid-stream | usage could not be checked; back off |
+| `subscription_sharing_user_not_eligible` | 403 | explain; do not retry |
+| `subscription_sharing_invalid_user` | 401 | ask the reader to sign in again |
+| `subscription_sharing_unsupported_capability` | 400 | remove what `error.param` names |
+| `subscription_sharing_route_not_supported` | 403 | use `/v1/responses` |
+| refresh: `invalid_grant`, `refresh_token_expired`, `refresh_token_invalidated`, `refresh_token_reused`, … | ? | clear the tokens and sign in again |
+
+A failure before the stream starts may come back as `{"detail": "…"}` rather than a standard error
+object.
+
+**No reset time is documented, in an error or anywhere else.** No endpoint returns the reader's
+remaining allowance. Codex's own app-server can read it (`account/rateLimits/read`, with
+`resetsAt`, `usedPercent` and `windowDurationMins`, as measured on the box on 2026-09-09 against our
+own login), but the SIWC docs do not offer that method. "For ChatGPT Plus users, the five-hour usage
+limit is shared across all apps where they use their ChatGPT plan" (`/profiles-and-sessions`). A
+reader can also set a weekly cap for each app in ChatGPT Settings → Usage (secondary). The exact URL
+of that settings page was not verified.
+
+**Spike, free, 2026-09-29.** `POST https://api.openai.com/v1/responses` and `GET /v1/models`, sent
+with a made-up bearer token, both return HTTP 401 with
+`{"error":{"code":"invalid_api_key","message":"Incorrect API key provided: … You can find your API key at https://platform.openai.com/account/api-keys."}}`.
+That is the ordinary API-key error, and its advice is wrong for a ChatGPT reader, who has no API
+key. **OpenAI's error text must never be passed through to a reader.** Map it to our own sentence.
+What a real, expired ChatGPT token returns can only be seen once we have a client id.
+
+### The nearest OpenAI model to Claude Sonnet (Artificial Analysis leaderboard, primary)
+
+<https://artificialanalysis.ai/leaderboards/models>, fetched 2026-09-29. Prices are per million
+tokens from OpenRouter's public model list (`GET https://openrouter.ai/api/v1/models`), read the
+same day.
+
+| model, effort | AA Intelligence Index | first token (s) | tokens/s | $ in / out |
+|---|---|---|---|---|
+| Claude Sonnet 5.5, high | 47 | 16 | 89 | 2 / 10 |
+| Claude Sonnet 5.5, medium | 41 | 1.3 | 89 | 2 / 10 |
+| **GPT-6.1 Sol, medium** | **48** | 5.3 | 62 | 2 / 10 |
+| **GPT-6.1 Sol, low** | **42** | 1.8 | 74 | 2 / 10 |
+| GPT-6 Sol, high | 43 | 15 | 66 | 2 / 10 |
+| GPT-5.6 Terra, max | 42 | 139 | 98 | 2 / 12 |
+| GPT-6 Luna, max | 37 | 97 | 148 | 0.10 / 0.50 |
+
+- **Terra is not competitive.** The newest is GPT-5.6 Terra, and at max effort it is slower than
+  Sol and scores lower.
+- **There is no "Luna Pro".** The Pro-only reasoning models (GPT-6 Astra, GPT-5.6 Sol Pro) are not
+  on Plus, so they cannot be the default.
+- **GPT-6.1 Sol is on Plus and Pro** (primary, <https://learn.chatgpt.com/docs/models>). Whether it
+  appears in a SIWC token's `/v1/models` list is not verified.
+- AA's index measures general reasoning. It does not measure JSON structuring or faithfulness over
+  a 5k–60k-token article, and AA's long-context benchmark (AA-LCR) was not obtained. So the swap
+  needs our own eval.
+- **Claude Sonnet 5 is deprecated** on AA in favour of Claude Sonnet 5.5, released 2026-09-28 at the
+  same price (<https://artificialanalysis.ai/articles/claude-sonnet-5-5>). The two scores sit on
+  different index versions and must not be compared. This is worth its own look, separately from
+  this work.
+
+### Prices of what would stay on us
+
+- **Live voice.** `gpt-realtime-2.1` costs $32 per million audio tokens in and $64 out (from
+  [`src/pricing.ts`](../../src/pricing.ts)). At about 600 tokens a minute for the reader's speech
+  and 1,200 for the model's, that is about $0.02 a minute listening and $0.08 a minute speaking.
+  Opening a session costs about $0.06 of article text, and about a tenth of that on each turn after
+  ([260831g](../plans/260831g-live-conversation.md)). Published measurements put typical sessions
+  at $0.06–$0.11 a minute (secondary,
+  <https://hackernoon.com/openai-realtime-api-pricing-in-2026-real-world-data-from-4000-measured-sessions>).
+  `gpt-live-transcribe` adds $0.017 a minute. The local ledger has no realtime sessions to measure
+  against, so these are estimates.
+- **Dictation, embeddings, images and PDF figures.** Small. See the plan's cost table.

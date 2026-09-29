@@ -1,0 +1,158 @@
+{
+  "arm": "before-2",
+  "slug": "scaling-hypothesis",
+  "version": "faq/3",
+  "faqSha256": "9c6f7a31f99efcb35ef1416a62d7fd0dd25b6c6687ff88b4619fe2dc74a4e5eb",
+  "at": "2026-09-29T17:49:14.839Z",
+  "tokens": {
+    "input": 29421,
+    "output": 10583,
+    "cacheRead": 0,
+    "cacheWrite": 0
+  },
+  "questions": [
+    {
+      "id": "spya-c5pb7k",
+      "question": "If standard NLP benchmarks show nothing unusual, why should we believe GPT-3's meta-learning leap is real?",
+      "passages": [
+        {
+          "blockId": "spya-s8rx6n",
+          "quote": "Nothing in the raw metrics reported on, say, Penn Tree Bank or LAMBADA or WinoGrande would lead you to expect all of this hilarious and creative output",
+          "start": 97
+        }
+      ]
+    },
+    {
+      "id": "spya-fefx0n",
+      "question": "If GPT-3 already costs millions of dollars, is scaling it 100-1000x further really economically realistic?",
+      "passages": [
+        {
+          "blockId": "spya-dfjr4c",
+          "quote": "Nonetheless, I think we can expect further scaling. (10×? No, 10× isn’t cool. You know what’s cool? 100–1000×, trained on a fancy new supercomputer.)",
+          "start": 1201
+        }
+      ]
+    },
+    {
+      "id": "spya-cj0tbe",
+      "question": "If the pretraining thesis is logically airtight, why does the author still doubt it will actually work in practice?",
+      "passages": [
+        {
+          "blockId": "spya-e5n86h",
+          "quote": "The pretraining thesis, while logically impeccable—how is a model supposed to solve all possible trick questions without understanding, just guessing?—never struck me as convincing, an argument admitting neither confutation nor conviction.",
+          "start": 19
+        },
+        {
+          "blockId": "spya-faees7",
+          "quote": "Why think pretraining or sequence modeling is not another one of them?",
+          "start": 0
+        }
+      ]
+    },
+    {
+      "id": "spya-x8vx56",
+      "question": "If DeepMind has the hardware, budgets, and people, why hasn't it built anything like GPT-3?",
+      "passages": [
+        {
+          "blockId": "spya-khnsat",
+          "quote": "They aren’t stupid, they have the hardware, they have the budgets, they have the people.",
+          "start": 294
+        },
+        {
+          "blockId": "spya-vr9q2p",
+          "quote": "Why didn’t DeepMind do GPT-3?",
+          "start": 0
+        }
+      ]
+    },
+    {
+      "id": "spya-k0z876",
+      "question": "If months after release no other lab has matched GPT-3, does that support or undercut the idea of an oncoming scaling arms race?",
+      "passages": [
+        {
+          "blockId": "spya-scr8jb",
+          "quote": "A quarter year on from GPT-3 and counting, can you name a single dense model as large as the 17b Turing-NLG—never mind larger than GPT-3?",
+          "start": 303
+        },
+        {
+          "blockId": "spya-fyy04z",
+          "quote": "no model has come near GPT-3, and indeed, no model has even exceeded Turing-NLG’s 17b.",
+          "start": 329
+        }
+      ]
+    },
+    {
+      "id": "spya-ag3yvw",
+      "question": "Isn't calling GPT-3 'just' pattern-matching or memorization a fair criticism rather than missing the point?",
+      "passages": [
+        {
+          "blockId": "spya-mpden3",
+          "quote": "dismiss any model as “just” this or that(“just billions of IF statements” or “just a bunch of multiplications” or “just millions of memorized web pages”)",
+          "start": 112
+        },
+        {
+          "blockId": "spya-ay4yw7",
+          "quote": "Showing that some task requiring intelligence can be solved by a well-defined algorithm with no ‘intelligence’ is precisely what success must look like!",
+          "start": 110
+        }
+      ]
+    },
+    {
+      "id": "spya-x0wb4v",
+      "question": "If training data is just physics, like river hydrology, with no agents in it at all, can agency still emerge from it?",
+      "passages": [
+        {
+          "blockId": "spya-f7e8ez",
+          "quote": "no amount of modeling the chaotic dynamics of Pluto will give you any help in modeling the dynamics of astronomy infighting about whether Pluto is a planet, right?",
+          "start": 361
+        },
+        {
+          "blockId": "spya-zh9cmm",
+          "quote": "Humans do, in fact, model natural systems like these as agents. We find such teleological explanations indispensable for intuition and shortcut reasoning across many natural systems.",
+          "start": 69
+        }
+      ]
+    },
+    {
+      "id": "spya-h3wra0",
+      "question": "Since capabilities like agency have to 'pay their way' with enough data and scale, couldn't a model simply fail to develop it?",
+      "passages": [
+        {
+          "blockId": "spya-dbrxu8",
+          "quote": "They need rich enough models to compute them feasibly, enough data to force them out of easier solutions (which will fail on a few rare datapoints), and enough training (to work through all the possibilities to converge on the better capabilities).",
+          "start": 655
+        },
+        {
+          "blockId": "spya-jrm0w9",
+          "quote": "All you can do is make a complex system that doesn’t display agency as far as you can tell; unfortunately, much like Turing-completeness (or security vulnerabilities), that there is no overt agency doesn’t mean it is not there.",
+          "start": 160
+        }
+      ]
+    },
+    {
+      "id": "spya-m980an",
+      "question": "If one random Turing machine alone has nothing it's trying to maximize, why would training on many different ones risk producing agency?",
+      "passages": [
+        {
+          "blockId": "spya-ufpyk0",
+          "quote": "There is nothing that random TM programs try to minimize or maximize; they simply run.",
+          "start": 305
+        },
+        {
+          "blockId": "spya-usu3q6",
+          "quote": "This provides our modularity, and a particular computation executed, and strong optimization pressure to rapidly ‘read’ the history and infer what the new rules must be.",
+          "start": 0
+        }
+      ]
+    }
+  ],
+  "dropped": {
+    "unknownIds": 0,
+    "unquoted": 1,
+    "tooLong": 0,
+    "duplicate": 0,
+    "unanchored": 1,
+    "overCap": 0,
+    "malformed": 0
+  }
+}

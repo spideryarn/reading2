@@ -344,7 +344,9 @@ a coincidence:
   otherwise reopen the bar every few milliseconds under whatever you had already typed.
 - **It does not fire while focus is in an input, a textarea, a select or anything contenteditable**,
   which is the same list the arrows respect — and it matters more here, because ⌘-K is a
-  text-editing chord in several editors.
+  text-editing chord in several editors. The list is one function, `isTyping` in
+  [`key-chord.ts`](../../src/web/key-chord.ts), shared by the arrows, G and both chords; so is
+  `isModChord`, the ⌘-or-Ctrl test with Shift, Alt, auto-repeat and IME composition refused.
 - **`preventDefault()` only when the press is claimed.** Firefox focuses the address bar on ⌘-K; a
   listener that suppressed that without opening anything would be a chord that quietly breaks a
   browser feature.
@@ -368,6 +370,43 @@ inert behind it, and there is nothing to step through.
 The chord was verified free before it was taken — a grep of `src/web/` and `tests/` for
 `metaKey`/`ctrlKey` with `"k"` returned nothing, 2026-09-06. On a phone there is no chord at all,
 which is why the bar also has a button in the Dock.
+
+### ⌘-Enter opens the Metadata page
+
+> In the Reading view, if I hit Command Enter, that should open up the Metadata mode.
+>
+> — Greg, 2026-09-29
+
+**⌘-Enter on a Mac, Ctrl-Enter everywhere else, goes to `/read/<slug>/metadata`** — the Metadata
+button's own href, `?at=` and all, so the two cannot disagree (`useMetadataChord` in
+[`Dock.tsx`](../../src/web/Dock.tsx)). Ctrl rather than the Alt-Enter Greg guessed at: it is the
+pairing ⌘-K already uses, and Alt-Enter on a link is a download
+([260929a](../research/260929a-keyboard-shortcut-libraries.md), which also says why no library).
+
+It keeps ⌘-K's rules — no repeat, no Shift or Alt, no IME composition, nothing over an open
+`<dialog>`, nothing once another handler has `preventDefault`ed, and `preventDefault()` only when
+claimed — and adds three where it does not fire:
+
+- **Off the reading view.** On the metadata page itself there is nothing to toggle back to.
+- **While typing.** ⌘/Ctrl-Enter already means *send* in five text boxes — Feedback, Comment,
+  Annotate, Quiz and Profile — each scoped to its own field; skipping text fields keeps them working.
+- **On a focused link**, or inside one. There it is a modified click, a new tab, on every link in
+  the prose. A focused *button* is app policy rather than a browser fact: no button here binds a
+  modified Enter, so the chord wins there.
+
+The Metadata button's card says so: *"⌘Enter / Ctrl-Enter opens it from the article"*. Tests: `tests/metadata-chord.test.tsx`.
+
+### Enter in a text box
+
+**Chat-style boxes send on Enter; Shift+Enter is a newline** — the chat composer, the box that
+edits a question already asked, and Referee's Candidates box, all through `isSendEnter` in
+[`key-chord.ts`](../../src/web/key-chord.ts), and ⌘/Ctrl-Enter sends there too. **Paragraph boxes
+keep ⌘/Ctrl-Enter** — Feedback, Comment, Annotate, Quiz, Profile — because Enter is their newline.
+**An Enter that ends an IME composition never sends**: a reader typing Japanese or Chinese presses it
+to accept a word. Chat's Send button carries the two keys on its card, and stays `aria-disabled`
+rather than `disabled` so the card still opens on an empty box
+([260929g § Part C](../plans/260929g-shelf-search-focus-and-metadata-chord.md)). Tests:
+`tests/the-enter-key-really-sends.test.tsx`.
 
 ## G, the one letter
 

@@ -334,6 +334,18 @@ h1 a:hover { text-decoration: underline; text-decoration-color: var(--highlight)
   white-space: nowrap;
   opacity: 0.72;
 }
+/* **A guessed address after the *uploaded* words** — Masthead.tsx §
+   `GuessedSourceLink`, plan 260929g. The row wraps only when it carries one, so
+   the plain origin line keeps the no-wrap rule above; on a narrow window the
+   guess drops under the words rather than squeezing them. A step dimmer than a
+   real origin (`--ink-faint`, the words' own colour, not `--ink-soft`), because
+   it is a guess, and the same hover. */
+.origin-with-guess { flex-wrap: wrap; column-gap: 0.6rem; }
+.origin-guess { color: var(--ink-faint); }
+.origin-guess:hover { color: var(--highlight); }
+/* The **?** is the part of the link that says *guess*, so it is never faded or
+   cut with the path: `flex: none`, full strength. */
+.origin-guess-mark { flex: none; }
 
 /* The facts line: byline, source, and the article's measurements. Separators
    are drawn by ::before on every span after the first, so a missing byline or

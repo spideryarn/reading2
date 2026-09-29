@@ -1,0 +1,172 @@
+{
+  "arm": "after",
+  "slug": "noema-mythology-of-conscious-ai",
+  "version": "faq/4",
+  "faqSha256": "8ded5d816427dcaf28f5660edff111ea37fab6673cce50e81c790ff6d72f1cfc",
+  "at": "2026-09-29T17:57:49.310Z",
+  "tokens": {
+    "input": 20481,
+    "output": 7723,
+    "cacheRead": 0,
+    "cacheWrite": 0
+  },
+  "questions": [
+    {
+      "id": "spya-xzz207",
+      "question": "Does explaining why people are biased toward seeing AI as conscious actually prove that AI isn't conscious?",
+      "passages": [
+        {
+          "blockId": "spya-cqh2pq",
+          "quote": "we become more likely to see consciousness where it doesn’t exist, and to miss seeing it where it does",
+          "start": 101
+        },
+        {
+          "blockId": "spya-k850tu",
+          "quote": "But helping you recognize the power of our pareidolia-inducing psychological biases is just the first step in challenging the mythology of conscious AI.",
+          "start": 285
+        }
+      ],
+      "difficulty": 0.2,
+      "centrality": 0.6
+    },
+    {
+      "id": "spya-dsuphy",
+      "question": "Does the failure of the neural-replacement thought experiment show that no functional account of the brain could work, or just its silicon version?",
+      "passages": [
+        {
+          "blockId": "spya-ahtr6e",
+          "quote": "But the argument fails at its first hurdle, given the impossibility of replacing any part of the brain with a perfect silicon equivalent.",
+          "start": 693
+        }
+      ],
+      "difficulty": 0.7,
+      "centrality": 0.45
+    },
+    {
+      "id": "spya-kpz4nv",
+      "question": "How can rejecting computational functionalism still leave room for a broader functionalism about brains and minds?",
+      "passages": [
+        {
+          "blockId": "spya-f0qxnb",
+          "quote": "the rather liberal position of functionalism-in-general, since functional organization can include many things, with the very specific claim of computational functionalism",
+          "start": 314
+        }
+      ],
+      "difficulty": 0.6,
+      "centrality": 0.55
+    },
+    {
+      "id": "spya-yuxku2",
+      "question": "How does the essay's case against computational functionalism undercut the simulation hypothesis's core assumption?",
+      "passages": [
+        {
+          "blockId": "spya-xdy4fe",
+          "quote": "This, perhaps unsurprisingly, is the assumption that “a computer running a suitable program would be conscious” (see page 2 of his paper).",
+          "start": 400
+        }
+      ],
+      "difficulty": 0.6,
+      "centrality": 0.4
+    },
+    {
+      "id": "spya-znd6q8",
+      "question": "If digital computers can't be conscious, why does the essay still leave the door open to artificial consciousness through other technologies?",
+      "passages": [
+        {
+          "blockId": "spya-rn8y3y",
+          "quote": "At the same time, nothing in what I’ve said rules out the possibility of artificial consciousness altogether.",
+          "start": 0
+        },
+        {
+          "blockId": "spya-vs0vpj",
+          "quote": "Even if I’m right that standard digital computers aren’t up to the job, other emerging technologies might yet be, whether alternative forms of computation (analogue, neuromorphic, biological and so on) or rapidly developing methods in synthetic biology.",
+          "start": 0
+        }
+      ],
+      "difficulty": 0.5,
+      "centrality": 0.7
+    },
+    {
+      "id": "spya-y7hb00",
+      "question": "Why does it matter to separate AI that's actually conscious from AI that merely seems conscious, if no test can tell them apart?",
+      "passages": [
+        {
+          "blockId": "spya-x63ycg",
+          "quote": "it is essential to draw a distinction between AI systems that are actually conscious and those that persuasively seem to be conscious but are, in fact, not",
+          "start": 80
+        },
+        {
+          "blockId": "spya-p8ky7g",
+          "quote": "Machines that seem conscious pose serious ethical issues distinct from those posed by actually conscious machines.",
+          "start": 110
+        }
+      ],
+      "difficulty": 0.4,
+      "centrality": 0.7
+    },
+    {
+      "id": "spya-mct590",
+      "question": "If wrongly denying a machine's consciousness feels psychologically unhealthy but wrongly granting it rights could tie our hands, which risk should we accept?",
+      "passages": [
+        {
+          "blockId": "spya-n0bnf9",
+          "quote": "we might give AI systems “rights” that they don’t actually need, since they would not actually be conscious, restricting our ability to control them for no good reason",
+          "start": 13
+        },
+        {
+          "blockId": "spya-gwz5eu",
+          "quote": "If we give these systems rights, as arguably we should if they really are conscious, we will hamper our ability to control them, or to shut them down if we need to.",
+          "start": 1
+        }
+      ],
+      "difficulty": 0.5,
+      "centrality": 0.6
+    },
+    {
+      "id": "spya-p7qurg",
+      "question": "If our sense that a machine is conscious can be as stubborn as a visual illusion, what use are the arguments against computational functionalism?",
+      "passages": [
+        {
+          "blockId": "spya-xk9gne",
+          "quote": "One overlooked factor here is that even if we know, or believe, that an AI is not conscious, we still might be unable to resist feeling that it is.",
+          "start": 0
+        }
+      ],
+      "difficulty": 0.5,
+      "centrality": 0.5
+    },
+    {
+      "id": "spya-uvaxy6",
+      "question": "Doesn't humanity's history of wrongly denying consciousness to others (animals, other humans) suggest we should extend it to AI too, just in case?",
+      "passages": [
+        {
+          "blockId": "spya-mxxutn",
+          "quote": "our unfortunate track record of withholding moral status from those that deserve it, including from many non-human animals, and sometimes other humans",
+          "start": 118
+        },
+        {
+          "blockId": "spya-d89xf7",
+          "quote": "Our psychological biases are more likely to lead to false positives than false negatives.",
+          "start": 80
+        }
+      ],
+      "difficulty": 0.4,
+      "centrality": 0.6
+    }
+  ],
+  "dropped": {
+    "unknownIds": 0,
+    "unquoted": 0,
+    "tooLong": 0,
+    "duplicate": 0,
+    "unanchored": 0,
+    "overCap": 0,
+    "malformed": 0
+  },
+  "scoreDrops": {
+    "difficultyAbsent": 0,
+    "difficultyRejected": 0,
+    "centralityAbsent": 0,
+    "centralityRejected": 0
+  }
+}

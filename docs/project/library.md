@@ -489,6 +489,13 @@ just above the list of articles."* The order the page renders in is now **add bo
 errors and Undo → search → `ShelfControls` → the "n of m" count → the list**
 ([`Library.tsx`](../../src/web/Library.tsx)).
 
+**The box has the focus when the shelf arrives**, since 2026-09-29 — Greg: *"let's put the focus by
+default on the search box."* Decided once, on mount, and not when the primary pointer is a finger
+(the on-screen keyboard would cover the shelf), when the page arrived with a `?q=`, when something
+else already has the focus, or when the box is not on screen (Back can mount the shelf scrolled).
+`takesFocusOnArrival` in `Library.tsx` has the reasons;
+[260929g](../plans/260929g-shelf-search-focus-and-metadata-chord.md) § Part A has the cost.
+
 1. **The cards, filtered in the browser.** Case- and accent-folded substring match over `title`,
    `byline`, `siteName` and `gist` — exactly the four fields a card renders, because matching
    something invisible looks like a bug from the outside. Free, instant, no request.

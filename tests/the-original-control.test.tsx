@@ -139,6 +139,7 @@ describe("the article title as a link", () => {
     blocks: [],
     assets: undefined,
     navLabelStatus: "ready",
+    sourceGuess: undefined,
     tree: {
       version: "t",
       generator: "t",

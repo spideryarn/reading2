@@ -196,6 +196,9 @@ export const JOB_DISPOSITION: Record<AiJob, JobDisposition> = {
   /* Citations mode's *Find it*: one owner-pressed web search for one cited
      work, in request scope — src/citation-find.ts. */
   "citations-find": "interactive request work",
+  /* An uploaded paper looking for its own page on the web, fired once when
+     its owner opens it — src/source-guess.ts. Request scope, owner-triggered. */
+  "upload-source-guess": "interactive request work",
   /* Marking an answer the reader just typed. */
   "quiz-mark": "interactive request work",
   /* The word that decides how hard the reader's next question is, judged from

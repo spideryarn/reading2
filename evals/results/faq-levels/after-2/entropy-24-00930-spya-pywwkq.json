@@ -1,0 +1,167 @@
+{
+  "arm": "after-2",
+  "slug": "entropy-24-00930-spya-pywwkq",
+  "version": "faq/4",
+  "faqSha256": "8ded5d816427dcaf28f5660edff111ea37fab6673cce50e81c790ff6d72f1cfc",
+  "at": "2026-09-29T17:58:29.823Z",
+  "tokens": {
+    "input": 21638,
+    "output": 2444,
+    "cacheRead": 0,
+    "cacheWrite": 0
+  },
+  "questions": [
+    {
+      "id": "spya-c5wb2y",
+      "question": "Given that mutual information is just an undirected correlation, why is it introduced as a tool for tracking information flow in circuits?",
+      "passages": [
+        {
+          "blockId": "spya-f6sbgx",
+          "quote": "It does not, however, quantify information transfer between the neurons, as it is an undirected measure that describes the instantaneous dependency between two variables and has no notion of the time-directed structure that we intuitively understand as “transfer” or “flow.”",
+          "start": 626
+        }
+      ],
+      "difficulty": 0.3,
+      "centrality": 0.4
+    },
+    {
+      "id": "spya-cs6ux3",
+      "question": "If there is no single agreed way to define redundant information, how can partial information decomposition give a definite answer at all?",
+      "passages": [
+        {
+          "blockId": "spya-bgsd4n",
+          "quote": "Unfortunately, classical Shannon information theory provides no unique solution to any of these, and so considerable work has been devoted to developing formal measures of each.",
+          "start": 257
+        },
+        {
+          "blockId": "spya-rc76qn",
+          "quote": "To date, no single universally accepted measure has been proposed. All measures have their own trade-offs and drawbacks",
+          "start": 112
+        }
+      ],
+      "difficulty": 0.4,
+      "centrality": 0.9
+    },
+    {
+      "id": "spya-bxze6c",
+      "question": "Since most of the studies described rely on the Imin measure that has been criticized as unintuitive, how much should we trust their synergy findings?",
+      "passages": [
+        {
+          "blockId": "spya-rc76qn",
+          "quote": "The majority of the studies discussed in this paper used the original Imin measure proposed in [1], although this measure has been criticized for unintuitive behavior [29,39].",
+          "start": 758
+        }
+      ],
+      "difficulty": 0.5,
+      "centrality": 0.6
+    },
+    {
+      "id": "spya-vgmjwq",
+      "question": "Why does synergy rise with input correlation only up to a point and then fall, instead of just increasing with more shared information?",
+      "passages": [
+        {
+          "blockId": "spya-ybmve2",
+          "quote": "the synergy began to decrease (this level is marked by the vertical dotted line in Figure 4E).",
+          "start": 378
+        },
+        {
+          "blockId": "spya-cs9fdy",
+          "quote": "This suggests that as the similarity of the converging information grows past some point, it becomes redundant, and the total amount of synergistic output is suppressed.",
+          "start": 724
+        }
+      ],
+      "difficulty": 0.5,
+      "centrality": 0.7
+    },
+    {
+      "id": "spya-ce4tpm",
+      "question": "If the effective networks were built using bivariate transfer entropy, which is known to overestimate connection significance, how solid are the triad-based synergy conclusions?",
+      "passages": [
+        {
+          "blockId": "spya-j4cy9j",
+          "quote": "it has been shown that bivariate analyses overestimate the significance of bivariate edges [51].",
+          "start": 315
+        }
+      ],
+      "difficulty": 0.6,
+      "centrality": 0.7
+    },
+    {
+      "id": "spya-ne3ywu",
+      "question": "Since the cortical culture findings come from in vitro tissue, do they still hold when neurons face real task demands in a behaving animal?",
+      "passages": [
+        {
+          "blockId": "spya-j4cy9j",
+          "quote": "the demands placed on a circuit in the context of a behaving animal are certain to differ from those placed on cultures in vitro.",
+          "start": 861
+        },
+        {
+          "blockId": "spya-t8fayf",
+          "quote": "This increase in relative redundancy was interpreted as a response to the practical requirements of the task",
+          "start": 432
+        }
+      ],
+      "difficulty": 0.4,
+      "centrality": 0.7
+    },
+    {
+      "id": "spya-skc0r4",
+      "question": "Even if synergy reliably marks certain neurons, does finding it actually explain why those neurons process information that way biologically?",
+      "passages": [
+        {
+          "blockId": "spya-spdx0y",
+          "quote": "it does not necessarily provide a mechanistic explanation for why particular neurons are synergy-dominated or redundancy-dominated.",
+          "start": 177
+        }
+      ],
+      "difficulty": 0.3,
+      "centrality": 0.8
+    },
+    {
+      "id": "spya-tbf4vg",
+      "question": "If the number of information atoms explodes combinatorially with more parent neurons, can PID ever describe a real neuron with many inputs?",
+      "passages": [
+        {
+          "blockId": "spya-aby2dp",
+          "quote": "in the case of six parent neurons, there are 7,828,354 distinct PI atoms, the vast majority of which are difficult to interpret.",
+          "start": 351
+        },
+        {
+          "blockId": "spya-aby2dp",
+          "quote": "Given that single neurons can receive inputs from very large numbers of upstream neurons, a “complete” description of the information dynamics of any individual neuron is completely intractable.",
+          "start": 538
+        }
+      ],
+      "difficulty": 0.6,
+      "centrality": 0.8
+    },
+    {
+      "id": "spya-k47shb",
+      "question": "Given that finite datasets systematically bias entropy and mutual information estimates upward, could reported synergy values be partly an artifact rather than real computation?",
+      "passages": [
+        {
+          "blockId": "spya-qa7gt2",
+          "quote": "the plug-in estimator for the Shannon entropy consistently underestimates the true entropy and overestimates the mutual information (for example, two processes that are uncorrelated can have non-zero apparent mutual information)",
+          "start": 243
+        }
+      ],
+      "difficulty": 0.6,
+      "centrality": 0.6
+    }
+  ],
+  "dropped": {
+    "unknownIds": 0,
+    "unquoted": 0,
+    "tooLong": 0,
+    "duplicate": 0,
+    "unanchored": 0,
+    "overCap": 0,
+    "malformed": 0
+  },
+  "scoreDrops": {
+    "difficultyAbsent": 0,
+    "difficultyRejected": 0,
+    "centralityAbsent": 0,
+    "centralityRejected": 0
+  }
+}

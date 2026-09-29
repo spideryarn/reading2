@@ -76,6 +76,7 @@ function article(): Article {
     ],
     assets: undefined,
     navLabelStatus: "ready",
+    sourceGuess: undefined,
     tree: {
       version: "t",
       generator: "t",

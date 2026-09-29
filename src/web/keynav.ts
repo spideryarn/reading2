@@ -51,6 +51,9 @@ import {
   stickyOffset,
 } from "./scroll.js";
 import { navigableItems, type Cell, type Geometry } from "./tree.js";
+/* Typing somewhere? Then the arrows are the caret's, not ours. One copy for
+   every shortcut, in a leaf module the Dock can import too — key-chord.ts. */
+import { isTyping } from "./key-chord.js";
 
 /**
  * The attribute a zone wears to say "arrows here mean this level".
@@ -354,18 +357,6 @@ function alreadyThere(origin: JumpOrigin, target: BlockId, passage: string | und
   const a = arrivalAnchor();
   if (a !== null) return a.id === target && a.passage === passage;
   return isPassageOnScreen(target, passage);
-}
-
-/** Typing somewhere? Then the arrows are the caret's, not ours. */
-function isTyping(target: EventTarget | null): boolean {
-  const el = target as HTMLElement | null;
-  if (!el || typeof el.tagName !== "string") return false;
-  return (
-    el.tagName === "INPUT" ||
-    el.tagName === "TEXTAREA" ||
-    el.tagName === "SELECT" ||
-    el.isContentEditable === true
-  );
 }
 
 /**

@@ -245,6 +245,7 @@ const OWNED: Article = {
      here asserts on it; it is `ready` so that no mode's surface is missing for
      a reason this file is not about. */
   navLabelStatus: "ready",
+  sourceGuess: undefined,
   meta: { slug: SLUG, title: "A piece", url: "https://example.com/a" },
 };
 

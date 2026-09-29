@@ -76,6 +76,7 @@ const ARTICLE: Article = {
      `assets` step, so the reader hot-links exactly as before. src/assets.ts. */
   assets: undefined,
   navLabelStatus: "ready",
+  sourceGuess: undefined,
   tree: {
     version: "t",
     generator: "t",

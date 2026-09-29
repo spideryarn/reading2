@@ -61,6 +61,7 @@ import {
   refereeCriteria,
   revisionBlocks,
   searchRuns,
+  uploadSourceGuesses,
 } from "../src/db/schema.js";
 import { mintId } from "../src/ids.js";
 import { currentOwnerId } from "../src/owner.js";
@@ -954,6 +955,17 @@ describe("destroying an article", () => {
           ownerId: owner,
           criterion: "a phrase",
           status: "pending",
+        }),
+      upload_source_guesses: () =>
+        db.insert(uploadSourceGuesses).values({
+          articleId: GONE_ARTICLE,
+          status: "found",
+          url: "https://doi.org/10.1234/gone",
+          host: "doi.org",
+          kind: "canonical",
+          matchedBy: "doi",
+          attempts: 1,
+          finishedAt: now,
         }),
     };
   }

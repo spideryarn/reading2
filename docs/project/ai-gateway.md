@@ -955,6 +955,27 @@ invented. Note that all three files are on
 so it is not work an unattended run may do
 ([feedback-reports.md](feedback-reports.md#a-report-is-unfiltered-input)).
 
+## A proposed second exception: calls paid by the reader's ChatGPT plan
+
+**Not built.** [260929g](../plans/260929g-bring-your-own-ai-subscription.md) proposes that a reader
+on a ChatGPT tier has their pipeline and chat calls made against OpenAI's Responses API
+(`api.openai.com/v1/responses`) with *their* ChatGPT token, not through OpenRouter. OpenAI's
+"Sign in with ChatGPT" plan usage allows only that endpoint and only OpenAI models. If it is built,
+it becomes the second sanctioned exception beside live conversation, and it changes four things
+here:
+- a new wire, reached through adapters at the two points where every call is assembled
+  (`streamMessage` and `outgoing`) rather than in each caller;
+- a credential chosen per call, before the call is made, which the spend scope cannot do today
+  because it learns the owner only when it writes the row;
+- a column saying who paid;
+- every Messages-wire stage also running, for these readers, at a fixed effort on GPT-6.1 Sol. That
+  gives up the adaptive thinking that
+  [§ Why the stages were not translated](#why-the-stages-were-not-translated) kept, and means every
+  prompt change is measured on two model families.
+
+The research is
+[260929a](../research/260929a-paying-for-model-calls-with-the-reader-s-own-ai-subscription.md).
+
 ## The one thing still open
 
 OpenRouter's own Messages reference contradicts itself about refusals: its example shows

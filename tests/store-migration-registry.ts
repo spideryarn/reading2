@@ -1838,6 +1838,18 @@ export const STORE_MIGRATION: Readonly<Record<string, StoreEntry>> = {
       "Its reach into the condemned modules is the seeder's copy step and the spend ledger, as " +
       "for `tests/glossary-lookup-stream-route.test.ts`. Read off the graph, not re-witnessed.",
   },
+  "tests/source-guess-pg.test.ts": {
+    category: "shared-mechanism-collateral",
+    mechanisms: ["fixture-loader"],
+    evidence: "static-only",
+    reason:
+      "Arrived after the witness ran, with an upload's guessed web address, stage 2 (2026-09-29). " +
+      "It claims and finishes `upload_source_guesses` rows on a bare article, seeds one article " +
+      "with `scratchArticleInPg` to read the owner's and the visitor's payloads, and drives " +
+      "`POST /api/source-guess/:slug` through `handleApi` to its 409 — no model is called. Its " +
+      "reach into the condemned modules is the seeder's copy step, as for " +
+      "`tests/citation-find-route.test.ts`. Read off the graph, not re-witnessed.",
+  },
   "tests/reading-time-route.test.ts": {
     category: "shared-mechanism-collateral",
     mechanisms: ["fixture-loader"],
@@ -2604,6 +2616,9 @@ export const TEST_LANES: Readonly<Record<string, TestLane>> = {
   /* Seeds three articles and drives the reading-time GET and POST through the
      route, reading rows back out of `reading_time`. No model is called. */
   "tests/reading-time-route.test.ts": "private-postgres",
+  /* Claims and settles guessed web addresses on a bare article, seeds one more
+     to read both payloads, and drives the route to its 409. No model is called. */
+  "tests/source-guess-pg.test.ts": "private-postgres",
   /* The shelf's filter terms, 260928a stage 2. Seeds two owners and their
      articles by hand, fills `revision_phrase_runs` and drives
      `GET /api/library/terms` through the route. No model is called. */

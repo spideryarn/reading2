@@ -197,9 +197,13 @@ stage.
 What code decides ([`src/citation-lookup.ts`](../../src/citation-lookup.ts)):
 
 - **the result matches this work** before anything is judged (a match, not proof it is the work) — a row the article linked by DOI or arXiv
-  keeps a judgement only if the result's URL carries that id; any other row needs the whole title in
-  the result's title plus the first author's surname or the year. Stricter than `pageNamesTitle`,
-  which still only chooses a link;
+  keeps a judgement only if the result's URL carries that id, or its extract carries the DOI and its
+  title names the work; any other row needs its title to name the work plus the first author's
+  surname or the year. *Names the work* is anchored at the start: the result's title begins with the
+  work's (a leading `[arXiv id]` dropped), followed by nothing or by short site parts such as
+  "| Proceedings B | The Royal Society", never a notice ("- Retraction", "- Review") — so
+  "Correction to: …" and "Comment on …" are refused. Stricter than `pageNamesTitle`, which still
+  only chooses a link;
 - **every quote shown is the extract's own slice**, found by `findQuote`'s strict `"spaced"` pass,
   at least six words; *supports* or *partly* without one becomes *doesn't show*, and *what the work
   does* without its own quote is dropped;
@@ -219,6 +223,11 @@ genuinely in its extract. That is why the verdict is labelled as a reading and n
 On a row the article linked, the page found is used only for its extract: the row's `url` and
 `linkFrom` never change. The reading lives in `lookup_*` columns on `citation_finds`, is attached as a
 separate private `lookup` field by `attachLookups`, and never reaches a visitor.
+
+**The search itself is shared.** `findWorkPage`, the call and its verdict without the route, the
+allowance or the store, has a second caller: an uploaded paper's guessed web address
+([ingest-queue.md § A guessed web address](ingest-queue.md#a-guessed-web-address-looked-for-once)),
+which brings its own job id and allowance and judges the page more strictly than `pageNamesTitle`.
 
 ## Chat can read it
 

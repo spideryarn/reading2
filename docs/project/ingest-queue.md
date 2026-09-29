@@ -309,6 +309,41 @@ from the title. That is a **rename**, and [block-ids.md](block-ids.md) is largel
 here are expensive. Written up as an open question rather than quietly decided:
 [260826u-pdf-upload-and-storage.md § Still open](../plans/260826u-pdf-upload-and-storage.md).
 
+### A guessed web address, looked for once
+
+Since 2026-09-29 an uploaded paper gets a **guess** at where it lives on the web, drawn after
+*uploaded* in the masthead and on the Metadata page with a trailing **?** and a tip saying it is our
+guess. Asked for through the Feedback button (SPIDERYARN-READING2-5H):
+
+> If someone uploads a paper … we should do a quick Google to try and find the canonical link for
+> that paper and then add it, maybe with a question mark somehow to say that we've guessed at where
+> the original URL was from. And if we can't find it for sure … then don't, don't link.
+
+[260929g](../plans/260929g-canonical-link-for-an-uploaded-paper.md) is the design, the two plan
+reviews and the real-page eval. Four things are worth knowing:
+
+- **It is not part of the ingest.** The first time the owner opens an uploaded article with no
+  settled answer, the reading view fires `POST /api/source-guess/:slug` and carries on
+  (`useSourceGuess`); the answer fills the line in when it comes. An upload nobody opens is never
+  searched, which costs nothing anyone could see. The server claims a row in
+  `upload_source_guesses` first, fenced by a token and capped at two attempts, so a second tab or a
+  reload gets the stored answer rather than a second search; the paid call is bounded by its own
+  allowance bucket, as *Find it*'s is.
+- **The search is Citations' and the page read is too** — `findWorkPage` in
+  [`src/citation-find.ts`](../../src/citation-find.ts) and `readPaperText` in
+  [`src/paper-text.ts`](../../src/paper-text.ts). The model only points at a search result.
+- **Code decides whether the page is this paper** —
+  [`src/source-guess.ts`](../../src/source-guess.ts) § `isSamePaper`: the title word for word, the
+  first author, and either the page's own DOI or arXiv id printed in the upload or its text saying
+  the same thing (4-word shingles of the upload's opening). An upload whose authors were not
+  extracted — most of them, on the eval — must pass the text check. Anything else, including a page
+  the fetch cannot read, shows nothing. A verified identifier is drawn as the constructed
+  `doi.org` / `arxiv.org/abs` link, *probably the original*; a text match as the page itself, *a
+  page that matches*.
+- **It is never `final_url`**, for the reason [§ the document with no
+  address](content-extraction.md#stage-2-and-the-document-with-no-address) gives, and it is
+  owner-only: a visitor sees no guess.
+
 ### The checks are the cheap ones, and they are not the real ones
 
 **The picker's checks** `uploadProblem` in

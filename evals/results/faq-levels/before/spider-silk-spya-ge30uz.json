@@ -1,0 +1,126 @@
+{
+  "arm": "before",
+  "slug": "spider-silk-spya-ge30uz",
+  "version": "faq/3",
+  "faqSha256": "9c6f7a31f99efcb35ef1416a62d7fd0dd25b6c6687ff88b4619fe2dc74a4e5eb",
+  "at": "2026-09-29T17:46:49.161Z",
+  "tokens": {
+    "input": 16217,
+    "output": 4086,
+    "cacheRead": 0,
+    "cacheWrite": 0
+  },
+  "questions": [
+    {
+      "id": "spya-fmpvke",
+      "question": "Given that methods exist to force spiders to release silk, why is collecting large amounts from spiders still harder than from silkworms?",
+      "passages": [
+        {
+          "blockId": "spya-k8j9fe",
+          "quote": "While methods have been developed to collect silk from a spider by force,[2] gathering silk from many spiders is more difficult than from silk-spinning organisms such as silkworms.",
+          "start": 57
+        }
+      ]
+    },
+    {
+      "id": "spya-w49tpb",
+      "question": "How can spider silk be less strong than Kevlar yet still outperform it overall?",
+      "passages": [
+        {
+          "blockId": "spya-nwva2u",
+          "quote": "They exhibit a unique combination of high tensile strength and extensibility (ductility). This enables a silk fibre to absorb a large amount of energy before breaking (toughness, the area under a stress-strain curve).",
+          "start": 81
+        },
+        {
+          "blockId": "spya-hv4xng",
+          "quote": "Weight for weight, silk is stronger than steel, but not as strong as Kevlar. Spider silk is, however, tougher than both.",
+          "start": 48
+        }
+      ]
+    },
+    {
+      "id": "spya-e6fc44",
+      "question": "How does silk end up stronger than steel weight-for-weight if it's so much less stiff than steel?",
+      "passages": [
+        {
+          "blockId": "spya-dq9b7q",
+          "quote": "Unlike steel or Kevlar, which are stiff, spider silk is ductile and elastic, having a lower Young's modulus.",
+          "start": 96
+        },
+        {
+          "blockId": "spya-hng89u",
+          "quote": "spider silk is a much less dense material, so that a given weight of spider silk is five times as strong as the same weight of steel.",
+          "start": 342
+        }
+      ]
+    },
+    {
+      "id": "spya-uydg8z",
+      "question": "If Darwin's bark spider makes the toughest known spider silk, why is another spider's silk later named the toughest?",
+      "passages": [
+        {
+          "blockId": "spya-gfykz5",
+          "quote": "According to Spider Silkome Database, Araneus ishisawai silk is the toughest.[18]",
+          "start": 252
+        },
+        {
+          "blockId": "spya-ug9bz2",
+          "quote": "Thus, C. darwini silk is more than twice as tough as any previously described silk and over 10 times tougher than Kevlar",
+          "start": 200
+        }
+      ]
+    },
+    {
+      "id": "spya-v6f5pj",
+      "question": "Why would a spider's web silk shrink and weaken when wet, given the web needs to keep working outdoors?",
+      "passages": [
+        {
+          "blockId": "spya-qdjb0x",
+          "quote": "shrinking up to 50% in length and behaving like a weak rubber under tension.[17] Many hypotheses have attempted to explain its use in nature, most popularly to re-tension webs built in the night using the morning dew.",
+          "start": 64
+        }
+      ]
+    },
+    {
+      "id": "spya-qj2r9k",
+      "question": "How does the liquid silk stored in the gland end up as a solid fibre just from being pulled out?",
+      "passages": [
+        {
+          "blockId": "spya-mepbwz",
+          "quote": "It is pulled on demand from a precursor out of specialised glands,[41] rather than continuously grown like plant cell walls.[26]",
+          "start": 93
+        },
+        {
+          "blockId": "spya-ba6knb",
+          "quote": "the shear stress and the ion and pH changes induce the liquid silk dope to undergo a phase transition and condense into a solid protein fibre with high molecular organisation.",
+          "start": 515
+        }
+      ]
+    },
+    {
+      "id": "spya-ngpj0a",
+      "question": "If lab-made spider silk uses simpler proteins that only reach half of natural silk's strength, how did one bacterial version fully match natural silk's performance?",
+      "passages": [
+        {
+          "blockId": "spya-gjan3e",
+          "quote": "Fibers spun from these synthetic spidroins are the first to fully replicate the mechanical performance of natural spider silk by all common metrics.",
+          "start": 645
+        },
+        {
+          "blockId": "spya-jzcepa",
+          "quote": "Artificial spider silks have fewer and simpler proteins than natural dragline silk, and consequently offer half the diameter, strength, and flexibility of natural dragline silk.",
+          "start": 573
+        }
+      ]
+    }
+  ],
+  "dropped": {
+    "unknownIds": 0,
+    "unquoted": 0,
+    "tooLong": 0,
+    "duplicate": 0,
+    "unanchored": 0,
+    "overCap": 0,
+    "malformed": 0
+  }
+}

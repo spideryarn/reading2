@@ -1,0 +1,185 @@
+{
+  "arm": "before",
+  "slug": "scaling-hypothesis",
+  "version": "faq/3",
+  "faqSha256": "9c6f7a31f99efcb35ef1416a62d7fd0dd25b6c6687ff88b4619fe2dc74a4e5eb",
+  "at": "2026-09-29T17:47:21.397Z",
+  "tokens": {
+    "input": 29421,
+    "output": 8186,
+    "cacheRead": 0,
+    "cacheWrite": 0
+  },
+  "questions": [
+    {
+      "id": "spya-wbj5kb",
+      "question": "If GPT-3's architecture is 'magnificently obsolete' and left deliberately unmodified, how can its success support the idea that scale alone drives intelligence?",
+      "passages": [
+        {
+          "blockId": "spya-fvqe70",
+          "quote": "a magnificently obsolete architecture from early 2018 (used mostly for software engineering convenience as the infrastructure has been debugged)",
+          "start": 259
+        },
+        {
+          "blockId": "spya-m3gtj6",
+          "quote": "we can simply train ever larger NNs and ever more sophisticated behavior will emerge naturally as the easiest way to optimize for all the tasks & data.",
+          "start": 228
+        }
+      ]
+    },
+    {
+      "id": "spya-ng7cqu",
+      "question": "If a bigger model contains far more sub-models that could overfit, why does it generalize better instead of just memorizing more?",
+      "passages": [
+        {
+          "blockId": "spya-djq0xk",
+          "quote": "Why do larger models not overfit (though they can) and generalize better than smaller models?",
+          "start": 192
+        },
+        {
+          "blockId": "spya-grkhs8",
+          "quote": "even though there are countless overfit sub-models inside the single big model, they all average out, leading to a preference for simple solutions.",
+          "start": 349
+        }
+      ]
+    },
+    {
+      "id": "spya-pe7sc2",
+      "question": "Doesn't the risk that pretraining could need impossibly more data or a wholly different architecture undercut the pretraining thesis?",
+      "passages": [
+        {
+          "blockId": "spya-faees7",
+          "quote": "It might require more text than exists, countless petabytes of data for all of those subtle factors like logical reasoning to represent enough training signal, amidst all the noise and distractors, to train a model.",
+          "start": 281
+        },
+        {
+          "blockId": "spya-s0h95g",
+          "quote": "But apparently, it would’ve worked fine. Even RNNs probably would’ve worked—Transformers are nice, but they seem mostly be about efficiency.",
+          "start": 0
+        }
+      ]
+    },
+    {
+      "id": "spya-rw7d7m",
+      "question": "If no one predicted GPT-3's specific abilities in advance, why trust predictions about what further scaling will bring?",
+      "passages": [
+        {
+          "blockId": "spya-uett4g",
+          "quote": "Did anyone predict, quantitatively, that this would happen where it did?",
+          "start": 3
+        },
+        {
+          "blockId": "spya-mfqqfm",
+          "quote": "Not that I know of.",
+          "start": 3
+        }
+      ]
+    },
+    {
+      "id": "spya-nde4uf",
+      "question": "If halving GPT-2's loss already produced surprising new abilities in GPT-3, what would a further drop toward human-level loss actually unlock?",
+      "passages": [
+        {
+          "blockId": "spya-edr6mj",
+          "quote": "What would a drop to ≤1, perhaps using wider context windows or recurrency, gain?",
+          "start": 824
+        },
+        {
+          "blockId": "spya-f6zupy",
+          "quote": "I don’t know.",
+          "start": 3
+        }
+      ]
+    },
+    {
+      "id": "spya-e7vpha",
+      "question": "If major labs already have the compute and budgets GPT-3 needed, why hasn't anyone matched it since?",
+      "passages": [
+        {
+          "blockId": "spya-khnsat",
+          "quote": "The existence of the hardware overhang implies that the limiting factor here is less hardware than human: will any organization treat GPT-3 as a Sputnik moment and invest aggressively in scaling programs?",
+          "start": 0
+        },
+        {
+          "blockId": "spya-scr8jb",
+          "quote": "But I think they lack a vision. As far as I can tell: they do not have any such thing, because Google Brain & DeepMind do not believe in the scaling hypothesis the way that Sutskever, Amodei and others at OA do.",
+          "start": 0
+        }
+      ]
+    },
+    {
+      "id": "spya-qsbt8a",
+      "question": "Why wouldn't DeepMind, with far greater resources, make the same all-in scaling bet as OpenAI?",
+      "passages": [
+        {
+          "blockId": "spya-vr9q2p",
+          "quote": "they believe that AGI will require us to “find the right algorithms” effectively replicating a mammalian brain module by module",
+          "start": 97
+        }
+      ]
+    },
+    {
+      "id": "spya-kgydb4",
+      "question": "Isn't dismissing GPT-3 as 'just' statistics or memorized text a reasonable objection rather than a confusion the piece needs to correct?",
+      "passages": [
+        {
+          "blockId": "spya-ay4yw7",
+          "quote": "if we ever succeed in AI, or in reductionism in general, it must be by reducing Y to ‘just X’. Showing that some task requiring intelligence can be solved by a well-defined algorithm with no ‘intelligence’ is precisely what success must look like!",
+          "start": 15
+        }
+      ]
+    },
+    {
+      "id": "spya-wghqmj",
+      "question": "Wouldn't scrubbing agent-related text and images from training data stop a model from developing agency?",
+      "passages": [
+        {
+          "blockId": "spya-denmtt",
+          "quote": "would we then have a model which is now just a (relatively) safe ‘tool AI’, with no agency lurking?",
+          "start": 473
+        },
+        {
+          "blockId": "spya-ueb3d2",
+          "quote": "I would still say that there’s a possibility, and maybe not even that small one: agency is not a discrete thing, but a continuum, which is a convergent instrumental drive / emergent capability because it is useful even for understanding “non-agentic” things.",
+          "start": 0
+        }
+      ]
+    },
+    {
+      "id": "spya-a74fqs",
+      "question": "Does an abstract system as simple as Conway's Game of Life really risk inducing an agent-like interpretation in a model?",
+      "passages": [
+        {
+          "blockId": "spya-q3nmj0",
+          "quote": "Does the ultra-abstract & simple cellular automaton Conway’s Game of Life (GoL) induce an intentional stance?",
+          "start": 172
+        },
+        {
+          "blockId": "spya-c874v8",
+          "quote": "you are much of the way to an intentional stance—not modeling a glider as the inexorable outcome of applying this and that rule about the local-neighborhood to a million cells of equal importance, but as a specific entity of interest",
+          "start": 114
+        }
+      ]
+    },
+    {
+      "id": "spya-y2t2au",
+      "question": "If a single random Turing machine has nothing it is trying to maximize, why would predicting many of them risk producing something like agency?",
+      "passages": [
+        {
+          "blockId": "spya-ufpyk0",
+          "quote": "There is nothing that random TM programs try to minimize or maximize; they simply run.",
+          "start": 305
+        }
+      ]
+    }
+  ],
+  "dropped": {
+    "unknownIds": 0,
+    "unquoted": 1,
+    "tooLong": 0,
+    "duplicate": 0,
+    "unanchored": 0,
+    "overCap": 0,
+    "malformed": 0
+  }
+}

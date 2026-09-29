@@ -301,7 +301,7 @@
   color: var(--page);
   background: var(--destructive, oklch(0.65 0.2 25));
 }
-/* Matches `.chat-send:disabled` below, and it was missing here — so the one
+/* Matches Send's unavailable rule below, and it was missing here — so the one
    icon button that is ever disabled (Ask again, while an answer arrives) kept
    its pointer cursor and still lit up under the mouse. It looked and felt
    exactly like a button that works, and did nothing. Found the long way round:
@@ -834,8 +834,10 @@
    keeps it recognisably the primary control; the grey icon says it has nothing
    to send. The icon's colour is the microphone's, a path known to render on an
    iPad — the old `opacity: .45` on a disabled button is GPT Sol's leading
-   suspect for the icon going missing there, unproven (see the plan). */
-.chat-send:disabled {
+   suspect for the icon going missing there, unproven (see the plan).
+   `aria-disabled` rather than `:disabled` since 2026-09-29, so the card on Send
+   still opens when there is nothing to send (ChatPanel.tsx § Composer). */
+.chat-send[aria-disabled="true"] {
   background: transparent;
   color: var(--ink-faint);
   cursor: default;
@@ -844,19 +846,19 @@
    parent's disabled grey cannot reach it through inheritance. This branch is
    still a disabled Send, and keeps the same quiet icon as every other reason
    Send cannot be pressed. */
-.chat-send:disabled .cmt-spinner { color: inherit; }
+.chat-send[aria-disabled="true"] .cmt-spinner { color: inherit; }
 /* Send only — `[type="submit"]`, because Stop takes Send's place while an
    answer arrives and is an *enabled* button with the same class. A bare
-   `:not(:disabled)` filled it orange too (GPT Sol, plan review P1). The tokens
+   `:not([aria-disabled])` filled it orange too (GPT Sol, plan review P1). The tokens
    are shadcn's `default` variant's, as on the shelf's Add (controls.md). */
-.chat-send[type="submit"]:not(:disabled) {
+.chat-send[type="submit"]:not([aria-disabled="true"]) {
   background: var(--primary);
   border-color: var(--primary);
   color: var(--primary-foreground);
 }
 /* Brightness, not a colour: an orange fill composited toward the page goes
    darker on this ground (controls.md § Two hover languages). */
-.chat-send[type="submit"]:not(:disabled):hover { filter: brightness(1.1); }
+.chat-send[type="submit"]:not([aria-disabled="true"]):hover { filter: brightness(1.1); }
 .chat-send:focus-visible { outline: 2px solid var(--highlight); outline-offset: 2px; }
 
 /* ---- Remember mode's composer ----
