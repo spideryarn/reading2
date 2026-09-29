@@ -230,7 +230,7 @@ describe("resultIsTheWork — R-1, stricter than Find it's title rule", () => {
   });
 
   it("accepts the whole title alone when the list has no author and no year", () => {
-    const page = { url: "https://blog.example/x", title: `${TITLE} (PDF)`, excerpt: "" };
+    const page = { url: "https://blog.example/x", title: `${TITLE} - PDF`, excerpt: "" };
     const { authors: _authors, year: _year, ...bare } = work();
     expect(resultIsTheWork(page, lookupContext(bare, textOf))).toBe(true);
   });
@@ -267,13 +267,70 @@ describe("resultIsTheWork — R-1, stricter than Find it's title rule", () => {
     expect(resultIsTheWork(page, context(natureRow))).toBe(true);
   });
 
-  it("on a DOI row, accepts the DOI in the extract beside a truncated title that passes the title rule", () => {
+  it("on a DOI row, a truncated title with the DOI in the extract also needs the first author's surname", () => {
     const page = {
       url: "https://www.nature.com/articles/nature05357",
       title: "Conclusions from the Functional Reconstruction of ...",
       excerpt: NATURE_EXTRACT,
     };
-    expect(resultIsTheWork(page, context(natureRow))).toBe(true);
+    expect(resultIsTheWork(page, context(natureRow))).toBe(false);
+    expect(resultIsTheWork({ ...page, excerpt: `Joseph W. Thornton. ${NATURE_EXTRACT}` }, context(natureRow))).toBe(true);
+  });
+
+  it("on a DOI row, a correction titled after the work is not the work (N-1)", () => {
+    const page = {
+      url: "https://www.nature.com/articles/nature05999",
+      title: `Correction to: ${NATURE_TITLE}`,
+      excerpt: `Correction to: Thornton (2006) doi:10.1038/nature05357. An author name was misspelt.`,
+    };
+    expect(resultIsTheWork(page, context(natureRow))).toBe(false);
+  });
+
+  it("refuses a comment on the work, titled with its whole title (N-1)", () => {
+    const page = { url: "https://journals.example/c", title: `Comment on ${NATURE_TITLE}`, excerpt: "Thornton 2006." };
+    expect(resultIsTheWork(page, context({ title: NATURE_TITLE, authors: "Thornton, J. W.", year: "2006" }))).toBe(false);
+  });
+
+  it("accepts the title behind a leading bracketed id, and the title with a short site tail", () => {
+    const search = context();
+    expect(resultIsTheWork({ url: "https://x.example", title: `[2001.08361] ${TITLE}`, excerpt: "Jared Kaplan et al." }, search)).toBe(true);
+    expect(resultIsTheWork({ url: "https://x.example", title: `${TITLE} | Nature`, excerpt: "Jared Kaplan et al." }, search)).toBe(true);
+    /* A longer tail, or one with no site delimiter, is another document. */
+    expect(resultIsTheWork({ url: "https://x.example", title: `${TITLE} | a reading group's notes and more`, excerpt: "Kaplan" }, search)).toBe(false);
+    expect(resultIsTheWork({ url: "https://x.example", title: `${TITLE} Revisited`, excerpt: "Kaplan" }, search)).toBe(false);
+  });
+
+  it("refuses a notice about the work whose word sits in the short tail", () => {
+    const search = context();
+    for (const tail of ["Retraction", "Erratum", "Correction notice", "Corrigendum", "Reply to comments"]) {
+      expect(resultIsTheWork({ url: "https://x.example", title: `${TITLE} - ${tail}`, excerpt: "Jared Kaplan" }, search)).toBe(false);
+    }
+    /* A journal whose name merely contains "Review" is still a site tail. */
+    expect(resultIsTheWork({ url: "https://x.example", title: `${TITLE} | Physical Review`, excerpt: "Jared Kaplan" }, search)).toBe(true);
+  });
+
+  it("refuses a sibling sharing a seven-token prefix when only the year matches (N-2)", () => {
+    const page = {
+      url: "https://journals.example/sibling",
+      title: "Conclusions from the Functional Reconstruction of an ...",
+      excerpt: "Published 2006 by Smith and Jones.",
+    };
+    expect(resultIsTheWork(page, context({ title: NATURE_TITLE, authors: "Thornton, J. W.", year: "2006" }))).toBe(false);
+  });
+
+  it("refuses a truncated title that is an internal run of the work's title, not its start (N-2)", () => {
+    const page = {
+      url: "https://journals.example/x",
+      title: "the Functional Reconstruction of an Ancient ...",
+      excerpt: "Thornton 2006.",
+    };
+    expect(resultIsTheWork(page, context({ title: NATURE_TITLE, authors: "Thornton, J. W.", year: "2006" }))).toBe(false);
+  });
+
+  it("refuses a truncated title when the list has no author to check it by", () => {
+    const page = { url: "https://x.example", title: "Conclusions from the Functional Reconstruction of ...", excerpt: "2006." };
+    const { authors: _authors, ...noAuthor } = work({ title: NATURE_TITLE, year: "2006" });
+    expect(resultIsTheWork(page, lookupContext(noAuthor, textOf))).toBe(false);
   });
 
   it("on a DOI row, the DOI in the extract alone is not enough — a citing paper's reference list", () => {
@@ -303,7 +360,7 @@ describe("resultIsTheWork — R-1, stricter than Find it's title rule", () => {
     expect(resultIsTheWork(page, context({ title: NATURE_TITLE, authors: "Thornton, J. W.", year: "2006" }))).toBe(
       true,
     );
-    /* The surname-or-year rule still applies on top. */
+    /* A truncated title needs the first author's surname; the year alone is not enough. */
     expect(
       resultIsTheWork({ ...page, excerpt: "An unrelated abstract." }, context({ title: NATURE_TITLE, authors: "Thornton, J. W.", year: "2006" })),
     ).toBe(false);
