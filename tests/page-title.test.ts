@@ -105,6 +105,7 @@ describe("an article", () => {
       citations: "Citations",
       faq: "FAQ",
       trajectory: "Trajectory",
+      tweets: "Tweets",
     };
     for (const mode of MODES) {
       const t = pageTitle({ kind: "read", title, view: "article", mode });
@@ -120,15 +121,14 @@ describe("an article", () => {
 
   /* This used to pass a mode to the metadata view and assert it was ignored.
      `TitleSpec` no longer lets that state be built — the reading view requires a
-     mode and the other two forbid one — so the case it was defending is a
+     mode and the other forbids one — so the case it was defending is a
      compile error now, which is the better place for it. What is left is the
      label itself. */
-  it("names the other two views", () => {
+  it("names the other view", () => {
+    /* Tweets was the third view until 2026-09-29, when it became a mode
+       (plan 260929f); its title is now the mode row above. */
     expect(pageTitle({ kind: "read", title, view: "metadata" })).toBe(
       `${title}${SEP}Metadata${SEP}${APP_NAME}`,
-    );
-    expect(pageTitle({ kind: "read", title, view: "tweets" })).toBe(
-      `${title}${SEP}Tweets${SEP}${APP_NAME}`,
     );
   });
 

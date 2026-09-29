@@ -60,7 +60,7 @@
  * paragraph rather than assume the question stays settled.** The thing to watch
  * for is a view that needs its own nested sub-routes, or a fourth segment.
  */
-import { useMemo, useSyncExternalStore } from "react";
+import { useEffect, useMemo, useSyncExternalStore } from "react";
 
 import { isSlug, PUBLIC_LIBRARY_SLUG } from "../ingest.js";
 
@@ -379,7 +379,6 @@ export function adminOnly(route: Route): boolean {
 const VIEW_SEGMENT: Record<ArticleView, string> = {
   article: "",
   metadata: "metadata",
-  tweets: "tweets",
 };
 
 /**
@@ -547,7 +546,7 @@ export function parseRoute(pathname: string): Route {
      the reserved slug and the constant that spells the route are one value —
      and the edge asks the same `PUBLIC_LIBRARY_SLUG`. */
   if (new RegExp(`^${PUBLIC_LIBRARY_HREF}/?$`).test(pathname)) return { kind: "public-library" };
-  const m = /^\/read\/([^/]+)(?:\/(metadata|tweets))?\/?$/.exec(pathname);
+  const m = /^\/read\/([^/]+)(?:\/(metadata))?\/?$/.exec(pathname);
   if (!m) return { kind: "not-found" };
   // A malformed escape would throw out of decodeURIComponent and take the whole
   // render with it, over a hand-mangled address bar.
@@ -1015,6 +1014,7 @@ export function settleAddress(pathname: string, search: string, hash: string): s
 
   at = liftLegacyAnchor(at);
   at = liftLegacySlug(at);
+  at = liftLegacyTweets(at);
   at = liftLegacyAbout(at);
   /* `liftStrandedText` stood here from 2026-09-05 to 2026-09-29, rewriting
      `?mode=hierarchy&text=0` to Structure and dropping every `text=0`. Both
@@ -1178,6 +1178,41 @@ function liftLegacyAbout(at: Address): Address {
 }
 
 /**
+ * **The rewrite below, for an address that arrives after boot** — a `navigate()`
+ * to an old link, or Back/Forward onto a history entry written while the page
+ * still existed. `settleAddress` runs once, at boot; without these two a tab
+ * open across the deploy would land on *not found*. GPT Sol, plan review,
+ * 2026-09-29. `null` when the address is not the old one.
+ */
+export function liftedTweetsHref(href: string): string | null {
+  const at = splitHref(href);
+  const lifted = liftLegacyTweets(at);
+  return lifted === at ? null : `${lifted.pathname}${lifted.search}${lifted.hash}`;
+}
+
+/**
+ * `/read/<slug>/tweets` → `/read/<slug>?mode=tweets`. The thread was a page of
+ * its own from 2026-08-25 until 2026-09-29, when it became a mode (Greg,
+ * SPIDERYARN-READING2-5A); links to the page — pasted, bookmarked, in a sent
+ * thread's own history — land on the mode rather than on *not found*.
+ *
+ * Every other parameter is carried, so an old link keeps its `?at=`; a `mode`
+ * already on it is replaced, because the path said which view it meant.
+ * `parseRoute` no longer knows the segment, so this has to run before anything
+ * asks it — `settleAddress`'s chain on boot (main.tsx), and `liftedTweetsHref`
+ * above after it.
+ * docs/plans/260929f-tweets-become-a-mode-with-a-wide-band-and-block-links.md.
+ */
+function liftLegacyTweets(at: Address): Address {
+  const m = /^\/read\/([^/]+)\/tweets\/?$/.exec(at.pathname);
+  if (!m) return at;
+  const route = parseRoute(`/read/${m[1]}`);
+  if (route.kind !== "read") return at;
+  const rest = withoutPairs(at.search, (pair) => hasKey(pair, "mode"));
+  return { ...splitHref(readHref(route.slug, rest ? `${rest}&mode=tweets` : "mode=tweets")), hash: at.hash };
+}
+
+/**
  * Go somewhere, without a page load.
  *
  * Scrolls to the top, because `history.scrollRestoration` is `manual` (see
@@ -1186,7 +1221,10 @@ function liftLegacyAbout(at: Address): Address {
  * overrides this if the link carried an `?at=`, which is the one case where
  * landing partway down is right.
  */
-export function navigate(href: string, options: { replace?: boolean } = {}): void {
+export function navigate(to: string, options: { replace?: boolean } = {}): void {
+  /* The thread's old page is a mode now; an old link goes to the mode rather
+     than to *not found*. § `liftedTweetsHref`. */
+  const href = liftedTweetsHref(to) ?? to;
   if (href === location.pathname + location.search) return;
   // nuqs's patched pushState/replaceState notices the new query string and
   // updates every useQueryState from it, so navigation and view state stay in
@@ -1692,5 +1730,16 @@ export function useRoute(): Route {
     () => location.pathname,
     () => "/",
   );
-  return useMemo(() => parseRoute(pathname), [pathname]);
+  /* **Back or Forward onto the thread's old page** — the one way an old address
+     reaches here without passing `settleAddress` or `navigate()`. Rewritten in
+     place, and parsed as where it is going meanwhile, so the frame before the
+     rewrite shows the article rather than *not found*. § `liftedTweetsHref`. */
+  useEffect(() => {
+    const lifted = liftedTweetsHref(`${location.pathname}${location.search}${location.hash}`);
+    if (lifted !== null) history.replaceState(history.state, "", lifted);
+  }, [pathname]);
+  return useMemo(() => {
+    const lifted = liftedTweetsHref(pathname);
+    return parseRoute(lifted === null ? pathname : splitHref(lifted).pathname);
+  }, [pathname]);
 }

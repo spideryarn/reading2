@@ -23,7 +23,7 @@ disk but is shaped like rows**, so the day it becomes Postgres is a change to on
 | `/` | the library — [`src/web/Library.tsx`](../../src/web/Library.tsx) |
 | `/read/<slug>` | the reading view — [web-client.md](web-client.md) |
 | `/read/<slug>/metadata` | everything we know about the article — [260825e-metadata-page.md](../plans/260825e-metadata-page.md) |
-| `/read/<slug>/tweets` | the article as a numbered thread — [260825g-tweet-thread-page.md](../plans/260825g-tweet-thread-page.md) |
+| `/read/<slug>/tweets` | redirects to `?mode=tweets`, the thread as a mode since 2026-09-29 — [260929f](../plans/260929f-tweets-become-a-mode-with-a-wide-band-and-block-links.md); the page it was, [260825g](../plans/260825g-tweet-thread-page.md) |
 | `/add/<a whole URL>` | queue that article and watch it — [ingest-queue.md § The add page](ingest-queue.md#the-add-page) |
 | `/design` | every token, face and component variant on one page — [design-css-overview.md](design-css-overview.md) |
 

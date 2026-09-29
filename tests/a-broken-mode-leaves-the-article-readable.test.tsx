@@ -1428,6 +1428,13 @@ const WITNESS: Partial<Record<AnyMode, Witness[]>> = {
     { label: "FaqBand", as: "owner" },
     { label: "VisitorBand", as: "visitor" },
   ],
+  /* A mode since 2026-09-29 (plan 260929f), FAQ's shape: the owner's band and
+     the visitor's gap. `VisitorTweetsBand` needs a stored thread on the
+     payload, and the owner witness proves its composition, as above. */
+  tweets: [
+    { label: "TweetsBand", as: "owner" },
+    { label: "VisitorBand", as: "visitor" },
+  ],
   structure: [
     { label: "StructureBand", as: "owner" },
     { label: "StructureBand", as: "visitor" },

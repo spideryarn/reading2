@@ -24,7 +24,6 @@ import { LandingPage } from "../LandingPage.js";
 import type { ArticleView } from "../router.js";
 import { Metadata } from "../Metadata.js";
 import { Reader } from "../reader/Reader.js";
-import { Tweets } from "../Tweets.js";
 import { useSlow } from "../useSlow.js";
 import { useArc } from "../useArc.js";
 import { useGlossaryRead } from "../useGlossary.js";
@@ -40,7 +39,7 @@ import { articleWaitTitle, useDocumentTitle } from "../page-title.js";
 import { apiFetch } from "../lib/api.js";
 import type { PublicArtefactSet, PublicArtefacts } from "../../public-types.js";
 import { NotSharedPage, ReauthRequiredPage } from "../PublicChrome.js";
-import { PublicMetadataPage, VisitorTweetsPage } from "../PublicPages.js";
+import { PublicMetadataPage } from "../PublicPages.js";
 import { useRenderCount } from "../perf.js";
 import { FeedbackTrigger } from "../FeedbackButton.js";
 import { useArticleAccess } from "./access.js";
@@ -103,7 +102,7 @@ export function ArticlePage({
    * The tab, for the two states this component owns and no others.
    *
    * Once the article is here, each of the views sets its own title — Reader has
-   * the mode, Metadata and Tweets have their own names — and this must then get
+   * the mode, Metadata has its own name — and this must then get
    * out of the way. Hence the empty string, which `useDocumentTitle` treats as
    * "not mine to set": React runs a child's effects *before* its parent's, so a
    * title computed here would otherwise land on top of the more specific one
@@ -182,7 +181,7 @@ export function ArticlePage({
      meant to keep the fetch, which is the whole reason it happens up here. */
   /* **No corner pair here since 2026-09-06, and this is the branch that lost
      it.** Every page below this line mounts a `Dock` — the reading view, the
-     metadata and tweets pages, and the three visitor stand-ins in
+     metadata page, and the visitor stand-ins in
      PublicPages.tsx — and the bar draws both the wordmark and the Feedback
      trigger itself (Dock.tsx). A `<HomeLogo />` here would be a second way home
      on the same screen, one of them fixed over the top of the spine while the
@@ -376,7 +375,6 @@ function OwnedArticle({
         onVisibility={sharedTo}
       />
     );
-  if (view === "tweets") return <Tweets slug={slug} article={article} />;
   return <OwnedReader slug={slug} article={article} onRenamed={renameTo} />;
 }
 /**
@@ -502,7 +500,7 @@ function OwnedReader({
  *
  * Note which components are reachable from here: `Reader`, and two small pages
  * written for this case. `Metadata` and `Tweets` are not among them, and that
- * is the seam rather than an omission — between them they mount the profile
+ * is the seam rather than an omission (Tweets is a mode now, with a visitor band) — between them they mount the profile
  * boxes, the delete button, the provenance fetch and `useJobs`.
  */
 function VisitorArticle({
@@ -541,17 +539,6 @@ function VisitorArticle({
       <PublicMetadataPage
         slug={slug}
         article={article}
-        available={available}
-        signedIn={signedIn}
-        sessionUnconfirmed={sessionUnconfirmed}
-      />
-    );
-  if (view === "tweets")
-    return (
-      <VisitorTweetsPage
-        slug={slug}
-        article={article}
-        thread={artefacts.tweets}
         available={available}
         signedIn={signedIn}
         sessionUnconfirmed={sessionUnconfirmed}

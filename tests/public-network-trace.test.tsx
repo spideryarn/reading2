@@ -412,10 +412,10 @@ const ARTICLE: PublicArticle = {
 };
 
 /**
- * The thread, for the one case that needs the tweets page to have one.
+ * The thread, for the cases that need the Tweets band to have one.
  *
  * Kept off `ARTICLE` so that the default fixture can still prove the *absent*
- * half — the page said *"There is a tweet thread for this piece"* about an
+ * half — the old tweets page said *"There is a tweet thread for this piece"* about an
  * article whose own response said there was not, and that assertion is worth
  * keeping red-able.
  */
@@ -884,6 +884,10 @@ const BAND_SAYS: Record<Mode, { where: string | null; says: string | null }> = {
      below. docs/plans/260929c-a-visitor-sees-every-stored-mode-on-a-public-article.md. */
   faq: { where: VISITOR_BAND, says: "Nobody has built an FAQ for this piece yet" },
   citations: { where: VISITOR_BAND, says: "Nobody has built a list of citations for this piece yet" },
+  /* A page of its own until 2026-09-29, a mode since (plan 260929f). No thread
+     on the payload, so the *nobody built one* sentence in the visitor's band;
+     the drawn thread is "renders the tweet thread the payload carries" below. */
+  tweets: { where: VISITOR_BAND, says: "Nobody has built a tweet thread for this piece yet" },
   /* **Free since 2026-09-04, and it is the only one here that draws a real
      picture for a visitor.** Force is built from the tree in the payload; the
      panel's three fetching hooks are off and the picker is hidden. The string
@@ -1620,35 +1624,52 @@ describe("a signed-out browser on a shared document", () => {
   });
 
   /**
-   * **The other two views, which the sweep never opened.**
+   * **The other view, which the sweep never opened — and the old address.**
    *
    * Every request assertion in this file was made at `/read/:slug` with query
    * modes, so `/metadata` and `/tweets` — two of the three addresses a visitor
-   * can reach — were untested for requests *and* for copy. GPT Sol, 2026-08-28.
+   * could reach — were untested for requests *and* for copy. GPT Sol,
+   * 2026-08-28. `/tweets` stopped being a page on 2026-09-29 and is lifted to
+   * `?mode=tweets` (router.ts § `liftedTweetsHref`), so what is opened now is
+   * the metadata page, the mode, and the old address a pasted link still
+   * carries — which must land in the same place and ask nothing more.
    */
-  it("stays inside the public namespace on the metadata and tweets pages", async () => {
-    for (const view of ["/metadata", "/tweets"]) {
+  it("stays inside the public namespace on the metadata page and in Tweets", async () => {
+    for (const [search, path] of [
+      ["", "/metadata"],
+      ["?mode=tweets", ""],
+      ["", "/tweets"],
+    ] as const) {
+      const where = `${path}${search}`;
       await remount();
-      await open("", view);
-      expect(outsidePublic(), view).toEqual([]);
-      expect(trace.filter((r) => r.method !== "GET"), view).toEqual([]);
+      await open(search, path);
+      expect(outsidePublic(), where).toEqual([]);
+      expect(trace.filter((r) => r.method !== "GET"), where).toEqual([]);
     }
+    /* The old address really became the mode, or its row above asked about a
+       page that no longer exists. */
+    expect(new URLSearchParams(location.search).get("mode")).toBe("tweets");
+    expect(readable(host.querySelector(VISITOR_BAND) as Element)).toContain(
+      "Nobody has built a tweet thread for this piece yet",
+    );
   });
 
   /**
-   * **The tweets page reads the flag rather than asserting one.**
+   * **The Tweets band reads the flag rather than asserting one.**
    *
    * `TWEETS_GAP` was a constant saying `not-yet-public`, so this page told a
    * visitor *"There is a tweet thread for this piece"* about an article whose
    * own response said `tweets: false`. The unit test for `tweetsGap` cannot see
    * that, because the constant was in the *caller* — which is why breaking the
-   * call site left `visitor-gaps` entirely green.
+   * call site left `visitor-gaps` entirely green. A page then, the mode since
+   * 2026-09-29; the gap now comes through `POLICY.tweets` like any other mode's.
    */
   it("does not claim a tweet thread that the wire says is not there", async () => {
-    await open("", "/tweets");
+    await open("?mode=tweets");
 
     expect(host.textContent).toContain("Nobody has built a tweet thread for this piece yet");
     expect(host.textContent).not.toContain("There is a tweet thread");
+    expect(host.querySelector(".mode-band.tweets")).toBeNull();
   });
 
   /**
@@ -1656,14 +1677,17 @@ describe("a signed-out browser on a shared document", () => {
    * half of the same branch, which is what makes the case above evidence
    * rather than a page that always says the same thing.
    *
-   * Still no request outside `/api/public/`: `Tweets` fetches
-   * `GET /api/tweets/:slug` and mounts `useJobs`, and neither may appear here.
+   * Still no request outside `/api/public/`: the owner's `TweetsBand` fetches
+   * `GET /api/tweets/:slug`, mounts `useJobs` and writes on arrival, and none of
+   * that may appear here — `VisitorTweetsBand` draws the payload's thread.
    */
   it("renders the tweet thread the payload carries, and asks nobody for it", async () => {
     served = { ...ARTICLE, tweets: THREAD };
-    await open("", "/tweets");
+    await open("?mode=tweets");
 
-    expect(host.textContent).toContain(PUBLIC_TWEET);
+    const band = host.querySelector(".mode-band.tweets");
+    expect(band, "the Tweets band").not.toBeNull();
+    expect(readable(band as Element)).toContain(PUBLIC_TWEET);
     expect(host.textContent).not.toContain("Nobody has built a tweet thread");
     /* The owner's foot: the provenance line and the button that spends. */
     expect(host.textContent).not.toContain("Write it again");
@@ -2176,8 +2200,9 @@ describe("a signed-out browser on a shared document", () => {
    * went on saying it. GPT Sol, second pass, 2026-08-28.
    *
    * The bar cannot infer footing from the drawer's *shape*: a drawer-less bar
-   * belongs to the owner on the metadata and tweets pages of their own article,
-   * and to a visitor on the public stand-ins. Inferring from its absence is what
+   * belongs to the owner on the metadata page of their own article, and to a
+   * visitor on the public stand-ins. (The tweets page was the third until it
+   * became a mode on 2026-09-29, inside the reading view and its drawer.) Inferring from its absence is what
    * caused this, so footing is passed.
    */
   /**
@@ -2195,7 +2220,7 @@ describe("a signed-out browser on a shared document", () => {
    * rendered through the app — so it holds the two things that must be true of
    * them however the copy is delivered.
    */
-  it.each(["/metadata", "/tweets"])(
+  it.each(["/metadata"])(
     "does not call somebody else's comments yours on %s",
     async (view) => {
       await open("", view);
@@ -2329,8 +2354,8 @@ describe("a signed-in reader who does not own it", () => {
    * comparison that never touches the page cannot see a divergence that needs a
    * pointer. That is the same blind spot blocker 2 lived in, one layer up.
    */
-  async function asksFor(view: string): Promise<string[]> {
-    await open("", view);
+  async function asksFor(view: string, search = ""): Promise<string[]> {
+    await open(search, view);
     const link = host.querySelector<HTMLAnchorElement>('a[href^="https://en.wikipedia.org"]');
     if (link) {
       await act(async () => {
@@ -2345,11 +2370,12 @@ describe("a signed-in reader who does not own it", () => {
   }
 
   it.each([
-    ["the reading view", ""],
-    ["the metadata page", "/metadata"],
-    ["the tweets page", "/tweets"],
-  ])("asks for the same things as a stranger on %s", async (_name, view) => {
-    const stranger = await asksFor(view);
+    ["the reading view", "", ""],
+    ["the metadata page", "/metadata", ""],
+    /* A page until 2026-09-29, and the mode since (plan 260929f). */
+    ["the Tweets mode", "", "?mode=tweets"],
+  ])("asks for the same things as a stranger on %s", async (_name, view, search) => {
+    const stranger = await asksFor(view, search);
     /* The fixture must actually make requests, or two empty lists match and
        this proves nothing. */
     expect(stranger.length).toBeGreaterThan(0);
@@ -2359,7 +2385,7 @@ describe("a signed-in reader who does not own it", () => {
     /* Signed in and not the owner: the owned route 404s, and the two-step falls
        through to the public one. */
     owned = () => json({ error: "not yours" }, 404);
-    const withAnAccount = await asksFor(view);
+    const withAnAccount = await asksFor(view, search);
 
     const probe = `GET /api/article/${SLUG}`;
     expect(withAnAccount.filter((l) => l === probe), "the owned probe, exactly once").toHaveLength(
@@ -2627,34 +2653,38 @@ describe("when the reader's own session cannot be confirmed", () => {
    * no-thread tweets arm dropped both the fact and the action, and nothing went
    * red. GPT Sol's review of stage 1b.
    *
-   * **Three rows and not two**, because `/tweets` is two different pages. With a
+   * **Three rows and not two**, because Tweets is two different things. With a
    * thread it draws the thread and the notice under it; without one it draws the
    * *nobody has built a tweet thread* stand-in — a different component, and the
    * one that was missing the chrome. An article with no thread is the default
-   * fixture and an ordinary state, not an edge.
+   * fixture and an ordinary state, not an edge. Tweets was the `/tweets` page
+   * until 2026-09-29 and is the mode `?mode=tweets` since (plan 260929f); both
+   * rows kept their point and moved with it.
    *
    * The fourth column is what the page itself must be showing, so a row cannot
    * pass by rendering an error page that happens to carry the notice.
    */
   it.each([
-    ["the metadata page", "/metadata", ARTICLE, "What has been built for it"],
+    ["the metadata page", "/metadata", "", ARTICLE, "What has been built for it"],
     [
-      "the tweets page, when there is a thread",
-      "/tweets",
+      "the Tweets mode, when there is a thread",
+      "",
+      "?mode=tweets",
       { ...ARTICLE, tweets: THREAD },
       PUBLIC_TWEET,
     ],
     [
-      "the tweets page, when there is none",
-      "/tweets",
+      "the Tweets mode, when there is none",
+      "",
+      "?mode=tweets",
       ARTICLE,
       "Nobody has built a tweet thread for this piece yet",
     ],
-  ])("says it on %s too", async (_name, view, payload, canary) => {
+  ])("says it on %s too", async (_name, view, search, payload, canary) => {
     session.user = { id: "somebody", email: "somebody@example.com" };
     owned = () => json({ error: "no" }, 401);
     served = payload;
-    await open("", view);
+    await open(search, view);
 
     // The page is the one this row is about, before anything is claimed about it.
     expect(host.textContent, "the view must have rendered").toContain(canary);

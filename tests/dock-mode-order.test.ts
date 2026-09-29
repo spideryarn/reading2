@@ -23,7 +23,9 @@ import { groupStarts, visibleModes } from "../src/web/Dock.js";
 /** The runs, left to right. The bar is these, flattened. */
 const RUNS = [
   ["plain"],
-  ["structure", "summary", "diagram"],
+  /* Tweets joined the shape run on 2026-09-29, when it stopped being a page of
+     its own (plan 260929f) — another shape of the whole piece, beside Summary. */
+  ["structure", "summary", "tweets", "diagram"],
   ["trajectory", "quotes", "faq", "search"],
   ["glossary", "ideas", "timeline"],
   ["referee", "citations", "debate"],
@@ -53,13 +55,14 @@ describe("the mode bar's order", () => {
   });
 
   it("with the switch off, draws lines only where two surviving runs meet", () => {
-    /* Structure, Summary | Trajectory, Quotes, Search | Glossary, Ideas | Chat:
+    /* Structure, Summary, Tweets | Trajectory, Quotes, Search | Glossary, Ideas | Chat:
        the critical run is hidden whole, so no line is left for it. */
     const drawn = visibleModes(false, undefined);
     expect(drawn.map((m) => m.mode)).toEqual([
       "plain",
       "structure",
       "summary",
+      "tweets",
       "trajectory",
       "quotes",
       "search",

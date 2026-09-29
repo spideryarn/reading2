@@ -27,7 +27,7 @@ import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { MODES, type Mode } from "../src/modes.js";
 import { MODE_LABEL } from "../src/title-text.js";
-import { modeGenerates, pendingActivation, resetActivations } from "../src/web/activation.js";
+import { modeGenerates, resetActivations } from "../src/web/activation.js";
 import { GENERATES_MARKER, NO_MATCH } from "../src/web/CommandBar.js";
 import { Dock } from "../src/web/Dock.js";
 import { FeedbackHost } from "../src/web/FeedbackButton.js";
@@ -56,8 +56,8 @@ beforeEach(() => {
   host = document.createElement("div");
   document.body.append(host);
   root = createRoot(host);
-  /* Mode activations are module state and outlive a render. Tweets no longer
-     arms one, but this file also presses modes and reads the shared map. */
+  /* Mode activations are module state and outlive a render, and this file
+     presses modes — Tweets among them since it became one on 2026-09-29. */
   resetActivations();
 });
 
@@ -540,6 +540,10 @@ const GENERATES: Record<Mode, boolean> = {
   citations: true,
   faq: true,
   trajectory: true,
+  /* A mode since 2026-09-29, and it spends: the band writes the thread on
+     arrival when there is none (useTweets.ts § `useAutoRunOnArrival`). The
+     marker it wore as a page row is now the mode row's. */
+  tweets: true,
 };
 
 /**
@@ -669,32 +673,40 @@ describe("the `generates` marker", () => {
   });
 
   /**
-   * **The page rows split, and that is the point of 2026-09-08.**
+   * **The page rows split, and that is the point of 2026-09-08** — until
+   * 2026-09-29, when the one page row that spent became a mode row.
    *
-   * This test said *"is on no page row"* until then, and its own comment said
-   * why that was all it could honestly claim: the renderer excluded every page
-   * by `kind`, so *"a page that did start work would be unmarked here and this
-   * test would stay green while the bar under-warned"* (GPT Sol, 2026-09-07).
+   * This test said *"is on no page row"* until 2026-09-08, and its own comment
+   * said why that was all it could honestly claim: the renderer excluded every
+   * page by `kind`, so *"a page that did start work would be unmarked here and
+   * this test would stay green while the bar under-warned"* (GPT Sol,
+   * 2026-09-07). Tweets was that page, so the marker came to follow the row's
+   * own `generates` rather than its kind (`commandGenerates`).
    *
-   * Tweets is that page — it opens an owner-only page that runs on arrival when
-   * empty — so the claim is now the one that could not be made before:
-   * **the marker follows the row's own `generates`, not its kind.** Both halves
-   * are named rows rather than counts, because *some page has it and some page
-   * does not* would be satisfied by the two being the wrong way round.
+   * Tweets is now the mode `?mode=tweets` (plan 260929f), and no page row
+   * spends. So the claim is the pair of named rows that is still true: the
+   * Tweets row is a **mode** row and carries the marker, and the pages that
+   * only go somewhere do not. Named rather than counted, for the reason the
+   * old version gave — *some row has it and some does not* would be satisfied
+   * by the two being the wrong way round.
    */
-  it("is on the page row that spends and not on the ones that only go somewhere", () => {
+  it("is on the Tweets mode row and not on the page rows that only go somewhere", () => {
     reading({ experimental: EXPERIMENTAL_ON });
     openBar();
-    const marked = new Map(
-      rowsOfKind("page").map((row) => [
-        row.querySelector(".cmdbar-name")?.textContent ?? "",
-        row.querySelector(".cmdbar-generates") !== null,
-      ]),
-    );
-    expect(marked.get("Tweets"), "the Tweets row is missing").toBe(true);
-    expect(marked.get("Metadata"), "the Metadata row is missing").toBe(false);
-    expect(marked.get("Library"), "the Library row is missing").toBe(false);
-    expect(marked.get(CHANGELOG_LABEL), "the changelog row is missing").toBe(false);
+    const markedOf = (kind: RowKind) =>
+      new Map(
+        rowsOfKind(kind).map((row) => [
+          row.querySelector(".cmdbar-name")?.textContent ?? "",
+          row.querySelector(".cmdbar-generates") !== null,
+        ]),
+      );
+    const modes = markedOf("mode");
+    const pages = markedOf("page");
+    expect(modes.get("Tweets"), "the Tweets mode row is missing").toBe(true);
+    expect(pages.has("Tweets"), "Tweets is a mode now, not a page row").toBe(false);
+    expect(pages.get("Metadata"), "the Metadata row is missing").toBe(false);
+    expect(pages.get("Library"), "the Library row is missing").toBe(false);
+    expect(pages.get(CHANGELOG_LABEL), "the changelog row is missing").toBe(false);
   });
 
   /**
@@ -1028,24 +1040,26 @@ describe("the rows that are not modes", () => {
   });
 
   /**
-   * **The Tweets row says it spends, and goes to a page that does.**
+   * **The Tweets row is the mode now, and it says it spends.**
    *
-   * The marker is still true: the thread page writes the thread on arrival
-   * when there is none (Tweets.tsx § `useAutoRunOnArrival`, since 2026-09-15),
-   * which tests/tweets-press-starts-it.test.tsx holds end to end. What this row
-   * no longer does is arm a token — from 2026-09-08 it did, and a row that
-   * armed as well as the page starting itself would be two ways to start one
-   * run, one of which mints tokens nothing claims.
+   * It was a page row from 2026-09-08 that navigated to `/read/<slug>/tweets`;
+   * since 2026-09-29 Tweets is `?mode=tweets` (plan 260929f), so typing its
+   * name selects the mode row, and taking it opens the mode without moving the
+   * address. The marker is still true: the band writes the thread on arrival
+   * when there is none (useTweets.ts § `useAutoRunOnArrival`), which
+   * tests/tweets-press-starts-it.test.tsx holds end to end.
    */
-  it("goes to the thread page, arms nothing, and wears the `generates` marker", () => {
-    readingSignedIn();
+  it("selects the Tweets mode row, opens the mode in place, and wears the `generates` marker", () => {
+    const onMode = vi.fn();
+    readingSignedIn({ onMode, experimental: EXPERIMENTAL_ON });
     openBar();
     type("tweets");
     expect(listed()).toEqual(["Tweets"]);
+    expect(rows()[0]?.dataset.kind).toBe("mode");
     expect(rows()[0]?.querySelector(".cmdbar-generates")?.textContent).toBe(GENERATES_MARKER);
     press("Enter");
-    expect(wentTo()).toBe("/read/a-piece/tweets");
-    expect(pendingActivation("a-piece", "tweets")).toBeNull();
+    expect(onMode).toHaveBeenCalledWith("tweets");
+    expect(wentTo()).toBeNull();
   });
 
   /**

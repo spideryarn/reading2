@@ -159,12 +159,17 @@ export const ARTICLE_PARAMS: readonly string[] = [...REMEMBERED, ...NEVER_REMEMB
  *   dropped on judgment rather than on cost, because a conversation panel that
  *   opens by itself reads as the app *starting* something.
  *
+ * - **`tweets`** — since 2026-09-29, when the thread page became a mode and
+ *   brought its rule with it: opening it with no thread **writes one**, a model
+ *   call, on arrival rather than on a press (useTweets.ts). A restore is the one
+ *   arrival nobody chose. docs/plans/260929f-tweets-become-a-mode-with-a-wide-band-and-block-links.md.
+ *
  * **`?diagram=`, `?dx=`, `?dhue=` and `?remember=` stay in `REMEMBERED`.** They
  * are subordinate to a mode nobody is now in, so they draw nothing and fetch
  * nothing — and pressing Diagram or Remember later returns the reader to the
  * picture or the half they had chosen, which is most of what they wanted.
  */
-const NEEDS_AN_EXPLICIT_PRESS = new Set(["chat", "diagram", "remember"]);
+const NEEDS_AN_EXPLICIT_PRESS = new Set(["chat", "diagram", "remember", "tweets"]);
 
 /** Where one article's last view is kept. One key per slug; see `writeLastView`. */
 const KEY_PREFIX = "spya.lastView.";

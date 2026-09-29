@@ -6,7 +6,9 @@
  * On 2026-09-06 the wordmark and the Feedback button left the top corners of
  * the window on the pages that mount a `Dock` — the article, its metadata page
  * and its tweets page, each in an owner's and a visitor's shape, so three
- * addresses and six components — and became children of that
+ * addresses and six components (two pages since 2026-09-29, when Tweets became
+ * a mode of the reading view; its address is walked as `?mode=tweets`) — and
+ * became children of that
  * bar (`.dock-home`, `.dock-feedback`). On 2026-09-29 the four signed-in pages
  * with a `SiteNav` made that bar's marked wordmark the home control instead of
  * keeping a second fixed copy over it.
@@ -507,7 +509,11 @@ describe("the route walk: one branded home control, never two triggers", () => {
   it.each([
     ["the reading view", `/read/${SLUG}`],
     ["the metadata page", `/read/${SLUG}/metadata`],
-    ["the tweets page", `/read/${SLUG}/tweets`],
+    /* A page of its own until 2026-09-29, a mode of the reading view since
+       (plan 260929f) — walked still, because it is where a reader who had it
+       bookmarked lands, and a band is one more thing that could bring a corner
+       control back. */
+    ["the Tweets mode", `/read/${SLUG}?mode=tweets`],
   ])("%s draws both controls in the bar and neither in a corner", async (_name, path) => {
     signIn();
     await show(path);
@@ -635,9 +641,11 @@ describe("a signed-out stranger on a shared article", () => {
     expect(document.querySelector(".dock-home")).not.toBeNull();
   });
 
-  it("gets none on the visitor metadata and tweets pages either", async () => {
-    for (const view of ["metadata", "tweets"]) {
-      await show(`/read/${SLUG}/${view}`);
+  it("gets none on the visitor metadata page or in Tweets either", async () => {
+    /* Tweets was the visitor's third page until 2026-09-29; it is a mode of
+       the reading view now (plan 260929f). */
+    for (const view of ["/metadata", "?mode=tweets"]) {
+      await show(`/read/${SLUG}${view}`);
       expect(feedbackTriggers(), `a stranger was offered one on ${view}`).toHaveLength(0);
       expect(waysHome()).toHaveLength(1);
       await act(async () => root.unmount());
@@ -796,10 +804,14 @@ describe("nothing reserves the corners they left", () => {
     const src = (file: string) =>
       readFileSync(path.join(import.meta.dirname, "../src/web", file), "utf8");
 
-    for (const file of ["Metadata.tsx", "Tweets.tsx", "PublicPages.tsx"]) {
+    for (const file of ["Metadata.tsx", "PublicPages.tsx"]) {
       expect(src(file), `${file} still reserves the corner`).not.toContain("pt-[calc(3.5rem");
       expect(src(file), `${file} lost its top padding`).toContain("pt-[calc(2.5rem");
     }
+    /* Tweets.tsx was the third page until 2026-09-29; it is a band inside the
+       reading view now (plan 260929f), so it has no page padding to keep — only
+       the corner's room must not have come back with it. */
+    expect(src("Tweets.tsx"), "Tweets.tsx still reserves the corner").not.toContain("pt-[calc(3.5rem");
     for (const file of ["ProfilePage.tsx", "ContactPage.tsx", "PrivacyPage.tsx"]) {
       expect(src(file), `${file} draws the corner pair and needs the room`).toContain(
         "pt-[calc(3.5rem",

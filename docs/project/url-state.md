@@ -320,7 +320,7 @@ default to mean what it used to. Anywhere else, reaching words mode is something
 doing it pushed the parameter. See [search.md § The URL](search.md#the-url).
 
 **A third segment says which of the article's pages**, added the same day:
-`/read/<slug>/metadata` and `/read/<slug>/tweets`. That does not bend the rule — those are still the
+`/read/<slug>/metadata` (and `/read/<slug>/tweets` until 2026-09-29, when the thread became the `?mode=tweets` mode and the old address began redirecting to it — [plan](../plans/260929f-tweets-become-a-mode-with-a-wide-band-and-block-links.md)). That does not bend the rule — those are still the
 same article, and which page you are on is not something you would want to reset by changing a
 parameter. An unknown third segment is the shelf too. The query string travels between all three, so
 stepping out to the metadata page and back returns you to the paragraph you left; `?panel=` is the

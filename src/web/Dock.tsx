@@ -658,6 +658,17 @@ const MODES_UI = [
     group: "shape",
     icon: Layers,
   },
+  /* **A mode since 2026-09-29**, a loose link to a page of its own before
+     (SPIDERYARN-READING2-5A). In the shape run after Summary because a thread is
+     the same move Summary makes — the article restated, shorter — and Greg did
+     not place it by hand; the plan records that as an assumption he can move.
+     `ListOrdered`, the icon the link carried.
+     docs/plans/260929f-tweets-become-a-mode-with-a-wide-band-and-block-links.md. */
+  {
+    mode: "tweets",
+    group: "shape",
+    icon: ListOrdered,
+  },
   /* **In the shape run, just after Summary, since 2026-09-29**, because it is
      the same move Summary makes — the article restated — with a picture
      instead of prose. It had sat between Referee and Chat, and Greg's reorder
@@ -1907,38 +1918,6 @@ export function Dock({
             />
           )}
 
-          {/* Labelled `Thread` until 2026-08-26, and `Tweets` now — after its own
-              page and its own route, which is the same rule that renamed `About`
-              to `Metadata`.
-
-              **This is only a link.** The thread page writes the thread itself
-              when its owner arrives and there is none — since 2026-09-15, however
-              they arrived (Tweets.tsx § `useAutoRunOnArrival`). From 2026-09-06
-              until then this link minted an activation token on the press, and a
-              reload or a pasted link got a page with a button on it instead.
-
-              The page keeps its button. It is what a reader presses after a
-              failure, and after this page load has spent its one automatic try. */}
-          <DockLink
-            href={readHref(slug, search, "tweets")}
-            current={view === "tweets"}
-            icon={ListOrdered}
-            label="Tweets"
-            /* **The card says nothing about pressing it**, and that is not a
-               stylistic preference: the page writes the thread only for the
-               owner, and only when there is none and this page load has not
-               already tried. A visitor's press writes nothing, so *"pressing this
-               writes the thread"* would be false on the surfaces they see.
-               `NOT_A_MODE` above carries the rule. */
-            hover={
-              <ControlTip
-                head="Tweets"
-                what={NOT_A_MODE.tweets.what}
-                how={NOT_A_MODE.tweets.how}
-              />
-            }
-          />
-
           {/* A link, not a drawer trigger — the details are a page now. Last in
               the bar, which is the right end for it: it is the machinery behind
               the article rather than a way of reading it. */}
@@ -2104,17 +2083,6 @@ const NOT_A_MODE = {
        So the sentence states the two halves and the outcome, and claims no
        mechanism between them. */
     how: "Saving one costs nothing and asks the model nothing — the tick-box that brings the AI in saves your words first, then opens a chat about the passage. Each stores the passage's permanent id as well as the exact words it quotes, and after the article is re-fetched the saved comment stays in the list even when those words are gone and the underline can no longer be drawn.",
-  },
-  tweets: {
-    what: "The article as a numbered thread of short posts",
-    /* Two claims corrected before this landed, both by reading the page rather
-       than the module header. *"Written once and then kept"* said a thread can
-       never be redone, and `Rewrite` on the thread page is a deliberate second
-       call — the empty state upstairs has the same drift. And *"kept exactly as
-       written"* is not literally true: `buildThread` trims each post
-       (src/tweets.ts). The load-bearing claim is the one about the limit, so it
-       is the one the sentence makes. GPT Sol, 2026-09-07. */
-    how: "Each thread is one model pass over the whole article and is kept until somebody asks for it again — writing one is not part of adding a piece, so a thread exists only on the pieces somebody wanted one for. Nothing in it is shortened to fit: a post over the length limit is left at the length the model wrote, and the page marks the overrun rather than cutting it.",
   },
   metadata: {
     what: "Where this article came from, what shape it is, and what the pipeline wrote",

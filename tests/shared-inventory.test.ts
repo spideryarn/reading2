@@ -26,6 +26,8 @@
 import { describe, expect, it } from "vitest";
 
 import { MODES, type Mode } from "../src/modes.js";
+import { OWNER_MODE_NOTE } from "../src/messages.js";
+import { MODE_LABEL } from "../src/title-text.js";
 import type { Glossary, PublicArtefacts } from "../src/types.js";
 import type { PublicArticle } from "../src/public-types.js";
 import { sharedInventory, type InventoryItem } from "../src/web/shared-inventory.js";
@@ -65,10 +67,11 @@ const keys = (items: InventoryItem[]): string[] => items.map((i) => i.key);
  * **The six rows that appear or do not according to a flag**, and which flag
  * each one reads.
  *
- * Written out rather than derived from `PublicArtefacts`, because four of them
- * are mode rows reached through `visitorGap`'s own table and two are hand-added
- * beside it — so this is the mapping under test, not a restatement of it. A
- * seventh artefact reaching the wire wants a line here.
+ * Written out rather than derived from `PublicArtefacts`, because most of them
+ * are mode rows reached through `visitorGap`'s own table and one — the arc — is
+ * hand-added beside it, so this is the mapping under test, not a restatement of
+ * it. (The thread was the second hand-added row until it became a mode on
+ * 2026-09-29.) A new artefact reaching the wire wants a line here.
  *
  * `timeline` is the sixth, since 2026-09-04. It was in `OWNERS_ONLY` below
  * until then, which is the line that moved.
@@ -149,6 +152,26 @@ describe("the sweep over the modes", () => {
       if (other === key) continue;
       expect(keys(oneOn.ifBuilt), `${other} moved when only ${key} exists`).toContain(other);
     }
+  });
+
+  /**
+   * **The thread is one row, and it is the mode's.**
+   *
+   * It was hand-added beside the sweep while it was a page. Once Tweets became
+   * a mode on 2026-09-29 the sweep reached it through `POLICY.tweets` too, and
+   * a hand-added row would have listed it twice under one key — which the
+   * partition above catches as a duplicate, and this names: exactly one row,
+   * labelled and described the way every other mode row is (plan 260929f).
+   */
+  it.each([
+    ["nothing built", NOTHING],
+    ["everything built", EVERYTHING],
+  ])("lists Tweets once, as a mode row, with %s", (_name, available) => {
+    const { shared, ifBuilt, withheld } = sharedInventory(available);
+    const rows = [...shared, ...ifBuilt, ...withheld].filter((i) => i.key === "tweets");
+    expect(rows).toEqual([
+      { key: "tweets", label: MODE_LABEL.tweets, detail: OWNER_MODE_NOTE.tweets },
+    ]);
   });
 
   /**

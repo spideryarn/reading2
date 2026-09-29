@@ -38,7 +38,6 @@ import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type {
   Arc,
-  Article,
   BlockId,
   Glossary,
   Ideas,
@@ -215,10 +214,6 @@ vi.mock("../src/web/useJobs.js", () => ({
   },
 }));
 
-/* The thread page's bottom bar reaches Supabase and the whole visitor layer, and
-   none of it is what this file is about. */
-vi.mock("../src/web/Dock.js", () => ({ Dock: () => null }));
-
 const { useIdeas } = await import("../src/web/useIdeas.js");
 const { useGlossary, useGlossaryRead } = await import("../src/web/useGlossary.js");
 const { useQuotes, useQuotesRead } = await import("../src/web/useQuotes.js");
@@ -226,7 +221,7 @@ const { useTimeline } = await import("../src/web/useTimeline.js");
 const { useQuiz } = await import("../src/web/useQuiz.js");
 const { useArc } = await import("../src/web/useArc.js");
 const { useSketch } = await import("../src/web/useSketch.js");
-const { Tweets } = await import("../src/web/Tweets.js");
+const { useTweets } = await import("../src/web/useTweets.js");
 
 /** A job for this article, arriving in the poll as finished. */
 function finishJob(step: string): void {
@@ -301,16 +296,13 @@ function SketchHarness({ slug }: { slug: string }): ReactElement {
   return createElement("aside", null, labels || all.status);
 }
 
-const ARTICLE = {
-  meta: { slug: SLUG, title: "A Constitution", url: "https://example.com/c" },
-  blocks: [{ id: BLOCKS[0], kind: "p", text: "some words here" }],
-  tree: { rootId: "spya-root", nodes: {} },
-} as unknown as Article;
-
 function TweetsHarness({ slug }: { slug: string }): ReactElement {
-  /* The eighth reader is a page rather than a hook — its GET is inline in the
-     component — so it is mounted whole, as its own tests mount it. */
-  return createElement(Tweets, { slug, article: ARTICLE });
+  /* The eighth reader was a page until 2026-09-29, its GET inline in the
+     component; as a mode its read lives in `useTweets`, so it is mounted as a
+     hook like the other seven. The thread is `ready` from the first answer, so
+     the arrival run (`useAutoRunOnArrival`) has nothing to write. */
+  const all = useTweets(slug);
+  return createElement("aside", null, all.thread?.tweets.map((t) => t.text).join(",") ?? all.status);
 }
 
 interface Reader {
@@ -331,7 +323,7 @@ const READERS: Reader[] = [
   { name: "useQuiz", step: "quiz", url: `/api/quiz/${SLUG}`, Harness: QuizHarness },
   { name: "useArc", step: "arc", url: `/api/arc/${SLUG}`, Harness: ArcHarness },
   { name: "useSketch", step: "sketch", url: `/api/sketch/${SLUG}`, Harness: SketchHarness },
-  { name: "Tweets.tsx", step: "tweets", url: `/api/tweets/${SLUG}`, Harness: TweetsHarness },
+  { name: "useTweets", step: "tweets", url: `/api/tweets/${SLUG}`, Harness: TweetsHarness },
 ];
 
 let host: HTMLDivElement;

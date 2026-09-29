@@ -68,7 +68,7 @@ import { PROMPT_VERSION as GLOSSARY_PROMPT_VERSION } from "../src/glossary.js";
 import { mintUniqueId } from "../src/ids.js";
 import { LABELS_PROMPT_VERSION } from "../src/labels.js";
 import { CAPABLE_MODEL } from "../src/models.js";
-import { articleFingerprint, hashBlocks } from "../src/source-hash.js";
+import { articleFingerprint, articleWithIdsFingerprint, hashBlocks } from "../src/source-hash.js";
 import { PROMPT_VERSION as TWEETS_PROMPT_VERSION } from "../src/tweets.js";
 import { pgArticleReader } from "../src/store/pg.js";
 import { pgGlossaryStore } from "../src/store/pg-glossary.js";
@@ -232,6 +232,20 @@ function treeFor(blocks: Block[]): Tree {
    `metaFingerprintOf` rebuilds from the revision's columns on the Postgres
    side, so both stores hash the identical input. */
 FINGERPRINT1 = articleFingerprint(B1, treeFor(B1), { title: "A fixture article" });
+
+/**
+ * **The thread's own fingerprint, since `tweets/5`** (2026-09-29, plan
+ * 260929f): the thread is written from `articleWithIds`, whose head prints the
+ * URL too, so it is stamped with `articleWithIdsFingerprint` over the cited head
+ * — the same inputs `citedMetaFingerprintOf` rebuilds from the revision.
+ * Stamped with `FINGERPRINT1` like the glossary, a live-version thread would
+ * read stale from its first publication, and *"survives a re-extraction, stale
+ * rather than gone"* would pass without the re-extraction doing anything.
+ */
+const TWEETS_FINGERPRINT1 = articleWithIdsFingerprint(B1, treeFor(B1), {
+  title: "A fixture article",
+  url: "https://example.com/carry-forward",
+});
 
 const assetsFor = (sourceHash: string): Assets => ({
   version: "assets/2",
@@ -409,7 +423,7 @@ async function writeTheFiles(): Promise<void> {
      manifest did not, so both stores have to say the images want re-fetching. */
   await writeFileJson("assets.json", assetsFor(ASSETS_HASH1));
   await writeFileJson("glossary.json", glossaryFor(FINGERPRINT1));
-  await writeFileJson("tweets.json", tweetsFor(FINGERPRINT1));
+  await writeFileJson("tweets.json", tweetsFor(TWEETS_FINGERPRINT1));
   await writeFileJson("meta.json", {
     slug: SLUG,
     title: "A fixture article",
@@ -455,7 +469,7 @@ describe("a re-extraction, through beginRevision and publishRevision", () => {
         tree: treeFor(B1),
         arc: arcFor(B1),
         assets: assetsFor(ASSETS_HASH1),
-        tweets: tweetsFor(FINGERPRINT1),
+        tweets: tweetsFor(TWEETS_FINGERPRINT1),
         glossary: glossaryFor(FINGERPRINT1),
       })
       .where(eq(articleRevisions.id, firstRevision));
@@ -491,7 +505,7 @@ describe("a re-extraction, through beginRevision and publishRevision", () => {
     });
     await step(firstRevision, "arc", { inputHash: HASH1 });
     await step(firstRevision, "tweets", {
-      inputHash: FINGERPRINT1,
+      inputHash: TWEETS_FINGERPRINT1,
       promptVersion: TWEETS_PROMPT_VERSION,
       model: CAPABLE_MODEL,
     });
@@ -529,6 +543,10 @@ describe("a re-extraction, through beginRevision and publishRevision", () => {
 
     const found = await pgArticleReader.loadGlossary(SLUG);
     expect(found.stale, "stamped against the blocks it was published with").toBe(false);
+    /* The thread too, or its `stale: true` after the re-extraction below says
+       nothing about the re-extraction. See `TWEETS_FINGERPRINT1`. */
+    const thread = await pgArticleReader.loadTweets(SLUG);
+    expect(thread.stale, "the thread, stamped against what it was published with").toBe(false);
   }, 30_000);
 
   it("copies the published revision into the new draft, blocks and step runs too", async () => {
@@ -612,7 +630,7 @@ describe("a re-extraction, through beginRevision and publishRevision", () => {
     /* `input_hash` unchanged by the copy, which is the whole point of it: the
        row says *tweets ran against B1* while the blocks hash B2, and that
        comparison is what yields "present but not current". */
-    expect(runs.get("tweets")?.inputHash).toBe(FINGERPRINT1);
+    expect(runs.get("tweets")?.inputHash).toBe(TWEETS_FINGERPRINT1);
     expect(runs.get("glossary")?.inputHash).toBe(FINGERPRINT1);
     expect(runs.get("hierarchy")?.inputHash, "hierarchy was re-run against B2").toBe(HASH2);
     expect(runs.get("fetch")?.inputHash, "fetch records nothing about its input").toBe(

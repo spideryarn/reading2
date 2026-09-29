@@ -14,9 +14,13 @@ import { beforeAll, describe, expect, it } from "vitest";
 import {
   buildThread,
   countChars,
+  emptyPostBlocksDropped,
   hashBlocks,
+  inputFingerprint,
   isStale,
   LIMIT,
+  MAX_POST_BLOCKS,
+  sentIds,
   overLimit,
   suggestedLength,
   TARGET,
@@ -67,7 +71,7 @@ describe("countChars", () => {
  * written to anywhere.
  */
 describe("buildThread", () => {
-  const opts = { slug: "a-slug", sourceHash: "deadbeefdeadbeef", elapsedMs: 1234 };
+  const opts = { slug: "a-slug", sourceHash: "deadbeefdeadbeef", elapsedMs: 1234, shown: BLOCKS };
 
   it("stores no post number, because the array already has the order", () => {
     // A stored `number` beside the index is a second copy of one fact, and the
@@ -115,6 +119,62 @@ describe("buildThread", () => {
     // itself done and never run again.
     expect(() => buildThread({ tweets: [] }, opts)).toThrow(/no posts/);
     expect(() => buildThread({ tweets: ["", "  "] }, opts)).toThrow(/no posts/);
+  });
+
+  it("keeps the passages a post names, in article order, deduplicated", () => {
+    const thread = buildThread(
+      { tweets: [{ text: "a", blocks: ["spya-bbbbbb", "spya-aaaaaa", "spya-bbbbbb"] }] },
+      opts,
+    );
+    expect(thread.tweets[0]?.blocks).toEqual(["spya-aaaaaa", "spya-bbbbbb"]);
+  });
+
+  it("drops an id the model was not shown, and counts it", () => {
+    const dropped = emptyPostBlocksDropped();
+    const thread = buildThread(
+      { tweets: [{ text: "a", blocks: ["spya-aaaaaa", "spya-zzzzzz", 7] }] },
+      { ...opts, dropped },
+    );
+    expect(thread.tweets[0]?.blocks).toEqual(["spya-aaaaaa"]);
+    expect(dropped.unknownIds).toBe(1);
+  });
+
+  it("keeps a post whose every passage was dropped, with no links", () => {
+    // Nothing the model wrote is silently removed — the file's rule. The post
+    // is still the thread; it just cannot point anywhere.
+    const dropped = emptyPostBlocksDropped();
+    const thread = buildThread(
+      { tweets: [{ text: "kept", blocks: ["spya-nothere"] }, { text: "b", blocks: ["spya-aaaaaa"] }] },
+      { ...opts, dropped },
+    );
+    expect(thread.tweets.map((t) => t.text)).toEqual(["kept", "b"]);
+    expect(thread.tweets[0]?.blocks).toEqual([]);
+    expect(dropped.unlinkedPosts).toBe(1);
+  });
+
+  it(`links a post to at most ${MAX_POST_BLOCKS} passages`, () => {
+    const many = Array.from({ length: 5 }, (_, i) => block(`spya-m${i}m${i}m${i}`, `p${i}`));
+    const dropped = emptyPostBlocksDropped();
+    const thread = buildThread(
+      { tweets: [{ text: "a", blocks: many.map((b) => b.id) }] },
+      { ...opts, shown: many, dropped },
+    );
+    expect(thread.tweets[0]?.blocks).toHaveLength(MAX_POST_BLOCKS);
+    expect(dropped.overCap).toBe(5 - MAX_POST_BLOCKS);
+  });
+
+  it("accepts the old bare-string shape as posts with no passages", () => {
+    // A model slipping back to `tweets/4`'s shape costs the links, not the thread.
+    const thread = buildThread({ tweets: ["one", { text: "two", blocks: ["spya-aaaaaa"] }] }, opts);
+    expect(thread.tweets.map((t) => [t.text, t.blocks])).toEqual([
+      ["one", []],
+      ["two", ["spya-aaaaaa"]],
+    ]);
+  });
+
+  it("skips an element that is not a post rather than throwing", () => {
+    const thread = buildThread({ tweets: [42, { blocks: [] }, null, "real"] }, opts);
+    expect(thread.tweets.map((t) => t.text)).toEqual(["real"]);
   });
 
   it("has no thread summary at all", () => {
@@ -174,16 +234,67 @@ describe("hashBlocks and isStale", () => {
       },
     },
   } as unknown as Tree;
-  const STALE_META = { title: "A title", byline: "Somebody", siteName: "Somewhere" };
+  const STALE_META = {
+    title: "A title",
+    byline: "Somebody",
+    siteName: "Somewhere",
+    url: "https://example.test/a",
+  };
+  /* Since `tweets/5` the fingerprint is `articleWithIdsFingerprint`, which
+     covers the URL line too — src/tweets.ts § `inputFingerprint`. */
   const freshThread = () =>
     buildThread(
-      { tweets: ["a"] },
+      { tweets: [{ text: "a", blocks: ["spya-aaaaaa"] }] },
       {
         slug: "s",
-        sourceHash: articleFingerprint(BLOCKS, STALE_TREE, STALE_META),
+        sourceHash: inputFingerprint(BLOCKS, STALE_TREE, STALE_META),
         elapsedMs: 0,
+        shown: BLOCKS,
       },
     );
+
+  /**
+   * **A thread written before `tweets/5` is not stale for being old.** Its
+   * posts carry no `blocks` and its hash is `articleFingerprint`; asked the new
+   * question it would announce that the article had moved when it had not, on
+   * every thread stored before 2026-09-29.
+   */
+  const oldThread = (): TweetThread => ({
+    version: "tweets/4",
+    generator: "m",
+    slug: "s",
+    sourceHash: articleFingerprint(BLOCKS, STALE_TREE, STALE_META),
+    limit: LIMIT,
+    tweets: [{ text: "a", chars: 1 }],
+    generatedAt: "2026-09-01T00:00:00Z",
+    elapsedMs: 0,
+  });
+
+  it("reads the version as a number, so tweets/10 is after tweets/5", () => {
+    expect(sentIds("tweets/4")).toBe(false);
+    expect(sentIds("tweets/5")).toBe(true);
+    expect(sentIds("tweets/10")).toBe(true);
+    expect(sentIds("tweets/1")).toBe(false);
+    expect(sentIds("nonsense")).toBe(false);
+  });
+
+  it("does not call a pre-tweets/5 thread stale on an unmoved article", () => {
+    expect(isStale(oldThread(), BLOCKS, STALE_TREE, STALE_META)).toBe(false);
+  });
+
+  it("still calls a pre-tweets/5 thread stale once the article moves", () => {
+    expect(isStale(oldThread(), BLOCKS, STALE_TREE, { ...STALE_META, title: "Renamed" })).toBe(
+      true,
+    );
+  });
+
+  it("calls a tweets/5 thread stale when only the URL moved", () => {
+    // The URL is in the head `articleWithIds` prints, so it is in what the
+    // thread was written from.
+    expect(
+      isStale(freshThread(), BLOCKS, STALE_TREE, { ...STALE_META, url: "https://example.test/b" }),
+    ).toBe(true);
+  });
 
   it("says a thread is stale once the article moves under it", () => {
     expect(isStale(freshThread(), BLOCKS, STALE_TREE, STALE_META)).toBe(false);
@@ -300,11 +411,12 @@ const STAMP_META = { slug: SLUG, title: "A title" };
 /** A thread as the stage would have written it against `blocks`. */
 function threadFor(blocks: Block[], over: Partial<TweetThread>): TweetThread {
   const full = buildThread(
-    { tweets: ["a post"] },
+    { tweets: [{ text: "a post", blocks: [blocks[0]!.id] }] },
     {
       slug: SLUG,
-      sourceHash: articleFingerprint(blocks, STAMP_TREE, STAMP_META),
+      sourceHash: inputFingerprint(blocks, STAMP_TREE, STAMP_META),
       elapsedMs: 0,
+      shown: blocks,
     },
   );
   return { ...full, ...over };

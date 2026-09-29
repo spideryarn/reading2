@@ -60,7 +60,6 @@ import {
   NEVER_SHARED,
   OWNER_MODE_NOTE,
   SHARED_ARC,
-  SHARED_TWEETS,
 } from "../messages.js";
 import { visitorGap } from "./visitor.js";
 
@@ -126,18 +125,16 @@ export function sharedInventory(available: PublicArtefacts): SharedInventory {
     else withheld.push(item);
   }
 
-  /* **The two artefacts the sweep cannot see**, because neither is a mode: the
-     thread is a page beside the article, and the arc is the extra rung Structure's
-     list face (Outline, until 2026-09-10) draws when there is one. Both are in `PublicArtefacts`, both cross when they
-     exist, and both were `available` flags with nothing reading them until GPT
-     Sol found the arc on 2026-09-02. Asked by hand, and asked the same way, so
-     the pair cannot drift apart. */
-  for (const [has, row] of [
-    ["arc", SHARED_ARC],
-    ["tweets", SHARED_TWEETS],
-  ] as const) {
-    (available[has] ? shared : ifBuilt).push({ ...row });
-  }
+  /* **The artefact the sweep cannot see**, because it is not a mode: the arc is
+     the extra rung Structure's list face (Outline, until 2026-09-10) draws when
+     there is one. It crosses when it exists, and was an `available` flag with
+     nothing reading it until GPT Sol found it on 2026-09-02.
+
+     **The thread was the second until 2026-09-29**, when it stopped being a page
+     and became a mode — so the sweep above lists it now, through `POLICY.tweets`,
+     and a row here as well would list it twice.
+     docs/plans/260929f-tweets-become-a-mode-with-a-wide-band-and-block-links.md. */
+  (available.arc ? shared : ifBuilt).push({ ...SHARED_ARC });
 
   withheld.push(...NEVER_SHARED.map((it) => ({ ...it })));
   return { shared, ifBuilt, withheld };

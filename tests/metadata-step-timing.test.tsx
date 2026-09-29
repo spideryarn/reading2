@@ -257,7 +257,7 @@ describe("tookFor", () => {
  * The boundaries, and every one of them is a boundary a naive implementation
  * gets wrong by rounding after the comparison rather than before it.
  *
- * **`howLong` is shared with the Tweets page** (`src/web/relative-time.ts`),
+ * **`howLong` is shared with the Tweets band** (`src/web/relative-time.ts`),
  * which had its own copy until 2026-09-08 — these are the cases the merge
  * added, and `tests/tweets-page.test.ts` still holds that page's own, which the
  * merged version passes unchanged.

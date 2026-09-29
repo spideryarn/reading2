@@ -6,7 +6,7 @@ The **Feedback** button, the dialog behind it, and the two places a bug report e
 **One dialog, three shapes of button, since 2026-09-08.** The dialog is mounted once, at the
 signed-in `App` level, and hands `open()` down through a context — otherwise a bar that unmounts
 takes a half-written report with it. The button is at the right-hand end of the bottom bar on the
-three pages that mount a `Dock` — the article, its metadata page and its tweets page, each in an
+two pages that mount a `Dock` — the article and its metadata page (the tweets page was a third until 2026-09-29, when it became a mode), each in an
 owner's and a visitor's shape
 ([260905g](../plans/260905g-move-the-wordmark-and-feedback-button-into-the-dock.md)); in the shelf's
 own masthead row on the homepage (§ below); and fixed in the window's top-right corner everywhere

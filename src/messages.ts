@@ -4099,26 +4099,18 @@ export const ALWAYS_SHARED = [
 ] as const;
 
 /**
- * **The two artefacts that cross but have no mode of their own**, and they are
- * two rather than one.
+ * **The artefact that crosses but has no mode of its own.**
  *
- * `SHARED_TWEETS` was alone here until GPT Sol pointed out, 2026-09-02, that the
- * arc is in exactly the same position and was quietly missing: `available.arc`
- * was computed, sent, and never read, so an article with no arc listed nothing
- * under *not built yet* and an owner could not tell whether one existed. The
- * comment beside the tweets line claimed it was "the one artefact with no mode
- * of its own", which was the mistake stated out loud and still not noticed.
+ * There were two until 2026-09-29. `SHARED_TWEETS` was here first, and GPT Sol
+ * pointed out on 2026-09-02 that the arc was in the same position and quietly
+ * missing: `available.arc` was computed, sent, and never read. Then the thread
+ * stopped being a page and became a mode, so the sweep over `MODES` lists it
+ * through `OWNER_MODE_NOTE.tweets`, and `SHARED_TWEETS` went — two rows for one
+ * artefact is what the sweep exists to prevent.
  *
- * The thread is a page beside the article (`VIEW_LABEL`, src/title-text.ts); the
- * arc is the extra rung Outline draws when there is one, so Outline is shared
- * either way and the arc is a separate row rather than a condition on it.
+ * The arc is the extra rung Outline draws when there is one, so Outline is
+ * shared either way and the arc is a separate row rather than a condition on it.
  */
-export const SHARED_TWEETS = {
-  key: "tweets",
-  label: "Tweets",
-  detail: "The article rewritten as a numbered thread.",
-};
-
 export const SHARED_ARC = {
   key: "arc",
   label: "The arc",
@@ -4262,6 +4254,9 @@ export const OWNER_MODE_NOTE: Record<Mode, string> = {
      line are the model's reading (src/trajectory.ts). */
   trajectory:
     "A route through this piece's quotes, in the order the model thought best for you, walked a little deeper each time round.",
+  /* `SHARED_TWEETS.detail`'s sentence until 2026-09-29, when the thread became a
+     mode and the sweep over `MODES` started listing it. */
+  tweets: "The article rewritten as a numbered thread, each post linked to where it came from.",
 };
 
 /* ---------------------------------------------------------------- timeline --

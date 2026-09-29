@@ -623,7 +623,7 @@ same machinery given a different sub-list, and none of them needed a special cas
   wait on it ([hierarchy.md § Why they are two steps](hierarchy.md#two-steps)).
 - **Re-run a stage** — `{ slug, steps: ["arc"], force: ["arc"] }`.
 - **Refresh from source** — the default steps, with `force: ["fetch"]`.
-- **Write the thread** — `{ slug, steps: ["tweets"] }`, which is the button on the tweets page.
+- **Write the thread** — `{ slug, steps: ["tweets"] }`, which is the button in the Tweets mode's band (a page until 2026-09-29, [plan](../plans/260929f-tweets-become-a-mode-with-a-wide-band-and-block-links.md)); `useTweets.ts` sends it.
 - **Buy the paragraph labels** — `{ slug, steps: ["labels"] }`, and nothing else. That is the whole
   shape of the successor job an ingest leaves behind, and `unrunnableStepPlan` is checked against it
   by name in `tests/jobs.test.ts`.
@@ -764,7 +764,7 @@ free `labels` successor that would restore them is not built.
 **Two clicks, not one.** A re-run spends no billing slot — `POST /api/jobs` takes one only for a
 request carrying a `url` ([billing.md](billing.md)) — so the only cost is ours, and there is no
 per-reader spend cap ([ai-gateway.md](ai-gateway.md#what-stops-a-reader-spending-our-money-and-what-does-not)).
-The confirm is where the price is said, and it is the same answer `Tweets.tsx` § `Rewrite` reached
+The confirm is where the price is said, and it is the same answer the thread page's `Rewrite` button (since removed) reached
 for the same reason. **Three of the nine rows say something of their own** and the other six take the
 default, and each difference is a fact about the step rather than decoration: the glossary's, because
 forcing it **appends** rather than replaces; the sketch's, because it is two minutes and about $0.20;

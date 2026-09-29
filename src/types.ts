@@ -348,6 +348,16 @@ export interface Tweet {
   text: string;
   /** Code points, counted by us. See `countChars` in src/tweets.ts. */
   chars: number;
+  /**
+   * The passages this post was drawn from, as block ids, so the band can link
+   * each post back to where it came from (Greg, 2026-09-29).
+   *
+   * **Absent** means written before `tweets/5`, when the prompt was not shown
+   * ids at all — every thread stored before then. **Present** means the ids
+   * that survived validation against the article, and may be empty: a post that
+   * loses its ids keeps its text. src/tweets.ts § `buildThread`.
+   */
+  blocks?: BlockId[];
 }
 
 /**

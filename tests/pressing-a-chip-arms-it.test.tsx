@@ -11,10 +11,12 @@
  *
  *  - Referee's four sub-mode chips, two of which arm and two of which must not;
  *  - Remember's Recall | Quiz toggle;
- *  - and, as a negative since 2026-09-15, the bar's **Tweets** link, which armed
- *    a token from 2026-09-06 and now must not: the thread page writes on
- *    arrival (tests/tweets-press-starts-it.test.tsx), and a link that armed as
+ *  - and, as a negative since 2026-09-15, the bar's **Tweets** button, which
+ *    armed a token from 2026-09-06 and now must not: the thread writes itself on
+ *    arrival (tests/tweets-press-starts-it.test.tsx), and a press that armed as
  *    well would be a second way to start one run, minting tokens nothing claims.
+ *    A link to a page until 2026-09-29 and a mode button since (plan 260929f);
+ *    the rule did not change with the shape.
  *
  * ## Why this file measures tokens rather than requests
  *
@@ -234,16 +236,16 @@ describe("Remember's Recall | Quiz toggle", () => {
   });
 });
 
-/* --------------------------------------------------- the bar's Tweets link -- */
+/* ------------------------------------------------- the bar's Tweets button -- */
 
-function mountDock(view: "article" | "tweets", visitor = false): void {
+function mountDock(view: "article", visitor = false, onMode: (next: string) => void = () => {}): void {
   act(() => {
     root.render(
       createElement(Dock, {
         slug: SLUG,
         view,
         mode: "plain" as const,
-        onMode: () => {},
+        onMode,
         experimental: EXPERIMENTAL_ON,
         ...(visitor ? { visitor: true as const } : {}),
       }),
@@ -251,9 +253,9 @@ function mountDock(view: "article" | "tweets", visitor = false): void {
   });
 }
 
-function tweetsLink(): HTMLAnchorElement {
-  const found = host.querySelector<HTMLAnchorElement>('a[aria-label="Tweets"]');
-  if (!found) throw new Error("no Tweets link in the bar");
+function tweetsButton(): HTMLButtonElement {
+  const found = host.querySelector<HTMLButtonElement>('button[aria-label="Tweets"]');
+  if (!found) throw new Error("no Tweets button in the bar");
   return found;
 }
 
@@ -264,14 +266,16 @@ function plainClick(el: HTMLElement): void {
   });
 }
 
-describe("the bar's Tweets link", () => {
-  it("arms nothing, and still goes to the thread page", () => {
-    /* The page starts itself on arrival (Tweets.tsx § `useAutoRunOnArrival`),
+describe("the bar's Tweets button", () => {
+  it("arms nothing, and still opens the mode", () => {
+    /* The band starts itself on arrival (useTweets.ts § `useAutoRunOnArrival`),
        so a token here would never be claimed — `useAutoRun` is not mounted
-       anywhere that asks for `tweets`. */
-    mountDock("article");
-    plainClick(tweetsLink());
-    expect(window.location.pathname).toBe(`/read/${SLUG}/tweets`);
+       anywhere that asks for `tweets`. The positive half is the mode opening:
+       without it, "arms nothing" would pass on a button that did nothing. */
+    const opened: string[] = [];
+    mountDock("article", false, (next) => opened.push(next));
+    plainClick(tweetsButton());
+    expect(opened).toEqual(["tweets"]);
     expect(armed("tweets")).toBe(false);
   });
 });

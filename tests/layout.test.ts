@@ -9,10 +9,15 @@
  */
 import { describe, expect, it } from "vitest";
 import {
+  bandCoversProse,
   DEFAULT_ROOT_PX,
   fitView,
+  MODE_IDEAL,
+  MODE_MIN,
+  PROSE_MIN,
   proseAloneMaxPx,
   SPINE_W,
+  wideIdeal,
   type FitInput,
 } from "../src/web/layout.js";
 
@@ -116,5 +121,68 @@ describe("the article on its own stops at the measure", () => {
     const band = (windowWidth: number) => fitView({ windowWidth, modeBand: true });
     expect(band(1600).alone).toBe(false);
     expect(band(390).alone).toBe(false);
+  });
+});
+
+/**
+ * **The wide band — Tweets', since it became a mode on 2026-09-29.**
+ *
+ * > It could be quite a wide left-hand column if that will help to make it be
+ * > readable.
+ * >
+ * > — Greg, 2026-09-29 (SPIDERYARN-READING2-5A)
+ *
+ * The posts are set in the prose face, so the band grows to a prose column's
+ * measure, `wideIdeal` = 34rem — and by the same rule as every other band, only
+ * into room the prose was not defending (`PROSE_MIN`). The numbers are written
+ * out by hand rather than computed from the constants, because a test that
+ * derived its expectation from `wideIdeal` would pass whatever `wideIdeal` said.
+ * docs/plans/260929f-tweets-become-a-mode-with-a-wide-band-and-block-links.md.
+ */
+describe("a wide band", () => {
+  const wide = (windowWidth: number, rootFontPx = DEFAULT_ROOT_PX) =>
+    fitView({ windowWidth, modeBand: true, bandShape: "wide", rootFontPx });
+
+  it("is a prose column's measure at a desktop window and a 16px root", () => {
+    expect(wideIdeal(16)).toBe(544);
+    expect(wide(1440).modeW).toBe(544);
+    // And the prose beside it keeps the rest of the window.
+    expect(wide(1440).widths).toEqual([1440 - SPINE_W - 544]);
+  });
+
+  it("scales with the root, because the posts are rem-sized type", () => {
+    expect(wide(1440, 12).modeW).toBe(408);
+    expect(wide(1440, 20).modeW).toBe(680);
+  });
+
+  it("takes only room the prose was not defending", () => {
+    /* At a 20px root the ideal is 680, but a 1100px window leaves 1088 - 544 =
+       544 beside a defended reading column, and that is all it gets. */
+    expect(wide(1100, 20).modeW).toBe(544);
+    expect(wide(1100, 20).widths).toEqual([PROSE_MIN]);
+    /* Squeezed below the ordinary band's floor, it stops at `MODE_MIN` like
+       any other, and the prose gives up the rest down to its own floor. */
+    expect(wide(800).modeW).toBe(MODE_MIN);
+  });
+
+  it("never comes out narrower than an ordinary band at a small root", () => {
+    // wideIdeal(9) is 306, under `MODE_IDEAL`; the wide band is never the narrower.
+    expect(wide(1440, 9).modeW).toBe(MODE_IDEAL);
+  });
+
+  it("covers the article below the crossover, like any other band", () => {
+    const at = 690;
+    expect(bandCoversProse(at)).toBe(true);
+    expect(wide(at).modeW).toBe(0);
+    expect(wide(at).widths).toEqual([at - SPINE_W]);
+  });
+
+  it("leaves the standard band exactly as it was", () => {
+    const standard = (windowWidth: number, rootFontPx = DEFAULT_ROOT_PX) =>
+      fitView({ windowWidth, modeBand: true, bandShape: "standard", rootFontPx });
+    expect(standard(1440).modeW).toBe(400);
+    expect(standard(1440, 20).modeW).toBe(400);
+    // The default shape is the standard one.
+    expect(fitView({ windowWidth: 1440, modeBand: true }).modeW).toBe(400);
   });
 });

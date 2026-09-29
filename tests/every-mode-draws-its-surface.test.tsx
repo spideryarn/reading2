@@ -87,6 +87,7 @@ import { commandId, modeCommand } from "../src/web/command-match.js";
 import { MODE_LABEL } from "../src/title-text.js";
 import type {
   Article,
+  BlockId,
   ChatThread,
   Citations,
   Debate,
@@ -99,6 +100,7 @@ import type {
   SearchRun,
   Timeline,
   Trajectory,
+  TweetThread,
 } from "../src/types.js";
 import type { SavedCriterion } from "../src/saved-criteria.js";
 
@@ -270,6 +272,9 @@ const FAQ_QUESTION = "Why trust a rig nobody could yet explain?";
 /* The current stop's role — drawn on the current row only, so a panel that
    drew the stepper and no rows would not satisfy it. */
 const TRAJECTORY_ROLE = "Where the chapter turns";
+/* A post's own words — the numbered list's content, not the counts line or
+   *Copy the thread*, which a thread of any posts would draw alike. */
+const TWEET_POST = "The rig came first; the theory of what it measured came later.";
 const SKETCH_NODE = "The calibrated rig";
 const SEARCH_CRITERION = "wherever the piece leans on an unnamed source";
 const CRITERION_TEXT = "every claim that rests on a single study";
@@ -390,6 +395,17 @@ const CITATIONS: Citations = {
     },
   ],
   capped: false,
+  generatedAt: "2026-09-01T09:00:00.000Z",
+  elapsedMs: 1,
+};
+
+const THREAD: TweetThread = {
+  version: "tweets/5",
+  generator: "test",
+  slug: SLUG,
+  sourceHash: "hash",
+  limit: 280,
+  tweets: [{ text: TWEET_POST, chars: [...TWEET_POST].length, blocks: ["spya-bbbbbb" as BlockId] }],
   generatedAt: "2026-09-01T09:00:00.000Z",
   elapsedMs: 1,
 };
@@ -731,6 +747,8 @@ function artefact(url: string): Response | null {
     return has ? json({ citations: CITATIONS, stale: false, outdated: false }) : GONE();
   if (url.startsWith("/api/faq/"))
     return has ? json({ faq: FAQ, stale: false, outdated: false }) : GONE();
+  if (url.startsWith("/api/tweets/"))
+    return has ? json({ thread: THREAD, stale: false, profileChanged: false }) : GONE();
   if (url.startsWith("/api/trajectory/"))
     return has
       ? json({ trajectory: TRAJECTORY, stale: false, outdated: false, profileChanged: false, notOnRoute: 0 })
@@ -1119,6 +1137,10 @@ const SPENDS: Record<Mode, Spend> = {
      around the Ideas, so the one press asks for both first in the same job
      (`precededBy`, src/web/useTrajectory.ts). Phase A serves neither. */
   trajectory: { kind: "posts", steps: ["quotes", "ideas", "trajectory"] },
+  /* One model pass over the article — and the one mode that writes on
+     *arrival* as well as on a press, by Greg's 2026-09-12 word (useTweets.ts §
+     `useAutoRunOnArrival`). What a press must post is the same one step. */
+  tweets: { kind: "posts", steps: ["tweets"] },
   /* **The one mode where the button and the target are not the same word**,
      and the one row where "what it costs" and "what it arms" are two questions.
 
@@ -1335,6 +1357,10 @@ const DRAWS: Record<Mode, Draws> = {
   citations: { kind: "band", where: ".mode-band.citations", says: CITATION_TITLE },
   faq: { kind: "band", where: ".mode-band.faq", says: FAQ_QUESTION },
   trajectory: { kind: "band", where: ".mode-band.trajectory", says: TRAJECTORY_ROLE },
+  /* A post's own words, off the thread in the payload. `.tweets` and not
+     `.gloss`: the panel's feature string is `"gloss tweets"`, so `.gloss` alone
+     would also match Glossary's band. */
+  tweets: { kind: "band", where: ".mode-band.tweets", says: TWEET_POST },
   /* A node **inside** the drawing, not the drawing's title: a title is drawn
      from the artefact's header and survives a scene that painted nothing. */
   diagram: { kind: "band", where: ".mode-band.diag", says: SKETCH_NODE },

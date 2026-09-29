@@ -157,6 +157,9 @@ export function selectPassages(mode: Mode, slots: PassageSlots): PassageSlot {
        and a `?faq=` selection that marks a question's passages in the prose is
        deferred — docs/plans/260916d-faq-mode.md § Deferred. */
     case "faq":
+    /* Tweets neither: each post's passages are jumps (`BlockRef`), not a
+       selection. docs/plans/260929f-tweets-become-a-mode-with-a-wide-band-and-block-links.md. */
+    case "tweets":
       return NOTHING;
     default: {
       /* The compiler being made to say that every mode has been given an

@@ -44,20 +44,46 @@ import { MODEL_REFUSED } from "./messages.js";
 import { anthropicCallFailed } from "./anthropic-call.js";
 import {
   articleFingerprint,
+  articleWithIdsFingerprint,
   type BlockFingerprint,
+  fallbackHeadTitle,
   hashBlocks,
-  type MetaFingerprint,
+  type MetaFingerprintWithUrl,
 } from "./source-hash.js";
 import { budgetFor, truncationFailure } from "./token-budget.js";
-import type { Meta, Tree, Tweet, TweetThread } from "./types.js";
+import type { Block, Meta, Tree, Tweet, TweetThread } from "./types.js";
 import { parseJsonAnswer } from "./parse-json.js";
-import { articleText } from "./article-prompt.js";
+import { articleWithIds } from "./article-prompt.js";
 import { articleWordCounts, isBodyEvidence } from "./block-policy.js";
 import { PROFILE_RULES, hashProfile, profileSection } from "./profile.js";
 import { plainWords } from "./plain-words.js";
 
-/** `tweets/4`, 2026-09-28: the prompt's own plain-words wording gave way to the shared `plainWords` section, one rule for every prompt (Greg, 2026-09-28; docs/plans/260926a-plainer-summaries-and-glossary.md, stage 3). */
-export const PROMPT_VERSION = "tweets/4";
+/**
+ * `tweets/5`, 2026-09-29: each post names the passages it was drawn from, so the
+ * band can link it back to them (Greg, SPIDERYARN-READING2-5A;
+ * docs/plans/260929f-tweets-become-a-mode-with-a-wide-band-and-block-links.md).
+ * That meant sending `articleWithIds` rather than `articleText`, which moved the
+ * fingerprint too — see `isStale`.
+ *
+ * `tweets/4`, 2026-09-28: the prompt's own plain-words wording gave way to the shared `plainWords` section, one rule for every prompt (Greg, 2026-09-28; docs/plans/260926a-plainer-summaries-and-glossary.md, stage 3).
+ */
+export const PROMPT_VERSION = "tweets/5";
+
+/** The most passages one post may link to. More is a row of chips nobody reads. */
+export const MAX_POST_BLOCKS = 3;
+
+/**
+ * What a thread written from this prompt is fingerprinted with: the blocks, the
+ * tree and the head `articleWithIds` prints, URL included — the FAQ's and the
+ * ideas' fingerprint, because it is now their rendering of the article.
+ */
+export function inputFingerprint(
+  blocks: readonly BlockFingerprint[],
+  tree: Tree,
+  meta: MetaFingerprintWithUrl | null,
+): string {
+  return articleWithIdsFingerprint(blocks, tree, meta);
+}
 
 /**
  * The per-post limit, in one place.
@@ -140,9 +166,45 @@ export function isStale(
   thread: TweetThread,
   blocks: BlockFingerprint[],
   tree: Tree,
-  meta: MetaFingerprint | null,
+  meta: MetaFingerprintWithUrl | null,
 ): boolean {
-  return thread.sourceHash !== articleFingerprint(blocks, tree, meta);
+  return thread.sourceHash !== fingerprintFor(thread, blocks, tree, meta);
+}
+
+/**
+ * **Compared the way it was written.** A thread from before `tweets/5` was
+ * hashed with `articleFingerprint` over `articleText`'s head; asking it the
+ * newer question would call every thread stored before 2026-09-29 stale — a
+ * banner saying the article moved when it had not. Those threads are merely
+ * *outdated* (the prompt changed), which is the pipeline stamp's business and
+ * is not announced (docs/plans/260929c-no-notice-when-a-mode-was-made-by-an-older-prompt.md).
+ *
+ * Keyed on the **parsed** producer version — `tweets/10` is after `tweets/5`,
+ * which a string comparison would get wrong — rather than on the posts
+ * carrying `blocks`, which a model can fail to fill without the prompt having
+ * been any different. A version that does not parse is judged the old way:
+ * every thread we ever wrote carries one, so that is a hand-made artefact, and
+ * the cost of guessing wrong is a banner offering a rewrite. GPT Sol, plan
+ * review, 2026-09-29.
+ */
+function fingerprintFor(
+  thread: TweetThread,
+  blocks: BlockFingerprint[],
+  tree: Tree,
+  meta: MetaFingerprintWithUrl | null,
+): string {
+  return sentIds(thread.version)
+    ? inputFingerprint(blocks, tree, meta)
+    : articleFingerprint(blocks, tree, meta);
+}
+
+/** The first prompt that sent the article with its block ids. */
+const FIRST_WITH_IDS = 5;
+
+/** Was a thread of this version written from `articleWithIds`? Exported for tests. */
+export function sentIds(version: string): boolean {
+  const m = /^tweets\/(\d+)$/.exec(version);
+  return m !== null && Number(m[1]) >= FIRST_WITH_IDS;
 }
 
 /**
@@ -201,6 +263,14 @@ Says what the piece leaves open or deliberately unsettled. Not a call to action,
 not "follow for more", not credits — whatever shows this thread carries the
 article's own link already.
 
+WHERE EACH POST CAME FROM
+
+Every post names the passages it is drawn from: the ids of one to
+${MAX_POST_BLOCKS} blocks. Pick the blocks a reader should go to in order to
+check the post — where the claim is actually made, not every block that
+mentions the topic. Use only ids that appear in the article above, copied
+exactly.
+
 RULES
 
 - One idea per post. Each must stand alone, and the sequence must still read in
@@ -227,10 +297,11 @@ OUTPUT
 
 JSON only, no prose, no code fence:
 
-{"tweets": ["...", "...", ...]}
+{"tweets": [{"text": "...", "blocks": ["spya-...", "spya-..."]}, ...]}
 
-Each element is one post's text, in order, with no numbering in it. Nothing
-else — no summary, no title, no commentary about the thread.
+Each element is one post, in order: its text, with no numbering in it, and the
+ids of the blocks it came from. Nothing else — no summary, no title, no
+commentary about the thread.
 
 ${plainWords("explain")}
 
@@ -303,8 +374,75 @@ ${skeleton}`;
  * not enough, because a thrown error is logged where it is caught and V8 quotes
  * the input in it.
  */
-function parseJson(raw: string): { tweets: string[] } {
-  return parseJsonAnswer(raw, "the tweet-thread response");
+function parseJson(raw: string): { tweets?: unknown } {
+  return parseJsonAnswer<{ tweets?: unknown }>(raw, "the tweet-thread response");
+}
+
+/** One post as the model sent it, before anything is checked. */
+interface RawPost {
+  text: string;
+  blocks: unknown;
+}
+
+/**
+ * The model's `tweets` array, read tolerantly.
+ *
+ * A bare string is the `tweets/4` shape and is accepted as a post with no
+ * passages: a model slipping back to the old shape should cost the links, not
+ * the thread. Anything that is neither a string nor an object with a string
+ * `text` is not a post and is skipped.
+ */
+function rawPosts(value: unknown): RawPost[] {
+  if (!Array.isArray(value)) return [];
+  const out: RawPost[] = [];
+  for (const item of value) {
+    if (typeof item === "string") {
+      out.push({ text: item, blocks: [] });
+    } else if (item && typeof item === "object") {
+      const { text, blocks } = item as { text?: unknown; blocks?: unknown };
+      if (typeof text === "string") out.push({ text, blocks });
+    }
+  }
+  return out;
+}
+
+/** What validation took out of the posts' passages. Logged as counts, never text. */
+export interface PostBlocksDropped {
+  /** Ids that are not one of the blocks the model was shown. */
+  unknownIds: number;
+  /** Ids past `MAX_POST_BLOCKS` on one post. */
+  overCap: number;
+  /** Posts left with no passage at all. Kept — the text is still the thread. */
+  unlinkedPosts: number;
+}
+
+export function emptyPostBlocksDropped(): PostBlocksDropped {
+  return { unknownIds: 0, overCap: 0, unlinkedPosts: 0 };
+}
+
+/**
+ * **Only ids the model was shown survive**, deduplicated, in article order, and
+ * at most `MAX_POST_BLOCKS`. Article order rather than the model's, so a post's
+ * links read down the page the way the reader will follow them.
+ */
+function checkBlocks(
+  value: unknown,
+  order: ReadonlyMap<string, number>,
+  dropped: PostBlocksDropped,
+): string[] {
+  const ids = Array.isArray(value) ? value.filter((v): v is string => typeof v === "string") : [];
+  const known: string[] = [];
+  for (const raw of ids) {
+    const id = raw.trim();
+    if (!order.has(id)) {
+      dropped.unknownIds++;
+      continue;
+    }
+    if (!known.includes(id)) known.push(id);
+  }
+  known.sort((a, b) => (order.get(a) ?? 0) - (order.get(b) ?? 0));
+  if (known.length > MAX_POST_BLOCKS) dropped.overCap += known.length - MAX_POST_BLOCKS;
+  return known.slice(0, MAX_POST_BLOCKS);
 }
 
 /**
@@ -321,20 +459,38 @@ function parseJson(raw: string): { tweets: string[] } {
  * step report done for ever after.
  */
 export function buildThread(
-  parsed: { tweets: string[] },
+  parsed: { tweets?: unknown },
   opts: {
     slug: string;
     sourceHash: string;
     elapsedMs: number;
     /** The rendered profile this was written from, or null for none. */
     profile?: string | null;
+    /**
+     * The blocks the model was shown, in article order — the only ids a post may
+     * keep. src/block-policy.ts § `isBodyEvidence` decides which those are.
+     */
+    shown: readonly Pick<Block, "id">[];
+    /** Filled in with what was taken out, for the caller to log. */
+    dropped?: PostBlocksDropped;
   },
 ): TweetThread {
-  const texts = parsed.tweets.map((t) => t.trim()).filter((t) => t.length > 0);
-  if (texts.length === 0) {
+  const order = new Map(opts.shown.map((b, i) => [b.id, i] as const));
+  const dropped = opts.dropped ?? emptyPostBlocksDropped();
+  const posts = rawPosts(parsed.tweets)
+    .map((p) => ({ text: p.text.trim(), blocks: p.blocks }))
+    .filter((p) => p.text.length > 0);
+  if (posts.length === 0) {
     throw new Error("The model returned no posts. Nothing to write.");
   }
-  const tweets: Tweet[] = texts.map((text) => ({ text, chars: countChars(text) }));
+  /* **A post is never dropped for losing its passages** — the rule at the top
+     of this file: nothing the model wrote is silently removed. It keeps its
+     text and draws no link, and the count says so. */
+  const tweets: Tweet[] = posts.map((p) => {
+    const blocks = checkBlocks(p.blocks, order, dropped);
+    if (blocks.length === 0) dropped.unlinkedPosts++;
+    return { text: p.text, chars: countChars(p.text), blocks };
+  });
   return {
     version: PROMPT_VERSION,
     generator: CAPABLE_MODEL,
@@ -370,6 +526,8 @@ export interface TweetsRun {
   cacheReadTokens: number;
   cacheWriteTokens: number;
   elapsedMs: number;
+  /** What validation took out of the posts' passages. */
+  dropped: PostBlocksDropped;
 }
 
 /**
@@ -429,7 +587,12 @@ export async function generateTweets(opts: {
      `null` the prompt was. Whoever built the `Article` resolved it — two
      resolutions of "is there metadata" are two answers waiting to differ.
      src/article-input.ts. */
-  const { blocks, tree, meta } = opts.article;
+  const { blocks, tree, meta: realMeta } = opts.article;
+  /* `articleWithIds` needs a head; with no metadata it prints the slug, which is
+     what `articleWithIdsFingerprint` resolves `null` to as well — the FAQ's and
+     the ideas' arrangement exactly (src/faq.ts). The byline instruction in
+     `renderPrompt` still sees the real `null`. */
+  const meta: Meta = realMeta ?? ({ title: fallbackHeadTitle(tree) } as Meta);
 
   /* Read once, used for both the prompt and the stamp — the stamp's whole job
      is to name what the prompt actually carried. */
@@ -483,12 +646,16 @@ export async function generateTweets(opts: {
       system: [
         {
           type: "text" as const,
-          text: articleText(meta, evidence),
+          /* **`articleWithIds`, not `articleText`, since `tweets/5`**: each post
+             names its passages, so the ids have to be on the page. That moves
+             this stage out of the arc/glossary cached prefix and into the
+             ideas/FAQ one — `ARTICLE_RENDERER` in src/models.ts. */
+          text: articleWithIds(meta, evidence),
           ...(opts.cacheArticle ? { cache_control: { type: "ephemeral" as const } } : {}),
         },
         { type: "text" as const, text: SYSTEM },
       ],
-      messages: [{ role: "user", content: renderPrompt({ meta, tree, posts, profile }) }],
+      messages: [{ role: "user", content: renderPrompt({ meta: realMeta, tree, posts, profile }) }],
     }, { ...(opts.signal ? { signal: opts.signal } : {}) });
 
     if (opts.onProgress) {
@@ -536,11 +703,14 @@ export async function generateTweets(opts: {
     .map((b) => b.text)
     .join("");
 
+  const dropped = emptyPostBlocksDropped();
   const thread = buildThread(parseJson(raw), {
     slug: tree.slug,
-    sourceHash: articleFingerprint(blocks, tree, meta),
+    sourceHash: inputFingerprint(blocks, tree, realMeta),
     profile,
     elapsedMs: Date.now() - started,
+    shown: evidence,
+    dropped,
   });
 
   return {
@@ -553,5 +723,6 @@ export async function generateTweets(opts: {
     cacheReadTokens: message.usage.cache_read_input_tokens ?? 0,
     cacheWriteTokens: message.usage.cache_creation_input_tokens ?? 0,
     elapsedMs: thread.elapsedMs,
+    dropped,
   };
 }

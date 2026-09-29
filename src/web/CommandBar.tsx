@@ -252,11 +252,12 @@ function besideTheModes({
 }
 
 /**
- * **The two rows that are about the article in front of you**, and they exist
+ * **The row that is about the article in front of you** — two until Tweets
+ * became a mode on 2026-09-29 and its row became a mode row — and it exists
  * only when there is one — see `CommandBarArticle` for why that is a statement
  * about the gate rather than about these rows.
  *
- * Both go exactly where the Dock button of the same name goes, `search` and
+ * It goes exactly where the Dock button of the same name goes, `search` and
  * all, so a reader who has learned one door has learned the other.
  */
 function articleRows({ slug, search }: CommandBarArticle): readonly Command[] {
@@ -270,22 +271,6 @@ function articleRows({ slug, search }: CommandBarArticle): readonly Command[] {
       /* The metadata page shows what the pipeline already wrote; opening it
          runs nothing. */
       generates: false,
-    },
-    {
-      kind: "page",
-      href: readHref(slug, search, "tweets"),
-      label: "Tweets",
-      description: "The article rewritten as a thread you could post.",
-      aliases: ["thread", "twitter", "x", "social"],
-      /**
-       * **This row spends, and it is the row CommandBar.tsx predicted** — but
-       * not by arming anything. The thread page writes the thread itself when
-       * its owner arrives and there is none (Tweets.tsx §
-       * `useAutoRunOnArrival`, since 2026-09-15), so this row is a plain
-       * navigation and the marker is still true of it. From 2026-09-08 until
-       * then it minted an activation token on the Enter, as the Dock's link did.
-       */
-      generates: true,
     },
   ];
 }

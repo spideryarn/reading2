@@ -166,7 +166,11 @@ import {
 } from "./store/artifacts.js";
 import { checkCoverage, generateHierarchy } from "./hierarchy.js";
 import { LABELS_PROMPT_VERSION, generateLabels, mergeLabels } from "./labels.js";
-import { generateTweets, PROMPT_VERSION as TWEETS_PROMPT_VERSION } from "./tweets.js";
+import {
+  generateTweets,
+  inputFingerprint as tweetsFingerprint,
+  PROMPT_VERSION as TWEETS_PROMPT_VERSION,
+} from "./tweets.js";
 import type { Block, JobUpload, StepName } from "./types.js";
 import { getDb } from "./db/client.js";
 import { articleRevisions, articles } from "./db/schema.js";
@@ -3033,11 +3037,17 @@ export const STEPS: { [K in StepName]: PipelineStep<K> } = {
        D0 (docs/plans/260827aa-delete-the-importer.md). The comparison belongs in one
        place (`sameStamp`); only the three values belong to the stage. */
     stamp: async (ctx, store) => {
-      /* `articleInputHash`, not a blocks-only hash: this prompt reads the tree
-         and the metadata as well as the blocks. See that function. */
-      const inputHash = await articleInputHash(ctx, store);
-      if (!inputHash) return null;
-      return { inputHash, promptVersion: TWEETS_PROMPT_VERSION, model: CAPABLE_MODEL };
+      /* The blocks, the tree and the metadata head **with its URL** since
+         `tweets/5`, which sends `articleWithIds` — the FAQ's stamp exactly, and
+         the same fingerprint `generateTweets` stores as `sourceHash`, handed
+         the same real, nullable metadata. src/tweets.ts § `inputFingerprint`. */
+      const article = await tryReadArticle(ctx.slug, store);
+      if (!article) return null;
+      return {
+        inputHash: tweetsFingerprint(article.blocks, article.tree, article.meta),
+        promptVersion: TWEETS_PROMPT_VERSION,
+        model: CAPABLE_MODEL,
+      };
     },
     async run(ctx, store) {
       const run = await generateTweets({
@@ -3064,6 +3074,11 @@ export const STEPS: { [K in StepName]: PipelineStep<K> } = {
           ms: run.elapsedMs,
           posts: run.thread.tweets.length,
           over: run.over,
+          /* Counts only. A post that lost every passage still ships; this is
+             how anyone finds out the model stopped naming them. */
+          droppedIds: run.dropped.unknownIds,
+          droppedOverCap: run.dropped.overCap,
+          unlinkedPosts: run.dropped.unlinkedPosts,
         },
         `tweets ${ctx.slug}: ${run.thread.tweets.length} posts${over}`,
       );

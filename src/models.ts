@@ -1534,7 +1534,11 @@ export const STAGE_EFFORT: Record<ArticleStage, Effort> = {
  */
 export const ARTICLE_RENDERER: Record<ArticleStage, "text" | "ids"> = {
   arc: "text",
-  tweets: "text",
+  /* `ids` since `tweets/5` (2026-09-29): each post names the blocks it came
+     from, so the ids have to be on the page. It sends the body only,
+     byte-identical to `ideas` and `faq`, so it joins that prefix and leaves
+     arc and glossary's. docs/plans/260929f-tweets-become-a-mode-with-a-wide-band-and-block-links.md. */
+  tweets: "ids",
   glossary: "text",
   /* The model returns the words and never a block id — src/quotes.ts § the
      header — so this sends the same bytes `glossary` does, which is what lets

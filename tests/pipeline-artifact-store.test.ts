@@ -117,7 +117,10 @@ import {
   trajectoryInput,
   trajectoryInputHash,
 } from "../src/trajectory.js";
-import { PROMPT_VERSION as TWEETS_VERSION } from "../src/tweets.js";
+import {
+  inputFingerprint as tweetsFingerprint,
+  PROMPT_VERSION as TWEETS_VERSION,
+} from "../src/tweets.js";
 import { splitIntoBlocks } from "../src/blocks.js";
 import { STEP_ORDER, STEPS, stepIsDone } from "../src/pipeline.js";
 import {
@@ -243,6 +246,11 @@ const CITATIONS_SOURCE_HASH = citationsFingerprint(BLOCKS, TREE, META);
 /* `faq` is `articleWithIdsFingerprint` again, over the body — computed through
    its own module for the same reason. */
 const FAQ_SOURCE_HASH = faqFingerprint(BLOCKS, TREE, META);
+/* `tweets` joined these on 2026-09-29: `tweets/5` sends `articleWithIds` so
+   each post can name its passages, and its fingerprint moved with the head
+   (src/tweets.ts § `inputFingerprint`; plan 260929f). Through its own module,
+   for the same reason as the four above. */
+const TWEETS_SOURCE_HASH = tweetsFingerprint(BLOCKS, TREE, META);
 const ARC_SOURCE_HASH = arcFingerprint(BLOCKS, TREE, META);
 /* **The one that is not `articleFingerprint` underneath.** `timeline` stamps
    `datedArticleFingerprint` — the blocks, the tree and a head that carries
@@ -253,9 +261,10 @@ const ARC_SOURCE_HASH = arcFingerprint(BLOCKS, TREE, META);
    what the stage's `stamp` computes off the same file. */
 const TIMELINE_SOURCE_HASH = timelineFingerprint(BLOCKS, TREE, META);
 /**
- * What `tweets` and `glossary` stamp. The same three inputs — neither
- * exports a fingerprint function of its own, because neither
- * computed one until the shared definition existed.
+ * What `glossary` stamps — and `tweets` did, until `tweets/5` moved it to
+ * `TWEETS_SOURCE_HASH` above. The same three inputs; the glossary exports no
+ * fingerprint function of its own, because it computed none until the shared
+ * definition existed.
  */
 const PROSE_SOURCE_HASH = articleFingerprint(BLOCKS, TREE, META);
 
@@ -408,6 +417,7 @@ function writeWholeArticle(store: MemoryArtifactStore): void {
   });
   store.plant(SLUG, "tweets", "tweets", {
     ...stamped,
+    sourceHash: TWEETS_SOURCE_HASH,
     version: TWEETS_VERSION,
     limit: 280,
     tweets: [{ text: "One post.", chars: 9 }],
@@ -1372,7 +1382,7 @@ describe("every stamped step covers everything its prompt reads", () => {
    * writing side and the checking side can quietly disagree.
    *
    * Every one of these stages tolerates a missing `meta.json` — `generateArc`
-   * and `generateTweets` pass `null` down, `generateIdeas` and `generateSketch`
+   * passes `null` down, `generateIdeas`, `generateSketch` and (since `tweets/5`) `generateTweets`
    * render a stub head with the slug in it so the prompt still has a head. The
    * stub is a *prompt* fallback and must stop at the prompt: the stamp asks the
    * store and hashes `null`, so a stage that hashed its stub would write a
@@ -1401,7 +1411,9 @@ describe("every stamped step covers everything its prompt reads", () => {
     expect(noMeta, "the two heads are not the same question").not.toBe(noMetaWithIds);
     for (const [step, kind, hash] of [
       ["arc", "arc", noMeta],
-      ["tweets", "tweets", noMeta],
+      /* `articleWithIds` since `tweets/5` (2026-09-29), so the synthesised
+         head, like `ideas`. */
+      ["tweets", "tweets", noMetaWithIds],
       ["glossary", "glossary", noMeta],
       ["ideas", "ideas", noMetaWithIds],
       ["sketch", "sketch", noMetaWithIds],
@@ -1419,8 +1431,8 @@ describe("every stamped step covers everything its prompt reads", () => {
 /**
  * **There are two prompt heads in this pipeline, and a fingerprint per head.**
  *
- * `articleText` (arc, tweets, glossary) prints `TITLE:`, `BY:` and
- * `PUBLISHED IN:`. `articleWithIds` (ideas, sketch) prints those three **and a
+ * `articleText` (arc, glossary; tweets until `tweets/5`) prints `TITLE:`, `BY:` and
+ * `PUBLISHED IN:`. `articleWithIds` (ideas, sketch, and tweets since 2026-09-29) prints those three **and a
  * fourth `URL:` line** — and when there is no `meta.json` at all those two
  * stages do not skip the head, they synthesise `TITLE: <tree.slug>` so the
  * model still has one (src/ideas.ts, src/sketch.ts).

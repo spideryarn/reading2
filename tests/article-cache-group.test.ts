@@ -16,10 +16,30 @@ import { cacheArticleForStep, DEFAULT_INGEST_STEPS, sharesArticleCache } from ".
 import type { StepName } from "../src/types.js";
 
 describe("the article cache group", () => {
-  it("puts arc and tweets together, because they think at the same effort", () => {
+  it("puts tweets with ideas and faq, because they think at the same effort AND send the same bytes", () => {
+    expect(STAGE_EFFORT.tweets).toBe(STAGE_EFFORT.ideas);
+    expect(ARTICLE_RENDERER.tweets).toBe(ARTICLE_RENDERER.ideas);
+    expect(sharesArticleCache("tweets", ["ideas"])).toBe(true);
+    expect(sharesArticleCache("faq", ["tweets"])).toBe(true);
+  });
+
+  it("no longer puts arc and tweets together, though they still think at the same effort", () => {
+    /* They were this file's canonical pair until `tweets/5`, when each post
+       started naming its source blocks and tweets moved to the `ids` renderer.
+       Same effort, different bytes: arc now has no partner at all.
+       docs/plans/260929f-tweets-become-a-mode-with-a-wide-band-and-block-links.md. */
     expect(STAGE_EFFORT.arc).toBe(STAGE_EFFORT.tweets);
-    expect(sharesArticleCache("arc", ["tweets"])).toBe(true);
-    expect(sharesArticleCache("tweets", ["arc"])).toBe(true);
+    expect(sharesArticleCache("arc", ["tweets"])).toBe(false);
+    expect(sharesArticleCache("tweets", ["arc"])).toBe(false);
+  });
+
+  it("still puts two text stages together when both effort and renderer match", () => {
+    /* The `articleText` half of the rule, which arc/tweets used to carry.
+       glossary and quotes both send the plain article at `medium`. */
+    expect(STAGE_EFFORT.glossary).toBe(STAGE_EFFORT.quotes);
+    expect(ARTICLE_RENDERER.glossary).toBe(ARTICLE_RENDERER.quotes);
+    expect(sharesArticleCache("glossary", ["quotes"])).toBe(true);
+    expect(sharesArticleCache("quotes", ["glossary"])).toBe(true);
   });
 
   it("keeps glossary out of it, because effort is part of the cache key", () => {
@@ -32,13 +52,14 @@ describe("the article cache group", () => {
     expect(sharesArticleCache("glossary", ["arc", "tweets"])).toBe(false);
   });
 
-  it("keeps ideas out of it even though its effort MATCHES arc and tweets", () => {
+  it("keeps ideas away from arc even though its effort MATCHES", () => {
     /* **The case that made the predicate read two tables instead of one.**
-       `ideas` thinks at `high`, exactly like arc and tweets, so an
-       effort-only grouping says all three share — and they cannot. `ideas`
-       answers with block ids, so it sends `articleWithIds` where the other
-       three send `articleText`; the two renderings of one article agree on the
-       head and on nothing after it.
+       `ideas` thinks at `high`, exactly like arc, so an effort-only grouping
+       says the two share — and they cannot. `ideas` answers with block ids, so
+       it sends `articleWithIds` where arc sends `articleText`; the two
+       renderings of one article agree on the head and on nothing after it.
+       (It was first written about arc *and* tweets; tweets has since crossed
+       over to the ids side, which is the same rule seen from the other end.)
 
        What that would have cost is not an error: it is `arc` marking the
        article on a job that has `ideas` behind it, paying the 1.25x write
@@ -47,15 +68,14 @@ describe("the article cache group", () => {
     expect(STAGE_EFFORT.ideas).toBe(STAGE_EFFORT.arc);
     expect(ARTICLE_RENDERER.ideas).not.toBe(ARTICLE_RENDERER.arc);
     expect(sharesArticleCache("arc", ["ideas"])).toBe(false);
-    expect(sharesArticleCache("ideas", ["arc", "tweets"])).toBe(false);
-    expect(sharesArticleCache("ideas", ["glossary"])).toBe(false);
+    expect(sharesArticleCache("ideas", ["arc", "glossary", "quotes"])).toBe(false);
   });
 
   it("puts timeline in the ids group with ideas and sketch, and in no other", () => {
     /* **Measured rather than asserted**, which is what this file is for. The
        claim in src/models.ts is that `timeline` shares one cached article
        prefix with `ideas` and `sketch` — same `high` effort, same `ids`
-       renderer — and shares nothing with the four `articleText` stages.
+       renderer — and shares nothing with the three `articleText` stages.
 
        It is worth pinning in both directions. Sharing where it should not marks
        the article, pays the 1.25x write premium and collects no read. Not
@@ -65,7 +85,7 @@ describe("the article cache group", () => {
     expect(ARTICLE_RENDERER.timeline).toBe(ARTICLE_RENDERER.ideas);
     expect(sharesArticleCache("ideas", ["timeline"])).toBe(true);
     expect(sharesArticleCache("timeline", ["sketch"])).toBe(true);
-    expect(sharesArticleCache("timeline", ["arc", "tweets", "glossary", "quotes"])).toBe(false);
+    expect(sharesArticleCache("timeline", ["arc", "glossary", "quotes"])).toBe(false);
   });
 
   it("agrees with itself about which renderer every article stage uses", () => {
@@ -145,8 +165,8 @@ describe("the article cache group", () => {
   });
 
   it("does not let a step out of the group into one, from either side", () => {
-    /* `glossary` sits between arc/tweets and ideas/timeline on the two tables at
-       once — same renderer as the first pair, same nothing as the second — so it
+    /* `glossary` sits between arc and ideas/timeline on the two tables at
+       once — same renderer as arc, same nothing as the pair — so it
        is the stage most likely to be swept in by a predicate that got sloppy
        about direction when it stopped only looking forwards. */
     expect(cacheArticleForStep(["arc", "glossary"], 0)).toBe(false);
@@ -173,7 +193,7 @@ describe("the article cache group", () => {
 
   it("answers false for an index that is not in the job", () => {
     // Also unreachable from production, where the index comes from the array itself.
-    expect(cacheArticleForStep(["arc", "tweets"], 7)).toBe(false);
+    expect(cacheArticleForStep(["ideas", "faq"], 7)).toBe(false);
     expect(cacheArticleForStep([], 0)).toBe(false);
   });
 
@@ -188,8 +208,8 @@ describe("the article cache group", () => {
 
        What this pins is that the plan, not the outcome, is the input — so the
        flag is a pure function of the step list and reading it needs no job. */
-    expect(cacheArticleForStep(["arc", "tweets"], 0)).toBe(true);
-    expect(cacheArticleForStep(["arc", "tweets"], 1)).toBe(true);
+    expect(cacheArticleForStep(["ideas", "faq"], 0)).toBe(true);
+    expect(cacheArticleForStep(["ideas", "faq"], 1)).toBe(true);
   });
 
   it("does not mark a prefix during an ordinary ingest, where nothing reads it", () => {
@@ -212,7 +232,7 @@ describe("the article cache group", () => {
   });
 
   it("marks it when a job really does schedule two of the group together", () => {
-    const job: StepName[] = ["arc", "tweets"];
+    const job: StepName[] = ["tweets", "ideas"];
     expect(cacheArticleForStep(job, 0)).toBe(true);
     expect(cacheArticleForStep(job, 1)).toBe(true);
   });

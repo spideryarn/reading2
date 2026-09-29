@@ -83,7 +83,10 @@ const drawer = () => host.querySelector<HTMLElement>(".dock-drawer");
 const closeButton = () => host.querySelector<HTMLButtonElement>(".dock-close");
 const scrim = () => host.querySelector<HTMLButtonElement>(".dock-scrim");
 /** A control in the bar *behind* the drawer, which must stay reachable. */
-const tweets = () => host.querySelector<HTMLElement>('.dock [aria-label="Tweets"]');
+/* Metadata rather than Tweets, which was this until Tweets became a mode on
+   2026-09-29: a control that is not a mode button stays in the bar whatever
+   the mode list does. */
+const metadata = () => host.querySelector<HTMLElement>('.dock [aria-label="Metadata"]');
 
 function must<T>(el: T | null | undefined, what: string): T {
   expect(el, `no ${what}`).toBeTruthy();
@@ -184,7 +187,7 @@ describe("where focus goes", () => {
     expect(key.defaultPrevented, "Tab's default action was cancelled").toBe(false);
 
     /* And where Tab would land, focus is allowed to stay. */
-    const behind = must(tweets(), "Tweets control");
+    const behind = must(metadata(), "Metadata control");
     act(() => behind.focus());
     expect(document.activeElement, "focus was pulled back into the drawer").toBe(behind);
     expect(drawer(), "the drawer closed itself when focus left").not.toBeNull();

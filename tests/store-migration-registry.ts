@@ -2952,6 +2952,10 @@ export const TEST_LANES: Readonly<Record<string, TestLane>> = {
   "tests/store-slug-guard.test.ts": "private-postgres",
   "tests/store-step-fence.test.ts": "private-postgres",
   "tests/store-transaction-isolation.test.ts": "private-postgres",
+  /* Added 2026-09-29 with `tweets/5` (plan 260929f): `loadTweets` must select
+     the final URL and judge a thread the way it was written. Its own
+     `test-`-prefixed article, published through `beginRevision`. */
+  "tests/store-tweets-stale.test.ts": "private-postgres",
   "tests/store-uploads-parity.test.ts": "private-postgres",
   /* Converted in the hinge, 2026-09-05. It wraps whichever store `routes.ts`
      hands things to and asserts the call; that was the filesystem one because

@@ -196,13 +196,19 @@ export type { AutoRunTarget };
  * experimental-features switch, so the button is not in front of every reader,
  * and that the blurb on it says so.
  *
- * `tweets` is not here because it is not a mode: it is its own page, and it
- * arms nothing — the page writes on arrival (useAutoRun.ts §
- * `useAutoRunOnArrival`).
+ *  - **`arrival`** — the band starts its own work when it mounts, so a press
+ *    arms nothing, yet opening the mode may well spend. One row: `tweets`, a
+ *    page until 2026-09-29 that kept its page's rule (useTweets.ts, useAutoRun.ts
+ *    § `useAutoRunOnArrival`). A fourth answer rather than `fixed`, because a
+ *    `fixed` press mints a token no `useAutoRun` would ever claim — an
+ *    unclaimed token is a spend still owed, and the sweep in
+ *    tests/every-mode-draws-its-surface.test.tsx says so — and rather than
+ *    `none`, because `modeGenerates` must stay true for it.
  */
 export type ModeActivation =
   | { kind: "fixed"; target: AutoRunTarget }
   | { kind: "delegated"; target: (ctx: PressContext) => AutoRunTarget | null; why: string }
+  | { kind: "arrival"; target: AutoRunTarget; why: string }
   | { kind: "none"; reason: string };
 
 /**
@@ -232,6 +238,11 @@ const MODE_TARGET: Record<Mode, ModeActivation> = {
      first (`precededBy`, src/web/useTrajectory.ts): the press is for this
      mode's artefact, and the token is keyed on it. */
   trajectory: { kind: "fixed", target: "trajectory" },
+  tweets: {
+    kind: "arrival",
+    target: "tweets",
+    why: "the band writes the thread when its owner opens it and there is none — Greg, 2026-09-12",
+  },
 
   /* The one delegated row, and the reason the variant carries a function at
      all: the picture a Diagram press lands on is whatever `?diagram=` says, so
@@ -442,6 +453,8 @@ export function armActivationForMode(slug: string, mode: Mode, ctx: PressContext
       if (target !== null) armActivation(slug, target);
       return;
     }
+    /* The band starts itself on mount; a token here would never be claimed. */
+    case "arrival":
     case "none":
       return;
     default: {
@@ -564,6 +577,8 @@ export function bandTarget(
       return decision.target;
     case "delegated":
       return decision.target({ diagram: sub.diagram });
+    /* No press was armed, so there is none to retire. */
+    case "arrival":
     case "none":
       return null;
     default: {

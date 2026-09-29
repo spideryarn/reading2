@@ -129,7 +129,7 @@ cannot take another press yet (since 2026-09-29, when the button gained a drawn 
 same value — GPT Sol). In *load failed* and *offline copy* the press asks again, which is an action.
 
 **`experimental.signedIn`, never `Dock`'s `signedIn` prop.** That one is optional visitor-copy input
-that `Metadata.tsx` and `Tweets.tsx` do not pass, so a switch keyed on it would vanish the moment an
+that `Metadata.tsx` does not pass, so a switch keyed on it would vanish the moment an
 owner pressed Metadata. The store knows the session, so the answer is the same on every page. (GPT
 Sol; Fable reached it independently.)
 

@@ -216,6 +216,12 @@ export const MODES = [
      docs/plans/260928a-trajectory-mode-skim-a-paper-at-increasing-depth.md,
      docs/project/trajectory.md. */
   "trajectory",
+  /* 2026-09-29: the article as a numbered thread, each post linked to the
+     passages it came from. A page of its own at `/read/<slug>/tweets` from
+     2026-08-25 until Greg asked for it as a normal mode with a wide band beside
+     the text (SPIDERYARN-READING2-5A); the old address redirects here.
+     docs/plans/260929f-tweets-become-a-mode-with-a-wide-band-and-block-links.md. */
+  "tweets",
 ] as const;
 export type Mode = (typeof MODES)[number];
 

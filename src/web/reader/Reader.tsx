@@ -37,6 +37,7 @@ import { useQuoteMarks } from "./useQuoteMarks.js";
 import { DebateBand, VisitorDebateBand } from "../modes/debate/DebateMode.js";
 import { CitationsBand, VisitorCitationsBand } from "../modes/citations/CitationsMode.js";
 import { FaqBand, VisitorFaqBand } from "../modes/faq/FaqMode.js";
+import { TweetsBand, VisitorTweetsBand } from "../modes/tweets/TweetsMode.js";
 import {
   armTrajectoryOpening,
   firstTrajectoryArrival,
@@ -235,7 +236,7 @@ export function Reader({
    * The page owns the fetches and the bar is told — Dock.tsx's own header says
    * so, and `drawer`, `marked` and `signedIn` all already work that way. The
    * store behind this hook is shared and session-bound, so the reading view,
-   * the metadata page and the tweets page cannot disagree for the length of a
+   * and the metadata page cannot disagree for the length of a
    * toggle (experimental-store.ts).
    *
    * **This is what makes a signed-in reader ask `GET /api/reader` on a reading
@@ -373,8 +374,11 @@ export function Reader({
         modeBand: bandOpen,
         /* Structure's two columns want a band of their own width where they
            fit (layout.ts § `structureColumnsBand`); every other band is the
-           ordinary one. docs/plans/260928a-structure-two-columns-readable.md. */
-        bandShape: mode === "structure" ? "structure" : "standard",
+           ordinary one. docs/plans/260928a-structure-two-columns-readable.md.
+           Tweets' posts are prose, so theirs may grow to a prose column's
+           measure — Greg, 2026-09-29: *"It could be quite a wide left-hand
+           column if that will help to make it be readable."* */
+        bandShape: mode === "structure" ? "structure" : mode === "tweets" ? "wide" : "standard",
         rootFontPx,
         showSpine,
       }),
@@ -451,7 +455,7 @@ export function Reader({
    * § Article identifiers, not article prose.
    *
    * The view is `"article"` by construction: `OwnedArticle` and its visitor
-   * twin answer `metadata` and `tweets` with their own pages, so this component
+   * twin answer `metadata` with its own page, so this component
    * is only ever mounted for the reading view.
    *
    * The cleanup clears it, so a report filed from the shelf a moment later does
@@ -1804,6 +1808,16 @@ export function Reader({
       case "faq":
         if (!owner) return artefacts?.faq ? <VisitorFaqBand faq={artefacts.faq} onJump={jumpTo} /> : null;
         return <FaqBand slug={slug} onJump={jumpTo} />;
+      /* **A mode since 2026-09-29**, a page of its own before. FAQ's shape: no
+         passages, each post's links are jumps. The band is the wide one
+         (`bandShape` above). docs/plans/260929f-tweets-become-a-mode-with-a-wide-band-and-block-links.md. */
+      case "tweets":
+        if (!owner) {
+          return artefacts?.tweets ? (
+            <VisitorTweetsBand slug={slug} thread={artefacts.tweets} article={article} onJump={jumpTo} />
+          ) : null;
+        }
+        return <TweetsBand slug={slug} article={article} onJump={jumpTo} />;
       /* **The owner/visitor pair, since 2026-09-29.** A passage producer (the
          current stop) and a controller (← / → and the door after the stop's
          block), both published up here and both cleared when the band

@@ -9,7 +9,7 @@
 import { readFileSync } from "node:fs";
 import path from "node:path";
 
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   settleAddress,
   ADMIN_FEEDBACK_HREF,
@@ -22,6 +22,8 @@ import {
   canonicalAddHref,
   carriedSearch,
   CONTACT_HREF,
+  liftedTweetsHref,
+  navigate,
   PRIVACY_HREF,
   FEATURES_HREF,
   PRICING_HREF,
@@ -96,11 +98,13 @@ describe("parseRoute", () => {
       slug: "example",
       view: "metadata",
     });
-    expect(parseRoute("/read/example/tweets")).toEqual({
-      kind: "read",
-      slug: "example",
-      view: "tweets",
-    });
+  });
+
+  it("no longer knows `/tweets`, which is a mode since 2026-09-29", () => {
+    /* The old page's address is lifted to `?mode=tweets` before anything parses
+       it — `settleAddress`, `navigate()` and `useRoute` (§ lifting the old
+       Tweets address, below). Parsed raw, it is simply not a view. */
+    expect(parseRoute("/read/example/tweets")).toEqual({ kind: "not-found" });
   });
 
   it("accepts the trailing slash on a view too — Greg wrote the route with one", () => {
@@ -332,14 +336,131 @@ describe("readHref", () => {
 
   it("spells the view as the third segment, and round-trips it", () => {
     expect(readHref("x", "", "metadata")).toBe("/read/x/metadata");
-    expect(readHref("x", "at=spya-k3m9qt", "tweets")).toBe("/read/x/tweets?at=spya-k3m9qt");
-    for (const view of ["article", "metadata", "tweets"] as const) {
+    expect(readHref("x", "at=spya-k3m9qt", "metadata")).toBe("/read/x/metadata?at=spya-k3m9qt");
+    for (const view of ["article", "metadata"] as const) {
       expect(parseRoute(readHref("x", "", view)), view).toEqual({
         kind: "read",
         slug: "x",
         view,
       });
     }
+  });
+});
+
+/**
+ * **Lifting the old Tweets address.** The thread was a page at
+ * `/read/<slug>/tweets` from 2026-08-25 until 2026-09-29, when it became the
+ * mode `?mode=tweets` (Greg, SPIDERYARN-READING2-5A;
+ * docs/plans/260929f-tweets-become-a-mode-with-a-wide-band-and-block-links.md).
+ * Links to the page are pasted, bookmarked and in a tab's own history, and each
+ * of them must land on the mode rather than on *not found* — at boot
+ * (`settleAddress`), on an in-app link (`navigate()`) and on Back
+ * (`useRoute`, which shares `liftedTweetsHref`).
+ */
+describe("lifting the old Tweets address", () => {
+  it("sends the bare page to the mode", () => {
+    expect(settleAddress("/read/x/tweets", "", "")).toBe("/read/x?mode=tweets");
+    // The trailing slash `parseRoute` accepts on every other view.
+    expect(settleAddress("/read/x/tweets/", "", "")).toBe("/read/x?mode=tweets");
+  });
+
+  it("carries the reader's place", () => {
+    expect(settleAddress("/read/x/tweets", "?at=spya-k3m9qt", "")).toBe(
+      "/read/x?at=spya-k3m9qt&mode=tweets",
+    );
+  });
+
+  it("replaces a mode already on the link, because the path said which one it meant", () => {
+    expect(settleAddress("/read/x/tweets", "?mode=summary&at=spya-k3m9qt", "")).toBe(
+      "/read/x?at=spya-k3m9qt&mode=tweets",
+    );
+  });
+
+  it("replaces an encoded `mode` too, or the stale one would win `get(\"mode\")`", () => {
+    /* `%6Dode` is `mode` to `URLSearchParams`, which returns the first match —
+       so a literal-only removal would leave the reader in Summary. The ninth
+       address bug's shape (§ `hasKey`). */
+    const lifted = settleAddress("/read/x/tweets", "?%6Dode=summary", "");
+    expect(lifted).toBe("/read/x?mode=tweets");
+    expect(new URLSearchParams((lifted ?? "").split("?")[1]).getAll("mode")).toEqual(["tweets"]);
+  });
+
+  it("keeps a hash", () => {
+    expect(settleAddress("/read/x/tweets", "?at=spya-k3m9qt", "#section-2")).toBe(
+      "/read/x?at=spya-k3m9qt&mode=tweets#section-2",
+    );
+    /* A block-id hash goes on to become `?at=`, as it does on any read address
+       — the lift runs first and hands the rest of the chain an ordinary one. */
+    expect(settleAddress("/read/x/tweets", "", "#spya-k3m9qt")).toBe(
+      "/read/x?at=spya-k3m9qt&mode=tweets",
+    );
+  });
+
+  it("runs before `?about=1`, which then goes to Metadata as it does from the article", () => {
+    /* The order matters: lifted second, the tweets path would already have been
+       handed to `liftLegacyAbout` as a route `parseRoute` cannot read. */
+    expect(settleAddress("/read/x/tweets", "?about=1", "")).toBe("/read/x/metadata?mode=tweets");
+  });
+
+  it("leaves everything that is not an article's tweets page alone", () => {
+    expect(settleAddress("/tweets", "", "")).toBeNull();
+    expect(settleAddress("/read/x/y/tweets", "", "")).toBeNull();
+    expect(settleAddress("/read/x/tweetsy", "", "")).toBeNull();
+    expect(settleAddress("/read/Not A Slug/tweets", "", "")).toBeNull();
+    // Already the mode: nothing to do, which is what makes the rewrite settle.
+    expect(settleAddress("/read/x", "?mode=tweets", "")).toBeNull();
+  });
+
+  it("`liftedTweetsHref` answers a whole href, and `null` for anything else", () => {
+    expect(liftedTweetsHref("/read/x/tweets?at=spya-a#h")).toBe("/read/x?at=spya-a&mode=tweets#h");
+    expect(liftedTweetsHref("/read/x?mode=tweets")).toBeNull();
+    expect(liftedTweetsHref("/read/x/metadata")).toBeNull();
+    expect(liftedTweetsHref("/read/x")).toBeNull();
+  });
+
+  describe("navigate()", () => {
+    /* This file is node rather than jsdom, so the three globals `navigate`
+       touches are posed — which also lets the test read exactly what was
+       written to history, rather than trusting a URL jsdom resolved. */
+    const written: string[] = [];
+    function pose(pathname: string, search = ""): void {
+      written.length = 0;
+      vi.stubGlobal("location", { pathname, search, hash: "" });
+      vi.stubGlobal("history", {
+        pushState: (_s: unknown, _t: string, href: string) => written.push(`push ${href}`),
+        replaceState: (_s: unknown, _t: string, href: string) => written.push(`replace ${href}`),
+      });
+      vi.stubGlobal("window", { dispatchEvent: () => true, scrollTo: () => {} });
+    }
+    afterEach(() => {
+      vi.unstubAllGlobals();
+    });
+
+    it("lands an old link on ?mode=tweets", () => {
+      pose("/read/x");
+      navigate("/read/x/tweets?at=spya-k3m9qt");
+      expect(written).toEqual(["push /read/x?at=spya-k3m9qt&mode=tweets"]);
+    });
+
+    it("and with `replace`", () => {
+      pose("/read/x");
+      navigate("/read/x/tweets", { replace: true });
+      expect(written).toEqual(["replace /read/x?mode=tweets"]);
+    });
+
+    it("writes nothing when the old link names where the reader already is", () => {
+      /* The `href === location` guard compares the *lifted* address — or an old
+         link clicked from inside Tweets would push a duplicate entry. */
+      pose("/read/x", "?mode=tweets");
+      navigate("/read/x/tweets");
+      expect(written).toEqual([]);
+    });
+
+    it("the positive control: an ordinary address goes through as written", () => {
+      pose("/read/x");
+      navigate("/read/x/metadata");
+      expect(written).toEqual(["push /read/x/metadata"]);
+    });
   });
 });
 
