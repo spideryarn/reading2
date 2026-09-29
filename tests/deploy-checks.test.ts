@@ -10,10 +10,12 @@
  * See scripts/deploy-checks.ts and docs/plans/260827v-deploy-pipeline.md.
  */
 import { spawnSync } from "node:child_process";
-import { readFileSync } from "node:fs";
+import { readdirSync, readFileSync } from "node:fs";
 import path from "node:path";
 
 import { describe, expect, it } from "vitest";
+
+import { parseSource, walkAst } from "./helpers/ts-ast.js";
 
 import {
   assetUrlsIn,
@@ -27,6 +29,7 @@ import {
   findSecretsInBundle,
   GATE_FIXTURE_ROOT,
   GATE_FIXTURES,
+  GATE_TOOLING_BUILDS,
   judgeClientBuild,
   judgeDeployments,
   stagedTooLong,
@@ -1297,5 +1300,74 @@ describe("failingTestsFromReport", () => {
   it("an all-green report is an empty list, not an error", () => {
     const green = JSON.stringify({ numFailedTests: 0, success: true, testResults: [] });
     expect(failingTestsFromReport(green, TREE)).toEqual({ ok: true, failing: [] });
+  });
+});
+
+/* ------------------------------------------------------------------ */
+/* What the gate builds before it tests                                */
+/* ------------------------------------------------------------------ */
+
+describe("GATE_TOOLING_BUILDS", () => {
+  const repo = path.resolve(import.meta.dirname, "..");
+
+  function requestedBuilds(source: string): string[] {
+    const ast = parseSource(source);
+    const errors = ast.errors ?? [];
+    if (errors.length > 0) {
+      throw new Error(`could not parse a test while looking for build requirements: ${errors[0]?.message}`);
+    }
+    const found = new Set<string>();
+    walkAst(ast.program, (node) => {
+      let value: string | undefined;
+      if (node.type === "StringLiteral" && typeof node.value === "string") {
+        value = node.value;
+      } else if (node.type === "TemplateElement") {
+        const cooked = (node.value as { cooked?: unknown } | undefined)?.cooked;
+        if (typeof cooked === "string") value = cooked;
+      }
+      if (value === undefined) return;
+      for (const match of value.matchAll(/`npm run (build(?:[:][\w.-]+)*)`/g)) {
+        if (match[1] !== undefined) found.add(match[1]);
+      }
+    });
+    return [...found];
+  }
+
+  it("reads runtime hints, not comments that merely discuss a build", () => {
+    const source = [
+      "/* run `npm run build:comment-only` first */",
+      'throw new Error("run `npm run build:one:two` first");',
+    ].join("\n");
+    expect(requestedBuilds(source)).toEqual(["build:one:two"]);
+  });
+
+  /* The suite says what it needs built in its own failure messages — "run
+     `npm run build:fleet` first" — so read the demand from there rather than
+     from a list somebody has to remember. The gate's worktree is a fresh
+     checkout: a build the suite asks for that the gate never runs is a set of
+     reds no commit can fix. On 2026-09-29 that was three fleet tests, and the
+     deploy's test gate could not go green anywhere. */
+  it("runs every build the test suite asks for", () => {
+    const self = path.join(repo, "tests", "deploy-checks.test.ts");
+    const asked = new Set<string>();
+    for (const rel of readdirSync(path.join(repo, "tests"), { recursive: true, encoding: "utf8" })) {
+      const file = path.join(repo, "tests", rel);
+      if (file === self || !/\.(ts|tsx)$/.test(rel)) continue;
+      const source = readFileSync(file, "utf8");
+      if (!source.includes("npm run build")) continue;
+      for (const script of requestedBuilds(source)) asked.add(script);
+    }
+    /* A control: the scan must find the hints it is known to have, or an empty
+       set passes this test by finding nothing. */
+    expect(asked).toContain("build");
+    expect(asked).toContain("build:fleet");
+
+    const run = new Set<string>(["build", ...GATE_TOOLING_BUILDS.map((b) => b.script)]);
+    expect([...asked].filter((s) => !run.has(s))).toEqual([]);
+  });
+
+  it("names only scripts package.json has", () => {
+    const scripts = JSON.parse(readFileSync(path.join(repo, "package.json"), "utf8")).scripts as Record<string, string>;
+    expect(GATE_TOOLING_BUILDS.filter((b) => !Object.hasOwn(scripts, b.script))).toEqual([]);
   });
 });
