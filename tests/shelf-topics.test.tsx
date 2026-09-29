@@ -124,6 +124,7 @@ vi.mock("../src/web/useShelf.js", async () => {
           actionError: null,
           report: () => {},
           archived,
+          archivedVisible: archived ?? [],
           archivedFailed: false,
           loadArchived,
           restore: async () => {},
@@ -424,6 +425,12 @@ describe("the Topics row", () => {
     host.remove();
     await show("/?topics=startup&show=unread&topicsView=detail");
     expect(rowKeys()).toEqual(["startup"]);
+  });
+
+  it("explains an all-zero detail view instead of drawing an unexplained empty list", async () => {
+    await show("/?q=matches-nothing&topicsView=detail");
+    expect(host.textContent).toContain("None of the topics is in this view.");
+    expect(host.querySelector('[aria-label="Topics in detail"]')).toBeNull();
   });
 
   it("hides zero pills when a search narrows the shelf, with no topic chosen", async () => {

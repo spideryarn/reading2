@@ -50,8 +50,21 @@ let asked: string[];
 let archiveGate: Promise<void> | null;
 /** Make the archived listing fail. */
 let archiveFails: boolean;
+/** Hold the active listing back, after taking its server-side snapshot. */
+let activeGate: Promise<void> | null;
+/** Make a later active-list refresh fail. */
+let activeFails: boolean;
+/** The stale-while-revalidate first paint, when a test needs one. */
+let cached: LibraryEntry[] | null;
 
 const NO_TERMS: LibraryTermsResponse = { terms: [], scope: { articles: 0, works: 0, skipped: 0 }, pending: 0 };
+
+async function activeResponse(json: (body: unknown, status?: number) => Response) {
+  const answer = [...active];
+  if (activeGate) await activeGate;
+  if (activeFails) return json({ error: "nope" }, 500);
+  return json({ articles: answer });
+}
 
 vi.mock("../src/web/lib/api.js", () => ({
   apiFetch: async (url: string, init?: RequestInit) => {
@@ -59,11 +72,12 @@ vi.mock("../src/web/lib/api.js", () => ({
     asked.push(`${method} ${url}`);
     const json = (body: unknown, status = 200) => new Response(JSON.stringify(body), { status });
     if (url.startsWith("/api/library/terms")) return json(NO_TERMS);
-    if (url === "/api/library") return json({ articles: active });
+    if (url === "/api/library") return activeResponse(json);
     if (url === "/api/library?archived=1") {
+      const answer = [...archived];
       if (archiveGate) await archiveGate;
       if (archiveFails) return json({ error: "nope" }, 500);
-      return json({ articles: archived });
+      return json({ articles: answer });
     }
     if (method === "PATCH" && url.startsWith("/api/library/")) {
       const slug = decodeURIComponent(url.slice("/api/library/".length));
@@ -101,7 +115,7 @@ vi.mock("../src/web/lib/api.js", () => ({
     return typeof status === "number" ? status : null;
   },
 }));
-vi.mock("../src/web/lib/cached-shelf.js", () => ({ readCachedShelf: async () => null }));
+vi.mock("../src/web/lib/cached-shelf.js", () => ({ readCachedShelf: async () => cached }));
 vi.mock("../src/web/useJobs.js", () => ({ useJobs: () => ({}) }));
 vi.mock("../src/web/AddArticle.js", () => ({ AddArticle: () => null }));
 vi.mock("../src/web/FeedbackButton.js", () => ({ FeedbackTrigger: () => null }));
@@ -141,6 +155,9 @@ beforeEach(() => {
   asked = [];
   archiveGate = null;
   archiveFails = false;
+  activeGate = null;
+  activeFails = false;
+  cached = null;
   /* Titles that interleave, so "sorted with everything else" is visible:
      by title, A (active) B (archived) C (active) D (archived). */
   active = [entry("alpha", "Alpha"), entry("charlie", "Charlie")];
@@ -262,12 +279,80 @@ describe("the Archived chip", () => {
     expect(host.textContent).not.toContain("Loading archived…");
   });
 
+  it("reconciles an archive made while an older archived-list snapshot is in flight", async () => {
+    let release: () => void = () => {};
+    archiveGate = new Promise((r) => (release = r));
+    await show("/?archived=1&by=title");
+    const alpha = [...host.querySelectorAll("main > ul:not([aria-label]) > li")].find((li) =>
+      li.textContent?.includes("Alpha"),
+    )!;
+
+    click(alpha.querySelector<HTMLButtonElement>('[data-action="archive"]')!);
+    await settle();
+    expect(cards().filter((row) => row.title === "Alpha")).toEqual([
+      { title: "Alpha", archived: true },
+    ]);
+
+    await act(async () => release());
+    await waitFor(() => !host.textContent?.includes("Loading archived…"), "the archived snapshot");
+    expect(cards().filter((row) => row.title === "Alpha")).toEqual([
+      { title: "Alpha", archived: true },
+    ]);
+  });
+
   it("keeps the active rows when the archive fails, and says that instead", async () => {
     archiveFails = true;
     await show("/?archived=1&by=title");
     await waitFor(() => !host.textContent?.includes("Loading archived…"), "the failure");
     expect(cards().map((c) => c.title)).toEqual(["Alpha", "Charlie"]);
     expect(host.textContent).toContain("Couldn't load the archived articles");
+  });
+
+  it("clears an archived-list failure after turning Archived off and a retry succeeds", async () => {
+    archiveFails = true;
+    await show("/?archived=1&by=title");
+    await waitFor(() => !host.textContent?.includes("Loading archived…"), "the failure");
+    expect(host.querySelector('[class*="bg-destructive"]')).toBeTruthy();
+
+    click(archivedChip()!);
+    archiveFails = false;
+    click(archivedChip()!);
+    await waitFor(() => cards().length === 4, "the successful retry");
+    expect(host.querySelector('[class*="bg-destructive"]')).toBeNull();
+    expect(host.textContent).not.toContain("Couldn't load the archived articles");
+  });
+
+  it("keeps a newly archived row usable when the older archive could not be loaded", async () => {
+    archiveFails = true;
+    await show("/?archived=1&by=title");
+    await waitFor(() => !host.textContent?.includes("Loading archived…"), "the failure");
+
+    const alpha = () =>
+      [...host.querySelectorAll("main > ul:not([aria-label]) > li")].find((li) =>
+        li.textContent?.includes("Alpha"),
+      );
+    click(alpha()!.querySelector<HTMLButtonElement>('[data-action="archive"]')!);
+    await settle();
+    expect(cards()).toContainEqual({ title: "Alpha", archived: true });
+
+    click(alpha()!.querySelector<HTMLButtonElement>('[data-action="edit"]')!);
+    const input = host.querySelector<HTMLInputElement>('input[aria-label="Title"]')!;
+    const set = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set;
+    act(() => {
+      set?.call(input, "Aardvark");
+      input.dispatchEvent(new Event("input", { bubbles: true }));
+    });
+    act(() => input.form?.requestSubmit());
+    await settle();
+    expect(cards()).toContainEqual({ title: "Aardvark", archived: true });
+
+    const aardvark = [...host.querySelectorAll("main > ul:not([aria-label]) > li")].find((li) =>
+      li.textContent?.includes("Aardvark"),
+    )!;
+    click(aardvark.querySelector<HTMLButtonElement>('[data-action="restore"]')!);
+    await settle();
+    expect(cards()).toContainEqual({ title: "Aardvark", archived: false });
+    expect(cards().filter((row) => row.title === "Aardvark")).toHaveLength(1);
   });
 
   it("offers Put back on an archived card, and the card stays, un-marked", async () => {
@@ -305,6 +390,50 @@ describe("the Archived chip", () => {
       { title: "Delta", archived: true },
     ]);
     expect(host.textContent).not.toContain("Loading archived…");
+  });
+
+  it("does not let the cached shelf's late live answer resurrect an archived row", async () => {
+    cached = [...active];
+    let release: () => void = () => {};
+    activeGate = new Promise((r) => (release = r));
+    await show("/?archived=1&by=title");
+    await waitFor(() => cards().length === 4, "the cached and archived rows");
+
+    const alpha = [...host.querySelectorAll("main > ul:not([aria-label]) > li")].find((li) =>
+      li.textContent?.includes("Alpha"),
+    )!;
+    click(alpha.querySelector<HTMLButtonElement>('[data-action="archive"]')!);
+    await settle();
+    await act(async () => release());
+    await settle();
+
+    expect(cards().filter((row) => row.title === "Alpha")).toEqual([
+      { title: "Alpha", archived: true },
+    ]);
+  });
+
+  it("Undo reconciles both lists from the PATCH without depending on a second active-list read", async () => {
+    await show("/?archived=1&by=title");
+    await waitFor(() => cards().length === 4, "the archived rows");
+    const alpha = [...host.querySelectorAll("main > ul:not([aria-label]) > li")].find((li) =>
+      li.textContent?.includes("Alpha"),
+    )!;
+    click(alpha.querySelector<HTMLButtonElement>('[data-action="archive"]')!);
+    await settle();
+
+    const readsBeforeUndo = asked.filter((request) => request === "GET /api/library").length;
+    activeFails = true;
+    const undo = [...host.querySelectorAll<HTMLButtonElement>("button")].find(
+      (button) => button.textContent?.trim() === "Undo",
+    )!;
+    click(undo);
+    await settle();
+
+    expect(cards().filter((row) => row.title === "Alpha")).toEqual([
+      { title: "Alpha", archived: false },
+    ]);
+    expect(asked.filter((request) => request === "GET /api/library")).toHaveLength(readsBeforeUndo);
+    expect(host.textContent).not.toContain('Archived “Alpha”');
   });
 
   it("renames an archived card in place, and it stays archived", async () => {

@@ -156,7 +156,7 @@ export function ShelfTerms({
             Clear
           </button>
         )}
-        {!detail && available.length === 0 && (
+        {available.length === 0 && (
           <span className="tw:text-xs tw:text-muted-foreground">None of the topics is in this view.</span>
         )}
         {!detail && available.length > COLLAPSED_CHIPS && (
@@ -175,7 +175,7 @@ export function ShelfTerms({
         {reading}
       </div>
 
-      {detail && (
+      {detail && available.length > 0 && (
         <ShelfTermsDetail
           terms={available}
           slotOf={slotOf}

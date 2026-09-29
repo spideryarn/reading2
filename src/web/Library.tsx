@@ -233,10 +233,11 @@ export function Library({
      and the row cap below apply to both halves as one list; a second list at
      the foot of the shelf could be neither sorted with the first nor capped
      with it. While the archive is loading, or has failed, this is the active
-     shelf alone — never `null` because of the archive (Sol R3). */
+     shelf plus any archive mutations whose server answers we already hold —
+     never `null` because of the archive (Sol R3). */
   const scope = useMemo(
-    () => (articles && inArchive ? [...articles, ...inArchive] : articles),
-    [articles, inArchive],
+    () => shelfScope(articles, shelf.archivedVisible, archivedOn),
+    [articles, archivedOn, shelf.archivedVisible],
   );
 
   /* The archive is fetched when the chip is on and the list is missing — on a
@@ -824,6 +825,21 @@ const slugOf = (entry: LibraryEntry) => entry.slug;
 
 /** One frozen empty array, so a shelf that has not loaded does not rebuild the table each render. */
 const EMPTY: LibraryEntry[] = [];
+
+/** One deduplicated scope, preferring the newer archived-side server answer. */
+function shelfScope(
+  active: readonly LibraryEntry[] | null,
+  archived: readonly LibraryEntry[],
+  archivedOn: boolean,
+): LibraryEntry[] | null {
+  if (!active || !archivedOn) return active ? [...active] : null;
+  /* `useShelf` normally prevents the same slug reaching both halves. Resolve
+     it here too so a transient stale response can never create duplicate
+     TanStack row ids; the archived copy carries the newer mutation state. */
+  const merged = new Map(active.map((entry) => [entry.slug, entry]));
+  for (const entry of archived) merged.set(entry.slug, entry);
+  return [...merged.values()];
+}
 
 /**
  * How many rows the table draws before it asks.
