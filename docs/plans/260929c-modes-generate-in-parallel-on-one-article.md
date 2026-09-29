@@ -193,3 +193,26 @@ The result is `C` plus my columns, so another concurrent job's publication is ke
   checked against `STORAGE`; resets and name-reservers exclusive — taken. Sol agreed dropping
   `jobs_one_running_per_slug` is right and either deploy order is safe, and found no other code
   relying on one running job per article.
+- **Code review, GPT Sol, round 1** (2026-09-29, workspace-write, on `95f76eab`): no findings,
+  verdict *ship*, no changes made. It traced the multi-claim draft (reopened, never re-minted, so
+  the base is right), skipped steps, the pointer/fail ordering, publication side effects and billing
+  in one transaction, FIFO for exclusive jobs, and expiry/cancel/sweeps/client selection by job id.
+
+## What landed
+
+Stage 1 as planned, in `95f76eab`: `src/sharing-steps.ts` (`STEP_SHARING`, exhaustive over
+`StepName` so a new step is a compile error until someone decides), `blockedByAnother` deciding
+overlap in TypeScript inside the lock, `drizzle/20260929052845_drop_jobs_one_running_per_slug.sql`,
+and `rebaseSharingDraftIn` + `publishIn`. The old draft is failed *without* the job fence, because
+the job's pointer has already moved to the new draft. Tests: `tests/sharing-steps.test.ts`,
+`tests/pg-session-sharing-rebase.test.ts`, four new cases in `tests/store-jobs-parity.test.ts`.
+
+**Deploy order.** The builder removed `claimIn`'s catch on the dropped index, which means new code
+against a database still holding the index would 500 on an overlapping claim rather than answer
+`busy`. Not reachable through `npm run deploy`, which applies pending migrations before it pushes
+and refuses to ship with any pending (docs/project/deployment.md), so the catch was not restored.
+
+**Browser check** (Stage 2, Sonnet + Playwright, local, "Life is Short"): Citations and Timeline
+both `running` in one `/api/jobs` snapshot, Timeline starting 0.8 s after Citations; Trajectory
+held `queued` while Quotes ran and started 0.09 s after it finished; every result present after a
+fresh load; desktop and phone layouts sane, no errors bar an unrelated glossary 404.
