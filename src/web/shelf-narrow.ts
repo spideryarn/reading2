@@ -2,11 +2,12 @@
  * **Which articles are on screen, and what every topic chip counts** — the
  * shelf's narrowing, as pure functions.
  *
- * One function narrows both halves of the shelf — the active list and, when
- * `?archived=1` is on, the archived one — in one order: **scope → search →
- * Unread → topics** (GPT Sol F6 on plan 260928a). Scope is which array you
- * hand it; the rest is here. Library.tsx calls it above the cards/table branch,
- * so both views obey it and there is no second list to disagree with.
+ * One function narrows the shelf — the active list and, when `?archived=1` is
+ * on, the archived articles merged into the same array (plan 260929a) — in one
+ * order: **scope → search → Unread → topics** (GPT Sol F6 on plan 260928a).
+ * Scope is which array you hand it; the rest is here. Library.tsx calls it
+ * above the cards/table branch, so both views obey it and there is no second
+ * list to disagree with.
  *
  * And **one formula for every count** (Sol F11):
  *
@@ -89,6 +90,19 @@ export function withTopics<T extends { slug: string }>(
   return entries.filter((e) => members.every((m) => m.has(e.slug)));
 }
 
+/**
+ * **Whether an entry is on the shelf only because Archived is on.**
+ *
+ * `archivedAt` is the server's own flag — set on every entry of the archived
+ * listing and on the answer to an archiving PATCH, absent everywhere else
+ * (`LibraryEntry.archivedAt` in src/types.ts) — so a merged row carries its
+ * state with it rather than by which array it came from. One function, so the
+ * card, the table row, the actions and the count all read it the same way.
+ */
+export function isArchived(entry: Pick<LibraryEntry, "archivedAt">): boolean {
+  return !!entry.archivedAt;
+}
+
 /** The whole order, for one array: search → Unread → topics. */
 export function narrowShelf(
   entries: readonly LibraryEntry[],
@@ -122,7 +136,7 @@ export function chosenTopics(
  *
  * Keys not among `terms` are ignored in `selected`, for the reason under
  * `topicMembers`. Every term gets an entry, zeros included — a zero is what
- * greys an unselected chip out.
+ * takes an unselected chip off the row (`availableTopics`).
  */
 export function topicCounts(
   visibleBeforeTopics: Iterable<string>,
@@ -152,4 +166,27 @@ export function topicCountsForVisible(
     counts.set(term.key, n);
   }
   return counts;
+}
+
+/**
+ * **The topics worth offering now**: every topic with something left to show,
+ * plus every chosen one — in the server's rank order, never re-sorted.
+ *
+ * Greg, 2026-09-29 (SPIDERYARN-READING2-4Y): *"if I pick one of the
+ * faceted-search-topic-pills, it should hide (or shunt to the right) any
+ * topic-pills that match 0 of the filtered articles on the shelf"*. Hidden,
+ * not shunted: the row is for choosing the next filter, and a chip that leads
+ * to an empty shelf is noise. A **chosen** topic at zero stays, or it could not
+ * be removed. Plan 260929a § Stage 2.
+ *
+ * Applied **before** the collapsed row takes its first twelve (GPT Sol R5), so
+ * the row has no holes where zeros used to be, and "All N topics" counts what
+ * it would show.
+ */
+export function availableTopics<T extends { key: string }>(
+  terms: readonly T[],
+  count: (key: string) => number,
+  chosen: ReadonlySet<string>,
+): T[] {
+  return terms.filter((t) => count(t.key) > 0 || chosen.has(t.key));
 }

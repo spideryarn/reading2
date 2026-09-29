@@ -48,22 +48,57 @@ a chip's count = |visible ∩ its articles|
 
 So a chosen chip's count equals the number of articles shown, and the "n of m" line is the same
 number. Counts are **physical articles**, never grouped works: six copies are six cards and a count
-of six. An unchosen chip at zero is greyed and disabled in place; a chosen one at zero stays
-pressable, or it could not be removed. The tooltip gives both denominators — *"2 match this view ·
-7 of 38 on the shelf"* — so a chip reading 2 over a card saying 7 explains itself (GPT Sol, F11).
+of six. The tooltip gives both denominators — *"2 match this view · 7 of 38 on the shelf"* — so a
+chip reading 2 over a card saying 7 explains itself (GPT Sol, F11).
 
-**One narrowing function for both lists**, in the order scope → search → Unread → topics, and it runs
+**One narrowing function over one list**, in the order scope → search → Unread → topics, and it runs
 above the cards/table branch, so both views obey it with no second list (Sol, F6).
+
+## A topic with nothing to show is not drawn
+
+> On the Homepage Shelf, if I pick one of the faceted-search-topic-pills, it should hide (or shunt to
+> the right) any topic-pills that match 0 of the filtered articles on the shelf, i.e. so it's easier
+> to pick a topic-pill and then immediately see which other topic-pills will help filter further
+> (and not be distracted by topic pills that will lead to empty results).
+>
+> — Greg, 2026-09-29
+
+An unchosen topic whose live count is 0 is **hidden**, in the pill row and in More detail alike —
+whatever made it zero: a chosen topic, the search box, Unread. **Hidden rather than shunted**: the
+row is for choosing the next filter, and a chip that leads to an empty shelf is noise. A **chosen**
+topic stays at zero, or it could not be removed. Until 2026-09-29 such a chip was greyed and
+disabled in place, on the argument that a row reshuffling under the pointer is worse than a dead
+chip; Greg's report weighed it the other way. The order is still the server's rank order — the
+survivors keep their places relative to each other, and each keeps its rank's colour.
+
+**The zeros go first, then the first twelve** (`availableTopics` in
+[`shelf-narrow.ts`](../../src/web/shelf-narrow.ts); GPT Sol R5 on plan
+[260929a](../plans/260929a-shelf-topics-round-three-concreteness-zero-pills-archived-toggle.md)):
+taking twelve and then dropping zeros would leave the row short with live pills waiting beyond it.
+*"All N topics"* counts the pills it would show, not every topic the server chose.
 
 ## Archived
 
-The shelf's existing **Show archived** control is the switch, and its state is in the URL as
-`?archived=1`. When on, topics are chosen over active **and** archived articles, and the archived list
-is narrowed by the same function — search and Unread included. That is why the archived list now
-stays visible during a search, where until 2026-09-28 it disappeared: the search did not look in it,
-so it could only have been wrong. The count line names both halves — *"4 of 41 articles (3 active + 1
-archived)"*. Passage search still covers active articles only. Reusing the existing control rather
-than adding a second switch is an **assumption pending Greg** (plan § Assumptions pending Greg).
+> On the Homepage Shelf, we have a "Show/hide archived" toggle at the very bottom.
+>
+> I think it would be better if it was a (default-hide-archived) toggle at the top (like for
+> "Unread"), so that it's easy to show some/all (so we can use the faceted-search-topic-pills and/or
+> sort to look through the Archived articles easily too).
+>
+> — Greg, 2026-09-29
+
+The switch is the **Archived** chip beside **Unread**, off by default, and its state is in the URL as
+`?archived=1`. When on, topics are chosen over active **and** archived articles, and the archived
+articles **join the shelf's one list** — sorted with everything else, narrowed by search, Unread and
+topics, counted in "n of m", each marked *Archived* and offering **Put back** where Archive would be
+([library.md § Archive](library.md#archive-and-undo-is-the-confirmation)). One list rather than a
+second section at the foot is what lets sort and topics work across both, which is what Greg asked
+for. The count line names both halves — *"4 of 41 articles (3 active + 1 archived)"*. Passage search
+still covers active articles only.
+
+While the archive is loading or has failed, topics wait (the question includes the archive, and it
+has not arrived) but the active rows stay painted. **Offline, topics are unavailable** — the terms
+route is not cached — which is the accepted limit.
 
 ## Two views: pills, and More detail
 

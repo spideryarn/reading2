@@ -130,7 +130,7 @@ list page now agree, and agreeing is the whole of it:
 
 | | height | radius |
 |---|---|---|
-| sort chips, Unread, Undo, Show archived, card icon buttons, the view toggle | **28px** (`h-7` / `size-7`) | pill for state, `rounded-md` (8px) otherwise |
+| sort chips, Unread, Archived, Undo, card icon buttons, the view toggle | **28px** (`h-7` / `size-7`) | pill for state, `rounded-md` (8px) otherwise |
 | the view toggle's two halves | 24px (`size-6`) inside the 28px box | `rounded-sm` (6px) = outer 8 − 2px padding |
 | shadcn `size="sm"` | 32px | `rounded-md` |
 | shadcn `size="default"`, and the inputs beside it | 36px | `rounded-md` |

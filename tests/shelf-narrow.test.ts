@@ -10,7 +10,9 @@
 import { describe, expect, it } from "vitest";
 import type { LibraryEntry } from "../src/types.js";
 import {
+  availableTopics,
   chosenTopics,
+  isArchived,
   narrowBeforeTopics,
   narrowShelf,
   topicCounts,
@@ -111,5 +113,27 @@ describe("topicCounts — the one formula", () => {
     const counts = topicCounts(["d"], ["memory"], TERMS);
     expect(counts.get("memory")).toBe(0);
     expect(counts.get("startup")).toBe(0);
+  });
+});
+
+describe("availableTopics (plan 260929a, report 4Y)", () => {
+  const ranked = [term("a"), term("b"), term("c"), term("d")];
+  const count = (n: Record<string, number>) => (k: string) => n[k] ?? 0;
+
+  it("drops a topic at zero, keeping the server's rank order", () => {
+    const got = availableTopics(ranked, count({ a: 2, b: 0, c: 5, d: 1 }), new Set());
+    expect(got.map((t) => t.key)).toEqual(["a", "c", "d"]);
+  });
+
+  it("keeps a chosen topic at zero, so it can be removed", () => {
+    const got = availableTopics(ranked, count({ a: 2 }), new Set(["c"]));
+    expect(got.map((t) => t.key)).toEqual(["a", "c"]);
+  });
+});
+
+describe("isArchived", () => {
+  it("reads the server's archivedAt, and nothing else", () => {
+    expect(isArchived(entry("x", { archivedAt: "2026-09-20T00:00:00.000Z" }))).toBe(true);
+    expect(isArchived(entry("x"))).toBe(false);
   });
 });

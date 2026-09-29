@@ -53,8 +53,17 @@ const { closeDb, getDb } = await import("../src/db/client.js");
 const { runAsOwner } = await import("../src/owner.js");
 const { currentShelfRevisions, readRevisionBlocks } = await import("../src/store/pg-shelf-terms.js");
 const { extractCandidates, segmentsFromBlocks, EXTRACTOR_VERSION } = await import("../src/shelf-terms/extract.js");
-const { byArticleCount, candidateTopics, chooseTerms, maxCoverageOrder, shelfTermHeadMetrics, shelfTermMetrics } =
-  await import(
+const {
+  adjacentSharedPairs,
+  byArticleCount,
+  CONCRETENESS_MIN,
+  candidateTopics,
+  chooseTerms,
+  maxCoverageOrder,
+  passesVagueTest,
+  shelfTermHeadMetrics,
+  shelfTermMetrics,
+} = await import(
   "../src/shelf-terms/choose.js"
 );
 const { sql } = await import("drizzle-orm");
@@ -139,6 +148,7 @@ async function main(): Promise<void> {
     }
 
     firstFew(input, slugs);
+    vagueAndAdjacency(input, slugs);
 
     const per1k = words ? (extractMs / words) * 1000 : 0;
     console.log(
@@ -225,6 +235,99 @@ function firstFew(input: Parameters<typeof chooseTerms>[0], slugs: string[]): vo
     );
   }
   console.log(`\nFirst 12\n${lists.join("\n")}`);
+}
+
+/**
+ * Plan 260929a § Stage 1: the vague-word rule and the adjacency rule, each
+ * off and on, at K = 30 in rank order. Coverage is in physical articles
+ * (n of N), because the gate is "no loss beyond one article" at @5/@8/@12.
+ * "Removed by the rule" is every single word of the rules-off 30 the vague
+ * test catches at that threshold and this variant no longer chooses —
+ * phrases are never vague.
+ */
+function vagueAndAdjacency(input: Parameters<typeof chooseTerms>[0], slugs: string[]): void {
+  console.log(`\nVague words and adjacency (plan 260929a), K = 30, rank order — articles covered of ${slugs.length}`);
+  console.log(" variant                  | @5  | @8  | @12 | total | adjacent shared-stem pairs in first 12");
+  console.log("--------------------------|-----|-----|-----|-------|---------------------------------------");
+  const before = chooseTerms(input, { maxTerms: 30, dropVague: false, adjacency: false });
+  const variants: [string, Parameters<typeof chooseTerms>[1]][] = [
+    ["before (both off)", { dropVague: false, adjacency: false }],
+    ["adjacency only", { dropVague: false }],
+    [`vague only, c≥${CONCRETENESS_MIN} D=2`, { adjacency: false }],
+    /* the other design: a vague word is dropped rather than held to a density */
+    [`drop, c≥${CONCRETENESS_MIN}`, { vagueDensityPer1000: null }],
+    ["c≥4.0 D=2", { concretenessMin: 4.0 }],
+    ["c≥5.0 D=2", { concretenessMin: 5.0 }],
+    [`D=2.0, c≥${CONCRETENESS_MIN} (default)`, {}],
+    /* vague only when also familiar: a rare abstract word keeps the ordinary rule */
+    ["D=2, familiar ≥ 4.5", { familiarityMin: 4.5 }],
+    ["D=2, familiar ≥ 5.0", { familiarityMin: 5.0 }],
+    ["D=2, familiar ≥ 5.5", { familiarityMin: 5.5 }],
+  ];
+  const watched = ["memory", "learning", "following", "parent", "mistake"];
+  const lists: string[] = [];
+  const n = (share: number) => String(Math.round(share * slugs.length)).padStart(3);
+  for (const [variant, opts] of variants) {
+    const r = chooseTerms(input, { maxTerms: 30, ...opts });
+    const h = shelfTermHeadMetrics(r.terms, slugs);
+    const total = shelfTermMetrics(r.terms, slugs).coverage;
+    const pairs = adjacentSharedPairs(r.terms, 12);
+    console.log(
+      ` ${variant.padEnd(25)}| ${n(h.coverageAt5)} | ${n(h.coverageAt8)} | ${n(h.coverageAt12)} | ${n(total).padStart(5)} | ` +
+        `${pairs.length}${pairs.length ? `: ${pairs.map(([a, b]) => `${a} → ${b}`).join("; ")}` : ""}`,
+    );
+    lists.push(`  ${variant} (${r.terms.length}): ${r.terms.slice(0, 12).map((t) => `${t.label} ${t.articles.length}`).join(", ")}`);
+    if (opts?.dropVague === false) continue;
+    const min = opts?.concretenessMin ?? CONCRETENESS_MIN;
+    const fam = opts?.familiarityMin ?? null;
+    const keys = new Set(r.terms.map((t) => t.key));
+    const removed = before.terms.filter(
+      (t) => !keys.has(t.key) && !t.key.includes(" ") && !passesVagueTest(t.key, min, fam),
+    );
+    const at = (key: string) => {
+      const i = r.terms.findIndex((t) => t.key === key);
+      return i < 0 ? `${key} out` : `${key} #${i + 1} (${r.terms[i]?.articles.length})`;
+    };
+    lists.push(`    watched: ${watched.map(at).join(", ")}`);
+    const left = before.terms.filter((t) => !keys.has(t.key) && !removed.includes(t));
+    const joined = r.terms.filter((t) => !before.terms.some((b) => b.key === t.key));
+    lists.push(
+      `    removed by the rule: ${removed.map((t) => t.label).join(", ") || "none"}` +
+        `\n    also left the 30: ${left.map((t) => t.label).join(", ") || "none"}` +
+        `\n    joined the 30: ${joined.map((t) => t.label).join(", ") || "none"}`,
+    );
+    /* The gate: an article the rules-off first k covered and this one does
+       not is a loss, unless every rules-off topic covering it was vague. */
+    for (const k of [5, 8, 12]) {
+      const inHead = (terms: typeof r.terms, slug: string) =>
+        terms.slice(0, k).filter((t) => t.articles.some((a) => a.slug === slug));
+      const lost = slugs.filter((s) => inHead(before.terms, s).length && !inHead(r.terms, s).length);
+      if (!lost.length) continue;
+      const why = lost.map((s) => {
+        const via = inHead(before.terms, s);
+        const vagueOnly = via.every((t) => removed.includes(t));
+        return `${s} (was in ${via.map((t) => t.label).join(", ")}${vagueOnly ? " — vague only" : ""})`;
+      });
+      lists.push(`    lost at @${k}: ${why.join("; ")}`);
+    }
+  }
+  console.log(`\nFirst 12, and what changed in the 30\n${lists.join("\n")}`);
+
+  /* Every vague single word in the band at the ordinary density, with how
+     many articles would still count it at max(4, D per 1,000 words). */
+  const wordsOf = new Map(input.map((a) => [a.slug, a.words]));
+  const bodyOf = new Map(input.map((a) => [a.slug, new Map(a.candidates.map((c) => [c.key, c.bodyCount]))]));
+  const vague = candidateTopics(input, { dropVague: false }).filter(
+    (t) => !t.key.includes(" ") && !passesVagueTest(t.key, CONCRETENESS_MIN),
+  );
+  const heavy = (t: (typeof vague)[number], D: number) =>
+    t.articles.filter(
+      (a) => (bodyOf.get(a.slug)?.get(t.key) ?? 0) >= Math.max(4, (D * (wordsOf.get(a.slug) ?? 0)) / 1000),
+    ).length;
+  console.log(
+    `\nVague words in the band (${vague.length}): articles at 0.3 → D=1 / 2 / 3` +
+      `\n  ${vague.map((t) => `${t.label} ${t.articles.length}→${heavy(t, 1)}/${heavy(t, 2)}/${heavy(t, 3)}`).join(", ")}`,
+  );
 }
 
 try {

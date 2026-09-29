@@ -67,7 +67,7 @@ export interface Shelf {
    * Re-read the shelf from the server.
    *
    * Returns a promise that **rejects** if the reload failed, so a caller that
-   * depends on the new list — Undo does — can tell. `useJobs` ignores it.
+   * depends on the new list can tell. `useJobs` ignores it.
    */
   reload: () => Promise<void>;
   /** The last archived article, while the Undo strip is up. */
@@ -79,9 +79,31 @@ export interface Shelf {
   actionError: string | null;
   /** The archived articles, once somebody has asked to see them. */
   archived: LibraryEntry[] | null;
-  /** Fetch the other half of the shelf. Idempotent. */
+  /**
+   * Archived rows the client can honestly draw now.
+   *
+   * Usually this is `archived`. If that listing is still loading or failed,
+   * successful local writes are overlaid here so an article archived while
+   * Archived is on does not disappear from the very scope it just joined.
+   */
+  archivedVisible: LibraryEntry[];
+  /**
+   * The last `loadArchived` failed, and `archived` is still `null` because of
+   * it — so the shelf can say "couldn't" rather than "loading" for ever. The
+   * reason itself is in `actionError`. Cleared by the next attempt.
+   */
+  archivedFailed: boolean;
+  /** Fetch the other half of the shelf. Idempotent, and one request at a time. */
   loadArchived: () => Promise<void>;
-  /** Put an archived article back on the shelf, from the archived list. */
+  /**
+   * Put an archived article back on the shelf.
+   *
+   * Since plan 260929a the archived articles are in the shelf's one list while
+   * Archived is on, so the entry moves between the two arrays **in one
+   * commit** — the server's answer lands in `articles` as it leaves
+   * `archived` — and the row stays where it is, un-marked, instead of
+   * vanishing until a reload brings it back.
+   */
   restore: (slug: string) => Promise<void>;
   /**
    * Which article is being renamed in place, if any.
@@ -122,6 +144,21 @@ export function useShelf(readerId: string): Shelf {
   const [actionError, setActionError] = useState<string | null>(null);
   const [undoable, setUndoable] = useState<LibraryEntry | null>(null);
   const [archived, setArchived] = useState<LibraryEntry[] | null>(null);
+  /* Writes can succeed while the archived listing is missing, or while a
+     listing request is returning an older snapshot. Keep those server answers
+     as edits over the listing until a later answer has been reconciled with
+     them. `null` means this slug is known not to be archived. */
+  const archivedEditsRef = useRef<Map<string, LibraryEntry | null>>(new Map());
+  const [archivedEdits, setArchivedEdits] = useState<ReadonlyMap<string, LibraryEntry | null>>(
+    () => new Map(),
+  );
+  const [archivedFailed, setArchivedFailed] = useState(false);
+  /**
+   * A `loadArchived` in flight. The shelf page asks from an effect keyed on
+   * "Archived is on and the list is missing", and a second ask while the first
+   * is out is a second request for the same answer.
+   */
+  const loadingArchived = useRef(false);
   const [renaming, setRenaming] = useState<string | null>(null);
   const undoTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   /**
@@ -177,6 +214,21 @@ export function useShelf(readerId: string): Shelf {
   const issued = useRef(0);
   const settled = useRef(0);
 
+  /* A mutation's server answer is newer than every shelf read issued before
+     it. Move the read barrier past those requests before committing the local
+     answer, so a late stale-while-revalidate response cannot resurrect an
+     archived row or undo a rename. */
+  const supersedeEarlierReads = useCallback(() => {
+    settled.current = ++issued.current;
+  }, []);
+
+  const recordArchivedEdit = useCallback((slug: string, entry: LibraryEntry | null) => {
+    const next = new Map(archivedEditsRef.current);
+    next.set(slug, entry);
+    archivedEditsRef.current = next;
+    setArchivedEdits(next);
+  }, []);
+
   /**
    * Which reader the answers now arriving are about.
    *
@@ -220,11 +272,7 @@ export function useShelf(readerId: string): Shelf {
         /* **A failure that a newer answer has already overtaken is not news,
            and reporting it does damage.** Two reloads overlap, the newer one
            paints, the older one then fails: putting its message in `error`
-           hangs a red box over a shelf that is perfectly current. Worse for
-           `undo`, which awaits `reload()` and clears the Undo strip only if it
-           resolves — a rejection from the overtaken request leaves the strip up
-           and an action error on screen for an article that has already been
-           restored and drawn.
+           hangs a red box over a shelf that is perfectly current.
 
            So it is neither reported nor rethrown: **resolved**, because the
            caller's post-condition — the shelf is current — is exactly what the
@@ -284,6 +332,10 @@ export function useShelf(readerId: string): Shelf {
     setError(null);
     setUndoable(null);
     setArchived(null);
+    archivedEditsRef.current = new Map();
+    setArchivedEdits(new Map());
+    setArchivedFailed(false);
+    loadingArchived.current = false;
     setRenaming(null);
     setActionError(null);
     archiving.current.clear();
@@ -353,11 +405,19 @@ export function useShelf(readerId: string): Shelf {
       try {
         const entry = await patch(slug, { archived: true });
         if (!stillOurs(asked)) return;
+        supersedeEarlierReads();
+        recordArchivedEdit(slug, entry);
         setArticles((list) => list?.filter((a) => a.slug !== slug) ?? null);
-        // Dropped rather than appended to: an archived list built from a
-        // stale copy plus one new entry is a list that can disagree with the
-        // server about what is in it. It is refetched when next opened.
-        setArchived(null);
+        /* **Moved into the archived list, if it is loaded**, since plan
+           260929a. It used to be dropped and refetched when next opened, on
+           the argument that a stale copy plus one entry can disagree with the
+           server. But with Archived on, the archived list is *on the shelf*, so
+           dropping it blanked every archived row until the refetch landed, and
+           the card the reader had just archived vanished and came back. The
+           entry is the server's own answer (the rule at the top of this file)
+           and the order is the page's, so nothing is derived twice here. Not
+           loaded, it stays not loaded. */
+        setArchived((list) => (list ? [entry, ...list.filter((a) => a.slug !== slug)] : null));
         setUndoable(entry);
         if (undoTimer.current) clearTimeout(undoTimer.current);
         undoTimer.current = setTimeout(() => setUndoable(null), UNDO_MS);
@@ -367,7 +427,7 @@ export function useShelf(readerId: string): Shelf {
         archiving.current.delete(slug);
       }
     },
-    [patch, stillOurs],
+    [patch, recordArchivedEdit, stillOurs, supersedeEarlierReads],
   );
 
   const undo = useCallback(async () => {
@@ -375,28 +435,25 @@ export function useShelf(readerId: string): Shelf {
     if (!entry) return;
     const asked = reader.current;
     try {
-      await patch(entry.slug, { archived: false });
-      /* Refetched rather than reinserted locally, and that is a deliberate
-         second choice. The shelf is sorted — real articles above the fixture,
-         then newest first — so putting the card back means knowing that rule,
-         and an earlier version of this function restated it here. That is a
-         second copy of a rule the server owns, which is the divergence the rest
-         of this file is arranged to avoid; the card would come back in the
-         wrong place the day anybody changed the sort, and look like a different
-         article. One refetch over a four-article shelf costs nothing. */
-      /* Awaited, and the Undo strip is cleared only after it succeeds. An
-         un-awaited reload could fail, leaving the article restored on the server
-         but absent from the list — with the one control that would have brought
-         it back already gone. */
-      await reload();
+      const restored = await patch(entry.slug, { archived: false });
       if (!stillOurs(asked)) return;
-      setArchived(null);
+      supersedeEarlierReads();
+      recordArchivedEdit(entry.slug, null);
+      /* The page owns the order now (Library.tsx combines before TanStack
+         sorts), so the PATCH's server-described entry is enough to commit both
+         halves at once. Waiting for a second GET made a successful Undo look
+         unsuccessful whenever that refresh failed, and left the arrays on the
+         wrong side of the server state. */
+      setArticles((list) =>
+        list ? [restored, ...list.filter((a) => a.slug !== entry.slug)] : list,
+      );
+      setArchived((list) => list?.filter((a) => a.slug !== entry.slug) ?? null);
       setUndoable(null);
       if (undoTimer.current) clearTimeout(undoTimer.current);
     } catch (e) {
       if (stillOurs(asked)) setActionError(readableFailure(e));
     }
-  }, [patch, reload, stillOurs, undoable]);
+  }, [patch, recordArchivedEdit, stillOurs, supersedeEarlierReads, undoable]);
 
   const rename = useCallback(
     async (slug: string, title: string | null) => {
@@ -408,19 +465,30 @@ export function useShelf(readerId: string): Shelf {
       try {
         const entry = await patch(slug, { title });
         if (!stillOurs(asked)) return;
-        setArticles((list) => list?.map((a) => (a.slug === slug ? entry : a)) ?? null);
+        supersedeEarlierReads();
+        recordArchivedEdit(slug, entry.archivedAt ? entry : null);
+        /* In both lists: with Archived on, the card being renamed may be an
+           archived one (plan 260929a, Sol R4). A slug is in one of them. */
+        const swap = (list: LibraryEntry[] | null) =>
+          list?.map((a) => (a.slug === slug ? entry : a)) ?? null;
+        setArticles(swap);
+        setArchived(swap);
       } catch (e) {
         if (stillOurs(asked)) setActionError(readableFailure(e));
       }
     },
-    [patch, stillOurs],
+    [patch, recordArchivedEdit, stillOurs, supersedeEarlierReads],
   );
 
   const beginRename = useCallback((slug: string) => setRenaming(slug), []);
   const cancelRename = useCallback(() => setRenaming(null), []);
 
   const loadArchived = useCallback(async () => {
+    if (loadingArchived.current) return;
+    loadingArchived.current = true;
     const asked = reader.current;
+    setActionError(null);
+    setArchivedFailed(false);
     try {
       const r = await apiFetch("/api/library?archived=1");
       const body = await readJson<LibraryResponse>(r);
@@ -428,9 +496,23 @@ export function useShelf(readerId: string): Shelf {
          Checked after the body is parsed rather than before, because parsing is
          itself a turn of the loop the reader can change in. */
       if (!stillOurs(asked)) return;
-      setArchived(body.articles);
+      /* The GET may have taken its database snapshot before an archive,
+         restore or rename whose PATCH answered first. Reapply those newer
+         server answers before accepting it, then retire the overlay: the full
+         list and every known mutation now live in one array. */
+      const reconciled = applyArchivedEdits(body.articles, archivedEditsRef.current);
+      setArchived(reconciled);
+      archivedEditsRef.current = new Map();
+      setArchivedEdits(new Map());
     } catch (e) {
-      if (stillOurs(asked)) setActionError(readableFailure(e));
+      if (stillOurs(asked)) {
+        setActionError(readableFailure(e));
+        setArchivedFailed(true);
+      }
+    } finally {
+      /* Another reader's reset has already cleared it, and theirs may be
+         in flight now. */
+      if (stillOurs(asked)) loadingArchived.current = false;
     }
   }, [stillOurs]);
 
@@ -444,15 +526,19 @@ export function useShelf(readerId: string): Shelf {
     async (slug: string) => {
       const asked = reader.current;
       try {
-        await patch(slug, { archived: false });
+        const entry = await patch(slug, { archived: false });
         if (!stillOurs(asked)) return;
+        supersedeEarlierReads();
+        recordArchivedEdit(slug, null);
         setArchived((list) => list?.filter((a) => a.slug !== slug) ?? null);
-        await reload();
+        /* Into the active list at once, from the server's answer, so the row
+           stays on screen and both arrays make one commit. */
+        setArticles((list) => (list ? [entry, ...list.filter((a) => a.slug !== slug)] : list));
       } catch (e) {
         if (stillOurs(asked)) setActionError(readableFailure(e));
       }
     },
-    [patch, reload, stillOurs],
+    [patch, recordArchivedEdit, stillOurs, supersedeEarlierReads],
   );
 
   const report = useCallback((message: string) => setActionError(message), []);
@@ -466,6 +552,11 @@ export function useShelf(readerId: string): Shelf {
      for a shelf that had not changed. Every field below is either a `useState`
      value or a `useCallback`, so this identity now changes exactly when
      something about the shelf actually has. */
+  const archivedVisible = useMemo(
+    () => applyArchivedEdits(archived ?? [], archivedEdits),
+    [archived, archivedEdits],
+  );
+
   return useMemo(
     () => ({
       articles,
@@ -478,6 +569,8 @@ export function useShelf(readerId: string): Shelf {
       actionError,
       report,
       archived,
+      archivedVisible,
+      archivedFailed,
       loadArchived,
       restore,
       renaming,
@@ -495,6 +588,8 @@ export function useShelf(readerId: string): Shelf {
       actionError,
       report,
       archived,
+      archivedVisible,
+      archivedFailed,
       loadArchived,
       restore,
       renaming,
@@ -502,4 +597,25 @@ export function useShelf(readerId: string): Shelf {
       cancelRename,
     ],
   );
+}
+
+/** Apply newer per-row server answers over an archived-list snapshot. */
+function applyArchivedEdits(
+  list: readonly LibraryEntry[],
+  edits: ReadonlyMap<string, LibraryEntry | null>,
+): LibraryEntry[] {
+  if (edits.size === 0) return [...list];
+  const left = new Map(edits);
+  const out: LibraryEntry[] = [];
+  for (const entry of list) {
+    if (!left.has(entry.slug)) {
+      out.push(entry);
+      continue;
+    }
+    const replacement = left.get(entry.slug);
+    left.delete(entry.slug);
+    if (replacement) out.push(replacement);
+  }
+  for (const replacement of left.values()) if (replacement) out.push(replacement);
+  return out;
 }

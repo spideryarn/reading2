@@ -38,10 +38,16 @@ import { at, localeText, numberOrMissing } from "./lib/table-sort.js";
 import { Link } from "./Link.js";
 import { exactly, timeAgo } from "./relative-time.js";
 import { readHref } from "./router.js";
-import { Actions, SharedBadge } from "./ShelfEntry.js";
+import { Actions, ArchivedMark, SharedBadge } from "./ShelfEntry.js";
 import type { Shelf } from "./ShelfEntry.js";
 import { TitleEditor } from "./TitleEditor.js";
 import { Tooltip } from "./Tooltip.js";
+
+/* `archivedAt` read directly rather than through shelf-narrow.ts's `isArchived`:
+   this file is shared with the lazy /admin and /design routes, and importing
+   shelf-narrow would put it (and library-hits.ts behind it) into the reader's
+   startup bytes — tests/eager-client-graph.test.ts § SHARED_WITH_READER. */
+const isArchived = (entry: { archivedAt?: string | null }) => !!entry.archivedAt;
 
 /**
  * What the card should say on its meta line while this column is the sort.
@@ -129,8 +135,15 @@ export const CHIP_ORDER = ["opened", "added", "title", "length", "opens", "quest
 /**
  * `now` is passed in rather than read here so that every relative date on one
  * render agrees with every other, and so nothing in this file reads the clock.
+ *
+ * `archivedShown` is `?archived=1`: archived articles are rows too, and
+ * Archive's card must not promise the row leaves (plan 260929a).
  */
-export function libraryColumns(shelf: Shelf, now: number): SortableColumn<LibraryEntry>[] {
+export function libraryColumns(
+  shelf: Shelf,
+  now: number,
+  archivedShown = false,
+): SortableColumn<LibraryEntry>[] {
   return [
     {
       id: "title",
@@ -249,7 +262,7 @@ export function libraryColumns(shelf: Shelf, now: number): SortableColumn<Librar
          could carry back, so hiding them would make them unreachable. */
       enableHiding: false,
       meta: { label: "Actions", hint: "", ends: ["", ""], noChip: true },
-      cell: ({ row }) => <RowActions entry={row.original} shelf={shelf} />,
+      cell: ({ row }) => <RowActions entry={row.original} shelf={shelf} archivedShown={archivedShown} />,
     },
   ];
 }
@@ -293,6 +306,7 @@ function TitleCell({
   }
 
   const facts = rowCardFacts(entry, hidden);
+  const archived = isArchived(entry);
 
   /* No stretched link here: a whole row as one click target would swallow
      the buttons at the end of it, and the card already learned that lesson
@@ -342,7 +356,7 @@ function TitleCell({
       ) : (
         link
       )}
-      {(sub || entry.visibility === "public" || entry.fixture) && (
+      {(sub || archived || entry.visibility === "public" || entry.fixture) && (
         <span className="tw:block tw:wrap-anywhere tw:text-xs tw:text-muted-foreground">
           {/* **First on the line, unlike on the card.** It went first because
               this line used to truncate, and the byline and the site name could
@@ -356,6 +370,13 @@ function TitleCell({
               **No `title` on the badge here.** Its hover sentence is in the row
               card instead, which a keyboard can reach and a `title` cannot; the
               table body carries no `title` attributes at all. */}
+          {/* Ahead even of Shared: it says why the row is here at all
+              (plan 260929a) — the card's order, for the card's reason. */}
+          {archived && (
+            <>
+              <ArchivedMark />{" "}
+            </>
+          )}
           {entry.visibility === "public" && (
             <>
               <SharedBadge titled={false} />{" "}
@@ -546,13 +567,22 @@ function Count({ value, highlight }: { value: number; highlight?: boolean }) {
  * buttons join it rather than nesting a group of their own, so a title's row
  * card and an action's card can never be open together. Plan 260928a, Sol P-3.
  */
-function RowActions({ entry, shelf }: { entry: LibraryEntry; shelf: Shelf }) {
+function RowActions({
+  entry,
+  shelf,
+  archivedShown,
+}: {
+  entry: LibraryEntry;
+  shelf: Shelf;
+  archivedShown: boolean;
+}) {
   return (
     <Actions
       entry={entry}
       shelf={shelf}
       onEdit={() => shelf.beginRename(entry.slug)}
       inTooltipGroup
+      archivedShown={archivedShown}
     />
   );
 }
