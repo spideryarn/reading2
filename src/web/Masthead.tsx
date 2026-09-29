@@ -59,13 +59,13 @@ import {
   SHARING_MARK_PRIVATE,
   SHARING_MARK_PUBLIC,
 } from "../messages.js";
-import type { Article, Meta, Visibility } from "../types.js";
+import type { Article, Meta, SourceGuess, Visibility } from "../types.js";
 /* The shared one, which drops a leading `www.` — three copies of this used to
    live in the client and its header asks the next caller not to make a fourth.
-   `isWebUrl` is not imported here any more: the one URL sink in this file is the
-   heading anchor, and `webSource` below already refuses everything that is not
-   `http(s)` — one test rather than two spellings of it. */
-import { hostOf } from "../urls.js";
+   `webSource` below guards the heading anchor and the origin line; `isWebUrl`
+   guards the other sink, the guessed address (`GuessedSourceLink`), which does
+   not come off `meta` and so never passes through `webSource`. */
+import { hostOf, isWebUrl } from "../urls.js";
 import { BackLink } from "./BackLink.js";
 import { Link } from "./Link.js";
 import { cameOffADisk, SourceLink, webSource } from "./SourceLink.js";
@@ -263,6 +263,7 @@ export function Masthead({ article, slug, onRenamed }: Props) {
         <OriginLine
           source={source}
           origin={onRenamed === undefined ? null : cameOffADisk(meta) ? "upload" : "unrecorded"}
+          guess={article.sourceGuess}
         />
 
         <p className="facts">
@@ -410,6 +411,7 @@ export function Masthead({ article, slug, onRenamed }: Props) {
 function OriginLine({
   source,
   origin,
+  guess,
 }: {
   source: string | null;
   /**
@@ -424,6 +426,14 @@ function OriginLine({
    * because "you uploaded this" is a claim about what the reader did.
    */
   origin: "upload" | "unrecorded" | null;
+  /**
+   * **Where we think an upload came from**, drawn after the *uploaded* words
+   * and only there — `GuessedSourceLink`. Read only when `origin` is
+   * `"upload"`, which is already owner-only; the payload a visitor gets carries
+   * none anyway (src/web/article/access.ts), so that is two gates, as for
+   * `SharingMark`.
+   */
+  guess: SourceGuess | undefined;
 }) {
   if (source) {
     /* `null` when the address will not parse — see `addressParts`, which is
@@ -511,8 +521,12 @@ function OriginLine({
      the whole redesign moved *out* of a tooltip. If a third of these ever needs
      the card badly enough, the answer is a focusable trigger with a
      focus-visible ring, not a `title`. */
+  /* Only on an upload, and only once something was found — `searching`,
+     `none` and *never looked* all draw nothing here (the metadata page is where
+     a settled *none* is said). */
+  const found = origin === "upload" && guess?.status === "found" ? guess : null;
   return (
-    <p className="origin">
+    <p className={found ? "origin origin-with-guess" : "origin"}>
       <Tooltip
         placement="bottom"
         keepSide
@@ -534,7 +548,102 @@ function OriginLine({
           </span>
         </span>
       </Tooltip>
+      {found && <GuessedSourceLink guess={found} className="origin-link origin-guess" />}
     </p>
+  );
+}
+
+/**
+ * **The card on a guessed address**, one per kind — shared by the masthead and
+ * the metadata page, so the two cannot come to explain the same link
+ * differently. `ControlTip`'s rule holds: the first paragraph is how we found
+ * it, the second is what it does not promise.
+ */
+function guessTip(guess: Extract<SourceGuess, { status: "found" }>): {
+  head: string;
+  what: string;
+  how: string;
+} {
+  if (guess.kind === "canonical") {
+    /* A `canonical` is only ever a verified DOI or arXiv id
+       (src/source-guess.ts § `isSamePaper`), so `content` should not reach
+       here — but the type allows it, and "its page" is still true if it does. */
+    const page =
+      guess.matchedBy === "doi"
+        ? "its DOI page"
+        : guess.matchedBy === "arxiv"
+          ? "its arXiv page"
+          : "its page";
+    return {
+      head: "Our guess at where this came from",
+      what: `We searched the web for your file and found ${page} — the title, first author and identifier all match.`,
+      how: "You uploaded the file, so we can't be sure it's the original.",
+    };
+  }
+  return {
+    head: "A page that matches your file",
+    what: "We searched the web and found a page with the same title, first author and text.",
+    how: "It may be a copy rather than the original.",
+  };
+}
+
+/**
+ * **A guessed address for an uploaded paper, host first, with a question mark
+ * that is part of the link** —
+ * docs/plans/260929g-canonical-link-for-an-uploaded-paper.md § Shown how. Greg's
+ * brief: *"maybe with a question mark somehow to say that we've guessed at where
+ * the original URL was from."*
+ *
+ * Drawn like the web origin line's address (`addressParts`: host kept, path
+ * faded and cut first) and a step dimmer, because it is a guess and the words
+ * beside it are a fact. The **?** is inside the anchor, so a wrap cannot part
+ * it from the address.
+ *
+ * **A `ControlTip`, not a `title`** — a touch device never shows a `title`
+ * (docs/project/tooltips.md). The anchor is the trigger, so a keyboard reaches
+ * the card by focus; the accessible name says it is a guess.
+ *
+ * **`isWebUrl` on the way in.** The server builds this address itself (a
+ * `doi.org` or `arxiv.org` link, or an exact search-result key), but an `href`
+ * is a sink and one test here costs nothing: anything else draws no link.
+ *
+ * Exported for the metadata page (Metadata.tsx § `Origin`), which draws the
+ * same link after its own lead-in.
+ */
+export function GuessedSourceLink({
+  guess,
+  className,
+}: {
+  guess: Extract<SourceGuess, { status: "found" }>;
+  className: string;
+}) {
+  if (!isWebUrl(guess.url)) return null;
+  const parts = addressParts(guess.url);
+  const tip = guessTip(guess);
+  const where = parts?.host ?? guess.host;
+  const label =
+    guess.kind === "canonical"
+      ? `Our guess at the original, at ${where}`
+      : `A page that matches your file, at ${where}`;
+  return (
+    <Tooltip
+      placement="bottom"
+      keepSide
+      className="tip-soon"
+      content={<ControlTip head={tip.head} what={tip.what} how={tip.how} />}
+    >
+      <a
+        href={guess.url}
+        target="_blank"
+        rel="noreferrer noopener"
+        aria-label={label}
+        className={className}
+      >
+        <span className="origin-host">{where}</span>
+        {parts?.rest ? <span className="origin-path">{parts.rest}</span> : null}
+        <span className="origin-guess-mark">?</span>
+      </a>
+    </Tooltip>
   );
 }
 

@@ -25,7 +25,7 @@
 import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import type { Article, Meta } from "../src/types.js";
+import type { Article, Meta, SourceGuess } from "../src/types.js";
 
 vi.mock("../src/web/lib/supabase.js", () => ({
   supabase: {
@@ -237,6 +237,89 @@ describe("the owner's metadata page", () => {
     await owner({ source: "pdf" });
     expect(host.textContent).toContain(UPLOADED);
     expect(host.textContent).not.toContain("View the original");
+  });
+});
+
+/**
+ * **What we found when we looked for an upload on the web**, under the upload
+ * sentence — docs/plans/260929g-canonical-link-for-an-uploaded-paper.md § Shown
+ * how. Unlike the masthead, this page also says a settled *no*.
+ */
+describe("the owner's metadata page, on a guessed address", () => {
+  const CANONICAL: SourceGuess = {
+    status: "found",
+    url: "https://arxiv.org/abs/2401.01234",
+    host: "arxiv.org",
+    kind: "canonical",
+    matchedBy: "arxiv",
+  };
+  const MATCHING: SourceGuess = {
+    status: "found",
+    url: "https://people.example.edu/~ada/paper.pdf",
+    host: "people.example.edu",
+    kind: "matching",
+    matchedBy: "content",
+  };
+  const NONE_SAID = "We looked for it on the web and found no page we could be sure was this paper.";
+
+  async function ownerWith(guess: SourceGuess | undefined, meta: Partial<Meta> = { source: "pdf" }) {
+    await act(async () => {
+      root.render(
+        createElement(Metadata, {
+          slug: SLUG,
+          article: { ...article(meta), sourceGuess: guess },
+          onRenamed: () => {},
+          onVisibility: () => {},
+        }),
+      );
+    });
+  }
+
+  const guessLink = () => host.querySelector<HTMLAnchorElement>("a.origin-guess");
+
+  it.each([
+    ["canonical", CANONICAL, "Probably the original:", "its arXiv page"],
+    ["matching", MATCHING, "A page that matches this paper:", "may be a copy"],
+  ] as const)("names a %s guess and links to it with a ?", async (_k, guess, lead, tip) => {
+    await ownerWith(guess);
+
+    expect(host.textContent).toContain(UPLOADED);
+    expect(host.textContent).toContain(lead);
+    const a = guessLink();
+    expect(a?.getAttribute("href")).toBe(guess.url);
+    expect(a?.getAttribute("target")).toBe("_blank");
+    expect(a?.getAttribute("rel")).toBe("noreferrer noopener");
+    expect(a?.textContent?.endsWith("?")).toBe(true);
+    expect(a?.hasAttribute("title")).toBe(false);
+    await act(async () => {
+      a?.focus();
+    });
+    expect(document.body.textContent).toContain(tip);
+    expect(host.textContent).not.toContain(NONE_SAID);
+  });
+
+  it("says we looked and found nothing, after a settled none", async () => {
+    await ownerWith({ status: "none" });
+
+    expect(host.textContent).toContain(NONE_SAID);
+    expect(guessLink()).toBeNull();
+  });
+
+  it.each([
+    ["nobody has looked", undefined],
+    ["a search is under way", { status: "searching" } as const],
+  ])("says nothing about a guess when %s", async (_n, guess) => {
+    await ownerWith(guess);
+
+    expect(host.textContent).toContain(UPLOADED);
+    expect(guessLink()).toBeNull();
+    expect(host.textContent).not.toContain(NONE_SAID);
+    expect(host.textContent).not.toContain("Probably the original");
+  });
+
+  it("says nothing about a guess on an article that was not uploaded", async () => {
+    await ownerWith({ status: "none" }, {});
+    expect(host.textContent).not.toContain(NONE_SAID);
   });
 });
 
