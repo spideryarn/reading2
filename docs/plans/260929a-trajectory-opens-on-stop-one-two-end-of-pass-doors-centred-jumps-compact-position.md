@@ -250,3 +250,12 @@ was checked against the code and each is accepted.
 - 2026-09-29: plan written; § 4 built first (CSS and markup only).
 - 2026-09-29: GPT Sol's plan review ([findings](260929a-trajectory-four-suggestions-plan-review-sol.md)),
   four P1s, all accepted — see § After the plan review.
+- 2026-09-29: built (`fb21841f`). GPT Sol's code review
+  ([findings](260929a-trajectory-four-suggestions-code-review-sol.md)) fixed five P1s in place, each
+  with a test: a reader's scroll inside the kept quiet window was taken for the glide's own and left
+  the anchor stale (now told apart by the scroll position); `abandonScroll` with nothing in flight
+  dropped the anchor; an opening token could outlive a band that unmounted before its data came and
+  fire after Back (each mount now claims the token); the `popstate` inference in F4 raced nuqs's
+  deferred address write, so **the opening is armed in the Dock's `onMode` instead** — the one door
+  a press comes through, Dock and command bar alike, which Back and Forward never call; and the
+  anchor is cleared on a mode switch, a re-flow, and a vanished row.

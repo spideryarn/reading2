@@ -17,6 +17,7 @@ import { atParam } from "../params.js";
 import {
   abandonScroll,
   arrivalAnchor,
+  clearArrivalAnchor,
   glideTarget,
   scrollToBlock,
   scrollToTop,
@@ -131,6 +132,10 @@ export function useReadingPosition(sections: Section[], blocks: Block[], layoutK
     laidOut.current = { layoutKey, at };
     if (was === null) return; // arrival: the restore effect above owns it
     if (was.layoutKey === layoutKey) return; // nothing reflowed
+    /* A centred arrival belongs to the geometry it landed in. End that logical
+       hold even when there is no `?at=` to re-anchor below: the page can reflow
+       without emitting a scroll event, and the old block must not stay current. */
+    clearArrivalAnchor();
     if (was.at !== at) return; // the address moved too — not ours
     if (at === null) return; // nothing to hold at the top
     abandonScroll();

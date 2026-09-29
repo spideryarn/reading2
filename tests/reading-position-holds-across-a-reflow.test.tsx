@@ -40,7 +40,13 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { Block, BlockId, NodeId } from "../src/types.js";
 import type { Section } from "../src/web/position.js";
-import { abandonScroll, glideTarget, scrollToBlock } from "../src/web/scroll.js";
+import {
+  abandonScroll,
+  arrivalAnchor,
+  clearArrivalAnchor,
+  glideTarget,
+  scrollToBlock,
+} from "../src/web/scroll.js";
 import { useReadingPosition } from "../src/web/reader/useReadingPosition.js";
 
 enableHistorySync();
@@ -184,6 +190,7 @@ afterEach(() => {
      which is the failure looking like signal, and exactly what an isolation
      leak does to a mutation check. */
   abandonScroll();
+  clearArrivalAnchor();
   vi.restoreAllMocks();
 });
 
@@ -379,5 +386,21 @@ describe("a reflow under a reader who is staying put", () => {
 
     expect(scrollTo).not.toHaveBeenCalled();
     expect(atNow()).toBeNull();
+  });
+
+  it("ends a centred arrival even when there is no ?at= to re-anchor", async () => {
+    history.replaceState(null, "", "/read/x");
+    render("portrait");
+    await settle();
+
+    /* Put block 12 exactly at its centred destination, so making the arrival
+       creates no scroll event that could clear it for some other reason. */
+    scrollY = 12 * PORTRAIT - (window.innerHeight - PORTRAIT) / 2;
+    scrollToBlock(block(12), "smooth", undefined, { align: "centre" });
+    expect(arrivalAnchor()).toEqual({ id: block(12), passage: undefined });
+
+    rowHeight = LANDSCAPE;
+    render("landscape");
+    expect(arrivalAnchor()).toBeNull();
   });
 });

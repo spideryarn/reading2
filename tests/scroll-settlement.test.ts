@@ -13,7 +13,9 @@
  */
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
-const { abandonScroll, arrivalAnchor, scrollToBlock, scrollToTop } = await import("../src/web/scroll.js");
+const { abandonScroll, arrivalAnchor, scrollToBlock, scrollToTop, watchBarVisibility } = await import(
+  "../src/web/scroll.js"
+);
 type ScrollOutcome = import("../src/web/scroll.js").ScrollOutcome;
 
 let frames: FrameRequestCallback[] = [];
@@ -328,12 +330,59 @@ describe("a centred jump", () => {
     expect(arrivalAnchor()).toBeNull();
   });
 
+  it("gives the anchor up when the reader scrolls during the glide's trailing quiet window", () => {
+    scrollToBlock("spya-far", "smooth", undefined, { align: "centre" });
+    flush(250);
+    expect(arrivalAnchor()).not.toBeNull();
+
+    /* Still inside the 150ms retained for the glide's delayed scroll event —
+       but this event arrived at a different pixel, so it is the reader. */
+    Object.defineProperty(window, "scrollY", { value: 3610, writable: true, configurable: true });
+    window.dispatchEvent(new Event("scroll"));
+    expect(arrivalAnchor()).toBeNull();
+  });
+
+  it("lets the controls bar answer a reader scroll during that quiet window", () => {
+    const stopWatching = watchBarVisibility();
+    try {
+      scrollToBlock("spya-far", "smooth", undefined, { align: "centre" });
+      flush(250);
+      /* The glide's own delayed event changes no pixel and stays quiet. */
+      window.dispatchEvent(new Event("scroll"));
+      flush(251);
+      expect(document.documentElement.dataset.bars).toBeUndefined();
+
+      /* The reader moves more than BAR_HIDE_AFTER before the window expires. */
+      Object.defineProperty(window, "scrollY", { value: 3610, writable: true, configurable: true });
+      window.dispatchEvent(new Event("scroll"));
+      flush(252);
+      expect(document.documentElement.dataset.bars).toBe("hidden");
+    } finally {
+      stopWatching();
+    }
+  });
+
   it("gives the anchor up to the next movement of any kind", () => {
     scrollToBlock("spya-far", "smooth", undefined, { align: "centre" });
     flush(250);
     expect(arrivalAnchor()).not.toBeNull();
     started = now;
     scrollToBlock("spya-here", "smooth");
+    expect(arrivalAnchor()).toBeNull();
+  });
+
+  it("keeps the anchor when abandonScroll has no movement to abandon", () => {
+    scrollToBlock("spya-far", "smooth", undefined, { align: "centre" });
+    flush(250);
+    expect(arrivalAnchor()).not.toBeNull();
+    abandonScroll();
+    expect(arrivalAnchor()).not.toBeNull();
+  });
+
+  it("drops an anchor whose block is no longer in the article", () => {
+    scrollToBlock("spya-far", "smooth", undefined, { align: "centre" });
+    flush(250);
+    document.querySelector('[data-block="spya-far"]')?.remove();
     expect(arrivalAnchor()).toBeNull();
   });
 

@@ -108,6 +108,31 @@ export interface TrajectoryArrival {
   open: boolean;
 }
 
+/* A mode-only pop keeps `Reader` mounted, but Back from another page can mount
+   it afresh. Remember that navigation above the component boundary too, or a
+   fresh `firstTrajectoryArrival` would mistake traversal for an opening and
+   push over Forward. The navigation-entry check covers a document restored by
+   browser history before this module's listener existed. */
+let poppedTrajectoryAddress: string | null = null;
+let documentTraversalAddress: string | null =
+  typeof window !== "undefined" &&
+  (performance.getEntriesByType?.("navigation")[0] as PerformanceNavigationTiming | undefined)?.type ===
+    "back_forward"
+    ? location.href
+    : null;
+if (typeof window !== "undefined") {
+  window.addEventListener("popstate", () => {
+    poppedTrajectoryAddress = location.href;
+  });
+}
+
+function takeTrajectoryTraversal(): boolean {
+  const traversed = poppedTrajectoryAddress === location.href || documentTraversalAddress === location.href;
+  poppedTrajectoryAddress = null;
+  documentTraversalAddress = null;
+  return traversed;
+}
+
 /**
  * **The token for the page's first load.** A `?stop=` is a deep link. With no
  * `?stop=` and no `?at=`, a Trajectory address is an opening — a link to the
@@ -115,10 +140,28 @@ export interface TrajectoryArrival {
  * position (a reload before the first step), which is restored, not overruled.
  */
 export function firstTrajectoryArrival(mode: string | null, search: string = location.search): TrajectoryArrival {
+  const traversed = takeTrajectoryTraversal();
   if (mode !== "trajectory") return { stop: null, open: false };
   const q = new URLSearchParams(search);
+  /* Back and Forward restore the entry through `?at=` and the browser history;
+     neither a surviving `?stop=` nor an otherwise bare address is a new
+     arrival. This also covers a traversal that remounted the whole Reader. */
+  if (traversed) return { stop: null, open: false };
   const stop = q.get("stop");
   return { stop, open: stop === null && !q.has("at") };
+}
+
+/** Arm the opening jump at the press, before nuqs writes the new address. */
+export function armTrajectoryOpening(
+  arrival: TrajectoryArrival,
+  from: string | null,
+  to: string | null,
+): void {
+  /* A direct press is stronger evidence than a remembered traversal to the
+     same href, and it owns its own opening token below. */
+  poppedTrajectoryAddress = null;
+  documentTraversalAddress = null;
+  if (from !== "trajectory" && to === "trajectory") arrival.open = true;
 }
 
 /** A module constant, for `NO_FOUND`'s reason (reader/passages.ts). */
@@ -430,13 +473,30 @@ function useTrajectoryMode({
   const stableDeeper = useCallback(() => latest.current.deeper(), []);
   const stopBlock = quote?.blockId ?? null;
 
+  /* **This mount claims the arrival before it waits for data.** The mailbox is
+     cleared in a layout effect, while the claimed token stays in this band's
+     ref. If the reader leaves before the route or Quotes resolve, the ref goes
+     with the band: Back cannot inherit the old press and turn traversal into a
+     fresh push. A ref survives StrictMode's synthetic effect replay, so the
+     first setup may claim it without the second losing it (code review F2). */
+  const claimedArrival = useRef<TrajectoryArrival>({ stop: null, open: false });
+  useLayoutEffect(() => {
+    /* StrictMode runs this setup twice around a synthetic cleanup. The second
+       sees an empty mailbox and must leave the first setup's local claim alone. */
+    if (arrival.stop === null && !arrival.open) return;
+    claimedArrival.current = { stop: arrival.stop, open: arrival.open };
+    arrival.stop = null;
+    arrival.open = false;
+  }, [arrival]);
+
   /* **Arriving in the mode: one effect, deep link first** — plan 260929a § 1,
-     GPT Sol F4. Both tokens live on `Reader`'s `arrival`, above the mode
-     boundary, because a mode switch remounts this band; each is consumed the
-     first time a current stop resolves to a block (the route and the Quotes
-     arrive over the wire), before anything is done with it, so a second run —
-     StrictMode, a re-render — finds nothing to do. **One-shot, not an effect on
-     `current`**, which would move the reader again after every step.
+     GPT Sol F4. The mailbox lives on `Reader`'s `arrival`, above the mode
+     boundary; this mount has claimed it into `claimedArrival`, so a later mount
+     cannot inherit it. The action is consumed the first time a current stop
+     resolves to a block (the route and Quotes arrive over the wire), before
+     anything is done with it, so a second run — StrictMode, a re-render — finds
+     nothing to do. **One-shot, not an effect on `current`**, which would move
+     the reader again after every step.
 
      - **A `?stop=` link** (the plan's stage 5a, Sol F28): brought into view and
        flashed with `arrive` — no push, since `?at=` is the only address the
@@ -451,16 +511,17 @@ function useTrajectoryMode({
        reader had got to if `?stop=` survived a mode switch. */
   useEffect(() => {
     if (current === null || stopBlock === null) return;
-    if (arrival.stop !== null) {
-      arrival.stop = null;
-      arrival.open = false;
+    const claimed = claimedArrival.current;
+    if (claimed.stop !== null) {
+      claimed.stop = null;
+      claimed.open = false;
       arrive(stopBlock, current.quoteId);
       return;
     }
-    if (!arrival.open) return;
-    arrival.open = false;
+    if (!claimed.open) return;
+    claimed.open = false;
     onJump(stopBlock, quoteMarkKey(current.quoteId, stopBlock));
-  }, [arrival, current, stopBlock, onJump]);
+  }, [current, stopBlock, onJump]);
 
   const control = useMemo<TrajectoryControl | null>(
     () =>

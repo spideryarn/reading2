@@ -182,8 +182,12 @@ horizontal handler that `Reader` passes only while Trajectory is open, and that 
 lands on and, on a narrow window, steps the band aside (since 2026-09-28,
 [trajectory.md](trajectory.md) § What shipped). It runs **after every guard** on this
 page: no modifiers, not while typing, not when a widget already handled the key, no auto-repeat. The
-route does not wrap, so at either end the handler answers that it took nothing and the key goes back
-to the browser, the same concession ↑ / ↓ make at the ends of the article. A step replaces
+route does not wrap, so at the end of a pass → answers that it took nothing and the key goes back
+to the browser, the same concession ↑ / ↓ make at the ends of the article. **← on the first stop
+goes to the first stop again** (since 2026-09-29, Greg: *"press Left (even if I'm already on Step
+1) should jump to the Step 1 block"* — SPIDERYARN-READING2-4K): the page may be anywhere, and "you
+are already on stop 1" is no answer to a reader asking to be taken there. The band's ‹ does the
+same and says *Back to stop 1* there. A step replaces
 `?stop=` rather than pushing, for [§ A keypress writes no URL of its own](#a-keypress-writes-no-url-of-its-own)'s
 reason. `tests/keynav-horizontal.test.ts` pins both halves — the handler takes the key, and without
 one the stride still moves. The plan is

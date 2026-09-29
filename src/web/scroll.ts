@@ -488,9 +488,20 @@ export function watchBarVisibility(): () => void {
     // A jump we started is not the reader scrolling, and chrome that answers to
     // it would move the ground under a destination already calculated. See
     // `markOurScroll`.
-    if (performance.now() < quietUntil) {
+    if (
+      performance.now() < quietUntil &&
+      ourScrollY !== null &&
+      Math.abs(window.scrollY - ourScrollY) < 0.5
+    ) {
       from = window.scrollY;
       return;
+    }
+    /* A different pixel inside the quiet window is the reader taking over,
+       not our delayed scroll event. Let the bar answer this movement and end
+       the window now rather than deafening it for the remaining 150ms. */
+    if (performance.now() < quietUntil) {
+      quietUntil = 0;
+      ourScrollY = null;
     }
     const next = stepBar(hidden, window.scrollY, from);
     from = next.from;
@@ -614,8 +625,16 @@ let aiming: number | null = null;
  * impossible rather than unlikely.
  */
 let quietUntil = 0;
+/** The last pixel one of this module's `scrollTo` calls actually reached. */
+let ourScrollY: number | null = null;
 function markOurScroll(ms = SCROLL_MS + 150) {
   quietUntil = performance.now() + ms;
+}
+
+/** Move the page and remember the browser's clamped/rounded answer. */
+function moveWindow(top: number): void {
+  window.scrollTo({ top, behavior: "auto" });
+  ourScrollY = window.scrollY;
 }
 
 /**
@@ -643,9 +662,12 @@ function cancel(outcome: ScrollOutcome = "cancelled") {
      scroll event is still to come: keep the window it opened, which ends
      150ms later on its own, so that event is not read as the reader scrolling
      away from the arrival it has just made (`anchor`, plan 260929a). */
-  if (outcome !== "settled") quietUntil = 0;
+  if (outcome !== "settled") {
+    quietUntil = 0;
+    ourScrollY = null;
+  }
   /* Any movement at all ends a centred arrival's hold on the position. */
-  anchor = null;
+  clearArrivalAnchor();
   if (frame) cancelAnimationFrame(frame);
   frame = 0;
   aiming = null;
@@ -711,7 +733,7 @@ function glide(
      concerned (`glideTarget`, `scrollByScreen`): the re-check only corrects. */
   aiming = ms > 0 ? first : null;
   landing = done ?? null;
-  if (ms === 0) window.scrollTo({ top: first, behavior: "auto" });
+  if (ms === 0) moveWindow(first);
 
   // The browser's own smooth scroll gives up the moment you touch the wheel.
   // Ours has to be told, or we would drag the reader back to a destination they
@@ -772,7 +794,7 @@ function glide(
        for every listener on the page. */
     // `top` only: omitting `left` keeps the horizontal position, which matters
     // because a deep tree scrolls the table sideways (layout.ts § overflowing).
-    if (Math.abs(top - window.scrollY) >= 0.5) window.scrollTo({ top, behavior: "auto" });
+    if (Math.abs(top - window.scrollY) >= 0.5) moveWindow(top);
     if (t < 1) frame = requestAnimationFrame(tick);
     else cancel(finish());
   };
@@ -802,7 +824,7 @@ export function reducedMotion(): boolean {
 export function scrollToTop() {
   cancel();
   markOurScroll(150); // instant, so only the event it fires needs covering
-  window.scrollTo({ top: 0, behavior: "auto" });
+  moveWindow(0);
 }
 
 /**
@@ -893,22 +915,36 @@ export function alignedOffset(o: {
  *
  * It lasts until the next movement of any kind — `cancel`, which every glide
  * runs first and which a wheel or touch mid-glide also runs — or a scroll
- * event outside our own quiet window, which is the reader scrolling. A
- * re-flow that makes the browser scroll ends it too, and then the reading line
- * answers again, which is the old behaviour rather than a wrong one.
+ * event outside our own quiet window. Inside that window, the glide's delayed
+ * event keeps the same pixel and a reader's movement does not, so the pixel
+ * decides. A re-flow that makes the browser scroll ends it too, and then the
+ * reading line answers again, which is the old behaviour rather than a wrong
+ * one.
  */
 let anchor: { id: string; passage: string | undefined } | null = null;
+let anchorY = 0;
 let anchorListening = false;
 
 function onScrollWhileAnchored(): void {
-  if (performance.now() < quietUntil) return;
+  /* The glide's delayed event reports the pixel it just reached. A reader can
+     scroll during that same 150ms window, though, and a different pixel is the
+     distinction the clock alone cannot make (plan 260929a code review, F1). */
+  if (performance.now() < quietUntil && Math.abs(window.scrollY - anchorY) < 0.5) return;
+  clearArrivalAnchor();
+}
+
+/** End a centred arrival without implying that a glide is in flight. */
+export function clearArrivalAnchor(): void {
   anchor = null;
-  window.removeEventListener("scroll", onScrollWhileAnchored);
-  anchorListening = false;
+  if (anchorListening) {
+    window.removeEventListener("scroll", onScrollWhileAnchored);
+    anchorListening = false;
+  }
 }
 
 function holdAnchor(id: string, passage: string | undefined): void {
   anchor = { id, passage };
+  anchorY = window.scrollY;
   if (anchorListening) return;
   window.addEventListener("scroll", onScrollWhileAnchored, { passive: true });
   anchorListening = true;
@@ -916,6 +952,10 @@ function holdAnchor(id: string, passage: string | undefined): void {
 
 /** The centred arrival the reader is standing on, or `null` — see `anchor`. */
 export function arrivalAnchor(): { id: string; passage: string | undefined } | null {
+  /* A re-extraction or page change can remove the row without moving the
+     viewport. Never let module state make position readers name a block that
+     the current article no longer draws. */
+  if (anchor !== null && blockRow(anchor.id) === null) clearArrivalAnchor();
   return anchor;
 }
 
@@ -1085,7 +1125,7 @@ export function scrollByScreen(dir: -1 | 1) {
   if (reducedMotion()) {
     cancel();
     markOurScroll(150); // instant, so only the event it fires needs covering
-    window.scrollTo({ top: target, behavior: "auto" });
+    moveWindow(target);
   } else glide(() => target);
 }
 
@@ -1216,5 +1256,8 @@ export function whereIsBlock(id: string): Whereabouts {
  * the reader has not taken over, and nothing here is starting a new movement.
  */
 export function abandonScroll(): void {
-  cancel();
+  /* "Already here" callers use this to stop an older glide. With no glide,
+     cancelling would only discard a centred arrival even though the page did
+     not move — notably when the comment dialog opens on that same block. */
+  if (frame !== 0) cancel();
 }

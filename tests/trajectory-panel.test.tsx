@@ -141,10 +141,34 @@ vi.mock("../src/web/flash.js", async (importOriginal) => {
 const { TrajectoryPanel, TrajectoryDoor, coverageNote, trajectoryPromise } = await import(
   "../src/web/TrajectoryPanel.js"
 );
-const { TrajectoryBand } = await import("../src/web/modes/trajectory/TrajectoryMode.js");
+const { armTrajectoryOpening, firstTrajectoryArrival, TrajectoryBand } = await import(
+  "../src/web/modes/trajectory/TrajectoryMode.js"
+);
 const { resetFlash } = await import("../src/web/flash.js");
 const { resolveQuotes } = await import("../src/web/search-hits.js");
 const { quoteStroke } = await import("../src/web/QuotesPanel.js");
+
+describe("the reading view's Trajectory arrival mailbox", () => {
+  it("arms from the press itself even while location still has the old mode", () => {
+    history.replaceState(null, "", "/read/a-route?mode=plain");
+    const arrival = firstTrajectoryArrival("plain");
+    armTrajectoryOpening(arrival, "plain", "trajectory");
+    expect(location.search, "nuqs has not written the new mode yet").toBe("?mode=plain");
+    expect(arrival).toEqual({ stop: null, open: true });
+  });
+
+  it("does not re-arm a press on the already-open mode", () => {
+    const arrival: TrajectoryArrival = { stop: null, open: false };
+    armTrajectoryOpening(arrival, "trajectory", "trajectory");
+    expect(arrival.open).toBe(false);
+  });
+
+  it("arms neither a stop arrival nor an opening when Back remounts the Reader", () => {
+    history.replaceState(null, "", "/read/a-route?mode=trajectory&stop=q-popped");
+    window.dispatchEvent(new PopStateEvent("popstate"));
+    expect(firstTrajectoryArrival("trajectory")).toEqual({ stop: null, open: false });
+  });
+});
 
 /* ------------------------------------------------------------ the article -- */
 
@@ -1271,6 +1295,23 @@ describe("the band, walked", () => {
     await act(async () => root.render(createElement(Harness, { arrival })));
     await settled();
     expect(scrolled).toEqual([`jump ${B[2]}`]);
+  });
+
+  it("retires an unresolved opening with the band that claimed it, so Back cannot spend the old press", async () => {
+    history.replaceState(null, "", "/read/a-route?mode=trajectory");
+    const arrival: TrajectoryArrival = { stop: null, open: true };
+    quotesRead = { ...QUOTES_READ, quotes: null, status: "loading" };
+    await act(async () => root.render(createElement(Harness, { arrival })));
+    await settled();
+    expect(scrolled).toEqual([]);
+
+    /* Leave before Quotes resolve, then return by history rather than by a new
+       press. The first mount owned the press; this one must not inherit it. */
+    await act(async () => root.render(createElement("div")));
+    quotesRead = QUOTES_READ;
+    await act(async () => root.render(createElement(Harness, { arrival })));
+    await settled();
+    expect(scrolled).toEqual([]);
   });
 
   it("plans it again with the route forced, and nothing else when the Quotes are current (5e)", async () => {
