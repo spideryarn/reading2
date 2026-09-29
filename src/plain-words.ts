@@ -98,13 +98,16 @@ export const PLAIN_WORDS_EXEMPT: Record<string, string> = {
   "src/quiz-verdict.ts": "writes one word — right, wrong or unclear — that no reader sees",
   "src/citation-find.ts": "writes a URL or null",
   "src/pdf-frontmatter.ts": "writes block ids",
+  "src/pdf-authors.ts":
+    "copies names and affiliations off the page verbatim, and the code stores the page's characters, not the model's",
   "src/pdf-figure-locate.ts": "writes a page number and a box for a figure",
   "src/pdf-read.ts": "transcribes a PDF verbatim; a transcriber told to prefer common words is invited to tidy",
   "src/transcribe.ts": "speech to text, verbatim, with no prompt at all",
   "src/messages-stream.ts": "the wire every Messages call goes through, not a prompt",
   "src/ai-call.ts": "the wire every OpenRouter call goes through, not a prompt",
   "src/embeddings.ts": "asks for vectors, not words",
-  "src/pipeline.ts": "only builds the PDF front-matter reader, whose prompt is src/pdf-frontmatter.ts",
+  "src/pipeline.ts":
+    "only builds the PDF front-matter and authors readers, whose prompts are src/pdf-frontmatter.ts and src/pdf-authors.ts",
   "src/hierarchy-deepen.ts": "sends EXPAND_SYSTEM, which lives in src/hierarchy-expand.ts and carries the rule there",
   "src/spend-declarations.ts": "names a model call inside a string, and makes none",
   "scripts/spike-book-structure.ts": "a one-off spike that sends production's own hierarchy prompt",
