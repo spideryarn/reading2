@@ -934,3 +934,5 @@ doc `docs/project/trajectory.md`; v1 built autonomously, v2 only if confident; q
 the doc; default behind the experimental switch). Greg: *"5.6 is fine for now, but ideally write
 things in a way that it'll automatically use the latest"* → model-roles-latest makes `--model sol`
 resolve to the newest Sol the subscription serves, never the paid key.
+
+- **2026-09-29 ~06:00 BST, fb56 (public modes for signed-out visitors, SPIDERYARN-READING2-56).** Assumptions pending Greg: (1) Quiz is read-only for visitors (questions, show the answer, the passage), with no marking because marking is a paid call; (2) Illustrated diagram plates are left out of this fix, as a named follow-up needing a public image route. Find-it results stay owner-private. Trajectory/FAQ/Citations/Debate ship first.
