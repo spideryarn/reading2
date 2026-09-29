@@ -12,6 +12,8 @@ import {
   authorsPrompt,
   parseAuthors,
   readAuthors,
+  markersAfter,
+  trimAffiliation,
   trimName,
   verifyAuthors,
   words,
@@ -72,6 +74,52 @@ describe("verifyAuthors", () => {
     ]);
   });
 
+  it("does not trim a real leading number from an affiliation without the same marker on the name", () => {
+    expect(trimAffiliation("3M Company", new Set())).toBe("3M Company");
+    expect(trimAffiliation("3M Company", new Set(["1"]))).toBe("3M Company");
+    expect(verifyAuthors([one("Jane Doe", ["3M Company"])], "Jane Doe", ["3M Company"]).authors).toEqual([
+      { name: "Jane Doe", affiliations: ["3M Company"] },
+    ]);
+    expect(verifyAuthors([one("Jane Doe", ["123 Main Street"])], "Jane Doe", ["123 Main Street"]).authors).toEqual([
+      { name: "Jane Doe", affiliations: ["123 Main Street"] },
+    ]);
+  });
+
+  it("reads the markers off the PAGE, so a model that left them off the name still gets the affiliation trimmed", () => {
+    /* The model wrote "Mei-jun Ou" (no marker); the page says Ou1, so the "1 " comes off. */
+    const verdict = verifyAuthors([one("Mei-jun Ou", ["1 Head and Neck Surgery Department"])], FRONTIERS_BYLINE, [
+      FRONTIERS_AFFILIATIONS,
+    ]);
+    expect(verdict.authors?.[0]?.affiliations).toEqual(["Head and Neck Surgery Department"]);
+    /* A spaced marker after the name counts too: "Newman 1,* ,". */
+    expect(markersAfter("Ehren L. Newman 1,* , Thomas F. Varley 2", "Ehren L. Newman".length)).toEqual(new Set(["1"]));
+    /* And two markers on one name: "Ou1,2". */
+    expect(markersAfter("Ou1,2, Xu3", 2)).toEqual(new Set(["1", "2"]));
+  });
+
+  it("cuts a glued letter marker off an affiliation only when it is the author's", () => {
+    expect(trimAffiliation("aDepartment of Electrical Engineering", new Set(["a"]))).toBe("Department of Electrical Engineering");
+    expect(trimAffiliation("eBay Research", new Set(["a"]))).toBe("eBay Research");
+  });
+
+  it("always cuts leading symbols — no institution starts with * or ☆ — and keeps the rest", () => {
+    expect(trimAffiliation("* Universidad Francisco de Paula Santander", new Set())).toBe("Universidad Francisco de Paula Santander");
+    expect(trimAffiliation("☆ 1 Somewhere", new Set(["1"]))).toBe("Somewhere");
+  });
+
+  it("refuses a list that leaves out somebody printed before or between the names it gives", () => {
+    const middle = verifyAuthors([one("Mei-jun Ou"), one("Hong Chen")], FRONTIERS_BYLINE, [FRONTIERS_BYLINE]);
+    expect(middle.authors).toBeNull();
+    const first = verifyAuthors([one("Xiang-hua Xu")], FRONTIERS_BYLINE, [FRONTIERS_BYLINE]);
+    expect(first.authors).toBeNull();
+    /* The control: all five, with markers and "and" between them, pass. */
+    const all = ["Mei-jun Ou", "Xiang-hua Xu", "Hong Chen", "Fu-rong Chen", "Shuai Shen"].map((n) => one(n));
+    expect(verifyAuthors(all, FRONTIERS_BYLINE, [FRONTIERS_BYLINE]).authors).toHaveLength(5);
+    /* A spaced marker between names is not a person: "Newman 1,* , Thomas". */
+    const newman = "Ehren L. Newman 1,* , Thomas F. Varley 1,* and John M. Beggs 3";
+    expect(verifyAuthors([one("Ehren L. Newman"), one("Thomas F. Varley"), one("John M. Beggs")], newman, [newman]).authors).toHaveLength(3);
+  });
+
   it("says nothing when nothing was offered — the byline stands as printed, with no note", () => {
     expect(verifyAuthors([], FRONTIERS_BYLINE, [FRONTIERS_BYLINE])).toEqual({ authors: null, note: null });
   });
@@ -90,6 +138,8 @@ describe("verifyAuthors", () => {
     it("a name with an invented word inside it", () => refused([one("Mei-jun 999 Ou")]));
     it("a name with no words at all", () => refused([one("--- ,,, ***")]));
     it("names reordered", () => refused([one("Ou Mei-jun")]));
+    it("real authors reordered", () => refused([one("Xiang-hua Xu"), one("Mei-jun Ou")]));
+    it("one printed author repeated", () => refused([one("Mei-jun Ou"), one("Mei-jun Ou")]));
     it("a name stitched from two authors", () => refused([one("Hong Xu")]));
     it("a name with a word the page does not print after it", () => refused([one("Mei-jun Ou <b>")]));
     it("an affiliation not on the page", () => refused([one("Mei-jun Ou", ["Evil Corp, visit example dot com"])]));
@@ -103,15 +153,16 @@ describe("verifyAuthors", () => {
     const verdict = verifyAuthors(
       [
         one("Mei-jun Ou1", ["1 Head and Neck Surgery Department, Hunan Cancer Hospital, Changsha, China"]),
+        one("Xiang-hua Xu2"),
+        one("Hong Chen1"),
+        one("Fu-rong Chen3"),
         one("Shuai Shen4*"),
       ],
       FRONTIERS_BYLINE,
       [FRONTIERS_AFFILIATIONS],
     );
-    expect(verdict.authors).toEqual([
-      { name: "Mei-jun Ou", affiliations: ["Head and Neck Surgery Department, Hunan Cancer Hospital, Changsha, China"] },
-      { name: "Shuai Shen", affiliations: [] },
-    ]);
+    expect(verdict.authors?.map((a) => a.name)).toEqual(["Mei-jun Ou", "Xiang-hua Xu", "Hong Chen", "Fu-rong Chen", "Shuai Shen"]);
+    expect(verdict.authors?.[0]?.affiliations).toEqual(["Head and Neck Surgery Department, Hunan Cancer Hospital, Changsha, China"]);
     const keul = verifyAuthors([one("Alexander G. Keul¹,☆", ["¹Environmental Psychology, Salzburg University"])], COPERNICUS_BYLINE, [
       COPERNICUS_AFFILIATION,
     ]);
@@ -121,6 +172,18 @@ describe("verifyAuthors", () => {
   it("never cuts a LETTER off a name by rule — Costa keeps its a unless the model dropped it", () => {
     expect(trimName("Ana Costa")).toBe("Ana Costa");
     expect(verifyAuthors([one("Salim Rukhsara")], ARNN_BYLINE, [ARNN_BYLINE]).authors?.[0]?.name).toBe("Salim Rukhsara");
+  });
+
+  it("maps folded offsets through astral letters without extending the stored name", () => {
+    expect(verifyAuthors([one("𐐀")], "𐐀 Alice Doe", ["𐐀 Alice Doe"]).authors).toEqual([
+      { name: "𐐀", affiliations: [] },
+    ]);
+  });
+
+  it("maps decomposed marks and compatibility ligatures back to the page's characters", () => {
+    expect(verifyAuthors([one("José Ofﬁce")], "Jose\u0301 Ofﬁce", ["Jose\u0301 Ofﬁce"]).authors).toEqual([
+      { name: "Jose\u0301 Ofﬁce", affiliations: [] },
+    ]);
   });
 
   it("stores the page's characters, so decoration the model added between the words is gone", () => {
@@ -140,21 +203,23 @@ describe("verifyAuthors", () => {
 
   it("refuses an affiliation over the character cap even when it is on the page", () => {
     const long = Array.from({ length: 40 }, () => "Laboratory").join(" ");
-    expect(verifyAuthors([one("Hong Chen", [long])], FRONTIERS_BYLINE, [long]).authors).toBeNull();
+    expect(verifyAuthors([one("Hong Chen", [long])], "Hong Chen", [long]).authors).toBeNull();
     const short = Array.from({ length: 20 }, () => "Laboratory").join(" ");
-    expect(verifyAuthors([one("Hong Chen", [short])], FRONTIERS_BYLINE, [short]).authors).not.toBeNull();
+    expect(verifyAuthors([one("Hong Chen", [short])], "Hong Chen", [short]).authors).not.toBeNull();
   });
 
   it("lets a marker be glued only after a name's words and only before an affiliation's first", () => {
     /* A marker in the MIDDLE of an affiliation is not a marker. */
-    const verdict = verifyAuthors([one("Hong Chen", ["Hunan Cancer Hospital"])], FRONTIERS_BYLINE, ["Hunan 1Cancer Hospital"]);
+    const verdict = verifyAuthors([one("Hong Chen", ["Hunan Cancer Hospital"])], "Hong Chen1", ["Hunan 1Cancer Hospital"]);
     expect(verdict.authors).toBeNull();
+    /* …and the control: the same affiliation printed plainly is found. */
+    expect(verifyAuthors([one("Hong Chen", ["Hunan Cancer Hospital"])], "Hong Chen1", ["Hunan Cancer Hospital"]).authors).not.toBeNull();
   });
 
   it("drops a repeated affiliation and squashes whitespace", () => {
     const verdict = verifyAuthors(
       [one("  Hong   Chen ", ["Hunan Cancer Hospital", "Hunan  Cancer Hospital"])],
-      FRONTIERS_BYLINE,
+      "Hong Chen1",
       [FRONTIERS_AFFILIATIONS],
     );
     expect(verdict.authors).toEqual([{ name: "Hong Chen", affiliations: ["Hunan Cancer Hospital"] }]);

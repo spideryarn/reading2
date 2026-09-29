@@ -25,11 +25,9 @@
  *   exactly, except that the **first** may have a marker glued in front
  *   (`1Environmental`, `aComputer`, `¹Environmental`);
  * - and the span found, whitespace collapsed to one line and **its digit and
- *   symbol markers trimmed by rule** (`trimName`, `trimAffiliation` — the model
- *   copies them along, and deciding which trailing `1,☆` is a footnote is a rule
- *   rather than a judgement), must still be shaped like a name or an address
- *   and fit the caps. A glued LETTER marker comes off only where the model
- *   left it off, since `Costa` ends in the same `a` an Elsevier paper uses.
+ *   symbol markers trimmed by rule** (`trimName`, `trimAffiliation` — a leading
+ *   affiliation number is trimmed only when the same marker is on this author's
+ *   name), must still be shaped like a name or an address and fit the caps.
  *
  * The model can therefore drop a marker, split a packed record and choose; it
  * cannot invent, respell, reorder or decorate. What it *can* still do is choose
@@ -70,7 +68,6 @@ const MARKER = /^(?:\p{N}{1,3}|\p{L})$/u;
  */
 const MARKER_MARKS = "\\p{N}\\s,;*∗⁎†‡§¶☆★#";
 const TRAILING_MARKS = new RegExp(`[${MARKER_MARKS}]+$`, "u");
-const LEADING_MARKS = new RegExp(`^[${MARKER_MARKS}]+`, "u");
 
 /**
  * **The page's span, with the markers a model copied along with it cut off.**
@@ -80,7 +77,45 @@ const LEADING_MARKS = new RegExp(`^[${MARKER_MARKS}]+`, "u");
  * characters are a footnote is a rule, so the rule is here.
  */
 export const trimName = (span: string) => span.replace(TRAILING_MARKS, "").trim();
-export const trimAffiliation = (span: string) => span.replace(LEADING_MARKS, "").trim();
+
+/**
+ * **The markers the page prints on one name** — read off the byline record,
+ * not the model's copy, which may or may not have kept them: the rest of the
+ * name's last word (`Ou1` → `1`, `Rukhsara` → `a`) and the marks that follow it
+ * (`Newman 1,*` → `1`, `Keul¹,☆` → `1`, `Ou1,2` → `1`, `2`). Folded, so `¹`
+ * and `1` agree. What an affiliation may have cut off its front.
+ */
+export function markersAfter(bylineText: string, end: number): Set<string> {
+  const tail = bylineText.slice(end).match(new RegExp(`^\\p{L}?[${MARKER_MARKS}]*`, "u"))?.[0] ?? "";
+  const folded = tail.normalize("NFKD").toLowerCase();
+  const out = new Set<string>(folded.match(/\p{N}+/gu) ?? []);
+  const letter = folded.match(/^\p{L}/u)?.[0];
+  if (letter) out.add(letter);
+  return out;
+}
+
+/** A byline word that may sit between two names without being a person: a marker, or glue. */
+const BETWEEN_NAMES = /^(?:\p{N}+|\p{L}|and|by|with|et|und|y|e)$/u;
+
+/** A leading run of marks with no digit in it — `*`, `**`, `☆`, `†` — never part of an institution. */
+const LEADING_SYMBOLS = /^[\s,;*∗⁎†‡§¶☆★#]+/u;
+
+/**
+ * **An affiliation's leading marker, cut only when it is this author's.**
+ * Symbols always come off: no institution starts with `*` or `☆`. A number or
+ * a glued letter comes off only when the page put the same marker on this
+ * author's name, so `3M Company` and `123 Main Street` keep their numbers
+ * (GPT Sol, code review of 260929d) while `1 Head and Neck Surgery` and
+ * `aDepartment of …` lose theirs.
+ */
+export const trimAffiliation = (span: string, markers: ReadonlySet<string>): string => {
+  const rest = span.replace(LEADING_SYMBOLS, "");
+  const number = rest.match(/^(\p{N}+)[\s,;*∗⁎†‡§¶☆★#]*/u);
+  if (number && markers.has(number[1]!.normalize("NFKD"))) return rest.slice(number[0].length).trim();
+  const letter = rest.match(/^(\p{Ll})(?=\p{Lu})/u);
+  if (letter && markers.has(letter[1]!)) return rest.slice(1).trim();
+  return rest.trim();
+};
 
 /** A name, once taken off the page: letters, marks, spaces, and the punctuation names are printed with. */
 const NAME_SHAPE = /^[\p{L}\p{M} .'’‐-]+$/u;
@@ -110,8 +145,12 @@ export function wordsOf(text: string): Word[] {
     let at = m.index;
     for (const ch of m[0]) {
       at += ch.length;
-      for (const f of foldChar(ch)) {
-        folded += f;
+      const next = foldChar(ch);
+      folded += next;
+      /* `String#length` and `slice` below use UTF-16 offsets. Record one end
+         for every UTF-16 code unit too: an astral letter contributes two, while
+         a compatibility ligature may contribute several BMP letters. */
+      for (let i = 0; i < next.length; i++) {
         ends.push(at);
       }
     }
@@ -126,15 +165,20 @@ export function words(text: string): string[] {
 }
 
 /** Where the proposal's words were found in the source, as a source span; or `null`. */
-type Finder = (have: Word[], want: string[]) => { start: number; end: number } | null;
+interface FoundSpan {
+  start: number;
+  end: number;
+  /** The first word after this match, for ordered non-overlapping name matches. */
+  nextWord: number;
+}
 
 /** A name: every word exact but the last, which may carry a glued marker after it. */
-const findName: Finder = (have, want) => {
+const findName = (have: Word[], want: string[], fromWord: number): FoundSpan | null => {
   /* A proposal with no words in it — `--- ***` — names nobody, and without this
      the empty run "matches" at the first position and the span is read off a
      last word that does not exist. */
   if (want.length === 0) return null;
-  for (let s = 0; s + want.length <= have.length; s++) {
+  for (let s = fromWord; s + want.length <= have.length; s++) {
     const last = want.length - 1;
     const ok = want.every((w, i) => {
       const h = have[s + i]!.folded;
@@ -144,14 +188,16 @@ const findName: Finder = (have, want) => {
     if (ok) {
       const lastWord = have[s + last]!;
       const wantLast = want[last]!;
-      return { start: have[s]!.start, end: lastWord.ends[wantLast.length - 1]! };
+      const end = lastWord.ends[wantLast.length - 1];
+      if (end === undefined) return null;
+      return { start: have[s]!.start, end, nextWord: s + want.length };
     }
   }
   return null;
 };
 
 /** An affiliation: every word exact but the first, which may carry a glued marker before it. */
-const findAffiliation: Finder = (have, want) => {
+const findAffiliation = (have: Word[], want: string[]): FoundSpan | null => {
   for (let s = 0; s + want.length <= have.length; s++) {
     const ok = want.every((w, i) => {
       const h = have[s + i]!.folded;
@@ -161,7 +207,9 @@ const findAffiliation: Finder = (have, want) => {
     if (ok) {
       const first = have[s]!;
       const cut = first.folded.length - want[0]!.length;
-      return { start: cut === 0 ? first.start : first.ends[cut - 1]!, end: have[s + want.length - 1]!.end };
+      const start = cut === 0 ? first.start : first.ends[cut - 1];
+      if (start === undefined) return null;
+      return { start, end: have[s + want.length - 1]!.end, nextWord: s + want.length };
     }
   }
   return null;
@@ -194,10 +242,32 @@ export function verifyAuthors(
   const byline = wordsOf(bylineText);
   const pageWords = pages.map((text) => ({ text, words: wordsOf(text) }));
   const out: Author[] = [];
+  let nextNameWord = 0;
   for (const [n, proposed] of answer.entries()) {
-    const at = findName(byline, words(proposed.name));
+    /* Start after the preceding author's span. Without this, every proposal is
+       an independent existential check: the model can reverse two real names
+       or repeat the first one and both still pass. */
+    const want = words(proposed.name);
+    const at = findName(byline, want, nextNameWord);
     if (!at) return refuse(`named somebody not printed in the byline (author ${n + 1})`);
-    const name = trimName(oneLine(bylineText.slice(at.start, at.end)));
+    /* **Nobody skipped.** What lies between the previous name and this one —
+       or before the first — must be markers and glue, or the list has left
+       out someone the page names, and the byline built from it would drop
+       their credit (GPT Sol, code review of 260929d). Someone printed after
+       the last name cannot be told from an affiliation fused onto the byline
+       record, so that case is a named limit of this check. */
+    const skipped = byline.slice(nextNameWord, at.nextWord - want.length);
+    if (skipped.some((w) => !BETWEEN_NAMES.test(w.folded))) {
+      return refuse(`left out somebody printed before author ${n + 1}`);
+    }
+    nextNameWord = at.nextWord;
+    const rawName = oneLine(bylineText.slice(at.start, at.end));
+    /* The page's markers for this name, both the ones the model copied into
+       its span and the ones after it. */
+    const inSpan = rawName.match(TRAILING_MARKS)?.[0] ?? "";
+    const markers = markersAfter(bylineText, at.end);
+    for (const m of inSpan.normalize("NFKD").match(/\p{N}+/gu) ?? []) markers.add(m);
+    const name = trimName(rawName);
     if (!NAME_SHAPE.test(name) || name.length > maxNameChars) {
       return refuse(`had a name that is not shaped like one (author ${n + 1})`);
     }
@@ -211,7 +281,7 @@ export function verifyAuthors(
       for (const page of pageWords) {
         const span = want.length ? findAffiliation(page.words, want) : null;
         if (span) {
-          found = trimAffiliation(oneLine(page.text.slice(span.start, span.end)));
+          found = trimAffiliation(oneLine(page.text.slice(span.start, span.end)), markers);
           break;
         }
       }

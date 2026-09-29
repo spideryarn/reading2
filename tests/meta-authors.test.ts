@@ -15,6 +15,7 @@
 import { readFileSync } from "node:fs";
 import { JSDOM } from "jsdom";
 import { describe, expect, it } from "vitest";
+import { AUTHOR_LIMITS, decodeAuthors } from "../src/authors.js";
 import { runExtract } from "../src/extract.js";
 import { bylineFromAuthors, chooseByline, inNaturalOrder, metaAuthors } from "../src/meta-authors.js";
 
@@ -127,6 +128,25 @@ describe("metaAuthors' affiliations (plan 260929d)", () => {
       { name: "Jane Doe", affiliations: [] },
       { name: "John Smith", affiliations: [] },
     ]);
+  });
+});
+
+describe("decodeAuthors", () => {
+  it("accepts the stored shape and copies only its public fields", () => {
+    expect(decodeAuthors([{ name: "Jane Doe", affiliations: ["Oxford"], internal: "not part of Author" }])).toEqual([
+      { name: "Jane Doe", affiliations: ["Oxford"] },
+    ]);
+  });
+
+  it("turns malformed or over-limit JSONB into no author list", () => {
+    expect(decodeAuthors([{ name: "Jane Doe" }])).toBeNull();
+    expect(decodeAuthors([{ name: "Jane Doe", affiliations: [""] }])).toBeNull();
+    expect(decodeAuthors([{ name: "x".repeat(AUTHOR_LIMITS.maxNameChars + 1), affiliations: [] }])).toBeNull();
+    expect(
+      decodeAuthors(
+        Array.from({ length: AUTHOR_LIMITS.maxAuthors + 1 }, () => ({ name: "Jane Doe", affiliations: [] })),
+      ),
+    ).toBeNull();
   });
 });
 

@@ -141,6 +141,29 @@ describe("judge scores the byline", () => {
     expect(judge(fixture, sample, "tidy", answerOf({ byline: "Ada Lovelace; Anil K.Tiwari; Grace Hopper" })).bylineRight).toBe(true);
     expect(judge(fixture, sample, "tidy", answerOf({ byline: "Ada Lovelace1, Anil K. Tiwari2 and Grace Hopper" })).bylineRight).toBe(false);
   });
+
+  it("uses structured names when commas inside names make the byline ambiguous", () => {
+    const fixture = fixtureOf({
+      byline: "Nastase, Samuel A., Hopper, Grace",
+      authors: [
+        { name: "Nastase, Samuel A.", affiliations: [] },
+        { name: "Hopper, Grace", affiliations: [] },
+      ],
+    });
+    const wronglySegmented = [
+      { name: "Nastase", affiliations: [] },
+      { name: "Samuel A.", affiliations: [] },
+      { name: "Hopper", affiliations: [] },
+      { name: "Grace", affiliations: [] },
+    ];
+    const v = judge(
+      fixture,
+      sample,
+      "tidy-authors",
+      answerOf({ byline: "Nastase; Samuel A.; Hopper; Grace", authors: wronglySegmented }),
+    );
+    expect(v.bylineRight).toBe(false);
+  });
 });
 
 describe("judge scores the authors per author (plan 260929d)", () => {

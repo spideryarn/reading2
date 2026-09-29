@@ -121,8 +121,29 @@ text** (src/pdf-authors.ts):
 - When the list passes, **`meta.byline` becomes the names joined `"; "`** — which is the "Smith1"
   fix for every PDF from now on.
 
+**After Sol's code review** ([260929d-authors-code-review-sol.md](260929d-authors-code-review-sol.md)),
+which fixed an astral-character offset bug, made names match in printed order (no reversal, no
+repeats) and stopped `3M Company` losing its `3`:
+
+- **A leading number or glued letter comes off an affiliation only when it is this author's
+  marker**, and the markers are read off the *page* — what is glued to or follows the name in the
+  byline record (`Ou1`, `Newman 1,*`, `Keul¹,☆`, `Rukhsara`) — not off the model's copy, which may
+  have left them out. Leading symbols (`*`, `☆`) always come off.
+- **Nobody skipped.** The byline words between one found name and the next, or before the first,
+  must be markers or glue (`and`, `by`); otherwise the list is refused, because a byline built from a
+  list that leaves out a printed author drops their credit. **The named limit**: an author printed
+  *after* the last name found cannot be told from an affiliation fused onto the byline record, so
+  that omission is not caught.
+- **The one truncation left** is a single letter off a surname — `Ana Cost` for `Ana Costa` passes,
+  because the same rule is what lets `Rukhsara` become `Rukhsar`. Accepted: it needs the model to
+  drop the letter, and the eval never saw it.
+- Web pages: `authorsForByline` rejects `Jane Doe, PhD and John Smith` (the `PhD` is left over), so
+  that page keeps its byline string. Conservative, and left as it is.
+
+Re-scored after all of it from the cached answers, no new calls: the same numbers as the table below.
+
 So the model can drop a marker, split a packed record and choose; it cannot invent, respell, reorder,
-truncate or decorate. *Changed after Sol's plan review (P0): the draft compared letters only and kept
+skip a name in the middle, or decorate. *Changed after Sol's plan review (P0): the draft compared letters only and kept
 the model's string, so the model could add any punctuation, digits or newlines, and a three-letter
 run-on on every word let it truncate names.* **What it can still do** is choose the wrong printed
 words — call a sentence of the page an affiliation. That is bounded by the caps and measured by the

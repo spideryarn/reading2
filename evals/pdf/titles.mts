@@ -598,6 +598,13 @@ export function judge(fixture: Fixture, sample: Sample, arm: string, answer: Arm
 
   const bylineAnswer = answer.byline?.trim() ? answer.byline.trim() : null;
   const goldByline = fixture.byline?.trim() ? fixture.byline.trim() : null;
+  /* When this arm and fixture have structured authors, use the structure. A
+     comma is both a list separator and part of `Surname, Given`; splitting the
+     strings can therefore give two differently segmented lists the same score. */
+  const offeredBylineNames = answer.authors?.map((a) => asWords(a.name)) ??
+    (bylineAnswer === null ? [] : bylineNames(bylineAnswer));
+  const expectedBylineNames = fixture.authors?.map((a) => asWords(a.name)) ??
+    (goldByline === null ? [] : bylineNames(goldByline));
 
   return {
     slug: fixture.slug,
@@ -620,7 +627,7 @@ export function judge(fixture: Fixture, sample: Sample, arm: string, answer: Arm
     bylineRight:
       goldByline === null
         ? bylineAnswer === null
-        : bylineAnswer !== null && sameList(bylineNames(bylineAnswer), bylineNames(goldByline)),
+        : bylineAnswer !== null && sameList(offeredBylineNames, expectedBylineNames),
     ...authorsVerdict(fixture.authors, answer.authors ?? null),
     setAside: answer.setAside.length,
     removable: removable.length,

@@ -99,10 +99,15 @@ describe("the masthead's authors", () => {
 
   it("unfolds every name in place when asked", async () => {
     await mount(article({ byline: "x", authors: FIVE }), true);
-    const more = [...facts().querySelectorAll("button")].find((b) => b.textContent?.includes("more"));
-    await act(async () => more?.click());
+    const more = [...facts().querySelectorAll("button")].find((b) => b.textContent?.includes("more")) as HTMLButtonElement;
+    expect(more.getAttribute("aria-label")).toBe("Show 2 more authors");
+    expect(more.getAttribute("aria-expanded")).toBe("false");
+    more.focus();
+    await act(async () => more.click());
     expect(names()).toEqual(FIVE.map((a) => a.name));
-    expect(facts().textContent).not.toContain("more");
+    expect(more.textContent).toBe("Show fewer");
+    expect(more.getAttribute("aria-expanded")).toBe("true");
+    expect(document.activeElement).toBe(more);
   });
 
   it("does not fold a list only one name longer than the fold — '+ 1 more' saves nothing", async () => {

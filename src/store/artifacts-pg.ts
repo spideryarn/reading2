@@ -57,6 +57,7 @@
 import { and, asc, eq } from "drizzle-orm";
 import type { SQL } from "drizzle-orm";
 
+import { decodeAuthors } from "../authors.js";
 import type { Db } from "../db/client.js";
 import {
   articleRevisions,
@@ -209,7 +210,7 @@ function readMeta(ref: JobDraftRef, row: RevisionRow): Meta | null {
     slug: ref.slug,
     title: row.title,
     byline: row.byline,
-    authors: row.authors,
+    authors: decodeAuthors(row.authors),
     siteName: row.siteName,
     lang: row.lang,
     url: row.finalUrl,
@@ -822,7 +823,7 @@ function metaColumns(meta: Meta): Partial<typeof articleRevisions.$inferInsert> 
     /* `?? null` like its neighbours, so a re-extraction that finds no declared
        authors clears the list rather than leaving the last one beside a new
        byline. Plan 260929d § 1. */
-    authors: meta.authors ?? null,
+    authors: decodeAuthors(meta.authors),
     siteName: meta.siteName ?? null,
     lang: meta.lang ?? null,
     excerpt: meta.excerpt ?? null,

@@ -33,6 +33,7 @@ import path from "node:path";
 
 import { eq } from "drizzle-orm";
 
+import { decodeAuthors } from "../authors.js";
 import { getDb } from "../db/client.js";
 import { articleRevisions, articles } from "../db/schema.js";
 /* **The queries moved out on 2026-09-01**, and only the queries. Everything
@@ -369,7 +370,7 @@ export async function exportArticle(
     slug,
     title: revision.title,
     byline: revision.byline,
-    authors: revision.authors,
+    authors: decodeAuthors(revision.authors),
     siteName: revision.siteName,
     lang: revision.lang,
     url: revision.finalUrl,

@@ -28,6 +28,7 @@
 import { readFile } from "node:fs/promises";
 import { describe, expect, it, vi } from "vitest";
 import { pass0, type PdfRecord } from "../src/pdf.js";
+import type { AuthorsReader } from "../src/pdf-authors.js";
 import type { FrontMatterAnswer, FrontMatterReader } from "../src/pdf-frontmatter.js";
 import { type PdfReader, runPdfExtract } from "../src/pdf-read.js";
 import { memoryCheckpoints } from "./helpers/memory-checkpoints.js";
@@ -100,12 +101,12 @@ const frontMatterSaying = (answer: FrontMatterAnswer, onAsk?: () => void): Front
   },
 });
 
-async function run(frontMatter: FrontMatterReader | null) {
+async function run(frontMatter: FrontMatterReader | null, authors: AuthorsReader | null = null) {
   const bytes = new Uint8Array(await readFile(EASY));
   const pass = await pass0(bytes);
   return runPdfExtract({
     frontMatter,
-    authors: null,
+    authors,
     bytes,
     url: "https://example.test/paper.pdf",
     checkpoints: memoryCheckpoints({ slug: "paper", articleId: "article-paper" }),
@@ -121,6 +122,22 @@ describe("the front-matter pass inside the stage", () => {
     );
     expect(result.meta.title).toBe("A landscape of consciousness");
     expect(result.meta.byline).toBe("Robert Lawrence Kuhn");
+  });
+
+  it("uses a verified author list for the byline and structured metadata", async () => {
+    const result = await run(
+      frontMatterSaying({ titleIds: ["p1-r3"], bylineIds: ["p1-r4"], publisherIds: [] }),
+      {
+        id: "test/authors",
+        usage: () => ({ input: 2, output: 3 }),
+        async ask() {
+          return [{ name: "Robert Lawrence Kuhn", affiliations: [] }];
+        },
+      },
+    );
+    expect(result.meta.byline).toBe("Robert Lawrence Kuhn");
+    expect(result.meta.authors).toEqual([{ name: "Robert Lawrence Kuhn", affiliations: [] }]);
+    expect(result.frontMatterUsage).toEqual({ input: 2, output: 3 });
   });
 
   it("leaves the title to the ladder when the pass names none", async () => {

@@ -65,8 +65,9 @@ interface Props {
 /** The names, comma-separated, each with its card. */
 export function AuthorNames({ authors, linkToShelf, all = false }: Props) {
   const [expanded, setExpanded] = useState(false);
-  const folded = !all && !expanded && authors.length > AUTHORS_SHOWN + 1;
-  const shown = folded ? authors.slice(0, AUTHORS_SHOWN) : authors;
+  const canFold = !all && authors.length > AUTHORS_SHOWN + 1;
+  const shown = canFold && !expanded ? authors.slice(0, AUTHORS_SHOWN) : authors;
+  const hidden = authors.length - AUTHORS_SHOWN;
   return (
     <span className="author-names" data-testid="author-names">
       {shown.map((author, i) => (
@@ -76,15 +77,17 @@ export function AuthorNames({ authors, linkToShelf, all = false }: Props) {
           <AuthorName author={author} linkToShelf={linkToShelf} />
         </span>
       ))}
-      {folded && (
+      {canFold && (
         <>
           {" "}
           <button
             type="button"
             className="tw:cursor-pointer tw:border-0 tw:bg-transparent tw:p-0 tw:font-[inherit] tw:text-[inherit] tw:text-ink-faint tw:underline tw:decoration-dotted tw:hover:text-highlight"
-            onClick={() => setExpanded(true)}
+            aria-expanded={expanded}
+            aria-label={expanded ? "Show fewer authors" : `Show ${hidden} more authors`}
+            onClick={() => setExpanded((open) => !open)}
           >
-            + {authors.length - AUTHORS_SHOWN} more
+            {expanded ? "Show fewer" : `+ ${hidden} more`}
           </button>
         </>
       )}

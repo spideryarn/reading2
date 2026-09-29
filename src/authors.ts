@@ -37,13 +37,21 @@ export const AUTHOR_LIMITS = {
  * GPT Sol, plan review of 260929d, P2.
  */
 export function decodeAuthors(value: unknown): Author[] | null {
-  if (!Array.isArray(value) || value.length === 0) return null;
+  if (!Array.isArray(value) || value.length === 0 || value.length > AUTHOR_LIMITS.maxAuthors) return null;
   const out: Author[] = [];
   for (const item of value) {
     if (typeof item !== "object" || item === null) return null;
     const { name, affiliations } = item as { name?: unknown; affiliations?: unknown };
-    if (typeof name !== "string" || name === "") return null;
-    if (!Array.isArray(affiliations) || !affiliations.every((a) => typeof a === "string")) return null;
+    if (typeof name !== "string" || name === "" || name.length > AUTHOR_LIMITS.maxNameChars) return null;
+    if (
+      !Array.isArray(affiliations) ||
+      affiliations.length > AUTHOR_LIMITS.maxAffiliations ||
+      !affiliations.every(
+        (a) => typeof a === "string" && a.length > 0 && a.length <= AUTHOR_LIMITS.maxAffiliationChars,
+      )
+    ) {
+      return null;
+    }
     out.push({ name, affiliations: affiliations as string[] });
   }
   return out;
