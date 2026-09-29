@@ -535,15 +535,24 @@ interface Props {
  *
  *  - `exit` — Plain, alone: the way out of a mode.
  *  - `shape` — the article's shape, restated (Structure, Summary, Diagram).
- *  - `passages` — the article's own passages: a walk through its quotes, the
- *    quotes, questions answered by passages, and finding passages.
- *  - `dimensions` — one dimension of the piece pulled out (Glossary, Ideas,
- *    Timeline).
+ *  - `guides` — ways through the piece, each drawn from it along one line: a
+ *    route through its quotes, the quotes, questions it answers, its terms,
+ *    its ideas, its dates (Trajectory, Quotes, FAQ, Glossary, Ideas,
+ *    Timeline). Not "contents": several of these are a model's reading of the
+ *    piece rather than things literally in it (GPT Sol, 2026-09-29).
  *  - `critical` — reading it critically and against other work (Referee,
  *    Citations, Debate).
- *  - `talk` — you and the article talking (Chat, Remember).
+ *  - `input` — modes that wait on the reader's own words: a word to find, a
+ *    conversation, what they took from it (Search, Chat, Remember) — the
+ *    same category docs/project/new-mode.md already names.
+ *
+ * Six runs became five later the same day, when Greg moved Glossary, Ideas
+ * and Timeline in with Trajectory and Search in with Chat
+ * (SPIDERYARN-READING2-57,
+ * docs/plans/260929f-mode-bar-regroup-glossary-ideas-timeline-with-trajectory-search-with-chat.md).
+ * The two runs that changed were renamed for what they now hold.
  */
-type ModeGroup = "exit" | "shape" | "passages" | "dimensions" | "critical" | "talk";
+type ModeGroup = "exit" | "shape" | "guides" | "critical" | "input";
 
 interface ModeUi {
   mode: Mode;
@@ -689,7 +698,7 @@ const MODES_UI = [
     group: "shape",
     icon: Network,
   },
-  /* **First of the passages run, just before Quotes, since 2026-09-29** —
+  /* **First of the guides run, just before Quotes, since 2026-09-29** —
      Greg: *"Move Trajectory one further left, before Quotes"*
      (SPIDERYARN-READING2-4E). It is a walk through the article's own Quotes,
      so it sits beside them; on 2026-09-28 it went straight after them (the
@@ -701,7 +710,7 @@ const MODES_UI = [
      docs/plans/260928a-trajectory-mode-skim-a-paper-at-increasing-depth.md § 5c. */
   {
     mode: "trajectory",
-    group: "passages",
+    group: "guides",
     icon: Route,
   },
   /* **After Trajectory, since 2026-09-29**; straight after Summary, with
@@ -710,7 +719,8 @@ const MODES_UI = [
      argument that the bar runs outwards from the article's own words and this
      is the mode *closest* to them — every row is a sentence out of the piece
      rather than something a model wrote about it. The move keeps the argument
-     and takes it further: ahead of the "one dimension pulled out" group.
+     and takes it further: ahead of Glossary, Ideas and Timeline, which since
+     SPIDERYARN-READING2-57 share its run.
      docs/project/quotes.md.
 
      **Not experimental since 2026-09-06**, on Greg's call that the mode is
@@ -720,13 +730,13 @@ const MODES_UI = [
      docs/project/experimental-features.md. */
   {
     mode: "quotes",
-    group: "passages",
+    group: "guides",
     icon: Quote,
   },
-  /* **In the passages run, after Quotes, since 2026-09-29** — Greg: *"Move FAQ
+  /* **In the guides run, after Quotes, since 2026-09-29** — Greg: *"Move FAQ
      and Search a little bit further left"* (SPIDERYARN-READING2-4E). Every row
      is a question answered by passages of the piece itself, which is what the
-     run is. It had stood after Citations, at the end of the "one dimension
+     piece contains. It had stood after Citations, at the end of the "one dimension
      pulled out" group, where Greg had not yet placed it by hand.
 
      `BadgeQuestionMark`, used nowhere else. Not `MessageCircleQuestionMark`,
@@ -735,28 +745,12 @@ const MODES_UI = [
      docs/plans/260916d-faq-mode.md. */
   {
     mode: "faq",
-    group: "passages",
+    group: "guides",
     icon: BadgeQuestionMark,
-  },
-  /* Search was **two** dimmed placeholders in the `SOON` list this file used to
-     carry — `Search` and `Highlights`, side by side — and is one mode now. That
-     is the design rather than a tidy-up: highlighting is what search *does to
-     the page*, not a separate thing to press. Greg's call; see
-     docs/project/search.md.
-
-     The `Highlights` placeholder's note has not been lost. It said overlapping
-     highlights need the CSS Custom Highlight API because a library that wraps
-     matches in tags cannot nest them — which turned out to be about a wall we
-     had already gone round, and the account of that is now at the top of
-     annotate.ts where somebody adding a fifth kind of mark will meet it. */
-  {
-    mode: "search",
-    group: "passages",
-    icon: Search,
   },
   {
     mode: "glossary",
-    group: "dimensions",
+    group: "guides",
     icon: BookA,
   },
   /* Straight after Glossary, because the order runs outwards from the article's
@@ -766,20 +760,20 @@ const MODES_UI = [
      reasoning rather than on the end. */
   {
     mode: "ideas",
-    group: "dimensions",
+    group: "guides",
     icon: Lightbulb,
   },
-  /* **Last of Glossary, Ideas, Timeline — the "one dimension of this piece
-     pulled out" run.** Greg placed it after Ideas on 2026-08-31, and on
-     2026-09-29 asked for it *"further right"* (SPIDERYARN-READING2-4E): FAQ
-     and Search, which had come to stand after it, moved left of the run, so
-     it is now three places further right and still at the far end of its
-     group, which is further from the article's own words than either of the
-     other two.
+  /* **Last of the guides run, after Glossary and Ideas.** Greg placed it
+     after Ideas on 2026-08-31, asked for it *"further right"* on 2026-09-29
+     (SPIDERYARN-READING2-4E), and later the same day moved Glossary, Ideas and
+     Timeline *"left into the bottom-bar separator-section with Trajectory"*
+     (SPIDERYARN-READING2-57) — so the three are one dimension of the piece
+     pulled out each, at the far end of the run of what the piece contains,
+     and no longer a run of their own.
      docs/plans/260831i-timeline-mode.md § 3. */
   {
     mode: "timeline",
-    group: "dimensions",
+    group: "guides",
     icon: Clock,
   },
   /* **First of the critical run — Referee, Citations, Debate — since
@@ -821,8 +815,8 @@ const MODES_UI = [
     group: "critical",
     icon: BookText,
   },
-  /* **Last of the critical run, before Chat, since 2026-09-29**, when Greg
-     moved Chat past it (*"Move Chat right, just before Recall"*) and put
+  /* **Last of the critical run, before the input run, since 2026-09-29**, when
+     Greg moved Chat past it (*"Move Chat right, just before Recall"*) and put
      Citations and Referee beside it (SPIDERYARN-READING2-4E). Debate's content
      comes from neither the article nor the reader — it is the only mode in
      this bar whose content is **not in the article at all** — so it stays at
@@ -846,13 +840,35 @@ const MODES_UI = [
     group: "critical",
     icon: Globe,
   },
+  /* **First of the input run — Search, Chat, Remember — since 2026-09-29.**
+     Greg: *"move Search into section with Chat"* (SPIDERYARN-READING2-57).
+     First in it rather than after Chat, because the same day he had asked for
+     Chat *"just before Recall"*. It is the reader coming to the article with
+     a word of their own to find, which is what the run has in common.
+
+     Search was **two** dimmed placeholders in the `SOON` list this file used to
+     carry — `Search` and `Highlights`, side by side — and is one mode now. That
+     is the design rather than a tidy-up: highlighting is what search *does to
+     the page*, not a separate thing to press. Greg's call; see
+     docs/project/search.md.
+
+     The `Highlights` placeholder's note has not been lost. It said overlapping
+     highlights need the CSS Custom Highlight API because a library that wraps
+     matches in tags cannot nest them — which turned out to be about a wall we
+     had already gone round, and the account of that is now at the top of
+     annotate.ts where somebody adding a fifth kind of mark will meet it. */
+  {
+    mode: "search",
+    group: "input",
+    icon: Search,
+  },
   {
     mode: "chat",
-    group: "talk",
+    group: "input",
     icon: MessagesSquare,
   },
-  /* Last, straight after Chat — the two are the "you and the article
-     talking" run, and Greg put Chat *"just before Recall"* on 2026-09-29
+  /* Last, straight after Chat — the end of the input run (Search, Chat,
+     Remember), and Greg put Chat *"just before Recall"* on 2026-09-29
      (SPIDERYARN-READING2-4E). The ordering runs from the article restated,
      through the ways into it, to the conversation about it. Remember
      is the only mode whose content comes from the READER — it cannot be used at
@@ -870,7 +886,7 @@ const MODES_UI = [
      docs/plans/260901d-rename-review-mode-to-remember-mode-everywhere.md. */
   {
     mode: "remember",
-    group: "talk",
+    group: "input",
     /* `Brain`, not `Speech`, from 2026-09-05. `Speech` was the mode's method — the
        reader talks — and Greg asked for its subject instead: what they kept.
        SPIDERYARN-READING2-25. It is the only brain in the bar, and Lucide has
