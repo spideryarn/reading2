@@ -509,14 +509,67 @@
 .fb-send:disabled { opacity: 0.45; cursor: default; }
 .fb-send:not(:disabled):hover { color: var(--highlight); border-color: var(--highlight); }
 
-.fb-done {
-  align-items: center;
+/* ---------------------------------------------------------------- the toast --
+   The thank-you after a report is filed, since 2026-09-29 — Greg: *"that
+   post-Feedback message should be a toast in the corner that disappears after a
+   few seconds, rather than a blocking modal."* Toast.tsx; it replaced the
+   `.fb-done` panel that used to fill the dialog.
+
+   **Bottom-right, clear of the bottom bar** — `bottom` is the same sum the
+   comment, chat and annotate dialogs use (dialogs.css), so it sits above the
+   Dock and the install hint rather than on top of the Dock's Feedback button.
+   The corner Feedback button is top-right, so it is clear of that one too.
+
+   **z-index 98**: above the Dock and its drawer (96/95) and the offline strip
+   (97) so a thank-you is never half under a surface that happens to be open,
+   and below the tooltip (100). design-css-overview.md § the stacking order. */
+.toast {
+  position: fixed;
+  right: calc(1.25rem + var(--safe-right));
+  bottom: calc(var(--dock-space) + var(--hint-h) + 0.75rem);
+  z-index: 98;
+  display: flex;
+  align-items: flex-start;
   gap: 0.6rem;
-  padding: 1.6rem 1.2rem;
+  width: min(24rem, calc(100vw - 2.5rem));
+  padding: 0.75rem 0.6rem 0.75rem 0.9rem;
+  background: var(--surface-raised);
+  border: 1px solid var(--rule-strong);
+  border-radius: var(--radius);
+  box-shadow: 0 12px 32px rgb(0 0 0 / 0.55);
   color: var(--ink);
-  text-align: center;
+  font-family: var(--font-ui);
 }
-.fb-done p { margin: 0; font-size: 0.9rem; }
+.toast-icon { flex: none; margin-top: 0.15rem; color: var(--highlight); }
+.toast-text { flex: 1; margin: 0; font-size: 0.85rem; line-height: 1.45; }
+.toast-close {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.5rem;
+  height: 1.5rem;
+  padding: 0;
+  border: 0;
+  border-radius: 4px;
+  background: none;
+  color: var(--ink-faint);
+  cursor: pointer;
+}
+.toast-close:hover { color: var(--ink); }
+.toast-close:focus-visible { outline: 1px solid var(--highlight); outline-offset: 1px; }
+
+/* **Movement only for a reader who has not asked for less**, rather than
+   animating by default and switching it off — the global guard in tailwind.css
+   would flatten it anyway, but a rise-and-fade is not something a reduced-motion
+   reader should get even briefly. */
+@media (prefers-reduced-motion: no-preference) {
+  .toast { animation: toast-in 180ms ease-out; }
+  @keyframes toast-in {
+    from { opacity: 0; transform: translateY(0.5rem); }
+    to { opacity: 1; transform: none; }
+  }
+}
 
 @media (max-width: 731px) {
   /* The word goes and the icon stays — § tokens shrinks `--feedback-w` to match,
@@ -526,6 +579,13 @@
      that is three times the glyph in it. */
   .fb-button-text { display: none; }
   .fb-button { justify-content: center; padding: 0; }
+  /* A phone: along the bottom, the width of the screen less a 16px gutter each
+     side, still above the bar. */
+  .toast {
+    left: calc(1rem + var(--safe-left));
+    right: calc(1rem + var(--safe-right));
+    width: auto;
+  }
 }
 
 /* ---------------------------------------------------------------- metadata --

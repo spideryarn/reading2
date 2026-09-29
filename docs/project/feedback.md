@@ -174,8 +174,8 @@ more. **What came of each report is not shown** — the plan's § Deferred says 
 paste and drop handlers on the whole `<dialog>`, and the form's submit all still reach a draft the
 reader cannot see; each has a guard and a test. And `.fb-scroll[hidden]` needs its own
 `display: none`, because the panel's `display: flex` outranks the UA's `[hidden]` — jsdom cannot see
-that one. A send already in flight is allowed to finish: success becomes the ordinary thank-you,
-and failure returns to Write so its recovery panel cannot land hidden.
+that one. A send already in flight is allowed to finish: success shuts the dialog and shows the
+ordinary thank-you toast, and failure returns to Write so its recovery panel cannot land hidden.
 [260916c](../plans/260916c-your-earlier-feedback-tab-in-the-feedback-dialog.md).
 
 ## The thank-you, and getting out of it
@@ -196,27 +196,52 @@ keyed by problem, suggestion and neither. They carry **no bracketed code** and a
 can return, and a thank-you is not a failure
 ([copy.md § The bracketed code](copy.md#the-bracketed-code)).
 
-**The kind rides on the `sent` stage**, not on the live `kind` state, so the sentence is a fact about
-the report that was filed rather than about a form `discard()` is about to clear.
+**The kind is the one that was sent**, read from the send's own closure rather than from the live
+`kind` state, so the sentence is a fact about the report that was filed rather than about a form
+`discard()` is clearing in the same moment.
+
+### A toast, not a panel
+
+> Remove "It is filed" from the post-Feedback message. And in fact, that post-Feedback message
+> should be a toast in the corner that disappears after a few seconds, rather than a blocking modal.
+>
+> — Greg, 2026-09-29
+
+So the three sentences lost *"It is filed"* and nothing else, and a successful send now **shuts the
+dialog at once** and shows the sentence in a small toast
+([`Toast.tsx`](../../src/web/Toast.tsx)): bottom-right on a wide window, along the bottom less a
+16px gutter on a phone, above the Dock and so clear of its Feedback button. It goes after about
+five seconds, **not while the pointer is over it or focus is inside it**, and has a close button.
+`role="status"` with `aria-live="polite"` announces it without taking focus; focus goes back
+wherever the `<dialog>` returns it on `close()`, to whatever opened it. No animation under
+`prefers-reduced-motion`. A library (`sonner`) was passed over: one message from one caller does
+not earn a dependency.
+
+**It renders outside the `<dialog>`**, as a sibling in `FeedbackDialog`'s own return, because the
+send that shows it is the send that shut the dialog, and nothing inside a shut `<dialog>` is
+painted. **On failure nothing changes**: the dialog stays up with the recovery panel.
+
+**The form is emptied under the same rule as before**, only earlier — at the moment the send
+succeeds rather than when the reader closed the thank-you panel: `discard(body !== sentBody)`,
+which keeps any words typed after Send, since they were never in the POST (GPT Sol's P0, 2026-09-05).
+A send that lands after the reader shut the dialog mid-flight now thanks them in the corner, which
+is how they learn it went; until 2026-09-29 a `thanksSeen` guard held the thank-you panel for the
+next opening instead. [260929f](../plans/260929f-feedback-thank-you-as-a-toast-and-dictation-that-never-runs-out-of-tape.md).
 
 ### The delay was something extra being drawn
 
-Nothing was slow. The Close button called `discard()` and `onClose()` together; both land in one
-commit, so React rendered the **emptied form** back into a dialog that was still open — and that is
-the frame the browser painted, because the shutting was a passive effect and those run after the
-paint. The reader saw a blank feedback form flash up in place of the thank-you they were dismissing.
+The 2026-09-05 half of Greg's report, *"there shouldn't be a delay"*, was about the old panel's
+Close button, and the lesson outlives the panel. Nothing was slow: the button called `discard()`
+and `onClose()` together, both landed in one commit, and React rendered the **emptied form** back
+into a dialog that was still open — the frame the browser painted, because the shutting was a
+passive effect and those run after the paint.
 
-So the button only closes, an effect empties the report once `open` has gone false, and the
-show/close sync is a `useLayoutEffect` rather than a `useEffect` so the shutting lands in the same
-commit as the press. **It fixed a second thing nobody had reported**: Escape, the ✕ and the backdrop
-left the stage at `sent`, so the next press of Feedback opened on a stale thank-you with the old
-draft behind it.
-
-**jsdom cannot see a paint**, so the obvious test — wait a microtask, read `dialog.open` — was green
-against the bug as well as after the fix; it was written, watched pass, and thrown away
-([silent-success.md](../reusable/silent-success.md)). What `tests/feedback-dialog.test.tsx` pins
-instead is the **order the DOM changes in**: at the moment `close()` is called, the thank-you must
-still be on screen. [260905c](../plans/260905c-contact-page-and-a-warmer-feedback-thank-you.md).
+The show/close sync has been a `useLayoutEffect` since, so the shutting lands in the same commit,
+before paint. **A successful send now depends on that directly**: it calls `onClose()` and
+`discard()` together, exactly the shape that flashed. **jsdom cannot see a paint**, so no test in
+`tests/feedback-dialog.test.tsx` can tell the layout effect from a passive one
+([silent-success.md](../reusable/silent-success.md)); it is a browser check.
+[260905c](../plans/260905c-contact-page-and-a-warmer-feedback-thank-you.md).
 
 ## The keyboard, and the button under it
 

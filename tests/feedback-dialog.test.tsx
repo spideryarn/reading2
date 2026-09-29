@@ -484,11 +484,8 @@ describe("the feedback dialog", () => {
     type("The first thing.");
     send();
     await act(async () => {});
-    expect(host.querySelector(".fb-done")).not.toBeNull();
-
-    /* Close from the thank-you panel — the one exit that starts a new report. */
-    const close = host.querySelector<HTMLButtonElement>(".fb-done button");
-    act(() => close?.dispatchEvent(new MouseEvent("click", { bubbles: true })));
+    /* A successful send is the one thing that starts a new report. */
+    expect(host.querySelector(".toast")).not.toBeNull();
     show(false);
     show(true);
 
@@ -528,21 +525,25 @@ describe("the feedback dialog", () => {
     answer = ok(201);
     send();
     await act(async () => {});
-    const close = host.querySelector<HTMLButtonElement>(".fb-done button");
-    act(() => close?.dispatchEvent(new MouseEvent("click", { bubbles: true })));
+    /* Filed: the reader waves the thank-you away and opens the box again. */
+    const dismiss = host.querySelector<HTMLButtonElement>(".toast-close");
+    if (!dismiss) throw new Error("no toast");
+    act(() => dismiss.dispatchEvent(new MouseEvent("click", { bubbles: true })));
     show(false);
     show(true);
 
     // A third report, half typed, not sent.
     type("A completely different bug.");
-    expect(host.querySelector(".fb-done")).toBeNull();
+    expect(host.querySelector(".toast")).toBeNull();
 
     // Now the abandoned request finally answers.
     await act(async () => {
       settle?.(new Response("{}", { status: 201 }));
     });
 
-    expect(host.querySelector(".fb-done"), "a stale send painted over a live draft").toBeNull();
+    /* Without the guard it would thank the reader for the draft on screen, and
+       empty it as though it had been sent. */
+    expect(host.querySelector(".toast"), "a stale send thanked a live draft").toBeNull();
     expect(firstBox().value).toBe("A completely different bug.");
   });
 
@@ -682,17 +683,16 @@ describe("the feedback dialog", () => {
     answer = ok(201);
     send();
     await act(async () => {});
-    expect(host.querySelector(".fb-done"), "the retry should have been filed").not.toBeNull();
+    expect(host.querySelector(".toast"), "the retry should have been filed").not.toBeNull();
 
     /* Only now does the first attempt come back, and it failed. */
     await act(async () => {
       settleFirst?.(new Response("nope", { status: 500 }));
     });
     expect(
-      host.querySelector(".fb-done"),
-      "an older attempt overwrote a newer success",
-    ).not.toBeNull();
-    expect(host.querySelector(".fb-failed")).toBeNull();
+      host.querySelector(".fb-failed"),
+      "an older attempt painted a failure over a newer success",
+    ).toBeNull();
   });
 
   it("says so when the browser refuses the clipboard", async () => {
@@ -891,10 +891,10 @@ describe("the backdrop", () => {
 });
 
 describe("the thank-you, and getting out of it", () => {
-  /** The sentence in the `.fb-done` panel, whitespace-collapsed. */
+  /** The sentence in the toast, whitespace-collapsed. */
   function thanks(): string {
-    const panel = host.querySelector(".fb-done p");
-    if (!panel) throw new Error("no thank-you panel");
+    const panel = host.querySelector(".toast .toast-text");
+    if (!panel) throw new Error("no thank-you toast");
     return (panel.textContent ?? "").replace(/\s+/g, " ").trim();
   }
 
@@ -933,50 +933,52 @@ describe("the thank-you, and getting out of it", () => {
     expect(thanks().toLowerCase()).not.toContain("sorry");
   });
 
+  /* Greg, 2026-09-29: *"Remove 'It is filed' from the post-Feedback message."*
+     All three, since which one the reader sees depends on the toggle. */
+  it.each([["A problem"], ["A suggestion"], [undefined]])(
+    "does not say it is filed (%s)",
+    async (label) => {
+      mount();
+      await fileOne(label);
+      expect(thanks().toLowerCase()).not.toContain("filed");
+    },
+  );
+
   /**
-   * **Close is instant, and this is what "instant" turned out to mean.**
+   * **A successful send shuts the dialog and says thank you in a toast** —
+   * Greg, 2026-09-29: *"that post-Feedback message should be a toast in the
+   * corner that disappears after a few seconds, rather than a blocking modal."*
    *
-   * Greg, 2026-09-05: *"when I click close on the thank you that is filed, there
-   * shouldn't be a delay, it should happen instantly."*
-   *
-   * Nothing was slow. The button called `discard()` and `onClose()` together, so
-   * one commit emptied the form *and* asked for the dialog to shut — and the
-   * emptied form is what the browser painted, because the shutting was a passive
-   * effect and those run after the paint. The reader saw a blank feedback form
-   * flash up in place of the thank-you they were dismissing.
-   *
-   * **jsdom cannot see a paint**, so a test that waited a microtask and read
-   * `dialog.open` was green before the fix as well as after — it was written,
-   * watched pass against the bug, and thrown away. docs/reusable/silent-success.md.
-   * What *is* observable is the order the DOM changes in, so that is what this
-   * pins: at the moment `close()` is called, the thank-you must still be on
-   * screen. Under the old arrangement the form had already replaced it.
+   * The toast has to live outside the `<dialog>`: a shut dialog paints nothing,
+   * so a thank-you inside it would be in the document and seen by nobody.
    */
-  it("shuts before it empties the panel, so nothing is drawn on the way out", async () => {
-    mountControlled();
+  it("shuts on success, empties the form, and thanks the reader outside the dialog", async () => {
+    const dialog = mountControlled();
     type("Something happened.");
     send();
     await act(async () => {});
 
-    const proto = window.HTMLDialogElement.prototype;
-    const real = proto.close;
-    const onScreenWhenItShut: boolean[] = [];
-    proto.close = function close(this: HTMLDialogElement) {
-      onScreenWhenItShut.push(host.querySelector(".fb-done") !== null);
-      real.call(this);
-    };
-    try {
-      const button = host.querySelector<HTMLButtonElement>(".fb-done button");
-      if (!button) throw new Error("no Close");
-      act(() => button.dispatchEvent(new MouseEvent("click", { bubbles: true })));
-    } finally {
-      proto.close = real;
-    }
-
-    expect(onScreenWhenItShut).toEqual([true]);
-    /* And it did empty afterwards — otherwise the assertion above is satisfied
-       by a Close button that does nothing at all. */
+    expect(dialog.open, "the dialog stayed up over the thank-you").toBe(false);
+    const toast = host.querySelector(".toast");
+    expect(toast, "no toast").not.toBeNull();
+    expect(dialog.contains(toast), "the toast is inside a shut dialog").toBe(false);
+    expect(thanks().toLowerCase()).toContain("thank you");
+    expect(host.querySelector(".fb-done"), "the old panel is still here").toBeNull();
+    /* And the next opening is a fresh report. */
     expect(firstBox().value).toBe("");
+  });
+
+  it("stays open, keeps the words and shows no toast when the send fails", async () => {
+    const dialog = mountControlled();
+    type("Something happened.");
+    answer = async () => new Response("nope", { status: 500 });
+    send();
+    await act(async () => {});
+
+    expect(dialog.open).toBe(true);
+    expect(host.querySelector(".toast")).toBeNull();
+    expect(host.querySelector(".fb-failed")).not.toBeNull();
+    expect(firstBox().value).toBe("Something happened.");
   });
 
   /**
@@ -1010,10 +1012,9 @@ describe("the thank-you, and getting out of it", () => {
     /* What went is what was in the box when Send was pressed. */
     expect(body().body).toBe("The first thing.");
 
-    const button = host.querySelector<HTMLButtonElement>(".fb-done button");
-    if (!button) throw new Error("no Close");
-    act(() => button.dispatchEvent(new MouseEvent("click", { bubbles: true })));
-
+    /* The send landed, so the dialog is shut and the form would have been
+       emptied — but not of words that were never in the POST. */
+    expect(host.querySelector(".toast")).not.toBeNull();
     expect(firstBox().value).toBe("The first thing. And another.");
     /* And it is a new report, not a second send of the one already filed. */
     answer = ok(201);
@@ -1024,14 +1025,15 @@ describe("the thank-you, and getting out of it", () => {
   });
 
   /**
-   * **A report filed while nobody was looking is not dismissed.**
+   * **A report filed while nobody was looking still says so.**
    *
-   * Close the dialog mid-flight and the request goes on; when it lands, `stage`
-   * becomes `sent` with `open` already false. Without the `thanksSeen` guard the
-   * reset effect fires there, and the reader reopens onto an empty box with no
-   * way to tell whether their report went.
+   * Close the dialog mid-flight and the request goes on. When it lands, the
+   * toast is how the reader learns it went — the dialog they left is shut, and
+   * reopening it onto an empty box would otherwise say nothing either way.
+   * (Until 2026-09-29 this was the `thanksSeen` guard, which kept the thank-you
+   * panel for the next opening.)
    */
-  it("shows the thank-you next time when the send landed after they left", async () => {
+  it("thanks the reader when the send lands after they left", async () => {
     mountControlled();
     type("Something happened.");
     let release: (() => void) | null = null;
@@ -1047,7 +1049,8 @@ describe("the thank-you, and getting out of it", () => {
     act(() => release?.());
     await act(async () => {});
 
-    expect(host.querySelector(".fb-done")).not.toBeNull();
+    expect(host.querySelector(".toast")).not.toBeNull();
+    expect(firstBox().value).toBe("");
   });
 
   /**
@@ -1080,13 +1083,11 @@ describe("the thank-you, and getting out of it", () => {
     });
     act(() => input.dispatchEvent(new Event("change", { bubbles: true })));
 
-    /* The report lands and the reader dismisses the thank-you, all while the
-       picture is still being re-encoded. */
+    /* The report lands — which shuts the dialog and starts the next report —
+       while the picture is still being re-encoded. */
     act(() => release?.());
     await act(async () => {});
-    const button = host.querySelector<HTMLButtonElement>(".fb-done button");
-    if (!button) throw new Error("no Close");
-    act(() => button.dispatchEvent(new MouseEvent("click", { bubbles: true })));
+    expect(host.querySelector(".toast")).not.toBeNull();
 
     /* Only now does the conversion finish. It belongs to a report that is filed
        and gone, so it must not land on the one that replaced it. */
@@ -1098,23 +1099,20 @@ describe("the thank-you, and getting out of it", () => {
   });
 
   /**
-   * **Every way out of the thank-you starts the next report**, not only the
-   * button — Escape, the ✕ and the backdrop all merely flip `open`.
-   *
-   * Before the reordering above, those three left `stage` at `sent`: the next
-   * press of Feedback opened on a stale thank-you for a report filed some time
-   * ago, with the old draft still behind it.
+   * **The next opening is the form, not the last report's thank-you.** The
+   * thank-you is not in the dialog any more, so there is nothing stale for the
+   * next press of Feedback to open onto.
    */
-  it("does not come back showing the last report's thank-you", async () => {
+  it("comes back to an empty form after a report is filed", async () => {
     mount();
     type("Something happened.");
     send();
     await act(async () => {});
-    expect(host.querySelector(".fb-done")).not.toBeNull();
 
     reopen();
 
     expect(host.querySelector(".fb-done")).toBeNull();
+    expect(host.querySelectorAll('[role="tab"]')).toHaveLength(2);
     expect(firstBox().value).toBe("");
   });
 });
@@ -1384,8 +1382,9 @@ describe("the Earlier tab", () => {
       settle?.(new Response("{}", { status: 201 }));
     });
 
-    expect(host.querySelector(".fb-done")).not.toBeNull();
-    expect(host.querySelectorAll('[role="tab"]')).toHaveLength(0);
+    expect(host.querySelector(".toast")).not.toBeNull();
+    /* And the report behind the Earlier tab is the next, empty one. */
+    expect(firstBox().value).toBe("");
   });
 
   it("stops the microphone on the way to Earlier, without pulling focus back to the box", () => {
