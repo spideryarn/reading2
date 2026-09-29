@@ -40,13 +40,13 @@
  * generic over its offered step. This line has repeatedly lagged the real list;
  * `rg 'useStepJob\\(' src/web` is the inventory, not this paragraph.
  *
- * **The fourteenth is ten mounts rather than one**, and it is the first caller
+ * **The fourteenth is a dozen mounts rather than one**, and it is the first caller
  * that is not a mode's own panel: Metadata's *Re-run AI processing* section puts
  * a row per offered step on screen at once
  * (docs/plans/260907d-re-run-any-generated-mode-from-the-metadata-page.md).
  * A component per row rather than a loop of hooks, for the ordinary reason —
- * and the ten subscriptions cost ten `useSyncExternalStore` subscriptions to
- * one shared engine, not ten polls.
+ * and a row's subscription is a `useSyncExternalStore` subscription to one
+ * shared engine, not a poll.
  *
  * The thread page came last, a day after the other three, because it had a
  * hundred lines of another session's uncommitted work in it on the day this was
@@ -95,8 +95,8 @@ interface StepRun<S extends StepName> {
    * current.
    *
    * The concrete callers now cover all thirteen members of that set. Metadata's
-   * `METADATA_RERUN_STEPS` (src/rerun-steps.ts) is the deliberate ten-member
-   * subset: `faq`, `illustrated` and `citations` are not offered there, and
+   * `METADATA_RERUN_STEPS` (src/rerun-steps.ts) is the deliberate subset:
+   * `illustrated` is not offered there, and
    * `tests/metadata-rerun-steps.test.ts` pins its membership rather than leaving
    * it to this paragraph.
    * Being in that set means the force-cascade is not allowed to speak for them:

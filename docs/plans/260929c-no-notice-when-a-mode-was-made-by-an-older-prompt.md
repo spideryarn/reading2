@@ -80,3 +80,16 @@ saying 55 answered its open question about the out-of-date banner buttons.
   for the model, not a notice in a mode, and it helps the model qualify an answer. Sol confirmed
   Quotes' hidden *Find more* is right, and that no Metadata row, shelf, command bar or visitor view
   shows the outdated verdict.
+- Built (Opus) and committed as `f46e2dc7`; not pushed on its own. **FAQ and Citations have no
+  Metadata re-run row**, and their outdated banner was their only redo, so on its own this change
+  would leave an outdated FAQ or Citations list with no way to be made again. Greg's direction is
+  that re-running lives in Metadata, so **stage 2 adds `faq` and `citations` to
+  `METADATA_RERUN_STEPS`** (src/rerun-steps.ts), each answering that list's three questions (metered
+  calls per press, prerequisite refusals, safe to publish over a good one), shown under the same
+  experimental-control rule as the modes themselves. Both land in one push.
+- Stage 2 built: `faq` and `citations` joined `METADATA_RERUN_STEPS`. The three answers, the same
+  for both — **one** metered call a press and no web search (one `streamMessage`, no tools;
+  Citations' *Find it* is a separate route); **no prerequisite** beyond the article (Citations
+  refuses before the call only if the list already there is unreadable); **safe over a good list**,
+  draft-then-publish, and a list validation empties throws rather than publishing. Rows drawn with
+  the switch off, as Timeline's, Quiz's and Debate's always were.
