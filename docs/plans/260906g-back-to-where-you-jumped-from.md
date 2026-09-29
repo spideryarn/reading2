@@ -93,7 +93,7 @@ had no implementable identity contract.
 already draws the line Greg would otherwise have to draw by hand:
 
 - Scrolling, arrow keys ([`keynav.ts`](../../src/web/keynav.ts)) and swipe-steps
-  ([`swipe.ts`](../../src/web/swipe.ts)) write `?at=` with a **debounced replace**, or write nothing
+  (`src/web/swipe.ts`) write `?at=` with a **debounced replace**, or write nothing
   at all. They never add a history entry, deliberately: *"a stride you take twenty times must not
   cost twenty presses of Back"*.
 - `jumpTo` ([`App.tsx`](../../src/web/App.tsx)) writes it with `history: "push"` and

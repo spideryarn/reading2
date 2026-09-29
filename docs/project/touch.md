@@ -21,7 +21,7 @@ arithmetic — `stepTarget` and `scrollToBlock` — so a finger and a key cannot
 **A finger on the prose column gets ordinary iPad scrolling**, and that is the design rather than a
 limitation. See [§ why the prose is untouched](#why-the-prose-is-untouched).
 
-The code is [`src/web/swipe.ts`](../../src/web/swipe.ts) — one pure function and one hook over six
+The code is `src/web/swipe.ts` — one pure function and one hook over six
 window listeners. The reasoning, the sources and the two mechanisms we rejected are in
 [260826f-ipad-touch-scrolling.md](../research/260826f-ipad-touch-scrolling.md).
 
@@ -674,7 +674,7 @@ tooltip, it does not say on an iPad.**
 None of this is testable from a laptop, and the automation browser is worse than useless here — its
 tab is hidden, so `requestAnimationFrame` never runs and neither does anything downstream of it
 ([browser-testing.md](browser-testing.md)). The pure arithmetic is pinned in
-[`tests/swipe.test.ts`](../../tests/swipe.test.ts) and
+`tests/swipe.test.ts` and
 [`tests/scroll.test.ts`](../../tests/scroll.test.ts) — the latter added after a cross-family review
 pointed out that both bugs in the screenful step were arithmetic, and neither had needed a browser to
 find. Everything below is a hand check.

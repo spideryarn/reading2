@@ -278,11 +278,11 @@ const WIRE_ROW = {
   meta: "provenance",
   blocks: "text",
   assets: "pictures",
-  /* The tree is three rows, because it is three things the owner recognises:
-     the nested contents, the structure (columns, or the nested list that was
-     Outline), and the gists down the page. Any one
-     of them proves the tree crosses. */
-  tree: "hierarchy",
+  /* The tree is two rows, because it is two things the owner recognises: the
+     structure (columns, or the nested list that was Outline) and the gists
+     down the page. Any one of them proves the tree crosses. It was three until
+     Hierarchy's columns were retired on 2026-09-29 (plan 260929d). */
+  tree: "structure",
   /* The arc has no mode of its own — it is the extra rung Structure's list
      face draws when there is one (Outline's, until that list became the face on
      2026-09-10). src/web/visitor.ts § structure. */

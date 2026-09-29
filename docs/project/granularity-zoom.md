@@ -471,8 +471,8 @@ to say. [`src/web/nav-labels.ts`](../../src/web/nav-labels.ts).
 > one `<col>` per column plus one for the prose, so the extra `<td>` took the **prose** column's
 > width and the article went invisible, off the right edge of the window, with nothing thrown and
 > nothing logged. Found in a browser on 2026-09-06; the guard and its test are in
-> [`TableView.tsx`](../../src/web/TableView.tsx) § `withheldLeafCell` and
-> `tests/paragraph-labels-withheld.test.tsx`.
+> the table's `withheldLeafCell` guard and `tests/paragraph-labels-withheld.test.tsx` — both gone
+> with the columns on 2026-09-29.
 
 **This does not breach the navLabel contract** ([node shape](#node-shape)), and the distinction is
 worth being precise about. The rule is that a navLabel must never be shown *instead of* prose that

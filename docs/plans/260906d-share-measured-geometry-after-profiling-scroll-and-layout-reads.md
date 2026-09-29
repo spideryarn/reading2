@@ -101,7 +101,7 @@ Stage 1 did optimise, and it confirmed both directly: `stickyOffset` runs **2 ca
 ### The read/write interleave that matters is not the one the review names
 
 The census found a stronger candidate than `watchBarVisibility`:
-[`ContextPanel.tsx`](../../src/web/ContextPanel.tsx) § `place` runs from a layout effect keyed on
+`src/web/ContextPanel.tsx` § `place` runs from a layout effect keyed on
 `rect.top` — which is `useColumnContext`'s sticky-header `bottom`, and
 [`TableView.tsx`](../../src/web/TableView.tsx) says plainly that near the masthead this fires on *most
 frames*. `place` reads `getBoundingClientRect`, `offsetTop`, `offsetHeight` and `clientHeight`, then

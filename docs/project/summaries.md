@@ -512,7 +512,7 @@ is exactly the case a quick look does not produce.
 
 ### Scrolling without taking the scroll off the reader
 
-The precedent in this repo is [`ContextPanel`](../../src/web/ContextPanel.tsx), which centres the
+The precedent in this repo is `ContextPanel` (`src/web/ContextPanel.tsx`, deleted), which centres the
 current item on a focus line — and it can, because it is `overflow: hidden` and **nothing but that
 file ever touches its `scrollTop`**. The summary panel is not that. It is a list the reader scrolls
 themselves, and a panel that springs back to where the code wants it is hostile.
@@ -592,7 +592,7 @@ Stated rather than smoothed over:
   when a rewrite lands, which can turn every one-sentence gist into a paragraph.
 - **A window resize or a late font swap is not covered.** Neither changes any of those triggers, so
   the row can drift out of view and stay there until the reader crosses a section boundary. A
-  `ResizeObserver` would close it — [`ContextPanel`](../../src/web/ContextPanel.tsx) has one — and is
+  `ResizeObserver` would close it — `ContextPanel` (`src/web/ContextPanel.tsx`, deleted) has one — and is
   deliberately not here, because it would also be a way for the panel to move when the reader has
   scrolled it somewhere on purpose and touched nothing since.
 - **One hole that did need a timer**, and it is worth saying why the timer is not the thing this

@@ -401,7 +401,7 @@ the default reading view. Nothing threw, nothing logged, and the jsdom suite was
 what the cell contained and never that the row still fitted the table.
 
 Fixed by a `columns.includes(leafDepth)` guard in `withheldLeafCell`, with a case that counts `<td>`s
-against `<col>`s ([`tests/paragraph-labels-withheld.test.tsx`](../../tests/paragraph-labels-withheld.test.tsx)),
+against `<col>`s (`tests/paragraph-labels-withheld.test.tsx`),
 watched red on the unguarded code. The lesson for stage 2 is the one in
 [silent-success.md](../reusable/silent-success.md): a renderer test that only inspects the element it
 added cannot see the element it displaced.

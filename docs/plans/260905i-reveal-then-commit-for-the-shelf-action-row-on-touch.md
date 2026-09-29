@@ -96,7 +96,7 @@ GPT Sol found five, all confirmed against the code before acting:
 
 - **A pen committed blind.** `pointerType === "touch"` excludes `pen`, and
   [touch.md § An Apple Pencil counts as a finger](../project/touch.md) is an explicit rule that
-  [`swipe.ts`](../../src/web/swipe.ts) already follows. Worse than an inconsistency: Floating UI
+  `src/web/swipe.ts` already follows. Worse than an inconsistency: Floating UI
   treats `pen` as *mouse-like*, so a Pencil got neither the hover card nor the reveal.
   **`Spine.tsx` § `bandPress` has the same narrow check and so breaks the same rule** — left alone
   here rather than changing reading-view behaviour in a shelf change, and flagged instead.

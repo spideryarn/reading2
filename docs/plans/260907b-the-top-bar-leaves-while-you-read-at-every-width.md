@@ -235,7 +235,7 @@ otherwise widen.
   reader who asked for less motion gets the slide anyway.
 
 - **`place()` centres the list on where the panel is *going*, not where it is.** It reads
-  `p.getBoundingClientRect().top` ([`ContextPanel.tsx`](../../src/web/ContextPanel.tsx) § place),
+  `p.getBoundingClientRect().top` (`src/web/ContextPanel.tsx` § place),
   which during a slide is an interpolated value, and `useLayoutEffect` re-runs it on `rect.top`
   changing — i.e. exactly once, at the start of the animation, against the old position. Nothing
   places the list again when the panel arrives, so the current entry finishes off the 40% focus line
@@ -253,9 +253,9 @@ otherwise widen.
   would otherwise extend from phones to every laptop.
 
 Files: [`narrow-window.css`](../../src/web/styles/narrow-window.css) § a small device and the
-reduced-motion block, [`column-context.css`](../../src/web/styles/column-context.css),
+reduced-motion block, `src/web/styles/column-context.css`,
 [`useColumnContext.ts`](../../src/web/useColumnContext.ts),
-[`ContextPanel.tsx`](../../src/web/ContextPanel.tsx), [`scroll.ts`](../../src/web/scroll.ts).
+`src/web/ContextPanel.tsx`, [`scroll.ts`](../../src/web/scroll.ts).
 
 **Done when**, red-first in each case:
 

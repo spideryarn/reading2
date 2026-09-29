@@ -56,7 +56,7 @@ is wrong twice over: a 133ms gap is about seven missed refreshes and counts once
 denominator is the intervals that *were* delivered rather than the ones that should have been. It is
 a comparative jank signal, not a drop rate. GPT Sol, 2026-09-04. The scroll itself stays smooth because it is compositor-driven — every `wheel`
 listener on the page is passive ([`keynav.ts:402`](../../src/web/keynav.ts),
-[`swipe.ts:329`](../../src/web/swipe.ts), [`scroll.ts:457`](../../src/web/scroll.ts),
+`swipe.ts:329` (`src/web/swipe.ts`, deleted), [`scroll.ts:457`](../../src/web/scroll.ts),
 [`follow.ts:172`](../../src/web/follow.ts)) — so what a reader sees lag by up to a tenth of a second
 is the panels, the spine band and the gist columns, not the prose.
 

@@ -57,7 +57,11 @@ export function useColumnContext({ sections, enabled, layoutKey }: Options): Liv
        docs/plans/260905d-mode-switching-is-sluggish-on-a-very-long-article.md. */
     const rows = rowsForBlockIds(sections.map((s) => s.blockId));
     const table = document.querySelector<HTMLElement>("table.zoom");
-    let last = EMPTY.focusRow;
+    /* `live` may still name a later section from the preceding effect. The
+       first measurement of each fresh row set must therefore publish even
+       when its answer is row zero; seeding this with zero would mistake that
+       answer for an unchanged measurement and leave the stale row selected. */
+    let last: number | null = null;
     let frame = 0;
 
     const measure = () => {

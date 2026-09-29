@@ -101,7 +101,7 @@ was built to answer, one level up.
 
 So a landmark's line budget is worked out from **how many entries the level has and how tall the
 panel is** — [`landmarkLines`](../../src/web/context.ts), tested in
-[`tests/context.test.ts`](../../tests/context.test.ts). A level of five gets several lines each, so
+`tests/context.test.ts`. A level of five gets several lines each, so
 it reads as five sentences with the one you are in set large and unclamped; forty sections under six
 part headings get none and stay the title-only list they already were. In between it steps down, and
 where it lands depends on the window as much as the count. A title column shows its gist under its
@@ -160,7 +160,7 @@ not move — everything else reads `--bar-bottom`. So when the bar slides out of
 `transition: top` of its own, or it snaps 44px while the spine beside it glides.
 
 **It must not have that transition at any other time**, and that is the whole of
-[`column-context.css`](../../src/web/styles/column-context.css) § the panels and the measuring stick:
+`src/web/styles/column-context.css` § the panels and the measuring stick:
 
 | why `top` changes | when | wanted |
 |---|---|---|
@@ -252,12 +252,12 @@ Worth keeping as a finding rather than a footnote: a thing that moves every scro
 corner of the eye is a cost even when it is two pixels tall.
 
 Where things live: [`context.ts`](../../src/web/context.ts) decides what the level lists and is
-tested in [`tests/context.test.ts`](../../tests/context.test.ts);
+tested in `tests/context.test.ts`;
 [`useColumnContext.ts`](../../src/web/useColumnContext.ts) is the live half — which item is under
-the focus line and where the columns are; [`ContextList.tsx`](../../src/web/ContextList.tsx)
-draws the list and the landmarks' tooltips; [`ContextPanel.tsx`](../../src/web/ContextPanel.tsx) is
+the focus line and where the columns are; `src/web/ContextList.tsx`
+draws the list and the landmarks' tooltips; `src/web/ContextPanel.tsx` is
 the panel; the cells under the panel are in [`TableView.tsx`](../../src/web/TableView.tsx); the styles are
-[`styles/column-context.css`](../../src/web/styles/column-context.css) § column context.
+`styles/column-context.css` (`src/web/styles/column-context.css`, deleted) § column context.
 
 ### What the panel replaced, and what it cost
 
@@ -341,7 +341,7 @@ because none of them announces itself:
 Two of those fixes needed numbers to agree across files — the room above and below the list that
 lets its ends reach the focus line, and the height of the fade at the panel's foot, which the bottom
 clamp has to know about. Both are now handed to the stylesheet as custom properties from
-[`ContextPanel.tsx`](../../src/web/ContextPanel.tsx). Written out in the CSS as `40vh`, `60vh` and
+`src/web/ContextPanel.tsx`. Written out in the CSS as `40vh`, `60vh` and
 `2.5rem` they were correct only while the focus line sat at 0.4: move the line and the first item
 would quietly stop short of it, with nothing to error and nothing to see.
 
@@ -390,7 +390,7 @@ sections column shows two part boundaries at once:
 not the sections column's, so the eye files the heading with the column to its left. The part you
 are in is at full strength; the others recede with their sections. Screenshots are in the session
 that made the choice; the CSS comment at `.ctx-group` in
-[`styles/column-context.css`](../../src/web/styles/column-context.css) carries the reasoning.
+`styles/column-context.css` (`src/web/styles/column-context.css`, deleted) carries the reasoning.
 
 ### The three that went
 
