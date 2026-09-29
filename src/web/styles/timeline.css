@@ -188,3 +188,10 @@
   line-height: 1.4;
 }
 
+/* Status-only since plan 260929b: progress, Stop and failures stay pinned even
+   though the idle redo button moved to Metadata. */
+.tl-again {
+  margin: 0;
+  padding: 0.45rem 0.7rem;
+  border-top: 1px solid var(--rule);
+}

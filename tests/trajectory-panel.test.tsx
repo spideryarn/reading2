@@ -20,6 +20,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type {
   Block,
   BlockId,
+  Job,
   NodeId,
   Quote,
   Quotes,
@@ -270,6 +271,14 @@ const ROUTE: Trajectory = {
   elapsedMs: 1,
 };
 
+const TRAJECTORY_BODY = {
+  trajectory: ROUTE,
+  stale: false,
+  outdated: false,
+  profileChanged: false,
+  notOnRoute: 0,
+};
+
 /* ------------------------------------------------------------- the harness -- */
 
 let host: HTMLDivElement;
@@ -288,7 +297,7 @@ beforeEach(() => {
   ideasBody = null;
   ideasReply = null;
   finishers.length = 0;
-  trajectoryBody = { trajectory: ROUTE, stale: false, outdated: false, profileChanged: false, notOnRoute: 0 };
+  trajectoryBody = TRAJECTORY_BODY;
   history.replaceState(null, "", "/read/a-route?mode=trajectory");
   host = document.createElement("div");
   document.body.append(host);
@@ -326,6 +335,23 @@ function owner(over: Partial<UseTrajectory> = {}): UseTrajectory {
     ...over,
   };
 }
+
+const RUNNING_TRAJECTORY_JOB: Job = {
+  id: "job-trajectory",
+  ownerId: "owner" as Job["ownerId"],
+  slug: "a-route",
+  status: "running",
+  createdAt: "2026-09-29T00:00:00.000Z",
+  startedAt: "2026-09-29T00:00:01.000Z",
+  steps: [
+    {
+      name: "trajectory",
+      label: "Planning the route",
+      status: "running",
+      startedAt: "2026-09-29T00:00:01.000Z",
+    },
+  ],
+};
 
 const calls: string[] = [];
 function view(over: Partial<TrajectoryView> = {}): TrajectoryView {
@@ -665,6 +691,16 @@ describe("the panel", () => {
     );
     expect(buttons).toEqual([]);
     expect(host.querySelector(".traj-again")).toBeNull();
+  });
+
+  it("keeps a current route's running job visible without restoring the standing button", async () => {
+    /* An empty published route has no ordinary footer notes, so this also pins
+       the status independently of the route having stops. */
+    await draw(owner({ job: RUNNING_TRAJECTORY_JOB }), view({ rows: [], depth: null }));
+    const footer = host.querySelector<HTMLElement>(".traj-again");
+    expect(footer, "the running job disappeared with the standing redo button").toBeTruthy();
+    expect(footer?.textContent).toContain("Stop");
+    expect(footer?.textContent).not.toContain("Plan it again");
   });
 
   it("offers it once, in the outdated banner, rebuilding the route only (5e)", async () => {
@@ -1320,7 +1356,7 @@ describe("the band, walked", () => {
 
   it("plans it again with the route forced, and nothing else when the Quotes are current (5e)", async () => {
     /* Outdated, so the banner — the one Plan it again left (plan 260929b) — is drawn. */
-    trajectoryBody = { ...trajectoryBody, outdated: true };
+    trajectoryBody = { ...TRAJECTORY_BODY, outdated: true };
     /* Not `["quotes", "trajectory"]`: the server re-runs Quotes whose prompt
        version is merely outdated, so naming them on every press re-bought and
        replaced a reader's Quotes on a route rebuild (browser check, 2026-09-28;
@@ -1335,7 +1371,7 @@ describe("the band, walked", () => {
 
   it("plans it again with the Ideas found first, unforced, when there are none (stage 6)", async () => {
     /* Outdated, so the banner — the one Plan it again left (plan 260929b) — is drawn. */
-    trajectoryBody = { ...trajectoryBody, outdated: true };
+    trajectoryBody = { ...TRAJECTORY_BODY, outdated: true };
     await mount();
     await act(async () => host.querySelector<HTMLButtonElement>(".gloss-stale button")!.click());
     await settled();
@@ -1344,7 +1380,7 @@ describe("the band, walked", () => {
 
   it("plans it again with stale Quotes chosen first, unforced (5e, Sol F30)", async () => {
     /* Outdated, so the banner — the one Plan it again left (plan 260929b) — is drawn. */
-    trajectoryBody = { ...trajectoryBody, outdated: true };
+    trajectoryBody = { ...TRAJECTORY_BODY, outdated: true };
     quotesRead = { ...QUOTES_READ, stale: true };
     ideasBody = IDEAS_BODY;
     await mount();
@@ -1356,7 +1392,7 @@ describe("the band, walked", () => {
 
   it("keeps a route press pending until the Ideas read says whether it is stale", async () => {
     /* Outdated, so the banner — the one Plan it again left (plan 260929b) — is drawn. */
-    trajectoryBody = { ...trajectoryBody, outdated: true };
+    trajectoryBody = { ...TRAJECTORY_BODY, outdated: true };
     let answerIdeas!: (response: Response) => void;
     ideasReply = new Promise<Response>((resolve) => {
       answerIdeas = resolve;

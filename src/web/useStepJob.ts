@@ -34,23 +34,19 @@
  *
  * ## Who uses it
  *
- * **Ten, and this line said four until 2026-09-01, eight until 2026-09-03 and
- * nine until 2026-09-07** — it named `useGlossary`, `useIdeas`, `useSummaries`
- * and `src/web/Tweets.tsx`, and `useSummaries` no longer exists. The list now is
- * `useArc`, `useGlossary`, `useIdeas`, `useIllustrated`, `useQuotes`, `useQuiz`,
- * `useSketch`, `useTimeline`, `src/web/Tweets.tsx` and — since 2026-09-07 —
- * `RerunRow` in `src/web/Metadata.tsx`. Called out rather than quietly
- * corrected, three times now, because it is the same species of stale comment
- * that cost a day in 2026-08-27's CPU work: a quantity a file asserts and
- * nothing measures is a perfectly good reason to believe something false.
+ * **Fourteen call sites.** Thirteen are a step-specific surface: Arc, Glossary,
+ * Ideas, Illustrated, Quotes, Quiz, Sketch, Timeline, FAQ, Debate, Trajectory,
+ * Citations and the Thread page. The fourteenth is `RerunRow` in Metadata,
+ * generic over its offered step. This line has repeatedly lagged the real list;
+ * `rg 'useStepJob\\(' src/web` is the inventory, not this paragraph.
  *
- * **The tenth is nine mounts rather than one**, and it is the first caller that
- * is not a mode's own panel: the Metadata page's *Generate it again* section
- * puts a row per offered step on screen at once
+ * **The fourteenth is ten mounts rather than one**, and it is the first caller
+ * that is not a mode's own panel: Metadata's *Re-run AI processing* section puts
+ * a row per offered step on screen at once
  * (docs/plans/260907d-re-run-any-generated-mode-from-the-metadata-page.md).
  * A component per row rather than a loop of hooks, for the ordinary reason —
- * and the nine subscriptions cost nine `useSyncExternalStore` subscriptions to
- * one shared engine, not nine polls.
+ * and the ten subscriptions cost ten `useSyncExternalStore` subscriptions to
+ * one shared engine, not ten polls.
  *
  * The thread page came last, a day after the other three, because it had a
  * hundred lines of another session's uncommitted work in it on the day this was
@@ -98,13 +94,11 @@ interface StepRun<S extends StepName> {
    * step a surface offers a button for is a step that knows whether it is
    * current.
    *
-   * The two lists were the same nine names when this was checked on 2026-09-03,
-   * and they are the same **ten** since 2026-09-07: the Metadata page's
-   * *Generate it again* rows brought `debate` in, which had been the one member
-   * of that set no surface ran through here. `METADATA_RERUN_STEPS`
-   * (src/rerun-steps.ts) is nine of those ten — `illustrated` is deliberately
-   * not offered there — and `tests/metadata-rerun-steps.test.ts` pins the
-   * membership rather than leaving it to this paragraph.
+   * The concrete callers now cover all thirteen members of that set. Metadata's
+   * `METADATA_RERUN_STEPS` (src/rerun-steps.ts) is the deliberate ten-member
+   * subset: `faq`, `illustrated` and `citations` are not offered there, and
+   * `tests/metadata-rerun-steps.test.ts` pins its membership rather than leaving
+   * it to this paragraph.
    * Being in that set means the force-cascade is not allowed to speak for them:
    * unnamed is unforced, silently, and the reader would watch a job start, run
    * and change nothing. (This said *"all four … `glossary`, `summary`, `ideas`,
@@ -160,7 +154,9 @@ interface StepRun<S extends StepName> {
    *
    * The one hole: `S` is inferred from the `step` argument, so a caller who
    * passes a `StepName`-typed **variable** rather than a literal widens it and
-   * the check quietly becomes no check. All nine callers pass literals.
+   * the check quietly becomes no check. The two callers that use `precededBy`
+   * instantiate the hook with literal steps; Metadata's generic caller does not
+   * use this option.
    *
    * **Each of them is a paid step in its own right**, so a surface that passes
    * this owes the reader the price of all of them *before* the press, not after.
@@ -316,7 +312,7 @@ function writesStep(job: Job, step: StepName): boolean {
  *   written the same two-clause `if`.
  *
  *   **Pass the read's `refresh`, not its `reload`** — `useOrderedRead`, and § The
- *   read half is next door above. Every one of the eight does now.
+   *   read half is next door above. Every artefact reader does now.
  *
  *   `onFinished` rather than watching for a status change, because `useJobs`
  *   already knows which jobs it has announced and which were merely on the

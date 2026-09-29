@@ -390,7 +390,20 @@ export function TimelinePanel({
           Metadata mode for that."* Metadata's *Re-run AI processing* has a row
           for this mode; the button inside the out-of-date banner stays, as a
           repair the page is prompting rather than a standing redo.
-          docs/plans/260929b-one-place-to-re-run-ai-processing.md. */
+          docs/plans/260929b-one-place-to-re-run-ai-processing.md.
+
+          Keep the footer only for an in-flight or failed job on a current
+          timeline. Without it, a run started from Metadata disappears from
+          this mode along with its Stop control and any eventual failure. */
+      foot={
+        timeline &&
+        owner?.status === "ready" &&
+        !owner.stale &&
+        !owner.outdated &&
+        (owner.job || owner.starting || owner.failed) ? (
+          <div className="tl-again">{run("Read it again", true)}</div>
+        ) : null
+      }
     >
 
       {owner?.error && <p className="gloss-error">{owner.error}</p>}

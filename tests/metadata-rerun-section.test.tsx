@@ -1,13 +1,13 @@
 // @vitest-environment jsdom
 /**
- * **The *Generate it again* section on the Metadata page** — Metadata.tsx
+ * **The *Re-run AI processing* section on the Metadata page** — Metadata.tsx
  * § `RerunSection`, stage 2 of
  * docs/plans/260907d-re-run-any-generated-mode-from-the-metadata-page.md.
  *
  * Mounted through `Metadata` rather than by rendering the section directly, for
  * the reason `tests/metadata-export-button.test.tsx` gives and which is sharper
  * here: what goes wrong with a control like this is the wiring — which slug
- * reaches the request, which of nine rows a press posted for, and whether the
+ * reaches the request, which of ten rows a press posted for, and whether the
  * read that follows the run is the one that trails. Rendering the section with
  * hand-written props asserts the props.
  *
@@ -15,7 +15,7 @@
  * React:
  *
  *  - **The first press asks and posts nothing.** The confirm step is the whole
- *    answer to *"a one-click repeatable paid button on a page of nine of them is
+ *    answer to *"a one-click repeatable paid button on a page of ten of them is
  *    the wrong shape"*, and a test that only checked the second press would pass
  *    over a button that had lost the first.
  *  - **The second press posts exactly `{ slug, steps: [step], force: [step] }`.**
@@ -286,8 +286,8 @@ async function press(b: HTMLButtonElement | undefined): Promise<void> {
   await settle();
 }
 
-describe("the Generate it again section", () => {
-  it("offers a control for each of the nine and for no other step", async () => {
+describe("the Re-run AI processing section", () => {
+  it("offers a control for each of the ten and for no other step", async () => {
     await open();
     for (const step of METADATA_RERUN_STEPS) {
       expect(row(step), `no row for ${step}`).toBeTruthy();
@@ -314,7 +314,7 @@ describe("the Generate it again section", () => {
     expect(row("ideas")?.textContent).toContain(
       "Another model call. The result changes only if the run succeeds.",
     );
-    /* Only that row asked. A confirm that opened on all nine would be a
+    /* Only that row asked. A confirm that opened on all ten would be a
        page-wide state pretending to belong to a row. */
     expect(row("quotes")?.textContent).not.toContain("Another model call");
   });
@@ -383,6 +383,17 @@ describe("the Generate it again section", () => {
     const text = row("sketch")?.textContent ?? "";
     expect(text).toContain("about $0.20");
     expect(text).toContain("about two minutes");
+  });
+
+  it("says Trajectory may refuse before buying its one model call", async () => {
+    await open();
+    await press(button("trajectory", "Run it again"));
+
+    const text = row("trajectory")?.textContent ?? "";
+    expect(text).not.toContain("Another model call.");
+    expect(text).toContain("Up to one model call");
+    expect(text).toContain("needs Quotes first");
+    expect(text).toContain("only if the run succeeds");
   });
 
   /**
@@ -587,7 +598,7 @@ describe("the Generate it again section", () => {
    * **Asserted on the resolved description rather than on the attribute**,
    * because the attribute is a promise and the text is what the reader is told:
    * an `aria-describedby` pointing at an id that does not exist looks identical
-   * to a correct one from the outside, and nine rows on one page is exactly the
+   * to a correct one from the outside, and ten rows on one page is exactly the
    * shape that produces a duplicated id.
    */
   it("moves focus to Yes and describes it with the sentence that names the cost", async () => {

@@ -832,7 +832,20 @@ export function DebatePanel({ access, onJump, level: chosenLevel, onLevel }: Pro
           Metadata mode for that."* Metadata's *Re-run AI processing* has a row
           for this mode; the button inside the out-of-date banner stays, as a
           repair the page is prompting rather than a standing redo.
-          docs/plans/260929b-one-place-to-re-run-ai-processing.md. */
+          docs/plans/260929b-one-place-to-re-run-ai-processing.md.
+
+          Keep the footer only while a current search's job is starting,
+          running or failed. It remains the mode's one surface for progress,
+          Stop, a stall warning and the failure sentence. */
+      foot={
+        debate &&
+        owner.status === "ready" &&
+        !owner.stale &&
+        !owner.outdated &&
+        (owner.job || owner.starting || owner.failed) ? (
+          <div className="dbt-again">{run("Search again", true)}</div>
+        ) : null
+      }
     >
 
       {owner.error && <p className="gloss-error">{owner.error}</p>}

@@ -177,9 +177,11 @@ import type {
   DebateLosses,
   Glossary,
   Ideas,
+  Job,
   Quiz,
   QuizQuestionId,
   Quotes,
+  StepName,
   Timeline,
 } from "../src/types.js";
 
@@ -1297,7 +1299,7 @@ function glossaryOwner(glossary: Glossary | null): GlossaryOwner {
   };
 }
 
-function ideasOwner(ideas: Ideas | null): IdeasOwner {
+function ideasOwner(ideas: Ideas | null, over: Partial<IdeasOwner> = {}): IdeasOwner {
   return {
     status: ideas ? "ready" : "loading",
     ideas,
@@ -1314,6 +1316,7 @@ function ideasOwner(ideas: Ideas | null): IdeasOwner {
     ensure: async () => {},
     regenerate: async () => {},
     cancel: () => {},
+    ...over,
   };
 }
 
@@ -1337,7 +1340,7 @@ function quotesOwner(quotes: Quotes | null): QuotesOwner {
   };
 }
 
-function timelineOwner(timeline: Timeline | null): TimelineOwner {
+function timelineOwner(timeline: Timeline | null, over: Partial<TimelineOwner> = {}): TimelineOwner {
   return {
     status: timeline ? "ready" : "loading",
     timeline,
@@ -1353,10 +1356,11 @@ function timelineOwner(timeline: Timeline | null): TimelineOwner {
     ensure: async () => {},
     regenerate: async () => {},
     cancel: () => {},
+    ...over,
   };
 }
 
-function debateOwner(debate: Debate | null): DebateOwner {
+function debateOwner(debate: Debate | null, over: Partial<DebateOwner> = {}): DebateOwner {
   return {
     status: debate ? "ready" : "loading",
     debate,
@@ -1372,10 +1376,11 @@ function debateOwner(debate: Debate | null): DebateOwner {
     ensure: async () => {},
     regenerate: async () => {},
     cancel: () => {},
+    ...over,
   };
 }
 
-function quizOwner(quiz: Quiz | null): UseQuiz {
+function quizOwner(quiz: Quiz | null, over: Partial<UseQuiz> = {}): UseQuiz {
   return {
     status: quiz ? "ready" : "none",
     quiz,
@@ -1394,10 +1399,36 @@ function quizOwner(quiz: Quiz | null): UseQuiz {
     cancel: () => {},
     mark: async () => {},
     clearAttempt: () => {},
+    ...over,
   };
 }
 
 const noop = () => {};
+
+function runningJob(step: StepName): Job {
+  return {
+    id: `job-${step}`,
+    ownerId: "owner" as Job["ownerId"],
+    slug: SLUG,
+    status: "running",
+    createdAt: "2026-09-29T00:00:00.000Z",
+    startedAt: "2026-09-29T00:00:01.000Z",
+    steps: [
+      {
+        name: step,
+        label: `Working on ${step}`,
+        status: "running",
+        startedAt: "2026-09-29T00:00:01.000Z",
+      },
+    ],
+  };
+}
+
+const VISIBLE_FAILURE = {
+  message: "The re-run failed visibly.",
+  retryable: false,
+  retry: null,
+};
 
 /* ------------------------------------------------------------ the mounts --
 
@@ -1435,9 +1466,9 @@ function mountGlossary(access: GlossaryAccess): ReactNode {
   });
 }
 
-function mountIdeas(ideas: Ideas | null): ReactNode {
+function mountIdeas(ideas: Ideas | null, over: Partial<IdeasOwner> = {}): ReactNode {
   return createElement(IdeasPanel, {
-    access: { kind: "owner", owner: ideasOwner(ideas), ideas },
+    access: { kind: "owner", owner: ideasOwner(ideas, over), ideas },
     ideaId: null,
     onIdea: noop,
     found: [],
@@ -1460,9 +1491,9 @@ function mountQuotes(quotes: Quotes | null): ReactNode {
   });
 }
 
-function mountTimeline(timeline: Timeline | null): ReactNode {
+function mountTimeline(timeline: Timeline | null, over: Partial<TimelineOwner> = {}): ReactNode {
   return createElement(TimelinePanel, {
-    access: { kind: "owner", owner: timelineOwner(timeline) },
+    access: { kind: "owner", owner: timelineOwner(timeline, over) },
     eventId: null,
     onEvent: noop,
     found: [],
@@ -1472,9 +1503,9 @@ function mountTimeline(timeline: Timeline | null): ReactNode {
   });
 }
 
-function mountDebate(debate: Debate | null): ReactNode {
+function mountDebate(debate: Debate | null, over: Partial<DebateOwner> = {}): ReactNode {
   return createElement(DebatePanel, {
-    access: { kind: "owner", owner: debateOwner(debate) },
+    access: { kind: "owner", owner: debateOwner(debate, over) },
     onJump: noop,
     level: null,
     onLevel: noop,
@@ -1495,9 +1526,9 @@ function mountDebate(debate: Debate | null): ReactNode {
  * and says nothing about Quiz, so the case was in fact unguarded until GPT Sol's
  * F25 on 2026-09-07.
  */
-function mountQuiz(quiz: Quiz | null): ReactNode {
+function mountQuiz(quiz: Quiz | null, over: Partial<UseQuiz> = {}): ReactNode {
   return createElement(QuizPanel, {
-    owner: quizOwner(quiz),
+    owner: quizOwner(quiz, over),
     subMode: createElement("div", { className: "rmb-sub" }),
     blocks: new Map<string, string>([["spya-bbbbbb", PARAGRAPH]]),
     onJump: noop,
@@ -1896,6 +1927,38 @@ describe("the bands stage 2 migrated, as they stood before it", () => {
   it("draws Quiz's band with a question, and no rewrite footer since plan 260929b", async () => {
     await paint(mountQuiz(QUIZ));
     expectShape(QUIZ_SHAPE);
+  });
+
+  it("keeps current-mode job progress and Stop after removing the idle redo footers", async () => {
+    const cases: [string, ReactNode, string][] = [
+      ["Ideas", mountIdeas(IDEAS, { job: runningJob("ideas") }), "ideas-again"],
+      ["Timeline", mountTimeline(TIMELINE, { job: runningJob("timeline") }), "tl-again"],
+      ["Debate", mountDebate(DEBATE, { job: runningJob("debate") }), "dbt-again"],
+      ["Quiz", mountQuiz(QUIZ, { job: runningJob("quiz") }), "quiz-rewrite"],
+    ];
+
+    for (const [name, node, footClass] of cases) {
+      await paint(node);
+      const footer = band().querySelector<HTMLElement>(`:scope > .${footClass}`);
+      expect(footer, `${name}'s running job disappeared with its redo button`).toBeTruthy();
+      expect(footer?.textContent).toContain("Stop");
+    }
+  });
+
+  it("keeps current-mode failure messages after removing the idle redo footers", async () => {
+    const cases: [string, ReactNode][] = [
+      ["Ideas", mountIdeas(IDEAS, { failed: VISIBLE_FAILURE })],
+      ["Timeline", mountTimeline(TIMELINE, { failed: VISIBLE_FAILURE })],
+      ["Debate", mountDebate(DEBATE, { failed: VISIBLE_FAILURE })],
+      ["Quiz", mountQuiz(QUIZ, { failed: VISIBLE_FAILURE })],
+    ];
+
+    for (const [name, node] of cases) {
+      await paint(node);
+      expect(band().textContent, `${name}'s failure disappeared with its redo button`).toContain(
+        VISIBLE_FAILURE.message,
+      );
+    }
   });
 
   it("draws Quiz's band with the empty state where the question was", async () => {

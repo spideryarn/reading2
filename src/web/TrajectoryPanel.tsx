@@ -311,10 +311,14 @@ export function TrajectoryPanel({ owner, view }: Props) {
          empty row over the loading sentence (new-mode.md § the header row). */
       head={ready && total > 0 && view.depth !== null ? <RouteHead view={view} total={total} /> : null}
       foot={
-        ready && total > 0 ? (
+        ready &&
+        (total > 0 ||
+          (!outdatedBy(owner) && (owner.job || owner.starting || owner.failed))) ? (
           <div className="traj-foot">
-            <p className="traj-note">{trajectoryPromise(route.profileHash !== null)}</p>
-            {atMost && coverageNote(total, route.offered) && (
+            {total > 0 && (
+              <p className="traj-note">{trajectoryPromise(route.profileHash !== null)}</p>
+            )}
+            {total > 0 && atMost && coverageNote(total, route.offered) && (
               <p className="traj-note">{coverageNote(total, route.offered)}</p>
             )}
             {/* No standing *Plan it again* here: Metadata's *Re-run AI
@@ -323,7 +327,13 @@ export function TrajectoryPanel({ owner, view }: Props) {
                 this processing" button - let's just rely on the Metadata mode
                 for that."* The button inside the out-of-date banner stays: it
                 is a repair the page is prompting, not a standing redo.
-                docs/plans/260929b-one-place-to-re-run-ai-processing.md. */}
+                docs/plans/260929b-one-place-to-re-run-ai-processing.md.
+
+                A current route still needs its status-only footer while a job
+                is starting, running or failed; idle draws nothing. */}
+            {!outdatedBy(owner) && (owner.job || owner.starting || owner.failed) && (
+              <div className="traj-again">{run("Plan it again", true)}</div>
+            )}
           </div>
         ) : null
       }

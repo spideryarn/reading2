@@ -41,12 +41,10 @@
  * looking for what this page had left behind. Three things came across, none of
  * them the gradients:
  *
- *  - **A thread that can be rewritten when it is fine.** Theirs had a "Reset"
- *    button at all times; ours had one only when the thread had gone stale, and
- *    docs/plans/260825g-tweet-thread-page.md#what-is-still-open left the rest open on
- *    the grounds that a model call should not be one click away. It is now two
- *    clicks away instead — see `Rewrite` — which answers the objection rather
- *    than living with the gap.
+ *  - **A thread can be rewritten from Metadata.** Theirs had a "Reset" button
+ *    at all times; ours eventually put a two-click rewrite at the foot, then
+ *    moved that standing action into Metadata's one *Re-run AI processing*
+ *    section on 2026-09-29. The stale banner keeps its repair button.
  *  - **The thread's own numbers.** Theirs put the post count, the characters in
  *    the thread and the characters in the document in a row of pills. The three
  *    facts were the good part; the pills were not. Ours says them in a line of
@@ -242,7 +240,7 @@ export function Tweets({ slug, article }: { slug: string; article: Article }) {
    * right for a stale one — it agrees the artefact is out of date, so an
    * ordinary run really does rewrite it. It is *wrong* for a thread that is
    * perfectly current: the step would report "already done" and the page would
-   * sit there having apparently done nothing. The footer's rewrite is how a
+   * sit there having apparently done nothing. Metadata's Thread row is how a
    * reader says "I know, do it anyway", and `StepRun.force` in useStepJob.ts is
    * what that turns into.
    */
@@ -268,8 +266,8 @@ export function Tweets({ slug, article }: { slug: string; article: Article }) {
    * docs/plans/260915e-tweets-page-starts-writing-when-opened.md.
    *
    * **The unforced verb, written out.** `work_key` is computed from the request
-   * *including* `force`, so an automatic run and a press on the footer's
-   * Rewrite during the same second are two requests that `enqueueOrGet` will
+   * *including* `force`, so an automatic run and a forced press during the same
+   * second are two requests that `enqueueOrGet` will
    * not collapse, and the reader pays twice. Spelling the arguments here rather
    * than passing `write` means a later reader cannot make it forced by changing
    * a default two lines up.

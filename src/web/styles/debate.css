@@ -472,3 +472,10 @@ button.dbt-mark:focus-visible { outline: 2px solid var(--highlight); outline-off
 .dbt-card-out:hover { text-decoration: underline; text-underline-offset: 2px; }
 .dbt-card-out svg { flex: none; }
 
+/* Status-only since plan 260929b: progress, Stop and failures stay pinned even
+   though the idle redo button moved to Metadata. */
+.dbt-again {
+  margin: 0;
+  padding: 0.45rem 0.7rem;
+  border-top: 1px solid var(--rule);
+}
