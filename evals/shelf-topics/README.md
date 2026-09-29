@@ -78,3 +78,9 @@ verdicts in `results/judgements/` can only be read through that key.
 Both keys mark a swapped duplicate as `independent: false`. The new key also names the pair it
 repeats (`duplicateOf`). `tally.ts` counts only independent votes per contrast and reports the
 duplicates' agreement separately.
+
+## The 2026-09-29 run files
+
+The per-run lists, raw model responses and built cases of the 2026-09-29 runs are gitignored
+(regenerable, but $0.26 to regenerate). A copy is on the Hetzner box at
+`/home/greg/spideryarn-eval-archives/260929c-shelf-topics-eval-runs.tgz` (381 files, 2 MB).
