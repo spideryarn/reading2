@@ -1347,6 +1347,22 @@ any time. See [admin.md](admin.md).
 The order is in
 [the plan](../plans/260902i-stripe-payments-and-subscription-tiers.md#where-the-build-stands).
 
+**Proposed, not built: ChatGPT tiers at a quarter of the price.** Greg, 2026-09-29: a reader whose
+ChatGPT Plus or Pro plan pays for their model calls should pay "1/4 of the price", and **a reader
+who disconnects drops back to Free**, the way a cancelled subscription does. The plan is
+[260929g](../plans/260929g-bring-your-own-ai-subscription.md). It is waiting on OpenAI admitting
+us, and on Greg. Three things in it bear on this doc:
+- A quarter of €9 is not a multiple of 50 cents, which `tests/billing-tiers.test.ts` requires, so
+  the plan proposes $2.50 / £2 / €2.50 and $12.50 / £10 / €11.50.
+- Checkout would have to refuse a ChatGPT tier to a reader with no live connection.
+- At £2 we keep about £1.37 after VAT and fees. One full live-voice conversation costs more than
+  that, and no live-voice allowance can be enforced today, so the plan leaves live voice off those
+  tiers.
+- A dearer tier must allow more articles ("charges more for more"), and a ChatGPT tier is the same
+  articles for less. So tiers would need a new "who pays for the models" dimension.
+- Disconnecting pauses the plan until the period ends, then Free, the way a cancellation keeps its
+  plan to the period end.
+
 ### Reader → Researcher: open at Stripe, and open in our own UI
 
 **The Stripe half was shut, and is now open.** Found by GPT Sol on 2026-09-03 and then confirmed

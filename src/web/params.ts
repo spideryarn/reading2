@@ -36,6 +36,7 @@ import { DIAGRAMS, type DiagramKind } from "./diagram.js";
 import type { ScatterAxis, ScatterHue } from "./scatter.js";
 import { DEFAULT_BY } from "./library-columns.js";
 import { sameList } from "./lib/table-sort.js";
+import { FAQ_ORDERS, type FaqOrder } from "./faq-order.js";
 import type { ShelfFilter, ShelfView } from "./ShelfControls.js";
 
 /* Which article is NOT in here. It is the path — `/read/<slug>` — and has been
@@ -615,6 +616,34 @@ export const citeOrderParam = createParser<CiteOrder>({
  * and debounced, because a range input fires on every pixel of a drag.
  */
 export const citeBarParam = createParser<number>({
+  parse: (v) => {
+    const n = Number.parseFloat(v);
+    return Number.isFinite(n) && n >= 0 && n <= 1 ? Math.round(n * 100) / 100 : null;
+  },
+  serialize: (v) => v.toFixed(2),
+}).withOptions({ history: "replace", limitUrlUpdates: debounce(200) });
+
+/**
+ * **How the FAQ is ordered** — `?faqby=`, since 2026-09-29. `prioritised` is
+ * the default: what survives the bar, the most central and approachable
+ * questions first; `document` is reading order, the order the FAQ had before.
+ * src/web/faq-order.ts; docs/plans/260929g-faq-difficulty-centrality-and-a-threshold.md.
+ * `push` and an unknown value falls back to the default, as `?citeby=`.
+ */
+export const faqOrderParam = createParser<FaqOrder>({
+  parse: (v) => (FAQ_ORDERS.includes(v as FaqOrder) ? (v as FaqOrder) : null),
+  serialize: (v) => v,
+})
+  .withDefault("prioritised")
+  .withOptions({ history: "push" });
+
+/**
+ * How high a question has to score to stay on screen in the prioritised order
+ * — `?faqbar=`, `centrality × (1 − difficulty)` on 0–1. No default, for
+ * `gateParam`'s reason: absent is *nobody has touched it*, which the panel
+ * resolves to `FAQ_BAR_DEFAULT` (faq-order.ts). `replace` and debounced.
+ */
+export const faqBarParam = createParser<number>({
   parse: (v) => {
     const n = Number.parseFloat(v);
     return Number.isFinite(n) && n >= 0 && n <= 1 ? Math.round(n * 100) / 100 : null;

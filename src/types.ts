@@ -4114,6 +4114,17 @@ export interface FaqQuestion {
   question: string;
   /** 1–3, deduplicated on `{blockId, start, end}`, in document order. */
   passages: FaqPassage[];
+  /**
+   * 0–1, the model's judgment: how much of the piece, and how much technical
+   * detail, a reader needs before this question makes sense. Low is a question
+   * anyone would ask on meeting the main claim; high is one that only arises
+   * inside a detail. **Optional, and absent on every list before `faq/4`** —
+   * such a list is drawn in reading order with no threshold
+   * (docs/plans/260929g-faq-difficulty-centrality-and-a-threshold.md).
+   */
+  difficulty?: number;
+  /** 0–1, the model's judgment: how much of the piece's argument turns on the answer. Optional as above. */
+  centrality?: number;
 }
 
 /**

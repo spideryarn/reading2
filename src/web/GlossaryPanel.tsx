@@ -95,6 +95,11 @@ import { Tooltip } from "./Tooltip.js";
 import { hostOf, isWebUrl } from "../urls.js";
 import {
   applyThreshold,
+  canThreshold,
+  floorToGateStep,
+  GATE_STEP,
+  thresholdMax,
+  thresholdTop,
   hiddenNote,
   survivesThreshold,
   type ThresholdResult,
@@ -623,43 +628,21 @@ export function sortEntries(
 export const PRIORITY_GATE = 0.1;
 
 /**
- * How far the slider moves in one step, and therefore how precise `?gate=` gets.
+ * The slider's step and the floor onto it — `0.01`, and a floor that survives
+ * binary floating point. Here until 2026-09-29, and in src/web/threshold.ts
+ * since, where Citations and the FAQ share them (plan 260929g). Re-exported so
+ * the names every caller and test imports from this file keep working.
  *
  * `0.01` because the whole usable range is short — a product of two scores the
  * model rarely puts above 0.8 apiece lands under 0.7 — so a coarser step would
- * skip past the boundary the reader is hunting for. Two decimal places is also
- * exactly what `gateParam` serializes, so what you drag to is what the URL says.
+ * skip past the boundary the reader is hunting for.
+ *
+ * `floorToGateStep` is one helper for both ends of the feature — the top of
+ * the track (`gateMax`) and the gate that reveals a term (`gateToReveal`) —
+ * because they have to agree: `canPrioritise` is derived from the first and
+ * would otherwise offer an order the second could not act on.
  */
-export const GATE_STEP = 0.01;
-
-/** How many steps span 0-1, and therefore the grid `?gate=` is written on. */
-const GATE_STEPS = Math.round(1 / GATE_STEP);
-
-/**
- * **The largest position of the slider at or below a score.**
- *
- * One helper for both ends of the feature — the top of the track (`gateMax`)
- * and the gate that reveals a term (`gateToReveal`) — because they have to
- * agree: `canPrioritise` is derived from the first and would otherwise offer an
- * order the second could not act on.
- *
- * **The arithmetic has to survive binary floating point, and the obvious
- * spelling does not.** `Math.floor(score / GATE_STEP)` loses a whole step
- * wherever the quotient lands a hair under an integer — `0.58 / 0.01` is
- * `57.99999999999999` and `0.57 / 0.01` is `56.99999999999999` — so a term
- * scored `0.57` got a track ending at `0.56`, which is a position above its own
- * score, and a reveal gate a step lower than the reader asked for. So: round
- * the quotient to a sane number of places *before* flooring, and divide by 100
- * rather than multiplying by `0.01`, since `57 * 0.01` is `0.5700000000000001`
- * and `57 / 100` is exactly the double `0.57` that `gateParam` round-trips.
- *
- * Never above its argument, which is the property the two callers lean on: the
- * term a number was computed from always survives that number.
- */
-export function floorToGateStep(score: number): number {
-  const steps = Math.floor(Math.round((score / GATE_STEP) * 1e9) / 1e9);
-  return steps / GATE_STEPS;
-}
+export { floorToGateStep, GATE_STEP };
 
 /** `difficulty × centrality`, or nothing at all if either is missing. */
 export function priorityOf(entry: GlossaryEntry): number | undefined {
@@ -713,12 +696,7 @@ export function visibleEntries(
  * not be what decides whether the order exists.
  */
 export function canPrioritise(entries: readonly GlossaryEntry[]): boolean {
-  const top = gateTop(entries);
-  for (const entry of entries) {
-    const p = priorityOf(entry);
-    if (p !== undefined && p < top) return true;
-  }
-  return false;
+  return canThreshold(entries, priorityOf);
 }
 
 /**
@@ -753,12 +731,7 @@ export function canPrioritise(entries: readonly GlossaryEntry[]): boolean {
  * the all-hidden foot line says so and says the way back.
  */
 export function gateTop(entries: readonly GlossaryEntry[]): number {
-  let top = 0;
-  for (const entry of entries) {
-    const p = priorityOf(entry);
-    if (p !== undefined && p > top) top = p;
-  }
-  return floorToGateStep(top);
+  return thresholdTop(entries, priorityOf);
 }
 
 export function gateMax(entries: readonly GlossaryEntry[], gate: number): number {
@@ -769,7 +742,7 @@ export function gateMax(entries: readonly GlossaryEntry[], gate: number): number
      `canPrioritise` answer true for a glossary whose every score rounds to
      `0.00` — a list where the only thing the track can do is show all or hide
      all, which is exactly the no-op the question is there to refuse. */
-  return Math.max(gateTop(entries), gate, GATE_STEP);
+  return thresholdMax(entries, gate, priorityOf);
 }
 
 /**

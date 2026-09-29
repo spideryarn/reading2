@@ -61,7 +61,7 @@ import { entryProse } from "./GlossaryPanel.js";
    decides whether a row has an address or only a search, and it is total over
    `linkFrom` — so importing it is what stops this card and the band teaching a
    reader two different rules about the same work. See `CiteCard`. */
-import { sourceOf } from "./CitationsPanel.js";
+import { CITE_WHY_LABEL, readNoteOf, sourceOf } from "./CitationsPanel.js";
 import { useHoverCard } from "./useHoverCard.js";
 import { TermJump } from "./TermJump.js";
 import { describeLink, type ExternalPreview, type LinkPreview } from "./link-preview.js";
@@ -1667,8 +1667,12 @@ function CiteCard({ work }: { work: CitedWork }) {
       {by && <p className="prose-card-text prose-card-cite-by">{by}</p>}
 
       <div className="prose-card-part prose-card-part-why">
-        <p className="prose-card-label">what the piece uses it for</p>
+        <p className="prose-card-label">{CITE_WHY_LABEL}</p>
         <p className="prose-card-text">{work.why}</p>
+        {/* The band's line, from the band's function: we have not read the
+            work, so `why` above is the article's claim, not the work's content.
+            CitationsPanel.tsx § what we have and have not read. */}
+        <p className="prose-card-cite-read">{readNoteOf(work)}</p>
       </div>
 
       <p className="prose-card-foot">

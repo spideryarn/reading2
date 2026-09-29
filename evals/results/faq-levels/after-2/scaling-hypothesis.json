@@ -1,0 +1,210 @@
+{
+  "arm": "after-2",
+  "slug": "scaling-hypothesis",
+  "version": "faq/4",
+  "faqSha256": "8ded5d816427dcaf28f5660edff111ea37fab6673cce50e81c790ff6d72f1cfc",
+  "at": "2026-09-29T17:59:47.371Z",
+  "tokens": {
+    "input": 30014,
+    "output": 11294,
+    "cacheRead": 0,
+    "cacheWrite": 0
+  },
+  "questions": [
+    {
+      "id": "spya-tq7kwd",
+      "question": "If GPT-3's architecture is admittedly outdated and flawed, how can its success still prove that scale alone drives these gains?",
+      "passages": [
+        {
+          "blockId": "spya-fvqe70",
+          "quote": "it’s a magnificently obsolete architecture from early 2018 (used mostly for software engineering convenience as the infrastructure has been debugged), which is small & shallow compared to what’s possible",
+          "start": 254
+        },
+        {
+          "blockId": "spya-asr663",
+          "quote": "its scaling continues to be roughly logarithmic/power-law, as it was for much smaller models & as forecast, and it has not hit a regime where gains effectively halt or start to require increases vastly beyond feasibility.",
+          "start": 605
+        }
+      ],
+      "difficulty": 0.3,
+      "centrality": 0.7
+    },
+    {
+      "id": "spya-p2t9f0",
+      "question": "Since a huge model could just memorize its training data, why don't bigger models overfit more instead of generalizing better?",
+      "passages": [
+        {
+          "blockId": "spya-djq0xk",
+          "quote": "Why do larger models not overfit (though they can) and generalize better than smaller models?",
+          "start": 192
+        },
+        {
+          "blockId": "spya-vkkfzh",
+          "quote": "it can’t possibly memorize all the instances of arithmetic (implicit or explicit) in GPT-3’s Internet-scale dataset. If a memorizing sub-model tried to do so, it would become extremely large and penalized.",
+          "start": 574
+        }
+      ],
+      "difficulty": 0.5,
+      "centrality": 0.6
+    },
+    {
+      "id": "spya-xy5ek2",
+      "question": "Isn't a model that just predicts the next character really doing sophisticated compression rather than genuine reasoning or understanding?",
+      "passages": [
+        {
+          "blockId": "spya-vg8832",
+          "quote": "“Yeah, but there’s more to being smart than knowing compression schemes!” “No there’s not!” “Shoot—he knows the secret!!”",
+          "start": 0
+        },
+        {
+          "blockId": "spya-nhgv5g",
+          "quote": "if for every string the model did just as good a job of predicting the next character as you could do, how could we say that it doesn’t truly understand everything?",
+          "start": 221
+        }
+      ],
+      "difficulty": 0.4,
+      "centrality": 0.7
+    },
+    {
+      "id": "spya-ag56k5",
+      "question": "If Moravec's decades-old compute forecasts have held up so well, does that mean an all-out AI arms race is now inevitable soon?",
+      "passages": [
+        {
+          "blockId": "spya-rbx2kz",
+          "quote": "[Roughly, yes. —Editor 2025-10-19]",
+          "start": 458
+        },
+        {
+          "blockId": "spya-cxnhav",
+          "quote": "And there are 28 years left in Moravec’s forecast…",
+          "start": 217
+        }
+      ],
+      "difficulty": 0.3,
+      "centrality": 0.5
+    },
+    {
+      "id": "spya-xqwkfg",
+      "question": "If DeepMind already has the hardware, budget, and talent to scale up, why hasn't it just built its own GPT-3-scale model already?",
+      "passages": [
+        {
+          "blockId": "spya-khnsat",
+          "quote": "Is there a GPT-4-equivalent brewing away inside DeepMind or Google Brain’s TPU pods now? They aren’t stupid, they have the hardware, they have the budgets, they have the people.",
+          "start": 205
+        },
+        {
+          "blockId": "spya-vr9q2p",
+          "quote": "with little risk or surprise until the final assembly.",
+          "start": 492
+        }
+      ],
+      "difficulty": 0.4,
+      "centrality": 0.6
+    },
+    {
+      "id": "spya-rb5980",
+      "question": "If scaling up really works this well, why do major labs like DeepMind and Google Brain still not treat it as the path forward?",
+      "passages": [
+        {
+          "blockId": "spya-scr8jb",
+          "quote": "they do not have any such thing, because Google Brain & DeepMind do not believe in the scaling hypothesis the way that Sutskever, Amodei and others at OA do.",
+          "start": 54
+        },
+        {
+          "blockId": "spya-vr9q2p",
+          "quote": "holds what we might call the “weak scaling hypothesis”: they believe that AGI will require us to “find the right algorithms” effectively replicating a mammalian brain module by module,",
+          "start": 41
+        }
+      ],
+      "difficulty": 0.5,
+      "centrality": 0.6
+    },
+    {
+      "id": "spya-mh8hrh",
+      "question": "If success just means finding a mechanical algorithm that reproduces a mental task, doesn't calling GPT-3 'just' next-word prediction actually count as evidence it understands, not against it?",
+      "passages": [
+        {
+          "blockId": "spya-mpden3",
+          "quote": "dismiss any model as “just” this or that(“just billions of IF statements” or “just a bunch of multiplications” or “just millions of memorized web pages”), missing the forest for the trees,",
+          "start": 112
+        },
+        {
+          "blockId": "spya-ay4yw7",
+          "quote": "But of course, if we ever succeed in AI, or in reductionism in general, it must be by reducing Y to ‘just X’. Showing that some task requiring intelligence can be solved by a well-defined algorithm with no ‘intelligence’ is precisely what success must look like!",
+          "start": 0
+        }
+      ],
+      "difficulty": 0.3,
+      "centrality": 0.9
+    },
+    {
+      "id": "spya-kppazu",
+      "question": "Given how confidently past experts predicted AI stagnation and were wrong, why should we still trust the calm, reassuring tone of today's experts?",
+      "passages": [
+        {
+          "blockId": "spya-m9r8zx",
+          "quote": "Projections of failure were made by eminent, respectable, serious people. They spoke in considered tones of why AI hype was excessive and might trigger an “AI winter”, and the fundamental flaws of fashionable approaches and why brute force could not work.",
+          "start": 74
+        },
+        {
+          "blockId": "spya-zyncdd",
+          "quote": "The voice of authority insists on calm, and people not “panicking” (the chief of sins).",
+          "start": 93
+        }
+      ],
+      "difficulty": 0.3,
+      "centrality": 0.8
+    },
+    {
+      "id": "spya-nbbtzm",
+      "question": "If you scrubbed all human-generated 'agentic' text from training data, would the resulting model finally be a safe, non-agentic tool?",
+      "passages": [
+        {
+          "blockId": "spya-denmtt",
+          "quote": "would we then have a model which is now just a (relatively) safe ‘tool AI’, with no agency lurking?",
+          "start": 473
+        },
+        {
+          "blockId": "spya-jrm0w9",
+          "quote": "All you can do is make a complex system that doesn’t display agency as far as you can tell; unfortunately, much like Turing-completeness (or security vulnerabilities), that there is no overt agency doesn’t mean it is not there.",
+          "start": 160
+        }
+      ],
+      "difficulty": 0.6,
+      "centrality": 0.6
+    },
+    {
+      "id": "spya-e4zbmn",
+      "question": "If training on a single random Turing machine doesn't induce agency-like behavior, why would training across many different ones change that?",
+      "passages": [
+        {
+          "blockId": "spya-xz4e9d",
+          "quote": "Would training on a random Turing machine risk the possibility of agency?",
+          "start": 0
+        },
+        {
+          "blockId": "spya-usu3q6",
+          "quote": "This provides our modularity, and a particular computation executed, and strong optimization pressure to rapidly ‘read’ the history and infer what the new rules must be.",
+          "start": 0
+        }
+      ],
+      "difficulty": 0.8,
+      "centrality": 0.4
+    }
+  ],
+  "dropped": {
+    "unknownIds": 0,
+    "unquoted": 0,
+    "tooLong": 0,
+    "duplicate": 0,
+    "unanchored": 0,
+    "overCap": 0,
+    "malformed": 0
+  },
+  "scoreDrops": {
+    "difficultyAbsent": 0,
+    "difficultyRejected": 0,
+    "centralityAbsent": 0,
+    "centralityRejected": 0
+  }
+}

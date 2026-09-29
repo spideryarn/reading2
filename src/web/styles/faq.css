@@ -16,6 +16,16 @@
 .faq-read-error { margin: 0.4rem 0.7rem 0; }
 .faq-read-error .gloss-error { margin: 0 0 0.5rem; }
 
+/* The question and, in the prioritised order, its two score bars beside it —
+   the glossary's `.gloss-term-head` arrangement: the text wraps, the bars stay. */
+.faq-question-row {
+  display: flex;
+  align-items: baseline;
+  gap: 0.5rem;
+}
+.faq-question-row .faq-question { flex: 1; min-width: 0; }
+.faq-scores { flex: none; }
+
 .faq-question {
   margin: 0;
   color: var(--ink);

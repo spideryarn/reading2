@@ -1,0 +1,110 @@
+{
+  "arm": "before-2",
+  "slug": "spider-silk-spya-ge30uz",
+  "version": "faq/3",
+  "faqSha256": "9c6f7a31f99efcb35ef1416a62d7fd0dd25b6c6687ff88b4619fe2dc74a4e5eb",
+  "at": "2026-09-29T17:48:05.676Z",
+  "tokens": {
+    "input": 16217,
+    "output": 3153,
+    "cacheRead": 0,
+    "cacheWrite": 0
+  },
+  "questions": [
+    {
+      "id": "spya-s80rsw",
+      "question": "How can silk's stiff crystalline regions and its stretchy amorphous regions together produce both great strength and great elasticity?",
+      "passages": [
+        {
+          "blockId": "spya-p263u9",
+          "quote": "The interplay between the hard crystalline segments and the strained elastic semi-amorphous regions gives spider silk its extraordinary properties.",
+          "start": 491
+        }
+      ]
+    },
+    {
+      "id": "spya-kvzcb2",
+      "question": "If pyrrolidine keeps silk moist to protect it, why does getting wet make dragline silk shrink and weaken?",
+      "passages": [
+        {
+          "blockId": "spya-p263u9",
+          "quote": "Pyrrolidine has hygroscopic properties that keep the silk moist while warding off ant invasion.",
+          "start": 726
+        },
+        {
+          "blockId": "spya-qdjb0x",
+          "quote": "When exposed to water, dragline silks undergo supercontraction, shrinking up to 50% in length and behaving like a weak rubber under tension.",
+          "start": 0
+        }
+      ]
+    },
+    {
+      "id": "spya-zsgdjm",
+      "question": "If silk is weaker than Kevlar, how can it still be described as tougher?",
+      "passages": [
+        {
+          "blockId": "spya-nwva2u",
+          "quote": "This enables a silk fibre to absorb a large amount of energy before breaking (toughness, the area under a stress-strain curve).",
+          "start": 171
+        },
+        {
+          "blockId": "spya-hv4xng",
+          "quote": "Weight for weight, silk is stronger than steel, but not as strong as Kevlar. Spider silk is, however, tougher than both.",
+          "start": 48
+        }
+      ]
+    },
+    {
+      "id": "spya-xba9v2",
+      "question": "If silk is less stiff than steel, how can its tensile strength still rival high-grade steel?",
+      "passages": [
+        {
+          "blockId": "spya-dq9b7q",
+          "quote": "Unlike steel or Kevlar, which are stiff, spider silk is ductile and elastic, having a lower Young's modulus.",
+          "start": 96
+        },
+        {
+          "blockId": "spya-mhe2r5",
+          "quote": "A dragline silk's tensile strength is comparable to that of high-grade alloy steel (450−2000 MPa)",
+          "start": 0
+        }
+      ]
+    },
+    {
+      "id": "spya-c9am5q",
+      "question": "What does the valve near the end of the silk duct actually do, given researchers still disagree?",
+      "passages": [
+        {
+          "blockId": "spya-s5073r",
+          "quote": "Though discovered some time ago, its precise purpose is still under discussion.",
+          "start": 30
+        }
+      ]
+    },
+    {
+      "id": "spya-bnbtns",
+      "question": "How can one engineered E. coli fibre fully match natural silk's performance while artificial silks generally reach only half its strength?",
+      "passages": [
+        {
+          "blockId": "spya-gjan3e",
+          "quote": "Fibers spun from these synthetic spidroins are the first to fully replicate the mechanical performance of natural spider silk by all common metrics.",
+          "start": 645
+        },
+        {
+          "blockId": "spya-jzcepa",
+          "quote": "Artificial spider silks have fewer and simpler proteins than natural dragline silk, and consequently offer half the diameter, strength, and flexibility of natural dragline silk.",
+          "start": 573
+        }
+      ]
+    }
+  ],
+  "dropped": {
+    "unknownIds": 0,
+    "unquoted": 0,
+    "tooLong": 0,
+    "duplicate": 0,
+    "unanchored": 0,
+    "overCap": 0,
+    "malformed": 0
+  }
+}

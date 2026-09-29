@@ -489,6 +489,11 @@ function publicFaq(faq: Faq): PublicFaq {
         id: q.id,
         question: q.question,
         passages: q.passages.map(publicPlace),
+        /* The model's two judgments cross, because a visitor's panel orders and
+           thresholds on them exactly as the owner's does (plan 260929g). Absent
+           stays absent: a list from before `faq/4` has neither. */
+        ...(q.difficulty !== undefined ? { difficulty: q.difficulty } : {}),
+        ...(q.centrality !== undefined ? { centrality: q.centrality } : {}),
       }),
     ),
   };

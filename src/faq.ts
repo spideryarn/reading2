@@ -59,6 +59,11 @@ import {
 } from "./source-hash.js";
 import { budgetFor, truncationFailure } from "./token-budget.js";
 import { plainWords } from "./plain-words.js";
+import {
+  type DifficultyCentralityDrops,
+  noDifficultyCentralityDrops,
+  scoreCounting,
+} from "./score-fields.js";
 import type {
   Block,
   BlockId,
@@ -77,8 +82,14 @@ export type { Faq, FaqDropped, FaqPassage, FaqQuestion } from "./types.js";
  * compare against the constant rather than a literal.
  *
  * `faq/3`, 2026-09-28: the prompt's own plain-words wording gave way to the shared `plainWords` section, one rule for every prompt (Greg, 2026-09-28; docs/plans/260926a-plainer-summaries-and-glossary.md, stage 3).
+ *
+ * `faq/4`, 2026-09-29: up to three broad pressure questions on the central
+ * claim, and a `difficulty` and `centrality` on every question, which the panel
+ * gates and orders on (Greg, SPIDERYARN-READING2-5D: *"dense and low level …
+ * start with a few that are a little bit more high level"*;
+ * docs/plans/260929g-faq-difficulty-centrality-and-a-threshold.md).
  */
-export const PROMPT_VERSION = "faq/3";
+export const PROMPT_VERSION = "faq/4";
 
 /** The only hard number on quantity. The prompt's budget is an upper bound under it. */
 export const MAX_QUESTIONS = 12;
@@ -91,6 +102,9 @@ export const MAX_QUESTION_CHARS = 200;
 
 /** A passage is a quotation, not a paragraph. Over this it is dropped, never cut. */
 export const MAX_QUOTE_CHARS = 300;
+
+/** `, "difficulty": 0.35, "centrality": 0.80` and its whitespace, generously. */
+export const SCORE_CHARS = 60;
 
 /** Body words per question in the prompt's upper budget. */
 export const WORDS_PER_QUESTION = 600;
@@ -108,14 +122,15 @@ export function questionBudget(words: number): number {
 /**
  * The answer budget in tokens, **derived from the field caps** (Sol F10):
  * a base for the JSON around the list, plus per question the question, up to
- * three quotes and their ids and punctuation — at a conservative three
- * characters a token. Undersizing does not degrade: it throws
- * `truncationFailure` and loses the whole pass.
+ * three quotes and their ids and punctuation, and the two scores with their
+ * keys (`SCORE_CHARS`) — at a conservative three characters a token.
+ * Undersizing does not degrade: it throws `truncationFailure` and loses the
+ * whole pass.
  */
 export const ANSWER_TOKENS =
   400 +
   MAX_QUESTIONS *
-    Math.ceil((MAX_QUESTION_CHARS + 40 + MAX_PASSAGES * (MAX_QUOTE_CHARS + 60)) / 3);
+    Math.ceil((MAX_QUESTION_CHARS + 40 + SCORE_CHARS + MAX_PASSAGES * (MAX_QUOTE_CHARS + 60)) / 3);
 
 /**
  * What this artefact was written from: the blocks, the tree (the skeleton is in
@@ -160,6 +175,8 @@ function text(value: unknown): string {
 interface RawQuestion {
   question?: unknown;
   passages?: unknown;
+  difficulty?: unknown;
+  centrality?: unknown;
 }
 
 interface RawPassage {
@@ -223,6 +240,9 @@ interface Draft {
   index: number;
   question: string;
   passages: Located[];
+  /** The first occurrence's, never a later duplicate's — see `toQuestions`. */
+  difficulty: number | undefined;
+  centrality: number | undefined;
 }
 
 /**
@@ -235,11 +255,20 @@ interface Draft {
  * (`unanchored`). Then the cap, in the model's order, and only then reading
  * order — so the cap keeps the questions the model listed first, and the
  * reader meets them in the order the piece raises them.
+ *
+ * **The scores belong to the first occurrence.** A later duplicate adds its
+ * passages and nothing else — not even a score the first one lacked, because a
+ * score is a judgment of the question as first put, and borrowing one would
+ * hide from `scores` that the model left it out. Every readable question (one
+ * with text and a passages array) is counted into `scores`, duplicates
+ * included, before anything is merged or anchored: that counter is about
+ * whether the model obeys the prompt, and every question it wrote is evidence.
  */
 export function toQuestions(
   raw: readonly unknown[],
   blocks: readonly Block[],
   dropped: FaqDropped,
+  scores: DifficultyCentralityDrops = noDifficultyCentralityDrops(),
 ): FaqQuestion[] {
   const byId = new Map(blocks.map((b) => [b.id as string, b]));
   const drafts = new Map<string, Draft>();
@@ -258,12 +287,14 @@ export function toQuestions(
       dropped.malformed++;
       continue;
     }
+    const difficulty = scoreCounting(r.difficulty, scores, "difficultyAbsent", "difficultyRejected");
+    const centrality = scoreCounting(r.centrality, scores, "centralityAbsent", "centralityRejected");
     const key = normaliseName(question);
     let draft = drafts.get(key);
     if (draft) {
       dropped.duplicate++;
     } else {
-      draft = { index, question, passages: [] };
+      draft = { index, question, passages: [], difficulty, centrality };
       drafts.set(key, draft);
     }
     for (const p of r.passages) {
@@ -324,6 +355,10 @@ function inReadingOrder(drafts: readonly Draft[], blocks: readonly Block[]): Faq
       id: mintUniqueId(taken),
       question: d.question,
       passages: passages.map(({ blockId, quote, start }) => ({ blockId, quote, start })),
+      /* Absent rather than `undefined`, so a stored question has the key or
+         does not — the shape every list before `faq/4` has. */
+      ...(d.difficulty !== undefined ? { difficulty: d.difficulty } : {}),
+      ...(d.centrality !== undefined ? { centrality: d.centrality } : {}),
     }));
 }
 
@@ -344,6 +379,8 @@ export function buildFaq(
     sourceHash: string;
     elapsedMs: number;
     dropped: FaqDropped;
+    /** What happened to the two scores — logged by the caller, never stored. */
+    scores?: DifficultyCentralityDrops;
   },
 ): Faq {
   if (!Array.isArray(parsed.questions)) {
@@ -353,7 +390,7 @@ export function buildFaq(
     );
   }
   const d = opts.dropped;
-  const questions = toQuestions(parsed.questions, opts.blocks, d);
+  const questions = toQuestions(parsed.questions, opts.blocks, d, opts.scores);
   if (parsed.questions.length > 0 && questions.length === 0) {
     throw new Error(
       `The model named ${parsed.questions.length} questions and none of them could be ` +
@@ -392,6 +429,13 @@ words. The reader follows them back into the text and judges for themselves.
 
 THE KINDS OF QUESTION THAT BELONG, MOST VALUABLE FIRST
 
+- A broad pressure question on the piece's central claim. Among the questions
+  that genuinely arise, include up to three of these. A broad question names a
+  specific objection, dependency, tension or implication that remains AFTER the
+  reader has understood the main claim — and the piece itself must respond to
+  it, in one to three passages. It is broad because it bears on the whole
+  argument, not because it asks for the whole argument. Do not invent one to
+  reach a count; if the piece raises none, ask none.
 - An objection the piece anticipates. "But doesn't X contradict Y?" — pointing
   to where the author deals with it.
 - A move that needs clarifying. "Why say A here, when B was just conceded?" —
@@ -411,8 +455,12 @@ a restatement of what the paragraph already says.
 WHAT DOES NOT BELONG
 
 - Whole-piece questions: "What is this article about?", "What are the main
-  points?", "What does the author conclude?". That is a summary with question
-  marks on it, and this is not the summary.
+  points?", "What does the author conclude?", "Why should we believe the main
+  claim?", "What evidence supports it?", "How does the article develop its
+  argument?". That is a summary with question marks on it, and this is not the
+  summary. A broad pressure question is not one of these: it presses on the
+  claim from a particular side; these ask for the claim, or its support, to be
+  restated.
 - A tour of the sections, one question each. Do not cover the piece part by
   part. Many parts raise no question worth asking; some raise two.
 - A question whose whole answer is the meaning of one term ("What is X?",
@@ -439,7 +487,9 @@ A whole-piece question.
 
 GOOD — "If entropy can only increase, how can a fridge make its inside colder?"
 The objection a careful reader raises, in the article's own terms, and the
-piece answers it in a particular place.
+piece answers it in a particular place. It is also a broad pressure question:
+it presses on the essay's central claim, and a reader meets it before any of
+the detail — difficulty low, centrality high.
 
 WRITING THE QUESTION
 
@@ -466,6 +516,24 @@ names one to three passages.
 A question with no passage that survives is thrown away, so do not offer one
 you cannot anchor.
 
+RATE EVERY QUESTION
+
+Two numbers from 0 to 1, on every question. Both are required.
+
+  "difficulty" — how much of the piece, and how much technical detail, a
+                 reader needs before this question makes sense to ask.
+                 0.1: anyone would ask it on first meeting the main claim.
+                 0.5: it needs one section's argument in hand.
+                 0.9: it only arises inside a technical detail — a method, a
+                 term of art, a step in a derivation.
+  "centrality" — how much of the piece's argument turns on the answer.
+                 0.9: the main claim stands or falls with it.
+                 0.5: one part of the argument depends on it.
+                 0.1: a side point; the argument would survive either answer.
+
+Use the whole range, and judge each question on its own — do not make the
+numbers fall in order down the list.
+
 HOW MANY
 
 The user message gives an upper limit. It is a ceiling, not a target. Fewer is
@@ -481,7 +549,9 @@ JSON only, no prose, no code fence:
 {"questions": [
   {
     "question": "...?",
-    "passages": [{"blockId": "spya-k3m9qt", "quote": "..."}]
+    "passages": [{"blockId": "spya-k3m9qt", "quote": "..."}],
+    "difficulty": 0.2,
+    "centrality": 0.9
   }
 ]}
 
@@ -513,6 +583,8 @@ export interface FaqRun {
   blocks: number;
   words: number;
   dropped: FaqDropped;
+  /** The scores the prompt required and did not get. Logged, not stored. src/score-fields.ts. */
+  scoreDrops: DifficultyCentralityDrops;
   model: string;
   inputTokens: number;
   outputTokens: number;
@@ -611,12 +683,14 @@ export async function generateFaq(opts: {
     .join("");
 
   const dropped = emptyDropped();
+  const scoreDrops = noDifficultyCentralityDrops();
   const faq = buildFaq(parseJson(raw), {
     slug: opts.article.slug,
     blocks: evidence,
     sourceHash,
     elapsedMs: Date.now() - started,
     dropped,
+    scores: scoreDrops,
   });
 
   /* Nothing is written here — the caller writes through the store. */
@@ -625,6 +699,7 @@ export async function generateFaq(opts: {
     blocks: blocks.length,
     words,
     dropped,
+    scoreDrops,
     model: CAPABLE_MODEL,
     inputTokens: message.usage.input_tokens,
     outputTokens: message.usage.output_tokens,

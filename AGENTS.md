@@ -259,8 +259,10 @@ nothing else has a copy of.
   agents may be editing there too, and that committing some of their changes along with yours is not
   the end of the world.
 - **Commit and push to `dev`.** That is the trunk, and a push there builds nothing. `main` is
-  production and is written only by `npm run deploy` — pushing to it yourself is an unreviewed
-  deploy to real readers, and **nothing mechanical stops you**:
+  production and is written only by `npm run deploy`, **which only the Overseer runs** (Greg,
+  2026-09-29): ask it rather than deploying yourself —
+  [overseer.md § Deploying](docs/project/overseer.md#deploying). Pushing to `main` yourself is an
+  unreviewed deploy to real readers, and **nothing mechanical stops you**:
   [version-control.md § What protects `main`](docs/project/version-control.md#what-protects-main-and-what-does-not).
 - **Stay inside your stage.** Talk to other stages through the artefacts they write, not by reaching
   into their code — [architecture.md § Stage ownership](docs/project/architecture.md#stage-ownership).

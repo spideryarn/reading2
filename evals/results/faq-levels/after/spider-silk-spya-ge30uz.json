@@ -1,0 +1,131 @@
+{
+  "arm": "after",
+  "slug": "spider-silk-spya-ge30uz",
+  "version": "faq/4",
+  "faqSha256": "8ded5d816427dcaf28f5660edff111ea37fab6673cce50e81c790ff6d72f1cfc",
+  "at": "2026-09-29T17:57:16.698Z",
+  "tokens": {
+    "input": 16810,
+    "output": 3652,
+    "cacheRead": 0,
+    "cacheWrite": 0
+  },
+  "questions": [
+    {
+      "id": "spya-zwemjr",
+      "question": "Why would male spiders, who don't spin prey-catching webs the same way, still produce silk during mating?",
+      "passages": [
+        {
+          "blockId": "spya-ybqc4f",
+          "quote": "Observations of male spiders producing silk during sexual interactions are common across widespread taxa. The function of male-produced silk in mating has received little study.",
+          "start": 271
+        }
+      ],
+      "difficulty": 0.3,
+      "centrality": 0.4
+    },
+    {
+      "id": "spya-bves56",
+      "question": "How can silk from the same spider be stiff for one job and much tougher for another?",
+      "passages": [
+        {
+          "blockId": "spya-xytxuw",
+          "quote": "Each spider and each type of silk has a set of mechanical properties optimised for their biological function.",
+          "start": 0
+        },
+        {
+          "blockId": "spya-m3rk4n",
+          "quote": "Two to three times as tough as the other silks, including dragline.",
+          "start": 566
+        }
+      ],
+      "difficulty": 0.4,
+      "centrality": 0.6
+    },
+    {
+      "id": "spya-x78h4g",
+      "question": "If silk is weaker than Kevlar, how can it still count as tougher than both Kevlar and steel?",
+      "passages": [
+        {
+          "blockId": "spya-nwva2u",
+          "quote": "This enables a silk fibre to absorb a large amount of energy before breaking (toughness, the area under a stress-strain curve).",
+          "start": 171
+        },
+        {
+          "blockId": "spya-hv4xng",
+          "quote": "Weight for weight, silk is stronger than steel, but not as strong as Kevlar. Spider silk is, however, tougher than both.",
+          "start": 48
+        }
+      ],
+      "difficulty": 0.3,
+      "centrality": 0.7
+    },
+    {
+      "id": "spya-vfr6hd",
+      "question": "If water exposure makes silk shrink and weaken through supercontraction, why would spiders benefit from morning dew on their webs?",
+      "passages": [
+        {
+          "blockId": "spya-qdjb0x",
+          "quote": "most popularly to re-tension webs built in the night using the morning dew",
+          "start": 206
+        }
+      ],
+      "difficulty": 0.4,
+      "centrality": 0.5
+    },
+    {
+      "id": "spya-vmarxs",
+      "question": "Why call the process \"spinning\" if the fibre never actually rotates?",
+      "passages": [
+        {
+          "blockId": "spya-g2gw42",
+          "quote": "The term \"spinning\" is misleading because no rotation occurs. It comes from analogy to the textile spinning wheels.",
+          "start": 183
+        }
+      ],
+      "difficulty": 0.4,
+      "centrality": 0.3
+    },
+    {
+      "id": "spya-mj2hj2",
+      "question": "What does the valve near the end of the spinning duct actually do, given researchers still disagree?",
+      "passages": [
+        {
+          "blockId": "spya-s5073r",
+          "quote": "Though discovered some time ago, its precise purpose is still under discussion.",
+          "start": 30
+        }
+      ],
+      "difficulty": 0.6,
+      "centrality": 0.3
+    },
+    {
+      "id": "spya-zn5fmp",
+      "question": "Why do artificial spider silks still fall short of natural dragline silk despite genetic engineering advances?",
+      "passages": [
+        {
+          "blockId": "spya-jzcepa",
+          "quote": "Artificial spider silks have fewer and simpler proteins than natural dragline silk, and consequently offer half the diameter, strength, and flexibility of natural dragline silk.",
+          "start": 573
+        }
+      ],
+      "difficulty": 0.5,
+      "centrality": 0.8
+    }
+  ],
+  "dropped": {
+    "unknownIds": 0,
+    "unquoted": 0,
+    "tooLong": 0,
+    "duplicate": 0,
+    "unanchored": 0,
+    "overCap": 0,
+    "malformed": 0
+  },
+  "scoreDrops": {
+    "difficultyAbsent": 0,
+    "difficultyRejected": 0,
+    "centralityAbsent": 0,
+    "centralityRejected": 0
+  }
+}

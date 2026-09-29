@@ -35,6 +35,24 @@
   line-height: 1.4;
 }
 
+/* `why`'s label: the sentence is the article's use of the work, not the work,
+   and the label says so in the faint ink of the row's other quiet words. */
+.cite-why-label {
+  color: var(--ink-faint);
+  font-family: var(--font-ui);
+  font-size: 0.77rem;
+}
+
+/* What we have read of the work — nothing, or a page matching its title. Every
+   row has it, so it is as quiet as the line under it. Plan 260929g stage 1. */
+.cite-read {
+  margin: 0.15rem 0 0;
+  color: var(--ink-faint);
+  font-family: var(--font-ui);
+  font-size: 0.77rem;
+  line-height: 1.35;
+}
+
 /* The provenance line. Wraps rather than truncating: at the band's narrowest
    (288px, `MODE_MIN` in layout.ts) the three pieces each get a line. */
 .cite-meta {

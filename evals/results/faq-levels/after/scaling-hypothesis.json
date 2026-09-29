@@ -1,0 +1,215 @@
+{
+  "arm": "after",
+  "slug": "scaling-hypothesis",
+  "version": "faq/4",
+  "faqSha256": "8ded5d816427dcaf28f5660edff111ea37fab6673cce50e81c790ff6d72f1cfc",
+  "at": "2026-09-29T17:57:57.123Z",
+  "tokens": {
+    "input": 30014,
+    "output": 8919,
+    "cacheRead": 0,
+    "cacheWrite": 0
+  },
+  "questions": [
+    {
+      "id": "spya-f9ysmr",
+      "question": "If architecture barely matters compared to scale, why does the scaling hypothesis still require finding a 'scalable architecture' first?",
+      "passages": [
+        {
+          "blockId": "spya-fvqe70",
+          "quote": "a magnificently obsolete architecture from early 2018 (used mostly for software engineering convenience as the infrastructure has been debugged), which is small & shallow compared to what’s possible",
+          "start": 259
+        }
+      ],
+      "difficulty": 0.5,
+      "centrality": 0.6
+    },
+    {
+      "id": "spya-wqsd5c",
+      "question": "If GPT-3 is 'just' predicting text, how can that count as real understanding or intelligence?",
+      "passages": [
+        {
+          "blockId": "spya-ye0m0c",
+          "quote": "It is ‘just’ a text prediction model, an idiot savant of text; but an idiot savant, we should remember, is only a genetic mutation or bit of brain damage away from a normal human.",
+          "start": 432
+        },
+        {
+          "blockId": "spya-ay4yw7",
+          "quote": "if we ever succeed in AI, or in reductionism in general, it must be by reducing Y to ‘just X’.",
+          "start": 15
+        }
+      ],
+      "difficulty": 0.4,
+      "centrality": 0.8
+    },
+    {
+      "id": "spya-f4dqjb",
+      "question": "Isn't GPT-3 too costly to justify scaling up even further?",
+      "passages": [
+        {
+          "blockId": "spya-dfjr4c",
+          "quote": "can ML afford to run projects which cost more than 0.1 milli-Manhattan-Projects⸮",
+          "start": 473
+        },
+        {
+          "blockId": "spya-dfjr4c",
+          "quote": "Nonetheless, I think we can expect further scaling.",
+          "start": 1201
+        }
+      ],
+      "difficulty": 0.3,
+      "centrality": 0.5
+    },
+    {
+      "id": "spya-mfqhjv",
+      "question": "Why would making a model bigger make it generalize better instead of just memorizing more of its training data?",
+      "passages": [
+        {
+          "blockId": "spya-djq0xk",
+          "quote": "Why do larger models not overfit (though they can) and generalize better than smaller models?",
+          "start": 192
+        },
+        {
+          "blockId": "spya-uknzzk",
+          "quote": "sub-models which memorize pieces of the data, or latch onto superficial features, learn quickest and are the easiest to represent internally.",
+          "start": 33
+        },
+        {
+          "blockId": "spya-vkkfzh",
+          "quote": "it can’t possibly memorize all the instances of arithmetic (implicit or explicit) in GPT-3’s Internet-scale dataset.",
+          "start": 574
+        }
+      ],
+      "difficulty": 0.5,
+      "centrality": 0.7
+    },
+    {
+      "id": "spya-jr2tmb",
+      "question": "Since nobody can say what capabilities a further scaled-up model would gain, how confident can we be that scaling keeps working?",
+      "passages": [
+        {
+          "blockId": "spya-edr6mj",
+          "quote": "If GPT-3 gained so much meta-learning and world knowledge by dropping its absolute loss ~50% when starting from GPT-2’s level, what capabilities would another ~30% improvement over GPT-3 gain?",
+          "start": 543
+        },
+        {
+          "blockId": "spya-f6zupy",
+          "quote": "I don’t know.",
+          "start": 3
+        }
+      ],
+      "difficulty": 0.4,
+      "centrality": 0.9
+    },
+    {
+      "id": "spya-cy5tp2",
+      "question": "If major labs already have the hardware to match GPT-3, why hasn't an AI arms race already broken out?",
+      "passages": [
+        {
+          "blockId": "spya-khnsat",
+          "quote": "The existence of the hardware overhang implies that the limiting factor here is less hardware than human: will any organization treat GPT-3 as a Sputnik moment and invest aggressively in scaling programs?",
+          "start": 0
+        },
+        {
+          "blockId": "spya-fyy04z",
+          "quote": "At least as of 2020-10-26, 152 days later, no model has come near GPT-3, and indeed, no model has even exceeded Turing-NLG’s 17b.",
+          "start": 286
+        }
+      ],
+      "difficulty": 0.4,
+      "centrality": 0.6
+    },
+    {
+      "id": "spya-jj5dhq",
+      "question": "If scale really is the secret to intelligence, why haven't well-funded rivals like DeepMind already built their own GPT-3-scale model?",
+      "passages": [
+        {
+          "blockId": "spya-scr8jb",
+          "quote": "they do not have any such thing, because Google Brain & DeepMind do not believe in the scaling hypothesis the way that Sutskever, Amodei and others at OA do.",
+          "start": 54
+        },
+        {
+          "blockId": "spya-vr9q2p",
+          "quote": "they believe that AGI will require us to “find the right algorithms” effectively replicating a mammalian brain module by module",
+          "start": 97
+        }
+      ],
+      "difficulty": 0.5,
+      "centrality": 0.85
+    },
+    {
+      "id": "spya-r377ks",
+      "question": "Could we make a generative model safely non-agentic just by removing human-generated 'agentic' data from its training set?",
+      "passages": [
+        {
+          "blockId": "spya-denmtt",
+          "quote": "would we then have a model which is now just a (relatively) safe ‘tool AI’, with no agency lurking?",
+          "start": 473
+        },
+        {
+          "blockId": "spya-ueb3d2",
+          "quote": "agency is not a discrete thing, but a continuum, which is a convergent instrumental drive / emergent capability because it is useful even for understanding “non-agentic” things.",
+          "start": 81
+        },
+        {
+          "blockId": "spya-jn3pv0",
+          "quote": "there cannot be any principled, hard-and-fast, necessary distinction between data which is ‘agentic’ and data which is merely ‘natural’.",
+          "start": 7
+        }
+      ],
+      "difficulty": 0.6,
+      "centrality": 0.7
+    },
+    {
+      "id": "spya-u8qufr",
+      "question": "Does training on a single random computer program risk producing agent-like behavior the same way training on human text does?",
+      "passages": [
+        {
+          "blockId": "spya-ufpyk0",
+          "quote": "There is nothing that random TM programs try to minimize or maximize; they simply run.",
+          "start": 305
+        },
+        {
+          "blockId": "spya-usu3q6",
+          "quote": "This provides our modularity, and a particular computation executed, and strong optimization pressure to rapidly ‘read’ the history and infer what the new rules must be.",
+          "start": 0
+        }
+      ],
+      "difficulty": 0.8,
+      "centrality": 0.5
+    },
+    {
+      "id": "spya-jeza4r",
+      "question": "Doesn't saying almost any system can be read as agent-like prove too much, making the whole idea of 'agency' meaningless?",
+      "passages": [
+        {
+          "blockId": "spya-msngfz",
+          "quote": "Agency may be like Turing-completeness: even in settings free of selection or optimization, it is a capability too useful and too convergent to guarantee its absence.",
+          "start": 0
+        },
+        {
+          "blockId": "spya-jrm0w9",
+          "quote": "that there is no overt agency doesn’t mean it is not there.",
+          "start": 328
+        }
+      ],
+      "difficulty": 0.6,
+      "centrality": 0.6
+    }
+  ],
+  "dropped": {
+    "unknownIds": 0,
+    "unquoted": 1,
+    "tooLong": 0,
+    "duplicate": 0,
+    "unanchored": 0,
+    "overCap": 0,
+    "malformed": 0
+  },
+  "scoreDrops": {
+    "difficultyAbsent": 0,
+    "difficultyRejected": 0,
+    "centralityAbsent": 0,
+    "centralityRejected": 0
+  }
+}

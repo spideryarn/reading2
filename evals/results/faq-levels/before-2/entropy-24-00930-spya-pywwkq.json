@@ -1,0 +1,132 @@
+{
+  "arm": "before-2",
+  "slug": "entropy-24-00930-spya-pywwkq",
+  "version": "faq/3",
+  "faqSha256": "9c6f7a31f99efcb35ef1416a62d7fd0dd25b6c6687ff88b4619fe2dc74a4e5eb",
+  "at": "2026-09-29T17:48:18.246Z",
+  "tokens": {
+    "input": 21045,
+    "output": 4418,
+    "cacheRead": 0,
+    "cacheWrite": 0
+  },
+  "questions": [
+    {
+      "id": "spya-cnu8mf",
+      "question": "If transfer entropy already tracks directed information flow between neurons, why isn't that enough to understand information processing, requiring PID instead?",
+      "passages": [
+        {
+          "blockId": "spya-s0db2g",
+          "quote": "Information transfer captures the overall “flow” of information through the system; however, it is limited in its ability to reveal how different streams of information “interact” and how neurons produce novel or modified information from multiple sources",
+          "start": 0
+        }
+      ]
+    },
+    {
+      "id": "spya-qq6w0k",
+      "question": "Since classical information theory gives no unique way to define redundancy, how can synergy results be trusted or compared across studies?",
+      "passages": [
+        {
+          "blockId": "spya-bgsd4n",
+          "quote": "Unfortunately, classical Shannon information theory provides no unique solution to any of these, and so considerable work has been devoted to developing formal measures of each.",
+          "start": 257
+        },
+        {
+          "blockId": "spya-rc76qn",
+          "quote": "There are, at present, close to a dozen competing redundancy functions",
+          "start": 375
+        }
+      ]
+    },
+    {
+      "id": "spya-wjjykb",
+      "question": "Since rich clubs are defined by having the most information propagation, isn't finding they also have high synergy just restating that same fact?",
+      "passages": [
+        {
+          "blockId": "spya-bftp48",
+          "quote": "By definition, rich clubs are disproportionately dense in information propagation",
+          "start": 654
+        },
+        {
+          "blockId": "spya-fud8q3",
+          "quote": "We also found that there was a strong positive correlation between the rich club coefficient and the average synergy produced by rich club triads, suggesting that the rich club structure itself was related to the amount of computation.",
+          "start": 672
+        }
+      ]
+    },
+    {
+      "id": "spya-kv2egf",
+      "question": "Why would synergy decrease again at long timescales even though more correlated information is available then?",
+      "passages": [
+        {
+          "blockId": "spya-ybmve2",
+          "quote": "Interestingly, synergy only increased up to a point. The peak in synergy occurred when the mutual information was about 7% of the maximal value, regardless of the timescale. Past this level, the synergy began to decrease",
+          "start": 187
+        },
+        {
+          "blockId": "spya-cs9fdy",
+          "quote": "This suggests that as the similarity of the converging information grows past some point, it becomes redundant, and the total amount of synergistic output is suppressed.",
+          "start": 724
+        }
+      ]
+    },
+    {
+      "id": "spya-mhr3ha",
+      "question": "If bivariate transfer entropy overestimates the significance of connections, doesn't that undermine the triad-based rich-club synergy findings?",
+      "passages": [
+        {
+          "blockId": "spya-j4cy9j",
+          "quote": "it has been shown that bivariate analyses overestimate the significance of bivariate edges [51]",
+          "start": 315
+        },
+        {
+          "blockId": "spya-wr7f6y",
+          "quote": "Rather than using a bivariate transfer entropy function, however, the authors used a serial conditioning algorithm to infer the multivariate TE networks",
+          "start": 526
+        }
+      ]
+    },
+    {
+      "id": "spya-s4yrnh",
+      "question": "Given real neurons can have huge numbers of inputs, how can PID's atom-based decomposition ever scale beyond small triads?",
+      "passages": [
+        {
+          "blockId": "spya-aby2dp",
+          "quote": "Given that single neurons can receive inputs from very large numbers of upstream neurons, a “complete” description of the information dynamics of any individual neuron is completely intractable.",
+          "start": 538
+        }
+      ]
+    },
+    {
+      "id": "spya-axrcfv",
+      "question": "Given that naive estimators are known to inflate mutual information even between unrelated signals, how confident can we be in the reported synergy values?",
+      "passages": [
+        {
+          "blockId": "spya-qa7gt2",
+          "quote": "it is known that the plug-in estimator for the Shannon entropy consistently underestimates the true entropy and overestimates the mutual information (for example, two processes that are uncorrelated can have non-zero apparent mutual information)",
+          "start": 226
+        }
+      ]
+    },
+    {
+      "id": "spya-n3tr80",
+      "question": "If the original redundancy measure can't be broken down moment by moment, how is the time-resolved local PID analysis mentioned later even possible?",
+      "passages": [
+        {
+          "blockId": "spya-ckpq7e",
+          "quote": "The original measure Imin, proposed by Williams and Beer [1], did not satisfy this property, and neither did many subsequent refinements such as the measures developed in [24,25,31]. To date, three local redundancy functions have been proposed",
+          "start": 117
+        }
+      ]
+    }
+  ],
+  "dropped": {
+    "unknownIds": 0,
+    "unquoted": 0,
+    "tooLong": 1,
+    "duplicate": 0,
+    "unanchored": 0,
+    "overCap": 0,
+    "malformed": 0
+  }
+}

@@ -1,0 +1,162 @@
+{
+  "arm": "after",
+  "slug": "towards-a-theory-of-bugs-the-ruliology-of-the-unexpected",
+  "version": "faq/4",
+  "faqSha256": "8ded5d816427dcaf28f5660edff111ea37fab6673cce50e81c790ff6d72f1cfc",
+  "at": "2026-09-29T17:57:10.566Z",
+  "tokens": {
+    "input": 20344,
+    "output": 3250,
+    "cacheRead": 0,
+    "cacheWrite": 0
+  },
+  "questions": [
+    {
+      "id": "spya-h0rzyf",
+      "question": "What's actually gained by searching for a formal proof instead of just running the program on many cases, if both cost unbounded effort?",
+      "passages": [
+        {
+          "blockId": "spya-ymdpn2",
+          "quote": "we don’t get any fundamental advantage by trying to make a proof rather than just running the Turing machine",
+          "start": 16
+        }
+      ],
+      "difficulty": 0.4,
+      "centrality": 0.6
+    },
+    {
+      "id": "spya-njbvez",
+      "question": "Does this mean any program that actually does something computationally worthwhile is doomed to carry some risk of bugs?",
+      "passages": [
+        {
+          "blockId": "spya-nd4kn9",
+          "quote": "to make the program worth actually running, there have to be parts of its behavior you can’t foresee",
+          "start": 384
+        },
+        {
+          "blockId": "spya-uj0h88",
+          "quote": "it’s very common for programs to have what amounts to a “spark of computational irreducibility inside”",
+          "start": 156
+        }
+      ],
+      "difficulty": 0.3,
+      "centrality": 0.9
+    },
+    {
+      "id": "spya-ztcfbe",
+      "question": "If computational irreducibility makes a program's behavior unforeseeable short of running it, how can any formal proof of correctness ever succeed?",
+      "passages": [
+        {
+          "blockId": "spya-y9hee0",
+          "quote": "there will always be certain things about a system that one will be able to predict",
+          "start": 474
+        },
+        {
+          "blockId": "spya-zz4up4",
+          "quote": "One can think of proofs as taking advantage of pockets of computational reducibility, to provide finite summaries of infinite things.",
+          "start": 239
+        }
+      ],
+      "difficulty": 0.4,
+      "centrality": 0.9
+    },
+    {
+      "id": "spya-b7qpdv",
+      "question": "Since scientific induction works in physics but fails in biology, does this tell us anything about how reliable induction should be for software behavior?",
+      "passages": [
+        {
+          "blockId": "spya-a6ybxq",
+          "quote": "insofar as the details of what programs do matters, one’s going to have the potential to run into computational irreducibility",
+          "start": 36
+        }
+      ],
+      "difficulty": 0.4,
+      "centrality": 0.5
+    },
+    {
+      "id": "spya-ep7hb0",
+      "question": "Given that math can encode arbitrary computation (per Gödel), why doesn't pure mathematics suffer the same flood of unexpected 'bugs' as ruliology?",
+      "passages": [
+        {
+          "blockId": "spya-whd6dc",
+          "quote": "pure mathematics as it’s normally practiced tends to concentrate on what amount to more “human-level” questions, that in effect exist in pockets of computational reducibility",
+          "start": 269
+        }
+      ],
+      "difficulty": 0.5,
+      "centrality": 0.8
+    },
+    {
+      "id": "spya-xq5h6e",
+      "question": "If a well-designed language pushes irreducibility into its primitives, does that mean programs written in it can be made completely bug-free?",
+      "passages": [
+        {
+          "blockId": "spya-wvj8uq",
+          "quote": "any time you write a program that actually needs to be written (in the sense that it’s achieving at least some irreducible computation), it’ll have the possibility of doing something you didn’t expect",
+          "start": 44
+        }
+      ],
+      "difficulty": 0.3,
+      "centrality": 0.85
+    },
+    {
+      "id": "spya-fcekwn",
+      "question": "If AI is good at catching bugs that follow familiar human mistakes, can it also be expected to catch the deeper, irreducibility-driven bugs discussed here?",
+      "passages": [
+        {
+          "blockId": "spya-j4rcwn",
+          "quote": "modern AIs are typically quite good at finding bugs that follow the patterns of typical human missteps",
+          "start": 398
+        },
+        {
+          "blockId": "spya-sggbeh",
+          "quote": "What we’ve mostly discussed here are, however, what amount to deeper kinds of bugs. They are bugs that do not follow any human-related patterns.",
+          "start": 0
+        }
+      ],
+      "difficulty": 0.3,
+      "centrality": 0.7
+    },
+    {
+      "id": "spya-d0y0ew",
+      "question": "For systems like modern neural networks that don't have an obvious visual 'spacetime' picture, is there any way to actually see inside and rule out surprises?",
+      "passages": [
+        {
+          "blockId": "spya-ms0ens",
+          "quote": "What actually happens in a realistic neural net will be very hard to visualize or to “understand at a human level”",
+          "start": 546
+        }
+      ],
+      "difficulty": 0.4,
+      "centrality": 0.5
+    },
+    {
+      "id": "spya-vwhwdw",
+      "question": "Does allowing some bugs actually let a program be made shorter, or is that only true for low-level code like Turing machines rather than well-designed languages?",
+      "passages": [
+        {
+          "blockId": "spya-xdwm97",
+          "quote": "if our program is written at a lower level, say as a Turing machine, then we can expect (as we saw above) that allowing some bugs can allow the program to be shorter",
+          "start": 226
+        }
+      ],
+      "difficulty": 0.4,
+      "centrality": 0.4
+    }
+  ],
+  "dropped": {
+    "unknownIds": 0,
+    "unquoted": 3,
+    "tooLong": 0,
+    "duplicate": 0,
+    "unanchored": 1,
+    "overCap": 0,
+    "malformed": 0
+  },
+  "scoreDrops": {
+    "difficultyAbsent": 0,
+    "difficultyRejected": 0,
+    "centralityAbsent": 0,
+    "centralityRejected": 0
+  }
+}

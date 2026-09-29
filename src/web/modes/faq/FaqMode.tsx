@@ -9,7 +9,10 @@
  * - **no passages** — each passage under a question is a jump through `onJump`,
  *   not a selection, so there is no `usePassageLifecycle` here and
  *   `selectPassages` answers `NOTHING` (src/web/reader/passages.ts);
- * - **no URL parameters** — nothing addresses a question yet.
+ * - **no selection in the URL** — nothing addresses a question yet. What the
+ *   URL does carry, since 2026-09-29, is the order and the bar: `?faqby=` and
+ *   `?faqbar=`, shared by both bands through `useFaqControls`, as
+ *   `?citeby=`/`?citebar=` are (plan 260929g).
  *
  * **The visitor twin, `VisitorFaqBand`**, draws the stored FAQ off the public
  * payload with no `useFaq` under it, so it can neither read the owner's FAQ nor
@@ -21,8 +24,10 @@
  * docs/project/faq.md.
  */
 
+import { useQueryState } from "nuqs";
 import type { BlockId } from "../../../types.js";
 import type { PublicFaq } from "../../../public-types.js";
+import { faqBarParam, faqOrderParam } from "../../params.js";
 import { useRenderCount } from "../../perf.js";
 import { useFaq } from "../../useFaq.js";
 import { FaqPanel } from "../../FaqPanel.js";
@@ -38,7 +43,8 @@ import { FaqPanel } from "../../FaqPanel.js";
 export function FaqBand({ slug, onJump }: { slug: string; onJump(id: BlockId): void }) {
   useRenderCount("FaqBand");
   const owner = useFaq(slug);
-  return <FaqPanel access={{ kind: "owner", owner }} onJump={onJump} />;
+  const controls = useFaqControls();
+  return <FaqPanel access={{ kind: "owner", owner }} {...controls} onJump={onJump} />;
 }
 
 /**
@@ -53,5 +59,16 @@ export function FaqBand({ slug, onJump }: { slug: string; onJump(id: BlockId): v
  */
 export function VisitorFaqBand({ faq, onJump }: { faq: PublicFaq; onJump(id: BlockId): void }) {
   useRenderCount("VisitorFaqBand");
-  return <FaqPanel access={{ kind: "visitor", faq }} onJump={onJump} />;
+  const controls = useFaqControls();
+  return <FaqPanel access={{ kind: "visitor", faq }} {...controls} onJump={onJump} />;
+}
+
+/** `?faqby=` and `?faqbar=`, which both bands share. */
+function useFaqControls() {
+  const [order, setOrder] = useQueryState("faqby", faqOrderParam);
+  /* Null is "nobody has touched the bar", which the panel resolves to
+     `FAQ_BAR_DEFAULT` — kept null here so the default is one number in one
+     file (src/web/faq-order.ts). */
+  const [bar, setBar] = useQueryState("faqbar", faqBarParam);
+  return { order, onOrder: setOrder, bar, onBar: setBar };
 }
