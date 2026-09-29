@@ -88,7 +88,23 @@ async function realStatus(res: Response): Promise<number> {
   return Number.isFinite(stated) && stated > 0 ? stated : res.status;
 }
 
-async function fail(res: Response, what: string): Promise<Error> {
+/**
+ * A Storage call that failed, with the status Storage meant (`realStatus`), so
+ * a caller can tell a transient 5xx from a refusal without parsing the message.
+ * `name` is left as `Error` so the message and `String(err)` read exactly as
+ * before: pipeline.ts and collect-assets.ts read `Storage put failed (415)`.
+ */
+export class StorageFailed extends Error {
+  constructor(
+    readonly op: string,
+    readonly status: number,
+    detail: string,
+  ) {
+    super(`Storage ${op} failed (${status})${detail ? `: ${detail}` : ""}`);
+  }
+}
+
+async function fail(res: Response, what: string): Promise<StorageFailed> {
   const status = await realStatus(res);
   let detail = "";
   try {
@@ -101,7 +117,7 @@ async function fail(res: Response, what: string): Promise<Error> {
      id and a canonical key is a content hash; neither is a secret, but this
      message reaches a log and the rule there is to say what happened rather
      than which document it happened to. src/log.ts. */
-  return new Error(`Storage ${what} failed (${status})${detail ? `: ${detail}` : ""}`);
+  return new StorageFailed(what, status, detail);
 }
 
 export function supabaseBlobs(baseUrl: string, serviceKey: string): RawSourceStore & UploadGrants {

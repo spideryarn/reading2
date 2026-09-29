@@ -33,6 +33,7 @@ import type { ScanCoverage, StoredAccountUsage, UsageAccount, UsageReport } from
 import { runOverseer, type UsagePassOutcome } from "../tools/overseer/daemon.js";
 import { readCheckpoint } from "../tools/overseer/store.js";
 import { clockFrom } from "./helpers/fixture-clock.js";
+import { heldOpen, tickAfter, ticks, until } from "./helpers/overseer-until.js";
 
 /** Just after the fixtures' own `collectedAt`s: the daemon's clock starts here, not at today. */
 const FIXTURE_NOW = "2026-09-10T06:01:00.000Z";
@@ -89,19 +90,6 @@ function report(over: Partial<UsageReport> = {}): UsageReport {
   };
 }
 
-function abortAfter(ms: number): AbortController {
-  const controller = new AbortController();
-  setTimeout(() => controller.abort(), ms).unref?.();
-  return controller;
-}
-
-async function heldOpen(signal: AbortSignal): Promise<void> {
-  await new Promise<void>((resolve) => {
-    if (signal.aborted) resolve();
-    else signal.addEventListener("abort", () => resolve());
-  });
-}
-
 function deferred<T>(): { promise: Promise<T>; resolve: (value: T) => void } {
   let resolve!: (value: T) => void;
   const promise = new Promise<T>((done) => {
@@ -120,20 +108,25 @@ type Run = {
   passes: number;
 };
 
+/**
+ * Runs the daemon until `until` holds, then for one more heartbeat tick so
+ * `current.json` carries whatever the last pass decided — never for a fixed
+ * time; tests/helpers/overseer-until.ts says why.
+ */
 async function runWithHook(options: {
   run: () => Promise<UsageReport>;
   onPass?: (outcome: UsagePassOutcome) => void;
-  /** Long enough for several TICKS but only a few passes, or the reverse. */
-  forMs?: number;
+  what: string;
+  until: (state: { outcomes: readonly UsagePassOutcome[]; root: string }) => boolean;
   usageIntervalMs?: number;
   tickMs?: number;
 }): Promise<Run> {
   const root = tempRoot();
-  const controller = abortAfter(options.forMs ?? 400);
+  const controller = new AbortController();
   const outcomes: UsagePassOutcome[] = [];
   let passes = 0;
 
-  await runOverseer({
+  const running = runOverseer({
     root,
     baseUrl: "http://127.0.0.1:1",
     signal: controller.signal,
@@ -141,6 +134,7 @@ async function runWithHook(options: {
     now: clockFrom(FIXTURE_NOW),
     log: () => {},
     source: async function* () {
+      yield* [];
       await heldOpen(controller.signal);
     },
     usage: {
@@ -155,14 +149,20 @@ async function runWithHook(options: {
       },
     },
   });
+  await until(options.what, () => options.until({ outcomes, root }));
+  await tickAfter(root);
+  controller.abort();
+  await running;
 
   return { root, outcomes, passes };
 }
 
+const aPass = { what: "a usage pass", until: ({ outcomes }: { outcomes: readonly UsagePassOutcome[] }) => outcomes.length > 0 };
+
 describe("onPass fires once per pass, with the right arm", () => {
   test("a fresh complete report is `take-fresh`, and carries the report", async () => {
     const produced = report();
-    const { outcomes, passes } = await runWithHook({ run: async () => produced });
+    const { outcomes, passes } = await runWithHook({ ...aPass, run: async () => produced });
 
     expect(passes).toBeGreaterThan(0);
     expect(outcomes.length).toBe(passes);
@@ -191,7 +191,8 @@ describe("onPass fires once per pass, with the right arm", () => {
 
     let call = 0;
     const { outcomes } = await runWithHook({
-      forMs: 700,
+      what: "the second pass, the incomplete one",
+      until: ({ outcomes: seen }) => seen.length > 1,
       run: async () => {
         call += 1;
         return call === 1 ? complete : incomplete;
@@ -207,6 +208,7 @@ describe("onPass fires once per pass, with the right arm", () => {
 
   test("a thrown pass is `collector-failed`, with the reason", async () => {
     const { outcomes } = await runWithHook({
+      ...aPass,
       run: async () => {
         throw new Error("ENOENT reading ~/.claude.json");
       },
@@ -222,12 +224,14 @@ describe("onPass fires once per pass, with the right arm", () => {
        on the checkpoint write would fire ~2,880 times a day for ~288 readings,
        and an unchanged reading would drown the collector failures the series is
        for. So: a fast tick, a usage interval longer than the whole run, and the
-       assertion is that NOTHING fires. */
+       assertion is that NOTHING fires — over ticks counted off the checkpoint,
+       so a starved box cannot pass this by having ticked zero times. */
     const { outcomes, passes } = await runWithHook({
+      what: "five heartbeat ticks",
+      until: ({ root }) => ticks(root) >= 5,
       run: async () => report(),
       tickMs: 20,
       usageIntervalMs: 100_000,
-      forMs: 400,
     });
     expect(passes).toBe(0);
     expect(outcomes).toEqual([]);
@@ -243,6 +247,7 @@ describe("a throwing callback cannot damage the daemon", () => {
   test("a throw on take-fresh does not become a collector failure on disk", async () => {
     const produced = report();
     const { root, outcomes } = await runWithHook({
+      ...aPass,
       run: async () => produced,
       onPass: () => {
         throw new Error("the history store is on fire");
@@ -262,7 +267,8 @@ describe("a throwing callback cannot damage the daemon", () => {
   test("a throw does not stop later passes", async () => {
     let thrown = 0;
     const { passes, outcomes } = await runWithHook({
-      forMs: 700,
+      what: "a second pass after a throwing hook",
+      until: ({ outcomes: seen }) => seen.length > 1,
       run: async () => report(),
       onPass: () => {
         thrown += 1;
@@ -278,6 +284,7 @@ describe("a throwing callback cannot damage the daemon", () => {
     /* The arm most likely to be missed: the hook is called from inside a
        `.catch()`, where an unguarded throw has nowhere left to go. */
     const { root, outcomes } = await runWithHook({
+      ...aPass,
       run: async () => {
         throw new Error("scan exploded");
       },
@@ -335,10 +342,14 @@ describe("the per-account pass is wired, and is independent of the scan", () => 
     accounts?: () => Promise<StoredAccountUsage>;
   }): Promise<{ root: string; calls: number }> {
     const root = tempRoot();
-    const controller = abortAfter(400);
+    const controller = new AbortController();
     let calls = 0;
+    /* Counted where each pass ENDS: in the account collector when there is one,
+       else in the scan. The daemon's own bookkeeping after either is microtasks,
+       so it is done before the next poll of `until` can see this count move. */
+    let finished = 0;
     const collect = options.accounts;
-    await runOverseer({
+    const running = runOverseer({
       root,
       baseUrl: "http://127.0.0.1:1",
       signal: controller.signal,
@@ -346,21 +357,36 @@ describe("the per-account pass is wired, and is independent of the scan", () => 
       tickMs: 40,
       log: () => {},
       source: async function* () {
+        yield* [];
         await heldOpen(controller.signal);
       },
       usage: {
         intervalMs: 120,
-        run: options.run,
+        run: async () => {
+          try {
+            return await options.run();
+          } finally {
+            if (collect === undefined) finished += 1;
+          }
+        },
         ...(collect === undefined
           ? {}
           : {
               accounts: async () => {
                 calls += 1;
-                return await collect();
+                try {
+                  return await collect();
+                } finally {
+                  finished += 1;
+                }
               },
             }),
       },
     });
+    await until("a whole usage pass, account half included", () => finished > 0);
+    await tickAfter(root);
+    controller.abort();
+    await running;
     return { root, calls };
   }
 
@@ -423,6 +449,7 @@ describe("the per-account pass is wired, and is independent of the scan", () => 
       tickMs: 10,
       log: () => {},
       source: async function* () {
+        yield* [];
         await heldOpen(controller.signal);
       },
       usage: {
@@ -440,7 +467,8 @@ describe("the per-account pass is wired, and is independent of the scan", () => 
     });
 
     await accountStarted.promise;
-    await pause(70);
+    const ticksBefore = ticks(root);
+    await until("five heartbeat ticks while the account pass is in flight", () => ticks(root) >= ticksBefore + 5);
     expect(usageCalls).toBe(1);
     expect(accountCalls).toBe(1);
 
@@ -449,7 +477,11 @@ describe("the per-account pass is wired, and is independent of the scan", () => 
       stopped = true;
     });
     controller.abort();
-    await pause(20);
+    /* Time for a daemon that did NOT wait to finish its shutdown and resolve.
+       A duration on purpose: this is the one negative a window cannot turn red
+       — a slow box can only make it pass more easily — and one task turn would
+       not give a broken shutdown time to get to the end of its awaits. */
+    await pause(100);
     expect(stopped, "shutdown returned while the account pass was still in flight").toBe(false);
 
     accounts.resolve(reading("2026-09-10T06:00:00.000Z"));

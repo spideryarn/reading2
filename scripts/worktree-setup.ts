@@ -159,12 +159,15 @@ if (existsSync(path.join(ROOT, ".env.local"))) {
 }
 
 say();
-// Measured 2026-09-07 in a fresh worktree: 2 of 786 files, and both are the same
-// missing build artefact rather than fourteen unrelated things. The "~14 of 477"
-// this said until then was measured 2026-09-01 and had gone stale in both numbers,
-// which matters because the figure is what tells a new agent whether its own red is
-// normal — docs/reusable/written-down-is-not-checked.md.
-info(`npm test         — expect 2 of 786 files red, both wanting \`npm run build\``);
+// What tells a new agent whether its own red is normal. It named a count, "2 of
+// 786" (measured 2026-09-07), and went stale twice: the "~14 of 477" before it,
+// then the three fleet files that want `build:fleet`, which it never mentioned
+// (2026-09-29). So it names the cause instead of a number: files whose own
+// failure message says which build to run. The deploy gate runs the ordinary
+// build plus the extra `build:fleet` entry in `GATE_TOOLING_BUILDS`;
+// tests/deploy-checks.test.ts keeps those level with the suite's messages.
+// docs/reusable/written-down-is-not-checked.md.
+info("npm test         — files asking for `npm run build` or `npm run build:fleet` are red until you run those");
 info(`npm run dev      — walks up from ${PRIMARY_PORT}; a port outside the range warns at startup`);
 info("and read docs/project/worktrees.md before landing anything");
 say();

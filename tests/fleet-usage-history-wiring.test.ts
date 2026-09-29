@@ -23,6 +23,7 @@ import { makeUsageRetention } from "../tools/fleet/usage-history-wiring.js";
 import type { CodexUsageReading, ScanCoverage, UsageAccount, UsageReport } from "../tools/fleet/wire.js";
 import { runOverseer } from "../tools/overseer/daemon.js";
 import { clockFrom } from "./helpers/fixture-clock.js";
+import { heldOpen, ticks, until } from "./helpers/overseer-until.js";
 
 /** Just after the fixtures' own `collectedAt`s: the daemon's clock starts here, not at today. */
 const FIXTURE_NOW = "2026-09-09T01:00:00.000Z";
@@ -167,19 +168,6 @@ function report(over: Partial<UsageReport> = {}): UsageReport {
   };
 }
 
-function abortAfter(ms: number): AbortController {
-  const controller = new AbortController();
-  setTimeout(() => controller.abort(), ms).unref?.();
-  return controller;
-}
-
-async function heldOpen(signal: AbortSignal): Promise<void> {
-  await new Promise<void>((resolve) => {
-    if (signal.aborted) resolve();
-    else signal.addEventListener("abort", () => resolve());
-  });
-}
-
 function deferred<T>(): { promise: Promise<T>; resolve: (value: T) => void } {
   let resolve!: (value: T) => void;
   const promise = new Promise<T>((done) => {
@@ -192,17 +180,28 @@ async function pause(ms: number): Promise<void> {
   await new Promise((resolve) => setTimeout(resolve, ms));
 }
 
+/** How many lines the usage history holds; 0 before the file exists. */
+function samples(root: string): number {
+  const read = openUsageHistoryForRead(root).read({ sinceMs: 0 });
+  return read.kind === "read" ? read.samples.length : 0;
+}
+
+/**
+ * Runs the real daemon until the history holds `lines` lines — never for a
+ * fixed time; tests/helpers/overseer-until.ts says why. The line is written
+ * inside the pass, so no heartbeat tick is needed before reading it.
+ */
 async function runWith(
   run: () => Promise<UsageReport>,
-  forMs = 400,
+  lines = 1,
   collectCodex: () => Promise<CodexUsageReading> = async () => CODEX,
 ): Promise<string> {
   const root = tempRoot();
-  const controller = abortAfter(forMs);
+  const controller = new AbortController();
   const now = clockFrom(FIXTURE_NOW);
   const retention = makeUsageRetention(root, { nextDueMs: 300_000, now, log: () => {} });
 
-  await runOverseer({
+  const running = runOverseer({
     root,
     baseUrl: "http://127.0.0.1:1",
     signal: controller.signal,
@@ -215,6 +214,9 @@ async function runWith(
     },
     usage: { ...usageHistoryDaemonOptions(retention, { claude: run, codex: collectCodex }), intervalMs: 120 },
   });
+  await until(`${lines} line(s) in the usage history`, () => samples(root) >= lines);
+  controller.abort();
+  await running;
   retention.close();
   return root;
 }
@@ -299,7 +301,8 @@ describe("a usage pass becomes a line on disk", () => {
     });
 
     await firstCodexCall.promise;
-    await pause(70);
+    const ticksBefore = ticks(root);
+    await until("five heartbeat ticks while Codex collection is in flight", () => ticks(root) >= ticksBefore + 5);
     expect(claudeCalls).toBe(1);
     expect(codexCalls).toBe(1);
 
@@ -308,7 +311,11 @@ describe("a usage pass becomes a line on disk", () => {
       stopped = true;
     });
     controller.abort();
-    await pause(20);
+    /* Time for a daemon that did NOT wait to finish its shutdown and resolve.
+       A duration on purpose: this is the one negative a window cannot turn red
+       — a slow box can only make it pass more easily — and one task turn would
+       not give a broken shutdown time to get to the end of its awaits. */
+    await pause(100);
     expect(stopped, "shutdown returned while Codex collection was still in flight").toBe(false);
 
     codex.resolve(CODEX);
@@ -325,7 +332,7 @@ describe("a usage pass becomes a line on disk", () => {
   });
 
   test("a rejected Codex collection does not turn a good Claude pass into collector-failed", async () => {
-    const root = await runWith(async () => report(), 400, async () => {
+    const root = await runWith(async () => report(), 1, async () => {
       throw new Error("temporary Codex failure");
     });
 
@@ -416,7 +423,7 @@ describe("a usage pass becomes a line on disk", () => {
               coverage: coverage({ transcriptsOpened: 1, transcriptsUnreadable: 3, unreadableWhy: ["EACCES"] }),
             },
           });
-    }, 700);
+    }, 2);
 
     const read = openUsageHistoryForRead(root).read({ sinceMs: 0 });
     if (read.kind !== "read") throw new Error("unreadable");
@@ -441,7 +448,9 @@ describe("a usage pass becomes a line on disk", () => {
        the actual resource rather than mirroring the implementation. Linux-only,
        which is what this daemon runs on. */
     const before = readdirSync("/proc/self/fd").length;
-    const root = await runWith(async () => report(), 700);
+    /* Five passes, as the fixed window used to give on a quiet box: a leak of
+       one descriptor per pass must clear the two of slack below by a margin. */
+    const root = await runWith(async () => report(), 5);
     const after = readdirSync("/proc/self/fd").length;
 
     const read = openUsageHistoryForRead(root).read({ sinceMs: 0 });
@@ -458,10 +467,10 @@ describe("a usage pass becomes a line on disk", () => {
        and an absent one are different answers to "has anything been recorded",
        and the route says different things about them. */
     const root = tempRoot();
-    const controller = abortAfter(300);
+    const controller = new AbortController();
     const now = clockFrom(FIXTURE_NOW);
     const retention = makeUsageRetention(root, { nextDueMs: 300_000, now, log: () => {} });
-    await runOverseer({
+    const running = runOverseer({
       root,
       baseUrl: "http://127.0.0.1:1",
       signal: controller.signal,
@@ -477,6 +486,11 @@ describe("a usage pass becomes a line on disk", () => {
         intervalMs: 100_000,
       },
     });
+    /* Ticks counted off the checkpoint, so "nothing written" is over a daemon
+       that demonstrably ran, not one a starved box never got going. */
+    await until("three heartbeat ticks", () => ticks(root) >= 3);
+    controller.abort();
+    await running;
     retention.close();
 
     expect(retention.path()).toBeNull();

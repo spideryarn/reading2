@@ -16,6 +16,7 @@ import { readNotes } from "../tools/overseer/notes.js";
 import type { SourceMessage } from "../tools/overseer/source.js";
 import type { ReportDrainOutcome } from "../tools/overseer/reports.js";
 import type { SessionRegister } from "../tools/overseer/store.js";
+import { heldOpen, until } from "./helpers/overseer-until.js";
 import { rawFixture } from "./overseer-fixtures.js";
 
 const roots: string[] = [];
@@ -47,11 +48,15 @@ const QUIET: ReportDrainOutcome = {
   notes: [],
 };
 
-async function runWithDrain(drain: (register: SessionRegister) => ReportDrainOutcome, forMs = 300): Promise<string> {
+/** Runs the daemon until `done` holds — never for a fixed time; tests/helpers/overseer-until.ts says why. */
+async function runWithDrain(
+  drain: (register: SessionRegister) => ReportDrainOutcome,
+  what: string,
+  done: () => boolean,
+): Promise<string> {
   const root = tempRoot();
   const controller = new AbortController();
-  setTimeout(() => controller.abort(), forMs).unref?.();
-  const outcome = await runOverseer({
+  const running = runOverseer({
     root,
     baseUrl: "http://127.0.0.1:1",
     signal: controller.signal,
@@ -61,20 +66,26 @@ async function runWithDrain(drain: (register: SessionRegister) => ReportDrainOut
     log: () => {},
     source: async function* (): AsyncGenerator<SourceMessage> {
       yield { kind: "payload", via: "sse", atMs: 0, json: rawFixture("session-new-before") };
-      await new Promise<void>((resolve) => controller.signal.addEventListener("abort", () => resolve()));
+      await heldOpen(controller.signal);
     },
     reports: { intervalMs: 25, drain },
   });
-  expect(outcome.kind).toBe("stopped");
+  await until(what, done);
+  controller.abort();
+  expect((await running).kind).toBe("stopped");
   return root;
 }
 
 test("the drain is called on its interval with the store's live register", async () => {
   const seen: SessionRegister[] = [];
-  await runWithDrain((register) => {
-    seen.push(register);
-    return QUIET;
-  });
+  await runWithDrain(
+    (register) => {
+      seen.push(register);
+      return QUIET;
+    },
+    "three drains",
+    () => seen.length > 2,
+  );
   expect(seen.length).toBeGreaterThan(2);
   // One live map, the store's own — not a copy per call.
   expect(new Set(seen).size).toBe(1);
@@ -84,11 +95,15 @@ test("the drain is called on its interval with the store's live register", async
 
 test("a throwing drain becomes a note and the daemon keeps running", async () => {
   let calls = 0;
-  const root = await runWithDrain(() => {
-    calls += 1;
-    if (calls === 1) throw new Error("the inbox is on fire");
-    return QUIET;
-  });
+  const root = await runWithDrain(
+    () => {
+      calls += 1;
+      if (calls === 1) throw new Error("the inbox is on fire");
+      return QUIET;
+    },
+    "a drain after the one that threw",
+    () => calls > 1,
+  );
   expect(calls).toBeGreaterThan(1);
   const read = readNotes(root);
   if (read.kind === "unreadable") throw new Error(read.cause);
