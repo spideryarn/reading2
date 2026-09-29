@@ -443,7 +443,6 @@ function OrderBar({
     /* biome-ignore lint/a11y/useSemanticElements: toggle buttons that order a
        list, not form controls — GlossaryPanel.tsx § SortBar says why. */
     <div className="gloss-sort" role="group" aria-label="Order the citations by">
-      <span className="gloss-sort-label">order</span>
       {options.map((option) => (
         <button
           key={option.key}

@@ -206,7 +206,7 @@ not repeat itself.
 So: `BATCH_SIZE = 20`, `suggestedCount(words)` scales the ask and clamps to it, and **running the
 step again appends**. `passes` on the artefact counts the calls. The panel used to print it under the
 list, on the argument that it was the only way to see that *Find more* had done anything; that
-stopped being true once the head grew a term count and the threshold row grew *n of m*, both of which
+stopped being true once the band grew a term count and the threshold row grew *n of m*, both of which
 move when a pass lands and both of which are the number the reader was actually waiting for. It went
 on 2026-09-05 — [above](#there-was-a-start-again-beside-it-and-it-went). It is still on the artefact
 and in the export.
@@ -469,6 +469,13 @@ the model falls into, and a negative example is the strongest guard against a re
 the design self-correcting: the panel never has to know what kind of term it is looking at. Nothing
 branches on `kind`, deliberately — kind is a proxy and it leaks both ways. A concept can be an
 allusion (*Paxos*), and a person can be fully introduced by the article.
+
+The only place `kind` shows is a small icon beside the name — a person, a place, an organisation, an
+event or a work, each with its meaning as a tooltip
+([`GlossaryKindIcon.tsx`](../../src/web/GlossaryKindIcon.tsx)). It was a word until 2026-09-29, when
+Greg asked what *work* meant and whether the words were worth their space; `concept` lost its mark
+then, because the prompt never says how a concept differs from a term
+([260929a](../plans/260929a-compact-glossary-header-and-kind-icons.md)).
 
 Run against the article that started this, the split does the work with no branching at all:
 
@@ -809,8 +816,10 @@ reasons, in the order they were found:
 
 Persistence is its own piece of work: an additive `reader_glossary_entries` table keyed by owner,
 article and revision, merged into the owner's response only, and a decision recorded about the public
-projection. Until then the hint under the box says *"Not added to the list"*, so the answer's
-disappearance reads as the design rather than as a failure.
+projection. Until then the Look up button's tooltip says *"Not added to the list"*, so the answer's
+disappearance reads as the design rather than as a failure. It was a line of its own under the box
+until 2026-09-29, when Greg asked for it to go to save a phone two lines
+([260929a](../plans/260929a-compact-glossary-header-and-kind-icons.md)).
 
 **No rate limit, no quota and no single-flight guard — and there is none to reuse.** The sibling
 `lookup` POST has none either; the only limiter in [`routes.ts`](../../src/routes.ts) is the feedback

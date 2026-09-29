@@ -379,6 +379,16 @@
   border-color: color-mix(in oklab, var(--highlight) 40%, transparent);
   color: var(--highlight-ink);
 }
+/* The icon alone — Glossary's, since 2026-09-29 (WrittenForYou.tsx § compact).
+   Even padding on all four sides: a round badge, not a pill with no words. */
+.prof-badge.icon-only { padding: 0.15rem; }
+/* What the badge was saying, said again at the top of the panel it opens —
+   the only place a compact badge's reader can read it. */
+.prof-panel-note {
+  margin: 0 0 0.4rem;
+  color: var(--ink);
+  font-weight: 600;
+}
 
 
 /* `.prof-row` and `.prof-open` lived here until 2026-09-13: the row beside

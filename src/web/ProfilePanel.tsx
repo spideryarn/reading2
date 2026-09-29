@@ -133,6 +133,7 @@ export function ProfilePanel({
   slug,
   className,
   label,
+  note,
   children,
 }: {
   slug: string;
@@ -142,6 +143,12 @@ export function ProfilePanel({
   label: string;
   /** The trigger's contents — an icon, or an icon and a word. */
   children: ReactNode;
+  /**
+   * What the trigger was saying, in a sentence at the top of the panel — for a
+   * trigger that is only an icon, this is the one place its words are read
+   * (WrittenForYou.tsx § `compact`).
+   */
+  note?: string | undefined;
 }) {
   const [open, setOpen] = useState(false);
   const { refs, floatingStyles, context } = useFloating({
@@ -190,6 +197,7 @@ export function ProfilePanel({
               aria-label="What you're being written for"
               {...getFloatingProps()}
             >
+              {note && <p className="prof-panel-note">{note}</p>}
               <PanelBody slug={slug} onLeave={() => setOpen(false)} />
             </div>
           </FloatingFocusManager>

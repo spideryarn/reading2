@@ -206,7 +206,9 @@ describe("the threshold wiring", () => {
   it("keeps the order buttons and the slider on screen when everything is hidden", () => {
     /* The all-hidden state's only way out is the two controls that caused it,
        so neither may be rendered from the filtered list. */
-    expect(glossaryPanel).toMatch(/glossary\.entries\.length > 1 && \(\s*<SortBar/);
+    expect(glossaryPanel).toMatch(/sorts\.length > 0 && \(\s*<SortBar/);
+    /* …and `sorts` is asked of the whole list, not of what the gate lets in. */
+    expect(glossaryPanel).toMatch(/const sorts = glossary && glossary\.entries\.length > 1 \? sortOptions\(all\)/);
     expect(glossaryPanel).toMatch(/glossary && order === "prioritised" && \(\s*<GateSlider/);
     expect(quotesPanel).toMatch(/quotes\.quotes\.length > 1 && \(\s*<RankBar/);
     expect(quotesPanel).toMatch(/quotes && rank === "prioritised" && \(\s*<BarSlider/);

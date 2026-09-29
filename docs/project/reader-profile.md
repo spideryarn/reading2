@@ -287,7 +287,9 @@ extra you ask for, so absent means no; the profile is the default this app now w
 **Every new run uses the profile, and nothing in a reading view offers to change that.** The one
 thing on screen about the profile is a *label* on the text — *written for you*, or *older profile*
 ([`src/web/WrittenForYou.tsx`](../../src/web/WrittenForYou.tsx)) — and it opens the profile panel
-below. The profile itself is edited on `/profile` (the Command bar's Profile row reaches it) and, for
+below. **In Glossary it is an icon without the words** since 2026-09-29, at the end of the sort row,
+to save a phone a row; the panel it opens then says the same sentence at its top, and the other modes
+keep the words ([260929a](../plans/260929a-compact-glossary-header-and-kind-icons.md)). The profile itself is edited on `/profile` (the Command bar's Profile row reaches it) and, for
 the per-article half, on the metadata page. The way to not be profiled is to empty both boxes; that
 is a real loss of control, and it is the one Greg asked for.
 
