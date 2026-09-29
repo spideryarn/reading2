@@ -42,6 +42,9 @@ import type { ChatAnchor, ChatThread, ThreadSummary } from "../src/types.js";
 vi.mock("../src/web/Tooltip.js", () => ({
   Tooltip: ({ children }: { children: unknown }) => children,
   TooltipGroup: ({ children }: { children: unknown }) => children,
+  /* Chat's Send button carries a card since 260929g; its words are not what
+     this file tests. */
+  ControlTip: () => null,
 }));
 
 /** Every `send` the dialog made, in order, with the text it sent. */

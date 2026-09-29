@@ -78,6 +78,7 @@ import {
 import { CitedMarkdown } from "./Cited.js";
 import { type ArtefactStatus, useAutoRun } from "./useAutoRun.js";
 import { ControlTip, Tooltip } from "./Tooltip.js";
+import { isSendEnter } from "./key-chord.js";
 import { BlockRef } from "./BlockRef.js";
 import { hostOf } from "../urls.js";
 import { useChat } from "./useChat.js";
@@ -872,8 +873,9 @@ function Composer({
         onChange={(e) => setText(e.target.value)}
         onKeyDown={(e) => {
           /* Enter sends, Shift+Enter is a newline — chat's own arrangement, so a
-             reader who has used one composer in this app has used both. */
-          if (e.key === "Enter" && !e.shiftKey) {
+             reader who has used one composer in this app has used both — IME
+             composition included, which `isSendEnter` refuses. */
+          if (isSendEnter(e)) {
             e.preventDefault();
             send();
           }

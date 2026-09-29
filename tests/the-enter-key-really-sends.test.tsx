@@ -77,6 +77,7 @@ vi.mock("../src/web/lib/supabase.js", () => ({
 const { Composer } = await import("../src/web/ChatPanel.js");
 const { CommentDialog } = await import("../src/web/CommentDialog.js");
 const { SignInControls } = await import("../src/web/SignInControls.js");
+const { CandidatesPanel } = await import("../src/web/CandidatesPanel.js");
 
 /* ----------------------------------------------------------- the harness -- */
 
@@ -212,7 +213,11 @@ describe("the chat composer", () => {
     press(box, "Enter");
 
     expect(sent).toEqual([]);
-    expect(sendButton()?.disabled, "Send looks pressable while recording").toBe(true);
+    /* `aria-disabled`, not `disabled`, so the card below still opens on it —
+       docs/project/tooltips.md § the shelf's action row. */
+    expect(sendButton()?.getAttribute("aria-disabled"), "Send looks pressable while recording").toBe(
+      "true",
+    );
   });
 
   it("sends nothing while the transcript is on its way", () => {
@@ -222,7 +227,152 @@ describe("the chat composer", () => {
     press(box, "Enter");
 
     expect(sent).toEqual([]);
-    expect(sendButton()?.disabled).toBe(true);
+    expect(sendButton()?.getAttribute("aria-disabled")).toBe("true");
+  });
+
+  /**
+   * **Enter that accepts an IME candidate is not Enter that sends.** A reader
+   * typing Japanese or Chinese presses it to pick a word, and before 2026-09-29
+   * the half-written question went. Both spellings of "composing": the modern
+   * flag, and the `keyCode` 229 some engines still send instead.
+   */
+  it("sends nothing on the Enter that ends an IME composition", () => {
+    const box = mount(false);
+    type(box, "日本語の");
+    const flagged = press(box, "Enter", { isComposing: true });
+    const legacy = press(box, "Enter", { keyCode: 229 } as KeyboardEventInit);
+
+    expect(sent).toEqual([]);
+    /* And the key is left to the IME, which is what it was pressed for. */
+    expect(flagged.defaultPrevented).toBe(false);
+    expect(legacy.defaultPrevented).toBe(false);
+  });
+
+  it("still sends on ⌘/Ctrl-Enter, which the Metadata chord leaves to text boxes", () => {
+    const box = mount(false);
+    type(box, "One more");
+    press(box, "Enter", { metaKey: true });
+
+    expect(sent).toEqual(["One more"]);
+  });
+
+  /* ------------------------------------------------------- the send card -- */
+
+  async function cardText(): Promise<string> {
+    await act(async () => {
+      await new Promise((r) => setTimeout(r, 400));
+    });
+    const cards = document.querySelectorAll('[role="tooltip"]');
+    expect(cards, "no card opened, or more than one").toHaveLength(1);
+    return (cards[0]?.textContent ?? "").replace(/\s+/g, " ");
+  }
+
+  async function closeCard(el: HTMLElement): Promise<void> {
+    await act(async () => {
+      el.dispatchEvent(new MouseEvent("mouseleave"));
+      el.blur();
+      await new Promise((r) => setTimeout(r, 300));
+    });
+  }
+
+  /**
+   * **The card, not an OS `title`** — Greg, 2026-09-29: *"Add a tooltip to the
+   * send-message button with keyboard shortcuts."* Asked of the EMPTY box,
+   * because that is when a reader wonders how to send and the button is
+   * unavailable; a natively disabled button would not have opened it.
+   */
+  it("says both keys on its card, by mouse and by keyboard, even with nothing to send", async () => {
+    mount(false);
+    const button = sendButton();
+    if (!button) throw new Error("no send button");
+    expect(button.getAttribute("title"), "the OS tooltip would race the card").toBeNull();
+    expect(button.getAttribute("aria-label")).toBe("Send");
+    expect(button.disabled, "a disabled button is no tooltip trigger").toBe(false);
+
+    button.dispatchEvent(new MouseEvent("mouseenter"));
+    const hovered = await cardText();
+    expect(hovered).toContain("Enter to send");
+    expect(hovered).toContain("Shift+Enter for a new line");
+    await closeCard(button);
+
+    act(() => button.focus());
+    const focused = await cardText();
+    expect(focused).toContain("Enter to send");
+    expect(focused).toContain("Shift+Enter for a new line");
+    expect(button.getAttribute("aria-describedby")).toBeTruthy();
+    await closeCard(button);
+  });
+
+  /* Unavailable is refused in the handler, since `aria-disabled` refuses nothing. */
+  it("sends nothing when the unavailable button is clicked", () => {
+    mic.armed = true;
+    const box = mount(false);
+    type(box, "half a sentence");
+    act(() => sendButton()?.click());
+
+    expect(sent).toEqual([]);
+  });
+});
+
+/* ------------------------------------------ Referee's Candidates box -- */
+
+/**
+ * `cnd-box` — the third box that sends on Enter, and it takes the same helper,
+ * so the IME case is asserted here too rather than trusted to the unit test.
+ */
+describe("the Candidates box", () => {
+  const asked: string[] = [];
+
+  function mount(): HTMLTextAreaElement {
+    asked.length = 0;
+    act(() => {
+      root.render(
+        createElement(CandidatesPanel, {
+          thread: {
+            id: "spya-thr3bb",
+            title: "Candidates",
+            createdAt: "2026-09-29T00:00:00.000Z",
+            updatedAt: "2026-09-29T00:00:00.000Z",
+            kind: "candidates",
+            messages: [],
+          },
+          loaded: true,
+          loadFailed: false,
+          blocks: [],
+          error: null,
+          onAsk: (q: string) => asked.push(q),
+          onStop: () => {},
+          onStart: () => {},
+          onJump: () => {},
+        }),
+      );
+    });
+    const box = host.querySelector<HTMLTextAreaElement>("textarea.cnd-box");
+    if (!box) throw new Error("no Candidates box");
+    return box;
+  }
+
+  it("sends on Enter", () => {
+    const box = mount();
+    type(box, "Leave out the authors' own lab");
+    press(box, "Enter");
+    expect(asked).toEqual(["Leave out the authors' own lab"]);
+  });
+
+  it("writes a newline on Shift+Enter", () => {
+    const box = mount();
+    type(box, "Two lines");
+    const e = press(box, "Enter", { shiftKey: true });
+    expect(asked).toEqual([]);
+    expect(e.defaultPrevented).toBe(false);
+  });
+
+  it("sends nothing on the Enter that ends an IME composition", () => {
+    const box = mount();
+    type(box, "日本語の");
+    press(box, "Enter", { isComposing: true });
+    press(box, "Enter", { keyCode: 229 } as KeyboardEventInit);
+    expect(asked).toEqual([]);
   });
 });
 
