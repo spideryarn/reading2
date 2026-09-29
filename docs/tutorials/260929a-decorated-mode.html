@@ -1,0 +1,1369 @@
+<!doctype html>
+<html lang="en">
+<!--
+    TUTORIAL REQUEST
+
+    User prompt: "ok, write me a tutorial for it (see @docs/reusable/write-tutorial.md ), to
+    understand the research, principles, ideas, decisions, options/alternatives, tradeoffs,
+    concerns, questions, next steps, etc etc etc"
+    ("it" = Decorated mode: experiments/decorated/decorated.html and the thinking behind it.)
+
+    Generated: 2026-09-29
+    Audience:  a product manager or engineer who knows Spideryarn and has never read the code
+    Written to: docs/reusable/write-tutorial.md
+
+    Source files read:
+      docs/research/260828b-decorated-mode/the-brief.md             the brief all six passes answered
+      docs/research/260828b-decorated-mode/ideas-*.md                the five lists (top 5s, left-fields,
+                                                                     reading-science "backfire" list,
+                                                                     designer "The system", web-platform
+                                                                     support ledger and three rules)
+      docs/research/260828c-decorated-mode-ideas.md                  the catalogue: disagreements,
+                                                                     agreements, channel budget, Greg's
+                                                                     second pass, open questions
+      experiments/decorated/README.md, build.mjs (header), page.js   the playground: layers, presets
+      (LAYERS, PRESETS), page.css (header), annotations.json         the judgement layer's shape
+      verify.mjs output, build.mjs output                            the numbers, re-run today
+      data/noema-mythology-of-conscious-ai/*.json                    the worked example's real artefacts
+      src/web/annotate.ts (header)                                   the app's own answer to "paint or wrap"
+      docs/project/vision.md (anti-goals), ideas.md, remember-mode.md, reading-time.md
+
+    Counts checked against the tree today, not copied from the docs: 24 switches in the panel,
+    4 presets; 141 blocks, 108 annotated, 212 spans (90 key, 48 strong, 31 hedge, 19 hinge,
+    19 quiet, 5 number); 13 weight-3 blocks; 34 "and also" connectives; 352 sentences graded
+    33% / 36% / 31%; 581 marks with tooltips; 27 comments; 19 terms; 10 ideas.
+
+    State when written: dev at 6485d643. The playground was last changed on 2026-08-31 (content)
+    and 2026-09-06 (paths). `node build.mjs` re-run today produced a byte-identical decorated.html
+    and `node verify.mjs` passed with all three controls going red as they should. Nothing from the
+    playground is in src/.
+
+    Reviewed by GPT Sol (high effort) 2026-09-29: 13 findings, all checked against the sources and
+    applied. The important ones: the worked example overstated Seth's position (he argues against
+    inevitability, not possibility); the designer endorsed a shallow ink ladder rather than opposing
+    fading; "Earn the ink" on the playground gates only per-paragraph apparatus; the example block's
+    ordinal was wrong; the Hinton sentence is graded 0 by a blanket rule, not a judgement.
+    Diagrams checked in a browser (Playwright on system Chrome, light, dark and 400px); three
+    geometry faults fixed.
+-->
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="description" content="Decorated mode: showing the whole article, word for word, and decorating it so the argument is easier to follow — the research behind it, the rules it keeps, the playground that tries twenty-four ideas on a real essay, and the decisions still open.">
+<title>Decorated Mode</title>
+<style>
+  :root {
+    --bg: #fbfaf8;
+    --panel: #ffffff;
+    --ink: #1f2328;
+    --ink-soft: #5b6470;
+    --rule: #e2e0dc;
+    --accent: #db8a45;
+    --link: #1a5fb4;
+
+    --c-author:  #3a3f47; --c-author-fill:  #f1efeb;
+    --c-machine: #1d4ed8; --c-machine-fill: #e2ebfe;
+    --c-reader:  #b45309; --c-reader-fill:  #fdf1dc;
+    --c-research:#6d28d9; --c-research-fill:#eee9fd;
+    --c-ok:      #15803d; --c-ok-fill:      #ddf5e3;
+    --c-warn:    #b3261e; --c-warn-fill:    #fdeaea;
+    --c-dead:    #8b929c; --c-dead-fill:    #ececec;
+
+    /* the playground's own prose ladder, for the sample paragraph */
+    --demo-bg: #17181b;
+    --demo-1: #f4f4f4; --demo-2: #dadada; --demo-3: #b8b8b8; --demo-4: #969696; --demo-5: #767676;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #16181c; --panel: #1e2128; --ink: #e6e6e3; --ink-soft: #a3adba;
+      --rule: #333842; --link: #7fb4ff;
+      --c-author:  #d9d7d2; --c-author-fill:  #2a2c31;
+      --c-machine: #8fb6ff; --c-machine-fill: #1b2740;
+      --c-reader:  #f0b167; --c-reader-fill:  #3a2c17;
+      --c-research:#b79cf5; --c-research-fill:#271e3d;
+      --c-ok:      #7fd396; --c-ok-fill:      #142b1c;
+      --c-warn:    #f38b84; --c-warn-fill:    #351a19;
+      --c-dead:    #7b828c; --c-dead-fill:    #2a2e35;
+      --demo-bg: #0f1012;
+    }
+  }
+
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; padding: 2.5rem 1.25rem 6rem;
+    background: var(--bg); color: var(--ink);
+    font: 16px/1.65 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    max-width: 62rem; margin-inline: auto;
+    -webkit-font-smoothing: antialiased;
+  }
+  h1 { font-size: 2.1rem; line-height: 1.15; letter-spacing: -0.02em; margin: 0 0 .4rem; }
+  h2 {
+    font-size: 1.42rem; line-height: 1.25; letter-spacing: -0.01em;
+    margin: 3.2rem 0 .8rem; padding-bottom: .35rem; border-bottom: 2px solid var(--rule);
+  }
+  h3 { font-size: 1.1rem; margin: 2rem 0 .5rem; }
+  h4 { font-size: .96rem; margin: 1.4rem 0 .4rem; color: var(--ink-soft); text-transform: uppercase; letter-spacing: .06em; }
+  p, li { max-width: 46rem; }
+  a { color: var(--link); text-decoration-color: color-mix(in srgb, var(--link) 40%, transparent); text-underline-offset: 2px; }
+  a:hover { text-decoration-color: currentColor; }
+  code { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: .875em;
+         background: color-mix(in srgb, var(--ink) 7%, transparent); padding: .1em .35em; border-radius: 3px; }
+  pre { background: color-mix(in srgb, var(--ink) 6%, transparent); border: 1px solid var(--rule);
+        border-radius: 6px; padding: .85rem 1rem; overflow-x: auto; font-size: .84rem; line-height: 1.5; }
+  pre code { background: none; padding: 0; font-size: 1em; }
+  blockquote { margin: 1rem 0; padding: .2rem 0 .2rem 1rem; border-left: 3px solid var(--rule);
+               color: var(--ink-soft); max-width: 46rem; }
+  blockquote p { margin: .4rem 0; }
+  .lede { font-size: 1.06rem; color: var(--ink-soft); max-width: 44rem; }
+  .meta { font-size: .84rem; color: var(--ink-soft); margin: .6rem 0 2rem; }
+  .meta strong { color: var(--ink); font-weight: 600; }
+
+  .callout { border: 1px solid var(--rule); border-left: 4px solid var(--accent);
+             background: var(--panel); border-radius: 5px; padding: .9rem 1.1rem; margin: 1.2rem 0; }
+  .callout p { margin: .4rem 0 0; }
+  .callout .title { font-weight: 650; }
+  .callout.warn  { border-left-color: var(--c-warn); background: var(--c-warn-fill); }
+  .callout.key   { border-left-color: var(--c-ok); background: var(--c-ok-fill); }
+  .callout.model { border-left-color: var(--c-research); background: var(--c-research-fill); }
+  .callout.decide { border-left-color: var(--c-reader); background: var(--c-reader-fill); }
+
+  .toc { background: var(--panel); border: 1px solid var(--rule); border-radius: 6px; padding: 1rem 1.4rem; margin: 1.6rem 0; }
+  .toc ol { margin: .4rem 0; padding-left: 1.3rem; }
+  .toc li { margin: .18rem 0; }
+  .paths { margin-top: 1rem; padding-top: .9rem; border-top: 1px dashed var(--rule); font-size: .93rem; }
+  .paths p { margin: .35rem 0; }
+
+  figure { margin: 1.6rem 0; }
+  .scroll { overflow-x: auto; border: 1px solid var(--rule); border-radius: 6px;
+            background: var(--panel); padding: .6rem; }
+  svg { display: block; width: 100%; min-width: 700px; height: auto; }
+  figcaption { font-size: .85rem; color: var(--ink-soft); margin-top: .5rem; max-width: 46rem; }
+
+  .s-author   { fill: var(--c-author-fill);   stroke: var(--c-author);   }
+  .s-machine  { fill: var(--c-machine-fill);  stroke: var(--c-machine);  }
+  .s-reader   { fill: var(--c-reader-fill);   stroke: var(--c-reader);   }
+  .s-research { fill: var(--c-research-fill); stroke: var(--c-research); }
+  .s-ok       { fill: var(--c-ok-fill);       stroke: var(--c-ok);       }
+  .s-warn     { fill: var(--c-warn-fill);     stroke: var(--c-warn);     }
+  .s-dead     { fill: var(--c-dead-fill);     stroke: var(--c-dead);     }
+  .s-panel    { fill: var(--panel);           stroke: var(--rule);       }
+  .box { stroke-width: 1.5; }
+  .t   { fill: var(--ink); font: 13px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+  .t-s { fill: var(--ink-soft); font: 12.5px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+  .t-b { fill: var(--ink); font: 13.5px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; font-weight: 650; }
+  .t-m { fill: var(--ink); font: 12.5px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+  .t-hd { fill: var(--ink-soft); font: 12px -apple-system, BlinkMacSystemFont, sans-serif; font-weight: 700; letter-spacing: .1em; }
+  .t-warn { fill: var(--c-warn); font: 12.5px -apple-system, BlinkMacSystemFont, sans-serif; font-weight: 600; }
+  .t-reader { fill: var(--c-reader); font: 12.5px -apple-system, BlinkMacSystemFont, sans-serif; font-weight: 600; }
+  .t-machine { fill: var(--c-machine); font: 12.5px -apple-system, BlinkMacSystemFont, sans-serif; font-weight: 600; }
+  .ln { stroke: var(--ink-soft); stroke-width: 1.5; fill: none; }
+  .ln-dash { stroke: var(--ink-soft); stroke-width: 1.3; fill: none; stroke-dasharray: 5 4; }
+  .ah { fill: var(--ink-soft); }
+
+  .key-row { display: flex; flex-wrap: wrap; gap: .5rem 1.2rem; font-size: .84rem; color: var(--ink-soft); margin: .4rem 0 1rem; }
+  .key-row span::before { content: ""; display: inline-block; width: .8rem; height: .8rem; border-radius: 2px;
+                          vertical-align: -.1rem; margin-right: .35rem; border: 1.5px solid; }
+  .k-author::before   { background: var(--c-author-fill);   border-color: var(--c-author)   !important; }
+  .k-machine::before  { background: var(--c-machine-fill);  border-color: var(--c-machine)  !important; }
+  .k-reader::before   { background: var(--c-reader-fill);   border-color: var(--c-reader)   !important; }
+  .k-research::before { background: var(--c-research-fill); border-color: var(--c-research) !important; }
+  .k-ok::before       { background: var(--c-ok-fill);       border-color: var(--c-ok)       !important; }
+
+  table { border-collapse: collapse; width: 100%; max-width: 54rem; margin: 1.1rem 0; font-size: .92rem; }
+  th, td { text-align: left; vertical-align: top; padding: .5rem .7rem; border-bottom: 1px solid var(--rule); }
+  th { font-weight: 650; font-size: .82rem; text-transform: uppercase; letter-spacing: .05em; color: var(--ink-soft); }
+  .tbl-scroll { overflow-x: auto; }
+
+  details { border: 1px solid var(--rule); border-radius: 6px; background: var(--panel);
+            padding: .35rem .9rem; margin: 1rem 0; }
+  details[open] { padding-bottom: .9rem; }
+  summary { cursor: pointer; font-weight: 600; padding: .5rem 0; }
+  summary::marker { color: var(--accent); }
+  details > *:not(summary) { max-width: 46rem; }
+
+  .pass { display: inline-block; font-size: .74rem; letter-spacing: .08em; text-transform: uppercase;
+          color: var(--accent); font-weight: 700; border: 1px solid currentColor;
+          border-radius: 3px; padding: .1em .5em; vertical-align: .25em; margin-right: .5rem; }
+  hr { border: 0; border-top: 1px solid var(--rule); margin: 3rem 0; }
+  .tag { display: inline-block; font-size: .72rem; font-weight: 700; letter-spacing: .05em; text-transform: uppercase;
+         padding: .05em .45em; border-radius: 3px; border: 1px solid currentColor; vertical-align: .12em; }
+  .tag.built { color: var(--c-ok); }
+  .tag.contested { color: var(--c-reader); }
+  .tag.not { color: var(--c-dead); }
+
+  .tag.star { color: var(--accent); border-color: var(--accent); }
+  .best { display: grid; grid-template-columns: repeat(auto-fit, minmax(17rem, 1fr)); gap: .8rem; margin: 1.2rem 0; }
+  .best .card { border: 1px solid var(--rule); border-top: 4px solid var(--accent); border-radius: 6px;
+                background: var(--panel); padding: .75rem 1rem .85rem; }
+  .best .card.unbuilt { border-top-color: var(--c-dead); }
+  .best .card h4 { margin: 0 0 .3rem; color: var(--ink); text-transform: none; letter-spacing: 0; font-size: 1rem; }
+  .best .card h4 .n { color: var(--accent); margin-right: .35rem; }
+  .best .card p { margin: .3rem 0 0; font-size: .92rem; }
+  .best .card .why { color: var(--ink-soft); font-size: .86rem; }
+  /* the sample paragraph, drawn with the playground's own ladder */
+  .demo { background: var(--demo-bg); border-radius: 8px; padding: 1.2rem 1.2rem 1.3rem; margin: 1.2rem 0;
+          display: grid; grid-template-columns: 9.5rem 1fr 1.6rem; gap: 0 1.1rem; overflow-x: auto; }
+  .demo .gut { font: 11.5px/1.45 -apple-system, BlinkMacSystemFont, sans-serif; color: var(--demo-4);
+               text-align: right; padding-top: .25rem; }
+  .demo .gut .conn { display: inline-block; font-variant: small-caps; letter-spacing: .06em; color: var(--demo-2);
+                     border: 1px solid var(--demo-5); border-radius: 3px; padding: 0 .35em; margin-bottom: .45rem; }
+  .demo .gut .q { display: block; font-style: italic; color: var(--demo-3); margin-top: .3rem; }
+  .demo .gut .role { display: block; letter-spacing: .08em; text-transform: uppercase; font-size: 10.5px; color: var(--demo-4); margin-top: .5rem; }
+  .demo .prose { font: 17px/1.62 Georgia, "Iowan Old Style", serif; color: var(--demo-2); margin: 0; min-width: 26rem; }
+  .demo .g0 { color: var(--demo-5); }
+  .demo .g1 { color: var(--demo-3); }
+  .demo .g2 { color: var(--demo-1); font-weight: 600; }
+  .demo .hedge { text-decoration: underline wavy var(--demo-4); text-underline-offset: 3px; }
+  .demo .lnk { text-decoration: underline solid var(--demo-4); text-underline-offset: 3px; }
+  .demo .mar { display: flex; flex-direction: column; gap: .35rem; padding-top: .3rem; color: var(--accent); font-size: 13px; }
+  .demo-cap { font-size: .85rem; color: var(--ink-soft); margin-top: -.5rem; max-width: 46rem; }
+
+  @media (max-width: 640px) {
+    .demo { grid-template-columns: 1fr; }
+    .demo .gut { text-align: left; margin-bottom: .6rem; }
+    .demo .mar { flex-direction: row; }
+    .demo .prose { min-width: 0; }
+  }
+</style>
+</head>
+<body>
+
+<h1>Decorated mode</h1>
+<p class="lede">Show the reader every word the author wrote, in order and unchanged, and decorate
+it so the argument is easier to follow. Here is the research behind the idea, the rules it keeps,
+the playground that tries twenty-four decorations on a real essay, and the decisions still open.</p>
+<p class="meta"><strong>10 minutes</strong> to skim · <strong>~40</strong> to read everything ·
+written 2026-09-29, against <code>dev</code> at <code>6485d643</code> · the page itself:
+<code>experiments/decorated/decorated.html</code></p>
+
+<h2 id="tldr">TL;DR</h2>
+
+<p>On 2026-08-28 Greg asked for a mode that shows <strong>the actual article, decorated</strong>:
+important sentences made more prominent and less important ones quieter, headings added where the
+author left none, small diagrams, glossary underlines, comments. The one hard rule is that
+<strong>no word of the author's is removed, reordered or rewritten</strong>.</p>
+
+<p>Five independent research lists produced <strong>168 ideas</strong>, and a sixth pass looked
+at the data we already had. The lists agreed on four ideas and split sharply on three questions:
+making text bigger or fainter, a label beside every paragraph, and letting the model pick the key
+sentences. The first and third pull against parts of Greg's brief. The playground puts
+<strong>24 switches</strong> on one self-contained HTML page (22 from the original ideas, the rest
+added later). The page renders Anil Seth's essay <em>The Mythology Of Conscious AI</em> from the
+real pipeline data, with a script that proves no word was changed.</p>
+
+<p>It is a playground, not a product. Nothing from it has been built into the app. The three
+questions it was built to settle have not been answered yet, and <a href="#example">the worked
+example below</a> shows what goes wrong if they are settled carelessly.</p>
+
+<h2 id="models">Four ways to picture it</h2>
+
+<div class="callout model">
+  <p class="title">1 · A critical edition, or a Talmud page</p>
+  <p>The text sits in the middle, untouched. Commentary goes around it: glosses in the margin,
+  rubrics above sections, notes beside hard words. Scholars have read this way for centuries, and
+  nobody reading such an edition mistakes the commentary for the text, because each has its own
+  place on the page and its own typeface. Decorated mode is that layout, with the commentary
+  written by a model.</p>
+</div>
+
+<div class="callout model">
+  <p class="title">2 · Road markings</p>
+  <p>A dashed line, a solid line and a zig-zag each mean one thing, and a driver can read them at
+  speed because no marking is ever reused to mean something else. The playground treats
+  typography the same way. Weight, faintness, underline style, the margin and colour are each a
+  <em>channel</em>, and each channel has one owner. If the dotted underline means "glossary term",
+  it never also means "assumption".</p>
+</div>
+
+<div class="callout model">
+  <p class="title">3 · An answer key, not a crib sheet</p>
+  <p>A summary handed over <em>before</em> you read lets you skip the reading. The same summary
+  shown <em>after</em> you've read lets you check what you took in. The research kept coming back
+  to this: identical decorations help or harm depending on whether they arrive before or after the
+  reading. Two ideas are built on it: "Earn the ink" and "The section gate".</p>
+</div>
+
+<div class="callout model">
+  <p class="title">4 · A mixing desk</p>
+  <p>The playground has a panel of twenty-four switches, one per decoration, plus four presets. You
+  are meant to turn things off and read what is left. Its README says <em>"the ones you don't miss
+  should not exist"</em>. It is a tool for making decisions, not a design.</p>
+</div>
+
+<h2 id="best">The most valuable ideas</h2>
+
+<p>Of the 168 ideas, these nine are the ones I'd carry forward, whatever happens to the rest. The
+ranking is this tutorial's synthesis, not a list any one source made, though the top two follow the
+reading-science pass's own ranking. They're ranked by how much each does for the reader, how much
+agreement and evidence sit behind it, and whether it keeps the <a href="#soft-rule">"not a way of not reading"</a> rule. Orange cards
+are on the playground; grey ones aren't built yet. The built ones carry a <span class="tag star">★</span> in
+<a href="#all-layers">the appendix table</a>.</p>
+
+<div class="best">
+  <div class="card">
+    <h4><span class="n">1</span>Earn the ink (read-first)</h4>
+    <p>Nothing we wrote about a passage can be read before the passage itself, so our summaries,
+    labels and questions become a check on your reading rather than a replacement for it.
+    (The playground does this per paragraph, for the gutter, the margin and the inline marks. Our
+    headings, section summaries and the arc rail aren't held back yet.)</p>
+    <p class="why">Two passes reached it independently, and the catalogue says it "de-risks almost
+    everything else". The one idea that makes the others safe. <a href="#d-readfirst">Decision 5</a>.</p>
+  </div>
+  <div class="card">
+    <h4><span class="n">2</span>The section gate</h4>
+    <p>At the end of a section you say what you took from it, and only then does our summary
+    open.</p>
+    <p class="why">Recall followed by feedback is the best-evidenced cheap technique the
+    reading-science pass found, and it was that pass's top pick. It turns a summary into an answer
+    key.</p>
+  </div>
+  <div class="card unbuilt">
+    <h4><span class="n">3</span>Whose voice is this</h4>
+    <p>Mark where the essay is stating a view it's about to reject.</p>
+    <p class="why">It prevents the error that reverses an argument's meaning, and <a
+    href="#example-problem">the worked example</a> shows our own skim path making that error by the
+    first few paragraphs. First on the list of things to build next. It has to be conservative:
+    a wrong "not the author's view" tint would create the very misreading it exists to
+    prevent.</p>
+  </div>
+  <div class="card">
+    <h4><span class="n">4</span>The assumptions</h4>
+    <p>The propositions the argument needs you to accept, marked under the exact words, with why
+    the argument needs each one.</p>
+    <p class="why">Four passes proposed it. It's interrogation made visible, and it's the most
+    distinctively Spideryarn data we have.</p>
+  </div>
+  <div class="card">
+    <h4><span class="n">5</span>The arc rail</h4>
+    <p>One sticky sentence saying where you are in the <em>argument</em>, not what this section
+    says.</p>
+    <p class="why">Four passes proposed it. It keeps track of the thing that fades fastest in an
+    hour-long essay, and the data already existed unused.</p>
+  </div>
+  <div class="card">
+    <h4><span class="n">6</span>Our headings, visibly ours</h4>
+    <p>Headings for the stretches the author left unheaded, set in a different voice from the
+    author's.</p>
+    <p class="why">The only idea all five passes proposed. This essay has four headings of its own
+    in 8,300 words.</p>
+  </div>
+  <div class="card">
+    <h4><span class="n">7</span>Three territories and the channel budget</h4>
+    <p>Author in the centre, us on the left, the reader on the right, with each visual property
+    owned by one kind of mark.</p>
+    <p class="why">It isn't a decoration. It's the rule that lets a dozen decorations share a page
+    without becoming a ransom note, and the reason the page can be read at all. <a
+    href="#voices">The picture</a>.</p>
+  </div>
+  <div class="card">
+    <h4><span class="n">8</span>Relation words in the gutter</h4>
+    <p><em>so, but, why, e.g.</em>: one word per paragraph saying how it relates to the one
+    before.</p>
+    <p class="why">Three passes proposed it. It shows structure without adding content, the family
+    the research calls safe, and costs one word of width.</p>
+  </div>
+  <div class="card unbuilt">
+    <h4><span class="n">9</span>The referent lamp</h4>
+    <p>Hover an ambiguous <em>this</em> or <em>it</em>, and what it refers to lights up where it
+    stands.</p>
+    <p class="why">"The best cheap idea not built." Backed by evidence, it needs one small pass,
+    and it repairs the failure that eats the most attention per word.</p>
+  </div>
+</div>
+
+<p><strong>Just outside the nine:</strong> <em>highlight-then-compare</em> (you mark what
+matters, then see what we marked). It's third on the catalogue's build-next list, and it's the only
+version of key-sentence marking the research considers safe. It sits outside the nine only because
+it needs interaction the app doesn't have yet. <strong>Worth seeing once, not ranked:</strong> <em>the thesis as verse</em> (the three
+sentences the essay exists to deliver, broken into lines at the author's own punctuation), which
+the catalogue calls "the most audacious thing available inside the rule". <strong>The one to be
+wary of:</strong> the <em>skim path</em>. It's the most requested and the most contested, for the
+reasons in <a href="#d-highlight">Decision 3</a>.</p>
+
+<nav class="toc">
+  <strong>Contents</strong>
+  <ol>
+    <li><a href="#best">The most valuable ideas</a> <span class="tag star">★</span></li>
+    <li><a href="#pass1">Pass 1 — the whole story in five steps</a></li>
+    <li><a href="#principles">Pass 2a — the rules everything answers to</a></li>
+    <li><a href="#research">Pass 2b — the research: six passes, 168 ideas</a></li>
+    <li><a href="#playground">Pass 2c — the playground: what is on it and how it is made</a></li>
+    <li><a href="#example">Pass 3 — one paragraph, every layer</a></li>
+    <li><a href="#hard">Pass 4 — the parts that were actually hard</a></li>
+    <li><a href="#decisions">Decisions waiting on Greg</a></li>
+    <li><a href="#tradeoffs">Other trade-offs and alternatives</a></li>
+    <li><a href="#risks">Risks and fragilities</a></li>
+    <li><a href="#next">Next steps</a></li>
+    <li><a href="#faq">FAQ</a></li>
+    <li><a href="#appendix">Appendix — every layer, the files, the numbers, the glossary</a></li>
+  </ol>
+  <div class="paths">
+    <p><strong>If you have to decide something:</strong> <a href="#tldr">TL;DR</a> → <a href="#best">the most valuable ideas</a> →
+      <a href="#example">the worked example</a> → <a href="#decisions">Decisions</a> →
+      <a href="#next">Next steps</a>.</p>
+    <p><strong>If you care about the reading research:</strong> <a href="#principles">the rules</a> →
+      <a href="#research">the research</a> → <a href="#backfire">what would backfire</a> →
+      <a href="#d-readfirst">read-first</a>.</p>
+    <p><strong>If you care about the visual design:</strong> <a href="#channels">the channel
+      budget</a> → <a href="#example">the worked example</a> → <a href="#greg-review">Greg's second
+      pass</a>.</p>
+    <p><strong>If you'd build it:</strong> <a href="#made">how the page is made</a> →
+      <a href="#hard">the hard parts</a> → <a href="#t-paint">paint or wrap</a> →
+      <a href="#risks">risks</a>.</p>
+    <p><strong>If you only open the page:</strong> <a href="#faq-open">how to use it</a>.</p>
+  </div>
+</nav>
+
+<!-- ============================================================ PASS 1 -->
+
+<h2 id="pass1"><span class="pass">Pass 1</span>The whole story in five steps</h2>
+
+<figure>
+  <div class="key-row"><span class="k-research">research</span><span class="k-machine">what was built</span><span class="k-reader">Greg</span><span class="k-ok">still open</span></div>
+  <div class="scroll">
+  <svg viewBox="0 0 920 210" role="img" aria-label="Brief, six research passes, catalogue, playground, Greg's review, open questions">
+    <defs><marker id="a1" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0 L10,5 L0,10 z" class="ah"/></marker></defs>
+    <rect x="10"  y="40" width="130" height="92" rx="6" class="box s-reader"/>
+    <text x="75" y="64" text-anchor="middle" class="t-b">The brief</text>
+    <text x="75" y="84" text-anchor="middle" class="t-s">Greg's dictation</text>
+    <text x="75" y="101" text-anchor="middle" class="t-s">+ one hard rule</text>
+    <text x="75" y="120" text-anchor="middle" class="t-s">28 Aug</text>
+
+    <rect x="180" y="40" width="140" height="92" rx="6" class="box s-research"/>
+    <text x="250" y="64" text-anchor="middle" class="t-b">Six passes</text>
+    <text x="250" y="84" text-anchor="middle" class="t-s">independent, each</text>
+    <text x="250" y="101" text-anchor="middle" class="t-s">with a stance</text>
+    <text x="250" y="120" text-anchor="middle" class="t-s">168 ideas</text>
+
+    <rect x="360" y="40" width="150" height="92" rx="6" class="box s-research"/>
+    <text x="435" y="64" text-anchor="middle" class="t-b">The catalogue</text>
+    <text x="435" y="84" text-anchor="middle" class="t-s">4 agreements</text>
+    <text x="435" y="101" text-anchor="middle" class="t-s">3 disagreements</text>
+    <text x="435" y="120" text-anchor="middle" class="t-s">a channel budget</text>
+
+    <rect x="550" y="40" width="140" height="92" rx="6" class="box s-machine"/>
+    <text x="620" y="64" text-anchor="middle" class="t-b">The playground</text>
+    <text x="620" y="84" text-anchor="middle" class="t-s">one real essay</text>
+    <text x="620" y="101" text-anchor="middle" class="t-s">24 switches</text>
+    <text x="620" y="120" text-anchor="middle" class="t-s">+ a word check</text>
+
+    <rect x="730" y="40" width="180" height="92" rx="6" class="box s-reader"/>
+    <text x="820" y="64" text-anchor="middle" class="t-b">Greg's second pass</text>
+    <text x="820" y="84" text-anchor="middle" class="t-s">7 notes, 29 Aug</text>
+    <text x="820" y="101" text-anchor="middle" class="t-s">"more tooltips",</text>
+    <text x="820" y="120" text-anchor="middle" class="t-s">"sentences, not blocks"</text>
+
+    <line x1="140" y1="86" x2="178" y2="86" class="ln" marker-end="url(#a1)"/>
+    <line x1="320" y1="86" x2="358" y2="86" class="ln" marker-end="url(#a1)"/>
+    <line x1="510" y1="86" x2="548" y2="86" class="ln" marker-end="url(#a1)"/>
+    <line x1="690" y1="86" x2="728" y2="86" class="ln" marker-end="url(#a1)"/>
+    <text x="159" y="30" text-anchor="middle" class="t-s">answered by</text>
+    <text x="339" y="30" text-anchor="middle" class="t-s">merged into</text>
+    <text x="529" y="30" text-anchor="middle" class="t-s">22 ideas built</text>
+    <text x="709" y="30" text-anchor="middle" class="t-s">looked at</text>
+
+    <path d="M820,132 L820,160 L620,160 L620,134" class="ln" marker-end="url(#a1)"/>
+    <text x="720" y="178" text-anchor="middle" class="t-s">revised: words not symbols, a legend, sentence-level skim path</text>
+
+    <rect x="360" y="152" width="150" height="46" rx="6" class="box s-ok"/>
+    <text x="435" y="172" text-anchor="middle" class="t-b">3 open questions</text>
+    <text x="435" y="189" text-anchor="middle" class="t-s">still unanswered</text>
+    <line x1="435" y1="132" x2="435" y2="150" class="ln-dash"/>
+  </svg>
+  </div>
+  <figcaption>The whole history takes four days and fits on one line. The playground has had no
+  content changes since 31 August.</figcaption>
+</figure>
+
+<ol>
+  <li><strong>The brief.</strong> Greg dictated the idea, and it was written up with one hard rule
+  (no word of the author's removed, reordered or rewritten) and one soft rule (a decoration must
+  not become a way of <em>not</em> reading).</li>
+  <li><strong>Six research passes.</strong> The brief went to six independent passes, none of which
+  saw the others' answers. Each was given a different stance: typography as literature, editorial
+  design, the cognitive science of reading, what browsers can now do, a cross-family model with no
+  stance, and the session that knew our data.</li>
+  <li><strong>A catalogue.</strong> The 168 ideas were grouped and ranked. More useful than the
+  list itself were the places where the passes <a href="#agreed">agreed</a> and the places where
+  they <a href="#decisions">disagreed</a>.</li>
+  <li><strong>A playground.</strong> 24 switches, driven by the real pipeline data for one essay
+  and one extra annotation file, plus a script that checks the article survived intact.</li>
+  <li><strong>Greg's review</strong> reshaped it: every mark now explains itself, logic symbols
+  became words, the drop cap went, and emphasis moved from paragraphs down to sentences. The three
+  big questions are still with Greg.</li>
+</ol>
+
+<!-- ============================================================ PASS 2a -->
+
+<h2 id="principles"><span class="pass">Pass 2</span>The rules everything answers to</h2>
+
+<h3 id="hard-rule">The hard rule: every word, in order, unchanged</h3>
+
+<blockquote>
+  <p>We may not remove any of the article's words, and we may not change any of its words. Every
+  sentence the author wrote is still on the page, in order, in full. What we may change is how it
+  is displayed, and what we may add around, between, beside and on top of it.</p>
+  <p>— the brief, 2026-08-28</p>
+</blockquote>
+
+<p>Allowed: size, weight, colour, faintness, spacing, underlines, marginal notes, inserted panels,
+inserted headings, inserted diagrams, hover behaviour. Not allowed: cutting a clause, paraphrasing,
+reordering. The playground enforces this with a script, <code>verify.mjs</code>, which compares
+every block on the page against the stored text character by character (<a href="#hard">Pass 4</a>
+covers how that script itself went quietly blind twice).</p>
+
+<h3 id="soft-rule">The soft rule, which decides more: not a way of <em>not</em> reading</h3>
+
+<p>This is <a href="../project/vision.md">the product's vision</a> turned into a rule for the
+interface. Greg, 2026-08-24: <em>"help them read efficiently, but deeply, help them internalize and
+interrogate."</em> A decoration that lets the reader consume our summary <em>instead</em> of the
+prose breaks the rule. One that makes the prose easier to enter, follow and question keeps it.
+According to the catalogue, <strong>this rule knocked out more ideas than ugliness did</strong>.</p>
+
+<div class="callout warn">
+  <p class="title">The two rules can come apart</p>
+  <p>A decoration can keep every word and still delete it in practice. Text at 40% opacity on a
+  dark page is text most people will not read. That is how the reading-science pass objected to
+  "make less important stuff fainter": the hard rule is satisfied on paper and broken in effect.
+  <a href="#d-size">Decision 1</a> is about exactly this.</p>
+</div>
+
+<h3 id="voices">Three voices, three territories</h3>
+
+<p>The design pass supplied the organising idea: three parties put marks on the page, and each
+gets its own territory so a reader can always tell who is speaking.</p>
+
+<figure>
+  <div class="key-row"><span class="k-author">the author</span><span class="k-machine">the machine (us)</span><span class="k-reader">the reader</span></div>
+  <div class="scroll">
+  <svg viewBox="0 0 900 342" role="img" aria-label="Page layout: spine and gutter for the machine, centre column for the author, right margin for the reader, arc rail at the top">
+    <defs><marker id="a2" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0 L10,5 L0,10 z" class="ah"/></marker></defs>
+    <!-- arc rail -->
+    <rect x="150" y="14" width="560" height="38" rx="5" class="box s-machine"/>
+    <text x="430" y="38" text-anchor="middle" class="t">arc rail (sticky): where you are in the <tspan font-weight="700">argument</tspan></text>
+    <!-- spine -->
+    <rect x="20" y="66" width="34" height="250" rx="4" class="box s-machine"/>
+    <line x1="30" y1="86" x2="46" y2="86" class="ln"/><line x1="30" y1="104" x2="40" y2="104" class="ln"/>
+    <line x1="30" y1="122" x2="50" y2="122" class="ln"/><line x1="30" y1="140" x2="38" y2="140" class="ln"/>
+    <line x1="30" y1="158" x2="44" y2="158" class="ln"/><line x1="30" y1="176" x2="36" y2="176" class="ln"/>
+    <circle cx="43" cy="194" r="4" fill="var(--c-reader)"/>
+    <line x1="30" y1="212" x2="50" y2="212" class="ln"/><line x1="30" y1="230" x2="40" y2="230" class="ln"/>
+    <!-- gutter -->
+    <rect x="70" y="66" width="190" height="250" rx="5" class="box s-machine"/>
+    <text x="165" y="90" text-anchor="middle" class="t-hd">LEFT GUTTER</text>
+    <text x="165" y="118" text-anchor="middle" class="t">relation word: so · but · why</text>
+    <text x="165" y="142" text-anchor="middle" class="t">the paragraph's question</text>
+    <text x="165" y="166" text-anchor="middle" class="t">glosses on first use</text>
+    <text x="165" y="190" text-anchor="middle" class="t">assumption stamps</text>
+    <text x="165" y="214" text-anchor="middle" class="t">rhetorical role (hold x)</text>
+    <text x="165" y="250" text-anchor="middle" class="t-s">small caps, ink steps 3–5,</text>
+    <text x="165" y="268" text-anchor="middle" class="t-s">never a colour,</text>
+    <text x="165" y="286" text-anchor="middle" class="t-s">never inline</text>
+    <!-- column -->
+    <rect x="280" y="66" width="420" height="250" rx="5" class="box s-author"/>
+    <text x="490" y="90" text-anchor="middle" class="t-hd">THE TEXT COLUMN</text>
+    <text x="490" y="118" text-anchor="middle" class="t">the author's words, serif, in order, in full</text>
+    <rect x="300" y="134" width="380" height="30" rx="3" class="box s-machine" stroke-dasharray="4 3"/>
+    <text x="490" y="154" text-anchor="middle" class="t-machine">OUR HEADING — sans, small caps</text>
+    <text x="490" y="190" text-anchor="middle" class="t-s">we may restyle: ink, weight, spacing,</text>
+    <text x="490" y="208" text-anchor="middle" class="t-s">four underline styles, line breaks</text>
+    <text x="490" y="244" text-anchor="middle" class="t-s">we may insert between blocks:</text>
+    <text x="490" y="262" text-anchor="middle" class="t-s">our headings, turn markers, section gates</text>
+    <text x="490" y="296" text-anchor="middle" class="t-warn">we may not cut, reword or reorder</text>
+    <!-- margin -->
+    <rect x="720" y="66" width="160" height="250" rx="5" class="box s-reader"/>
+    <text x="800" y="90" text-anchor="middle" class="t-hd">RIGHT MARGIN</text>
+    <text x="800" y="118" text-anchor="middle" class="t">your comments</text>
+    <text x="800" y="142" text-anchor="middle" class="t">your bookmarks</text>
+    <circle cx="770" cy="176" r="6" fill="var(--c-reader)"/><circle cx="790" cy="176" r="6" fill="none" stroke="var(--c-reader)" stroke-width="1.5"/>
+    <text x="800" y="216" text-anchor="middle" class="t-s">the only colour</text>
+    <text x="800" y="234" text-anchor="middle" class="t-s">on the page:</text>
+    <text x="800" y="252" text-anchor="middle" class="t-reader">nothing a model</text>
+    <text x="800" y="270" text-anchor="middle" class="t-reader">decided is orange</text>
+    <text x="37" y="330" text-anchor="middle" class="t-s">spine</text>
+  </svg>
+  </div>
+  <figcaption>Territory is how the reader tells who is speaking. The author keeps the centre, the
+  typeface and full ink. We get the left side and the fainter greys, and never a colour. The
+  reader gets the right side and the one accent colour.</figcaption>
+</figure>
+
+<h3 id="channels">The channel budget</h3>
+
+<p>Twelve decorations can share one page only if each owns a different <em>channel</em>, meaning
+one visual property. A channel has exactly one owner, and a block may carry at most two
+non-default channels at once. The playground's stylesheet is organised by channel rather than by
+feature for this reason.</p>
+
+<div class="tbl-scroll">
+<table>
+  <tr><th>Channel</th><th>Who owns it</th></tr>
+  <tr><td>Accent colour (orange)</td><td>The reader's own marks only, plus whatever is momentarily targeted</td></tr>
+  <tr><td>Ink (five steps of grey)</td><td>Importance and de-emphasis, with a readable floor at step 5 that nothing goes below</td></tr>
+  <tr><td>Weight (three stops)</td><td>Load-bearing sentences, and the author's own emphasis</td></tr>
+  <tr><td>Size</td><td>Headings only. Body size is constant (except behind one <a href="#d-size">contested switch</a>)</td></tr>
+  <tr><td>Space / line spacing</td><td>Emphasis on a passage. The quietest channel, so it does the most work</td></tr>
+  <tr><td>Underline style</td><td><strong>solid</strong> = the author's hyperlink · <strong>dotted</strong> = a glossary term · <strong>dashed</strong> = an assumption the argument leans on · <strong>wavy</strong> = a hedge</td></tr>
+  <tr><td>Hairlines</td><td>Structure, all on one vertical line at the far left</td></tr>
+  <tr><td>Motion</td><td>One moving thing per screen, tied to scrolling, off when the reader has asked for reduced motion</td></tr>
+  <tr><td>Background fill</td><td>Momentary only: hover, focus, target. <strong>No permanent highlighter, ever</strong></td></tr>
+</table>
+</div>
+
+<div class="callout key">
+  <p class="title">The line that settles arguments</p>
+  <p><em>"Per screen, exactly one element may be at full ink + raised weight + extra space. That is
+  the reader's one unit of attention, and every decoration is competing for it."</em> — the design
+  pass.</p>
+</div>
+
+<h3 id="two-tests">Two tests that came out of Greg's review</h3>
+
+<ul>
+  <li><strong>"What does a reader know after this that they did not know before it?"</strong> This
+  is the test the drop cap failed. A section opening was already signalled three times, by a rule,
+  a heading and a small-caps first line, so the large initial letter added nothing.</li>
+  <li><strong>"The mark is the answer; the tooltip is the reason."</strong> If a mark can't answer
+  its own question, it should be a word. This is why the logic symbols in the gutter (∴ ⊥ ∵) became
+  <em>so, but, why</em>.</li>
+</ul>
+
+<!-- ============================================================ PASS 2b -->
+
+<h2 id="research"><span class="pass">Pass 2</span>The research: six passes, 168 ideas</h2>
+
+<p>Each pass answered the same brief and none saw the others' answers. Every pass had to give each
+idea six things (what the reader sees, why it helps, how it would work, the data it needs, the
+risk, and a ranking) and finish with a top five and one "left-field" idea it was slightly
+embarrassed to suggest.</p>
+
+<div class="tbl-scroll">
+<table>
+  <tr><th>Pass</th><th>Stance</th><th>Ideas</th><th>Its #1</th><th>Its left-field idea</th></tr>
+  <tr><td>GPT Sol</td><td>cross-family model, no stance imposed</td><td>32</td><td>Rhetorical score: what each sentence is <em>doing</em></td><td>Argument gravity: paragraphs lean toward or away from what they support <span class="tag built">built</span></td></tr>
+  <tr><td>Fable</td><td>typography as literature: manuscripts, critical editions, comics, verse</td><td>33</td><td>Salience fisheye: importance as continuous relief <span class="tag built">built</span></td><td>The thesis set as verse <span class="tag built">built</span></td></tr>
+  <tr><td>Designer</td><td>editorial and information design; the smallest intervention</td><td>34</td><td>(no ranking; ended with <em>the system</em>, i.e. the <a href="#channels">channel budget</a>)</td><td>—</td></tr>
+  <tr><td>Reading science</td><td>the cognitive psychology of reading; what the evidence says</td><td>35</td><td>The section gate: say what you took before the summary opens <span class="tag built">built</span></td><td>Read this one aloud: one paragraph per article gets a microphone <span class="tag not">not built</span></td></tr>
+  <tr><td>Web platform</td><td>what browsers have shipped since 2023 and nobody uses</td><td>34</td><td>The overlap layer: paint marks with the CSS Custom Highlight API</td><td>Confidence ink: hand-drawn strokes whose wobble shows how sure we are <span class="tag not">not built</span></td></tr>
+  <tr><td>This session</td><td>the artefacts we actually have</td><td>—</td><td colspan="2">The question each paragraph answers, in the reader's voice <span class="tag built">built</span></td></tr>
+</table>
+</div>
+
+<h3 id="science">What the reading science brought</h3>
+
+<p>This was the pass that changed the most, because it's the one that says what <em>doesn't</em>
+work. Its opening was blunt: the aids people reach for first (pre-highlighting, summaries above the
+text, speed-reading modes, bolding the start of every word) are mostly the ones with weak or
+negative evidence. They share one failure: they raise a reader's <em>confidence</em> faster than
+their <em>understanding</em>. The aids with good evidence make the reader produce something, such
+as recalling, explaining or predicting.</p>
+
+<p>Three findings run under almost every decision:</p>
+<ul>
+  <li><strong>Going back is useful.</strong> About 10–15% of eye movements in normal reading go
+  backwards, and they do repair work: working out what "it" refers to, re-checking a number. A
+  decoration that discourages going back is working against the reader.</li>
+  <li><strong>Filling the gaps can hurt.</strong> Readers with enough background learn <em>more</em>
+  from a text whose gaps they bridge themselves. So our job is to show where a gap is, not to fill
+  it.</li>
+  <li><strong>Signalling structure is the safe family.</strong> Cues that expose structure without
+  adding content reliably help, and they don't replace the prose.</li>
+</ul>
+
+<details id="backfire">
+  <summary>The reading-science pass's list of decorations that would probably backfire</summary>
+  <ul>
+    <li><strong>Pre-highlighted key sentences.</strong> <em>"The obvious first feature, and the
+    worst."</em> In the standard review of study techniques, highlighting rates as low-value even
+    when learners do it themselves. Done <em>for</em> the reader it is worse, because attention
+    narrows onto the marked text. And our highlights will be model-quality, <em>"which means
+    confidently wrong somewhere in every article."</em></li>
+    <li><strong>Making unimportant sentences smaller or fainter.</strong> Three objections: the
+    reader can't check the model's judgement before reading the sentence; faint amounts to deleted;
+    and mixing type sizes within a line makes the eye land in the wrong places. The counter-proposal
+    is to vary spacing <em>between</em> blocks, by how dense the text is, which is a property of
+    the text, rather than by importance, which is a claim about it.</li>
+    <li><strong>Bionic reading</strong> (bolding the first half of every word): no peer-reviewed
+    support, and it uses up the whole emphasis budget on something that says nothing about this
+    text.</li>
+    <li><strong>Speed-reading modes</strong> (one word at a time): they remove both the preview of
+    the next word and the ability to go back, and the trade gets worse as the text gets harder.</li>
+    <li><strong>A label beside every paragraph:</strong> it creates <em>"a second, complete,
+    faster-to-read article running down the margin"</em>.</li>
+  </ul>
+</details>
+
+<h3 id="agreed">Where the passes agreed</h3>
+
+<p>Four ideas were proposed independently by three or more of the five outside passes. That is the
+nearest thing to a signal the exercise produced, and all four are on the playground.</p>
+
+<ol>
+  <li><strong>Write the headings the author didn't</strong> (all five). This essay has four headings
+  of its own in 8,300 words. Every pass added the same condition: ours must be visibly ours.</li>
+  <li><strong>One sticky sentence saying where you are in the <em>argument</em></strong>, as opposed
+  to what the section says. The pipeline already produced this data (<code>arc.json</code>) and
+  nothing used it.</li>
+  <li><strong>Mark the turns</strong>: a word per paragraph for how it relates to the one before
+  (<em>so, but, why, e.g.</em>). Readers who understand every sentence still lose track of what
+  the sentences are doing together.</li>
+  <li><strong>Show the assumptions</strong>: <code>ideas.json</code>, the propositions the piece
+  needs you to accept, most of them never argued for. At the time nothing used it, and it was
+  called <em>"the most distinctively Spideryarn thing we have"</em>. (It has since got its own
+  mode in the app: <a href="../project/ideas.md">Ideas</a>.)</li>
+</ol>
+
+<details>
+  <summary>What the web-platform pass contributed, and where the playground ignored it</summary>
+  <p>It proposed three rules for any plan:</p>
+  <ol>
+    <li><strong>Paint the author's words, never wrap them.</strong> A newer browser feature (the CSS
+    Custom Highlight API) can colour or underline any stretch of text without changing the page's
+    structure, so overlapping marks stop being a problem. <strong>But it can only change colour,
+    background, underline and text shadow. It can't change size, weight or spacing</strong>, and
+    those are what Greg asked for. The playground wraps text in spans and pays the price. See
+    <a href="#t-paint">paint or wrap</a>.</li>
+    <li><strong>Nothing we add should end up in the clipboard.</strong> The playground originally
+    got this wrong: copy three paragraphs and our headings and gutter notes came along. It's fixed,
+    and <code>verify.mjs</code> checks it.</li>
+    <li><strong>Never hide the author's prose inside a collapsed section</strong>, because in most
+    browsers find-in-page can't see collapsed text. The playground never did.</li>
+  </ol>
+  <p>It also put the whole list against a support table showing which browsers ship which feature
+  as of August 2026. Several of the nicer ideas are Chrome-only.</p>
+</details>
+
+<!-- ============================================================ PASS 2c -->
+
+<h2 id="playground"><span class="pass">Pass 2</span>The playground: what is on it and how it is made</h2>
+
+<p>It is deliberately <strong>outside the app</strong>. Nothing in it imports app code and the app
+imports nothing from it, so an idea can be tried without first arguing about how it fits the
+reading view's URL, its mode band or its layer limits. Most of the ideas will be thrown away, so
+there was no point paying that integration cost for them.</p>
+
+<h3 id="made">How the page is made</h3>
+
+<figure>
+  <div class="key-row"><span class="k-author">the article</span><span class="k-machine">pipeline data we already make</span><span class="k-research">the one extra judgement file</span><span class="k-ok">the check</span></div>
+  <div class="scroll">
+  <svg viewBox="0 0 900 300" role="img" aria-label="Pipeline data and annotations.json go into build.mjs which writes decorated.html; verify.mjs checks it against blocks.json">
+    <defs><marker id="a3" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0 L10,5 L0,10 z" class="ah"/></marker></defs>
+    <rect x="16" y="20" width="200" height="46" rx="6" class="box s-author"/>
+    <text x="116" y="41" text-anchor="middle" class="t-m">blocks.json</text>
+    <text x="116" y="58" text-anchor="middle" class="t-s">141 blocks, the stored text</text>
+
+    <rect x="16" y="80" width="200" height="118" rx="6" class="box s-machine"/>
+    <text x="116" y="101" text-anchor="middle" class="t-b">pipeline data</text>
+    <text x="116" y="122" text-anchor="middle" class="t-m">tree · labels · arc</text>
+    <text x="116" y="140" text-anchor="middle" class="t-m">summary · glossary</text>
+    <text x="116" y="158" text-anchor="middle" class="t-m">ideas · comments</text>
+    <text x="116" y="182" text-anchor="middle" class="t-s">all real, already made</text>
+
+    <rect x="16" y="212" width="200" height="66" rx="6" class="box s-research"/>
+    <text x="116" y="234" text-anchor="middle" class="t-m">annotations.json</text>
+    <text x="116" y="252" text-anchor="middle" class="t-s">one-off judgement pass:</text>
+    <text x="116" y="268" text-anchor="middle" class="t-s">weight, role, spans…</text>
+
+    <rect x="300" y="80" width="230" height="140" rx="6" class="box s-panel"/>
+    <text x="415" y="102" text-anchor="middle" class="t-m">build.mjs</text>
+    <text x="415" y="126" text-anchor="middle" class="t-s">cuts each block's text into ranges</text>
+    <text x="415" y="144" text-anchor="middle" class="t-s">splits at every mark boundary</text>
+    <text x="415" y="162" text-anchor="middle" class="t-s">grades every sentence 0 / 1 / 2</text>
+    <text x="415" y="180" text-anchor="middle" class="t-s">narrows over-long marks</text>
+    <text x="415" y="198" text-anchor="middle" class="t-warn">prints every quote it can't place</text>
+
+    <rect x="620" y="96" width="260" height="108" rx="6" class="box s-author"/>
+    <text x="750" y="118" text-anchor="middle" class="t-m">decorated.html</text>
+    <text x="750" y="140" text-anchor="middle" class="t-s">one file, ~528 KB, opens from disk</text>
+    <text x="750" y="158" text-anchor="middle" class="t-s">page.css + page.js inlined</text>
+    <text x="750" y="176" text-anchor="middle" class="t-s">every layer = a class on the page,</text>
+    <text x="750" y="192" text-anchor="middle" class="t-s">switched by the panel</text>
+
+    <rect x="620" y="228" width="260" height="56" rx="6" class="box s-ok"/>
+    <text x="750" y="250" text-anchor="middle" class="t-m">verify.mjs</text>
+    <text x="750" y="268" text-anchor="middle" class="t-s">4 checks, each proven able to fail</text>
+
+    <line x1="216" y1="34" x2="298" y2="100" class="ln" marker-end="url(#a3)"/>
+    <line x1="216" y1="139" x2="298" y2="146" class="ln" marker-end="url(#a3)"/>
+    <line x1="216" y1="245" x2="298" y2="196" class="ln" marker-end="url(#a3)"/>
+    <line x1="530" y1="150" x2="618" y2="150" class="ln" marker-end="url(#a3)"/>
+    <text x="574" y="140" text-anchor="middle" class="t-s">writes</text>
+    <line x1="750" y1="228" x2="750" y2="206" class="ln" marker-end="url(#a3)"/>
+    <text x="700" y="220" text-anchor="end" class="t-s">reads the page back</text>
+    <path d="M620,256 L262,256 L262,56 L219,56" class="ln-dash" marker-end="url(#a3)"/>
+    <text x="445" y="248" text-anchor="middle" class="t-s">and compares, character by character</text>
+  </svg>
+  </div>
+  <figcaption>Everything on the page comes from real data. The only thing made specially for the
+  playground is <code>annotations.json</code>, a one-off pass of judgements over this one
+  article. No pipeline step produces it yet.</figcaption>
+</figure>
+
+<p><strong>What <code>annotations.json</code> holds.</strong> For 108 of the 141 blocks it records
+a <em>weight</em> from 0 to 3 (how load-bearing the paragraph is), a <em>role</em> (claim,
+evidence, concession, rebuttal and so on, sixteen kinds in all), a <em>connective</em> (how this
+paragraph relates to the one before), <em>the question the paragraph answers</em>, a
+<em>difficulty</em>, and 212 marked <em>spans</em>: the key sentence, strong phrases, hedges,
+hinges, skippable asides and numbers that matter. The sentence-by-sentence skim grades are
+<em>worked out</em> from these at build time rather than asked for separately, so everything
+traces back to one set of judgements.</p>
+
+<h3 id="layers">The 24 switches, in five groups</h3>
+
+<p>Each group is below. The full list, with what each switch does and where it came from, is
+<a href="#all-layers">in the appendix</a>.</p>
+
+<ul>
+  <li><strong>Structure</strong>: our headings, a one-line summary under each, the spine (the
+  whole article as a strip of ticks down the left edge), and small caps on the opening line of each
+  section.</li>
+  <li><strong>The argument</strong>: the arc rail, turn markers, the relation word per paragraph,
+  the rhetorical x-ray (hold <kbd>x</kbd>), and the assumptions.</li>
+  <li><strong>The sentences</strong>: the skim path (hold <kbd>s</kbd>), salience relief,
+  <em>…and by size too</em> <span class="tag contested">contested</span>, <em>fade the
+  skippable</em> <span class="tag contested">contested</span>, hedges, numbers, and the thesis as
+  verse.</li>
+  <li><strong>The terms, and you</strong>: glossary underlines, definitions in the margin, <em>a
+  line per paragraph</em> <span class="tag contested">contested</span>, the question each
+  paragraph answers, your own marks, and the section gate.</li>
+  <li><strong>The strange ones</strong>: <em>Earn the ink</em> (decorations appear only after
+  you've spent long enough beside a paragraph to have read it) and argument gravity.</li>
+</ul>
+
+<p>Four <strong>presets</strong>: <em>all on</em>, <em>bare prose</em>, <em>the restrained
+set</em> (ten switches), and <em>everything Greg asked for</em> (twenty-two). The panel opens with
+a <strong>legend</strong>, and every sample in it is drawn with the page's real styles, because a
+reader who doesn't know a mark exists will never hover over it.</p>
+
+<!-- ============================================================ PASS 3 -->
+
+<h2 id="example"><span class="pass">Pass 3</span>One paragraph, every layer</h2>
+
+<p>This is an early paragraph of Seth's essay, <code>spya-epw4h3</code>, the fifth of the body
+text. The one before it says
+Google engineer Blake Lemoine claimed the chatbot LaMDA was conscious, and that Google fired him.
+This is the author's text, complete and unedited:</p>
+
+<blockquote><p>But the question he raised has not gone away. Firing someone for breaching
+confidentiality is not the same as firing them for being wrong. As AI technologies continue to
+improve, questions about machine consciousness are increasingly being raised. David Chalmers, one
+of the foremost thinkers in this area, has suggested that conscious machines may be possible in the
+not-too-distant future. Geoffrey Hinton, a true AI pioneer and recent Nobel Prize winner, thinks
+they exist already. In late 2024, a group of prominent researchers wrote a widely publicized
+article about the need to take the welfare of AI systems seriously. For many leading experts in AI
+and neuroscience, the emergence of machine consciousness is a question of <em>when</em>, not
+<em>if</em>.</p></blockquote>
+
+<h3>What we already knew about it, before decorating</h3>
+<ul>
+  <li><strong>Its place in the tree</strong> (<code>tree.json</code>). It is the last block of a
+  span with no author heading, for which we wrote one: <em>"Fantasies Of Artificial Minds"</em>.
+  That span sits inside <em>"Framing The Question"</em>, which is also ours.</li>
+  <li><strong>Its label</strong> (<code>labels.json</code>): <em>"Chalmers, Hinton and others treat
+  machine consciousness as a when-not-if question."</em></li>
+  <li><strong>The arc</strong> (<code>arc.json</code>) for the first fourteen blocks:
+  <em>"Machine consciousness is a mythology still untested against evidence, yet the stakes of
+  believing it … are laid out before any argument against it begins."</em></li>
+  <li><strong>The reader's own marks</strong> (<code>comments.json</code>): two answered questions,
+  one on Chalmers and one on Hinton, and a bookmark.</li>
+</ul>
+
+<h3>What the judgement pass added</h3>
+<ul>
+  <li><strong>weight 2</strong> of 3, <strong>role: rebuttal</strong>, <strong>connective:
+  but</strong></li>
+  <li><strong>the question it answers</strong>: <em>"Wasn't Lemoine just a crank Google
+  fired?"</em></li>
+  <li><strong>spans</strong>: "Firing someone … for being wrong." is <em>strong</em>; the Chalmers
+  clause is a <em>hedge</em>; and the last sentence, "For many leading experts … when, not if", is
+  the paragraph's <strong>key</strong> sentence.</li>
+</ul>
+
+<h3>What the reader sees: the restrained preset, plus the question layer and the x-ray key held</h3>
+
+<div class="demo" aria-label="The paragraph as the playground renders it, approximated">
+  <div class="gut">
+    <span class="conn">but</span>
+    <span class="q">Wasn't Lemoine just a crank Google fired?</span>
+    <span class="role">rebuttal · hold x</span>
+  </div>
+  <p class="prose"><span class="g1">But the question he raised has not gone away. Firing someone
+  for breaching confidentiality is not the same as firing them for being wrong.</span>
+  <span class="g0">As AI technologies continue to improve, questions about machine consciousness
+  are increasingly being raised.</span> <span class="g1">David Chalmers, one of the foremost
+  thinkers in this area, has <span class="hedge">suggested that conscious</span> machines <span
+  class="lnk">may be possible</span> in the not-too-distant future.</span> <span class="g0">Geoffrey
+  Hinton, a true AI pioneer and recent Nobel Prize winner, <span class="lnk">thinks they exist</span>
+  already. In late 2024, a group of prominent researchers wrote a widely publicized article about
+  the need to take the <span class="lnk">welfare of AI systems</span> seriously.</span> <span
+  class="g2">For many leading experts in AI and neuroscience, the emergence of machine consciousness
+  is a question of <em>when</em>, not <em>if</em>.</span></p>
+  <div class="mar" aria-label="your marks"><span title="your question">●</span><span title="your question">●</span><span title="your bookmark">○</span></div>
+</div>
+<p class="demo-cap">A close copy of the playground's output, built from its real sentence grades:
+bright is "carries the argument" (grade 2), mid-grey "supports it" (1), dimmest "can be skipped"
+(0, which still stays readable). Solid underlines are the author's own links; the wavy one is a
+hedge. On the real page the question in the gutter appears only with its switch on, and the role
+only while <kbd>x</kbd> is held.</p>
+
+<p>Most of this works as designed. The <em>but</em> tells you this paragraph pushes back on the
+last one. The question in the gutter tells you which objection it pushes back on. The hedge mark
+stops you reading "may be possible" as "is". Your own marks are orange and nothing else is.</p>
+
+<div class="callout warn" id="example-problem">
+  <p class="title">Now hold <kbd>s</kbd> and read only the bright sentence</p>
+  <p>The skim path says the one sentence carrying this paragraph is: <em>"For many leading experts
+  in AI and neuroscience, the emergence of machine consciousness is a question of when, not
+  if."</em></p>
+  <p>That is other people's position, and the essay spends most of its length challenging it,
+  especially the idea that consciousness in today's silicon, digital AI is <em>inevitable</em>.
+  (Seth doesn't rule artificial consciousness out altogether. He ends by arguing against
+  overconfidence both ways, calling it neither inevitable nor impossible.) A reader skimming the
+  bright path takes away a view close to the reverse of the article's, and it looks
+  authoritative, because it's the one sentence we made brighter.</p>
+  <p>The judgement pass wasn't wrong: it <em>is</em> the sentence that carries this paragraph. What
+  is missing is a second fact, that this is somebody else's view, stated in order to be refused.
+  The reading-science pass warned about exactly this failure (<em>"mistaking the steelman for the
+  thesis"</em>), and its fix, <a href="#next">"Whose voice is this"</a>, is first on the list of
+  things to build next. Its absence shows up within the first few paragraphs.</p>
+</div>
+
+<p>Two smaller things show up in the same paragraph:</p>
+<ul>
+  <li><strong>The hedge mark is in slightly the wrong place.</strong> Build-time narrowing looks
+  for the first hedge word, finds "suggested", and keeps the two words after it. That gives
+  "suggested that conscious" and leaves the stronger hedge, "may be possible", outside the wavy
+  line. See <a href="#h-extent">why hedges
+  are narrowed</a>.</li>
+  <li><strong>The whole Hinton sentence is marked skippable</strong>, not just his credentials.
+  Nobody judged it skippable directly: the rule treats any later, unmarked sentence in a weight-2
+  paragraph as elaboration. But the authority of the people Seth disagrees with is part of his
+  point, because the essay argues against eminent people. Deciding what is skippable is itself a
+  claim about the argument, and here a blanket rule made it.</li>
+</ul>
+
+<p>With <em>Earn the ink</em> on, none of the gutter text would appear until you had been beside
+this paragraph long enough to read it. Then the question and the relation word arrive as a check
+on what you just read, not as a preview of it. That is the <a href="#d-readfirst">read-first</a>
+case in one paragraph.</p>
+
+<!-- ============================================================ PASS 4 -->
+
+<h2 id="hard"><span class="pass">Pass 4</span>The parts that were actually hard</h2>
+
+<p>None of these is needed to follow the decisions. They're here because each one would come back
+if the playground were rebuilt inside the app.</p>
+
+<details id="h-extent">
+  <summary>How long a mark is decides what kind of mark it is</summary>
+  <p>The judgement pass was asked to mark <em>hedges</em> ("may be", "arguably") and
+  <em>numbers</em> with "enough words around it to read as a fact". What came back were whole
+  clauses: hedges up to <strong>194 characters</strong> long, and "won the 2025 annual Berggruen
+  Prize Essay Competition" counted as a number.</p>
+  <p>A wavy underline over four words marks a hedge. The same underline over a 194-character
+  clause is a highlighted sentence, which is <a href="#backfire">the thing the research argued
+  hardest against</a>, arriving through a layer designed to avoid it. <em>"It built itself out of
+  a vague word in a prompt."</em></p>
+  <p>Now the build narrows hedge and number marks to the marker word plus two words, caps them at
+  34 characters, and <strong>prints how many it moved</strong> (33 of 36). The lesson for any
+  future decoration pass is to <strong>state the length in the schema</strong>. The first version
+  of the narrowing also quietly dropped nine marks its word list didn't recognise, and <em>"a mark
+  we cannot place is worse than no mark, because it looks placed."</em> The worked example shows
+  that narrowing can still land slightly off.</p>
+</details>
+
+<details>
+  <summary>The check that proves nothing changed went blind, twice</summary>
+  <p><code>verify.mjs</code> proves its own worth with a <em>control</em>: it deletes four words
+  from a copy of the page and confirms the comparison goes red. Once tooltips added English prose
+  inside HTML attributes, the control picked four words from a tooltip, deleted them, and the
+  comparison stayed green. Deleting words from a tooltip changes nothing in the article. The
+  control now takes its words from the prose itself.</p>
+  <p>The tooltip check had the opposite fault. It passed six marks that had no tooltip, because it
+  was reading the legend's text out of the page's own inlined script. Both faults were found only
+  because each check is run against a deliberately broken copy. Re-run on 2026-09-29, all four
+  checks pass and all three controls go red when they should.</p>
+</details>
+
+<details>
+  <summary>Overlapping marks, and why the text is chopped into pieces</summary>
+  <p>One phrase can be a glossary term, sit inside a comment, and be part of the key sentence all
+  at once. HTML elements have to nest, and two marks that merely overlap have no valid nesting.
+  The playground's answer, which the app's own highlighter also uses
+  (<code>src/web/annotate.ts</code>), is to <strong>cut the text at every boundary of every
+  mark</strong> and label each piece with whichever marks cover it. Nothing nests, so nothing can
+  fail to nest. The cost is the heavy markup in the worked example: one short paragraph becomes
+  about twenty pieces. See <a href="#t-paint">paint or wrap</a> for the alternative.</p>
+</details>
+
+<details>
+  <summary>A glossary card that opened by accident and wouldn't close</summary>
+  <p>Brushing past an underlined term while scrolling opened its card, and nothing closed it. The
+  browser feature used for the card closes it on an outside click, but nothing told the reader to
+  click. The fix was to separate two cases: <strong>a card opened by hovering closes when the
+  pointer leaves; a card opened by clicking stays until it is dismissed</strong>. The fix itself had
+  a bug. A hover timer is always already running by the time you click, and 420 ms later it
+  un-pinned the card, so the pin looked set at the moment of the click and came undone half a
+  second later. It was found by a browser agent watching the state rather than the screen.</p>
+</details>
+
+<details>
+  <summary>Bugs it found in data the live app uses</summary>
+  <p>The build reports every quote it can't place instead of skipping it, which is how it found
+  these. <strong>Three of the ten assumption quotes, and one comment quote, don't match the
+  article exactly</strong>, because the model retyped a curly apostrophe as a straight one or
+  there's a non-breaking space. <strong>Two of the nineteen glossary terms match nothing</strong>
+  because the article uses a plural ("Turing machines"). Anything in the app that anchors by exact
+  quote would silently drop these. The catalogue says neither has been confirmed against the app
+  yet. Re-run today, the build still reports six quote problems for this article.</p>
+</details>
+
+<details>
+  <summary>"Earn the ink" measures time, not reading</summary>
+  <p>It's a timer scaled to the length of the block. It can't tell reading from staring out of the
+  window, and the catalogue says so: <em>"It does not have to — the point is only ordering."</em>
+  The reading-science pass's version was stricter: it blurred <em>every</em> piece of text we
+  generate until the reader had scrolled past the end of the span it describes. The playground
+  holds back only each paragraph's own gutter, margin, role and inline marks. Our headings, their
+  one-line summaries, the arc rail, the turn markers and the section gates can all still be read
+  ahead of the prose they describe.</p>
+</details>
+
+<!-- ============================================================ JUDGEMENT -->
+
+<h2 id="decisions">Decisions waiting on Greg</h2>
+
+<p>The playground exists so these can be judged with the prose in front of you rather than in the
+abstract. Each has a switch.</p>
+
+<div class="callout decide" id="d-size">
+  <p class="title">Decision 1 · Should less important text be smaller or fainter?</p>
+  <p><strong>Greg asked for it twice</strong> (<em>"make critical sentences bigger"</em>,
+  <em>"make less important stuff smaller or fainter"</em>). <strong>The reading-science pass
+  opposed both halves</strong>: fainter amounts to deleted, the reader can't check the judgement
+  before reading, and mixed sizes within a line throw the eye off. <strong>The designer split
+  it</strong>: never change body size, but a shallow ink ladder with a tested contrast floor is
+  <em>"the better half"</em> of Greg's idea. The playground's default layer is that compromise,
+  and the stronger <em>Fade the skippable</em> is tested separately.</p>
+  <p><strong>Options:</strong></p>
+  <ul>
+    <li><strong>A · Space and ink only</strong> (the playground's default, <em>Salience
+    relief</em>). Important paragraphs get more air and fuller ink, and nothing drops below a
+    readable floor. It costs little and is less dramatic than what Greg pictured.</li>
+    <li><strong>B · Also size and fading</strong> (the switches <em>…and by size too</em> and
+    <em>Fade the skippable</em>, both off by default). This is what Greg first described. It
+    carries the risks above.</li>
+    <li><strong>C · Vary spacing by density, not importance.</strong> This was the research's
+    compromise: the property comes from the text itself rather than from a claim about it. It
+    needs a density measure we don't have, and it isn't built.</li>
+  </ul>
+  <p><strong>What would decide it:</strong> read a few sections with A, then B. If B makes you
+  skip text you later wish you'd read, that's the objection proving itself.</p>
+</div>
+
+<div class="callout decide" id="d-labels">
+  <p class="title">Decision 2 · Should every paragraph get a line in the margin?</p>
+  <p>We have a one-line label for all 141 blocks, and printing them is very tempting. Three of the
+  four passes that addressed it said no. It becomes <em>"a second, complete, faster-to-read
+  article running down the margin"</em>, which is the definition of a way of not reading. The
+  labels are more useful as search results, hover text and end-of-section feedback. On the
+  playground the switch is contested and off by default, and even when on, labels are faint until
+  you're beside them.</p>
+</div>
+
+<div class="callout decide" id="d-highlight">
+  <p class="title">Decision 3 · Should the model pick the key sentences at all?</p>
+  <p>The reading science calls pre-highlighting <em>"the obvious first feature, and the
+  worst"</em>. Greg's second-pass note pulled the other way: <em>"It doesn't do enough to
+  emphasise the sections that are worth reading vs can be skipped (perhaps with spans rather than
+  at block level)."</em> The playground followed Greg and now grades every sentence 0 / 1 / 2.
+  <strong>That skim path is part of the restrained preset, where it stays on the whole time rather than only while a key is held.</strong></p>
+  <p>That means this disagreement has been partly settled by building it rather than by deciding
+  it. <a href="#example-problem">The worked example</a> is the case against it as it stands. The
+  mitigations available:</p>
+  <ul>
+    <li><strong>Only while held</strong> (the <kbd>s</kbd> key): you ask it a question rather than
+    reading inside it. It's already built as an alternative.</li>
+    <li><strong>Only after reading</strong> (<a href="#d-readfirst">read-first</a>).</li>
+    <li><strong>Highlight, then compare</strong>: the reader marks what they think matters first,
+    and ours appears afterwards as a comparison. The research ranked this as the only version that
+    keeps the benefit without the harm. Not built.</li>
+    <li><strong>Whose voice is this</strong>: a sentence stating someone else's view is never
+    shown as carrying the argument without saying whose view it is. Not built.</li>
+  </ul>
+</div>
+
+<div class="callout decide" id="d-dial">
+  <p class="title">Decision 4 · A mode, or a dial?</p>
+  <p>The panel of twenty-four switches exists because this is a playground. The design pass argued
+  that the product should have <strong>one control with four positions</strong>, from bare to
+  loud, rather than a panel of toggles. A dial is simpler for readers, and it forces us to decide
+  which decorations belong at each level, which is the real design work. A panel keeps
+  flexibility, but no reader will learn twenty conventions.</p>
+</div>
+
+<div class="callout decide" id="d-readfirst">
+  <p class="title">Decision 5 · Should the article decorate itself as you read it?</p>
+  <p>Two passes arrived at this independently (reading science's <em>Read-first ink</em> and
+  Fable's <em>Second reading</em>), and the catalogue calls it <em>"the strongest structural idea
+  in the whole catalogue"</em>. It makes almost every other idea safe, because nothing we wrote
+  about a passage can be read before the passage.</p>
+  <p>It also changes what the feature <em>is</em>: <em>"from 'a decorated article' to 'an article
+  that decorates itself as you read it'. That is either the best idea in the catalogue or too
+  clever. It is the question the playground exists to answer."</em> The costs are that it feels
+  withholding on a re-read, that it needs to remember what you've read, and that the timer can't
+  tell reading from staring.</p>
+</div>
+
+<h2 id="tradeoffs">Other trade-offs and alternatives</h2>
+
+<details id="t-paint" open>
+  <summary>Paint or wrap: how marks get onto the author's words</summary>
+  <div class="tbl-scroll">
+  <table>
+    <tr><th></th><th>Wrap (cut into pieces)</th><th>Paint (Custom Highlight API)</th></tr>
+    <tr><td>Can change</td><td>anything: weight, size, spacing, colour, underline</td><td>colour, background, underline, shadow <strong>only</strong></td></tr>
+    <tr><td>Overlapping marks</td><td>fine, if you cut at every boundary</td><td>free</td></tr>
+    <tr><td>Copy, find, select</td><td>safe with care</td><td>safe automatically</td></tr>
+    <tr><td>Cost</td><td>heavy markup; checks written against markup can go blind</td><td>can't do what Greg asked for (bigger, bolder, more space)</td></tr>
+    <tr><td>Who uses it</td><td>the playground, and the app's highlighter</td><td>nobody yet</td></tr>
+  </table>
+  </div>
+  <p>The catalogue's view: <em>"the right answer is probably both"</em>. Paint the colour and
+  underline marks, and wrap only where weight or spacing has to change.</p>
+</details>
+
+<details>
+  <summary>Our headings: how visibly ours?</summary>
+  <p>Every pass said generated headings must be distinguishable from the author's. The first build
+  put a "not the author's" badge on each. Greg asked for that to move into a tooltip, so now
+  <strong>the typeface alone</strong> tells you: ours are sans-serif small caps, the author's four
+  are serif at full ink. It's quieter, but it only works for a reader who has noticed the
+  difference. The web-platform pass's <em>Confidence ink</em> (a hand-drawn stroke that wobbles
+  where we inferred rather than quoted) was another answer to the same problem, and it isn't
+  built.</p>
+</details>
+
+<details>
+  <summary>Words or symbols in the gutter</summary>
+  <p>Symbols are one character wide and cost almost nothing to read, but only once you've learned
+  them. Nobody had learned them, and some were wrong on their own terms: ⊥ means "contradiction",
+  not "but". Words cost a little width and need no learning. Two symbols survived, <code>+</code>
+  and <code>=</code>, <em>"on the grounds that nobody has ever had to be taught either"</em>.</p>
+</details>
+
+<details>
+  <summary>Unbidden definitions in the margin vs definitions on hover</summary>
+  <p>A hover card only helps if you already suspect you need it. A gloss in the margin at the word's
+  first use teaches you without being asked, but it costs margin space and attention on every
+  first use. The playground does both: a dotted underline everywhere, as in the reading view,
+  and a margin gloss on first use only.</p>
+</details>
+
+<h2 id="risks">Risks and fragilities</h2>
+
+<ul>
+  <li><strong>The model's judgements will be confidently wrong somewhere in every
+  article.</strong> Every emphasis layer amplifies that. <a href="#example-problem">The worked
+  example</a> is one concrete case from block seven.</li>
+  <li><strong>Can the reader tell our voice from the author's?</strong> The whole design depends on
+  territory and typeface. If readers don't notice the difference, our headings and questions read
+  as the author's.</li>
+  <li><strong>Crowding.</strong> With everything on, the page is loud. That's intended, since it's
+  a playground, but it means no one has yet tested what a sensible default set looks like on a
+  second article.</li>
+  <li><strong>One article, one shape.</strong> Everything was tuned on a single argumentative essay
+  that names a bias, refutes a theory and draws a conclusion. A scientific paper, a news piece or
+  a listicle would test the ideas differently. The skim grades' cut-off (33% / 36% / 31%) was
+  chosen for this article.</li>
+  <li><strong>The judgement layer doesn't exist as a pipeline step.</strong> <code>annotations.json</code>
+  was made once, for this article. Trying any of this on a second article means writing that pass
+  properly, with the lesson about <a href="#h-extent">stating lengths in the schema</a>.</li>
+  <li><strong>The playground can only be rebuilt on Greg's Mac.</strong> <code>build.mjs</code> reads
+  the article from <code>data/noema-mythology-of-conscious-ai/</code>, which is left over from the
+  filesystem store that was retired on 2026-09-05. It isn't in git (<code>/data/</code> is
+  ignored), so a fresh checkout or the remote box can't rebuild the page. The committed
+  <code>decorated.html</code> still opens anywhere.</li>
+  <li><strong>Accessibility is mostly unexamined.</strong> The web-platform pass's rule, that every
+  importance cue needs a twin that doesn't rely on colour or size (for high-contrast modes and
+  screen readers), isn't systematically applied.</li>
+  <li><strong>What helps a novice can get in an expert's way.</strong> The reading-science pass
+  warns that any always-on aid can become distracting redundancy for a reader who already knows
+  the ground. Every persistent decoration therefore needs a remembered global off switch, and
+  possibly a setting in the reader's profile. The playground's panel doesn't count, because it is
+  a testing tool.</li>
+  <li><strong>Browser support.</strong> Several of the nicest ideas (anchored margin notes,
+  scroll-state, hand-drawn strokes) are Chrome-only or missing in Firefox as of August 2026.</li>
+</ul>
+
+<h2 id="next">Next steps</h2>
+
+<p><strong>What the catalogue recommends building next on the playground</strong>, in its own
+order:</p>
+<ol>
+  <li><strong>Whose voice is this.</strong> Mark where the essay is stating a position it will
+  reject. <a href="#example-problem">The worked example</a> shows why this comes first. It needs a
+  pass that marks attributed-position spans.</li>
+  <li><strong>The referent lamp.</strong> Hover an ambiguous <em>this</em>, <em>it</em> or
+  <em>such systems</em>, and what it refers to lights up where it stands. It's cheap, backed by
+  evidence, and needs one small pass. The catalogue calls it <em>"the best cheap idea not
+  built"</em>.</li>
+  <li><strong>Highlight-then-compare.</strong> The reader marks first, then sees ours.</li>
+  <li><strong>Skim conscience.</strong> When you scroll faster than anyone can read, the
+  decorations withdraw instead of trying harder. It's the other half of <em>Earn the ink</em>.</li>
+  <li><strong>A structure sketch drawn as you go.</strong> A diagram of the argument that gains one
+  node per section as you pass it, so it can never be read ahead of the prose.</li>
+</ol>
+
+<p><strong>Suggestions from writing this tutorial</strong> (mine, not yet anyone's plan):</p>
+<ul>
+  <li><strong>Answer the five decisions above</strong>, or at least 1, 3 and 5, with the page open.
+  Each has a switch, and each is a few minutes' reading.</li>
+  <li><strong>Try a second article of a different shape</strong> before anything moves into the
+  app. That means writing the judgement pass as a real pipeline step with lengths in its schema,
+  and making the build read from the database (or a committed fixture) instead of the leftover
+  <code>data/</code> folder.</li>
+  <li><strong>Confirm the two data bugs against the app</strong> (straight vs curly apostrophes in
+  quotes, and plurals in glossary matching). They affect the live reading view whether or not
+  decorated mode ever ships.</li>
+  <li><strong>If it moves into the app</strong>, the natural first slice is probably the four
+  ideas with the strongest agreement across passes (our headings, proposed by all five; the arc
+  rail, relation words and assumptions, by three or four each) plus the
+  glossary underlines the reading view already has. All of them signal structure, which is the
+  family the research calls safe, and none needs a new model pass. Some neighbours already exist:
+  <a href="../project/ideas.md">Ideas mode</a> uses <code>ideas.json</code>,
+  <a href="../project/remember-mode.md">Remember mode</a> is the section gate for a whole article,
+  and <a href="../project/reading-time.md">reading time</a> draws where you've been on the
+  spine.</li>
+</ul>
+
+<h2 id="faq">FAQ</h2>
+
+<details id="faq-open" open>
+  <summary>How do I actually use the page?</summary>
+  <p>Open <code>experiments/decorated/decorated.html</code> straight from disk; no server is needed.
+  The panel is at the bottom right. Start with <em>bare prose</em>, then <em>the restrained
+  set</em>, then <em>all on</em>, then turn switches off one at a time. Hold <kbd>s</kbd> for the
+  skim path and <kbd>x</kbd> for what each paragraph is doing. Hover over anything Spideryarn added
+  and it will say what it is. That's enforced: <code>verify.mjs</code> fails if a mark can't
+  explain itself.</p>
+</details>
+
+<details>
+  <summary>Is any of this in the app?</summary>
+  <p>No. Nothing from the playground is in <code>src/</code>. Some of the same data now has other
+  homes (see <a href="#next">next steps</a>).</p>
+</details>
+
+<details>
+  <summary>Isn't this just highlighting with extra steps?</summary>
+  <p>That is the risk the whole research exercise was about. The ideas that survived mostly
+  <em>signal structure</em> (where the turns are, what's assumed, where you are in the argument)
+  rather than telling you which words to read. The one layer that does tell you which words to
+  read, the skim path, is <a href="#d-highlight">the most contested thing on the page</a>.</p>
+</details>
+
+<details>
+  <summary>Why this particular essay?</summary>
+  <p>It's long (about 8,300 words), argumentative, and nearly unheaded (four headings of the
+  author's own), and it spends long stretches stating views it rejects. That's a hard, realistic
+  test for decorations meant to help follow an argument, and it had real comments and every
+  artefact already made.</p>
+</details>
+
+<details>
+  <summary>Why does it matter that the checks "prove themselves"?</summary>
+  <p>Because a check that has never failed may simply not be checking. Two of this page's checks
+  had quietly stopped working after markup changes, and they were found only because each one runs
+  against a deliberately broken copy and must go red. This is the house rule in
+  <a href="../reusable/silent-success.md">silent-success.md</a>.</p>
+</details>
+
+<details>
+  <summary>Where do I read the ideas themselves?</summary>
+  <p>The catalogue, <a href="../research/260828c-decorated-mode-ideas.md">260828c-decorated-mode-ideas.md</a>,
+  is the best single read. For the originals, it recommends five: Fable #12 (the thesis as verse),
+  Fable #11 (the margin like a Talmud page), reading science #19 (the section gate), the reading
+  science "would probably backfire" list, and the designer's "The system". All are in
+  <a href="../research/260828b-decorated-mode/">260828b-decorated-mode/</a>.</p>
+</details>
+
+<!-- ============================================================ APPENDIX -->
+
+<h2 id="appendix">Appendix</h2>
+
+<h3 id="all-layers">Every switch on the panel</h3>
+<div class="tbl-scroll">
+<table>
+  <tr><th>Switch</th><th>What it does</th><th>Data</th><th>From</th></tr>
+  <tr><td colspan="4"><strong>Structure</strong></td></tr>
+  <tr><td>Our headings <span class="tag star">★</span></td><td>Headings for the unheaded spans, in sans small caps; hover says they're ours</td><td>tree</td><td>all five passes</td></tr>
+  <tr><td>Section overtures</td><td>The span's one-sentence summary under our heading</td><td>tree gists</td><td>designer, Sol</td></tr>
+  <tr><td>The spine</td><td>The whole article as ticks down the left edge; tick length = load-bearing, orange = your marks</td><td>annotations, comments</td><td>designer, Fable</td></tr>
+  <tr><td>Rubrication</td><td>Opening line of each section in small caps (the drop cap was removed)</td><td>tree</td><td>Fable</td></tr>
+  <tr><td colspan="4"><strong>The argument</strong></td></tr>
+  <tr><td>The arc rail <span class="tag star">★</span></td><td>One sticky sentence: where you are in the argument</td><td>arc</td><td>four passes</td></tr>
+  <tr><td>Turn markers</td><td>The arc sentences left in the flow where the argument turns</td><td>arc</td><td>Fable, designer</td></tr>
+  <tr><td>The turn gutter <span class="tag star">★</span></td><td>One word per paragraph: so, but, why, e.g., closer, wider, vs, new; the dull ones faded</td><td>annotations</td><td>Sol, designer, reading science</td></tr>
+  <tr><td>Rhetorical x-ray</td><td>Hold <kbd>x</kbd>: what each paragraph is doing</td><td>annotations</td><td>Fable, Sol, reading science</td></tr>
+  <tr><td>The assumptions <span class="tag star">★</span></td><td>Dashed under the words, stamped in the gutter; click for why the argument needs it</td><td>ideas</td><td>four passes</td></tr>
+  <tr><td colspan="4"><strong>The sentences</strong></td></tr>
+  <tr><td>The skim path</td><td>Every sentence graded 2 / 1 / 0 by ink; hold <kbd>s</kbd> to see it momentarily</td><td>derived from annotations</td><td>Greg's second pass</td></tr>
+  <tr><td>Salience relief</td><td>Load-bearing paragraphs get more air and ink; weight on the key sentence</td><td>annotations</td><td>Greg, Fable, Sol, designer</td></tr>
+  <tr><td>…and by size too <span class="tag contested">contested</span></td><td>Key sentences larger</td><td>annotations</td><td>Greg; opposed by reading science and designer</td></tr>
+  <tr><td>Fade the skippable <span class="tag contested">contested</span></td><td>Asides and credentials one ink step down</td><td>annotations</td><td>designer, Fable; opposed by reading science</td></tr>
+  <tr><td>Mark the hedges</td><td>Wavy underline and a raised query on "may", "arguably"</td><td>annotations</td><td>designer, Sol</td></tr>
+  <tr><td>Figures that behave</td><td>Quieter numerals in prose; boxed figures where a number carries the argument</td><td>annotations</td><td>four passes</td></tr>
+  <tr><td>The thesis as verse</td><td>Three key sentences broken into lines at the author's punctuation</td><td>annotations</td><td>Fable (left-field)</td></tr>
+  <tr><td colspan="4"><strong>The terms, and you</strong></td></tr>
+  <tr><td>Glossary underlines</td><td>Dotted, as in the reading view; first use stronger; hover for the card</td><td>glossary</td><td>Fable, reading science, designer</td></tr>
+  <tr><td>Glosses in the margin</td><td>The definition in the gutter at first use, unasked</td><td>glossary</td><td>Fable, reading science</td></tr>
+  <tr><td>A line per paragraph <span class="tag contested">contested</span></td><td>A label beside every block</td><td>labels</td><td>designer; opposed by reading science</td></tr>
+  <tr><td>The question it answers</td><td>Each paragraph's question, in the reader's voice</td><td>annotations</td><td>this session</td></tr>
+  <tr><td>Your own marks</td><td>Your comments and bookmarks in the right margin, in orange</td><td>comments</td><td>designer, Fable, Sol</td></tr>
+  <tr><td>The section gate <span class="tag star">★</span></td><td>Say what you took from the section before our summary opens</td><td>summary</td><td>reading science (its top pick)</td></tr>
+  <tr><td colspan="4"><strong>The strange ones</strong></td></tr>
+  <tr><td>Earn the ink <span class="tag star">★</span></td><td>Decorations appear only after you've been beside a paragraph long enough to read it</td><td>—</td><td>reading science, Fable</td></tr>
+  <tr><td>Argument gravity</td><td>Paragraphs lean a few pixels toward or away from what they support. <em>"Probably a bad idea."</em></td><td>annotations</td><td>Sol (left-field)</td></tr>
+</table>
+</div>
+
+<h3>Files</h3>
+<div class="tbl-scroll">
+<table>
+  <tr><th>Where</th><th>What</th></tr>
+  <tr><td><code>experiments/decorated/decorated.html</code></td><td>The page. One file, opens from disk</td></tr>
+  <tr><td><code>experiments/decorated/README.md</code></td><td>How to use it, the promise, the four checks</td></tr>
+  <tr><td><code>experiments/decorated/build.mjs</code></td><td>Data → page. Prints every problem it finds</td></tr>
+  <tr><td><code>experiments/decorated/verify.mjs</code></td><td>The checks, and their controls</td></tr>
+  <tr><td><code>experiments/decorated/annotations.json</code></td><td>The one-off judgement layer</td></tr>
+  <tr><td><code>experiments/decorated/page.css</code> · <code>page.js</code></td><td>Styles organised by channel; the panel, spine, rail, cards and timer</td></tr>
+  <tr><td><code>docs/research/260828b-decorated-mode/</code></td><td>The brief and the five lists</td></tr>
+  <tr><td><code>docs/research/260828c-decorated-mode-ideas.md</code></td><td>The catalogue: the best single read</td></tr>
+</table>
+</div>
+
+<h3>The numbers, checked 2026-09-29</h3>
+<p>141 blocks, 108 annotated · 212 marked spans (90 key, 48 strong, 31 hedge, 19 hinge, 19
+skippable, 5 number) · 13 paragraphs at the top weight, none of whose sentences can be called
+skippable · 34 of the relation words are "and also" · 352 sentences: 33% carry the argument, 36%
+support it, 31% skippable · 581 marks with tooltips, of 14 kinds · 19 glossary terms · 10
+assumptions · 27 reader comments · 24 switches · 4 presets.</p>
+
+<h3>Glossary</h3>
+<dl>
+  <dt><strong>Block</strong></dt><dd>One paragraph, heading or figure of the article, with a permanent id such as <code>spya-epw4h3</code>.</dd>
+  <dt><strong>Artefact</strong></dt><dd>A file of model output about an article: the tree, labels, arc, glossary, ideas and so on. Each is keyed by block id.</dd>
+  <dt><strong>Tree</strong></dt><dd>The nested outline of the article. It is also the table of contents and the zoom structure. Every node has a title, which is ours when the author gave none.</dd>
+  <dt><strong>Arc</strong></dt><dd>A handful of sentences, each covering a range of blocks, saying where the argument has got to.</dd>
+  <dt><strong>Channel</strong></dt><dd>One visual property (ink, weight, size, space, underline style, colour, motion) owned by exactly one kind of decoration.</dd>
+  <dt><strong>Apparatus</strong></dt><dd>Everything we add to the page, as opposed to the author's text. It is never copied with a selection.</dd>
+  <dt><strong>Hedge</strong></dt><dd>A qualifier ("may", "arguably"): the author is not asserting this outright.</dd>
+  <dt><strong>Hinge</strong></dt><dd>The words where the argument turns.</dd>
+  <dt><strong>Control</strong></dt><dd>A deliberately broken copy that a check must reject, to prove the check can fail.</dd>
+  <dt><strong>Steelman</strong></dt><dd>The strongest version of the view an author is about to argue against.</dd>
+</dl>
+
+</body>
+</html>
