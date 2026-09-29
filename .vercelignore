@@ -28,8 +28,10 @@ dist
 api-dist
 
 # Articles on this laptop. Production reads them out of Postgres.
-data
-output
+# Anchored with a leading slash: a bare `data` matches at any depth, and it
+# silently kept src/shelf-terms/data/ off Vercel (deploy of 2026-09-28 23:35).
+/data
+/output
 
 # Nothing in the build or the deployed function reads any of these — a claim
 # this file makes and cannot check. The `build` gate in scripts/deploy.ts is
