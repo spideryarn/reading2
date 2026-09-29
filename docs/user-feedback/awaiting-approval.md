@@ -11,7 +11,7 @@ One line each: the date the report arrived, its Sentry short id, one sentence of
 proposed, and a link to the plan doc. When Greg answers, the work either happens or doesn't, the note
 in this directory records which, and the line comes off.
 
-<!-- Nothing awaiting approval. -->
+- 2026-09-29 · SPIDERYARN-READING2-5J · Let readers pay for their own model calls (a ChatGPT plan is not open to paid hosted apps yet; connecting an OpenRouter account is) — first decision is whether Greg sends OpenAI's interest form · [260929g](../plans/260929g-bring-your-own-ai-subscription.md)
 
 ## Decisions resting with Greg from reports that DID ship
 

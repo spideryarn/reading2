@@ -79,7 +79,6 @@ import type {
   Article,
   CitationFind,
   CitationsFound,
-  CitedWork,
   FindCitationResponse,
   SearchEvidence,
 } from "./types.js";
@@ -156,7 +155,7 @@ const TITLE_CAP = 300;
  * one says the opposite, and says what a good answer is.
  */
 export const FIND_SYSTEM = [
-  "You find the web page of one cited work.",
+  "You find the web page of one scholarly work.",
   "Run ONE web search for it — its title, with the first author if one is given. Do not search again.",
   "Then answer with only a JSON object and nothing else:",
   '{"url": "<the search result URL that is this work\'s own page>"}',
@@ -167,8 +166,23 @@ export const FIND_SYSTEM = [
   "reviews or summarises the work is not its page.",
 ].join("\n");
 
-/** The user turn: the work as the article gives it, and nothing else of the article. */
-export function findPrompt(work: CitedWork, reference: string | null): string {
+/**
+ * **The work to look for, as the caller knows it** — a cited work as an
+ * article gives it (Citations' *Find it*), or an uploaded paper looking for
+ * its own canonical page. Only the title is required; the rest narrows the
+ * search.
+ */
+export interface WorkToFind {
+  title: string;
+  authors?: string | undefined;
+  year?: string | undefined;
+}
+
+/**
+ * The user turn: the work, and — when there is one — the reference entry an
+ * article gives for it. Nothing else of the article.
+ */
+export function findPrompt(work: WorkToFind, reference: string | null): string {
   const lines = [`Title: ${work.title}`];
   if (work.authors) lines.push(`Authors: ${work.authors}`);
   if (work.year) lines.push(`Year: ${work.year}`);
@@ -177,7 +191,7 @@ export function findPrompt(work: CitedWork, reference: string | null): string {
 }
 
 /** The request, in one place so a test can read what goes on the wire. */
-export function findRequest(work: CitedWork, reference: string | null, model: string): AiRequestBody {
+export function findRequest(work: WorkToFind, reference: string | null, model: string): AiRequestBody {
   return {
     model,
     max_tokens: ANSWER_TOKENS,
@@ -340,6 +354,53 @@ async function callOnce(
   }
 }
 
+/** What `findWorkPage` hands back: the judged reading, and the model that answered. */
+export interface FoundWorkPage {
+  reading: FindReading;
+  model: string;
+}
+
+/**
+ * **Search the web for one work and judge the answer — the shared core**, with
+ * no route, no allowance and no store: each caller brings its own bound on
+ * presses and decides what to keep. Citations' *Find it* below is one caller;
+ * an uploaded paper looking for its canonical page is another.
+ *
+ * The rules are `readFind`'s and are all code: the URL must be one the search
+ * returned, and the result must name the work. A failure arrives as the house
+ * copy with an HTTP status (`callOnce`), and an answer that cannot be read is a
+ * 502 rather than "nothing matched" — a claim that nothing matched has to have
+ * been checked.
+ *
+ * **Every caller must bound how often it runs this** — each run is billed web
+ * searches, and nothing here counts them for you beyond the reading's
+ * `searches`.
+ */
+export async function findWorkPage(
+  work: WorkToFind,
+  reference: string | null,
+  opts: {
+    call?: NonNullable<FindCitationDeps["call"]>;
+    model?: string;
+    timeoutMs?: number;
+    line?: ReturnType<typeof log>;
+  } = {},
+): Promise<FoundWorkPage> {
+  const send = opts.call ?? ((body, options) => openRouterJson("citations-find", body, options));
+  const model = opts.model ?? modelFor("citations-find");
+  const timeoutMs = opts.timeoutMs ?? FIND_TIMEOUT_MS;
+  const line = opts.line ?? log("model");
+  const started = Date.now();
+  const call = await callOnce(send, findRequest(work, reference, model), { timeoutMs, line, model, started });
+  const used = call.answeredBy ?? model;
+  const reading = readFind(call.json, work.title);
+  if (!reading) {
+    line.error({ model: used, ms: since(started) }, "a web find's answer could not be read");
+    throw httpError(502, PROVIDER_UNREADABLE.message);
+  }
+  return { reading, model: used };
+}
+
 export function makeFindCitation(
   deps: FindCitationDeps,
 ): (slug: string, entryId: string) => Promise<FindCitationResponse> {
@@ -379,20 +440,14 @@ export function makeFindCitation(
     }
 
     const started = Date.now();
-    let call: JsonCall;
+    let answered: FoundWorkPage;
     try {
-      call = await callOnce(send, findRequest(work, reference, model), { timeoutMs, line, model, started });
+      answered = await findWorkPage(work, reference, { call: send, model, timeoutMs, line });
     } finally {
       /* Frees the concurrency slot whatever happened; the fill still counts. */
       await deps.allowance.finish(allowance.id);
     }
-
-    const used = call.answeredBy ?? model;
-    const reading = readFind(call.json, work.title);
-    if (!reading) {
-      line.error({ model: used, ms: since(started) }, "a citation find's answer could not be read");
-      throw httpError(502, PROVIDER_UNREADABLE.message);
-    }
+    const { reading, model: used } = answered;
 
     const kept = reading.verdict.kind === "kept" ? reading.verdict.page : null;
     /* One line per call, and `searches` is on it because it is the alarm: the

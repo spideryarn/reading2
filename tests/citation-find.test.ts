@@ -20,6 +20,7 @@ import {
   FIND_SYSTEM,
   MAX_TOTAL_RESULTS,
   findRequest,
+  findWorkPage,
   makeFindCitation,
   readFind,
 } from "../src/citation-find.js";
@@ -406,6 +407,20 @@ describe("the request — the only bounds on spend that exist", () => {
     const user = (body.messages as { role: string; content: string }[])[1]?.content ?? "";
     expect(user).toContain(`Title: ${TITLE}`);
     expect(user).toContain("arXiv preprint");
+  });
+
+  it("findWorkPage, the shared core, judges a title-only work with no article and no store", async () => {
+    const sent: AiRequestBody[] = [];
+    const { reading } = await findWorkPage({ title: TITLE }, null, {
+      model: "a-model",
+      call: async (body) => {
+        sent.push(body);
+        return { json: answer({ results: [A_REVIEW, THE_PAPER] }) } as JsonCall;
+      },
+    });
+    expect(reading.verdict).toEqual({ kind: "kept", page: expect.objectContaining({ url: PAPER }) });
+    const user = (sent[0]?.messages as { content: string }[] | undefined)?.[1]?.content ?? "";
+    expect(user).toBe(`Title: ${TITLE}`);
   });
 
   it("sends the article's reference entry when the work has one", async () => {

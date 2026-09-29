@@ -255,7 +255,7 @@ will eventually have to decide whether they are a system or an accident:
 ## See also
 
 - [web-client.md](web-client.md) — the view all of this styles, and its constraints
-- [icons.md](icons.md) — Lucide, one stroke weight, and two ways an SVG breaks a layout quietly
+- [icons.md](icons.md) — Lucide, one stroke weight, two ways an SVG breaks a layout quietly, and **navigation is an icon with a tooltip, not a text label** (Greg, 2026-09-29)
 - [colour-scales.md](colour-scales.md) — the three palettes that are not the brand, and why every
   published one is upside down on a black page
 - [tooltips.md](tooltips.md) — the one component whose appearance is entirely ours
