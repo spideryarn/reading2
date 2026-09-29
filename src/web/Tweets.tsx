@@ -275,8 +275,10 @@ export function ThreadPosts({
 
   return (
     <>
+      {/* Muted since 2026-09-29: each overlong post's own count already turns
+          red, so this line explains rather than alarms. */}
       {over > 0 && (
-        <p className="tw:mt-3 tw:mb-0 tw:text-xs tw:text-destructive">
+        <p className="tw:mt-3 tw:mb-0 tw:text-xs tw:text-muted-foreground">
           {over === 1 ? "One post is" : `${over} posts are`} over {thread.limit} characters. Nothing
           has been cut — what the model wrote is what is below.
         </p>

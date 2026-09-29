@@ -1,6 +1,6 @@
 # Tweets become a mode, with a wide band and a link from each post to its passage
 
-Status: planned, 2026-09-29. Feedback SPIDERYARN-READING2-5A (report `spya-v6rjvy`).
+Status: **built**, on `dev` 2026-09-29, not deployed. Feedback SPIDERYARN-READING2-5A (report `spya-v6rjvy`).
 
 > In the past, we'd set up the tweet thread mode as kind of its own page, but actually I'm realizing
 > that it would work to have it as a normal mode with its own left-hand column alongside the text.
@@ -174,6 +174,29 @@ code review, since the redirect and the fingerprint had to land together.
 The reading-view-overview rule *"arriving at one does not"* now has an exception (Tweets). That
 sentence is a rule in an entry-point doc, so it is left for Greg to approve a wording; the Tweets
 line under *The modes in the band* says it.
+
+## As built: the code review and the browser check
+
+- **GPT Sol's code review**
+  ([260929f-tweets-become-a-mode-code-review-sol.md](260929f-tweets-become-a-mode-code-review-sol.md))
+  fixed two must-fixes itself: the thread was not inside a scroller, and `navigate()` could keep a
+  stale hash on an old link. Its hash fix compared the hash on *every* navigation; narrowed to lifted
+  links only. Its two reported items (a surface-shape pin for the band; present-tense comments still
+  naming the tweets page) were done in a follow-up commit.
+- **A press arms nothing.** The first build left `MODE_TARGET.tweets` `fixed`, which minted a token
+  no `useAutoRun` claims, and the sweep in `every-mode-draws-its-surface` counts an unclaimed token as
+  a spend still owed. A fourth `ModeActivation` kind, `arrival`, says what is true: the band starts
+  itself, a press arms nothing, and `modeGenerates` stays true.
+- **Browser check** (Sonnet, Playwright, "Life is Short"; shots in [260929f-shots/](260929f-shots/)):
+  the band measured 544px at 1440 and 1100px, the prose beside it at 544px, no sideways scroll; an
+  old thread showed the Metadata line, and a re-run wrote six linked posts in ~13s; four of five
+  first links landed on the matching paragraph (the fifth on a related one), each jump flashed the
+  paragraph; the old address with `#hash` and with `?at=` landed on the mode.
+- **Left for Greg:** on a phone the covering band hides the paragraph a link scrolls to. That is
+  every band's behaviour (the covering design leaves the way back to the Dock — TermJump.tsx says so),
+  so changing it is an app-wide product call, not this plan's. The browser agent also suggested
+  larger passage chips than `BlockRef`'s six-character ids; that is the shared component, so also
+  not here.
 
 ## Done looks like
 
