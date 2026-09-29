@@ -212,6 +212,22 @@ describe("a control a finger has to hit", () => {
       ).toBe(true);
     });
   }
+
+  it("keeps Glossary's icon-only profile badge large enough for a finger", () => {
+    const selector = ".prof-badge.icon-only";
+    const rule = rules(coarseBlocks(readerCssNoComments())).find((candidate) =>
+      selectors(candidate.selector).includes(selector),
+    );
+    expect(rule, `${selector} has no rule inside a coarse-pointer block`).toBeDefined();
+    const width = /min-width:\s*([\d.]+)rem/.exec(rule?.decls ?? "");
+    const height = /min-height:\s*([\d.]+)rem/.exec(rule?.decls ?? "");
+    expect(Number(width?.[1]), `${selector} has no usable width floor`).toBeGreaterThanOrEqual(
+      FLOOR_REM,
+    );
+    expect(Number(height?.[1]), `${selector} has no usable height floor`).toBeGreaterThanOrEqual(
+      FLOOR_REM,
+    );
+  });
 });
 
 describe("a text field iOS must not zoom into", () => {

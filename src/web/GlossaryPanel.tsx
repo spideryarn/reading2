@@ -68,7 +68,7 @@
  * The four designs this was chosen from, and the two things it is a bet on, are
  * in docs/plans/260826b-glossary-prioritised-order.md.
  */
-import { useState } from "react";
+import { type ReactNode, useState } from "react";
 import {
   ExternalLink,
   Globe,
@@ -106,6 +106,7 @@ import { MAX_ASKED_TERM } from "../asked-term.js";
 import { JobProgress } from "./JobProgress.js";
 import { ModeSurface } from "./ModeSurface.js";
 import { WrittenForYou } from "./WrittenForYou.js";
+import { GlossaryKindIcon } from "./GlossaryKindIcon.js";
 import { useRenderCount } from "./perf.js";
 
 /**
@@ -245,42 +246,52 @@ export function GlossaryPanel({
   const order = effectiveSort(all, sort);
   const shown = glossary ? sortEntries(all, order, gate) : [];
   const orphanedLookup = keptWithoutEntry(owner, all);
+  /* A label rather than a control: it is provenance, not a warning. The
+     glossary already made this exact choice once — "a label instead of a
+     warning triangle" — and the reason holds. src/web/WrittenForYou.tsx.
+     Provenance about the owner's own run, so a visitor sees none of it:
+     `profileHash` never leaves the server (src/public-types.ts). `null` rather
+     than a component that renders nothing, so the sort row's trailing slot
+     is empty when there is nothing to put in it. */
+  const badge =
+    glossary && owner?.profiled ? (
+      <WrittenForYou written changed={owner.profileChanged} slug={owner.slug} compact />
+    ) : null;
+  const sorts = glossary && glossary.entries.length > 1 ? sortOptions(all) : [];
+  const count = glossary && (
+    <span className="gloss-count">
+      {glossary.entries.length} {glossary.entries.length === 1 ? "term" : "terms"}
+    </span>
+  );
 
   return (
     <ModeSurface
       label="Glossary"
       feature="gloss"
-      /* **A fragment, not a conditional** — and that is the whole trap of this
-          migration. Both children below are gated on `glossary`, so while the
-          list is still coming this row is empty; a `head={glossary && …}` would
-          hand the surface `null` and it would render no `.band-head` at all,
-          deleting a row that is on screen today. The fragment is always
-          present, and the conditionals live inside it. */
+      /* **No head row at all while the sort row is drawn**, since 2026-09-29.
+          Greg, on a phone: *"The Glossary stuff at the top takes up too much
+          space … maybe move the "N words" onto the `order` row somehow -
+          actually maybe we already show the "of N" so we don't need it"*
+          (`[SPIDERYARN-READING2-4G]`). The row held two things, and both
+          move to the end of the sort row: the profile badge always, and the
+          count everywhere but *prioritised*, which already says it as
+          "8 of 24" on the threshold row. The other orders have no numbering,
+          so there the count is the only total on screen.
+
+          **Otherwise a fragment, not a conditional**, and that is the trap
+          this used to guard alone: while the list is still coming, both
+          children are gated on `glossary`, and `head={glossary && …}` would
+          hand the surface `null` and render no `.band-head` at all — deleting
+          a row that was on screen. With one term, or fewer than two sorts on
+          offer, there is no sort row to carry them, so the old row stays.
+          docs/plans/260929a-compact-glossary-header-and-kind-icons.md. */
       head={
-        <>
-          {/* The mode's name went on 2026-09-05 — the Dock says it, and saying
-              it twice was the clutter Greg asked us to clear (§ Stage 5 of
-              docs/plans/260905d-declutter-the-reading-view-top-bars.md). The
-              row stays, because what follows is a count rather than a name. */}
-          {glossary && (
-            <span className="gloss-count">
-              {glossary.entries.length} {glossary.entries.length === 1 ? "term" : "terms"}
-            </span>
-          )}
-          {/* A label rather than a control, and on the head line rather than in
-              a banner: it is provenance, not a warning. The glossary already
-              made this exact choice once — "a label instead of a warning
-              triangle" — and the reason holds. src/web/WrittenForYou.tsx. */}
-          {/* Provenance about the owner's own run, so a visitor sees none of it:
-              `profileHash` never leaves the server (src/public-types.ts). */}
-          {glossary && owner && (
-            <WrittenForYou
-              written={owner.profiled}
-              changed={owner.profileChanged}
-              slug={owner.slug}
-            />
-          )}
-        </>
+        sorts.length > 0 ? null : (
+          <>
+            {count}
+            {badge}
+          </>
+        )
       }
       /* Pinned under the scroller rather than at the end of it, which is what
           `foot` is for. The guard is the one it had as a trailing child: the
@@ -320,10 +331,22 @@ export function GlossaryPanel({
       {/* Sorting is only a question once there is a list, and each option is
           only offered once the model actually returned what it needs — an older
           glossary may have no scores at all, and offering a sort that would
-          silently do nothing is worse than not offering it. `SortBar` returns
-          nothing when fewer than two survive that. */}
-      {glossary && glossary.entries.length > 1 && (
-        <SortBar entries={all} sort={order} onSort={onSort} />
+          silently do nothing is worse than not offering it. `sortOptions` is
+          empty when fewer than two survive that. */}
+      {sorts.length > 0 && (
+        <SortBar
+          options={sorts}
+          sort={order}
+          onSort={onSort}
+          trailing={
+            order !== "prioritised" || badge ? (
+              <>
+                {order !== "prioritised" && count}
+                {badge}
+              </>
+            ) : null
+          }
+        />
       )}
 
       {/* Only in the order it belongs to. It is the one control here that sets
@@ -968,17 +991,19 @@ export function entryProse(entry: GlossaryEntry): EntryProse {
   return { lead: sections[0]!.text, sections, legacy: false };
 }
 
-/** Which sorts this particular glossary can actually offer. */
-function SortBar({
-  entries,
-  sort,
-  onSort,
-}: {
-  entries: GlossaryEntry[];
-  sort: TermSort;
-  onSort(sort: TermSort): void;
-}) {
-  const options: { key: TermSort; label: string; title: string }[] = [
+interface SortOption {
+  key: TermSort;
+  label: string;
+  title: string;
+}
+
+/**
+ * Which sorts this particular glossary can actually offer. **Fewer than two is
+ * no bar at all**, and the panel asks this before drawing, because whether the
+ * bar is there decides where the profile badge goes (`GlossaryPanel`).
+ */
+function sortOptions(entries: GlossaryEntry[]): SortOption[] {
+  const options: SortOption[] = [
     /* Offered when some position of the bar would hide something — the same
        rule the two score sorts below follow, which is that a control that would
        visibly do nothing is worse than one that isn't there. It is a question
@@ -1020,27 +1045,52 @@ function SortBar({
         ]
       : []),
   ];
-  if (options.length < 2) return null;
+  return options.length < 2 ? [] : options;
+}
 
+/**
+ * The sort buttons, and — at the right-hand end — whatever the panel hands
+ * `trailing`: the count and the profile badge, which came here from a head row
+ * of their own on 2026-09-29, so that row could go (`GlossaryPanel`).
+ *
+ * **The trailing slot is beside the group, not in it.** The group is what a
+ * screen reader announces as "Order the terms by", and a profile button inside
+ * it would be announced as one of the orders. GPT Sol's review of the plan.
+ */
+function SortBar({
+  options,
+  sort,
+  onSort,
+  trailing,
+}: {
+  options: SortOption[];
+  sort: TermSort;
+  onSort(sort: TermSort): void;
+  trailing: ReactNode;
+}) {
   return (
-    /* biome-ignore lint/a11y/useSemanticElements: <fieldset> is for form
-       controls and wants a <legend>; these are three toggle buttons that
-       change how a list is ordered, and `role="group"` with an accessible name
-       is exactly what ARIA has for that. */
-    <div className="gloss-sort" role="group" aria-label="Order the terms by">
-      <span className="gloss-sort-label">order</span>
-      {options.map((option) => (
-        <button
-          key={option.key}
-          type="button"
-          className={`gloss-sort-btn${sort === option.key ? " on" : ""}`}
-          aria-pressed={sort === option.key}
-          title={option.title}
-          onClick={() => onSort(option.key)}
-        >
-          {option.label}
-        </button>
-      ))}
+    <div className="gloss-sort">
+      {/* biome-ignore lint/a11y/useSemanticElements: <fieldset> is for form
+          controls and wants a <legend>; these are toggle buttons that change
+          how a list is ordered, and `role="group"` with an accessible name is
+          exactly what ARIA has for that. */}
+      <div className="gloss-sort-group" role="group" aria-label="Order the terms by">
+        {/* No "order" word in front since 2026-09-29 — Greg asked for it to go,
+            and the group's `aria-label` still says it to a screen reader. */}
+        {options.map((option) => (
+          <button
+            key={option.key}
+            type="button"
+            className={`gloss-sort-btn${sort === option.key ? " on" : ""}`}
+            aria-pressed={sort === option.key}
+            title={option.title}
+            onClick={() => onSort(option.key)}
+          >
+            {option.label}
+          </button>
+        ))}
+      </div>
+      {trailing && <span className="gloss-sort-trail">{trailing}</span>}
     </div>
   );
 }
@@ -1253,12 +1303,10 @@ function Term({
       >
         <span className="gloss-term-head">
           <span className="gloss-name">{entry.name}</span>
-          {/* Not shown for `term`, which is the default and says nothing. The
-              chip earns its space when it tells you this is a person or a book
-              rather than a piece of vocabulary. */}
-          {entry.kind !== "term" && entry.kind !== "other" && (
-            <span className="gloss-kind">{entry.kind}</span>
-          )}
+          {/* An icon, and only for the kinds that say "not vocabulary" — a
+              person, a place, a book. GlossaryKindIcon.tsx says why `concept`
+              lost its chip on 2026-09-29. */}
+          <GlossaryKindIcon kind={entry.kind} />
           {/* One number under `hardest` or `most central`, both under
               `prioritised`, none in first-use order. Never the product: that is
               our arithmetic, not the model's judgment, and a number the reader
@@ -1471,14 +1519,15 @@ function Term({
  * >
  * > — a reader, 2026-09-04, `[SPIDERYARN-READING2-Y]`
  *
- * Two things it deliberately does not do, and the hint under the box says the
- * first one out loud rather than letting the reader find out:
+ * Two things it deliberately does not do, and the button's tooltip says the
+ * first one out loud rather than letting the reader find out (a line under the
+ * box said it until 2026-09-29, when it went to save a phone two lines):
  *
  * - **It adds nothing to the list.** The glossary is one JSON document that a
  *   *Find more terms* run rewrites and that a shared link publishes whole, so a
  *   reader-added entry would be merged away by the first and handed to
  *   strangers by the second — src/types.ts § `AskedTermAnswer`. Saying "not
- *   added to the list" in the hint is what stops the answer's disappearance
+ *   added to the list" in the tooltip is what stops the answer's disappearance
  *   from reading as a bug.
  * - **It does not correct spelling.** The tolerance is `term-match.ts`'s
  *   folding of case, plurals and possessives, and no more. When it finds
@@ -1552,19 +1601,19 @@ function AskATerm({
              never a request that could only fail. Whitespace alone is an empty
              box. */
           disabled={asking || term.trim().length === 0}
-          title="Finds these words in the article and explains the passage they are in. One model call."
+          /* **The deferral lives here now.** It was a line of its own under the
+             box — *"Not added to the list"* — so an answer that never became a
+             row would read as the design rather than a failure. Greg asked for
+             the line to go on 2026-09-29 because it cost a phone two lines of
+             band (`[SPIDERYARN-READING2-4G]`); the answer's own card still
+             appears where the row would have. */
+          title="Finds these words in the article and explains the passage they are in. Not added to the list. One model call."
         >
           {asking ? <LoaderCircle size={12} className="cmt-spinner" /> : <TextSearch size={12} />}
           {asking ? "Looking…" : "Look up"}
         </button>
       </form>
 
-      {/* **The deferral, said before it is noticed.** A reader who typed a term
-          and got an answer would otherwise reasonably expect a new row, and its
-          absence would read as a failure rather than as the design. */}
-      <p className="gloss-ask-hint">
-        Finds the words in this article and explains the passage. Not added to the list.
-      </p>
 
       {/* Until the first words land. After that the words are the progress, and
           a sentence about waiting beside them would be describing the past. */}
