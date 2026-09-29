@@ -130,7 +130,7 @@ one and generates nothing at all.
 Five things to get right, and the first is the one that cost this field a whole review round:
 
 - **Write about the mode, not about pressing the button.** The same string is read on four surfaces
-  at least — the segment on the reading view, the loose links on the metadata and tweets pages
+  at least — the segment on the reading view, the loose links on the metadata page
   (which navigate and arm *nothing*), and either of those seen by a visitor, who gets an explanatory
   band rather than a generator. So *"opening it runs a model pass"* is false on three of the four.
   Four of the fourteen opened that way in first draft and every one was caught by a cross-family
@@ -158,8 +158,8 @@ Five things to get right, and the first is the one that cost this field a whole 
 
 *[`tests/dock-mode-tooltips.test.tsx`](../../tests/dock-mode-tooltips.test.tsx) — that both exist,
 that the second is not a copy of the first, that no price crept in, and that every mode's card opens
-in **both** arms of the bar: the segment on the reading view, and the loose links on the metadata and
-tweets pages, which are a different component and were the arm left carrying a `title` attribute.*
+in **both** arms of the bar: the segment on the reading view, and the loose links on the metadata
+page, which are a different component and were the arm left carrying a `title` attribute.*
 
 ## Moving a mode in or out of the switch
 
@@ -247,8 +247,10 @@ Then the residue nothing refuses at compile time:
       correctly, so the predicate is untestable —
       *[`tests/public-visibility-pg.test.ts`](../../tests/public-visibility-pg.test.ts)*.
 - **Pressing the control that opens it — a mode button, a sub-mode chip — runs the job when there
-  is nothing there**; arriving does not. (A page with a path of its own may start on arrival
-  instead, as the Tweets page does since 2026-09-15 — `useAutoRunOnArrival` in the same file.)
+  is nothing there**; arriving does not. (One mode starts on arrival instead: Tweets, since
+  2026-09-29 a mode rather than a page, kept the rule Greg asked of its page on 2026-09-12 —
+  `useAutoRunOnArrival` in the same file — and is in last-view's `NEEDS_AN_EXPLICIT_PRESS` so a
+  restore cannot spend. A new mode that wants the same needs both halves.)
   [`useAutoRun.ts`](../../src/web/useAutoRun.ts) is the whole rule, and
   [reading-view-overview.md § True across the whole view](reading-view-overview.md#true-across-the-whole-view)
   is why. *Nothing.*

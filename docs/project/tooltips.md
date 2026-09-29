@@ -208,7 +208,8 @@ Three things about it are not true of any other set here.
   the rule that **no card in this bar names a price** — the command bar says `generates` and no
   figure, and a tooltip on the button beside it must not be more disclosed than the bar is.
 - **The same fourteen modes are drawn by two different components**, and only one of them had a
-  card. On the reading view they are a `role="radiogroup"` segment; on the metadata and tweets pages
+  card. On the reading view they are a `role="radiogroup"` segment; on the metadata page (and, until
+  2026-09-29, the tweets page — now a mode, [plan](../plans/260929f-tweets-become-a-mode-with-a-wide-band-and-block-links.md))
   they are loose `DockLink`s, and those carried a `title` attribute while the segment had a panel.
   `DockLink`'s hover became a two-member union rather than a `title: string` so that the arm a link
   took was a choice the compiler could see, with the three buttons that are *not* modes sitting
@@ -223,7 +224,7 @@ Three things about it are not true of any other set here.
   why the button is dimmed rather than `aria-disabled`. That widened `state`, which until then had
   meant *this switch is mid-flight or broken*; what the two share is that somebody who opened the
   card because the control looked wrong wants that answered before they are told what it is for.
-- **And the three buttons in the bar that are not modes** — Comments, Tweets and Metadata — took the
+- **And the three buttons in the bar that are not modes** — Comments, Tweets and Metadata (Tweets became a mode on 2026-09-29, leaving two; [plan](../plans/260929f-tweets-become-a-mode-with-a-wide-band-and-block-links.md)) — took the
   same two-paragraph card later the same day. Their copy is `NOT_A_MODE` in
   [`Dock.tsx`](../../src/web/Dock.tsx) rather than `MODE_CATALOG`, because a record keyed by `Mode`
   is the wrong home for three things that are not modes and never will be. They are in a

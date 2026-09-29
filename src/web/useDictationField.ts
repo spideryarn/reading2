@@ -220,6 +220,13 @@ export function useDictationField<C>({
        empty and this is the insertion. One line either way. */
     onTranscript: (text) => put(text, true),
     onEnd: () => {
+      /* If the hook immediately restarts on a newly chosen device, it does so
+         without another field-button press. Continue after the words this
+         session kept, rather than reusing the caret from its original press and
+         inserting the restarted session in front of them. A failed session
+         with no live words has no span, so its retry still keeps the original
+         insertion point. */
+      if (span.current) pressedAt.current = span.current.to;
       span.current = null;
       valueAtEnd.current = live.current;
       /* **`pressedAt` is deliberately kept**, where the span is not.
@@ -241,6 +248,12 @@ export function useDictationField<C>({
 
   const toggle = useCallback(() => {
     if (!dictation.armed) {
+      /* A press during the previous session's transcription supersedes that
+         session. Its rough Chromium words stay in the box, but they are now
+         ordinary text: the new session's authoritative transcript must replace
+         only what the new session contributes. The stale session never reaches
+         `onEnd`, so this boundary has to be made at the press itself. */
+      span.current = null;
       pressedAt.current = box.current?.selectionStart ?? null;
       /* A new press: there is no ended dictation to be stale relative to. */
       valueAtEnd.current = null;

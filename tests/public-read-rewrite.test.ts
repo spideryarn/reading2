@@ -143,6 +143,8 @@ describe("vercel.json's rewrites", () => {
        reach: the client owns these pages, and the function would answer them
        with a head describing the reading view or 404 them outright. */
     expect(routedBy("/read/some-article/metadata")).toBe("/((?!api/).*)");
+    /* The thread's old page, a mode since 2026-09-29: it must still reach the
+       client, whose `settleAddress` lifts it to `?mode=tweets`. */
     expect(routedBy("/read/some-article/tweets")).toBe("/((?!api/).*)");
     /* And the ordinary pages, so "falls through" is not just true of `/read/`. */
     expect(routedBy("/library")).toBe("/((?!api/).*)");
@@ -590,7 +592,7 @@ describe("parseRoute and a malformed slug", () => {
    * **And a real slug still reads**, which is the control: an `isSlug` that
    * refused everything would pass the case above and break the whole app.
    */
-  it("but a real slug still reads, at all three views", () => {
+  it("but a real slug still reads, at both views", () => {
     expect(parseRoute("/read/noema-mythology-of-conscious-ai")).toEqual({
       kind: "read",
       slug: "noema-mythology-of-conscious-ai",
@@ -601,11 +603,10 @@ describe("parseRoute and a malformed slug", () => {
       slug: "a-slug",
       view: "metadata",
     });
-    expect(parseRoute("/read/a-slug/tweets")).toEqual({
-      kind: "read",
-      slug: "a-slug",
-      view: "tweets",
-    });
+    /* `/tweets` was the third view until 2026-09-29; it is the mode
+       `?mode=tweets` now, and the old address is lifted before it is parsed
+       (router.ts § `liftedTweetsHref`), so it reads through the article view. */
+    expect(parseRoute("/read/a-slug")).toEqual({ kind: "read", slug: "a-slug", view: "article" });
   });
 });
 

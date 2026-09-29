@@ -1,7 +1,8 @@
 /**
- * The thread page's one pure part: the text that lands on the clipboard.
+ * The Tweets band's one pure part: the text that lands on the clipboard.
  *
- * Everything else on `/read/<slug>/tweets` is rendering, and the rendering is
+ * Everything else in `?mode=tweets` (a page at `/read/<slug>/tweets` until
+ * 2026-09-29) is rendering, and the rendering is
  * checked in a browser (docs/project/browser-testing.md). This is the piece
  * that has a right answer and can drift without looking wrong: the numbering,
  * and the source line.
@@ -12,7 +13,7 @@
  * being in the copy is a product decision (docs/plans/260825g-tweet-thread-page.md),
  * not a formatting detail, and it should break a test if it goes.
  *
- * The write half is tested in tweets.test.ts; the page is src/web/Tweets.tsx.
+ * The write half is tested in tweets.test.ts; the panel is src/web/Tweets.tsx.
  */
 import { describe, expect, it } from "vitest";
 import { cascadeForce } from "../src/jobs.js";

@@ -63,7 +63,6 @@ you are looking at it.
 | Reading view, default mode | `<article> · Spideryarn` | `The Mythology of Conscious AI · Spideryarn` |
 | Reading view, any other mode | `<article> · <Mode> · Spideryarn` | `The Mythology of Conscious AI · Glossary · Spideryarn` |
 | `/read/<slug>/metadata` | `<article> · Metadata · Spideryarn` | — |
-| `/read/<slug>/tweets` | `<article> · Tweets · Spideryarn` | — |
 | `/add/<url>` | `Adding <host> · Spideryarn` | `Adding nytimes.com · Spideryarn` |
 | `/add/upload/<id>` | `Adding <filename> · Spideryarn` | `Adding the-paper.pdf · Spideryarn` |
 | `/profile` | `Profile · Spideryarn` | — |
@@ -270,7 +269,7 @@ it goes wrong by waiting. The table below is the ones worth a note, not an inven
 | [`article/ArticlePage.tsx`](../../src/web/article/ArticlePage.tsx) — `ArticlePage` | loading and error, **and nothing else** |
 | [`reader/Reader.tsx`](../../src/web/reader/Reader.tsx) — `Reader` | the reading view, with its mode |
 | [`Metadata.tsx`](../../src/web/Metadata.tsx) | `/read/<slug>/metadata` |
-| [`Tweets.tsx`](../../src/web/Tweets.tsx) | `/read/<slug>/tweets` |
+| [`Tweets.tsx`](../../src/web/Tweets.tsx) | the Tweets mode's band — `?mode=tweets` on the reading view (a page at `/read/<slug>/tweets` until 2026-09-29, when [the plan](../plans/260929f-tweets-become-a-mode-with-a-wide-band-and-block-links.md) made it a mode; the old address redirects), so its title is the ordinary any-other-mode one |
 | [`AddPage.tsx`](../../src/web/AddPage.tsx) | both `/add/` routes |
 | [`ProfilePage.tsx`](../../src/web/ProfilePage.tsx) | `/profile` |
 | [`DesignPage.tsx`](../../src/web/DesignPage.tsx) | `/design` |

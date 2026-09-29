@@ -43,7 +43,8 @@
  * One *hook* surface is driven rather than three. All three go through
  * `useStepJob`, and `tests/step-job-force.test.tsx` is what proves that they do.
  *
- * The thread page is driven separately below, because it was the fourth copy of
+ * The thread (a page then, the Tweets band now) is driven separately below,
+ * because it was the fourth copy of
  * this and the one that did **not** go through the hook — so for it, "does the
  * reason survive the poll" was a live question rather than a fact inherited
  * from a shared module. It is kept after the conversion for the same reason the
@@ -72,17 +73,17 @@ vi.mock("../src/web/lib/supabase.js", () => ({
   },
 }));
 
-/* The thread page's bottom bar reaches Supabase and the whole visitor layer,
-   and none of it is what this file is about. Same reason as
+/* The Dock reaches Supabase and the whole visitor layer, and none of it is
+   what this file is about. Same reason as
    tests/background-reload-keeps-the-list.test.tsx. */
 vi.mock("../src/web/Dock.js", () => ({ Dock: () => null }));
 
 const { useIdeas } = await import("../src/web/useIdeas.js");
-const { Tweets } = await import("../src/web/Tweets.js");
+const { TweetsBand } = await import("../src/web/modes/tweets/TweetsMode.js");
 const { AddPage } = await import("../src/web/AddPage.js");
 const { jobEngine } = await import("../src/web/jobEngine.js");
 
-/** Enough article for the page to render its head. */
+/** Enough article for the Tweets band to render its head. */
 const ARTICLE = {
   meta: { slug: "constitution", title: "A Constitution", url: "https://example.com/c" },
   blocks: [{ id: "spya-a", kind: "p", text: "some words here" }],
@@ -293,7 +294,7 @@ describe("a job the server received and refused", () => {
   });
 });
 
-describe("the thread page, which had its own copy of all this", () => {
+describe("the Tweets band, whose page had its own copy of all this", () => {
   /**
    * The fourth surface, mounted whole and clicked, because it is a component
    * rather than a hook and its `failed` was written out longhand in the
@@ -301,22 +302,22 @@ describe("the thread page, which had its own copy of all this", () => {
    * hooks were fixed out of on 2026-08-28 and this one was not, because the
    * file held another session's uncommitted work that day.
    *
-   * Everything real runs: the page's own `load`, the real `useJobs`, the real
+   * Everything real runs: `useTweets`'s own `load`, the real `useJobs`, the real
    * `apiFetch` and `readJson`. Only the dock is stubbed.
    */
   it("goes on saying what the server said after the next poll succeeds", async () => {
     await act(async () => {
-      root.render(createElement(Tweets, { slug: "constitution", article: ARTICLE }));
+      root.render(createElement(TweetsBand, { slug: "constitution", article: ARTICLE, onJump: () => {} }));
     });
     await settle();
     await answerPolls();
-    // The page found no thread, so the button that asks for one is on screen.
+    // The band found no thread, so the button that asks for one is on screen.
     expect(host.textContent).toContain("Nobody has written a thread for this one yet.");
 
     const button = [...host.querySelectorAll("button")].find(
       (b) => b.textContent?.trim() === "Write the thread",
     );
-    if (!button) throw new Error("the thread page did not render its write button");
+    if (!button) throw new Error("the Tweets band did not render its write button");
 
     await act(async () => {
       button.click();
@@ -345,7 +346,7 @@ describe("the thread page, which had its own copy of all this", () => {
   it("lets go of it the moment a run does start", async () => {
     /* The other half, on this surface too: durable must not mean stuck. */
     await act(async () => {
-      root.render(createElement(Tweets, { slug: "constitution", article: ARTICLE }));
+      root.render(createElement(TweetsBand, { slug: "constitution", article: ARTICLE, onJump: () => {} }));
     });
     await settle();
     await answerPolls();
@@ -354,7 +355,7 @@ describe("the thread page, which had its own copy of all this", () => {
       const button = [...host.querySelectorAll("button")].find(
         (b) => b.textContent?.trim() === "Write the thread",
       );
-      if (!button) throw new Error("the thread page did not render its write button");
+      if (!button) throw new Error("the Tweets band did not render its write button");
       await act(async () => {
         button.click();
         await Promise.resolve();

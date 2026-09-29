@@ -390,9 +390,9 @@ button. Reuse the machinery, write the chrome — worth knowing before adding a 
 The old design's selling point was that no audio of the reader's voice crossed anything of ours.
 That is over, deliberately, and Greg made the call with the trade put to him in those words.
 
-What is true: the recording is held in memory for one request, base64'd into one OpenRouter call,
-never written to disk by us and never logged — the same rule that keeps a reader's question and
-the article's prose out of a log line covers a transcript exactly as well
+What is true: each recording part is held in memory for one request, base64'd into one OpenRouter
+call, never written to disk by us and never logged — the same rule that keeps a reader's question
+and the article's prose out of a log line covers a transcript exactly as well
 ([logging.md](logging.md)).
 
 **What stopped being true on 2026-09-07 is the second half of that.** The call used to send
@@ -421,13 +421,56 @@ importing nothing, because this is one arithmetic problem with two ends.
 
 **Vercel refuses a request body over 4.5 MB before any of our code runs**: no body read, no auth
 gate, no error copy, no log line. So a cap above that is not a cap, it is a blank failure. The
-first draft got this wrong in the dangerous direction by sizing it from the 32 kbps the recorder
-*asks* for — the recorder prefers AAC and on that container deliberately sends no bitrate hint at
-all, because the hint is what made the encoder throw. Its measured rate is ~14 KB/s, so five
-minutes was ~5.6 MB.
+request refuses above 3 MB of base64, and no one recording may hold more than 2.1 MB of audio
+(`MAX_BYTES` in [`mic-recording.ts`](../../src/web/mic-recording.ts)). Chrome's AAC runs at a
+measured ~14 KB/s with no bitrate hint (the hint is what made its encoder throw), so one recording
+fills that in about **two and a half minutes**.
 
-The recorder now stops at 2.1 MB of audio, and the request refuses above 3 MB of base64, so the
-ordinary case is a dictation that ends by itself rather than one that is rejected.
+**Until 2026-09-29 that was where a Chrome dictation ended**, with `[mic-full]` — Greg hit it
+mid-sentence in the Feedback box (SPIDERYARN-READING2-5B). Now **the tape rotates**: at two minutes
+or 80% of `MAX_BYTES`, whichever comes first, a new `MediaRecorder` is started on the same track and
+then the old one stopped, so a long dictation is several **parts**, each its own complete file (MP4
+and WebM cannot be joined byte-wise, which is why it is several recorders rather than one sliced
+up). Each part is sent to `POST /api/transcribe` **the moment it closes, while the reader carries
+on talking**, so the wait after Stop is only the last part's. At Stop the hook waits for every part,
+joins their words in order with a space, and calls `onTranscript` **once** — so the one-span
+replace in [`useDictationField`](../../src/web/useDictationField.ts) is unchanged. No request is
+bigger than before and there is no server change; the provider meters transcription by seconds of
+audio rather than by the number of parts.
+
+The rules that make it safe, each a decision in
+[260929f § Part B, revised after review](../plans/260929f-feedback-thank-you-as-a-toast-and-dictation-that-never-runs-out-of-tape.md#part-b-revised-after-review):
+
+- **The cut is decided when the recorder hands over a chunk**, not by a timer (`chunkVerdict`), so
+  it still happens in a throttled background tab. Hard lengths only; no hunting for a pause.
+- **All or nothing.** If any part fails, no transcript is delivered — delivering the parts either
+  side of a hole would, on Chromium, replace the live words that cover it. Every part is offered to
+  save (one **Save part N** button each), and **Try again** re-sends only the parts that failed.
+- **A part that loses audio breaks the tape** — a recorder that errors after recording, a flush that
+  never finishes, or one chunk too big for any request (a tab suspended for minutes and handed its
+  backlog at once). The dictation ends there with `[mic-broken]`, no final transcript is delivered,
+  and the complete parts before it are offered to save. Not retryable: the broken part has no whole
+  file.
+- **The two-second minimum is for the dictation, not the part**, so a one-second tail after a
+  rotation is kept. A tail with no bytes at all is simply absent.
+- **Stop, the ceiling and another box taking the microphone keep the parts' uploads; a second press
+  in the same box, a device change and an unmount abort them.** The session's `AbortController` now
+  exists from the press, and the superseding abort runs on every browser, not only where there is a
+  recogniser.
+
+**The ceiling on a whole dictation stays at five minutes** (`MAX_MS`), and hitting it ends the
+dictation and transcribes what was said, under `[mic-full]` with a sentence that is now true. Not
+higher, although parts would allow it: five minutes of speech is about what the largest box —
+Feedback's 4,000 characters — holds, and the other boxes take 600 to 4,000. A ceiling sized from
+each box's own limit is the later refinement.
+
+**What is not verified.** A spike on the box (plan § The spike) rotated five parts in Chrome 152
+and Chromium 151: every part decoded on its own, and a seam loses **up to ~70 ms** — the old
+recorder's last Opus packet, the same whichever recorder is stopped first. Headless Chrome on Linux
+offers no AAC recorder, so **the AAC seam is unmeasured**; Playwright's WebKit has no
+`MediaRecorder`, so **Safari and the iPad are unmeasured**, and nobody has yet dictated over two
+minutes into a real browser. Whether seams garble words in real speech is the open question; a
+voice-activity cut is the fix if they do.
 
 **The size is also the wait, and an iPad was the heavy one.** Measured 2026-09-12 after Greg reported
 dictation as slow on an iPad on weak Wi-Fi: 41 seconds of speech at an iPad's size took **10.8 s to
@@ -437,15 +480,11 @@ strongest lever, not a proven cause of any one slow dictation. WebKit
 records at **192 kbps** when a page gives no bitrate (`LargeAudioBitRate`, read from its source), and
 the AAC attempt gave none because Chromium's encoder throws on one. So since that day the AAC attempt
 carries **48 kbps on WebKit only**, recognised positively by `navigator.vendor` (`takesAacBitrate` in
-[`mic-recording.ts`](../../src/web/mic-recording.ts)), and the cap that used to bite an iPad at about
-87 seconds now sits past the five-minute one. Whether the hint is honoured is not visible from the
+[`mic-recording.ts`](../../src/web/mic-recording.ts)), and an iPad's recording now fills far more
+slowly than Chrome's. Whether the hint is honoured is not visible from the
 box, which cannot run Safari: the `dictation transcribed` log line carries `format`, `audioSeconds`
 and `kbps`, from the provider's own `usage.seconds`, and ~48 on an `m4a` row is the answer.
-[260912b](../plans/260912b-dictation-slow-on-weak-wifi.md), with the spike that measured it. **Hitting the
-cap ends the dictation**, which it did not used to: recording stopping while dictation carried on
-was fine for a souvenir and wrong for a source, because the words after the cap would be
-transcribed from audio that does not contain them and the result would replace the whole of what
-was said.
+[260912b](../plans/260912b-dictation-slow-on-weak-wifi.md), with the spike that measured it.
 
 ## The ways it fails
 
@@ -487,7 +526,7 @@ was said.
    recording, which GPT Sol caught as a P0 before it shipped.
 6. **The transcription fails after the reader has stopped.** The audio is kept — on *every* failed
    upload since 2026-09-05, not only when the box is empty — and **Try again** sends the same bytes
-   up again. Offered only when the failure could plausibly go the other way: a container we cannot
+   up again (for a dictation in parts, only the parts that failed). Offered only when the failure could plausibly go the other way: a container we cannot
    read, or a recording over the cap, will be refused identically for ever, and
    [copy.md](copy.md) is explicit that inviting a futile retry is the expensive mistake.
    `TranscriptionResult.retryable` in [`dictation-upload.ts`](../../src/web/dictation-upload.ts)
@@ -510,7 +549,7 @@ a recorder that hit its cap. They live beside the code that raises them.
 | | |
 |---|---|
 | `[mic-blocked]` `[mic-no-service]` `[mic-no-connection]` `[mic-none]` `[mic-language]` `[mic-stopped]` | the browser's recogniser, in [`dictation-errors.ts`](../../src/web/dictation-errors.ts) — and **the reader rarely sees any of them now**, because a recogniser that dies while the tape is running is a decoration failing, not a dictation failing |
-| `[mic-unplugged]` `[mic-no-start]` `[mic-full]` `[mic-empty]` `[mic-silent]` `[mic-unexpected]` | the capture and the ending, in [`useDictation.ts`](../../src/web/useDictation.ts) |
+| `[mic-unplugged]` `[mic-no-start]` `[mic-full]` `[mic-broken]` `[mic-empty]` `[mic-silent]` `[mic-unexpected]` | the capture and the ending, in [`useDictation.ts`](../../src/web/useDictation.ts) — `[mic-full]` is the five-minute ceiling and `[mic-broken]` a part that lost audio; [§ The sizes](#the-sizes-and-the-wall-behind-them) |
 | `[mic-no-tape]` | no recording was made at all, so there was no authoritative pass |
 | `[mic-format]` `[mic-too-long]` `[mic-slow]` `[mic-offline]` | the upload, in [`dictation-upload.ts`](../../src/web/dictation-upload.ts) |
 | `[mic-not-set-up]` `[mic-upstream]` `[mic-no-upstream]` `[mic-unreadable]` `[mic-too-long]` | the server, in [`src/transcribe.ts`](../../src/transcribe.ts) — see below |
@@ -558,7 +597,7 @@ reader actually loses a dictation to — and the recogniser's became `[mic-no-co
 | [`DictationStrip.tsx`](../../src/web/DictationStrip.tsx) | the button and the strip, so every box gets the same one |
 | [`mic-lock.ts`](../../src/web/mic-lock.ts) | one microphone per page, however many boxes have a button |
 | [`dictation-upload.ts`](../../src/web/dictation-upload.ts) | the client half of `POST /api/transcribe` |
-| [`mic-recording.ts`](../../src/web/mic-recording.ts) | the tape, its container fallback and its caps |
+| [`mic-recording.ts`](../../src/web/mic-recording.ts) | the tape, its container fallback, its caps, and where it is cut into parts |
 | [`mic-devices.ts`](../../src/web/mic-devices.ts) | which microphone, and why the constraint is `exact` |
 | [`useAudioLevel.ts`](../../src/web/useAudioLevel.ts) · [`audio-level.ts`](../../src/web/audio-level.ts) · [`MicLevel.tsx`](../../src/web/MicLevel.tsx) | the meter |
 | [`dictation-errors.ts`](../../src/web/dictation-errors.ts) | every recogniser error code to a sentence, totally |

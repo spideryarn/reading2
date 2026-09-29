@@ -57,13 +57,14 @@ export function readMode(url: string): Mode {
 }
 
 /**
- * The three things a `/read/<slug>` address can be showing.
+ * The two things a `/read/<slug>` address can be showing — three until the
+ * thread became a mode on 2026-09-29 (`?mode=tweets`; router.ts § `liftLegacyTweets`).
  *
  * Defined here rather than in src/web/router.ts, which owns the routes but
  * imports React's world. `router.ts` re-exports this name, so nothing that used
  * it knows it moved.
  */
-export const ARTICLE_VIEWS = ["article", "metadata", "tweets"] as const;
+export const ARTICLE_VIEWS = ["article", "metadata"] as const;
 export type ArticleView = (typeof ARTICLE_VIEWS)[number];
 
 /**

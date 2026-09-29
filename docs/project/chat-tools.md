@@ -568,7 +568,7 @@ line the eight above deliberately do not cross — see the security section.
 |---|---|
 | **Plant a question on a section** — a comment waiting where the reader will hit it | **Do this one first.** It is the most Spideryarn-ish thing on the list: the model prepares the reading rather than replacing it, and it is the only one that acts *later*. Needs a `Comment` that is a question rather than an answer, which is a schema change — see [comments.md](comments.md) |
 | **Glossary add/update** | Worth it, and cheap to read (`article_glossary` already does). Writing means an entry arriving without the provenance the generated ones carry, so a hand-added entry needs to be visibly one. See [glossary.md](glossary.md) |
-| **Generate a tweet thread** | Least valuable of the three. It is a whole pipeline stage with a page of its own ([260825g-tweet-thread-page.md](../plans/260825g-tweet-thread-page.md)), it is expensive, and "make me a thread" from inside a reading companion is a different product |
+| **Generate a tweet thread** | Least valuable of the three. It is a whole pipeline stage with a mode of its own (a page until 2026-09-29; [260825g-tweet-thread-page.md](../plans/260825g-tweet-thread-page.md)), it is expensive, and "make me a thread" from inside a reading companion is a different product |
 | **`add_to_library(url)`** — offered and not taken | Would want a confirm step rather than firing on the model's say-so: it spends money and changes state. [ingest-queue.md](ingest-queue.md) |
 
 ## What the browser pass found

@@ -103,7 +103,7 @@ import {
   useRef,
   useState,
 } from "react";
-import { Bug, Check, Copy, Lightbulb, LoaderCircle, Mail, X } from "lucide-react";
+import { Bug, Copy, Lightbulb, LoaderCircle, Mail, X } from "lucide-react";
 
 import { mintId } from "../ids.js";
 import { FEEDBACK_NOT_AVAILABLE, FEEDBACK_SEND_FAILED } from "../messages.js";
@@ -121,6 +121,7 @@ import { collectFeedbackDiagnostics } from "./feedback-diagnostics.js";
 import { imageFileFromDrop, imageFileFromPaste, screenshotFromFile } from "./feedback-screenshot.js";
 import { apiFetch, failure } from "./lib/api.js";
 import { sendForTranscription } from "./dictation-upload.js";
+import { Toast, type ToastMessage } from "./Toast.js";
 import { useDictationField } from "./useDictationField.js";
 import { useVisualViewport } from "./useVisualViewport.js";
 
@@ -157,20 +158,14 @@ interface Props {
   where: FeedbackWhere;
 }
 
+/**
+ * **There is no `sent` stage, since 2026-09-29.** A successful send shuts the
+ * dialog and says thank you in a toast (`send` below), so the form's stages end
+ * at a failure or back at editing.
+ */
 type Stage =
   | { kind: "editing" }
   | { kind: "sending" }
-  /**
-   * **`said` is what the reader called it, as filed** — and it is on the stage
-   * rather than read out of the live `kind` state on purpose.
-   *
-   * The thank-you differs by kind (see `THANKS`), and `kind` is form state that
-   * `discard()` clears. Reading it here would make the sentence a fact about the
-   * *form* rather than about the *report*, which is one careless re-render away
-   * from answering a problem with the generic thanks. The same reasoning as
-   * `reportId`, one field along: what was sent is not what is on screen.
-   */
-  | { kind: "sent"; said: FeedbackKind | null; sentBody: string }
   | { kind: "failed"; message: string };
 
 /**
@@ -205,11 +200,20 @@ type View = "write" | "earlier";
  * failures a model call can return, and a thank-you is not a failure.
  *
  * *"We will look into it"* is a promise, and it is Greg's own sentence, kept.
+ *
+ * **"It is filed" went on 2026-09-29**, and nothing else did. Greg:
+ *
+ * > Remove "It is filed" from the post-Feedback message. And in fact, that
+ * > post-Feedback message should be a toast in the corner that disappears after
+ * > a few seconds, rather than a blocking modal.
+ *
+ * So these are shown in a `Toast` (Toast.tsx), outside the dialog, rather than
+ * in a panel inside it — see `send`.
  */
 const THANKS: Record<"problem" | "suggestion" | "none", string> = {
-  problem: "Sorry to hear you have been having a problem — thank you for telling us. It is filed, and we will look into it.",
-  suggestion: "Thank you for the suggestion — we really appreciate it. It is filed.",
-  none: "Thank you for the feedback — we really appreciate it. It is filed.",
+  problem: "Sorry to hear you have been having a problem — thank you for telling us. We will look into it.",
+  suggestion: "Thank you for the suggestion — we really appreciate it.",
+  none: "Thank you for the feedback — we really appreciate it.",
 };
 
 interface Shot {
@@ -339,6 +343,8 @@ export function FeedbackDialog({ open, onClose, where }: Props) {
      `close` event Escape does, so without this our own "shut it" comes straight
      back as a second `onClose`. */
   const closingOurselves = useRef(false);
+  /** Which actual opening is on screen; a late request may outlive its own one. */
+  const opening = useRef(0);
 
   const [body, setBody] = useState("");
   const [kind, setKind] = useState<FeedbackKind | null>(null);
@@ -406,7 +412,7 @@ export function FeedbackDialog({ open, onClose, where }: Props) {
    * instantly".**
    *
    * A passive effect runs *after* the browser has painted. So pressing Close on
-   * the thank-you panel used to do this: the click commits `open=false` in
+   * the old thank-you panel used to do this: the click commits `open=false` in
    * FeedbackButton and, through `discard()`, `stage="editing"` here — one commit,
    * which renders the emptied form back into a `<dialog>` whose `open` attribute
    * nothing has touched yet. The browser paints that. Only then does the effect
@@ -416,14 +422,14 @@ export function FeedbackDialog({ open, onClose, where }: Props) {
    * A layout effect runs in the same commit, before paint, so the shutting and
    * the emptying land in one frame and neither is seen. The same reason
    * follow.ts gives for its own: a correction that is painted is not a
-   * correction. Greg, 2026-09-05; tests/feedback-dialog.test.tsx § shuts in the
-   * same frame.
+   * correction. Greg, 2026-09-05.
    *
-   * **jsdom cannot tell this apart from a `useEffect`**, and the test file says
-   * so rather than pretending otherwise: there is no paint in jsdom, and React
-   * flushes both kinds of effect within the same microtask there. What *is*
-   * pinned is the ordering below — that the dialog is shut before the panel is
-   * emptied — and this line is the other half, checked in a browser.
+   * **It matters more since 2026-09-29, not less**: a successful send now calls
+   * `onClose()` and `discard()` in the same commit (`send`), so this is the only
+   * thing standing between that commit and a frame of the emptied form in a
+   * dialog that is still up. **jsdom cannot tell this apart from a `useEffect`**
+   * — there is no paint there — so this line is checked in a browser, not by
+   * tests/feedback-dialog.test.tsx.
    *
    * **Lightbox.tsx has the same `useEffect` and has been left alone**: its panel
    * does not change on the way out, so the lag is one frame of an unchanged
@@ -435,12 +441,21 @@ export function FeedbackDialog({ open, onClose, where }: Props) {
     if (!dialog) return;
     if (open && !dialog.open) {
       closingOurselves.current = false;
+      opening.current += 1;
       dialog.showModal();
     } else if (!open && dialog.open) {
       closingOurselves.current = true;
       dialog.close();
     }
   }, [open]);
+
+  /** A completion owns the opening it began in, not any later one. */
+  const closeOpening = useCallback(
+    (sentOpening: number) => {
+      if (sentOpening === opening.current) onClose();
+    },
+    [onClose],
+  );
 
   /**
    * **A send the reader walked away from is not still in progress.**
@@ -495,8 +510,8 @@ export function FeedbackDialog({ open, onClose, where }: Props) {
    * The comment described the intended behaviour and the code did the opposite,
    * which is the kind of thing a reviewer finds and an author reads past.
    *
-   * So a draft survives being dismissed, and is cleared only here — after a
-   * report is filed, on the reader's way out of the thank-you panel.
+   * So a draft survives being dismissed, and is cleared only here — when a
+   * report has been filed (`send`).
    */
   const discard = useCallback((keepDraft: boolean) => {
     /* Invalidates any paste still being re-encoded — see `shotGeneration`. */
@@ -517,50 +532,30 @@ export function FeedbackDialog({ open, onClose, where }: Props) {
   }, []);
 
   /**
-   * **The report is cleared on the way out, and only once the dialog is shut.**
+   * **The thank-you, as a toast rather than a dialog stage** — `toast` below.
+   * Greg,
+   * 2026-09-29: *"that post-Feedback message should be a toast in the corner
+   * that disappears after a few seconds, rather than a blocking modal."* It is
+   * rendered beside the `<dialog>` when that send shuts its opening, because a
+   * shut dialog paints nothing. A send from an earlier opening is the exception:
+   * it must not shut the dialog the reader reopened, so its toast renders inside
+   * the top-layer dialog instead of underneath it. See `send` and Toast.tsx.
+   * Until then it was a `sent` stage with its own panel, and a `thanksSeen`
+   * effect that emptied the form once the reader closed that panel; both went.
    *
-   * Greg, 2026-09-05: *"when I click close on the thank you that is filed, there
-   * shouldn't be a delay, it should happen instantly."*
+   * **`bodyRef` is the box as it is now**, readable from inside a send that
+   * began before the last render — the same pattern as `reportIdRef` — and it is
+   * how a completion finds out whether the reader went on typing after Send.
    *
-   * The Close button used to call `discard()` and `onClose()` together. Both
-   * land in one commit, so React rendered the **emptied form** back into a
-   * dialog that was still open, and that is the frame the browser painted:
-   * a blank feedback form flashing up in place of the thank-you being
-   * dismissed. Nothing was slow — something extra was drawn.
-   *
-   * So the button only closes, and this puts the next report on its feet
-   * afterwards. A passive effect, deliberately: it must run **after** the layout
-   * effect above has shut the dialog, which is exactly the order React runs them
-   * in. tests/feedback-dialog.test.tsx pins the ordering by recording what is on
-   * screen at the moment `close()` is called.
-   *
-   * **It fires for every way out of the thank-you, not just the button**, and
-   * that fixes a second thing nobody had reported: Escape, the ✕ and the
-   * backdrop left `stage` at `sent`, so the next press of Feedback opened on a
-   * stale thank-you for a report filed some time ago, with the old draft still
-   * behind it.
-   *
-   * **Only from `sent`.** A draft the reader dismissed — mid-edit, or after a
-   * failed send — survives being shut and must: that is the accident `discard`'s
-   * own comment is about.
-   *
-   * ## The two guards, and the bug each one is
-   *
-   * **`thanksSeen`: a report filed while nobody was looking is not dismissed.**
-   * Close the dialog while a send is in the air and the request goes on; when it
-   * lands, `stage` becomes `sent` with `open` already false. Without this the
-   * reader would reopen onto an empty box with no way to tell whether their
-   * report went. With it, they reopen onto the thank-you — which is what this
-   * panel is for.
-   *
-   * **`sentBody`: words typed after Send are not somebody else's report.** The
-   * box stays editable while a request is in flight, so a reader can add a
-   * sentence between pressing Send and the answer arriving — and that sentence
-   * was never in the POST. Clearing it would delete writing that was never
-   * filed. So the draft survives, and the new `reportId` makes pressing Send
-   * again file it as the second report it is. GPT Sol established this as a P0
-   * on 2026-09-05; it predates this change, which merely widened the ways of
-   * reaching it from the Close button to every dismissal.
+   * **Words typed after Send are not the report that was filed.** The box stays
+   * editable while a request is in flight, so a reader can add a sentence
+   * between pressing Send and the answer arriving — and that sentence was never
+   * in the POST. Clearing it would delete writing that was never filed. So the
+   * draft survives, and the new `reportId` makes pressing Send again file it as
+   * the second report it is. GPT Sol established this as a P0 on 2026-09-05. The
+   * rule — `discard(body !== sentBody)` — did not change with the move to a
+   * toast; only *when* it runs did: at the moment the send succeeds, rather than
+   * when the reader closed the old thank-you panel.
    *
    * **What is deliberately not fixed here** is the other half Sol names: after a
    * *failed* send, an edit and a retry carry the same `reportId`, and
@@ -570,17 +565,11 @@ export function FeedbackDialog({ open, onClose, where }: Props) {
    * that stops being editable, which is a redesign of this dialog rather than a
    * guard. docs/plans/260905c-contact-page-and-a-warmer-feedback-thank-you.md.
    */
-  const thanksSeen = useRef(false);
-  useEffect(() => {
-    if (stage.kind !== "sent") return;
-    if (open) {
-      thanksSeen.current = true;
-      return;
-    }
-    if (!thanksSeen.current) return;
-    thanksSeen.current = false;
-    discard(body !== stage.sentBody);
-  }, [open, stage, discard, body]);
+  const [toast, setToast] = useState<ToastMessage | null>(null);
+  const toastCount = useRef(0);
+  const dismissToast = useCallback(() => setToast(null), []);
+  const bodyRef = useRef(body);
+  bodyRef.current = body;
 
   const takeFile = useCallback(async (file: File) => {
     const mine = ++shotGeneration.current;
@@ -640,8 +629,8 @@ export function FeedbackDialog({ open, onClose, where }: Props) {
    * presses stop. A guard on that by itself leaves the case that actually
    * happens: press Cmd+Enter while still talking, and the report goes with
    * Chrome's rough live guesses in it, or with nothing at all on a browser that
-   * has no live recogniser — and the microphone is still on over the thank-you
-   * panel. `armed` is the other half. GPT Sol, 2026-09-02.
+   * has no live recogniser — and the microphone is still on after the report
+   * has gone. `armed` is the other half. GPT Sol, 2026-09-02.
    */
   const dictationBusy = dictate.dictation.armed || dictate.readOnly;
 
@@ -777,14 +766,15 @@ export function FeedbackDialog({ open, onClose, where }: Props) {
      *
      * A request can outlive the draft that started it: the reader can close the
      * dialog mid-flight, and if they then file a different report, this
-     * request's `setStage` would land in it — a stale success replacing a new
-     * draft with "Thank you", whose Close button would then throw the new words
-     * away. So every completion below is guarded on the id still being current.
+     * request's success would land in it — thanking the reader for a new draft
+     * and throwing its words away as though they had been sent. So every
+     * completion below is guarded on the id still being current.
      * GPT Sol, 2026-09-01, and it was the second half of the same finding as
      * the durable id above.
      */
     const mine = reportId;
     const attempt = ++attempts.current;
+    const openingAtSend = opening.current;
     const stillMine = () => mine === reportIdRef.current && attempt === attempts.current;
 
     /* **A spinner that cannot paint until this line finishes.** `setStage`
@@ -839,7 +829,24 @@ export function FeedbackDialog({ open, onClose, where }: Props) {
          after a lost response looks like, and telling them about it would be
          explaining our idempotency to somebody reporting a bug. */
       if (!stillMine()) return;
-      setStage({ kind: "sent", said: kind, sentBody: body });
+      /* **Filed: finish this report and say thank you in the corner.** Its own
+         opening shuts in the same commit, which the layout effect above turns
+         into one frame. A later opening stays put; the toast rendered inside
+         that top-layer dialog is then how the reader learns the earlier send
+         went.
+
+         `kind` and `body` here are the closure's — what was POSTed — and that is
+         the point: the thank-you is a fact about the report, not about the form,
+         and `bodyRef` is the form as it is now. When this opening closes, focus
+         goes back where the native `<dialog>` puts it, to whatever opened it;
+         the toast never takes it (Toast.tsx). */
+      /* The reader may have shut and reopened the same report while this request
+         was away. Its success still files that report, advances its id and keeps
+         any newer words, but it must not close the opening they are using now. */
+      closeOpening(openingAtSend);
+      discard(bodyRef.current !== body);
+      toastCount.current += 1;
+      setToast({ id: toastCount.current, text: THANKS[kind ?? "none"] });
     } catch {
       /* The network, or a request that never left. `failure()` needs a
          `Response` and there is not one — this is the correlated-failure case
@@ -860,6 +867,8 @@ export function FeedbackDialog({ open, onClose, where }: Props) {
     shot,
     dictationBusy,
     showSendFailure,
+    closeOpening,
+    discard,
   ]);
 
   const copy = useCallback(() => {
@@ -875,10 +884,11 @@ export function FeedbackDialog({ open, onClose, where }: Props) {
   }, [body, kind, where]);
 
   return (
-    /* The click handled below is the backdrop, whose keyboard equivalent is
-       Escape — which <dialog> implements itself. Lightbox.tsx needs a
-       `biome-ignore` for the same handler and this does not, because the
-       ⌘/Ctrl+Enter listener further down already satisfies the rule. */
+    <>
+    {/* The click handled below is the backdrop, whose keyboard equivalent is
+        Escape — which <dialog> implements itself. Lightbox.tsx needs a
+        `biome-ignore` for the same handler and this does not, because the
+        ⌘/Ctrl+Enter listener further down already satisfies the rule. */}
     <dialog
       ref={ref}
       className="fb-dialog"
@@ -944,25 +954,6 @@ export function FeedbackDialog({ open, onClose, where }: Props) {
         }
       }}
     >
-      {/* **One `<dialog>` element, two panels inside it**, and that is not a
-          style choice. Returning a different `<dialog>` for the sent state
-          unmounts the node the effect above called `showModal()` on and mounts
-          a fresh one that nothing has opened — so the thank-you would be in the
-          document and painted nowhere. */}
-      {stage.kind === "sent" ? (
-        <div className="fb-panel fb-done">
-          <Check size={20} />
-          <p>{THANKS[stage.said ?? "none"]}</p>
-          {/* **Close, and nothing else** — the emptying happens once the
-              dialog is shut, in the effect above `discard`. Doing both here is
-              what made Greg's *"there shouldn't be a delay"*: the click emptied
-              the form and shut the dialog in one commit, and the emptied form
-              is what got painted. */}
-          <button type="button" className="fb-send" onClick={onClose}>
-            Close
-          </button>
-        </div>
-      ) : (
       <form
         className="fb-panel"
         method="dialog"
@@ -1265,8 +1256,17 @@ export function FeedbackDialog({ open, onClose, where }: Props) {
           </button>
         </div>
       </form>
-      )}
+      {/* A request can finish after the reader has closed and reopened the
+          dialog. That later opening stays open; its toast must join the native
+          dialog's top layer or every page-level z-index remains underneath it. */}
+      <Toast toast={open ? toast : null} onDismiss={dismissToast} />
     </dialog>
+    {/* **Outside the `<dialog>` in the ordinary case**, because the send that
+        shows it also shuts the dialog and nothing inside a shut dialog is
+        painted. The sibling region is mounted before its words arrive, which
+        is what lets `aria-live` announce them. */}
+    <Toast toast={open ? null : toast} onDismiss={dismissToast} />
+    </>
   );
 }
 

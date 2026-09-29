@@ -62,6 +62,8 @@ crossover is the window minus the rail, so it moves with `?spine=0`, and the `@m
 843px)` that guessed it disagreed with `fitMode` from 832 to 843 with the rail off, laying the band
 over an article the table had just been squeezed to make room for
 ([`styles/narrow-window.css`](../../src/web/styles/narrow-window.css) § a band with no room).
+A passage link pressed inside a covering band steps the band aside so the paragraph shows, with a
+pill to bring it back — [touch.md § A passage link in a covering band shows the passage](touch.md#a-passage-link-in-a-covering-band-shows-the-passage).
 That is the shape to aim for — a breakpoint disappears when the wide layout stops being
 extravagant or when somebody who knows the answer writes it down, not when the narrow one gets
 another rule.

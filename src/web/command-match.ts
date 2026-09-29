@@ -53,8 +53,8 @@ interface CommandWords {
    * exactly as fragile as GPT Sol said on 2026-09-07: *"the fix, on the day a
    * spending page is proposed, is to move 'does this start work?' into
    * `Command` itself and render off the property — not to add a second name to
-   * this condition."* That day is this one. The Tweets row navigates to the
-   * owner-only thread page, which starts a run on arrival when empty, so a
+   * this condition."* That day is this one. The Tweets row navigated to the
+   * owner-only thread page (a mode since 2026-09-29), which started a run on arrival when empty, so a
    * `kind` check would have shipped a spending row wearing no marker, and no
    * test could have seen the difference because the check would go on excluding
    * pages. Until 2026-09-15 the row armed that run itself.

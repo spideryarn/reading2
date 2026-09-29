@@ -912,7 +912,14 @@ function publicIdeas(ideas: Ideas): PublicIdeas {
 function publicTweets(thread: TweetThread): PublicTweets {
   return {
     limit: thread.limit,
-    tweets: thread.tweets.map((tweet): Tweet => ({ text: tweet.text, chars: tweet.chars })),
+    /* `blocks` crosses when the post has it: the ids of this public article's
+       own blocks, which every other public artefact carries too, and what the
+       visitor's band links each post back with. */
+    tweets: thread.tweets.map((tweet): Tweet => ({
+      text: tweet.text,
+      chars: tweet.chars,
+      ...(tweet.blocks ? { blocks: [...tweet.blocks] } : {}),
+    })),
   };
 }
 

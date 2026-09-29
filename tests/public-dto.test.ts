@@ -863,13 +863,20 @@ describe("the artefacts a shared link carries", () => {
   };
 
   const THREAD: TweetThread = {
-    version: "tweets/1",
+    version: "tweets/5",
     generator: "some-model",
     slug: "noema",
     sourceHash: "abc123",
     profileHash: "profile-of-a-person",
     limit: 280,
-    tweets: [{ text: "The first post.", chars: 15 }],
+    /* **One post with `blocks` and one without**, since `tweets/5`
+       (2026-09-29, plan 260929f) — so the allowlist below has to decide the
+       field's fate, and the second post proves an absent list stays absent
+       rather than crossing as `undefined` or `[]`. */
+    tweets: [
+      { text: "The first post.", chars: 15, blocks: ["spya-k3m9qt" as BlockId] },
+      { text: "The second post.", chars: 16 },
+    ],
     generatedAt: "2026-08-28T10:00:00.000Z",
     elapsedMs: 12_000,
   };
@@ -1223,7 +1230,21 @@ describe("the artefacts a shared link carries", () => {
   });
 
   it("carries the thread and the limit it was counted against", () => {
-    expect(pathsUnder("tweets")).toEqual(["limit", "tweets", "tweets[].chars", "tweets[].text"].sort());
+    /* `tweets[].blocks` since 2026-09-29: the ids of this public article's own
+       blocks, which every other public artefact carries too, and what a
+       visitor's Tweets band links each post back with (plan 260929f). */
+    expect(pathsUnder("tweets")).toEqual(
+      ["limit", "tweets", "tweets[].blocks", "tweets[].chars", "tweets[].text"].sort(),
+    );
+  });
+
+  it("carries a post's blocks when it has them, and no key when it does not", () => {
+    const [linked, unlinked] = built.tweets?.tweets ?? [];
+    expect(linked?.blocks).toEqual(["spya-k3m9qt"]);
+    /* A copy, not the stored array: a projection that handed the row's own
+       list across would let a later mutation of one reach the other. */
+    expect(linked?.blocks).not.toBe(THREAD.tweets[0]?.blocks);
+    expect(unlinked && "blocks" in unlinked).toBe(false);
   });
 
   /**

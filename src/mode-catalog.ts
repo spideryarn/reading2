@@ -115,7 +115,7 @@ export interface ModeCatalogEntry {
    *
    *  - **Describe a gesture rather than the mode.** Every sentence here is
    *    read on **four** surfaces at least: the bar button on the reading view,
-   *    the loose link in the same bar on the metadata and tweets pages, and
+   *    the loose link in the same bar on the metadata page, and
    *    either of those seen by a **visitor** rather than the owner. Those
    *    surfaces do not behave alike — the loose link only navigates and arms
    *    nothing (`DockModeLinks` in src/web/Dock.tsx), and a visitor with no
@@ -485,6 +485,31 @@ export const MODE_CATALOG: Record<Mode, ModeCatalogEntry> = {
        for it in the mainstream: "take Trajectory and Quotes modes out of
        Experimental features" — docs/project/experimental-features.md. Still
        owners-only (`POLICY.trajectory`, src/web/visitor.ts). */
+    experimental: false,
+  },
+  tweets: {
+    /* `NOT_A_MODE.tweets` in src/web/Dock.tsx until 2026-09-29, when the thread
+       page became this mode (docs/plans/260929f-tweets-become-a-mode-with-a-wide-band-and-block-links.md). */
+    description: "The article as a numbered thread of short posts",
+    /* **Checked against the source, claim by claim** (docs/project/new-mode.md §
+       The card on the button):
+       - "one model pass over the whole article": the `tweets` step, one
+         messages-wire call over `articleWithIds` (src/tweets.ts § generateTweets).
+       - "not part of adding a piece": `DEFAULT_INGEST_STEPS` excludes `tweets`
+         (src/pipeline.ts).
+       - "each post points to the passages it came from": `Tweet.blocks`,
+         validated against the blocks sent (src/tweets.ts § checkBlocks); a post
+         whose ids were all dropped keeps its text and draws no link, and a
+         thread from before `tweets/5` has none — hence "points", not "links",
+         and no promise that every post does.
+       - "nothing is shortened to fit": `buildThread` keeps each post's text
+         (trimmed) and counts it; the band marks an overrun.
+       About the mode, not the press — a visitor reads the stored thread and
+       starts nothing. No price. */
+    how: "One model pass over the whole article, written once and kept — it is not part of adding a piece, so a thread exists only where somebody asked for one. Each post points to the passages it came from, and nothing is shortened to fit: a post over the length limit is kept as written and marked.",
+    /* The command bar's Tweets *page* row carried these until the page went. */
+    aliases: ["thread", "twitter", "x", "social"],
+    /* The page it replaces was on everybody's bar. */
     experimental: false,
   },
 };

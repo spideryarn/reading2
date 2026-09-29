@@ -68,7 +68,7 @@
  * 2026-09-08): it wanted the glyph, which is decoration, and not the link.
  *
  * **And, since 2026-09-06, none of the pages that mount a `Dock`.** The
- * article, its metadata and tweets pages, and the three visitor stand-ins in
+ * article, its metadata page (and tweets page until 2026-09-29), and the three visitor stand-ins in
  * PublicPages.tsx draw `DockHome` in the bottom bar instead — same glyph, same
  * word, same colour, different corner. Greg's call: the reading view is the one
  * page whose whole job is a column of prose, and the only one where a permanent

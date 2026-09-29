@@ -81,7 +81,7 @@
  * `DockLink`, `DockTab` and `DockModes` below rather than one component with
  * flags.
  *
- * **The bar looks the same on all three pages and is not the same component
+ * **The bar looks the same on every page that draws it and is not the same component
  * twice.** What varies is whether a `drawer` was handed in. Only the reading
  * view has the comments, because only it pays for them: `useComments(slug)`
  * fetches on mount, and a visit to the metadata page should not buy a drawer
@@ -294,8 +294,8 @@ interface Props {
    * Which mode owns the middle band, and how to change it — the reading view
    * only. See params.ts § modeParam and docs/plans/260826a-chat-mode.md.
    *
-   * Optional for the same reason `drawer` is: the metadata and thread pages
-   * have no middle band to put a mode in, so their Chat button is a link back
+   * Optional for the same reason `drawer` is: the metadata page (and the thread page until 2026-09-29)
+   * has no middle band to put a mode in, so their Chat button is a link back
    * to the reading view rather than a switch that would have nothing to switch.
    */
   mode?: Mode;
@@ -367,7 +367,7 @@ interface Props {
    * spelling is easy to reach for wrongly. `experimental.signedIn` comes from
    * the store, which knows the session, so it has one answer on every page. The
    * deleted prop was *optional visitor-copy input*, and `Metadata.tsx` and
-   * `Tweets.tsx` mounted the bar without it — so any control drawn on it
+   * `Tweets.tsx` (then a page) mounted the bar without it — so any control drawn on it
    * vanished the moment an owner pressed Metadata, present on one page of their
    * own article and gone on the next. (GPT Sol, finding 2; Fable reached the
    * same conclusion independently.) If something here ever needs *is somebody
@@ -379,7 +379,7 @@ interface Props {
    * `signedIn` and the one every other piece of chrome keys on.
    *
    * Needed separately from `drawer` because the drawer's *shape* is not a
-   * reliable proxy for footing: the metadata and tweets pages mount the bar
+   * reliable proxy for footing: the metadata page (and the tweets page until 2026-09-29) mounts the bar
    * without one, and they exist for both readers. Inferring from its absence is
    * what left two of the three visitor pages saying "Your comments".
    */
@@ -667,6 +667,17 @@ const MODES_UI = [
     group: "shape",
     icon: Layers,
   },
+  /* **A mode since 2026-09-29**, a loose link to a page of its own before
+     (SPIDERYARN-READING2-5A). In the shape run after Summary because a thread is
+     the same move Summary makes — the article restated, shorter — and Greg did
+     not place it by hand; the plan records that as an assumption he can move.
+     `ListOrdered`, the icon the link carried.
+     docs/plans/260929f-tweets-become-a-mode-with-a-wide-band-and-block-links.md. */
+  {
+    mode: "tweets",
+    group: "shape",
+    icon: ListOrdered,
+  },
   /* **In the shape run, just after Summary, since 2026-09-29**, because it is
      the same move Summary makes — the article restated — with a picture
      instead of prose. It had sat between Referee and Chat, and Greg's reorder
@@ -706,7 +717,7 @@ const MODES_UI = [
      the plan first put it and Greg had not yet placed it by hand.
 
      `Route`, used nowhere else — a path with stops on it, which is the mode.
-     Not `ListOrdered`, which is the Tweets link's numbered thread.
+     Not `ListOrdered`, which is the Tweets mode's numbered thread.
      docs/plans/260928a-trajectory-mode-skim-a-paper-at-increasing-depth.md § 5c. */
   {
     mode: "trajectory",
@@ -932,7 +943,7 @@ export type ModesMissingFromDock<
  * exactly one button must be checked, so `?mode=timeline` with the switch off
  * and no Timeline button would leave a group announcing *one of these* with
  * none of them on — and the reader stranded in a mode with no way back that the
- * bar could show them. It holds on the loose-link arm too (metadata and tweets),
+ * bar could show them. It holds on the loose-link arm too (the metadata page; tweets too until 2026-09-29),
  * which is where a first draft of the plan stopped short: `carriedSearch`
  * strips only `?panel=`, so `?mode=` is still in the string those links are
  * built from, and the bar there can read it back. GPT Sol, finding 9.
@@ -1429,7 +1440,7 @@ export function Dock({
 
   /**
    * Which mode the bar is *about*, in either arm: the prop on the reading view,
-   * and the carried `?mode=` on the metadata and tweets pages.
+   * and the carried `?mode=` on the metadata page.
    *
    * **`experimental.on`, never `experimental?.on`.** A mount site that forgot
    * the prop must throw here rather than quietly answering "show everything" —
@@ -1543,7 +1554,7 @@ export function Dock({
    * being rewritten this week by somebody else.
    *
    * State on the bar as a whole rather than on `DockModes`: the bar is drawn on
-   * the metadata and tweets pages too, where there is no `onMode` and therefore
+   * the metadata page too (and the tweets page until 2026-09-29), where there is no `onMode` and therefore
    * nothing for a command to do, and all three parts of it — the listener, the
    * button and the dialog — stand down there.
    *
@@ -1717,7 +1728,7 @@ export function Dock({
            `visibleModes` any other way. */
         modes={visible}
         activateMode={activateMode}
-        /* The same two values the Metadata and Tweets links below are built
+        /* The same two values the Metadata link below is built
            from, so the bar's rows and the buttons cannot go to different
            places. `search` is already through `carriedSearch`. */
         article={{ slug, search }}
@@ -1904,7 +1915,7 @@ export function Dock({
                  pass, 2026-08-28.
 
                  `signedIn` is not the question; ownership is. A drawer-less bar
-                 belongs to the owner on the metadata and tweets pages of *their*
+                 belongs to the owner on the metadata page of *their*
                  article, and to a visitor on the public stand-ins. */
               /* **The same card the drawer trigger draws, plus where the press
                  lands** — the rule `DockModeLinks` follows for the modes, and for
@@ -1922,38 +1933,6 @@ export function Dock({
               }
             />
           )}
-
-          {/* Labelled `Thread` until 2026-08-26, and `Tweets` now — after its own
-              page and its own route, which is the same rule that renamed `About`
-              to `Metadata`.
-
-              **This is only a link.** The thread page writes the thread itself
-              when its owner arrives and there is none — since 2026-09-15, however
-              they arrived (Tweets.tsx § `useAutoRunOnArrival`). From 2026-09-06
-              until then this link minted an activation token on the press, and a
-              reload or a pasted link got a page with a button on it instead.
-
-              The page keeps its button. It is what a reader presses after a
-              failure, and after this page load has spent its one automatic try. */}
-          <DockLink
-            href={readHref(slug, search, "tweets")}
-            current={view === "tweets"}
-            icon={ListOrdered}
-            label="Tweets"
-            /* **The card says nothing about pressing it**, and that is not a
-               stylistic preference: the page writes the thread only for the
-               owner, and only when there is none and this page load has not
-               already tried. A visitor's press writes nothing, so *"pressing this
-               writes the thread"* would be false on the surfaces they see.
-               `NOT_A_MODE` above carries the rule. */
-            hover={
-              <ControlTip
-                head="Tweets"
-                what={NOT_A_MODE.tweets.what}
-                how={NOT_A_MODE.tweets.how}
-              />
-            }
-          />
 
           {/* A link, not a drawer trigger — the details are a page now. Last in
               the bar, which is the right end for it: it is the machinery behind
@@ -2068,7 +2047,7 @@ const TITLES: Record<Panel, { own: string; visitor: string }> = {
  *
  * **Write about the thing, never about the press.** Every sentence below is
  * read on at least four surfaces: the button on the reading view, the same
- * button on the metadata and tweets pages, and either of those seen by a
+ * button on the metadata page, and either of those seen by a
  * **visitor** rather than the owner. So *"pressing this writes the thread"* is
  * false for a visitor — the thread page writes only for the owner, and only
  * when there is none and this page load has not already tried (Tweets.tsx §
@@ -2120,17 +2099,6 @@ const NOT_A_MODE = {
        So the sentence states the two halves and the outcome, and claims no
        mechanism between them. */
     how: "Saving one costs nothing and asks the model nothing — the tick-box that brings the AI in saves your words first, then opens a chat about the passage. Each stores the passage's permanent id as well as the exact words it quotes, and after the article is re-fetched the saved comment stays in the list even when those words are gone and the underline can no longer be drawn.",
-  },
-  tweets: {
-    what: "The article as a numbered thread of short posts",
-    /* Two claims corrected before this landed, both by reading the page rather
-       than the module header. *"Written once and then kept"* said a thread can
-       never be redone, and `Rewrite` on the thread page is a deliberate second
-       call — the empty state upstairs has the same drift. And *"kept exactly as
-       written"* is not literally true: `buildThread` trims each post
-       (src/tweets.ts). The load-bearing claim is the one about the limit, so it
-       is the one the sentence makes. GPT Sol, 2026-09-07. */
-    how: "Each thread is one model pass over the whole article and is kept until somebody asks for it again — writing one is not part of adding a piece, so a thread exists only on the pieces somebody wanted one for. Nothing in it is shortened to fit: a post over the length limit is left at the length the model wrote, and the page marks the overrun rather than cutting it.",
   },
   metadata: {
     what: "Where this article came from, what shape it is, and what the pipeline wrote",
@@ -2447,8 +2415,8 @@ function DockModes({
 }
 
 /**
- * **The same modes, off the reading view** — the metadata and tweets
- * pages, where there is no band to switch, so the segment degrades to loose
+ * **The same modes, off the reading view** — the metadata
+ * page, where there is no band to switch, so the segment degrades to loose
  * links back to the article.
  *
  * A component of its own since 2026-09-07, and it is the arm this bar keeps
@@ -2495,8 +2463,8 @@ function DockModeLinks({
           /* `dock-mode` says *this is one of the modes* on a page where they are
              one loose link per mode rather than one segment, so § the bar's fit
              ladder can take their labels at the mode rung the way it takes the
-             segment's. Without it that rung does nothing on the metadata and
-             tweets pages, and the bar there skips straight from every label to
+             segment's. Without it that rung does nothing on the metadata
+             page, and the bar there skips straight from every label to
              none. GPT Sol, reviewing the design. */
           className={`dock-mode${marked?.has(m.mode) ? ` ${MARKED}` : ""}${starts.has(m.mode) ? " dock-group-start" : ""}`}
           keepLabel={m.keepLabel}
@@ -2909,7 +2877,7 @@ function DockCommandBar({
   modes: readonly ModeUi[];
   activateMode(next: Mode): void;
   /**
-   * **Which article the bar's Metadata and Tweets rows are about**, since
+   * **Which article the bar's Metadata row (and, until 2026-09-29, Tweets row) is about**, since
    * 2026-09-08 — the same `slug` and carried `search` the Dock's own links to
    * those two pages are built from, handed over rather than recomputed.
    */

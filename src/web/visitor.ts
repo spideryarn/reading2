@@ -102,7 +102,11 @@ export const NOUN: Record<keyof PublicArtefacts, string> = {
  * *Nobody has built one of these yet*, for a caller that has already
  * established the artefact is absent.
  *
- * **`VisitorTweetsPage` is the one caller, and this replaced a `tweetsGap`
+ * (`visitorGap` below calls it for every artefact mode; `VisitorTweetsPage`, the
+ * thread's visitor page until it became a mode on 2026-09-29, was the caller
+ * this paragraph was written about.)
+ *
+ * **`VisitorTweetsPage` was the one caller, and this replaced a `tweetsGap`
  * that took the five booleans.** The tweets page has to branch on the artefact
  * key anyway — it renders the thread when there is one, and TypeScript will not
  * narrow `artefacts.tweets` from the return value of a policy function — so a
@@ -347,6 +351,13 @@ const POLICY: Record<Mode, VisitorPolicy> = {
    * docs/plans/260929c-a-visitor-sees-every-stored-mode-on-a-public-article.md.
    */
   trajectory: { kind: "artefact", key: "trajectory" },
+  /**
+   * **A mode since 2026-09-29**, and a visitor could already read a stored
+   * thread on the page it replaced — so this row keeps what they had. The
+   * visitor gets `VisitorTweetsBand`, which mounts no `useTweets`.
+   * docs/plans/260929f-tweets-become-a-mode-with-a-wide-band-and-block-links.md.
+   */
+  tweets: { kind: "artefact", key: "tweets" },
 };
 
 /**

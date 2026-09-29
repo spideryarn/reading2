@@ -611,6 +611,10 @@ const REVISION_READ_POLICY: Record<
     /* `timeline` sends `articleWithIds` too, so its head prints the same
        `URL:` line — it is the cited set plus the date, not a set of its own. */
     timeline: "value",
+    /* `tweets` since `tweets/5` (2026-09-29): each post names its passages, so
+       it sends `articleWithIds` and its fingerprint covers the `URL:` line.
+       docs/plans/260929f-tweets-become-a-mode-with-a-wide-band-and-block-links.md. */
+    tweets: "value",
     /* `quiz` for the same reason as `ideas` and `sketch`: it sends
        `articleWithIds`, whose head prints a `URL:` line, so its freshness
        fingerprint covers it. A read that could not see the column would compute
@@ -1122,7 +1126,9 @@ export const REVISION_PROJECTIONS = {
      narrower question than the one the writer asked, and the two stores
      disagree about the same article. src/source-hash.ts § `articleFingerprint`,
      docs/plans/260831b-finish-the-database-move.md § stage 1. */
-  tweets: { id: articleRevisions.id, tweets: articleRevisions.tweets, ...FINGERPRINT_COLUMNS },
+  /* `CITED_FINGERPRINT_COLUMNS` since `tweets/5` (2026-09-29): the thread now
+     sends `articleWithIds`, whose head prints the URL. */
+  tweets: { id: articleRevisions.id, tweets: articleRevisions.tweets, ...CITED_FINGERPRINT_COLUMNS },
   glossary: { id: articleRevisions.id, glossary: articleRevisions.glossary, ...FINGERPRINT_COLUMNS },
   /* `FINGERPRINT_COLUMNS` and not the cited set: `quotes` sends `articleText`,
      whose head prints no `URL:` line — src/models.ts § ARTICLE_RENDERER. */
@@ -2717,9 +2723,9 @@ const rawPgArticleReader: ArticleReader = {
        `articleFingerprint` — and `null` here is "we cannot tell", which answers
        not-current for every one of them. */
     const tree = revision.tree as Tree | null;
-    /* **Two heads, because there are two prompts.** `articleText` (arc, tweets,
+    /* **Two heads, because there are two prompts.** `articleText` (arc,
        glossary) prints three metadata lines; `articleWithIds` (ideas,
-       sketch) prints those three and a `URL:`, and falls back to the tree's slug
+       sketch, and tweets since `tweets/5`) prints those three and a `URL:`, and falls back to the tree's slug
        when there is no metadata at all. src/source-hash.ts. */
     const metaFingerprint = metaFingerprintOf(revision);
     const citedFingerprint = citedMetaFingerprintOf(revision);
@@ -2833,7 +2839,10 @@ const rawPgArticleReader: ArticleReader = {
         }
         case "tweets": {
           const thread = revision.tweets as TweetThread | null;
-          return Boolean(thread && tree && !tweetsStale(thread, blocks, tree, metaFingerprint));
+          /* The cited head since `tweets/5`, which sends `articleWithIds`; a
+             thread from before it is judged on the head it was written from
+             inside `isStale` (src/tweets.ts § `fingerprintFor`). */
+          return Boolean(thread && tree && !tweetsStale(thread, blocks, tree, citedFingerprint));
         }
         case "glossary":
           return glossaryIsCurrent(revision.glossary as Glossary | null, articleHash);
@@ -3161,7 +3170,7 @@ const rawPgArticleReader: ArticleReader = {
     const tree = found.revision.tree as Tree | null;
     return {
       thread,
-      stale: !tree || tweetsStale(thread, blocks, tree, metaFingerprintOf(found.revision)),
+      stale: !tree || tweetsStale(thread, blocks, tree, citedMetaFingerprintOf(found.revision)),
     };
   },
 

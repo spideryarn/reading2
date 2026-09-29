@@ -313,6 +313,10 @@ describe("the sharing card, on the page that owns it", () => {
     expect(under("Anyone who opens it gets these")).toEqual(
       expect.arrayContaining(["Glossary", "Tweets"]),
     );
+    /* **Once.** Tweets was a hand-added row while it was a page, and since it
+       became a mode on 2026-09-29 the mode sweep lists it too — a second chip
+       with the same name is what that looked like in this dialog (plan 260929f). */
+    expect(under("Anyone who opens it gets these").filter((l) => l === "Tweets")).toHaveLength(1);
     expect(under("Not built yet")).toEqual(
       expect.arrayContaining(["Ideas", "Quotes", "The arc"]),
     );

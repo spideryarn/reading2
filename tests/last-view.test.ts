@@ -53,7 +53,7 @@ describe("rememberableSearch", () => {
     expect(rememberableSearch("?match=words&order=confidence&conf=65&runs=spya-a")).toBe("");
   });
 
-  it("drops the three modes that start something merely by being arrived in", () => {
+  it("drops the four modes that start something merely by being arrived in", () => {
     /* Diagram POSTs `/api/similar` or `/api/projection` for three of its five
        pictures, and Remember opens a conversation exactly as Chat does — both
        found by GPT Sol (F1, F2) after a first survey wrongly reported all
@@ -69,6 +69,13 @@ describe("rememberableSearch", () => {
       "?at=spya-a&diagram=force&dhue=topic",
     );
     expect(rememberableSearch("?mode=remember&remember=quiz")).toBe("?remember=quiz");
+    /* Tweets, since it became a mode on 2026-09-29: opening it with no thread
+       writes one on arrival (useTweets.ts § `useAutoRunOnArrival`), and a
+       restore is the one arrival nobody chose. Plan 260929f. */
+    expect(rememberableSearch("?mode=tweets")).toBe("");
+    expect(rememberableSearch("?at=spya-a&mode=tweets")).toBe("?at=spya-a");
+    expect(restoredHref("/read/x", "", "?at=spya-a&mode=tweets")).toBe("/read/x?at=spya-a");
+    expect(restoredHref("/read/x", "", "?mode=tweets")).toBe(null);
   });
 
   it("keeps every other mode as it stands", () => {

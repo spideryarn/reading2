@@ -15,22 +15,34 @@
  * promised a mount-vs-press test for this page; it never landed, and this file
  * is it, turned round.
  *
- * So everything between the bar and the page is real here: the `Dock` the
- * reading view draws, `Link`, `navigate()`, `useRoute`, and the `Tweets` page
- * itself. Only the network and the job queue are posed, for the reason
- * tests/modes-that-start-themselves.test.tsx gives: what is counted is
- * *whether a job was asked for*.
+ * **Since 2026-09-29 it is a mode, not a page** (`?mode=tweets`,
+ * docs/plans/260929f-tweets-become-a-mode-with-a-wide-band-and-block-links.md),
+ * and the arrival rule came with it — the one mode that breaks *a press spends,
+ * arriving does not*, on Greg's word. So this file now asks the three things
+ * that rule has to keep true as a mode: it writes on arrival **once per page
+ * load**, a failed read **reads again before it spends**, and the one arrival
+ * nobody chose — the shelf restoring the last view — **does not carry
+ * `?mode=tweets`** (last-view.ts § `NEEDS_AN_EXPLICIT_PRESS`).
+ *
+ * So everything between the bar and the band is real here: the `Dock` the
+ * reading view draws, its mode buttons, and the real `TweetsBand` with its
+ * `useTweets`. The harness stands in for `Reader`'s mode state the way
+ * tests/modes-that-start-themselves.test.tsx does — a `useState` the Dock's
+ * `onMode` sets, read at mount from the address as nuqs would. Only the network
+ * and the job queue are posed, for the reason that file gives: what is counted
+ * is *whether a job was asked for*.
  *
  * Under a real `<StrictMode>`, so *exactly one* request is the double-effect
  * assertion as well as the ordinary one. And every negative case lets the GET
- * settle first — a "no request" asserted before the page knows whether there is
+ * settle first — a "no request" asserted before the band knows whether there is
  * a thread passes on broken code too.
  *
  * docs/plans/260915e-tweets-page-starts-writing-when-opened.md.
  */
-import { act, createElement, StrictMode, type ReactElement } from "react";
+import { act, createElement, StrictMode, useState, type ReactElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import type { Mode } from "../src/modes.js";
 import type { Article, Job, TweetThread } from "../src/types.js";
 import { EXPERIMENTAL_ON } from "./helpers/experimental-fixtures.js";
 
@@ -132,8 +144,8 @@ vi.mock("../src/web/useJobs.js", async () => {
 });
 
 const { Dock } = await import("../src/web/Dock.js");
-const { Tweets } = await import("../src/web/Tweets.js");
-const { useRoute } = await import("../src/web/router.js");
+const { TweetsBand } = await import("../src/web/modes/tweets/TweetsMode.js");
+const { restoredHref } = await import("../src/web/last-view.js");
 const { resetActivations } = await import("../src/web/activation.js");
 const { jobEngine } = await import("../src/web/jobEngine.js");
 
@@ -146,21 +158,37 @@ const ARTICLE: Article = {
 };
 
 /**
- * `OwnedArticle`, as far as this file is concerned: the real route decides
- * whether the reading view's bar or the thread page is on screen, exactly as
- * ArticlePage.tsx does with `view`.
+ * Moves the reader between modes without a press — Back, Forward, a link from
+ * another page. Set by `Reading` on every render.
  */
-function Page(): ReactElement {
-  const route = useRoute();
-  const view = route.kind === "read" ? route.view : "article";
-  if (view === "tweets") return createElement(Tweets, { slug: SLUG, article: ARTICLE });
-  return createElement(Dock, {
-    slug: SLUG,
-    view: "article" as const,
-    mode: "plain",
-    onMode: () => {},
-    experimental: EXPERIMENTAL_ON,
-  });
+let arrive: (next: Mode) => void = () => {};
+
+/** The mode the address names, read once at mount as `Reader`'s query state is. */
+function modeInAddress(): Mode {
+  return new URLSearchParams(window.location.search).get("mode") === "tweets" ? "tweets" : "plain";
+}
+
+/**
+ * `Reader`, as far as this file is concerned: the band is on screen while the
+ * mode is `tweets`, beside the real bar whose `onMode` sets it.
+ */
+function Reading(): ReactElement {
+  const [mode, setMode] = useState<Mode>(modeInAddress);
+  arrive = setMode;
+  return createElement(
+    "div",
+    null,
+    mode === "tweets"
+      ? createElement(TweetsBand, { slug: SLUG, article: ARTICLE, onJump: () => {} })
+      : null,
+    createElement(Dock, {
+      slug: SLUG,
+      view: "article" as const,
+      mode,
+      onMode: setMode,
+      experimental: EXPERIMENTAL_ON,
+    }),
+  );
 }
 
 let host: HTMLDivElement;
@@ -177,16 +205,23 @@ async function settle(): Promise<void> {
 async function openAt(path: string): Promise<void> {
   window.history.replaceState(null, "", path);
   await act(async () => {
-    root.render(createElement(StrictMode, null, createElement(Page)));
+    root.render(createElement(StrictMode, null, createElement(Reading)));
   });
   await settle();
 }
 
 async function pressTweets(): Promise<void> {
-  const link = host.querySelector<HTMLAnchorElement>('a[aria-label="Tweets"]');
-  if (!link) throw new Error("no Tweets link in the bar");
+  const button = host.querySelector<HTMLButtonElement>('button[aria-label="Tweets"]');
+  if (!button) throw new Error("no Tweets button in the bar");
   await act(async () => {
-    link.dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true, button: 0 }));
+    button.click();
+  });
+  await settle();
+}
+
+async function arriveIn(mode: Mode): Promise<void> {
+  await act(async () => {
+    arrive(mode);
   });
   await settle();
 }
@@ -202,6 +237,8 @@ beforeEach(() => {
   postRefuses = false;
   threadFailsNext = 0;
   resetActivations();
+  /* Clears the page load's automatic attempts too, so each case is a fresh
+     page load. jobEngine.ts § beginAutoAttempt. */
   jobEngine.reset();
   host = document.createElement("div");
   document.body.appendChild(host);
@@ -213,12 +250,13 @@ afterEach(async () => {
   host.remove();
 });
 
-describe("the Tweets page, reached from the reading view's bar", () => {
+describe("the Tweets band, pressed in the reading view's bar", () => {
   it("writes the thread when there is none — one unforced request", async () => {
     await openAt(`/read/${SLUG}`);
+    expect(threadGets).toHaveLength(0);
     await pressTweets();
 
-    expect(window.location.pathname).toBe(`/read/${SLUG}/tweets`);
+    expect(host.textContent).toContain("Nobody has written a thread for this one yet.");
     expect(threadGets.length).toBeGreaterThan(0);
     expect(tweetsPosts()).toHaveLength(1);
     expect(tweetsPosts()[0]).toEqual({ slug: SLUG, steps: ["tweets"] });
@@ -230,14 +268,27 @@ describe("the Tweets page, reached from the reading view's bar", () => {
     await pressTweets();
 
     expect(threadGets.length).toBeGreaterThan(0);
-    expect(host.textContent).toContain("A thread, 1 post");
+    /* The counts line, drawn only once the thread is on screen. */
+    expect(host.textContent).toContain("1 post ·");
     expect(posts).toHaveLength(0);
+  });
+
+  it("keeps a populated thread scrollable inside the fixed-height band", async () => {
+    threadStatus = 200;
+    await openAt(`/read/${SLUG}?mode=tweets`);
+
+    const list = host.querySelector(".mode-band.tweets ol");
+    const scroll = list?.parentElement;
+    expect(scroll).toBeTruthy();
+    expect(scroll?.classList.contains("tw:flex-1")).toBe(true);
+    expect(scroll?.classList.contains("tw:min-h-0")).toBe(true);
+    expect(scroll?.classList.contains("tw:overflow-y-auto")).toBe(true);
   });
 });
 
-describe("the Tweets page, arrived at without a press", () => {
-  it("writes the thread on a pasted link too — one unforced request", async () => {
-    await openAt(`/read/${SLUG}/tweets`);
+describe("the Tweets band, arrived in without a press", () => {
+  it("writes the thread on a pasted ?mode=tweets too — one unforced request", async () => {
+    await openAt(`/read/${SLUG}?mode=tweets`);
 
     expect(threadGets.length).toBeGreaterThan(0);
     expect(tweetsPosts()).toHaveLength(1);
@@ -246,16 +297,19 @@ describe("the Tweets page, arrived at without a press", () => {
 
   it("spends nothing on a pasted link when there is a thread already", async () => {
     threadStatus = 200;
-    await openAt(`/read/${SLUG}/tweets`);
+    await openAt(`/read/${SLUG}?mode=tweets`);
 
     expect(threadGets.length).toBeGreaterThan(0);
-    expect(host.textContent).toContain("A thread, 1 post");
+    /* The counts line, drawn only once the thread is on screen. */
+    expect(host.textContent).toContain("1 post ·");
     expect(posts).toHaveLength(0);
   });
 
   it("reads again once after a failed read, and writes if that says there is none", async () => {
+    /* A failed read is not an answer to *is there a thread*: spending on it
+       would buy a second thread for an article that may already have one. */
     threadFailsNext = 1;
-    await openAt(`/read/${SLUG}/tweets`);
+    await openAt(`/read/${SLUG}?mode=tweets`);
 
     expect(threadGets).toHaveLength(2);
     expect(tweetsPosts()).toHaveLength(1);
@@ -263,14 +317,14 @@ describe("the Tweets page, arrived at without a press", () => {
 
   it("does not loop when the read keeps failing, and spends nothing", async () => {
     threadFailsNext = 99;
-    await openAt(`/read/${SLUG}/tweets`);
+    await openAt(`/read/${SLUG}?mode=tweets`);
 
     expect(threadGets).toHaveLength(2);
     expect(posts).toHaveLength(0);
   });
 
   it("does not post again when an accepted job later fails", async () => {
-    await openAt(`/read/${SLUG}/tweets`);
+    await openAt(`/read/${SLUG}?mode=tweets`);
     expect(tweetsPosts()).toHaveLength(1);
 
     jobs = [
@@ -293,7 +347,7 @@ describe("the Tweets page, arrived at without a press", () => {
       },
     ];
     await act(async () => {
-      root.render(createElement(StrictMode, null, createElement(Page)));
+      root.render(createElement(StrictMode, null, createElement(Reading)));
     });
     await settle();
 
@@ -301,23 +355,17 @@ describe("the Tweets page, arrived at without a press", () => {
     expect(tweetsPosts()).toHaveLength(1);
   });
 
-  it("tries once per tab: a second arrival after a refused run leaves the button", async () => {
+  it("tries once per page load: a second arrival after a refused run leaves the button", async () => {
     postRefuses = true;
-    await openAt(`/read/${SLUG}/tweets`);
+    await openAt(`/read/${SLUG}?mode=tweets`);
     expect(tweetsPosts()).toHaveLength(1);
 
-    /* Away and back — Back, Forward, or the link again. The one automatic
-       attempt is spent, so this is a person's button now and not a loop. */
-    await act(async () => {
-      window.history.pushState(null, "", `/read/${SLUG}`);
-      window.dispatchEvent(new PopStateEvent("popstate"));
-    });
-    await settle();
-    await act(async () => {
-      window.history.pushState(null, "", `/read/${SLUG}/tweets`);
-      window.dispatchEvent(new PopStateEvent("popstate"));
-    });
-    await settle();
+    /* Away and back without a press — Back, Forward, a link from Metadata. The
+       band unmounts and mounts again, and the one automatic attempt is spent,
+       so this is a person's button now and not a loop. */
+    await arriveIn("plain");
+    expect(host.textContent).not.toContain("Nobody has written a thread for this one yet.");
+    await arriveIn("tweets");
 
     expect(tweetsPosts()).toHaveLength(1);
     expect(host.textContent).toContain("Nobody has written a thread for this one yet.");
@@ -331,5 +379,27 @@ describe("the Tweets page, arrived at without a press", () => {
     await act(async () => button.click());
     await settle();
     expect(tweetsPosts()).toHaveLength(2);
+  });
+});
+
+describe("the shelf restoring the last view", () => {
+  /* The one arrival that is not intent. A reader who last left the article in
+     Tweets and comes back to it from the shelf is restored to where they were
+     reading — not handed a model call. */
+  it("drops ?mode=tweets from the restored address, and so spends nothing", async () => {
+    const restored = restoredHref(`/read/${SLUG}`, "", "?at=spya-a&mode=tweets");
+    expect(restored).toBe(`/read/${SLUG}?at=spya-a`);
+    if (restored === null) throw new Error("nothing restored");
+
+    await openAt(restored);
+    expect(threadGets).toHaveLength(0);
+    expect(posts).toHaveLength(0);
+  });
+
+  it("the positive control: the same address with the mode left in writes the thread", async () => {
+    /* Without this the case above would pass on a harness that never mounted
+       the band from the address at all. */
+    await openAt(`/read/${SLUG}?at=spya-a&mode=tweets`);
+    expect(tweetsPosts()).toHaveLength(1);
   });
 });

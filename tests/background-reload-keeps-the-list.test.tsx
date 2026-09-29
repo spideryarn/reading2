@@ -13,7 +13,7 @@
  * Three hooks were copied from that one **before** the guard landed, and none
  * of them had it: `useSummaries` (26 Aug, deleted 2026-08-31 with the summary
  * ladder), `useIdeas` (27 Aug) and the thread page's own loader in
- * `Tweets.tsx`. Two of the three were live bugs, because `load()` is not only
+ * `Tweets.tsx` (now `useTweets`, the Tweets mode's hook). Two of the three were live bugs, because `load()` is not only
  * the opening read — every one of them calls it again from `onFinished`
  * whenever a job that writes their artefact completes.
  *
@@ -41,8 +41,9 @@
  *
  * Written against the hooks rather than the reading view, for the reason
  * `tests/glossary-one-fetch.test.tsx` gives: mounting `Reader` drags in nuqs,
- * Supabase and the layout. `Tweets` is a page and is mounted whole, with only
- * the Dock stubbed.
+ * Supabase and the layout. The thread is mounted as its band, `TweetsBand` —
+ * the read and the panel together, since the panel's `ready` gate is what a
+ * failed reload used to trip — with only the Dock stubbed.
  */
 import { act, createElement, type ReactElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
@@ -175,12 +176,12 @@ vi.mock("../src/web/useJobs.js", () => ({
   },
 }));
 
-/* The thread page's bottom bar reaches Supabase and the whole visitor layer,
-   and none of it is what this file is about. */
+/* The Dock reaches Supabase and the whole visitor layer, and none of it is
+   what this file is about. */
 vi.mock("../src/web/Dock.js", () => ({ Dock: () => null }));
 
 const { useIdeas } = await import("../src/web/useIdeas.js");
-const { Tweets } = await import("../src/web/Tweets.js");
+const { TweetsBand } = await import("../src/web/modes/tweets/TweetsMode.js");
 
 /** A job for this article, landing in the hook's poll as finished. */
 function finishJob(step: string, slug = "constitution"): void {
@@ -287,9 +288,9 @@ describe("the ideas panel", () => {
   });
 });
 
-describe("the thread page", () => {
+describe("the Tweets band", () => {
   it("keeps the thread when the reload after a job fails", async () => {
-    await render(createElement(Tweets, { slug: "constitution", article: ARTICLE }));
+    await render(createElement(TweetsBand, { slug: "constitution", article: ARTICLE, onJump: () => {} }));
     await settle();
     expect(host.textContent).toContain("the first post");
 
@@ -302,7 +303,7 @@ describe("the thread page", () => {
 
     /* The thread renders only in the `ready` branch of a discriminated union,
        so replacing the whole union with `{status:"error"}` took the posts off
-       the page — and the reader was left with a message where the thread was. */
+       the band — and the reader was left with a message where the thread was. */
     expect(host.textContent).toContain("the first post");
     /* ...and the failure is still said out loud. It has to be said somewhere:
        the job finished, so `JobProgress` has gone quiet, and a reader who saw a
@@ -319,7 +320,7 @@ describe("the thread page", () => {
 
   it("still reports a failure that leaves us with nothing", async () => {
     fails = true;
-    await render(createElement(Tweets, { slug: "constitution", article: ARTICLE }));
+    await render(createElement(TweetsBand, { slug: "constitution", article: ARTICLE, onJump: () => {} }));
     await settle();
     expect(host.textContent).toContain("Failed to fetch");
     expect(host.textContent).not.toContain("the first post");

@@ -11,8 +11,9 @@
  *
  * So this file asks the only question that would have gone red on `24335207`:
  * **run a two-mode job through the real walk, and see what `StepContext.cacheArticle`
- * each step is actually handed.** Both must be `true`. `arc` and `tweets` share
+ * each step is actually handed.** Both must be `true`. `tweets` and `ideas` share
  * an effort and a renderer, so the entry one writes is the entry the other reads.
+ * (The pair was `arc` and `tweets` until `tweets/5` moved tweets to `ids`.)
  *
  * docs/postmortems/260903c-the-conditional-article-cache-breakpoint-marks-the-writer-but-never-the-reader.md
  *
@@ -113,6 +114,7 @@ const seen: { step: StepName; cacheArticle: boolean | undefined }[] = [];
 const PART: Partial<Record<StepName, unknown>> = {
   arc: { entries: [] },
   tweets: { tweets: [] },
+  ideas: { ideas: [] },
   glossary: { entries: [] },
 };
 
@@ -235,17 +237,20 @@ describe("the cacheArticle flag, as the job walk actually sets it", () => {
   }, 60_000);
 
   it("marks BOTH steps of a same-group pair — the reader as well as the writer", async () => {
-    await walk(["arc", "tweets"]);
+    /* `tweets` and `ideas` since `tweets/5` moved tweets to the `ids` renderer;
+       the pair was `arc` and `tweets` when the bug below was found, and those two
+       no longer share. docs/plans/260929f-tweets-become-a-mode-with-a-wide-band-and-block-links.md. */
+    await walk(["tweets", "ideas"]);
 
     /* First that both steps ran at all. Every way this file can go wrong
        silently — a step skipped on freshness, a walk that stopped after one, a
        registry key that did not take — produces a SHORT list, and a short list
        satisfies every `every()` ever written. docs/reusable/silent-success.md. */
-    expect(seen.map((s) => s.step)).toEqual(["arc", "tweets"]);
+    expect(seen.map((s) => s.step)).toEqual(["tweets", "ideas"]);
 
     /* And then the thing itself. Before 2026-09-03 this was `[true, false]`:
-       `arc` paid the 1.25x write premium and `tweets`, last in its group, sent
-       no breakpoint and read nothing. */
+       the writer paid the 1.25x write premium and the reader, last in its
+       group, sent no breakpoint and read nothing. */
     expect(seen.map((s) => s.cacheArticle)).toEqual([true, true]);
   }, 30_000);
 

@@ -1247,9 +1247,16 @@ describe("checkColdDraw", () => {
  * pipeline's tables and so cannot inherit their mistakes.
  */
 describe("checkBatchedDraw", () => {
+  /* The numbers below are a real job's, and that job priced `arc,tweets` — the
+     same-group pair of the day. The rows now carry `glossary` and `quotes`
+     instead, because `checkBatchedDraw` groups by the *live* `STAGE_EFFORT` and
+     `ARTICLE_RENDERER` tables, and since `tweets/5` moved tweets to the `ids`
+     renderer arc has no partner left to share with. glossary and quotes are the
+     text pair that remains (both `medium`+`text`), so every case still asks what
+     it asked. docs/plans/260929f-tweets-become-a-mode-with-a-wide-band-and-block-links.md. */
   const writer = row({
     id: "writer",
-    stepName: "arc",
+    stepName: "glossary",
     startedAt: "2026-09-03T05:47:10.000Z",
     cacheWriteTokens: 25_428,
     cacheReadTokens: 0,
@@ -1257,13 +1264,14 @@ describe("checkBatchedDraw", () => {
 
   it("refuses the real broken numbers: a writer that paid and a reader that never looked", () => {
     /* Verbatim from evals/results/cost/2026-09-03-05-47-10-e0a1he1b-against-…,
-       the job that priced `arc,tweets` before the fix. `tweets` read nothing AND
+       the job that priced `arc,tweets` before the fix, relabelled as said above.
+       The reader read nothing AND
        wrote nothing, which is only possible if no `cache_control` reached the
        provider — a prefix that merely failed to match would have written its
        own entry. */
     const reader = row({
       id: "reader",
-      stepName: "tweets",
+      stepName: "quotes",
       startedAt: "2026-09-03T05:47:40.000Z",
       reportedInputTokens: 27_533,
       cacheWriteTokens: 0,
@@ -1272,7 +1280,7 @@ describe("checkBatchedDraw", () => {
     const findings = checkBatchedDraw([writer, reader], "batched");
     expect(findings.map((f) => f.kind)).toEqual(["unclaimed-cache-write"]);
     expect(findings[0]!.fatal).toBe(true);
-    expect(findings[0]!.step).toBe("arc");
+    expect(findings[0]!.step).toBe("glossary");
     expect(findings[0]!.message).toContain("25428");
     expect(findings[0]!.message).toContain("the best any of them managed was 0");
   });
@@ -1280,7 +1288,7 @@ describe("checkBatchedDraw", () => {
   it("accepts the shape the fix produces: the reader reads what the writer wrote", () => {
     const reader = row({
       id: "reader",
-      stepName: "tweets",
+      stepName: "quotes",
       startedAt: "2026-09-03T05:47:40.000Z",
       reportedInputTokens: 2_105,
       cacheWriteTokens: 0,
@@ -1296,23 +1304,24 @@ describe("checkBatchedDraw", () => {
        full entry and neither reads one — two lost bets, two findings. */
     const other = row({
       id: "other",
-      stepName: "tweets",
+      stepName: "quotes",
       startedAt: "2026-09-03T05:47:40.000Z",
       cacheWriteTokens: 27_239,
       cacheReadTokens: 0,
     });
     const findings = checkBatchedDraw([writer, other], "batched");
-    expect(findings.map((f) => f.step)).toEqual(["arc", "tweets"]);
+    expect(findings.map((f) => f.step)).toEqual(["glossary", "quotes"]);
     expect(findings.every((f) => f.kind === "unclaimed-cache-write")).toBe(true);
   });
 
   it("will not let one group's read absolve another group's lost write", () => {
     /* **GPT Sol's exploit of the first version of this rule**, which evaluated
-       `some()` per writer over every call in the draw. arc writes and is never
-       read; ideas writes and timeline reads exactly what ideas wrote; the
-       timeline read satisfied arc's writer too and the gate returned nothing.
-       arc is `high`+`text` and those two are `high`+`ids` — different prefixes
-       entirely, so that read could never have been arc's. */
+       `some()` per writer over every call in the draw. A text-stage writer (arc,
+       in the exploit) writes and is never read; ideas writes and timeline reads
+       exactly what ideas wrote; the timeline read satisfied the other writer too
+       and the gate returned nothing. glossary is `medium`+`text` and those two
+       are `high`+`ids` — different prefixes entirely, so that read could never
+       have been glossary's. */
     const ideas = row({
       id: "ideas",
       stepName: "ideas",
@@ -1328,7 +1337,7 @@ describe("checkBatchedDraw", () => {
       cacheReadTokens: 27_239,
     });
     const findings = checkBatchedDraw([writer, ideas, timeline], "batched");
-    expect(findings.map((f) => f.step)).toEqual(["arc"]);
+    expect(findings.map((f) => f.step)).toEqual(["glossary"]);
     expect(findings[0]!.kind).toBe("unclaimed-cache-write");
   });
 
@@ -1337,14 +1346,14 @@ describe("checkBatchedDraw", () => {
        to, the other is a real loss and must be reported. */
     const second = row({
       id: "second",
-      stepName: "tweets",
+      stepName: "quotes",
       startedAt: "2026-09-03T05:47:40.000Z",
       cacheWriteTokens: 25_428,
       cacheReadTokens: 0,
     });
     const third = row({
       id: "third",
-      stepName: "tweets",
+      stepName: "quotes",
       startedAt: "2026-09-03T05:48:10.000Z",
       cacheWriteTokens: 0,
       cacheReadTokens: 25_428,
@@ -1361,8 +1370,8 @@ describe("checkBatchedDraw", () => {
       row({ id, stepName: step as never, startedAt: at, cacheWriteTokens: 0, cacheReadTokens: 0 });
     const findings = checkBatchedDraw(
       [
-        cold("a", "arc", "2026-09-03T05:47:10.000Z"),
-        cold("b", "tweets", "2026-09-03T05:47:40.000Z"),
+        cold("a", "glossary", "2026-09-03T05:47:10.000Z"),
+        cold("b", "quotes", "2026-09-03T05:47:40.000Z"),
       ],
       "batched",
     );
@@ -1373,7 +1382,7 @@ describe("checkBatchedDraw", () => {
   it("says nothing about one lone stage that cached nothing — there was nobody to share with", () => {
     const alone = row({
       id: "alone",
-      stepName: "arc",
+      stepName: "glossary",
       cacheWriteTokens: 0,
       cacheReadTokens: 0,
     });
@@ -1386,7 +1395,7 @@ describe("checkBatchedDraw", () => {
        squared by money that was already spent when it placed its bet. */
     const early = row({
       id: "early",
-      stepName: "tweets",
+      stepName: "quotes",
       startedAt: "2026-09-03T05:46:00.000Z",
       cacheWriteTokens: 0,
       cacheReadTokens: 25_428,
@@ -1400,7 +1409,7 @@ describe("checkBatchedDraw", () => {
     const near = (read: number) =>
       row({
         id: "r",
-        stepName: "tweets",
+        stepName: "quotes",
         startedAt: "2026-09-03T05:47:40.000Z",
         cacheWriteTokens: 0,
         cacheReadTokens: read,
@@ -1428,14 +1437,14 @@ describe("checkBatchedDraw", () => {
   it("stops at unknown telemetry rather than reporting a shortfall that is really an absence", () => {
     /* A missing field could have been the read that squares any of these
        writes, so one unknown poisons the arithmetic for all of them. */
-    const silent = row({ id: "s", stepName: "tweets", cacheReadTokens: null });
+    const silent = row({ id: "s", stepName: "quotes", cacheReadTokens: null });
     const findings = checkBatchedDraw([writer, silent], "batched");
     expect(findings.map((f) => f.kind)).toEqual(["unknown-cache-telemetry"]);
     expect(findings[0]!.fatal).toBe(true);
   });
 
   it("says nothing on the phases that are not batched, and nothing on an empty draw", () => {
-    const reader = row({ id: "reader", stepName: "tweets", cacheWriteTokens: 0, cacheReadTokens: 0 });
+    const reader = row({ id: "reader", stepName: "quotes", cacheWriteTokens: 0, cacheReadTokens: 0 });
     expect(checkBatchedDraw([writer, reader], "mode")).toEqual([]);
     expect(checkBatchedDraw([writer, reader], "ingest")).toEqual([]);
     expect(checkBatchedDraw([], "batched")).toEqual([]);

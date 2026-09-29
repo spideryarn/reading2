@@ -539,8 +539,8 @@ describe("the audio it keeps", () => {
       latest().onend?.();
       await vi.advanceTimersByTimeAsync(20);
     });
-    expect(h.get().recording?.blob.size).toBe(4096);
-    expect(h.get().recording?.ext).toBe("webm");
+    expect(h.get().recording?.parts[0]?.blob.size).toBe(4096);
+    expect(h.get().recording?.parts[0]?.ext).toBe("webm");
     h.unmount();
   });
 

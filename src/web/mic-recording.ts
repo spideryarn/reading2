@@ -66,28 +66,72 @@
  * `rms 0.027` from the analyser, and 13,971 bytes here.
  */
 
-/** What a finished recording is. Never handed over empty, short, or broken. */
+/**
+ * One **part** of a recording: one `MediaRecorder`'s complete, playable file.
+ * Never handed over empty or broken.
+ *
+ * A dictation is one part until it runs long, and then several — see
+ * {@link recordTrack} on why the tape rotates, and
+ * docs/plans/260929f-feedback-thank-you-as-a-toast-and-dictation-that-never-runs-out-of-tape.md.
+ */
 export interface MicRecording {
   blob: Blob;
   /** What the recorder actually produced, which may not be what we asked for. */
   mimeType: string;
   /** The file extension that matches it — `m4a`, `webm`. No leading dot. */
   ext: string;
-  /** How long it ran, in ms. For the label on the button. */
+  /** How long this part ran, in ms. For the label on the button. */
   ms: number;
-  /** It hit a cap and stopped early, so this is the beginning and not the whole. */
+  /** The dictation hit its ceiling here, so this is the last part and the rest was never recorded. */
   capped: boolean;
+}
+
+/**
+ * How a tape ended, when it left anything worth offering.
+ *
+ * `parts` is never empty. **`broken` means the parts are not the whole
+ * dictation** — a recorder failed, a flush never finished, or a chunk had to be
+ * thrown away — so they are evidence to save and not a source to transcribe:
+ * joining the words either side of a hole would be handing the reader a
+ * transcript with a sentence missing and nothing saying so. `parts` is then the
+ * complete ones *before* the first failure.
+ */
+export interface TapeEnding {
+  parts: MicRecording[];
+  broken: boolean;
+}
+
+/** What the tape tells its owner while it runs. All optional; none may throw. */
+export interface TapeEvents {
+  /** The whole dictation reached {@link MAX_MS}. The tape has stopped itself. */
+  onCapped?(): void;
+  /**
+   * A part closed **because the tape rotated**, complete, while the reader is
+   * still talking — so it can be sent now rather than at the end. `index`
+   * counts from 0 and matches its place in {@link TapeEnding.parts}. Not called
+   * for the tail, which `stop()` hands over.
+   */
+  onPart?(part: MicRecording, index: number): void;
+  /**
+   * Capture failed part-way — after audio had been collected — so whatever is
+   * said from here cannot be joined to what came before. The owner should end
+   * the dictation rather than let the reader talk into a tape that is already
+   * lost.
+   */
+  onBroken?(): void;
+  /** Every advertised container refused before the tape captured a byte. */
+  onUnavailable?(): void;
 }
 
 /** A recording in progress. Exactly one of `stop` / `cancel` is called, once. */
 export interface MicTape {
   /**
-   * Stop, and hand back what was recorded once the recorder has finished with
-   * it. Null when there is nothing worth offering.
+   * Stop, and hand back every part once the recorders have finished with them.
+   * Null when there is nothing worth offering.
    *
    * **The caller must await this before stopping the track** — see the header.
    */
-  stop(): Promise<MicRecording | null>;
+  stop(): Promise<TapeEnding | null>;
   /** Stop and throw it away. For the ordinary case where dictation worked. */
   cancel(): void;
 }
@@ -172,25 +216,43 @@ const WEBKIT_AAC_BPS = 48_000;
 /** A chunk a second, so a stop mid-second still has the second before it. */
 const TIMESLICE_MS = 1000;
 /**
- * The caps, and **what happens when one is hit changed on 2026-08-27.**
+ * **The ceiling on a whole dictation**, however many parts it is in.
  *
- * It used to be: recording stops, dictation carries on, and the saved file says
- * it is only the beginning. That was right while the recording was an optional
- * souvenir of a failed dictation. It is wrong now that the recording is *the
- * source of the transcript* — a dictation that ran past the cap would be
- * transcribed from its first few minutes and the result would replace the whole
- * of what the reader said, with nothing anywhere reporting a loss. GPT Sol's
- * plan review, item 2.
+ * When it is hit, `onCapped` is told and [`useDictation`](./useDictation.ts)
+ * ends the dictation — since 2026-08-27, when the recording became *the source
+ * of the transcript*: recording stopping while dictation carried on would have
+ * transcribed the first few minutes and replaced the whole of what was said
+ * with them. GPT Sol's plan review, item 2.
  *
- * So `onCapped` is now told, and [`useDictation`](./useDictation.ts) ends the
- * dictation when it fires. Running out of tape does take the microphone away
- * mid-sentence, which is unfriendly — and it is the friendlier of the two,
- * because the alternative is silently keeping the wrong half.
+ * **Five minutes, and not higher, although segments would allow it** (plan
+ * 260929f, R7). Five minutes of speech is about what the largest box, Feedback's
+ * 4,000 characters, holds; twenty would be ~18,000 characters into boxes that
+ * take 600 to 4,000. What segments removed is the byte cutoff that used to end a
+ * Chrome dictation at two and a half minutes, well before this.
  */
 const MAX_MS = 5 * 60_000;
 /**
- * Belt to the cap's braces: a bound on what is actually held, not on a bitrate
- * hint — and now also the bound that keeps a request inside Vercel's 4.5 MB.
+ * **The tape rotates to a new part at two minutes or 80% of {@link MAX_BYTES},
+ * whichever comes first** — see {@link chunkVerdict}.
+ *
+ * Two minutes is ~1.7 MB at Chrome's AAC rate, so the byte bound is the safety
+ * rather than the rule; 80% leaves room for the old recorder's terminal chunk,
+ * which arrives after the rotation and still belongs to the old part.
+ */
+export const PART_MS = 120_000;
+export const PART_BYTES = 1_680_000;
+/**
+ * The most any one **part** may hold: a bound on what is actually held, not on
+ * a bitrate hint — and the bound that keeps each request inside Vercel's 4.5 MB.
+ *
+ * **Since 2026-09-29 reaching it does not end anything**, because the tape
+ * rotates to a new part at 80% of it ({@link PART_BYTES}) — so in the ordinary
+ * course nothing ever gets here. Only a single chunk big enough to jump the gap
+ * does (a tab suspended for minutes and then handed its backlog at once), and
+ * that chunk cannot be kept without breaking the size bound or dropped without
+ * leaving a hole, so it is a capture failure and said as one. Greg hit the old
+ * behaviour as `[mic-full]` two and a half minutes into a Feedback message;
+ * plan 260929f § Part B.
  *
  * It was 8 MB, sized when nothing was uploaded. Base64 inflates by a third, so
  * 8 MB of audio is 10.7 MB of body and Vercel refuses it **before any of our
@@ -198,27 +260,53 @@ const MAX_MS = 5 * 60_000;
  * in [src/transcribe.ts](../transcribe.ts) is 3 MB of base64, so this is the
  * raw-byte figure that fits inside it with room for the JSON around it.
  *
- * Deliberately the *lower* of the two guards: at Chrome's measured AAC rate of
- * ~14 KB/s this bites at about two and a half minutes, well before `MAX_MS`.
- * That is the point — the cap that fires should be the one whose consequences
- * are understood, not whichever the encoder's bitrate happens to reach first.
- *
- * **On an iPad it bit at about 87 seconds** until 2026-09-12, because WebKit
- * recorded at 192 kbps (~24 KB/s) with no hint — which nobody had worked out,
- * because every rate here was measured in Chrome. With
- * {@link WEBKIT_AAC_BPS} it records at ~6 KB/s and `MAX_MS` fires first.
+ * **On an iPad it used to bite at about 87 seconds**, until 2026-09-12, because
+ * WebKit recorded at 192 kbps (~24 KB/s) with no hint — which nobody had worked
+ * out, because every rate here was measured in Chrome. See
+ * {@link WEBKIT_AAC_BPS}.
  */
-const MAX_BYTES = 2_100_000;
+export const MAX_BYTES = 2_100_000;
 /**
  * Shorter than this and there is nothing in it worth calling evidence.
  *
  * A press immediately followed by a second press produces no confirmed text and
  * would otherwise offer the reader a fraction of a second of room tone as
  * though it explained something. GPT Sol's plan review, item 5.
+ *
+ * **Applied to the whole dictation, never to a part.** Per part, it would throw
+ * away a one-second tail after a rotation — the reader's last words.
  */
 const MIN_MS = 2000;
 /** How long to wait for a recorder to finish before releasing the track anyway. */
 const FLUSH_TIMEOUT_MS = 3000;
+
+/** What to do with a chunk that has just arrived for the part being recorded. */
+export type ChunkVerdict =
+  /** Keep it and carry on. */
+  | "keep"
+  /** Keep it, and then start the next part. */
+  | "rotate"
+  /** It cannot be kept inside {@link MAX_BYTES}: a capture failure. */
+  | "overflow";
+
+/**
+ * **Where the tape is cut**, decided each time the recorder hands over data.
+ *
+ * On a chunk rather than on a timer, and that is deliberate (plan 260929f,
+ * R6): a background tab's timers are throttled, but `dataavailable` still
+ * arrives whenever the recorder has data, so this runs exactly when there is
+ * something to decide about. Hard lengths only — no hunting for a pause — until
+ * a measurement of seam damage asks for more (R8).
+ *
+ * @param part the part being recorded, *before* this chunk: how long it has
+ * run and what it holds.
+ */
+export function chunkVerdict(part: { ms: number; bytes: number }, chunk: number): ChunkVerdict {
+  const after = part.bytes + chunk;
+  if (after > MAX_BYTES) return "overflow";
+  if (part.ms >= PART_MS || after >= PART_BYTES) return "rotate";
+  return "keep";
+}
 
 /**
  * The attempts this browser says it can make, best first.
@@ -298,12 +386,14 @@ export function extFor(mimeType: string): string {
  * 14-32-05` is the form they can match against their own memory of when they
  * pressed the button.
  */
-export function recordingFilename(at: Date, ext: string): string {
+export function recordingFilename(at: Date, ext: string, part?: number): string {
   const p = (n: number) => String(n).padStart(2, "0");
   const stamp = `${at.getFullYear()}-${p(at.getMonth() + 1)}-${p(at.getDate())} ${p(
     at.getHours(),
   )}-${p(at.getMinutes())}-${p(at.getSeconds())}`;
-  return `spideryarn dictation ${stamp}.${ext}`;
+  /* The part number for a dictation in several, so two saved in the same
+     second do not collide and the reader can put them back in order. */
+  return `spideryarn dictation ${stamp}${part === undefined ? "" : ` part ${part}`}.${ext}`;
 }
 
 /**
@@ -330,8 +420,20 @@ export function formatDuration(ms: number): string {
  * **Never throws, and never stops the track.** The track belongs to
  * [`useDictation`](./useDictation.ts); this is one more reader of it. A
  * recording that cannot start must not be a reason dictation does not.
+ *
+ * ## The tape rotates
+ *
+ * A long dictation is recorded in **parts**, each its own `MediaRecorder` and
+ * so its own complete, playable file — MP4 and WebM cannot be joined byte-wise,
+ * which is why this is several recorders and not one recorder's chunks sliced
+ * up. {@link chunkVerdict} says when to cut; the next recorder is started on
+ * the same track *before* the old one is stopped, and reuses the container that
+ * already worked rather than walking the ladder again. Each finished part goes
+ * to `onPart`, so it is sent while the reader is still talking and the wait
+ * after Stop is only the last part's. Plan 260929f § Part B, and § The spike for
+ * what a seam measured.
  */
-export function recordTrack(track: MediaStreamTrack, onCapped?: () => void): MicTape | null {
+export function recordTrack(track: MediaStreamTrack, events: TapeEvents = {}): MicTape | null {
   if (typeof MediaRecorder === "undefined") return null;
   /* An empty list is a browser that claims none of our containers. Ask for
      nothing and read back what it chose — which is the same fallback the
@@ -339,169 +441,295 @@ export function recordTrack(track: MediaStreamTrack, onCapped?: () => void): Mic
   const attempts: Array<Attempt | undefined> = supportedAttempts();
   if (attempts.length === 0) attempts.push(undefined);
 
-  const chunks: Blob[] = [];
-  let bytes = 0;
-  let cancelled = false;
-  let errored = false;
-  let capped = false;
-  let timedOut = false;
-  let startedAt = Date.now();
-  let endedAt: number | null = null;
-  let at = 0;
-  let rec: MediaRecorder | null = null;
-  let settle: (() => void) | null = null;
-  const done = new Promise<void>((resolve) => {
-    settle = resolve;
-  });
+  /**
+   * One recorder's worth. `abandoned` is an attempt on the container ladder
+   * that failed before holding anything and was replaced; `failed` is a real
+   * loss of audio.
+   */
+  interface Part {
+    rec: MediaRecorder;
+    chunks: Blob[];
+    bytes: number;
+    startedAt: number;
+    endedAt: number | null;
+    state: "recording" | "closing" | "closed" | "failed" | "abandoned";
+    done: Promise<void>;
+    settle: () => void;
+    /** Built once, when the part closes, and the chunks dropped. */
+    file: MicRecording | null;
+  }
 
-  const halted = () => {
+  const parts: Part[] = [];
+  let current: Part | null = null;
+  let at = 0;
+  let cancelled = false;
+  let stopping = false;
+  let capped = false;
+  /** A part has failed, so nothing more may come out of this tape. */
+  let dead = false;
+  let ceiling = 0;
+  const timers: number[] = [];
+
+  const halt = (p: Part) => {
     try {
-      if (rec && rec.state !== "inactive") rec.stop();
+      if (p.rec.state !== "inactive") p.rec.stop();
     } catch {
       /* Already inactive. */
     }
   };
 
-  const finished = () => {
-    endedAt = Date.now();
-    settle?.();
+  const fileOf = (p: Part): MicRecording => {
+    if (!p.file) {
+      const mimeType = p.rec.mimeType || attempts[at]?.type || "audio/webm";
+      p.file = {
+        blob: new Blob(p.chunks, { type: mimeType }),
+        mimeType,
+        ext: extFor(mimeType),
+        ms: (p.endedAt ?? Date.now()) - p.startedAt,
+        capped: false,
+      };
+      // The Blob owns the data now; holding the chunks as well would double it.
+      p.chunks.length = 0;
+    }
+    return p.file;
   };
 
   /**
-   * Build and start one attempt. False if it would not even construct or start,
-   * in which case the caller moves on to the next.
+   * **A part lost audio, so the tape is over.** Whatever is recorded after a
+   * hole cannot be joined to what came before it without the reader's words
+   * going missing in the middle with nothing saying so — the all-or-nothing
+   * rule, plan 260929f R3. Every recorder stops, and the owner is told so it can
+   * end the dictation rather than let the reader keep talking into nothing.
    */
-  const begin = (): boolean => {
-    const opts = attempts[at];
-    let next: MediaRecorder;
-    try {
-      next = new MediaRecorder(new MediaStream([track]), opts ? { ...opts, mimeType: opts.type } : {});
-    } catch {
-      return false;
+  const fail = (p: Part) => {
+    if (p.state === "failed" || p.state === "abandoned") return;
+    const firstFailure = !dead;
+    p.state = "failed";
+    p.endedAt = Date.now();
+    p.settle();
+    dead = true;
+    window.clearTimeout(ceiling);
+    for (const q of parts) halt(q);
+    /* Tell the owner even when this happened during `stop()`. A failed flush of
+       the first/only part leaves no `TapeEnding` to carry `broken: true`, so the
+       event is the only way to distinguish it from a short or empty recording.
+       The owner's callback is idempotent once the session is already finishing. */
+    if (firstFailure && !cancelled) events.onBroken?.();
+  };
+
+  const onData = (p: Part, data: Blob) => {
+    /* **Abandoned and failed parts first, and this is the load-bearing line.**
+       The specification's failure sequence is `error`, *then* a terminal
+       `dataavailable` carrying what was collected, *then* `stop` — so by the
+       time a replacement recorder is running, the one it replaced still has a
+       blob to hand over. Were it kept, the reader would be offered a file with
+       one container's bytes at the front of another's: right size, plausible
+       type, does not play. It would also move `bytes` off zero, which silently
+       converts the next retry into a giving-up.
+       https://www.w3.org/TR/mediastream-recording/#error-handling
+       GPT Sol's review of the library decision, 2026-08-27, blocker 3. It hid
+       behind Chrome, whose AAC failure hands over an *empty* terminal blob. */
+    if (cancelled || data.size === 0 || p.state === "failed" || p.state === "abandoned") return;
+    /* **Checked before the chunk is kept, not after.** A delayed
+       `dataavailable` can be any size, so a bound checked afterwards bounds
+       nothing. GPT Sol's code review, 2026-08-27, item 4. */
+    const verdict = chunkVerdict({ ms: Date.now() - p.startedAt, bytes: p.bytes }, data.size);
+    if (verdict === "overflow") {
+      fail(p);
+      return;
     }
-    next.ondataavailable = (e) => {
-      /* **`rec !== next` first, and this is the load-bearing line.** The
-         specification's failure sequence is `error`, *then* a terminal
-         `dataavailable` carrying what was collected, *then* `stop` — so by the
-         time a replacement recorder is running, the one it replaced still has a
-         blob to hand over. Without this guard that blob lands in the shared
-         `chunks` array, and the reader is offered a file with one container's
-         bytes at the front of another's: right size, plausible type, does not
-         play. It also moves `bytes` off zero, which silently converts the next
-         retry into a giving-up.
-         https://www.w3.org/TR/mediastream-recording/#error-handling
-         GPT Sol's review of the library decision, 2026-08-27, blocker 3. It
-         hid behind Chrome, whose AAC failure hands over an *empty* terminal
-         blob — so the size check below happened to swallow it. */
-      if (rec !== next || cancelled || e.data.size === 0) return;
-      /* **Checked before the chunk is kept, not after.** The first version
-         stored it and then noticed, which bounds nothing: a delayed
-         `dataavailable` can be any size, so the "cap" was a promise about a
-         number nobody had looked at yet. GPT Sol's code review, item 4. */
-      if (bytes + e.data.size > MAX_BYTES) {
-        capped = true;
-        halted();
-        onCapped?.();
-        return;
-      }
-      chunks.push(e.data);
-      bytes += e.data.size;
-    };
-    next.onstop = () => {
-      if (rec === next) finished();
-    };
-    next.onerror = () => {
-      if (rec !== next) return;
-      /* **A recorder that failed before producing anything gets replaced, not
-         mourned.** `isTypeSupported` is a claim about the codec and not about
-         the options we pass with it, so the only way to find out whether this
-         browser will really encode this combination is to watch it try — and on
-         2026-08-27 the first choice failed on every machine we had, silently,
-         which meant the feature never once produced a file. Anything already
-         collected, though, means the container was fine and something else went
-         wrong later; that is a real failure and the evidence contract says we
-         offer nothing. */
-      if (bytes === 0) {
-        chunks.length = 0;
-        /* **A loop, not one more go.** An attempt that will not even construct
-           is not the end of the ladder, and a single `begin()` here stopped the
-           search at it — leaving the container below it, which would have
-           worked, never tried. The opening walk down the list already does this;
-           the retry path did not. GPT Sol's review, blocker 3. */
-        while (at + 1 < attempts.length) {
-          at += 1;
-          // The clock restarts with the recorder, so `ms` describes the file we
-          // actually have rather than including the failed attempt.
-          startedAt = Date.now();
-          if (begin()) return;
+    p.chunks.push(data);
+    p.bytes += data.size;
+    /* Only the part being recorded rotates. A part already closing is handing
+       over its terminal chunk, which is its own and moves nothing. */
+    if (verdict === "rotate" && p === current && p.state === "recording" && !stopping && !capped) {
+      rotate(p);
+    }
+  };
+
+  const onError = (p: Part) => {
+    if (cancelled || p.state === "failed" || p.state === "abandoned") return;
+    /* **A recorder that failed before producing anything gets replaced, not
+       mourned** — but only the first part, before the tape has held a byte.
+       `isTypeSupported` is a claim about the codec and not about the options we
+       pass with it, so the only way to find out whether this browser will
+       really encode this combination is to watch it try — and on 2026-08-27 the
+       first choice failed on every machine we had, silently, which meant the
+       feature never once produced a file. Anything already collected means the
+       container was fine and something else went wrong later: a real failure. */
+    if (p.bytes === 0 && parts.length === 1 && parts[0] === p) {
+      p.state = "abandoned";
+      p.settle();
+      /* **A loop, not one more go.** An attempt that will not even construct
+         is not the end of the ladder. GPT Sol's review, blocker 3. */
+      while (at + 1 < attempts.length) {
+        at += 1;
+        const next = open();
+        if (next) {
+          parts[0] = next;
+          return;
         }
       }
-      errored = true;
-      finished();
-    };
-    /* Claimed *before* `start`, so that the guard in `ondataavailable` above
-       tells the truth from the recorder's first breath rather than from the
-       line after it, and put back if it will not start. */
-    const previous = rec;
-    rec = next;
-    try {
-      next.start(TIMESLICE_MS);
-    } catch {
-      rec = previous;
-      return false;
+      /* Nothing left to try, and nothing was ever held — so there is no hole,
+         only no tape. Not `fail`: that is for audio lost part-way. */
+      p.state = "failed";
+      dead = true;
+      window.clearTimeout(ceiling);
+      if (!cancelled) events.onUnavailable?.();
+      return;
     }
-    return true;
+    fail(p);
+  };
+
+  const onStop = (p: Part) => {
+    if (p.state === "failed" || p.state === "abandoned" || p.state === "closed") return;
+    p.state = "closed";
+    p.endedAt = Date.now();
+    p.settle();
+    /* A part closed by a rotation, whole: send it now, while the reader is
+       still talking. The tail is `stop()`'s to hand over. */
+    if (p !== current && !cancelled && !dead && p.bytes > 0) {
+      events.onPart?.(fileOf(p), parts.indexOf(p));
+    }
+  };
+
+  /**
+   * Build and start one recorder on the container at `at`, making it
+   * `current`. Null if it would not construct or start.
+   */
+  const open = (): Part | null => {
+    const opts = attempts[at];
+    let rec: MediaRecorder;
+    try {
+      rec = new MediaRecorder(new MediaStream([track]), opts ? { ...opts, mimeType: opts.type } : {});
+    } catch {
+      return null;
+    }
+    let settle = () => {};
+    const done = new Promise<void>((resolve) => {
+      settle = resolve;
+    });
+    // The clock starts with the recorder, so `ms` describes the file we have.
+    const p: Part = {
+      rec,
+      chunks: [],
+      bytes: 0,
+      startedAt: Date.now(),
+      endedAt: null,
+      state: "recording",
+      done,
+      settle,
+      file: null,
+    };
+    rec.ondataavailable = (e) => onData(p, e.data);
+    rec.onstop = () => onStop(p);
+    rec.onerror = () => onError(p);
+    /* Current *before* `start`, so a chunk delivered from inside `start` is
+       judged as the live part's, and put back if it will not start. */
+    const previous = current;
+    current = p;
+    try {
+      rec.start(TIMESLICE_MS);
+    } catch {
+      current = previous;
+      return null;
+    }
+    return p;
+  };
+
+  /**
+   * **New recorder first, then stop the old one**, so the only gap is what the
+   * old recorder's last packet drops. If the new one will not start, the old one
+   * carries on and the next chunk tries again; {@link MAX_BYTES} is the backstop.
+   */
+  const rotate = (old: Part) => {
+    const next = open();
+    if (!next) return;
+    parts.push(next);
+    old.state = "closing";
+    halt(old);
+    /* Bounded, like `stop()`'s wait: a part whose recorder never says it has
+       finished is not a complete file. */
+    timers.push(
+      window.setTimeout(() => {
+        if (old.state === "closing") fail(old);
+      }, FLUSH_TIMEOUT_MS),
+    );
   };
 
   while (at < attempts.length) {
-    if (begin()) break;
+    const first = open();
+    if (first) {
+      parts.push(first);
+      break;
+    }
     at += 1;
   }
-  if (!rec) return null;
+  if (parts.length === 0) return null;
 
-  const cap = window.setTimeout(() => {
+  ceiling = window.setTimeout(() => {
     capped = true;
-    halted();
-    onCapped?.();
+    for (const q of parts) halt(q);
+    events.onCapped?.();
   }, MAX_MS);
 
-  const halt = async () => {
-    window.clearTimeout(cap);
-    halted();
-    /* Bounded. The caller stops the track the moment this resolves, and a
-       recorder that never fires `stop` must not be able to leave the browser's
-       recording indicator lit on a page nobody is dictating into.
-       **But which of the two won matters.** If the timeout did, the recorder
-       never finished and the chunks in hand are missing their last piece —
-       offering them would be handing the reader a partial file described as
-       what we captured. So the wait reports its winner and a timed-out flush
-       yields nothing. GPT Sol's code review, item 3. */
-    const ok = await Promise.race([
-      done.then(() => true),
-      new Promise<boolean>((resolve) => window.setTimeout(() => resolve(false), FLUSH_TIMEOUT_MS)),
-    ]);
-    if (!ok) timedOut = true;
+  const stopAll = () => {
+    window.clearTimeout(ceiling);
+    for (const t of timers) window.clearTimeout(t);
+    for (const q of parts) {
+      if (q.state === "recording") q.state = "closing";
+      halt(q);
+    }
+  };
+
+  /** What the settled parts amount to. See {@link TapeEnding}. */
+  const collect = (): TapeEnding | null => {
+    const broken = parts.some((q) => q.state === "failed");
+    const kept: MicRecording[] = [];
+    for (const q of parts) {
+      // The complete parts *before* the first failure, in order.
+      if (q.state !== "closed") break;
+      /* A tail with nothing in it is absent — not evidence of silence, and the
+         parts before it stand. */
+      if (q.bytes > 0) kept.push(fileOf(q));
+    }
+    const tail = kept.at(-1);
+    if (!tail) return null;
+    /* The whole dictation, first part's start to last part's end — never a part
+       on its own, or a one-second tail after a rotation would go. */
+    const total = (parts.at(-1)?.endedAt ?? Date.now()) - (parts[0]?.startedAt ?? Date.now());
+    if (broken) return { parts: kept, broken };
+    if (total < MIN_MS) return null;
+    if (capped) kept[kept.length - 1] = { ...tail, capped: true };
+    return { parts: kept, broken };
   };
 
   return {
     async stop() {
-      await halt();
-      if (cancelled || errored || timedOut) return null;
-      const mimeType = rec?.mimeType || attempts[at]?.type || "audio/webm";
-      const blob = new Blob(chunks, { type: mimeType });
-      // Dropped either way: the Blob owns the data now, and holding the chunks
-      // as well would double the memory for as long as the page is open.
-      chunks.length = 0;
-      const ms = (endedAt ?? Date.now()) - startedAt;
-      /* Empty, or too short to contain anything. Neither is evidence, and
-         neither may be handed to a reader as if it were. */
-      if (blob.size === 0 || ms < MIN_MS) return null;
-      return { blob, mimeType, ext: extFor(mimeType), ms, capped };
+      stopping = true;
+      stopAll();
+      /* Bounded. The caller stops the track the moment this resolves, and a
+         recorder that never fires `stop` must not be able to leave the
+         browser's recording indicator lit on a page nobody is dictating into.
+         **But a part that never finished is not a file**, so it counts as
+         failed rather than being offered as what we captured. GPT Sol's code
+         review, 2026-08-27, item 3. */
+      await Promise.race([
+        Promise.all(parts.map((q) => q.done)),
+        new Promise<void>((resolve) => window.setTimeout(resolve, FLUSH_TIMEOUT_MS)),
+      ]);
+      for (const q of parts) {
+        if (q.state === "closing" || q.state === "recording") fail(q);
+      }
+      if (cancelled) return null;
+      const ending = collect();
+      for (const q of parts) q.chunks.length = 0;
+      return ending;
     },
     cancel() {
       cancelled = true;
-      chunks.length = 0;
-      void halt();
+      stopAll();
+      for (const q of parts) q.chunks.length = 0;
     },
   };
 }

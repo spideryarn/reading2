@@ -4099,26 +4099,18 @@ export const ALWAYS_SHARED = [
 ] as const;
 
 /**
- * **The two artefacts that cross but have no mode of their own**, and they are
- * two rather than one.
+ * **The artefact that crosses but has no mode of its own.**
  *
- * `SHARED_TWEETS` was alone here until GPT Sol pointed out, 2026-09-02, that the
- * arc is in exactly the same position and was quietly missing: `available.arc`
- * was computed, sent, and never read, so an article with no arc listed nothing
- * under *not built yet* and an owner could not tell whether one existed. The
- * comment beside the tweets line claimed it was "the one artefact with no mode
- * of its own", which was the mistake stated out loud and still not noticed.
+ * There were two until 2026-09-29. `SHARED_TWEETS` was here first, and GPT Sol
+ * pointed out on 2026-09-02 that the arc was in the same position and quietly
+ * missing: `available.arc` was computed, sent, and never read. Then the thread
+ * stopped being a page and became a mode, so the sweep over `MODES` lists it
+ * through `OWNER_MODE_NOTE.tweets`, and `SHARED_TWEETS` went — two rows for one
+ * artefact is what the sweep exists to prevent.
  *
- * The thread is a page beside the article (`VIEW_LABEL`, src/title-text.ts); the
- * arc is the extra rung Outline draws when there is one, so Outline is shared
- * either way and the arc is a separate row rather than a condition on it.
+ * The arc is the extra rung Outline draws when there is one, so Outline is
+ * shared either way and the arc is a separate row rather than a condition on it.
  */
-export const SHARED_TWEETS = {
-  key: "tweets",
-  label: "Tweets",
-  detail: "The article rewritten as a numbered thread.",
-};
-
 export const SHARED_ARC = {
   key: "arc",
   label: "The arc",
@@ -4262,6 +4254,9 @@ export const OWNER_MODE_NOTE: Record<Mode, string> = {
      line are the model's reading (src/trajectory.ts). */
   trajectory:
     "A route through this piece's quotes, in the order the model thought best for you, walked a little deeper each time round.",
+  /* `SHARED_TWEETS.detail`'s sentence until 2026-09-29, when the thread became a
+     mode and the sweep over `MODES` started listing it. */
+  tweets: "The article rewritten as a numbered thread, each post linked to where it came from.",
 };
 
 /* ---------------------------------------------------------------- timeline --
@@ -5085,3 +5080,47 @@ export const CITATION_FIND_RESTING: ReaderFacingFailure = {
     "same answer. Try again tomorrow — the Scholar " +
     "search is still there. [cite-resting]",
 };
+
+/* ------------------------------------------ citations: reading the paper --
+   src/paper-text.ts § `readPaperText` — fetching a cited work so its text can
+   be checked against what the article says it says (plan 260929g). Not a
+   failure of ours in any of these cases: the paper was not there to read, and
+   each sentence says which way. The union lives here rather than beside the
+   fetch because this file must stay a leaf (tests/client-imports.test.ts). */
+
+/** Why a cited work's text could not be read. A closed set; each has a sentence below. */
+export type PaperUnreadableReason =
+  | "invalid-url"
+  | "blocked"
+  | "refused"
+  | "not-found"
+  | "site-error"
+  | "network"
+  | "timeout"
+  | "too-large"
+  | "not-a-document"
+  | "paywall-or-empty"
+  | "scan"
+  | "damaged";
+
+const PAPER_UNREADABLE: Record<PaperUnreadableReason, string> = {
+  "invalid-url": "We could not get the paper because the link to it is not a web address we can open.",
+  blocked: "We could not get the paper because its link points somewhere private, which we never fetch.",
+  refused:
+    "We could not get the paper because the site would not let us read it — publishers often turn away automated readers.",
+  "not-found": "We could not get the paper because there is nothing at that address any more.",
+  "site-error": "We could not get the paper because the site answered with an error.",
+  network: "We could not get the paper because we could not reach the site.",
+  timeout: "We could not get the paper because the site took too long to answer.",
+  "too-large": "We could not get the paper because it is too long for us to read in one go.",
+  "not-a-document": "We could not get the paper because the link leads to a file that is not a web page or a PDF.",
+  "paywall-or-empty":
+    "We could not get the paper because the page had no text of the paper on it — it may be behind a paywall or a login.",
+  scan: "We could not get the paper because it is a scanned image with no text we can read.",
+  damaged: "We could not get the paper because the PDF would not open — it may be locked or damaged.",
+};
+
+/** The reader's sentence for a paper that could not be read. */
+export function paperUnreadableSentence(why: PaperUnreadableReason): string {
+  return PAPER_UNREADABLE[why];
+}

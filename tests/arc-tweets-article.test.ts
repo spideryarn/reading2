@@ -37,7 +37,7 @@ import path from "node:path";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { Article } from "../src/article-input.js";
-import { articleFingerprint } from "../src/source-hash.js";
+import { articleFingerprint, articleWithIdsFingerprint } from "../src/source-hash.js";
 import type { Block, Meta, Tree } from "../src/types.js";
 
 /** Every request the stage under test made, flattened to text. */
@@ -228,7 +228,7 @@ describe("generateTweets", () => {
 
     const run = await generateTweets({ article: withMeta });
 
-    expect(run.thread.sourceHash).toBe(articleFingerprint(BLOCKS, TREE, META));
+    expect(run.thread.sourceHash).toBe(articleWithIdsFingerprint(BLOCKS, TREE, META));
     expect(sent.join("\n")).toContain(TITLE);
     expect(Object.keys(run)).not.toContain("outFile");
   });
@@ -243,8 +243,8 @@ describe("generateTweets", () => {
 
     const bare = await generateTweets({ article: withoutMeta });
 
-    expect(bare.thread.sourceHash).toBe(articleFingerprint(BLOCKS, TREE, null));
-    expect(bare.thread.sourceHash).not.toBe(articleFingerprint(BLOCKS, TREE, META));
+    expect(bare.thread.sourceHash).toBe(articleWithIdsFingerprint(BLOCKS, TREE, null));
+    expect(bare.thread.sourceHash).not.toBe(articleWithIdsFingerprint(BLOCKS, TREE, META));
     expect(sent.join("\n")).not.toContain(TITLE);
     /* The thread's prompt says so in words as well: with no byline it must tell
        the model to write "the author" rather than invent a name. src/tweets.ts. */

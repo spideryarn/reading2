@@ -227,11 +227,31 @@ export const MODE_IDEAL = 400; // 25rem
 export const MODE_MIN = 288; // 18rem — narrower and an answer stops reading as prose
 
 /**
+ * **The widest a `"wide"` band goes: a prose column's measure.** Tweets' posts
+ * are set in the prose face, so the width at which prose reads well is the width
+ * at which they do. Greg, 2026-09-29: *"It could be quite a wide left-hand
+ * column if that will help to make it be readable."*
+ * docs/plans/260929f-tweets-become-a-mode-with-a-wide-band-and-block-links.md.
+ */
+export const WIDE_IDEAL_REM = 34;
+
+/**
+ * `WIDE_IDEAL_REM` in pixels at this root. In rem, like Structure's columns,
+ * because the posts are rem-sized type: a reader with a larger root font gets a
+ * proportionally wider band rather than fewer words a line. GPT Sol, plan
+ * review, 2026-09-29.
+ */
+export function wideIdeal(rootFontPx: number): number {
+  return Math.round(WIDE_IDEAL_REM * rootFontPx);
+}
+
+/**
  * **Which band a mode gets.** Every mode's band is `MODE_MIN`–`MODE_IDEAL` wide,
  * except Structure's while its two columns are on screen — see
- * `structureColumnsBand`.
+ * `structureColumnsBand` — and a `"wide"` one, which grows to `wideIdeal`
+ * instead, by the same rule: only into room the prose was not defending.
  */
-export type BandShape = "standard" | "structure";
+export type BandShape = "standard" | "structure" | "wide";
 
 /**
  * **Structure's two columns, as widths.** Calculated from rem, because the
@@ -617,6 +637,11 @@ function bandWidth(avail: number, bandShape: BandShape, rootFontPx: number): num
   if (bandShape === "structure") {
     const { min, ideal } = structureColumnsBand(rootFontPx);
     if (avail - PROSE_MIN >= min) return Math.min(avail - PROSE_MIN, ideal);
+  }
+  /* Grows smoothly rather than jumping: the posts reflow at any width, unlike
+     Structure's two columns. */
+  if (bandShape === "wide") {
+    return clamp(avail - PROSE_MIN, MODE_MIN, Math.max(MODE_IDEAL, wideIdeal(rootFontPx)));
   }
   return clamp(avail - PROSE_MIN, MODE_MIN, MODE_IDEAL);
 }

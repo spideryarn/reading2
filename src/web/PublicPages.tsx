@@ -1,5 +1,6 @@
 /**
- * **The two article pages a visitor gets instead of the owner's.**
+ * **The article page a visitor gets instead of the owner's** — two until the
+ * thread became a mode on 2026-09-29 and got a visitor band instead.
  *
  * `Metadata` and `Tweets` are not reachable from `VisitorArticle`, and that is
  * the seam rather than an omission. Between them they mount the profile boxes,
@@ -18,7 +19,7 @@
 import { ExternalLink } from "lucide-react";
 
 import type { Article } from "../types.js";
-import type { PublicArtefacts, PublicTweets } from "../public-types.js";
+import type { PublicArtefacts } from "../public-types.js";
 import { SHARED_LINK_CARRIES, TAKEDOWN_LINK } from "../messages.js";
 import { Dock } from "./Dock.js";
 import { BackLink } from "./BackLink.js";
@@ -27,9 +28,8 @@ import { carriedSearch, readHref, TAKEDOWN_HREF, type ArticleView } from "./rout
 import { webSource } from "./SourceLink.js";
 import { articleStats } from "./stats.js";
 import { pageTitle, useDocumentTitle } from "./page-title.js";
-import { SharedNotice, VisitorNotice } from "./PublicChrome.js";
-import { markedModes, notBuiltGap, NOUN, type VisitorGap } from "./visitor.js";
-import { ThreadCounts, ThreadPosts } from "./Tweets.js";
+import { SharedNotice } from "./PublicChrome.js";
+import { markedModes, NOUN } from "./visitor.js";
 import { useExperimental } from "./useExperimental.js";
 
 /**
@@ -231,167 +231,6 @@ function Artefact({ name, has }: { name: string; has: boolean }) {
         {has ? "✓" : "—"} {name}
       </span>
     </li>
-  );
-}
-
-/**
- * A page that exists for the owner and is not carried on a shared link.
- *
- * Today that is the tweet thread, whose public endpoint is slice 1b. Written as
- * one component taking a `gap` rather than as a tweets page, because the
- * *shape* of this — a title, the sentence, the ask — is the same for whatever
- * lands here next.
- */
-export function VisitorPage({
-  slug,
-  article,
-  view,
-  gap,
-  available,
-  signedIn,
-  sessionUnconfirmed,
-}: {
-  slug: string;
-  article: Article;
-  /* Never the reading view: this page exists *instead of* an article the link
-     does not carry. Narrower than `ArticleView` on purpose — the wide type let
-     it be built for the reading view, which would have put a mode-less tab on a
-     mode-bearing page. */
-  view: Exclude<ArticleView, "article">;
-  gap: VisitorGap;
-  /**
-   * Which artefacts this piece has, for the bar's marked modes.
-   *
-   * It was hardcoded `null` here until slice 1b — the "we could not check"
-   * answer, on a page that had the article in hand — so every dimmed button on
-   * this page said *we could not check* about an article we knew everything
-   * about. There is no `null` to pass now.
-   */
-  available: PublicArtefacts;
-  /** For the call to action only — reader-capability.ts § signedIn. */
-  signedIn: boolean;
-  /** For the notice at the foot — reader-capability.ts § sessionUnconfirmed. */
-  sessionUnconfirmed: boolean;
-}) {
-  useDocumentTitle(pageTitle({ kind: "read", title: article.meta.title, view }));
-  return (
-    <>
-      <main className={`tw:mx-auto tw:max-w-2xl tw:px-6 ${TOP_CLEARANCE} tw:font-sans ${DOCK_CLEARANCE}`}>
-        <BackToArticle slug={slug} />
-        <h1 className="tw:m-0 tw:mb-4 tw:font-prose tw:text-2xl tw:leading-snug tw:text-foreground">
-          {article.meta.title}
-        </h1>
-        <VisitorNotice gap={gap} signedIn={signedIn} />
-        {/* **The read-only chrome, which this page went without until
-            2026-09-02** — and it was the only one of the four visitor pages
-            missing it (`PublicMetadataPage` above, and the thread arm below).
-            A comment here called that deliberate, on the grounds that
-            `VisitorNotice` is about the artefact rather than about the page.
-            Both of those are true and the conclusion did not follow: a reader
-            whose session could not be confirmed lost the fact *and* the
-            *Continue signed out* button by clicking Tweets on a piece that has
-            no thread — the default state of most articles. `VisitorArticle`
-            states the opposite guarantee in as many words (App.tsx §
-            `sessionUnconfirmed`: the explanation goes to all three views
-            precisely because the other two are one click away), so the comment
-            was claiming a gap was a decision. GPT Sol, reviewing stage 1b.
-
-            **Below the sentence above it, not beside the title**, which is where
-            the metadata page puts it. Two reasons, and the second is the one
-            that decided it. The thread arm below puts it at the foot too, so the
-            two halves of `/read/:slug/tweets` differ by whether there is a
-            thread rather than by where the chrome sits. And stacked the other
-            way — *we couldn't confirm you're signed in* directly above *nobody
-            has built a tweet thread* — the page invites the reader to read the
-            second as a consequence of the first, which is the one thing it must
-            not say. `SharedNotice`'s own ordering rule, one level up: the thing
-            the reader came for first, the news about their session second. */}
-        <div className="tw:mt-8 tw:border-t tw:border-border tw:pt-4">
-          <SharedNotice signedIn={signedIn} sessionUnconfirmed={sessionUnconfirmed} />
-        </div>
-      </main>
-      <VisitorDock slug={slug} view={view} available={available} />
-    </>
-  );
-}
-
-/**
- * **The tweet thread, for somebody who does not own the article** — and since
- * slice 1b it is the real thread rather than a notice about one.
- *
- * `Tweets` is not reachable from here and that is the seam rather than an
- * omission: it fetches `GET /api/tweets/:slug` and mounts `useJobs`, which
- * polls the private job list for ever. What a visitor gets instead is the two
- * presentational halves of that page — `ThreadCounts` and `ThreadPosts`, the
- * same components the owner's page draws — with the thread that arrived inside
- * `GET /api/public/article/:slug`. src/web/Tweets.tsx.
- *
- * **The branch is on the artefact itself, not on a flag beside it.** `thread`
- * being absent *is* what `available.tweets` was computed from
- * (src/web/public-artefacts.ts), so branching on the key is what keeps *there
- * is no thread* and *we say there is no thread* the same fact. The constant this
- * replaces claimed a thread existed whatever the wire said — GPT Sol,
- * 2026-08-28 — and the sentence still comes from the one table every other gap
- * uses.
- */
-export function VisitorTweetsPage({
-  slug,
-  article,
-  thread,
-  available,
-  signedIn,
-  sessionUnconfirmed,
-}: {
-  slug: string;
-  article: Article;
-  /** Absent when nobody has written one for this piece. */
-  thread: PublicTweets | undefined;
-  available: PublicArtefacts;
-  signedIn: boolean;
-  /**
-   * For the notice at the foot of the page — reader-capability.ts §
-   * sessionUnconfirmed. **Both arms take it**: the no-thread one draws
-   * `VisitorNotice` about the artefact *and* this about the page, for the reason
-   * written where it lands in `VisitorPage`.
-   */
-  sessionUnconfirmed: boolean;
-}) {
-  useDocumentTitle(pageTitle({ kind: "read", title: article.meta.title, view: "tweets" }));
-
-  if (thread === undefined) {
-    return (
-      <VisitorPage
-        slug={slug}
-        article={article}
-        view="tweets"
-        gap={notBuiltGap("tweets")}
-        available={available}
-        signedIn={signedIn}
-        sessionUnconfirmed={sessionUnconfirmed}
-      />
-    );
-  }
-
-  return (
-    <>
-      <main className={`tw:mx-auto tw:max-w-2xl tw:px-6 ${TOP_CLEARANCE} tw:font-sans ${DOCK_CLEARANCE}`}>
-        <BackToArticle slug={slug} />
-        <h1 className="tw:m-0 tw:font-prose tw:text-2xl tw:leading-snug tw:text-foreground">
-          {article.meta.title}
-        </h1>
-        {/* No `children`: the owner's provenance label reads `profileHash`,
-            which never leaves the server. src/public-types.ts. */}
-        <ThreadCounts thread={thread} article={article} />
-        <ThreadPosts thread={thread} />
-        {/* No provenance footer and no rewrite button: both are the owner's, and
-            one of them spends a model call. What a visitor gets instead is the
-            notice card, which says what a shared link is and what it carries. */}
-        <div className="tw:mt-8 tw:border-t tw:border-border tw:pt-4">
-          <SharedNotice signedIn={signedIn} sessionUnconfirmed={sessionUnconfirmed} />
-        </div>
-      </main>
-      <VisitorDock slug={slug} view="tweets" available={available} />
-    </>
   );
 }
 

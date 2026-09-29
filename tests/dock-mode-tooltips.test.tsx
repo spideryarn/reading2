@@ -408,18 +408,20 @@ describe("a mode a visitor cannot have", () => {
   });
 });
 
-/* ------------------------------------- and the three that are not modes ---- */
+/* --------------------------------------- and the two that are not modes ---- */
 
 /**
- * **Comments, Tweets and Metadata**, which sit in the same bar and were the last
- * three buttons in it wearing a `title` attribute — the OS box, which waits a
+ * **Comments and Metadata**, which sit in the same bar and were among the last
+ * buttons in it wearing a `title` attribute — the OS box, which waits a
  * second, cannot be styled, and does not exist on a touch device at all.
  *
- * A closed set of three, written out rather than derived, because unlike
- * `MODES` there is no table to walk and no fourth arriving. If one does, this
- * list is where it is noticed.
+ * A closed set, written out rather than derived, because unlike `MODES` there
+ * is no table to walk. It was three until 2026-09-29, when Tweets stopped
+ * being a page and became a mode (plan 260929f); its card is a mode card now,
+ * and the sweeps over `MODES` above hold it. If another arrives, this list is
+ * where it is noticed.
  *
- * Two of them are one button each. **Comments is two** — a `DockTab` opening
+ * Metadata is one button. **Comments is two** — a `DockTab` opening
  * the drawer on the reading view, a `DockLink` back to it everywhere else — and
  * that pair is what matters most here: the drawer's visitor notice was retired
  * on 2026-09-04 and this button went on saying half of it, because nothing
@@ -427,7 +429,7 @@ describe("a mode a visitor cannot have", () => {
  * read it back through the rendered card rather than by importing it, so what
  * is asserted is what a reader is shown.
  */
-const NOT_MODES = ["Comments", "Tweets", "Metadata"] as const;
+const NOT_MODES = ["Comments", "Metadata"] as const;
 
 /** The bar's button with this accessible name, in whichever arm is rendered. */
 function barControl(label: string): HTMLElement {
@@ -472,7 +474,8 @@ describe("the three buttons in the bar that are not modes", () => {
   /**
    * The check that makes the card worth its 300ms. It catches a copy and not a
    * paraphrase — `restates` above says why that is still worth having — and
-   * this is where the temptation is strongest: all three of these had a single
+   * this is where the temptation is strongest: all three of these (Tweets then
+   * among them) had a single
    * sentence for a fortnight, and the cheapest way to grow a second paragraph
    * is to say the first one again.
    */
@@ -490,11 +493,12 @@ describe("the three buttons in the bar that are not modes", () => {
    * The same product decision the modes are under: the command bar marks a
    * generating row with the word `generates` and no number, so a `$` here would
    * be that decision reversed by accident. Tweets is the one that would attract
-   * a price, being the only button of the three that can start a paid run.
+   * a price, being the only one of these that can start a paid run — so it is
+   * kept in this check after becoming a mode, beside the two that are not.
    */
   it("carry no currency-symbol figure", async () => {
     withDrawer();
-    for (const label of NOT_MODES) {
+    for (const label of [...NOT_MODES, "Tweets"]) {
       const { paras } = await cardFor(barControl(label));
       expect(paras.join(" "), `${label} names a price`).not.toMatch(/[$£€]\s*\d/);
     }
@@ -509,7 +513,7 @@ describe("the three buttons in the bar that are not modes", () => {
   });
 
   /**
-   * **The arm that drifts.** Off the reading view all three are `DockLink`s, and
+   * **The arm that drifts.** Off the reading view both are `DockLink`s, and
    * Comments changes shape entirely: there is no drawer to open, so the button
    * goes back to the article with it already open. The card has to say so —
    * exactly as the loose mode links say *back in the article itself* — and

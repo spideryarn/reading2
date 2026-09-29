@@ -11,7 +11,7 @@ One line each: the date the report arrived, its Sentry short id, one sentence of
 proposed, and a link to the plan doc. When Greg answers, the work either happens or doesn't, the note
 in this directory records which, and the line comes off.
 
-<!-- Nothing awaiting approval. -->
+- 2026-09-29 · SPIDERYARN-READING2-5J · Let readers pay for their own model calls (a ChatGPT plan is not open to paid hosted apps yet; connecting an OpenRouter account is) — first decision is whether Greg sends OpenAI's interest form · [260929g](../plans/260929g-bring-your-own-ai-subscription.md)
 
 ## Decisions resting with Greg from reports that DID ship
 
@@ -46,7 +46,9 @@ paragraph is the part still worth acting on.
 > human happened to be looking. If reader-facing copy is ever to be gated on a person, the gate has
 > to live somewhere the deploy path executes.
 
-<!-- Nothing resting with Greg: report 44 was answered on 2026-09-28. -->
+| report | the decision left | where it is set out |
+|---|---|---|
+| [5C](https://greg-detre.sentry.io/issues/SPIDERYARN-READING2-5C) — navigation uses icons with tooltips, not text labels | Whether [design-css-overview.md](../project/design-css-overview.md) should carry a one-line pointer to the new rule. The rule itself is already written, in [icons.md § Navigation](../project/icons.md#navigation-an-icon-with-a-tooltip-not-a-text-label). design-css-overview.md is a rule doc, so the session didn't edit it; it put a before/after in its debrief instead. That debrief can't be found now, so whoever takes this up has to draft the line again | [note](260929_1436-trajectory-icons-question-first-sparkline-where-am-i.md) · [plan 260929f § 4](../plans/260929f-trajectory-snippets-in-place-sparkline-and-where-card.md) |
 
 **Six rows came off this table on 2026-09-17**, because Greg had already answered them on 2026-09-11
 and they were still sitting here as though he had not: the dictation privacy wording, the Socratic

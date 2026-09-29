@@ -23,7 +23,7 @@ disk but is shaped like rows**, so the day it becomes Postgres is a change to on
 | `/` | the library — [`src/web/Library.tsx`](../../src/web/Library.tsx) |
 | `/read/<slug>` | the reading view — [web-client.md](web-client.md) |
 | `/read/<slug>/metadata` | everything we know about the article — [260825e-metadata-page.md](../plans/260825e-metadata-page.md) |
-| `/read/<slug>/tweets` | the article as a numbered thread — [260825g-tweet-thread-page.md](../plans/260825g-tweet-thread-page.md) |
+| `/read/<slug>/tweets` | redirects to `?mode=tweets`, the thread as a mode since 2026-09-29 — [260929f](../plans/260929f-tweets-become-a-mode-with-a-wide-band-and-block-links.md); the page it was, [260825g](../plans/260825g-tweet-thread-page.md) |
 | `/add/<a whole URL>` | queue that article and watch it — [ingest-queue.md § The add page](ingest-queue.md#the-add-page) |
 | `/design` | every token, face and component variant on one page — [design-css-overview.md](design-css-overview.md) |
 
@@ -64,7 +64,7 @@ active. `EnqueueTicket` in [`src/store/jobs.ts`](../../src/store/jobs.ts) has bo
 flight* holds the article row open so each race happens on purpose rather than by luck.
 
 **This said "the two routes" until 2026-08-25.** The last two arrived together, and they are one
-route with three views rather than three routes: same article, same fetch, same bottom bar, so
+route with two views rather than two routes (three until 2026-09-29, when the tweets page became `?mode=tweets`): same article, same fetch, same bottom bar, so
 `Route` carries a `view` and `ArticlePage` branches on it
 ([`article/ArticlePage.tsx`](../../src/web/article/ArticlePage.tsx)). The article payload is fetched
 above that branch, so stepping
@@ -82,7 +82,7 @@ So `/read/noema-mythology-of-conscious-ai?cols=1,2&at=spya-tgnssb` is one link t
 [`main.tsx`](../../src/web/main.tsx), which also sends the two superseded spellings of the article's
 details, `?about=1` and `?panel=about`, to `/read/<slug>/metadata`.
 
-The query string travels between the three views, so leaving the article to look at its metadata and
+The query string travels between the views, so leaving the article to look at its metadata and
 coming back returns you to the paragraph you left. `?panel=` is the exception — it names a drawer,
 and a drawer left open across a navigation is not a place you were. That rule is `carriedSearch` in
 [`router.ts`](../../src/web/router.ts), and it is one function so that nothing else has to remember

@@ -1,444 +1,192 @@
 /**
- * The article as a numbered thread, at `/read/<slug>/tweets`.
+ * **The article as a numbered thread, in the band beside it.**
  *
- * > The Tweet Thread view (which also needs its own `/read/[slug]/tweets/` url)
+ * A page of its own at `/read/<slug>/tweets` from 2026-08-25 until 2026-09-29,
+ * when Greg asked for it as an ordinary mode:
+ *
+ * > instead of it having its own page, it's just going to be a normal mode with
+ * > a left-hand column. It could be quite a wide left-hand column if that will
+ * > help to make it be readable. And let's also add block links for each tweet
+ * > item to relevant place in the text for that tweet item, so that if I'm
+ * > reading the tweet item, I can see where in the text it came from.
  * >
- * > — Greg, 2026-08-25
+ * > — Greg, 2026-09-29 (SPIDERYARN-READING2-5A)
  *
- * The write half is src/tweets.ts, the read half is `GET /api/tweets/:slug`,
- * and the whole argument for the feature existing at all — including the two
- * vision.md anti-goals it sits next to, and what this page has to do about them
- * — is docs/plans/260825g-tweet-thread-page.md. Read that before changing what is on
- * screen here; several of the things this page does *not* do were decided
- * rather than skipped.
+ * So the thread sits in a wide band (`BandShape` `"wide"`, src/web/layout.ts)
+ * beside the prose, and each post links to the passages it was drawn from —
+ * the one block link, `BlockRef`, which jumps and flashes the paragraph. The
+ * old address redirects to `?mode=tweets` (router.ts § `liftLegacyTweets`).
+ * docs/plans/260929f-tweets-become-a-mode-with-a-wide-band-and-block-links.md.
  *
- * ## What this page refuses to look like
+ * The write half is src/tweets.ts, the read half `GET /api/tweets/:slug`, and
+ * the argument for the feature existing at all — including the two vision.md
+ * anti-goals it sits next to — is docs/plans/260825g-tweet-thread-page.md.
+ * Read that before changing what is on screen here; several things this does
+ * *not* do were decided rather than skipped.
+ *
+ * ## What this refuses to look like
  *
  * No avatars, no handles, no timestamps, no like counts, no gradient header, no
- * emoji pills, no threading line between cards. The version this was borrowed
- * from had all of them, and a mocked-up timeline invites you to read a thread
- * as something a person posted. This is a numbered list of short paragraphs and
- * it should look like one — dark, quiet, typographic
- * (docs/project/design-css-overview.md).
+ * emoji pills, no threading line between posts. A mocked-up timeline invites
+ * you to read a thread as something a person posted. This is a numbered list
+ * of short paragraphs and it should look like one — since 2026-09-29 without a
+ * box round each post either, a hairline between them instead, so fifteen
+ * posts read as one list rather than fifteen cards.
  *
  * ## The three things that are load-bearing
  *
  *  - **The number is `index + 1`, at the point of display.** Nothing stores a
- *    post number, on purpose (src/types.ts § Tweet), because two copies of one
- *    fact can only ever disagree.
- *  - **The count is against `thread.limit`, not against 280.** The artefact
- *    carries the limit it was counted against, so a thread written under an
- *    older limit still reports itself honestly. Only an actual violation is
- *    flagged: a 190-character post is not a warning about anything, and a page
- *    that cries wolf at 190 teaches you to ignore the flag at 281.
+ *    post number, on purpose (src/types.ts § Tweet).
+ *  - **The count is against `thread.limit`, not against 280**, and only an
+ *    actual violation is flagged: a page that cries wolf at 190 teaches you to
+ *    ignore the flag at 281.
  *  - **`stale` is said out loud.** The thread describes the blocks it was
- *    written from, and those can move underneath it. Their version could not
- *    answer this question at all.
+ *    written from, and those can move underneath it.
  *
- * ## What was borrowed back from theirs, 2026-08-25
+ * ## Borrowed back from the original, 2026-08-25
  *
- * A second pass over `components/tweet-thread-view.tsx` in the original repo,
- * looking for what this page had left behind. Three things came across, none of
- * them the gradients:
+ * The thread's own numbers in a line of prose rather than pills, and a copy
+ * button a screen reader can follow. Deliberately left there: the thread
+ * summary, the green→amber→red character bar, the threading line, the hover
+ * transforms, and "Post to Bluesky", which was a styled button wired to
+ * `alert()`.
  *
- *  - **A thread can be rewritten from Metadata.** Theirs had a "Reset" button
- *    at all times; ours eventually put a two-click rewrite at the foot, then
- *    moved that standing action into Metadata's one *Re-run AI processing*
- *    section on 2026-09-29. The stale banner keeps its repair button.
- *  - **The thread's own numbers.** Theirs put the post count, the characters in
- *    the thread and the characters in the document in a row of pills. The three
- *    facts were the good part; the pills were not. Ours says them in a line of
- *    prose, and adds the elapsed time, which the artefact has stored since the
- *    first run and nothing has ever shown.
- *  - **A copy button a screen reader can follow.** Theirs changed its
- *    `aria-label` with its state. Ours changed only its visible text, inside a
- *    button whose accessible name came from `title` — so the announcement never
- *    moved off "Copy".
- *
- * Deliberately left there: the thread summary (cut on purpose, see the plan's
- * as-built §6), the green→amber→red character bar (it cries wolf at 190), the
- * threading line between cards, the hover scale transforms, and "Post to
- * Bluesky", which was a fully styled button wired to `alert()`.
- *
- * Tailwind utilities rather than a block in styles.css, exactly as Metadata.tsx
- * does it: this page is chrome, and chrome is what Tailwind is here for
- * (docs/project/web-client.md#tailwind-and-shadcn-components). Every class needs
- * the `tw:` prefix — unprefixed names silently do nothing.
+ * Tailwind utilities, prefixed `tw:` — unprefixed names silently do nothing.
  */
-import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
-import { Check, Copy, PenLine, TriangleAlert } from "lucide-react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { Check, Copy, PenLine, RotateCw, TriangleAlert } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { THREAD_RECHECK_FAILED } from "../messages.js";
-import type { Article, Job, ThreadResponse, TweetThread } from "../types.js";
+import type { Article, BlockId, Job, TweetThread } from "../types.js";
 import type { PublicTweets } from "../public-types.js";
-import { Dock } from "./Dock.js";
-import { BackLink } from "./BackLink.js";
-import { recordLog } from "./log-buffer.js";
-import { pageTitle, useDocumentTitle } from "./page-title.js";
+import { BlockRef } from "./BlockRef.js";
+import { JobProgress } from "./JobProgress.js";
+import { ModeSurface } from "./ModeSurface.js";
+import { useRenderCount } from "./perf.js";
 import { carriedSearch, readHref } from "./router.js";
 import { articleStats } from "./stats.js";
-import { useOrderedRead } from "./useOrderedRead.js";
-import { type StepFailure, useStepJob } from "./useStepJob.js";
-import { useAutoRunOnArrival } from "./useAutoRun.js";
-import { useSlow } from "./useSlow.js";
-import { apiFetch, readJson } from "./lib/api.js";
-import { JobProgress } from "./JobProgress.js";
+import type { UseTweets } from "./useTweets.js";
 import { WrittenForYou } from "./WrittenForYou.js";
-import { useExperimental } from "./useExperimental.js";
 import { howLong } from "./relative-time.js";
-
-/** Clear of the fixed bottom bar, stated against `--dock-h`. See Metadata.tsx. */
-const DOCK_CLEARANCE = "tw:pb-[calc(var(--dock-space)_+_2rem)]";
 
 /** How long a copy button says it worked before going back to normal. */
 const COPIED_MS = 1600;
 
-type Loaded =
-  | { status: "loading" }
-  /** The article has no thread yet. A 404, and an ordinary one — most articles have none. */
-  | { status: "none" }
-  | { status: "ready"; thread: TweetThread; stale: boolean; profileChanged: boolean }
-  | { status: "error"; message: string };
+/**
+ * **Who is reading, and the thread they get — one prop, so the two cannot
+ * disagree.** The owner's arm is the whole `useTweets` read and job; the
+ * visitor's is the stored thread off the public payload and nothing else, so a
+ * visitor's panel has nothing to press that could ask the model.
+ * src/web/reader-capability.ts; `FaqAccess` is the sibling.
+ */
+export type TweetsAccess =
+  | { kind: "owner"; owner: UseTweets }
+  | { kind: "visitor"; thread: PublicTweets; owner?: never };
 
-export function Tweets({ slug, article }: { slug: string; article: Article }) {
-  const [loaded, setLoaded] = useState<Loaded>({ status: "loading" });
-  /**
-   * A read that failed **while something was already on screen**.
-   *
-   * Separate from `loaded`, because the union cannot hold both a thread and a
-   * failure and the reader needs both: what is on the page is still the best
-   * this app has, and the fact that we could not check for a newer version is
-   * worth a line rather than a silence. See the catch in `load`.
-   *
-   * **It holds a sentence from src/messages.ts, never the error.** It used to
-   * hold `(err as Error).message` and interpolate it into a line written here,
-   * which put *"Failed to fetch"* in front of somebody who came to read an
-   * article — docs/project/copy.md's first rule, and its rule about where these
-   * sentences live, both broken by one line. The raw message goes to the
-   * console instead. See `THREAD_RECHECK_FAILED`.
-   */
-  const [reloadError, setReloadError] = useState<string | null>(null);
-  const slow = useSlow(loaded.status === "loading");
+export function TweetsPanel({
+  access,
+  article,
+  slug,
+  onJump,
+}: {
+  access: TweetsAccess;
+  article: Article;
+  slug: string;
+  onJump(id: BlockId): void;
+}) {
+  useRenderCount("TweetsPanel");
+  const owner = access.kind === "owner" ? access.owner : null;
+  const thread: PublicTweets | null = owner ? owner.thread : access.kind === "visitor" ? access.thread : null;
+  const ready = thread !== null && (owner === null || owner.status === "ready");
 
-  /* **The bar is told which modes this reader sees; it does not go and get it.**
-     One shared store behind the hook, so this page and the reading view cannot
-     disagree for the length of a toggle. Dock.tsx § experimental. */
-  const experimental = useExperimental();
-
-  /* The tab: the article first, then which of its pages this is — and `Tweets`
-     rather than `Thread`, because that is what the button in the Dock says.
-     See src/web/page-title.ts. */
-  useDocumentTitle(pageTitle({ kind: "read", title: article.meta.title, view: "tweets" }));
-
-  /**
-   * Fetch the thread. Its own endpoint rather than a field on the article — see
-   * docs/plans/260825g-tweet-thread-page.md#as-built-where-this-plan-met-the-code: most
-   * articles have no thread, so carrying one on the article payload would make
-   * every reader of every article download a `null`.
-   */
-  const load = useCallback(async (current: () => boolean) => {
-    try {
-      const res = await apiFetch(`/api/tweets/${encodeURIComponent(slug)}`);
-      if (!current()) return;
-      if (res.status === 404) {
-        setLoaded({ status: "none" });
-        setReloadError(null);
-        return;
+  return (
+    <ModeSurface
+      label="Tweets"
+      feature="gloss tweets"
+      /* **A head only when there is a thread**: the counts and *Copy the
+         thread*, which is not the mode's name (new-mode.md § the band's
+         chrome). No thread, no row. */
+      head={
+        ready && thread ? (
+          <ThreadCounts thread={thread} article={article}>
+            {owner?.thread && (
+              <WrittenForYou
+                written={owner.thread.profileHash != null}
+                changed={owner.profileChanged}
+                slug={slug}
+                compact
+              />
+            )}
+          </ThreadCounts>
+        ) : null
       }
-      const { thread, stale, profileChanged } = await readJson<ThreadResponse>(res);
-      if (!current()) return;
-      setLoaded({ status: "ready", thread, stale, profileChanged });
-      setReloadError(null);
-    } catch (err) {
-      /* Nothing is said about a read this page has moved on from — not the
-         console line, not the log record, not the sentence. */
-      if (!current()) return;
-      const message = (err as Error).message;
-      /* **The raw message stops here.** lib/api.ts logs every failure it
-         *builds*, and the sentence it builds is safe to show — but the
-         commonest failure on this path is a `TypeError` out of `fetch` that it
-         never sees, and that one is the browser's own words. So it is written
-         to the console, once, and the reader is told something they can act on
-         instead. docs/project/logging.md describes the same split for the
-         server. */
-      console.error(`[tweets] could not read the thread for ${slug}`, err);
-      /* **This one reaches neither the global handler nor `AppBoundary`.** It is
-         caught here and turned into a sentence, which is right for the reader
-         and means nothing anywhere else knows it happened — so without this line
-         a thread that will not load is a bug report with an empty timeline
-         behind it. The name only; the message is what the console line above is
-         for. See src/web/log-buffer.ts. */
-      recordLog({
-        kind: "client-error",
-        source: "tweets",
-        name: err instanceof Error ? err.name : "Error",
-      });
-      /* **A failed reload must not take the thread away.** `load` is not only
-         the opening read — `onFinished` below calls it again when a job
-         finishes — and the posts render only in the `ready` branch, so
-         replacing the whole union with `{status:"error"}` left a reader who was
-         mid-thread with a message where the thread had been. Only the opening
-         read has nothing to fall back on; the rest keep what they have and say
-         so in `reloadError`. Same guard, same reason, as useGlossary.ts §
-         `fetchNow`.
-         `error` is in the condition as well as `loading`, so a page that is
-         already showing a failure shows the *current* one: a second read can
-         fail for a different reason than the first, and the recheck line below
-         is deliberately hidden in this branch rather than said twice. */
-      setLoaded((was) =>
-        was.status === "loading" || was.status === "error" ? { status: "error", message } : was,
-      );
-      setReloadError(THREAD_RECHECK_FAILED.message);
-    }
-  }, [slug]);
-
-  /* **The ordering is not this hook's**: an ordinary `reload` joins the read
-     already in flight, a post-job `refresh` trails it rather than racing it, and
-     only the newest reply may commit. src/web/useOrderedRead.ts, shared with the
-     seven other artefact readers — this one lost that race until 2026-09-02
-     (tests/artefact-read-race.test.tsx). */
-  const { reload, refresh } = useOrderedRead(load);
-
-  useEffect(() => {
-    void reload();
-  }, [reload]);
-
-  /**
-   * The queue, because writing a thread is half a minute of model time and this
-   * repo has one for exactly that (docs/project/ingest-queue.md).
-   *
-   * **All of it is in the hook now** — src/web/useStepJob.ts. The job memo, the
-   * two-clause `writesThread` filter, `postFailed`/`startedId`/`stopped` and
-   * the `failed` expression were written out here longhand and were the fourth
-   * copy of the same ninety lines; the hook's own docstring says which of the
-   * four each paragraph came from. Two things this page knew and the other
-   * three did not — that forcing a step forces every step after it, and that
-   * `tweets` must be named rather than forced positionally — went into
-   * `StepRun.force` there, which is where they are true of all four.
-   *
-   * The one that mattered was `failed`. This page read `queue.error` at render,
-   * which is right for a frame: `error` is shared with the poller and a failed
-   * POST's own `finally` starts the poll that clears it, so the server's reason
-   * for refusing a job was replaced by "Couldn't start the job." before anyone
-   * could read it. The hook snapshots it out of `queue.lastFailure()` instead.
-   * `tests/refused-job-reason-survives.test.tsx` mounts this page whole and
-   * drives that sequence with the polls held.
-   */
-  const queue = useStepJob(slug, "tweets", refresh, "watches-queue");
-  /* Destructured because the four surfaces below took `job` and `failed` as
-     props long before the hook existed, and threading `queue` through them
-     would be a rename of this file's whole render for no gain. `cancel` stays
-     on `queue`, where the two call sites read it. */
-  const { job, failed, stalled } = queue;
-
-  /**
-   * Ask for a thread.
-   *
-   * `force` is the difference between "write one" and "write this one again".
-   * Without it the step's own freshness check — the `tweets` step's `stamp` in
-   * src/pipeline.ts — is the arbiter, which is right for an absent thread and
-   * right for a stale one — it agrees the artefact is out of date, so an
-   * ordinary run really does rewrite it. It is *wrong* for a thread that is
-   * perfectly current: the step would report "already done" and the page would
-   * sit there having apparently done nothing. Metadata's Thread row is how a
-   * reader says "I know, do it anyway", and `StepRun.force` in useStepJob.ts is
-   * what that turns into.
-   */
-  async function write(force = false) {
-    await queue.start({ force });
-  }
-
-  /**
-   * **The owner opened the thread page and there is no thread — write one.**
-   *
-   * > The Tweets mode should automatically start generating (if it hasn't
-   * > already generated) when opened (without having to click a button to kick
-   * > it off)
-   * >
-   * > — Greg, 2026-09-12
-   *
-   * **On arrival, not on a press**, since 2026-09-15. From 2026-09-06 this was
-   * `useAutoRun`, spending a token the bar's Tweets link minted — so a reload, a
-   * pasted link or Back showed the button instead, which is what Greg reported.
-   * The press rule exists because `?mode=` is query state; this page is a path,
-   * so arriving here is the intent. What it now spends on without a press, and
-   * why that is bounded, is src/web/useAutoRun.ts § `useAutoRunOnArrival` and
-   * docs/plans/260915e-tweets-page-starts-writing-when-opened.md.
-   *
-   * **The unforced verb, written out.** `work_key` is computed from the request
-   * *including* `force`, so an automatic run and a forced press during the same
-   * second are two requests that `enqueueOrGet` will
-   * not collapse, and the reader pays twice. Spelling the arguments here rather
-   * than passing `write` means a later reader cannot make it forced by changing
-   * a default two lines up.
-   *
-   * **An inline arrow is fine and is not a re-render hazard** — the hook holds
-   * this in a ref it rewrites every render, precisely so that a caller which
-   * rebuilds the function cannot re-fire the effect.
-   *
-   * `reload`, not `write`, for the last argument: a read that *failed* is not an
-   * answer to *is there a thread*, so it is answered by reading again — once —
-   * rather than by spending. This page needs that way out, because its `error`
-   * branch draws a sentence and no run button at all.
-   *
-   * **The return value is dropped.** `automatic` was there so a panel could say
-   * *Using your profile* instead of drawing a tickbox it had already decided —
-   * until the tickbox and the sentence were both removed on 2026-09-13. The
-   * glossary, ideas, quotes and sketch hooks now drop it too. What this thread
-   * was written with is stated afterwards by `<WrittenForYou>`, out of the
-   * artefact itself.
-   */
-  useAutoRunOnArrival(slug, "tweets", loaded.status, () => write(false), reload);
-
-  const backHref = readHref(slug, carriedSearch(location.search), "article");
-
-  return (
-    <>
-      {/* 2.5rem since 2026-09-06: the rem above it was room for the corner
-          wordmark, which is in this page's `Dock` now and no longer above this
-          element. `--safe-top` stays, for the clock rather than for the
-          wordmark. See Metadata.tsx, which carries the whole note. */}
-      <main className={`tw:mx-auto tw:max-w-2xl tw:px-6 tw:pt-[calc(2.5rem_+_var(--safe-top))] tw:font-sans ${DOCK_CLEARANCE}`}>
-        <BackLink href={backHref} label="Back to the article" className="tw:mb-6" />
-
-        <h1 className="tw:m-0 tw:font-prose tw:text-2xl tw:leading-snug tw:text-foreground">
-          {article.meta.title}
-        </h1>
-
-        {/* See useSlow.ts: silent until the wait is worth mentioning, then the
-            step by name. */}
-        {loaded.status === "loading" && slow && (
-          <p className="tw:mt-6 tw:text-sm tw:text-muted-foreground">
-            Looking for a thread for this article…
+      foot={owner?.thread && ready ? <Provenance thread={owner.thread} owner={owner} /> : null}
+    >
+      {owner?.error && (
+        <div className="tw:px-4 tw:pt-3">
+          <p className="gloss-error tw:m-0" role="alert">
+            {owner.error}
           </p>
-        )}
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            className="tw:mt-2"
+            onClick={() => void owner.retryRead()}
+          >
+            <RotateCw size={13} />
+            Try again
+          </Button>
+        </div>
+      )}
 
-        {loaded.status === "error" && (
-          <p className="tw:mt-6 tw:text-sm tw:text-destructive">{loaded.message}</p>
-        )}
+      {owner?.status === "loading" && <p className="gloss-quiet">Looking for a thread…</p>}
 
-        {/* A reload failed behind something that is still on screen. Muted
-            rather than destructive, and below the title rather than over the
-            thread: nothing the reader is looking at has been lost, we just
-            could not check whether there is a newer one. Not shown in the
-            `error` branch above, which is the same failure said once already.
-            The sentence is `THREAD_RECHECK_FAILED` and comes from
-            src/messages.ts — see the note on `reloadError`. */}
-        {loaded.status !== "error" && reloadError && (
-          <p className="tw:mt-6 tw:mb-0 tw:text-xs tw:text-muted-foreground">{reloadError}</p>
-        )}
+      {owner?.status === "none" && (
+        <div className="gloss-empty">
+          <p>Nobody has written a thread for this one yet.</p>
+          <p className="gloss-hint">
+            One model pass over the whole article, and it takes tens of seconds. Written once and kept
+            — you will not be asked again unless the article changes.
+          </p>
+          <Run owner={owner} label="Write the thread" />
+        </div>
+      )}
 
-        {loaded.status === "none" && (
-          <Empty
-            job={job}
-            failed={failed}
-            stalled={stalled}
-            onWrite={write}
-            onCancel={queue.cancel}
-          />
-        )}
-
-        {loaded.status === "ready" && (
-          <Thread
-            thread={loaded.thread}
-            stale={loaded.stale}
-            profileChanged={loaded.profileChanged}
-            article={article}
-            job={job}
-            failed={failed}
-            stalled={stalled}
-            onWrite={write}
-            onCancel={queue.cancel}
-          />
-        )}
-      </main>
-
-      {/* No `drawer` prop, so Questions is a link back to the article — the
-          same arrangement as the metadata page, and for the same reason. See
-          Dock.tsx. */}
-      <Dock slug={slug} view="tweets" experimental={experimental} />
-    </>
+      {ready && thread && (
+        <div className="tw:min-h-0 tw:flex-1 tw:overflow-y-auto tw:px-4 tw:pb-4">
+          {/* The article has moved and the thread has not. Everything below is
+              now a claim about a version of the piece that no longer exists, and
+              a passage link may land somewhere else. */}
+          {owner?.stale && (
+            <div className="gloss-stale">
+              <p>
+                <TriangleAlert size={13} />
+                This thread describes an older version of the article.
+              </p>
+              <Run owner={owner} label="Write it again" force />
+            </div>
+          )}
+          {owner && <UnlinkedNote thread={thread} slug={slug} />}
+          <ThreadPosts thread={thread} onJump={onJump} />
+        </div>
+      )}
+    </ModeSurface>
   );
 }
 
-/**
- * No thread yet, and the button that writes one.
- *
- * **A button, and since 2026-09-06 not only a button.** Both halves of that
- * sentence have a history worth keeping.
- *
- * Theirs generated automatically when the page became visible, and the effect
- * that did it re-fired on every failure — generating, failing, generating again,
- * for as long as you left the tab open. Greg asked for a button, which removed
- * that bug structurally rather than by remembering to set a flag on every error
- * path.
- *
- * What has changed is that the button is no longer the *only* structural fix.
- * `jobEngine.beginAutoAttempt` is one automatic attempt per `(slug, target)` per
- * page load — written after this comment was, for the modes, and closing
- * exactly that loop. So since 2026-09-06 pressing Tweets wrote the thread on its
- * own, and since 2026-09-15 arriving here does, however the owner arrived
- * (§ `useAutoRunOnArrival` at the top of this file). This button stays for the
- * case the automatic run does not cover: an attempt already spent in this page
- * load, whether it failed or the reader came back after cancelling it.
- *
- * A failed attempt does not try again. The one try is spent, the button is
- * here, and pressing it is a person rather than a loop.
- */
-function Empty({
-  job,
-  failed,
-  stalled,
-  onWrite,
-  onCancel,
-}: {
-  job: Job | null;
-  failed: StepFailure | null;
-  stalled: boolean;
-  onWrite(): Promise<void>;
-  onCancel(id: string): void;
-}) {
-  return (
-    <div className="tw:mt-8 tw:rounded-lg tw:border tw:border-border tw:bg-card tw:p-5">
-      <p className="tw:m-0 tw:text-sm tw:text-foreground">
-        Nobody has written a thread for this one yet.
-      </p>
-      <p className="tw:mt-2 tw:mb-4 tw:text-xs tw:text-muted-foreground">
-        It is one model call over the whole article, and it takes tens of seconds. Written once and
-        kept — you will not be asked again unless the article changes.
-      </p>
-      <Progress
-        job={job}
-        failed={failed}
-        stalled={stalled}
-        onWrite={onWrite}
-        onCancel={onCancel}
-        label="Write the thread"
-      />
-    </div>
-  );
-}
-
-/**
- * The thread page's run button. `onWrite` rather than `onRun` because that is
- * what this page's callers already call it; the shared component underneath
- * does not care.
- */
-function Progress({
-  onWrite,
-  ...props
-}: {
-  job: Job | null;
-  failed: StepFailure | null;
-  stalled: boolean;
-  onWrite(): Promise<void>;
-  onCancel(id: string): void;
-  label: string;
-}) {
+/** The band's run button: the empty state's, and the stale banner's. */
+function Run({ owner, label, force = false }: { owner: UseTweets; label: string; force?: boolean }) {
   return (
     <JobProgress
-      {...props}
-      onRun={onWrite}
+      job={owner.job}
+      starting={owner.starting}
+      failed={owner.failed}
+      stalled={owner.stalled}
+      /* The empty state's must be `ensure` — the identical, unforced request
+         the automatic run makes — or it buys a second model call. */
+      onRun={() => (force ? owner.regenerate() : owner.ensure())}
+      onCancel={owner.cancel}
+      label={label}
       step="tweets"
       icon={<PenLine size={13} />}
       runningLabel="Writing…"
@@ -446,110 +194,35 @@ function Progress({
   );
 }
 
-/** The thread itself: the posts, and the two ways to copy them. */
-function Thread({
-  thread,
-  stale,
-  profileChanged,
-  article,
-  job,
-  failed,
-  stalled,
-  onWrite,
-  onCancel,
-}: {
-  thread: TweetThread;
-  stale: boolean;
-  profileChanged: boolean;
-  article: Article;
-  job: Job | null;
-  failed: StepFailure | null;
-  stalled: boolean;
-  onWrite(force?: boolean): Promise<void>;
-  onCancel(id: string): void;
-}) {
+/**
+ * **A thread written before posts named their passages**, said once and quietly.
+ *
+ * Every thread stored before `tweets/5` has no `blocks` on any post, so the
+ * links this band exists to draw are simply absent — and without a sentence the
+ * reader cannot tell "no links" from "broken". Not a banner and not a button:
+ * re-running lives in Metadata (260929b), and an older prompt is otherwise not
+ * announced (260929c); this is about a feature missing from what is on screen.
+ * The owner's alone: a visitor cannot re-run anything.
+ */
+function UnlinkedNote({ thread, slug }: { thread: PublicTweets; slug: string }) {
+  if (thread.tweets.some((t) => t.blocks !== undefined)) return null;
   return (
-    <>
-      <ThreadCounts thread={thread} article={article}>
-        {/* Provenance, beside the counts rather than in a banner: it describes
-            what is on screen. src/web/WrittenForYou.tsx. Owner-only, because
-            `profileHash` never leaves the server. src/public-types.ts. */}
-        <WrittenForYou
-          written={thread.profileHash != null}
-          changed={profileChanged}
-          slug={thread.slug}
-        />
-      </ThreadCounts>
-
-      {/* The article has moved and the thread has not. Said plainly, at the
-          top, because everything below it is now a claim about a version of
-          the piece that no longer exists. The button offers the fix, and needs
-          no `force`: the step's own freshness check already knows this thread
-          is out of date, so asking for it again really does rewrite it. */}
-      {stale && (
-        <div className="tw:mt-4 tw:rounded-md tw:border tw:border-border tw:bg-card tw:p-4">
-          <p className="tw:m-0 tw:flex tw:items-center tw:gap-2 tw:text-sm tw:text-foreground">
-            <TriangleAlert size={14} className="tw:shrink-0 tw:text-destructive" />
-            This thread describes an older version of the article.
-          </p>
-          <p className="tw:mt-1 tw:mb-3 tw:text-xs tw:text-muted-foreground">
-            The text was re-fetched or re-extracted after the thread was written, so the posts below
-            may quote something that is no longer there.
-          </p>
-          <div className="gloss-run">
-            <Progress
-              job={job}
-              failed={failed}
-                stalled={stalled}
-              onWrite={() => onWrite(false)}
-              onCancel={onCancel}
-              label="Write it again"
-            />
-          </div>
-        </div>
-      )}
-
-      <ThreadPosts thread={thread} />
-
-      {/* A hairline and then the provenance: the end of the thread, said with a
-          rule rather than with their "🏁 End of thread" pill. In a list of
-          fifteen cards the reader does want to know they have reached the
-          bottom; it just does not need an emoji to say so. */}
-      <div className="tw:mt-8 tw:flex tw:flex-wrap tw:items-center tw:gap-x-3 tw:gap-y-2 tw:border-t tw:border-border tw:pt-4">
-        <p className="tw:m-0 tw:text-xs tw:text-ink-faint">
-          Written by {thread.generator} · {thread.version} · {whenWritten(thread.generatedAt)} ·{" "}
-          {howLong(thread.elapsedMs)}
-        </p>
-        {/* Only when the thread is fine. A stale one already has a button, at
-            the top, inside the paragraph explaining why it needs pressing —
-            two of them would be one too many, and the wrong one is the one
-            further from the reason. */}
-        {!stale && (
-          <RunFoot
-            job={job}
-            failed={failed}
-            onWrite={(force) => onWrite(force)}
-            onCancel={onCancel}
-          />
-        )}
-      </div>
-    </>
+    <p className="tw:mt-3 tw:mb-0 tw:text-xs tw:text-muted-foreground">
+      Written before posts linked back to the text. Re-run <em>Thread</em> in{" "}
+      <a href={readHref(slug, carriedSearch(location.search), "metadata")}>Metadata</a> to get the
+      links.
+    </p>
   );
 }
 
 /**
- * **The thread's three numbers**, said as a sentence.
+ * **The thread's three numbers**, said as a sentence, and *Copy the thread*.
  *
- * Borrowed back from the original version's pill row, 2026-08-25: the three
- * facts were the good part and the pills were not. The document's word count is
- * the one that earns its place — on its own "1,842 characters" is a fact about
- * nothing, and beside 8,275 words it is the compression the reader is being
- * asked to trust.
- *
- * **Shared with the visitor's page**, which is why it takes a `PublicTweets`
- * rather than the whole artefact: the counts are arithmetic over the posts, and
- * a visitor is looking at the same posts. `children` is where the owner puts
- * their own provenance label, which a visitor has none of.
+ * The document's word count is the one that earns its place: on its own
+ * "1,842 characters" is a fact about nothing, and beside 8,275 words it is the
+ * compression the reader is being asked to trust. Takes a `PublicTweets`
+ * because the counts are arithmetic over the posts, which a visitor has too;
+ * `children` is where the owner puts their own provenance label.
  */
 export function ThreadCounts({
   thread,
@@ -561,17 +234,15 @@ export function ThreadCounts({
   children?: ReactNode;
 }) {
   const total = thread.tweets.length;
-  /* Summed here rather than stored. It is the array's own arithmetic, and a
-     `chars` total in the artefact would be a second copy of a fact the posts
-     already carry — the same reason nothing stores a post number. */
+  /* Summed here rather than stored — the same reason nothing stores a post number. */
   const chars = thread.tweets.reduce((n, t) => n + t.chars, 0);
   const words = useMemo(() => articleStats(article).words, [article]);
 
   return (
-    <div className="tw:mt-2 tw:flex tw:flex-wrap tw:items-center tw:gap-3">
-      <p className="tw:m-0 tw:text-sm tw:text-muted-foreground">
-        A thread, {total} {total === 1 ? "post" : "posts"} · {chars.toLocaleString()} characters
-        from {words.toLocaleString()} words
+    <div className="tw:flex tw:w-full tw:flex-wrap tw:items-center tw:gap-x-3 tw:gap-y-1">
+      <p className="tw:m-0 tw:text-xs tw:text-muted-foreground">
+        {total} {total === 1 ? "post" : "posts"} · {chars.toLocaleString()} characters from{" "}
+        {words.toLocaleString()} words
       </p>
       {children}
       <CopyButton
@@ -584,53 +255,61 @@ export function ThreadCounts({
 }
 
 /**
- * **The posts themselves** — one numbered card each, and the over-limit line
- * above them.
+ * **The posts themselves**, and the over-limit line above them.
  *
- * One component for the owner and for a visitor, which is the rule the whole of
- * slice 1b follows: the hooks need two components, the thing on screen does not.
- * Two lists for one thread is how the two drift into two designs for one thing.
- * src/web/reader-capability.ts.
- *
- * It takes a `PublicTweets` — `limit` and the posts — because that is every
- * field it reads. The provenance footer is the owner's and lives in `Thread`.
+ * One component for the owner and for a visitor: two lists for one thread is
+ * how the two drift into two designs for one thing. Each post leads with its
+ * number, so a reader part-way down the column can say which post they are on,
+ * and ends with the passages it came from — `BlockRef`, the one block link, so
+ * a click jumps to the paragraph and flashes it.
  */
-export function ThreadPosts({ thread }: { thread: PublicTweets }) {
+export function ThreadPosts({
+  thread,
+  onJump,
+}: {
+  thread: PublicTweets;
+  onJump(id: BlockId): void;
+}) {
   const total = thread.tweets.length;
   const over = thread.tweets.filter((t) => t.chars > thread.limit).length;
 
   return (
     <>
-      {/* Only a real violation. `thread.limit` and not 280: the artefact says
-          what it was counted against, and a thread written under a different
-          limit should not be re-judged under this one. */}
+      {/* Muted since 2026-09-29: each overlong post's own count already turns
+          red, so this line explains rather than alarms. */}
       {over > 0 && (
-        <p className="tw:mt-4 tw:mb-0 tw:text-xs tw:text-destructive">
+        <p className="tw:mt-3 tw:mb-0 tw:text-xs tw:text-muted-foreground">
           {over === 1 ? "One post is" : `${over} posts are`} over {thread.limit} characters. Nothing
           has been cut — what the model wrote is what is below.
         </p>
       )}
 
-      <ol className="tw:mt-6 tw:mb-0 tw:flex tw:list-none tw:flex-col tw:gap-3 tw:p-0">
+      <ol className="tw:m-0 tw:flex tw:list-none tw:flex-col tw:p-0">
         {thread.tweets.map((tweet, i) => (
           <li
-            // Position is the identity here — there is no stored id and no
-            // stored number, and two posts can legitimately carry the same
-            // text. The list is rebuilt whole on every load.
+            // Position is the identity: no stored id, no stored number, and two
+            // posts can legitimately carry the same text.
             // biome-ignore lint/suspicious/noArrayIndexKey: no id, rebuilt whole
             key={i}
-            className="tw:rounded-lg tw:border tw:border-border tw:bg-card tw:p-4"
+            className="tw:border-b tw:border-border tw:py-4 tw:last:border-b-0"
           >
             {/* `whitespace-pre-line`, because the prompt allows a line break
-                inside a post and a paragraph that eats them changes what the
-                post says. */}
+                inside a post and a paragraph that eats them changes what it says. */}
             <p className="tw:m-0 tw:font-prose tw:text-[0.95rem] tw:leading-relaxed tw:whitespace-pre-line tw:text-foreground">
-              {tweet.text}
-            </p>
-            <div className="tw:mt-3 tw:flex tw:items-center tw:gap-3 tw:text-xs tw:text-ink-faint">
-              <span className="tw:font-mono">
+              <span className="tw:mr-2 tw:font-mono tw:text-xs tw:text-ink-faint">
                 {i + 1}/{total}
               </span>
+              {tweet.text}
+            </p>
+            <div className="tw:mt-2 tw:flex tw:flex-wrap tw:items-center tw:gap-x-3 tw:gap-y-1 tw:text-xs tw:text-ink-faint">
+              {tweet.blocks && tweet.blocks.length > 0 && (
+                <span className="tweets-from tw:flex tw:flex-wrap tw:items-center tw:gap-x-1.5">
+                  <span>From</span>
+                  {tweet.blocks.map((id) => (
+                    <BlockRef key={id} id={id} onJump={onJump} />
+                  ))}
+                </span>
+              )}
               <span
                 className={`tw:font-mono ${tweet.chars > thread.limit ? "tw:text-destructive" : ""}`}
                 title={
@@ -651,50 +330,47 @@ export function ThreadPosts({ thread }: { thread: PublicTweets }) {
 }
 
 /**
- * **The foot of a current thread: a run in progress, or the one that failed —
- * and no button.**
+ * **The foot: who wrote the thread and when, and a run that is under way.**
  *
- * This was *Rewrite*, a two-click *"Write it again"* for a thread with nothing
- * wrong with it, until Greg, 2026-09-29 (SPIDERYARN-READING2-53): *"Same goes
- * for any other modes that still have a "redo this processing" button - let's
- * just rely on the Metadata mode for that."* Metadata's *Re-run AI processing*
- * has a Thread row, with its own confirm. The stale banner at the top keeps its
- * button: a repair the page is prompting, not a standing redo.
- * docs/plans/260929b-one-place-to-re-run-ai-processing.md.
- *
- * What stays is the part that was never a button: a job on this article —
- * started from Metadata, or from the stale banner — still shows its progress and
- * its Stop here, and a failed one still says why.
+ * No standing *Write it again* — Greg, 2026-09-29 (SPIDERYARN-READING2-53):
+ * *"let's just rely on the Metadata mode for that."* What stays is the part that
+ * was never a button: a job started from Metadata or from the stale banner shows
+ * its progress and its Stop here, and a failed one says why.
  */
-function RunFoot({
-  job,
-  failed,
-  onWrite,
-  onCancel,
-}: {
-  job: Job | null;
-  failed: StepFailure | null;
-  onWrite(force?: boolean): Promise<void>;
-  onCancel(id: string): void;
-}) {
-  if (job) {
-    return (
-      <span className="tw:ml-auto tw:w-full">
-        <Progress
-          job={job}
-          failed={null}
-          /* Unreachable here: this branch only renders with a job of our own,
-             and one article cannot have two active ones. */
-          stalled={false}
-          onWrite={() => onWrite(true)}
-          onCancel={onCancel}
-          label="Write it again"
-        />
-      </span>
-    );
-  }
-  if (!failed) return null;
-  return <span className="tw:ml-auto tw:text-xs tw:text-destructive">{failed.message}</span>;
+function Provenance({ thread, owner }: { thread: TweetThread; owner: UseTweets }) {
+  const running = !owner.stale && (owner.job || owner.starting);
+  return (
+    <div className="tw:flex tw:flex-wrap tw:items-center tw:gap-x-3 tw:gap-y-2 tw:px-4 tw:py-2">
+      <p className="tw:m-0 tw:text-xs tw:text-ink-faint">
+        Written by {thread.generator} · {thread.version} · {whenWritten(thread.generatedAt)} ·{" "}
+        {howLong(thread.elapsedMs)}
+      </p>
+      {running && <RunFoot job={owner.job} owner={owner} />}
+      {!running && !owner.stale && owner.failed && (
+        <span className="tw:ml-auto tw:text-xs tw:text-destructive">{owner.failed.message}</span>
+      )}
+    </div>
+  );
+}
+
+/** A run under way on a current thread: its progress and its Stop. Failure is `Provenance`'s. */
+function RunFoot({ job, owner }: { job: Job | null; owner: UseTweets }) {
+  return (
+    <span className="tw:w-full">
+      <JobProgress
+        job={job}
+        starting={owner.starting}
+        failed={null}
+        stalled={owner.stalled}
+        onRun={() => owner.regenerate()}
+        onCancel={owner.cancel}
+        label="Write it again"
+        step="tweets"
+        icon={<PenLine size={13} />}
+        runningLabel="Writing…"
+      />
+    </span>
+  );
 }
 
 /**
@@ -702,19 +378,13 @@ function RunFoot({
  *
  * `navigator.clipboard` needs a secure context, and an iframe or an http origin
  * that is not localhost will reject the write. Saying so is the point: a copy
- * button that silently does nothing is textbook
- * docs/reusable/silent-success.md, and the reader would find out by pasting the
- * wrong thing somewhere else.
+ * button that silently does nothing is docs/reusable/silent-success.md.
  *
- * One state this cannot report, found while checking the page under browser
- * automation: `writeText` can return a promise that never settles at all, when
- * the clipboard permission prompt has nowhere to appear. Neither handler runs
- * and the button sits on "Copy". A timeout would turn that into a "Couldn't
- * copy" that might be a lie — the write may yet land — so it is left alone and
- * written down here instead.
+ * One state this cannot report: `writeText` can return a promise that never
+ * settles, when the permission prompt has nowhere to appear. A timeout would
+ * turn that into a "Couldn't copy" that might be a lie, so it is left alone.
  *
- * `text` is a function rather than a string so the whole-thread markdown is
- * built on the click rather than on every render.
+ * `text` is a function so the whole-thread markdown is built on the click.
  */
 function CopyButton({
   text,
@@ -740,17 +410,11 @@ function CopyButton({
       size="xs"
       className={className}
       title={label}
-      /* Borrowed from theirs, which was the one accessibility detail this page
-         had left behind. Without it the button's accessible name comes from
-         `title` and stays on "Copy" through every state, so the outcome — and
-         especially "Couldn't copy", the state this component exists to report —
-         is announced to a screen reader as nothing at all. */
+      /* Without it the accessible name comes from `title` and stays on "Copy"
+         through every state, so "Couldn't copy" is announced as nothing. */
       aria-label={state === "done" ? "Copied" : state === "failed" ? "Couldn't copy" : label}
       onClick={() => {
-        // The `?.` was doing real damage: on an origin with no clipboard at
-        // all the expression is `undefined`, nothing is thrown, and the button
-        // stays on "Copy" for ever — the failure this component exists to
-        // report, reported as nothing happening.
+        // No `?.`: on an origin with no clipboard it would silently do nothing.
         if (!navigator.clipboard) {
           setState("failed");
           return;
@@ -762,9 +426,6 @@ function CopyButton({
       }}
     >
       {state === "done" ? <Check size={12} className="tw:text-highlight" /> : <Copy size={12} />}
-      {/* `aria-live` as well as the label, because the label changing is not an
-          announcement unless something is watching the region. `polite`, so it
-          waits its turn rather than interrupting whatever is being read. */}
       <span aria-live="polite">
         {state === "done" ? "Copied" : state === "failed" ? "Couldn't copy" : label}
       </span>
@@ -777,33 +438,17 @@ function CopyButton({
  *
  * **The source line is not decoration.** A generated summary loose on the
  * internet with no path back to what it summarises is one of vision.md's
- * anti-goals by name, and carrying the URL is the cheapest possible answer to
- * it. The original version did this too, and it is the one part of their copy
- * format worth keeping exactly.
+ * anti-goals by name, and carrying the URL is the cheapest answer to it.
  *
  * The `n/total` prefix belongs here and not on the per-post copy: this is the
- * form you post, so the numbering is part of it. A single post copies as its
- * own text alone, which is what its character count describes — the count and
- * the clipboard should not disagree.
- *
- * Exported for tests: this is the only pure thing on the page, and it is the
- * part that has a right answer.
+ * form you post. A single post copies as its own text, which is what its
+ * character count describes.
  */
 export function threadMarkdown(thread: PublicTweets, article: Article): string {
   const head = [article.meta.title, article.meta.url].filter(Boolean).join("\n");
   const posts = thread.tweets.map((t, i) => `${i + 1}/${thread.tweets.length} ${t.text}`);
   return [head, ...posts].join("\n\n");
 }
-
-/* `howLong` lived here from 2026-08-26 until 2026-09-08 and is now
-   relative-time.ts's, because the metadata page's step rows wanted the same
-   string and a second copy had been written before anybody noticed this one.
-   Why it exists at all is unchanged and is worth keeping in mind on this page:
-   `elapsedMs` has been in the artefact since the first run and nothing showed
-   it, and the original asked the SDK for its own timings, got empty values
-   back, and rendered them as `0ms` — a duration that reads as "instant" rather
-   than as "we don't know". That is where `an unknown time` comes from.
-   A number nobody looks at is a number nobody notices going wrong. */
 
 /** `25 Aug 2026`, or nothing readable if the artefact's timestamp is not one. */
 function whenWritten(iso: string): string {

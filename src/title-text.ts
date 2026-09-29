@@ -188,8 +188,8 @@ export function documentTitle(
   view: ArticleView = "article",
 ): string {
   /* **The view wins over the mode, and that is `readTitle`'s rule rather than a
-     new one**: the metadata and tweets pages are pages beside the article, and
-     the mode is a band inside the reading view that neither of them has. A
+     new one**: the metadata page (and, until 2026-09-29, the tweets page) is a page beside the article, and
+     the mode is a band inside the reading view that it has not. A
      `/read/x?about=1&mode=glossary` becomes `x · Metadata · Spideryarn` on both
      sides, with the mode dropped. */
   const label =
@@ -202,8 +202,8 @@ export function documentTitle(
 }
 
 /**
- * The two of an article's three views that are pages beside the article rather
- * than the article itself. Named as the Dock names them, so the tab and the
+ * The one view beside the article rather than the article itself (the thread was
+ * the second until it became a mode, 2026-09-29). Named as the Dock names it, so the tab and the
  * button you pressed to get there agree.
  *
  * Beside `MODE_LABEL` and for the same reason: the server composes this title
@@ -213,7 +213,6 @@ export function documentTitle(
  */
 export const VIEW_LABEL: Record<Exclude<ArticleView, "article">, string> = {
   metadata: "Metadata",
-  tweets: "Tweets",
 };
 
 /**
@@ -250,4 +249,5 @@ export const MODE_LABEL: Record<Mode, string> = {
   citations: "Citations",
   faq: "FAQ",
   trajectory: "Trajectory",
+  tweets: "Tweets",
 };

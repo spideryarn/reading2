@@ -552,8 +552,8 @@ would only get in the way of it.
 ## What this does not cover yet
 
 **One near-miss first**, because it is the kind of thing this section exists to
-stop being invisible: `"Couldn't start the job."` lives in `Tweets.tsx`,
-`useGlossary.ts` and `useSummaries.ts`, three times over. It is a failure
+stop being invisible: `"Couldn't start the job."` lived in `Tweets.tsx`,
+`useGlossary.ts` and `useSummaries.ts`, three times over; the copy is now one string in `useStepJob.ts`. It is a failure
 message the reader sees, so by the rule above it belongs here — it says nothing
 about what happened, nothing about whose problem it is, and has no code. It has
 not moved yet.

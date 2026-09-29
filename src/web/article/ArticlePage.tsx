@@ -1,5 +1,5 @@
 /**
- * **One article, fetched once for all three of its views**, and the three
+ * **One article, fetched once for all of its views**, and the three
  * components that stand for the three footings you can read it on: your own
  * (`OwnedArticle` and `OwnedReader`), or somebody else's, shared
  * (`VisitorArticle`).
@@ -24,7 +24,6 @@ import { LandingPage } from "../LandingPage.js";
 import type { ArticleView } from "../router.js";
 import { Metadata } from "../Metadata.js";
 import { Reader } from "../reader/Reader.js";
-import { Tweets } from "../Tweets.js";
 import { useSlow } from "../useSlow.js";
 import { useArc } from "../useArc.js";
 import { useGlossaryRead } from "../useGlossary.js";
@@ -40,13 +39,13 @@ import { articleWaitTitle, useDocumentTitle } from "../page-title.js";
 import { apiFetch } from "../lib/api.js";
 import type { PublicArtefactSet, PublicArtefacts } from "../../public-types.js";
 import { NotSharedPage, ReauthRequiredPage } from "../PublicChrome.js";
-import { PublicMetadataPage, VisitorTweetsPage } from "../PublicPages.js";
+import { PublicMetadataPage } from "../PublicPages.js";
 import { useRenderCount } from "../perf.js";
 import { FeedbackTrigger } from "../FeedbackButton.js";
 import { useArticleAccess } from "./access.js";
 
 /**
- * One article, fetched **once for all three of its views**.
+ * One article, fetched **once for all of its views**.
  *
  * The fetch lives here rather than in the reading view because the metadata and
  * tweet pages need the same payload, and because this component does not
@@ -103,7 +102,7 @@ export function ArticlePage({
    * The tab, for the two states this component owns and no others.
    *
    * Once the article is here, each of the views sets its own title — Reader has
-   * the mode, Metadata and Tweets have their own names — and this must then get
+   * the mode, Metadata has its own name — and this must then get
    * out of the way. Hence the empty string, which `useDocumentTitle` treats as
    * "not mine to set": React runs a child's effects *before* its parent's, so a
    * title computed here would otherwise land on top of the more specific one
@@ -182,7 +181,7 @@ export function ArticlePage({
      meant to keep the fetch, which is the whole reason it happens up here. */
   /* **No corner pair here since 2026-09-06, and this is the branch that lost
      it.** Every page below this line mounts a `Dock` — the reading view, the
-     metadata and tweets pages, and the three visitor stand-ins in
+     metadata page, and the visitor stand-ins in
      PublicPages.tsx — and the bar draws both the wordmark and the Feedback
      trigger itself (Dock.tsx). A `<HomeLogo />` here would be a second way home
      on the same screen, one of them fixed over the top of the spine while the
@@ -376,7 +375,6 @@ function OwnedArticle({
         onVisibility={sharedTo}
       />
     );
-  if (view === "tweets") return <Tweets slug={slug} article={article} />;
   return <OwnedReader slug={slug} article={article} onRenamed={renameTo} />;
 }
 /**
@@ -501,8 +499,8 @@ function OwnedReader({
  * owner — the same page either way, because the question is *is this mine*.
  *
  * Note which components are reachable from here: `Reader`, and two small pages
- * written for this case. `Metadata` and `Tweets` are not among them, and that
- * is the seam rather than an omission — between them they mount the profile
+ * written for this case. `Metadata` is not among them (and `Tweets` was not, until it became a mode
+ * with a visitor band on 2026-09-29), and that is the seam rather than an omission — between them they mount the profile
  * boxes, the delete button, the provenance fetch and `useJobs`.
  */
 function VisitorArticle({
@@ -528,8 +526,8 @@ function VisitorArticle({
   /** For the call to action, and nothing else — reader-capability.ts § signedIn. */
   signedIn: boolean;
   /**
-   * **Only for what the chrome says**, and it goes to all three views rather
-   * than to the reading view alone: the other two are one click away and carry
+   * **Only for what the chrome says**, and it goes to both views rather
+   * than to the reading view alone: the other is one click away and carries
    * the same `SharedNotice`, so a reader who stepped out to the metadata page
    * would otherwise watch the explanation vanish. App.tsx § ArticleAccess.
    */
@@ -541,17 +539,6 @@ function VisitorArticle({
       <PublicMetadataPage
         slug={slug}
         article={article}
-        available={available}
-        signedIn={signedIn}
-        sessionUnconfirmed={sessionUnconfirmed}
-      />
-    );
-  if (view === "tweets")
-    return (
-      <VisitorTweetsPage
-        slug={slug}
-        article={article}
-        thread={artefacts.tweets}
         available={available}
         signedIn={signedIn}
         sessionUnconfirmed={sessionUnconfirmed}

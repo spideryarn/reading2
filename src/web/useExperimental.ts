@@ -6,7 +6,7 @@
  * one-write-at-a-time guard, and every component that called it got **its own
  * copy of all of them**. That was fine while the only consumer was one settings
  * row on `/profile`, and wrong the moment a feature went behind the switch —
- * `App.tsx` is the router, and the reading view, metadata and tweets each mount
+ * `App.tsx` is the router, and the reading view and metadata (and tweets, until 2026-09-29) each mount
  * their own `Dock`, so two of them could disagree for the length of a toggle.
  *
  * All of it now lives in experimental-store.ts, **with the reasoning that shaped

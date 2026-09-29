@@ -177,7 +177,8 @@ export function useAutoRun(
 
 /**
  * **A page the owner opened, with nothing on it, starts itself — no press.**
- * One caller: the Tweets page (Tweets.tsx).
+ * One caller: the Tweets band (useTweets.ts) — the Tweets page until it became
+ * a mode on 2026-09-29, when the arrival rule came with it (docs/plans/260929f-tweets-become-a-mode-with-a-wide-band-and-block-links.md).
  *
  * > The Tweets mode should automatically start generating (if it hasn't already
  * > generated) when opened (without having to click a button to kick it off)
@@ -187,8 +188,11 @@ export function useAutoRun(
  * `useAutoRun` above ties the spend to a press because `?mode=` is query state:
  * it survives leaving the mode and is carried by links from other pages, so a
  * band mounting says nothing about what the reader just did.
- * `/read/<slug>/tweets` is a **path**, and arriving at it is the intent. So the
- * token goes, and everything else stays:
+ * `/read/<slug>/tweets` was a **path**, and arriving at it was the intent. So the
+ * token went, and everything else stayed. When the page became a mode on
+ * 2026-09-29 the rule came with it — Greg's *"when opened"* was not revoked —
+ * and the one arrival nobody chose, a last-view restore, drops `?mode=tweets`
+ * instead (last-view.ts § `NEEDS_AN_EXPLICIT_PRESS`). What stays:
  *
  *  - **one attempt per `(slug, target)` per page load** — `beginAutoAttempt`,
  *    which records before it answers, so `<StrictMode>`'s double effect is

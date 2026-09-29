@@ -137,6 +137,14 @@ readers never are.
 - **[trajectory.md](trajectory.md)** — skim a paper at increasing depth: one route through its
   passages, not in the paper's order, walked with a handful of stops, then a dozen, then more. Open
   it for Greg's dictated brief, verbatim, and the questions still waiting for him.
+- **Tweets** — the article as a numbered thread, in a wide band beside the prose, each post linked to
+  the passages it came from. A page of its own at `/read/<slug>/tweets` until 2026-09-29; that
+  address now redirects to `?mode=tweets`. **The one mode that writes on arrival** rather than on a
+  press, on Greg's 2026-09-12 word, with a last-view restore excluded. No `tweets.md` yet; the plans
+  are the reference: [260825g](../plans/260825g-tweet-thread-page.md) (why it exists, and what it
+  refuses to look like) and
+  [260929f](../plans/260929f-tweets-become-a-mode-with-a-wide-band-and-block-links.md) (the mode, the
+  wide band, the links).
 
 The last two band modes — **chat** and **remember**, and the quiz that is remember's other half — are
 under the next heading instead, because what they are about is a passage rather than the whole piece.
@@ -196,8 +204,8 @@ them, and they come in two shapes:
 **pages**, where Enter goes there, and **actions**, where Enter does the thing — today Feedback,
 which opens the dialog, and Comments, which opens the drawer.
 
-**Two of the rows are about the article you are standing on** — its Metadata and its Tweets — and
-they exist only because the bar does: it is mounted on the reading view alone, for the owner, so
+**One of the rows is about the article you are standing on** — its Metadata (Tweets was the second
+until it became a mode on 2026-09-29, and is a mode row now) — and it exists only because the bar does: it is mounted on the reading view alone, for the owner, so
 there is always an article to name. The day it is offered anywhere else is the day those rows have to
 answer for themselves, and the answer written down for that day is *no row at all* rather than a row
 with nothing to point at.
@@ -205,9 +213,10 @@ with nothing to point at.
 **What the original call refused is mostly still refused**, and where it is not, that is Greg's doing
 rather than a boundary quietly moving. It said a passage jump, a generation row, a chat and a model
 call each need **a verb this bar does not have**. Two of those have since arrived: a *generation row*
-is what Tweets is — it goes to the thread page, which writes the thread on arrival when there is none
-(since 2026-09-15, [260915e](../plans/260915e-tweets-page-starts-writing-when-opened.md)), and it
-wears the `generates` marker for it — and Feedback is a genuinely new verb, admitted because it is
+is what Tweets is — since 2026-09-29 a mode row, whose band writes the thread on arrival when there
+is none ([260915e](../plans/260915e-tweets-page-starts-writing-when-opened.md) for the rule,
+[260929f](../plans/260929f-tweets-become-a-mode-with-a-wide-band-and-block-links.md) for the move),
+and it wears the `generates` marker for it — and Feedback is a genuinely new verb, admitted because it is
 what he asked for. A passage jump and an "ask this article" are still out, and the line is now
 sharper than "a verb we don't have": each would need the bar to grow an **argument** — *which*
 passage, *which* question — and it has one text box and it is the filter. A query that matches

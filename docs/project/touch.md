@@ -625,6 +625,38 @@ which tells an iOS reader how to get the browser's own chrome out of the way, an
 `media()` in [`src/web/media.ts`](../../src/web/media.ts). They say different things and sit in
 different places: this one is in flow at the top of the article, that one is fixed above the dock.
 
+## A passage link in a covering band shows the passage
+
+A band lying over the article has a problem of its own: every passage link in it — a `BlockRef`, a
+Structure or Summary row, a Quotes row, a search hit — scrolls the prose *underneath* the band and
+flashes it there, and the reader sees nothing happen.
+
+> close the panel on link tap on phone for all modes
+>
+> — Greg, 2026-09-29
+
+So since 2026-09-29 a jump that starts inside a covering band **steps the band aside**: the band is
+hidden, not closed (`bandAway`, [`Reader.tsx`](../../src/web/reader/Reader.tsx) § `bandJump`), the
+paragraph is in front of the reader and its flash plays once it is uncovered. A pill above the Dock,
+**"↩ back to ⟨mode⟩"** ([`BandBackChip.tsx`](../../src/web/BandBackChip.tsx)), puts the band back
+exactly as it was — it was never unmounted, so a Chat draft, a half-typed Quiz answer and a Search
+query are all still there. Pressing the mode's own button in the Dock does the same. While the pill
+shows, the *back to ⟨section⟩* chip does not: "back" means the band.
+
+What it deliberately does not do:
+
+- **Close the mode.** `?mode=plain` would unmount the band and lose what lives only in its memory.
+- **Bring the band back on browser Back.** The reader may make pushes of their own while the band is
+  away, and Back should undo those.
+- **Step aside while the picture is being walked.** Diagram's step buttons and arrow keys follow the
+  picture in the prose (`onFollow`); only a press on a node or a row steps the band aside.
+- **Touch Trajectory's own rule.** It jumps when it opens, so it keeps plain `jumpTo` and steps aside
+  itself when a stop is chosen, as it has since 2026-09-28; it gets the pill like every other mode.
+
+It keys on the band covering the prose (`fit.modeW === 0`), not on a device, so a narrow desktop
+window behaves the same. Focus that was in the band moves to the pill and back again.
+[260929g](../plans/260929g-on-a-phone-a-band-link-closes-the-band.md).
+
 ## A mode says its name when you press it
 
 > So if I'm on an iPad and I click on a mode, there's no tooltip, there's no heading, there's no
