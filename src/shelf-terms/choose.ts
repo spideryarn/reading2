@@ -19,6 +19,8 @@
  * topics however the articles and their candidates arrive. The tests shuffle
  * both to prove it.
  */
+import { isCommonWord } from "./data/common-words.js";
+import { glasgowConcreteness } from "./data/concreteness.js";
 import { type Candidate, pickLabel } from "./extract.js";
 
 /** One article, as step 2 needs it: step 1's stored output plus the slug. */
@@ -95,7 +97,36 @@ export interface ChooseOptions {
    * counts double a single word of equal weight, at 0 not at all.
    */
   phraseBonus?: number;
+  /**
+   * Hold vague single words — those failing `passesVagueTest` — to the rule
+   * below (plan 260929a). Off only for the report's before/after and the
+   * tests. Phrases are never vague.
+   */
+  dropVague?: boolean;
+  /** Glasgow concreteness (1–7) at or above which a common word passes. */
+  concretenessMin?: number;
+  /**
+   * A number D: a vague word counts for an article only at
+   * `max(4, D × words / 1000)` prose uses — Greg's "common words need to
+   * occur more often" (plan 260929a). Null: it is dropped outright, which the
+   * report keeps for comparison.
+   */
+  vagueDensityPer1000?: number | null;
+  /**
+   * A candidate sharing a word stem with the topic taken just before it does
+   * not come next when another adds at least as many new works (plan 260929a
+   * R7). Off only for the report and the tests.
+   */
+  adjacency?: boolean;
 }
+
+/**
+ * The Glasgow concreteness (1–7) a common word needs to name a topic. Tuned
+ * on the local shelf (plan 260929a § Measurements): 4.5 is the lowest that
+ * catches *entered* and *breaking* by their lemmas (*enter* 4.1, *break* 4.4);
+ * 5.0 also catches *signals* (4.9), which is a topic.
+ */
+export const CONCRETENESS_MIN = 4.5;
 
 const DEFAULTS: Required<ChooseOptions> = {
   maxTerms: 30,
@@ -111,6 +142,10 @@ const DEFAULTS: Required<ChooseOptions> = {
   minCoverageWords: 0,
   qualityExponent: 1,
   phraseBonus: 1,
+  dropVague: true,
+  concretenessMin: CONCRETENESS_MIN,
+  vagueDensityPer1000: 2,
+  adjacency: true,
 };
 
 const byString = (a: string, b: string) => (a < b ? -1 : a > b ? 1 : 0);
@@ -128,6 +163,60 @@ export function stemForOverlap(word: string): string {
     if (word.endsWith(suffix) && word.length - suffix.length >= 4)
       return word.slice(0, -suffix.length);
   return word;
+}
+
+/**
+ * The forms to look a key's word up by in the Glasgow norms, which rate
+ * mostly base forms and the odd plural: the word, its plural (keys are
+ * plural-folded, and the norms have *kids* but not *kid*), then crude lemmas
+ * — *-s*, *-es*, *-ed*, *-d*, *-ing*, *-ing* → *-e*. The first form the norms
+ * know decides.
+ */
+function lookupForms(word: string): string[] {
+  const forms = [word, `${word}s`];
+  const strip = (suffix: string, add = "") => {
+    if (word.endsWith(suffix) && word.length - suffix.length >= 3)
+      forms.push(word.slice(0, -suffix.length) + add);
+  };
+  strip("s");
+  strip("es");
+  strip("ed");
+  strip("d");
+  strip("ing");
+  strip("ing", "e");
+  return forms;
+}
+
+/**
+ * **Is this one word specific enough to name a topic?** (plan 260929a.)
+ * Greg's 4T: *following* and *entered* are vague, *rat* is not, though all
+ * three are everyday words. So a word passes when it is **not common** in
+ * English (SUBTLEX-US Zipf < 4.0 — technical terms, proper nouns, *neural*,
+ * *irreducibility*), or when the Glasgow norms rate it **concrete**, at or
+ * above `min` on their 1–7 scale (*rat* 6.7). A common word the norms rate
+ * lower (*process* 3.0), or do not rate (*following*), fails.
+ *
+ * Rarity rescues a rated word too, which the plan's first cut did not: at
+ * any threshold that catches *entered* (by its lemma *enter*, 4.1), *neural*
+ * (4.1) would be caught with it.
+ */
+export function passesVagueTest(word: string, min: number): boolean {
+  if (!isCommonWord(word)) return true;
+  for (const form of lookupForms(word)) {
+    const rating = glasgowConcreteness(form);
+    if (rating !== undefined) return rating >= min;
+  }
+  return false;
+}
+
+/**
+ * Only a **single word** can be vague. Phrases keep the extractor's shape test
+ * on their head alone: judging them by their words dropped real topics —
+ * *Stolen Generations*, *natural language*, *power station* (plan 260929a §
+ * Measurements).
+ */
+function isVague(key: string, min: number): boolean {
+  return !key.includes(" ") && !passesVagueTest(key, min);
 }
 
 function jaccard(a: ReadonlySet<string>, b: ReadonlySet<string>): number {
@@ -181,18 +270,25 @@ function getOrSet<K, V>(map: Map<K, V>, key: K, make: () => V): V {
  * `max(2, 0.3 per 1,000 words)`. Scaled by length, because an absolute
  * threshold let a 152k-word book join every common word's set. **bodyCount,
  * never count or score**, so a title hit alone is not membership (Sol F3).
+ * A vague single word (`isVague`) needs `max(4, vagueDensityPer1000 per
+ * 1,000)` — used heavily, not in passing (plan 260929a).
  *
  * `dfAll` is for idf and counts every stored candidate, member or not.
  */
-function collect(articles: ChooseArticle[], densityPer1000: number): Collected {
+function collect(articles: ChooseArticle[], o: Required<ChooseOptions>): Collected {
   const members = new Map<string, Map<string, Membership>>();
   const dfAll = new Map<string, Set<string>>();
   const alias = shortPluralAliases(articles);
+  const D = o.dropVague ? o.vagueDensityPer1000 : null;
+  const raised = new Map<string, boolean>();
+  const isRaised = (key: string) =>
+    getOrSet(raised, key, () => D !== null && isVague(key, o.concretenessMin));
   for (const a of articles) {
-    const need = Math.max(2, (densityPer1000 * a.words) / 1000);
+    const need = Math.max(2, (o.densityPer1000 * a.words) / 1000);
+    const needVague = D === null ? need : Math.max(4, (D * a.words) / 1000);
     for (const [key, c] of mergeCandidates(a.candidates, alias)) {
       getOrSet(dfAll, key, () => new Set<string>()).add(a.textHash);
-      if (c.bodyCount < need) continue;
+      if (c.bodyCount < (isRaised(key) ? needVague : need)) continue;
       getOrSet(members, key, () => new Map<string, Membership>()).set(a.slug, {
         hash: a.textHash,
         count: c.count,
@@ -384,21 +480,50 @@ function greedy(pool: Pool[], K: number, o: Required<ChooseOptions>, short: Read
      Back in key order, which is what makes an exact tie go to the smaller key. */
   let remaining = eligible(pool, o.qualityPool);
   while (chosen.length < K && remaining.length) {
-    let best: Pool | null = null;
-    let bestStep: Step = { fresh: -1, discounted: -1 };
-    for (const c of remaining) {
-      const step = measure(c, covered, short);
-      if (!best || better(step, c.quality, bestStep, best.quality, o.qualityExponent)) {
-        best = c;
-        bestStep = step;
-      }
-    }
-    if (!best) break;
-    const pick = best;
+    const steps = remaining.map((c) => ({ c, step: measure(c, covered, short) }));
+    const found = bestOf(steps, o) ?? null;
+    if (!found) break;
+    const next = o.adjacency ? notBesidePrevious(found, steps, chosen, o) : found;
+    const pick = next.c;
     remaining = remaining.filter((c) => c !== pick);
-    if (!isRedundant(chosen, pick, bestStep.fresh, o)) admit(chosen, pick, covered, o);
+    if (!isRedundant(chosen, pick, next.step.fresh, o)) admit(chosen, pick, covered, o);
   }
   return chosen;
+}
+
+interface Measured {
+  c: Pool;
+  step: Step;
+}
+
+/** The best by `better`; the first of an exact tie, and `steps` is in key order. */
+function bestOf(steps: Measured[], o: Required<ChooseOptions>): Measured | undefined {
+  let best: Measured | undefined;
+  for (const m of steps)
+    if (!best || better(m.step, m.c.quality, best.step, best.c.quality, o.qualityExponent)) best = m;
+  return best;
+}
+
+/**
+ * Plan 260929a R7, Greg's 4T: *neural networks* then *neural activity*. When
+ * the best candidate shares a word stem with the topic taken just before it,
+ * the best of the candidates that do not — among those adding at least as
+ * many new works — comes next instead. The sharer stays in the running and
+ * can come later. Coverage never pays for it: the swap needs as many fresh
+ * works.
+ */
+function notBesidePrevious(
+  best: Measured,
+  steps: Measured[],
+  chosen: Pool[],
+  o: Required<ChooseOptions>,
+): Measured {
+  const previous = chosen[chosen.length - 1];
+  if (!previous || !sharesWord(previous.key, best.c.key)) return best;
+  const others = steps.filter(
+    (m) => m.step.fresh >= best.step.fresh && !sharesWord(previous.key, m.c.key),
+  );
+  return bestOf(others, o) ?? best;
 }
 
 function measure(c: Pool, covered: ReadonlyMap<string, number>, short: ReadonlySet<string>): Step {
@@ -451,13 +576,16 @@ function eligible(pool: Pool[], n: number): Pool[] {
 
 /** Every candidate that passes membership and the band, sorted by key. */
 function buildPool(articles: ChooseArticle[], N: number, o: Required<ChooseOptions>): Pool[] {
-  const { members, dfAll } = collect(articles, o.densityPer1000);
+  const { members, dfAll } = collect(articles, o);
   const band = {
     minDf: Math.max(2, Math.ceil(o.minDfFraction * N)),
     maxDf: Math.floor(o.maxDfFraction * N),
   };
   const pool: Pool[] = [];
   for (const key of [...members.keys()].sort(byString)) {
+    /* By default `collect` has already held a vague word to its higher bar;
+       with no density given, the report's other design drops it here. */
+    if (o.dropVague && o.vagueDensityPer1000 === null && isVague(key, o.concretenessMin)) continue;
     const m = members.get(key);
     const p = m ? toPool(key, m, dfAll.get(key)?.size ?? 1, N, band, o.phraseBonus) : null;
     if (p) pool.push(p);
@@ -557,6 +685,22 @@ export function shelfTermMetrics(terms: ShelfTerm[], articleSlugs: string[]): Sh
     maxPairwiseJaccard: js.reduce((m, x) => Math.max(m, x), 0),
     uncovered: articleSlugs.filter((s) => per.get(s) === 0),
   };
+}
+
+/**
+ * Neighbours among the first `k` topics, in the order given, that share a
+ * word stem (plan 260929a R7) — measured on the final list, so after any
+ * `admit` replacement has moved a topic into an earlier place.
+ */
+export function adjacentSharedPairs(terms: ShelfTerm[], k = 12): [string, string][] {
+  const head = terms.slice(0, k);
+  const out: [string, string][] = [];
+  for (let i = 1; i < head.length; i++) {
+    const a = head[i - 1];
+    const b = head[i];
+    if (a && b && sharesWord(a.key, b.key)) out.push([a.label, b.label]);
+  }
+  return out;
 }
 
 /** |A ∩ B| / min(|A|, |B|): 1 when the smaller set sits wholly inside the larger. */
