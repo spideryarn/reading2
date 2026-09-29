@@ -104,13 +104,11 @@ describe("next and previous", () => {
 });
 
 describe("changing depth", () => {
-  it("depth up from the last stop of a pass goes round again, to the first stop new at that depth", () => {
-    /* g is the last of Gist. More's new stops are c and f; c comes first. */
-    expect(stopAfterDepthChange(ROUTE, 1, 2, "g")).toBe("c");
-    /* More is a c d f g, so g is its last stop too; Most's first new stop is b. */
-    expect(stopAfterDepthChange(ROUTE, 2, 3, "g")).toBe("b");
-    /* Straight from Gist to Most: the first stop deeper than Gist, which is b. */
-    expect(stopAfterDepthChange(ROUTE, 1, 3, "g")).toBe("b");
+  it("depth up from the last stop of a pass keeps your place — going round is the door's (plan 260929a)", () => {
+    /* g is the last of Gist and of More; every deeper pass still has it. */
+    expect(stopAfterDepthChange(ROUTE, 1, 2, "g")).toBe("g");
+    expect(stopAfterDepthChange(ROUTE, 2, 3, "g")).toBe("g");
+    expect(stopAfterDepthChange(ROUTE, 1, 3, "g")).toBe("g");
   });
 
   it("depth up from anywhere else stays on the current stop", () => {
@@ -160,21 +158,34 @@ describe("the door after the current stop", () => {
     expect(doorAfter(ROUTE, 1, "a")).toEqual({ kind: "next", quoteId: "d" });
   });
 
-  it("offers to go round again at the end of a pass that has a deeper one", () => {
-    expect(doorAfter(ROUTE, 1, "g")).toEqual({ kind: "again", depth: 2 });
-    expect(doorAfter(ROUTE, 2, "g")).toEqual({ kind: "again", depth: 3 });
+  it("offers, at the end of a pass, stop 1 of this pass and stop 1 of the next deeper one (4N)", () => {
+    /* Gist is a d g; More a c d f g; Most is every stop, a first. */
+    expect(doorAfter(ROUTE, 1, "g")).toEqual({ kind: "end", first: "a", deeper: { depth: 2, first: "a" } });
+    expect(doorAfter(ROUTE, 2, "g")).toEqual({ kind: "end", first: "a", deeper: { depth: 3, first: "a" } });
   });
 
-  it("skips a depth that adds nothing when offering to go round again", () => {
+  it("lands More detail on the deeper pass's own first stop when that is new at it", () => {
+    const late: TrajectoryStop[] = [
+      { quoteId: "p", depth: 2, role: null },
+      { quoteId: "q", depth: 1, role: null },
+    ];
+    expect(doorAfter(late, 1, "q")).toEqual({ kind: "end", first: "q", deeper: { depth: 2, first: "p" } });
+  });
+
+  it("skips a depth that adds nothing when offering more detail", () => {
     const short: TrajectoryStop[] = [
       { quoteId: "x", depth: 1, role: null },
       { quoteId: "y", depth: 3, role: null },
     ];
-    expect(doorAfter(short, 1, "x")).toEqual({ kind: "again", depth: 3 });
+    expect(doorAfter(short, 1, "x")).toEqual({ kind: "end", first: "x", deeper: { depth: 3, first: "x" } });
   });
 
-  it("has nothing to offer at the last stop of the deepest pass", () => {
-    expect(doorAfter(ROUTE, 3, "h")).toEqual({ kind: "end" });
+  it("offers only going round again at the end of the deepest pass", () => {
+    expect(doorAfter(ROUTE, 3, "h")).toEqual({ kind: "end", first: "a", deeper: null });
+  });
+
+  it("has no door on a pass with no stops", () => {
+    expect(doorAfter([], 1, null)).toBeNull();
   });
 });
 

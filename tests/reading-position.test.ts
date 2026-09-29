@@ -230,3 +230,23 @@ describe("two presses of the diagram's ↓ button move twice", () => {
     expect(landed).toEqual([15, 16, 17, 18]);
   });
 });
+
+/* Plan 260929a § 3, GPT Sol F1: a centred arrival's top sits below the line,
+   so the line is in the section before it; while the arrival holds, it is the
+   reader's position. */
+describe("a centred arrival owns the position until the reader scrolls", () => {
+  it("does not rewrite ?at= to the section above a jump that landed centred", () => {
+    /* Jumped to the middle section's first block; the line is in section 1. */
+    expect(spy(9, MIDDLE, { anchored: MIDDLE })).toBeNull();
+    /* Without the anchor, the line's section would win — the defect. */
+    expect(spy(9, MIDDLE)).toEqual({ at: block(0) });
+  });
+
+  it("names the anchored block's section when ?at= is elsewhere (a Trajectory step pushes nothing)", () => {
+    expect(spy(24, block(3), { anchored: block(26) })).toEqual({ at: LAST });
+  });
+
+  it("still waits for a jump in flight", () => {
+    expect(spy(9, block(3), { anchored: LAST, jumpInFlight: true })).toBeNull();
+  });
+});

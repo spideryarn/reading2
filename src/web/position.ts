@@ -200,9 +200,21 @@ export function positionToWrite(opts: {
   atTop: boolean;
   /** What `?at=` says now. */
   held: BlockId | null;
+  /**
+   * A centred arrival the reader has not scrolled away from — scroll.ts §
+   * `anchor`. Its top is below `line`, so the section at the line is the one
+   * *before* it; while it holds, it is the reader's position (plan 260929a,
+   * GPT Sol F1). Omitted means none.
+   */
+  anchored?: BlockId | null;
 }): { at: BlockId | null } | null {
   const { sections, rowOf, tops, line, jumpInFlight, atTop, held } = opts;
   if (jumpInFlight) return null;
+  if (opts.anchored) {
+    const section = sectionContaining(sections, rowOf, opts.anchored);
+    if (section === null || section === sectionContaining(sections, rowOf, held)) return null;
+    return { at: section };
+  }
   // Above the first section there is no section to name, and saying so keeps
   // ?at= out of the URL until the reader has actually moved.
   if (atTop) return held === null ? null : { at: null };

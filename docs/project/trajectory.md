@@ -23,9 +23,10 @@ v1, for the article's owner only, and behind the experimental switch until later
   pinned head with `‹ Stop k of N ›` and **Gist · More · Most** (only the depths that add stops),
   then the stops with their section paths and (since 260928e) their words, the role shown on the current row only, and a shallower
   pass's stops dimmed.
-- **In the prose**: the current stop's quote is ringed and barred, scrolled near the top on every
-  step, and followed by a **Next stop ›** door — *Go round again — More ›* at the end of a pass.
-  On a narrow window the band steps aside once a stop is chosen, and the door carries the walk.
+- **In the prose**: the current stop's quote is ringed and barred, brought into view on every
+  step (centred since 2026-09-29, below), and followed by a **Next stop ›** door — two doors at the
+  end of a pass since 2026-09-29, below. On a narrow window the band steps aside once a stop is
+  chosen, and the door carries the walk.
 - **Keys and address**: ← / → step the stops while the mode is open
   ([keyboard.md](keyboard.md) § ← / → in Trajectory); `?depth=` pushes and `?stop=`
   replaces ([url-state.md](url-state.md)). The rules for where a step or a depth change lands are
@@ -69,7 +70,7 @@ Stage 5, asked for by Greg on 2026-09-28 (his words are in the
   to its stop and flashes it once when the band opens, leaving the band open. A depth change that
   keeps your stop does nothing. This is the named exception to flash.ts's "stepping does not
   flash": the route is out of paper order, so each step is a jump across the article.
-- **Where each stop sits**: a thin muted track with a dot on every row, the same width on each, so
+- **Where each stop sits**: a thin muted track with a dot on every row (vertical, under the number, since 2026-09-29 — below), the same on each, so
   the dots zig-zag down the list as the route jumps about. The dot is at the stop's position in
   words (`positionOf` in [`trajectory-route.ts`](../../src/web/trajectory-route.ts)); the current
   row's dot is in the accent. A screen reader hears "about 70% of the way through".
@@ -112,6 +113,31 @@ own, cut at about 100 characters with the whole of them in a tooltip; the curren
 whole, which is also what a tap reaches on touch. The `〃` that stood for a repeated section path is
 gone — beside a quotation it read as another quotation mark — and a repeated path is now said to a
 screen reader only. A model-written summary per stop is deferred, with the reason, in the plan.
+
+**Four reports of Greg's, 2026-09-29**
+([plan 260929a](../plans/260929a-trajectory-opens-on-stop-one-two-end-of-pass-doors-centred-jumps-compact-position.md),
+his words quoted there):
+
+- **Opening the mode goes to its stop** (SPIDERYARN-READING2-4K). Switching into Trajectory by
+  pressing something, or opening a Trajectory link that names no stop and no position, jumps to the
+  band's current stop — stop 1 on a fresh opening, or where you had got to if you left the mode and
+  came back. It is a real jump, so the **↩ Back to …** chip offers the way home if that was not what
+  you wanted ([url-state.md](url-state.md#the-pushed-entry-says-where-you-came-from)). That makes
+  two history entries, the mode and then the jump: the first Back returns you to where you were and
+  keeps Trajectory open, the second leaves it. Back or Forward *into* Trajectory never jumps — that
+  restores an entry. A `?stop=` link arrives at its stop without a push, as before, and one whose
+  stop has gone arrives at stop 1. **← on stop 1** goes to stop 1 again ([keyboard.md](keyboard.md)).
+- **Two doors at the end of a pass** (SPIDERYARN-READING2-4N): **Go round again**, to stop 1 of the
+  same pass, and **More detail ›**, to stop 1 of the next deeper pass — offered only when there is
+  one, so the end of *Most* offers going round again alone. Under them, *End of Gist — 5 stops.* The
+  depth buttons in the head no longer go round when pressed on the last stop: a depth change always
+  keeps your place, and going round is the doors' job.
+- **Every arrival is centred** (SPIDERYARN-READING2-4M) — the stop's quote in the middle of the
+  window, so you see what is round it; a quote too tall to centre goes to the top. This is every
+  block link in the app, not only Trajectory: [url-state.md § A jump lands centred](url-state.md).
+- **The position mark is a short vertical line under the row's number** (SPIDERYARN-READING2-4D) —
+  top the start of the article, bottom its end, as the spine draws it — instead of a horizontal
+  track with a column of its own, which took about 53px of a band that can be 280px wide.
 
 ### What we tried for v2
 
