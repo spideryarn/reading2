@@ -302,6 +302,14 @@ export function GlossaryPanel({
             job={owner.job}
             starting={owner.starting}
             failed={owner.failed}
+            /* **No *Find more* on an outdated list.** There the run it sends
+               does not append: `existingFor` refuses a list from another
+               prompt version, so it would *replace* the list under a button
+               that says "more" — the reason Quotes hides its own. The banner
+               that used to offer the honest rewrite went on 2026-09-29
+               (SPIDERYARN-READING2-55); re-running is in Metadata. A job or
+               a failure still shows. Plan 260929c. */
+            more={!owner.outdated}
             /* **In the list's own recorded setting**, not the current profile.
                `existingFor` refuses to append across a profile difference, so
                asking a plain list's Find more for the profile would *rewrite*
@@ -438,26 +446,11 @@ export function GlossaryPanel({
                 />
               </div>
             </div>
-          ) : owner?.outdated ? (
-            <div className="gloss-stale">
-              <p>
-                <TriangleAlert size={13} />
-                These were written by a different version of the glossary. Finding them again
-                rewrites each entry the way it would be written now.
-              </p>
-              <div className="gloss-run">
-                <Progress
-                  job={owner.job}
-                  starting={owner.starting}
-                  failed={owner.failed}
-                      stalled={owner.stalled}
-                  onRun={() => owner.find()}
-                  onCancel={owner.cancel}
-                  label="Find them again"
-                />
-              </div>
-            </div>
           ) : null}
+          {/* **No banner for an outdated glossary** (older prompt, same
+              article) — Greg, 2026-09-29 (SPIDERYARN-READING2-55): *"it's not
+              worth bugging the user about it."* Re-running is in Metadata; the
+              foot below drops its *Find more* on such a list. Plan 260929c. */}
 
           {/* One list again, in every order. It was a `div` wrapping two headed
               `ol`s from 2026-08-26 until 2026-09-03, when the threshold started
@@ -1977,6 +1970,7 @@ function Foot({
   job,
   starting,
   failed,
+  more,
   onMore,
   onCancel,
 }: {
@@ -1995,6 +1989,8 @@ function Foot({
    */
   starting: boolean;
   failed: StepFailure | null;
+  /** Whether *Find more* is offered; false on an outdated list (see the caller). */
+  more: boolean;
   onMore(): Promise<void>;
   onCancel(id: string): void;
 }) {
@@ -2015,6 +2011,14 @@ function Foot({
         />
       </div>
     );
+  }
+
+  if (!more) {
+    return failed ? (
+      <div className="gloss-foot">
+        <p className="gloss-error">{failed.message}</p>
+      </div>
+    ) : null;
   }
 
   return (

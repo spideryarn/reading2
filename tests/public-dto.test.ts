@@ -33,11 +33,17 @@ import type {
   Arc,
   Block,
   BlockId,
+  Citations,
+  ClaimDebateRow,
+  Debate,
+  DirectDebateRow,
+  Faq,
   Glossary,
   Ideas,
   Quotes,
   NodeId,
   Timeline,
+  Trajectory,
   Tree,
   TreeNode,
   TweetThread,
@@ -57,6 +63,10 @@ const NO_ARTEFACTS = {
   quotes: null,
   tweets: null,
   timeline: null,
+  trajectory: null,
+  faq: null,
+  citations: null,
+  debate: null,
   /* **An empty array, not `null`** — comments are not an artefact, so there is
      no "nobody built one" state for them to be in. src/public-types.ts
      § PublicArticle.comments. */
@@ -954,6 +964,134 @@ describe("the artefacts a shared link carries", () => {
   };
 
   /**
+   * **A stored route with every field set**, `profileHash` above all: it is who
+   * the route was planned for, and an assertion about a route with a `null`
+   * hash would pass a projection that spread the document. One stop carries a
+   * `cue` and one does not (routes before `trajectory/5`), so `opt` is
+   * exercised both ways. src/public-types.ts § `PublicTrajectory`.
+   */
+  const TRAJECTORY: Trajectory = {
+    version: "trajectory/7",
+    generator: "some-model",
+    slug: "noema",
+    sourceHash: "abc123",
+    profileHash: "profile-of-a-person",
+    stops: [
+      { quoteId: "spya-quote1", depth: 1, role: null, cue: "Look for what the first example costs the claim." },
+      { quoteId: "spya-quote2", depth: 2, role: "Names the trouble" },
+    ],
+    visible: [1, 2, 2],
+    offered: 12,
+    dropped: {
+      collapsed: 1,
+      unknownQuote: 2,
+      duplicate: 0,
+      sameBlock: 1,
+      malformed: 0,
+      badRole: 0,
+      badCue: 1,
+      overCap: 0,
+    },
+    generatedAt: "2026-09-29T10:00:00.000Z",
+    elapsedMs: 12_000,
+  };
+
+  /**
+   * **A stored FAQ with every field set**, `dropped` above all: the owner's
+   * panel prints it and a visitor's must not be sent it. Plan 260929c stage 2.
+   */
+  const FAQ: Faq = {
+    version: "faq/3",
+    generator: "some-model",
+    slug: "noema",
+    sourceHash: "abc123",
+    questions: [
+      {
+        id: "q-one",
+        question: "What does the measurement have to carry?",
+        passages: [{ blockId: "spya-bbbbbb" as BlockId, quote: "the measurement", start: 4 }],
+      },
+    ],
+    dropped: { unknownIds: 1, unquoted: 2, tooLong: 0, duplicate: 0, unanchored: 3, overCap: 0, malformed: 0 },
+    generatedAt: "2026-09-29T10:00:00.000Z",
+    elapsedMs: 9_000,
+  };
+
+  /**
+   * **A stored Citations list with every field set, and three addresses** — a
+   * clean DOI, one carrying a credential, and one on a private host. The two
+   * bad links must be gone from the wire and their rows kept (plan 260929c
+   * stage 3). `key` embeds the credentialled address too, and `found` is set on
+   * a row the way the owner's read attaches it: neither may cross.
+   */
+  const CITATIONS: Citations = {
+    version: "citations/4",
+    generator: "some-model",
+    slug: "noema",
+    sourceHash: "abc123",
+    citations: [
+      {
+        id: "w-clean",
+        key: "doi:10.1/abc",
+        title: "A clean work",
+        authors: "Somebody",
+        year: "2004",
+        why: "The piece leans on it.",
+        relevance: 0.9,
+        influence: 0.7,
+        reference: { blockId: "spya-bbbbbb" as BlockId, quote: "Somebody 2004", start: 0 },
+        mentions: [{ blockId: "spya-bbbbbb" as BlockId, quote: "Somebody", start: 0 }],
+        citedAt: ["spya-bbbbbb" as BlockId],
+        firstCited: "spya-bbbbbb" as BlockId,
+        citedInBody: true,
+        url: "https://doi.org/10.1/abc",
+        linkFrom: "doi",
+        found: { host: "found.example", searches: 1, model: "m", at: "2026-09-29T10:00:00.000Z" },
+      },
+      {
+        id: "w-cred",
+        key: "url:https://user:pw@x.org/paper",
+        title: "A credentialled work",
+        why: "Cited once.",
+        mentions: [],
+        citedAt: [],
+        firstCited: "spya-bbbbbb" as BlockId,
+        citedInBody: false,
+        url: "https://user:pw@x.org/paper",
+        linkFrom: "article",
+      },
+      {
+        id: "w-private",
+        key: "url:http://192.168.0.1/paper",
+        title: "A work on a private host",
+        why: "Cited twice.",
+        mentions: [],
+        citedAt: [],
+        firstCited: "spya-bbbbbb" as BlockId,
+        citedInBody: false,
+        url: "http://192.168.0.1/paper",
+        linkFrom: "article",
+      },
+      {
+        /* A `web` link is the owner's own *Find it*: dropped unjudged. */
+        id: "w-web",
+        key: "work:found|x|2001",
+        title: "A work the owner found",
+        why: "Background.",
+        mentions: [],
+        citedAt: [],
+        firstCited: "spya-bbbbbb" as BlockId,
+        citedInBody: false,
+        url: "https://owners-find.example/paper",
+        linkFrom: "web",
+      },
+    ],
+    capped: true,
+    generatedAt: "2026-09-29T10:00:00.000Z",
+    elapsedMs: 30_000,
+  };
+
+  /**
    * Everything `publicArticle` needs that is not the thing under test, so the
    * comment cases below can name only their comments.
    */
@@ -984,6 +1122,10 @@ describe("the artefacts a shared link carries", () => {
     quotes: QUOTES,
     tweets: THREAD,
     timeline: TIMELINE,
+    trajectory: TRAJECTORY,
+    faq: FAQ,
+    citations: CITATIONS,
+    debate: null,
     comments: [],
     searches: [],
     sketch: null,
@@ -1382,6 +1524,107 @@ describe("the artefacts a shared link carries", () => {
   });
 
   /**
+   * **The route's stops and `offered`, and nothing else** — not who it was
+   * planned for (`profileHash`), and not the pipeline's counts and timings.
+   * Asserted twice: the key set would pass a renamed `profileHash`, and the
+   * string search would not.
+   */
+  it("carries the route's stops and the offered count, and not who it was planned for", () => {
+    expect(pathsUnder("trajectory")).toEqual(
+      ["offered", "stops", "stops[].cue", "stops[].depth", "stops[].quoteId", "stops[].role"].sort(),
+    );
+    expect(built.trajectory).toEqual({
+      stops: [
+        { quoteId: "spya-quote1", depth: 1, role: null, cue: "Look for what the first example costs the claim." },
+        { quoteId: "spya-quote2", depth: 2, role: "Names the trouble" },
+      ],
+      offered: 12,
+    });
+    /* The cue-less stop crosses with no `cue` key, not an `undefined` one. */
+    expect("cue" in (built.trajectory?.stops[1] ?? {})).toBe(false);
+    const json = JSON.stringify(built);
+    expect(json).not.toContain("profileHash");
+    expect(json).not.toContain("profile-of-a-person");
+  });
+
+  /** The questions and the article's passages, and not our checking's tally. */
+  it("carries the faq's questions and passages, and not what checking dropped", () => {
+    expect(pathsUnder("faq")).toEqual(
+      [
+        "questions",
+        "questions[].id",
+        "questions[].passages",
+        "questions[].passages[].blockId",
+        "questions[].passages[].quote",
+        "questions[].passages[].start",
+        "questions[].question",
+      ].sort(),
+    );
+    expect(built.faq).toEqual({ questions: FAQ.questions });
+    expect(JSON.stringify(built.faq)).not.toContain("dropped");
+  });
+
+  /**
+   * **Each cited work minus `key` and `found`, and every address re-judged.**
+   * Exact nested keys against a list with every field set, so a spread of the
+   * work would show up as `key` and `found…` here.
+   */
+  it("carries each cited work without its key or the owner's finds", () => {
+    expect(pathsUnder("citations")).toEqual(
+      [
+        "capped",
+        "citations",
+        "citations[].authors",
+        "citations[].citedAt",
+        "citations[].citedInBody",
+        "citations[].firstCited",
+        "citations[].id",
+        "citations[].influence",
+        "citations[].linkFrom",
+        "citations[].mentions",
+        "citations[].mentions[].blockId",
+        "citations[].mentions[].quote",
+        "citations[].mentions[].start",
+        "citations[].reference",
+        "citations[].reference.blockId",
+        "citations[].reference.quote",
+        "citations[].reference.start",
+        "citations[].relevance",
+        "citations[].title",
+        "citations[].url",
+        "citations[].why",
+        "citations[].year",
+      ].sort(),
+    );
+    const json = JSON.stringify(built.citations);
+    expect(json).not.toContain("found.example");
+    expect(json).not.toContain('"key"');
+    expect(built.citations?.capped).toBe(true);
+  });
+
+  /**
+   * **A refused address takes the link off the row, not the row** — the
+   * mutation-style case plan 260929c asks for. A credential and a private host
+   * are both absent from the whole payload, and both rows survive with their
+   * titles; so does the row whose `web` link was the owner's own find.
+   */
+  it("drops a credentialled or private-host link and keeps the row", () => {
+    const json = JSON.stringify(built);
+    expect(json).not.toContain("user:pw");
+    expect(json).not.toContain("192.168.0.1");
+    expect(json).not.toContain("owners-find.example");
+    const byId = new Map((built.citations?.citations ?? []).map((w) => [w.id, w]));
+    expect([...byId.keys()]).toEqual(["w-clean", "w-cred", "w-private", "w-web"]);
+    expect(byId.get("w-clean")?.url).toBe("https://doi.org/10.1/abc");
+    /* Even the source label must not reveal that the owner ran Find it. */
+    expect(byId.get("w-web")?.linkFrom).toBe("search");
+    for (const id of ["w-cred", "w-private", "w-web"]) {
+      expect("url" in (byId.get(id) ?? {}), id).toBe(false);
+      expect(byId.get(id)?.title, id).toBeTruthy();
+    }
+  });
+
+  /**
    * **And the artefacts are really there**, which every assertion above passes
    * without. A DTO returning `{}` for all four satisfies every key set and
    * every "does not contain", and it is the failure this repo keeps writing up:
@@ -1438,6 +1681,10 @@ describe("the artefacts a shared link carries", () => {
       quotes: null,
       tweets: null,
       timeline: null,
+      trajectory: null,
+      faq: null,
+      citations: null,
+      debate: null,
       comments: [],
       searches: [],
       sketch: null,
@@ -1466,7 +1713,7 @@ describe("the artefacts a shared link carries", () => {
       assets: null,
       ...NO_ARTEFACTS,
     });
-    for (const key of ["glossary", "ideas", "tweets"]) {
+    for (const key of ["glossary", "ideas", "tweets", "trajectory", "faq", "citations", "debate"]) {
       expect(key in bare, key).toBe(false);
     }
   });
@@ -1593,5 +1840,340 @@ describe("the source URL a stranger receives", () => {
   it("says nothing at all when there is nothing it may say", () => {
     expect(published(null)).toBeUndefined();
     expect(published("https://user:pw@example.com/a")).toBeUndefined();
+  });
+});
+
+/**
+ * **The Debate a shared link carries** — since 2026-09-29, plan 260929c stage
+ * 4, by the contract 260905f § Security set. Its own block because two of its
+ * cases need the article's own address set, and the artefact block above runs
+ * with none.
+ *
+ * Three addresses, three places: the row's source (`publicCitationUrl`, a
+ * refusal drops the row), a `linked` signal's address (the article's own, so
+ * `publicSourceUrl`, a refusal takes the address off the signal), and the
+ * row's words (a refused address in them drops the row). Every drop is counted
+ * at the boundary.
+ */
+describe("the debate a shared link carries", () => {
+  const TITLE = "The mythology of conscious AI";
+  /** The article's own address with a credential in it — `publicMeta` leaves it off the masthead. */
+  const CREDENTIALLED_SOURCE = "https://owner:hunter2@papers.example.org/piece";
+  /** And on a private host, the other refusal. */
+  const PRIVATE_SOURCE = "http://10.1.2.3/piece";
+
+  const counts = {
+    returnedSources: 9,
+    reportedRows: 7,
+    keptRows: 3,
+    omittedOverCap: 1,
+    lost: {
+      uncited: 1,
+      selfSource: 0,
+      unverifiedSource: 1,
+      directnessUnverified: 1,
+      sourceIsCopy: 0,
+      claimNotInBlock: 0,
+      unknownBlockId: 0,
+      malformed: 0,
+    },
+    webSearches: 12,
+  };
+
+  /** A direct row with every field set, and all three kinds of evidence. */
+  function directRow(over: Partial<DirectDebateRow> = {}): DirectDebateRow {
+    return {
+      id: "spya-dr0001",
+      url: "https://reply.example.org/a-reply",
+      title: "A reply",
+      sourceQuote: "The measure cannot be computed.",
+      relation: "disputes",
+      lean: "leans-against",
+      applies: "It argues the measure is not computable.",
+      limits: "It does not address the second half.",
+      articleReferenceQuote: `in "${TITLE}"`,
+      identifies: [
+        { kind: "linked", url: "https://www.noemamag.com/the-mythology-of-conscious-ai/" },
+        { kind: "quoted", quote: "the measurement", blockId: "spya-bbbbbb" as BlockId, coverage: 0.3, density: 0.2 },
+        { kind: "named", by: "title", witness: TITLE },
+      ],
+      ...over,
+    };
+  }
+
+  /** A claim row with every field set. */
+  function claimRow(over: Partial<ClaimDebateRow> = {}): ClaimDebateRow {
+    return {
+      id: "spya-cr0001",
+      url: "https://answers.example.org/on-claims",
+      title: "An answer",
+      sourceQuote: "Somebody answers what it claims.",
+      relation: "qualifies",
+      lean: "neither",
+      applies: "It narrows the claim.",
+      limits: "Only for mammals.",
+      claimQuote: "the measurement",
+      blockId: "spya-bbbbbb" as BlockId,
+      ...over,
+    };
+  }
+
+  function debateOf(direct: DirectDebateRow[], claims: ClaimDebateRow[]): Debate {
+    return {
+      version: "debate/9",
+      generator: "some-model",
+      slug: "noema",
+      sourceHash: "abc123",
+      searchedAt: "2026-09-20T10:00:00.000Z",
+      direct: { rows: direct, counts },
+      claims: { rows: claims, counts },
+      elapsedMs: 31_000,
+    };
+  }
+
+  function publish(debate: Debate, finalUrl: string | null = "https://www.noemamag.com/the-mythology-of-conscious-ai/") {
+    return publicArticle({
+      slug: "noema",
+      title: TITLE,
+      byline: null,
+      siteName: null,
+      lang: null,
+      excerpt: null,
+      headingTitle: null,
+      finalUrl,
+      blocks: [BLOCK],
+      tree: TREE,
+      arc: null,
+      assets: null,
+      ...NO_ARTEFACTS,
+      debate,
+    });
+  }
+
+  /**
+   * **Exact nested keys against an over-full input.** Every stored field set,
+   * plus provenance and the stored counts: a spread anywhere would show up
+   * here as `version`, `counts…` or `webSearches`.
+   */
+  it("carries rows, signals and searchedAt, and none of the provenance or stored counts", () => {
+    const built = publish(debateOf([directRow()], [claimRow()]));
+    expect(keyPaths(built.debate)).toEqual(
+      [
+        "searchedAt",
+        "direct",
+        "direct.rows",
+        "direct.rows[].id",
+        "direct.rows[].url",
+        "direct.rows[].title",
+        "direct.rows[].sourceQuote",
+        "direct.rows[].relation",
+        "direct.rows[].lean",
+        "direct.rows[].applies",
+        "direct.rows[].limits",
+        "direct.rows[].articleReferenceQuote",
+        "direct.rows[].identifies",
+        "direct.rows[].identifies[].kind",
+        "direct.rows[].identifies[].url",
+        "direct.rows[].identifies[].quote",
+        "direct.rows[].identifies[].blockId",
+        "direct.rows[].identifies[].coverage",
+        "direct.rows[].identifies[].density",
+        "direct.rows[].identifies[].by",
+        "direct.rows[].identifies[].witness",
+        "direct.sourceNotPublishable",
+        "claims",
+        "claims.rows",
+        "claims.rows[].id",
+        "claims.rows[].url",
+        "claims.rows[].title",
+        "claims.rows[].sourceQuote",
+        "claims.rows[].relation",
+        "claims.rows[].lean",
+        "claims.rows[].applies",
+        "claims.rows[].limits",
+        "claims.rows[].claimQuote",
+        "claims.rows[].blockId",
+        "claims.sourceNotPublishable",
+      ].sort(),
+    );
+    expect(built.debate?.searchedAt).toBe("2026-09-20T10:00:00.000Z");
+    expect(built.debate?.direct.sourceNotPublishable).toBe(0);
+    expect(built.debate?.claims.sourceNotPublishable).toBe(0);
+    /* A clean article address on a linked signal crosses as itself. */
+    expect(built.debate?.direct.rows[0]?.identifies[0]).toEqual({
+      kind: "linked",
+      url: "https://www.noemamag.com/the-mythology-of-conscious-ai/",
+    });
+  });
+
+  /**
+   * **A refused source drops the whole row, and the loss is counted** — the
+   * 260905f mutation: a credentialled and a private-host source in each group.
+   * The rows vanish, each group's count says exactly how many, the addresses
+   * appear nowhere in the payload, and the owner's stored counts are untouched.
+   */
+  it("drops a row whose source is credentialled or private, and counts it", () => {
+    const debate = debateOf(
+      [
+        directRow(),
+        directRow({ id: "spya-dr0002", url: "https://reader:swordfish@x.org/reply" }),
+        directRow({ id: "spya-dr0003", url: "http://192.168.0.7/reply" }),
+      ],
+      [claimRow(), claimRow({ id: "spya-cr0002", url: "http://intranet/answer" })],
+    );
+    const before = structuredClone(debate);
+    const built = publish(debate);
+    expect(built.debate?.direct.rows.map((r) => r.id)).toEqual(["spya-dr0001"]);
+    expect(built.debate?.direct.sourceNotPublishable).toBe(2);
+    expect(built.debate?.claims.rows.map((r) => r.id)).toEqual(["spya-cr0001"]);
+    expect(built.debate?.claims.sourceNotPublishable).toBe(1);
+    const json = JSON.stringify(built);
+    for (const leak of ["swordfish", "192.168.0.7", "intranet/answer"]) expect(json, leak).not.toContain(leak);
+    expect(debate, "the owner's artefact and its counts are untouched").toEqual(before);
+  });
+
+  /**
+   * **The nested places — GPT Sol's P0 on the plan.** A direct row's `linked`
+   * signal is the article's *own* address, and its witness can quote it. With
+   * the article's address refused (a credential; then a private host):
+   *
+   * - a row whose witness quotes it is dropped and counted;
+   * - a row whose witness does not keeps its place, and its `linked` signal
+   *   crosses without the address;
+   * - a claim row whose quotation carries it is dropped too;
+   *
+   * and the address is nowhere in the payload — the masthead included.
+   */
+  it.each([
+    ["a credential", CREDENTIALLED_SOURCE, "hunter2"],
+    ["a private host", PRIVATE_SOURCE, "10.1.2.3"],
+  ])("never publishes the article's own address with %s, however it is nested", (_, source, needle) => {
+    const built = publish(
+      debateOf(
+        [
+          directRow({
+            id: "spya-dr0010",
+            articleReferenceQuote: `see ${source} for the piece`,
+            identifies: [{ kind: "linked", url: source }],
+          }),
+          directRow({
+            id: "spya-dr0011",
+            identifies: [
+              { kind: "linked", url: source },
+              { kind: "named", by: "title", witness: TITLE },
+            ],
+          }),
+        ],
+        [
+          claimRow(),
+          claimRow({ id: "spya-cr0010", sourceQuote: `As ${source.replace(/^https?:\/\//, "")} argues` }),
+        ],
+      ),
+      source,
+    );
+    expect(built.debate?.direct.rows.map((r) => r.id)).toEqual(["spya-dr0011"]);
+    expect(built.debate?.direct.sourceNotPublishable).toBe(1);
+    expect(built.debate?.direct.rows[0]?.identifies).toEqual([
+      { kind: "linked" },
+      { kind: "named", by: "title", witness: TITLE },
+    ]);
+    expect(built.debate?.claims.rows.map((r) => r.id)).toEqual(["spya-cr0001"]);
+    expect(built.debate?.claims.sourceNotPublishable).toBe(1);
+    expect(JSON.stringify(built)).not.toContain(needle);
+  });
+
+  /**
+   * **A linked address refused on its own**, with the masthead's address
+   * clean: the page spelled the article's address with a query on it — which
+   * `publicCitationUrl` would pass and `publicSourceUrl`, the article's own
+   * policy, does not. The signal loses it; a witness quoting it loses the row.
+   */
+  it("judges a linked address by the article's own policy, not the citation one", () => {
+    const signed = "https://www.noemamag.com/the-mythology-of-conscious-ai/?token=OWNERSECRET";
+    const built = publish(
+      debateOf(
+        [
+          directRow({ id: "spya-dr0020", identifies: [{ kind: "linked", url: signed }] }),
+          directRow({ id: "spya-dr0021", articleReferenceQuote: signed, identifies: [{ kind: "linked", url: signed }] }),
+        ],
+        [],
+      ),
+    );
+    expect(built.debate?.direct.rows.map((r) => r.id)).toEqual(["spya-dr0020"]);
+    expect(built.debate?.direct.rows[0]?.identifies).toEqual([{ kind: "linked" }]);
+    expect(built.debate?.direct.sourceNotPublishable).toBe(1);
+    expect(JSON.stringify(built)).not.toContain("OWNERSECRET");
+  });
+
+  it("drops a row whose source is the article's refused own address", () => {
+    const signed = "https://www.noemamag.com/the-mythology-of-conscious-ai/?token=OWNERSECRET";
+    const built = publish(
+      debateOf(
+        [directRow({ id: "spya-dr0022", url: signed })],
+        [claimRow({ id: "spya-cr0022", url: signed })],
+      ),
+      signed,
+    );
+    expect(built.debate?.direct.rows).toEqual([]);
+    expect(built.debate?.direct.sourceNotPublishable).toBe(1);
+    expect(built.debate?.claims.rows).toEqual([]);
+    expect(built.debate?.claims.sourceNotPublishable).toBe(1);
+    expect(JSON.stringify(built)).not.toContain("OWNERSECRET");
+  });
+
+  it("drops a row whose words contain a percent-encoded refused address", () => {
+    const signed = "https://www.noemamag.com/the-mythology-of-conscious-ai/?token=OWNERSECRET";
+    const built = publish(
+      debateOf(
+        [directRow({ id: "spya-dr0023", articleReferenceQuote: encodeURIComponent(signed) })],
+        [claimRow({ id: "spya-cr0023", sourceQuote: encodeURIComponent(signed) })],
+      ),
+      signed,
+    );
+    expect(built.debate?.direct.rows).toEqual([]);
+    expect(built.debate?.direct.sourceNotPublishable).toBe(1);
+    expect(built.debate?.claims.rows).toEqual([]);
+    expect(built.debate?.claims.sourceNotPublishable).toBe(1);
+    expect(JSON.stringify(built)).not.toContain("OWNERSECRET");
+  });
+
+  /**
+   * **A legacy row crosses in today's vocabulary.** Stored before 2026-09-08 it
+   * has `valence` and no `lean`; before 2026-09-06, no `identifies`. The public
+   * row carries `lean` only, and a named signal on the witness.
+   */
+  it("reads a legacy row's lean and evidence, and carries neither old field", () => {
+    const legacy = {
+      ...directRow({ id: "spya-dr0030" }),
+      lean: undefined,
+      valence: "positive",
+      identifies: undefined,
+    } as unknown as DirectDebateRow;
+    const legacyClaim = { ...claimRow({ id: "spya-cr0030" }), lean: undefined, valence: "negative" } as unknown as ClaimDebateRow;
+    const built = publish(debateOf([legacy], [legacyClaim]));
+    const row = built.debate?.direct.rows[0];
+    expect(row?.lean).toBe("leans-for");
+    expect(row?.identifies).toEqual([{ kind: "named", by: "title", witness: `in "${TITLE}"` }]);
+    expect(built.debate?.claims.rows[0]?.lean).toBe("leans-against");
+    expect(JSON.stringify(built.debate)).not.toContain("valence");
+  });
+
+  it("carries no debate key when nobody searched", () => {
+    const bare = publicArticle({
+      slug: "noema",
+      title: null,
+      byline: null,
+      siteName: null,
+      lang: null,
+      excerpt: null,
+      headingTitle: null,
+      finalUrl: null,
+      blocks: [BLOCK],
+      tree: TREE,
+      arc: null,
+      assets: null,
+      ...NO_ARTEFACTS,
+    });
+    expect("debate" in bare).toBe(false);
   });
 });

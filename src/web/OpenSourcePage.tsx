@@ -9,9 +9,10 @@
  *
  * *Brief* is the instruction, so this is four short sections and a row of
  * links, and it takes `ContactPage.tsx`'s shape rather than the marketing
- * shell — a Back link, an `h1`, prose, and the same `SiteFooter` every page a
- * reader lands on carries. The reasoning for that choice is written out in
- * ContactPage.tsx § Why it looks like `/privacy`; it applies here unchanged.
+ * shell — a Home icon link, an `h1`, prose, and the same `SiteFooter` every
+ * page a reader lands on carries. The reasoning for that choice is written
+ * out in ContactPage.tsx § Why it looks like `/privacy`; it applies here
+ * unchanged.
  *
  * ## Everything on it is already true somewhere else
  *
@@ -37,10 +38,10 @@
  * "brief", and the way a brief page stops being brief is by trying to be a
  * second README.
  */
-import { ArrowLeft } from "lucide-react";
 
 import { REPO_URL } from "../changelog.js";
 import { GitHubMark } from "./GitHubMark.js";
+import { BackLink } from "./BackLink.js";
 import { Link } from "./Link.js";
 import { pageTitle, useDocumentTitle } from "./page-title.js";
 import { CHANGELOG_HREF, PRIVACY_HREF } from "./router.js";
@@ -62,13 +63,7 @@ export function OpenSourcePage() {
 
   return (
     <main className="tw:mx-auto tw:max-w-2xl tw:px-6 tw:pt-[calc(3.5rem_+_var(--safe-top))] tw:pb-24 tw:font-sans">
-      <Link
-        href="/"
-        className="tw:mb-6 tw:inline-flex tw:items-center tw:gap-1 tw:text-xs tw:text-ink-faint tw:no-underline tw:hover:text-highlight"
-      >
-        <ArrowLeft size={13} />
-        Back
-      </Link>
+      <BackLink href="/" label="Home" icon="home" className="tw:mb-6" />
 
       <h1 className="tw:m-0 tw:flex tw:items-center tw:gap-2.5 tw:font-prose tw:text-2xl tw:leading-snug tw:text-foreground">
         <GitHubMark size={22} className="tw:shrink-0 tw:text-ink-faint" />

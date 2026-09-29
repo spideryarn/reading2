@@ -488,9 +488,21 @@ const SHARED_WITH_READER = [
   "src/types.ts",
   "src/uploads.ts",
   "src/urls.ts",
+  /* Both arrived 2026-09-29 as extractions, not as new code for the reader
+     (docs/plans/260929c-…). `BackLink` is the arrow-and-tooltip every page's
+     way back now uses: the eager pages (Masthead, Tweets, Profile, Contact,
+     Privacy, OpenSource, the visitor pages) each typed that link inline before,
+     and `/admin` now shares it. `LogoGlyphs` is the wordmark's letters and
+     spider, lifted out of HomeLogo and Dock — both eager — so `/design`'s
+     gallery draws the same markup rather than a copy. The reader downloaded
+     all of this already; what is new is only that the lazy routes reach the
+     same module. Both import only `Link`, `Tooltip` and lucide, which are
+     here already. */
+  "src/web/BackLink.tsx",
   "src/web/IconButton.tsx",
   "src/web/JobProgress.tsx",
   "src/web/Link.tsx",
+  "src/web/LogoGlyphs.tsx",
   "src/web/ShelfEntry.tsx",
   "src/web/TitleEditor.tsx",
   "src/web/Tooltip.tsx",

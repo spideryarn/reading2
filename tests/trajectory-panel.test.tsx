@@ -402,7 +402,7 @@ const CARD: StopCard = {
 
 async function draw(o: UseTrajectory, v: TrajectoryView) {
   calls.length = 0;
-  await act(async () => root.render(createElement(TrajectoryPanel, { owner: o, view: v, away: false })));
+  await act(async () => root.render(createElement(TrajectoryPanel, { access: { kind: "owner", owner: o }, view: v, away: false })));
 }
 
 const text = (sel: string) => host.querySelector(sel)?.textContent ?? null;
@@ -734,11 +734,31 @@ describe("the panel", () => {
     expect(footer?.textContent).not.toContain("Plan it again");
   });
 
-  it("offers it once, in the outdated banner, rebuilding the route only (5e)", async () => {
+  /* An older prompt is not announced — Greg, 2026-09-29
+     (SPIDERYARN-READING2-55): *"perhaps even don't bother showing it."* Only
+     the stale and profile-changed banners are left, and a job on an outdated
+     route shows in the foot. plan 260929c. */
+  it("says nothing about an outdated route, but still about a stale or re-profiled one", async () => {
+    await draw(owner({ outdated: true }), view());
+    expect(host.querySelector(".gloss-stale")).toBeNull();
+    expect(host.textContent).not.toContain("older version of the prompt");
+    await draw(owner({ outdated: true, profileChanged: true }), view());
+    expect(text(".gloss-stale")).toContain("before your profile said what it says now");
+    expect(host.querySelector(".gloss-stale button")?.textContent).toBe("Plan it again");
+  });
+
+  it("shows a running job in the foot on an outdated route", async () => {
+    await draw(owner({ outdated: true, job: RUNNING_TRAJECTORY_JOB }), view());
+    const footer = host.querySelector<HTMLElement>(".traj-again");
+    expect(footer, "a run on an outdated route shows nowhere").toBeTruthy();
+    expect(footer?.textContent).toContain("Stop");
+  });
+
+  it("offers it once, in the stale banner, rebuilding the route only (5e)", async () => {
     let regenerated = 0;
     let ensured = 0;
     const o = owner({
-      outdated: true,
+      stale: true,
       regenerate: async () => void regenerated++,
       ensure: async () => void ensured++,
     });
@@ -1448,8 +1468,8 @@ describe("the band, walked", () => {
   });
 
   it("plans it again with the route forced, and nothing else when the Quotes are current (5e)", async () => {
-    /* Outdated, so the banner — the one Plan it again left (plan 260929b) — is drawn. */
-    trajectoryBody = { ...TRAJECTORY_BODY, outdated: true };
+    /* Stale, so the banner — the one Plan it again left (plans 260929b, 260929c) — is drawn. */
+    trajectoryBody = { ...TRAJECTORY_BODY, stale: true };
     /* Not `["quotes", "trajectory"]`: the server re-runs Quotes whose prompt
        version is merely outdated, so naming them on every press re-bought and
        replaced a reader's Quotes on a route rebuild (browser check, 2026-09-28;
@@ -1463,8 +1483,8 @@ describe("the band, walked", () => {
   });
 
   it("plans it again with the Ideas found first, unforced, when there are none (stage 6)", async () => {
-    /* Outdated, so the banner — the one Plan it again left (plan 260929b) — is drawn. */
-    trajectoryBody = { ...TRAJECTORY_BODY, outdated: true };
+    /* Stale, so the banner — the one Plan it again left (plans 260929b, 260929c) — is drawn. */
+    trajectoryBody = { ...TRAJECTORY_BODY, stale: true };
     await mount();
     await act(async () => host.querySelector<HTMLButtonElement>(".gloss-stale button")!.click());
     await settled();
@@ -1472,8 +1492,8 @@ describe("the band, walked", () => {
   });
 
   it("plans it again with stale Quotes chosen first, unforced (5e, Sol F30)", async () => {
-    /* Outdated, so the banner — the one Plan it again left (plan 260929b) — is drawn. */
-    trajectoryBody = { ...TRAJECTORY_BODY, outdated: true };
+    /* Stale, so the banner — the one Plan it again left (plans 260929b, 260929c) — is drawn. */
+    trajectoryBody = { ...TRAJECTORY_BODY, stale: true };
     quotesRead = { ...QUOTES_READ, stale: true };
     ideasBody = IDEAS_BODY;
     await mount();
@@ -1484,8 +1504,8 @@ describe("the band, walked", () => {
   });
 
   it("keeps a route press pending until the Ideas read says whether it is stale", async () => {
-    /* Outdated, so the banner — the one Plan it again left (plan 260929b) — is drawn. */
-    trajectoryBody = { ...TRAJECTORY_BODY, outdated: true };
+    /* Stale, so the banner — the one Plan it again left (plans 260929b, 260929c) — is drawn. */
+    trajectoryBody = { ...TRAJECTORY_BODY, stale: true };
     let answerIdeas!: (response: Response) => void;
     ideasReply = new Promise<Response>((resolve) => {
       answerIdeas = resolve;

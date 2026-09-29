@@ -24,7 +24,7 @@
  * note the `tw:` prefix, without which the class does nothing.
  */
 import { useCallback, useMemo, type ReactNode } from "react";
-import { ArrowLeft, MessageSquareWarning, Palette, RefreshCw, Users } from "lucide-react";
+import { MessageSquareWarning, Palette, RefreshCw, Users } from "lucide-react";
 import type { OnChangeFn, SortingState } from "@tanstack/react-table";
 import { functionalUpdate } from "@tanstack/react-table";
 import { throttle, useQueryState } from "nuqs";
@@ -34,6 +34,7 @@ import { ADMIN_CHIP_ORDER, adminColumns } from "./admin-columns.js";
 import { buildCommit, buildTime, shortCommit } from "./build-stamp.js";
 import { DataTable, naturalDirections, SortChips, useSortedTable } from "./lib/DataTable.js";
 import { isAllNatural, sinkLast, sortingFromUrl, sortingToUrl } from "./lib/table-sort.js";
+import { BackLink } from "./BackLink.js";
 import { Link } from "./Link.js";
 import { pageTitle, useDocumentTitle } from "./page-title.js";
 import { ADMIN_DEFAULT_BY, adminByParam, sortDirParam } from "./params.js";
@@ -69,7 +70,7 @@ const idOf = (u: AdminUser) => u.id;
 function Shell({
   title,
   children,
-  back = { href: LIBRARY_HREF, label: "Home" },
+  back = { href: LIBRARY_HREF, label: "Back to your library" },
 }: {
   title: string;
   children: ReactNode;
@@ -81,13 +82,7 @@ function Shell({
        sideways inside `DataTable`'s own overflow box. */
     <main className="tw:mx-auto tw:max-w-6xl tw:px-6 tw:py-10 tw:font-sans">
       <header className="tw:mb-8">
-        <Link
-          href={back.href}
-          className="tw:inline-flex tw:items-center tw:gap-1.5 tw:text-xs tw:text-ink-faint tw:no-underline tw:hover:text-highlight"
-        >
-          <ArrowLeft size={13} />
-          {back.label}
-        </Link>
+        <BackLink href={back.href} label={back.label} />
         <h1 className="tw:mt-2 tw:font-prose tw:text-3xl tw:text-foreground">{title}</h1>
       </header>
       {children}
@@ -317,7 +312,7 @@ export function AdminUsersPage() {
   );
 
   return (
-    <Shell title="Users" back={{ href: ADMIN_HREF, label: "Admin" }}>
+    <Shell title="Users" back={{ href: ADMIN_HREF, label: "Back to Admin" }}>
       {error && (
         <p className="tw:mb-4 tw:rounded-md tw:border tw:border-destructive/40 tw:bg-destructive/10 tw:p-4 tw:text-sm tw:text-foreground">
           {/* **Which numbers you are looking at, when there are still numbers.**
@@ -407,7 +402,7 @@ export function AdminFeedbackPage() {
   const now = useNow();
 
   return (
-    <Shell title="Feedback" back={{ href: ADMIN_HREF, label: "Admin" }}>
+    <Shell title="Feedback" back={{ href: ADMIN_HREF, label: "Back to Admin" }}>
       {error && (
         /* Same sentence-shape as the users page, and the distinction it draws
            matters more here: an empty inbox is an ordinary answer, so an error

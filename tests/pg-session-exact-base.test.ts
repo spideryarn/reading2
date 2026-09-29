@@ -27,6 +27,12 @@
  * `npm run db:import`, a hand-run `publishRevision`, or the fixture loader. The
  * invariant is absent either way, which is what this file is about.
  *
+ * **Since 2026-09-29 it is usually another job**: compatible mode jobs run side
+ * by side on one article, and the second to finish is carried onto the first's
+ * publication when the data shows that is safe (`rebaseSharingDraftIn`). The
+ * cases below still refuse, because each one moves the very column its `arc`
+ * job makes; tests/pg-session-sharing-rebase.test.ts is the rebase's own file.
+ *
  * ## What the guard is, and what it is not
  *
  * `publishRevisionIn` (src/store/pg-revisions.ts) compares the draft's own

@@ -39,6 +39,7 @@ import { ArrowRight } from "lucide-react";
 import type { ReactNode } from "react";
 import { libraryHomeTitle } from "./library-home-title.js";
 import { Link } from "./Link.js";
+import { LogoLetters, LogoMark } from "./LogoGlyphs.js";
 import { useLogoAnimation } from "./logo-animation.js";
 import { FEATURES_HREF, PRICING_HREF, PRIVACY_HREF } from "./router.js";
 import type { Shot as ShotRecord } from "./shots.js";
@@ -63,10 +64,14 @@ export const SHELL = "tw:mx-auto tw:w-full tw:max-w-6xl tw:px-6";
  * caller owns the link. The bar spreads `useLogoAnimation()` on its home link
  * (hover, and a long press that does not navigate); the footer wraps this in
  * a span with `{ tap: true }`, because a tap there does nothing else. One host
- * per copy, so no spider ever plays twice. There are no `.logo-letter` spans
- * here, so only the animations that reach the mark are offered
- * (logo-animation.ts § pickLogoAnimation) — the shelf's spider has the same
- * set. docs/plans/260929a-logo-beside-the-wordmark-beta-to-the-right-no-shelf-tagline.md.
+ * per copy, so no spider ever plays twice.
+ * docs/plans/260929a-logo-beside-the-wordmark-beta-to-the-right-no-shelf-tagline.md.
+ *
+ * **All thirteen since 2026-09-29, not the spider's six.** The name was plain
+ * text until then, so `lettersDrawn` found nothing and only the mark
+ * animations were offered; it is `LogoLetters` now, the same ten spans
+ * HomeLogo draws (LogoGlyphs.tsx).
+ * docs/plans/260929c-back-links-become-icons-with-tooltips-and-one-animated-wordmark-reused.md.
  *
  * It exists as a component because it is now drawn in two places that do not
  * otherwise share code: the bar at the top of this file, and the foot of
@@ -92,19 +97,18 @@ export function Wordmark({ className }: { className?: string }) {
     <span
       className={`tw:inline-flex tw:items-center tw:gap-[0.4em] tw:font-prose tw:font-medium tw:text-foreground ${className ?? ""}`}
     >
-      {/* `alt=""` for the reason HomeLogo.tsx gives: the name is right beside
-          it, and a screen reader saying it twice is noise. */}
-      <span className="logo-mark">
-        <img
-          className="logo-image tw:h-auto tw:w-[1.25em]"
-          src="/spideryarn-logo.png"
-          alt=""
-          width={20}
-          height={20}
-        />
-      </span>
+      <LogoMark className="tw:h-auto tw:w-[1.25em]" />
+      {/* **The name is ten `.logo-letter` spans since 2026-09-29**, so the
+          host offers all thirteen animations rather than the spider's six —
+          Greg: *"The contact page has all the lovely logo+sitename
+          animations, but the other pages don't."* A wrapper of their own,
+          because the stagger is `:nth-child` over exactly these ten, and
+          "Reading" stays plain text after it. LogoGlyphs.tsx. */}
       <span>
-        Spideryarn <span className="tw:text-highlight">Reading</span>
+        <span>
+          <LogoLetters />
+        </span>{" "}
+        <span className="site-wordmark-rest tw:text-highlight">Reading</span>
       </span>
     </span>
   );

@@ -27,8 +27,9 @@ of compression, down the page for position and across for detail. Read that firs
   invariants a stream needs and a single response does not.
 - **Never substitute generated text for the prose,** and render model output as text, not HTML.
 - **One payload, no network on zoom** — meta, blocks and tree arrive together.
-- **Pressing a mode with nothing in it runs it; arriving at one does not.** Six surfaces are backed
-  by a paid step — Glossary, Ideas, Quotes, Timeline, Debate, and the Sketch picture inside Diagram —
+- **Pressing a mode with nothing in it runs it; arriving at one does not.** The artefact-backed
+  surfaces are Glossary, Ideas, Quotes, Timeline, Debate, Citations, FAQ, Trajectory, and the Sketch
+  or Illustrated picture inside Diagram —
   and since 2026-09-02 a press on the bar's button starts the job with no second click. A pasted link, a
   Back step and a link in from the metadata page all show the empty state and its button, and spend
   nothing: the press is recorded as data by the control that saw it
@@ -121,15 +122,18 @@ readers never are.
   around the claims it makes. **The only mode whose content is not in the article at all**, which is
   why nearly everything the panel draws that is not a row is a disclosure. There is no `debate.md`
   yet; the plan is the reference:
-  [260905f](../plans/260905f-debate-mode-what-the-web-says-about-this-piece.md). Owner-only and
-  behind the switch for now.
+  [260905f](../plans/260905f-debate-mode-what-the-web-says-about-this-piece.md). Behind the switch
+  for now; since 2026-09-29 a visitor to a public article sees a stored one, every row's address
+  re-judged at the boundary and a refused row withheld and counted — only running a search is the
+  owner's ([260929c](../plans/260929c-a-visitor-sees-every-stored-mode-on-a-public-article.md)).
 - **[citations.md](citations.md)** — every work the piece cites, each with a link out, ordered and
   thresholded the way the glossary is. Open it for the one safety property: every address a row
-  shows was in the article, and a search says it is one. Owner-only and behind the switch for now.
+  shows was in the article, and a search says it is one. Behind the switch; a visitor to a public
+  article sees the stored list, while making it and using *Find it* remain the owner's.
 - **[faq.md](faq.md)** — the questions a careful reader would ask the piece while reading it, each
   answered by passages of the piece itself and never by a written answer. Open it for where the
-  promise stops: the words are checked, which passage answers which question is not. Owner-only and
-  behind the switch for now.
+  promise stops: the words are checked, which passage answers which question is not. Behind the
+  switch; a visitor to a public article sees the stored FAQ, while making it remains the owner's.
 - **[trajectory.md](trajectory.md)** — skim a paper at increasing depth: one route through its
   passages, not in the paper's order, walked with a handful of stops, then a dozen, then more. Open
   it for Greg's dictated brief, verbatim, and the questions still waiting for him.

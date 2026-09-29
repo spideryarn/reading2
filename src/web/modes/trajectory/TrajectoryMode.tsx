@@ -10,7 +10,13 @@
  * in the prose `TableView` draws. Both ask this hook, so all three ways of
  * stepping are one rule (src/web/trajectory-route.ts).
  *
- * No visitor twin: `POLICY.trajectory` is `owners-only` (src/web/visitor.ts).
+ * **And a visitor twin since 2026-09-29**, `VisitorTrajectoryBand`: the stored
+ * route off the public payload, through the same `useTrajectoryMode`, with no
+ * `useTrajectory` under it — so it can neither read the owner's route nor plan
+ * one. It was `owners-only` until a signed-out reader of a public article with
+ * a built route was told the route would cost a model call
+ * (SPIDERYARN-READING2-56,
+ * docs/plans/260929c-a-visitor-sees-every-stored-mode-on-a-public-article.md).
  *
  * docs/plans/260928a-trajectory-mode-skim-a-paper-at-increasing-depth.md
  * § The mode (client), docs/project/trajectory.md.
@@ -19,6 +25,13 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef } from "react";
 import { useQueryStates } from "nuqs";
 import type { Block, BlockId, Quote, Tree, TrajectoryDepth, TrajectoryStop } from "../../../types.js";
+import type {
+  PublicFaq,
+  PublicGlossary,
+  PublicIdeas,
+  PublicTimeline,
+  PublicTrajectory,
+} from "../../../public-types.js";
 import { blockIndex, sectionPathOf } from "../../../section-path.js";
 import { depthParam, stopParam } from "../../params.js";
 import { usePassageLifecycle } from "../../passage-lifecycle.js";
@@ -271,7 +284,71 @@ export function TrajectoryBand({
     onControl,
     arrival,
   });
-  return <TrajectoryPanel owner={owner} view={view} away={away} />;
+  return <TrajectoryPanel access={{ kind: "owner", owner }} view={view} away={away} />;
+}
+
+/** The props both bands take from `Reader` for the walk itself. */
+type WalkProps = Pick<
+  Parameters<typeof TrajectoryBand>[0],
+  | "blocks"
+  | "tree"
+  | "quoteMarks"
+  | "covers"
+  | "away"
+  | "onAway"
+  | "onJump"
+  | "onFound"
+  | "openKey"
+  | "onOpenKey"
+  | "onControl"
+  | "onOpen"
+  | "canOpen"
+  | "arrival"
+>;
+
+/**
+ * **The same walk, for somebody who does not own the article.**
+ *
+ * Everything came in the page's own payload: the route, the quotes it stops
+ * at, and the stop card's sources. No `useTrajectory`, so no read of
+ * `/api/trajectory/:slug` and no `useAutoRun` — nothing here can plan a route,
+ * which is the whole of why this is a second band rather than a flag on the
+ * first (src/web/reader-capability.ts; `VisitorTimelineBand` is the sibling).
+ * The card's sources are the payload's copies, never `useIdeasRead` or
+ * `useFaqRead`: those are owner reads. A stored artefact on a shared link
+ * carries no freshness (src/public-types.ts § `PublicArtefactSet`), so each is
+ * handed over as not stale.
+ */
+export function VisitorTrajectoryBand({
+  route,
+  quotes,
+  glossary,
+  ideas,
+  timeline,
+  faq,
+  ...walk
+}: WalkProps & {
+  route: PublicTrajectory;
+  quotes: Quote[];
+  glossary: PublicGlossary | undefined;
+  ideas: PublicIdeas | undefined;
+  timeline: PublicTimeline | undefined;
+  /** The payload's FAQ, since 2026-09-29 (plan 260929c stage 2). */
+  faq: PublicFaq | undefined;
+}) {
+  useRenderCount("VisitorTrajectoryBand");
+  const sources = useMemo<CardSources>(
+    () => ({
+      glossary: { value: glossary ?? null, stale: false },
+      ideas: { value: ideas ?? null, stale: false },
+      faq: { value: faq ?? null, stale: false },
+      timeline: { value: timeline ?? null, stale: false },
+    }),
+    [glossary, ideas, timeline, faq],
+  );
+  const { away, ...rest } = walk;
+  const view = useTrajectoryMode({ ...rest, sources, stops: route.stops, quotes });
+  return <TrajectoryPanel access={{ kind: "visitor", route }} view={view} away={away} />;
 }
 
 /** What the panel draws — see `TrajectoryPanel`. */

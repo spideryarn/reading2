@@ -90,6 +90,15 @@ import { checkTree } from "../tree-invariants.js";
 import type { Block, JobReset, OwnerId, StepName, Tree } from "../types.js";
 import { deriveLibraryScalars } from "../library-scalars.js";
 import { extraColumns, extraSteps } from "../reset.js";
+import {
+  SHARING_STEPS,
+  isSharingJob,
+  readsOf,
+  sharingPolicy,
+  writesOf,
+  type JobShape,
+  type SharingStep,
+} from "../sharing-steps.js";
 import { READ_COMMITTED } from "./isolation.js";
 import { REVISION_PROJECTIONS, ownedSlug, requireSlug } from "./pg.js";
 import { slugIsTaken } from "./slug-is-taken.js";
@@ -1005,6 +1014,24 @@ export const CARRIED_BLOCK_COLUMNS = [
 ] as const;
 
 
+/**
+ * **The columns of `revision_step_runs` a new draft carries forward** — every
+ * one but `revision_id`, which the insert supplies, and `attempt_id`, which
+ * names the claim that ran the step and so is not the new draft's to inherit.
+ *
+ * Named since 2026-09-29 because a second reader needs exactly this list:
+ * `rebaseSharingDraftIn` compares run rows across two revisions over it (the
+ * *semantic projection*, GPT Sol F2 on
+ * docs/plans/260929c-modes-generate-in-parallel-on-one-article.md). A literal
+ * row comparison would include `attempt_id`, which the carry drops — so it
+ * would call the ordinary case, a base whose rows came from a real job, a
+ * conflict.
+ */
+export const STEP_RUN_CARRIED_COLUMNS = [
+  "step_name", "input_hash", "implementation_version", "prompt_version", "model", "status",
+  "started_at", "finished_at",
+] as const;
+
 async function beginDraftIn(
   tx: Tx,
   opts: BeginRevisionOptions,
@@ -1077,9 +1104,7 @@ async function beginDraftIn(
          the page reports a stage that never ran while the column beside it
          holds a thread. */
       const runColumns = sql.join(
-        ["step_name", "input_hash", "implementation_version", "prompt_version", "model", "status", "started_at", "finished_at"].map(
-          (name) => sql.identifier(name),
-        ),
+        STEP_RUN_CARRIED_COLUMNS.map((name) => sql.identifier(name)),
         sql`, `,
       );
       const copiedRuns = await tx.execute(sql`
@@ -2310,6 +2335,338 @@ export async function publishRevisionIn(
     successor,
     regenerated,
   };
+}
+
+/* ------------------------------------------------ rebasing a sharing draft -- */
+
+/**
+ * What `rebaseSharingDraftIn` did, for the caller to publish and to log.
+ *
+ * - `current` — the draft's base is what the article serves (or the draft is
+ *   not a draft of it at all, which `publishRevisionIn` refuses in its own
+ *   words); nothing to do.
+ * - `declined` — the base moved and this draft may not be carried onto the new
+ *   one. The caller publishes the draft as it stands and `publishRevisionIn`
+ *   refuses it exactly as it always has (`PublishRefused`, transient).
+ * - `rebased` — a fresh draft now holds the current revision plus this job's
+ *   columns; publish **that** one.
+ */
+export type RebaseOutcome =
+  | { readonly kind: "current" }
+  | { readonly kind: "declined"; readonly why: RebaseDeclined }
+  | {
+      readonly kind: "rebased";
+      /** The new draft, which the job now owns. Publish this. */
+      readonly revisionId: string;
+      /** The draft the job ran in, now failed. */
+      readonly from: string;
+      /** What `from` was copied from. */
+      readonly oldBase: string;
+      /** What the new draft was copied from — the article's current revision. */
+      readonly onto: string;
+      /** The steps whose columns and run rows were carried across. */
+      readonly steps: readonly StepName[];
+    };
+
+/** Why a moved draft was not rebased. Codes, not prose — they are logged. */
+export type RebaseDeclined =
+  | "no-base"
+  | "draft-not-owned"
+  | "not-a-sharing-job"
+  | "article-moved"
+  | "blocks-moved"
+  | "step-runs-moved";
+
+/**
+ * **A sharing job whose draft's base moved while it ran is carried onto the
+ * new base, when nothing it depends on changed** — instead of being refused and
+ * its paid work thrown away.
+ *
+ * docs/plans/260929c-modes-generate-in-parallel-on-one-article.md § 2. Mode jobs
+ * that make different columns now run side by side on one article (`mayOverlap`,
+ * src/sharing-steps.ts), so the first to finish publishes and moves the pointer
+ * under the second. Without this, `publishRevisionIn`'s lineage check refuses
+ * the second — correctly, as far as it can tell — and the reader pays for the
+ * mode twice.
+ *
+ * ## When it is safe, and why the comparison is on the data
+ *
+ * With `B` the draft's base and `C` the article's current revision, the rebase
+ * happens only when all of these hold (GPT Sol F1: provenance alone is not
+ * enough — a script can publish without writing any run row):
+ *
+ * 1. every `article_revisions` column `REVISION_CARRY_POLICY` marks `carry`
+ *    that is **not** a sharing step's column is equal in `B` and `C` — the
+ *    tree, the labels and their status, the assets, the fetch and extract
+ *    fields. Rendered from the policy (`carriedColumns`), never typed out, so a
+ *    new column joins the comparison by existing;
+ * 2. `B` and `C` have the same `revision_blocks`, as a symmetric `EXCEPT ALL`
+ *    over `CARRIED_BLOCK_COLUMNS` — the comparison `publicationInputUnchanged`
+ *    makes;
+ * 3. for every step in `W ∪ R` (this job's steps and what they read), its
+ *    column is equal in `B` and `C` — nobody else made or changed what this job
+ *    made or read;
+ * 4. the `revision_step_runs` rows of every non-sharing step and every step in
+ *    `W ∪ R` are equal as sets over `STEP_RUN_CARRIED_COLUMNS` — the semantic
+ *    projection, never `revision_id` or `attempt_id` (Sol F2), because the carry
+ *    drops `attempt_id` and a literal comparison would call the ordinary case a
+ *    conflict.
+ *
+ * What may differ is exactly the *other* sharing steps' columns and run rows,
+ * which is what a concurrent mode job's publication changes. So the result is
+ * `C` plus this job's columns: that publication is kept, not buried.
+ *
+ * ## What it does
+ *
+ * Mint a fresh draft from `C` with `beginDraftIn`, which fences it to this job
+ * and moves the job's pointer onto it; copy `W`'s columns and `W`'s run rows —
+ * `attempt_id` included, so the published row is what a normal publication
+ * would have kept — from the old draft, column and run row as one unit because
+ * `stampForStep` cross-checks them; then fail the old draft, as any abandoned
+ * draft is. The caller publishes the new draft through the **unchanged**
+ * `publishRevisionIn`, whose lineage check now passes because it is true.
+ * `publishRevisionIn`'s "no opt-out" stance is kept: nothing here weakens it,
+ * and a declined rebase reaches it holding the old draft and is refused.
+ *
+ * The queue rule makes a declined rebase unreachable for queue jobs; this
+ * check is what makes the rebase safe against anything else that publishes —
+ * a script, `db:import`, a future caller — rather than trusting the queue.
+ *
+ * ## Locks
+ *
+ * Article first, then the job row, as everywhere in this file. The caller
+ * (`settleIn`, src/store/pg-session.ts) already holds the article; re-locking
+ * is free. It returns what to log rather than logging, by the rule
+ * `publishRevisionIn` gives: the caller's transaction can still roll back.
+ */
+export async function rebaseSharingDraftIn(
+  tx: Tx,
+  opts: {
+    readonly slug: string;
+    readonly revisionId: string;
+    readonly job: { readonly id: string; readonly attemptId: string };
+  },
+): Promise<RebaseOutcome> {
+  const { slug, revisionId, job } = opts;
+  requireSlug(slug);
+
+  const article = await lockArticle(tx, slug);
+  /* No article, or a revision that is not a draft of it: not this function's
+     to judge. `publishRevisionIn` refuses each of these as `permanent` with the
+     reason, so answering `current` hands them over untouched. */
+  if (!article) return { kind: "current" };
+  const [draft] = await tx
+    .select({
+      articleId: articleRevisions.articleId,
+      status: articleRevisions.status,
+      basedOn: articleRevisions.basedOnRevisionId,
+    })
+    .from(articleRevisions)
+    .where(eq(articleRevisions.id, revisionId))
+    .limit(1);
+  if (!draft || draft.articleId !== article.id || draft.status !== "draft") {
+    return { kind: "current" };
+  }
+
+  const oldBase = draft.basedOn;
+  const onto = article.currentRevisionId;
+  if (oldBase === onto) return { kind: "current" };
+  /* A first ingest's draft (copied from nothing) over an article that is now
+     serving something, or a draft whose lineage nobody recorded: there is no
+     `B` to compare, so nothing can be shown safe. */
+  if (!oldBase || !onto) return { kind: "declined", why: "no-base" };
+
+  /* The job row, locked and fenced on the live claim — the read `liveJobDraft`
+     makes, widened by the three facts `mayOverlap` needs. */
+  const [row] = await tx
+    .select({
+      draftRevisionId: jobs.draftRevisionId,
+      steps: jobs.steps,
+      reset: jobs.reset,
+      reservesName: jobs.reservesName,
+    })
+    .from(jobs)
+    .where(liveAttempt(job.id, job.attemptId))
+    .for("update")
+    .limit(1);
+  if (!row) throw new NotTheLiveAttempt(job.id);
+  if (row.draftRevisionId !== revisionId) return { kind: "declined", why: "draft-not-owned" };
+
+  const shape: JobShape = {
+    steps: row.steps.map((step) => step.name),
+    reset: row.reset !== null,
+    reservesName: row.reservesName,
+  };
+  if (!isSharingJob(shape)) return { kind: "declined", why: "not-a-sharing-job" };
+
+  /* `isSharingJob` has just proved every step is a sharing step. */
+  const written = [...writesOf(shape)] as SharingStep[];
+  const touched = new Set<StepName>([...written, ...readsOf(shape)]);
+  const columnOf = (step: StepName) => sharingPolicy(step as SharingStep).column;
+  const sharingColumns = new Set<string>(SHARING_STEPS.map(columnOf));
+  const touchedColumns = new Set<string>([...touched].map(columnOf));
+  /* (1) and (3): every carried column that is not a sharing step's, and the
+     columns of every step this job made or read. */
+  const compared = carriedColumns().filter(
+    (name) => !sharingColumns.has(name) || touchedColumns.has(name),
+  );
+  /* (4): every step's run rows except the *other* sharing steps' — those are
+     exactly what a concurrent mode job's publication may have changed. */
+  const untouchedSharing = SHARING_STEPS.filter((step) => !touched.has(step));
+
+  const columnsSame = sql.join(
+    compared.map((name) => {
+      const column = sql.identifier(articleRevisions[name].name);
+      return sql`b.${column} is not distinct from c.${column}`;
+    }),
+    sql` and `,
+  );
+  const blockColumns = sql.join(
+    CARRIED_BLOCK_COLUMNS.map((name) => sql.identifier(name)),
+    sql`, `,
+  );
+  const runColumns = sql.join(
+    STEP_RUN_CARRIED_COLUMNS.map((name) => sql.identifier(name)),
+    sql`, `,
+  );
+  const runsOf = (id: string) => sql`
+    select ${runColumns} from ${revisionStepRuns}
+     where ${revisionStepRuns.revisionId} = ${id}::uuid
+       and not (${revisionStepRuns.stepName} = any(${stepArray(untouchedSharing)}))`;
+  const blocksOf = (id: string) => sql`
+    select ${blockColumns} from ${revisionBlocks} where ${revisionBlocks.revisionId} = ${id}::uuid`;
+
+  const verdict = await tx.execute<{
+    columns_same: boolean;
+    blocks_same: boolean;
+    runs_same: boolean;
+  }>(sql`
+    select
+      (${columnsSame}) as columns_same,
+      not exists ((${blocksOf(oldBase)} except all ${blocksOf(onto)})
+                  union all
+                  (${blocksOf(onto)} except all ${blocksOf(oldBase)})) as blocks_same,
+      not exists ((${runsOf(oldBase)} except all ${runsOf(onto)})
+                  union all
+                  (${runsOf(onto)} except all ${runsOf(oldBase)})) as runs_same
+    from ${articleRevisions} b, ${articleRevisions} c
+    where b.${sql.identifier("id")} = ${oldBase}::uuid
+      and c.${sql.identifier("id")} = ${onto}::uuid
+  `);
+  const same = verdict.rows[0];
+  if (same?.columns_same !== true) return { kind: "declined", why: "article-moved" };
+  if (same.blocks_same !== true) return { kind: "declined", why: "blocks-moved" };
+  if (same.runs_same !== true) return { kind: "declined", why: "step-runs-moved" };
+
+  /* Safe. A fresh draft from `C`, fenced to this job — `beginDraftIn` moves
+     `jobs.draft_revision_id` onto it, so `jobs_draft_revision_unique` is never
+     asked to hold two pointers, and that is also why the old draft is failed
+     *without* the job below: `failRevisionIn`'s fence would take the pointer
+     off the new draft. */
+  const begun = await beginDraftIn(tx, { slug, job });
+
+  /* This job's columns, from the draft it ran in. */
+  const overlay = sql.join(
+    written.map((step) => {
+      const column = sql.identifier(articleRevisions[columnOf(step)].name);
+      return sql`${column} = o.${column}`;
+    }),
+    sql`, `,
+  );
+  await tx.execute(sql`
+    update ${articleRevisions} as n set ${overlay}
+      from ${articleRevisions} as o
+     where n.${sql.identifier("id")} = ${begun.revisionId}::uuid
+       and o.${sql.identifier("id")} = ${revisionId}::uuid
+  `);
+
+  /* And their run rows, as one unit with the columns: every column but the
+     revision's own id, read off the table so a new one rides along —
+     `attempt_id` included, which the ordinary carry drops. A step the old
+     draft has no row for gets none here either; the comparison above proved
+     `C`'s row for it equals `B`'s, which is what the old draft started with. */
+  const allRuns = sql.join(
+    Object.values(getTableColumns(revisionStepRuns))
+      .map((column) => column.name)
+      .filter((name) => name !== "revision_id")
+      .map((name) => sql.identifier(name)),
+    sql`, `,
+  );
+  await tx.execute(sql`
+    delete from ${revisionStepRuns}
+     where ${revisionStepRuns.revisionId} = ${begun.revisionId}::uuid
+       and ${revisionStepRuns.stepName} = any(${stepArray(written)})
+  `);
+  await tx.execute(sql`
+    insert into ${revisionStepRuns} (${sql.identifier("revision_id")}, ${allRuns})
+    select ${begun.revisionId}::uuid, ${allRuns}
+      from ${revisionStepRuns}
+     where ${revisionStepRuns.revisionId} = ${revisionId}::uuid
+       and ${revisionStepRuns.stepName} = any(${stepArray(written)})
+  `);
+
+  /* The old draft is abandoned, and failed as any abandoned draft is — the row
+     kept as evidence until `sweepAbandonedDrafts` reclaims it. Exactly one row,
+     or something believed above is false. */
+  const failed = await failRevisionIn(tx, {
+    slug,
+    revisionId,
+    reason: `rebased onto ${onto} as ${begun.revisionId}`,
+  });
+  if (failed.changed !== 1) {
+    throw new Error(
+      `Rebasing draft ${revisionId} failed ${failed.changed} rows rather than 1. It was read as a ` +
+        "draft of this article under the article lock, so no other answer is possible.",
+    );
+  }
+
+  return {
+    kind: "rebased",
+    revisionId: begun.revisionId,
+    from: revisionId,
+    oldBase,
+    onto,
+    steps: written,
+  };
+}
+
+/** Step names as a bound `text[]` parameter — never spliced into the SQL. */
+function stepArray(steps: readonly StepName[]): SQL {
+  return sql`${`{${steps.join(",")}}`}::text[]`;
+}
+
+/**
+ * The line a rebase prints — **after** the transaction that made it, for the
+ * reason `logPublication` gives. Ids, codes and step names only.
+ */
+export function logRebase(slug: string, outcome: RebaseOutcome): void {
+  switch (outcome.kind) {
+    case "current":
+      return;
+    case "declined":
+      logger.info(
+        { slug, why: outcome.why },
+        "a draft whose base moved was not rebased; its publication will be refused",
+      );
+      return;
+    case "rebased":
+      logger.info(
+        {
+          slug,
+          revisionId: outcome.revisionId,
+          from: outcome.from,
+          oldBase: outcome.oldBase,
+          onto: outcome.onto,
+          steps: outcome.steps,
+        },
+        "rebased a sharing job's draft onto the revision published while it ran",
+      );
+      return;
+    default: {
+      const never: never = outcome;
+      throw new Error(`unhandled rebase outcome ${JSON.stringify(never)}`);
+    }
+  }
 }
 
 /**

@@ -91,6 +91,10 @@ export const NOUN: Record<keyof PublicArtefacts, string> = {
   quotes: "a set of quotes",
   tweets: "a tweet thread",
   timeline: "a timeline",
+  trajectory: "a trajectory",
+  faq: "an FAQ",
+  citations: "a list of citations",
+  debate: "a debate",
   sketch: "a sketch",
 };
 
@@ -281,60 +285,68 @@ const POLICY: Record<Mode, VisitorPolicy> = {
    */
   referee: { kind: "owners-only" },
   /**
-   * **`owners-only` in Stage 3, and it is a staging decision rather than the
-   * final answer.**
+   * **An artefact mode since 2026-09-29** (SPIDERYARN-READING2-56, plan
+   * 260929c stage 4). It was `owners-only` from Stage 3 as a staging decision:
+   * Debate is meant to be shared — it is the artefact whose whole value is that
+   * somebody else can check it — but the boundary a visitor's row must not
+   * bypass was not built, and writing the visitor branch first is what a GPT
+   * Sol review (F23) refused. The comment here also said it spends, and it
+   * does — two metered web searches, ~$0.27 a run — but that is the cost of
+   * *running* a search, which a visitor never pays, not of *showing* one.
    *
-   * Debate is meant to be shareable — it is the one artefact whose whole value
-   * is that somebody else can check it, and `searchedAt` crosses both DTOs
-   * deliberately so a visitor can see how old the search is. What is not built
-   * yet is the thing a visitor's row must not bypass: `PUBLIC_PROJECTIONS`, the
-   * public DTO, and `publicCitationUrl` re-judging every row's URL at the
-   * boundary — a refusal there drops the whole row, because a row with no
-   * source violates this mode's own invariant.
-   *
-   * So this says `owners-only` until Stage 4 builds that contract, and then it
-   * becomes `{ kind: "artefact", key: "debate" }`. Writing the visitor branch
-   * first is exactly what a GPT Sol review (F23) refused: a "green" panel
-   * implemented against a sanitisation boundary that did not exist.
-   * docs/plans/260905f-debate-mode-what-the-web-says-about-this-piece.md § Stage 4.
-   *
-   * It also spends, and more than most: two metered web-search calls, up to
-   * ~$0.27 a run and rising with the length of the article.
+   * The boundary is built now (src/public/dto.ts § `publicDebate`): every
+   * row's address re-judged by `publicCitationUrl`, a refusal dropping the row
+   * and counting it for the visitor's foot line; a `linked` signal's address —
+   * the article's own — judged by `publicSourceUrl`, as the masthead's is; and
+   * a row whose words carry a refused address dropped too. The visitor gets
+   * `VisitorDebateBand`, which mounts no `useDebate` and draws no search.
+   * docs/plans/260905f-debate-mode-what-the-web-says-about-this-piece.md § Stage 4,
+   * docs/plans/260929c-a-visitor-sees-every-stored-mode-on-a-public-article.md.
    */
-  debate: { kind: "owners-only" },
+  debate: { kind: "artefact", key: "debate" },
   /**
-   * **`owners-only` for v1, and like Debate a staging decision.** The list is
-   * one artefact column and a visitor branch is "a projection away" — but that
-   * projection is `PUBLIC_PROJECTIONS`, the public DTO, and a `PublicArtefacts`
-   * flag, none of which exist yet, and the rows carry outbound URLs a public
-   * boundary should re-judge before a stranger is handed them. Until that is
-   * built a visitor meets the explanatory band rather than an empty one.
-   * docs/plans/260911g-citations-mode.md § What is deliberately not built.
+   * **An artefact mode since 2026-09-29.** It was `owners-only` as a staging
+   * decision — the public projection its rows' URLs had to pass through was
+   * not built — and a comment here that said *"It spends: one model pass over
+   * the whole article"*, true of *making* the list and nothing to do with
+   * *showing* one. Greg, SPIDERYARN-READING2-56, on the Trajectory: *"It's a
+   * public article, and the Trajectory has already been generated, so it
+   * should show it"* — and the rule he gave was for every mode.
    *
-   * It spends: one model pass over the whole article.
+   * The projection is built now: every address re-judged by
+   * `publicCitationUrl`, a refused one taking the link off the row, the dedupe
+   * `key` left behind (src/public/dto.ts § `publicCitedWork`). The visitor gets
+   * `VisitorCitationsBand`, which mounts no `useCitations` and draws no *Find
+   * it*, whose results stay the owner's.
+   * docs/plans/260929c-a-visitor-sees-every-stored-mode-on-a-public-article.md.
    */
-  citations: { kind: "owners-only" },
+  citations: { kind: "artefact", key: "citations" },
   /**
-   * **`owners-only` for v1**, a staging decision like Citations': a visitor
-   * branch needs `PUBLIC_PROJECTIONS`, the public DTO and a `PublicArtefacts`
-   * flag for the `faq` column, and none is built. Until then a visitor meets
-   * the explanatory band rather than an empty one.
-   * docs/plans/260916d-faq-mode.md § Deferred.
-   *
-   * It spends: one model pass over the whole article.
+   * **An artefact mode since 2026-09-29**, for Citations' reason above: it was
+   * `owners-only` for the cost of *asking* for an FAQ, which a visitor never
+   * pays. The visitor gets `VisitorFaqBand`, which mounts no `useFaq`; no
+   * profile is in this stage. SPIDERYARN-READING2-56,
+   * docs/plans/260929c-a-visitor-sees-every-stored-mode-on-a-public-article.md.
    */
-  faq: { kind: "owners-only" },
+  faq: { kind: "artefact", key: "faq" },
   /**
-   * **`owners-only` for v1**, FAQ's staging decision: a visitor branch needs a
-   * public projection of the `trajectory` column and a `PublicArtefacts` flag,
-   * and neither is built. The route is also written for the owner's profile,
-   * which is a second reason to think before showing it to a stranger.
-   * docs/plans/260928a-trajectory-mode-skim-a-paper-at-increasing-depth.md.
+   * **An artefact mode since 2026-09-29**, and it was `owners-only` for the
+   * wrong reason. The comment here said *"It spends: one small model pass over
+   * the Quotes"* — true of *planning* a route, and nothing to do with *showing*
+   * one, which is a column on the row the public read already fetches. So a
+   * signed-out reader of a public article whose route had been built was told
+   * it was *"for whoever added this article — asking costs a model call"*.
+   * Greg, SPIDERYARN-READING2-56: *"It's a public article, and the Trajectory
+   * has already been generated, so it should show it."*
    *
-   * It spends: one small model pass over the Quotes — and the Quotes' own pass
-   * first, when there are none.
+   * The visitor gets `VisitorTrajectoryBand`, which mounts no `useTrajectory`
+   * and so can neither read the owner's route nor plan one
+   * (src/web/modes/trajectory/TrajectoryMode.tsx). The route was planned for
+   * the owner, possibly shaped by their profile, on the same terms as the
+   * glossary, ideas and quotes above — and `profileHash` does not cross.
+   * docs/plans/260929c-a-visitor-sees-every-stored-mode-on-a-public-article.md.
    */
-  trajectory: { kind: "owners-only" },
+  trajectory: { kind: "artefact", key: "trajectory" },
 };
 
 /**

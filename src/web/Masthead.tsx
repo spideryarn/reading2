@@ -49,7 +49,7 @@
  * stays with you as you read is the spine and the arc column, not this.
  */
 import { useMemo, type ReactNode } from "react";
-import { ArrowLeft, ExternalLink, FileQuestion, Globe, Lock, Upload } from "lucide-react";
+import { ExternalLink, FileQuestion, Globe, Lock, Upload } from "lucide-react";
 import {
   SHARING_BADGE,
   SHARING_MARK_HOW_PRIVATE,
@@ -66,6 +66,7 @@ import type { Article, Meta, Visibility } from "../types.js";
    heading anchor, and `webSource` below already refuses everything that is not
    `http(s)` — one test rather than two spellings of it. */
 import { hostOf } from "../urls.js";
+import { BackLink } from "./BackLink.js";
 import { Link } from "./Link.js";
 import { cameOffADisk, SourceLink, webSource } from "./SourceLink.js";
 import { carriedSearch, LIBRARY_HREF, readHref } from "./router.js";
@@ -204,21 +205,23 @@ export function Masthead({ article, slug, onRenamed }: Props) {
             `stickyOffset()`, so anything added to it changes where every deep
             link and arrow jump lands (scroll.ts). Browser Back does the same
             job; this is for the reader who arrived by pasted link and has no
-            Back to press. The bottom bar had a Home button too until
-            2026-08-26; the way home is the wordmark fixed in the top-left
-            corner of the window now (HomeLogo.tsx), and this is still not a
-            duplicate of it for the reason it was not a duplicate of the
-            button: this one is named after where it goes and scrolls away with
-            the title, and that one is a brand mark that is always there.
-            Utilities rather than a rule in styles.css: chrome is what Tailwind
-            is here for (web-client.md#tailwind-and-shadcn-components). */}
-        <Link
+            Back to press. The way home is also `DockHome` in the bottom bar
+            (Dock.tsx), and this is still not a duplicate of it: this one
+            scrolls away with the title, and that one is a brand mark that is
+            always there.
+
+            **An arrow and a tooltip since 2026-09-29**, not the word
+            "Library". Greg, SPIDERYARN-READING2-50: *"change the back button
+            text labels at the top of some pages … to icons with tooltips
+            (because there's already so much text on the page)"*. BackLink.tsx.
+            The label is the owner's library for the owner; a visitor may be
+            signed out, where `/` is the front page, so theirs does not say
+            *your*. */}
+        <BackLink
           href={LIBRARY_HREF}
-          className="tw:mb-1.5 tw:inline-flex tw:items-center tw:gap-1 tw:font-sans tw:text-xs tw:text-ink-faint tw:no-underline tw:hover:text-highlight"
-        >
-          <ArrowLeft size={13} />
-          Library
-        </Link>
+          label={onRenamed === undefined ? "Back to Spideryarn" : "Back to your library"}
+          className="tw:mb-1.5"
+        />
         {/* The title, and the pencil beside it — TitleEditor.tsx owns where the
             pencil hides, what replaces the heading, and what a failed write
             says, because the metadata page needs all three the same way. */}

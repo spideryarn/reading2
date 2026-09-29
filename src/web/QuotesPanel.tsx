@@ -688,6 +688,17 @@ export function QuotesPanel({
       foot={
         quotes && owner?.status === "ready" && owner.quotes && !owner.stale && !owner.outdated ? (
           <Foot list={owner.quotes} running={owner.job !== null || owner.starting} findMore={findMore} />
+        ) : /* **Status only, on an outdated list.** Its banner went on
+               2026-09-29 (SPIDERYARN-READING2-55, plan 260929c), and that banner
+               was where a rewrite's progress, Stop and failure showed; a run
+               started from Metadata would otherwise show nowhere. Idle, nothing
+               — the Ideas, Timeline, Debate and Quiz feet do the same. */
+          quotes &&
+          owner?.status === "ready" &&
+          owner.outdated &&
+          !owner.stale &&
+          (owner.job || owner.starting || owner.failed) ? (
+          <div className="quotes-foot">{rerun("Choose them again", true)}</div>
         ) : null
       }
     >
@@ -740,7 +751,8 @@ export function QuotesPanel({
               differently now*, which is what bumping `PROMPT_VERSION` means.
               Stale wins when both are true; two banners stacked is a wall.
 
-              **Both banners carry *Choose them again*, and neither list gets
+              **The stale banner carries *Choose them again* (the outdated one
+              went in plan 260929c), and neither list gets
               Find more.** Greg removed the button from a *current* list on
               2026-09-11 (*"Remove the "Choose them again" button, and add a
               "Find more" button"*), and it survived on the stale banner, where
@@ -762,20 +774,12 @@ export function QuotesPanel({
               </p>
               {rerun("Choose them again", true)}
             </div>
-          ) : owner?.outdated ? (
-            <div className="quotes-stale">
-              <p>
-                <TriangleAlert size={13} />
-                {/* **"Include", so the sentence is true of a mixed list** —
-                    the lists a Find more appended to between 2026-09-11 and
-                    2026-09-24 kept their older stamp, and are part old and
-                    part new. */}
-                These include lines chosen by an earlier version of the prompt. Choosing them again
-                replaces this list with one the current prompt chooses.
-              </p>
-              {rerun("Choose them again", true)}
-            </div>
           ) : null}
+          {/* **No banner for an outdated list** since 2026-09-29 — Greg
+              (SPIDERYARN-READING2-55): *"it's not worth bugging the user about
+              it."* It still gets no Find more (above); re-running is in
+              Metadata, and a run started there shows in the foot. Plan
+              260929c. */}
 
           {/* Said once, above the list, and only when there is something to say.
               See `discardedNote` for why only two of the five counts are named. */}

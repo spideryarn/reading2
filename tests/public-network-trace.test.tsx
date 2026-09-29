@@ -166,6 +166,11 @@ const SLUG = "a-piece";
 const PUBLIC_TERM = "Integrated information theory";
 const PUBLIC_IDEA = "Measurement precedes theory";
 const PUBLIC_TWEET = "The first post.";
+const PUBLIC_CUE = "Watch the example carry the claim.";
+const PUBLIC_QUESTION = "Where does the argument come from?";
+const PUBLIC_WORK = "An information integration theory of consciousness";
+/** A stored Debate row's quotation from a stranger's page, since plan 260929c stage 4. */
+const PUBLIC_DEBATE_QUOTE = "The integration measure cannot be computed for any real brain.";
 
 /**
  * A **PDF** article, because the private source control only mounts for one.
@@ -867,6 +872,18 @@ const BAND_SAYS: Record<Mode, { where: string | null; says: string | null }> = {
      2026-09-04, when the payload grew a flag to be sure with.
      docs/plans/260904c-more-modes-on-a-shared-link.md § Stage 1. */
   timeline: { where: VISITOR_BAND, says: "Nobody has built a timeline for this piece yet" },
+  /* No route on the payload either, so the *nobody built one* sentence — it
+     moved out of the owners-only group below on 2026-09-29, when the payload
+     grew a flag for it, exactly as `timeline` did (SPIDERYARN-READING2-56).
+     The drawn route is "draws a stored trajectory from the payload" below.
+     docs/plans/260929c-a-visitor-sees-every-stored-mode-on-a-public-article.md. */
+  trajectory: { where: VISITOR_BAND, says: "Nobody has built a trajectory for this piece yet" },
+  /* And the FAQ and the Citations list, the same day and the same way: out of
+     the owners-only group below once the payload grew a flag for each. The
+     drawn ones are "draws a stored faq" and "draws a stored citations list"
+     below. docs/plans/260929c-a-visitor-sees-every-stored-mode-on-a-public-article.md. */
+  faq: { where: VISITOR_BAND, says: "Nobody has built an FAQ for this piece yet" },
+  citations: { where: VISITOR_BAND, says: "Nobody has built a list of citations for this piece yet" },
   /* **Free since 2026-09-04, and it is the only one here that draws a real
      picture for a visitor.** Force is built from the tree in the payload; the
      panel's three fetching hooks are off and the picker is hidden. The string
@@ -898,17 +915,12 @@ const BAND_SAYS: Record<Mode, { where: string | null; says: string | null }> = {
      raw mode id; the capital R is the assertion that it no longer does.
      docs/plans/260902j-public-read-only-access-audit-and-improvements.md § C2. */
   referee: { where: VISITOR_BAND, says: "Referee is for whoever added this article" },
-  /* Owners-only until Stage 4 builds the public contract its rows must not
-     bypass — src/web/visitor.ts § POLICY.debate says why that is staging rather
-     than the answer. When it becomes an artefact mode this row moves up beside
-     `timeline`. */
-  debate: { where: VISITOR_BAND, says: "Debate is for whoever added this article" },
-  /* Owners-only for v1, for Debate's reason — src/web/visitor.ts § POLICY.citations. */
-  citations: { where: VISITOR_BAND, says: "Citations is for whoever added this article" },
-  /* Owners-only for v1 — src/web/visitor.ts § POLICY.faq. */
-  faq: { where: VISITOR_BAND, says: "FAQ is for whoever added this article" },
-  /* Owners-only for v1 — src/web/visitor.ts § POLICY.trajectory. */
-  trajectory: { where: VISITOR_BAND, says: "Trajectory is for whoever added this article" },
+  /* **An artefact mode since 2026-09-29** (plan 260929c stage 4): it was
+     owners-only until the public contract its rows must not bypass was built —
+     every row's address re-judged at the boundary. On the default fixture there
+     is no stored debate, so the band says nobody built one. The drawn one is
+     "draws a stored debate" below. */
+  debate: { where: VISITOR_BAND, says: "Nobody has built a debate for this piece yet" },
 };
 
 /**
@@ -1149,6 +1161,279 @@ describe("a signed-out browser on a shared document", () => {
        Asserted here rather than left to the sweep, because the sweep runs
        against the fixture that has no quotes and so cannot see a fetch this
        branch alone would make. */
+    expect(trace.map((r) => r.url)).toEqual([`/api/public/article/${SLUG}`]);
+    expect(trace.filter((r) => r.method !== "GET")).toEqual([]);
+  });
+
+  /**
+   * **A stored Trajectory is shown to a visitor, and nothing is spent.**
+   *
+   * SPIDERYARN-READING2-56, Greg, 2026-09-29: a public article whose route had
+   * already been built told a signed-out reader *"Trajectory is for whoever
+   * added this article — asking costs a model call"*. Showing a stored route
+   * asks nothing; only planning one spends. So with a route and its quotes on
+   * the payload, the band draws the route's rows — the quote's own words and
+   * its cue — and the trace stays the one public GET.
+   * docs/plans/260929c-a-visitor-sees-every-stored-mode-on-a-public-article.md.
+   */
+  it("draws a stored trajectory from the payload, asking nothing", async () => {
+    await remount();
+    served = {
+      ...ARTICLE,
+      quotes: {
+        quotes: [
+          { id: "spya-qte001", blockId: "spya-bbbbbb", text: "The first paragraph", importance: 0.9 },
+          { id: "spya-qte002", blockId: "spya-cccccc", text: "an argument made elsewhere", importance: 0.8 },
+        ],
+      },
+      trajectory: {
+        stops: [
+          { quoteId: "spya-qte002", depth: 1, role: null, cue: PUBLIC_CUE },
+          { quoteId: "spya-qte001", depth: 2, role: null, cue: "Where it starts." },
+        ],
+        offered: 2,
+      },
+      /* Put a public stop-card link on the current stop. Its click changes
+         modes through query state and must not mint or spend an owner token. */
+      ideas: {
+        ideas: [
+          {
+            id: "spya-idea01",
+            name: PUBLIC_IDEA,
+            provenance: "assumed",
+            statement: "You cannot theorise about what you have no way to measure.",
+            occurrences: [
+              {
+                blockId: "spya-cccccc",
+                quote: "an argument made elsewhere",
+                reasoning: "It rests on it.",
+              },
+            ],
+          },
+        ],
+      },
+    };
+    await open("?mode=trajectory&depth=1&stop=spya-qte002");
+
+    const band = host.querySelector(".mode-band");
+    expect(band, "a band is open").not.toBeNull();
+    expect(band?.matches(VISITOR_BAND), "not the owners-only boundary").toBe(false);
+    expect(readable(band as Element)).toContain(PUBLIC_CUE);
+    expect(readable(band as Element)).toContain("an argument made elsewhere");
+    expect(host.textContent).not.toContain("Trajectory is for whoever added this article");
+    /* None of the owner's verbs: no plan, no re-plan, no retry. */
+    expect(host.textContent).not.toContain("Plan it again");
+    expect(host.textContent).not.toContain("Plan the route");
+    expect(trace.map((r) => r.url)).toEqual([`/api/public/article/${SLUG}`]);
+    expect(trace.filter((r) => r.method !== "GET")).toEqual([]);
+
+    const stopCardLink = buttonNamed(PUBLIC_IDEA);
+    expect(stopCardLink, "the stop card has no link into the stored public Ideas").not.toBeNull();
+    await act(async () => stopCardLink?.click());
+    expect(await modeAfterPress("trajectory")).toBe("ideas");
+    expect(trace.map((r) => r.url)).toEqual([`/api/public/article/${SLUG}`]);
+    expect(trace.filter((r) => r.method !== "GET")).toEqual([]);
+  });
+
+  /**
+   * **A stored FAQ is shown to a visitor, and nothing is spent** — the same bug
+   * as the Trajectory's above, one mode along (SPIDERYARN-READING2-56, plan
+   * 260929c stage 2). The question and the article's own passage are drawn;
+   * none of the owner's verbs is, and the trace is the one public GET.
+   */
+  it("draws a stored faq from the payload, asking nothing", async () => {
+    await remount();
+    served = {
+      ...ARTICLE,
+      faq: {
+        questions: [
+          {
+            id: "q1",
+            question: PUBLIC_QUESTION,
+            passages: [{ blockId: "spya-cccccc", quote: "an argument made elsewhere", start: 0 }],
+          },
+        ],
+      },
+    };
+    await open("?mode=faq&q=q1");
+
+    const band = host.querySelector(".mode-band");
+    expect(band, "a band is open").not.toBeNull();
+    expect(band?.matches(VISITOR_BAND), "not the owners-only boundary").toBe(false);
+    expect(readable(band as Element)).toContain(PUBLIC_QUESTION);
+    expect(readable(band as Element)).toContain("an argument made elsewhere");
+    expect(host.textContent).not.toContain("FAQ is for whoever added this article");
+    /* None of the owner's verbs: no first run, no re-run, no retry. */
+    expect(host.textContent).not.toContain("Find the questions");
+    expect(host.textContent).not.toContain("Find them again");
+    expect(host.textContent).not.toContain("Try again");
+    expect(trace.map((r) => r.url)).toEqual([`/api/public/article/${SLUG}`]);
+    expect(trace.filter((r) => r.method !== "GET")).toEqual([]);
+  });
+
+  /**
+   * **A stored Citations list is shown to a visitor, and nothing is spent** —
+   * plan 260929c stage 3. The work's title and its reason are drawn, the
+   * article's own link is a link, and a row the boundary took the link off is
+   * still a row. No *Find it* (a paid web search, and the owner's finds stay
+   * private), no *Find the citations*, and the trace is the one public GET.
+   */
+  it("draws a stored citations list from the payload, asking nothing", async () => {
+    await remount();
+    served = {
+      ...ARTICLE,
+      citations: {
+        citations: [
+          {
+            id: "w1",
+            title: PUBLIC_WORK,
+            authors: "Tononi",
+            year: "2004",
+            why: "The theory the piece argues against.",
+            relevance: 0.9,
+            influence: 0.8,
+            mentions: [{ blockId: "spya-cccccc", quote: "an argument made elsewhere", start: 0 }],
+            citedAt: ["spya-cccccc"],
+            firstCited: "spya-cccccc",
+            citedInBody: true,
+            url: "https://doi.org/10.1186/1471-2202-5-42",
+            linkFrom: "doi",
+          },
+          {
+            id: "w2",
+            title: "A work whose link did not cross",
+            why: "Named once in passing.",
+            mentions: [],
+            citedAt: [],
+            firstCited: "spya-bbbbbb",
+            citedInBody: false,
+            linkFrom: "article",
+          },
+          {
+            id: "w3",
+            title: "A work the article gave no link for",
+            why: "Background.",
+            mentions: [],
+            citedAt: [],
+            firstCited: "spya-bbbbbb",
+            citedInBody: false,
+            url: "https://scholar.google.com/scholar?q=A+work",
+            linkFrom: "search",
+          },
+        ],
+        capped: false,
+      },
+    };
+    await open("?mode=citations&citeby=document");
+
+    const band = host.querySelector(".mode-band");
+    expect(band, "a band is open").not.toBeNull();
+    expect(band?.matches(VISITOR_BAND), "not the owners-only boundary").toBe(false);
+    const text = readable(band as Element);
+    expect(text).toContain(PUBLIC_WORK);
+    expect(text).toContain("The theory the piece argues against.");
+    expect(text).toContain("A work whose link did not cross");
+    expect(band?.querySelector('a[href="https://doi.org/10.1186/1471-2202-5-42"]')).not.toBeNull();
+    expect(host.textContent).not.toContain("Citations is for whoever added this article");
+    /* None of the owner's verbs: no first run, no re-run, no paid search. */
+    expect(host.textContent).not.toContain("Find the citations");
+    expect(host.textContent).not.toContain("Find them again");
+    expect(host.textContent).not.toContain("Find it");
+    expect(band?.querySelector(".cite-find")).toBeNull();
+    expect(trace.map((r) => r.url)).toEqual([`/api/public/article/${SLUG}`]);
+    expect(trace.filter((r) => r.method !== "GET")).toEqual([]);
+  });
+
+  /**
+   * **A stored Debate is shown to a visitor, and nothing is spent** — plan
+   * 260929c stage 4. A search is the dearest press in the bar (two metered web
+   * searches, ~$0.27 a run), so this asserts both halves: the stored rows are
+   * drawn — a reply's quotation and a claim row's quotation — the boundary's
+   * withheld row is disclosed in plain words, and neither *Search the web* nor
+   * *Search again* is on the page. The trace is the one public GET.
+   */
+  it("draws a stored debate from the payload, asking nothing", async () => {
+    await remount();
+    served = {
+      ...ARTICLE,
+      debate: {
+        searchedAt: "2026-09-20T10:00:00.000Z",
+        direct: {
+          rows: [
+            {
+              id: "spya-dbt001",
+              url: "https://reply.example.org/a-reply",
+              title: "A reply to the piece",
+              sourceQuote: PUBLIC_DEBATE_QUOTE,
+              relation: "disputes",
+              lean: "leans-against",
+              applies: "It argues the measure is not computable.",
+              articleReferenceQuote: "The first paragraph",
+              identifies: [
+                {
+                  kind: "quoted",
+                  quote: "The first paragraph",
+                  blockId: "spya-bbbbbb",
+                  coverage: 0.2,
+                  density: 0.1,
+                },
+              ],
+            },
+          ],
+          sourceNotPublishable: 1,
+        },
+        claims: {
+          rows: [
+            {
+              id: "spya-dbt002",
+              url: "https://answers.example.org/on-claims",
+              sourceQuote: "Somebody else answers what it claims.",
+              relation: "qualifies",
+              lean: "neither",
+              applies: "It narrows the claim.",
+              claimQuote: "an argument made elsewhere",
+              blockId: "spya-cccccc",
+            },
+          ],
+          sourceNotPublishable: 0,
+        },
+      },
+    };
+    await open("?mode=debate&name=quoted");
+
+    const band = host.querySelector(".mode-band");
+    expect(band, "a band is open").not.toBeNull();
+    expect(band?.matches(VISITOR_BAND), "not the owners-only boundary").toBe(false);
+    const text = readable(band as Element);
+    expect(text).toContain(PUBLIC_DEBATE_QUOTE);
+    expect(text).toContain("Somebody else answers what it claims.");
+    expect(band?.querySelector('a[href="https://reply.example.org/a-reply"]')).not.toBeNull();
+    /* The row the boundary withheld is said, not silently missing. */
+    expect(text).toContain("1 more result that is not shown on a shared link");
+    expect(host.textContent).not.toContain("Debate is for whoever added this article");
+    /* None of the owner's verbs: no first search, no search again, no retry. */
+    expect(host.textContent).not.toContain("Search the web");
+    expect(host.textContent).not.toContain("Search again");
+    expect(host.textContent).not.toContain("Nobody has asked the web about this one yet");
+    expect(host.textContent).not.toContain("Try again");
+    expect(trace.map((r) => r.url)).toEqual([`/api/public/article/${SLUG}`]);
+    expect(trace.filter((r) => r.method !== "GET")).toEqual([]);
+  });
+
+  /**
+   * **A quiz link opens Remember's owners-only band, and asks nothing** —
+   * Greg excluded Quiz from public articles on 2026-09-29 (plan 260929c §
+   * Decided): it is Remember's second half, `POLICY` decides per mode, and
+   * Recall must stay private. A hostile deep link naming the quiz view gets the
+   * boundary sentence, and the trace is the one public GET — no read of the
+   * quiz, no mark.
+   */
+  it("gives a quiz deep link the owners-only band, asking nothing", async () => {
+    await remount();
+    await open("?mode=remember&remember=quiz");
+    const band = host.querySelector(".mode-band");
+    expect(band?.matches(VISITOR_BAND), "the owners-only boundary").toBe(true);
+    expect(readable(band as Element)).toContain("Remember is for whoever added this article");
     expect(trace.map((r) => r.url)).toEqual([`/api/public/article/${SLUG}`]);
     expect(trace.filter((r) => r.method !== "GET")).toEqual([]);
   });
@@ -1512,21 +1797,29 @@ describe("a signed-out browser on a shared document", () => {
   }, SWEEP_MS);
 
   /**
-   * **The five modes that start themselves for an owner start nothing here.**
+   * **The modes that can start paid work for an owner start nothing here.**
    *
-   * Since 2026-09-02, pressing Glossary, Ideas, Quotes or Timeline with nothing
-   * behind it posts a job, and so does picking the Sketch picture inside
-   * Diagram. The sweep above already presses every button and asserts no POST,
-   * which covers the first four; this names them, so that a future edit which
-   * quietly narrowed the sweep is still red here.
+   * The sweep above already presses every button and asserts no POST. This
+   * separately reaches each artefact mode by URL, including the four newly
+   * public stored modes, so that a future edit which quietly narrows the sweep
+   * is still red here. Sketch has its own nested-view case below.
    *
    * The seam is capability rather than a check inside the feature: the hooks
    * that can do it mount under `OwnedReader` and never for a visitor. That is
    * what makes this cheap to hold and worth holding — it fails the moment
    * somebody moves one of them up a level.
    */
-  it("starts none of the five paid modes, however they are reached", async () => {
-    for (const mode of ["glossary", "ideas", "quotes", "timeline"]) {
+  it("starts no paid artefact mode, however it is reached", async () => {
+    for (const mode of [
+      "glossary",
+      "ideas",
+      "quotes",
+      "timeline",
+      "trajectory",
+      "faq",
+      "citations",
+      "debate",
+    ]) {
       await remount();
       await open(`?mode=${mode}`);
       expect(trace.filter((r) => r.method !== "GET"), `on ${mode}`).toEqual([]);

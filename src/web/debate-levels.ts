@@ -34,8 +34,8 @@
  * § "The bar, and what 'Prioritised' turns out to mean".
  */
 import {
-  type DirectDebateRow,
   type IdentificationLevel,
+  type IdentifiedRow,
   identificationLevel,
 } from "../types.js";
 import { applyThreshold, type ThresholdResult } from "./threshold.js";
@@ -132,10 +132,10 @@ export function isIdentificationLevel(
  * is nothing for this bar to be about. They are not hidden by it, not in its
  * `N of M`, and not in its foot line. The signature is the guard.
  */
-export function visibleDirect(
-  rows: readonly DirectDebateRow[],
+export function visibleDirect<R extends IdentifiedRow<{ kind: IdentificationLevel }>>(
+  rows: readonly R[],
   level: IdentificationLevel,
-): ThresholdResult<DirectDebateRow> {
+): ThresholdResult<R> {
   return applyThreshold(rows, RANK[level], (row) => RANK[identificationLevel(row)]);
 }
 

@@ -66,13 +66,13 @@
  * the `tw:` prefix — unprefixed names silently do nothing.
  */
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
-import { ArrowLeft, Check, Copy, PenLine, TriangleAlert } from "lucide-react";
+import { Check, Copy, PenLine, TriangleAlert } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { THREAD_RECHECK_FAILED } from "../messages.js";
 import type { Article, Job, ThreadResponse, TweetThread } from "../types.js";
 import type { PublicTweets } from "../public-types.js";
 import { Dock } from "./Dock.js";
-import { Link } from "./Link.js";
+import { BackLink } from "./BackLink.js";
 import { recordLog } from "./log-buffer.js";
 import { pageTitle, useDocumentTitle } from "./page-title.js";
 import { carriedSearch, readHref } from "./router.js";
@@ -299,13 +299,7 @@ export function Tweets({ slug, article }: { slug: string; article: Article }) {
           element. `--safe-top` stays, for the clock rather than for the
           wordmark. See Metadata.tsx, which carries the whole note. */}
       <main className={`tw:mx-auto tw:max-w-2xl tw:px-6 tw:pt-[calc(2.5rem_+_var(--safe-top))] tw:font-sans ${DOCK_CLEARANCE}`}>
-        <Link
-          href={backHref}
-          className="tw:mb-6 tw:inline-flex tw:items-center tw:gap-1 tw:text-xs tw:text-ink-faint tw:no-underline tw:hover:text-highlight"
-        >
-          <ArrowLeft size={13} />
-          Back to the article
-        </Link>
+        <BackLink href={backHref} label="Back to the article" className="tw:mb-6" />
 
         <h1 className="tw:m-0 tw:font-prose tw:text-2xl tw:leading-snug tw:text-foreground">
           {article.meta.title}

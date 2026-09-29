@@ -81,13 +81,28 @@ The wordmark is drawn **twice**, with deliberately different inner markup:
 
 A third host since 2026-09-15, and not a wordmark: the spider beside the shelf's heading
 ([`Library.tsx`](../../src/web/Library.tsx) § ShelfSpider), 28px, with no letters for anything to
-reach, so only the six mark animations ever run there (§ The trigger).
+reach, so only the six mark animations ever run there (§ The trigger). **The heading was left plain
+on 2026-09-29, deliberately**: it is `text-3xl`, and the letter animations move by fixed pixels
+tuned for a 13px word, so at 30px they read as half a gesture. Making the set scale with its host is
+the way to change that, and it is its own piece of work.
+
+**The letters and the mark are one component since 2026-09-29**: `LogoLetters` and `LogoMark` in
+[`LogoGlyphs.tsx`](../../src/web/LogoGlyphs.tsx). Every copy draws those and keeps its own wrapper,
+for the reason the table above gives. Greg, 2026-09-29: *"The contact page has all the lovely
+logo+sitename animations, but the other pages don't."* The difference was only ever markup — a host
+with no `.logo-letter` is offered the spider's six — so giving the other wordmarks the letters is
+the whole fix
+([260929c](../plans/260929c-back-links-become-icons-with-tooltips-and-one-animated-wordmark-reused.md)).
 
 Two more since 2026-09-29, the same shape: the marketing pages' `Wordmark`
 ([`SiteBits.tsx`](../../src/web/SiteBits.tsx)) gained the spider at Greg's asking, so the top bar's
 home link and every `SiteFooter` host the hook — the bar as a link (hover and long press, as
-`HomeLogo`), the footer as a plain span with `{ tap: true }` (as the shelf's spider). The words there
-are plain text with no `.logo-letter`, so again only the mark animations run. Pages that draw that
+`HomeLogo`), the footer as a plain span with `{ tap: true }` (as the shelf's spider). Their words
+were plain text, so only the mark animations ran, until the same day's
+[260929c](../plans/260929c-back-links-become-icons-with-tooltips-and-one-animated-wordmark-reused.md)
+gave them the letters (below). **Two effects behave differently there**, because "Reading" follows
+the name: Retype draws no cursor (it would sit on the R), and Dawn fades the whole wordmark, "Reading"
+included, since it masks its host. Pages that draw that
 bar no longer draw the corner `HomeLogo`, so no page shows two spiders at the top —
 [260929a](../plans/260929a-logo-beside-the-wordmark-beta-to-the-right-no-shelf-tagline.md).
 
@@ -187,7 +202,8 @@ selectors, so the tag cannot drift from what the rules actually touch.
 
 **A tap plays one only where a tap does nothing else.** On the reading view and in the corner a tap
 is the way home and stays so; a finger gets its animation from the hold. The shelf's spider
-([`Library.tsx`](../../src/web/Library.tsx) § ShelfSpider) is a picture, so it takes
+([`Library.tsx`](../../src/web/Library.tsx) § ShelfSpider) is a picture and a heading, not a
+link, so it takes
 `{ tap: true }` and a tap plays one — decided on the `click`, never a short `pointerup`, because the
 release is heard on `window` and a finger that slid off and lifted elsewhere is not a tap on it.
 Whether the reading view's first tap should play and the second go home, the way a link's card
