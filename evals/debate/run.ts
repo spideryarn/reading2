@@ -94,7 +94,13 @@ import {
   type VerifyReport,
 } from "./verify-fallback.js";
 import { fixtureFetch, fixtureFetchOptions, fixtureJournal, QUOTES, URLS } from "./verify-fixture.js";
-import { type BearsReport, bearsLines, bearsProblems, sumBearsReports } from "./bears.js";
+import {
+  type BearsReport,
+  bearsLines,
+  bearsProblems,
+  completeBearsReport,
+  sumBearsReports,
+} from "./bears.js";
 
 /** **Gitignored.** See the header. */
 const RUN_ROOT = "output/debate-runs";
@@ -163,7 +169,8 @@ interface RunFile {
   /**
    * **What the model answered for `bears`, and what survived** — from a Layer 1
    * replay of this run's own journal (bears.ts). Here and never in the stored
-   * artefact. `null` when no attempt could be replayed.
+   * artefact. `null` unless exactly one direct and one claims pass replayed from
+   * a journal with no unreadable lines or write failures.
    */
   bears: BearsReport | null;
   /** Rows the replay kept, which must equal `kept`'s sum — see `report`. */
@@ -236,10 +243,11 @@ async function commandRun(o: Options): Promise<void> {
   /* The bears counts come from replaying the journal rather than from the
      run's return value, because only the journal still holds what the model
      *answered* — a kept row carries only what survived. */
-  const replayed = replayJournal(contents.events, { blockText: blockTextById(article.blocks) }).flatMap((r) =>
-    r.ok ? [r] : [],
-  );
-  const bears = replayed.length > 0 ? sumBearsReports(replayed.map((r) => r.bears)) : null;
+  const replayed = replayJournal(contents.events, { blockText: blockTextById(article.blocks) });
+  const bears =
+    journal.failures.length === 0 && contents.malformedLines.length === 0
+      ? completeBearsReport(replayed)
+      : null;
 
   const runFile: RunFile = {
     runId,
@@ -264,7 +272,21 @@ async function commandRun(o: Options): Promise<void> {
   await writeFile(path.join(dir, "run.json"), `${JSON.stringify(runFile, null, 2)}\n`, "utf-8");
 
   report(runFile, contents.malformedLines, journal.failures.length);
-  if (!completed || cost.problems.length > 0 || !reconciliation.complete) process.exitCode = 1;
+  const runKept = kept ? kept.direct + kept.claims : null;
+  const bearsInvalid =
+    bears === null ||
+    bearsProblems(bears).length > 0 ||
+    (runKept !== null && bears.keptRows !== runKept);
+  if (
+    !completed ||
+    cost.problems.length > 0 ||
+    !reconciliation.complete ||
+    bearsInvalid ||
+    journal.failures.length > 0 ||
+    contents.malformedLines.length > 0
+  ) {
+    process.exitCode = 1;
+  }
 }
 
 function report(runFile: RunFile, malformedLines: number[], writeFailures: number): void {
@@ -288,7 +310,7 @@ function report(runFile: RunFile, malformedLines: number[], writeFailures: numbe
       );
     }
   } else {
-    console.log("\n  bears: not measured — no attempt in the journal could be replayed");
+    console.log("\n  bears: not measured — the journal did not replay as one direct and one claims pass");
   }
   console.log(`\nCost: ${runFile.costLine}`);
   console.log(`  ledger run ${runFile.ledgerRunId}; generations: ${runFile.cost.callIds.join(", ") || "(none)"}`);

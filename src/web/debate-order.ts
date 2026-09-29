@@ -362,15 +362,41 @@ function byClaim<D extends OrderableRow, C extends ClaimLikeRow>(
 
 /**
  * **What a reader would see in one order, as a string** — the row ids in order,
- * plus the boundaries between headings when there is more than one. One group
- * under one heading is not structure, so it compares equal to the same rows
- * flat; the lines inside *prioritised* and *date* mark where rows went, which
- * the id sequence already carries.
+ * plus structure that changes the result: two or more claim headings,
+ * prioritised's unjudged line or usable relevance threshold, and date's marker
+ * or undated line. One claim group under one heading is not structure, so it
+ * compares equal to the same rows flat.
  */
-function signature(groups: readonly DebateGroup<OrderableRow, ClaimLikeRow>[]): string {
+function signature(
+  order: DebateOrder,
+  groups: readonly DebateGroup<OrderableRow, ClaimLikeRow>[],
+  claims: readonly ClaimLikeRow[],
+): string {
   const headed = groups.filter((g) => g.kind === "piece" || g.kind === "claim");
-  if (headed.length > 1) return headed.map((g) => g.rows.map((r) => r.id).join(",")).join("|");
-  return groups.flatMap((g) => g.rows.map((r) => r.id)).join(",");
+  if (order === "claim" && headed.length > 1) {
+    return headed.map((g) => g.rows.map((r) => r.id).join(",")).join("|");
+  }
+  const ids = groups.flatMap((g) => g.rows.map((r) => r.id)).join(",");
+
+  /* The row ids are not the whole rendered result for these two orders.
+     Prioritised owns a threshold that can change the list, and its unjudged
+     rows have a heading; date can add an article marker and an undated heading.
+     Treating either as identical to a flat list made an explicit `claim` URL
+     resolve to prioritised and let `?bears=` hide its rows. */
+  if (order === "prioritised") {
+    const canHide = claims.some((row) => {
+      const bears = readBears(row);
+      return bears !== null && bears !== "directly";
+    });
+    const hasUnjudged = groups.some((g) => g.kind === "unjudged");
+    return canHide || hasUnjudged ? `prioritised:${ids}:${canHide ? "threshold" : ""}:${hasUnjudged ? "unjudged" : ""}` : ids;
+  }
+  if (order === "date" && groups.some((g) => g.kind === "marker" || g.kind === "undated")) {
+    return `date:${groups
+      .map((g) => (g.kind === "marker" ? `marker-${String(g.year)}` : `${g.kind}-${g.rows.map((r) => r.id).join(",")}`))
+      .join("|")}`;
+  }
+  return ids;
 }
 
 /**
@@ -379,19 +405,21 @@ function signature(groups: readonly DebateGroup<OrderableRow, ClaimLikeRow>[]): 
  * `effectiveDebateOrder` can find which offered order draws what a hidden one
  * would have. Never empty: *by claim* always has its data.
  *
- * Signatures are taken with no bar applied and no marker: the question is what
- * the order does to this debate, not where two sliders happen to sit.
+ * Signatures are taken before either threshold is applied. The article marker
+ * is included because it is part of what selecting date draws; the reader's
+ * current slider positions are not.
  */
 function distinctOrders<D extends OrderableRow, C extends ClaimLikeRow>(
   direct: readonly D[],
   claims: readonly C[],
   blockOrder: ReadonlyMap<BlockId, number>,
+  articleYear: number | null = null,
 ): { order: DebateOrder; sig: string }[] {
   const seen = new Set<string>();
   const out: { order: DebateOrder; sig: string }[] = [];
   for (const order of DEBATE_ORDER_PREFERENCE) {
     if (!hasDataFor(order, direct, claims)) continue;
-    const sig = signature(orderDebateRows(direct, claims, order, blockOrder));
+    const sig = signature(order, orderDebateRows(direct, claims, order, blockOrder, articleYear), claims);
     if (seen.has(sig)) continue;
     seen.add(sig);
     out.push({ order, sig });
@@ -403,17 +431,19 @@ function distinctOrders<D extends OrderableRow, C extends ClaimLikeRow>(
  * **The orders the bar offers**, in button order — or none, when fewer than two
  * would draw different lists (F14).
  *
- * The panel hands this **every** row the debate kept, not the rows the bars
- * left: an order button that appeared and vanished as the reader dragged a
- * different control would be worse than either (Glossary's `sortOptions` makes
- * the same call about its own slider).
+ * The panel hands this every claim row and the direct rows left by the
+ * identification bar. That bar applies in every order, so a row it removed
+ * cannot honestly distinguish two orders on screen. The relevance bar is not
+ * applied here: it belongs only to prioritised and cannot decide whether that
+ * order exists.
  */
 export function debateOrderOptions<D extends OrderableRow, C extends ClaimLikeRow>(
   direct: readonly D[],
   claims: readonly C[],
   blockOrder: ReadonlyMap<BlockId, number>,
+  articleYear: number | null = null,
 ): DebateOrder[] {
-  const distinct = distinctOrders(direct, claims, blockOrder);
+  const distinct = distinctOrders(direct, claims, blockOrder, articleYear);
   return distinct.length < 2 ? [] : distinct.map((d) => d.order);
 }
 
@@ -433,10 +463,11 @@ export function effectiveDebateOrder<D extends OrderableRow, C extends ClaimLike
   claims: readonly C[],
   requested: DebateOrder,
   blockOrder: ReadonlyMap<BlockId, number>,
+  articleYear: number | null = null,
 ): DebateOrder {
   if (!hasDataFor(requested, direct, claims)) return "claim";
-  const distinct = distinctOrders(direct, claims, blockOrder);
+  const distinct = distinctOrders(direct, claims, blockOrder, articleYear);
   if (distinct.some((d) => d.order === requested)) return requested;
-  const sig = signature(orderDebateRows(direct, claims, requested, blockOrder));
+  const sig = signature(requested, orderDebateRows(direct, claims, requested, blockOrder, articleYear), claims);
   return distinct.find((d) => d.sig === sig)?.order ?? "claim";
 }

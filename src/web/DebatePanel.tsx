@@ -709,13 +709,13 @@ export function emptyGroupNote(counts: DebateCounts, group: "direct" | "claims")
 export function leadNote(debate: {
   direct: { rows: readonly unknown[]; counts: DebateCounts };
   claims: { rows: readonly unknown[]; counts: DebateCounts };
-}): string | null {
+}, claimsFollow = debate.claims.rows.length > 0): string | null {
   const noDirect = debate.direct.rows.length === 0;
   const noClaims = debate.claims.rows.length === 0;
   const parts: string[] = [];
   if (noDirect) parts.push(emptyGroupNote(debate.direct.counts, "direct"));
   if (noClaims) parts.push(emptyGroupNote(debate.claims.counts, "claims"));
-  else if (noDirect) parts.push(DEBATE_CLAIMS_FOLLOW);
+  else if (noDirect && claimsFollow) parts.push(DEBATE_CLAIMS_FOLLOW);
   return parts.length > 0 ? parts.join(" ") : null;
 }
 
@@ -943,19 +943,18 @@ export function DebatePanel({
   /**
    * **Which order is drawn, which are offered, and the list in that order.**
    *
-   * Both questions are asked of **every** row the debate kept, not of what the
-   * bars left: an order button that came and went as the reader dragged a
-   * different control would be worse than either (debate-order.ts §
-   * `debateOrderOptions`). The list itself is the bars' rows — the bars
-   * filter, the order arranges, and neither reaches into the other.
+   * The identification bar runs first, and both questions are asked of the
+   * direct rows it left plus every claim row. Otherwise the panel can offer an
+   * order whose only distinguishing row is no longer on screen. Relevance runs
+   * later because it belongs to one order; the list itself is both bars' rows.
    */
   const order = useMemo(
-    () => effectiveDebateOrder(directRows, claimRows, requestedOrder, blockOrder),
-    [directRows, claimRows, requestedOrder, blockOrder],
+    () => effectiveDebateOrder(barred.visible, claimRows, requestedOrder, blockOrder, articleYear),
+    [barred, claimRows, requestedOrder, blockOrder, articleYear],
   );
   const orders = useMemo(
-    () => debateOrderOptions(directRows, claimRows, blockOrder),
-    [directRows, claimRows, blockOrder],
+    () => debateOrderOptions(barred.visible, claimRows, blockOrder, articleYear),
+    [barred, claimRows, blockOrder, articleYear],
   );
 
   /**
@@ -1001,8 +1000,10 @@ export function DebatePanel({
      `leadPlacement`. */
   const lead = useMemo(() => {
     if (debate === null) return null;
-    return isShared(debate) ? sharedLeadNote(debate) : leadNote(debate);
-  }, [debate]);
+    return isShared(debate)
+      ? sharedLeadNote(debate)
+      : leadNote(debate, barredClaims.visible.length > 0);
+  }, [debate, barredClaims.visible.length]);
   const placement = lead === null ? null : leadPlacement(lead, rows.length);
   const foot = useMemo(() => {
     if (debate === null) return [];
@@ -1263,6 +1264,7 @@ function StopBar<L extends string>({
   defaultLevel,
   noun,
   title,
+  judgedOnly = false,
   moved,
   onLevel,
 }: {
@@ -1291,11 +1293,14 @@ function StopBar<L extends string>({
   defaultLevel: L;
   noun: ThresholdNoun;
   title: string;
+  /** Leave rows with no judgment out of the bar's N of M. They remain visible. */
+  judgedOnly?: boolean;
   moved: boolean;
   onLevel(level: L | null): void;
 }) {
-  const total = barred.visible.length + barred.hiddenCount;
-  const count = `${barred.visible.length} of ${total}`;
+  const visibleCount = barred.visible.length - (judgedOnly ? barred.unscoredCount : 0);
+  const total = visibleCount + barred.hiddenCount;
+  const count = `${visibleCount} of ${total}${judgedOnly ? " judged" : ""}`;
   const note = hiddenNote(barred.hiddenCount, total, noun);
 
   return (
@@ -1385,7 +1390,8 @@ function NameBar({
  * the *thresholding* Greg asked for with *prioritised*, over claim rows only.
  * The words are the AI's judgment (`bears`), and the default hides nothing
  * (`RELEVANCE_DEFAULT`, the plan's F5). A row the AI did not judge is never
- * hidden: it is in both numbers, and always on the list.
+ * hidden: it is always on the list, under its own line, and is left out of the
+ * bar's N of M so it does not look as though it cleared a judgment it lacks.
  */
 function RelevanceBar({
   barred,
@@ -1410,6 +1416,7 @@ function RelevanceBar({
       defaultLevel={RELEVANCE_DEFAULT}
       noun={ANSWER}
       title="How directly the AI judged a page bears on the claim it answers: loosely, partly or directly. Left shows every answer, right only the ones it judged to bear directly. Rows the AI did not judge are never hidden, and rows about this piece are not affected."
+      judgedOnly
       moved={moved}
       onLevel={onLevel}
     />

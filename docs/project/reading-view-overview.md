@@ -122,8 +122,9 @@ readers never are.
   around the claims it makes. **The only mode whose content is not in the article at all**, which is
   why nearly everything the panel draws that is not a row is a disclosure. There is no `debate.md`
   yet; the plan is the reference:
-  [260905f](../plans/260905f-debate-mode-what-the-web-says-about-this-piece.md). Behind the switch
-  for now; since 2026-09-29 a visitor to a public article sees a stored one, every row's address
+  [260905f](../plans/260905f-debate-mode-what-the-web-says-about-this-piece.md), and for how a row
+  is laid out, the four orders and the relevance bar,
+  [260929h](../plans/260929h-debate-mode-clearer-sources-and-orders.md). Behind the switch for now; since 2026-09-29 a visitor to a public article sees a stored one, every row's address
   re-judged at the boundary and a refused row withheld and counted — only running a search is the
   owner's ([260929c](../plans/260929c-a-visitor-sees-every-stored-mode-on-a-public-article.md)).
 - **[citations.md](citations.md)** — every work the piece cites, each with a link out, ordered and

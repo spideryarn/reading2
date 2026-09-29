@@ -23,7 +23,7 @@ import {
 } from "../src/debate.js";
 import { isDebateBears, readStoredBears } from "../src/types.js";
 import type { Block, SearchEvidence } from "../src/types.js";
-import { bearsLines, bearsProblems, bearsReport } from "../evals/debate/bears.js";
+import { bearsLines, bearsProblems, bearsReport, completeBearsReport } from "../evals/debate/bears.js";
 
 describe("the live reader", () => {
   it("keeps each of the three stops", () => {
@@ -132,8 +132,8 @@ describe("the eval's bears report", () => {
     const reported = [{ bears: "directly" }, { bears: "hugely" }, {}, { bears: "partly" }, "not a row"];
     const report = bearsReport(reported, [{ bears: "directly" }, {}]);
     expect(report).toEqual({
-      rows: 4,
-      omitted: 1,
+      rows: 5,
+      omitted: 2,
       offered: { directly: 1, partly: 1, loosely: 0 },
       refused: 1,
       keptRows: 2,
@@ -148,9 +148,28 @@ describe("the eval's bears report", () => {
   });
 
   it("names broken arithmetic rather than printing it", () => {
-    const report = bearsReport([{ bears: "directly" }], []);
-    report.refused += 1;
+    const report = bearsReport([{}], []);
+    report.omitted += 1;
     expect(bearsProblems(report)).not.toEqual([]);
+    expect(bearsLines(report).join("\n")).toContain("! omitted + offered + refused does not add up");
+  });
+
+  it("makes no run-level claim from a partial replay", () => {
+    const direct = bearsReport([{ bears: "directly" }], [{ bears: "directly" }]);
+    const claims = bearsReport([{ bears: "partly" }], [{ bears: "partly" }]);
+    expect(completeBearsReport([{ ok: true, pass: "direct", bears: direct }])).toBeNull();
+    expect(
+      completeBearsReport([
+        { ok: true, pass: "direct", bears: direct },
+        { ok: false, pass: "claims" },
+      ]),
+    ).toBeNull();
+    expect(
+      completeBearsReport([
+        { ok: true, pass: "direct", bears: direct },
+        { ok: true, pass: "claims", bears: claims },
+      ]),
+    ).toMatchObject({ rows: 2, keptRows: 2 });
   });
 });
 

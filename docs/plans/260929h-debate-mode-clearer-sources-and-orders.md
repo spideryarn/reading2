@@ -1,6 +1,6 @@
 # Debate mode: say what each source is, and let the reader order the list
 
-Status: **plan, reviewed once by GPT Sol (§ After the plan review); stage 1 building.** Report SPIDERYARN-READING2-5P (spya-w7t24d), from Greg's
+Status: **stages 1–2 built and reviewed; see § After, in a browser and § The code review.** Report SPIDERYARN-READING2-5P (spya-w7t24d), from Greg's
 own account, 2026-09-29.
 
 ## What Greg asked
@@ -321,6 +321,12 @@ So the row count swings 4–6 on the same prompt, and the full version's 5 and 4
 fall was not the fields' doing**, or not provably. `bears` came back on every row the model reported,
 in the vocabulary, every time. Cost of all ten runs: about $2.35.
 
+**How `bears` spreads**, from a free replay of the `bears`-only journals: stored claim rows were
+3 `directly` + 3 `partly` (cargocult) and 4 + 2 (mythology), and **never `loosely`** — the prompt
+already tells the model to leave a page on the same topic that answers nothing out. So the bar's one
+move that changes anything is *hide the `partly` rows*, and on a debate where every row is `directly`
+it is not drawn at all (the browser check's re-run of mythology came back four `directly`).
+
 ### What that decided
 
 - **The search stops being asked for title, authors and year.** They verify on one row in eleven,
@@ -332,6 +338,57 @@ in the vocabulary, every time. Cost of all ten runs: about $2.35.
   built and tested, and dormant: no stored row carries the fields, so none of them draws.
 - **Authors and year need a bibliographic source, which is Greg's call** — § Deferred: authors and
   year from a lookup.
+
+## After, in a browser
+
+Local dev server on `86272935`, signed in as the owner, 2026-09-29, on
+`the-mythology-of-conscious-ai-spya-rn5m0q`:
+[1 by claim](260929h-shot-after-1-claim.png) · [2 `more` open](260929h-shot-after-2-more.png) ·
+[3 stance](260929h-shot-after-3-stance.png) ·
+[4 prioritised, after a re-run](260929h-shot-after-4-prioritised.png) ·
+[5 by claim, new data](260929h-shot-after-5-bar-moved.png) · [6 phone](260929h-shot-after-6-phone.png).
+
+Against § Stages' *done means*:
+
+- **A row's source is identifiable without hovering** — yes: the title leads every row, the site is
+  under it.
+- **Three or more rows on a phone screen** — **not met: about two and a half** (two whole rows and
+  the top of a third; a row is ~190–215px at 390px wide, against 370–450 before). Better than one and
+  a half, and short of the target.
+- **Every order offered changes the list** — yes, and C2–C4 below tightened it.
+- The re-run through Metadata worked and wrote `debate/3`; *prioritised* became the default. All four
+  rows came back `directly`, so the relevance bar correctly did not draw — which also means **the
+  bar has not been seen moved in a browser**; its behaviour is covered by the panel tests only.
+- Keyboard: Tab reaches `more`, Enter opens it, focus stays, `aria-expanded` flips.
+
+## The code review (GPT Sol, round 1, 2026-09-29)
+
+Write-capable, on `86272935`. Eight fixed by the reviewer, red-first, and read and re-gated by me
+(typecheck exit 0; 27 files, 795 tests; `eval:debate check` 23 of 23):
+
+- **C1 (P1)** the relevance bar's *N of M* counted unjudged rows as clearing it; now *"1 of 3
+  judged"*, unjudged rows still always shown.
+- **C2 (P1)** the offered and effective orders were computed from every direct row, including ones
+  the identification bar had hidden, so an order could be offered whose only difference was off
+  screen. Both now use the rows the bar left. This reverses stage 1's *"buttons do not come and go
+  while you drag the other bar"*: correctness over stability.
+- **C3 (P1)** `?debateby=claim&bears=directly` could resolve to *prioritised* and hide a row, because
+  two orders shared a signature. The signature now includes the threshold and the unjudged section.
+- **C4 (P2)** the date order's signature now includes its marker and undated section.
+- **C5 (P1)** with every claim row hidden by the relevance bar, the lead still said *"What follows
+  takes up what it argues."* It now says it only when a claim row follows.
+- **C6–C8 (P1/P2)** the eval's bears report: malformed rows in the denominator, a partial journal
+  presented as a whole run, and an arithmetic warning suppressed.
+
+Reported, not fixed, and left as they are:
+
+- **C9 (P2)** the dormant byline's line in `more` says the authors and year are *the AI's reading of
+  the page*. A lookup would make that false. **Whoever builds § Deferred must carry provenance on the
+  fields and change that copy** — it is the one line the lookup cannot reuse as is.
+- **C10 (P3)** both prompts say *"No ranking by prominence is applied to what you return, and the
+  reader is told so."* The reader is now told what each order does rather than that. Changing it is a
+  prompt change with its own measurement; the clause is harmless to the model, so it waits for the
+  next `debate/` bump.
 
 ## Deferred: authors and year from a lookup
 

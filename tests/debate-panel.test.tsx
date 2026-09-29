@@ -1045,6 +1045,25 @@ describe("the bar over how firmly a page identifies this article", () => {
     }
   });
 
+  it("does not offer an order once the identification bar has removed the row that made it different", () => {
+    const rows = [
+      direct({ id: "spya-d2w4r7", lean: "leans-for" }),
+      quoted({ id: "spya-d2w4r8", lean: "leans-against" }),
+    ];
+    paint(
+      owner({
+        debate: artefact({
+          direct: { rows, counts: counts({ reportedRows: 2, keptRows: 2 }) },
+          claims: { rows: [], counts: counts({ returnedSources: 0, reportedRows: 0, keptRows: 0 }) },
+        }),
+      }),
+      null,
+      "stance",
+    );
+    expect(host.querySelector(".gloss-sort")).toBeNull();
+    expect(text()).toContain(DEBATE_ORDER_BY_CLAIM);
+  });
+
   /* A group emptied by the bar is not a search that found nothing. In *by
      claim* the temptation is an *About this piece* heading with an empty-search
      sentence under it; `hiddenNote` has already said what happened. */
@@ -1472,6 +1491,23 @@ describe("the lead sentence, said where it is true", () => {
     expect(host.querySelector(".dbt-item")).toBeNull();
   });
 
+  it("does not promise that claim rows follow when the relevance bar has hidden all of them", () => {
+    const onlyLoose = {
+      rows: [claim3({ bears: "loosely" })],
+      counts: counts({ reportedRows: 1, keptRows: 1 }),
+    };
+    paint(
+      owner({ debate: artefact({ direct: noDirect, claims: onlyLoose }) }),
+      "named",
+      "prioritised",
+      new Map(),
+      { relevance: "directly" },
+    );
+    expect(host.querySelectorAll(".dbt-item")).toHaveLength(0);
+    expect(text()).toContain(DEBATE_RESPONSES_NONE);
+    expect(text()).not.toContain(DEBATE_CLAIMS_FOLLOW);
+  });
+
   /* A visitor's lead is `sharedLeadNote`'s, placed the same way. */
   it("places a visitor's lead the same way", () => {
     paintShared(
@@ -1629,7 +1665,7 @@ describe("prioritised, and the relevance bar", () => {
 
   it("hides nothing until the reader moves it, and says so", () => {
     paint(owner({ debate: judged() }));
-    expect(host.querySelector(".dbt-rel .dbt-bar-value")?.textContent).toBe("bears loosely · 4 of 4");
+    expect(host.querySelector(".dbt-rel .dbt-bar-value")?.textContent).toBe("bears loosely · 3 of 3 judged");
     expect(host.querySelector(".dbt-rel .dbt-bar-note")?.textContent).toBe("Nothing is hidden by this threshold.");
     expect(host.querySelector(".dbt-rel .dbt-bar-reset")).toBeNull();
   });
@@ -1637,8 +1673,10 @@ describe("prioritised, and the relevance bar", () => {
   it("hides claim rows only, never an unjudged one, and its count is the rows drawn", () => {
     paint(owner({ debate: judged() }), "named", "prioritised", new Map(), { relevance: "directly" });
     expect(sequence()).toEqual(["A reply to the piece", "Direct", DEBATE_UNJUDGED, "Unjudged"]);
-    /* Its N of M counts claim rows: two drawn (one judged, one not) of four. */
-    expect(host.querySelector(".dbt-rel .dbt-bar-value")?.textContent).toBe("bears directly · 2 of 4");
+    /* Its N of M counts the rows the AI judged: one drawn of three. The
+       unjudged row is still on the list, under its own line, but is not made to
+       look as though it cleared "bears directly". */
+    expect(host.querySelector(".dbt-rel .dbt-bar-value")?.textContent).toBe("bears directly · 1 of 3 judged");
     expect(host.querySelector(".dbt-rel .dbt-bar-note")?.textContent).toBe(
       "2 answers to its claims are hidden by this threshold. Drag the slider left to show them.",
     );
@@ -1666,6 +1704,20 @@ describe("prioritised, and the relevance bar", () => {
     paint(owner({ debate: judged() }), "named", "claim", new Map(), { relevance: "directly" });
     expect(host.querySelector(".dbt-rel")).toBeNull();
     expect(host.querySelectorAll(".dbt-item")).toHaveLength(5);
+  });
+
+  it("honours an explicit by-claim URL and ignores bears even when prioritised starts in the same order", () => {
+    const oneLoose = artefact({
+      direct: { rows: [], counts: counts({ returnedSources: 0, reportedRows: 0, keptRows: 0 }) },
+      claims: {
+        rows: [claim3({ title: "Loose", bears: "loosely" })],
+        counts: counts({ reportedRows: 1, keptRows: 1 }),
+      },
+    });
+    paint(owner({ debate: oneLoose }), "named", "claim", new Map(), { relevance: "directly" });
+    expect(host.querySelectorAll(".dbt-item")).toHaveLength(1);
+    expect(host.querySelector(".dbt-rel")).toBeNull();
+    expect(text()).toContain(DEBATE_ORDER_BY_CLAIM);
   });
 
   it("is not offered on rows without bears", () => {

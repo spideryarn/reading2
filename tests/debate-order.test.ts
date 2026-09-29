@@ -261,6 +261,7 @@ describe("the relevance bar", () => {
     const partly = visibleClaims(rows, "partly");
     expect(ids(partly.visible)).toEqual(["direct", "part", "unjudged"]);
     expect(partly.hiddenCount).toBe(1);
+    expect(partly.unscoredCount).toBe(1);
     const directly = visibleClaims(rows, "directly");
     expect(ids(directly.visible)).toEqual(["direct", "unjudged"]);
     expect(directly.hiddenCount).toBe(2);
@@ -386,5 +387,20 @@ describe("which orders are offered, and which one is drawn", () => {
     /* Same row order both ways, but by claim draws two headings and stance none. */
     const rows = [claim("a", B1, "one", { lean: "leans-against" }), claim("b", B2, "two", { lean: "leans-for" })];
     expect(debateOrderOptions([], rows, ARTICLE)).toEqual(["claim", "stance"]);
+  });
+
+  it("keeps prioritised distinct when its relevance bar can change an otherwise identical list", () => {
+    const rows = [claim("a", B1, "one", { bears: "loosely" })];
+    expect(debateOrderOptions([], rows, ARTICLE)).toEqual(["prioritised", "claim"]);
+    expect(effectiveDebateOrder([], rows, "claim", ARTICLE)).toBe("claim");
+  });
+
+  it("keeps date distinct when its missing-year line or article marker changes the rendered list", () => {
+    const rows = [
+      claim("dated", B1, "one", { publishedYear: 2020 }),
+      claim("undated", B1, "one"),
+    ];
+    expect(debateOrderOptions([], rows, ARTICLE, 2022)).toContain("date");
+    expect(effectiveDebateOrder([], rows, "date", ARTICLE, 2022)).toBe("date");
   });
 });
