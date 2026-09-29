@@ -16,6 +16,7 @@ import type { Block, BlockId } from "../../types.js";
 import { atParam } from "../params.js";
 import {
   abandonScroll,
+  arrivalAnchor,
   glideTarget,
   scrollToBlock,
   scrollToTop,
@@ -168,6 +169,7 @@ export function useReadingPosition(sections: Section[], blocks: Block[], layoutK
         jumpInFlight,
         atTop: window.scrollY <= stickyOffset(),
         held: synced.current,
+        anchored: (arrivalAnchor()?.id as BlockId | undefined) ?? null,
       });
       if (next === null) return;
       synced.current = next.at;

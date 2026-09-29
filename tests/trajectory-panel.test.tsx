@@ -92,13 +92,15 @@ vi.mock("../src/web/useJobs.js", async (importOriginal) => {
 
 /* Scrolls are recorded — jsdom has no layout, and the claim is that a step
    scrolls rather than pushes. comment-jump.test.ts does the same. */
-const { scrolled, flashed, passages, jumpPassages, movement } = vi.hoisted(() => ({
+const { scrolled, flashed, passages, jumpPassages, movement, aligns } = vi.hoisted(() => ({
   scrolled: [] as string[],
   flashed: [] as string[],
   /* The passage each flash was narrowed to (plan 260928a § 7b), or null. */
   passages: [] as (string | null)[],
   /* The passage a history-pushing row jump asks `beginJump` to flash. */
   jumpPassages: [] as (string | null)[],
+  /* How each Trajectory movement asked to land — plan 260929a § 3. */
+  aligns: [] as string[],
   movement: { outcome: "settled" as "settled" | "cancelled" | "missing", dropped: 0 },
 }));
 vi.mock("../src/web/scroll.js", async (importOriginal) => {
@@ -110,8 +112,10 @@ vi.mock("../src/web/scroll.js", async (importOriginal) => {
       id: string,
       _behavior?: ScrollBehavior,
       done?: (o: "settled" | "cancelled" | "missing") => void,
+      how?: { align?: string },
     ) => {
       scrolled.push(id);
+      aligns.push(how?.align ?? "top");
       done?.(movement.outcome);
     },
   };
@@ -544,9 +548,10 @@ describe("the panel", () => {
     expect(calls).toEqual([`row ${Q[3]}`, "step 1", "depth 3"]);
   });
 
-  it("disables the arrow at each end, because the route does not wrap", async () => {
+  it("turns ‹ into Back to stop 1 on stop 1, and disables › at the end, because the route does not wrap", async () => {
     await draw(owner(), view({ position: 1 }));
-    expect(host.querySelector<HTMLButtonElement>('[aria-label="Previous stop"]')!.disabled).toBe(true);
+    expect(host.querySelector('[aria-label="Previous stop"]')).toBeNull();
+    expect(host.querySelector<HTMLButtonElement>('[aria-label="Back to stop 1"]')!.disabled).toBe(false);
     await draw(owner(), view({ position: 3 }));
     expect(host.querySelector<HTMLButtonElement>('[aria-label="Next stop"]')!.disabled).toBe(true);
   });
@@ -655,7 +660,9 @@ describe("the panel", () => {
     await draw(owner(), view({ rows: v.rows.map((r, i) => ({ ...r, position: positions[i]! })) }));
     const rows = [...host.querySelectorAll<HTMLElement>(".traj-row")];
     const dots = rows.map((r) => r.querySelector<HTMLElement>(".traj-pos-dot"));
-    expect(dots.map((d) => d?.style.left)).toEqual(["80%", "10%", "55%"]);
+    expect(dots.map((d) => d?.style.top)).toEqual(["80%", "10%", "55%"]);
+    /* Inside the number's column, so it takes no width of its own (plan 260929a § 4). */
+    expect(rows[0]!.querySelector(".traj-n .traj-pos")).not.toBeNull();
     expect(dots.map((d) => d?.classList.contains("on"))).toEqual([false, true, false]);
     /* Drawn for the eye; said in words for a screen reader. */
     expect(rows[0]!.querySelector(".traj-pos")?.getAttribute("aria-hidden")).toBe("true");
@@ -698,52 +705,66 @@ describe("the panel", () => {
 });
 
 describe("the door in the prose", () => {
-  it("offers the next stop, and the band back only when asked to", async () => {
-    let pressed = 0;
+  const door = (props: Partial<Parameters<typeof TrajectoryDoor>[0]>) =>
+    createElement(TrajectoryDoor, {
+      door: null,
+      onNext: () => {},
+      onAgain: () => {},
+      onDeeper: () => {},
+      onRoute: null,
+      ...props,
+    });
+
+  it("offers the next stop mid-pass, and the band back only when asked to", async () => {
+    let next = 0;
     let back = 0;
-    await act(async () =>
-      root.render(createElement(TrajectoryDoor, { label: "Next stop ›", cue: null, onPress: () => void pressed++, onRoute: null })),
-    );
+    await act(async () => root.render(door({ door: { kind: "next", cue: null }, onNext: () => void next++ })));
     expect([...host.querySelectorAll("button")].map((b) => b.textContent)).toEqual(["Next stop ›"]);
     await act(async () =>
+      root.render(door({ door: { kind: "next", cue: null }, onNext: () => void next++, onRoute: () => void back++ })),
+    );
+    const buttons = [...host.querySelectorAll<HTMLButtonElement>("button")];
+    expect(buttons.map((b) => b.textContent)).toEqual(["All stops", "Next stop ›"]);
+    await act(async () => buttons[1]!.click());
+    await act(async () => buttons[0]!.click());
+    expect([next, back]).toEqual([1, 1]);
+  });
+
+  it("offers two doors at the end of a pass: round again, and more detail (4N)", async () => {
+    let again = 0;
+    let deeper = 0;
+    await act(async () =>
       root.render(
-        createElement(TrajectoryDoor, {
-          label: "Go round again — More ›",
-          cue: null,
-          onPress: () => void pressed++,
-          onRoute: () => void back++,
+        door({
+          door: { kind: "end", pass: "Gist", count: 5, deeper: "More" },
+          onAgain: () => void again++,
+          onDeeper: () => void deeper++,
         }),
       ),
     );
     const buttons = [...host.querySelectorAll<HTMLButtonElement>("button")];
-    expect(buttons.map((b) => b.textContent)).toEqual(["All stops", "Go round again — More ›"]);
-    await act(async () => buttons[1]!.click());
+    expect(buttons.map((b) => b.textContent)).toEqual(["Go round again", "More detail ›"]);
+    expect(text(".traj-door-cue")).toBe("End of Gist — 5 stops.");
     await act(async () => buttons[0]!.click());
-    expect([pressed, back]).toEqual([1, 1]);
+    await act(async () => buttons[1]!.click());
+    expect([again, deeper]).toEqual([1, 1]);
   });
 
-  it("says under the door where it leads — the next stop's cue, small and muted", async () => {
-    await act(async () =>
-      root.render(
-        createElement(TrajectoryDoor, {
-          label: "Next stop ›",
-          cue: "Look for the headline comparison.",
-          onPress: () => {},
-          onRoute: null,
-        }),
-      ),
-    );
+  it("offers only going round again at the end of the deepest pass", async () => {
+    await act(async () => root.render(door({ door: { kind: "end", pass: "Most", count: 1, deeper: null } })));
+    expect([...host.querySelectorAll("button")].map((b) => b.textContent)).toEqual(["Go round again"]);
+    expect(text(".traj-door-cue")).toBe("End of Most — 1 stop.");
+  });
+
+  it("says under the next-stop door where it leads — the next stop's cue, small and muted", async () => {
+    await act(async () => root.render(door({ door: { kind: "next", cue: "Look for the headline comparison." } })));
     expect(text(".traj-door-cue")).toBe("Look for the headline comparison.");
-    await act(async () =>
-      root.render(createElement(TrajectoryDoor, { label: "Next stop ›", cue: null, onPress: () => {}, onRoute: null })),
-    );
+    await act(async () => root.render(door({ door: { kind: "next", cue: null } })));
     expect(host.querySelector(".traj-door-cue")).toBeNull();
   });
 
-  it("draws nothing at the end of the deepest pass", async () => {
-    await act(async () =>
-      root.render(createElement(TrajectoryDoor, { label: null, cue: null, onPress: () => {}, onRoute: null })),
-    );
+  it("draws nothing with no door and no band to bring back", async () => {
+    await act(async () => root.render(door({})));
     expect(host.innerHTML).toBe("");
   });
 });
@@ -777,6 +798,7 @@ let away = 0;
 function Harness({ covers = false, arrival }: { covers?: boolean; arrival?: TrajectoryArrival }) {
   const ownArrival = useRef<TrajectoryArrival>({
     stop: new URLSearchParams(location.search).get("stop"),
+    open: false,
   });
   const [found, setFound] = useState<Found[]>([]);
   const [openKey, setOpenKey] = useState<string | null>(null);
@@ -896,7 +918,7 @@ describe("the band, walked", () => {
     expect(published[0]).toBe(MARKS.find((m) => m.blockId === B[2]));
     expect(host.querySelector("#state")?.getAttribute("data-open")).toBe(published[0]!.key);
     expect(control?.blockId).toBe(B[2]);
-    expect(control?.door).toBe("Next stop ›");
+    expect(control?.door).toEqual({ kind: "next", cue: "Look for the headline comparison." });
   });
 
   it("steps by replacing the entry, and scrolls the stop to the top", async () => {
@@ -915,21 +937,82 @@ describe("the band, walked", () => {
       took = control!.step(1);
     });
     expect(took).toBe(false);
-    expect(control?.door).toBe("Go round again — More ›");
+    expect(control?.door).toEqual({ kind: "end", pass: "Gist", count: 2, deeper: "More" });
   });
 
-  it("goes round again from the end of a pass: one pushed entry, depth and stop together", async () => {
+  it("More detail goes to stop 1 of the deeper pass: one pushed entry, depth and stop together (4N)", async () => {
     await mount();
     await act(async () => void control!.step(1));
     await settled();
     const before = history.length;
     scrolled.length = 0;
-    await act(async () => control!.advance());
+    await act(async () => control!.deeper());
     await settled();
     expect(history.length, "one entry for the depth and the stop").toBe(before + 1);
-    expect([param("depth"), param("stop")]).toEqual(["2", Q[3]]);
-    expect(scrolled).toEqual([B[3]]);
-    expect(text(".band-head")).toContain("Stop 3 of 3");
+    expect([param("depth"), param("stop")]).toEqual(["2", Q[2]]);
+    expect(scrolled).toEqual([B[2]]);
+    expect(text(".band-head")).toContain("Stop 1 of 3");
+  });
+
+  it("Go round again goes to stop 1 of this pass, replacing the entry (4N)", async () => {
+    await mount();
+    await act(async () => void control!.step(1));
+    await settled();
+    const before = history.length;
+    scrolled.length = 0;
+    await act(async () => control!.again());
+    await settled();
+    expect(history.length, "a step along the same pass does not push").toBe(before);
+    expect([param("depth"), param("stop")]).toEqual([null, Q[2]]);
+    expect(scrolled).toEqual([B[2]]);
+    expect(text(".band-head")).toContain("Stop 1 of 2");
+  });
+
+  it("offers only going round again at the end of the deepest pass", async () => {
+    history.replaceState(null, "", `/read/a-route?mode=trajectory&depth=3&stop=${Q[1]}`);
+    await mount();
+    expect(control?.door).toEqual({ kind: "end", pass: "Most", count: 4, deeper: null });
+    await act(async () => control!.deeper());
+    await settled();
+    expect(param("stop"), "no deeper pass: nothing moves").toBe(Q[1]);
+  });
+
+  it("does not go round on a depth button pressed at the end of a pass — it keeps your place", async () => {
+    history.replaceState(null, "", `/read/a-route?mode=trajectory&depth=1&stop=${Q[0]}`);
+    await mount();
+    scrolled.length = 0;
+    await act(async () => host.querySelectorAll<HTMLButtonElement>(".traj-depth")[1]!.click());
+    await settled();
+    expect([param("depth"), param("stop")]).toEqual(["2", Q[0]]);
+    expect(scrolled).toEqual([]);
+  });
+
+  it("← on stop 1 goes to stop 1's passage again, and so does ‹ (4K)", async () => {
+    await mount();
+    scrolled.length = 0;
+    let took = false;
+    await act(async () => {
+      took = control!.step(-1);
+    });
+    await settled();
+    expect(took, "the key is taken, not handed back").toBe(true);
+    expect(scrolled).toEqual([B[2]]);
+    expect(flashed).toEqual([B[2]]);
+    const back = host.querySelector<HTMLButtonElement>('[aria-label="Back to stop 1"]')!;
+    expect(back.disabled).toBe(false);
+    await act(async () => back.click());
+    await settled();
+    expect(scrolled).toEqual([B[2], B[2]]);
+  });
+
+  it("centres every movement along the route (4M)", async () => {
+    await mount();
+    aligns.length = 0;
+    await act(async () => void control!.step(1));
+    await settled();
+    await act(async () => void control!.again());
+    await settled();
+    expect(aligns).toEqual(["centre", "centre"]);
   });
 
   it("keeps the reader's place on a depth change that is not the end of a pass", async () => {
@@ -973,7 +1056,7 @@ describe("the band, walked", () => {
     history.replaceState(null, "", "/read/a-route?mode=trajectory&depth=3");
     await mount();
     /* Four blocks of seven words each; route order is blocks 2, 0, 3, 1. */
-    const left = [...host.querySelectorAll<HTMLElement>(".traj-pos-dot")].map((d) => d.style.left);
+    const left = [...host.querySelectorAll<HTMLElement>(".traj-pos-dot")].map((d) => d.style.top);
     expect(left).toEqual(["63%", "13%", "88%", "38%"]);
   });
 
@@ -1048,10 +1131,10 @@ describe("the band, walked", () => {
     history.replaceState(null, "", `/read/a-route?mode=trajectory&depth=1&stop=${Q[0]}`);
     await mount();
     flashed.length = 0;
-    await act(async () => control!.advance());
+    await act(async () => control!.deeper());
     await settled();
-    expect(param("stop")).toBe(Q[3]);
-    expect(flashed).toEqual([B[3]]);
+    expect(param("stop")).toBe(Q[2]);
+    expect(flashed).toEqual([B[2]]);
   });
 
   it("leaves a row press's quote flash to the jump it makes, so it flashes once (5a, 7b)", async () => {
@@ -1084,6 +1167,7 @@ describe("the band, walked", () => {
     function Mode({ trajectory }: { trajectory: boolean }) {
       const arrival = useRef<TrajectoryArrival>({
         stop: new URLSearchParams(location.search).get("stop"),
+        open: false,
       });
       return trajectory
         ? createElement(Harness, { arrival: arrival.current })
@@ -1143,10 +1227,50 @@ describe("the band, walked", () => {
     expect([scrolled, away]).toEqual([[B[3]], 0]);
   });
 
-  it("does nothing for a deep link whose stop is not on the pass", async () => {
+  it("lands a deep link whose stop is not on the pass on the first stop, without a push (Sol F4)", async () => {
     history.replaceState(null, "", `/read/a-route?mode=trajectory&depth=1&stop=${Q[1]}`);
+    const before = history.length;
     await mount();
-    expect([scrolled, flashed]).toEqual([[], []]);
+    expect([scrolled, flashed]).toEqual([[B[2]], [B[2]]]);
+    expect(history.length).toBe(before);
+  });
+
+  it("jumps to the current stop when the mode is opened, once, as a jump the chip can undo (4K)", async () => {
+    history.replaceState(null, "", "/read/a-route?mode=trajectory");
+    const arrival: TrajectoryArrival = { stop: null, open: true };
+    await act(async () => root.render(createElement(StrictMode, null, createElement(Harness, { arrival }))));
+    await settled();
+    /* `onJump` is `jumpTo` → `beginJump` in the reader: the push, the stamp
+       the "Back to …" chip is drawn from, the centring and the flash. */
+    expect(scrolled).toEqual([`jump ${B[2]}`]);
+    expect(jumpPassages).toEqual([`${Q[2]}:${B[2]}:0`]);
+    expect(arrival.open, "consumed").toBe(false);
+    /* A step afterwards is a step, not a second opening. */
+    await act(async () => void control!.step(1));
+    await settled();
+    expect(scrolled).toEqual([`jump ${B[2]}`, B[0]]);
+  });
+
+  it("prefers a deep link to the opening jump when both are armed", async () => {
+    history.replaceState(null, "", `/read/a-route?mode=trajectory&depth=2&stop=${Q[3]}`);
+    const arrival: TrajectoryArrival = { stop: Q[3]!, open: true };
+    await act(async () => root.render(createElement(Harness, { arrival })));
+    await settled();
+    expect(scrolled).toEqual([B[3]]);
+    expect(arrival).toEqual({ stop: null, open: false });
+  });
+
+  it("waits for the route before the opening jump, and does not jump on a remount it was not armed for", async () => {
+    history.replaceState(null, "", "/read/a-route?mode=trajectory");
+    const arrival: TrajectoryArrival = { stop: null, open: true };
+    await act(async () => root.render(createElement(Harness, { arrival })));
+    await settled();
+    expect(scrolled).toEqual([`jump ${B[2]}`]);
+    /* Back into the mode (Reader does not re-arm on popstate): nothing moves. */
+    await act(async () => root.render(createElement("div")));
+    await act(async () => root.render(createElement(Harness, { arrival })));
+    await settled();
+    expect(scrolled).toEqual([`jump ${B[2]}`]);
   });
 
   it("plans it again with the route forced, and nothing else when the Quotes are current (5e)", async () => {
@@ -1273,12 +1397,11 @@ describe("the scrapbook, walked", () => {
     expect(text(".traj-row.current .traj-cue")).toBe("How they measured it");
   });
 
-  it("hands the door the cue of the stop it leads to — the next one, or the first new one round again", async () => {
+  it("hands the door the next stop's cue mid-pass, and the pass that ended at its end", async () => {
     await mount();
-    expect(control?.doorCue).toBe("Look for the headline comparison.");
+    expect(control?.door).toEqual({ kind: "next", cue: "Look for the headline comparison." });
     await act(async () => void control!.step(1));
     await settled();
-    expect(control?.door).toBe("Go round again — More ›");
-    expect(control?.doorCue).toBe("Where does it stop holding?");
+    expect(control?.door).toEqual({ kind: "end", pass: "Gist", count: 2, deeper: "More" });
   });
 });

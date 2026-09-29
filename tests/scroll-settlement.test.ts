@@ -13,7 +13,7 @@
  */
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
-const { abandonScroll, scrollToBlock, scrollToTop } = await import("../src/web/scroll.js");
+const { abandonScroll, arrivalAnchor, scrollToBlock, scrollToTop } = await import("../src/web/scroll.js");
 type ScrollOutcome = import("../src/web/scroll.js").ScrollOutcome;
 
 let frames: FrameRequestCallback[] = [];
@@ -303,5 +303,59 @@ describe("scrollToBlock re-aims while it travels", () => {
     docTop.set("spya-far", 4500);
     flush(500);
     expect(window.scrollY, "a shift after arrival is not chased").toBe(4300);
+  });
+});
+
+/**
+ * **A centred jump, and the arrival it leaves** — plan 260929a § 3, GPT Sol F1
+ * and F2. Rows are 20px tall in a 900px window with no bars, so a centred row
+ * sits 440px down: `spya-far` (at 4000) lands at 3560.
+ */
+describe("a centred jump", () => {
+  it("lands the row in the middle of the window, and leaves an anchor while the reader stays", () => {
+    const { outcomes, done } = recorder();
+    scrollToBlock("spya-far", "smooth", done, { align: "centre" });
+    flush(250);
+    expect(outcomes).toEqual(["settled"]);
+    expect(window.scrollY).toBe(3560);
+    expect(arrivalAnchor()).toEqual({ id: "spya-far", passage: undefined });
+    /* The glide's own trailing scroll event is inside its quiet window. */
+    window.dispatchEvent(new Event("scroll"));
+    expect(arrivalAnchor(), "our own last frame is not the reader leaving").not.toBeNull();
+    /* The reader scrolling, afterwards, ends it. */
+    now = started + 1000;
+    window.dispatchEvent(new Event("scroll"));
+    expect(arrivalAnchor()).toBeNull();
+  });
+
+  it("gives the anchor up to the next movement of any kind", () => {
+    scrollToBlock("spya-far", "smooth", undefined, { align: "centre" });
+    flush(250);
+    expect(arrivalAnchor()).not.toBeNull();
+    started = now;
+    scrollToBlock("spya-here", "smooth");
+    expect(arrivalAnchor()).toBeNull();
+  });
+
+  it("leaves no anchor for a top-aligned movement", () => {
+    scrollToBlock("spya-far", "smooth");
+    flush(250);
+    expect(window.scrollY).toBe(4000);
+    expect(arrivalAnchor()).toBeNull();
+  });
+
+  it("does not settle at once on a passage whose marks are not drawn yet — it takes the corrective frame (Sol F2)", () => {
+    const { outcomes, done } = recorder();
+    scrollToBlock("spya-here", "smooth", done, { align: "centre", passage: "q:spya-here:0" });
+    expect(outcomes, "no distance, but the aim was provisional").toEqual([]);
+    flush(16);
+    expect(outcomes).toEqual(["settled"]);
+    expect(arrivalAnchor()).toEqual({ id: "spya-here", passage: "q:spya-here:0" });
+  });
+
+  it("still settles at once with no distance and nothing provisional", () => {
+    const { outcomes, done } = recorder();
+    scrollToBlock("spya-here", "smooth", done, { align: "centre" });
+    expect(outcomes).toEqual(["settled"]);
   });
 });

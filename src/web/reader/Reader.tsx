@@ -18,6 +18,7 @@ import {
   type ReactNode,
   useCallback,
   useEffect,
+  useLayoutEffect,
   useMemo,
   useRef,
   useState,
@@ -37,6 +38,7 @@ import { DebateBand } from "../modes/debate/DebateMode.js";
 import { CitationsBand } from "../modes/citations/CitationsMode.js";
 import { FaqBand } from "../modes/faq/FaqMode.js";
 import {
+  firstTrajectoryArrival,
   TrajectoryBand,
   type TrajectoryArrival,
   type TrajectoryControl,
@@ -338,9 +340,34 @@ export function Reader({
      mount of its band. `ModeBoundary key={mode}` remounts the band on re-entry
      while leaving mode-specific query state in the URL; this token survives
      that boundary and is consumed by the first resolved arrival only. */
-  const trajectoryArrival = useRef<TrajectoryArrival>({
-    stop: mode === "trajectory" ? new URLSearchParams(location.search).get("stop") : null,
-  });
+  const trajectoryArrival = useRef<TrajectoryArrival>(firstTrajectoryArrival(mode));
+  /* **Switching into Trajectory by pressing something arms its opening jump**
+     (TrajectoryArrival § open, plan 260929a § 1). Back or Forward into it does
+     not: that restores an entry, and a fresh jump would push a new one and cut
+     off Forward (GPT Sol F4). Mode changes come from the Dock, the command bar,
+     the stop card and more, so rather than arm at every call site this
+     recognises the one that is not a press — a `popstate` that landed on a
+     Trajectory address, recorded by its href and consumed here. A layout
+     effect, so it runs before the newly mounted band's passive effect reads the
+     token. */
+  const poppedInto = useRef<string | null>(null);
+  useEffect(() => {
+    const onPop = () => {
+      poppedInto.current =
+        new URLSearchParams(location.search).get("mode") === "trajectory" ? location.href : null;
+    };
+    window.addEventListener("popstate", onPop);
+    return () => window.removeEventListener("popstate", onPop);
+  }, []);
+  const modeBefore = useRef(mode);
+  useLayoutEffect(() => {
+    const was = modeBefore.current;
+    modeBefore.current = mode;
+    if (mode === was || mode !== "trajectory") return;
+    const popped = poppedInto.current === location.href;
+    poppedInto.current = null;
+    if (!popped) trajectoryArrival.current.open = true;
+  }, [mode]);
 
   /* The tab: the article first, then the mode — and nothing for whichever mode
      is the default, which is the one most tabs are in and so the one that
@@ -1184,9 +1211,10 @@ export function Reader({
       blockId: trajectoryControl.blockId,
       node: (
         <TrajectoryDoor
-          label={trajectoryControl.door}
-          cue={trajectoryControl.doorCue}
-          onPress={trajectoryControl.advance}
+          door={trajectoryControl.door}
+          onNext={trajectoryControl.advance}
+          onAgain={trajectoryControl.again}
+          onDeeper={trajectoryControl.deeper}
           onRoute={bandBack ? () => setBandAway(false) : null}
         />
       ),
