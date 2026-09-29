@@ -55,7 +55,7 @@ import { pageTitle, useDocumentTitle } from "./page-title.js";
  * can honestly promise: there is no changelog, no diff view and nobody to email
  * about a wording change during a beta. Bump it when you change the words.
  */
-const LAST_UPDATED = "16 September 2026";
+const LAST_UPDATED = "29 September 2026";
 
 /**
  * A heading and its paragraphs. Eight of them; nothing else on the page.
@@ -166,10 +166,11 @@ export function PrivacyPage() {
           article goes to a model provider, and we can see what is in here. */}
       <p className="tw:mt-5 tw:mb-0 tw:rounded-md tw:border tw:border-rule tw:bg-surface-raised tw:p-4 tw:text-sm tw:leading-relaxed tw:text-foreground">
         The short version: we keep your account, the articles you add and everything you write about
-        them, so that we can show it back to you. To make the summaries, answers and diagrams, we
-        send the article and your questions to AI providers. We don’t sell any of it, we don’t show
-        ads, and nobody trains a model on it. Spideryarn is beta software run by one person — assume we
-        can see what’s in it.
+        them, so that we can show it back to you. Everything the AI does here — summaries, chat
+        answers, the glossary, quotes, diagrams, the quiz and the rest — works by sending AI
+        providers what that feature needs: usually the article, and sometimes what you give it, such
+        as a question, a quiz answer or your profile. We don’t sell any of it, we don’t show ads, and nobody trains a model on it. Spideryarn
+        is beta software run by one person — assume we can see what’s in it.
       </p>
 
       <Section title="Who we are">
@@ -223,9 +224,10 @@ export function PrivacyPage() {
             article you have shared, and it goes when the article does.
           </li>
           <li className="tw:mb-2">
-            <strong className="tw:text-foreground">What the models make for you</strong> —
-            summaries, outlines, glossaries, diagrams and search indexes, kept so that we don’t have
-            to pay to make them twice.
+            <strong className="tw:text-foreground">What the models make for you</strong> — we keep
+            reusable results such as summaries, outlines, glossaries, quotes, timelines, quiz
+            questions, diagrams and saved search results, so that we don’t have to pay to make them
+            twice.
           </li>
           <li className="tw:mb-2">
             <strong className="tw:text-foreground">A record of every model call</strong> — which
