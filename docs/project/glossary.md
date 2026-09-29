@@ -1032,7 +1032,7 @@ Four things about the slider are decisions rather than details:
   ambiguous between *there is nothing here* and *you have hidden it all* —
   [silent-success](../reusable/silent-success.md), which this codebase keeps catching itself in.
   `hiddenNote` in [`src/web/threshold.ts`](../../src/web/threshold.ts) writes it for all five
-  numeric sliders — this one, Quotes, Search, Citations and the FAQ — and for Debate's categorical bar.
+  numeric sliders — this one, Quotes, Search, Citations and the FAQ — and for Debate's two categorical bars.
 - **The order no longer cancels itself just because the bar hides nothing.** It used to. The slider
   reverses that argument twice over: cancelling would take the slider away with it and strand the
   reader mid-adjustment, and a list with nothing hidden here is not silent — the bar is on screen

@@ -1265,6 +1265,22 @@ export function Reader({
   );
 
   /**
+   * **Each block's position in the article** — Debate's *by claim* order puts
+   * its claims in the order the piece makes them, and the artefact does not
+   * carry that; the blocks do. Built once here and handed to both debate
+   * bands. docs/plans/260929h-debate-mode-clearer-sources-and-orders.md F8.
+   */
+  const blockOrder = useMemo(
+    () => new Map(article.blocks.map((b, i) => [b.id, i])),
+    [article.blocks],
+  );
+  /* …and the article's own publication date, for the *date* order's marker;
+     the band takes the year from it. Read off `object` because a visitor's
+     meta has no `publishedAt` in its type (it does not cross the public
+     boundary), and then there is simply no marker. */
+  const publishedAt = (article.meta as { publishedAt?: unknown }).publishedAt;
+
+  /**
    * **What every block link's card says** — each block's text and the section
    * it sits in, in one pass (BlockLinkCard.tsx). Memoised on the article alone,
    * so the provider's value is the same object while the reader scrolls and
@@ -1849,8 +1865,15 @@ export function Reader({
          docs/plans/260929c-a-visitor-sees-every-stored-mode-on-a-public-article.md. */
       case "debate":
         if (!owner)
-          return artefacts?.debate ? <VisitorDebateBand debate={artefacts.debate} onJump={bandJump} /> : null;
-        return <DebateBand slug={slug} onJump={bandJump} />;
+          return artefacts?.debate ? (
+            <VisitorDebateBand
+              debate={artefacts.debate}
+              onJump={bandJump}
+              blockOrder={blockOrder}
+              publishedAt={publishedAt}
+            />
+          ) : null;
+        return <DebateBand slug={slug} onJump={bandJump} blockOrder={blockOrder} publishedAt={publishedAt} />;
       /* **The owner/visitor pair, since 2026-09-29.** It was the owner alone
          until a public article's stored Trajectory was refused to a signed-out
          reader (SPIDERYARN-READING2-56); a stored list is the same case. The

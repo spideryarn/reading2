@@ -25,6 +25,7 @@ import { DictationButton, DictationStrip } from "./DictationStrip.js";
 import { type Mark, PlaceOnCriterion } from "./PlaceOnCriterion.js";
 import { Tooltip } from "./Tooltip.js";
 import { parseRoute } from "./router.js";
+import { keepDictation } from "./dictation-keep.js";
 import { sendForTranscription } from "./dictation-upload.js";
 import { useDictationField } from "./useDictationField.js";
 import { useEscapeToClose } from "./useEscapeToClose.js";
@@ -143,6 +144,8 @@ export function CommentDialog({
     box: followUpBox,
     context: route.kind === "read" ? { kind: "article", slug: route.slug } : { kind: "profile" },
     transcribe: sendForTranscription,
+    /* One box per comment, as the follow-up itself is. */
+    keep: keepDictation(`comment:${comment.id}`),
   });
 
   /* On screen for as long as it is mounted — this dialog has no shut state of

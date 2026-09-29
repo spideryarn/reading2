@@ -125,8 +125,10 @@ describe("what the bar keeps at each stop", () => {
   });
 
   it("leaves the rows in the order they arrived, at every stop", () => {
-    /* `DEBATE_NO_RANKING`: the list is search order and position carries no
-       claim, so a bar that sorted by level would make it carry one. */
+    /* The bar filters and never orders: which order the list is drawn in is
+       `?debateby=`'s business (debate-order.ts), and none of those orders is
+       by identification level — the chip on the row already says it. A bar
+       that sorted by level would put a second order under the reader's one. */
     const shuffled = [LINKED, NAMED, QUOTED];
     expect(visibleDirect(shuffled, "named").visible.map((r) => r.id)).toEqual(
       shuffled.map((r) => r.id),

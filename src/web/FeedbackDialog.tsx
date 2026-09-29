@@ -120,6 +120,7 @@ import { EarlierList, useEarlierFeedback } from "./FeedbackEarlier.js";
 import { collectFeedbackDiagnostics } from "./feedback-diagnostics.js";
 import { imageFileFromDrop, imageFileFromPaste, screenshotFromFile } from "./feedback-screenshot.js";
 import { apiFetch, failure } from "./lib/api.js";
+import { keepDictation } from "./dictation-keep.js";
 import { sendForTranscription } from "./dictation-upload.js";
 import { Toast, type ToastMessage } from "./Toast.js";
 import { useDictationField } from "./useDictationField.js";
@@ -619,6 +620,12 @@ export function FeedbackDialog({ open, onClose, where }: Props) {
     box,
     context: where.slug === null ? { kind: "profile" } : { kind: "article", slug: where.slug },
     transcribe: sendForTranscription,
+    /* **Only while open.** This dialog is mounted on every page whether or not
+       it is showing, so a keeper here while shut would let any background tab
+       claim a recording left from a closed one — and hold it where nobody can
+       see it. One box for the whole site: a recording is offered back on
+       whichever page Feedback is next opened. Plan 260929h. */
+    ...(open ? { keep: keepDictation("feedback") } : {}),
   });
 
   /**

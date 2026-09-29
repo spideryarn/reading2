@@ -55,6 +55,7 @@ import { whereSearchCountCameFrom, type Usage } from "../../src/openrouter-strea
 import type { ArticleBlockText } from "../../src/shingles.js";
 import type { ClaimDebateRow, DebateGroup, DirectDebateRow } from "../../src/types.js";
 import { supersededLean } from "./score.js";
+import { type BearsReport, bearsLines, bearsReport } from "./bears.js";
 
 /** The half of a chat completion a replay reads. Structural, so a journal from an older run still parses. */
 interface JournalledAnswer {
@@ -82,6 +83,12 @@ export type ReplayedAttempt =
        */
       supersededLeans: number;
       group: DebateGroup<DirectDebateRow> | DebateGroup<ClaimDebateRow>;
+      /**
+       * **What the model answered for `bears`, and what survived** — per
+       * bears.ts. On every replayed attempt, so an old journal says "none
+       * offered" rather than saying nothing.
+       */
+      bears: BearsReport;
     }
   | { ok: false; attemptId: string; pass: DebatePassKind | null; skipped: string };
 
@@ -212,45 +219,55 @@ function replayOne(
   }
   const stored = readStoredVocabulary(rows);
   if (start.pass === "direct") {
+    const group = readDirectGroup(stored.rows, { admissible, article: identity, blockText }, searches);
     return {
       ok: true,
       attemptId: start.attemptId,
       pass: "direct",
       returnedSources: admissible.size,
       supersededLeans: stored.supersededLeans,
-      group: readDirectGroup(stored.rows, { admissible, article: identity, blockText }, searches),
+      group,
+      bears: bearsReport(stored.rows, group.rows),
     };
   }
+  const group = readClaimGroup(stored.rows, { admissible, article: identity, blockText }, searches);
   return {
     ok: true,
     attemptId: start.attemptId,
     pass: "claims",
     returnedSources: admissible.size,
     supersededLeans: stored.supersededLeans,
-    group: readClaimGroup(stored.rows, { admissible, article: identity, blockText }, searches),
+    group,
+    bears: bearsReport(stored.rows, group.rows),
   };
 }
 
 /** One line per attempt, for a report. */
 export function replayLines(replayed: readonly ReplayedAttempt[]): string[] {
-  return replayed.map((r) => {
-    const name = `${r.pass ?? "(unknown)"} ${r.attemptId.slice(0, 8)}`;
-    if (!r.ok) return `  ${name.padEnd(24)} NOT REPLAYED — ${r.skipped}`;
-    const lost = Object.entries(r.group.counts.lost)
-      .filter(([, n]) => n > 0)
-      .map(([reason, n]) => `${reason} ${String(n)}`)
-      .join(", ");
-    return (
-      `  ${name.padEnd(24)} ${String(r.group.counts.keptRows).padStart(2)} kept of ` +
-      `${String(r.group.counts.reportedRows).padStart(2)} reported, ` +
-      `${String(r.returnedSources).padStart(2)} returned source(s), ` +
-      `${String(r.group.counts.webSearches)} search(es)` +
-      (lost ? `; lost: ${lost}` : "; nothing lost") +
-      /* Said out loud, and only when it happened: a run of these lines with no
-         such clause is a claim that every row was read exactly as written. */
-      (r.supersededLeans > 0
-        ? `; ${String(r.supersededLeans)} row(s) read forward from the pre-2026-09-08 valence vocabulary`
-        : "")
-    );
-  });
+  /* The attempt's line, then its bears counts beneath it, so the counts sit
+     under the pass they are about. */
+  return replayed.flatMap((r) =>
+    r.ok ? [attemptLine(r), ...bearsLines(r.bears, "    ")] : [attemptLine(r)],
+  );
+}
+
+function attemptLine(r: ReplayedAttempt): string {
+  const name = `${r.pass ?? "(unknown)"} ${r.attemptId.slice(0, 8)}`;
+  if (!r.ok) return `  ${name.padEnd(24)} NOT REPLAYED — ${r.skipped}`;
+  const lost = Object.entries(r.group.counts.lost)
+    .filter(([, n]) => n > 0)
+    .map(([reason, n]) => `${reason} ${String(n)}`)
+    .join(", ");
+  return (
+    `  ${name.padEnd(24)} ${String(r.group.counts.keptRows).padStart(2)} kept of ` +
+    `${String(r.group.counts.reportedRows).padStart(2)} reported, ` +
+    `${String(r.returnedSources).padStart(2)} returned source(s), ` +
+    `${String(r.group.counts.webSearches)} search(es)` +
+    (lost ? `; lost: ${lost}` : "; nothing lost") +
+    /* Said out loud, and only when it happened: a run of these lines with no
+       such clause is a claim that every row was read exactly as written. */
+    (r.supersededLeans > 0
+      ? `; ${String(r.supersededLeans)} row(s) read forward from the pre-2026-09-08 valence vocabulary`
+      : "")
+  );
 }

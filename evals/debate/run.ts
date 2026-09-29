@@ -28,7 +28,7 @@
  *
  * `evals/summaries/run.ts` has `--stub` and `evals/deepen` has `--dry-run`, and
  * both exist because **a paid run that quietly measured nothing is this repo's
- * commonest expensive bug**. `check` exercises the four seams that a paid run
+ * commonest expensive bug**. `check` exercises the five seams that a paid run
  * would otherwise exercise for the first time with money on the table:
  *
  * 1. **Journal writing** — a real `JournalFile`, real appends, read back.
@@ -39,6 +39,10 @@
  * 4. **Layer 1 replay** — over that synthetic journal, with a kept row, a row
  *    lost to `directnessUnverified`, and an attempt that cannot be replayed at
  *    all because its bytes are gone.
+ * 5. **`bears`** (`debate/3`) — counted omitted / offered by stop / refused per
+ *    pass, and by stop on the stored rows, with a case in every column
+ *    (bears.ts; 260929h, F4). A paid run prints the same counts, from a replay
+ *    of its own journal.
  *
  * The seam it does **not** cover is `generateDebate` writing the journal in the
  * first place, which needs a model at the other end of `openRouterJson`. That is
@@ -81,7 +85,7 @@ import { fallbackHeadTitle } from "../../src/source-hash.js";
 import type { Block, Meta } from "../../src/types.js";
 import { costOf, formatRunCost, type RunCost } from "./cost.js";
 import { JournalFile, readJournal } from "./journal-file.js";
-import { replayJournal, replayLines } from "./replay.js";
+import { type ReplayedAttempt, replayJournal, replayLines } from "./replay.js";
 import {
   headline,
   HOW_TO_READ,
@@ -90,6 +94,13 @@ import {
   type VerifyReport,
 } from "./verify-fallback.js";
 import { fixtureFetch, fixtureFetchOptions, fixtureJournal, QUOTES, URLS } from "./verify-fixture.js";
+import {
+  type BearsReport,
+  bearsLines,
+  bearsProblems,
+  completeBearsReport,
+  sumBearsReports,
+} from "./bears.js";
 
 /** **Gitignored.** See the header. */
 const RUN_ROOT = "output/debate-runs";
@@ -155,6 +166,15 @@ interface RunFile {
   elapsedMs: number;
   webSearches: number | null;
   kept: { direct: number; claims: number } | null;
+  /**
+   * **What the model answered for `bears`, and what survived** — from a Layer 1
+   * replay of this run's own journal (bears.ts). Here and never in the stored
+   * artefact. `null` unless exactly one direct and one claims pass replayed from
+   * a journal with no unreadable lines or write failures.
+   */
+  bears: BearsReport | null;
+  /** Rows the replay kept, which must equal `kept`'s sum — see `report`. */
+  replayedKept: number | null;
   cost: RunCost;
   costLine: string;
   /** The collector's own id, which is what joins `callIds` to `ai_calls`. */
@@ -220,6 +240,14 @@ async function commandRun(o: Options): Promise<void> {
   const cost = costOf(mine, { completed });
   const contents = await readJournal(journal.file);
   const reconciliation = reconcile(contents.events);
+  /* The bears counts come from replaying the journal rather than from the
+     run's return value, because only the journal still holds what the model
+     *answered* — a kept row carries only what survived. */
+  const replayed = replayJournal(contents.events, { blockText: blockTextById(article.blocks) });
+  const bears =
+    journal.failures.length === 0 && contents.malformedLines.length === 0
+      ? completeBearsReport(replayed)
+      : null;
 
   const runFile: RunFile = {
     runId,
@@ -232,6 +260,8 @@ async function commandRun(o: Options): Promise<void> {
     elapsedMs: Date.now() - startedAt,
     webSearches,
     kept,
+    bears,
+    replayedKept: bears?.keptRows ?? null,
     cost,
     costLine: formatRunCost(cost),
     ledgerRunId: currentSpend()?.runId ?? "(no collector)",
@@ -242,7 +272,21 @@ async function commandRun(o: Options): Promise<void> {
   await writeFile(path.join(dir, "run.json"), `${JSON.stringify(runFile, null, 2)}\n`, "utf-8");
 
   report(runFile, contents.malformedLines, journal.failures.length);
-  if (!completed || cost.problems.length > 0 || !reconciliation.complete) process.exitCode = 1;
+  const runKept = kept ? kept.direct + kept.claims : null;
+  const bearsInvalid =
+    bears === null ||
+    bearsProblems(bears).length > 0 ||
+    (runKept !== null && bears.keptRows !== runKept);
+  if (
+    !completed ||
+    cost.problems.length > 0 ||
+    !reconciliation.complete ||
+    bearsInvalid ||
+    journal.failures.length > 0 ||
+    contents.malformedLines.length > 0
+  ) {
+    process.exitCode = 1;
+  }
 }
 
 function report(runFile: RunFile, malformedLines: number[], writeFailures: number): void {
@@ -253,6 +297,20 @@ function report(runFile: RunFile, malformedLines: number[], writeFailures: numbe
       `  kept ${String(runFile.kept.direct)} about this piece, ${String(runFile.kept.claims)} about what it claims` +
         `; ${String(runFile.webSearches ?? 0)} web search(es); ${String(Math.round(runFile.elapsedMs / 1000))}s`,
     );
+  }
+  if (runFile.bears) {
+    console.log("");
+    for (const line of bearsLines(runFile.bears)) console.log(line);
+    /* The replay and the run read the same rows with the same code, so a
+       difference means the journal is not a record of what the run stored. */
+    const runKept = runFile.kept ? runFile.kept.direct + runFile.kept.claims : null;
+    if (runKept !== null && runFile.replayedKept !== runKept) {
+      console.log(
+        `  ! the replay kept ${String(runFile.replayedKept)} row(s) and the run kept ${String(runKept)} — these counts are not about this run`,
+      );
+    }
+  } else {
+    console.log("\n  bears: not measured — the journal did not replay as one direct and one claims pass");
   }
   console.log(`\nCost: ${runFile.costLine}`);
   console.log(`  ledger run ${runFile.ledgerRunId}; generations: ${runFile.cost.callIds.join(", ") || "(none)"}`);
@@ -683,8 +741,14 @@ const NAMES_NOTHING = {
  *   F24, the rule that two genuine quotations from an unrelated page do not
  *   make a response to this piece.
  * - `claims-1` keeps one row, which is the only path that needs the article's
- *   blocks.
+ *   blocks, and loses one to `uncited`.
  * - `dead-1` is the OOM shape: a start, and nothing after it.
+ *
+ * **And `bears`** (`debate/3`; 260929h, F4), placed so each column of its
+ * report is non-zero somewhere: an answer outside the vocabulary on a kept row
+ * (refused, the row kept and unjudged); no answer on the row lost for
+ * directness (omitted); `directly` on the kept claim row; and `partly` on the
+ * claim row lost as `uncited` (offered, on no stored row).
  */
 function syntheticJournal(): DebateJournalEvent[] {
   const start = (attemptId: string, pass: "direct" | "claims"): DebateJournalEvent => ({
@@ -725,6 +789,7 @@ function syntheticJournal(): DebateJournalEvent[] {
             relation: "qualifies",
             lean: "leans-against",
             applies: "It accepts the schedule only for cool kitchens.",
+            bears: "very",
           },
           {
             url: NAMES_NOTHING.url,
@@ -752,6 +817,17 @@ function syntheticJournal(): DebateJournalEvent[] {
             relation: "corroborates",
             lean: "leans-for",
             applies: "It reports the same collapse.",
+            bears: "directly",
+          },
+          {
+            url: "https://never-returned.example/starter",
+            blockId: "spya-aaaaaa",
+            claimQuote: "fall apart within a week",
+            sourceQuote: "collapse in about a week",
+            relation: "corroborates",
+            lean: "leans-for",
+            applies: "An address the search never returned.",
+            bears: "partly",
           },
         ],
         [NAMES_NOTHING],
@@ -939,12 +1015,68 @@ async function commandCheck(): Promise<void> {
     ),
   );
 
+  /* --- seam 5: bears (debate/3; 260929h, F4) ---------------------------- */
+  results.push(...bearsChecks(replayed));
+
   const failed = results.filter((x) => !x.held).length;
   console.log(
     `\n${String(results.length - failed)} of ${String(results.length)} checks held.` +
       (failed > 0 ? ` ${String(failed)} FAILED — do not spend money until they pass.` : " Nothing was measured and nothing was spent."),
   );
   if (failed > 0) process.exitCode = 1;
+}
+
+/**
+ * **Seam 5 — `bears`**, over the synthetic journal's replay. Its own function so
+ * `commandCheck` stays a list of seams; `syntheticJournal` says which row puts
+ * a case in which column.
+ */
+function bearsChecks(replayed: readonly ReplayedAttempt[]): { held: boolean }[] {
+  const results: { held: boolean }[] = [];
+  const direct = replayed.find((x) => x.attemptId === "direct-1");
+  const claims = replayed.find((x) => x.attemptId === "claims-1");
+  const db = direct?.ok === true ? direct.bears : null;
+  const cb = claims?.ok === true ? claims.bears : null;
+  console.log("\nHow much each passage bears on its target");
+  results.push(
+    check(
+      "an answer outside the three stops is refused, and its row is kept unjudged — never defaulted",
+      db?.refused === 1 && db.unjudgedKept === 1 && db.keptRows === 1,
+      JSON.stringify(db),
+    ),
+  );
+  results.push(check("a row with no answer is counted as omitted", db?.omitted === 1, JSON.stringify(db)));
+  const storedClaim = claims?.ok === true ? claims.group.rows[0] : undefined;
+  results.push(
+    check(
+      "the stored claim row carries its stop",
+      storedClaim?.bears === "directly" && cb?.onKeptRows.directly === 1,
+      JSON.stringify({ bears: storedClaim?.bears, onKeptRows: cb?.onKeptRows }),
+    ),
+  );
+  results.push(
+    check(
+      "an answer on a row lost for another reason is offered, and on no stored row",
+      cb?.offered.partly === 1 && cb.onKeptRows.partly === 0,
+      JSON.stringify(cb),
+    ),
+  );
+  const total = sumBearsReports([db, cb].filter((b) => b !== null));
+  results.push(
+    check(
+      "the columns add up — omitted + offered + refused is every row, stops + unjudged is every stored row",
+      total.rows === 4 && bearsProblems(total).length === 0,
+      `${String(total.rows)} rows; ${bearsProblems(total).join("; ")}`,
+    ),
+  );
+  results.push(
+    check(
+      "the replay prints the bears counts under each pass",
+      replayLines(replayed).join("\n").includes("bears over"),
+      "no bears line in the replay output",
+    ),
+  );
+  return results;
 }
 
 /** Append half a line and count what `readJournal` says about it. */

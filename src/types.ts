@@ -4481,6 +4481,84 @@ interface DebateRowBase {
    * limitation.
    */
   limits?: string;
+  /*
+   * **What the work is — title, authors, year. Nothing writes these today.**
+   *
+   * They are the landing place for a bibliographic lookup (DOI, arXiv,
+   * OpenAlex) that Greg has not approved — a new outside service
+   * (docs/plans/260929h-debate-mode-clearer-sources-and-orders.md § Deferred).
+   * Stage 2 first asked the search model to copy them off the page and kept
+   * each only if the page's extract held it; measured, that verified on 1 row
+   * of 11, because the extract is a passage from the middle of the page and the
+   * page's head is almost never in it (the plan's § The measurement, as it
+   * runs). So the ask was dropped before shipping.
+   *
+   * **No stored row carries them yet**, and the client reads them defensively:
+   * its byline and its *date* order stay dormant until something writes them.
+   * Whatever does must say where each came from, and keep `title` (the search
+   * engine's) apart from `workTitle`.
+   */
+  /** The work's own title. Beside the engine's `title`, never replacing it. */
+  workTitle?: string;
+  /** The work's authors, as the source spells them. Never an empty list. */
+  authors?: string[];
+  /**
+   * The work's year of publication — a year and not a date (Sol's F1: a date we
+   * invented would sort as if it were known).
+   */
+  publishedYear?: number;
+  /**
+   * How much the quoted passage bears on this row's target — a model judgment
+   * in three named stops, never a score, and nothing verifies it.
+   *
+   * **Absent means unjudged, not `loosely`.** An answer outside the vocabulary
+   * is dropped rather than defaulted, unlike `relation` and `lean`: those have
+   * an honest "cannot tell" member to fall to, and this has none — so a
+   * default here would put a row in a relevance band the model never chose.
+   * Read it through `readStoredBears`.
+   */
+  bears?: DebateBears;
+}
+
+/**
+ * **How much a passage bears on its row's target** — the relevance stop the
+ * *prioritised* order sorts on (260929h).
+ *
+ * - `directly` — it tests or responds to exactly this;
+ * - `partly` — it bears on part of it, or on something close;
+ * - `loosely` — same topic, little direct bearing.
+ *
+ * Three words rather than a number for the reason the identification bar gave
+ * (src/web/debate-levels.ts): a reader shown *0.73* reads a measurement, and
+ * this is one model's judgment of a stranger's page.
+ */
+export type DebateBears = "directly" | "partly" | "loosely";
+
+/** Total by construction, as `LEAN_MEMBERS` is: omit a member and this stops compiling. */
+const BEARS_MEMBERS: { [K in DebateBears]: true } = {
+  directly: true,
+  partly: true,
+  loosely: true,
+};
+
+/** The three stops, strongest first — the order *prioritised* sorts in. */
+export const DEBATE_BEARS: readonly DebateBears[] = ["directly", "partly", "loosely"];
+
+/** Is this one of the three stops this build knows? */
+export function isDebateBears(value: unknown): value is DebateBears {
+  return typeof value === "string" && Object.hasOwn(BEARS_MEMBERS, value);
+}
+
+/**
+ * **A stored row's `bears`, or `null` when it has none this build can read** —
+ * every row from before `debate/3`, and anything a hand-edit left behind.
+ *
+ * `null` rather than a default stop, because "unjudged" is what those rows are:
+ * the prioritised order puts them last under a line that says so, and a
+ * default would quietly file them in a band.
+ */
+export function readStoredBears(row: { bears?: unknown }): DebateBears | null {
+  return isDebateBears(row.bears) ? row.bears : null;
 }
 
 /**

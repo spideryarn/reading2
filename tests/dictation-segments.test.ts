@@ -231,7 +231,9 @@ function drive(send = transcribe) {
   function Probe(): ReactNode {
     state = useDictation({
       onText: () => {},
-      onTranscript: (t) => transcripts.push(t),
+      onTranscript: (t) => {
+        transcripts.push(t);
+      },
       onEnd: () => ends.push(1),
       context: { kind: "profile" },
       transcribe: send,

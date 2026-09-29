@@ -318,6 +318,7 @@ const dictate = useDictationField({
   value, onChange, box,
   context: { kind: "article", slug },
   transcribe: sendForTranscription,
+  keep: keepDictation(`chat:${slug}`), // names this box; § A closed tab
 });
 
 <textarea ref={box} readOnly={dictate.readOnly} … />
@@ -486,6 +487,56 @@ box, which cannot run Safari: the `dictation transcribed` log line carries `form
 and `kbps`, from the provider's own `usage.seconds`, and ~48 on an `m4a` row is the answer.
 [260912b](../plans/260912b-dictation-slow-on-weak-wifi.md), with the spike that measured it.
 
+## A closed tab does not lose a dictation
+
+> I would be really sad if at the end of a few minutes of really rich thought, the contents got lost
+> because, I don't know, there was a bug or the internet connection dropped or something like that.
+>
+> — Greg, 2026-09-29 (SPIDERYARN-READING2-5M)
+
+A failed upload already kept its audio and offered **Try again** (item 6 below). What could still
+lose a dictation was **the tab going away** — closed, reloaded, crashed, or thrown away by the
+browser — while the recording existed only in the page's memory. So since 2026-09-29 **every
+recorder chunk is also written to IndexedDB as it arrives**, and the next time the same box is on
+screen a recording that never reached it is offered back in the ordinary row, under
+`[mic-recovered]`. Try again puts its words at the caret; Save and Discard work as before.
+[260929h](../plans/260929h-dictation-that-survives-a-closed-tab.md) has the design, the options
+passed over, and GPT Sol's review.
+
+```
+ chunk every second ──▶ IndexedDB, this device only
+ words in the box, Discard, too short, device change ──▶ forgotten
+ tab dies, upload fails, box unmounts, a new press ──▶ left, and offered back next time
+```
+
+- **It is a seam, like the transcriber.** `DictationKeeper` in
+  [`transcriber.ts`](../../src/web/transcriber.ts) is types only; the product passes
+  `keep: keepDictation("<box>")` from [`dictation-keep.ts`](../../src/web/dictation-keep.ts), and
+  the fleet dashboard passes nothing and is unchanged. **A new box adds that one line**, naming
+  itself: `feedback`, `chat:<slug>`, `comment:<id>`, `annotate:<block>:<start>`,
+  `quiz:<slug>:<question>`, `profile:<field>`. A recording is offered back only in the box it was
+  made in, to the reader who made it, and is transcribed against the `where` it was recorded with.
+- **Web Locks decide which tab may offer it.** The page holding a tape holds a lock named for it,
+  and a recovery takes the lock with `ifAvailable`, so a tape being recorded in one tab is never
+  offered by another, and a dead tab's tape is offered by one page only. No Web Locks, no keeping.
+- **Feedback keeps only while open**, because the dialog is mounted on every page whether or not it
+  is showing — a keeper there while shut would let a background tab claim the recording invisibly.
+- **The row says so only when it is true.** "The audio is kept on this device, even if you close the
+  page" appears only when every write landed (`KeptTape.intact()`); a failed keeper is never
+  described as holding anything, and never touches the dictation.
+- **A tab that died mid-sentence is not "nothing was lost".** Its last part never received the
+  recorder's closing chunk, and the specification does not promise such a file plays, so it is
+  offered under `[mic-cut-off]`, which says the last seconds may be missing. Measured in Chrome
+  151 on 2026-09-29: WebM and fragmented MP4 truncated at any chunk decoded, losing under a second.
+  **Safari is unmeasured.**
+- **How long it stays** — until delivered or discarded, or Sign out, or the first visit after a week
+  (`sweepDictations`, at startup). Not on a lapsed session. [privacy.md § On the reader's own
+  device](privacy.md#on-the-readers-own-device-until-the-words-arrive).
+
+**Not covered**: the words once they are in the box. The audio is forgotten when the transcript
+lands, so a tab that dies between that and Send loses the text as it would lose typed text. Keeping
+the Feedback draft itself is the next step, and is named in the plan.
+
 ## The ways it fails
 
 1. **The model answers the question instead of transcribing it.** A reader dictating into the chat
@@ -551,6 +602,7 @@ a recorder that hit its cap. They live beside the code that raises them.
 | `[mic-blocked]` `[mic-no-service]` `[mic-no-connection]` `[mic-none]` `[mic-language]` `[mic-stopped]` | the browser's recogniser, in [`dictation-errors.ts`](../../src/web/dictation-errors.ts) — and **the reader rarely sees any of them now**, because a recogniser that dies while the tape is running is a decoration failing, not a dictation failing |
 | `[mic-unplugged]` `[mic-no-start]` `[mic-full]` `[mic-broken]` `[mic-empty]` `[mic-silent]` `[mic-unexpected]` | the capture and the ending, in [`useDictation.ts`](../../src/web/useDictation.ts) — `[mic-full]` is the five-minute ceiling and `[mic-broken]` a part that lost audio; [§ The sizes](#the-sizes-and-the-wall-behind-them) |
 | `[mic-no-tape]` | no recording was made at all, so there was no authoritative pass |
+| `[mic-recovered]` `[mic-cut-off]` | a recording an earlier page left behind, offered back — whole, or cut off mid-sentence; [§ A closed tab](#a-closed-tab-does-not-lose-a-dictation) |
 | `[mic-format]` `[mic-too-long]` `[mic-slow]` `[mic-offline]` | the upload, in [`dictation-upload.ts`](../../src/web/dictation-upload.ts) |
 | `[mic-not-set-up]` `[mic-upstream]` `[mic-no-upstream]` `[mic-unreadable]` `[mic-too-long]` | the server, in [`src/transcribe.ts`](../../src/transcribe.ts) — see below |
 | `[ai-busy]` `[ai-no-credit]` `[ai-key]` `[ai-refused]` `[ai-no-model]` `[ai-bad-request]` `[ai-upstream]` `[ai-timeout]` | also the server, but the sentences come from [`messages.ts`](../../src/messages.ts) — every provider refusal has gone through `providerHttpFailure` since 2026-09-07, so a dictation can now show the same words as any other failed model call |
@@ -596,6 +648,7 @@ reader actually loses a dictation to — and the recogniser's became `[mic-no-co
 | [`useDictationField.ts`](../../src/web/useDictationField.ts) | wiring it to a text box: the caret, the span, the closed box |
 | [`DictationStrip.tsx`](../../src/web/DictationStrip.tsx) | the button and the strip, so every box gets the same one |
 | [`mic-lock.ts`](../../src/web/mic-lock.ts) | one microphone per page, however many boxes have a button |
+| [`dictation-keep.ts`](../../src/web/dictation-keep.ts) | the copy on the device until the words are in the box |
 | [`dictation-upload.ts`](../../src/web/dictation-upload.ts) | the client half of `POST /api/transcribe` |
 | [`mic-recording.ts`](../../src/web/mic-recording.ts) | the tape, its container fallback, its caps, and where it is cut into parts |
 | [`mic-devices.ts`](../../src/web/mic-devices.ts) | which microphone, and why the constraint is `exact` |

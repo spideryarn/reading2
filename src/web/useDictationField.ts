@@ -62,7 +62,7 @@
  * chat composer.
  */
 import { type RefObject, useCallback, useRef } from "react";
-import type { Transcriber } from "./transcriber.js";
+import type { DictationKeeper, Transcriber } from "./transcriber.js";
 import { type UseDictation, useDictation } from "./useDictation.js";
 
 export interface UseDictationField {
@@ -84,6 +84,7 @@ export function useDictationField<C>({
   box,
   context,
   transcribe,
+  keep,
 }: {
   value: string;
   onChange(next: string): void;
@@ -99,6 +100,12 @@ export function useDictationField<C>({
   context: C;
   /** How a recording becomes words. The product passes `sendForTranscription`. */
   transcribe: Transcriber<C>;
+  /**
+   * Where a copy is kept until the words are in the box, so a closed tab does
+   * not lose a dictation. The product passes `keepDictation(<this box's name>)`;
+   * see [dictation-keep.ts](./dictation-keep.ts).
+   */
+  keep?: DictationKeeper<C>;
 }): UseDictationField {
   /**
    * The value as of *now*, rather than as of the last render.
@@ -244,6 +251,7 @@ export function useDictationField<C>({
     },
     context,
     transcribe,
+    ...(keep && { keep }),
   });
 
   const toggle = useCallback(() => {

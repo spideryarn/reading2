@@ -311,6 +311,18 @@ one more, and is gone when the request ends; nothing stores it and nothing logs 
 the same reason it always did. The `ai_calls` row saying a dictation happened is still written, and
 still carries no content.
 
+### On the reader's own device, until the words arrive
+
+**Since 2026-09-29 the browser keeps a copy of a dictation while it is being transcribed**, so that a
+tab that closes or loses its connection does not lose minutes of talking — Greg's report
+SPIDERYARN-READING2-5M, and [dictation.md § A closed tab does not lose a
+dictation](dictation.md#a-closed-tab-does-not-lose-a-dictation). It is IndexedDB on the reader's
+machine, never sent anywhere by being kept, and it goes when the words are in the box, when the
+reader discards it, when they press **Sign out**, or on their next visit after a week. It is **not**
+dropped when a session merely lapses, unlike the offline article copy, because that would be the
+silent loss the copy exists to prevent. The promise beside the button is about our servers and is
+unchanged; `/privacy` names the device copy in its paragraph on what the browser keeps.
+
 ## Deleting an article, for good
 
 **Added 2026-09-07**, when the shelf stopped being the only ending an article has.
@@ -489,7 +501,9 @@ these moves:
   "never carries the text of the article" promise; the rest of the section is still prose to re-read
 - what the **browser** keeps — the page names the session, a few preferences, and the offline
   IndexedDB cache of article bodies in [`src/web/lib/offline-store.ts`](../../src/web/lib/offline-store.ts),
-  which is dropped for that account on sign-out. The first draft claimed the session was the only
+  which is dropped for that account on sign-out — and, since 2026-09-29, a dictation not yet
+  transcribed ([`src/web/dictation-keep.ts`](../../src/web/dictation-keep.ts)), dropped on Sign out
+  or after a week. The first draft claimed the session was the only
   thing stored, which was false and was the second wrong claim of the day; both were found by
   reading the code rather than by re-reading the prose.
 

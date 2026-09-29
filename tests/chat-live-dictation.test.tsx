@@ -57,6 +57,7 @@ vi.mock("../src/web/useDictationField.js", () => ({
         deviceUnavailable: false,
         chooseDevice: () => {},
         recording: null,
+        keptOnDevice: false,
         clearRecording: () => {},
         canRetry: false,
         retry: () => {},

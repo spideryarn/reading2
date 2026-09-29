@@ -264,6 +264,9 @@ const IDEA_NAME = "Instruments outrun explanation";
 const QUOTE_LINE = "before anybody could say what it would measure";
 const TIMELINE_LABEL = "The Vienna calibration";
 const DEBATE_APPLIES = "A replication in Leiden reached the opposite reading.";
+/* The page title a Debate row leads with since 260929h — the applies paragraph
+   above now sits closed behind the row's `more`, so it is not what a reader sees. */
+const DEBATE_TITLE = "The Leiden replication";
 /* A work's title, which is what a row leads with — drawn from the artefact,
    so a panel that drew its controls and no rows would not satisfy it. */
 const CITATION_TITLE = "Elements of Episodic Memory";
@@ -481,7 +484,7 @@ const DEBATE: Debate = {
       {
         id: "spya-dbt234",
         url: "https://example.org/leiden",
-        title: "The Leiden replication",
+        title: DEBATE_TITLE,
         sourceQuote: "We could not reproduce the calibration.",
         relation: "disputes",
         lean: "leans-against",
@@ -1352,7 +1355,7 @@ const DRAWS: Record<Mode, Draws> = {
   timeline: { kind: "band", where: ".mode-band.timeline", says: TIMELINE_LABEL },
   /* What the found page is said to bear on — a row's body, not the group
      heading above it, which is a constant sentence. */
-  debate: { kind: "band", where: ".mode-band.dbt", says: DEBATE_APPLIES },
+  debate: { kind: "band", where: ".mode-band.dbt", says: DEBATE_TITLE },
   /* A work's title — the row's own content, not the order buttons or the
      foot's sentences, which are constants a panel with no rows still draws. */
   citations: { kind: "band", where: ".mode-band.citations", says: CITATION_TITLE },

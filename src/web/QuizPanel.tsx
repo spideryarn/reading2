@@ -64,6 +64,7 @@ import { DictationButton, DictationStrip } from "./DictationStrip.js";
 import { JobProgress } from "./JobProgress.js";
 import { ModeSurface } from "./ModeSurface.js";
 import { TooltipGroup } from "./Tooltip.js";
+import { keepDictation } from "./dictation-keep.js";
 import { sendForTranscription } from "./dictation-upload.js";
 import { type UseDictationField, useDictationField } from "./useDictationField.js";
 import { armActivation } from "./activation.js";
@@ -235,6 +236,9 @@ export function QuizPanel({
     box,
     context: { kind: "article", slug: owner.slug },
     transcribe: sendForTranscription,
+    /* One box per question: an answer offered back under a different question
+       would be the wrong answer. */
+    keep: keepDictation(`quiz:${owner.slug}:${question?.id ?? ""}`),
   });
 
   /**

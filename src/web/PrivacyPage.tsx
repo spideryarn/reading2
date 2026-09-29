@@ -251,7 +251,10 @@ export function PrivacyPage() {
           What your browser keeps is the thing that signs you in, a few preferences like which
           microphone you picked, and a copy of the articles you have opened, so that losing your
           connection doesn’t lose your reading. That copy is dropped when you sign out — worth
-          knowing on a shared computer.
+          knowing on a shared computer. While a dictation is being turned into text, your browser
+          also keeps its recording, so that closing the page or losing your connection doesn’t lose
+          what you said; it is deleted once the words are in the box, when you discard it or sign
+          out, and otherwise the first time you come back after a week.
         </p>
       </Section>
 
