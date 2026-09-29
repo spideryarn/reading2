@@ -111,8 +111,17 @@ import {
   rememberDevice,
   rememberedDevice,
 } from "./mic-devices.js";
-import { type MicRecording, type MicTape, recordTrack } from "./mic-recording.js";
+import { type MicRecording, type MicTape, type TapeEvents, recordTrack } from "./mic-recording.js";
 import { useAudioLevel } from "./useAudioLevel.js";
+
+/**
+ * The tape lost audio part-way — one of its recorders failed, never finished,
+ * or had to drop a chunk. One sentence wherever it is said, which is twice:
+ * when it happens and when the dictation ends. Plan 260929f, R5.
+ */
+const TAPE_BROKE =
+  "The recording broke off part-way, so it couldn't produce a complete transcript. Press the microphone and try again. [mic-broken]";
+const TRANSCRIPTION_UNEXPECTED = "Something went wrong while transcribing that. [mic-unexpected]";
 
 /* The API is prefixed in Safari and unprefixed in Chrome, and neither spelling
    is in TypeScript's DOM library — it is not a standard. Declared narrowly:
@@ -186,6 +195,35 @@ function audio(): AudioContext | null {
  * a synonym for `phase !== "idle"` any more.
  */
 export type DictationPhase = "idle" | "opening" | "listening" | "transcribing";
+
+/**
+ * **One dictation's audio, in the parts it was recorded in.**
+ *
+ * One part unless the reader talked for more than two minutes; then the tape
+ * rotated and each part is its own file (see `recordTrack`). One logical
+ * recording with an ordered list rather than a bare array of files, so there
+ * is one thing to keep, show and throw away — plan 260929f, R9.
+ */
+export interface DictationRecording {
+  /** In the order they were spoken. Never empty. */
+  parts: MicRecording[];
+}
+
+/**
+ * The parts' words, as one transcript: in order, a space between.
+ *
+ * A single part is handed over exactly as it came back. Nothing is done about
+ * the seam — a capital letter where part two begins — because the request has
+ * no prompt to carry the previous part's last words into (plan 260929f, § What
+ * is not in this).
+ */
+export function joinTranscripts(texts: string[]): string {
+  if (texts.length === 1) return texts[0] ?? "";
+  return texts
+    .map((t) => t.trim())
+    .filter(Boolean)
+    .join(" ");
+}
 
 /** Where the moving bars are getting their number from. */
 export type MeterKind =
@@ -272,7 +310,7 @@ export interface UseDictation {
    * the reader can hear what we heard. Null the rest of the time, which is
    * almost always. See [mic-recording.ts](./mic-recording.ts).
    */
-  recording: MicRecording | null;
+  recording: DictationRecording | null;
   /** Throw the kept recording away. */
   clearRecording(): void;
   /**
@@ -387,13 +425,59 @@ interface Session<C> {
   claim: MicClaim;
   freed: () => void;
   /**
-   * Aborts the transcription request this session started.
+   * Aborts every transcription request this session starts — one per part.
    *
    * On the session rather than in a ref because a second press must be able to
-   * kill the first press's request specifically, and a ref would only ever hold
-   * the newest.
+   * kill the first press's requests specifically, and a ref would only ever
+   * hold the newest. **Created with the session**, because a long dictation
+   * starts uploading while the reader is still talking, and an unmount or a
+   * device change then has to reach those requests too (plan 260929f, R4).
    */
-  upload: AbortController | null;
+  upload: AbortController;
+  /**
+   * Each part's request, by part index, started once. A part that closed during
+   * the rotation is sent from `onPart`; the rest from `finish`. Keyed so that a
+   * part reaching both is still sent only once.
+   */
+  sent: Map<number, Promise<TranscriptionResult>>;
+  /** The tape lost audio part-way (`onBroken`). The ending says so. */
+  broke: boolean;
+}
+
+/**
+ * Send one part, once. Never rejects: a transcriber that breaks its contract
+ * and throws becomes a failure with a sentence, like any other.
+ */
+function sendPart<C>(
+  s: Session<C>,
+  index: number,
+  part: MicRecording,
+  transcribe: Transcriber<C>,
+): Promise<TranscriptionResult> {
+  const known = s.sent.get(index);
+  if (known) return known;
+  const pending = callTranscriber(transcribe, part, s.where, s.upload.signal);
+  s.sent.set(index, pending);
+  return pending;
+}
+
+/** A transcriber is an application seam: contain both rejected promises and synchronous throws. */
+function callTranscriber<C>(
+  transcribe: Transcriber<C>,
+  part: MicRecording,
+  where: C,
+  signal: AbortSignal,
+): Promise<TranscriptionResult> {
+  const failed = (): TranscriptionResult => ({
+    ok: false,
+    message: TRANSCRIPTION_UNEXPECTED,
+    retryable: false,
+  });
+  try {
+    return transcribe(part.blob, part.mimeType, where, signal).catch(failed);
+  } catch {
+    return Promise.resolve(failed());
+  }
 }
 
 /**
@@ -479,7 +563,7 @@ export function useDictation<C>(options: DictationOptions<C>): UseDictation {
   const [startedAt, setStartedAt] = useState<number | null>(null);
   const [deviceLabel, setDeviceLabel] = useState<string | null>(null);
   const [deviceId, setDeviceId] = useState<string | null>(() => rememberedDevice());
-  const [recording, setRecording] = useState<MicRecording | null>(null);
+  const [recording, setRecording] = useState<DictationRecording | null>(null);
   /**
    * The recording behind `recording` **and where it was going**, held for a
    * retry.
@@ -489,8 +573,15 @@ export function useDictation<C>(options: DictationOptions<C>): UseDictation {
    * otherwise have their words transcribed against a different article's
    * glossary. A ref, because nothing renders from it — `canRetry` is the piece
    * the interface shows.
+   *
+   * `texts` is each part's words where they came back and null where they did
+   * not, so a retry re-sends **only the failed parts** (plan 260929f).
    */
-  const retryable = useRef<{ recorded: MicRecording; where: C } | null>(null);
+  const retryable = useRef<{
+    recorded: DictationRecording;
+    texts: Array<string | null>;
+    where: C;
+  } | null>(null);
   const [canRetry, setCanRetry] = useState(false);
   /** Which retry is allowed to publish its answer. See `retry`. */
   const retryGeneration = useRef(0);
@@ -633,7 +724,7 @@ export function useDictation<C>(options: DictationOptions<C>): UseDictation {
     };
 
     if (quiet) {
-      s.upload?.abort();
+      s.upload.abort();
       tape?.cancel();
       t?.stop();
       free();
@@ -688,22 +779,34 @@ export function useDictation<C>(options: DictationOptions<C>): UseDictation {
     };
 
     /**
-     * What the transcript turned out to be, and what that leaves the reader
-     * with. Split out of the `then` below so that each half is one decision
-     * rather than a ladder of six.
+     * What the parts' transcripts turned out to be, and what that leaves the
+     * reader with. Split out of the `then` below so that each half is one
+     * decision rather than a ladder of six.
      *
      * The predicate running through all of it is **"did anything come back"**,
      * not "was there an error". Greg's own failure raised no error at all — a
      * silent microphone yields `no-speech`, which is suppressed because it
      * fires on every ordinary pause — so an error-only rule would have been
      * silent through the entire thing this exists for.
+     *
+     * **All or nothing** (plan 260929f, R3): the transcript is published only
+     * when every part came back. Publishing the parts that worked with a hole
+     * in the middle would, on Chromium, replace the live words that cover the
+     * hole — losing them.
      */
-    const landed = (recorded: MicRecording, result: TranscriptionResult) => {
-      if (result.ok && result.text) {
-        transcribed.current?.(result.text);
-        return;
-      }
-      if (result.ok) {
+    const landed = (recorded: DictationRecording, results: TranscriptionResult[]) => {
+      /* Aborted by an unmount or a second press. The caller has already sent
+         every abandoned case away; reaching here means the abort came from
+         somewhere else, and there is nothing to say about it. */
+      if (results.some((r) => !r.ok && "abandoned" in r)) return;
+      const failures = results.filter((r): r is Extract<TranscriptionResult, { ok: false }> => !r.ok);
+      const first = failures[0];
+      if (!first) {
+        const text = joinTranscripts(results.map((r) => (r.ok ? r.text : "")));
+        if (text) {
+          transcribed.current?.(text);
+          return;
+        }
         /* A success with nothing in it: the model heard no speech. If the
            recogniser heard none either, the reader is entitled to hear what we
            heard. */
@@ -713,61 +816,67 @@ export function useDictation<C>(options: DictationOptions<C>): UseDictation {
         }
         return;
       }
-      if ("abandoned" in result) {
-        /* Aborted by an unmount or a second press. The caller has already sent
-           every abandoned case away; reaching here means the abort came from
-           somewhere else, and there is nothing to say about it. */
-        return;
-      }
       /* **It failed, and what that costs depends on the browser.** On Chromium
          the live words are in the box and the reader merely has the worse
-         version; elsewhere the box is empty and the whole dictation is gone. So
-         the audio comes back exactly when nothing else did. */
-      setError(result.message);
-      /* **Kept on every failure now, not only when the box is empty.**
-         It used to be `if (s.confirmed === 0)`, on the reasoning that a reader
-         with the recogniser's rough words has the worse version rather than
-         nothing. That stopped being true on 2026-09-05, when a recogniser that
-         dies mid-sentence began leaving the recording running: the rough words
-         then cover the first half of a dictation and the tape covers all of it,
-         so throwing the tape away throws away everything said after the
-         recogniser gave up. GPT Sol's plan review, F2 — a P0. */
+         version; elsewhere the box is empty and the whole dictation is gone. */
+      setError(first.message);
+      /* **Kept on every failure, not only when the box is empty.** A recogniser
+         that dies mid-sentence leaves the recording running, so the rough words
+         can cover the first half of a dictation and the tape all of it —
+         throwing the tape away throws away everything said after the recogniser
+         gave up. GPT Sol's plan review of 260905c, F2 — a P0. */
       setRecording(recorded);
       /* **Offered here and not in the `ok` branch above**, which is the whole
          of the distinction: this is a failure, and the same bytes may well
          succeed on a second try. An empty transcript is an answer, and will be
          the same answer.
 
-         Two further gates. `result.retryable` is the upload saying whether the
-         same bytes could ever work — a recording in an unsupported container or
-         over the size cap will be refused identically for ever, and copy.md is
-         explicit that inviting a futile retry is the expensive mistake.
-         `s.confirmed === 0` is the *field*: a retry arrives after `onEnd`, so
-         it lands beside the recogniser's rough words rather than replacing
-         them, which would duplicate half the dictation. That second gate is a
-         limit rather than a decision, and it is named in the plan. */
-      if (s.confirmed === 0 && result.retryable) {
-        retryable.current = { recorded, where: s.where };
+         Two further gates. `retryable` is the upload saying whether the same
+         bytes could ever work — **for every failed part**, since a retry that
+         cannot finish the set cannot publish anything. `s.confirmed === 0` is
+         the *field*: a retry arrives after `onEnd`, so it lands beside the
+         recogniser's rough words rather than replacing them, which would
+         duplicate half the dictation. That second gate is a limit rather than a
+         decision, and it is named in the plan. */
+      if (s.confirmed === 0 && failures.every((r) => r.retryable)) {
+        retryable.current = {
+          recorded,
+          texts: results.map((r) => (r.ok ? r.text : null)),
+          where: s.where,
+        };
         setCanRetry(true);
       }
     };
 
-    void tape.stop().then(async (recorded) => {
-      /* The recorder is drained *before* the track is released — killing the
+    /** The tape left nothing worth offering. Say which kind of nothing. */
+    const nothingKept = (broken: boolean) => {
+      if (!stillOurs()) return;
+      if (broken) setError(TAPE_BROKE);
+      else if (s.confirmed === 0) {
+        setError("We didn't catch that. Press the microphone and try again. [mic-empty]");
+      }
+    };
+
+    void tape.stop().then(async (ending) => {
+      /* The recorders are drained *before* the track is released — killing the
          track under a live recorder loses the final `dataavailable`, which is
          the tail of the file. Only then is the device somebody else's to take;
          the transcription that follows needs no microphone. */
       t?.stop();
       free();
-      if (!recorded) {
+      /* **A tape that lost audio part-way publishes nothing** (plan 260929f,
+         R3). Whatever it kept is offered to save — but not to retry, because
+         the part with the hole has no complete file to send again. The requests
+         already in flight are cancelled: nothing will read them. */
+      const broken = s.broke || ending?.broken === true;
+      if (broken) s.upload.abort();
+      if (!ending) {
         /* The recorder produced nothing worth offering — too short, errored,
            zero bytes. On Chromium the live words are still in the box and are
            all the reader gets; elsewhere the box is empty and they need
            telling, because an empty box after a minute of talking is the one
            outcome that must never be silent. */
-        if (stillOurs() && s.confirmed === 0) {
-          setError("We didn't catch that. Press the microphone and try again. [mic-empty]");
-        }
+        nothingKept(broken);
         done();
         return;
       }
@@ -777,16 +886,21 @@ export function useDictation<C>(options: DictationOptions<C>): UseDictation {
         done();
         return;
       }
+      const recorded: DictationRecording = { parts: ending.parts };
+      if (broken) {
+        setError(TAPE_BROKE);
+        setRecording(recorded);
+        done();
+        return;
+      }
 
-      s.upload = new AbortController();
-      const result = await transcribe.current(
-        recorded.blob,
-        recorded.mimeType,
-        s.where,
-        s.upload.signal,
+      /* Every part, **in order** — the earlier ones were very likely sent while
+         the reader was still talking, so this is mostly waiting for the tail. */
+      const results = await Promise.all(
+        ending.parts.map((part, i) => sendPart(s, i, part, transcribe.current)),
       );
       if (!stillOurs()) return;
-      landed(recorded, result);
+      landed(recorded, results);
       done();
     }).catch(() => {
       /* **Nothing above is allowed to reject, and this is here because "not
@@ -797,7 +911,7 @@ export function useDictation<C>(options: DictationOptions<C>): UseDictation {
          happened. */
       t?.stop();
       free();
-      if (stillOurs()) setError("Something went wrong while transcribing that. [mic-unexpected]");
+      if (stillOurs()) setError(TRANSCRIPTION_UNEXPECTED);
       done();
     });
   }, []);
@@ -865,7 +979,9 @@ export function useDictation<C>(options: DictationOptions<C>): UseDictation {
       live: false,
       liveGaveUp: false,
       where: whereRef.current,
-      upload: null,
+      upload: new AbortController(),
+      sent: new Map(),
+      broke: false,
       /* Filled in on the next two lines — a `Session` is built in one literal so
          that no field can be forgotten, and these two have to refer to it. */
       claim: null as unknown as MicClaim,
@@ -883,8 +999,50 @@ export function useDictation<C>(options: DictationOptions<C>): UseDictation {
      */
     const capped = () => {
       if (session.current !== s || s.finished) return;
-      setError("That was as much as we can transcribe at once. The rest wasn't recorded. [mic-full]");
+      setError(
+        "Dictation stops after five minutes, so it stopped there. What you said before that is kept. [mic-full]",
+      );
       stopRef.current();
+    };
+    /**
+     * What the tape tells this session while it runs. A part that closes on a
+     * rotation is sent **now**, while the reader keeps talking — unless this
+     * session has already been abandoned, whose requests are aborted anyway.
+     */
+    const tapeEvents: TapeEvents = {
+      onCapped: capped,
+      onPart: (part, index) => {
+        if (!mounted.current || s.upload.signal.aborted) return;
+        void sendPart(s, index, part, transcribe.current);
+      },
+      /* The tape lost audio part-way, so nothing said from here can be joined
+         to what came before. End it now, the ordinary way, and say why. */
+      onBroken: () => {
+        /* This may arrive while `finish()` is already draining the tape. Set the
+           fact before its terminal guard: when the only part fails to flush,
+           `stop()` has no complete file with which to carry `broken: true`.
+           Abort rotated-part uploads immediately as well; no ending can publish
+           them once capture has a hole. */
+        s.broke = true;
+        s.upload.abort();
+        if (session.current !== s || s.finished) return;
+        setError(TAPE_BROKE);
+        stopRef.current();
+      },
+      /* The ladder started, so `armTape` received a tape, but every container
+         then failed before producing a byte. Turn it back into the same no-tape
+         ending as a synchronous construction/start refusal. */
+      onUnavailable: () => {
+        if (session.current !== s || s.finished) return;
+        s.tape?.cancel();
+        s.tape = null;
+        /* With live words already in the box, `finish` says nothing (its
+           `[mic-no-tape]` is for an empty one) — and the microphone would stop
+           mid-sentence in silence, leaving rough words that look authoritative.
+           GPT Sol's round-two review, C1. */
+        if (s.confirmed > 0) setError(TAPE_BROKE);
+        stopRef.current();
+      },
     };
 
     s.claim = {
@@ -925,7 +1083,7 @@ export function useDictation<C>(options: DictationOptions<C>): UseDictation {
         if (s.audioAt === null) {
           s.audioAt = Date.now();
           setStartedAt(s.audioAt);
-          armTape(s, capped);
+          armTape(s, tapeEvents);
         }
       };
       /* Both of these are the recogniser reporting, so both stop counting when
@@ -940,12 +1098,11 @@ export function useDictation<C>(options: DictationOptions<C>): UseDictation {
       };
 
       r.onresult = (e) => {
-        /* Guarded on **this session having finished**, not on it being the
-           current one. A session we have asked to stop is still entitled to
-           deliver the words the reader already said — that is the entire point of
-           waiting for `onend` — and those words belong in the same box whether or
-           not somebody has since pressed the button again. */
-        if (s.finished) return;
+        /* A stopped session may deliver its final phrase until another press
+           supersedes it. After that press the box has a new live-word span, and
+           letting the stale recogniser append would mix two sessions whenever
+           the new authoritative pass failed. */
+        if (s.finished || session.current !== s) return;
         /* **We have given up on this recogniser**, so anything else it emits is
            a guess we have already stopped showing. Letting a late phrase in
            would put words in the box under a strip that says they are not
@@ -1026,7 +1183,7 @@ export function useDictation<C>(options: DictationOptions<C>): UseDictation {
             setStartedAt(s.audioAt);
             setPhase("listening");
           }
-          armTape(s, capped);
+          armTape(s, tapeEvents);
           /* **`recordTrack` can return null**, when every container this browser
              claims to support refuses to start. Carrying on then would leave the
              microphone armed with *no* transcription source at all — no live
@@ -1091,13 +1248,20 @@ export function useDictation<C>(options: DictationOptions<C>): UseDictation {
           finish(s);
         }
       };
-
-      /* **A new press kills the last press's transcription.** Without this the
-         old request runs to completion, is dropped by `stillOurs`, and is paid
-         for — and on a slow connection two overlapping uploads of a megabyte each
-         is a real cost for an answer nobody will ever see. */
-      newest.current?.upload?.abort();
     }
+
+    /* **A new press kills the last press's transcription.** Without this the
+       old requests run to completion, are dropped by `stillOurs`, and are paid
+       for — and on a slow connection overlapping uploads of a megabyte each are
+       a real cost for an answer nobody will ever see. Outside the recogniser
+       block since 2026-09-29, so Safari and Firefox get it too (plan 260929f,
+       R4); it used to be inside it. */
+    newest.current?.upload.abort();
+    /* A retry has no Session and therefore is not reached by the line above.
+       Starting a real dictation supersedes it just as completely: its answer is
+       generation-guarded already, and its paid request should not keep running. */
+    retryUpload.current?.abort();
+    retryUpload.current = null;
 
     session.current = s;
     newest.current = s;
@@ -1183,14 +1347,14 @@ export function useDictation<C>(options: DictationOptions<C>): UseDictation {
         s.audioAt = Date.now();
         setStartedAt(s.audioAt);
         setPhase("listening");
-        armTape(s, capped);
+        armTape(s, tapeEvents);
         return;
       }
       /* Both orders covered. `audiostart` is the recorder's zero, and it is
          measured at ~1.1s after the track arrives — but it is a task rather
          than a microtask, so it could in principle land before the assignment
          above. Whichever happens second arms the tape. */
-      armTape(s, capped);
+      armTape(s, tapeEvents);
     })();
   }, [finish]);
 
@@ -1239,11 +1403,18 @@ export function useDictation<C>(options: DictationOptions<C>): UseDictation {
   );
 
   const clearRecording = useCallback(() => {
+    /* Discard is also a cancellation when Retry is still in flight. Otherwise
+       the reader can throw the audio away and still have its transcript arrive
+       later, after the row that explained it has gone. */
+    retryUpload.current?.abort();
+    retryUpload.current = null;
+    retryGeneration.current++;
     setRecording(null);
     /* The offer goes with the audio. A Retry button over a `Blob` the reader
        has just discarded is a button that cannot work. */
     retryable.current = null;
     setCanRetry(false);
+    setPhase("idle");
   }, []);
 
   /**
@@ -1264,6 +1435,9 @@ export function useDictation<C>(options: DictationOptions<C>): UseDictation {
   const retry = useCallback(() => {
     const held = retryable.current;
     if (!held) return;
+    /* Defensive against a second programmatic press while the button is gone:
+       never pay for two retries of the same failed parts at once. */
+    retryUpload.current?.abort();
     setCanRetry(false);
     setError(null);
     setPhase("transcribing");
@@ -1279,11 +1453,15 @@ export function useDictation<C>(options: DictationOptions<C>): UseDictation {
     const cancel = new AbortController();
     retryUpload.current = cancel;
     void (async () => {
-      const result = await transcribe.current(
-        held.recorded.blob,
-        held.recorded.mimeType,
-        held.where,
-        cancel.signal,
+      /* **Only the parts that failed.** The words that already came back are
+         kept rather than paid for twice (plan 260929f). */
+      const results = await Promise.all(
+        held.recorded.parts.map((part, i): Promise<TranscriptionResult> => {
+          const text = held.texts[i];
+          return text != null
+            ? Promise.resolve({ ok: true, text })
+            : callTranscriber(transcribe.current, part, held.where, cancel.signal);
+        }),
       );
       /* **Three ways this is no longer ours**, and every one of them ends in
          touching nothing at all: the component has gone; a newer retry is in
@@ -1294,32 +1472,39 @@ export function useDictation<C>(options: DictationOptions<C>): UseDictation {
          stale transcript into the middle of a live dictation's span. */
       if (!mounted.current || retryGeneration.current !== mine || session.current) return;
       setPhase("idle");
-      if (result.ok && result.text) {
-        retryable.current = null;
-        setRecording(null);
-        transcribed.current?.(result.text);
-        /* **`onEnd` again**, because this is a second ending of the same
-           dictation and it is the caller's cue to persist what is in the box.
-           The first one fired with the box unchanged, so nothing was saved
-           then; without this the transcript would sit in a box nobody had been
-           told to commit. */
-        ended.current?.();
-        return;
-      }
-      if ("abandoned" in result) return;
-      /* A success with an empty transcript, or a second failure. Either way the
-         audio stays and the reader is told; the offer comes back only for the
-         failure, on the same rule as the first attempt. */
-      if (result.ok) {
+      if (results.some((r) => !r.ok && "abandoned" in r)) return;
+      /* What came back this time is kept for the next go, whatever happens to
+         the rest. */
+      held.texts = results.map((r) => (r.ok ? r.text : null));
+      const failures = results.filter(
+        (r): r is Extract<TranscriptionResult, { ok: false }> => !r.ok,
+      );
+      const first = failures[0];
+      if (!first) {
+        const text = joinTranscripts(results.map((r) => (r.ok ? r.text : "")));
+        if (text) {
+          retryable.current = null;
+          setRecording(null);
+          transcribed.current?.(text);
+          /* **`onEnd` again**, because this is a second ending of the same
+             dictation and it is the caller's cue to persist what is in the box.
+             The first one fired with the box unchanged, so nothing was saved
+             then; without this the transcript would sit in a box nobody had
+             been told to commit. */
+          ended.current?.();
+          return;
+        }
+        /* A success with an empty transcript: the audio stays and the reader
+           is told, and no second offer — the same rule as the first attempt. */
         setError("We didn't catch any words in that. The audio is below if you want it. [mic-silent]");
         return;
       }
-      setError(result.message);
-      /* **From the new result, not unconditionally.** A retry that comes back
+      setError(first.message);
+      /* **From the new results, not unconditionally.** A retry that comes back
          `[mic-too-long]` or a dead API key must not offer a third go — the
          first attempt's answer to that question has been superseded by this
          one's. GPT Sol's code review, R2. */
-      setCanRetry(result.retryable);
+      setCanRetry(failures.every((r) => r.retryable));
     })();
   }, []);
 
@@ -1343,7 +1528,7 @@ export function useDictation<C>(options: DictationOptions<C>): UseDictation {
          completion, and was paid for, for an answer nobody would ever see.
          `newest` is the one that still points at it. GPT Sol's code review,
          item 8. */
-      newest.current?.upload?.abort();
+      newest.current?.upload.abort();
       /* And a *retry* belongs to no session at all, so it is held separately or
          it would be the same bug again. GPT Sol's code review, R3. */
       retryUpload.current?.abort();
@@ -1405,9 +1590,9 @@ export function useDictation<C>(options: DictationOptions<C>): UseDictation {
  * Needs both the track and `audioAt`, and is called from whichever arrives
  * second. Does nothing twice.
  */
-function armTape(s: Session<unknown>, capped: () => void): void {
+function armTape(s: Session<unknown>, events: TapeEvents): void {
   if (s.tape || s.finished || !s.track || s.audioAt === null) return;
-  s.tape = recordTrack(s.track, capped);
+  s.tape = recordTrack(s.track, events);
 }
 
 type CaptureOutcome =

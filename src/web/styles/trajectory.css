@@ -21,13 +21,29 @@
 }
 
 .traj-stepper { display: flex; align-items: center; gap: 0.2rem; }
-.traj-count {
-  min-width: 6.5em;
-  text-align: center;
-  color: var(--ink);
-  font-size: 0.87rem;
-  font-variant-numeric: tabular-nums;
+/* **The route as a line** in place of "Stop k of N" (SPIDERYARN-READING2-5C,
+   plan 260929f § 2): one dot per stop of the pass, at its height in the
+   article, walked left to right. A button so its tooltip — the number — is
+   reachable by keyboard and finger. Walked dots filled, the current one in the
+   accent and larger, the ones to come hollow. */
+.traj-spark {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: var(--control-h-lg);
+  padding: 0 0.1rem;
+  border: 0;
+  border-radius: var(--radius);
+  background: none;
+  cursor: pointer;
 }
+.traj-spark:hover,
+.traj-spark[aria-expanded="true"] { background: var(--surface-raised); }
+.traj-spark:focus-visible { outline: 2px solid var(--highlight); outline-offset: 1px; }
+.traj-spark-line { fill: none; stroke: var(--rule-strong); stroke-width: 1; }
+.traj-spark-dot { fill: var(--page); stroke: var(--ink-faint); stroke-width: 1; }
+.traj-spark-dot.done { fill: var(--ink-faint); }
+.traj-spark-dot.on { fill: var(--highlight); stroke: var(--highlight); }
 
 .traj-arrow,
 .traj-depth,
@@ -114,7 +130,7 @@
   gap: 0.55rem;
   width: 100%;
   min-height: var(--control-h);
-  padding: 0.35rem 0.4rem;
+  padding: var(--traj-row-pad-y) var(--traj-row-pad-x);
   border: 0;
   border-radius: var(--radius);
   background: none;
@@ -128,12 +144,16 @@
    costs no width of its own. */
 .traj-n {
   flex: none;
+  /* Keep the mark's top independent of the neighbouring text's baseline: the
+     sibling `.traj-where` derives its own top from this column's metrics. */
+  align-self: flex-start;
   display: flex;
   flex-direction: column;
   align-items: flex-end;
   min-width: 1.4em;
   color: var(--ink-faint);
   font-size: 0.8rem;
+  line-height: var(--traj-number-line);
   font-variant-numeric: tabular-nums;
   text-align: right;
 }
@@ -176,8 +196,8 @@
   flex: none;
   position: relative;
   width: 7px;
-  height: 1.6rem;
-  margin: 0.2rem 0.2em 0 0;
+  height: var(--traj-pos-height);
+  margin: var(--traj-pos-gap) 0.2em 0 0;
 }
 .traj-pos::before {
   content: "";
@@ -276,7 +296,7 @@
 .traj-chips { display: flex; flex-wrap: wrap; gap: 0.3rem; }
 .traj-chip {
   display: inline-flex;
-  align-items: baseline;
+  align-items: center;
   gap: 0.35rem;
   min-height: var(--control-h);
   padding: 0 0.6rem;
@@ -285,7 +305,12 @@
   background: var(--page);
   color: var(--ink);
   font-size: 0.85rem;
-  line-height: calc(var(--control-h) - 2px);
+  /* A name can wrap — an idea's is a short sentence — so the line height is
+     text's, and the house height comes from `min-height` (browser check,
+     260929f: two lines of an idea sat 33px apart). */
+  line-height: 1.3;
+  padding-block: 0.3rem;
+  text-align: left;
   cursor: pointer;
 }
 .traj-chip:hover,
@@ -297,7 +322,102 @@
   border-left: 2px solid var(--rule-strong);
 }
 .traj-sense p { margin: 0 0 0.15rem; color: var(--ink-soft); }
-.traj-question { color: var(--ink); }
+/* **The way to a whole mode is an icon with a tooltip** (SPIDERYARN-READING2-5C,
+   icons.md § Navigation): quiet, at the end of what opened. */
+.traj-sense { display: flex; flex-wrap: wrap; align-items: flex-start; gap: 0 0.3rem; }
+.traj-sense > p,
+.traj-sense > .traj-passage { flex: 1 1 100%; }
+.traj-open {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: var(--control-h);
+  height: var(--control-h);
+  margin-left: auto;
+  padding: 0;
+  border: 0;
+  border-radius: var(--radius);
+  background: none;
+  color: var(--highlight-ink);
+  cursor: pointer;
+}
+.traj-open:hover { background: var(--page); }
+.traj-open:focus-visible { outline: 2px solid var(--highlight); outline-offset: 1px; }
+
+/* **The FAQ's question, above the stop** (SPIDERYARN-READING2-5C): the row's
+   frame, so it reads as the question the passage below answers. */
+.traj-asks {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  padding: 0.35rem 0.5rem 0.1rem calc(0.4rem + 1.4em + 0.55rem);
+  border-radius: var(--radius) var(--radius) 0 0;
+  background: var(--surface-raised);
+  box-shadow: inset 3px 0 0 var(--highlight);
+  font-size: 0.85rem;
+  line-height: 1.4;
+}
+.traj-ask-q {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 0.35rem;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--ink);
+  font: inherit;
+  font-style: italic;
+  text-align: left;
+  cursor: pointer;
+}
+.traj-ask-q svg { flex: none; align-self: center; color: var(--ink-faint); }
+.traj-ask-q:hover span,
+.traj-ask-q.on span { text-decoration: underline; text-decoration-color: var(--highlight); }
+.traj-ask .traj-sense { margin-bottom: 0.2rem; }
+.traj-passage p { margin: 0; }
+.traj-passage + .traj-passage { margin-top: 0.3rem; }
+.traj-passage-at { color: var(--ink-faint); font-size: 0.75rem; }
+.traj-passage-here { color: var(--ink-faint); font-style: italic; }
+.traj-ask-tip { max-width: min(16rem, calc(100vw - 1.75rem)); font-size: 0.8rem; line-height: 1.4; }
+.traj-row.current:has(.traj-asks) .traj-go { border-radius: 0; }
+
+/* **Where am I**: a button laid over the row's position mark, beside the row's
+   own button rather than in it (Sol, plan 260929f F5). Invisible — the mark
+   under it is the drawing; this is only the thing to point at. The hit target's
+   top is derived from the same padding, number line and gap that place the
+   mark, rather than assuming a font-dependent offset from `.traj-line`. */
+.traj-line {
+  --traj-row-pad-x: 0.4rem;
+  --traj-row-pad-y: 0.35rem;
+  --traj-number-line: 1rem;
+  --traj-pos-gap: 0.2rem;
+  --traj-pos-height: 1.6rem;
+  position: relative;
+}
+.traj-where {
+  position: absolute;
+  top: calc(var(--traj-row-pad-y) + var(--traj-number-line) + var(--traj-pos-gap));
+  left: var(--traj-row-pad-x);
+  width: 1.2rem;
+  height: 2rem;
+  padding: 0;
+  border: 0;
+  border-radius: var(--radius);
+  background: none;
+  cursor: help;
+}
+.traj-where:hover,
+.traj-where[aria-expanded="true"] { background: var(--highlight-wash); }
+.traj-where:focus-visible { outline: 2px solid var(--highlight); outline-offset: 1px; }
+
+/* The card itself — WhereCard.tsx, where.ts. */
+.where-card { margin: 0; padding: 0; list-style: none; font-size: 0.8rem; line-height: 1.45; }
+.where-node { color: var(--ink-faint); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.where-node.on-path { color: var(--ink-soft); }
+.where-node.here { color: var(--ink); font-weight: 600; }
+.where-node.here::before { content: "▸ "; color: var(--highlight); }
+.where-more { color: var(--ink-faint); font-style: italic; }
+.where-tip { max-width: min(18rem, calc(100vw - 1.75rem)); }
 /* A link's look on a real button: these open another mode or move the prose. */
 .traj-link {
   display: inline;
