@@ -120,8 +120,8 @@ export function FaqPanel({ owner, onJump }: Props) {
          Summary and Search have none. */
       /* Pinned under the scroller, so the promise is about the whole list rather
          than read as the last row's. No re-run here: a fresh list offers none,
-         the rule Greg set for the Glossary and Quotes; the stale and outdated
-         banners carry it. */
+         the rule Greg set for the Glossary and Quotes; the stale banner carries
+         it, and an outdated list has none (plan 260929c). */
       foot={
         ready && questions.length > 0 ? (
           <div className="faq-foot">
@@ -168,15 +168,12 @@ export function FaqPanel({ owner, onJump }: Props) {
               </p>
               {run("Find them again", true)}
             </div>
-          ) : owner.outdated ? (
-            <div className="gloss-stale">
-              <p>
-                <TriangleAlert size={13} />
-                These were written by an older version of the prompt.
-              </p>
-              {run("Find them again", true)}
-            </div>
           ) : null}
+          {/* No banner for an outdated list (older prompt, same article) —
+              Greg, 2026-09-29 (SPIDERYARN-READING2-55): *"it's not worth
+              bugging the user about it."* FAQ has no Metadata re-run row, so
+              an outdated list is simply kept until the article changes. Plan
+              260929c. */}
 
           {questions.length === 0 && <p className="gloss-quiet">{FAQ_NONE}</p>}
 

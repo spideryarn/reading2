@@ -214,14 +214,17 @@ describe("FaqPanel", () => {
     expect(host.textContent).toContain("The model stopped before it finished.");
   });
 
-  it("offers to ask again only under a stale or outdated list, stale first", async () => {
+  /* An outdated list — same article, older prompt — is not announced: Greg,
+     2026-09-29 (SPIDERYARN-READING2-55), plan 260929c. FAQ has no Metadata re-run row. */
+  it("offers to ask again only under a stale list, and says nothing of an older prompt", async () => {
     await draw(owner({ stale: true, outdated: true }));
     expect(host.textContent).toContain("These describe an older version of the article.");
     expect(host.textContent).not.toContain("older version of the prompt");
     expect(host.textContent).toContain("Find them again");
     await draw(owner({ outdated: true }));
-    expect(host.textContent).toContain("These were written by an older version of the prompt.");
-    expect(host.textContent).toContain("Find them again");
+    expect(host.querySelector(".gloss-stale")).toBeNull();
+    expect(host.textContent).not.toContain("older version of the prompt");
+    expect(host.textContent).not.toContain("Find them again");
   });
 
   it("uses the unforced verb when empty and the forced verb when the list needs replacing", async () => {

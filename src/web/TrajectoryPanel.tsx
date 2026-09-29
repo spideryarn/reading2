@@ -196,9 +196,17 @@ export function emptyHint(owner: Pick<UseTrajectory, "quotesFirst" | "ideasFirst
   return `A short model pass puts the article's Quotes in an order, and takes a few seconds. ${kept}`;
 }
 
-export function outdatedBy(
-  owner: Pick<UseTrajectory, "stale" | "profileChanged" | "outdated">,
-): string | null {
+/**
+ * The one banner over a route, and why it is there — or `null`.
+ *
+ * **Not for an outdated route.** A route planned by an older prompt, over the
+ * same article, is not announced: Greg, 2026-09-29 (SPIDERYARN-READING2-55),
+ * *"There are probably lots of cases where the prompt will get out of date,
+ * and it's not worth bugging the user about it."* Re-running is in Metadata.
+ * `outdated` itself is still read — the stop card treats outdated sources as
+ * usable. docs/plans/260929c-no-notice-when-a-mode-was-made-by-an-older-prompt.md.
+ */
+export function bannerReason(owner: Pick<UseTrajectory, "stale" | "profileChanged">): string | null {
   if (owner.stale) {
     /* One input hash covers all three, so this read cannot honestly attribute
        the mismatch to Quotes. `notOnRoute` is also only a present-day count: a
@@ -207,7 +215,6 @@ export function outdatedBy(
     return "The Quotes, Ideas, or outline have changed since this route was planned.";
   }
   if (owner.profileChanged) return "This route was planned before your profile said what it says now.";
-  if (owner.outdated) return "This route was planned by an older version of the prompt.";
   return null;
 }
 
@@ -374,11 +381,16 @@ export function TrajectoryPanel({ owner, view, away }: Props) {
            Greg, 2026-09-29 (SPIDERYARN-READING2-53): *"remove the "Plan it
            again" button … let's just rely on the Metadata mode for that."*
            Metadata's *Re-run AI processing* has a Trajectory row, and the
-           outdated banner keeps its own button. What is left is a job's
-           progress, Stop and failure while one is starting, running or
-           failed; idle, there is no foot at all.
+           stale and profile-changed banners keep their own button, which
+           carries the job there — hence the gate on those two. What is left is
+           a job's progress, Stop and failure while one is starting, running or
+           failed; idle, there is no foot at all. An outdated route has no
+           banner (plan 260929c), so its job shows here.
            docs/plans/260929b-one-place-to-re-run-ai-processing.md. */
-        ready && !outdatedBy(owner) && (owner.job || owner.starting || owner.failed) ? (
+        ready &&
+        !owner.stale &&
+        !owner.profileChanged &&
+        (owner.job || owner.starting || owner.failed) ? (
           <div className="traj-foot">
             <div className="traj-again">{run("Plan it again", true)}</div>
           </div>
@@ -409,11 +421,11 @@ export function TrajectoryPanel({ owner, view, away }: Props) {
 
       {ready && (
         <>
-          {outdatedBy(owner) && (
+          {bannerReason(owner) && (
             <div className="gloss-stale">
               <p>
                 <TriangleAlert size={13} />
-                {outdatedBy(owner)}
+                {bannerReason(owner)}
               </p>
               {run("Plan it again", true)}
             </div>

@@ -455,10 +455,16 @@ describe("CitationsPanel", () => {
     expect(row(FAMOUS.id).textContent ?? "").not.toContain("rel·");
   });
 
-  it("offers no re-run under a fresh list — only a stale or outdated one asks again", async () => {
+  it("offers no re-run under a fresh or outdated list — only a stale one asks again", async () => {
     /* The costly press stays out of the ordinary foot: Greg took the same
-       button out of the Glossary and Quotes. The banner still carries it. */
+       button out of the Glossary and Quotes. The stale banner still carries it;
+       an outdated list (older prompt, same article) is not announced — Greg,
+       2026-09-29 (SPIDERYARN-READING2-55), plan 260929c. */
     await draw(owner());
+    expect(host.textContent).not.toContain("Find them again");
+    await draw(owner({ outdated: true }));
+    expect(host.querySelector(".gloss-stale")).toBeNull();
+    expect(host.textContent).not.toContain("older version of the prompt");
     expect(host.textContent).not.toContain("Find them again");
     await draw(owner({ stale: true }));
     expect(host.textContent).toContain("Find them again");
