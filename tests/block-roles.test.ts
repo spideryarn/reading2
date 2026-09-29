@@ -462,6 +462,7 @@ describe("all five roles", () => {
       trajectory: null,
       faq: null,
       citations: null,
+      debate: null,
       comments: [],
       searches: [],
       sketch: null,

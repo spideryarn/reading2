@@ -93,7 +93,7 @@ export interface SharedInventory {
 /**
  * The inventory for this article.
  *
- * `available` is the presence of the five artefacts, from
+ * `available` is the presence of the public artefacts, from
  * `ArticleSharing.available` — **not** from `stages[].done`, which means *ran,
  * and would not be re-run today*. The two disagree on a stale artefact, and the
  * stale one is still exactly what a visitor reads (src/types.ts §

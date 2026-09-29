@@ -174,9 +174,9 @@ export function asArticleSharing(value: unknown): ArticleSharing | undefined {
 }
 
 /**
- * **The five presence flags, every one of them checked.**
+ * **The public artefact presence flags, every one of them checked.**
  *
- * `undefined` for anything short of five booleans, and the caller draws no list
+ * `undefined` for anything short of the complete boolean set, and the caller draws no list
  * at all rather than a partial one. **A missing key is not a `false`**: that
  * default would tell an owner their glossary stays private, which is the exact
  * sentence this slice exists to stop being guessed at. Saying nothing about an
@@ -184,12 +184,12 @@ export function asArticleSharing(value: unknown): ArticleSharing | undefined {
  * one than it looks — the switch itself is unaffected, because `visibility`
  * parsed on its own.
  *
- * `ARTEFACT_KEYS` rather than five hand-written reads, and it is typed
+ * `ARTEFACT_KEYS` rather than a hand-written chain of reads, and it is typed
  * `readonly (keyof PublicArtefacts)[]` with an exhaustiveness test beside it
- * (tests/shared-inventory.test.ts) so a sixth artefact cannot be validated into
+ * (tests/shared-inventory.test.ts) so another artefact cannot be validated into
  * existence by being forgotten.
  */
-export const ARTEFACT_KEYS = ["arc", "tweets", "glossary", "ideas", "quotes", "timeline", "sketch", "trajectory", "faq", "citations"] as const satisfies
+export const ARTEFACT_KEYS = ["arc", "tweets", "glossary", "ideas", "quotes", "timeline", "sketch", "trajectory", "faq", "citations", "debate"] as const satisfies
   readonly (keyof PublicArtefacts)[];
 
 export function asPublicArtefacts(value: unknown): PublicArtefacts | undefined {
@@ -207,6 +207,7 @@ export function asPublicArtefacts(value: unknown): PublicArtefacts | undefined {
     trajectory: row.trajectory as boolean,
     faq: row.faq as boolean,
     citations: row.citations as boolean,
+    debate: row.debate as boolean,
   };
 }
 

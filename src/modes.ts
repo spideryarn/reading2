@@ -194,8 +194,9 @@ export const MODES = [
   /* 2026-09-11: every work the piece cites, each with a link out, ranked the
      way Glossary is — asked for through the Feedback button (SPIDERYARN-READING2-2Y).
      The link is derived by code from the article, never written by the model,
-     which is the one safety property; behind the experimental switch and
-     owner-only for v1. **`citations` and not `references` or `sources`**:
+     which is the one safety property; behind the experimental switch. Its
+     stored output is public, while making it and *Find it* remain owner-only.
+     **`citations` and not `references` or `sources`**:
      the step and the column were already `citations` in stage 1, and
      `references`/`sources` are aliases in `MODE_CATALOG`. The name does share
      a word with chat's web citations (src/web/citations.ts, `Citation` in
@@ -205,15 +206,17 @@ export const MODES = [
   /* 2026-09-16: the questions a careful reader would put to this piece while
      reading it, each answered by passages of the piece itself — never a
      written answer. Asked for through the Feedback button (SPIDERYARN-READING2-3A);
-     behind the experimental switch and owner-only for v1. Not Quiz, where the
-     article asks the reader; not Ideas, which are propositions nobody asks.
+     behind the experimental switch. Its stored output is public, while making
+     it remains owner-only. Not Quiz, where the article asks the reader; not
+     Ideas, which are propositions nobody asks.
      docs/plans/260916d-faq-mode.md, docs/project/faq.md. */
   "faq",
   /* 2026-09-28: a route through the article's own Quotes, walked at three
      depths — a handful of stops, then a dozen, then most of them — in an order a
      model chose for this reader rather than the paper's. The stops are the
      quotes; the mode adds only an order, a depth and a short role line. Behind
-     the experimental switch and owner-only for v1.
+     the experimental switch. Its stored output is public, while planning it
+     remains owner-only.
      docs/plans/260928a-trajectory-mode-skim-a-paper-at-increasing-depth.md,
      docs/project/trajectory.md. */
   "trajectory",

@@ -94,6 +94,7 @@ const AVAILABLE: PublicArtefacts = {
   trajectory: true,
   faq: true,
   citations: true,
+  debate: true,
 };
 
 const PRIVATE: ArticleSharing = {
@@ -510,9 +511,11 @@ describe("the list of what goes out", () => {
   /* **Unsharing is never blocked.** Taking an article back is the safe
      direction, and a card that could not do it would strand an owner over a
      field with nothing to do with visibility. */
-  it("still lets an owner stop sharing without the inventory", async () => {
-    const { available: _dropped, ...noFlags } = SHARED;
-    await mount(noFlags);
+  it("still lets an owner stop sharing when an old server omits a newer flag", async () => {
+    const { debate: _newFlag, ...oldAvailable } = AVAILABLE;
+    const parsed = asArticleSharing({ ...SHARED, available: oldAvailable });
+    expect(parsed && "available" in parsed).toBe(false);
+    await mount(parsed);
     expect(host.textContent).toContain("Stop sharing");
     expect(host.textContent).not.toContain("Anyone who opens it gets these");
   });

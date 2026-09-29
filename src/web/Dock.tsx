@@ -2278,7 +2278,7 @@ function DockModes({
                a reader 300ms to be told what the label already said. The bar
                was the last row of controls in the app without the shape every
                other row has, and it is the row where the unguessable half
-               matters most. Six of these buttons start a model call the instant
+               matters most. Nine of these buttons start a model call the instant
                they are pressed, four wait on the reader's own words, three read
                a tree written before the reader arrived and one generates
                nothing at all — and nothing on screen tells them apart.

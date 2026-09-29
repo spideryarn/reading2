@@ -1,6 +1,6 @@
 /**
  * **Which artefacts a shared payload turned out to have** — the one place the
- * client turns *keys that are present* into the five booleans everything else
+ * client turns *keys that are present* into the booleans everything else
  * reads.
  *
  * ## Why this exists at all, which is the interesting half
@@ -12,7 +12,7 @@
  * that a lost request would not be rendered as a claim about somebody's
  * article.
  *
- * The four artefacts ride on the article payload now, so the payload answers
+ * The artefacts ride on the article payload now, so the payload answers
  * the question it used to ask: **a key that is present exists, and a key that
  * is absent was never built.** The request goes, its swallowed `catch` goes,
  * and the state that hedged it goes with them.
@@ -47,7 +47,7 @@ import type { PublicArtefactSet, PublicArtefacts, PublicArticle } from "../publi
 import type { SavedSearch } from "./useSearch.js";
 
 /**
- * The four artefacts, lifted off the payload into an object that holds nothing
+ * The public artefacts, lifted off the payload into an object that holds nothing
  * else.
  *
  * `PublicArticle` already *extends* `PublicArtefactSet`, so passing the whole
@@ -69,6 +69,7 @@ export function artefactsOf(article: PublicArticle): PublicArtefactSet {
     ...(article.trajectory === undefined ? {} : { trajectory: article.trajectory }),
     ...(article.faq === undefined ? {} : { faq: article.faq }),
     ...(article.citations === undefined ? {} : { citations: article.citations }),
+    ...(article.debate === undefined ? {} : { debate: article.debate }),
     ...(article.sketch === undefined ? {} : { sketch: article.sketch }),
   };
 }
@@ -91,6 +92,7 @@ export function artefactsIn(article: PublicArticle): PublicArtefacts {
     trajectory: article.trajectory !== undefined,
     faq: article.faq !== undefined,
     citations: article.citations !== undefined,
+    debate: article.debate !== undefined,
     sketch: article.sketch !== undefined,
   };
 }

@@ -94,6 +94,7 @@ export const NOUN: Record<keyof PublicArtefacts, string> = {
   trajectory: "a trajectory",
   faq: "an FAQ",
   citations: "a list of citations",
+  debate: "a debate",
   sketch: "a sketch",
 };
 
@@ -288,27 +289,25 @@ const POLICY: Record<Mode, VisitorPolicy> = {
    */
   referee: { kind: "owners-only" },
   /**
-   * **`owners-only` in Stage 3, and it is a staging decision rather than the
-   * final answer.**
+   * **An artefact mode since 2026-09-29** (SPIDERYARN-READING2-56, plan
+   * 260929c stage 4). It was `owners-only` from Stage 3 as a staging decision:
+   * Debate is meant to be shared — it is the artefact whose whole value is that
+   * somebody else can check it — but the boundary a visitor's row must not
+   * bypass was not built, and writing the visitor branch first is what a GPT
+   * Sol review (F23) refused. The comment here also said it spends, and it
+   * does — two metered web searches, ~$0.27 a run — but that is the cost of
+   * *running* a search, which a visitor never pays, not of *showing* one.
    *
-   * Debate is meant to be shareable — it is the one artefact whose whole value
-   * is that somebody else can check it, and `searchedAt` crosses both DTOs
-   * deliberately so a visitor can see how old the search is. What is not built
-   * yet is the thing a visitor's row must not bypass: `PUBLIC_PROJECTIONS`, the
-   * public DTO, and `publicCitationUrl` re-judging every row's URL at the
-   * boundary — a refusal there drops the whole row, because a row with no
-   * source violates this mode's own invariant.
-   *
-   * So this says `owners-only` until Stage 4 builds that contract, and then it
-   * becomes `{ kind: "artefact", key: "debate" }`. Writing the visitor branch
-   * first is exactly what a GPT Sol review (F23) refused: a "green" panel
-   * implemented against a sanitisation boundary that did not exist.
-   * docs/plans/260905f-debate-mode-what-the-web-says-about-this-piece.md § Stage 4.
-   *
-   * It also spends, and more than most: two metered web-search calls, up to
-   * ~$0.27 a run and rising with the length of the article.
+   * The boundary is built now (src/public/dto.ts § `publicDebate`): every
+   * row's address re-judged by `publicCitationUrl`, a refusal dropping the row
+   * and counting it for the visitor's foot line; a `linked` signal's address —
+   * the article's own — judged by `publicSourceUrl`, as the masthead's is; and
+   * a row whose words carry a refused address dropped too. The visitor gets
+   * `VisitorDebateBand`, which mounts no `useDebate` and draws no search.
+   * docs/plans/260905f-debate-mode-what-the-web-says-about-this-piece.md § Stage 4,
+   * docs/plans/260929c-a-visitor-sees-every-stored-mode-on-a-public-article.md.
    */
-  debate: { kind: "owners-only" },
+  debate: { kind: "artefact", key: "debate" },
   /**
    * **An artefact mode since 2026-09-29.** It was `owners-only` as a staging
    * decision — the public projection its rows' URLs had to pass through was

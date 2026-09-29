@@ -12,10 +12,19 @@
  * The `?name=` wiring below is the one thing that did not come across unchanged: it
  * arrived a day later with Stage P, and its conflict was the whole of `App.tsx`.
  * See docs/plans/260906b-an-evaluation-for-debate-mode-and-what-it-finds.md.
+ *
+ * **And a visitor twin since 2026-09-29**, `VisitorDebateBand`: the stored
+ * debate off the public payload, every row's address already re-judged at the
+ * boundary (src/public/dto.ts § `publicDebate`), with no `useDebate`,
+ * `useAutoRun` or `useStepJob` under it — so it can neither read the owner's
+ * debate nor start a search, which is two metered web searches at ~$0.27. It
+ * was `owners-only` until that boundary was built (SPIDERYARN-READING2-56,
+ * docs/plans/260929c-a-visitor-sees-every-stored-mode-on-a-public-article.md).
  */
 
 import { useQueryState } from "nuqs";
 import type { BlockId } from "../../../types.js";
+import type { PublicDebate } from "../../../public-types.js";
 import { nameParam } from "../../params.js";
 import { useRenderCount } from "../../perf.js";
 import { useDebate } from "../../useDebate.js";
@@ -41,8 +50,9 @@ import { DebatePanel } from "../../DebatePanel.js";
  * are the first thing to add — the plan's § Deliberately not in v1 — and adding
  * them is what would bring the hook and a passage slot with it.
  *
- * **Owner-only, so there is one of these and not two**, until Stage 4 builds
- * the public contract. See the branch above.
+ * **The owner's band.** `VisitorDebateBand` below is the other one, and it is
+ * a second component rather than a flag on this one because a hook cannot be
+ * called conditionally.
  */
 export function DebateBand({ slug, onJump }: { slug: string; onJump(id: BlockId): void }) {
   useRenderCount("DebateBand");
@@ -58,5 +68,23 @@ export function DebateBand({ slug, onJump }: { slug: string; onJump(id: BlockId)
       level={level}
       onLevel={setLevel}
     />
+  );
+}
+
+/**
+ * **The same panel, for somebody who does not own the article.**
+ *
+ * The debate came in the page's own payload. No `useDebate`, so no read of
+ * `/api/debate/:slug`, no job and no search — a second band rather than a flag
+ * on the first, because a hook cannot be called conditionally
+ * (src/web/reader-capability.ts; `VisitorTimelineBand` is the sibling). The
+ * identification bar is the reader's own URL (`?name=`), so a visitor has it
+ * too.
+ */
+export function VisitorDebateBand({ debate, onJump }: { debate: PublicDebate; onJump(id: BlockId): void }) {
+  useRenderCount("VisitorDebateBand");
+  const [level, setLevel] = useQueryState("name", nameParam);
+  return (
+    <DebatePanel access={{ kind: "visitor", debate }} onJump={onJump} level={level} onLevel={setLevel} />
   );
 }

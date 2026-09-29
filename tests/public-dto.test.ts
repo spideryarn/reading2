@@ -34,6 +34,9 @@ import type {
   Block,
   BlockId,
   Citations,
+  ClaimDebateRow,
+  Debate,
+  DirectDebateRow,
   Faq,
   Glossary,
   Ideas,
@@ -63,6 +66,7 @@ const NO_ARTEFACTS = {
   trajectory: null,
   faq: null,
   citations: null,
+  debate: null,
   /* **An empty array, not `null`** — comments are not an artefact, so there is
      no "nobody built one" state for them to be in. src/public-types.ts
      § PublicArticle.comments. */
@@ -1121,6 +1125,7 @@ describe("the artefacts a shared link carries", () => {
     trajectory: TRAJECTORY,
     faq: FAQ,
     citations: CITATIONS,
+    debate: null,
     comments: [],
     searches: [],
     sketch: null,
@@ -1611,6 +1616,8 @@ describe("the artefacts a shared link carries", () => {
     const byId = new Map((built.citations?.citations ?? []).map((w) => [w.id, w]));
     expect([...byId.keys()]).toEqual(["w-clean", "w-cred", "w-private", "w-web"]);
     expect(byId.get("w-clean")?.url).toBe("https://doi.org/10.1/abc");
+    /* Even the source label must not reveal that the owner ran Find it. */
+    expect(byId.get("w-web")?.linkFrom).toBe("search");
     for (const id of ["w-cred", "w-private", "w-web"]) {
       expect("url" in (byId.get(id) ?? {}), id).toBe(false);
       expect(byId.get(id)?.title, id).toBeTruthy();
@@ -1677,6 +1684,7 @@ describe("the artefacts a shared link carries", () => {
       trajectory: null,
       faq: null,
       citations: null,
+      debate: null,
       comments: [],
       searches: [],
       sketch: null,
@@ -1705,7 +1713,7 @@ describe("the artefacts a shared link carries", () => {
       assets: null,
       ...NO_ARTEFACTS,
     });
-    for (const key of ["glossary", "ideas", "tweets", "trajectory", "faq", "citations"]) {
+    for (const key of ["glossary", "ideas", "tweets", "trajectory", "faq", "citations", "debate"]) {
       expect(key in bare, key).toBe(false);
     }
   });
@@ -1832,5 +1840,340 @@ describe("the source URL a stranger receives", () => {
   it("says nothing at all when there is nothing it may say", () => {
     expect(published(null)).toBeUndefined();
     expect(published("https://user:pw@example.com/a")).toBeUndefined();
+  });
+});
+
+/**
+ * **The Debate a shared link carries** — since 2026-09-29, plan 260929c stage
+ * 4, by the contract 260905f § Security set. Its own block because two of its
+ * cases need the article's own address set, and the artefact block above runs
+ * with none.
+ *
+ * Three addresses, three places: the row's source (`publicCitationUrl`, a
+ * refusal drops the row), a `linked` signal's address (the article's own, so
+ * `publicSourceUrl`, a refusal takes the address off the signal), and the
+ * row's words (a refused address in them drops the row). Every drop is counted
+ * at the boundary.
+ */
+describe("the debate a shared link carries", () => {
+  const TITLE = "The mythology of conscious AI";
+  /** The article's own address with a credential in it — `publicMeta` leaves it off the masthead. */
+  const CREDENTIALLED_SOURCE = "https://owner:hunter2@papers.example.org/piece";
+  /** And on a private host, the other refusal. */
+  const PRIVATE_SOURCE = "http://10.1.2.3/piece";
+
+  const counts = {
+    returnedSources: 9,
+    reportedRows: 7,
+    keptRows: 3,
+    omittedOverCap: 1,
+    lost: {
+      uncited: 1,
+      selfSource: 0,
+      unverifiedSource: 1,
+      directnessUnverified: 1,
+      sourceIsCopy: 0,
+      claimNotInBlock: 0,
+      unknownBlockId: 0,
+      malformed: 0,
+    },
+    webSearches: 12,
+  };
+
+  /** A direct row with every field set, and all three kinds of evidence. */
+  function directRow(over: Partial<DirectDebateRow> = {}): DirectDebateRow {
+    return {
+      id: "spya-dr0001",
+      url: "https://reply.example.org/a-reply",
+      title: "A reply",
+      sourceQuote: "The measure cannot be computed.",
+      relation: "disputes",
+      lean: "leans-against",
+      applies: "It argues the measure is not computable.",
+      limits: "It does not address the second half.",
+      articleReferenceQuote: `in "${TITLE}"`,
+      identifies: [
+        { kind: "linked", url: "https://www.noemamag.com/the-mythology-of-conscious-ai/" },
+        { kind: "quoted", quote: "the measurement", blockId: "spya-bbbbbb" as BlockId, coverage: 0.3, density: 0.2 },
+        { kind: "named", by: "title", witness: TITLE },
+      ],
+      ...over,
+    };
+  }
+
+  /** A claim row with every field set. */
+  function claimRow(over: Partial<ClaimDebateRow> = {}): ClaimDebateRow {
+    return {
+      id: "spya-cr0001",
+      url: "https://answers.example.org/on-claims",
+      title: "An answer",
+      sourceQuote: "Somebody answers what it claims.",
+      relation: "qualifies",
+      lean: "neither",
+      applies: "It narrows the claim.",
+      limits: "Only for mammals.",
+      claimQuote: "the measurement",
+      blockId: "spya-bbbbbb" as BlockId,
+      ...over,
+    };
+  }
+
+  function debateOf(direct: DirectDebateRow[], claims: ClaimDebateRow[]): Debate {
+    return {
+      version: "debate/9",
+      generator: "some-model",
+      slug: "noema",
+      sourceHash: "abc123",
+      searchedAt: "2026-09-20T10:00:00.000Z",
+      direct: { rows: direct, counts },
+      claims: { rows: claims, counts },
+      elapsedMs: 31_000,
+    };
+  }
+
+  function publish(debate: Debate, finalUrl: string | null = "https://www.noemamag.com/the-mythology-of-conscious-ai/") {
+    return publicArticle({
+      slug: "noema",
+      title: TITLE,
+      byline: null,
+      siteName: null,
+      lang: null,
+      excerpt: null,
+      headingTitle: null,
+      finalUrl,
+      blocks: [BLOCK],
+      tree: TREE,
+      arc: null,
+      assets: null,
+      ...NO_ARTEFACTS,
+      debate,
+    });
+  }
+
+  /**
+   * **Exact nested keys against an over-full input.** Every stored field set,
+   * plus provenance and the stored counts: a spread anywhere would show up
+   * here as `version`, `counts…` or `webSearches`.
+   */
+  it("carries rows, signals and searchedAt, and none of the provenance or stored counts", () => {
+    const built = publish(debateOf([directRow()], [claimRow()]));
+    expect(keyPaths(built.debate)).toEqual(
+      [
+        "searchedAt",
+        "direct",
+        "direct.rows",
+        "direct.rows[].id",
+        "direct.rows[].url",
+        "direct.rows[].title",
+        "direct.rows[].sourceQuote",
+        "direct.rows[].relation",
+        "direct.rows[].lean",
+        "direct.rows[].applies",
+        "direct.rows[].limits",
+        "direct.rows[].articleReferenceQuote",
+        "direct.rows[].identifies",
+        "direct.rows[].identifies[].kind",
+        "direct.rows[].identifies[].url",
+        "direct.rows[].identifies[].quote",
+        "direct.rows[].identifies[].blockId",
+        "direct.rows[].identifies[].coverage",
+        "direct.rows[].identifies[].density",
+        "direct.rows[].identifies[].by",
+        "direct.rows[].identifies[].witness",
+        "direct.sourceNotPublishable",
+        "claims",
+        "claims.rows",
+        "claims.rows[].id",
+        "claims.rows[].url",
+        "claims.rows[].title",
+        "claims.rows[].sourceQuote",
+        "claims.rows[].relation",
+        "claims.rows[].lean",
+        "claims.rows[].applies",
+        "claims.rows[].limits",
+        "claims.rows[].claimQuote",
+        "claims.rows[].blockId",
+        "claims.sourceNotPublishable",
+      ].sort(),
+    );
+    expect(built.debate?.searchedAt).toBe("2026-09-20T10:00:00.000Z");
+    expect(built.debate?.direct.sourceNotPublishable).toBe(0);
+    expect(built.debate?.claims.sourceNotPublishable).toBe(0);
+    /* A clean article address on a linked signal crosses as itself. */
+    expect(built.debate?.direct.rows[0]?.identifies[0]).toEqual({
+      kind: "linked",
+      url: "https://www.noemamag.com/the-mythology-of-conscious-ai/",
+    });
+  });
+
+  /**
+   * **A refused source drops the whole row, and the loss is counted** — the
+   * 260905f mutation: a credentialled and a private-host source in each group.
+   * The rows vanish, each group's count says exactly how many, the addresses
+   * appear nowhere in the payload, and the owner's stored counts are untouched.
+   */
+  it("drops a row whose source is credentialled or private, and counts it", () => {
+    const debate = debateOf(
+      [
+        directRow(),
+        directRow({ id: "spya-dr0002", url: "https://reader:swordfish@x.org/reply" }),
+        directRow({ id: "spya-dr0003", url: "http://192.168.0.7/reply" }),
+      ],
+      [claimRow(), claimRow({ id: "spya-cr0002", url: "http://intranet/answer" })],
+    );
+    const before = structuredClone(debate);
+    const built = publish(debate);
+    expect(built.debate?.direct.rows.map((r) => r.id)).toEqual(["spya-dr0001"]);
+    expect(built.debate?.direct.sourceNotPublishable).toBe(2);
+    expect(built.debate?.claims.rows.map((r) => r.id)).toEqual(["spya-cr0001"]);
+    expect(built.debate?.claims.sourceNotPublishable).toBe(1);
+    const json = JSON.stringify(built);
+    for (const leak of ["swordfish", "192.168.0.7", "intranet/answer"]) expect(json, leak).not.toContain(leak);
+    expect(debate, "the owner's artefact and its counts are untouched").toEqual(before);
+  });
+
+  /**
+   * **The nested places — GPT Sol's P0 on the plan.** A direct row's `linked`
+   * signal is the article's *own* address, and its witness can quote it. With
+   * the article's address refused (a credential; then a private host):
+   *
+   * - a row whose witness quotes it is dropped and counted;
+   * - a row whose witness does not keeps its place, and its `linked` signal
+   *   crosses without the address;
+   * - a claim row whose quotation carries it is dropped too;
+   *
+   * and the address is nowhere in the payload — the masthead included.
+   */
+  it.each([
+    ["a credential", CREDENTIALLED_SOURCE, "hunter2"],
+    ["a private host", PRIVATE_SOURCE, "10.1.2.3"],
+  ])("never publishes the article's own address with %s, however it is nested", (_, source, needle) => {
+    const built = publish(
+      debateOf(
+        [
+          directRow({
+            id: "spya-dr0010",
+            articleReferenceQuote: `see ${source} for the piece`,
+            identifies: [{ kind: "linked", url: source }],
+          }),
+          directRow({
+            id: "spya-dr0011",
+            identifies: [
+              { kind: "linked", url: source },
+              { kind: "named", by: "title", witness: TITLE },
+            ],
+          }),
+        ],
+        [
+          claimRow(),
+          claimRow({ id: "spya-cr0010", sourceQuote: `As ${source.replace(/^https?:\/\//, "")} argues` }),
+        ],
+      ),
+      source,
+    );
+    expect(built.debate?.direct.rows.map((r) => r.id)).toEqual(["spya-dr0011"]);
+    expect(built.debate?.direct.sourceNotPublishable).toBe(1);
+    expect(built.debate?.direct.rows[0]?.identifies).toEqual([
+      { kind: "linked" },
+      { kind: "named", by: "title", witness: TITLE },
+    ]);
+    expect(built.debate?.claims.rows.map((r) => r.id)).toEqual(["spya-cr0001"]);
+    expect(built.debate?.claims.sourceNotPublishable).toBe(1);
+    expect(JSON.stringify(built)).not.toContain(needle);
+  });
+
+  /**
+   * **A linked address refused on its own**, with the masthead's address
+   * clean: the page spelled the article's address with a query on it — which
+   * `publicCitationUrl` would pass and `publicSourceUrl`, the article's own
+   * policy, does not. The signal loses it; a witness quoting it loses the row.
+   */
+  it("judges a linked address by the article's own policy, not the citation one", () => {
+    const signed = "https://www.noemamag.com/the-mythology-of-conscious-ai/?token=OWNERSECRET";
+    const built = publish(
+      debateOf(
+        [
+          directRow({ id: "spya-dr0020", identifies: [{ kind: "linked", url: signed }] }),
+          directRow({ id: "spya-dr0021", articleReferenceQuote: signed, identifies: [{ kind: "linked", url: signed }] }),
+        ],
+        [],
+      ),
+    );
+    expect(built.debate?.direct.rows.map((r) => r.id)).toEqual(["spya-dr0020"]);
+    expect(built.debate?.direct.rows[0]?.identifies).toEqual([{ kind: "linked" }]);
+    expect(built.debate?.direct.sourceNotPublishable).toBe(1);
+    expect(JSON.stringify(built)).not.toContain("OWNERSECRET");
+  });
+
+  it("drops a row whose source is the article's refused own address", () => {
+    const signed = "https://www.noemamag.com/the-mythology-of-conscious-ai/?token=OWNERSECRET";
+    const built = publish(
+      debateOf(
+        [directRow({ id: "spya-dr0022", url: signed })],
+        [claimRow({ id: "spya-cr0022", url: signed })],
+      ),
+      signed,
+    );
+    expect(built.debate?.direct.rows).toEqual([]);
+    expect(built.debate?.direct.sourceNotPublishable).toBe(1);
+    expect(built.debate?.claims.rows).toEqual([]);
+    expect(built.debate?.claims.sourceNotPublishable).toBe(1);
+    expect(JSON.stringify(built)).not.toContain("OWNERSECRET");
+  });
+
+  it("drops a row whose words contain a percent-encoded refused address", () => {
+    const signed = "https://www.noemamag.com/the-mythology-of-conscious-ai/?token=OWNERSECRET";
+    const built = publish(
+      debateOf(
+        [directRow({ id: "spya-dr0023", articleReferenceQuote: encodeURIComponent(signed) })],
+        [claimRow({ id: "spya-cr0023", sourceQuote: encodeURIComponent(signed) })],
+      ),
+      signed,
+    );
+    expect(built.debate?.direct.rows).toEqual([]);
+    expect(built.debate?.direct.sourceNotPublishable).toBe(1);
+    expect(built.debate?.claims.rows).toEqual([]);
+    expect(built.debate?.claims.sourceNotPublishable).toBe(1);
+    expect(JSON.stringify(built)).not.toContain("OWNERSECRET");
+  });
+
+  /**
+   * **A legacy row crosses in today's vocabulary.** Stored before 2026-09-08 it
+   * has `valence` and no `lean`; before 2026-09-06, no `identifies`. The public
+   * row carries `lean` only, and a named signal on the witness.
+   */
+  it("reads a legacy row's lean and evidence, and carries neither old field", () => {
+    const legacy = {
+      ...directRow({ id: "spya-dr0030" }),
+      lean: undefined,
+      valence: "positive",
+      identifies: undefined,
+    } as unknown as DirectDebateRow;
+    const legacyClaim = { ...claimRow({ id: "spya-cr0030" }), lean: undefined, valence: "negative" } as unknown as ClaimDebateRow;
+    const built = publish(debateOf([legacy], [legacyClaim]));
+    const row = built.debate?.direct.rows[0];
+    expect(row?.lean).toBe("leans-for");
+    expect(row?.identifies).toEqual([{ kind: "named", by: "title", witness: `in "${TITLE}"` }]);
+    expect(built.debate?.claims.rows[0]?.lean).toBe("leans-against");
+    expect(JSON.stringify(built.debate)).not.toContain("valence");
+  });
+
+  it("carries no debate key when nobody searched", () => {
+    const bare = publicArticle({
+      slug: "noema",
+      title: null,
+      byline: null,
+      siteName: null,
+      lang: null,
+      excerpt: null,
+      headingTitle: null,
+      finalUrl: null,
+      blocks: [BLOCK],
+      tree: TREE,
+      arc: null,
+      assets: null,
+      ...NO_ARTEFACTS,
+    });
+    expect("debate" in bare).toBe(false);
   });
 });

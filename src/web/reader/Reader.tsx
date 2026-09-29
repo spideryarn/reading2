@@ -34,7 +34,7 @@ import { IdeasBand, VisitorIdeasBand } from "../modes/ideas/IdeasMode.js";
 import { TimelineBand, VisitorTimelineBand } from "../modes/timeline/TimelineMode.js";
 import { QuotesBand, VisitorQuotesBand } from "../modes/quotes/QuotesMode.js";
 import { useQuoteMarks } from "./useQuoteMarks.js";
-import { DebateBand } from "../modes/debate/DebateMode.js";
+import { DebateBand, VisitorDebateBand } from "../modes/debate/DebateMode.js";
 import { CitationsBand, VisitorCitationsBand } from "../modes/citations/CitationsMode.js";
 import { FaqBand, VisitorFaqBand } from "../modes/faq/FaqMode.js";
 import {
@@ -1939,17 +1939,20 @@ export function Reader({
             onOpenKey={setOpenTimelineKey}
           />
         ) : null;
-      /* **The owner alone, and there is deliberately no visitor twin yet.**
-         Debate is meant to be shared — it is the artefact whose whole value is
-         that somebody else can check it — but a visitor's row must pass
-         `publicCitationUrl` at the boundary, where a refusal drops the whole
-         row, and that contract is Stage 4. Building the branch first is what a
-         GPT Sol review (F23) refused. Until then `POLICY.debate` is
-         `owners-only`, so a visitor meets the boundary sentence rather than an
-         empty band.
-         docs/plans/260905f-debate-mode-what-the-web-says-about-this-piece.md § Stage 4. */
+      /* **The owner/visitor pair, since 2026-09-29** — Stage 4, which built the
+         boundary a visitor's row must pass: every row's address re-judged by
+         `publicCitationUrl` (a refusal drops the row, counted), and the
+         article's own address inside a direct row judged as the masthead's is
+         (src/public/dto.ts § `publicDebate`). Gated on the debate itself, like
+         the timeline's: an absent key means `visitorGap` said `not-built` and
+         the `VisitorBand` is in the slot. `VisitorDebateBand` mounts no
+         `useDebate`, so nothing here can start a search.
+         docs/plans/260905f-debate-mode-what-the-web-says-about-this-piece.md § Stage 4,
+         docs/plans/260929c-a-visitor-sees-every-stored-mode-on-a-public-article.md. */
       case "debate":
-        return owner ? <DebateBand slug={slug} onJump={jumpTo} /> : null;
+        if (!owner)
+          return artefacts?.debate ? <VisitorDebateBand debate={artefacts.debate} onJump={jumpTo} /> : null;
+        return <DebateBand slug={slug} onJump={jumpTo} />;
       /* **The owner/visitor pair, since 2026-09-29.** It was the owner alone
          until a public article's stored Trajectory was refused to a signed-out
          reader (SPIDERYARN-READING2-56); a stored list is the same case. The

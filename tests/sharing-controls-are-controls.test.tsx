@@ -76,6 +76,7 @@ const AVAILABLE: PublicArtefacts = {
   trajectory: true,
   faq: true,
   citations: true,
+  debate: true,
 };
 
 const PRIVATE: ArticleSharing = {

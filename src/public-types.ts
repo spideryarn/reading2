@@ -65,9 +65,12 @@ import type {
   BlockId,
   BlockKind,
   CommentAnchor,
+  DebateLean,
+  DebateRelation,
   FaqQuestion,
   GlossaryKind,
   Idea,
+  IdentificationSignal,
   NavLabelStatus,
   Quote,
   QuoteDrops,
@@ -249,7 +252,7 @@ export interface PublicArticle extends PublicArtefactSet {
 }
 
 /**
- * **The four artefacts a shared link carries, and the one rule about them:
+ * **The public artefacts a shared link carries, and the one rule about them:
  * a key that is present exists, and a key that is absent was never built.**
  *
  * Slice 1b, and the shape is Greg's decision of 2026-08-28 over GPT Sol's
@@ -293,7 +296,7 @@ export interface PublicArticle extends PublicArtefactSet {
  * rather than an intention.
  *
  * **No generator, version, slug, sourceHash, passes, generatedAt or elapsedMs**
- * on any of the four. Facts about our pipeline and its timings.
+ * on any of them. Facts about our pipeline and its timings.
  */
 export interface PublicArtefactSet {
   glossary?: PublicGlossary;
@@ -304,6 +307,7 @@ export interface PublicArtefactSet {
   trajectory?: PublicTrajectory;
   faq?: PublicFaq;
   citations?: PublicCitations;
+  debate?: PublicDebate;
   sketch?: PublicSketch;
 }
 
@@ -504,7 +508,9 @@ export interface PublicCitedWork {
   firstCited: BlockId;
   citedInBody: boolean;
   url?: string;
-  linkFrom: CitationLinkFrom;
+  /** The article's source rule. `web` is the owner's private Find-it result
+   * and is normalised back to `search` at the public boundary. */
+  linkFrom: Exclude<CitationLinkFrom, "web">;
 }
 
 /**
@@ -519,6 +525,95 @@ export interface PublicCitedWork {
 export interface PublicCitations {
   citations: PublicCitedWork[];
   capped: boolean;
+}
+
+/**
+ * **One way a page showed it was about this article, as a visitor gets it** —
+ * `IdentificationSignal` with one difference: a `linked` signal's `url` may be
+ * absent.
+ *
+ * That address is **the article's own**, as the stranger's page spelled it
+ * (`linkTo` in src/debate.ts matches it against the article's `meta.url`, which
+ * is `final_url`), and `describeSignal` prints it. So it is judged by the policy
+ * `publicMeta` applies to the article's own address — `publicSourceUrl`, which
+ * also refuses a query string — and a refusal takes the address off the signal
+ * and leaves the fact that the page links the piece. GPT Sol, plan review 1
+ * (P0), plan 260929c. The other two arms are rebuilt field by field.
+ */
+export type PublicIdentificationSignal =
+  | { kind: "linked"; url?: string }
+  | Extract<IdentificationSignal, { kind: "quoted" }>
+  | Extract<IdentificationSignal, { kind: "named" }>;
+
+/**
+ * What both of a visitor's Debate rows carry — the owner's row, minus nothing
+ * but provenance it never had, and with `lean` always present: a row stored
+ * before 2026-09-08 carries `valence` instead, and the boundary reads it
+ * through `readStoredLean` so a visitor never meets the old vocabulary.
+ *
+ * **`url` is required**, and that is the contract 260905f § Security set: a
+ * Debate row *is* its source, so a row whose address `publicCitationUrl`
+ * refuses does not cross at all — it is counted instead.
+ */
+interface PublicDebateRowBase {
+  id: string;
+  url: string;
+  title?: string;
+  sourceQuote: string;
+  relation: DebateRelation;
+  lean: DebateLean;
+  applies: string;
+  limits?: string;
+}
+
+/** A page about this piece, as a visitor gets it. `identifies` is never empty — the boundary reads it through `identifiesOf`. */
+export interface PublicDirectDebateRow extends PublicDebateRowBase {
+  articleReferenceQuote: string;
+  identifies: PublicIdentificationSignal[];
+}
+
+/** A page that answers a claim the piece makes, as a visitor gets it. */
+export interface PublicClaimDebateRow extends PublicDebateRowBase {
+  claimQuote: string;
+  blockId: BlockId;
+}
+
+/**
+ * One of the two searches, as a visitor gets it: its rows, and **how many
+ * rows the public boundary withheld** — computed there, never read off the
+ * artefact (260905f § What is counted, Sol's F17). The stored `counts` do not
+ * cross: `returnedSources`, `reportedRows`, `keptRows`, `omittedOverCap`, the
+ * loss reasons and `webSearches` are facts about our search and our checking,
+ * which the owner's foot lines print and a visitor's do not — the FAQ's
+ * `dropped`, one mode along.
+ */
+export interface PublicDebateGroup<Row> {
+  rows: Row[];
+  /**
+   * Rows the boundary did not publish: the source address `publicCitationUrl`
+   * refused (a credential, a private host), or a row whose text carries an
+   * address the boundary refused — the article's own, above all. The
+   * visitor's foot line says so in plain words, so a shorter list is never a
+   * silent one.
+   */
+  sourceNotPublishable: number;
+}
+
+/**
+ * **The Debate, as a visitor gets it** — since 2026-09-29, the fourth mode plan
+ * 260929c moved off `owners-only` (SPIDERYARN-READING2-56), by the contract its
+ * own plan set (260905f § Security, § Stage 4). Showing a stored search costs
+ * nothing; only running one spends (two metered web searches, ~$0.27).
+ *
+ * `searchedAt` crosses **deliberately** — a shared link outlives a search, and
+ * a visitor must be able to see how old it is (260905f § `searchedAt`). The
+ * rest of the pipeline does not: `version`, `generator`, `slug`, `sourceHash`,
+ * `elapsedMs`, and every stored count. No profile is in this stage.
+ */
+export interface PublicDebate {
+  searchedAt: string;
+  direct: PublicDebateGroup<PublicDirectDebateRow>;
+  claims: PublicDebateGroup<PublicClaimDebateRow>;
 }
 
 /**
@@ -680,10 +775,10 @@ export interface PublicSearchRun {
 /**
  * **Re-exported, not declared here, and it moved on 2026-09-02.**
  *
- * The five booleans are still exactly what a visitor's page is keyed on and
+ * These booleans are still exactly what a visitor's page is keyed on and
  * every importer still reaches them through this file. What changed is that a
  * *second* reader appeared on the owner's side of the line:
- * `ArticleSharing.available` in src/types.ts carries the same five, so that the
+ * `ArticleSharing.available` in src/types.ts carries the same set, so that the
  * confirmation dialog can list what a shared link will actually carry
  * (docs/plans/260902n-the-sharing-dialog-lists-what-goes-out-and-what-stays.md).
  *
@@ -695,4 +790,3 @@ export interface PublicSearchRun {
  * type modules run one way, and they should keep doing so.
  */
 export type { PublicArtefacts } from "./types.js";
-

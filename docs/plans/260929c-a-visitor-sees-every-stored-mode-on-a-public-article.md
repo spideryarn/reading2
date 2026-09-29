@@ -156,7 +156,9 @@ crosses.
 - **Citations** — each `CitedWork` minus provenance, with **`url` through `publicCitationUrl`**: a
   refused URL drops the *link*, not the row — a citation is still a citation without one, unlike a
   Debate row. `key` is an internal dedupe key that can embed a URL and does not cross. `found` (the
-  owner's paid *Find it*, table `citation_finds`) does not cross in this plan — *Deferred*.
+  owner's paid *Find it*, table `citation_finds`) does not cross; neither does the attached
+  `linkFrom: "web"` fact, which the public projection normalises back to `"search"`. Private, not
+  deferred.
 - **Debate** — the contract its own plan set,
   [260905f § Stage 4](260905f-debate-mode-what-the-web-says-about-this-piece.md): every row's `url`
   through `publicCitationUrl`, **a refused URL drops the whole row** (a row without its source breaks
@@ -166,7 +168,7 @@ crosses.
   source URL* (src/debate.ts) and printed verbatim, and `articleReferenceQuote` can contain the same
   address — the one `publicMeta` suppresses when it carries a credential or a private host. Public
   row and signal types are rebuilt recursively; a linked signal's URL goes through
-  `publicCitationUrl`, and a direct row whose witness names a refused source address is dropped and
+  `publicSourceUrl`, and a direct row whose witness names a refused source address is dropped and
   counted. Mutation tests for both nested places.
 
 ## The simpler option passed over
@@ -231,6 +233,22 @@ crossing, and a mutation test with a credentialled and a private-host URL.
 
 Its own plan's Stage 4 contract, on `DebatePanel`'s existing `DebateAccess` union, plus the nested
 `identifies[].url` and `articleReferenceQuote` handling above.
+
+**As built, 2026-09-29.** `publicDebate` (src/public/dto.ts) rebuilds rows and signals field by
+field. A row's `url` goes through `publicCitationUrl`, a refusal dropping the row. A `linked`
+signal's address goes through **`publicSourceUrl`**, not `publicCitationUrl`: it is the article's own
+address, so it gets the masthead's policy, which also refuses a query string — a refusal takes the
+address off the signal. And a row whose *words* (witness, quotation, any string on it) contain a
+refused address — the article's own when refused, a refused `linked` address, a refused row source,
+each whole and scheme-less — is dropped. The row's own `url` is checked against that set too, so the
+article's refused address cannot pass merely because citation policy would allow its query; and the
+comparison decodes percent-escaped ASCII, including nested escapes. Every drop is counted per search in `sourceNotPublishable`,
+computed at the boundary; the visitor's foot line says it. **No stored count crosses**, so a
+visitor's empty search gets a sentence true of both *found nothing* and *could not check*
+(`DEBATE_RESPONSES_NONE_SHARED`), and a search emptied by the boundary gets no lead at all. Legacy
+rows cross through `readStoredLean` and `identifiesOf`. `tests/visitor-gaps.test.ts` § *the modes a
+visitor may not see* is the postmortem's countermeasure 1: chat, remember and referee, each with its
+reason.
 
 ### What every stage owes (Sol, plan review 4)
 

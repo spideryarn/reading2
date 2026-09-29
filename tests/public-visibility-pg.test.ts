@@ -54,7 +54,7 @@ import { pgPublicReader } from "../src/store/public-reader.js";
 import { documentTitle } from "../src/title-text.js";
 import { safePublicCanonical } from "../src/urls.js";
 import { currentOwnerId, type OwnerId, runInRequest } from "../src/owner.js";
-import type { Citations, Faq, Glossary, Ideas, Trajectory, TweetThread } from "../src/types.js";
+import type { Citations, Debate, Faq, Glossary, Ideas, Trajectory, TweetThread } from "../src/types.js";
 
 loadEnvLocal();
 
@@ -108,6 +108,10 @@ const PUBLIC_QUESTION = "What would a measurement of consciousness have to show?
 const PUBLIC_WORK = "Consciousness as integrated information";
 /** A cited work's address carrying a credential: its row crosses, the address never does. */
 const CREDENTIALLED_URL = "https://reader:hunter2@papers.example.org/phi.pdf";
+/** A stored Debate claim row's quotation — on the wire once published, never before (plan 260929c stage 4). */
+const PUBLIC_DEBATE_QUOTE = "Integration is not the same thing as experience.";
+/** A Debate row's source carrying a credential: the whole row stays behind, counted. */
+const CREDENTIALLED_REPLY = "https://reader:opensesame@replies.example.org/answer";
 
 /* ── The owner's own work, which crosses since 2026-09-04 ────────────────────
    Four strings a visitor must see and six rows they must not. Real prose in
@@ -163,6 +167,7 @@ const ARTEFACTS: {
   trajectory: Trajectory;
   faq: Faq;
   citations: Citations;
+  debate: Debate;
 } = {
   glossary: {
     version: "glossary/2",
@@ -285,6 +290,105 @@ const ARTEFACTS: {
     ],
     capped: false,
     generatedAt: "2026-02-02T00:00:00.000Z",
+    elapsedMs: 1,
+  },
+  /* **The stored Debate, since 2026-09-29** (plan 260929c stage 4). The
+     article's own address is `SIGNED_URL`, which the masthead withholds for
+     its query — and a direct row's `linked` signal and witness are exactly
+     where that address turns up. Three direct rows: one whose signal carries
+     it (kept, the address taken off), one whose witness quotes it (dropped),
+     one whose source is credentialled (dropped). One clean claim row. */
+  debate: {
+    version: "debate/9",
+    generator: "test",
+    slug: SLUG,
+    sourceHash: "abc",
+    searchedAt: "2026-02-02T00:00:00.000Z",
+    direct: {
+      rows: [
+        {
+          id: "spya-dbtpg1",
+          url: "https://replies.example.org/kept",
+          sourceQuote: "A reply that is kept.",
+          relation: "disputes",
+          lean: "leans-against",
+          applies: "It disputes the piece.",
+          articleReferenceQuote: EXTRACTED_TITLE,
+          identifies: [
+            { kind: "linked", url: SIGNED_URL },
+            { kind: "named", by: "title", witness: EXTRACTED_TITLE },
+          ],
+        },
+        {
+          id: "spya-dbtpg2",
+          url: "https://replies.example.org/quotes-the-address",
+          sourceQuote: "A reply that quotes the signed address.",
+          relation: "extends",
+          lean: "leans-for",
+          applies: "It extends the piece.",
+          articleReferenceQuote: `read it at ${SIGNED_URL}`,
+          identifies: [{ kind: "linked", url: SIGNED_URL }],
+        },
+        {
+          id: "spya-dbtpg3",
+          url: CREDENTIALLED_REPLY,
+          sourceQuote: "A reply behind a password.",
+          relation: "qualifies",
+          lean: "neither",
+          applies: "It qualifies the piece.",
+          articleReferenceQuote: EXTRACTED_TITLE,
+          identifies: [{ kind: "named", by: "title", witness: EXTRACTED_TITLE }],
+        },
+      ],
+      counts: {
+        returnedSources: 3,
+        reportedRows: 3,
+        keptRows: 3,
+        omittedOverCap: 0,
+        lost: {
+          uncited: 0,
+          selfSource: 0,
+          unverifiedSource: 0,
+          directnessUnverified: 0,
+          sourceIsCopy: 0,
+          claimNotInBlock: 0,
+          unknownBlockId: 0,
+          malformed: 0,
+        },
+        webSearches: 4,
+      },
+    },
+    claims: {
+      rows: [
+        {
+          id: "spya-dbtpg4",
+          url: "https://answers.example.org/claim",
+          sourceQuote: PUBLIC_DEBATE_QUOTE,
+          relation: "disputes",
+          lean: "leans-against",
+          applies: "It disputes the claim.",
+          claimQuote: "the",
+          blockId: "spya-wpvvqq",
+        },
+      ],
+      counts: {
+        returnedSources: 1,
+        reportedRows: 1,
+        keptRows: 1,
+        omittedOverCap: 0,
+        lost: {
+          uncited: 0,
+          selfSource: 0,
+          unverifiedSource: 0,
+          directnessUnverified: 0,
+          sourceIsCopy: 0,
+          claimNotInBlock: 0,
+          unknownBlockId: 0,
+          malformed: 0,
+        },
+        webSearches: 2,
+      },
+    },
     elapsedMs: 1,
   },
 };
@@ -725,7 +829,8 @@ describe("sharing one article", { timeout: 60_000 }, () => {
     /* The route's cue joined 2026-09-29: a private article's stored
        Trajectory is on this row too, and must not be readable either. */
     /* The FAQ's question and the cited work's title joined the same day. */
-    for (const canary of [PUBLIC_TERM, PUBLIC_IDEA, PUBLIC_TWEET, PUBLIC_CUE, PUBLIC_QUESTION, PUBLIC_WORK]) {
+    /* And the Debate's claim quotation, since plan 260929c stage 4. */
+    for (const canary of [PUBLIC_TERM, PUBLIC_IDEA, PUBLIC_TWEET, PUBLIC_CUE, PUBLIC_QUESTION, PUBLIC_WORK, PUBLIC_DEBATE_QUOTE]) {
       expect(r.text, canary).not.toContain(canary);
     }
   });
@@ -988,6 +1093,39 @@ describe("sharing one article", { timeout: 60_000 }, () => {
    * The cited work crosses with its address taken off — a credential in it —
    * and without its `key`, which embeds the same address.
    */
+  /**
+   * **The stored Debate, since 2026-09-29** (plan 260929c stage 4), off a real
+   * row: only a row answers whether the public `select` fetches the column.
+   * The two rows the boundary refuses are gone and counted; the kept row's
+   * `linked` signal has lost the article's signed address; neither the
+   * signature nor the credential is anywhere in the response; and no stored
+   * count crosses.
+   */
+  it("serves the stored debate, without the rows or addresses the boundary refuses", async () => {
+    const r = await call("GET", `/api/public/article/${SLUG}`);
+    expect(r.status).toBe(200);
+    const body = r.body as {
+      debate?: {
+        searchedAt: string;
+        direct: { rows: { id: string; identifies: unknown[] }[]; sourceNotPublishable: number };
+        claims: { rows: { id: string; sourceQuote: string }[]; sourceNotPublishable: number };
+      };
+    };
+    expect(body.debate?.searchedAt).toBe("2026-02-02T00:00:00.000Z");
+    expect(body.debate?.direct.rows.map((row) => row.id)).toEqual(["spya-dbtpg1"]);
+    expect(body.debate?.direct.sourceNotPublishable).toBe(2);
+    expect(body.debate?.direct.rows[0]?.identifies).toEqual([
+      { kind: "linked" },
+      { kind: "named", by: "title", witness: EXTRACTED_TITLE },
+    ]);
+    expect(body.debate?.claims.rows.map((row) => row.sourceQuote)).toEqual([PUBLIC_DEBATE_QUOTE]);
+    expect(body.debate?.claims.sourceNotPublishable).toBe(0);
+    expect(r.text).not.toContain("SECRETSIGNATURE");
+    expect(r.text).not.toContain("opensesame");
+    expect(JSON.stringify(body.debate)).not.toContain("webSearches");
+    expect(JSON.stringify(body.debate)).not.toContain("counts");
+  });
+
   it("serves the stored faq and citations, and not a credentialled address", async () => {
     const r = await call("GET", `/api/public/article/${SLUG}`);
     expect(r.status).toBe(200);
@@ -1262,7 +1400,7 @@ describe("sharing one article", { timeout: 60_000 }, () => {
        * only place that claim is checked end to end.
        *
        * `shareableArtefacts` (src/store/pg.ts) reads presence off the revision
-       * row, and the fixture plants six artefacts and not the rest — so
+       * row, and the fixture plants seven artefacts and not the rest — so
        * this asymmetry is the assertion. A unit test cannot make it: the whole
        * question is whether the columns the projection publishes are the
        * columns this field reports, and only a row answers that.
@@ -1290,6 +1428,7 @@ describe("sharing one article", { timeout: 60_000 }, () => {
         trajectory: true,
         faq: true,
         citations: true,
+        debate: true,
       },
     });
   });

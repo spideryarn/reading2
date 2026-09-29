@@ -72,6 +72,7 @@ const NOTHING_BUILT: PublicArtefacts = {
   trajectory: false,
   faq: false,
   citations: false,
+  debate: false,
 };
 const EVERYTHING_BUILT: PublicArtefacts = {
   arc: true,
@@ -84,6 +85,7 @@ const EVERYTHING_BUILT: PublicArtefacts = {
   trajectory: true,
   faq: true,
   citations: true,
+  debate: true,
 };
 
 /**
@@ -117,8 +119,36 @@ function only(built: keyof PublicArtefacts): PublicArtefacts {
     trajectory: built === "trajectory",
     faq: built === "faq",
     citations: built === "citations",
+    debate: built === "debate",
   };
 }
+
+/**
+ * **Every mode a visitor may not see, and why — written down.**
+ *
+ * The countermeasure postmortem 260929a ranks first: four modes went
+ * `owners-only` for the cost of *making* their output, which a visitor never
+ * pays, and nobody was ever asked *why may a visitor not see what it stored?*
+ * (docs/postmortems/260929a-one-policy-row-decided-who-may-make-a-mode-and-who-may-see-it.md).
+ * A mode that stores what it generates is shown from the payload; `owners-only`
+ * is for a mode whose stored output is the reader's own. So each row here is
+ * that reason, and the test below fails the day a fifth `owners-only` mode
+ * appears until somebody writes its line — or makes it an artefact mode.
+ */
+const OWNERS_ONLY: Partial<Record<Mode, string>> = {
+  chat: "the owner's own conversation, built with their profile — and every turn is a model call",
+  remember:
+    "Recall is the owner's own answers, built with their profile; Quiz was excluded by Greg on 2026-09-29 as not small (plan 260929c § Decided)",
+  referee: "the owner's own criteria, poles and marks on an unpublished paper — a reviewer's private working",
+};
+
+describe("the modes a visitor may not see", () => {
+  it("names every owners-only mode, each with the reason it is not an artefact", () => {
+    const ownersOnly = MODES.filter((mode) => visitorGap(mode, EVERYTHING_BUILT)?.kind === "owners-only");
+    expect([...ownersOnly].sort()).toEqual(Object.keys(OWNERS_ONLY).sort());
+    for (const reason of Object.values(OWNERS_ONLY)) expect(reason.length).toBeGreaterThan(20);
+  });
+});
 
 describe("what a visitor is told, mode by mode", () => {
   it("gives the table of contents away, which is the whole feature", () => {
@@ -303,11 +333,11 @@ describe("what a visitor is told, mode by mode", () => {
        mode id to name the button with. It has an `owners-only` row in the total
        `POLICY` record now, and there is no fall-through left to reach.
        docs/plans/260831an-referee-mode-for-peer-reviewers.md. */
-    /* `debate` joined them on 2026-09-05 and is the one entry here that is
-       expected to leave again: it is owners-only only until Stage 4 builds the
-       public projection its rows must not bypass, at which point it drops out
-       with the glossary and the quotes and this line loses a word.
-       src/web/visitor.ts § POLICY.debate. */
+    /* `debate` joined them on 2026-09-05 as the one entry expected to leave
+       again, owners-only only until Stage 4 built the public projection its
+       rows must not bypass. **It left on 2026-09-29** (plan 260929c stage 4,
+       src/web/visitor.ts § POLICY.debate). What remains is exactly
+       `OWNERS_ONLY` below, each with its reason. */
     /* `citations` joined on 2026-09-11, owners-only for Debate's reason, and
        `faq` on 2026-09-16 for the same one. **Both left on 2026-09-29** with
        `trajectory` below: a stored FAQ and a stored list ride the public
@@ -319,10 +349,10 @@ describe("what a visitor is told, mode by mode", () => {
        (SPIDERYARN-READING2-56, src/web/visitor.ts § POLICY.trajectory,
        docs/plans/260929c-a-visitor-sees-every-stored-mode-on-a-public-article.md). */
     expect([...markedModes(EVERYTHING_BUILT).keys()].sort()).toEqual(
-      ["chat", "debate", "referee", "remember"].sort(),
+      ["chat", "referee", "remember"].sort(),
     );
     /* And one at a time, so a mode reading the wrong flag shows up. */
-    for (const built of ["glossary", "ideas", "quotes", "timeline", "trajectory", "faq", "citations"] as const) {
+    for (const built of ["glossary", "ideas", "quotes", "timeline", "trajectory", "faq", "citations", "debate"] as const) {
       expect([...markedModes(only(built)).keys()], built).not.toContain(built);
     }
   });
@@ -350,6 +380,9 @@ describe("what a visitor is told, mode by mode", () => {
            (plan 260929c stages 2 and 3). */
         mode === "faq" ||
         mode === "citations" ||
+        /* And the Debate, the same day, once its rows' boundary was built
+           (plan 260929c stage 4). */
+        mode === "debate" ||
         /* Free since 2026-09-04: the picture is drawn from the tree in the
            payload, and the panel's visitor arm buys nothing.
            docs/plans/260904c-more-modes-on-a-shared-link.md § Stage 2. */
@@ -467,6 +500,7 @@ describe("what the payload says it has", () => {
       trajectory: false,
       faq: false,
       citations: false,
+      debate: false,
     });
     expect(
       artefactsIn({

@@ -206,6 +206,7 @@ const ALL_BUILT: PublicArtefacts = {
   trajectory: true,
   faq: true,
   citations: true,
+  debate: true,
 };
 
 describe("the sharing card, on the page that owns it", () => {
@@ -279,6 +280,7 @@ describe("the sharing card, on the page that owns it", () => {
         trajectory: false,
         faq: false,
         citations: false,
+        debate: false,
       } satisfies PublicArtefacts,
     };
 
@@ -477,6 +479,7 @@ describe("the sharing card, on the page that owns it", () => {
         trajectory: false,
         faq: false,
         citations: false,
+        debate: false,
         /* Annotated like `ALL_BUILT` above and for the same reason: an untyped
            literal here goes a field short the day another artefact is added,
            the parser rejects it, and the card silently draws "we could not work

@@ -54,7 +54,11 @@ import { ControlTip, Tooltip } from "./Tooltip.js";
  * `CitedWork` is one of these, so the owner's path is unchanged. Since
  * 2026-09-29, plan 260929c stage 3.
  */
-export type ShownWork = PublicCitedWork & Pick<CitedWork, "found">;
+export type ShownWork = Omit<PublicCitedWork, "linkFrom"> & {
+  /** The owner may have a private Find-it row; a public row cannot. */
+  linkFrom: CitedWork["linkFrom"];
+  found?: CitedWork["found"];
+};
 
 /* ------------------------------------------------------------- the scores -- */
 
