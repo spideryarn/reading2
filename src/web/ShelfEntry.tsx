@@ -42,11 +42,16 @@ import { IconButton } from "./IconButton.js";
 import { Link } from "./Link.js";
 import { exactly } from "./relative-time.js";
 import { readHref } from "./router.js";
-import { isArchived } from "./shelf-narrow.js";
 import { TitleEditor } from "./TitleEditor.js";
 import { ControlTip, Tooltip, TooltipGroup } from "./Tooltip.js";
 import type { useShelf } from "./useShelf.js";
 import { fetchOk } from "./lib/api.js";
+
+/* `archivedAt` read directly rather than through shelf-narrow.ts's `isArchived`:
+   this file is shared with the lazy /admin and /design routes, and importing
+   shelf-narrow would put it (and library-hits.ts behind it) into the reader's
+   startup bytes — tests/eager-client-graph.test.ts § SHARED_WITH_READER. */
+const isArchived = (entry: { archivedAt?: string | null }) => !!entry.archivedAt;
 
 export type Shelf = ReturnType<typeof useShelf>;
 

@@ -39,10 +39,15 @@ import { Link } from "./Link.js";
 import { exactly, timeAgo } from "./relative-time.js";
 import { readHref } from "./router.js";
 import { Actions, ArchivedMark, SharedBadge } from "./ShelfEntry.js";
-import { isArchived } from "./shelf-narrow.js";
 import type { Shelf } from "./ShelfEntry.js";
 import { TitleEditor } from "./TitleEditor.js";
 import { Tooltip } from "./Tooltip.js";
+
+/* `archivedAt` read directly rather than through shelf-narrow.ts's `isArchived`:
+   this file is shared with the lazy /admin and /design routes, and importing
+   shelf-narrow would put it (and library-hits.ts behind it) into the reader's
+   startup bytes — tests/eager-client-graph.test.ts § SHARED_WITH_READER. */
+const isArchived = (entry: { archivedAt?: string | null }) => !!entry.archivedAt;
 
 /**
  * What the card should say on its meta line while this column is the sort.
