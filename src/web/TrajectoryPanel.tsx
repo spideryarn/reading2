@@ -21,10 +21,10 @@
  * Under the current row, and only there, whatever the other modes have
  * *already* written about this paragraph — src/web/stop-card.ts gathers it.
  * Nothing on it is generated for it, nothing starts a run, and when there is
- * nothing there is no card and no sentence asking for one. The term chips
- * open to one line and a link; ideas and events link into their modes, while
- * the FAQ question is text because its passage is the stop already open. The
- * tying-together is the juxtaposition, not a synthesis (Sol F21).
+ * nothing there is no card and no sentence asking for one. Term and idea chips
+ * open to one line and an icon into their mode; the FAQ question sits above
+ * the row and opens its checked passages there. Events still link into their
+ * mode. The tying-together is the juxtaposition, not a synthesis (Sol F21).
  *
  * ## The head is pinned, and the list follows the stop
  *
@@ -45,8 +45,18 @@
  * (`offeredDepths`). Each is a real `<button>` and its own tab stop, with
  * `aria-pressed` — keyboard.md's rule that arrow keys belong to the article.
  */
-import { useEffect, useRef, useState } from "react";
-import { ChevronLeft, ChevronRight, Info, RotateCw, Route, TriangleAlert } from "lucide-react";
+import { type ReactNode, useEffect, useRef, useState } from "react";
+import {
+  BadgeQuestionMark,
+  BookA,
+  ChevronLeft,
+  ChevronRight,
+  Info,
+  Lightbulb,
+  RotateCw,
+  Route,
+  TriangleAlert,
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
 import type { UseTrajectory } from "./useTrajectory.js";
 import type { PublicTrajectory } from "../public-types.js";
@@ -58,7 +68,10 @@ import { ModeSurface } from "./ModeSurface.js";
 import { useRenderCount } from "./perf.js";
 import { snippet } from "./citations.js";
 import { Tooltip, TooltipGroup } from "./Tooltip.js";
-import { type CardTarget, cardIsEmpty, type StopCard } from "./stop-card.js";
+import type { CardQuestion, CardTarget, StopCard } from "./stop-card.js";
+import { sparkline, sparkWidth } from "./route-spark.js";
+import type { WhereRow } from "./where.js";
+import { WhereCard } from "./WhereCard.js";
 
 /** One row of the list. Built by `useTrajectoryMode`, drawn here. */
 export interface TrajectoryRow {
@@ -86,6 +99,38 @@ export interface TrajectoryRow {
    * the current one, the whole of it in a tooltip (plan 260928e).
    */
   words: string | null;
+  /** Where it sits in the article's outline, for its position mark's card — `[]` for none (260929f § 3). */
+  where: readonly WhereRow[];
+}
+
+/**
+ * **Which snippet is open on the current stop** — one at a time across the
+ * row and its card (Sol, plan 260929f F4): a term's sense, an idea's
+ * statement, or a FAQ question's passages. Held by the panel, not the card,
+ * because a question sits above the row and the rest below it, and the list's
+ * follow-scroll has to re-measure when one opens. `stop` ties it to the stop it
+ * was opened on, so it is hidden during a step before the cleanup effect
+ * forgets it permanently.
+ */
+interface OpenSnippet {
+  stop: string;
+  kind: "term" | "idea" | "faq";
+  id: string;
+}
+
+/**
+ * **Navigation is an icon with a tooltip, not a text label** — Greg,
+ * SPIDERYARN-READING2-5C; docs/project/icons.md § Navigation. The mode's own
+ * icon, so the button looks like the mode it opens.
+ */
+function OpenIn({ label, icon, onOpen }: { label: string; icon: ReactNode; onOpen(): void }) {
+  return (
+    <Tooltip content={<p>{label}</p>} placement="top">
+      <button type="button" className="traj-open" aria-label={label} onClick={onOpen}>
+        {icon}
+      </button>
+    </Tooltip>
+  );
 }
 
 /**
@@ -220,12 +265,41 @@ export function bannerReason(owner: Pick<UseTrajectory, "stale" | "profileChange
   return null;
 }
 
+/** The sparkline's drawing — src/web/route-spark.ts has the geometry. */
+const SPARK_H = 26;
+const SPARK_PAD = 4;
+function RouteSpark({ positions, current }: { positions: readonly (number | null)[]; current: number }) {
+  const width = sparkWidth(positions.length);
+  const { dots, runs } = sparkline(positions, { width, height: SPARK_H, pad: SPARK_PAD });
+  return (
+    <svg width={width} height={SPARK_H} viewBox={`0 0 ${width} ${SPARK_H}`} aria-hidden="true" focusable="false">
+      {runs.map((points) => (
+        <polyline key={points} points={points} className="traj-spark-line" />
+      ))}
+      {dots.map((d) => (
+        <circle
+          key={d.index}
+          cx={d.x}
+          cy={d.y}
+          r={d.index === current ? 3.5 : 2.2}
+          className={`traj-spark-dot${d.index === current ? " on" : d.index < current ? " done" : ""}`}
+        />
+      ))}
+    </svg>
+  );
+}
+
 /**
  * **The pinned head**: the stepper, and the depth control when there is more
  * than one depth to offer.
  */
 function RouteHead({ view, total, about }: { view: TrajectoryView; total: number; about: string[] }) {
   const [aboutOpen, setAboutOpen] = useState(false);
+  const [sparkOpen, setSparkOpen] = useState(false);
+  const here = view.rows[view.position - 1]?.position ?? null;
+  const said =
+    `Stop ${view.position} of ${total}` +
+    (here === null ? " · position unavailable" : ` · about ${Math.round(here * 100)}% through the article`);
   return (
     <div className="traj-head">
       <div className="traj-stepper">
@@ -242,7 +316,22 @@ function RouteHead({ view, total, about }: { view: TrajectoryView; total: number
         >
           <ChevronLeft size={20} />
         </button>
-        <span className="traj-count" aria-live="polite">
+        {/* **The route as a line** instead of "Stop k of N" (Greg,
+            SPIDERYARN-READING2-5C): a real button, so a keyboard and a finger
+            reach its tooltip, which holds the number (Sol, 260929f F6). The
+            number is also a status line for a screen reader, spoken on a step. */}
+        <Tooltip content={<p>{said}</p>} placement="bottom" open={sparkOpen} onOpenChange={setSparkOpen}>
+          <button
+            type="button"
+            className="traj-spark"
+            aria-label={said}
+            aria-expanded={sparkOpen}
+            onClick={() => setSparkOpen((was) => !was)}
+          >
+            <RouteSpark positions={view.rows.map((r) => r.position)} current={view.position - 1} />
+          </button>
+        </Tooltip>
+        <span className="sr-only" role="status" aria-live="polite" aria-atomic="true">
           Stop {view.position} of {total}
         </span>
         <button
@@ -349,6 +438,9 @@ export function TrajectoryPanel({ access, view, away }: Props) {
   const atMost = ready && view.depth !== null && view.depth === deepest && view.depth === 3;
   /** The row whose whole quote is up — one at a time, and only by mouse or focus. */
   const [tipFor, setTipFor] = useState<string | null>(null);
+  /** The row whose "where am I" card is up — by hover, focus or a tap. */
+  const [whereFor, setWhereFor] = useState<string | null>(null);
+  const [snippetOpen, setSnippet] = useState<OpenSnippet | null>(null);
   /** The list's own scroller, kept pointed at the current row (54). */
   const scroller = useRef<HTMLDivElement>(null);
   const currentId = ready ? (view.rows.find((row) => row.current)?.quoteId ?? null) : null;
@@ -356,7 +448,15 @@ export function TrajectoryPanel({ access, view, away }: Props) {
      `away` is there because a band that stepped aside is `display: none`: a
      step made from the prose's door measures nothing, so the list is measured
      again when the band comes back (GPT Sol, plan review F1). */
-  useFollow(scroller, currentId, [view.depth, view.card, away]);
+  /* Only a snippet on the current stop counts as open — see `OpenSnippet`. */
+  const snippet = snippetOpen !== null && snippetOpen.stop === currentId ? snippetOpen : null;
+  const toggle = (kind: OpenSnippet["kind"], id: string) =>
+    setSnippet((was) =>
+      currentId === null || (was?.stop === currentId && was.kind === kind && was.id === id)
+        ? null
+        : { stop: currentId, kind, id },
+    );
+  useFollow(scroller, currentId, [view.depth, view.card, away, snippet?.kind, snippet?.id]);
   /* A depth or route refresh can remove an open row, so its Tooltip unmounts
      before it can report that it closed. Do not let that stale id reopen if
      the row later returns. The enabled check also covers words disappearing. */
@@ -365,6 +465,30 @@ export function TrajectoryPanel({ access, view, away }: Props) {
     const row = ready ? view.rows.find((candidate) => candidate.quoteId === tipFor) : undefined;
     if (row === undefined || !rowWords(row)?.whole) setTipFor(null);
   }, [ready, tipFor, view.rows]);
+  /* A controlled tooltip can unmount before reporting that it closed. Do not
+     let its stale id reopen if a shallower pass removes the row and a later
+     pass brings it back. This is the where-card equivalent of `tipFor` above. */
+  useEffect(() => {
+    if (whereFor === null) return;
+    const row = ready ? view.rows.find((candidate) => candidate.quoteId === whereFor) : undefined;
+    if (row === undefined || row.position === null || row.where.length === 0) setWhereFor(null);
+  }, [ready, whereFor, view.rows]);
+  /* `snippet` hides an old stop's opening immediately during the step. Clear
+     the stored value afterwards as well, so walking back does not resurrect
+     something the reader closed by leaving the stop. Also forget an artefact
+     removed by a read refresh while the stop itself stays current. */
+  useEffect(() => {
+    if (snippetOpen === null) return;
+    const exists =
+      snippetOpen.stop === currentId &&
+      view.card !== null &&
+      (snippetOpen.kind === "term"
+        ? view.card.terms.some((term) => term.entry.id === snippetOpen.id)
+        : snippetOpen.kind === "idea"
+          ? view.card.ideas.some((idea) => idea.id === snippetOpen.id)
+          : view.card.questions.some((question) => question.id === snippetOpen.id));
+    if (!exists) setSnippet(null);
+  }, [currentId, snippetOpen, view.card]);
 
   /**
    * @param again whether this is the button beside a route already there. The
@@ -499,6 +623,8 @@ export function TrajectoryPanel({ access, view, away }: Props) {
                         </span>
                       </button>
                     );
+                    const questions = row.current ? (view.card?.questions ?? []) : [];
+                    const below = row.current && view.card !== null && cardHasBelow(view.card);
                     return (
                       <li
                         key={row.quoteId}
@@ -506,6 +632,21 @@ export function TrajectoryPanel({ access, view, away }: Props) {
                         data-stop={row.quoteId}
                         {...{ [FOLLOW_ATTR]: row.quoteId }}
                       >
+                        {/* **The question first, then the passage** (Greg,
+                            SPIDERYARN-READING2-5C): FAQ's question, above the
+                            row rather than under it, as a sibling of the row's
+                            button so opening it cannot also press the row. */}
+                        {questions.length > 0 && (
+                          <StopQuestions
+                            questions={questions}
+                            place={row.place}
+                            open={snippet?.kind === "faq" ? snippet.id : null}
+                            onToggle={(id) => toggle("faq", id)}
+                            onOpen={view.onOpen}
+                            canOpen={view.canOpen}
+                          />
+                        )}
+                        <div className="traj-line">
                         {/* Always wrapped, enabled only while the row is cut, so the
                             button is never remounted as its row becomes current.
                             Controlled, which makes it mouse-only: a tap's
@@ -521,10 +662,35 @@ export function TrajectoryPanel({ access, view, away }: Props) {
                         >
                           {go}
                         </Tooltip>
-                        {row.current && view.card && !cardIsEmpty(view.card) && (
+                        {/* **Where am I** — the position mark's card: a
+                            sibling button laid over the mark, so a keyboard
+                            and a finger reach it and it never presses the row
+                            (Sol, 260929f F5). */}
+                        {row.position !== null && row.where.length > 0 && (
+                          <Tooltip
+                            content={<WhereCard rows={row.where} />}
+                            placement="right"
+                            open={whereFor === row.quoteId}
+                            onOpenChange={(open) =>
+                              setWhereFor((was) => (open ? row.quoteId : was === row.quoteId ? null : was))
+                            }
+                            className="where-tip"
+                          >
+                            <button
+                              type="button"
+                              className="traj-where"
+                              aria-label={`Where stop ${row.n} is in the article`}
+                              aria-expanded={whereFor === row.quoteId}
+                              onClick={() => setWhereFor((was) => (was === row.quoteId ? null : row.quoteId))}
+                            />
+                          </Tooltip>
+                        )}
+                        </div>
+                        {below && view.card && (
                           <StopCardView
-                            key={row.quoteId}
                             card={view.card}
+                            open={snippet}
+                            onToggle={toggle}
                             onOpen={view.onOpen}
                             canOpen={view.canOpen}
                           />
@@ -542,26 +708,115 @@ export function TrajectoryPanel({ access, view, away }: Props) {
   );
 }
 
+/** Whether the card under the row has anything — the FAQ question sits above it now. */
+function cardHasBelow(card: StopCard): boolean {
+  return card.terms.length > 0 || card.ideas.length > 0 || card.events.length > 0;
+}
+
+/**
+ * **The FAQ's question, above the stop** — Greg, SPIDERYARN-READING2-5C: *"I
+ * kind of like the idea of situating the quote in terms of the question for
+ * which it's an answer. But if so, maybe the question should go first and add
+ * a tooltip."* Pressing it opens, in place, **every** passage FAQ pairs with it
+ * — FAQ answers only in the article's own words — and an icon opens FAQ.
+ *
+ * The tooltip says what the pairing is and is not (Sol, 260929f F3): FAQ
+ * pairs a question with a *paragraph*, by the model's reading, and its words
+ * there may not be the stop's quote.
+ */
+function StopQuestions({
+  questions,
+  place,
+  open,
+  onToggle,
+  onOpen,
+  canOpen,
+}: {
+  questions: readonly CardQuestion[];
+  place: string | null;
+  open: string | null;
+  onToggle(id: string): void;
+  onOpen(target: CardTarget): void;
+  canOpen(target: CardTarget): boolean;
+}) {
+  const where = place ? ` in ${place}` : "";
+  return (
+    <div className="traj-asks">
+      {questions.map((q) => (
+        <div key={q.id} className="traj-ask">
+          <Tooltip
+            content={
+              <p>
+                A question the FAQ wrote. It pairs it with a passage in this paragraph{where} — the model's
+                reading. Press for its passages.
+              </p>
+            }
+            placement="top"
+            className="traj-ask-tip"
+          >
+            <button
+              type="button"
+              className={`traj-ask-q${open === q.id ? " on" : ""}`}
+              aria-expanded={open === q.id}
+              onClick={() => onToggle(q.id)}
+            >
+              <BadgeQuestionMark size={14} aria-hidden="true" />
+              <span>{q.question}</span>
+            </button>
+          </Tooltip>
+          {open === q.id && (
+            <div className="traj-sense">
+              {q.passages.map((p) => (
+                <div key={`${p.blockId}:${p.start}`} className="traj-passage">
+                  {/* The stop's own quote is right below: say so rather than repeat it. */}
+                  {p.here ? (
+                    <p className="traj-passage-here">This stop's passage, below</p>
+                  ) : (
+                    <>
+                      <p>“{p.quote}”</p>
+                      {p.place && <p className="traj-passage-at">{p.place}</p>}
+                    </>
+                  )}
+                </div>
+              ))}
+              {canOpen({ kind: "faq" }) && (
+                <OpenIn label="Open FAQ" icon={<BadgeQuestionMark size={16} />} onOpen={() => onOpen({ kind: "faq" })} />
+              )}
+            </div>
+          )}
+        </div>
+      ))}
+    </div>
+  );
+}
+
 /**
  * **The stop card** — see the file header. One cluster per artefact that has
  * something for this paragraph, in a fixed order: the words first (they are
- * what trips a skimmer), then the ideas, the question, and the study.
+ * what trips a skimmer), then the ideas and the study. The FAQ question went
+ * above the row (`StopQuestions`).
  *
- * Keyed on the stop by its caller, so an open chip closes when the reader
- * steps on.
+ * **Terms and ideas are chips that open in place** — the sense of a term, the
+ * statement of an idea — so the reader can stay in Trajectory (Greg,
+ * SPIDERYARN-READING2-59: *"can we make them be expandable as well, like the
+ * glossary"*). The way to the full mode is an icon inside what opened.
  */
 function StopCardView({
   card,
+  open,
+  onToggle,
   onOpen,
   canOpen,
 }: {
   card: StopCard;
+  open: OpenSnippet | null;
+  onToggle(kind: OpenSnippet["kind"], id: string): void;
   onOpen(target: CardTarget): void;
   canOpen(target: CardTarget): boolean;
 }) {
-  const [openTerm, setOpenTerm] = useState<string | null>(null);
-  const open = card.terms.find((t) => t.entry.id === openTerm) ?? null;
-  const lead = open ? entryProse(open.entry).lead : "";
+  const term = open?.kind === "term" ? (card.terms.find((t) => t.entry.id === open.id) ?? null) : null;
+  const idea = open?.kind === "idea" ? (card.ideas.find((i) => i.id === open.id) ?? null) : null;
+  const lead = term ? entryProse(term.entry).lead : "";
   return (
     <div className="traj-card">
       {card.terms.length > 0 && (
@@ -572,26 +827,24 @@ function StopCardView({
               <button
                 key={entry.id}
                 type="button"
-                className={`traj-chip${entry.id === openTerm ? " on" : ""}`}
-                aria-expanded={entry.id === openTerm}
-                onClick={() => setOpenTerm((was) => (was === entry.id ? null : entry.id))}
+                className={`traj-chip${entry.id === term?.entry.id ? " on" : ""}`}
+                aria-expanded={entry.id === term?.entry.id}
+                onClick={() => onToggle("term", entry.id)}
               >
                 {entry.name}
                 {alsoAt !== null && <span className="traj-also">also at stop {alsoAt}</span>}
               </button>
             ))}
           </div>
-          {open && (
+          {term && (
             <div className="traj-sense">
               {lead && <p>{lead}</p>}
-              {canOpen({ kind: "term", id: open.entry.id }) && (
-                <button
-                  type="button"
-                  className="traj-link"
-                  onClick={() => onOpen({ kind: "term", id: open.entry.id })}
-                >
-                  In the glossary ›
-                </button>
+              {canOpen({ kind: "term", id: term.entry.id }) && (
+                <OpenIn
+                  label="Open in Glossary"
+                  icon={<BookA size={16} />}
+                  onOpen={() => onOpen({ kind: "term", id: term.entry.id })}
+                />
               )}
             </div>
           )}
@@ -600,33 +853,27 @@ function StopCardView({
       {card.ideas.length > 0 && (
         <section className="traj-cluster" aria-label="Ideas it bears on">
           <p className="traj-cluster-h">Ideas it bears on</p>
-          <ul>
-            {card.ideas.map((idea) => (
-              <li key={idea.id}>
-                {canOpen({ kind: "idea", id: idea.id }) ? (
-                  <button type="button" className="traj-link" onClick={() => onOpen({ kind: "idea", id: idea.id })}>
-                    {idea.name}
-                  </button>
-                ) : (
-                  <span>{idea.name}</span>
-                )}
-              </li>
+          <div className="traj-chips">
+            {card.ideas.map((i) => (
+              <button
+                key={i.id}
+                type="button"
+                className={`traj-chip${i.id === idea?.id ? " on" : ""}`}
+                aria-expanded={i.id === idea?.id}
+                onClick={() => onToggle("idea", i.id)}
+              >
+                {i.name}
+              </button>
             ))}
-          </ul>
-        </section>
-      )}
-      {card.questions.length > 0 && (
-        <section className="traj-cluster" aria-label="The question it answers">
-          <p className="traj-cluster-h">
-            {card.questions.length === 1 ? "The question it answers" : "Questions it answers"}
-          </p>
-          <ul>
-            {card.questions.map((q) => (
-              <li key={q.id}>
-                <span className="traj-question">{q.question}</span>
-              </li>
-            ))}
-          </ul>
+          </div>
+          {idea && (
+            <div className="traj-sense">
+              <p>{idea.statement}</p>
+              {canOpen({ kind: "idea", id: idea.id }) && (
+                <OpenIn label="Open in Ideas" icon={<Lightbulb size={16} />} onOpen={() => onOpen({ kind: "idea", id: idea.id })} />
+              )}
+            </div>
+          )}
         </section>
       )}
       {card.events.length > 0 && (

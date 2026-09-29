@@ -51,6 +51,7 @@ import {
   stepStop,
 } from "../../trajectory-route.js";
 import type { QuotesRead } from "../../useQuotes.js";
+import { type WhereRow, whereForBlock } from "../../where.js";
 import { useTrajectory } from "../../useTrajectory.js";
 import { TrajectoryPanel, type TrajectoryRow } from "../../TrajectoryPanel.js";
 import { type CardSources, type CardTarget, gatherStopCard, type StopCard } from "../../stop-card.js";
@@ -175,6 +176,7 @@ export function armTrajectoryOpening(
 
 /** A module constant, for `NO_FOUND`'s reason (reader/passages.ts). */
 const NO_STOPS: TrajectoryStop[] = [];
+const NO_WHERE: WhereRow[] = [];
 const NO_QUOTES: Quote[] = [];
 const NONE_FOUND: Found[] = [];
 
@@ -664,6 +666,8 @@ function useTrajectoryMode({
           position: block === null ? null : (positions.get(block) ?? null),
           /* The quote's own words, for the row (plan 260928e). */
           words: byId.get(stop.quoteId)?.text ?? null,
+          /* Where it sits in the outline, for the position mark's card (260929f § 3). */
+          where: block === null ? NO_WHERE : whereForBlock(tree, index, block),
         };
       }),
     [route, blockOf, index, tree, current, positions, byId],
@@ -694,10 +698,20 @@ function useTrajectoryMode({
   /* **The stop card**, gathered for the current stop only, from what the
      other modes have already written. "Also at stop k" counts along this
      pass, so the route goes in as its stops' blocks. */
+  const placeOf = useCallback(
+    (block: BlockId) => {
+      const path = sectionPathOf(block, index, tree);
+      return path.length > 0 ? path.join(" › ") : null;
+    },
+    [index, tree],
+  );
   const routeBlocks = useMemo(() => route.map((s) => blockOf(s.quoteId)), [route, blockOf]);
   const card = useMemo(
-    () => (stopBlock === null ? null : gatherStopCard({ blockId: stopBlock, blocks, route: routeBlocks, sources })),
-    [stopBlock, blocks, routeBlocks, sources],
+    () =>
+      stopBlock === null
+        ? null
+        : gatherStopCard({ blockId: stopBlock, blocks, route: routeBlocks, sources, placeOf, quote }),
+    [stopBlock, blocks, routeBlocks, sources, placeOf, quote],
   );
 
   return {

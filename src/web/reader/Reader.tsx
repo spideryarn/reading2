@@ -46,7 +46,7 @@ import {
   type TrajectoryControl,
 } from "../modes/trajectory/TrajectoryMode.js";
 import { TrajectoryDoor } from "../TrajectoryPanel.js";
-import type { CardTarget } from "../stop-card.js";
+import { type CardTarget, modeForCardTarget } from "../stop-card.js";
 import type { Quote } from "../../types.js";
 import { GlossaryBand, VisitorGlossaryBand } from "../modes/glossary/GlossaryMode.js";
 import { SearchBand, VisitorSearchBand } from "../modes/search/SearchMode.js";
@@ -822,8 +822,7 @@ export function Reader({
   const [, setEventId] = useQueryState("event", eventParam);
   const canOpenFromStopCard = useCallback(
     (target: CardTarget) => {
-      const targetMode =
-        target.kind === "term" ? "glossary" : target.kind === "idea" ? "ideas" : "timeline";
+      const targetMode = modeForCardTarget(target);
       return shownBehindTheSwitch({
         experimental: MODE_CATALOG[targetMode].experimental,
         on: experimental.on,
@@ -848,6 +847,10 @@ export function Reader({
         case "event":
           void setEventId(target.id);
           void setMode("timeline");
+          return;
+        /* No `?faq=` selection exists, so FAQ opens at the top of its list. */
+        case "faq":
+          void setMode("faq");
           return;
         default: {
           const never: never = target;

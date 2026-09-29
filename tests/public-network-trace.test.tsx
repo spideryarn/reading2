@@ -1227,8 +1227,16 @@ describe("a signed-out browser on a shared document", () => {
     expect(trace.map((r) => r.url)).toEqual([`/api/public/article/${SLUG}`]);
     expect(trace.filter((r) => r.method !== "GET")).toEqual([]);
 
-    const stopCardLink = buttonNamed(PUBLIC_IDEA);
-    expect(stopCardLink, "the stop card has no link into the stored public Ideas").not.toBeNull();
+    /* The idea is a chip that opens in place (plan 260929f), and its icon is
+       the link into the stored public Ideas. Neither may spend. */
+    const chip = buttonNamed(PUBLIC_IDEA);
+    expect(chip, "the stop card has no chip for the stored public idea").not.toBeNull();
+    await act(async () => chip?.click());
+    expect(readable(band as Element)).toContain("You cannot theorise about what you have no way to measure.");
+    expect(trace.map((r) => r.url)).toEqual([`/api/public/article/${SLUG}`]);
+    /* An icon with no words (icons.md § Navigation), so found by its accessible name. */
+    const stopCardLink = host.querySelector<HTMLButtonElement>('button[aria-label="Open in Ideas"]');
+    expect(stopCardLink, "the open idea has no link into the stored public Ideas").not.toBeNull();
     await act(async () => stopCardLink?.click());
     expect(await modeAfterPress("trajectory")).toBe("ideas");
     expect(trace.map((r) => r.url)).toEqual([`/api/public/article/${SLUG}`]);

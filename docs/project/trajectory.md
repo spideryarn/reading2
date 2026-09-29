@@ -46,12 +46,12 @@ v2, the scrapbook, is built on top of that:
 - **The stop card**, under the current row only
   ([`stop-card.ts`](../../src/web/stop-card.ts) gathers it; the panel draws it). It holds whatever
   the other modes have **already** written about this paragraph:
-  - the glossary terms it uses, as chips that open to a one-line sense and a link into Glossary.
-    They are found in the prose the reader sees, by the glossary's own matcher, over every term. A
-    term an earlier stop on this pass also uses says *"also at stop k"*;
-  - the ideas it bears on, as links into Ideas;
-  - the FAQ question it answers, as text. There is no passage jump: matching the question to the
-    stop already proves that its passage is the paragraph the reader is on;
+  - the glossary terms it uses, as chips that open to a one-line sense and an icon into Glossary
+    (a text link until 2026-09-29, below). They are found in the prose the reader sees, by the
+    glossary's own matcher, over every term. A term an earlier stop on this pass also uses says
+    *"also at stop k"*;
+  - the ideas it bears on — links into Ideas until 2026-09-29, chips that open in place since;
+  - the FAQ question it answers — as text on the card until 2026-09-29, above the row since;
   - where it sits in the study, as links into Timeline when that experimental control is available,
     and as text when it is hidden.
 
@@ -202,6 +202,39 @@ Most. So:
   counts that way. The prompt's description was left alone because 260929b measured the "the reader
   has read the earlier pass" framing with no gain. Longer snippets at deeper passes, Summary or
   Glossary stops at the coarser ones, and variety within Most are deferred in the plan.
+
+**Snippets that open in place, a route sparkline, and a "where am I" card** — two reports of
+Greg's, 2026-09-29, SPIDERYARN-READING2-59 and 5C
+([plan 260929f](../plans/260929f-trajectory-snippets-in-place-sparkline-and-where-card.md), which
+quotes both whole):
+
+> I'm increasingly thinking of the trajectory mode as one of the main modes, and that I'd mostly
+> stay within it. [...] so that I can stay in trajectory mode and access almost everything that I'd
+> want to for the snippets.
+>
+> — Greg, 2026-09-29
+
+- **Ideas open in place**, as the terms do: a chip opens the idea's statement under it. One snippet
+  is open at a time across the stop — a term, an idea or a question — and stepping on closes it.
+- **The FAQ question goes first.** It was on the card under the quote, where it read as an
+  afterthought; it now sits above the row, with FAQ's icon. Its tooltip says what it is: a question
+  the FAQ wrote, which the FAQ pairs with a passage in this paragraph — the model's reading, and
+  pairing by paragraph, so FAQ's words there may not be the stop's quote. Pressing it opens every
+  passage FAQ points to for it, with their sections: FAQ answers only in the article's own words.
+- **Navigation is an icon with a tooltip.** *In the glossary ›* became the Glossary icon; Ideas and
+  FAQ are opened the same way, each by its own mode's icon — the rule is now in
+  [icons.md § Navigation](icons.md#navigation-an-icon-with-a-tooltip-not-a-text-label).
+- **A sparkline instead of "Stop k of N".** One dot per stop of the pass, left to right in walking
+  order, each at its height in the article; walked dots filled, the current one in the accent. It
+  is a button: its tooltip says *Stop k of N · about P% through the article*, and a screen reader
+  still hears the count on every step. With the words gone, the depth buttons share its row where
+  the band is wide enough, and wrap under it where it is not.
+- **Where am I.** Each row's position mark is also a button, whose tooltip is a small fisheye of the
+  article's outline: the top-level sections, and down the path to this stop's section with its near
+  neighbours, the section you are in marked. It is one component (`WhereCard` over `whereRows` in
+  [`where.ts`](../../src/web/where.ts)), generic over the outline's shape so that the spine can use
+  it too; **the spine does not yet**, because its hover cards need a shorter, node-based version
+  first (the plan's *Deferred*).
 
 ### What we tried for v2
 
