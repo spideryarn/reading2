@@ -533,7 +533,12 @@ function collectAnnotated<T>(
     // `<title>` and carries their markup — `<i>Landmarks</i>` showed as tags in
     // Debate. Made plain here, once, for every caller —
     // docs/plans/260929e-outside-titles-become-plain-text-at-ingest.md.
-    into.set(c.url, keep({ ...c, url: c.url, ...(c.title === undefined ? {} : { title: plainTitle(c.title) }) }));
+    /* The wire is JSON, whatever its TypeScript declaration says. Keep the old
+       tolerance of a null/non-string title rather than turning it into a
+       `plainTitle(...).replace is not a function` failure. */
+    const { title: rawTitle, ...rest } = c;
+    const title = typeof rawTitle === "string" ? plainTitle(rawTitle) : undefined;
+    into.set(c.url, keep({ ...rest, url: c.url, ...(title === undefined ? {} : { title }) }));
   }
 }
 

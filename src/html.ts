@@ -189,7 +189,7 @@ export function plainTitle(value: string): string {
      no more. Real titles settle in one. */
   for (let pass = 0, previous = ""; pass < 8 && previous !== out; pass++) {
     previous = out;
-    out = out.replace(MARKUP_WITH_CONTENT, "").replace(LINE_BREAK, " ").replace(INLINE_TAG, "");
+    out = removeMarkupWithContent(out).replace(LINE_BREAK, " ").replace(INLINE_TAG, "");
   }
   return normaliseText(out);
 }
@@ -210,10 +210,49 @@ const INLINE_TAGS = [
 const NAME = (names: readonly string[]) => `(?:[a-z][\\w.-]*:)?(?:${names.join("|")})`;
 const INLINE_TAG = new RegExp(`<\\/?${NAME(INLINE_TAGS)}(?:\\s[^<>]*)?\\/?>`, "gi");
 const LINE_BREAK = new RegExp(`<${NAME(["br"])}(?:\\s[^<>]*)?\\/?>`, "gi");
-const MARKUP_WITH_CONTENT = new RegExp(
-  `<(${NAME(["annotation", "annotation-xml", "tex-math"])})(?:\\s[^<>]*)?>[\\s\\S]*?<\\/\\1\\s*>`,
+const CONTENT_TAG = new RegExp(
+  `<(\\/?)(${NAME(["annotation", "annotation-xml", "tex-math"])})(?:\\s[^<>]*)?>`,
   "gi",
 );
+
+/**
+ * Remove paired TeX-copy elements, including everything between their tags.
+ *
+ * A lazy `.*?` from every opening tag to a back-referenced close looks compact,
+ * but an input made only of unclosed `<annotation>` tags makes the engine scan
+ * the rest of the string once per tag: quadratic work on an outside string.
+ * This pass visits each recognised tag once, records paired ranges, then removes
+ * their union. Unpaired tags stay literal, as they did before.
+ */
+function removeMarkupWithContent(value: string): string {
+  const opens = new Map<string, number[]>();
+  const ranges: [number, number][] = [];
+  CONTENT_TAG.lastIndex = 0;
+  for (let match = CONTENT_TAG.exec(value); match !== null; match = CONTENT_TAG.exec(value)) {
+    const closing = match[1] === "/";
+    const name = (match[2] as string).toLowerCase();
+    if (!closing) {
+      const starts = opens.get(name) ?? [];
+      starts.push(match.index);
+      opens.set(name, starts);
+      continue;
+    }
+    const starts = opens.get(name);
+    const start = starts?.pop();
+    if (start !== undefined) ranges.push([start, CONTENT_TAG.lastIndex]);
+  }
+  if (ranges.length === 0) return value;
+
+  ranges.sort((a, b) => a[0] - b[0]);
+  let out = "";
+  let keptThrough = 0;
+  for (const [start, end] of ranges) {
+    if (end <= keptThrough) continue;
+    if (start > keptThrough) out += value.slice(keptThrough, start);
+    keptThrough = end;
+  }
+  return out + value.slice(keptThrough);
+}
 
 const ENTITY = /&(?:#(\d{1,7})|#[xX]([0-9a-fA-F]{1,6})|([a-zA-Z][a-zA-Z0-9]{1,31}));/g;
 const NAMED: Readonly<Record<string, string>> = {
@@ -227,10 +266,21 @@ const NAMED: Readonly<Record<string, string>> = {
   Gamma: "Γ", Delta: "Δ", Lambda: "Λ", Pi: "Π", Sigma: "Σ", Phi: "Φ", Psi: "Ψ", Omega: "Ω",
   le: "≤", ge: "≥", ne: "≠", asymp: "≈", infin: "∞", rarr: "→", larr: "←", harr: "↔",
 };
+/* HTML's numeric-reference compatibility table. Old pages still spell an em
+   dash as `&#151;`; interpreting that as the C1 control U+0097 and then letting
+   `normaliseText` remove it loses the character rather than decoding it. */
+const NUMERIC_REPLACEMENTS = new Map<number, number>([
+  [0x80, 0x20ac], [0x82, 0x201a], [0x83, 0x0192], [0x84, 0x201e], [0x85, 0x2026],
+  [0x86, 0x2020], [0x87, 0x2021], [0x88, 0x02c6], [0x89, 0x2030], [0x8a, 0x0160],
+  [0x8b, 0x2039], [0x8c, 0x0152], [0x8e, 0x017d], [0x91, 0x2018], [0x92, 0x2019],
+  [0x93, 0x201c], [0x94, 0x201d], [0x95, 0x2022], [0x96, 0x2013], [0x97, 0x2014],
+  [0x98, 0x02dc], [0x99, 0x2122], [0x9a, 0x0161], [0x9b, 0x203a], [0x9c, 0x0153],
+  [0x9e, 0x017e], [0x9f, 0x0178],
+]);
 
 function decodeEntity(whole: string, dec?: string, hex?: string, name?: string): string {
   if (name !== undefined) return NAMED[name] ?? whole;
   const point = dec !== undefined ? Number.parseInt(dec, 10) : Number.parseInt(hex ?? "", 16);
   const valid = point > 0 && point <= 0x10ffff && !(point >= 0xd800 && point <= 0xdfff);
-  return valid ? String.fromCodePoint(point) : whole;
+  return valid ? String.fromCodePoint(NUMERIC_REPLACEMENTS.get(point) ?? point) : whole;
 }

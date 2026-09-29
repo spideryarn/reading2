@@ -538,6 +538,28 @@ describe("the whole stage, with the model stubbed out", () => {
     expect(result.extractedHtml).toContain("<article>");
   }, 30_000);
 
+  it("makes a PDF Info title plain before meta and rendered HTML diverge", async () => {
+    const { PDFDocument } = await import("pdf-lib");
+    const source = await PDFDocument.load(await readFile(EASY));
+    source.setTitle("A <i>marked</i> &amp; titled paper");
+    const bytes = await source.save();
+    const pass = await pass0(bytes);
+    expect(pass.metaTitle).toBe("A <i>marked</i> &amp; titled paper");
+
+    const result = await runPdfExtract({
+      frontMatter: null,
+      bytes,
+      url: "https://example.test/marked.pdf",
+      checkpoints: memoryCheckpoints({ slug: "marked", articleId: "article-marked" }),
+      slug: "marked",
+      reader: honestReader(pass),
+    });
+
+    expect(result.meta.title).toBe("A marked & titled paper");
+    expect(result.extractedHtml).toContain("<title>A marked &amp; titled paper</title>");
+    expect(result.extractedHtml).not.toContain("<i>marked</i>");
+  }, 30_000);
+
   it("asks a chunk with only content warnings exactly once more, and no more", async () => {
     /* Not the fallback the plan forbids — the same call, judged by the same
        check. It exists because the reader drops a clause about one run in

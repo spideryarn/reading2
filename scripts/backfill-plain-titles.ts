@@ -88,16 +88,12 @@ export function plainTitlesIn(value: unknown, changes: [string, string][] = []):
   return out;
 }
 
-/* A cheap prefilter — a value with neither `<` nor `&` has nothing to strip or
-   decode. `plainTitle` still decides; this only saves reading rows. */
-const MAYBE = `~ '[<&]'`;
-
 async function reportArticleTitles(pool: Pool): Promise<number> {
   const rows = (
     await pool.query(
       `select a.slug, r.id, r.title from spideryarn.article_revisions r
          join spideryarn.articles a on a.id = r.article_id
-        where r.title ${MAYBE} order by a.slug`,
+        where r.title is not null order by a.slug`,
     )
   ).rows as { slug: string; id: string; title: string }[];
   const marked = rows.filter((r) => plainTitle(r.title) !== r.title);
@@ -105,7 +101,7 @@ async function reportArticleTitles(pool: Pool): Promise<number> {
     console.log(`  article_revisions.title ${r.slug} (revision ${r.id})\n    - ${r.title}\n    + ${plainTitle(r.title)}`);
   }
   console.log(
-    `article_revisions.title: ${marked.length} revision(s) whose title has markup — never written here; re-extract these articles`,
+    `article_revisions.title: ${marked.length} revision(s) whose title needs normalising — never written here; re-extract these articles`,
   );
   return marked.length;
 }
@@ -132,7 +128,11 @@ async function main(): Promise<void> {
     for (const t of TARGETS) {
       const keys = t.key.map((k) => `"${k}"`).join(", ");
       const rows = (
-        await pool.query(`select ${keys}, "${t.column}" as v from spideryarn."${t.table}" where "${t.column}"::text ${MAYBE}`)
+        /* Do not prefilter on `<`/`&`: `plainTitle` also normalises whitespace,
+           controls and bidi characters, none of which needs either marker. */
+        await pool.query(
+          `select ${keys}, "${t.column}" as v from spideryarn."${t.table}" where "${t.column}" is not null`,
+        )
       ).rows as Record<string, unknown>[];
       let changed = 0;
       for (const row of rows) {
@@ -168,7 +168,9 @@ async function main(): Promise<void> {
           console.log(`    ! changed since it was read — left alone`);
         }
       }
-      console.log(`${t.table}.${t.column}: ${changed} row(s) ${write ? "rewritten" : "would change"}, of ${rows.length} with a < or &`);
+      console.log(
+        `${t.table}.${t.column}: ${changed} row(s) ${write ? "rewritten" : "would change"}, of ${rows.length} scanned`,
+      );
       total += changed;
     }
     await reportArticleTitles(pool);
