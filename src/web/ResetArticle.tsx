@@ -161,7 +161,7 @@ function useResetJob(slug: string, onFinished: () => void) {
         finish(job.id);
         return;
       }
-      /* Existing rerun rows announce their own nine steps. These are the extras
+      /* Existing rerun rows announce their own steps. These are the extras
          with no such row, whether they came from a reset or another tab. Keeping
          the sets disjoint avoids turning one completion into a trailing second
          metadata read in useOrderedRead. */

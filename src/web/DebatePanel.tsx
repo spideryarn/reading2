@@ -909,19 +909,20 @@ export function DebatePanel({ access, onJump, level: chosenLevel, onLevel }: Pro
           (SPIDERYARN-READING2-53): *"Same goes for any other modes that still
           have a "redo this processing" button - let's just rely on the
           Metadata mode for that."* Metadata's *Re-run AI processing* has a row
-          for this mode; the button inside the out-of-date banner stays, as a
+          for this mode; the button inside the stale banner stays, as a
           repair the page is prompting rather than a standing redo.
           docs/plans/260929b-one-place-to-re-run-ai-processing.md.
 
           Keep the footer only while a current search's job is starting,
           running or failed. It remains the mode's one surface for progress,
-          Stop, a stall warning and the failure sentence. */
+          Stop, a stall warning and the failure sentence. Not on a stale
+          search, whose banner carries the job; an outdated one has no banner
+          (plan 260929c), so its job shows here. */
       foot={
         debate &&
         owner !== null &&
         owner.status === "ready" &&
         !owner.stale &&
-        !owner.outdated &&
         (owner.job || owner.starting || owner.failed) ? (
           <div className="dbt-again">{run("Search again", true)}</div>
         ) : null
@@ -970,15 +971,11 @@ export function DebatePanel({ access, onJump, level: chosenLevel, onLevel }: Pro
               </p>
               {run("Search again", true)}
             </div>
-          ) : owner?.outdated ? (
-            <div className="gloss-stale">
-              <p>
-                <TriangleAlert size={13} />
-                This was searched by an older version of the prompt.
-              </p>
-              {run("Search again", true)}
-            </div>
           ) : null}
+          {/* No banner for an outdated search (older prompt, same article) —
+              Greg, 2026-09-29 (SPIDERYARN-READING2-55): *"it's not worth
+              bugging the user about it."* Re-running is in Metadata. Plan
+              260929c. */}
 
           {/* **Two of the three disclosures at the top, and the third at the
               foot**, because they are needed at different moments and all three

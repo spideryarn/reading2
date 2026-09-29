@@ -256,7 +256,10 @@ Then the residue nothing refuses at compile time:
   stamp says which prompt wrote the artefact, and an unchanged one makes every
   stored artefact claim it was written by the prompt that ships. Where the stage
   also has an `outdated` comparison ([`pg.ts`](../../src/store/pg.ts)) the bump
-  surfaces in the panel. `hierarchy`'s
+  marks old artefacts outdated — re-run from Metadata if wanted, but **not announced in the
+  panel** (Greg, 2026-09-29, SPIDERYARN-READING2-55;
+  [260929c](../plans/260929c-no-notice-when-a-mode-was-made-by-an-older-prompt.md)); only a
+  *stale* result, where the article moved, gets a banner. `hierarchy`'s
   is a stamp and nothing more; `labels`' has no comparison either but is inside
   `batchFingerprint`, so it invalidates checkpoint reuse. Check the version is
   *one* constant before you bump it: `sketch` had two literal

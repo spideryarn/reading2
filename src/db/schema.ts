@@ -2178,8 +2178,9 @@ export const jobs = spideryarn.table(
      * parity suite's cap case is what stands between that and a green run;
      * docs/reusable/silent-success.md is why it is written to be seen red.
      *
-     * The per-article rule is a different question and keeps indexes of its
-     * own — see `jobs_one_running_per_slug` and its three neighbours below.
+     * The per-article rule is a different question. It kept an index of its own,
+     * `jobs_one_running_per_slug`, until 2026-09-29, and that went the same way
+     * for a different reason — see its note below.
      */
     /**
      * A draft has exactly one owner, enforced rather than assumed.
@@ -2221,40 +2222,36 @@ export const jobs = spideryarn.table(
       sql`not ${t.cancelling} or ${t.status} = 'running'`,
     ),
 
-    /**
-     * **The article mutex: at most one job actually *running* per article.**
+    /*
+     * **`jobs_one_running_per_slug` was here, and it is gone on purpose** —
+     * 2026-09-29, docs/plans/260929c-modes-generate-in-parallel-on-one-article.md.
      *
-     * `jobs_active_slug` was here until 2026-09-02 — unique on
-     * `(owner_id, slug)` `where status in ('queued','running')` — and it did
-     * three jobs at once: reserve the name, de-duplicate the request, and
-     * serialise the article. Doing all three meant a second, *different*
-     * request for one article was refused at enqueue rather than queued behind
-     * the first, which is what Greg asked to change. Each of the three now has
-     * its own home, and the scope of each was a separate decision.
+     * It was `uniqueIndex(...).on(slug).where(status = 'running')`: at most one
+     * job actually running per article, global on `slug` because
+     * `articles.slug` is. It was built for the filesystem store, which wrote
+     * every artefact into one shared `data/<slug>/` directory with no job
+     * scoping, so two claimants on one article overwrote each other's output
+     * outright; that store was deleted 2026-09-05. Since then every job writes
+     * its own draft revision, and what an article's line still has to prevent
+     * is narrower: two jobs making the same column, or one reading what the
+     * other is making. Mode jobs that do neither now run side by side
+     * (`mayOverlap`, src/sharing-steps.ts), and a unique index cannot say
+     * *unless compatible*.
      *
-     * **Global on `slug`, not `(owner_id, slug)`.** `articles.slug` is globally
-     * unique — it is the URL contract — so two owners can build toward one
-     * name, and until 2026-08-30 only `jobs_only_one_running` (above, and gone)
-     * stopped them doing it at once. What this protects is not ambiguity but
-     * corruption: until it was deleted 2026-09-05, src/store/artifacts-fs.ts
-     * keyed every artefact write, the attempt marker and `interrupted()` on
-     * `(slug, step)` in one shared `data/<slug>/` directory with no job
-     * scoping, so two claimants on one article would overwrite each other's
-     * output outright.
-     *
-     * It is a backstop, not the mechanism. The order rule in
-     * src/store/pg-jobs.ts § `claim` — no older active row for this slug — is
-     * what keeps a second claimant from getting here at all.
+     * **So the rule is the locked read, as the global cap's became** —
+     * `blockedByAnother` in src/store/pg-jobs.ts § `claim`, inside the
+     * `queue_state` lock every claimant takes. It always was the mechanism; the
+     * index was the backstop, and `claimIn`'s `catch` on its name was written
+     * down as unreachable. Both went together. The parity suite's
+     * one-article cases are what stand between a broken read and a green run.
      */
-    uniqueIndex("jobs_one_running_per_slug")
-      .on(t.slug)
-      .where(sql`${t.status} = 'running'`),
 
     /**
      * **Name reservation**: at most one active job may be *claiming* a slug.
      *
      * The half of `jobs_active_slug` that closed the check-then-use race, kept
-     * exactly. Global on `slug` for the same reason as the mutex above, and
+     * exactly. Global on `slug` because `articles.slug` is — the URL contract,
+     * so two owners can build toward one name — and
      * partial on `reserves_name` so that the many jobs merely *naming* an
      * existing article do not reserve anything and can therefore queue up
      * behind one another.
@@ -2321,9 +2318,10 @@ export const jobs = spideryarn.table(
      * guarantee.
      *
      * `claim` asks whether any *older* active row exists for this slug, ordered
-     * by `(created_at, id)`, and refuses if one does. Nothing above serves that
-     * query: the two unique indexes on `slug` are partial on `running` and on
-     * `reserves_name`, and `jobs_queued_idx` (drizzle/0001) leads on
+     * by `(created_at, id)` — or any running one — and refuses unless the two
+     * may overlap (src/sharing-steps.ts). Nothing above serves that query: the
+     * one unique index left on `slug` alone is partial on `reserves_name`, and
+     * `jobs_queued_idx` (drizzle/0001) leads on
      * `created_at` rather than on the slug. The scan runs **inside** the
      * `queue_state` lock every claimant takes, so a sequential scan there would
      * serialise the whole account behind it.

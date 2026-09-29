@@ -452,17 +452,18 @@ export function QuizPanel({
       /* No standing *Write them again* under the question any more — Greg,
           2026-09-29 (SPIDERYARN-READING2-53): *"let's just rely on the
           Metadata mode for that."* Metadata's *Re-run AI processing* has a
-          Quiz row; the older-version notice keeps its own button.
+          Quiz row; the stale banner keeps its own button.
           docs/plans/260929b-one-place-to-re-run-ai-processing.md.
 
           Keep the footer only while a current batch's job is starting,
           running or failed. Otherwise removing the button also removes the
-          only place this mode can show that progress or failure. */
+          only place this mode can show that progress or failure. Not on a
+          stale batch, whose banner carries the job; an outdated one has no
+          banner (plan 260929c), so its job shows here. */
       foot={
         quiz &&
         owner.status === "ready" &&
         !owner.stale &&
-        !owner.outdated &&
         (owner.job || owner.starting || owner.failed) ? (
           <div className="quiz-rewrite">{run("Write them again")}</div>
         ) : null
@@ -490,7 +491,7 @@ export function QuizPanel({
 
       {quiz && owner.status === "ready" && (
         <>
-          <Staleness stale={owner.stale} outdated={owner.outdated} run={run} />
+          <Staleness stale={owner.stale} run={run} />
 
           {questions.length === 0 && (
             <p className="gloss-quiet">
@@ -829,34 +830,29 @@ function QuestionList({
 }
 
 /**
- * The two ways a batch stops describing the article, and **only one banner**.
+ * The article has moved under the questions, and **only that** gets a banner.
+ * Stale means every mark is refused with a 409 until the questions are
+ * rewritten, so the button under it is the only useful thing on the screen.
  *
- * `stale` wins when both are true, for the reason the timeline band gives next
- * door: it is the one that makes the passages wrong, and two banners stacked is
- * a wall. Stale also means every mark is refused with a 409 until the questions
- * are rewritten, so the button under it is the only useful thing on the screen.
- *
- * They are separate facts: `stale` is the article having moved under the
- * questions, `outdated` is the questions predating the current prompt. The
- * first breaks marking; the second only means better questions are available.
+ * `outdated` — the questions predating the current prompt — only means better
+ * questions are available, and is not announced: Greg, 2026-09-29
+ * (SPIDERYARN-READING2-55), *"it's not worth bugging the user about it."*
+ * Re-running is in Metadata. Plan 260929c.
  */
 function Staleness({
   stale,
-  outdated,
   run,
 }: {
   stale: boolean;
-  outdated: boolean;
   run(label: string): React.ReactNode;
 }) {
-  if (!stale && !outdated) return null;
+  if (!stale) return null;
   return (
     <div className="gloss-stale">
       <p>
         <TriangleAlert size={13} />
-        {stale
-          ? "These questions were written about an older version of the article, so answers cannot be marked against them."
-          : "These were written by an older version of the prompt."}
+        These questions were written about an older version of the article, so answers cannot be
+        marked against them.
       </p>
       {run("Write them again")}
     </div>

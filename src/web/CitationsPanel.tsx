@@ -305,6 +305,7 @@ export function CitationsPanel({ access, order: chosenOrder, onOrder, bar: chose
   const shown = orderWorks(all, order, bar);
   /* A visitor's list arrived with the page, so it is ready by construction. */
   const ready = citations !== null && (owner === null || owner.status === "ready");
+  const showJob = owner !== null && ready && !owner.stale && (owner.job || owner.starting || owner.failed);
 
   const run = (label: string, again = false) =>
     owner === null ? null : (
@@ -343,13 +344,17 @@ export function CitationsPanel({ access, order: chosenOrder, onOrder, bar: chose
          one press that costs money, under a list that was fine. Greg took the
          same button out of the Glossary (*Start again*, 2026-09-05: "confusing
          and unnecessary") and out of Quotes (*Choose them again*, 2026-09-11).
-         A list that is stale or outdated still offers it, in the banner above,
-         which is the case where asking again buys something. */
+         A stale list still offers it, in the banner above, which is the case
+         where asking again buys something; an outdated one is not announced
+         (plan 260929c). A job started from Metadata still needs its progress,
+         Stop and failure here, so that transient status shares this one footer
+         with the permanent list notes. */
       foot={
-        ready && all.length > 0 ? (
+        ready && (all.length > 0 || showJob) ? (
           <div className="cite-foot">
-            {citations.capped && <p className="cite-note">{CAPPED_NOTE}</p>}
-            <p className="cite-note">{INFLUENCE_NOTE}</p>
+            {all.length > 0 && citations.capped && <p className="cite-note">{CAPPED_NOTE}</p>}
+            {all.length > 0 && <p className="cite-note">{INFLUENCE_NOTE}</p>}
+            {showJob && run("Find them again", true)}
           </div>
         ) : null
       }
@@ -389,15 +394,11 @@ export function CitationsPanel({ access, order: chosenOrder, onOrder, bar: chose
               </p>
               {run("Find them again", true)}
             </div>
-          ) : owner?.outdated ? (
-            <div className="gloss-stale">
-              <p>
-                <TriangleAlert size={13} />
-                This was found by an older version of the prompt.
-              </p>
-              {run("Find them again", true)}
-            </div>
           ) : null}
+          {/* No banner for an outdated list (older prompt, same article) —
+              Greg, 2026-09-29 (SPIDERYARN-READING2-55): *"it's not worth
+              bugging the user about it."* Re-running is in Metadata. Plan
+              260929c. */}
 
           {all.length === 0 && <p className="gloss-quiet">{CITATIONS_NONE}</p>}
 

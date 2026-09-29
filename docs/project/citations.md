@@ -175,6 +175,16 @@ shows no rows, and a capped one is counted as *the stored list*, never the artic
 experimental switch governs this mode's screen, not the reader's own derived data, so the tool is not
 behind it. [chat-tools.md](chat-tools.md) has the tool.
 
+## Making it again
+
+From the Metadata page: *Re-run AI processing* has a Citations row, since 2026-09-29, and it is the
+only redo — the panel says nothing when its list was made by an older prompt
+([260929c](../plans/260929c-no-notice-when-a-mode-was-made-by-an-older-prompt.md)). A press is one
+model call and no web search (that is *Find it*, per row); the list is replaced only if the run
+succeeds, and a work found again keeps its id, so a link *Find it* stored stays with it. The row is
+drawn with the experimental switch off too, as Timeline's and Debate's are. Why it is safe to offer
+is in [`src/rerun-steps.ts`](../../src/rerun-steps.ts).
+
 ## Who sees it
 
 Making the list, and *Find it*, are owner-only, and behind the

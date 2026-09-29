@@ -57,9 +57,9 @@ export interface UseFaq {
    */
   ensure(): Promise<void>;
   /**
-   * The forced run — the stale and outdated banners' button. It replaces the
-   * list. `faq` is in FORCE_ONLY_WHEN_NAMED (src/pipeline.ts), so forcing it
-   * does not sweep in the steps before it.
+   * The forced run — the stale banner's button and Metadata's row. It replaces
+   * the list. `faq` is in FORCE_ONLY_WHEN_NAMED (src/pipeline.ts), so forcing
+   * it does not sweep in the steps before it.
    */
   regenerate(): Promise<void>;
   cancel(id: string): void;

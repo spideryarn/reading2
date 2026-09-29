@@ -7,7 +7,7 @@
  * Mounted through `Metadata` rather than by rendering the section directly, for
  * the reason `tests/metadata-export-button.test.tsx` gives and which is sharper
  * here: what goes wrong with a control like this is the wiring — which slug
- * reaches the request, which of ten rows a press posted for, and whether the
+ * reaches the request, which row a press posted for, and whether the
  * read that follows the run is the one that trails. Rendering the section with
  * hand-written props asserts the props.
  *
@@ -15,7 +15,7 @@
  * React:
  *
  *  - **The first press asks and posts nothing.** The confirm step is the whole
- *    answer to *"a one-click repeatable paid button on a page of ten of them is
+ *    answer to *"a one-click repeatable paid button on a page full of them is
  *    the wrong shape"*, and a test that only checked the second press would pass
  *    over a button that had lost the first.
  *  - **The second press posts exactly `{ slug, steps: [step], force: [step] }`.**
@@ -64,6 +64,29 @@ vi.mock("../src/web/lib/supabase.js", () => ({
     },
   },
   googleSignInAvailable: false,
+}));
+
+/**
+ * **Whether the experimental switch reads as on** — off unless a test says
+ * otherwise, which is what a reader who has never touched it gets.
+ *
+ * Mocked so the rows' rule about the switch is asserted rather than inherited
+ * from however an unanswered `GET /api/reader` happens to settle. **The rule is
+ * that there is no rule**: a mode behind the switch (Timeline, Quiz, Debate,
+ * FAQ, Citations) keeps its row here with the switch off, because hiding is
+ * about the bar's clutter and never about reaching a thing already made —
+ * docs/project/experimental-features.md § The four rules.
+ */
+let experimentalOn = false;
+vi.mock("../src/web/useExperimental.js", () => ({
+  useExperimental: () => ({
+    on: experimentalOn,
+    since: experimentalOn ? "2026-09-01T00:00:00.000Z" : null,
+    loaded: true,
+    signedIn: true,
+    saving: false,
+    error: null,
+  }),
 }));
 
 Object.defineProperty(window, "matchMedia", {
@@ -192,6 +215,7 @@ function madeJob(id: string, step: StepName, status: Job["status"] = "queued"): 
 beforeEach(() => {
   (globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
   ran = new Set<StepName>(METADATA_RERUN_STEPS);
+  experimentalOn = false;
   posts = [];
   retries = [];
   releasePost = undefined;
@@ -287,7 +311,7 @@ async function press(b: HTMLButtonElement | undefined): Promise<void> {
 }
 
 describe("the Re-run AI processing section", () => {
-  it("offers a control for each of the ten and for no other step", async () => {
+  it("offers a control for each step on the list and for no other step", async () => {
     await open();
     for (const step of METADATA_RERUN_STEPS) {
       expect(row(step), `no row for ${step}`).toBeTruthy();
@@ -306,6 +330,43 @@ describe("the Re-run AI processing section", () => {
     }
   });
 
+  /**
+   * **FAQ and Citations joined on 2026-09-29**, when their out-of-date banner —
+   * their only redo — went (docs/plans/260929c-no-notice-when-a-mode-was-made-by-an-older-prompt.md).
+   * Both are behind the experimental switch, and so are Timeline, Quiz and
+   * Debate, whose rows have always been drawn whatever the switch says: the
+   * same rule, asserted for all five with it off and on.
+   */
+  it.each([false, true])(
+    "draws the rows of modes behind the switch whether it is on or off (on: %s)",
+    async (on) => {
+      experimentalOn = on;
+      await open();
+      for (const step of ["timeline", "quiz", "faq", "debate", "citations"]) {
+        expect(row(step), `no row for ${step}`).toBeTruthy();
+        expect(button(step, "Run it again"), `no button for ${step}`).toBeTruthy();
+      }
+      expect(row("faq")?.textContent).toContain("FAQ");
+      expect(row("citations")?.textContent).toContain("Citations");
+    },
+  );
+
+  it.each(["faq", "citations"])(
+    "asks first on the %s row, with the one-call sentence, then forces that step alone",
+    async (step) => {
+      await open();
+      await press(button(step, "Run it again"));
+
+      expect(posts).toEqual([]);
+      expect(row(step)?.textContent).toContain(
+        "Another model call. The result changes only if the run succeeds.",
+      );
+
+      await press(button(step, "Yes, run it"));
+      expect(posts).toEqual([{ slug: SLUG, steps: [step], force: [step] }]);
+    },
+  );
+
   it("asks before it spends anything", async () => {
     await open();
     await press(button("ideas", "Run it again"));
@@ -314,7 +375,7 @@ describe("the Re-run AI processing section", () => {
     expect(row("ideas")?.textContent).toContain(
       "Another model call. The result changes only if the run succeeds.",
     );
-    /* Only that row asked. A confirm that opened on all ten would be a
+    /* Only that row asked. A confirm that opened on every row would be a
        page-wide state pretending to belong to a row. */
     expect(row("quotes")?.textContent).not.toContain("Another model call");
   });
@@ -598,7 +659,7 @@ describe("the Re-run AI processing section", () => {
    * **Asserted on the resolved description rather than on the attribute**,
    * because the attribute is a promise and the text is what the reader is told:
    * an `aria-describedby` pointing at an id that does not exist looks identical
-   * to a correct one from the outside, and ten rows on one page is exactly the
+   * to a correct one from the outside, and a dozen rows on one page is exactly the
    * shape that produces a duplicated id.
    */
   it("moves focus to Yes and describes it with the sentence that names the cost", async () => {

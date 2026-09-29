@@ -388,18 +388,19 @@ export function TimelinePanel({
           (SPIDERYARN-READING2-53): *"Same goes for any other modes that still
           have a "redo this processing" button - let's just rely on the
           Metadata mode for that."* Metadata's *Re-run AI processing* has a row
-          for this mode; the button inside the out-of-date banner stays, as a
+          for this mode; the button inside the stale banner stays, as a
           repair the page is prompting rather than a standing redo.
           docs/plans/260929b-one-place-to-re-run-ai-processing.md.
 
           Keep the footer only for an in-flight or failed job on a current
           timeline. Without it, a run started from Metadata disappears from
-          this mode along with its Stop control and any eventual failure. */
+          this mode along with its Stop control and any eventual failure. Not
+          on a stale timeline, whose banner carries the job; an outdated one
+          has no banner (plan 260929c), so its job shows here. */
       foot={
         timeline &&
         owner?.status === "ready" &&
         !owner.stale &&
-        !owner.outdated &&
         (owner.job || owner.starting || owner.failed) ? (
           <div className="tl-again">{run("Read it again", true)}</div>
         ) : null
@@ -446,15 +447,11 @@ export function TimelinePanel({
               </p>
               {run("Read it again", true)}
             </div>
-          ) : owner?.outdated ? (
-            <div className="gloss-stale">
-              <p>
-                <TriangleAlert size={13} />
-                This was read by an older version of the prompt.
-              </p>
-              {run("Read it again", true)}
-            </div>
           ) : null}
+          {/* No banner for an outdated timeline (older prompt, same article) —
+              Greg, 2026-09-29 (SPIDERYARN-READING2-55): *"it's not worth
+              bugging the user about it."* Re-running is in Metadata. Plan
+              260929c. */}
 
           {/* **The piece has no chronology, and that is a real answer** —
               not an error, and with no retry offered, because running it

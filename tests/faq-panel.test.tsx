@@ -7,7 +7,7 @@
 import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import type { BlockId, Faq, FaqDropped, FaqQuestion } from "../src/types.js";
+import type { BlockId, Faq, FaqDropped, FaqQuestion, Job } from "../src/types.js";
 import type { UseFaq } from "../src/web/useFaq.js";
 
 const { FAQ_NONE, FAQ_PROMISE, FaqPanel, droppedCount, droppedNote } = await import(
@@ -40,6 +40,16 @@ const ISOLATED: FaqQuestion = {
   id: "faq-isolated",
   question: "Does the argument depend on the system being isolated?",
   passages: [{ blockId: LATER, quote: "we will assume the box is sealed", start: 40 }],
+};
+
+const RUNNING: Job = {
+  id: "job-faq",
+  ownerId: "owner" as Job["ownerId"],
+  slug: "a-piece",
+  status: "running",
+  createdAt: "2026-09-29T00:00:00.000Z",
+  startedAt: "2026-09-29T00:00:01.000Z",
+  steps: [{ name: "faq", label: "Writing the FAQ", status: "running" }],
 };
 
 function artefact(questions: FaqQuestion[], dropped: FaqDropped = NOTHING_DROPPED): Faq {
@@ -214,14 +224,32 @@ describe("FaqPanel", () => {
     expect(host.textContent).toContain("The model stopped before it finished.");
   });
 
-  it("offers to ask again only under a stale or outdated list, stale first", async () => {
+  /* An outdated list — same article, older prompt — is not announced: Greg,
+     2026-09-29 (SPIDERYARN-READING2-55), plan 260929c. Re-running is in Metadata. */
+  it("offers to ask again only under a stale list, and says nothing of an older prompt", async () => {
     await draw(owner({ stale: true, outdated: true }));
     expect(host.textContent).toContain("These describe an older version of the article.");
     expect(host.textContent).not.toContain("older version of the prompt");
     expect(host.textContent).toContain("Find them again");
     await draw(owner({ outdated: true }));
-    expect(host.textContent).toContain("These were written by an older version of the prompt.");
-    expect(host.textContent).toContain("Find them again");
+    expect(host.querySelector(".gloss-stale")).toBeNull();
+    expect(host.textContent).not.toContain("older version of the prompt");
+    expect(host.textContent).not.toContain("Find them again");
+  });
+
+  it("shows a Metadata-started job and failure on an outdated list without adding a second foot", async () => {
+    await draw(owner({ outdated: true, job: RUNNING }));
+    expect(host.querySelectorAll(":scope > aside > .faq-foot")).toHaveLength(1);
+    expect(host.querySelector(".faq-foot")?.textContent).toContain("Stop");
+
+    await draw(
+      owner({
+        outdated: true,
+        failed: { message: "The FAQ could not be written.", retryable: false, retry: null },
+      }),
+    );
+    expect(host.querySelectorAll(":scope > aside > .faq-foot")).toHaveLength(1);
+    expect(host.querySelector(".faq-foot")?.textContent).toContain("The FAQ could not be written.");
   });
 
   it("uses the unforced verb when empty and the forced verb when the list needs replacing", async () => {

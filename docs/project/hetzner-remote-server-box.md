@@ -669,8 +669,9 @@ blanks the tab you already had it in; `--include-attached` says you meant it.
 
 ## The status line
 
-The box's status line names the session (tmux and Claude's own name), the model, directory, git
-branch and worktree, a ten-cell bar for how much of the context window is gone — yellow from 70% and
+The box's status line names the session (tmux and Claude's own name), the model, one location — the
+worktree, else the directory — and the git branch only when that location does not already imply it,
+a ten-cell bar for how much of the context window is gone — yellow from 70% and
 red from 90%, so the colour arrives before auto-compaction at around 80% does — and how much of the
 account's five-hour and weekly usage limits is used, with when each resets. Both Claude config
 directories on the box point at it.

@@ -664,15 +664,22 @@ for (const adapter of ADAPTERS) {
     });
 
     /**
-     * **And two jobs on ONE article take turns**, which is the guarantee that
-     * pays for the one above.
+     * **And two exclusive jobs on ONE article take turns**, which is the
+     * guarantee that pays for the one above.
      *
-     * Not a nicety: src/store/artifacts-fs.ts keys every artefact write, the
-     * attempt marker and `interrupted()` on `(slug, step)` in one shared
-     * `data/<slug>/` directory with no job scoping, and on Postgres a job
-     * publishes by copying whatever revision is current and moving the pointer.
-     * Two claimants on one article therefore overwrite each other, and both
-     * report success — docs/reusable/silent-success.md.
+     * Not a nicety: a job publishes by copying whatever revision is current
+     * and moving the pointer, so two ingests (these are `fetch` jobs) inside
+     * one article at once would each rebuild the blocks and tree under the
+     * other, and one of them would be refused having paid for its work — or,
+     * before the lineage check, both would report success over each other.
+     * docs/reusable/silent-success.md. (It said src/store/artifacts-fs.ts until
+     * that store went, 2026-09-05.)
+     *
+     * **Since 2026-09-29 this is the case that holds the line for exclusive
+     * jobs**, because `jobs_one_running_per_slug` no longer stands behind the
+     * read: compatible *mode* jobs may now share an article (the cases under
+     * "mode jobs sharing an article" below), and everything else must still be
+     * refused here by `blockedByAnother` alone.
      *
      * **Skipped until 2026-09-02**, because the second job had nowhere to be
      * stored: `jobs_active_slug` covered `queued`, so this failed at its second
@@ -779,10 +786,11 @@ for (const adapter of ADAPTERS) {
      * running path stayed broken.
      *
      * The rule: Stop on a *running* job leaves it `running` with `cancelling`
-     * set until its claimant releases, and `jobs_one_running_per_slug` still
-     * covers that row — so skipping it would buy the successor a unique
-     * violation rather than a claim. The successor unblocks when the
-     * cancellation becomes **terminal**, not when Stop is pressed.
+     * set until its claimant releases, and `blockedByAnother` still counts that
+     * row as running — so skipping it would put a second runner inside the
+     * article. (Until 2026-09-29 `jobs_one_running_per_slug` covered it too, and
+     * skipping would have bought a unique violation.) The successor unblocks
+     * when the cancellation becomes **terminal**, not when Stop is pressed.
      */
     it("keeps a successor waiting while a stopped predecessor is still running", async () => {
       const slug = `${MINE}${mintId()}`;
@@ -842,9 +850,12 @@ for (const adapter of ADAPTERS) {
      * a wait into a 500. Two requests land on one article; A gets the earlier
      * `createdAt` and its insert is still uncommitted when B — later, same slug
      * — commits and claims. A then commits and claims. Nothing on the slug is
-     * *older* than A, so the predecessor read passes it, and its `UPDATE` walks
+     * *older* than A, so the predecessor read passes it, and its `UPDATE` walked
      * straight into `jobs_one_running_per_slug`: a `23505` where the contract
      * says `busy`, answered as 500 by the route and logged as a thrown pump.
+     * That index is gone since 2026-09-29, so today the same hole would be
+     * worse — a second job silently running inside the article — and this
+     * case is the only thing that would say so.
      *
      * So `claim` refuses on **either** an older active row or any other
      * *running* row on the slug. The late commit is still deliberately not FIFO
@@ -899,6 +910,105 @@ for (const adapter of ADAPTERS) {
 
       await store.enqueueOrGet(next, { workKey: "k2", reservesName: false });
       expectClaimed(await store.claim(next.id, OWNER, mintAttempt(), LEASE, CAP));
+    });
+
+    /* ----------------------------------- mode jobs sharing an article -- */
+
+    /*
+     * docs/plans/260929c-modes-generate-in-parallel-on-one-article.md: a job
+     * whose steps are all *sharing* steps (src/sharing-steps.ts) may run beside
+     * another such job on the same article when neither makes what the other
+     * makes or reads. Everything else keeps the line above. The overlap rule is
+     * unit-tested in tests/sharing-steps.test.ts; these hold `claim` to it,
+     * inside the lock, on a real database — and the first of them is the one
+     * that goes red if `blockedByAnother` ignores the rule.
+     */
+    const modeJob = (slug: string, steps: JobStep["name"][], at: number): Job =>
+      aJob({
+        slug,
+        steps: steps.map((name) => ({ name, label: name, status: "pending" })) as JobStep[],
+        createdAt: new Date(at).toISOString(),
+      });
+
+    it("runs two independent mode jobs on one article at once, whichever is claimed first", async () => {
+      const slug = `${MINE}${mintId()}`;
+      const base = Date.now();
+      const quotes = modeJob(slug, ["quotes"], base);
+      const ideas = modeJob(slug, ["ideas"], base + 1000);
+      await store.enqueueOrGet(quotes, { workKey: "k1", reservesName: false });
+      await store.enqueueOrGet(ideas, { workKey: "k2", reservesName: false });
+
+      /* The newer one first: the older is queued and ahead of it, and is not in
+         its way. Then the older, while the newer is running. */
+      const ideasHeld = mintAttempt();
+      expectClaimed(await store.claim(ideas.id, OWNER, ideasHeld, LEASE, CAP), "ideas beside a queued quotes");
+      const quotesHeld = mintAttempt();
+      expectClaimed(await store.claim(quotes.id, OWNER, quotesHeld, LEASE, CAP), "quotes beside a running ideas");
+
+      expect((await store.get(quotes.id, OWNER))?.status).toBe("running");
+      expect((await store.get(ideas.id, OWNER))?.status).toBe("running");
+
+      await store.finish(quotes.id, quotesHeld, { status: "done", steps: quotes.steps });
+      await store.finish(ideas.id, ideasHeld, { status: "done", steps: ideas.steps });
+    });
+
+    it("keeps Trajectory waiting while the Quotes it routes through are being made, and runs it after", async () => {
+      const slug = `${MINE}${mintId()}`;
+      const base = Date.now();
+      const quotes = modeJob(slug, ["quotes"], base);
+      const trajectory = modeJob(slug, ["trajectory"], base + 1000);
+      await store.enqueueOrGet(quotes, { workKey: "k1", reservesName: false });
+      await store.enqueueOrGet(trajectory, { workKey: "k2", reservesName: false });
+
+      const held = mintAttempt();
+      expectClaimed(await store.claim(quotes.id, OWNER, held, LEASE, CAP));
+      const waiting = await store.claim(trajectory.id, OWNER, mintAttempt(), LEASE, CAP);
+      expect(waiting.kind).toBe("busy");
+      expect(waiting.kind === "busy" && waiting.why).toMatch(/ahead of it/);
+
+      await store.finish(quotes.id, held, { status: "done", steps: quotes.steps });
+      expectClaimed(await store.claim(trajectory.id, OWNER, mintAttempt(), LEASE, CAP));
+    });
+
+    it("never makes one step twice at once on one article", async () => {
+      const slug = `${MINE}${mintId()}`;
+      const base = Date.now();
+      const first = modeJob(slug, ["glossary"], base);
+      const second = modeJob(slug, ["glossary"], base + 1000);
+      await store.enqueueOrGet(first, { workKey: "k1", reservesName: false });
+      await store.enqueueOrGet(second, { workKey: "k2", reservesName: false });
+
+      const held = mintAttempt();
+      expectClaimed(await store.claim(first.id, OWNER, held, LEASE, CAP));
+      expect((await store.claim(second.id, OWNER, mintAttempt(), LEASE, CAP)).kind).toBe("busy");
+      await store.finish(first.id, held, { status: "done", steps: first.steps });
+    });
+
+    /**
+     * **FIFO is kept for every pair that may not overlap**, so a mode job does
+     * not jump a re-extraction that was asked for first — even though nothing
+     * is *running* on the article, and even though another mode job beside it
+     * could.
+     */
+    it("keeps a mode job behind an older queued exclusive job", async () => {
+      const slug = `${MINE}${mintId()}`;
+      const base = Date.now();
+      const ingest = aJob({ slug, createdAt: new Date(base).toISOString() });
+      const quotes = modeJob(slug, ["quotes"], base + 1000);
+      await store.enqueueOrGet(ingest, { workKey: "k1", reservesName: false });
+      await store.enqueueOrGet(quotes, { workKey: "k2", reservesName: false });
+
+      const blocked = await store.claim(quotes.id, OWNER, mintAttempt(), LEASE, CAP);
+      expect(blocked.kind).toBe("busy");
+      expect(blocked.kind === "busy" && blocked.why).toMatch(/ahead of it/);
+      expect((await store.get(quotes.id, OWNER))?.status).toBe("queued");
+
+      /* And the exclusive job, once running, still keeps it out. */
+      const held = mintAttempt();
+      expectClaimed(await store.claim(ingest.id, OWNER, held, LEASE, CAP));
+      expect((await store.claim(quotes.id, OWNER, mintAttempt(), LEASE, CAP)).kind).toBe("busy");
+      await store.finish(ingest.id, held, { status: "done", steps: ingest.steps });
+      expectClaimed(await store.claim(quotes.id, OWNER, mintAttempt(), LEASE, CAP));
     });
 
     /* ---------------------------------- reserving a name, and an address -- */
