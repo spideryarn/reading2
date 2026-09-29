@@ -76,6 +76,7 @@ import {
   MAX_URL_QUERY_CHARS,
 } from "./chat-tools.js";
 import { FetchFailure, fetchDocument, type FetchFailureCode } from "./fetch.js";
+import { plainTitle } from "./html.js";
 import { jsdom } from "./jsdom-lazy.js";
 import { log, since } from "./log.js";
 import { fetchAllowanceStore, linkPreviewStore, loadArticle } from "./store/index.js";
@@ -294,14 +295,15 @@ export function extractPreview(html: string, url: string): Extracted | null {
   const dom = new JSDOM(html, { url });
   const doc = dom.window.document;
 
-  const title = tidy(
+  /* Plain text, not the page's markup — an `og:title` can carry `<i>` as
+     readily as a search result can. docs/plans/260929e-outside-titles-become-plain-text-at-ingest.md. */
+  const rawTitle =
     metaContent(doc, [
       'meta[property="og:title"]',
       'meta[name="twitter:title"]',
       'meta[property="twitter:title"]',
-    ]) ?? doc.title,
-    MAX_TITLE_CHARS,
-  );
+    ]) ?? doc.title;
+  const title = tidy(plainTitle(rawTitle), MAX_TITLE_CHARS);
   const siteName = tidy(metaContent(doc, ['meta[property="og:site_name"]']), MAX_SITE_CHARS);
   const description = tidy(
     metaContent(doc, [

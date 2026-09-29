@@ -594,6 +594,21 @@ Metadata page show it one name at a time (`src/web/AuthorNames.tsx`); a page wit
 keeps its byline as one string. The reasoning, and what a visitor does not get yet, are in
 [../plans/260929d-authors-and-affiliations-at-import-shown-and-linked.md](../plans/260929d-authors-and-affiliations-at-import-shown-and-linked.md).
 
+## A title from outside is plain text
+
+A page's `<title>`, a PDF's `Info.Title`, an `og:title` and a web-search result's title can all
+carry inline markup (`<i>Drosophila</i>`, `H<sub>2</sub>O`, `<jats:italic>`, MathML) or entities.
+Every surface draws a title as text, so any of that shows literally. **The rule: an outside title
+is made plain where it is constructed, by `plainTitle` in [`src/html.ts`](../../src/html.ts), and
+stored plain.** This stage applies it in `runExtract` and `runPdfExtract` before the title branches
+into `meta.title`, the page's `<h1>` and the job's title, and `metaColumns` repeats it as a backstop.
+The other roads in — search results, link previews, cited works and Referee Criteria — are listed
+in the plan, [../plans/260929e-outside-titles-become-plain-text-at-ingest.md](../plans/260929e-outside-titles-become-plain-text-at-ingest.md).
+`tests/plain-title.test.ts` feeds one marked-up title through every one of them. **A new road for a
+title belongs in that test.** `plainTitle` is not a sanitiser: its output is text, and it is
+escaped like any other text wherever it becomes markup. The class is in
+[../postmortems/260929b-outside-titles-stored-with-their-markup.md](../postmortems/260929b-outside-titles-stored-with-their-markup.md).
+
 ## What it gets wrong, and how we know
 
 **An accordion is closed, not absent — and Readability cannot tell.** It skips

@@ -121,6 +121,7 @@ import {
   TooManyPages,
 } from "./pdf.js";
 import { type Check, check, comparisonWords, report } from "./pdf-score.js";
+import { plainTitle } from "./html.js";
 import { mathsAsText, plainMaths } from "./pdf-tex.js";
 import { loadMathsRenderer } from "./maths-server.js";
 import {
@@ -2816,7 +2817,10 @@ export async function runPdfExtract(opts: PdfExtractOptions): Promise<PdfExtract
      copy of the transcription, so it outranks even a plausible-looking metadata
      title — which is a claim the file's producer made about itself and can be a
      leftover template. src/pdf-frontmatter.ts. */
-  const title = plainMaths(front?.title ?? titleFrom(mended, pass, lastName(opts)));
+  /* `plainTitle` after `plainMaths`: a PDF's Info `Title` can carry markup as
+     well as TeX, and this one string feeds the rendered `<h1>`, the job's
+     title and `meta.title`. docs/plans/260929e-outside-titles-become-plain-text-at-ingest.md. */
+  const title = plainTitle(plainMaths(front?.title ?? titleFrom(mended, pass, lastName(opts))));
 
   /**
    * The mean recall, **and how many pages it is a mean of** — which is the

@@ -270,3 +270,9 @@ shown red under its mutation, then green; the production files were restored byt
 A fixture uuid shared with `library.test.ts` (from S2-1's fix) was made unique. **Push waits for
 fb4c's migration `20260929052845` to reach `origin/dev`** — the watermark order is fb4c, this
 (`20260929065031`), then fb4j (`20260929091412`). Applying it to production is Greg's.
+
+**After the push (bfdfccf3):** checking the claim to the Overseer that "the route falls back to the
+program's list if the table is missing" found it half true — the first read was guarded, **the
+claim was not**, so a production deploy ahead of Greg's migration would have turned the Topics row
+into a 500. A test that makes the claim throw `relation … does not exist` went red, the claim is now
+guarded like the read, green. Every other store call on the path was already guarded.

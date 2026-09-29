@@ -27,7 +27,7 @@
    `readArticle` below stays synchronous. */
 import { jsdom } from "./jsdom-lazy.js";
 import { Readability } from "@mozilla/readability";
-import { escapeHtml } from "./html.js";
+import { escapeHtml, plainTitle } from "./html.js";
 import { canonicaliseCallouts, type CalloutStats } from "./callouts.js";
 import { type FurnitureRemovals, removePlatformFurniture } from "./furniture.js";
 import { canonicaliseMaths } from "./maths-import.js";
@@ -1217,9 +1217,15 @@ export async function runExtract(opts: {
      src/meta-authors.ts. */
   const byline = chooseByline(authors?.map((a) => a.name) ?? null, tidyMetaText(article.byline));
   const declared = authorsForByline(authors, byline);
+  /* **Plain text, once, before it branches** into `meta.title`, the page's
+     `<h1>` (which stage 3 turns into a block) and the job's title. A page's
+     `<title>` or `og:title` can say `&lt;i&gt;Drosophila&lt;/i&gt;`, which
+     Readability decodes into literal tags.
+     docs/plans/260929e-outside-titles-become-plain-text-at-ingest.md. */
+  const title = typeof article.title === "string" ? plainTitle(article.title) : article.title;
   const meta: Meta = {
     slug,
-    title: article.title ?? slug,
+    title: title ?? slug,
     ...(byline ? { byline } : {}),
     /* The same list, structured: names and the affiliations the page declares
        for each, for the masthead and the Metadata page to show one at a time.
@@ -1242,7 +1248,7 @@ export async function runExtract(opts: {
   return {
     slug,
     meta,
-    extractedHtml: debugPage(article),
+    extractedHtml: debugPage({ ...article, title }),
     length: article.length ?? null,
     excerpt: article.excerpt ?? null,
     notes,
