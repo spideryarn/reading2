@@ -15,12 +15,14 @@ is roughly when this session received the report; it could not read Sentry.
 **Ending: Shipped** — on `dev`, not deployed. Resolve 4J (the next feedback sweep does the Sentry
 status write).
 
-What we did: every article now keeps its authors as a list, each with the affiliations the source
+What we did: every newly imported or reset article now keeps its authors as a list, each with the affiliations the source
 declares — a web page's `citation_author_institution` tags, or, for a PDF, the names and affiliations
 on the front page with the footnote markers cut off (which is the "Smith1" fix). The masthead shows
 the names one at a time, each with a card of its affiliations, and a click opens the shelf searched
 for that author. The Metadata page has an Authors section. Existing articles pick this up when they
 are reset from the Metadata page; visitors to a shared article still see the byline string, for a
-reason the plan gives.
+reason the plan gives. A PDF's own first page, in the body of the article, still shows its byline
+as printed, markers and all — that is the transcription of the page, and hiding it is named in the
+plan as the next step.
 
 Plan: [260929d](../plans/260929d-authors-and-affiliations-at-import-shown-and-linked.md).
