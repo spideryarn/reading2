@@ -311,7 +311,7 @@ export function citeReadNotIdentified(host: string): string {
 }
 /** `unreadable`: the AI's reading of the extract was malformed and thrown away whole. */
 export function citeReadUnreadable(host: string): string {
-  return `A page matching it was found (${host}), but the AI's reading of it came back garbled and was thrown away, so nothing here comes from the work.`;
+  return `We have not read the work itself. A page matching it was found (${host}), but the AI's reading of its search extract came back garbled and was thrown away, so we show nothing from that extract.`;
 }
 
 /**

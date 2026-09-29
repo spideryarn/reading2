@@ -33,6 +33,22 @@ The row always says which. An address shows its host and its rule (*doi.org · D
 search is drawn as a search — the title is not a link, and the one link says *search Scholar*.
 `sourceOf` in [`CitationsPanel.tsx`](../../src/web/CitationsPanel.tsx) is total over `linkFrom`.
 
+## What we have read of the work, said on every row
+
+Asked for through the Feedback button on 2026-09-29 (SPIDERYARN-READING2-5G):
+
+> be really careful to be clear about whether you could get the actual paper, so that we can be sure
+> you're not hallucinating
+
+`why` is written **from the article**, and nothing that makes the list reads the cited work. So the
+row labels `why` *what the article uses it for*, and every row and hover card carries one quiet line
+saying what we have read. Usually that is nothing: *We have not read this work, only the article that
+cites it.* After *Look it up* it names what was read, which is only ever a search engine's extract
+of a matching page, and never the work itself. `readNoteOf` in
+[`CitationsPanel.tsx`](../../src/web/CitationsPanel.tsx) is the one source of that line for both
+surfaces, total over `linkFrom` and the lookup's state. The design and its two plan reviews are
+[260929g](../plans/260929g-check-a-cited-paper-supports-the-claim.md).
+
 ## The orders, and the bar
 
 Four, under the glossary's order buttons ([glossary.md](glossary.md)):
@@ -108,7 +124,7 @@ the references* for a bibliography-only work. The provenance
 is the panel's own `sourceOf`, so a `search` row is drawn here as a search exactly as it is there:
 two surfaces disagreeing about whether an address is the work's own would teach a reader something
 false. Not in the card, each deliberately: the score bars (the card says meaning, the band says
-numbers), *Find it* (billed, and a surface that opens on a hover is the wrong place for it), and a
+numbers), *Look it up* (billed, and a surface that opens on a hover is the wrong place for it), and a
 foot button into the mode (it needs `?cite=`).
 
 **A finger gets the card on the first tap.** `mark.cite` is in `tapSelector` and in
@@ -122,10 +138,11 @@ jump or open.
 so a visitor — who since 2026-09-29 sees the stored list in the band — has no marks in the prose and
 no card section.
 
-## Find it on the web
+## Look it up on the web
 
-A row whose article gave no link offers **Find it** beside its Scholar search — owner-only, one row
-at a time, a few seconds. **It explains itself in a `ControlTip` rather than a `title`** since
+Every owner row offers **Look it up** — owner-only, one row at a time, a few seconds. It was *Find
+it*, offered only on a row with no link, until 2026-09-29, when it also began reading what it
+finds (§ [It reads the search extract](#it-reads-the-search-extract-never-the-work)). **It explains itself in a `ControlTip` rather than a `title`** since
 2026-09-16, asked for through the Feedback button (SPIDERYARN-READING2-3K): *"make it clearer what
 that does (e.g. rich tooltip) and the effect of running it"*. The card is bounded by what the code
 checks rather than by what the sentence wants to say — no call count, no fixed price, and not *its
@@ -166,6 +183,39 @@ same row being pressed again: the `citation-find` bucket of the shared per-owner
 after the checks that refuse for free. The numbers are guesses, written as such. Added by the owed
 code review, GPT Sol F11.
 
+### It reads the search extract, never the work
+
+Since 2026-09-29 (SPIDERYARN-READING2-5G) the same single call also judges the kept result's
+**search extract** — the text Exa returns with each result, up to `MAX_EVIDENCE_EXCERPT`, typically
+the abstract — against what the article uses the work for (`why` and the first citing paragraph):
+*supports*, *partly*, or *the extract doesn't show this — the full work may*. There is no
+*does not support*: an extract is not the work. Greg's clarification set the scope — *"I was
+basically thinking of ways to tweak that prompt/UI"* — so this rides on the retrieval Citations
+already had rather than fetching the paper; reading the paper itself is the plan's proposed later
+stage.
+
+What code decides ([`src/citation-lookup.ts`](../../src/citation-lookup.ts)):
+
+- **the result matches this work** before anything is judged (a match, not proof it is the work) — a row the article linked by DOI or arXiv
+  keeps a judgement only if the result's URL carries that id; any other row needs the whole title in
+  the result's title plus the first author's surname or the year. Stricter than `pageNamesTitle`,
+  which still only chooses a link;
+- **every quote shown is the extract's own slice**, found by `findQuote`'s strict `"spaced"` pass,
+  at least six words; *supports* or *partly* without one becomes *doesn't show*, and *what the work
+  does* without its own quote is dropped;
+- **a stale reading is never shown**: it is stored with a fingerprint of everything sent, recomputed
+  when the list is read, and attached only on a match.
+
+What it says to the reader: the provenance line (§ [What we have read of the
+work](#what-we-have-read-of-the-work-said-on-every-row)) names the extract, its size and host; the
+verdict is labelled *the AI's reading of that extract*, the quotes *from the search extract*. **The
+residual risk** is Debate's: a hostile page can steer the AI's reading while every quote shown is
+genuinely in its extract. That is why the verdict is labelled as a reading and never as a fact.
+
+On a row the article linked, the page found is used only for its extract: the row's `url` and
+`linkFrom` never change. The reading lives in `lookup_*` columns on `citation_finds`, is attached as a
+separate private `lookup` field by `attachLookups`, and never reaches a visitor.
+
 ## Chat can read it
 
 Chat — typed, a passage question, and Live — can read the stored list through the
@@ -180,18 +230,18 @@ behind it. [chat-tools.md](chat-tools.md) has the tool.
 From the Metadata page: *Re-run AI processing* has a Citations row, since 2026-09-29, and it is the
 only redo — the panel says nothing when its list was made by an older prompt
 ([260929c](../plans/260929c-no-notice-when-a-mode-was-made-by-an-older-prompt.md)). A press is one
-model call and no web search (that is *Find it*, per row); the list is replaced only if the run
-succeeds, and a work found again keeps its id, so a link *Find it* stored stays with it. The row is
+model call and no web search (that is *Look it up*, per row); the list is replaced only if the run
+succeeds, and a work found again keeps its id, so a link *Look it up* stored stays with it. The row is
 drawn with the experimental switch off too, as Timeline's and Debate's are. Why it is safe to offer
 is in [`src/rerun-steps.ts`](../../src/rerun-steps.ts).
 
 ## Who sees it
 
-Making the list, and *Find it*, are owner-only, and behind the
+Making the list, and *Look it up*, are owner-only, and behind the
 [experimental switch](experimental-features.md). **Since 2026-09-29 a visitor to a public article
 sees a stored list** in the band, from the page's own payload: each work's address re-judged by
 `publicCitationUrl` (a refused one takes the link off the row, not the row), its dedupe `key` left
-behind, and the owner's *Find it* results kept private (SPIDERYARN-READING2-56,
+behind, and the owner's *Look it up* results kept private (SPIDERYARN-READING2-56,
 [260929c](../plans/260929c-a-visitor-sees-every-stored-mode-on-a-public-article.md)).
 
 ## Deferred

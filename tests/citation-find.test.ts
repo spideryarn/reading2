@@ -551,6 +551,17 @@ describe("the request — the only bounds on spend that exist", () => {
     );
   });
 
+  it("gives the search a linked row's DOI because the result URL must carry it", async () => {
+    const linked = work({ id: LINKED_ID, url: "https://doi.org/10.1000/x", linkFrom: "doi" });
+    const { findCitation, sent } = harness(
+      answer({ content: JSON.stringify(JUDGED), results: [DOI_PAGE] }),
+      [linked],
+    );
+    await findCitation("a-piece", LINKED_ID);
+    const user = (sent[0]?.messages as { role: string; content: string }[] | undefined)?.[1]?.content ?? "";
+    expect(user).toContain("DOI: 10.1000/x");
+  });
+
   it("findWorkPage still sends Find it's prompt and nothing of an article", async () => {
     const sent: AiRequestBody[] = [];
     await findWorkPage({ title: TITLE }, null, {

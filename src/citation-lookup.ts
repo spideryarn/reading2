@@ -66,7 +66,7 @@ import type {
  * user turn, or any rule in this file changes what a lookup would say** — it is
  * inside the context fingerprint, so a bump detaches every stored lookup.
  */
-export const CITATION_LOOKUP_VERSION = "citation-lookup/1";
+export const CITATION_LOOKUP_VERSION = "citation-lookup/2";
 
 /** R-7: the citing passage sent, in characters. */
 export const PASSAGE_CAP = 1_200;

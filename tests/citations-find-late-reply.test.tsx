@@ -65,6 +65,8 @@ function artefact(row: CitedWork): Citations {
 
 /** What the GET answers **when it arrives**. Tests move it. */
 let listed: CitedWork = SEARCHED;
+/** The citing block's text, which the server fingerprints but the row does not carry. */
+let passage = "The original citing passage.";
 /** The find's reply, held until the test lets it go. */
 let releaseFind: (() => void) | null = null;
 /** Hold the next GET after it has captured its snapshot. */
@@ -119,6 +121,7 @@ vi.mock("../src/web/lib/api.js", () => ({
   apiFetch: async (input: string, init?: { method?: string }) => {
     if (init?.method === "POST" && input.endsWith("/find")) {
       const asked = listed;
+      const askedPassage = passage;
       await new Promise<void>((go) => {
         releaseFind = go;
       });
@@ -127,7 +130,7 @@ vi.mock("../src/web/lib/api.js", () => ({
          while the row's context still matches (`attachLookups`). Mirroring
          those halves is what lets the read-race case below distinguish a
          stale GET from current server state. */
-      const sameContext = listed.why === asked.why && listed.url === asked.url;
+      const sameContext = listed.why === asked.why && listed.url === asked.url && passage === askedPassage;
       if (listed.linkFrom === "search") listed = { ...listed, ...FOUND_LINK };
       if (sameContext) listed = { ...listed, lookup: LOOKUP };
       return json(foundFor(asked));
@@ -200,6 +203,7 @@ let root: Root;
 
 beforeEach(() => {
   listed = SEARCHED;
+  passage = "The original citing passage.";
   releaseFind = null;
   holdGet = false;
   releaseGet = null;
@@ -315,12 +319,27 @@ describe("a find whose reply arrives after the list was found again", () => {
     expect(row?.lookup).toBeUndefined();
   });
 
+  it("does not patch a reading when citing text changed under the same stable block id", async () => {
+    await open();
+    const pending = await press();
+
+    /* Re-extraction preserves the block id and the citation row, but changes the
+       exact passage the server fingerprints. The client cannot see that text in
+       `CitedWork`; only a fresh GET can decide whether the stored lookup attaches. */
+    passage = "The citing passage was edited while the lookup was running.";
+    await answer(pending);
+
+    const row = hook?.citations?.citations[0];
+    expect(row?.linkFrom).toBe("web");
+    expect(row?.lookup).toBeUndefined();
+  });
+
   it("repairs an older GET that lands after the found link was patched", async () => {
     await open();
 
     /* This reload reads the searched row now, but its reply stays in flight
-       across the POST. Without `armRefresh`, it lands last and silently puts
-       the Scholar row back on screen. */
+       across the POST. The post-write `refresh` must trail it; otherwise it
+       lands last and silently puts the Scholar row back on screen. */
     holdGet = true;
     let pendingRead: Promise<void> | undefined;
     await act(async () => {

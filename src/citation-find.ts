@@ -258,7 +258,7 @@ export function findRequest(work: WorkToFind, reference: string | null, model: s
  */
 export const LOOKUP_SYSTEM = [
   "You find the web page of one scholarly work, and read what the search returned about it.",
-  "Run ONE web search for it — its title, with the first author if one is given. Do not search again.",
+  "Run ONE web search for it — use its exact DOI or arXiv id when one is given; otherwise use its title, with the first author if one is given. Do not search again.",
   "Then answer with only a JSON object and nothing else:",
   '{"url": "<the search result URL that is this work\'s own page>",',
   ' "paperDoes": "<one sentence: what the work does>", "paperDoesQuote": "<words copied from that result>",',
@@ -291,6 +291,8 @@ export function lookupPrompt(context: LookupContext): string {
   const lines = [`Title: ${context.title}`];
   if (context.authors) lines.push(`Authors: ${context.authors}`);
   if (context.year) lines.push(`Year: ${context.year}`);
+  if (context.anchor?.kind === "doi") lines.push(`DOI: ${context.anchor.id}`);
+  if (context.anchor?.kind === "arxiv") lines.push(`arXiv id: ${context.anchor.id}`);
   if (context.reference) lines.push(`The article's reference entry: ${context.reference}`);
   lines.push(`What the article uses it for: ${context.why}`);
   if (context.passage) lines.push(`The article's passage that cites it: ${context.passage}`);

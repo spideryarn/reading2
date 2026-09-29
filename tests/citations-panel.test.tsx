@@ -715,6 +715,8 @@ describe("what a row says after Look it up", () => {
     }
     expect(citeReadAssessed(310, "arxiv.org")).toMatch(/not read the work itself/);
     expect(citeReadAssessed(310, "arxiv.org")).toContain("310 words");
+    expect(citeReadUnreadable("arxiv.org")).toMatch(/not read the work itself/);
+    expect(citeReadUnreadable("arxiv.org")).toMatch(/show nothing from that extract/);
     for (const [, line] of cases.slice(1)) expect(line).toMatch(/nothing/);
     /* No lookup: stage 1's two lines, unchanged. */
     expect(readNoteOf({ linkFrom: "doi" })).toBe(CITE_NOT_READ);
