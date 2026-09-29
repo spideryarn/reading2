@@ -13,7 +13,7 @@
  * The no-recogniser path (Safari, Firefox) throughout: the keeper hangs off the
  * tape, which both paths share, and this path has no `onend` to choreograph.
  */
-import { act, createElement, type ReactNode } from "react";
+import { act, createElement, StrictMode, type ReactNode } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { resetMicrophoneLock } from "../src/web/mic-lock.js";
@@ -103,7 +103,7 @@ function fakeTape(log: Log): KeptTape {
     complete: () => {
       log.complete = true;
     },
-    intact: () => !log.forgot && !log.released,
+    intact: async () => !log.forgot && !log.released,
     forget: () => {
       log.forgot = true;
     },
@@ -201,20 +201,24 @@ afterEach(() => {
 
 /* ----------------------------------------------------------- the harness -- */
 
-function drive(opts: { keep?: DictationKeeper<unknown>; accepts?: boolean } = {}) {
+function drive(
+  opts: { keep?: DictationKeeper<unknown>; accepts?: boolean; noTranscript?: boolean; strict?: boolean } = {},
+) {
   const transcripts: string[] = [];
   let state: ReturnType<typeof useDictation> | null = null;
-  const keep = opts.keep ?? keeper();
-  function Probe(): ReactNode {
+  let activeKeep: DictationKeeper<unknown> | undefined = opts.keep ?? keeper();
+  function Probe({ keep }: { keep: DictationKeeper<unknown> | undefined }): ReactNode {
     state = useDictation({
       onText: () => {},
-      onTranscript: (t) => {
-        transcripts.push(t);
-        return opts.accepts ?? true;
-      },
+      ...(!opts.noTranscript && {
+        onTranscript: (t: string) => {
+          transcripts.push(t);
+          return opts.accepts ?? true;
+        },
+      }),
       context: { kind: "profile" },
       transcribe,
-      keep,
+      ...(keep && { keep }),
     });
     return null;
   }
@@ -223,13 +227,21 @@ function drive(opts: { keep?: DictationKeeper<unknown>; accepts?: boolean } = {}
   let root: Root;
   act(() => {
     root = createRoot(host);
-    root.render(createElement(Probe));
+    const probe = createElement(Probe, { keep: activeKeep });
+    root.render(opts.strict ? createElement(StrictMode, null, probe) : probe);
   });
   return {
     transcripts,
     get: () => {
       if (!state) throw new Error("the hook never rendered");
       return state;
+    },
+    keep: (next: DictationKeeper<unknown> | undefined) => {
+      activeKeep = next;
+      act(() => {
+        const probe = createElement(Probe, { keep: activeKeep });
+        root.render(opts.strict ? createElement(StrictMode, null, probe) : probe);
+      });
     },
     unmount: () => act(() => root.unmount()),
   };
@@ -303,10 +315,36 @@ describe("the hook tells its keeper", () => {
     expect(h.get().keptOnDevice).toBe(false);
   });
 
+  it("forgets the device copy when Retry gets a successful empty answer", async () => {
+    const h = drive();
+    await press(h);
+    talk(3000, 300);
+    await stop(h);
+    await answer(offline);
+    act(() => h.get().retry());
+    await settle();
+    await answer(ok(""));
+    expect(tape()).toMatchObject({ forgot: true, released: false });
+    expect(h.get().recording).not.toBeNull();
+  });
+
+  it("marks the device copy broken when Retry is refused for good", async () => {
+    const h = drive();
+    await press(h);
+    talk(3000, 300);
+    await stop(h);
+    await answer(offline);
+    act(() => h.get().retry());
+    await settle();
+    await answer(refused);
+    expect(tape()).toMatchObject({ broken: true, forgot: false, released: false });
+    expect(h.get().canRetry).toBe(false);
+  });
+
   it("does not say the audio is kept when the keeper's writes failed", async () => {
     const failing: DictationKeeper<unknown> = {
       ...keeper(),
-      begin: (where) => ({ ...keeper().begin(where)!, intact: () => false }),
+      begin: (where) => ({ ...keeper().begin(where)!, intact: async () => false }),
     };
     const h = drive({ keep: failing });
     await press(h);
@@ -315,6 +353,29 @@ describe("the hook tells its keeper", () => {
     await answer(offline);
     expect(h.get().recording).not.toBeNull();
     expect(h.get().keptOnDevice).toBe(false);
+  });
+
+  it("does not say the audio is kept until every queued write has landed", async () => {
+    let report: ((intact: boolean) => void) | null = null;
+    const slow: DictationKeeper<unknown> = {
+      ...keeper(),
+      begin: (where) => ({
+        ...keeper().begin(where)!,
+        intact: () =>
+          new Promise((resolve) => {
+            report = resolve;
+          }),
+      }),
+    };
+    const h = drive({ keep: slow });
+    await press(h);
+    talk(3000, 300);
+    await stop(h);
+    await answer(offline);
+    expect(h.get().keptOnDevice).toBe(false);
+    await act(async () => report?.(true));
+    await settle();
+    expect(h.get().keptOnDevice).toBe(true);
   });
 
   it("forgets it when the reader discards the recording", async () => {
@@ -355,6 +416,17 @@ describe("the hook tells its keeper", () => {
     expect(tape()).toMatchObject({ forgot: false, released: true });
   });
 
+  it("releases an upload still in flight when the page goes", async () => {
+    const h = drive();
+    await press(h);
+    talk(3000, 300);
+    await stop(h);
+    expect(h.get().phase).toBe("transcribing");
+    h.unmount();
+    await settle();
+    expect(tape()).toMatchObject({ forgot: false, released: true });
+  });
+
   it("releases the last recording when the reader presses again, to be offered next time", async () => {
     const h = drive();
     await press(h);
@@ -375,12 +447,43 @@ describe("the hook tells its keeper", () => {
     expect(calls).toHaveLength(0);
   });
 
+  it("forgets the old tape when the reader changes microphone and starts over", async () => {
+    const h = drive();
+    await press(h);
+    talk(3000, 300);
+    const first = tape();
+    act(() => h.get().chooseDevice("another-device"));
+    await settle();
+    expect(first).toMatchObject({ forgot: true, released: false });
+  });
+
   it("does not forget words the box refused to take", async () => {
     const h = drive({ accepts: false });
     await press(h);
     talk(3000, 300);
     await stop(h);
     await answer(ok("nowhere to go"));
+    expect(tape()).toMatchObject({ forgot: false, released: true });
+  });
+
+  it("does not forget words when no box delivery callback exists", async () => {
+    const h = drive({ noTranscript: true });
+    await press(h);
+    talk(3000, 300);
+    await stop(h);
+    await answer(ok("nowhere to deliver"));
+    expect(tape()).toMatchObject({ forgot: false, released: true });
+  });
+
+  it("releases Retry audio when the box refuses the recovered words", async () => {
+    const h = drive({ accepts: false });
+    await press(h);
+    talk(3000, 300);
+    await stop(h);
+    await answer(offline);
+    act(() => h.get().retry());
+    await settle();
+    await answer(ok("still nowhere to go"));
     expect(tape()).toMatchObject({ forgot: false, released: true });
   });
 });
@@ -446,9 +549,52 @@ describe("a recording an earlier page left behind", () => {
         }),
     };
     const h = drive({ keep: slow });
+    await settle();
     h.unmount();
     leftBehind();
     await act(async () => hand?.(waiting));
     expect(recovered).toMatchObject({ released: true, forgot: false });
+  });
+
+  it("is still offered under StrictMode's setup-cleanup-setup cycle", async () => {
+    leftBehind();
+    const h = drive({ strict: true });
+    await settle();
+    expect(h.get().error).toContain("[mic-recovered]");
+    expect(h.get().recording).not.toBeNull();
+    expect(recovered).toMatchObject({ released: false, forgot: false });
+  });
+
+  /* Feedback passes a keeper only while open and stays mounted when shut. Its
+     row must survive the close as it did before keepers existed — and the page
+     keeps the lock, so no other tab offers the same recording twice. */
+  it("stays on screen, still held, when a conditional keeper disappears", async () => {
+    leftBehind();
+    const h = drive();
+    await settle();
+    expect(h.get().recording).not.toBeNull();
+    h.keep(undefined);
+    await settle();
+    expect(recovered).toMatchObject({ released: false, forgot: false });
+    expect(h.get().recording).not.toBeNull();
+    expect(h.get().canRetry).toBe(true);
+  });
+});
+
+describe("a box whose keeper goes while its words are on the way", () => {
+  /* Stop, then close Feedback before the transcript lands: the words belong in
+     the draft, which survives the close. Refusing them would lose them outright
+     wherever the device kept nothing. */
+  it("still delivers the transcript, and then forgets the copy", async () => {
+    const h = drive();
+    await press(h);
+    talk(3000, 300);
+    await stop(h);
+    h.keep(undefined);
+    await settle();
+    await answer(ok("said just before closing"));
+    expect(h.transcripts).toEqual(["said just before closing"]);
+    expect(tape()).toMatchObject({ forgot: true });
+    expect(h.get().phase).toBe("idle");
   });
 });

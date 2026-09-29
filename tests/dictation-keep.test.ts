@@ -115,6 +115,17 @@ describe("keeping a tape", () => {
     expect(await keep.keepDictation("feedback").recover()).toBeNull();
   });
 
+  it("does not read a released tape until all of its queued writes finish", async () => {
+    const tape = keep.keepDictation("feedback").begin(where);
+    tape?.chunk(0, bytes("a1"), "audio/webm");
+    tape?.chunk(0, bytes("a2"), "audio/webm");
+    tape?.release();
+    expect(await keep.keepDictation("feedback").recover()).toBeNull();
+    await flush();
+    const found = await keep.keepDictation("feedback").recover();
+    expect(await text(found?.parts[0]?.blob ?? new Blob())).toBe("a1a2");
+  });
+
   it("offers one tape to one page only", async () => {
     await deadPage();
     locks.dropAll();
@@ -125,6 +136,23 @@ describe("keeping a tape", () => {
     // And once the first lets go without delivering it, it is back.
     first?.tape.release();
     await flush();
+    expect(await keep.keepDictation("feedback").recover()).not.toBeNull();
+  });
+
+  it("releases the lock when rebuilding a recovered tape throws", async () => {
+    await deadPage();
+    locks.dropAll();
+    const RealBlob = Blob;
+    vi.stubGlobal(
+      "Blob",
+      class {
+        constructor() {
+          throw new Error("cannot rebuild blob");
+        }
+      },
+    );
+    expect(await keep.keepDictation("feedback").recover()).toBeNull();
+    vi.stubGlobal("Blob", RealBlob);
     expect(await keep.keepDictation("feedback").recover()).not.toBeNull();
   });
 
@@ -188,12 +216,37 @@ describe("keeping a tape", () => {
     expect(found?.complete).toBe(false);
   });
 
-  it("reports intact while its writes land", async () => {
+  it("says a part with a missing final chunk is not complete", async () => {
+    const tape = keep.keepDictation("feedback").begin(where);
+    tape?.chunk(0, bytes("a1"), "audio/webm");
+    tape?.chunk(0, bytes("a2"), "audio/webm");
+    tape?.complete();
+    await flush();
+    const db = await new Promise<IDBDatabase>((ok) => {
+      const r = indexedDB.open("spideryarn-dictation");
+      r.onsuccess = () => ok(r.result);
+    });
+    await new Promise<void>((ok) => {
+      const tx = db.transaction("chunks", "readwrite");
+      const store = tx.objectStore("chunks");
+      store.openCursor(null, "prev").onsuccess = (e) => {
+        (e.target as IDBRequest<IDBCursorWithValue>).result?.delete();
+      };
+      tx.oncomplete = () => ok();
+    });
+    db.close();
+    locks.dropAll();
+    const found = await keep.keepDictation("feedback").recover();
+    expect(await text(found?.parts[0]?.blob ?? new Blob())).toBe("a1");
+    expect(found?.complete).toBe(false);
+  });
+
+  it("reports intact after its writes land", async () => {
     const tape = await deadPage();
-    expect(tape.intact()).toBe(true);
+    expect(await tape.intact()).toBe(true);
     tape.release();
     // Released: no longer this page's to describe as kept.
-    expect(tape.intact()).toBe(false);
+    expect(await tape.intact()).toBe(false);
   });
 
   it("reports not intact when the database never opens", async () => {
@@ -206,7 +259,7 @@ describe("keeping a tape", () => {
     const tape = keep.keepDictation("feedback").begin(where);
     tape?.chunk(0, bytes("a1"), "audio/webm");
     await flush();
-    expect(tape?.intact()).toBe(false);
+    expect(await tape?.intact()).toBe(false);
   });
 });
 
@@ -245,6 +298,33 @@ describe("how long a tape stays", () => {
     await keep.forgetDictationsOf("reader-a");
     locks.dropAll();
     expect(await keep.keepDictation("feedback").recover()).not.toBeNull();
+    await load("reader-a");
+    expect(await keep.keepDictation("feedback").recover()).toBeNull();
+  });
+
+  it("sign-out cannot be undone by a held tape's queued writes", async () => {
+    const tape = keep.keepDictation("feedback").begin(where);
+    tape?.chunk(0, bytes("still queued"), "audio/webm");
+    await keep.forgetDictationsOf("reader-a");
+    await flush();
+    expect(await keep.keepDictation("feedback").recover()).toBeNull();
+  });
+
+  it("sign-out cannot be undone by another tab's late writes", async () => {
+    const firstTab = keep;
+    const tape = firstTab.keepDictation("feedback").begin(where);
+    tape?.chunk(0, bytes("before"), "audio/webm");
+    await flush();
+
+    /* A fresh module is a second tab: its in-memory active-tape registry cannot
+       reach the first tab, so only the IndexedDB sign-out marker protects this. */
+    await load("reader-a");
+    await keep.forgetDictationsOf("reader-a");
+    tape?.chunk(0, bytes("after"), "audio/webm");
+    tape?.complete();
+    await flush();
+
+    locks.dropAll();
     await load("reader-a");
     expect(await keep.keepDictation("feedback").recover()).toBeNull();
   });

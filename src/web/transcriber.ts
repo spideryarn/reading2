@@ -135,11 +135,11 @@ export interface KeptTape {
    */
   complete(): void;
   /**
-   * Every write so far has landed. What the row may promise — "kept on this
-   * device" — depends on it; a keeper that has silently failed must not be
-   * described as holding anything.
+   * Wait for every queued write, then say whether they all landed. What the row
+   * may promise — "kept on this device" — depends on it; a keeper that has
+   * silently failed must not be described as holding anything.
    */
-  intact(): boolean;
+  intact(): Promise<boolean>;
   /** Its words are in the box, or the reader threw it away. Delete it. */
   forget(): void;
   /** This page no longer holds it. Leave it for the next time the box is on screen. */

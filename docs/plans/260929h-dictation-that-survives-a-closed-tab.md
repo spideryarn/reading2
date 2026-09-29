@@ -140,6 +140,33 @@ Sol's review (2026-09-29, read-only) found two P0s, four P1s and a P2. What chan
 - **P2-7, simpler v1 (closed parts only).** Considered and not taken: it misses the tab dying during
   a three-minute monologue, the case Greg named.
 
+## GPT Sol's code review, and what was kept
+
+Sol reviewed commit `807e2a2c` with write access and fixed what it found. Kept:
+
+- **P0 — a missing or throwing `onTranscript` counted as delivered**, so the copy was forgotten for
+  words that went nowhere. Delivery must now positively succeed (`deliverTranscript`).
+- **StrictMode** — the recovery claim is deferred one task, so React's throwaway first mount never
+  takes a lock the real mount then mistakes for another tab's.
+- **Sign-out racing a queued write** — a `signouts` marker shares a transaction with every write, so
+  a late chunk or `complete()`, from this tab or another, cannot recreate what Sign out deleted.
+  Database version 2 for the new store; version 1 never shipped.
+- **A lock leaked when rebuilding a tape threw**; **`intact()` answered before writes landed** (now
+  async, and the row waits); **a missing final chunk read as complete** (per-part counts stored at
+  `complete()`); **an empty Retry left the copy recoverable**; **a refused Retry was not marked
+  save-only**.
+
+**Reverted, with a test each that fails against Sol's version:**
+
+- `stillOurs` also required the keeper to still be the same box. Feedback drops its keeper on close
+  and stays mounted, so a transcript landing just after the close would have been refused — and,
+  where the device kept nothing, lost. It is delivered into the draft, as before keepers.
+- The recovery effect cleared the on-screen row and released its tape whenever the box changed.
+  Closing Feedback would then have thrown away in-memory audio that might be the only copy. The row
+  now survives the close and the page keeps the lock, so no other tab offers it twice.
+- Sol removed the time bound on the sign-out deletion; restored (3 s), because Sign out must not hang
+  on a stuck transaction. The marker still refuses late writes past the bound.
+
 ## Stages
 
 1. **Keeper + hook seam + all six boxes + copy + tests.** One stage; it is small.
@@ -157,5 +184,5 @@ Sol's review (2026-09-29, read-only) found two P0s, four P1s and a P2. What chan
   `tests/dictation-keep.test.ts` (14) and `tests/dictation-keep-hook.test.tsx` (15), each checked
   by mutation — nine mutations of the code, all killed.
 - [x] Stage 2: dictation.md § A closed tab, privacy.md, `/privacy`, the note.
-- [ ] Sol code review
+- [x] Sol code review (above), gates re-run: typecheck, 23 scoped files / 473 tests, full suite
 - [ ] Landed on dev

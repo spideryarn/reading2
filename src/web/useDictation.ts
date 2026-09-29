@@ -462,6 +462,8 @@ interface Session<C> {
   sent: Map<number, Promise<TranscriptionResult>>;
   /** The tape lost audio part-way (`onBroken`). The ending says so. */
   broke: boolean;
+  /** The keeper this press began with. Like `where`, it may not follow a later render. */
+  keeper: DictationKeeper<C> | null;
   /**
    * The copy of this tape on the device, begun at its first chunk. `undefined`
    * until then; `null` where there is no keeper or it could not keep. Plan
@@ -702,14 +704,35 @@ export function useDictation<C>(options: DictationOptions<C>): UseDictation {
   const holdKept = useCallback((tape: KeptTape | null | undefined) => {
     if (held.current && held.current !== tape) held.current.release();
     held.current = tape ?? null;
-    /* Only a copy whose every write landed may be described as kept. */
-    setKeptOnDevice(held.current?.intact() === true);
+    /* Do not make the promise until every queued write has actually landed. An
+       offline failure can return faster than IndexedDB opens. Plan 260929h,
+       code review. */
+    setKeptOnDevice(false);
+    const current = held.current;
+    if (current) {
+      void current
+        .intact()
+        .then((intact) => {
+          if (held.current === current) setKeptOnDevice(intact);
+        })
+        .catch(() => {});
+    }
   }, []);
   /** The row's recording has reached its end — delivered, or thrown away. */
   const forgetHeld = useCallback(() => {
     held.current?.forget();
     held.current = null;
     setKeptOnDevice(false);
+  }, []);
+  /** Missing or throwing delivery is not delivery, so it can never justify deletion. */
+  const deliverTranscript = useCallback((text: string): boolean => {
+    const deliver = transcribed.current;
+    if (!deliver) return false;
+    try {
+      return deliver(text) !== false;
+    } catch {
+      return false;
+    }
   }, []);
 
   /**
@@ -835,6 +858,11 @@ export function useDictation<C>(options: DictationOptions<C>): UseDictation {
        `session.current`, which is null by now for every finished session:
        without it, a second press's transcript could land while the first
        press's was still in flight and the loser would overwrite the winner. */
+    /* **Not** also "is the keeper still the same box". Feedback drops its keeper
+       when it closes, and stays mounted; a transcript finishing just after the
+       close belongs in its draft, which survives the close — and where nothing
+       was kept on the device, refusing it here would lose the words outright.
+       Considered and reverted after GPT Sol's code review of 260929h. */
     const stillOurs = () => mounted.current && newest.current === s;
     const done = () => {
       if (!stillOurs()) {
@@ -882,7 +910,7 @@ export function useDictation<C>(options: DictationOptions<C>): UseDictation {
         if (text) {
           /* The words are in the box, so the device copy has done its job —
              unless the box refused them, when it stays for next time. */
-          if (transcribed.current?.(text) === false) s.kept?.release();
+          if (!deliverTranscript(text)) s.kept?.release();
           else s.kept?.forget();
           return;
         }
@@ -1012,7 +1040,7 @@ export function useDictation<C>(options: DictationOptions<C>): UseDictation {
       if (stillOurs()) setError(TRANSCRIPTION_UNEXPECTED);
       done();
     });
-  }, [holdKept]);
+  }, [deliverTranscript, holdKept]);
 
   const stop = useCallback(() => {
     const s = session.current;
@@ -1080,6 +1108,7 @@ export function useDictation<C>(options: DictationOptions<C>): UseDictation {
       upload: new AbortController(),
       sent: new Map(),
       broke: false,
+      keeper: keeper.current ?? null,
       kept: undefined,
       /* Filled in on the next two lines — a `Session` is built in one literal so
          that no field can be forgotten, and these two have to refer to it. */
@@ -1115,7 +1144,7 @@ export function useDictation<C>(options: DictationOptions<C>): UseDictation {
       onChunk: (index, chunk, mimeType) => {
         if (s.kept === undefined) {
           try {
-            s.kept = keeper.current?.begin(s.where) ?? null;
+            s.kept = s.keeper?.begin(s.where) ?? null;
           } catch {
             s.kept = null;
           }
@@ -1552,8 +1581,8 @@ export function useDictation<C>(options: DictationOptions<C>): UseDictation {
    * first attempt gets, for the same two seconds and the same reason.
    */
   const retry = useCallback(() => {
-    const held = retryable.current;
-    if (!held) return;
+    const offer = retryable.current;
+    if (!offer) return;
     /* Defensive against a second programmatic press while the button is gone:
        never pay for two retries of the same failed parts at once. */
     retryUpload.current?.abort();
@@ -1575,11 +1604,11 @@ export function useDictation<C>(options: DictationOptions<C>): UseDictation {
       /* **Only the parts that failed.** The words that already came back are
          kept rather than paid for twice (plan 260929f). */
       const results = await Promise.all(
-        held.recorded.parts.map((part, i): Promise<TranscriptionResult> => {
-          const text = held.texts[i];
+        offer.recorded.parts.map((part, i): Promise<TranscriptionResult> => {
+          const text = offer.texts[i];
           return text != null
             ? Promise.resolve({ ok: true, text })
-            : callTranscriber(transcribe.current, part, held.where, cancel.signal);
+            : callTranscriber(transcribe.current, part, offer.where, cancel.signal);
         }),
       );
       /* **Three ways this is no longer ours**, and every one of them ends in
@@ -1594,7 +1623,7 @@ export function useDictation<C>(options: DictationOptions<C>): UseDictation {
       if (results.some((r) => !r.ok && "abandoned" in r)) return;
       /* What came back this time is kept for the next go, whatever happens to
          the rest. */
-      held.texts = results.map((r) => (r.ok ? r.text : null));
+      offer.texts = results.map((r) => (r.ok ? r.text : null));
       const failures = results.filter(
         (r): r is Extract<TranscriptionResult, { ok: false }> => !r.ok,
       );
@@ -1604,7 +1633,7 @@ export function useDictation<C>(options: DictationOptions<C>): UseDictation {
         if (text) {
           retryable.current = null;
           setRecording(null);
-          if (transcribed.current?.(text) === false) holdKept(null);
+          if (!deliverTranscript(text)) holdKept(null);
           else forgetHeld();
           /* **`onEnd` again**, because this is a second ending of the same
              dictation and it is the caller's cue to persist what is in the box.
@@ -1616,17 +1645,20 @@ export function useDictation<C>(options: DictationOptions<C>): UseDictation {
         }
         /* A success with an empty transcript: the audio stays and the reader
            is told, and no second offer — the same rule as the first attempt. */
+        retryable.current = null;
+        forgetHeld();
         setError("We didn't catch any words in that. The audio is below if you want it. [mic-silent]");
         return;
       }
       setError(first.message);
+      if (!failures.every((r) => r.retryable)) held.current?.broken();
       /* **From the new results, not unconditionally.** A retry that comes back
          `[mic-too-long]` or a dead API key must not offer a third go — the
          first attempt's answer to that question has been superseded by this
          one's. GPT Sol's code review, R2. */
       setCanRetry(failures.every((r) => r.retryable));
     })();
-  }, [forgetHeld, holdKept]);
+  }, [deliverTranscript, forgetHeld, holdKept]);
 
   /**
    * **A recording an earlier page left behind in this box, offered back.**
@@ -1645,36 +1677,50 @@ export function useDictation<C>(options: DictationOptions<C>): UseDictation {
    */
   useEffect(() => {
     const k = keeper.current;
-    if (!k || keepBox === null) return;
     let gone = false;
-    void k
-      .recover()
-      .then((found) => {
-        if (!found) return;
-        if (gone || !mounted.current || session.current || retryable.current || held.current) {
-          found.tape.release();
-          return;
-        }
-        const recorded: DictationRecording = {
-          parts: found.parts.map((p) => ({
-            blob: p.blob,
-            mimeType: p.mimeType,
-            ext: extFor(p.mimeType),
-            ms: p.ms,
-            capped: false,
-          })),
-        };
-        holdKept(found.tape);
-        setRecording(recorded);
-        setError(found.complete ? RECOVERED : RECOVERED_CUT);
-        if (!found.broken) {
-          retryable.current = { recorded, texts: recorded.parts.map(() => null), where: found.where };
-          setCanRetry(true);
-        }
-      })
-      .catch(() => {});
+    /* **A box change leaves what is on screen alone.** Closing Feedback drops its
+       keeper, and the row under a failed dictation must survive that exactly as
+       it did before keepers existed — the in-memory audio may be the only copy,
+       if the device's writes failed. The page goes on holding the tape's lock,
+       so no other tab offers it twice; reopening finds the row where it was.
+       GPT Sol's code review proposed resetting here, and it was reverted for
+       that reason. */
+    if (!k || keepBox === null) return;
+
+    /* React StrictMode immediately performs setup-cleanup-setup. Defer the
+       claim one task so the throwaway setup never takes a Web Lock that the
+       real setup then mistakes for another tab's. Plan 260929h, code review. */
+    const timer = window.setTimeout(() => {
+      void k
+        .recover()
+        .then((found) => {
+          if (!found) return;
+          if (gone || !mounted.current || session.current || retryable.current || held.current) {
+            found.tape.release();
+            return;
+          }
+          const recorded: DictationRecording = {
+            parts: found.parts.map((p) => ({
+              blob: p.blob,
+              mimeType: p.mimeType,
+              ext: extFor(p.mimeType),
+              ms: p.ms,
+              capped: false,
+            })),
+          };
+          holdKept(found.tape);
+          setRecording(recorded);
+          setError(found.complete ? RECOVERED : RECOVERED_CUT);
+          if (!found.broken) {
+            retryable.current = { recorded, texts: recorded.parts.map(() => null), where: found.where };
+            setCanRetry(true);
+          }
+        })
+        .catch(() => {});
+    }, 0);
     return () => {
       gone = true;
+      window.clearTimeout(timer);
     };
   }, [keepBox, holdKept]);
 
