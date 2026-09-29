@@ -1,0 +1,7 @@
+# Regenerable, and large: the built cases (npx tsx evals/shelf-topics/build-cases.ts)
+# and the per-run lists and raw model responses (run-arms.ts). The summary, the
+# judge's pairs, key and verdicts are committed — they are the evidence.
+cases/
+results/*/
+!results/pairs/
+!results/judgements/

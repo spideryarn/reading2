@@ -1,0 +1,9 @@
+{"case":"kitchen-garden","judgements":[
+{"id":"p024","winner":"tie","scoreA":7,"scoreB":7,"reason":"Same pills with only kimchi/sourdough and compost/seasonal-cooking swapped; both lead with real themes but close on vague 'season' and 'harvest'."},
+{"id":"p025","winner":"A","scoreA":7,"scoreB":3,"reason":"B has the same core themes but mixes in incidental words (weekend, morning, phone, car), and two of them are in its first 8; A stays on topic and includes beekeeping."},
+{"id":"p026","winner":"A","scoreA":7,"scoreB":3,"reason":"B's weekend/morning/phone/car pills are meaningless filters for this reader; A is all real gardening and fermentation themes."},
+{"id":"p027","winner":"tie","scoreA":3,"scoreB":3,"reason":"Identical lists."},
+{"id":"p028","winner":"tie","scoreA":7,"scoreB":7,"reason":"Same pills with only minor reordering of mid-list items."},
+{"id":"p029","winner":"A","scoreA":8,"scoreB":7,"reason":"A leads with the fermentation core, adds raised beds, and has no vague 'season'/'harvest' pills, though it lacks beekeeping and 'starter' nearly duplicates sourdough; B covers beekeeping but ends on filler."},
+{"id":"p030","winner":"A","scoreA":7,"scoreB":6,"reason":"Same first 8, but B adds a loose 'kitchen' pill that overlaps kimchi/sourdough, on top of the vague season/harvest pills both lists share."}
+]}

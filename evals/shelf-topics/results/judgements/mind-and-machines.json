@@ -1,0 +1,9 @@
+{"case":"mind-and-machines","judgements":[
+{"id":"p010","winner":"tie","scoreA":3,"scoreB":3,"reason":"Identical lists; both open with the generic 'model' pill and have noise pills (dog, car, window, phone), and neither has a consciousness pill."},
+{"id":"p011","winner":"B","scoreA":6,"scoreB":7,"reason":"Same core themes (alignment, consciousness, scaling, Chinese room, Turing test), but A adds an incoherent 'machine' pill that B leaves out."},
+{"id":"p012","winner":"B","scoreA":6,"scoreB":9,"reason":"B covers the shelf's real themes (consciousness, alignment, moral status, interpretability, scaling, reward hacking) with no generic pills, while A leans on 'model' and 'machine' and misses interpretability and reward hacking."},
+{"id":"p013","winner":"B","scoreA":3,"scoreB":7,"reason":"A opens with the generic 'model' pill, has no consciousness pill, and is padded with incidental words (dog, car, window, phone); B is short and all on theme."},
+{"id":"p014","winner":"A","scoreA":7,"scoreB":6,"reason":"Same themes, but B adds an incoherent 'machine' pill that A leaves out."},
+{"id":"p015","winner":"A","scoreA":6,"scoreB":3,"reason":"A leads with alignment, consciousness and scaling, while B leads with the generic 'model', has no consciousness pill, and carries noise pills (dog, car, window, phone)."},
+{"id":"p016","winner":"A","scoreA":7,"scoreB":6,"reason":"Same themes, but B adds an incoherent 'machine' pill that A leaves out."}
+]}

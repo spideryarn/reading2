@@ -1,0 +1,9 @@
+{"case":"contemplative-neuro","judgements":[
+{"id":"p017","winner":"B","scoreA":5,"scoreB":7,"reason":"B is eight meaningful pills covering the whole shelf, while A puts the junk pill 'sequence' in its first eight and adds 'female' and 'bell' later."},
+{"id":"p018","winner":"B","scoreA":5,"scoreB":7,"reason":"B holds only real themes and covers the shelf; A carries incidental pills ('sequence', 'female', 'bell')."},
+{"id":"p019","winner":"B","scoreA":6,"scoreB":7,"reason":"A's topics are meaningful, but it piles up overlapping neuroscience pills (brain, research, default mode network, neuroplasticity, meditators), while B is leaner and covers the same ground."},
+{"id":"p020","winner":"B","scoreA":6,"scoreB":7,"reason":"A has vague pills ('researchers') and an incoherent one ('practitioners', which groups the EEG report with Metta), while B's pills are all real themes."},
+{"id":"p021","winner":"tie","scoreA":7,"scoreB":7,"reason":"Both lists are clean and cover the whole shelf; A's specific default-mode-network and neuroplasticity pills suit a neuroscience student but overlap each other, while B's single 'brain' pill is tidier."},
+{"id":"p022","winner":"tie","scoreA":5,"scoreB":5,"reason":"The two lists are identical."},
+{"id":"p023","winner":"tie","scoreA":7,"scoreB":7,"reason":"Both are clean, full-coverage lists; A's 'brain' pill is tidier, and B's default-mode-network and neuroplasticity split is more specific but redundant."}
+]}

@@ -1,0 +1,182 @@
+{
+ "case": "mind-and-machines",
+ "profile": "A software engineer reading about AI safety, philosophy of mind and whether machines can be conscious.",
+ "shelf": [
+  "1. The Alignment Problem, Plainly Stated — An essay arguing that AI alignment is best understood as the ordinary, unglamorous work of closing the gap between what we ask a system to do and what we actually want.",
+  "2. Opening the Black Box — An explainer on interpretability research: the project of reading what is actually happening inside a trained model instead of only judging it by its outputs.",
+  "3. The Room With No Understanding — A philosophical essay revisiting John Searle's Chinese room argument and asking whether today's language models are just a bigger version of the same room.",
+  "4. Why Is There Something It Is Like — An essay laying out the hard problem of consciousness: why any physical process should be accompanied by subjective experience at all, rather than nothing.",
+  "5. Do Dogs Dream? — An essay on animal consciousness, using the family dog as a case study for how little certainty we actually have about which animals have inner experience.",
+  "6. Should We Worry About Our Chatbots' Feelings? — A blog post asking whether chatbots that talk convincingly about their own feelings deserve any moral status, and why that question is harder to dismiss than it sounds.",
+  "7. The Curve That Keeps Climbing — An explainer on scaling laws: the surprisingly reliable relationship between a model's size, its training data and its performance.",
+  "8. When the Model Games the Score — An explainer on reward hacking, told through examples of systems that technically satisfy their training objective while completely missing the point.",
+  "9. Sixty Years After Turing's Question — A historical essay tracing the Turing test from Alan Turing's original 1950 proposal to its uneasy status today, when machines routinely sound convincing.",
+  "10. The Philosopher Who Won't Look Away — A profile of a philosopher of mind who has spent a career refusing easy answers about consciousness, the hard problem, and what, if anything, understands.",
+  "11. Inside the Lab Racing to Scale Up — A news report on a fast-growing AI lab, covering its push toward larger language models and the alignment and safety debates that push has provoked internally.",
+  "12. How Language Models Actually Work — A plain-language explainer on how language models are trained and how the now-famous scaling laws describe their improvement, aimed at a curious non-specialist.",
+  "13. The Ethics Committee That Meets on Tuesdays — A wry office dispatch about a company's internal AI ethics committee, where AI alignment questions compete for attention with lunch orders and building maintenance."
+ ],
+ "pairs": [
+  {
+   "id": "p010",
+   "A": [
+    "1. model (6): How Language Models Actually Work; The Room With No Understanding; Inside the Lab Racing to Scale Up; The Curve That Keeps Climbing; Opening the Black Box; +1 more",
+    "2. reward hacking (3): When the Model Games the Score; The Alignment Problem, Plainly Stated; Opening the Black Box",
+    "3. moral status (3): Should We Worry About Our Chatbots' Feelings?; Why Is There Something It Is Like; Do Dogs Dream?",
+    "4. Chinese room (4): The Room With No Understanding; Sixty Years After Turing's Question; The Philosopher Who Won't Look Away; Should We Worry About Our Chatbots' Feelings?",
+    "5. AI alignment (5): The Ethics Committee That Meets on Tuesdays; The Alignment Problem, Plainly Stated; Inside the Lab Racing to Scale Up; When the Model Games the Score; Opening the Black Box",
+    "6. Turing test (4): Sixty Years After Turing's Question; How Language Models Actually Work; The Room With No Understanding; Should We Worry About Our Chatbots' Feelings?",
+    "7. dog (4): Do Dogs Dream?; The Philosopher Who Won't Look Away; The Ethics Committee That Meets on Tuesdays; Should We Worry About Our Chatbots' Feelings?",
+    "8. car (6): Opening the Black Box; The Philosopher Who Won't Look Away; The Curve That Keeps Climbing; When the Model Games the Score; How Language Models Actually Work; +1 more",
+    "9. window (3): Do Dogs Dream?; The Curve That Keeps Climbing; The Philosopher Who Won't Look Away",
+    "10. phone (4): Should We Worry About Our Chatbots' Feelings?; Sixty Years After Turing's Question; The Room With No Understanding; The Ethics Committee That Meets on Tuesdays",
+    "11. machine (4): Sixty Years After Turing's Question; Opening the Black Box; The Alignment Problem, Plainly Stated; The Ethics Committee That Meets on Tuesdays"
+   ],
+   "B": [
+    "1. model (6): How Language Models Actually Work; The Room With No Understanding; Inside the Lab Racing to Scale Up; The Curve That Keeps Climbing; Opening the Black Box; +1 more",
+    "2. reward hacking (3): When the Model Games the Score; The Alignment Problem, Plainly Stated; Opening the Black Box",
+    "3. moral status (3): Should We Worry About Our Chatbots' Feelings?; Why Is There Something It Is Like; Do Dogs Dream?",
+    "4. Chinese room (4): The Room With No Understanding; Sixty Years After Turing's Question; The Philosopher Who Won't Look Away; Should We Worry About Our Chatbots' Feelings?",
+    "5. AI alignment (5): The Ethics Committee That Meets on Tuesdays; The Alignment Problem, Plainly Stated; Inside the Lab Racing to Scale Up; When the Model Games the Score; Opening the Black Box",
+    "6. Turing test (4): Sixty Years After Turing's Question; How Language Models Actually Work; The Room With No Understanding; Should We Worry About Our Chatbots' Feelings?",
+    "7. dog (4): Do Dogs Dream?; The Philosopher Who Won't Look Away; The Ethics Committee That Meets on Tuesdays; Should We Worry About Our Chatbots' Feelings?",
+    "8. car (6): Opening the Black Box; The Philosopher Who Won't Look Away; The Curve That Keeps Climbing; When the Model Games the Score; How Language Models Actually Work; +1 more",
+    "9. window (3): Do Dogs Dream?; The Curve That Keeps Climbing; The Philosopher Who Won't Look Away",
+    "10. phone (4): Should We Worry About Our Chatbots' Feelings?; Sixty Years After Turing's Question; The Room With No Understanding; The Ethics Committee That Meets on Tuesdays",
+    "11. machine (4): Sixty Years After Turing's Question; Opening the Black Box; The Alignment Problem, Plainly Stated; The Ethics Committee That Meets on Tuesdays"
+   ]
+  },
+  {
+   "id": "p011",
+   "A": [
+    "1. AI alignment (5): The Ethics Committee That Meets on Tuesdays; The Alignment Problem, Plainly Stated; Inside the Lab Racing to Scale Up; When the Model Games the Score; Opening the Black Box",
+    "2. consciousness (4): Do Dogs Dream?; The Philosopher Who Won't Look Away; Why Is There Something It Is Like; Should We Worry About Our Chatbots' Feelings?",
+    "3. scaling laws (3): The Curve That Keeps Climbing; Inside the Lab Racing to Scale Up; How Language Models Actually Work",
+    "4. Chinese room (4): The Room With No Understanding; Sixty Years After Turing's Question; The Philosopher Who Won't Look Away; Should We Worry About Our Chatbots' Feelings?",
+    "5. Turing test (4): Sixty Years After Turing's Question; How Language Models Actually Work; The Room With No Understanding; Should We Worry About Our Chatbots' Feelings?",
+    "6. model (6): How Language Models Actually Work; The Room With No Understanding; Inside the Lab Racing to Scale Up; The Curve That Keeps Climbing; Opening the Black Box; +1 more",
+    "7. machine (4): Sixty Years After Turing's Question; Opening the Black Box; The Alignment Problem, Plainly Stated; The Ethics Committee That Meets on Tuesdays"
+   ],
+   "B": [
+    "1. AI alignment (5): The Ethics Committee That Meets on Tuesdays; The Alignment Problem, Plainly Stated; Inside the Lab Racing to Scale Up; When the Model Games the Score; Opening the Black Box",
+    "2. consciousness (4): Do Dogs Dream?; The Philosopher Who Won't Look Away; Why Is There Something It Is Like; Should We Worry About Our Chatbots' Feelings?",
+    "3. Chinese room (4): The Room With No Understanding; Sixty Years After Turing's Question; The Philosopher Who Won't Look Away; Should We Worry About Our Chatbots' Feelings?",
+    "4. scaling laws (3): The Curve That Keeps Climbing; Inside the Lab Racing to Scale Up; How Language Models Actually Work",
+    "5. model (6): How Language Models Actually Work; The Room With No Understanding; Inside the Lab Racing to Scale Up; The Curve That Keeps Climbing; Opening the Black Box; +1 more",
+    "6. Turing test (4): Sixty Years After Turing's Question; How Language Models Actually Work; The Room With No Understanding; Should We Worry About Our Chatbots' Feelings?"
+   ]
+  },
+  {
+   "id": "p012",
+   "A": [
+    "1. AI alignment (5): The Ethics Committee That Meets on Tuesdays; The Alignment Problem, Plainly Stated; Inside the Lab Racing to Scale Up; When the Model Games the Score; Opening the Black Box",
+    "2. consciousness (4): Do Dogs Dream?; The Philosopher Who Won't Look Away; Why Is There Something It Is Like; Should We Worry About Our Chatbots' Feelings?",
+    "3. scaling laws (3): The Curve That Keeps Climbing; Inside the Lab Racing to Scale Up; How Language Models Actually Work",
+    "4. Chinese room (4): The Room With No Understanding; Sixty Years After Turing's Question; The Philosopher Who Won't Look Away; Should We Worry About Our Chatbots' Feelings?",
+    "5. Turing test (4): Sixty Years After Turing's Question; How Language Models Actually Work; The Room With No Understanding; Should We Worry About Our Chatbots' Feelings?",
+    "6. model (6): How Language Models Actually Work; The Room With No Understanding; Inside the Lab Racing to Scale Up; The Curve That Keeps Climbing; Opening the Black Box; +1 more",
+    "7. machine (4): Sixty Years After Turing's Question; Opening the Black Box; The Alignment Problem, Plainly Stated; The Ethics Committee That Meets on Tuesdays"
+   ],
+   "B": [
+    "1. consciousness (4): Do Dogs Dream?; The Philosopher Who Won't Look Away; Why Is There Something It Is Like; Should We Worry About Our Chatbots' Feelings?",
+    "2. AI alignment (5): The Ethics Committee That Meets on Tuesdays; The Alignment Problem, Plainly Stated; Inside the Lab Racing to Scale Up; When the Model Games the Score; Opening the Black Box",
+    "3. moral status (3): Should We Worry About Our Chatbots' Feelings?; Why Is There Something It Is Like; Do Dogs Dream?",
+    "4. interpretability (3): Opening the Black Box; The Ethics Committee That Meets on Tuesdays; The Alignment Problem, Plainly Stated",
+    "5. scaling laws (3): The Curve That Keeps Climbing; Inside the Lab Racing to Scale Up; How Language Models Actually Work",
+    "6. Chinese room (4): The Room With No Understanding; Sixty Years After Turing's Question; The Philosopher Who Won't Look Away; Should We Worry About Our Chatbots' Feelings?",
+    "7. reward hacking (3): When the Model Games the Score; The Alignment Problem, Plainly Stated; Opening the Black Box",
+    "8. Turing test (4): Sixty Years After Turing's Question; How Language Models Actually Work; The Room With No Understanding; Should We Worry About Our Chatbots' Feelings?",
+    "9. understanding (2): The Room With No Understanding; How Language Models Actually Work"
+   ]
+  },
+  {
+   "id": "p013",
+   "A": [
+    "1. model (6): How Language Models Actually Work; The Room With No Understanding; Inside the Lab Racing to Scale Up; The Curve That Keeps Climbing; Opening the Black Box; +1 more",
+    "2. reward hacking (3): When the Model Games the Score; The Alignment Problem, Plainly Stated; Opening the Black Box",
+    "3. moral status (3): Should We Worry About Our Chatbots' Feelings?; Why Is There Something It Is Like; Do Dogs Dream?",
+    "4. Chinese room (4): The Room With No Understanding; Sixty Years After Turing's Question; The Philosopher Who Won't Look Away; Should We Worry About Our Chatbots' Feelings?",
+    "5. AI alignment (5): The Ethics Committee That Meets on Tuesdays; The Alignment Problem, Plainly Stated; Inside the Lab Racing to Scale Up; When the Model Games the Score; Opening the Black Box",
+    "6. Turing test (4): Sixty Years After Turing's Question; How Language Models Actually Work; The Room With No Understanding; Should We Worry About Our Chatbots' Feelings?",
+    "7. dog (4): Do Dogs Dream?; The Philosopher Who Won't Look Away; The Ethics Committee That Meets on Tuesdays; Should We Worry About Our Chatbots' Feelings?",
+    "8. car (6): Opening the Black Box; The Philosopher Who Won't Look Away; The Curve That Keeps Climbing; When the Model Games the Score; How Language Models Actually Work; +1 more",
+    "9. window (3): Do Dogs Dream?; The Curve That Keeps Climbing; The Philosopher Who Won't Look Away",
+    "10. phone (4): Should We Worry About Our Chatbots' Feelings?; Sixty Years After Turing's Question; The Room With No Understanding; The Ethics Committee That Meets on Tuesdays",
+    "11. machine (4): Sixty Years After Turing's Question; Opening the Black Box; The Alignment Problem, Plainly Stated; The Ethics Committee That Meets on Tuesdays"
+   ],
+   "B": [
+    "1. AI alignment (5): The Ethics Committee That Meets on Tuesdays; The Alignment Problem, Plainly Stated; Inside the Lab Racing to Scale Up; When the Model Games the Score; Opening the Black Box",
+    "2. consciousness (4): Do Dogs Dream?; The Philosopher Who Won't Look Away; Why Is There Something It Is Like; Should We Worry About Our Chatbots' Feelings?",
+    "3. Chinese room (4): The Room With No Understanding; Sixty Years After Turing's Question; The Philosopher Who Won't Look Away; Should We Worry About Our Chatbots' Feelings?",
+    "4. scaling laws (3): The Curve That Keeps Climbing; Inside the Lab Racing to Scale Up; How Language Models Actually Work",
+    "5. model (6): How Language Models Actually Work; The Room With No Understanding; Inside the Lab Racing to Scale Up; The Curve That Keeps Climbing; Opening the Black Box; +1 more",
+    "6. Turing test (4): Sixty Years After Turing's Question; How Language Models Actually Work; The Room With No Understanding; Should We Worry About Our Chatbots' Feelings?"
+   ]
+  },
+  {
+   "id": "p014",
+   "A": [
+    "1. AI alignment (5): The Ethics Committee That Meets on Tuesdays; The Alignment Problem, Plainly Stated; Inside the Lab Racing to Scale Up; When the Model Games the Score; Opening the Black Box",
+    "2. consciousness (4): Do Dogs Dream?; The Philosopher Who Won't Look Away; Why Is There Something It Is Like; Should We Worry About Our Chatbots' Feelings?",
+    "3. scaling laws (3): The Curve That Keeps Climbing; Inside the Lab Racing to Scale Up; How Language Models Actually Work",
+    "4. Chinese room (4): The Room With No Understanding; Sixty Years After Turing's Question; The Philosopher Who Won't Look Away; Should We Worry About Our Chatbots' Feelings?",
+    "5. model (6): How Language Models Actually Work; The Room With No Understanding; Inside the Lab Racing to Scale Up; The Curve That Keeps Climbing; Opening the Black Box; +1 more",
+    "6. Turing test (4): Sixty Years After Turing's Question; How Language Models Actually Work; The Room With No Understanding; Should We Worry About Our Chatbots' Feelings?"
+   ],
+   "B": [
+    "1. AI alignment (5): The Ethics Committee That Meets on Tuesdays; The Alignment Problem, Plainly Stated; Inside the Lab Racing to Scale Up; When the Model Games the Score; Opening the Black Box",
+    "2. consciousness (4): Do Dogs Dream?; The Philosopher Who Won't Look Away; Why Is There Something It Is Like; Should We Worry About Our Chatbots' Feelings?",
+    "3. scaling laws (3): The Curve That Keeps Climbing; Inside the Lab Racing to Scale Up; How Language Models Actually Work",
+    "4. Chinese room (4): The Room With No Understanding; Sixty Years After Turing's Question; The Philosopher Who Won't Look Away; Should We Worry About Our Chatbots' Feelings?",
+    "5. Turing test (4): Sixty Years After Turing's Question; How Language Models Actually Work; The Room With No Understanding; Should We Worry About Our Chatbots' Feelings?",
+    "6. model (6): How Language Models Actually Work; The Room With No Understanding; Inside the Lab Racing to Scale Up; The Curve That Keeps Climbing; Opening the Black Box; +1 more",
+    "7. machine (4): Sixty Years After Turing's Question; Opening the Black Box; The Alignment Problem, Plainly Stated; The Ethics Committee That Meets on Tuesdays"
+   ]
+  },
+  {
+   "id": "p015",
+   "A": [
+    "1. AI alignment (5): The Ethics Committee That Meets on Tuesdays; The Alignment Problem, Plainly Stated; Inside the Lab Racing to Scale Up; When the Model Games the Score; Opening the Black Box",
+    "2. consciousness (4): Do Dogs Dream?; The Philosopher Who Won't Look Away; Why Is There Something It Is Like; Should We Worry About Our Chatbots' Feelings?",
+    "3. scaling laws (3): The Curve That Keeps Climbing; Inside the Lab Racing to Scale Up; How Language Models Actually Work",
+    "4. Chinese room (4): The Room With No Understanding; Sixty Years After Turing's Question; The Philosopher Who Won't Look Away; Should We Worry About Our Chatbots' Feelings?",
+    "5. Turing test (4): Sixty Years After Turing's Question; How Language Models Actually Work; The Room With No Understanding; Should We Worry About Our Chatbots' Feelings?",
+    "6. model (6): How Language Models Actually Work; The Room With No Understanding; Inside the Lab Racing to Scale Up; The Curve That Keeps Climbing; Opening the Black Box; +1 more",
+    "7. machine (4): Sixty Years After Turing's Question; Opening the Black Box; The Alignment Problem, Plainly Stated; The Ethics Committee That Meets on Tuesdays"
+   ],
+   "B": [
+    "1. model (6): How Language Models Actually Work; The Room With No Understanding; Inside the Lab Racing to Scale Up; The Curve That Keeps Climbing; Opening the Black Box; +1 more",
+    "2. reward hacking (3): When the Model Games the Score; The Alignment Problem, Plainly Stated; Opening the Black Box",
+    "3. moral status (3): Should We Worry About Our Chatbots' Feelings?; Why Is There Something It Is Like; Do Dogs Dream?",
+    "4. Chinese room (4): The Room With No Understanding; Sixty Years After Turing's Question; The Philosopher Who Won't Look Away; Should We Worry About Our Chatbots' Feelings?",
+    "5. AI alignment (5): The Ethics Committee That Meets on Tuesdays; The Alignment Problem, Plainly Stated; Inside the Lab Racing to Scale Up; When the Model Games the Score; Opening the Black Box",
+    "6. Turing test (4): Sixty Years After Turing's Question; How Language Models Actually Work; The Room With No Understanding; Should We Worry About Our Chatbots' Feelings?",
+    "7. dog (4): Do Dogs Dream?; The Philosopher Who Won't Look Away; The Ethics Committee That Meets on Tuesdays; Should We Worry About Our Chatbots' Feelings?",
+    "8. car (6): Opening the Black Box; The Philosopher Who Won't Look Away; The Curve That Keeps Climbing; When the Model Games the Score; How Language Models Actually Work; +1 more",
+    "9. window (3): Do Dogs Dream?; The Curve That Keeps Climbing; The Philosopher Who Won't Look Away",
+    "10. phone (4): Should We Worry About Our Chatbots' Feelings?; Sixty Years After Turing's Question; The Room With No Understanding; The Ethics Committee That Meets on Tuesdays",
+    "11. machine (4): Sixty Years After Turing's Question; Opening the Black Box; The Alignment Problem, Plainly Stated; The Ethics Committee That Meets on Tuesdays"
+   ]
+  },
+  {
+   "id": "p016",
+   "A": [
+    "1. AI alignment (5): The Ethics Committee That Meets on Tuesdays; The Alignment Problem, Plainly Stated; Inside the Lab Racing to Scale Up; When the Model Games the Score; Opening the Black Box",
+    "2. consciousness (4): Do Dogs Dream?; The Philosopher Who Won't Look Away; Why Is There Something It Is Like; Should We Worry About Our Chatbots' Feelings?",
+    "3. Chinese room (4): The Room With No Understanding; Sixty Years After Turing's Question; The Philosopher Who Won't Look Away; Should We Worry About Our Chatbots' Feelings?",
+    "4. scaling laws (3): The Curve That Keeps Climbing; Inside the Lab Racing to Scale Up; How Language Models Actually Work",
+    "5. model (6): How Language Models Actually Work; The Room With No Understanding; Inside the Lab Racing to Scale Up; The Curve That Keeps Climbing; Opening the Black Box; +1 more",
+    "6. Turing test (4): Sixty Years After Turing's Question; How Language Models Actually Work; The Room With No Understanding; Should We Worry About Our Chatbots' Feelings?"
+   ],
+   "B": [
+    "1. AI alignment (5): The Ethics Committee That Meets on Tuesdays; The Alignment Problem, Plainly Stated; Inside the Lab Racing to Scale Up; When the Model Games the Score; Opening the Black Box",
+    "2. consciousness (4): Do Dogs Dream?; The Philosopher Who Won't Look Away; Why Is There Something It Is Like; Should We Worry About Our Chatbots' Feelings?",
+    "3. scaling laws (3): The Curve That Keeps Climbing; Inside the Lab Racing to Scale Up; How Language Models Actually Work",
+    "4. Chinese room (4): The Room With No Understanding; Sixty Years After Turing's Question; The Philosopher Who Won't Look Away; Should We Worry About Our Chatbots' Feelings?",
+    "5. Turing test (4): Sixty Years After Turing's Question; How Language Models Actually Work; The Room With No Understanding; Should We Worry About Our Chatbots' Feelings?",
+    "6. model (6): How Language Models Actually Work; The Room With No Understanding; Inside the Lab Racing to Scale Up; The Curve That Keeps Climbing; Opening the Black Box; +1 more",
+    "7. machine (4): Sixty Years After Turing's Question; Opening the Black Box; The Alignment Problem, Plainly Stated; The Ethics Committee That Meets on Tuesdays"
+   ]
+  }
+ ]
+}
