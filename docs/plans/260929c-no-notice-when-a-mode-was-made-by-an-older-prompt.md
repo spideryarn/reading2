@@ -93,3 +93,12 @@ saying 55 answered its open question about the out-of-date banner buttons.
   refuses before the call only if the list already there is unreadable); **safe over a good list**,
   draft-then-publish, and a list validation empties throws rather than publishing. Rows drawn with
   the switch off, as Timeline's, Quiz's and Debate's always were.
+- **GPT Sol code review** ([prompt](260929c-code-review-prompt.md), [answer](260929c-code-review-sol.md)),
+  *accept after fixes*: **F10** FAQ and Citations hid a Metadata-started run's progress, Stop and
+  failure on an existing list — they now show it in their one footer. Sol confirmed the nine panels
+  keep stale and profile-changed handling, and that the FAQ/Citations answers are true (a forced
+  Citations run keeps the ids, so stored *Find it* links survive). **Browser check** (Sonnet): no
+  notice on outdated Trajectory (`trajectory/6`), Ideas (`ideas/2`) and Quotes (`quotes/2`), results
+  intact, no empty box; a stale Ideas list still shows its banner and button; Metadata lists all
+  eleven rows including FAQ and Citations; no new console errors. Gates: typecheck 0; 220 files,
+  5,275 tests.

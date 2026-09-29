@@ -89,6 +89,7 @@ export function FaqPanel({ owner, onJump }: Props) {
   const questions = faq?.questions ?? [];
   const ready = faq !== null && owner.status === "ready";
   const dropped = ready ? droppedNote(faq.dropped) : null;
+  const showJob = ready && !owner.stale && (owner.job || owner.starting || owner.failed);
 
   /**
    * @param again whether this is the button beside a list that is already
@@ -121,12 +122,15 @@ export function FaqPanel({ owner, onJump }: Props) {
       /* Pinned under the scroller, so the promise is about the whole list rather
          than read as the last row's. No re-run here: a fresh list offers none,
          the rule Greg set for the Glossary and Quotes; the stale banner carries
-         it, and an outdated list has none (plan 260929c). */
+         it. A job started from Metadata still needs its progress, Stop and
+         failure here, including on an outdated list, so that transient status
+         shares this one footer with the permanent promise. */
       foot={
-        ready && questions.length > 0 ? (
+        ready && (questions.length > 0 || showJob) ? (
           <div className="faq-foot">
-            <p className="faq-note">{FAQ_PROMISE}</p>
-            {dropped && <p className="faq-note">{dropped}</p>}
+            {questions.length > 0 && <p className="faq-note">{FAQ_PROMISE}</p>}
+            {questions.length > 0 && dropped && <p className="faq-note">{dropped}</p>}
+            {showJob && run("Find them again", true)}
           </div>
         ) : null
       }
@@ -171,8 +175,7 @@ export function FaqPanel({ owner, onJump }: Props) {
           ) : null}
           {/* No banner for an outdated list (older prompt, same article) —
               Greg, 2026-09-29 (SPIDERYARN-READING2-55): *"it's not worth
-              bugging the user about it."* FAQ has no Metadata re-run row, so
-              an outdated list is simply kept until the article changes. Plan
+              bugging the user about it."* Re-running is in Metadata. Plan
               260929c. */}
 
           {questions.length === 0 && <p className="gloss-quiet">{FAQ_NONE}</p>}

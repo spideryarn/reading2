@@ -34,13 +34,13 @@
  *
  * ## Who uses it
  *
- * **Fourteen call sites.** Thirteen are a step-specific surface: Arc, Glossary,
+ * **Fifteen call sites.** Fourteen are step-specific surfaces: Arc, Glossary,
  * Ideas, Illustrated, Quotes, Quiz, Sketch, Timeline, FAQ, Debate, Trajectory,
- * Citations and the Thread page. The fourteenth is `RerunRow` in Metadata,
+ * Citations and the Thread page. The fifteenth is `RerunRow` in Metadata,
  * generic over its offered step. This line has repeatedly lagged the real list;
  * `rg 'useStepJob\\(' src/web` is the inventory, not this paragraph.
  *
- * **The fourteenth is a dozen mounts rather than one**, and it is the first caller
+ * **The fifteenth is a dozen mounts rather than one**, and it is the first caller
  * that is not a mode's own panel: Metadata's *Re-run AI processing* section puts
  * a row per offered step on screen at once
  * (docs/plans/260907d-re-run-any-generated-mode-from-the-metadata-page.md).

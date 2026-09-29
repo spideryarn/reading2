@@ -274,6 +274,7 @@ export function CitationsPanel({ owner, order: chosenOrder, onOrder, bar: chosen
   const order = effectiveOrder(all, chosenOrder);
   const shown = orderWorks(all, order, bar);
   const ready = citations !== null && owner.status === "ready";
+  const showJob = ready && !owner.stale && (owner.job || owner.starting || owner.failed);
 
   const run = (label: string, again = false) => (
     <JobProgress
@@ -313,12 +314,15 @@ export function CitationsPanel({ owner, order: chosenOrder, onOrder, bar: chosen
          and unnecessary") and out of Quotes (*Choose them again*, 2026-09-11).
          A stale list still offers it, in the banner above, which is the case
          where asking again buys something; an outdated one is not announced
-         (plan 260929c), and has no Metadata re-run row. */
+         (plan 260929c). A job started from Metadata still needs its progress,
+         Stop and failure here, so that transient status shares this one footer
+         with the permanent list notes. */
       foot={
-        ready && all.length > 0 ? (
+        ready && (all.length > 0 || showJob) ? (
           <div className="cite-foot">
-            {citations.capped && <p className="cite-note">{CAPPED_NOTE}</p>}
-            <p className="cite-note">{INFLUENCE_NOTE}</p>
+            {all.length > 0 && citations.capped && <p className="cite-note">{CAPPED_NOTE}</p>}
+            {all.length > 0 && <p className="cite-note">{INFLUENCE_NOTE}</p>}
+            {showJob && run("Find them again", true)}
           </div>
         ) : null
       }
@@ -361,9 +365,8 @@ export function CitationsPanel({ owner, order: chosenOrder, onOrder, bar: chosen
           ) : null}
           {/* No banner for an outdated list (older prompt, same article) —
               Greg, 2026-09-29 (SPIDERYARN-READING2-55): *"it's not worth
-              bugging the user about it."* Citations has no Metadata re-run
-              row, so an outdated list is simply kept until the article
-              changes. Plan 260929c. */}
+              bugging the user about it."* Re-running is in Metadata. Plan
+              260929c. */}
 
           {all.length === 0 && <p className="gloss-quiet">{CITATIONS_NONE}</p>}
 
