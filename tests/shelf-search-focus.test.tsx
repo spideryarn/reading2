@@ -164,4 +164,20 @@ describe("the shelf's search box", () => {
     await show("/");
     expect(document.activeElement).not.toBe(box());
   });
+
+  it("does not, when the box is horizontally off screen as the shelf mounts", async () => {
+    vi.spyOn(HTMLInputElement.prototype, "getBoundingClientRect").mockReturnValue({
+      top: 100,
+      bottom: 140,
+      left: -1,
+      right: 399,
+      width: 400,
+      height: 40,
+      x: -1,
+      y: 100,
+      toJSON: () => ({}),
+    } as DOMRect);
+    await show("/");
+    expect(document.activeElement).not.toBe(box());
+  });
 });

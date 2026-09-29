@@ -936,7 +936,12 @@ function takesFocusOnArrival(input: HTMLInputElement, arrivingQuery: string): bo
   const active = document.activeElement;
   if (active !== null && active !== document.body) return false;
   const box = input.getBoundingClientRect();
-  return box.top >= 0 && box.bottom <= window.innerHeight;
+  return (
+    box.top >= 0 &&
+    box.right <= window.innerWidth &&
+    box.bottom <= window.innerHeight &&
+    box.left >= 0
+  );
 }
 
 function SearchBox({ value, onChange }: { value: string; onChange: (v: string) => void }) {
