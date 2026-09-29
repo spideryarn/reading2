@@ -73,8 +73,8 @@ of compression, down the page for position and across for detail. Read that firs
 asked for them; the rest are what everybody sees, a signed-out visitor included. **Which is which
 lives in [experimental-features.md](experimental-features.md)**, with the reason for each — not
 here, and not counted anywhere, because the membership moves and a copy of it goes stale. Diagram is
-the one gated a level down instead: the mode is in everybody's bar and four of its five pictures are
-behind the switch ([diagram.md](diagram.md)).
+gated twice: the mode itself since 2026-09-29, and four of its five pictures inside it
+([diagram.md](diagram.md)).
 
 Hidden means hidden from the bar, not unreachable: `?mode=timeline` still works, and the bar retains
 whichever mode the URL names so the reader keeps their way back.

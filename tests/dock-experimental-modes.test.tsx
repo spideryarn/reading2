@@ -11,12 +11,14 @@
  * > When a non-logged-in user reads a Public-readable article, I thin it should
  * > default to treating them as "Experimental Features" = false.
  *
- * **Diagram came back out on 2026-09-04**, and the gate went one level down
- * rather than away: the mode is in everybody's bar and four of its five
- * pictures are behind the switch instead, a reader having reported that only
- * the Sketch is good enough to show everyone (SPIDERYARN-READING2-13). The chip
- * row's end of that is tests/diagram-kind-gating.test.tsx; both ends draw by one
- * rule, src/web/experimental-visibility.ts.
+ * **Diagram came back out on 2026-09-04 and went back in on 2026-09-29.** On
+ * the 4th the gate went one level down rather than away — the mode in
+ * everybody's bar and four of its five pictures behind the switch, a reader
+ * having reported that only the Sketch was good enough to show everyone
+ * (SPIDERYARN-READING2-13). On the 29th Greg put the whole mode behind it
+ * (SPIDERYARN-READING2-4R). The chip gate stays, so a switched-on reader still
+ * sees all five; tests/diagram-kind-gating.test.tsx is that end, and both ends
+ * draw by one rule, src/web/experimental-visibility.ts.
  *
  * **This file names members and never counts.** It used to say nine and
  * fourteen in its assertions, its test names and this docblock, so promoting
@@ -95,6 +97,11 @@ const BEHIND_THE_SWITCH: readonly Mode[] = [
      reader's bar, so keeping Structure hidden would have taken the list away
      from everybody without the switch.
      docs/plans/260910g-structure-mode-subsumes-outline.md. */
+  /* 2026-09-29, at Greg's request (SPIDERYARN-READING2-4R): *"Move all of
+     Diagram mode into the 'Experimental features'. It's just not good enough
+     yet."* The whole mode this time, not only four of its pictures.
+     docs/project/experimental-features.md. */
+  "diagram",
 ];
 
 /**

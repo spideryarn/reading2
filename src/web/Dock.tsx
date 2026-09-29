@@ -106,15 +106,18 @@
  * should be Hierarchy, Summary, Glossary, Search, Chat, Questions, Thread
  * (renamed to 'Tweets'), Metadata."*
  *
- * It is not arbitrary, and the shape is worth naming so the next button knows
- * where to go: **the five modes come first, then the things that leave the
- * band.** Inside the modes it runs from the article's own words outwards —
- * Hierarchy and Summary are the article restated, Glossary and Search are ways
- * into it, Chat is a conversation about it. Then Questions (yours), Tweets
- * (the article rewritten for somewhere else) and Metadata (the machinery).
- * A new mode goes in MODES_UI, **and the compiler now asks for it** — a `Mode`
- * with no row there is a typecheck error, not a button nobody notices is
- * missing (`ModesMissingFromDock`). Anything else goes after them.
+ * That was the seed of the bar rather than a permanent enumeration. The mode
+ * list has since grown and been regrouped; `MODES_UI` below is the current
+ * source of truth, and a literal-order test makes order changes deliberate. A
+ * new mode goes there, and the compiler asks for it — a `Mode` with no row is a
+ * typecheck error, not a button nobody notices is missing
+ * (`ModesMissingFromDock`). Anything that is not a mode goes after them.
+ *
+ * **Since 2026-09-29 the modes are also in runs, with a line between runs** —
+ * Greg reordered them and asked for *"subtle vertical separator lines between
+ * groups of related modes"* (SPIDERYARN-READING2-4E). A new mode joins a run
+ * (`ModeGroup`, a required field on its row), and the order and the runs are
+ * written out by hand in tests/dock-mode-order.test.ts.
  *
  * ## And a second rule, which is *whether* a button is drawn at all
  *
@@ -134,12 +137,13 @@
  * named the four and gave a count until 2026-09-06, when promoting Quotes
  * meant editing five comments that were arithmetic rather than reasoning.
  *
- * **Diagram came back out on 2026-09-04**, and the gate went one level down
- * rather than away: the mode is in the default bar, and four of its five
- * pictures are behind the switch instead — `KIND_UI` in DiagramPanel.tsx, which
+ * **Diagram came back out on 2026-09-04, and went back in on 2026-09-29.** In
+ * between, the gate was one level down: the mode in the default bar and four of
+ * its five pictures behind the switch — `KIND_UI` in DiagramPanel.tsx, which
  * carries the same required flag and shares this file's rule
- * (experimental-visibility.ts). A reader asked for exactly that: *"the only
- * diagram sub-mode that is good enough to show everyone is the sketch mode"*.
+ * (experimental-visibility.ts). Then Greg: *"Move all of Diagram mode into the
+ * 'Experimental features'. It's just not good enough yet."*
+ * (SPIDERYARN-READING2-4R). The chip gate stays inside the mode.
  *
  * The rule itself, and why the current mode is retained rather than dropped, is
  * `visibleModes` below. The manual is
@@ -504,23 +508,15 @@ interface Props {
 /**
  * Everything the middle band can be, in the order they sit in the bar.
  *
- * A table rather than hand-written buttons, because a radiogroup's keyboard
- * behaviour has to walk them: "the next mode" is only meaningful if there is a
- * list to be next in. Adding another is a row here — which is exactly what
- * Search and then Summary cost (docs/project/summaries.md).
+ * A table rather than hand-written buttons, because order and grouping are
+ * properties of the set rather than of an individual button. Adding another is
+ * a row here — which is exactly what Search and then Summary cost
+ * (docs/project/summaries.md).
  *
- * The order is deliberate and is not alphabetical: **Plain first, because it is
- * the default** and the one you come back to — Hierarchy held that place until
- * 2026-08-31 and now sits second, still first among the modes that show you
- * something. Left-to-right in the bar is also the order the arrow keys travel,
- * so the resting state being leftmost means every other mode is reached by
- * going right from the resting state.
- *
- * The other four were reordered by hand on 2026-08-26 — Summary, Glossary,
- * Search, Chat — and the reasoning is in the file header under "The order".
- * Short version: it runs from the article restated, through the ways into it,
- * to the conversation about it, and Chat is last because it is the one furthest
- * from the article's own words.
+ * The order is deliberate and is not alphabetical: **Plain first, because it
+ * is the default** and the one you come back to — Hierarchy held that place
+ * until 2026-08-31. The `group` values are the semantic grouping as well as the
+ * source of the separators. The literal-order test pins both order and group.
  *
  * **A new mode is a row here, and the compiler asks for it** — see
  * `ModesMissingFromDock` below. Until 2026-09-02 nothing did: this was annotated
@@ -529,6 +525,27 @@ interface Props {
  * The word on the button is not a row here at all any more; it comes from
  * `MODE_LABEL`.
  */
+/**
+ * **The runs of related modes in the bar**, left to right, and what makes each
+ * one a run — so the next mode knows which to join. Greg asked for lines
+ * between them on 2026-09-29 (SPIDERYARN-READING2-4E); the membership is ours,
+ * read off his reordering of the same day, and
+ * docs/plans/260929c-mode-bar-order-and-groups-experimental-switch-gutter-icons-diagram-behind-the-switch-reading-time-line-explained.md
+ * § 1 has the reasoning.
+ *
+ *  - `exit` — Plain, alone: the way out of a mode.
+ *  - `shape` — the article's shape, restated (Hierarchy, Structure, Summary,
+ *    Diagram).
+ *  - `passages` — the article's own passages: a walk through its quotes, the
+ *    quotes, questions answered by passages, and finding passages.
+ *  - `dimensions` — one dimension of the piece pulled out (Glossary, Ideas,
+ *    Timeline).
+ *  - `critical` — reading it critically and against other work (Referee,
+ *    Citations, Debate).
+ *  - `talk` — you and the article talking (Chat, Remember).
+ */
+type ModeGroup = "exit" | "shape" | "passages" | "dimensions" | "critical" | "talk";
+
 interface ModeUi {
   mode: Mode;
   icon: typeof Info;
@@ -546,6 +563,18 @@ interface ModeUi {
      second reader of them was arriving that could not import this file.
      docs/plans/260906h-mode-catalog-and-a-command-bar.md.
      What is left here is layout, and only layout. */
+  /**
+   * **Which run of related modes this one belongs to**, so the bar can draw a
+   * line between runs. Greg, 2026-09-29: *"Add subtle vertical separator
+   * lines between groups of related modes"* (SPIDERYARN-READING2-4E).
+   *
+   * Required, like the catalog's `experimental`, so mode eighteen has to say
+   * which run it joins. Rows of one group must be adjacent in `MODES_UI` —
+   * tests/dock-mode-order.test.ts holds that, since a group split in two
+   * would draw two lines for one run. What each group is for is the comment
+   * on `ModeGroup`.
+   */
+  group: ModeGroup;
   /**
    * **Keep the word when every other button loses one.**
    *
@@ -602,11 +631,13 @@ const MODES_UI = [
      while a band is open. docs/plans/plain-mode-and-the-way-out.md. */
   {
     mode: "plain",
+    group: "exit",
     icon: AlignLeft,
     keepLabel: true,
   },
   {
     mode: "hierarchy",
+    group: "shape",
     icon: ListTree,
   },
   /* Straight after Hierarchy, because it answers the same question — what shape
@@ -626,14 +657,62 @@ const MODES_UI = [
      went with it. docs/plans/260910g-structure-mode-subsumes-outline.md. */
   {
     mode: "structure",
+    group: "shape",
     icon: Columns2,
   },
   {
     mode: "summary",
+    group: "shape",
     icon: Layers,
   },
-  /* **Straight after Summary, since 2026-09-28**, with Trajectory after it.
-     Greg moved both: *"move Quotes mode and Trajectory mode further towards
+  /* **In the shape run, just after Summary, since 2026-09-29**, because it is
+     the same move Summary makes — the article restated — with a picture
+     instead of prose. It had sat between Referee and Chat, and Greg's reorder
+     that day (SPIDERYARN-READING2-4E) put Citations, Referee and Debate
+     together, which left there it would have split. His sentences did not
+     name it; the plan (260929c § 1) says why it moved.
+
+     **Experimental again since 2026-09-29** — the whole mode, at Greg's
+     request (SPIDERYARN-READING2-4R). From 2026-09-04 until then the flag had
+     moved down a level rather than gone: one of its five pictures was good
+     enough for everybody and four were not, so the switch hid the four
+     (`KIND_UI` in DiagramPanel.tsx), which it still does inside the mode.
+
+     **Pressing this button draws the Sketch, since 2026-09-06.** It used to buy
+     nothing — the mode landed on an invitation with the price on it and waited
+     for a second press — and Greg asked for the second press to go
+     (docs/plans/260906b-opening-a-mode-starts-it-generating.md). So it was, until
+     2026-09-29, the most expensive button in the bar in front of *every*
+     reader: ~$0.20 and about two minutes. It is still that press for a reader
+     with the switch on. Only the Sketch; Illustrated is still its own
+     chip inside the mode. activation.ts § MODE_TARGET has the reasoning, and the
+     empty state still says the price for anyone who arrives without pressing.
+
+     Its description (src/mode-catalog.ts) names the picture a default reader
+     will actually meet. It used to list the three geometries, which are now the
+     hidden ones. */
+  {
+    mode: "diagram",
+    group: "shape",
+    icon: Network,
+  },
+  /* **First of the passages run, just before Quotes, since 2026-09-29** —
+     Greg: *"Move Trajectory one further left, before Quotes"*
+     (SPIDERYARN-READING2-4E). It is a walk through the article's own Quotes,
+     so it sits beside them; on 2026-09-28 it went straight after them (the
+     sentence quoted on the Quotes row below), and before that after FAQ, where
+     the plan first put it and Greg had not yet placed it by hand.
+
+     `Route`, used nowhere else — a path with stops on it, which is the mode.
+     Not `ListOrdered`, which is the Tweets link's numbered thread.
+     docs/plans/260928a-trajectory-mode-skim-a-paper-at-increasing-depth.md § 5c. */
+  {
+    mode: "trajectory",
+    group: "passages",
+    icon: Route,
+  },
+  /* **After Trajectory, since 2026-09-29**; straight after Summary, with
+     Trajectory after it, on 2026-09-28, when Greg moved both: *"move Quotes mode and Trajectory mode further towards
      the left (after Summary)"*. It stood after Ideas before that, on the
      argument that the bar runs outwards from the article's own words and this
      is the mode *closest* to them — every row is a sentence out of the piece
@@ -648,62 +727,14 @@ const MODES_UI = [
      docs/project/experimental-features.md. */
   {
     mode: "quotes",
+    group: "passages",
     icon: Quote,
   },
-  /* **Straight after Quotes, since 2026-09-28** — Greg's move, the sentence
-     quoted on the Quotes row above. It is a walk through the article's own
-     Quotes, so it sits beside them. It had been after FAQ, where the plan
-     first put it and Greg had not yet placed it by hand.
-
-     `Route`, used nowhere else — a path with stops on it, which is the mode.
-     Not `ListOrdered`, which is the Tweets link's numbered thread.
-     docs/plans/260928a-trajectory-mode-skim-a-paper-at-increasing-depth.md § 5c. */
-  {
-    mode: "trajectory",
-    icon: Route,
-  },
-  {
-    mode: "glossary",
-    icon: BookA,
-  },
-  /* Straight after Glossary, because the order runs outwards from the article's
-     own words and these two are the same kind of thing pointed at different
-     units: a term is a word you look up, an idea is a proposition you hold.
-     Greg set this order by hand, so a new mode goes where it belongs in his
-     reasoning rather than on the end. */
-  {
-    mode: "ideas",
-    icon: Lightbulb,
-  },
-  /* **After Ideas and before Search**, which is Greg's placement (2026-08-31)
-     and the reason it did not land immediately after the Ideas row: Quotes
-     arrived between the two the same day (it moved to just after Summary on
-     2026-09-28), and "after Ideas" is a position in the reasoning — with Glossary and Ideas, as a third "here is one
-     dimension of this piece pulled out" — rather than an array index. It is
-     further from the article's own words than either of those, and further than
-     Quotes, so it goes at the far end of that group.
-     docs/plans/260831i-timeline-mode.md § 3. */
-  {
-    mode: "timeline",
-    icon: Clock,
-  },
-  /* **After Timeline, at the end of the "one dimension of this piece pulled
-     out" group** — Glossary, Ideas, Timeline; Quotes was in it until
-     2026-09-28 — because its list is the
-     piece's own references rather than the web's (that is Debate, further
-     out). Greg has not set this one by hand; move it if it is wrong.
-
-     `BookText` — a closed book with lines on it, i.e. *a work*. `Library` was
-     the obvious glyph and is refused: it is the shelf's, on every page. `Quote`
-     is Quotes'. docs/plans/260911g-citations-mode.md. */
-  {
-    mode: "citations",
-    icon: BookText,
-  },
-  /* **After Citations, at the end of the same group**: every row is a question
-     answered by passages of the piece itself, so it is still the article pulled
-     out rather than the web or the reader's own words. Greg has not set this one
-     by hand; move it if it is wrong.
+  /* **In the passages run, after Quotes, since 2026-09-29** — Greg: *"Move FAQ
+     and Search a little bit further left"* (SPIDERYARN-READING2-4E). Every row
+     is a question answered by passages of the piece itself, which is what the
+     run is. It had stood after Citations, at the end of the "one dimension
+     pulled out" group, where Greg had not yet placed it by hand.
 
      `BadgeQuestionMark`, used nowhere else. Not `MessageCircleQuestionMark`,
      which is Quiz's run button — the article asking *you* is the mode this one
@@ -711,6 +742,7 @@ const MODES_UI = [
      docs/plans/260916d-faq-mode.md. */
   {
     mode: "faq",
+    group: "passages",
     icon: BadgeQuestionMark,
   },
   /* Search was **two** dimmed placeholders in the `SOON` list this file used to
@@ -726,9 +758,41 @@ const MODES_UI = [
      annotate.ts where somebody adding a fifth kind of mark will meet it. */
   {
     mode: "search",
+    group: "passages",
     icon: Search,
   },
-  /* **Straight after Search, because it is Search's kind of thing** — a pass
+  {
+    mode: "glossary",
+    group: "dimensions",
+    icon: BookA,
+  },
+  /* Straight after Glossary, because the order runs outwards from the article's
+     own words and these two are the same kind of thing pointed at different
+     units: a term is a word you look up, an idea is a proposition you hold.
+     Greg set this order by hand, so a new mode goes where it belongs in his
+     reasoning rather than on the end. */
+  {
+    mode: "ideas",
+    group: "dimensions",
+    icon: Lightbulb,
+  },
+  /* **Last of Glossary, Ideas, Timeline — the "one dimension of this piece
+     pulled out" run.** Greg placed it after Ideas on 2026-08-31, and on
+     2026-09-29 asked for it *"further right"* (SPIDERYARN-READING2-4E): FAQ
+     and Search, which had come to stand after it, moved left of the run, so
+     it is now three places further right and still at the far end of its
+     group, which is further from the article's own words than either of the
+     other two.
+     docs/plans/260831i-timeline-mode.md § 3. */
+  {
+    mode: "timeline",
+    group: "dimensions",
+    icon: Clock,
+  },
+  /* **First of the critical run — Referee, Citations, Debate — since
+     2026-09-29**, which is Greg's grouping: *"Move Citations further right,
+     next to Debate and Reviewer"* (SPIDERYARN-READING2-4E). Until then it sat
+     straight after Search, because it is Search's kind of thing — a pass
      over the piece looking for passages — pointed at somebody who has been
      asked to peer-review it rather than at somebody reading it for themselves.
      Its first sub-mode is very nearly a saved search, which is the argument for
@@ -746,45 +810,30 @@ const MODES_UI = [
      mode is actually for. docs/project/icons.md. */
   {
     mode: "referee",
+    group: "critical",
     icon: ClipboardCheck,
   },
-  /* Diagram sits between the ways *into* the article and the conversation about
-     it, next to Summary rather than next to Chat, because it is the same move
-     Summary makes — the article restated — with a picture instead of prose.
+  /* **Between Referee and Debate, since 2026-09-29** — Greg: *"Move
+     Citations further right, next to Debate and Reviewer"*
+     (SPIDERYARN-READING2-4E). Its list is the piece's own references, Debate's
+     is the web's, and Referee is somebody weighing the piece against other
+     work: the three are reading it critically. It stood after Timeline before
+     that.
 
-     **Not experimental since 2026-09-04**, and the flag moved rather than
-     went: one of its five pictures is good enough for everybody and four are
-     not, so the switch now hides the four (`KIND_UI` in DiagramPanel.tsx).
-
-     **Pressing this button draws the Sketch, since 2026-09-06.** It used to buy
-     nothing — the mode landed on an invitation with the price on it and waited
-     for a second press — and Greg asked for the second press to go
-     (docs/plans/260906b-opening-a-mode-starts-it-generating.md). So this is now
-     the most expensive button in the bar that is in front of *every* reader:
-     ~$0.20 and about two minutes. Only the Sketch; Illustrated is still its own
-     chip inside the mode. activation.ts § MODE_TARGET has the reasoning, and the
-     empty state still says the price for anyone who arrives without pressing.
-
-     Its description (src/mode-catalog.ts) names the picture a default reader
-     will actually meet. It used to list the three geometries, which are now the
-     hidden ones. */
+     `BookText` — a closed book with lines on it, i.e. *a work*. `Library` was
+     the obvious glyph and is refused: it is the shelf's, on every page. `Quote`
+     is Quotes'. docs/plans/260911g-citations-mode.md. */
   {
-    mode: "diagram",
-    icon: Network,
+    mode: "citations",
+    group: "critical",
+    icon: BookText,
   },
-  {
-    mode: "chat",
-    icon: MessagesSquare,
-  },
-  /* **After Chat and before Remember**, which is a placement in the ordering
-     this list has followed since Greg set it by hand rather than an array
-     index: it runs from the article restated, through the ways into it, to the
-     conversation about it, and Remember is last because its content comes from
-     the READER. Debate's content comes from neither the article nor the reader
-     — it is the only mode in this bar whose content is **not in the article at
-     all** — so it goes at the far end of the outward run and one step short of
-     the reader's own. Greg has not set this one by hand; move it if it is
-     wrong.
+  /* **Last of the critical run, before Chat, since 2026-09-29**, when Greg
+     moved Chat past it (*"Move Chat right, just before Recall"*) and put
+     Citations and Referee beside it (SPIDERYARN-READING2-4E). Debate's content
+     comes from neither the article nor the reader — it is the only mode in
+     this bar whose content is **not in the article at all** — so it stays at
+     the far end of the outward run, one run short of the reader's own.
 
      **`Globe`, and it is the same word this app already draws for "this came
      from the open web"** — the glossary's web lookup, chat's search, the
@@ -801,11 +850,18 @@ const MODES_UI = [
      docs/plans/260905f-debate-mode-what-the-web-says-about-this-piece.md. */
   {
     mode: "debate",
+    group: "critical",
     icon: Globe,
   },
-  /* Last, and one step further out than Chat, which is the end of the ordering
-     this list has followed since Greg set it by hand: it runs from the article
-     restated, through the ways into it, to the conversation about it. Remember
+  {
+    mode: "chat",
+    group: "talk",
+    icon: MessagesSquare,
+  },
+  /* Last, straight after Chat — the two are the "you and the article
+     talking" run, and Greg put Chat *"just before Recall"* on 2026-09-29
+     (SPIDERYARN-READING2-4E). The ordering runs from the article restated,
+     through the ways into it, to the conversation about it. Remember
      is the only mode whose content comes from the READER — it cannot be used at
      all until they have read the piece — so it belongs past the point where the
      article's own words run out. docs/plans/260827ah-review-mode.md.
@@ -821,6 +877,7 @@ const MODES_UI = [
      docs/plans/260901d-rename-review-mode-to-remember-mode-everywhere.md. */
   {
     mode: "remember",
+    group: "talk",
     /* `Brain`, not `Speech`, from 2026-09-05. `Speech` was the mode's method — the
        reader talks — and Greg asked for its subject instead: what they kept.
        SPIDERYARN-READING2-25. It is the only brain in the bar, and Lucide has
@@ -896,6 +953,27 @@ export function visibleModes(on: boolean, current: Mode | undefined): readonly M
       current: m.mode === current,
     }),
   );
+}
+
+/**
+ * **Which drawn buttons begin a new run of related modes** — and so carry the
+ * separator line (`ModeGroup`; dock-fit.css § lines between runs).
+ *
+ * Worked out from the list **as drawn**, never from `MODES_UI`: with the
+ * switch off whole runs disappear, and a line computed from the full list
+ * would either sit beside nothing or be missing where two surviving runs
+ * meet. The first drawn button never carries one — a line at the very end of
+ * the frame separates nothing.
+ *
+ * Exported for tests/dock-mode-order.test.ts.
+ */
+export function groupStarts(visible: readonly ModeUi[]): ReadonlySet<Mode> {
+  const starts = new Set<Mode>();
+  visible.forEach((m, i) => {
+    const before = visible[i - 1];
+    if (before && before.group !== m.group) starts.add(m.mode);
+  });
+  return starts;
 }
 
 /**
@@ -1710,7 +1788,7 @@ export function Dock({
             honest, and it is the trigger the previous note in this file named —
             not the arrival of a third mode, but the third mode being *visible*.
             See DockModes below. Off the reading view there is no band to switch,
-            so the same five degrade to links back to it. */}
+            so the same visible mode list degrades to links back to it. */}
         {mode !== undefined && onMode ? (
           <DockModes
             modes={visible}
@@ -2264,6 +2342,7 @@ function DockModes({
    *
    * tests/arrows-belong-to-the-article.test.tsx holds all of it.
    */
+  const starts = groupStarts(modes);
   return (
     <div className="dock-modes" role="radiogroup" aria-label="What the middle column shows">
       <TooltipGroup delay={{ open: 300, close: 120 }} timeoutMs={400}>
@@ -2312,7 +2391,7 @@ function DockModes({
             <button
               type="button"
               role="radio"
-              className={`dock-btn${m.mode === mode ? " on" : ""}${marked?.has(m.mode) ? ` ${MARKED}` : ""}`}
+              className={`dock-btn${m.mode === mode ? " on" : ""}${marked?.has(m.mode) ? ` ${MARKED}` : ""}${starts.has(m.mode) ? " dock-group-start" : ""}`}
               aria-checked={m.mode === mode}
               /* Explicit, because the visible label is `display: none` at
                  narrow widths and an accessible name computed from the text
@@ -2387,6 +2466,9 @@ function DockModeLinks({
   modes: readonly ModeUi[];
   marked?: ReadonlyMap<Mode, string> | undefined;
 }) {
+  /* The same runs, and the same line between them, as the segment draws —
+     `groupStarts`. */
+  const starts = groupStarts(modes);
   return (
     /* **One group, so these scrub like the segment does.** Fourteen independent
        300ms waits is what a row of tooltips feels like without it —
@@ -2407,7 +2489,7 @@ function DockModeLinks({
              segment's. Without it that rung does nothing on the metadata and
              tweets pages, and the bar there skips straight from every label to
              none. GPT Sol, reviewing the design. */
-          className={`dock-mode${marked?.has(m.mode) ? ` ${MARKED}` : ""}`}
+          className={`dock-mode${marked?.has(m.mode) ? ` ${MARKED}` : ""}${starts.has(m.mode) ? " dock-group-start" : ""}`}
           keepLabel={m.keepLabel}
           /* **The same card the segment draws, plus where the press lands.** A
              reader who learned what Quotes costs by hovering it on the reading
@@ -3187,6 +3269,11 @@ function DockExperimentalSwitch({
      things key on it: the marker, the on-state, and `aria-invalid`. */
   const broken = variant === "load-failed" || variant === "save-failed";
   const state = SWITCH_STATE[variant](setting.on);
+  /* Saving cannot accept another press, but it is still a toggle whose current
+     value is known. `aria-disabled` reports the temporary unavailability;
+     removing `aria-pressed` would instead change its role to a command button
+     while the drawn knob continues to report the value. */
+  const pressed = press === "toggle" || variant === "saving" ? setting.on : undefined;
   /* The state sentence is *described by* rather than named — see `aria-label`
      below for the APG rule that forces the split, and `PRESS` for why. */
   const stateId = useId();
@@ -3217,15 +3304,15 @@ function DockExperimentalSwitch({
            state we do not have. `soon` is the dim that goes with
            `aria-disabled`. */
         className={`dock-btn dock-experimental${setting.on && !broken ? " on" : ""}${press === "nothing" ? " soon" : ""}`}
-        /* **Only where a press actually toggles.** Two reasons, and they land on
-           the same three variants. It is a *toggle button* only where pressing
-           it moves the setting — in `load-failed` and `stale` the press asks the
-           server again, which is an action. And where there is no answer at all
-           (`waiting`) or the read failed, `aria-pressed={false}` would be the
-           button telling a screen reader the setting is off, which is the
-           silent-default mistake in its most direct form.
-           docs/reusable/silent-success.md; `PRESS` above. */
-        aria-pressed={press === "toggle" ? setting.on : undefined}
+        /* **Where this is a toggle whose value is known.** Ready and
+           save-failed accept a toggle press. Saving remains the same toggle and
+           retains its known value while `aria-disabled` separately says that it
+           cannot accept another press yet. In `load-failed` and `stale`, the
+           press asks the server again, which is an action rather than a toggle;
+           and where there is no answer at all, `aria-pressed={false}` would tell
+           a screen reader the setting is off. docs/reusable/silent-success.md;
+           `PRESS` above. */
+        aria-pressed={pressed}
         /* **A supplement, and known to be one.** `aria-invalid` is not among the
            states ARIA lists as supported on `role="button"` — it belongs to the
            input-ish roles — so how much of it survives to a screen reader is not
@@ -3274,6 +3361,20 @@ function DockExperimentalSwitch({
             urgent thing in it, so it is among the first labels the ladder
             should be free to drop. Plain's word is the one that stays. */}
         <span className="dock-btn-label">Experimental</span>
+        {/* **A drawn switch, so the button reads as one.** Greg, 2026-09-29:
+            *"make the Experimental mode icon/tooltip more visibly a toggle
+            somehow"* (SPIDERYARN-READING2-4F) — a flask, a word and a lit
+            frame read as one more mode. A track and a knob is the one shape
+            everybody reads as on/off.
+
+            **Drawn in every variant**, so the row's width never changes with
+            the state and `fitSignature` has nothing new to learn. Where the
+            knob sits is `SWITCH_LOOK`, not the frame's `broken` rule — see
+            there. Presentation only — `aria-pressed` and the description above
+            carry the state — and never dropped by the fit ladder, because once
+            the label is gone this is what says "toggle". dock.css § the
+            experimental switch. */}
+        <span className={`dock-switch ${SWITCH_LOOK[variant](setting.on)}`} aria-hidden="true" />
         {/* Visible, and one of three carriers — see the header. `aria-hidden`
             because the sentence it stands for is already in the description. */}
         {broken && (
@@ -3283,6 +3384,34 @@ function DockExperimentalSwitch({
     </Tooltip>
   );
 }
+
+/**
+ * **Where the drawn switch's knob sits**, per appearance — the class on
+ * `.dock-switch` (dock.css § the experimental switch).
+ *
+ * Not the frame's rule. The frame goes unlit for a failed load *and* a failed
+ * save, which is right for a lit frame and wrong for a knob: after a failed
+ * save the store has already put the value back (experimental-store.ts §
+ * `set`), so the position is known and `aria-pressed` reports it — a knob
+ * forced left there would contradict the button's own state. And where there
+ * is no answer at all, a knob on the left is the silent-default mistake in its
+ * most visible form: it draws "off" for a value nobody has read. GPT Sol, plan
+ * review, 2026-09-29.
+ *
+ *  - known — `ready`, `saving`, `save-failed`: the value.
+ *  - `stale`: the cached value, muted, because it is what we last knew.
+ *  - no answer — `waiting`, `load-failed`: `is-unknown`, the knob centred.
+ *
+ * Exported for tests/dock-experimental-switch.test.tsx.
+ */
+export const SWITCH_LOOK: Record<ExperimentalVariant, (on: boolean) => string> = {
+  ready: (on) => (on ? "is-on" : "is-off"),
+  saving: (on) => (on ? "is-on" : "is-off"),
+  "save-failed": (on) => (on ? "is-on" : "is-off"),
+  stale: (on) => (on ? "is-on is-stale" : "is-off is-stale"),
+  waiting: () => "is-unknown",
+  "load-failed": () => "is-unknown",
+};
 
 /**
  * **What the switch is doing right now**, one sentence per appearance.
@@ -3316,8 +3445,16 @@ const SWITCH_STATE: Record<ExperimentalVariant, (on: boolean) => string> = {
   stale: (on) => `${experimentalOffline(on)} Press to check again.`,
   waiting: () => "Loading…",
   /* `null` for the date — *when* you turned it on is the one thing `/profile`
-     can say and a button in a row of eighteen icons cannot. */
-  ready: (on) => (on ? experimentalIsOn(null) : EXPERIMENTAL_IS_OFF),
+     can say and a button in a row of eighteen icons cannot.
+
+     **And what a press does**, since 2026-09-29 — the other half of making
+     this read as a toggle (SPIDERYARN-READING2-4F; the drawn switch is the
+     first half). Here and not in experimental-copy.ts: the checkbox on
+     /profile needs no instruction, because it is a checkbox. */
+  ready: (on) =>
+    on
+      ? `${experimentalIsOn(null)} Press to turn it off.`
+      : `${EXPERIMENTAL_IS_OFF} Press to turn it on.`,
 };
 
 /**

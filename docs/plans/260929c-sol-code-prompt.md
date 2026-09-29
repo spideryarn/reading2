@@ -1,0 +1,11 @@
+Code review of the built change, with licence to fix. Repo: spideryarn2, this worktree. The change is the single commit at HEAD: see it with `git show HEAD --stat` and `git show HEAD`. The plan is docs/plans/260929c-mode-bar-order-and-groups-experimental-switch-gutter-icons-diagram-behind-the-switch-reading-time-line-explained.md, and your own earlier plan review is docs/plans/260929c-sol-plan-review.md — check that every finding you made there was actually addressed in the code, not just in the plan.
+
+What it does (five admin requests from Greg): reorders the bottom bar's modes into runs with a hairline only between runs (`group` on MODES_UI rows, `groupStarts`, dock-fit.css); a drawn switch inside the Experimental button with `SWITCH_LOOK` deciding the knob; gutter glyphs 12->15px; Diagram behind the experimental switch; the reading-time hairline turned into `span.blk-read` (last child of `.blk-gutter`) with a `title` and a hover strip in the gap right of the column.
+
+The conclusion I would least like to be wrong about: that `span.blk-read` as a new last child of `.blk-gutter` breaks none of the gutter's `:nth-child` / `> *` / container-query / `[data-open]` rules — i.e. that it never takes a control's slot, never becomes visible or hoverable on an unread row, never changes how many icons a short paragraph shows, and does not misbehave when the column is opened with "…" (data-open, which unfolds the column over rows below). Please read src/web/styles/gutter.css in full for this, plus touch.css and narrow-window.css rules that touch the gutter, and reason about specificity concretely.
+
+Also check: the switch's knob vs aria-pressed in every variant; that groupStarts is computed from the visible list on both the segment and the loose-links arm; that nothing else in the repo still asserts Diagram is in the default bar (grep src, tests, docs — but do NOT edit docs/project/security-map.md; if it needs a change, report it instead); stale comments that name the old order.
+
+Tests: the box's memory guard may refuse vitest; if a run is refused, say so rather than reporting tests as passing. `npm run typecheck` is safe to run.
+
+Fix what you find inside this change (edit the files directly; do not commit). Report: each finding with file:line, severity, and whether you fixed it; and anything wider for me to decide.

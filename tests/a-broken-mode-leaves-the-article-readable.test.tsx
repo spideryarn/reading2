@@ -1610,6 +1610,9 @@ describe("a press that met any broken band is retired", () => {
   });
 
   it("diagram: the bar's press lands on the Sketch, and that is the token retired", async () => {
+    /* Diagram's button is behind the experimental switch since 2026-09-29
+       (SPIDERYARN-READING2-4R). */
+    experimentalSince = "2026-09-01T09:00:00.000Z";
     who.set(OWNER_A);
     notBuilt = "/api/sketch/";
     await open("?diagram=sketch");

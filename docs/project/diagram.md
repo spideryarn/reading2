@@ -135,7 +135,8 @@ Pinned in `tests/url-state.test.ts`.
 
 ### Who sees which chip, 2026-09-04
 
-**The mode is in everybody's bar; four of its five pictures are not.** A reader
+**The mode was in everybody's bar from 2026-09-04 to 2026-09-29; four of its five pictures were
+not.** A reader
 wrote in:
 
 > We have this idea of experimental features. The only diagram sub-mode that is
@@ -145,8 +146,14 @@ wrote in:
 >
 > — a reader, 2026-09-04 (SPIDERYARN-READING2-13)
 
-So Diagram is `experimental: false` in
-[`MODE_CATALOG`](../../src/mode-catalog.ts) and each row of
+**Since 2026-09-29 the whole mode is behind the switch as well** — Greg: *"Move all of Diagram mode
+into the 'Experimental features'. It's just not good enough yet."* (SPIDERYARN-READING2-4R,
+[260929c](../plans/260929c-mode-bar-order-and-groups-experimental-switch-gutter-icons-diagram-behind-the-switch-reading-time-line-explained.md)).
+What follows is still true inside the mode, which a reader with the switch off now reaches only by
+URL.
+
+So Diagram was `experimental: false` in
+[`MODE_CATALOG`](../../src/mode-catalog.ts) from 2026-09-04 to 2026-09-29, and each row of
 `KIND_UI` ([`DiagramPanel.tsx`](../../src/web/DiagramPanel.tsx)) carries the flag
 instead — Sketch false, the other four true. The chip row draws the ones that
 are not experimental **plus whichever the URL names**, which is the mode bar's
@@ -189,8 +196,8 @@ posted, for an owner arriving at `?mode=diagram` and at
 `?mode=diagram&diagram=sketch`.
 
 *Pressing Diagram in the bar* now draws the picture it is about to open, which
-makes it the dearest button in the bar that is in front of every reader: about
-$0.20 and two minutes. Greg's rule
+made it, until the mode went behind the experimental switch on 2026-09-29, the dearest button in
+the bar in front of every reader: about $0.20 and two minutes. Greg's rule
 ([260906b](../plans/260906b-opening-a-mode-starts-it-generating.md)):
 
 > By opening the mode, the user is implicitly indicating that they want what's
@@ -2227,9 +2234,9 @@ with the wrong reasoning, and stops being the right answer the day the gate move
 `similar.pairs` is a shared empty array while the hook is idle and `buildGraph` takes it as an
 argument, so the hierarchy, sequence, anchor and vocabulary edges all draw as usual.
 
-**And they do get a button for it**, since 2026-09-04: Diagram came out from behind the
-experimental-features switch, so it is in the bar a signed-out reader sees as well as being reachable
-by a shared `?mode=diagram` URL. What their switch — off by decision — still decides is the picture
+**They had a button for it from 2026-09-04 to 2026-09-29**, while Diagram was out from behind the
+experimental-features switch. Since it went back in, a signed-out reader — off by decision — reaches
+it only by a shared `?mode=diagram` URL, and the bar draws its button only while they are in it. What their switch — off by decision — still decides is the picture
 chips, and they have none of those anyway: a visitor gets no picker at all.
 [experimental-features.md](experimental-features.md), and
 [Who sees which chip](#who-sees-which-chip-2026-09-04) above.

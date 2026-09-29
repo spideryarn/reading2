@@ -326,7 +326,7 @@ export const MODE_CATALOG: Record<Mode, ModeCatalogEntry> = {
        empty state and the pipeline both use, so a reader who has seen the mode
        once will type it. */
     aliases: ["sketch", "picture", "visual"],
-    experimental: false,
+    experimental: true,
   },
   ideas: {
     description:
