@@ -207,6 +207,33 @@ agrees with it.
    carries its own `aria-label`; if you ever do compose children in, put `aria-hidden="true"` back by
    hand.
 
+## Navigation: an icon with a tooltip, not a text label
+
+> I'd rather that was an icon with a tooltip, because I'm trying to avoid adding more text than we
+> need, because there's already so much text on the page. Icons should always have tooltips, and
+> for navigation, I'm suggesting that where we can, we use icons + tooltips rather than text labels.
+> And add this as a note to our design document going forwards.
+>
+> — Greg, 2026-09-29 (SPIDERYARN-READING2-5C), on Trajectory's *In the glossary ›*
+
+Going forwards, then:
+
+- **A control that takes you somewhere** — into another mode, to a whole list — is an icon button,
+  and its words live in its tooltip and its `aria-label`. For a mode, use **that mode's own icon**
+  from the bar (`MODES_UI` in [`Dock.tsx`](../../src/web/Dock.tsx)), so the button looks like where
+  it goes: Trajectory's stop card opens Glossary with `BookA`, Ideas with `Lightbulb` and FAQ with
+  `BadgeQuestionMark` (`OpenIn` in [`TrajectoryPanel.tsx`](../../src/web/TrajectoryPanel.tsx)).
+- **Every icon has a tooltip.** No bare icon, anywhere.
+- **Not for content.** A link whose words *are* the thing — an idea's name, an event's label, a
+  section title — stays words. The rule is about labels like *In the glossary ›*, not about text
+  that happens to be clickable.
+- **"Where we can."** A control whose meaning no icon carries, or that a first-time reader must
+  understand before pressing (*Plan the route*), keeps its words.
+
+This is a note, not yet a line in [design-css-overview.md](design-css-overview.md), which is a rule
+doc and changes only with Greg's approval of the wording
+([edit-important-docs.md](../reusable/edit-important-docs.md)).
+
 ## Where they're used
 
 - [`src/web/Masthead.tsx`](../../src/web/Masthead.tsx) — `ChevronDown`, rotated by `.chevron.up` for

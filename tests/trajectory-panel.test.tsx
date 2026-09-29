@@ -31,7 +31,7 @@ import type {
 } from "../src/types.js";
 import type { GlossaryEntry } from "../src/types.js";
 import type { GlossaryRead } from "../src/web/useGlossary.js";
-import type { StopCard } from "../src/web/stop-card.js";
+import type { CardTarget, StopCard } from "../src/web/stop-card.js";
 import type { Found } from "../src/web/search-hits.js";
 import type { UseTrajectory } from "../src/web/useTrajectory.js";
 import type { QuotesRead } from "../src/web/useQuotes.js";
@@ -369,16 +369,16 @@ function view(over: Partial<TrajectoryView> = {}): TrajectoryView {
       { depth: 3, label: "Most", count: 4 },
     ],
     rows: [
-      { quoteId: Q[2]!, n: 1, place: "Methods", cue: "What earlier work missed", current: false, missing: false, position: null, words: null },
-      { quoteId: Q[0]!, n: 2, place: "Results", cue: "The headline result", current: true, missing: false, position: null, words: null },
-      { quoteId: Q[3]!, n: 3, place: "Methods", cue: "Where it stops holding", current: false, missing: false, position: null, words: null },
+      { quoteId: Q[2]!, n: 1, place: "Methods", cue: "What earlier work missed", current: false, missing: false, position: null, words: null, where: [] },
+      { quoteId: Q[0]!, n: 2, place: "Results", cue: "The headline result", current: true, missing: false, position: null, words: null, where: [] },
+      { quoteId: Q[3]!, n: 3, place: "Methods", cue: "Where it stops holding", current: false, missing: false, position: null, words: null, where: [] },
     ],
     position: 2,
     card: null,
     onDepth: (d) => void calls.push(`depth ${d}`),
     onRow: (id) => void calls.push(`row ${id}`),
     onStep: (dir) => void calls.push(`step ${dir}`),
-    onOpen: (target) => void calls.push(`open ${target.kind} ${target.id}`),
+    onOpen: (target) => void calls.push(`open ${target.kind}${"id" in target ? ` ${target.id}` : ""}`),
     canOpen: () => true,
     ...over,
   };
@@ -397,8 +397,18 @@ const CARD: StopCard = {
     { entry: TERM, alsoAt: 1 },
     { entry: { ...TERM, id: "spya-te3def", name: "synergy", senseHere: "Information only the pair carries." }, alsoAt: null },
   ],
-  ideas: [{ id: "spya-id2abc", name: "Synergy is not redundancy" }],
-  questions: [{ id: "q1", question: "How was synergy measured?" }],
+  ideas: [{ id: "spya-id2abc", name: "Synergy is not redundancy", statement: "The pair carries information neither does alone." }],
+  questions: [
+    {
+      id: "q1",
+      question: "How was synergy measured?",
+      passages: [
+        { blockId: "spya-tr2abc" as BlockId, quote: "We measured it with PID.", start: 4, place: "Methods", here: false },
+        { blockId: "spya-tr4ghj" as BlockId, quote: "Synergy peaked mid-range.", start: 8, place: "Results", here: false },
+        { blockId: "spya-tr3def" as BlockId, quote: "The stop's own words.", start: 0, place: "Results", here: true },
+      ],
+    },
+  ],
   events: [{ id: "spya-ev2abc", label: "Recordings made" }],
 };
 
@@ -414,6 +424,9 @@ describe("the panel", () => {
     await draw(owner(), view());
     const head = host.querySelector(".band-head");
     expect(head?.textContent).toContain("Stop 2 of 3");
+    expect(head?.querySelector(".traj-spark")?.getAttribute("aria-label")).toBe(
+      "Stop 2 of 3 · position unavailable",
+    );
     const depths = [...host.querySelectorAll<HTMLButtonElement>(".band-head .traj-depth")];
     expect(depths.map((b) => b.textContent)).toEqual(["Gist2", "More3", "Most4"]);
     expect(depths.map((b) => b.getAttribute("aria-pressed"))).toEqual(["false", "true", "false"]);
@@ -446,8 +459,8 @@ describe("the panel", () => {
   it("draws a repeated section path for a screen reader only — no ditto mark beside a quote (260928e)", async () => {
     const repeated = view({
       rows: [
-        { quoteId: Q[2]!, n: 1, place: "Methods", cue: null, current: false, missing: false, position: null, words: "First." },
-        { quoteId: Q[3]!, n: 2, place: "Methods", cue: null, current: false, missing: false, position: null, words: "Second." },
+        { quoteId: Q[2]!, n: 1, place: "Methods", cue: null, current: false, missing: false, position: null, words: "First.", where: [] },
+        { quoteId: Q[3]!, n: 2, place: "Methods", cue: null, current: false, missing: false, position: null, words: "Second.", where: [] },
       ],
       position: 1,
     });
@@ -643,7 +656,7 @@ describe("the panel", () => {
       depth: 3,
       /* Most walks only its own stop (260929e), so the count must come from the
          whole route, not from the rows drawn. */
-      rows: [{ quoteId: Q[1]!, n: 1, place: "Results", cue: null, current: true, missing: false, position: null, words: null }],
+      rows: [{ quoteId: Q[1]!, n: 1, place: "Results", cue: null, current: true, missing: false, position: null, words: null, where: [] }],
     });
     /* The live Quotes list may include two abstract quotes; the route records
        the four it was actually offered, which is the honest denominator. */
@@ -676,32 +689,114 @@ describe("the panel", () => {
     /* Outside the row's button: a button cannot hold other controls. */
     expect(cards[0]!.closest("button")).toBeNull();
     const chips = [...host.querySelectorAll<HTMLButtonElement>(".traj-chip")];
-    expect(chips.map((c) => c.textContent)).toEqual(["transfer entropyalso at stop 1", "synergy"]);
-    expect(text(".traj-card")).toContain("Synergy is not redundancy");
-    expect(text(".traj-card")).toContain("How was synergy measured?");
+    expect(chips.map((c) => c.textContent)).toEqual([
+      "transfer entropyalso at stop 1",
+      "synergy",
+      "Synergy is not redundancy",
+    ]);
     expect(text(".traj-card")).toContain("Recordings made");
     expect(text(".traj-card")).not.toContain(TERM.senseHere!);
+    /* The FAQ question is not on the card any more: it sits above the row. */
+    expect(text(".traj-card")).not.toContain("How was synergy measured?");
   });
 
-  it("opens a term chip to its one-line sense and a link into Glossary", async () => {
+  it("puts the FAQ question above the row, outside its button, and opens every passage it points to (5C)", async () => {
+    await draw(owner(), view({ card: CARD }));
+    const row = host.querySelector<HTMLElement>(".traj-row.current")!;
+    const ask = row.querySelector<HTMLButtonElement>(".traj-ask-q")!;
+    const go = row.querySelector<HTMLButtonElement>(".traj-go")!;
+    /* First in the row, and not inside the row's button. */
+    expect(ask.compareDocumentPosition(go) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(ask.closest(".traj-go")).toBeNull();
+    expect(ask.textContent).toContain("How was synergy measured?");
+    expect(ask.getAttribute("aria-expanded")).toBe("false");
+    await act(async () => ask.click());
+    expect(calls, "opening the question must not press the row").toEqual([]);
+    expect(ask.getAttribute("aria-expanded")).toBe("true");
+    const opened = text(".traj-ask .traj-sense");
+    expect(opened).toContain("We measured it with PID.");
+    expect(opened).toContain("Synergy peaked mid-range.");
+    expect(opened).toContain("Results");
+    /* The stop's own quote is named, not repeated above itself. */
+    expect(opened).toContain("This stop's passage, below");
+    expect(opened).not.toContain("The stop's own words.");
+    await act(async () => host.querySelector<HTMLButtonElement>('.traj-ask [aria-label="Open FAQ"]')!.click());
+    expect(calls).toEqual(["open faq"]);
+  });
+
+  it("opens a term chip to its one-line sense, and Glossary by an icon, not the words (5C)", async () => {
     await draw(owner(), view({ card: CARD }));
     const chip = host.querySelector<HTMLButtonElement>(".traj-chip")!;
     expect(chip.getAttribute("aria-expanded")).toBe("false");
     await act(async () => chip.click());
     expect(chip.getAttribute("aria-expanded")).toBe("true");
     expect(text(".traj-sense")).toContain(TERM.senseHere!);
-    await act(async () => host.querySelector<HTMLButtonElement>(".traj-sense .traj-link")!.click());
+    expect(text(".traj-sense")).not.toMatch(/in the glossary/i);
+    const open = host.querySelector<HTMLButtonElement>('.traj-sense [aria-label="Open in Glossary"]')!;
+    expect(open.textContent).toBe("");
+    await act(async () => open.click());
     expect(calls).toEqual([`open term ${TERM.id}`]);
   });
 
-  it("links an idea and an event into their modes, and leaves the FAQ question as text", async () => {
+  it("opens an idea in place to its statement, one snippet at a time (59)", async () => {
     await draw(owner(), view({ card: CARD }));
-    const buttons = [...host.querySelectorAll<HTMLButtonElement>(".traj-card .traj-link")];
-    const byText = (t: string) => buttons.find((b) => b.textContent?.includes(t))!;
-    await act(async () => byText("Synergy is not redundancy").click());
-    await act(async () => byText("Recordings made").click());
-    expect(byText("the passage")).toBeUndefined();
+    const chips = () => [...host.querySelectorAll<HTMLButtonElement>(".traj-chip")];
+    await act(async () => chips()[0]!.click());
+    await act(async () => chips()[2]!.click());
+    /* The idea's opening closed the term's. */
+    expect(chips().map((c) => c.getAttribute("aria-expanded"))).toEqual(["false", "false", "true"]);
+    expect(text(".traj-card .traj-sense")).toContain("The pair carries information neither does alone.");
+    await act(async () => host.querySelector<HTMLButtonElement>(".traj-ask-q")!.click());
+    expect(chips().map((c) => c.getAttribute("aria-expanded"))).toEqual(["false", "false", "false"]);
+    await act(async () => chips()[2]!.click());
+    await act(async () => host.querySelector<HTMLButtonElement>('.traj-card [aria-label="Open in Ideas"]')!.click());
+    const events = [...host.querySelectorAll<HTMLButtonElement>(".traj-card .traj-link")];
+    await act(async () => events.find((b) => b.textContent?.includes("Recordings made"))!.click());
     expect(calls).toEqual(["open idea spya-id2abc", "open event spya-ev2abc"]);
+  });
+
+  it("closes an open snippet when stepping away, so stepping back does not resurrect it", async () => {
+    const at = (i: number) => {
+      const v = view({ card: CARD, position: i + 1 });
+      return { ...v, rows: v.rows.map((row, j) => ({ ...row, current: i === j })) };
+    };
+    await draw(owner(), at(1));
+    await act(async () => host.querySelector<HTMLButtonElement>(".traj-chip")!.click());
+    expect(host.querySelector(".traj-card .traj-sense")).not.toBeNull();
+    await draw(owner(), at(0));
+    await draw(owner(), at(1));
+    expect(host.querySelector(".traj-card .traj-sense")).toBeNull();
+  });
+
+  it("gives each row's position mark a where-am-I card, as its own button beside the row (5C)", async () => {
+    const where = [
+      { kind: "node" as const, key: "a", title: "Methods", depth: 0, onPath: false, here: false },
+      { kind: "node" as const, key: "b", title: "Results", depth: 0, onPath: true, here: true },
+    ];
+    const v = view();
+    await draw(owner(), { ...v, rows: v.rows.map((r) => ({ ...r, position: 0.5, where })) });
+    const marks = [...host.querySelectorAll<HTMLButtonElement>(".traj-where")];
+    expect(marks).toHaveLength(3);
+    expect(marks[0]!.closest(".traj-go")).toBeNull();
+    expect(marks[0]!.getAttribute("aria-label")).toBe("Where stop 1 is in the article");
+    await act(async () => marks[0]!.click());
+    expect(calls, "the mark must not press the row").toEqual([]);
+    const card = document.querySelector(".where-card");
+    expect(card?.textContent).toBe("MethodsResults");
+    expect(card?.querySelector('[aria-current="location"]')?.textContent).toBe("Results");
+  });
+
+  it("forgets an open where-card when its row leaves the pass", async () => {
+    const where = [{ kind: "node" as const, key: "a", title: "Methods", depth: 0, onPath: true, here: true }];
+    const v = view();
+    const full = { ...v, rows: v.rows.map((row) => ({ ...row, position: 0.5, where })) };
+    await draw(owner(), full);
+    await act(async () => host.querySelector<HTMLButtonElement>(".traj-where")!.click());
+    expect(document.querySelector(".where-card")).not.toBeNull();
+    await draw(owner(), { ...full, rows: full.rows.slice(1) });
+    await draw(owner(), full);
+    expect(host.querySelector<HTMLButtonElement>(".traj-where")!.getAttribute("aria-expanded")).toBe("false");
+    expect(document.querySelector(".where-card")).toBeNull();
   });
 
   it("keeps an experimental event as scrapbook text when its mode control is hidden", async () => {
@@ -947,7 +1042,7 @@ function Harness({ covers = false, stepped = false, arrival }: { covers?: boolea
       onOpenKey: setOpenKey,
       onControl,
       glossary: glossaryRead,
-      onOpen: (target: { kind: string; id: string }) => void opened.push(`${target.kind} ${target.id}`),
+      onOpen: (target: CardTarget) => void opened.push(`${target.kind}${"id" in target ? ` ${target.id}` : ""}`),
       canOpen: () => true,
       arrival: arrival ?? ownArrival.current,
     }),
@@ -1668,17 +1763,16 @@ describe("the scrapbook, walked", () => {
     await mount();
     expect(current()).toBe(Q[2]);
     const card = host.querySelector(".traj-row.current .traj-card");
-    expect([...(card?.querySelectorAll(".traj-chip") ?? [])].map((c) => c.textContent)).toEqual(["laboratory"]);
+    /* The term, then the idea — both chips now (260929f). */
+    const chips = () => [...host.querySelectorAll<HTMLButtonElement>(".traj-row.current .traj-card .traj-chip")];
+    expect(chips().map((c) => c.textContent)).toEqual(["laboratory", "Fieldwork is the test"]);
     /* Outdated, not stale, so it is shown (F19). */
     expect(card?.textContent).toContain("Fieldwork is the test");
     expect(requested.some((r) => r.url.startsWith("/api/ideas/"))).toBe(true);
     expect(requested.filter((r) => r.method !== "GET")).toEqual([]);
 
-    await act(async () => {
-      [...host.querySelectorAll<HTMLButtonElement>(".traj-card .traj-link")]
-        .find((b) => b.textContent?.includes("Fieldwork"))!
-        .click();
-    });
+    await act(async () => chips()[1]!.click());
+    await act(async () => host.querySelector<HTMLButtonElement>('.traj-card [aria-label="Open in Ideas"]')!.click());
     expect(opened).toEqual(["idea spya-id4ghj"]);
   });
 
