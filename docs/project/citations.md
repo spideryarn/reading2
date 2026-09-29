@@ -203,6 +203,10 @@ What code decides ([`src/citation-lookup.ts`](../../src/citation-lookup.ts)):
 - **every quote shown is the extract's own slice**, found by `findQuote`'s strict `"spaced"` pass,
   at least six words; *supports* or *partly* without one becomes *doesn't show*, and *what the work
   does* without its own quote is dropped;
+- **a known limit**: a search title the engine cut short (ending "…") is matched on its opening
+  words, the first author and the year, so a different paper by the same author, in the same year,
+  with the same opening words, could be taken for the work. The reader is only ever told it is *a
+  page matching it*. Accepted, with the reasoning, in the plan's review log;
 - **a stale reading is never shown**: it is stored with a fingerprint of everything sent, recomputed
   when the list is read, and attached only on a match.
 

@@ -201,6 +201,38 @@ and no database writes. **Total cost $0.73 for 28 calls.**
    enough prefix run.
 3. **One quote over its cap discarded the whole reading.** Now only that field is dropped.
 
+GPT Sol's narrow review of those fixes found the loosened title rule admitted derivative pages:
+"Correction to: <title>", "Comment on <title>", "<title> - Retraction", "<title> - Review", and a
+sibling paper sharing a long title opening. The rule is now:
+
+- anchored at the start of both titles;
+- a short site tail is allowed, judged part by part, with no notice word in it and not led by
+  "review";
+- a cut title needs the first author's surname, and the year where the list has one.
+
+Commits b5c5fc72, 61a6e6c2 and debef873.
+
+**Re-runs, arm B only.** Both runs cover the same 14 works.
+
+- *At b5c5fc72:* 11 of 14 assessed.
+- *At 61a6e6c2:* 11 of 14 assessed, with one correct page refused: the Royal Society's
+  "| Proceedings B | The Royal Society" tail. debef873 fixes it by judging each part of a tail
+  separately.
+- *Page-picking is stable across runs:* the page chosen and the identity decision stay the same,
+  except where Exa returns a different copy of the page.
+- *The verdict grade wobbles between adjacent grades from run to run.* Kaplan went not-in-extract
+  → partly → supports across three runs; the grade is the model's call and is not reproducible.
+  That is why it is labelled *the AI's reading*.
+- *Quote verification caught every invented, joined, paraphrased or reformatted quote in all
+  three runs.* One of those was a correct quote the model re-typed with TeX, `$360$` for 360. It
+  was dropped: the right direction.
+- **Total spend on real runs: about $1.62.**
+
+**Known limit, after two rounds and a narrow re-check.** A different paper by the same first author,
+in the same year, whose search title shares the work's first five or more words and is cut short
+before they differ, would be taken for the work. The page would still be described only as *a page
+matching it*. Settled with Opus; see the review log.
+
 Unchanged: a row titled only "Thompson et al 2020" can never be found by title. That is *Find
 it*'s existing rule, and out of scope here.
 
@@ -235,3 +267,24 @@ half-built code was never committed; this section and the Sol review are what su
   [260929g-check-a-cited-paper-plan-review-sol.md](260929g-check-a-cited-paper-plan-review-sol.md).
   P-1, P-2, P-3 and P-8 carry over into § 2 above. The rest were about the fetching pipeline and
   belong to the proposed later stage.
+- Second plan review, of the re-scoped plan:
+  [260929g-citations-say-what-we-saw-plan-review-sol.md](260929g-citations-say-what-we-saw-plan-review-sol.md).
+  All of R-1…R-8 adopted, § After the second plan review. Not adopted: R-7's `max_characters` on the
+  search tool, because nothing in the repo uses it, and `require_parameters` could turn it into a
+  failure.
+- Code review of stages 1–2:
+  [260929g-citations-say-what-we-saw-code-review-sol.md](260929g-citations-say-what-we-saw-code-review-sol.md).
+  Approved; Sol fixed C-1…C-3 itself. C-4 (`pass0` cannot be interrupted) belongs to the proposed
+  later stage.
+- Narrow review of the rules loosened after the real run:
+  [260929g-citations-identity-fixes-review-sol.md](260929g-citations-identity-fixes-review-sol.md)
+  found N-1 and N-2. The re-check,
+  [260929g-citations-identity-fixes-recheck-sol.md](260929g-citations-identity-fixes-recheck-sol.md),
+  found both narrowed but still open. debef873 closed N-1's "- Review" and added the year to N-2.
+- **Sol still objects to N-2's residual** (the same author and year, a shared title opening, a cut
+  title). **Overruled**, on Opus's arbitration: it can mislabel a real quote, but it cannot invent
+  one; the reader is already told it is "a page matching it"; and refusing every cut title would
+  lose about one lookup in seven for a case not yet seen in real data. If a real run ever shows a
+  sibling accepted, refuse a cut title unless a DOI or arXiv id matches. Opus also suggested saying
+  on the row when a match came from a cut title. That needs a stored field, so it is left as a
+  follow-up.
