@@ -936,3 +936,4 @@ things in a way that it'll automatically use the latest"* → model-roles-latest
 resolve to the newest Sol the subscription serves, never the paid key.
 
 - **2026-09-29 ~06:00 BST, fb56 (public modes for signed-out visitors, SPIDERYARN-READING2-56).** Assumptions pending Greg: (1) Quiz is read-only for visitors (questions, show the answer, the passage), with no marking because marking is a paid call; (2) Illustrated diagram plates are left out of this fix, as a named follow-up needing a public image route. Find-it results stay owner-private. Trajectory/FAQ/Citations/Debate ship first.
+- **2026-09-29, Greg:** "We don't need Illustrated diagrams for visitors." The fb56 follow-up (a public route for Illustrated plates) is dropped, not deferred. Quiz for visitors: excluded (fb56 chose (a), too big for read-only; Greg had allowed either).
