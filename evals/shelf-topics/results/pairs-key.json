@@ -1,0 +1,782 @@
+{
+ "p001": {
+  "case": "greg-like",
+  "kind": "same-arm-control",
+  "A": {
+   "arm": "baseline",
+   "run": 1
+  },
+  "B": {
+   "arm": "baseline",
+   "run": 2
+  }
+ },
+ "p002": {
+  "case": "greg-like",
+  "kind": "swapped-duplicate",
+  "A": {
+   "arm": "luna-score",
+   "run": 1
+  },
+  "B": {
+   "arm": "jev-floor",
+   "run": 1
+  }
+ },
+ "p003": {
+  "case": "greg-like",
+  "kind": "same-arm-control",
+  "A": {
+   "arm": "luna-score",
+   "run": 2
+  },
+  "B": {
+   "arm": "luna-score",
+   "run": 1
+  }
+ },
+ "p004": {
+  "case": "greg-like",
+  "kind": "contrast",
+  "A": {
+   "arm": "deepseek-score",
+   "run": 1
+  },
+  "B": {
+   "arm": "luna-score",
+   "run": 1
+  }
+ },
+ "p005": {
+  "case": "greg-like",
+  "kind": "contrast",
+  "A": {
+   "arm": "luna-order",
+   "run": 1
+  },
+  "B": {
+   "arm": "luna-score",
+   "run": 1
+  }
+ },
+ "p006": {
+  "case": "greg-like",
+  "kind": "contrast",
+  "A": {
+   "arm": "luna-score",
+   "run": 1
+  },
+  "B": {
+   "arm": "baseline",
+   "run": 1
+  }
+ },
+ "p007": {
+  "case": "greg-like",
+  "kind": "contrast",
+  "A": {
+   "arm": "baseline",
+   "run": 1
+  },
+  "B": {
+   "arm": "jev-floor",
+   "run": 1
+  }
+ },
+ "p008": {
+  "case": "greg-like",
+  "kind": "contrast",
+  "A": {
+   "arm": "jev-floor",
+   "run": 1
+  },
+  "B": {
+   "arm": "luna-score",
+   "run": 1
+  }
+ },
+ "p009": {
+  "case": "greg-like",
+  "kind": "contrast",
+  "A": {
+   "arm": "jev-score",
+   "run": 1
+  },
+  "B": {
+   "arm": "jev-floor",
+   "run": 1
+  }
+ },
+ "p010": {
+  "case": "mind-and-machines",
+  "kind": "same-arm-control",
+  "A": {
+   "arm": "baseline",
+   "run": 1
+  },
+  "B": {
+   "arm": "baseline",
+   "run": 2
+  }
+ },
+ "p011": {
+  "case": "mind-and-machines",
+  "kind": "swapped-duplicate",
+  "A": {
+   "arm": "luna-score",
+   "run": 1
+  },
+  "B": {
+   "arm": "jev-floor",
+   "run": 1
+  }
+ },
+ "p012": {
+  "case": "mind-and-machines",
+  "kind": "contrast",
+  "A": {
+   "arm": "luna-score",
+   "run": 1
+  },
+  "B": {
+   "arm": "luna-order",
+   "run": 1
+  }
+ },
+ "p013": {
+  "case": "mind-and-machines",
+  "kind": "contrast",
+  "A": {
+   "arm": "baseline",
+   "run": 1
+  },
+  "B": {
+   "arm": "jev-floor",
+   "run": 1
+  }
+ },
+ "p014": {
+  "case": "mind-and-machines",
+  "kind": "same-arm-control",
+  "A": {
+   "arm": "luna-score",
+   "run": 2
+  },
+  "B": {
+   "arm": "luna-score",
+   "run": 1
+  }
+ },
+ "p015": {
+  "case": "mind-and-machines",
+  "kind": "contrast",
+  "A": {
+   "arm": "luna-score",
+   "run": 1
+  },
+  "B": {
+   "arm": "baseline",
+   "run": 1
+  }
+ },
+ "p016": {
+  "case": "mind-and-machines",
+  "kind": "contrast",
+  "A": {
+   "arm": "jev-floor",
+   "run": 1
+  },
+  "B": {
+   "arm": "luna-score",
+   "run": 1
+  }
+ },
+ "p017": {
+  "case": "contemplative-neuro",
+  "kind": "contrast",
+  "A": {
+   "arm": "baseline",
+   "run": 1
+  },
+  "B": {
+   "arm": "jev-floor",
+   "run": 1
+  }
+ },
+ "p018": {
+  "case": "contemplative-neuro",
+  "kind": "contrast",
+  "A": {
+   "arm": "baseline",
+   "run": 1
+  },
+  "B": {
+   "arm": "luna-score",
+   "run": 1
+  }
+ },
+ "p019": {
+  "case": "contemplative-neuro",
+  "kind": "contrast",
+  "A": {
+   "arm": "luna-order",
+   "run": 1
+  },
+  "B": {
+   "arm": "luna-score",
+   "run": 1
+  }
+ },
+ "p020": {
+  "case": "contemplative-neuro",
+  "kind": "same-arm-control",
+  "A": {
+   "arm": "luna-score",
+   "run": 2
+  },
+  "B": {
+   "arm": "luna-score",
+   "run": 1
+  }
+ },
+ "p021": {
+  "case": "contemplative-neuro",
+  "kind": "swapped-duplicate",
+  "A": {
+   "arm": "luna-score",
+   "run": 1
+  },
+  "B": {
+   "arm": "jev-floor",
+   "run": 1
+  }
+ },
+ "p022": {
+  "case": "contemplative-neuro",
+  "kind": "same-arm-control",
+  "A": {
+   "arm": "baseline",
+   "run": 2
+  },
+  "B": {
+   "arm": "baseline",
+   "run": 1
+  }
+ },
+ "p023": {
+  "case": "contemplative-neuro",
+  "kind": "contrast",
+  "A": {
+   "arm": "jev-floor",
+   "run": 1
+  },
+  "B": {
+   "arm": "luna-score",
+   "run": 1
+  }
+ },
+ "p024": {
+  "case": "kitchen-garden",
+  "kind": "swapped-duplicate",
+  "A": {
+   "arm": "luna-score",
+   "run": 1
+  },
+  "B": {
+   "arm": "jev-floor",
+   "run": 1
+  }
+ },
+ "p025": {
+  "case": "kitchen-garden",
+  "kind": "contrast",
+  "A": {
+   "arm": "luna-score",
+   "run": 1
+  },
+  "B": {
+   "arm": "baseline",
+   "run": 1
+  }
+ },
+ "p026": {
+  "case": "kitchen-garden",
+  "kind": "contrast",
+  "A": {
+   "arm": "jev-floor",
+   "run": 1
+  },
+  "B": {
+   "arm": "baseline",
+   "run": 1
+  }
+ },
+ "p027": {
+  "case": "kitchen-garden",
+  "kind": "same-arm-control",
+  "A": {
+   "arm": "baseline",
+   "run": 2
+  },
+  "B": {
+   "arm": "baseline",
+   "run": 1
+  }
+ },
+ "p028": {
+  "case": "kitchen-garden",
+  "kind": "contrast",
+  "A": {
+   "arm": "jev-floor",
+   "run": 1
+  },
+  "B": {
+   "arm": "luna-score",
+   "run": 1
+  }
+ },
+ "p029": {
+  "case": "kitchen-garden",
+  "kind": "contrast",
+  "A": {
+   "arm": "luna-order",
+   "run": 1
+  },
+  "B": {
+   "arm": "luna-score",
+   "run": 1
+  }
+ },
+ "p030": {
+  "case": "kitchen-garden",
+  "kind": "same-arm-control",
+  "A": {
+   "arm": "luna-score",
+   "run": 1
+  },
+  "B": {
+   "arm": "luna-score",
+   "run": 2
+  }
+ },
+ "p031": {
+  "case": "history",
+  "kind": "contrast",
+  "A": {
+   "arm": "luna-score",
+   "run": 1
+  },
+  "B": {
+   "arm": "baseline",
+   "run": 1
+  }
+ },
+ "p032": {
+  "case": "history",
+  "kind": "same-arm-control",
+  "A": {
+   "arm": "baseline",
+   "run": 2
+  },
+  "B": {
+   "arm": "baseline",
+   "run": 1
+  }
+ },
+ "p033": {
+  "case": "history",
+  "kind": "same-arm-control",
+  "A": {
+   "arm": "luna-score",
+   "run": 2
+  },
+  "B": {
+   "arm": "luna-score",
+   "run": 1
+  }
+ },
+ "p034": {
+  "case": "history",
+  "kind": "contrast",
+  "A": {
+   "arm": "jev-floor",
+   "run": 1
+  },
+  "B": {
+   "arm": "luna-score",
+   "run": 1
+  }
+ },
+ "p035": {
+  "case": "history",
+  "kind": "swapped-duplicate",
+  "A": {
+   "arm": "luna-score",
+   "run": 1
+  },
+  "B": {
+   "arm": "jev-floor",
+   "run": 1
+  }
+ },
+ "p036": {
+  "case": "history",
+  "kind": "contrast",
+  "A": {
+   "arm": "luna-order",
+   "run": 1
+  },
+  "B": {
+   "arm": "luna-score",
+   "run": 1
+  }
+ },
+ "p037": {
+  "case": "history",
+  "kind": "contrast",
+  "A": {
+   "arm": "baseline",
+   "run": 1
+  },
+  "B": {
+   "arm": "jev-floor",
+   "run": 1
+  }
+ },
+ "p038": {
+  "case": "local",
+  "kind": "same-arm-control",
+  "A": {
+   "arm": "luna-score",
+   "run": 2
+  },
+  "B": {
+   "arm": "luna-score",
+   "run": 1
+  }
+ },
+ "p039": {
+  "case": "local",
+  "kind": "swapped-duplicate",
+  "A": {
+   "arm": "luna-score",
+   "run": 1
+  },
+  "B": {
+   "arm": "jev-floor",
+   "run": 1
+  }
+ },
+ "p040": {
+  "case": "local",
+  "kind": "contrast",
+  "A": {
+   "arm": "baseline",
+   "run": 1
+  },
+  "B": {
+   "arm": "luna-score",
+   "run": 1
+  }
+ },
+ "p041": {
+  "case": "local",
+  "kind": "contrast",
+  "A": {
+   "arm": "baseline",
+   "run": 1
+  },
+  "B": {
+   "arm": "jev-floor",
+   "run": 1
+  }
+ },
+ "p042": {
+  "case": "local",
+  "kind": "same-arm-control",
+  "A": {
+   "arm": "baseline",
+   "run": 1
+  },
+  "B": {
+   "arm": "baseline",
+   "run": 2
+  }
+ },
+ "p043": {
+  "case": "local",
+  "kind": "contrast",
+  "A": {
+   "arm": "luna-order",
+   "run": 1
+  },
+  "B": {
+   "arm": "luna-score",
+   "run": 1
+  }
+ },
+ "p044": {
+  "case": "local",
+  "kind": "contrast",
+  "A": {
+   "arm": "jev-floor",
+   "run": 1
+  },
+  "B": {
+   "arm": "luna-score",
+   "run": 1
+  }
+ },
+ "p045": {
+  "case": "local-subset-a",
+  "kind": "contrast",
+  "A": {
+   "arm": "luna-score",
+   "run": 1
+  },
+  "B": {
+   "arm": "jev-floor",
+   "run": 1
+  }
+ },
+ "p046": {
+  "case": "local-subset-a",
+  "kind": "same-arm-control",
+  "A": {
+   "arm": "baseline",
+   "run": 1
+  },
+  "B": {
+   "arm": "baseline",
+   "run": 2
+  }
+ },
+ "p047": {
+  "case": "local-subset-a",
+  "kind": "contrast",
+  "A": {
+   "arm": "baseline",
+   "run": 1
+  },
+  "B": {
+   "arm": "jev-floor",
+   "run": 1
+  }
+ },
+ "p048": {
+  "case": "local-subset-a",
+  "kind": "contrast",
+  "A": {
+   "arm": "luna-score",
+   "run": 1
+  },
+  "B": {
+   "arm": "luna-order",
+   "run": 1
+  }
+ },
+ "p049": {
+  "case": "local-subset-a",
+  "kind": "swapped-duplicate",
+  "A": {
+   "arm": "jev-floor",
+   "run": 1
+  },
+  "B": {
+   "arm": "luna-score",
+   "run": 1
+  }
+ },
+ "p050": {
+  "case": "local-subset-a",
+  "kind": "same-arm-control",
+  "A": {
+   "arm": "luna-score",
+   "run": 2
+  },
+  "B": {
+   "arm": "luna-score",
+   "run": 1
+  }
+ },
+ "p051": {
+  "case": "local-subset-a",
+  "kind": "contrast",
+  "A": {
+   "arm": "baseline",
+   "run": 1
+  },
+  "B": {
+   "arm": "luna-score",
+   "run": 1
+  }
+ },
+ "p052": {
+  "case": "local-subset-b",
+  "kind": "contrast",
+  "A": {
+   "arm": "jev-floor",
+   "run": 1
+  },
+  "B": {
+   "arm": "luna-score",
+   "run": 1
+  }
+ },
+ "p053": {
+  "case": "local-subset-b",
+  "kind": "contrast",
+  "A": {
+   "arm": "luna-score",
+   "run": 1
+  },
+  "B": {
+   "arm": "baseline",
+   "run": 1
+  }
+ },
+ "p054": {
+  "case": "local-subset-b",
+  "kind": "same-arm-control",
+  "A": {
+   "arm": "luna-score",
+   "run": 1
+  },
+  "B": {
+   "arm": "luna-score",
+   "run": 2
+  }
+ },
+ "p055": {
+  "case": "local-subset-b",
+  "kind": "same-arm-control",
+  "A": {
+   "arm": "baseline",
+   "run": 2
+  },
+  "B": {
+   "arm": "baseline",
+   "run": 1
+  }
+ },
+ "p056": {
+  "case": "local-subset-b",
+  "kind": "contrast",
+  "A": {
+   "arm": "jev-floor",
+   "run": 1
+  },
+  "B": {
+   "arm": "baseline",
+   "run": 1
+  }
+ },
+ "p057": {
+  "case": "local-subset-b",
+  "kind": "contrast",
+  "A": {
+   "arm": "luna-order",
+   "run": 1
+  },
+  "B": {
+   "arm": "luna-score",
+   "run": 1
+  }
+ },
+ "p058": {
+  "case": "local-subset-b",
+  "kind": "swapped-duplicate",
+  "A": {
+   "arm": "luna-score",
+   "run": 1
+  },
+  "B": {
+   "arm": "jev-floor",
+   "run": 1
+  }
+ },
+ "p059": {
+  "case": "local-subset-c",
+  "kind": "contrast",
+  "A": {
+   "arm": "baseline",
+   "run": 1
+  },
+  "B": {
+   "arm": "jev-floor",
+   "run": 1
+  }
+ },
+ "p060": {
+  "case": "local-subset-c",
+  "kind": "same-arm-control",
+  "A": {
+   "arm": "luna-score",
+   "run": 1
+  },
+  "B": {
+   "arm": "luna-score",
+   "run": 2
+  }
+ },
+ "p061": {
+  "case": "local-subset-c",
+  "kind": "contrast",
+  "A": {
+   "arm": "baseline",
+   "run": 1
+  },
+  "B": {
+   "arm": "luna-score",
+   "run": 1
+  }
+ },
+ "p062": {
+  "case": "local-subset-c",
+  "kind": "contrast",
+  "A": {
+   "arm": "luna-score",
+   "run": 1
+  },
+  "B": {
+   "arm": "luna-order",
+   "run": 1
+  }
+ },
+ "p063": {
+  "case": "local-subset-c",
+  "kind": "contrast",
+  "A": {
+   "arm": "jev-floor",
+   "run": 1
+  },
+  "B": {
+   "arm": "luna-score",
+   "run": 1
+  }
+ },
+ "p064": {
+  "case": "local-subset-c",
+  "kind": "swapped-duplicate",
+  "A": {
+   "arm": "luna-score",
+   "run": 1
+  },
+  "B": {
+   "arm": "jev-floor",
+   "run": 1
+  }
+ },
+ "p065": {
+  "case": "local-subset-c",
+  "kind": "same-arm-control",
+  "A": {
+   "arm": "baseline",
+   "run": 1
+  },
+  "B": {
+   "arm": "baseline",
+   "run": 2
+  }
+ }
+}

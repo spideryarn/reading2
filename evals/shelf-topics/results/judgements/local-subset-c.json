@@ -1,0 +1,9 @@
+{"case":"local-subset-c","judgements":[
+{"id":"p059","winner":"B","scoreA":3,"scoreB":5,"reason":"A leads with incidental words (July, thread, diameter, mechanism, loss, essay) while B's six pills are mostly real themes (AI, writing, computational irreducibility, brains), though B misses work/projects and memory."},
+{"id":"p060","winner":"tie","scoreA":5,"scoreB":5,"reason":"The lists are identical except for weak tail pills (data/language vs cell/metaphor), which trade off evenly."},
+{"id":"p061","winner":"B","scoreA":3,"scoreB":5,"reason":"B's pills are broader real themes with wider coverage (writing, kids/projects, Indigenous memory), whereas A front-loads meaningless labels like July and thread."},
+{"id":"p062","winner":"B","scoreA":5,"scoreB":6,"reason":"B names themes central to this reader (conscious AI, conscious experience, neural networks, computational irreducibility) though it is AI-only and redundant, while A covers more of the shelf with vague words like collective, data and kids."},
+{"id":"p063","winner":"B","scoreA":4,"scoreB":5,"reason":"Both share the same core, but A's short list leaves the work/projects and post-colonial memory articles uncovered, which B reaches via kids, collective and Indigenous."},
+{"id":"p064","winner":"A","scoreA":5,"scoreB":4,"reason":"A covers more of the shelf (work/projects, Indigenous memory) on top of the same AI/writing/brains core that B's shorter list has."},
+{"id":"p065","winner":"tie","scoreA":3,"scoreB":3,"reason":"Identical lists."}
+]}

@@ -1,0 +1,9 @@
+{"case":"contemplative-neuro","judgements":[
+{"id":"f017","winner":"tie","scoreA":5,"scoreB":5,"reason":"The two lists are identical."},
+{"id":"f018","winner":"B","scoreA":5,"scoreB":7,"reason":"B covers the whole shelf with eight meaningful pills, while A's first eight include the junk pill 'sequence' and it later adds 'female' and 'bell'."},
+{"id":"f019","winner":"B","scoreA":5,"scoreB":6,"reason":"Both cover the main themes, but A adds the vague 'researchers' pill and an incoherent 'practitioners' pill (monks EEG plus metta), while B's extras are real topics, even though neuroplasticity overlaps."},
+{"id":"f020","winner":"A","scoreA":7,"scoreB":6,"reason":"Both are clean and cover the shelf, but A's single 'brain' pill replaces B's overlapping 'default mode network' and 'neuroplasticity' pills, so A has fewer near-duplicates."},
+{"id":"f021","winner":"B","scoreA":5,"scoreB":6,"reason":"B has the same real themes without A's incidental pills 'sequence', 'female' and 'bell'."},
+{"id":"f022","winner":"B","scoreA":6,"scoreB":7,"reason":"B keeps the full coverage and folds the overlapping brain-science pills into one 'brain' pill, so it has less redundancy."},
+{"id":"f023","winner":"A","scoreA":6,"scoreB":5,"reason":"B piles up overlapping science pills (brain, research, default mode network, neuroplasticity, meditators) in its twelve slots, while A is tighter with the same coverage."}
+]}

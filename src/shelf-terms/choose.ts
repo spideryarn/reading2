@@ -123,6 +123,19 @@ export interface ChooseOptions {
    * R7). Off only for the report and the tests.
    */
   adjacency?: boolean;
+  /**
+   * **A quality from outside** — a model's per-candidate score, keyed by the
+   * candidate's `key` (plan 260929c R8). When set, it **replaces** the computed
+   * quality (idf × tf × phrase bonus) for every candidate, and nothing else
+   * changes: membership, the band, the redundancy skips, the discounted-coverage
+   * greedy and the adjacency rule run exactly as they do by default. A
+   * candidate the map does not name gets 0, and a candidate at 0 is never a
+   * topic (`eligible`), so a caller that scored only part of the pool gets
+   * topics only from the part it scored. Every value must be finite and ≥ 0 —
+   * anything else throws a `RangeError` rather than ranking by it. Null (the
+   * default): the computed quality.
+   */
+  quality?: ReadonlyMap<string, number> | null;
 }
 
 /**
@@ -152,6 +165,7 @@ const DEFAULTS: Required<ChooseOptions> = {
   familiarityMin: null,
   vagueDensityPer1000: 2,
   adjacency: true,
+  quality: null,
 };
 
 const byString = (a: string, b: string) => (a < b ? -1 : a > b ? 1 : 0);
@@ -633,7 +647,19 @@ function buildPool(articles: ChooseArticle[], N: number, o: Required<ChooseOptio
     const p = m ? toPool(key, m, dfAll.get(key)?.size ?? 1, N, band, o.phraseBonus) : null;
     if (p) pool.push(p);
   }
-  return pool;
+  return o.quality ? withExternalQuality(pool, o.quality) : pool;
+}
+
+/** `ChooseOptions.quality` over the pool: named keys take their score, the rest 0. */
+function validateExternalQuality(quality: ReadonlyMap<string, number> | null): void {
+  if (!quality) return;
+  for (const [key, q] of quality)
+    if (!Number.isFinite(q) || q < 0)
+      throw new RangeError(`external quality for "${key}" must be finite and ≥ 0, got ${q}`);
+}
+
+function withExternalQuality(pool: Pool[], quality: ReadonlyMap<string, number>): Pool[] {
+  return pool.map((p) => ({ ...p, quality: quality.get(p.key) ?? 0 }));
 }
 
 /**
@@ -643,11 +669,40 @@ function buildPool(articles: ChooseArticle[], N: number, o: Required<ChooseOptio
  */
 export function candidateTopics(articles: ChooseArticle[], opts: ChooseOptions = {}): ShelfTerm[] {
   const o = { ...DEFAULTS, ...opts };
+  validateExternalQuality(o.quality);
   const N = new Set(articles.map((a) => a.textHash)).size;
   if (N < o.minWorks) return [];
   return eligible(buildPool(articles, N, o), opts.qualityPool ?? Number.POSITIVE_INFINITY).map(
     (p) => ({ key: p.key, label: p.label, articles: p.articles }),
   );
+}
+
+/** One candidate as a model is shown it: `ShelfTerm` plus how many works it reaches and its quality. */
+export interface PoolCandidate extends ShelfTerm {
+  /** Distinct works (text hashes) among its members — what the band and coverage count. */
+  works: number;
+  /** The computed quality, or `opts.quality`'s value when given. */
+  quality: number;
+}
+
+/**
+ * **Every candidate the greedy pass could take, best in quality first**, with
+ * what a prompt needs to describe it: the label, the key a score must come back
+ * under, the member articles (`articles.length` is the article count) and the
+ * quality the default ranking would use. Plan 260929c: the program proposes
+ * from this list and a model scores it; the scores go back in through
+ * `ChooseOptions.quality`. Ties by key, so the order is total. Candidates with
+ * quality 0 are included — the model may still see them — but `chooseTerms`
+ * will never take one.
+ */
+export function candidatePool(articles: ChooseArticle[], opts: ChooseOptions = {}): PoolCandidate[] {
+  const o = { ...DEFAULTS, ...opts };
+  validateExternalQuality(o.quality);
+  const N = new Set(articles.map((a) => a.textHash)).size;
+  if (N < o.minWorks) return [];
+  return buildPool(articles, N, o)
+    .sort((a, b) => b.quality - a.quality || byString(a.key, b.key))
+    .map((p) => ({ key: p.key, label: p.label, articles: p.articles, works: p.works.length, quality: p.quality }));
 }
 
 /**
@@ -656,6 +711,7 @@ export function candidateTopics(articles: ChooseArticle[], opts: ChooseOptions =
  */
 export function chooseTerms(articles: ChooseArticle[], opts: ChooseOptions = {}): ChooseResult {
   const o = { ...DEFAULTS, ...opts };
+  validateExternalQuality(o.quality);
   const N = new Set(articles.map((a) => a.textHash)).size;
   /* On the 000…002 test shelf, 6 articles that are 2 works, every
      configuration the spike tried chose nothing useful. */

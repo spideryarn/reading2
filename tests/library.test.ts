@@ -54,6 +54,7 @@ describe("describeArticle", () => {
   };
   const base = {
     slug: "s",
+    revisionId: "10000000-0000-4000-8000-000000000001",
     meta: { slug: "s", title: "T" },
     scalars: deriveLibraryScalars({ blocks, tree }),
     comments: 0,
@@ -78,6 +79,7 @@ describe("describeArticle", () => {
 
   it("prints the word count it was given, and turns it into minutes", () => {
     const entry = describeArticle(base);
+    expect(entry.revisionId).toBe(base.revisionId);
     expect(entry.words).toBe(1000);
     expect(entry.minutes).toBe(readingMinutes(1000));
   });

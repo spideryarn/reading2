@@ -1,0 +1,9 @@
+{"case":"local-subset-c","judgements":[
+{"id":"f059","winner":"B","scoreA":5,"scoreB":6,"reason":"A is compact and on-profile but covers only the AI/writing cluster; B is noisier yet reaches the memory, work and project articles."},
+{"id":"f060","winner":"A","scoreA":6,"scoreB":3,"reason":"B leads with incidental words (July, thread, diameter, mechanism) that make incoherent groups, while A's first pills are real themes."},
+{"id":"f061","winner":"tie","scoreA":3,"scoreB":3,"reason":"Identical lists."},
+{"id":"f062","winner":"A","scoreA":6,"scoreB":5,"reason":"A's conscious AI, brains and neural network pills match this reader's stated interests closely, though they overlap and cover little beyond AI; B covers more of the shelf with vaguer pills."},
+{"id":"f063","winner":"B","scoreA":3,"scoreB":5,"reason":"A opens with narrow or incidental pills (Turing machine, July), whereas B is a short list of coherent AI, writing and minds themes."},
+{"id":"f064","winner":"B","scoreA":5,"scoreB":6,"reason":"The lists are nearly the same; A's cell and metaphor pills are incoherent mixes, a bit worse than B's data and language."},
+{"id":"f065","winner":"A","scoreA":6,"scoreB":5,"reason":"A covers more of the shelf (memory, work, projects) despite some noisy pills; B is tidy but leaves out large parts of the shelf."}
+]}

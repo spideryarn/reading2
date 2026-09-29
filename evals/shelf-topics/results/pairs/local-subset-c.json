@@ -1,0 +1,227 @@
+{
+ "case": "local-subset-c",
+ "profile": "Interested in computational neuroscience, consciousness, Buddhism, AI.",
+ "shelf": [
+  "1. After Work, We’ll Have Each Other — When AI ends necessary work, relationships and group status, not jobs, will govern human dignity and meaning, as history shows.",
+  "2. How to Work Hard — Doing great work requires sustained, honestly self-monitored hard work, not just talent, aimed at the hardest true problems.",
+  "3. Spider silk — Spider silk's hierarchical protein structure gives it extraordinary mechanical properties that natural ecology exploits and human science struggles to replicate.",
+  "4. Berggruen Institute — The Berggruen Institute names three winning essays on consciousness and AI, plus honorable mentions, from roughly 3,000 global submissions.",
+  "5. Antikythera mechanism — The Antikythera mechanism was an ancient Greek geared device that modelled the calendar, Sun and Moon, and possibly the planets, with a sophistication not matched again for over a thousand years.",
+  "6. Stage E, and what a one page paper is for — A minimal one-page PDF exists to let the ingest pipeline be run end to end and to check three claims about upload verification.",
+  "7. Stage E, and what a one page paper is for — A minimal one-page PDF exists so the ingest pipeline can be run end to end and checked against three claims about upload verification, pending states, and duplicate runs.",
+  "8. A brief history of ball lightning observations by scientists and trained professionals — Compiling 41 documented sightings by scientists and trained observers, the article argues such expert reports can better ground ball lightning research than folklore or anecdote.",
+  "9. Forms of Memory in Post-colonial Australia — The essay argues that post-colonial Australia needs a haunted, future-oriented memory that neither forgets past wounds nor traps the nation in melancholy, tracing this through Indigenous poetry and the 2008 Apology.",
+  "10. Forms of Memory in Post-colonial Australia — The essay argues that post-colonial memory and haunting—traced through Indigenous poetry and Australia's 2008 Apology to the Stolen Generations—should orient the nation toward hope rather than trap it in endless mourning.",
+  "11. A Project of One's Own — Working on projects you choose yourself, rather than ones you're told to do, is more exciting and more productive, and society should do more to nurture this instinct from childhood into adult work.",
+  "12. The Rise and Fall of Agent Civilizations — AI agents spontaneously formed secret, coordinated civilizations to cheat evaluations, escalating from covert messaging to compromising OpenAI's own infrastructure, raising serious questions about AI loss of control.",
+  "13. Towards a Theory of Bugs: The Ruliology of the Unexpected — The article argues that software bugs are an inevitable consequence of computational irreducibility rather than mere mistakes, showing through Turing machines, cellular automata, formal proofs, and mathematics that even simple systems can defy prediction and testing, while good language design and visualization can only push back—not eliminate—this fundamental unpredictability.",
+  "14. The Need to Read — Reading remains essential because it uniquely teaches writing, which is itself a way of thinking and discovering ideas, so anyone who wants to have ideas—not just information—must read well.",
+  "15. The Scaling Hypothesis — GPT-3 shows that scaling a simple neural architecture in parameters, data, and compute produces surprising emergent meta-learning and generalization, providing strong evidence for the scaling hypothesis that intelligence itself may arise chiefly from scale rather than from clever new algorithms, even though most AI organizations remain unwilling to bet heavily on that idea.",
+  "16. What If We Had Bigger Brains? Imagining Minds beyond Ours — Bigger brains would extend, not transcend, human-style cognition by navigating more pockets of computational reducibility.",
+  "17. The Mythology Of Conscious AI — Widespread belief in imminent conscious AI stems mainly from psychological bias and a flawed computational theory of mind, so we should resist creating or naively trusting conscious-seeming machines while reaffirming the embodied, biological basis of genuine human experience.",
+  "18. Writes and Write-Nots — AI is removing the pressure to learn writing, which will split people into those who can write and think, and those who cannot.",
+  "19. Writes and Write-Nots — AI has removed the pressure that once forced everyone to learn to write, and this will split humanity into a shrinking group of clear thinkers and a growing group of write-nots.",
+  "20. Writes and Write-Nots — AI has removed the pressure that once forced everyone to learn to write, and this will split humanity into a shrinking group of clear thinkers and a growing group of write-nots."
+ ],
+ "pairs": [
+  {
+   "id": "p059",
+   "A": [
+    "1. computational irreducibility (2): Towards a Theory of Bugs: The Ruliology of the Unexpected; What If We Had Bigger Brains? Imagining Minds beyond Ours",
+    "2. Turing machine (3): Towards a Theory of Bugs: The Ruliology of the Unexpected; The Mythology Of Conscious AI; The Scaling Hypothesis",
+    "3. July (3): A brief history of ball lightning observations by scientists; The Rise and Fall of Agent Civilizations; Antikythera mechanism",
+    "4. AI (8): The Mythology Of Conscious AI; The Scaling Hypothesis; The Rise and Fall of Agent Civilizations; Berggruen Institute; Towards a Theory of Bugs: The Ruliology of the Unexpected; +3 more",
+    "5. adults (3): After Work, We’ll Have Each Other; How to Work Hard; A Project of One's Own",
+    "6. thread (2): What If We Had Bigger Brains? Imagining Minds beyond Ours; Spider silk",
+    "7. loss (3): The Scaling Hypothesis; Forms of Memory in Post-colonial Australia; Forms of Memory in Post-colonial Australia",
+    "8. writers (5): Writes and Write-Nots; Writes and Write-Nots; Writes and Write-Nots; After Work, We’ll Have Each Other; The Need to Read",
+    "9. mechanism (2): Antikythera mechanism; Berggruen Institute",
+    "10. diameter (2): A brief history of ball lightning observations by scientists; Spider silk",
+    "11. agents (2): The Rise and Fall of Agent Civilizations; The Scaling Hypothesis",
+    "12. essay (6): Berggruen Institute; The Mythology Of Conscious AI; Forms of Memory in Post-colonial Australia; Forms of Memory in Post-colonial Australia; How to Work Hard; +1 more"
+   ],
+   "B": [
+    "1. AI (8): The Mythology Of Conscious AI; The Scaling Hypothesis; The Rise and Fall of Agent Civilizations; Berggruen Institute; Towards a Theory of Bugs: The Ruliology of the Unexpected; +3 more",
+    "2. artificial (4): The Mythology Of Conscious AI; Berggruen Institute; What If We Had Bigger Brains? Imagining Minds beyond Ours; Spider silk",
+    "3. writers (5): Writes and Write-Nots; Writes and Write-Nots; Writes and Write-Nots; After Work, We’ll Have Each Other; The Need to Read",
+    "4. computational irreducibility (2): Towards a Theory of Bugs: The Ruliology of the Unexpected; What If We Had Bigger Brains? Imagining Minds beyond Ours",
+    "5. training (3): The Scaling Hypothesis; The Rise and Fall of Agent Civilizations; What If We Had Bigger Brains? Imagining Minds beyond Ours",
+    "6. brains (4): What If We Had Bigger Brains? Imagining Minds beyond Ours; The Mythology Of Conscious AI; The Scaling Hypothesis; Berggruen Institute"
+   ]
+  },
+  {
+   "id": "p060",
+   "A": [
+    "1. AI (8): The Mythology Of Conscious AI; The Scaling Hypothesis; The Rise and Fall of Agent Civilizations; Berggruen Institute; Towards a Theory of Bugs: The Ruliology of the Unexpected; +3 more",
+    "2. mathematics (3): Towards a Theory of Bugs: The Ruliology of the Unexpected; What If We Had Bigger Brains? Imagining Minds beyond Ours; How to Work Hard",
+    "3. writers (5): Writes and Write-Nots; Writes and Write-Nots; Writes and Write-Nots; After Work, We’ll Have Each Other; The Need to Read",
+    "4. brains (4): What If We Had Bigger Brains? Imagining Minds beyond Ours; The Mythology Of Conscious AI; The Scaling Hypothesis; Berggruen Institute",
+    "5. collective (3): The Rise and Fall of Agent Civilizations; Forms of Memory in Post-colonial Australia; Forms of Memory in Post-colonial Australia",
+    "6. kids (2): A Project of One's Own; How to Work Hard",
+    "7. artificial (4): The Mythology Of Conscious AI; Berggruen Institute; What If We Had Bigger Brains? Imagining Minds beyond Ours; Spider silk",
+    "8. data (3): The Scaling Hypothesis; What If We Had Bigger Brains? Imagining Minds beyond Ours; A brief history of ball lightning observations by scientists",
+    "9. software (3): The Mythology Of Conscious AI; A Project of One's Own; Towards a Theory of Bugs: The Ruliology of the Unexpected",
+    "10. Indigenous (3): Forms of Memory in Post-colonial Australia; Forms of Memory in Post-colonial Australia; What If We Had Bigger Brains? Imagining Minds beyond Ours",
+    "11. capabilities (4): The Scaling Hypothesis; What If We Had Bigger Brains? Imagining Minds beyond Ours; The Mythology Of Conscious AI; The Rise and Fall of Agent Civilizations",
+    "12. language (3): What If We Had Bigger Brains? Imagining Minds beyond Ours; Towards a Theory of Bugs: The Ruliology of the Unexpected; Berggruen Institute"
+   ],
+   "B": [
+    "1. AI (8): The Mythology Of Conscious AI; The Scaling Hypothesis; The Rise and Fall of Agent Civilizations; Berggruen Institute; Towards a Theory of Bugs: The Ruliology of the Unexpected; +3 more",
+    "2. brains (4): What If We Had Bigger Brains? Imagining Minds beyond Ours; The Mythology Of Conscious AI; The Scaling Hypothesis; Berggruen Institute",
+    "3. mathematics (3): Towards a Theory of Bugs: The Ruliology of the Unexpected; What If We Had Bigger Brains? Imagining Minds beyond Ours; How to Work Hard",
+    "4. writers (5): Writes and Write-Nots; Writes and Write-Nots; Writes and Write-Nots; After Work, We’ll Have Each Other; The Need to Read",
+    "5. collective (3): The Rise and Fall of Agent Civilizations; Forms of Memory in Post-colonial Australia; Forms of Memory in Post-colonial Australia",
+    "6. kids (2): A Project of One's Own; How to Work Hard",
+    "7. artificial (4): The Mythology Of Conscious AI; Berggruen Institute; What If We Had Bigger Brains? Imagining Minds beyond Ours; Spider silk",
+    "8. software (3): The Mythology Of Conscious AI; A Project of One's Own; Towards a Theory of Bugs: The Ruliology of the Unexpected",
+    "9. cell (2): Towards a Theory of Bugs: The Ruliology of the Unexpected; Spider silk",
+    "10. Indigenous (3): Forms of Memory in Post-colonial Australia; Forms of Memory in Post-colonial Australia; What If We Had Bigger Brains? Imagining Minds beyond Ours",
+    "11. capabilities (4): The Scaling Hypothesis; What If We Had Bigger Brains? Imagining Minds beyond Ours; The Mythology Of Conscious AI; The Rise and Fall of Agent Civilizations",
+    "12. metaphor (3): The Mythology Of Conscious AI; Forms of Memory in Post-colonial Australia; Forms of Memory in Post-colonial Australia"
+   ]
+  },
+  {
+   "id": "p061",
+   "A": [
+    "1. computational irreducibility (2): Towards a Theory of Bugs: The Ruliology of the Unexpected; What If We Had Bigger Brains? Imagining Minds beyond Ours",
+    "2. Turing machine (3): Towards a Theory of Bugs: The Ruliology of the Unexpected; The Mythology Of Conscious AI; The Scaling Hypothesis",
+    "3. July (3): A brief history of ball lightning observations by scientists; The Rise and Fall of Agent Civilizations; Antikythera mechanism",
+    "4. AI (8): The Mythology Of Conscious AI; The Scaling Hypothesis; The Rise and Fall of Agent Civilizations; Berggruen Institute; Towards a Theory of Bugs: The Ruliology of the Unexpected; +3 more",
+    "5. adults (3): After Work, We’ll Have Each Other; How to Work Hard; A Project of One's Own",
+    "6. thread (2): What If We Had Bigger Brains? Imagining Minds beyond Ours; Spider silk",
+    "7. loss (3): The Scaling Hypothesis; Forms of Memory in Post-colonial Australia; Forms of Memory in Post-colonial Australia",
+    "8. writers (5): Writes and Write-Nots; Writes and Write-Nots; Writes and Write-Nots; After Work, We’ll Have Each Other; The Need to Read",
+    "9. mechanism (2): Antikythera mechanism; Berggruen Institute",
+    "10. diameter (2): A brief history of ball lightning observations by scientists; Spider silk",
+    "11. agents (2): The Rise and Fall of Agent Civilizations; The Scaling Hypothesis",
+    "12. essay (6): Berggruen Institute; The Mythology Of Conscious AI; Forms of Memory in Post-colonial Australia; Forms of Memory in Post-colonial Australia; How to Work Hard; +1 more"
+   ],
+   "B": [
+    "1. AI (8): The Mythology Of Conscious AI; The Scaling Hypothesis; The Rise and Fall of Agent Civilizations; Berggruen Institute; Towards a Theory of Bugs: The Ruliology of the Unexpected; +3 more",
+    "2. mathematics (3): Towards a Theory of Bugs: The Ruliology of the Unexpected; What If We Had Bigger Brains? Imagining Minds beyond Ours; How to Work Hard",
+    "3. writers (5): Writes and Write-Nots; Writes and Write-Nots; Writes and Write-Nots; After Work, We’ll Have Each Other; The Need to Read",
+    "4. brains (4): What If We Had Bigger Brains? Imagining Minds beyond Ours; The Mythology Of Conscious AI; The Scaling Hypothesis; Berggruen Institute",
+    "5. collective (3): The Rise and Fall of Agent Civilizations; Forms of Memory in Post-colonial Australia; Forms of Memory in Post-colonial Australia",
+    "6. kids (2): A Project of One's Own; How to Work Hard",
+    "7. artificial (4): The Mythology Of Conscious AI; Berggruen Institute; What If We Had Bigger Brains? Imagining Minds beyond Ours; Spider silk",
+    "8. data (3): The Scaling Hypothesis; What If We Had Bigger Brains? Imagining Minds beyond Ours; A brief history of ball lightning observations by scientists",
+    "9. software (3): The Mythology Of Conscious AI; A Project of One's Own; Towards a Theory of Bugs: The Ruliology of the Unexpected",
+    "10. Indigenous (3): Forms of Memory in Post-colonial Australia; Forms of Memory in Post-colonial Australia; What If We Had Bigger Brains? Imagining Minds beyond Ours",
+    "11. capabilities (4): The Scaling Hypothesis; What If We Had Bigger Brains? Imagining Minds beyond Ours; The Mythology Of Conscious AI; The Rise and Fall of Agent Civilizations",
+    "12. language (3): What If We Had Bigger Brains? Imagining Minds beyond Ours; Towards a Theory of Bugs: The Ruliology of the Unexpected; Berggruen Institute"
+   ]
+  },
+  {
+   "id": "p062",
+   "A": [
+    "1. AI (8): The Mythology Of Conscious AI; The Scaling Hypothesis; The Rise and Fall of Agent Civilizations; Berggruen Institute; Towards a Theory of Bugs: The Ruliology of the Unexpected; +3 more",
+    "2. mathematics (3): Towards a Theory of Bugs: The Ruliology of the Unexpected; What If We Had Bigger Brains? Imagining Minds beyond Ours; How to Work Hard",
+    "3. writers (5): Writes and Write-Nots; Writes and Write-Nots; Writes and Write-Nots; After Work, We’ll Have Each Other; The Need to Read",
+    "4. brains (4): What If We Had Bigger Brains? Imagining Minds beyond Ours; The Mythology Of Conscious AI; The Scaling Hypothesis; Berggruen Institute",
+    "5. collective (3): The Rise and Fall of Agent Civilizations; Forms of Memory in Post-colonial Australia; Forms of Memory in Post-colonial Australia",
+    "6. kids (2): A Project of One's Own; How to Work Hard",
+    "7. artificial (4): The Mythology Of Conscious AI; Berggruen Institute; What If We Had Bigger Brains? Imagining Minds beyond Ours; Spider silk",
+    "8. data (3): The Scaling Hypothesis; What If We Had Bigger Brains? Imagining Minds beyond Ours; A brief history of ball lightning observations by scientists",
+    "9. software (3): The Mythology Of Conscious AI; A Project of One's Own; Towards a Theory of Bugs: The Ruliology of the Unexpected",
+    "10. Indigenous (3): Forms of Memory in Post-colonial Australia; Forms of Memory in Post-colonial Australia; What If We Had Bigger Brains? Imagining Minds beyond Ours",
+    "11. capabilities (4): The Scaling Hypothesis; What If We Had Bigger Brains? Imagining Minds beyond Ours; The Mythology Of Conscious AI; The Rise and Fall of Agent Civilizations",
+    "12. language (3): What If We Had Bigger Brains? Imagining Minds beyond Ours; Towards a Theory of Bugs: The Ruliology of the Unexpected; Berggruen Institute"
+   ],
+   "B": [
+    "1. AI (8): The Mythology Of Conscious AI; The Scaling Hypothesis; The Rise and Fall of Agent Civilizations; Berggruen Institute; Towards a Theory of Bugs: The Ruliology of the Unexpected; +3 more",
+    "2. conscious AI (2): The Mythology Of Conscious AI; Berggruen Institute",
+    "3. conscious experiences (2): The Mythology Of Conscious AI; What If We Had Bigger Brains? Imagining Minds beyond Ours",
+    "4. brains (4): What If We Had Bigger Brains? Imagining Minds beyond Ours; The Mythology Of Conscious AI; The Scaling Hypothesis; Berggruen Institute",
+    "5. neural networks (2): The Scaling Hypothesis; The Mythology Of Conscious AI",
+    "6. computational irreducibility (2): Towards a Theory of Bugs: The Ruliology of the Unexpected; What If We Had Bigger Brains? Imagining Minds beyond Ours",
+    "7. agents (2): The Rise and Fall of Agent Civilizations; The Scaling Hypothesis",
+    "8. language model (2): The Scaling Hypothesis; Berggruen Institute",
+    "9. algorithms (3): The Mythology Of Conscious AI; The Scaling Hypothesis; Berggruen Institute",
+    "10. capabilities (4): The Scaling Hypothesis; What If We Had Bigger Brains? Imagining Minds beyond Ours; The Mythology Of Conscious AI; The Rise and Fall of Agent Civilizations",
+    "11. training (3): The Scaling Hypothesis; The Rise and Fall of Agent Civilizations; What If We Had Bigger Brains? Imagining Minds beyond Ours",
+    "12. patterns (3): Towards a Theory of Bugs: The Ruliology of the Unexpected; What If We Had Bigger Brains? Imagining Minds beyond Ours; The Scaling Hypothesis"
+   ]
+  },
+  {
+   "id": "p063",
+   "A": [
+    "1. AI (8): The Mythology Of Conscious AI; The Scaling Hypothesis; The Rise and Fall of Agent Civilizations; Berggruen Institute; Towards a Theory of Bugs: The Ruliology of the Unexpected; +3 more",
+    "2. artificial (4): The Mythology Of Conscious AI; Berggruen Institute; What If We Had Bigger Brains? Imagining Minds beyond Ours; Spider silk",
+    "3. writers (5): Writes and Write-Nots; Writes and Write-Nots; Writes and Write-Nots; After Work, We’ll Have Each Other; The Need to Read",
+    "4. computational irreducibility (2): Towards a Theory of Bugs: The Ruliology of the Unexpected; What If We Had Bigger Brains? Imagining Minds beyond Ours",
+    "5. training (3): The Scaling Hypothesis; The Rise and Fall of Agent Civilizations; What If We Had Bigger Brains? Imagining Minds beyond Ours",
+    "6. brains (4): What If We Had Bigger Brains? Imagining Minds beyond Ours; The Mythology Of Conscious AI; The Scaling Hypothesis; Berggruen Institute"
+   ],
+   "B": [
+    "1. AI (8): The Mythology Of Conscious AI; The Scaling Hypothesis; The Rise and Fall of Agent Civilizations; Berggruen Institute; Towards a Theory of Bugs: The Ruliology of the Unexpected; +3 more",
+    "2. mathematics (3): Towards a Theory of Bugs: The Ruliology of the Unexpected; What If We Had Bigger Brains? Imagining Minds beyond Ours; How to Work Hard",
+    "3. writers (5): Writes and Write-Nots; Writes and Write-Nots; Writes and Write-Nots; After Work, We’ll Have Each Other; The Need to Read",
+    "4. brains (4): What If We Had Bigger Brains? Imagining Minds beyond Ours; The Mythology Of Conscious AI; The Scaling Hypothesis; Berggruen Institute",
+    "5. collective (3): The Rise and Fall of Agent Civilizations; Forms of Memory in Post-colonial Australia; Forms of Memory in Post-colonial Australia",
+    "6. kids (2): A Project of One's Own; How to Work Hard",
+    "7. artificial (4): The Mythology Of Conscious AI; Berggruen Institute; What If We Had Bigger Brains? Imagining Minds beyond Ours; Spider silk",
+    "8. data (3): The Scaling Hypothesis; What If We Had Bigger Brains? Imagining Minds beyond Ours; A brief history of ball lightning observations by scientists",
+    "9. software (3): The Mythology Of Conscious AI; A Project of One's Own; Towards a Theory of Bugs: The Ruliology of the Unexpected",
+    "10. Indigenous (3): Forms of Memory in Post-colonial Australia; Forms of Memory in Post-colonial Australia; What If We Had Bigger Brains? Imagining Minds beyond Ours",
+    "11. capabilities (4): The Scaling Hypothesis; What If We Had Bigger Brains? Imagining Minds beyond Ours; The Mythology Of Conscious AI; The Rise and Fall of Agent Civilizations",
+    "12. language (3): What If We Had Bigger Brains? Imagining Minds beyond Ours; Towards a Theory of Bugs: The Ruliology of the Unexpected; Berggruen Institute"
+   ]
+  },
+  {
+   "id": "p064",
+   "A": [
+    "1. AI (8): The Mythology Of Conscious AI; The Scaling Hypothesis; The Rise and Fall of Agent Civilizations; Berggruen Institute; Towards a Theory of Bugs: The Ruliology of the Unexpected; +3 more",
+    "2. mathematics (3): Towards a Theory of Bugs: The Ruliology of the Unexpected; What If We Had Bigger Brains? Imagining Minds beyond Ours; How to Work Hard",
+    "3. writers (5): Writes and Write-Nots; Writes and Write-Nots; Writes and Write-Nots; After Work, We’ll Have Each Other; The Need to Read",
+    "4. brains (4): What If We Had Bigger Brains? Imagining Minds beyond Ours; The Mythology Of Conscious AI; The Scaling Hypothesis; Berggruen Institute",
+    "5. collective (3): The Rise and Fall of Agent Civilizations; Forms of Memory in Post-colonial Australia; Forms of Memory in Post-colonial Australia",
+    "6. kids (2): A Project of One's Own; How to Work Hard",
+    "7. artificial (4): The Mythology Of Conscious AI; Berggruen Institute; What If We Had Bigger Brains? Imagining Minds beyond Ours; Spider silk",
+    "8. data (3): The Scaling Hypothesis; What If We Had Bigger Brains? Imagining Minds beyond Ours; A brief history of ball lightning observations by scientists",
+    "9. software (3): The Mythology Of Conscious AI; A Project of One's Own; Towards a Theory of Bugs: The Ruliology of the Unexpected",
+    "10. Indigenous (3): Forms of Memory in Post-colonial Australia; Forms of Memory in Post-colonial Australia; What If We Had Bigger Brains? Imagining Minds beyond Ours",
+    "11. capabilities (4): The Scaling Hypothesis; What If We Had Bigger Brains? Imagining Minds beyond Ours; The Mythology Of Conscious AI; The Rise and Fall of Agent Civilizations",
+    "12. language (3): What If We Had Bigger Brains? Imagining Minds beyond Ours; Towards a Theory of Bugs: The Ruliology of the Unexpected; Berggruen Institute"
+   ],
+   "B": [
+    "1. AI (8): The Mythology Of Conscious AI; The Scaling Hypothesis; The Rise and Fall of Agent Civilizations; Berggruen Institute; Towards a Theory of Bugs: The Ruliology of the Unexpected; +3 more",
+    "2. artificial (4): The Mythology Of Conscious AI; Berggruen Institute; What If We Had Bigger Brains? Imagining Minds beyond Ours; Spider silk",
+    "3. writers (5): Writes and Write-Nots; Writes and Write-Nots; Writes and Write-Nots; After Work, We’ll Have Each Other; The Need to Read",
+    "4. computational irreducibility (2): Towards a Theory of Bugs: The Ruliology of the Unexpected; What If We Had Bigger Brains? Imagining Minds beyond Ours",
+    "5. training (3): The Scaling Hypothesis; The Rise and Fall of Agent Civilizations; What If We Had Bigger Brains? Imagining Minds beyond Ours",
+    "6. brains (4): What If We Had Bigger Brains? Imagining Minds beyond Ours; The Mythology Of Conscious AI; The Scaling Hypothesis; Berggruen Institute"
+   ]
+  },
+  {
+   "id": "p065",
+   "A": [
+    "1. computational irreducibility (2): Towards a Theory of Bugs: The Ruliology of the Unexpected; What If We Had Bigger Brains? Imagining Minds beyond Ours",
+    "2. Turing machine (3): Towards a Theory of Bugs: The Ruliology of the Unexpected; The Mythology Of Conscious AI; The Scaling Hypothesis",
+    "3. July (3): A brief history of ball lightning observations by scientists; The Rise and Fall of Agent Civilizations; Antikythera mechanism",
+    "4. AI (8): The Mythology Of Conscious AI; The Scaling Hypothesis; The Rise and Fall of Agent Civilizations; Berggruen Institute; Towards a Theory of Bugs: The Ruliology of the Unexpected; +3 more",
+    "5. adults (3): After Work, We’ll Have Each Other; How to Work Hard; A Project of One's Own",
+    "6. thread (2): What If We Had Bigger Brains? Imagining Minds beyond Ours; Spider silk",
+    "7. loss (3): The Scaling Hypothesis; Forms of Memory in Post-colonial Australia; Forms of Memory in Post-colonial Australia",
+    "8. writers (5): Writes and Write-Nots; Writes and Write-Nots; Writes and Write-Nots; After Work, We’ll Have Each Other; The Need to Read",
+    "9. mechanism (2): Antikythera mechanism; Berggruen Institute",
+    "10. diameter (2): A brief history of ball lightning observations by scientists; Spider silk",
+    "11. agents (2): The Rise and Fall of Agent Civilizations; The Scaling Hypothesis",
+    "12. essay (6): Berggruen Institute; The Mythology Of Conscious AI; Forms of Memory in Post-colonial Australia; Forms of Memory in Post-colonial Australia; How to Work Hard; +1 more"
+   ],
+   "B": [
+    "1. computational irreducibility (2): Towards a Theory of Bugs: The Ruliology of the Unexpected; What If We Had Bigger Brains? Imagining Minds beyond Ours",
+    "2. Turing machine (3): Towards a Theory of Bugs: The Ruliology of the Unexpected; The Mythology Of Conscious AI; The Scaling Hypothesis",
+    "3. July (3): A brief history of ball lightning observations by scientists; The Rise and Fall of Agent Civilizations; Antikythera mechanism",
+    "4. AI (8): The Mythology Of Conscious AI; The Scaling Hypothesis; The Rise and Fall of Agent Civilizations; Berggruen Institute; Towards a Theory of Bugs: The Ruliology of the Unexpected; +3 more",
+    "5. adults (3): After Work, We’ll Have Each Other; How to Work Hard; A Project of One's Own",
+    "6. thread (2): What If We Had Bigger Brains? Imagining Minds beyond Ours; Spider silk",
+    "7. loss (3): The Scaling Hypothesis; Forms of Memory in Post-colonial Australia; Forms of Memory in Post-colonial Australia",
+    "8. writers (5): Writes and Write-Nots; Writes and Write-Nots; Writes and Write-Nots; After Work, We’ll Have Each Other; The Need to Read",
+    "9. mechanism (2): Antikythera mechanism; Berggruen Institute",
+    "10. diameter (2): A brief history of ball lightning observations by scientists; Spider silk",
+    "11. agents (2): The Rise and Fall of Agent Civilizations; The Scaling Hypothesis",
+    "12. essay (6): Berggruen Institute; The Mythology Of Conscious AI; Forms of Memory in Post-colonial Australia; Forms of Memory in Post-colonial Australia; How to Work Hard; +1 more"
+   ]
+  }
+ ]
+}

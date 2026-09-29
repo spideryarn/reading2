@@ -24,13 +24,25 @@
  *
  * docs/project/shelf-terms.md.
  */
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import type { LibraryEntry, LibraryTermsResponse } from "../types.js";
 import { apiFetch, readJson } from "./lib/api.js";
 import { chosenTopics, topicMembers } from "./shelf-narrow.js";
 
 /** How long to wait before asking again while articles are still being read. */
 export const PENDING_RETRY_MS = 400;
+
+/**
+ * **How long to wait before asking again while the model is choosing**
+ * (`refreshing: true`), and how many times. The server answers with the
+ * program's list — or the model's older pick — at once and then spends 6–20 s
+ * on the model; asking again after that shows the new pick without a reload.
+ * Bounded, so a refresh that never lands costs this shelf four more requests
+ * and then nothing: the next load shows whatever was stored.
+ * docs/project/shelf-terms.md.
+ */
+export const REFRESHING_RETRY_MS = 8_000;
+export const REFRESHING_RETRIES = 4;
 
 export interface ShelfTermsState {
   /** The last answer, or `null` before the first and after a failure. */
@@ -45,14 +57,17 @@ export interface ShelfTermsState {
 
 /**
  * What identifies the shelf the topics were chosen over: every article's slug
- * and word count, sorted, and the archived list's too when it is in scope.
+ * and current revision, sorted, and the archived list's too when it is in
+ * scope. The title and gist ride beside it because either can change without a
+ * new revision (a reader rename is article state), and both are model input.
  *
  * `null` means "do not ask yet" — the shelf has not loaded, or the archive is
  * in scope and its list has not arrived. Asking then would be answered, and then
  * asked again the moment the list lands.
  *
- * Word counts ride along so that a re-extraction (a new revision, new phrases)
- * refreshes the topics as well as an article arriving or leaving.
+ * `revisionId` is optional only for shelf rows cached before it was added. The
+ * visible model inputs and derived scalars are the fallback for one of those
+ * old rows; a fresh server response always carries the id.
  */
 export function shelfKeyOf(
   articles: readonly LibraryEntry[] | null,
@@ -63,7 +78,18 @@ export function shelfKeyOf(
   if (archivedInScope && !archived) return null;
   const part = (list: readonly LibraryEntry[]) =>
     list
-      .map((a) => `${a.slug}:${a.words}`)
+      .map((a) =>
+        JSON.stringify([
+          a.slug,
+          a.revisionId ?? null,
+          a.title,
+          a.gist ?? null,
+          a.words,
+          a.blocks,
+          a.parts,
+          a.sections,
+        ]),
+      )
       .sort()
       .join(",");
   return archivedInScope && archived ? `${part(articles)}|${part(archived)}` : part(articles);
@@ -88,12 +114,18 @@ export function useShelfTerms({
      request and its cleanup — a second code path that fetched would need its
      own abort. */
   const [round, setRound] = useState(0);
+  /* How many times this question has been asked again because the model was
+     choosing — per scope and shelf, so a new question starts from zero. A ref:
+     it counts requests, and nothing renders from it. */
+  const refreshAsks = useRef<{ question: string; count: number }>({ question: "", count: 0 });
 
   // biome-ignore lint/correctness/useExhaustiveDependencies: `round` is the ask-again trigger — the effect reads nothing from it
   useEffect(() => {
     if (shelfKey === null) return;
     const controller = new AbortController();
     let again: ReturnType<typeof setTimeout> | undefined;
+    const question = `${archived ? "all" : "active"}|${shelfKey}`;
+    if (refreshAsks.current.question !== question) refreshAsks.current = { question, count: 0 };
     apiFetch(`/api/library/terms${archived ? "?archived=1" : ""}`, { signal: controller.signal })
       .then((r) => readJson<LibraryTermsResponse>(r))
       .then((body) => {
@@ -101,6 +133,10 @@ export function useShelfTerms({
         if (controller.signal.aborted) return;
         setAnswer({ data: body, archived, shelfKey });
         if (body.pending > 0) again = setTimeout(() => setRound((n) => n + 1), PENDING_RETRY_MS);
+        else if (body.refreshing && refreshAsks.current.count < REFRESHING_RETRIES) {
+          refreshAsks.current.count += 1;
+          again = setTimeout(() => setRound((n) => n + 1), REFRESHING_RETRY_MS);
+        }
       })
       .catch((e: unknown) => {
         if (controller.signal.aborted || (e instanceof Error && e.name === "AbortError")) return;

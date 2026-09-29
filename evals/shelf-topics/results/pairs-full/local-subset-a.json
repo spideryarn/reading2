@@ -1,0 +1,226 @@
+{
+ "case": "local-subset-a",
+ "profile": "Interested in computational neuroscience, consciousness, Buddhism, AI.",
+ "shelf": [
+  "1. Distributed Representations: Composition & Superposition — Distributed representations conflate two competing strategies, composition and superposition, which must be distinguished to understand neural networks.",
+  "2. After Work, We’ll Have Each Other — When AI ends necessary work, relationships and group status, not jobs, will govern human dignity and meaning, as history shows.",
+  "3. Analog Cognition and Consciousness — Brain waves, interacting bidirectionally with spikes, provide flexible executive control that generates cognition and unified consciousness.",
+  "4. The Mythology Of Conscious AI — Conscious AI is a mythology built on psychological biases and a flawed computational assumption, so we should focus instead on the real dangers of AI that merely seems conscious.",
+  "5. Life is Short — Because life is genuinely short, one should prune bullshit, pursue what matters, and savor the time remaining.",
+  "6. Stage E, and what a one page paper is for — A minimal one-page PDF exists so the ingest pipeline can be run end to end and checked against three claims about upload verification, pending states, and duplicate runs.",
+  "7. A brief history of ball lightning observations by scientists and trained professionals — Compiling 41 historical ball lightning reports from scientists and trained observers alongside six notable evidentiary cases, the article argues that systematic documentation of credible eyewitness accounts can help unify ball lightning research.",
+  "8. A brief history of ball lightning observations by scientists and trained professionals — Compiling 41 documented sightings by scientists and trained observers, the article argues such expert reports can better ground ball lightning research than folklore or anecdote.",
+  "9. Forms of Memory in Post-colonial Australia — The essay argues that genuine hope for post-colonial Australia requires holding history's ghosts through poetry and public apology rather than shutting them away in a settled past.",
+  "10. Change Your Name — Startups without the .com of their name should change it, because denial rooted in identity and lack of imagination keeps founders from fixing an easily solvable weakness.",
+  "11. The Top of My Todo List — Reflecting on a nurse's list of dying regrets, the author distills them into a personal anti-cog creed and turns it into daily reminders.",
+  "12. The Need to Read — Reading remains essential because it uniquely teaches writing, which is itself a way of thinking and discovering ideas, so anyone who wants to have ideas—not just information—must read well.",
+  "13. The Scaling Hypothesis — GPT-3 shows that scaling a simple neural architecture in parameters, data, and compute produces surprising emergent meta-learning and generalization, providing strong evidence for the scaling hypothesis that intelligence itself may arise chiefly from scale rather than from clever new algorithms, even though most AI organizations remain unwilling to bet heavily on that idea.",
+  "14. The Mythology Of Conscious AI — Widespread belief in imminent conscious AI stems mainly from psychological bias and a flawed computational theory of mind, so we should resist creating or naively trusting conscious-seeming machines while reaffirming the embodied, biological basis of genuine human experience.",
+  "15. Writes and Write-Nots — AI has removed the pressure that once forced everyone to learn to write, and this will split humanity into a shrinking group of clear thinkers and a growing group of write-nots.",
+  "16. Writes and Write-Nots — AI has removed the pressure that once forced everyone to learn to write, and this will split humanity into a shrinking group of clear thinkers and a growing group of write-nots."
+ ],
+ "pairs": [
+  {
+   "id": "f045",
+   "A": [
+    "1. AI (5): The Mythology Of Conscious AI; The Mythology Of Conscious AI; The Scaling Hypothesis; Writes and Write-Nots; Writes and Write-Nots",
+    "2. representations (2): Distributed Representations: Composition & Superposition; Analog Cognition and Consciousness",
+    "3. ball lightning (2): A brief history of ball lightning observations by scientists and trained professionals; A brief history of ball lightning observations by scientists and trained professionals",
+    "4. memory (2): Forms of Memory in Post-colonial Australia; Analog Cognition and Consciousness",
+    "5. neural networks (4): The Scaling Hypothesis; The Mythology Of Conscious AI; The Mythology Of Conscious AI; Distributed Representations: Composition & Superposition",
+    "6. brain (4): The Mythology Of Conscious AI; The Mythology Of Conscious AI; Analog Cognition and Consciousness; The Scaling Hypothesis",
+    "7. neurons (4): Analog Cognition and Consciousness; Distributed Representations: Composition & Superposition; The Mythology Of Conscious AI; The Mythology Of Conscious AI"
+   ],
+   "B": [
+    "1. ball lightning (2): A brief history of ball lightning observations by scientists and trained professionals; A brief history of ball lightning observations by scientists and trained professionals",
+    "2. neural networks (4): The Scaling Hypothesis; The Mythology Of Conscious AI; The Mythology Of Conscious AI; Distributed Representations: Composition & Superposition",
+    "3. memory (2): Forms of Memory in Post-colonial Australia; Analog Cognition and Consciousness",
+    "4. writers (4): Writes and Write-Nots; Writes and Write-Nots; After Work, We’ll Have Each Other; The Need to Read",
+    "5. window (3): A brief history of ball lightning observations by scientists and trained professionals; A brief history of ball lightning observations by scientists and trained professionals; Life is Short",
+    "6. signals (2): Analog Cognition and Consciousness; Change Your Name",
+    "7. AI (5): The Mythology Of Conscious AI; The Mythology Of Conscious AI; The Scaling Hypothesis; Writes and Write-Nots; Writes and Write-Nots",
+    "8. money (2): After Work, We’ll Have Each Other; Life is Short",
+    "9. neurons (4): Analog Cognition and Consciousness; Distributed Representations: Composition & Superposition; The Mythology Of Conscious AI; The Mythology Of Conscious AI",
+    "10. loss (2): The Scaling Hypothesis; Forms of Memory in Post-colonial Australia",
+    "11. solve (2): The Scaling Hypothesis; The Need to Read",
+    "12. potential (4): Analog Cognition and Consciousness; The Mythology Of Conscious AI; The Mythology Of Conscious AI; Change Your Name"
+   ]
+  },
+  {
+   "id": "f046",
+   "A": [
+    "1. AI (5): The Mythology Of Conscious AI; The Mythology Of Conscious AI; The Scaling Hypothesis; Writes and Write-Nots; Writes and Write-Nots",
+    "2. representations (2): Distributed Representations: Composition & Superposition; Analog Cognition and Consciousness",
+    "3. ball lightning (2): A brief history of ball lightning observations by scientists and trained professionals; A brief history of ball lightning observations by scientists and trained professionals",
+    "4. writers (4): Writes and Write-Nots; Writes and Write-Nots; After Work, We’ll Have Each Other; The Need to Read",
+    "5. brain (4): The Mythology Of Conscious AI; The Mythology Of Conscious AI; Analog Cognition and Consciousness; The Scaling Hypothesis",
+    "6. money (2): After Work, We’ll Have Each Other; Life is Short",
+    "7. memory (2): Forms of Memory in Post-colonial Australia; Analog Cognition and Consciousness",
+    "8. signals (2): Analog Cognition and Consciousness; Change Your Name",
+    "9. neural networks (4): The Scaling Hypothesis; The Mythology Of Conscious AI; The Mythology Of Conscious AI; Distributed Representations: Composition & Superposition",
+    "10. data (3): The Scaling Hypothesis; A brief history of ball lightning observations by scientists and trained professionals; A brief history of ball lightning observations by scientists and trained professionals",
+    "11. continuous (4): The Mythology Of Conscious AI; The Mythology Of Conscious AI; Analog Cognition and Consciousness; Life is Short",
+    "12. neurons (4): Analog Cognition and Consciousness; Distributed Representations: Composition & Superposition; The Mythology Of Conscious AI; The Mythology Of Conscious AI"
+   ],
+   "B": [
+    "1. AI (5): The Mythology Of Conscious AI; The Mythology Of Conscious AI; The Scaling Hypothesis; Writes and Write-Nots; Writes and Write-Nots",
+    "2. representations (2): Distributed Representations: Composition & Superposition; Analog Cognition and Consciousness",
+    "3. ball lightning (2): A brief history of ball lightning observations by scientists and trained professionals; A brief history of ball lightning observations by scientists and trained professionals",
+    "4. money (2): After Work, We’ll Have Each Other; Life is Short",
+    "5. brain (4): The Mythology Of Conscious AI; The Mythology Of Conscious AI; Analog Cognition and Consciousness; The Scaling Hypothesis",
+    "6. possibility (3): The Scaling Hypothesis; Forms of Memory in Post-colonial Australia; Distributed Representations: Composition & Superposition",
+    "7. data (3): The Scaling Hypothesis; A brief history of ball lightning observations by scientists and trained professionals; A brief history of ball lightning observations by scientists and trained professionals",
+    "8. continuous (4): The Mythology Of Conscious AI; The Mythology Of Conscious AI; Analog Cognition and Consciousness; Life is Short",
+    "9. relationship (3): After Work, We’ll Have Each Other; Analog Cognition and Consciousness; Distributed Representations: Composition & Superposition",
+    "10. memory (2): Forms of Memory in Post-colonial Australia; Analog Cognition and Consciousness",
+    "11. assumption (3): The Mythology Of Conscious AI; The Mythology Of Conscious AI; After Work, We’ll Have Each Other",
+    "12. neural networks (4): The Scaling Hypothesis; The Mythology Of Conscious AI; The Mythology Of Conscious AI; Distributed Representations: Composition & Superposition"
+   ]
+  },
+  {
+   "id": "f047",
+   "A": [
+    "1. AI (5): The Mythology Of Conscious AI; The Mythology Of Conscious AI; The Scaling Hypothesis; Writes and Write-Nots; Writes and Write-Nots",
+    "2. representations (2): Distributed Representations: Composition & Superposition; Analog Cognition and Consciousness",
+    "3. ball lightning (2): A brief history of ball lightning observations by scientists and trained professionals; A brief history of ball lightning observations by scientists and trained professionals",
+    "4. writers (4): Writes and Write-Nots; Writes and Write-Nots; After Work, We’ll Have Each Other; The Need to Read",
+    "5. brain (4): The Mythology Of Conscious AI; The Mythology Of Conscious AI; Analog Cognition and Consciousness; The Scaling Hypothesis",
+    "6. money (2): After Work, We’ll Have Each Other; Life is Short",
+    "7. memory (2): Forms of Memory in Post-colonial Australia; Analog Cognition and Consciousness",
+    "8. signals (2): Analog Cognition and Consciousness; Change Your Name",
+    "9. neural networks (4): The Scaling Hypothesis; The Mythology Of Conscious AI; The Mythology Of Conscious AI; Distributed Representations: Composition & Superposition",
+    "10. data (3): The Scaling Hypothesis; A brief history of ball lightning observations by scientists and trained professionals; A brief history of ball lightning observations by scientists and trained professionals",
+    "11. continuous (4): The Mythology Of Conscious AI; The Mythology Of Conscious AI; Analog Cognition and Consciousness; Life is Short",
+    "12. neurons (4): Analog Cognition and Consciousness; Distributed Representations: Composition & Superposition; The Mythology Of Conscious AI; The Mythology Of Conscious AI"
+   ],
+   "B": [
+    "1. ball lightning (2): A brief history of ball lightning observations by scientists and trained professionals; A brief history of ball lightning observations by scientists and trained professionals",
+    "2. neural networks (4): The Scaling Hypothesis; The Mythology Of Conscious AI; The Mythology Of Conscious AI; Distributed Representations: Composition & Superposition",
+    "3. memory (2): Forms of Memory in Post-colonial Australia; Analog Cognition and Consciousness",
+    "4. writers (4): Writes and Write-Nots; Writes and Write-Nots; After Work, We’ll Have Each Other; The Need to Read",
+    "5. window (3): A brief history of ball lightning observations by scientists and trained professionals; A brief history of ball lightning observations by scientists and trained professionals; Life is Short",
+    "6. signals (2): Analog Cognition and Consciousness; Change Your Name",
+    "7. AI (5): The Mythology Of Conscious AI; The Mythology Of Conscious AI; The Scaling Hypothesis; Writes and Write-Nots; Writes and Write-Nots",
+    "8. money (2): After Work, We’ll Have Each Other; Life is Short",
+    "9. neurons (4): Analog Cognition and Consciousness; Distributed Representations: Composition & Superposition; The Mythology Of Conscious AI; The Mythology Of Conscious AI",
+    "10. loss (2): The Scaling Hypothesis; Forms of Memory in Post-colonial Australia",
+    "11. solve (2): The Scaling Hypothesis; The Need to Read",
+    "12. potential (4): Analog Cognition and Consciousness; The Mythology Of Conscious AI; The Mythology Of Conscious AI; Change Your Name"
+   ]
+  },
+  {
+   "id": "f048",
+   "A": [
+    "1. ball lightning (2): A brief history of ball lightning observations by scientists and trained professionals; A brief history of ball lightning observations by scientists and trained professionals",
+    "2. neural networks (4): The Scaling Hypothesis; The Mythology Of Conscious AI; The Mythology Of Conscious AI; Distributed Representations: Composition & Superposition",
+    "3. memory (2): Forms of Memory in Post-colonial Australia; Analog Cognition and Consciousness",
+    "4. writers (4): Writes and Write-Nots; Writes and Write-Nots; After Work, We’ll Have Each Other; The Need to Read",
+    "5. window (3): A brief history of ball lightning observations by scientists and trained professionals; A brief history of ball lightning observations by scientists and trained professionals; Life is Short",
+    "6. signals (2): Analog Cognition and Consciousness; Change Your Name",
+    "7. AI (5): The Mythology Of Conscious AI; The Mythology Of Conscious AI; The Scaling Hypothesis; Writes and Write-Nots; Writes and Write-Nots",
+    "8. money (2): After Work, We’ll Have Each Other; Life is Short",
+    "9. neurons (4): Analog Cognition and Consciousness; Distributed Representations: Composition & Superposition; The Mythology Of Conscious AI; The Mythology Of Conscious AI",
+    "10. loss (2): The Scaling Hypothesis; Forms of Memory in Post-colonial Australia",
+    "11. solve (2): The Scaling Hypothesis; The Need to Read",
+    "12. potential (4): Analog Cognition and Consciousness; The Mythology Of Conscious AI; The Mythology Of Conscious AI; Change Your Name"
+   ],
+   "B": [
+    "1. ball lightning (2): A brief history of ball lightning observations by scientists and trained professionals; A brief history of ball lightning observations by scientists and trained professionals",
+    "2. neural networks (4): The Scaling Hypothesis; The Mythology Of Conscious AI; The Mythology Of Conscious AI; Distributed Representations: Composition & Superposition",
+    "3. memory (2): Forms of Memory in Post-colonial Australia; Analog Cognition and Consciousness",
+    "4. writers (4): Writes and Write-Nots; Writes and Write-Nots; After Work, We’ll Have Each Other; The Need to Read",
+    "5. window (3): A brief history of ball lightning observations by scientists and trained professionals; A brief history of ball lightning observations by scientists and trained professionals; Life is Short",
+    "6. signals (2): Analog Cognition and Consciousness; Change Your Name",
+    "7. AI (5): The Mythology Of Conscious AI; The Mythology Of Conscious AI; The Scaling Hypothesis; Writes and Write-Nots; Writes and Write-Nots",
+    "8. money (2): After Work, We’ll Have Each Other; Life is Short",
+    "9. neurons (4): Analog Cognition and Consciousness; Distributed Representations: Composition & Superposition; The Mythology Of Conscious AI; The Mythology Of Conscious AI",
+    "10. loss (2): The Scaling Hypothesis; Forms of Memory in Post-colonial Australia",
+    "11. solve (2): The Scaling Hypothesis; The Need to Read",
+    "12. potential (4): Analog Cognition and Consciousness; The Mythology Of Conscious AI; The Mythology Of Conscious AI; Change Your Name"
+   ]
+  },
+  {
+   "id": "f049",
+   "A": [
+    "1. AI (5): The Mythology Of Conscious AI; The Mythology Of Conscious AI; The Scaling Hypothesis; Writes and Write-Nots; Writes and Write-Nots",
+    "2. representations (2): Distributed Representations: Composition & Superposition; Analog Cognition and Consciousness",
+    "3. ball lightning (2): A brief history of ball lightning observations by scientists and trained professionals; A brief history of ball lightning observations by scientists and trained professionals",
+    "4. memory (2): Forms of Memory in Post-colonial Australia; Analog Cognition and Consciousness",
+    "5. neural networks (4): The Scaling Hypothesis; The Mythology Of Conscious AI; The Mythology Of Conscious AI; Distributed Representations: Composition & Superposition",
+    "6. brain (4): The Mythology Of Conscious AI; The Mythology Of Conscious AI; Analog Cognition and Consciousness; The Scaling Hypothesis",
+    "7. neurons (4): Analog Cognition and Consciousness; Distributed Representations: Composition & Superposition; The Mythology Of Conscious AI; The Mythology Of Conscious AI"
+   ],
+   "B": [
+    "1. AI (5): The Mythology Of Conscious AI; The Mythology Of Conscious AI; The Scaling Hypothesis; Writes and Write-Nots; Writes and Write-Nots",
+    "2. representations (2): Distributed Representations: Composition & Superposition; Analog Cognition and Consciousness",
+    "3. ball lightning (2): A brief history of ball lightning observations by scientists and trained professionals; A brief history of ball lightning observations by scientists and trained professionals",
+    "4. writers (4): Writes and Write-Nots; Writes and Write-Nots; After Work, We’ll Have Each Other; The Need to Read",
+    "5. brain (4): The Mythology Of Conscious AI; The Mythology Of Conscious AI; Analog Cognition and Consciousness; The Scaling Hypothesis",
+    "6. money (2): After Work, We’ll Have Each Other; Life is Short",
+    "7. memory (2): Forms of Memory in Post-colonial Australia; Analog Cognition and Consciousness",
+    "8. signals (2): Analog Cognition and Consciousness; Change Your Name",
+    "9. neural networks (4): The Scaling Hypothesis; The Mythology Of Conscious AI; The Mythology Of Conscious AI; Distributed Representations: Composition & Superposition",
+    "10. data (3): The Scaling Hypothesis; A brief history of ball lightning observations by scientists and trained professionals; A brief history of ball lightning observations by scientists and trained professionals",
+    "11. continuous (4): The Mythology Of Conscious AI; The Mythology Of Conscious AI; Analog Cognition and Consciousness; Life is Short",
+    "12. neurons (4): Analog Cognition and Consciousness; Distributed Representations: Composition & Superposition; The Mythology Of Conscious AI; The Mythology Of Conscious AI"
+   ]
+  },
+  {
+   "id": "f050",
+   "A": [
+    "1. AI (5): The Mythology Of Conscious AI; The Mythology Of Conscious AI; The Scaling Hypothesis; Writes and Write-Nots; Writes and Write-Nots",
+    "2. neural networks (4): The Scaling Hypothesis; The Mythology Of Conscious AI; The Mythology Of Conscious AI; Distributed Representations: Composition & Superposition",
+    "3. brain (4): The Mythology Of Conscious AI; The Mythology Of Conscious AI; Analog Cognition and Consciousness; The Scaling Hypothesis",
+    "4. neurons (4): Analog Cognition and Consciousness; Distributed Representations: Composition & Superposition; The Mythology Of Conscious AI; The Mythology Of Conscious AI",
+    "5. computation (3): The Mythology Of Conscious AI; The Mythology Of Conscious AI; Analog Cognition and Consciousness",
+    "6. representations (2): Distributed Representations: Composition & Superposition; Analog Cognition and Consciousness",
+    "7. model (5): The Scaling Hypothesis; Analog Cognition and Consciousness; The Mythology Of Conscious AI; The Mythology Of Conscious AI; Distributed Representations: Composition & Superposition",
+    "8. memory (2): Forms of Memory in Post-colonial Australia; Analog Cognition and Consciousness",
+    "9. Turing machine (3): The Mythology Of Conscious AI; The Mythology Of Conscious AI; The Scaling Hypothesis",
+    "10. continuous (4): The Mythology Of Conscious AI; The Mythology Of Conscious AI; Analog Cognition and Consciousness; Life is Short",
+    "11. patterns (2): Analog Cognition and Consciousness; The Scaling Hypothesis",
+    "12. assumption (3): The Mythology Of Conscious AI; The Mythology Of Conscious AI; After Work, We’ll Have Each Other"
+   ],
+   "B": [
+    "1. AI (5): The Mythology Of Conscious AI; The Mythology Of Conscious AI; The Scaling Hypothesis; Writes and Write-Nots; Writes and Write-Nots",
+    "2. representations (2): Distributed Representations: Composition & Superposition; Analog Cognition and Consciousness",
+    "3. ball lightning (2): A brief history of ball lightning observations by scientists and trained professionals; A brief history of ball lightning observations by scientists and trained professionals",
+    "4. writers (4): Writes and Write-Nots; Writes and Write-Nots; After Work, We’ll Have Each Other; The Need to Read",
+    "5. brain (4): The Mythology Of Conscious AI; The Mythology Of Conscious AI; Analog Cognition and Consciousness; The Scaling Hypothesis",
+    "6. money (2): After Work, We’ll Have Each Other; Life is Short",
+    "7. memory (2): Forms of Memory in Post-colonial Australia; Analog Cognition and Consciousness",
+    "8. signals (2): Analog Cognition and Consciousness; Change Your Name",
+    "9. neural networks (4): The Scaling Hypothesis; The Mythology Of Conscious AI; The Mythology Of Conscious AI; Distributed Representations: Composition & Superposition",
+    "10. data (3): The Scaling Hypothesis; A brief history of ball lightning observations by scientists and trained professionals; A brief history of ball lightning observations by scientists and trained professionals",
+    "11. continuous (4): The Mythology Of Conscious AI; The Mythology Of Conscious AI; Analog Cognition and Consciousness; Life is Short",
+    "12. neurons (4): Analog Cognition and Consciousness; Distributed Representations: Composition & Superposition; The Mythology Of Conscious AI; The Mythology Of Conscious AI"
+   ]
+  },
+  {
+   "id": "f051",
+   "A": [
+    "1. AI (5): The Mythology Of Conscious AI; The Mythology Of Conscious AI; The Scaling Hypothesis; Writes and Write-Nots; Writes and Write-Nots",
+    "2. representations (2): Distributed Representations: Composition & Superposition; Analog Cognition and Consciousness",
+    "3. ball lightning (2): A brief history of ball lightning observations by scientists and trained professionals; A brief history of ball lightning observations by scientists and trained professionals",
+    "4. writers (4): Writes and Write-Nots; Writes and Write-Nots; After Work, We’ll Have Each Other; The Need to Read",
+    "5. brain (4): The Mythology Of Conscious AI; The Mythology Of Conscious AI; Analog Cognition and Consciousness; The Scaling Hypothesis",
+    "6. money (2): After Work, We’ll Have Each Other; Life is Short",
+    "7. memory (2): Forms of Memory in Post-colonial Australia; Analog Cognition and Consciousness",
+    "8. signals (2): Analog Cognition and Consciousness; Change Your Name",
+    "9. neural networks (4): The Scaling Hypothesis; The Mythology Of Conscious AI; The Mythology Of Conscious AI; Distributed Representations: Composition & Superposition",
+    "10. data (3): The Scaling Hypothesis; A brief history of ball lightning observations by scientists and trained professionals; A brief history of ball lightning observations by scientists and trained professionals",
+    "11. continuous (4): The Mythology Of Conscious AI; The Mythology Of Conscious AI; Analog Cognition and Consciousness; Life is Short",
+    "12. neurons (4): Analog Cognition and Consciousness; Distributed Representations: Composition & Superposition; The Mythology Of Conscious AI; The Mythology Of Conscious AI"
+   ],
+   "B": [
+    "1. AI (5): The Mythology Of Conscious AI; The Mythology Of Conscious AI; The Scaling Hypothesis; Writes and Write-Nots; Writes and Write-Nots",
+    "2. representations (2): Distributed Representations: Composition & Superposition; Analog Cognition and Consciousness",
+    "3. ball lightning (2): A brief history of ball lightning observations by scientists and trained professionals; A brief history of ball lightning observations by scientists and trained professionals",
+    "4. memory (2): Forms of Memory in Post-colonial Australia; Analog Cognition and Consciousness",
+    "5. neural networks (4): The Scaling Hypothesis; The Mythology Of Conscious AI; The Mythology Of Conscious AI; Distributed Representations: Composition & Superposition",
+    "6. brain (4): The Mythology Of Conscious AI; The Mythology Of Conscious AI; Analog Cognition and Consciousness; The Scaling Hypothesis",
+    "7. neurons (4): Analog Cognition and Consciousness; Distributed Representations: Composition & Superposition; The Mythology Of Conscious AI; The Mythology Of Conscious AI"
+   ]
+  }
+ ]
+}

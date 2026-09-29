@@ -2570,6 +2570,7 @@ const rawPgArticleReader: ArticleReader = {
       entries.push(
         describeArticle({
           slug: row.article.slug,
+          revisionId: row.revision.id,
           meta: metaFrom(row.article.slug, row.revision, row.headingTitle),
           /* **The five numbers, not the artefacts they came from.** They were
              recomputed here from every block row and the whole tree of every

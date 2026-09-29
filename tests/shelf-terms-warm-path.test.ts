@@ -32,6 +32,8 @@ function shelfRevision(n: number): ShelfRevision {
     slug: `article-${n}`,
     archived: false,
     title: null,
+    titleOverride: null,
+    gist: null,
   };
 }
 

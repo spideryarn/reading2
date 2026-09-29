@@ -1,0 +1,9 @@
+{"case":"local-subset-a","judgements":[
+{"id":"f045","winner":"A","scoreA":5,"scoreB":4,"reason":"A is short and on-theme (AI, neuroscience, ball lightning) though brain/neurons/neural networks overlap, while B leads with ball lightning and fills with incidental words like window, loss, solve and potential."},
+{"id":"f046","winner":"A","scoreA":6,"scoreB":4,"reason":"A includes the real writing/reading theme in its top four, whereas B spends slots on vague words like possibility, relationship and assumption and drops writing entirely."},
+{"id":"f047","winner":"A","scoreA":6,"scoreB":4,"reason":"A puts AI, representations and writers up front; B leads with the two ball-lightning duplicates and includes several incidental pills (window, loss, solve, potential)."},
+{"id":"f048","winner":"tie","scoreA":4,"scoreB":4,"reason":"The two lists are identical."},
+{"id":"f049","winner":"B","scoreA":5,"scoreB":6,"reason":"B keeps A's core AI/neuro pills and adds the writers theme, covering the essays A misses, at the cost of a few weak pills like money and signals."},
+{"id":"f050","winner":"B","scoreA":4,"scoreB":6,"reason":"A is almost entirely overlapping neuro/AI pills (neural networks, brain, neurons, computation, model, Turing machine) and ignores ball lightning and writing, while B covers more of the shelf."},
+{"id":"f051","winner":"A","scoreA":6,"scoreB":5,"reason":"A adds the writers theme and broader coverage of the essays beyond B's compact but overlapping AI/neuroscience set."}
+]}

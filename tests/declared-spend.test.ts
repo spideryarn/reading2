@@ -59,6 +59,23 @@ describe("the register", () => {
        listing it as uncounted while it was quietly writing rows. */
     expect(() => declarationFor(UNMETERED)).toThrow(/not metered/);
   });
+
+  it("records the Jev bypass on the Decisions wire it actually uses", async () => {
+    const declaration = declarationFor("shelf-topics-jev");
+    expect(declaration.wire).toBe("decisions");
+    const rows = await rowsFrom(() =>
+      withDeclaredExternalCall(declaration.id, { model: "typesafe/jev-1.13" }, async ({ observe }) => {
+        observe.openRouter({
+          model: "typesafe/jev-1.13-20260917",
+          provider: "TypeSafe",
+          usage: { prompt_tokens: 123, completion_tokens: 0, cost: 0.000_005 },
+        });
+      }),
+    );
+    expect(rows[0]?.wire).toBe("decisions");
+    expect(rows[0]?.reportedInputTokens).toBe(123);
+    expect(rows[0]?.creditsUsedNanos).toBe(5_000);
+  });
 });
 
 describe("withDeclaredExternalCall", () => {

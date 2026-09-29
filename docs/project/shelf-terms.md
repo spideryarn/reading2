@@ -4,8 +4,12 @@ Parent: [reading-view-overview.md](reading-view-overview.md), beside [library.md
 
 A row of **topics** above the shelf — short phrases like *neural networks*, *consciousness*,
 *Indigenous*, each with a count. Choose one and the shelf narrows to the articles that are about it;
-choose a second and it narrows to articles about both. The topics are picked by a program, not a
-model: the same shelf always gives the same topics, it costs nothing, and it takes milliseconds.
+choose a second and it narrows to articles about both. **A program proposes the topics and a model
+judges them**: the program finds the phrases the articles actually use and counts which articles
+each reaches; since 2026-09-29 GPT-6 Luna scores those candidates for this reader, and the program
+chooses from the scores. With no model answer yet, the row is the program's alone — the same shelf
+always gives the same topics, it costs nothing, and it takes milliseconds.
+[§ The model's judgement](#the-models-judgement) is how the two fit.
 
 > Delegate to a new agent that does some simple keyword/clustering on the articles in my shelf so I
 > can easily filter to different kinds of article. It should choose terms that somehow enable me to
@@ -38,6 +42,56 @@ This doc is what you need to work on it.
 The route fills missing candidates **within a time budget** and answers `pending` with how many are
 still unread; the client shows what it has, says *"Reading N more articles…"*, and asks again. The
 server always reads at least one article per request, so the loop cannot spin.
+
+## The model's judgement
+
+> I'm still not that happy with the suggestions that are being generated. They're just not that
+> meaningful/relevant (e.g. "food", "female", "bowl" has little to do with my real topics
+> (computational neuroscience, consciousness, Buddhism, AI). […] I'd still rather this was
+> free/very cheap.
+>
+> — Greg, 2026-09-29
+
+**The program proposes, a model disposes.** Step 2 above still runs on every request. On top of it,
+GPT-6 Luna is shown the shelf — each read article's title (the reader's rename wins) and its
+one-sentence gist, and the reader's profile if they wrote one — and up to 80 of the program's
+candidates, each with how many articles it reaches and three example titles, and scores each 0–3
+against one anchored rubric. The scores go back into the **same** greedy as its quality
+(`ChooseOptions.quality`), so coverage, the redundancy skips and the neighbour rule stay ours and the
+model never invents a label. Chosen by an eval over nine shelves with blind judges — scores beat the
+program's list 9–0, and beat asking the model for an order once every topic's member titles were
+visible: plan [260929c](../plans/260929c-shelf-topics-chosen-by-a-model.md) § Stage 1.
+
+- **Stored per owner and scope** (`active`, or `all` with `?archived=1`) in `shelf_topic_scores`,
+  with a hash of exactly what the model was shown: the messages, the prompt version and the model.
+- **A stored row is used whether or not it is current.** Its scored keys take their score and **a key
+  it did not score is left out**, as in the eval — which is what keeps *food* and *bowl* out. If that
+  leaves no topics (a row from a very different shelf), the program's list is used. `chosenBy` in the
+  response says which.
+- **What triggers a refresh**: the hash differing from the stored row's — an article added, removed,
+  re-extracted, renamed, re-gisted, the profile edited — and only once nothing is `pending`, so the
+  model sees complete candidates. Archiving or restoring moves the `active` scope's hash and not the
+  `all` scope's. Search, sort, Unread and reading position never reach the server's input, so they
+  never refresh anything.
+- **The answer goes first.** The route sends the program's list (or the stored pick) with
+  `refreshing: true`, then awaits the model before its handler returns, so the spend lands in the
+  request's own collector against the reader — job `shelf-topics`,
+  [ai-gateway.md](ai-gateway.md). The client asks again every 8 s, at most four times, and the
+  model's pick appears without a reload.
+- **One refresh at a time, and never a storm.** One statement claims the refresh for
+  (owner, scope, input) with a 90-second lease; the write lands only if the claim is still ours. A
+  failure — a refusal, a timeout, an answer with a score outside 0–3 — counts, and pushes the next
+  attempt out (2, 8, 32, 128 minutes, then six hours); the stored row, if any, keeps being used.
+  Then a per-owner allowance — 12 an hour, 40 a day — and a global fuse of 3,000 a day, from the
+  rate limiter [link hover cards](links.md) already use.
+- **Cost**: about $0.001 a refresh (≈2–5k tokens in, 1–2k out incl. reasoning, 6–20 s), paid when the
+  shelf changes rather than when anybody loads it. **Not** the ingest quota
+  ([billing.md](billing.md)): that counts articles, and this is reading-aid spend like a link card.
+- **Fallback**: no key, no row yet, a failed call — the program's list, silently to the reader and
+  loudly in the log (never with a title, gist, label or the profile in it).
+
+The reader's titles, gists and profile going to OpenAI via OpenRouter is on
+[/privacy](privacy.md).
 
 ## The count: one formula
 
@@ -153,7 +207,9 @@ while articles are still being read, a topic can be absent from one answer and p
 |---|---|
 | extracting candidates; the English check; `EXTRACTOR_VERSION` | [`src/shelf-terms/extract.ts`](../../src/shelf-terms/extract.ts) |
 | choosing topics; `shelfTermMetrics` (coverage, overlap, redundancy — the one definition) | [`src/shelf-terms/choose.ts`](../../src/shelf-terms/choose.ts) |
-| storage, the owner-scoped set, the bounded fill | [`src/store/pg-shelf-terms.ts`](../../src/store/pg-shelf-terms.ts) |
+| the model's prompt, the input hash, the strict parser, the one call; `SHELF_TOPICS_PROMPT_VERSION` | [`src/shelf-terms/model-scores.ts`](../../src/shelf-terms/model-scores.ts) |
+| stored scores applied, the claim, the refresh after the answer, the allowance | [`src/shelf-topics.ts`](../../src/shelf-topics.ts) |
+| storage, the owner-scoped set, the bounded fill; the `shelf_topic_scores` row and its claim | [`src/store/pg-shelf-terms.ts`](../../src/store/pg-shelf-terms.ts) |
 | `GET /api/library/terms` (`?archived=1` for active + archived), `private, no-store` | [`src/routes.ts`](../../src/routes.ts); the shape is `LibraryTermsResponse` in [`src/types.ts`](../../src/types.ts) |
 | the fetch, the ask-again loop, which URL keys apply | [`src/web/useShelfTerms.ts`](../../src/web/useShelfTerms.ts) |
 | the narrowing and the count formula, pure | [`src/web/shelf-narrow.ts`](../../src/web/shelf-narrow.ts) |
@@ -174,7 +230,7 @@ it Greg runs it with his owner uuid and the production `DATABASE_URL` in the she
 
 ## What v1 does not do
 
-- No LLM, no embeddings, no clustering library.
+- No embeddings, no clustering library; the one model call judges candidates and never writes one.
 - No editing of topics — hide, rename or pin. Zotero-style "hide this automatic tag" is the obvious v2.
 - The generic-word list is hand-written, so weak topics such as *window* and *message* survive.
 - Near-synonyms (*neural nets* / *neural networks*) can both appear, and near-copies of one article

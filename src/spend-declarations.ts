@@ -67,6 +67,9 @@ export const PAID_ENDPOINT_PATHS: readonly string[] = [
      What the path buys is the scan — a source file that names it is a source
      file that can spend, whether or not anything uses it that way today. */
   "/v1/images",
+  /* Jev's Decisions endpoint (added 2026-09-29, plan 260929c). Only the
+     shelf-topics eval calls it, through the declared bypass `shelf-topics-jev`. */
+  "/api/alpha/decisions",
 ];
 
 export interface Declaration {
@@ -363,6 +366,23 @@ export const DECLARATIONS: readonly Declaration[] = [
     why: "The cheap arm's model (the quick tier) is served only on chat/completions, and the seam for that wire (`openRouterJson`) owns the per-job provider policy — this eval's arms deliberately differ from the app's policy and from each other, which is the same reason the PDF bake-off's OpenRouter arm is a declared bypass.",
   },
   {
+    /* **Jev, on OpenRouter's Decisions endpoint** — the shelf-topics eval's
+       one arm that cannot use the gateway (plan 260929c, R5). The response
+       reports `input_tokens`/`output_tokens` and a settled `cost`, which the
+       caller maps onto the OpenRouter observer's usage shape. The ledger names
+       the real wire even though adding a Decisions route to the product gateway
+       remains Stage 2's, and only if Jev wins. */
+    id: "shelf-topics-jev",
+    kind: "bypass",
+    since: "2026-09-29",
+    account: "openrouter",
+    file: "evals/shelf-topics/jev.ts",
+    job: "eval",
+    wire: "decisions",
+    metered: true,
+    why: "Jev is a decisions model: OpenRouter refuses it on /chat/completions and serves it only on POST /api/alpha/decisions, a path the gateway (src/ai-call.ts) has no route for. Adding one is Stage 2's decision, taken only if the eval says Jev is worth a sixth wire.",
+  },
+  {
     /* **The fleet dashboard's dictation, and the first entry here that is not
        this app.**
 
@@ -514,4 +534,3 @@ export function declarationFor(id: string): Declaration {
   }
   return found;
 }
-

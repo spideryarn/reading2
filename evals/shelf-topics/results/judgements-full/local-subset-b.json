@@ -1,0 +1,9 @@
+{"case":"local-subset-b","judgements":[
+{"id":"f052","winner":"A","scoreA":5,"scoreB":4,"reason":"A's three pills (AI, memory, representations) are all meaningful for this reader; B shares them but fills its first eight with incoherent word-pills like organization, model, white and machine, though it does reach the work essays."},
+{"id":"f053","winner":"A","scoreA":5,"scoreB":3,"reason":"A is short but every pill is a real theme; B leads with an obscure name pill, mixed groups (mechanism, sphere, cycle, red, lady), and pushes AI and memory to the bottom, where memory duplicates Wagan Watson."},
+{"id":"f054","winner":"tie","scoreA":3,"scoreB":3,"reason":"Identical lists."},
+{"id":"f055","winner":"A","scoreA":4,"scoreB":3,"reason":"Both carry junk pills, but A leads with AI, memory and a coherent neurons pill, while B opens on the incoherent 'model' and adds more vague groups (collective, principle, technology)."},
+{"id":"f056","winner":"B","scoreA":4,"scoreB":5,"reason":"B's three pills are all meaningful; A shares its top two but then mostly adds incoherent word-pills (organization, model, white, machine) that would confuse the filter."},
+{"id":"f057","winner":"B","scoreA":3,"scoreB":4,"reason":"B puts AI, memory and neurons first; A leads with a name pill and mixed groups and buries AI at position 9."},
+{"id":"f058","winner":"A","scoreA":4,"scoreB":3,"reason":"B spends its top six on overlapping computation pills (neurons, representations, model, code, patterns) and reaches the work essays only at 12; A has AI, memory and neurons at the top and covers the work essays."}
+]}

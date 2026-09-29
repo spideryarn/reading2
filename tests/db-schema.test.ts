@@ -589,7 +589,8 @@ describe("the schema keeps the promises the plan makes", () => {
                             'uploads_owner_fk','feedback_owner_fk',
                             'billing_accounts_owner_fk','ingest_events_owner_fk',
                             'jobs_ingest_event_fk','realtime_sessions_owner_fk',
-                            'rate_limit_events_owner_fk','link_summaries_owner_fk')
+                            'rate_limit_events_owner_fk','link_summaries_owner_fk',
+                            'shelf_topic_scores_owner_fk')
           order by conname`,
       );
       expect(rows.map((r) => r.conname)).toEqual([
@@ -628,6 +629,10 @@ describe("the schema keeps the promises the plan makes", () => {
            references this table with RESTRICT too, so the record of what a live
            conversation cost cannot be deleted from either end by accident. */
         "realtime_sessions_owner_fk",
+        /* drizzle/20260929065031, appended by hand to the generated migration.
+           CASCADE, for `link_summaries`' reason: the model's scores for a
+           reader's shelf topics are a cache, worth nothing once they are gone. */
+        "shelf_topic_scores_owner_fk",
         "uploads_owner_fk",
       ]);
     });
