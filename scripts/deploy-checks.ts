@@ -707,6 +707,25 @@ export const GATE_FIXTURES = [
   "tests/fixtures/data-root/output/writes.blocks.json",
 ] as const;
 
+/**
+ * **Builds the test gate needs that the deploy does not ship**, each run as a
+ * gate of its own after `npm run build`.
+ *
+ * `npm run build` is Vercel's recipe and stays exactly that; the fleet
+ * dashboard is box tooling, never deployed, so it does not belong in it. But
+ * its tests read the built client, and the gate runs them in a fresh worktree
+ * where nothing has been built — so without this, three fleet tests were red
+ * at every commit and the test gate could not pass anywhere (2026-09-29). A
+ * separate gate rather than part of `build`, so a failure names the tooling
+ * rather than reading as a product build that will not ship.
+ *
+ * tests/deploy-checks.test.ts reads the suite's own "run `npm run build…`"
+ * hints and fails when one names a script missing from here.
+ */
+export const GATE_TOOLING_BUILDS: readonly { gate: string; script: string }[] = [
+  { gate: "fleet client build", script: "build:fleet" },
+];
+
 export function missingGateFixtures(exists: (relPath: string) => boolean): string[] {
   return GATE_FIXTURES.filter((rel) => !exists(rel));
 }

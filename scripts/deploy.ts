@@ -57,6 +57,7 @@ import {
   failingTestsFromReport,
   findSecretsInBundle,
   GATE_FIXTURE_ROOT,
+  GATE_TOOLING_BUILDS,
   judgeClientBuild,
   judgeDeployments,
   stagedTooLong,
@@ -739,7 +740,7 @@ function gatesAt(sha: string): void {
        whole recipe; now there is one of it and this reads it rather than
        repeating it. */
     const unmask = maskPrunedRoots(wt);
-    let built;
+    let built: ReturnType<typeof run>;
     try {
       built = run("npm", ["run", "--silent", "build"], { cwd: wt, env: BUILD_ENV });
     } finally {
@@ -748,6 +749,13 @@ function gatesAt(sha: string): void {
       unmask();
     }
     gate("build", built.code === 0, () => explainBuildFailure(built.out));
+
+    /* What the tests need built beyond what ships. After `unmask()`, because
+       these are not Vercel builds and the pruning is about Vercel's upload. */
+    for (const b of GATE_TOOLING_BUILDS) {
+      const r = run("npm", ["run", "--silent", b.script], { cwd: wt, env: BUILD_ENV });
+      gate(b.gate, r.code === 0, () => tail(r.out, 20));
+    }
 
     /* Only the tests need the personal state, so only they get it. */
     const envLocal = path.join(ROOT, ".env.local");
