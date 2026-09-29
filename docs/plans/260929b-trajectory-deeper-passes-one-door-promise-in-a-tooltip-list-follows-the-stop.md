@@ -117,4 +117,6 @@ what stage 2 changed in the prompt is written here, under *Progress*, once it la
   steps at 1440 (the one exception is a row taller than the list, top kept at the comfort margin)
   and all at 820; at 420 *All stops* brings the band back with the row visible; one door at the end
   of Gist and More, none at Most; the tooltip on hover and tap, outside click closes it; no console
-  errors. Not browser-verified: Tab focus + Escape (unit-tested), the head at 420 (Sol: wraps safely).
+  errors. A follow-up check covered the rest: Tab reaches *About this route* and opens the tooltip,
+  Escape closes it and focus stays on the button; at 420 and 375 the head wraps to two rows with no
+  overlap, and the tapped tooltip stays inside the viewport.
