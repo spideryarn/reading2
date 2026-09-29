@@ -203,6 +203,17 @@ watchConnection();
  */
 watchUncaughtErrors();
 
+/**
+ * Delete kept dictations more than a week old — anybody's. Here rather than in
+ * a box, because a box may never be opened again, and "deleted after a week"
+ * has to be true of a recording nobody came back for. Dynamic, and after the
+ * first paint, so nothing on the critical path waits on IndexedDB.
+ * docs/plans/260929h-dictation-that-survives-a-closed-tab.md.
+ */
+setTimeout(() => {
+  void import("./dictation-keep.js").then((m) => m.sweepDictations()).catch(() => {});
+}, 5000);
+
 createRoot(document.getElementById("root")!).render(
   <StrictMode>
     <LucideProvider size={16} strokeWidth={1.75}>

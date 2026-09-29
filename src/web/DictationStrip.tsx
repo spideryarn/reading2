@@ -372,6 +372,7 @@ export function DictationStrip({
           recording={dictation.recording}
           onDiscard={dictation.clearRecording}
           onRetry={dictation.canRetry ? dictation.retry : null}
+          keptOnDevice={dictation.keptOnDevice}
         />
       )}
 
@@ -428,8 +429,15 @@ function SaveRecording({
   recording,
   onDiscard,
   onRetry,
+  keptOnDevice,
 }: {
   recording: DictationRecording;
+  /**
+   * A copy is on this device and every write of it landed, so closing the page
+   * will not lose it — Greg's *"say, look, it failed but nothing's been lost"*.
+   * Plan 260929h.
+   */
+  keptOnDevice: boolean;
   onDiscard(): void;
   /**
    * Send the same audio again, or null when that could not help.
@@ -466,7 +474,11 @@ function SaveRecording({
           transcription failed — including when the recogniser's rough words are
           in the box — and that sentence would then be false. The error line
           above already says what happened; this row's job is the audio. */}
-      <span className="prof-recording-what">The audio is still here if you want it.</span>
+      <span className="prof-recording-what">
+        {keptOnDevice
+          ? "The audio is kept on this device, even if you close the page."
+          : "The audio is still here if you want it."}
+      </span>
       {onRetry && (
         /* **First, and it is the primary action.** Everything else in this row
            is salvage — a file to keep, a thing to throw away — and the reader's

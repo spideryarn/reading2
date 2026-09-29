@@ -240,7 +240,9 @@ function drive() {
   function Probe(): ReactNode {
     state = useDictation({
       onText: (t) => text.push(t),
-      onTranscript: (t) => transcripts.push(t),
+      onTranscript: (t) => {
+        transcripts.push(t);
+      },
       onEnd: () => ends.push(1),
       context: { kind: "profile" },
       /* The product's own transcriber, so the fake `fetch` below is still

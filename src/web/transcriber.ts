@@ -80,3 +80,81 @@ export type Transcriber<C> = (
   context: C,
   signal?: AbortSignal,
 ) => Promise<TranscriptionResult>;
+
+/**
+ * **Somewhere to keep a dictation until its words are safely in the box.**
+ *
+ * The recording lives in the page's memory, so a tab that closes, reloads,
+ * crashes or is discarded by the browser takes minutes of talking with it —
+ * the one way left to lose a dictation once a failed upload started keeping its
+ * audio. A keeper holds a copy as it is recorded, and the next time the same box
+ * is on screen the recording is offered back. Greg, 2026-09-29
+ * (SPIDERYARN-READING2-5M): *"I would be really sad if at the end of a few
+ * minutes of really rich thought, the contents got lost."*
+ * docs/plans/260929h-dictation-that-survives-a-closed-tab.md.
+ *
+ * A type here and an implementation elsewhere, for the same reason as
+ * {@link Transcriber}: the product keeps recordings in IndexedDB
+ * ([`dictation-keep.ts`](./dictation-keep.ts)), the fleet dashboard passes no
+ * keeper at all, and the hook is shared by both.
+ *
+ * **Nothing here may throw or reject.** A keeper that fails must never touch the
+ * dictation it is keeping; the worst it may do is keep nothing.
+ */
+export interface DictationKeeper<C> {
+  /**
+   * Which box this keeper is for — `"feedback"`, `"chat:<slug>"`. A recording
+   * is only ever offered back to the box it was made in, and the hook re-runs
+   * its recovery when this changes.
+   */
+  readonly box: string;
+  /**
+   * Start keeping a new dictation. Null when this device cannot keep one — no
+   * signed-in reader, no IndexedDB, no Web Locks — in which case the dictation
+   * runs exactly as it did before keepers existed.
+   */
+  begin(where: C): KeptTape | null;
+  /**
+   * A dictation an earlier page left unfinished in this box, **claimed for this
+   * page** so that no other tab can offer it too. Null when there is none.
+   */
+  recover(): Promise<RecoveredTape<C> | null>;
+}
+
+/** One kept dictation, while a page holds it. Every method is fire-and-forget. */
+export interface KeptTape {
+  /** One recorder chunk, in order. `part` counts from 0, as the tape's parts do. */
+  chunk(part: number, blob: Blob, mimeType: string): void;
+  /** The tape lost audio part-way, so what is kept is evidence, not a source to transcribe. */
+  broken(): void;
+  /**
+   * Every part's recorder finished, so every kept part is a whole file. Until
+   * this is said, a recovered tape is one whose page died mid-sentence: its last
+   * part never got the recorder's closing chunk, and is offered with a warning
+   * that the end may be missing rather than as "nothing was lost".
+   */
+  complete(): void;
+  /**
+   * Every write so far has landed. What the row may promise — "kept on this
+   * device" — depends on it; a keeper that has silently failed must not be
+   * described as holding anything.
+   */
+  intact(): boolean;
+  /** Its words are in the box, or the reader threw it away. Delete it. */
+  forget(): void;
+  /** This page no longer holds it. Leave it for the next time the box is on screen. */
+  release(): void;
+}
+
+/** What a recovery hands back: the parts as they were kept, and where they were going. */
+export interface RecoveredTape<C> {
+  tape: KeptTape;
+  where: C;
+  /** When the dictation started, for the sentence that offers it back. */
+  startedAt: number;
+  /** In order, never empty. `ms` is approximate: first chunk to last. */
+  parts: Array<{ blob: Blob; mimeType: string; ms: number }>;
+  broken: boolean;
+  /** Every part closed and no chunk is missing. See {@link KeptTape.complete}. */
+  complete: boolean;
+}

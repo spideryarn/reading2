@@ -62,6 +62,7 @@ import { mintId } from "../ids.js";
 import { DictationButton, DictationStrip } from "./DictationStrip.js";
 import { type Mark, NO_MARK, PlaceOnCriterion } from "./PlaceOnCriterion.js";
 import { parseRoute } from "./router.js";
+import { keepDictation } from "./dictation-keep.js";
 import { sendForTranscription } from "./dictation-upload.js";
 import { useDictationField } from "./useDictationField.js";
 import { useEscapeToClose } from "./useEscapeToClose.js";
@@ -177,6 +178,8 @@ export function AnnotateDialog({
     box,
     context: route.kind === "read" ? { kind: "article", slug: route.slug } : { kind: "profile" },
     transcribe: sendForTranscription,
+    /* One box per passage, as the draft itself is — see the reset below. */
+    keep: keepDictation(`annotate:${anchor.blockId}:${anchor.start}`),
   });
 
   /* One box per passage. Carrying half-typed words from one selection to the
