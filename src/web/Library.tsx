@@ -62,6 +62,7 @@ import { DataTable, naturalDirections, useSortedTable } from "./lib/DataTable.js
 import { capRows } from "./lib/row-cap.js";
 import { isAllNatural, sinkLast, sortingFromUrl, sortingToUrl } from "./lib/table-sort.js";
 import { Link } from "./Link.js";
+import { LogoMark } from "./LogoGlyphs.js";
 import { useLogoAnimation } from "./logo-animation.js";
 import { foldWithMap, libraryHitHref, queryTerms } from "./library-hits.js";
 import {
@@ -1247,6 +1248,14 @@ function Tip({ children }: { children: ReactNode }) {
  * they sit on `.logo-mark`, which is a box exactly the spider whatever its
  * size. The heading beside it is an `<h1>` and is left alone.
  *
+ * **Still left alone on 2026-09-29**, when the other wordmarks gained the
+ * letters (LogoGlyphs.tsx). The heading is `text-3xl`, and the letter
+ * animations move by fixed pixels tuned for a 13px word — a 2px pluck and an
+ * 8px abseil read as half a gesture at 30px. GPT Sol's review of
+ * docs/plans/260929c-back-links-become-icons-with-tooltips-and-one-animated-wordmark-reused.md,
+ * finding 1. Scaling the set to its host is the way to change that, and it is
+ * a stylesheet project of its own rather than a reuse.
+ *
  * **A tap plays one here, where on the reading view it goes home**, because
  * here it does nothing else — `{ tap: true }`, decided on the click.
  *
@@ -1259,9 +1268,7 @@ function ShelfSpider() {
   const anim = useLogoAnimation({ tap: true });
   return (
     <span className={`shelf-spider ${anim.className}`} aria-hidden="true" {...anim.handlers}>
-      <span className="logo-mark">
-        <img className="logo-image" src="/spideryarn-logo.png" alt="" width={28} height={28} />
-      </span>
+      <LogoMark size={28} />
     </span>
   );
 }

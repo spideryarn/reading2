@@ -150,6 +150,7 @@ const DESIGN_JOB = {
 
 import { Toggle } from "@/components/ui/toggle";
 import { Link } from "./Link.js";
+import { LogoLetters, LogoMark } from "./LogoGlyphs.js";
 import { PILL } from "./pill.js";
 import { pageTitle, useDocumentTitle } from "./page-title.js";
 import { LIBRARY_HREF } from "./router.js";
@@ -1131,10 +1132,13 @@ const veryLongIdentifierName = computeSomethingExpensive(withArgument, andAnothe
  * nothing. That is the check, and it is the reason to keep the page rather than
  * screenshot it once.
  *
- * The markup below is `HomeLogo`'s, copied rather than imported, and that is
+ * The shell below is `HomeLogo`'s, copied rather than imported, and that is
  * the one deliberate duplication here: the component is a `Link` to the library
  * and hangs itself in `position: fixed` in the corner of the window, neither of
- * which is wanted twelve times in a grid.
+ * which is wanted twelve times in a grid. **The glyphs inside it are not
+ * copied** since 2026-09-29 — `LogoMark` and `LogoLetters` (LogoGlyphs.tsx)
+ * are the same components every page's wordmark draws, so this gallery cannot
+ * drift from them.
  *
  * **The two copies of the wordmark were set in different faces** until
  * 2026-09-08, which is why this section draws both. `--font-brand` now
@@ -1222,16 +1226,9 @@ function LogoAnimations() {
 function LogoGlyph({ wrapper }: { wrapper: "logo-text" | "dock-btn-label" }) {
   return (
     <>
-      <span className="logo-mark">
-        <img className="logo-image" src="/spideryarn-logo.png" alt="" width={20} height={20} />
-      </span>
+      <LogoMark />
       <span className={wrapper}>
-        {"Spideryarn".split("").map((ch, i) => (
-          // biome-ignore lint/suspicious/noArrayIndexKey: fixed string, rebuilt whole
-          <span className="logo-letter" key={i}>
-            {ch}
-          </span>
-        ))}
+        <LogoLetters />
       </span>
     </>
   );

@@ -105,6 +105,7 @@
 import { cn } from "@/lib/utils";
 
 import { Link } from "./Link.js";
+import { LogoLetters, LogoMark } from "./LogoGlyphs.js";
 import { libraryHomeTitle } from "./library-home-title.js";
 import { useLogoAnimation } from "./logo-animation.js";
 import { LIBRARY_HREF } from "./router.js";
@@ -144,16 +145,12 @@ export function HomeLogo() {
       {/* `alt=""` and not "Spideryarn": the wordmark beside it already says the
           name, and a screen reader reading it twice is how a decorative image
           becomes noise. The link's own text is the accessible name. */}
-      <span className="logo-mark">
-        <img className="logo-image" src="/spideryarn-logo.png" alt="" width={20} height={20} />
-      </span>
+      <LogoMark />
+      {/* `.logo-text` is this copy's own wrapper — it is what the 731px query
+          hides — and the letters inside it are the shared ones
+          (LogoGlyphs.tsx). */}
       <span className="logo-text">
-        {"Spideryarn".split("").map((ch, i) => (
-          // biome-ignore lint/suspicious/noArrayIndexKey: fixed string, rebuilt whole
-          <span className="logo-letter" key={i}>
-            {ch}
-          </span>
-        ))}
+        <LogoLetters />
       </span>
     </Link>
   );

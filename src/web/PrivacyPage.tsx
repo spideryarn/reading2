@@ -39,10 +39,10 @@
  * were already false when written, and the comments beside them say which.
  */
 import { useEffect } from "react";
-import { ArrowLeft } from "lucide-react";
 
 import { TAKEDOWN_HEADING } from "../messages.js";
 import { CONTACT_EMAIL } from "../site-text.js";
+import { BackLink } from "./BackLink.js";
 import { Link } from "./Link.js";
 import { PUBLIC_SHARING_HREF, TAKEDOWN_SECTION_ID } from "./router.js";
 import { SiteFooter } from "./SiteFooter.js";
@@ -143,13 +143,7 @@ export function PrivacyPage() {
           article — so there was often no "back" for it to mean. It is also the
           label the footer uses for the same destination, and one page should not
           call one address two things. */}
-      <Link
-        href="/"
-        className="tw:mb-6 tw:inline-flex tw:items-center tw:gap-1 tw:text-xs tw:text-ink-faint tw:no-underline tw:hover:text-highlight"
-      >
-        <ArrowLeft size={13} />
-        Home
-      </Link>
+      <BackLink href="/" label="Home" icon="home" className="tw:mb-6" />
 
       <h1 className="tw:m-0 tw:font-prose tw:text-2xl tw:leading-snug tw:text-foreground">
         Privacy

@@ -228,6 +228,7 @@ import { DEFAULT_MODE, diagramInSearch, type Mode, type Panel } from "./params.j
 import { modeFromParam } from "../modes.js";
 import { cn } from "@/lib/utils";
 import { Link } from "./Link.js";
+import { LogoLetters, LogoMark } from "./LogoGlyphs.js";
 import { useLogoAnimation } from "./logo-animation.js";
 /* The trigger only — the dialog and the `open` state stay mounted at the
    signed-in `App` level, where a `Dock` unmounting cannot destroy a draft.
@@ -2508,16 +2509,13 @@ function DockHome({ knownSignedOut }: { knownSignedOut: boolean }) {
       {/* `alt=""` and not "Spideryarn": the wordmark beside it already says the
           name, and a screen reader reading it twice is how a decorative image
           becomes noise. HomeLogo.tsx says the same in the corner. */}
-      <span className="logo-mark">
-        <img className="logo-image" src="/spideryarn-logo.png" alt="" width={20} height={20} />
-      </span>
+      <LogoMark />
+      {/* `.dock-btn-label` is this copy's own wrapper — the bar's fit ladder
+          hides it — and the letters inside are the shared ones
+          (LogoGlyphs.tsx). `lettersDrawn` still sees them hidden when the
+          ladder takes the word, which is what 260915c was about. */}
       <span className="dock-btn-label">
-        {"Spideryarn".split("").map((ch, i) => (
-          // biome-ignore lint/suspicious/noArrayIndexKey: fixed string, rebuilt whole
-          <span className="logo-letter" key={i}>
-            {ch}
-          </span>
-        ))}
+        <LogoLetters />
       </span>
     </Link>
   );
