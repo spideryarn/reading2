@@ -105,6 +105,8 @@ import { buildSections, sectionDepth } from "../position.js";
 import { bandCoversProse, fitView } from "../layout.js";
 import { navPlan, useArrowNav } from "../keynav.js";
 import { ReturnChip } from "../ReturnChip.js";
+import { BandBackChip } from "../BandBackChip.js";
+import { MODE_LABEL } from "../../title-text.js";
 import { BlockLinkProvider, buildBlockLinkIndex } from "../BlockLinkCard.js";
 import { flushPendingFlash, resetFlash } from "../flash.js";
 import { ViewportProbe } from "../ViewportProbe.js";
@@ -313,11 +315,12 @@ export function Reader({
   const bandOpen = mode !== "plain";
   /**
    * **The band has stepped aside from the prose** — on a narrow window, where
-   * it lies over the whole article (`band-covers`), after the reader chooses a
-   * Trajectory stop. The band stays mounted, so its stop, its marks and the
-   * door in the prose all survive; only its paint goes (narrow-window.css §
-   * a band that has stepped aside). The door carries the stepping from there
-   * (TrajectoryPanel.tsx § TrajectoryDoor), and offers the band back.
+   * it lies over the whole article (`band-covers`), after the reader follows a
+   * passage link out of any band (`bandJump` below, since 2026-09-29) or chooses
+   * a Trajectory stop (since 2026-09-28). The band stays mounted, so everything
+   * in it survives; only its paint goes (narrow-window.css § a band that has
+   * stepped aside). `BandBackChip` offers it back, as does Trajectory's door
+   * (TrajectoryPanel.tsx § TrajectoryDoor).
    *
    * Component state, not the URL: it is about this window at this moment, and
    * a reload or a shared link should open the band. Cleared whenever the mode
@@ -325,11 +328,15 @@ export function Reader({
    * how you ask for its band back. The plan's F4.
    */
   const [bandAway, setBandAway] = useState(false);
-  const bandStepsAside = useCallback(() => setBandAway(true), []);
   // biome-ignore lint/correctness/useExhaustiveDependencies: `mode` is the trigger, not an input — a new mode brings its band back.
   useEffect(() => {
     setBandAway(false);
   }, [mode]);
+  /* **Browser Back does not bring the band back**, deliberately. A `popstate`
+     rule was in the plan and GPT Sol took it out: while the band is away the
+     reader can make further pushes of their own (a footnote jump, a Trajectory
+     depth), and Back should undo *those*, not reopen a band. `BandBackChip` is
+     the way back. docs/plans/260929g-on-a-phone-a-band-link-closes-the-band.md. */
   /**
    * **The mode the reader has just pressed, for `ModeHerald` to name.**
    *
@@ -442,6 +449,60 @@ export function Reader({
      removal timer rather than retaining a detached prose cell for 1.2s. */
   useEffect(() => resetFlash, []);
   const { at, jumpTo, rowOf } = useReadingPosition(sections, article.blocks, layoutKey);
+  /**
+   * **A jump that starts inside a band.** The same `jumpTo`, and then — where
+   * the band lies over the whole article, which on a phone it does — the band
+   * steps aside, so the paragraph the reader asked for is what they see.
+   *
+   * > close the panel on link tap on phone for all modes
+   * >
+   * > — Greg, 2026-09-29
+   *
+   * *Steps aside* (`bandAway`) rather than `?mode=plain`: the band stays mounted,
+   * so a Chat draft, a Quiz answer half-typed and a Search query survive, and the
+   * "back to ⟨mode⟩" pill (`BandBackChip`) puts it back exactly as it was.
+   * Trajectory did this alone from 2026-09-28; this is the same state for every
+   * mode. Handed to bands only — the spine, the table, the chat dialog and the
+   * hover card keep plain `jumpTo`, since none of them is under a band.
+   * docs/plans/260929g-on-a-phone-a-band-link-closes-the-band.md.
+   */
+  const bandCovers = bandOpen && fit.modeW === 0;
+  const bandBack = bandAway && bandCovers;
+  /**
+   * **Where focus was in the band when it stepped aside**, so it goes back
+   * there when the band returns. A band that goes `display: none` takes a
+   * keyboard or screen-reader user's focus with it; `BandBackChip` takes it in
+   * the meantime. GPT Sol, plan review, 2026-09-29.
+   */
+  const bandFocus = useRef<HTMLElement | null>(null);
+  const rememberBandFocus = useCallback(() => {
+    const focused = document.activeElement;
+    bandFocus.current =
+      focused instanceof HTMLElement && focused.closest(".mode-band") !== null ? focused : null;
+  }, []);
+  /* Trajectory cannot use `bandJump` because it also jumps on opening, so its
+     deliberate `onAway` path shares the focus handoff separately. */
+  const bandStepsAside = useCallback(() => {
+    /* A door can advance Trajectory while the band is already away. Preserve
+       the band control that should receive focus when it eventually returns. */
+    if (!bandAway) rememberBandFocus();
+    setBandAway(true);
+  }, [bandAway, rememberBandFocus]);
+  const bandJump = useCallback(
+    (blockId: BlockId, passage?: string) => {
+      jumpTo(blockId, passage);
+      if (!bandCovers) return;
+      rememberBandFocus();
+      setBandAway(true);
+    },
+    [jumpTo, bandCovers, rememberBandFocus],
+  );
+  useEffect(() => {
+    if (bandBack) return;
+    const was = bandFocus.current;
+    bandFocus.current = null;
+    if (was?.isConnected) was.focus({ preventScroll: true });
+  }, [bandBack]);
 
   /**
    * **Tell the Feedback dialog where the reader is.** feedback-context.ts.
@@ -1075,7 +1136,6 @@ export function Reader({
      TrajectoryDoor. Memoised on the control, which changes only with the stop
      and the door's words, so `memo(TableView)` holds between them. It also
      offers the band back while it has stepped aside on a narrow window. */
-  const bandBack = bandAway && fit.modeW === 0;
   const afterBlock = useMemo(() => {
     if (mode !== "trajectory" || !trajectoryControl?.blockId) return null;
     return {
@@ -1594,7 +1654,7 @@ export function Reader({
             key={mode}
             slug={slug}
             blocks={blockText}
-            onJump={jumpTo}
+            onJump={bandJump}
             kind="chat"
             onMode={setMode}
             handoff={chatHandoff}
@@ -1607,7 +1667,7 @@ export function Reader({
          half — see `RememberBand`. */
       case "remember":
         return owner ? (
-          <RememberBand slug={slug} blocks={blockText} onJump={jumpTo} onMode={setMode} />
+          <RememberBand slug={slug} blocks={blockText} onJump={bandJump} onMode={setMode} />
         ) : null;
       case "glossary":
         /* `glossaryRead ?` rather than `owner ?`, and it is the same test: the
@@ -1633,7 +1693,7 @@ export function Reader({
             <GlossaryBand
               slug={slug}
               read={glossaryRead}
-              onJump={jumpTo}
+              onJump={bandJump}
               onSelected={setTerm}
               onAskChat={askInChat}
             />
@@ -1641,7 +1701,7 @@ export function Reader({
         return artefacts?.glossary ? (
           <VisitorGlossaryBand
             glossary={artefacts.glossary}
-            onJump={jumpTo}
+            onJump={bandJump}
             onSelected={setTerm}
           />
         ) : null;
@@ -1676,11 +1736,11 @@ export function Reader({
                guessed here is why that move cost this line nothing but its
                example. */
             proseBeside={fit.modeW > 0}
-            onJump={jumpTo}
+            onJump={bandJump}
           />
         );
       case "summary":
-        return <SummaryBand article={article} onJump={jumpTo} />;
+        return <SummaryBand article={article} onJump={bandJump} />;
       /* **Mounted for a visitor too, since 2026-09-04** — one branch rather
          than the owner/visitor pair the artefact modes have, because there is
          no artefact to carry and no second component to build: the default
@@ -1704,7 +1764,10 @@ export function Reader({
             slug={slug}
             article={article}
             at={at}
-            onJump={jumpTo}
+            onJump={bandJump}
+            /* Walking the picture follows it in the prose without stepping the
+               band aside — DiagramPanel.tsx § `onFollow`. */
+            onFollow={jumpTo}
           />
         );
       /* **The first mode that could break on its own**, 2026-09-05 — the
@@ -1717,7 +1780,7 @@ export function Reader({
             <IdeasBand
               slug={slug}
               blocks={article.blocks}
-              onJump={jumpTo}
+              onJump={bandJump}
               onFound={setIdeaFound}
               openKey={openOccurrence}
               onOpenKey={setOpenOccurrence}
@@ -1727,7 +1790,7 @@ export function Reader({
           <VisitorIdeasBand
             ideas={artefacts.ideas}
             blocks={article.blocks}
-            onJump={jumpTo}
+            onJump={bandJump}
             onFound={setIdeaFound}
             openKey={openOccurrence}
             onOpenKey={setOpenOccurrence}
@@ -1738,9 +1801,9 @@ export function Reader({
          the panel, its three controls and — for the owner — the job machinery
          that must not be mounted anywhere else. QuotesMode.tsx. */
       case "quotes":
-        if (owner) return <QuotesBand slug={slug} read={owner.quotes} onJump={jumpTo} />;
+        if (owner) return <QuotesBand slug={slug} read={owner.quotes} onJump={bandJump} />;
         return artefacts?.quotes ? (
-          <VisitorQuotesBand quotes={artefacts.quotes} onJump={jumpTo} />
+          <VisitorQuotesBand quotes={artefacts.quotes} onJump={bandJump} />
         ) : null;
       /* **The owner/visitor pair the ideas and the quotes have, since
          2026-09-04.** It was one branch until then, and the comment here said
@@ -1758,7 +1821,7 @@ export function Reader({
             <TimelineBand
               slug={slug}
               blocks={article.blocks}
-              onJump={jumpTo}
+              onJump={bandJump}
               onFound={setTimelineFound}
               openKey={openTimelineKey}
               onOpenKey={setOpenTimelineKey}
@@ -1768,7 +1831,7 @@ export function Reader({
           <VisitorTimelineBand
             timeline={artefacts.timeline}
             blocks={article.blocks}
-            onJump={jumpTo}
+            onJump={bandJump}
             onFound={setTimelineFound}
             openKey={openTimelineKey}
             onOpenKey={setOpenTimelineKey}
@@ -1786,8 +1849,8 @@ export function Reader({
          docs/plans/260929c-a-visitor-sees-every-stored-mode-on-a-public-article.md. */
       case "debate":
         if (!owner)
-          return artefacts?.debate ? <VisitorDebateBand debate={artefacts.debate} onJump={jumpTo} /> : null;
-        return <DebateBand slug={slug} onJump={jumpTo} />;
+          return artefacts?.debate ? <VisitorDebateBand debate={artefacts.debate} onJump={bandJump} /> : null;
+        return <DebateBand slug={slug} onJump={bandJump} />;
       /* **The owner/visitor pair, since 2026-09-29.** It was the owner alone
          until a public article's stored Trajectory was refused to a signed-out
          reader (SPIDERYARN-READING2-56); a stored list is the same case. The
@@ -1801,26 +1864,26 @@ export function Reader({
       case "citations":
         if (!owner)
           return artefacts?.citations ? (
-            <VisitorCitationsBand citations={artefacts.citations} onJump={jumpTo} />
+            <VisitorCitationsBand citations={artefacts.citations} onJump={bandJump} />
           ) : null;
-        return <CitationsBand slug={slug} read={owner.citations} onJump={jumpTo} />;
+        return <CitationsBand slug={slug} read={owner.citations} onJump={bandJump} />;
       /* **The owner/visitor pair, since 2026-09-29**, for the citations' reason
          above. No passages: each passage under a question is a jump, not a
          selection. docs/plans/260916d-faq-mode.md,
          docs/plans/260929c-a-visitor-sees-every-stored-mode-on-a-public-article.md. */
       case "faq":
-        if (!owner) return artefacts?.faq ? <VisitorFaqBand faq={artefacts.faq} onJump={jumpTo} /> : null;
-        return <FaqBand slug={slug} onJump={jumpTo} />;
+        if (!owner) return artefacts?.faq ? <VisitorFaqBand faq={artefacts.faq} onJump={bandJump} /> : null;
+        return <FaqBand slug={slug} onJump={bandJump} />;
       /* **A mode since 2026-09-29**, a page of its own before. FAQ's shape: no
          passages, each post's links are jumps. The band is the wide one
          (`bandShape` above). docs/plans/260929f-tweets-become-a-mode-with-a-wide-band-and-block-links.md. */
       case "tweets":
         if (!owner) {
           return artefacts?.tweets ? (
-            <VisitorTweetsBand slug={slug} thread={artefacts.tweets} article={article} onJump={jumpTo} />
+            <VisitorTweetsBand slug={slug} thread={artefacts.tweets} article={article} onJump={bandJump} />
           ) : null;
         }
-        return <TweetsBand slug={slug} article={article} onJump={jumpTo} />;
+        return <TweetsBand slug={slug} article={article} onJump={bandJump} />;
       /* **The owner/visitor pair, since 2026-09-29.** A passage producer (the
          current stop) and a controller (← / → and the door after the stop's
          block), both published up here and both cleared when the band
@@ -1848,7 +1911,7 @@ export function Reader({
               covers={fit.modeW === 0}
               away={bandAway && fit.modeW === 0}
               onAway={bandStepsAside}
-              onJump={jumpTo}
+              onJump={jumpTo /* not `bandJump`: Trajectory jumps on opening, and steps aside itself (`onAway`) — Sol, 260929g */}
               onFound={setTrajectoryFound}
               openKey={openTrajectoryKey}
               onOpenKey={setOpenTrajectoryKey}
@@ -1868,7 +1931,7 @@ export function Reader({
             covers={fit.modeW === 0}
             away={bandAway && fit.modeW === 0}
             onAway={bandStepsAside}
-            onJump={jumpTo}
+            onJump={jumpTo /* not `bandJump`: see the visitor arm above */}
             onFound={setTrajectoryFound}
             openKey={openTrajectoryKey}
             onOpenKey={setOpenTrajectoryKey}
@@ -1895,7 +1958,7 @@ export function Reader({
           <SearchBand
             slug={slug}
             blocks={article.blocks}
-            onJump={jumpTo}
+            onJump={bandJump}
             onFound={setFound}
             openHit={openHit}
             onOpenHit={setOpenHit}
@@ -1904,7 +1967,7 @@ export function Reader({
           <VisitorSearchBand
             searches={searches}
             blocks={article.blocks}
-            onJump={jumpTo}
+            onJump={bandJump}
             onFound={setFound}
             openHit={openHit}
             onOpenHit={setOpenHit}
@@ -1933,7 +1996,7 @@ export function Reader({
                judgement; `useComments` is already mounted for the page.
                docs/project/referee-mode.md § the referee's own mark. */
             comments={comments}
-            onJump={jumpTo}
+            onJump={bandJump}
             onFound={setRefereeFound}
             /* Which marked passage the referee last pressed, so the prose rings
                the exact phrase rather than washing the whole block. Search's
@@ -2502,7 +2565,7 @@ export function Reader({
           at the same z-index. Only while a band is open: Plain and Hierarchy
           have no *"top of the mode column"* to stand on. */}
       <ModeHerald
-        press={bandOpen && herald !== null && herald.mode === mode ? herald : null}
+        press={bandOpen && !bandAway && herald !== null && herald.mode === mode ? herald : null}
         onDone={() => setHerald(null)}
       />
 
@@ -2511,7 +2574,19 @@ export function Reader({
           sections this component already built rather than resolving the
           origin block itself: the label is a section title, and there must be
           one answer to "which section is this block in" on the page. */}
-      <ReturnChip sections={sections} rowOf={rowOf} />
+      {/* **While a band has stepped aside, "back" means the band** —
+          BandBackChip.tsx. The section chip would go back in history with the
+          band still hidden, and two pills saying "back" to two places is one
+          too many. docs/plans/260929g-on-a-phone-a-band-link-closes-the-band.md. */}
+      {bandBack ? (
+        <BandBackChip
+          label={MODE_LABEL[mode]}
+          takeFocus={bandFocus.current !== null}
+          onBack={() => setBandAway(false)}
+        />
+      ) : (
+        <ReturnChip sections={sections} rowOf={rowOf} />
+      )}
 
       {/* Last in the DOM as well as topmost in z-index: the bar and its drawer
           are drawn over everything, and matching source order to paint order is
