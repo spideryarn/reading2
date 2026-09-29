@@ -79,6 +79,33 @@
   font-variant-numeric: tabular-nums;
 }
 
+/* **Where the passages come from** — an info button, last in the head and
+   pushed to its right edge, whose tooltip holds the two sentences that were
+   the foot (SPIDERYARN-READING2-52). Quiet, like Quotes' `.quotes-why`: it
+   is a footnote, not a control the reader needs to walk the route. The
+   house height, so it sits level with the stepper's row when the head wraps. */
+.traj-about {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  width: var(--control-h);
+  height: var(--control-h);
+  margin-left: auto;
+  padding: 0;
+  border: 0;
+  border-radius: var(--radius);
+  background: none;
+  color: var(--ink-faint);
+  cursor: pointer;
+}
+.traj-about:hover { color: var(--ink); background: var(--surface-raised); }
+.traj-about.on { color: var(--highlight-ink); background: var(--surface-raised); }
+.traj-about:focus-visible { outline: 2px solid var(--highlight); outline-offset: 1px; }
+.traj-about-card { max-width: min(20rem, calc(100vw - 1.75rem)); }
+.traj-about-card p { margin: 0; }
+.traj-about-card p + p { margin-top: 0.4rem; }
+
 /* ------------------------------------------------------------------ rows -- */
 .traj-list { margin: 0.3rem 0 0; padding: 0; list-style: none; }
 .traj-go {
@@ -180,17 +207,11 @@
 .traj-read-error { margin: 0.4rem 0.7rem 0; }
 .traj-read-error .gloss-error { margin: 0 0 0.5rem; }
 
-/* A rule above it, so the promise reads as being about the route rather than
+/* A rule above it, so the foot reads as being about the route rather than
    the last row's — citations.css's `.cite-foot`. */
 .traj-foot { padding: 0.4rem 0.7rem 0; border-top: 1px solid var(--rule); }
-.traj-note {
-  margin: 0 0 0.3rem;
-  color: var(--ink-faint);
-  font-size: 0.77rem;
-  line-height: 1.35;
-}
-/* **Plan it again**, under the promise: quiet, and in the foot so a thirty-stop
-   list does not have to be scrolled to reach it — `.ideas-again`, `.tl-again`. */
+/* **Plan it again**: quiet, and in the foot so a thirty-stop list does not
+   have to be scrolled to reach it — `.ideas-again`, `.tl-again`. */
 .traj-again { padding: 0.1rem 0 0.45rem; }
 
 /* ------------------------------------------------------ the door in the prose --

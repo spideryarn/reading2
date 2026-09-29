@@ -158,10 +158,10 @@ describe("the door after the current stop", () => {
     expect(doorAfter(ROUTE, 1, "a")).toEqual({ kind: "next", quoteId: "d" });
   });
 
-  it("offers, at the end of a pass, stop 1 of this pass and stop 1 of the next deeper one (4N)", () => {
+  it("offers stop 1 of the next deeper pass at the end of a pass (51)", () => {
     /* Gist is a d g; More a c d f g; Most is every stop, a first. */
-    expect(doorAfter(ROUTE, 1, "g")).toEqual({ kind: "end", first: "a", deeper: { depth: 2, first: "a" } });
-    expect(doorAfter(ROUTE, 2, "g")).toEqual({ kind: "end", first: "a", deeper: { depth: 3, first: "a" } });
+    expect(doorAfter(ROUTE, 1, "g")).toEqual({ kind: "end", deeper: { depth: 2, first: "a" } });
+    expect(doorAfter(ROUTE, 2, "g")).toEqual({ kind: "end", deeper: { depth: 3, first: "a" } });
   });
 
   it("lands More detail on the deeper pass's own first stop when that is new at it", () => {
@@ -169,7 +169,7 @@ describe("the door after the current stop", () => {
       { quoteId: "p", depth: 2, role: null },
       { quoteId: "q", depth: 1, role: null },
     ];
-    expect(doorAfter(late, 1, "q")).toEqual({ kind: "end", first: "q", deeper: { depth: 2, first: "p" } });
+    expect(doorAfter(late, 1, "q")).toEqual({ kind: "end", deeper: { depth: 2, first: "p" } });
   });
 
   it("skips a depth that adds nothing when offering more detail", () => {
@@ -177,11 +177,11 @@ describe("the door after the current stop", () => {
       { quoteId: "x", depth: 1, role: null },
       { quoteId: "y", depth: 3, role: null },
     ];
-    expect(doorAfter(short, 1, "x")).toEqual({ kind: "end", first: "x", deeper: { depth: 3, first: "x" } });
+    expect(doorAfter(short, 1, "x")).toEqual({ kind: "end", deeper: { depth: 3, first: "x" } });
   });
 
-  it("offers only going round again at the end of the deepest pass", () => {
-    expect(doorAfter(ROUTE, 3, "h")).toEqual({ kind: "end", first: "a", deeper: null });
+  it("offers no onward action at the end of the deepest pass (51)", () => {
+    expect(doorAfter(ROUTE, 3, "h")).toEqual({ kind: "end", deeper: null });
   });
 
   it("has no door on a pass with no stops", () => {

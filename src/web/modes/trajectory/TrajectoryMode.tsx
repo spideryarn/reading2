@@ -71,8 +71,6 @@ export interface TrajectoryControl {
   step(dir: -1 | 1): boolean;
   /** *Next stop ›*. */
   advance(): void;
-  /** *Go round again* — stop 1 of this pass. */
-  again(): void;
   /** *More detail ›* — stop 1 of the next deeper pass. */
   deeper(): void;
 }
@@ -80,10 +78,10 @@ export interface TrajectoryControl {
 /**
  * **The door, as the prose draws it** (TrajectoryPanel.tsx § TrajectoryDoor).
  * Mid-pass, *Next stop ›* with the cue of the stop it leads to. At the end of a
- * pass, two buttons — plan 260929a § 2, from Greg's SPIDERYARN-READING2-4N:
- * *"the "Go round again - More" button is confusing … perhaps be two separate
- * buttons"* — and a line saying which pass just ended, not a cue: two doors
- * lead to two places, and one cue would be wrong for one of them.
+ * pass, *More detail ›* when there is a deeper pass, and a line saying which
+ * pass just ended — at the deepest, the line alone. *Go round again* went in
+ * plan 260929b (SPIDERYARN-READING2-51): ← walks back, to stop 1 and its
+ * passage.
  */
 export type DoorView =
   | { kind: "next"; cue: string | null }
@@ -176,6 +174,7 @@ export function TrajectoryBand({
   quotes,
   quoteMarks,
   covers,
+  away,
   onAway,
   onJump,
   onFound,
@@ -204,6 +203,12 @@ export function TrajectoryBand({
   quoteMarks: readonly Found[];
   /** The band is lying over the prose (a narrow window) — `fit.modeW === 0`. */
   covers: boolean;
+  /**
+   * The band has stepped aside (`onAway`) and is not drawn, so its list has no
+   * geometry to measure. When it comes back the list is measured again, to
+   * show the stop the reader moved to meanwhile (SPIDERYARN-READING2-54).
+   */
+  away: boolean;
   /** Get out of the way of the prose. Only meaningful while `covers`. */
   onAway(): void;
   /** A row press is a block jump narrowed to that stop's quote. */
@@ -266,7 +271,7 @@ export function TrajectoryBand({
     onControl,
     arrival,
   });
-  return <TrajectoryPanel owner={owner} view={view} />;
+  return <TrajectoryPanel owner={owner} view={view} away={away} />;
 }
 
 /** What the panel draws — see `TrajectoryPanel`. */
@@ -372,7 +377,7 @@ function useTrajectoryMode({
 
   /**
    * **Every direct movement along the route goes through here** — ‹ ›, ← →,
-   * the door, going round again, a depth change that moves you (Sol F29): the
+   * the door, a depth change that moves you (Sol F29): the
    * stop's block scrolled near the top and flashed when the glide settles
    * (`arrive`), and on a narrow window the band steps aside so the prose it
    * landed on can be seen. One helper, so the keys cannot do less than the
@@ -438,9 +443,6 @@ function useTrajectoryMode({
   const advance = useCallback(() => {
     if (door?.kind === "next") goStep(door.quoteId);
   }, [door, goStep]);
-  const again = useCallback(() => {
-    if (door?.kind === "end") goStep(door.first);
-  }, [door, goStep]);
   const deeper = useCallback(() => {
     if (door?.kind === "end" && door.deeper) changeDepth(door.deeper.depth, door.deeper.first);
   }, [door, changeDepth]);
@@ -465,11 +467,10 @@ function useTrajectoryMode({
   /* ------------------------------------------------ published upward --
      The verbs through a ref, so the published object is stable and changes
      only with the stop's block and the door's words. See `TrajectoryControl`. */
-  const latest = useRef({ step, advance, again, deeper });
-  latest.current = { step, advance, again, deeper };
+  const latest = useRef({ step, advance, deeper });
+  latest.current = { step, advance, deeper };
   const stableStep = useCallback((dir: -1 | 1) => latest.current.step(dir), []);
   const stableAdvance = useCallback(() => latest.current.advance(), []);
-  const stableAgain = useCallback(() => latest.current.again(), []);
   const stableDeeper = useCallback(() => latest.current.deeper(), []);
   const stopBlock = quote?.blockId ?? null;
 
@@ -532,10 +533,9 @@ function useTrajectoryMode({
             door: doorView,
             step: stableStep,
             advance: stableAdvance,
-            again: stableAgain,
             deeper: stableDeeper,
           },
-    [current, stopBlock, doorView, stableStep, stableAdvance, stableAgain, stableDeeper],
+    [current, stopBlock, doorView, stableStep, stableAdvance, stableDeeper],
   );
   useLayoutEffect(() => {
     onControl(control);

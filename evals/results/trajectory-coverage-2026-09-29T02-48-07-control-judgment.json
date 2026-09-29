@@ -1,0 +1,9 @@
+{
+  "judge": "the implementing agent (Opus 5.5), keys unopened when written; judged after the blind pairs. Same scale: D = adds detail/subtlety/complexity, F = new but framing/background, R = repeats the pass before. Leak noted: old#1 appears in both files, so identical sides can be matched across them; the blind judgment was saved before this file was read.",
+  "vb-spya-vu3xen d2": { "A": "D R D", "B": "D R D", "pick": "A", "why": "A's third stop is the future-caring heuristic (a mechanism); B's is 'most have to learn what matters'" },
+  "vb-spya-vu3xen d3": { "A": "D D D D", "B": "D D D D", "pick": "tie", "why": "the complement of the More split; three of four stops the same" },
+  "entropy-24-00930-spya-pywwkq d2": { "A": "F D D D D F", "B": "D D D D F D", "pick": "B", "why": "B adds the lattice-explosion caveat where A adds the historical obstacles" },
+  "entropy-24-00930-spya-pywwkq d3": { "A": "F F F F D D D D D D", "B": "F F F D D D D D D D", "pick": "B", "why": "near-identical; A spends one more on background" },
+  "source-spya-furjgs d2": { "A": "R D D D", "B": "D F D D", "pick": "B", "why": "A's first addition restates the Gist's hard-to-observe point; B adds Gerlach's speed and the automation loss" },
+  "source-spya-furjgs d3": { "A": "D D D D D D", "B": "R D D D D D", "pick": "A", "why": "B's first addition is the random/anecdotal line again" }
+}

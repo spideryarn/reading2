@@ -82,11 +82,10 @@
  * Greg, 2026-09-03, asked the page to "indicate what you're on now". A signed-in
  * reader gets one line saying so, below the cards; a signed-out one gets
  * nothing, and — the point — makes no request. `readerId` comes from App.tsx,
- * which already branches on signed-in to decide whether this page wears the
- * corner logo, so the answer is known before the page renders and there is no
- * moment where it has to guess. A `useBilling()` inside an unconditional render
- * would have put a 401 on the path of the one page a stranger is most likely to
- * be sent, for a line that is not for them.
+ * which already branches on signed-in and therefore knows the answer before
+ * the page renders; there is no moment where it has to guess. A `useBilling()`
+ * inside an unconditional render would have put a 401 on the path of the one
+ * page a stranger is most likely to be sent, for a line that is not for them.
  *
  * **It carries a reader id rather than a boolean, and that is the account
  * switch.** The first version took `signedIn: boolean`, which is enough to

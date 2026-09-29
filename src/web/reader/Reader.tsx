@@ -1195,7 +1195,6 @@ export function Reader({
         <TrajectoryDoor
           door={trajectoryControl.door}
           onNext={trajectoryControl.advance}
-          onAgain={trajectoryControl.again}
           onDeeper={trajectoryControl.deeper}
           onRoute={bandBack ? () => setBandAway(false) : null}
         />
@@ -1973,6 +1972,7 @@ export function Reader({
             quotes={owner.quotes}
             quoteMarks={quotes.found}
             covers={fit.modeW === 0}
+            away={bandAway && fit.modeW === 0}
             onAway={bandStepsAside}
             onJump={jumpTo}
             onFound={setTrajectoryFound}

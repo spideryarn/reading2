@@ -78,12 +78,20 @@
  * docs/plans/260905g-move-the-wordmark-and-feedback-button-into-the-dock.md.
  *
  * **The pages that keep this component** are the shelf-adjacent ones (`/add`,
- * `/profile`, `/features`, `/pricing`, `/contact`, `/privacy`, `/read/public`,
- * the 404 and the admin pages) and the four branches of `ArticlePage` that draw
+ * `/profile`, `/contact`, `/privacy`, the 404 and the admin pages) and the four branches of `ArticlePage` that draw
  * no `Dock` — loading, error, not-shared and reauth-required. None of them has
  * a masthead or a controls bar; that is why the paragraph above had to be
  * rewritten rather than merely narrowed. `ArticlePage`'s final branch is where
  * it stopped being drawn.
+ *
+ * **Nor, since 2026-09-29, the four pages that draw the marketing top bar**
+ * (`SiteNav`) signed in — `/features`, `/features/public-readable-sharing`,
+ * `/pricing` and `/read/public`. That bar's wordmark gained the spider and its
+ * own animation host that day, and this fixed copy sat on top of it: two
+ * branded home controls and two spiders in one corner. The bar owns that
+ * control there.
+ * tests/dock-corner-controls.test.tsx mounts all four routes and pins it from
+ * the rendered page rather than from App.tsx's source shape.
  *
  * ## The hover animations
  *
@@ -96,8 +104,8 @@
  */
 import { cn } from "@/lib/utils";
 
-import { buildDescription } from "./build-stamp.js";
 import { Link } from "./Link.js";
+import { libraryHomeTitle } from "./library-home-title.js";
 import { useLogoAnimation } from "./logo-animation.js";
 import { LIBRARY_HREF } from "./router.js";
 
@@ -113,11 +121,8 @@ import { LIBRARY_HREF } from "./router.js";
  * **The destination survives when the build is unknown**, which is every test
  * and every `npm run dev`: a tooltip is not the place to say *"unknown"*.
  */
-const HOME_TITLE = "Spideryarn — back to the library";
-
 export function HomeLogo() {
   const anim = useLogoAnimation();
-  const build = buildDescription();
   return (
     <Link
       href={LIBRARY_HREF}
@@ -133,7 +138,7 @@ export function HomeLogo() {
          both are about what happens when a reader points at the wordmark, so if
          one of them ever has to give way it should be a decision rather than a
          collision. docs/project/design-logo.md is the animation's. */
-      title={build === null ? HOME_TITLE : `${HOME_TITLE}\n(${build})`}
+      title={libraryHomeTitle()}
       {...anim.handlers}
     >
       {/* `alt=""` and not "Spideryarn": the wordmark beside it already says the

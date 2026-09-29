@@ -24,8 +24,8 @@ v1, for the article's owner only, and behind the experimental switch until later
   then the stops with their section paths and (since 260928e) their words, the role shown on the current row only, and a shallower
   pass's stops dimmed.
 - **In the prose**: the current stop's quote is ringed and barred, brought into view on every
-  step (centred since 2026-09-29, below), and followed by a **Next stop ›** door — two doors at the
-  end of a pass since 2026-09-29, below. On a narrow window the band steps aside once a stop is
+  step (centred since 2026-09-29, below), and followed by a **Next stop ›** door — *More detail ›*
+  at the end of a pass, and nothing at the end of the deepest, since 2026-09-29, below. On a narrow window the band steps aside once a stop is
   chosen, and the door carries the walk.
 - **Keys and address**: ← / → step the stops while the mode is open
   ([keyboard.md](keyboard.md) § ← / → in Trajectory); `?depth=` pushes and `?stop=`
@@ -41,7 +41,7 @@ v2, the scrapbook, is built on top of that:
   shows it, and a route written before cues shows its old role instead (`PROMPT_VERSION`
   `trajectory/5` marks those as out of date).
 - **The next stop's cue under the door.** Under **Next stop ›** in the prose, in small muted
-  italics, so the door says where it leads. Going round again shows the cue of the stop it lands on.
+  italics, so the door says where it leads.
 - **The stop card**, under the current row only
   ([`stop-card.ts`](../../src/web/stop-card.ts) gathers it; the panel draws it). It holds whatever
   the other modes have **already** written about this paragraph:
@@ -63,7 +63,7 @@ v2, the scrapbook, is built on top of that:
 Stage 5, asked for by Greg on 2026-09-28 (his words are in the
 [plan § Stage 5](../plans/260928a-trajectory-mode-skim-a-paper-at-increasing-depth.md)):
 
-- **A flash on every arrival** — ‹ ›, ← →, the door, going round again, and a depth change that
+- **A flash on every arrival** — ‹ ›, ← →, the door, and a depth change that
   moves you all go through one helper that scrolls to the stop and flashes it with
   [`flashBlock`](../../src/web/flash.ts) once the scroll settles, and on a narrow window steps the
   band aside. A row press is a jump and flashes through `beginJump`, once. A `?stop=` link scrolls
@@ -131,13 +131,30 @@ his words quoted there):
   same pass, and **More detail ›**, to stop 1 of the next deeper pass — offered only when there is
   one, so the end of *Most* offers going round again alone. Under them, *End of Gist — 5 stops.* The
   depth buttons in the head no longer go round when pressed on the last stop: a depth change always
-  keeps your place, and going round is the doors' job.
+  keeps your place, and going round is the doors' job. *Go round again* went later the same day
+  (SPIDERYARN-READING2-51, below).
 - **Every arrival is centred** (SPIDERYARN-READING2-4M) — the stop's quote in the middle of the
   window, so you see what is round it; a quote too tall to centre goes to the top. This is every
   block link in the app, not only Trajectory: [url-state.md § A jump lands centred](url-state.md).
 - **The position mark is a short vertical line under the row's number** (SPIDERYARN-READING2-4D) —
   top the start of the article, bottom its end, as the spine draws it — instead of a horizontal
   track with a column of its own, which took about 53px of a band that can be 280px wide.
+
+**Three more of Greg's, 2026-09-29**
+([plan 260929b](../plans/260929b-trajectory-deeper-passes-one-door-promise-in-a-tooltip-list-follows-the-stop.md),
+his words quoted there):
+
+- **One door at the end of a pass** (SPIDERYARN-READING2-51): *Go round again* is gone, *More
+  detail ›* stays, and the end of the deepest pass has no button, only the line saying which pass
+  ended. ← walks back, and ← on stop 1 goes to its passage.
+- **The promise is a tooltip** (SPIDERYARN-READING2-52): the two sentences that were the foot —
+  where the passages come from, and at Most how many of the Quotes it walks — are the tooltip of an
+  info button at the right of the pinned head, opened by hover, focus or a tap. The foot keeps
+  *Plan it again*.
+- **The list follows the stop** (SPIDERYARN-READING2-54): whatever moves the current stop, the
+  band's own list scrolls just enough to show its row — Summary's `useFollow`
+  ([`follow.ts`](../../src/web/follow.ts)), which moves that scroller and never the page — and
+  measures again when a band that stepped aside on a narrow window comes back.
 
 ### What we tried for v2
 
@@ -328,7 +345,7 @@ the role, it never says what the passage found.
 **The option we tried and did not build: a thread.** This was a line tying each stop to the one
 before it ("From the definition to real recordings — note the number"). In the spike it did the most
 to make the route feel like one walk (spike C, linked above). It was dropped because a reader
-reaches a stop from many places — a link, a row press, *go round again*, Back — so a line about
+reaches a stop from many places — a link, a row press, a depth change, Back — so a line about
 "the previous stop" is often about a stop they never came from. Doing it properly means one line per
 step between two stops, shown only when that is the step you actually took: more lines and more
 cost, for a sentence that is sometimes absent.

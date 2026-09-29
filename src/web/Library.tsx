@@ -578,9 +578,12 @@ export function Library({
             </div>
           </TooltipGroup>
         </div>
-        <p className="tw:mt-1 tw:text-sm tw:text-muted-foreground">
-          Read deeply, at whatever level of detail you need. Pick a piece.
-        </p>
+        {/* **No tagline, since 2026-09-29.** It read "Read deeply, at whatever
+            level of detail you need. Pick a piece." Greg, SPIDERYARN-READING2-4W:
+            *"Or maybe actually just remove the tagline from the logged-in
+            Homepage."* The reader here has already signed up for the pitch.
+            If it ever comes back, his wording was "Read deeply & efficiently".
+            docs/plans/260929a-logo-beside-the-wordmark-beta-to-the-right-no-shelf-tagline.md. */}
       </header>
 
       <AddArticle queue={queue} />
