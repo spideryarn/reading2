@@ -52,6 +52,7 @@
 
 import { findQuote } from "./quote-match.js";
 import type { Block, BlockId, Citation } from "./types.js";
+import { plainTitle } from "./html.js";
 import { isWebUrl } from "./urls.js";
 
 /* ------------------------------------------------------------------ kinds -- */
@@ -552,7 +553,9 @@ export function readCitations(raw: unknown): Citation[] {
     const { url, title } = (item ?? {}) as Record<string, unknown>;
     if (typeof url !== "string" || !isWebUrl(url) || seen.has(url)) continue;
     seen.add(url);
-    const trimmed = typeof title === "string" ? title.trim() : "";
+    /* Plain, as every outside title is — the model copies the page's own,
+       markup included. docs/plans/260929e-outside-titles-become-plain-text-at-ingest.md. */
+    const trimmed = typeof title === "string" ? plainTitle(title) : "";
     out.push(trimmed === "" ? { url } : { url, title: trimmed });
     if (out.length >= MAX_CITATIONS) break;
   }

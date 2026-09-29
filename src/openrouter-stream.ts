@@ -40,10 +40,11 @@ import {
   wentQuiet,
 } from "./messages.js";
 import type { Citation, SearchEvidence } from "./types.js";
-/* `src/urls.ts` has no imports of its own, and `src/types.ts` only a type from
+/* `src/urls.ts` and `src/html.ts` have no imports of their own, and `src/types.ts` only a type from
    `messages.js` — so neither drags a logger, a store or a reader in here. That
    is the constraint this module's header states, and it is checked from outside
    by tests/public-imports.test.ts and tests/client-imports.test.ts. */
+import { plainTitle } from "./html.js";
 import { isWebUrl } from "./urls.js";
 /**
  * Was that abort the *reader*, rather than one of our own clocks?
@@ -528,7 +529,11 @@ function collectAnnotated<T>(
       onDropped?.();
       continue;
     }
-    into.set(c.url, keep({ ...c, url: c.url }));
+    // The page's title as the search reported it, which is somebody's
+    // `<title>` and carries their markup — `<i>Landmarks</i>` showed as tags in
+    // Debate. Made plain here, once, for every caller —
+    // docs/plans/260929e-outside-titles-become-plain-text-at-ingest.md.
+    into.set(c.url, keep({ ...c, url: c.url, ...(c.title === undefined ? {} : { title: plainTitle(c.title) }) }));
   }
 }
 

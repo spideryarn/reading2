@@ -69,6 +69,7 @@ import {
 import { siteFor } from "./artifact-storage.js";
 import { CONTENT_TYPE } from "./blobs.js";
 import type { DocumentKind, RawManifest } from "../fetch.js";
+import { plainTitle } from "../html.js";
 import { log } from "../log.js";
 import { structureHash } from "../source-hash.js";
 import type { Block, Meta, NavLabelStatus, StepName } from "../types.js";
@@ -809,13 +810,15 @@ const META_COLUMNS = [
 ] as const;
 
 /** `meta.json` taken apart into the columns it owns — the inverse of `readMeta`. */
-function metaColumns(meta: Meta): Partial<typeof articleRevisions.$inferInsert> {
+export function metaColumns(meta: Meta): Partial<typeof articleRevisions.$inferInsert> {
   /* **Every column named, and `?? null` on every one of them.** A field the
      stage stopped producing has to *clear* its column, not leave last
      extraction's value sitting beside this one's — which is what an
      absent-key-means-leave-it write would do, and it would read perfectly. */
   const columns: Partial<typeof articleRevisions.$inferInsert> = {
-    title: meta.title ?? null,
+    /* The extractors already made it plain; this is the guard for the next
+       producer that forgets. docs/plans/260929e-outside-titles-become-plain-text-at-ingest.md. */
+    title: typeof meta.title === "string" ? plainTitle(meta.title) : null,
     byline: meta.byline ?? null,
     siteName: meta.siteName ?? null,
     lang: meta.lang ?? null,

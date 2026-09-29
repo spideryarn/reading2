@@ -1,7 +1,7 @@
 /**
  * **Turning somebody else's text into markup, in one place.**
  *
- * Three functions and no imports. Everything here is about the moment a string we
+ * A handful of functions and no imports. Everything here is about the moment a string we
  * did not write becomes part of a document we did: the extracted `<title>` of a
  * page, a caption a model produced, the gist that will be a `<meta>` tag on a
  * shared link. [security-map.md](../docs/project/security-map.md) counts the
@@ -140,4 +140,97 @@ export function headText(value: string, limit: number): string {
      to the obvious expectation of it. No ellipsis — this is metadata, and a
      `…` in an `og:title` is a claim that the title contained one. */
   return points.slice(0, limit).join("").trimEnd();
+}
+
+/**
+ * **A title that came from outside us, as plain text.** The rule: an outside
+ * title is stored as text, never as markup —
+ * docs/plans/260929e-outside-titles-become-plain-text-at-ingest.md.
+ *
+ * Search results, `og:title`, PDF metadata and Crossref-style records carry
+ * inline markup (`<i>Drosophila</i>`, `H<sub>2</sub>O`, `<jats:italic>`,
+ * MathML) and entities. Every surface in this app draws a title as text, which
+ * is safe and shows the tags literally. So the decision is made once, where
+ * the title is written, and every sink downstream — the tab, `og:title`, a
+ * hover card, export, a prompt — gets text without having to know.
+ *
+ * Three steps, in an order that matters:
+ *
+ * 1. **Decode entities once**, so a title encoded once (`&lt;i&gt;`) and one
+ *    already decoded (`<i>`) end up the same. Numeric references are all
+ *    decoded; the named ones are a **short table** of what turns up in titles
+ *    (punctuation, a few symbols, Greek), not the HTML standard's two
+ *    thousand, and a name not in it — `&eacute;`, say — is left as written
+ *    rather than guessed at. Our sources mostly hand titles over already
+ *    decoded, so this is for the leftovers. One pass, so a doubly-encoded
+ *    `&amp;lt;` becomes `&lt;` — which makes that the one input a second call
+ *    would still change. The function is not idempotent on it, and nothing
+ *    here claims otherwise.
+ * 2. **Remove tags whose name is on a list**, not everything tag-shaped:
+ *    `Why x<y and y>z` is a title, not markup. A namespace prefix (`mml:`,
+ *    `jats:`) is ignored. Removed rather than replaced by a space, so
+ *    `H<sub>2</sub>O` reads `H2O`; `<br>` is the exception. The TeX copies
+ *    MathML and JATS carry beside the maths (`annotation`, `tex-math`) go
+ *    *with their content*, or the formula would be printed twice. Repeated
+ *    until nothing changes (at most eight times), so `<i<i>>` cannot leave
+ *    an `<i>` behind.
+ * 3. **`normaliseText` last**, so a bidi override that step 1 produced from
+ *    `&#x202E;` is dropped like any other.
+ *
+ * **This is not a sanitiser and must never be used as one.** Its output is
+ * text: `<scr<i>ipt>` comes out as the literal string `<script>`, which is
+ * harmless in a text node and would be an injection anywhere else. Anything
+ * that puts it into markup escapes it first, exactly as it would any other
+ * string.
+ */
+export function plainTitle(value: string): string {
+  let out = value.replace(ENTITY, decodeEntity);
+  /* Bounded, so a title built to nest a thousand deep costs eight passes and
+     no more. Real titles settle in one. */
+  for (let pass = 0, previous = ""; pass < 8 && previous !== out; pass++) {
+    previous = out;
+    out = out.replace(MARKUP_WITH_CONTENT, "").replace(LINE_BREAK, " ").replace(INLINE_TAG, "");
+  }
+  return normaliseText(out);
+}
+
+const INLINE_TAGS = [
+  /* HTML inline */
+  "i", "b", "em", "strong", "u", "s", "sub", "sup", "small", "big", "span", "font",
+  "sc", "scp", "tt", "code", "cite", "q", "dfn", "var", "mark", "abbr", "a", "wbr",
+  /* MathML */
+  "math", "mi", "mo", "mn", "ms", "mtext", "mrow", "msub", "msup", "msubsup", "mfrac",
+  "msqrt", "mroot", "mover", "munder", "munderover", "mstyle", "mspace", "semantics",
+  "mfenced", "mpadded", "mphantom", "menclose",
+  /* JATS, which is what Crossref's titles are written in */
+  "italic", "bold", "underline", "monospace", "inline-formula", "alternatives",
+];
+/* An optional namespace prefix, then the name, then either the end of the tag
+   or whitespace before attributes — so `<i>` matches and `<if>` does not. */
+const NAME = (names: readonly string[]) => `(?:[a-z][\\w.-]*:)?(?:${names.join("|")})`;
+const INLINE_TAG = new RegExp(`<\\/?${NAME(INLINE_TAGS)}(?:\\s[^<>]*)?\\/?>`, "gi");
+const LINE_BREAK = new RegExp(`<${NAME(["br"])}(?:\\s[^<>]*)?\\/?>`, "gi");
+const MARKUP_WITH_CONTENT = new RegExp(
+  `<(${NAME(["annotation", "annotation-xml", "tex-math"])})(?:\\s[^<>]*)?>[\\s\\S]*?<\\/\\1\\s*>`,
+  "gi",
+);
+
+const ENTITY = /&(?:#(\d{1,7})|#[xX]([0-9a-fA-F]{1,6})|([a-zA-Z][a-zA-Z0-9]{1,31}));/g;
+const NAMED: Readonly<Record<string, string>> = {
+  amp: "&", lt: "<", gt: ">", quot: '"', apos: "'", nbsp: " ",
+  ndash: "–", mdash: "—", lsquo: "‘", rsquo: "’", sbquo: "‚", ldquo: "“", rdquo: "”", bdquo: "„",
+  laquo: "«", raquo: "»", hellip: "…", middot: "·", bull: "•", times: "×", divide: "÷",
+  minus: "−", plusmn: "±", deg: "°", prime: "′", Prime: "″", copy: "©", reg: "®", trade: "™",
+  shy: "­", thinsp: " ", ensp: " ", emsp: " ",
+  alpha: "α", beta: "β", gamma: "γ", delta: "δ", epsilon: "ε", lambda: "λ", mu: "μ",
+  pi: "π", sigma: "σ", tau: "τ", phi: "φ", chi: "χ", psi: "ψ", omega: "ω",
+  Gamma: "Γ", Delta: "Δ", Lambda: "Λ", Pi: "Π", Sigma: "Σ", Phi: "Φ", Psi: "Ψ", Omega: "Ω",
+  le: "≤", ge: "≥", ne: "≠", asymp: "≈", infin: "∞", rarr: "→", larr: "←", harr: "↔",
+};
+
+function decodeEntity(whole: string, dec?: string, hex?: string, name?: string): string {
+  if (name !== undefined) return NAMED[name] ?? whole;
+  const point = dec !== undefined ? Number.parseInt(dec, 10) : Number.parseInt(hex ?? "", 16);
+  const valid = point > 0 && point <= 0x10ffff && !(point >= 0xd800 && point <= 0xdfff);
+  return valid ? String.fromCodePoint(point) : whole;
 }
