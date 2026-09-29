@@ -37,7 +37,9 @@
  */
 import { ArrowRight } from "lucide-react";
 import type { ReactNode } from "react";
+import { libraryHomeTitle } from "./library-home-title.js";
 import { Link } from "./Link.js";
+import { useLogoAnimation } from "./logo-animation.js";
 import { FEATURES_HREF, PRICING_HREF, PRIVACY_HREF } from "./router.js";
 import type { Shot as ShotRecord } from "./shots.js";
 
@@ -45,8 +47,26 @@ import type { Shot as ShotRecord } from "./shots.js";
 export const SHELL = "tw:mx-auto tw:w-full tw:max-w-6xl tw:px-6";
 
 /**
- * **The two words, with the second one orange.** Nothing more — no pill, no
- * link, no logo mark.
+ * **The spider and the two words, with the second one orange.** Nothing more —
+ * no pill, no link.
+ *
+ * **The spider joined on 2026-09-29**, and this comment said "no logo mark"
+ * until then. Greg, SPIDERYARN-READING2-4X: *"include the Spideryarn logo next
+ * to "Spideryarn Reading" (in the top left, and bottom-left). And same for
+ * logged-in footer."* It goes *in here* rather than beside each caller so
+ * that nothing can draw the words without the mark — the drift argument
+ * below, applied one level down. The markup is `.logo-mark > .logo-image`,
+ * the same as HomeLogo, DockHome and the shelf's spider, because that is what
+ * styles/logo-animations.css keys its animations off.
+ *
+ * **It does not animate itself; the caller hosts the hook**, the same way the
+ * caller owns the link. The bar spreads `useLogoAnimation()` on its home link
+ * (hover, and a long press that does not navigate); the footer wraps this in
+ * a span with `{ tap: true }`, because a tap there does nothing else. One host
+ * per copy, so no spider ever plays twice. There are no `.logo-letter` spans
+ * here, so only the animations that reach the mark are offered
+ * (logo-animation.ts § pickLogoAnimation) — the shelf's spider has the same
+ * set. docs/plans/260929a-logo-beside-the-wordmark-beta-to-the-right-no-shelf-tagline.md.
  *
  * It exists as a component because it is now drawn in two places that do not
  * otherwise share code: the bar at the top of this file, and the foot of
@@ -58,18 +78,34 @@ export const SHELL = "tw:mx-auto tw:w-full tw:max-w-6xl tw:px-6";
  * **Not a link, and the caller adds one if it wants one.** The nav wraps it in
  * a link to `/`; the footer deliberately does not, because the footer's whole
  * rule is that it never offers the page under the reader's feet, and a wordmark
- * pointing at `/` on `/` would break it. **Not `HomeLogo` either** — that is the
- * animated corner mark with thirteen hover animations
- * (docs/project/design-logo.md), and the foot of a privacy policy is not where
- * those belong.
+ * pointing at `/` on `/` would break it. **Not `HomeLogo` either** — that is
+ * `position: fixed` and always links to the library, neither of which a bar or
+ * a footer wants.
  *
  * The size is the caller's, since the two want different ones, so `className`
- * carries a `tw:text-*` and nothing else needs to be a prop.
+ * carries a `tw:text-*` and nothing else needs to be a prop. **The spider is
+ * sized in `em` to follow it**: 1.25em is HomeLogo's 20px beside the bar's
+ * 16px text, and scales down with the footer's smaller words.
  */
 export function Wordmark({ className }: { className?: string }) {
   return (
-    <span className={`tw:font-prose tw:font-medium tw:text-foreground ${className ?? ""}`}>
-      Spideryarn <span className="tw:text-highlight">Reading</span>
+    <span
+      className={`tw:inline-flex tw:items-center tw:gap-[0.4em] tw:font-prose tw:font-medium tw:text-foreground ${className ?? ""}`}
+    >
+      {/* `alt=""` for the reason HomeLogo.tsx gives: the name is right beside
+          it, and a screen reader saying it twice is noise. */}
+      <span className="logo-mark">
+        <img
+          className="logo-image tw:h-auto tw:w-[1.25em]"
+          src="/spideryarn-logo.png"
+          alt=""
+          width={20}
+          height={20}
+        />
+      </span>
+      <span>
+        Spideryarn <span className="tw:text-highlight">Reading</span>
+      </span>
     </span>
   );
 }
@@ -132,6 +168,12 @@ export function SiteNav({
      reflow width with two entries in it, and a third always-on one puts it back
      over. So everything except the first link is `sm:`. */
   const secondary = `${link} tw:hidden tw:sm:inline`;
+  const anim = useLogoAnimation();
+  /* Signed in, this wordmark replaces `HomeLogo` on the four pages that carry
+     the bar, so it keeps that control's destination tooltip and build stamp.
+     Signed out there is no library to go back to, and the bar did not carry
+     that tooltip before this replacement. */
+  const homeTitle = signedIn ? libraryHomeTitle() : undefined;
   return (
     <nav className="site-nav">
       {/* The shell's own `px-6` is halved below `sm`, and the gap with it.
@@ -139,21 +181,41 @@ export function SiteNav({
           lines at 390px — "Spideryarn / Reading", the pill, "Sign / in" — but
           nowrap alone turns a wrap into a sideways scroll, and at the 320px
           reflow width the measured content needs about 331px. Narrower padding
-          and a smaller gap buy the 11px back. Cross-family review, finding 4. */}
+          and a smaller gap buy the 11px back. Cross-family review, finding 4.
+
+          **Re-measured 2026-09-29, when the spider joined the wordmark** (about
+          26px more on the left): zero overflow on the document, the bar and the
+          footer at 320 and 390 on `/`, `/features` and `/pricing`, one 56px
+          row. The pill that used to sit on the left is `sm:` only, so it was
+          never part of the phone budget. docs/plans/260929a-…. */}
       <div
         className={`tw:mx-auto tw:flex tw:h-14 tw:w-full tw:max-w-6xl tw:items-center tw:justify-between tw:gap-3 tw:px-3 tw:sm:gap-6 tw:sm:px-6`}
       >
+        {/* **The animation host is the link**, as on HomeLogo: a hover plays
+            one, a long press plays one without navigating, a tap goes home.
+            SiteBits.tsx § `Wordmark` says why the hook lives here and not in
+            there. `site-wordmark-host` carries the long-press lines `.logo`
+            gives the other copies (styles/dock.css). */}
         <Link
           href="/"
-          className="tw:flex tw:shrink-0 tw:items-center tw:gap-2.5 tw:whitespace-nowrap tw:no-underline"
+          className={`site-wordmark-host tw:flex tw:shrink-0 tw:items-center tw:whitespace-nowrap tw:no-underline ${anim.className}`}
           aria-label="Spideryarn Reading, home"
+          title={homeTitle}
+          {...anim.handlers}
         >
           <Wordmark className="tw:text-base" />
+        </Link>
+        <div className="tw:flex tw:shrink-0 tw:items-center tw:gap-4 tw:whitespace-nowrap tw:sm:gap-5">
+          {/* **Beta, on the right since 2026-09-29.** Greg,
+              SPIDERYARN-READING2-4X: *"move the "Beta" to the right-hand-side
+              of the Header (just before "Features") so it's a bit less
+              prominent."* First in this cluster, so it is just before Features
+              on the landing page and just before Home everywhere else. Still
+              `sm:` only — below it the bar has no room, which is the budget the
+              comment above measures. */}
           <span className="tw:hidden tw:rounded-full tw:border tw:border-highlight/50 tw:px-2 tw:py-px tw:text-[0.6rem] tw:font-semibold tw:uppercase tw:tracking-widest tw:text-highlight tw:sm:inline">
             Beta
           </span>
-        </Link>
-        <div className="tw:flex tw:shrink-0 tw:items-center tw:gap-4 tw:whitespace-nowrap tw:sm:gap-5">
           {/* **The one always-on link**, and it is whichever of Home/Features
               is not the page you are standing on. `/pricing` joined this family
               on 2026-09-04 and takes Home, which is the more useful of the two

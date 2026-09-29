@@ -595,6 +595,13 @@
   -webkit-touch-callout: none;
   user-select: none;
 }
+/* The marketing bar's home link and the footer's wordmark, which host the same
+   animations since 2026-09-29 (SiteBits.tsx § Wordmark). The same two lines and
+   the same reason; no `display`, because each caller sets its own layout. */
+.site-wordmark-host {
+  -webkit-touch-callout: none;
+  user-select: none;
+}
 
 /* The way home, fixed in the very top-left of the window — HomeLogo.tsx.
    Height matches `--bar-h` so it sits on the same line as the reading view's

@@ -83,6 +83,14 @@ A third host since 2026-09-15, and not a wordmark: the spider beside the shelf's
 ([`Library.tsx`](../../src/web/Library.tsx) § ShelfSpider), 28px, with no letters for anything to
 reach, so only the six mark animations ever run there (§ The trigger).
 
+Two more since 2026-09-29, the same shape: the marketing pages' `Wordmark`
+([`SiteBits.tsx`](../../src/web/SiteBits.tsx)) gained the spider at Greg's asking, so the top bar's
+home link and every `SiteFooter` host the hook — the bar as a link (hover and long press, as
+`HomeLogo`), the footer as a plain span with `{ tap: true }` (as the shelf's spider). The words there
+are plain text with no `.logo-letter`, so again only the mark animations run. Pages that draw that
+bar no longer draw the corner `HomeLogo`, so no page shows two spiders at the top —
+[260929a](../plans/260929a-logo-beside-the-wordmark-beta-to-the-right-no-shelf-tagline.md).
+
 Both wordmarks spread `useLogoAnimation()` onto their `<a>`, so *when* an animation runs has one
 implementation. What they do not share is the wrapper class, and that is on purpose: `.logo-text` is
 hidden by the 731px query, and the dock's word is owned by the bar's own fit ladder instead

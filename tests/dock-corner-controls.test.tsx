@@ -1,14 +1,15 @@
 // @vitest-environment jsdom
 /**
- * **One way home per page, and never two Feedback buttons — asserted by walking
- * the routes rather than by reading them.**
+ * **One branded home control per page, and never two Feedback buttons —
+ * asserted by walking the routes rather than by reading them.**
  *
  * On 2026-09-06 the wordmark and the Feedback button left the top corners of
  * the window on the pages that mount a `Dock` — the article, its metadata page
  * and its tweets page, each in an owner's and a visitor's shape, so three
  * addresses and six components — and became children of that
- * bar (`.dock-home`, `.dock-feedback`). Every other page kept its corners
- * exactly as they were.
+ * bar (`.dock-home`, `.dock-feedback`). On 2026-09-29 the four signed-in pages
+ * with a `SiteNav` made that bar's marked wordmark the home control instead of
+ * keeping a second fixed copy over it.
  * docs/plans/260905g-move-the-wordmark-and-feedback-button-into-the-dock.md.
  *
  * That change is **positional**, which is why this file boots the real router
@@ -22,8 +23,8 @@
  *
  * The two failures this is aimed at, and they are opposite shapes:
  *
- *  - **Two ways home on one screen.** A `<HomeLogo />` left behind on a page
- *    that now draws `DockHome` gives a reader two, one of them fixed over the
+ *  - **Two branded ways home on one screen.** A `<HomeLogo />` left behind on a
+ *    page that now draws `DockHome` gives a reader two, one of them fixed over the
  *    top 44px of the spine on a phone that has scrolled its bars away — which
  *    is the live bug this move dissolves rather than fixes,
  *    docs/postmortems/260905g-the-top-of-the-spine-is-under-the-wordmark-on-a-phone.md.
@@ -309,16 +310,19 @@ async function show(path: string): Promise<void> {
 }
 
 /**
- * **Every way home on screen, however it is drawn.**
+ * **Every branded home control on screen, in each of its three shapes.**
  *
- * Both classes, because the whole subject of this file is that a page has one
- * of them and never both, and a counter that knew only one of the two could not
- * see the failure. `document` and not `host`: the corner controls are
+ * All three selectors, because the whole subject of this file is that a page
+ * has one of them and never two, and a counter that knew only the older shapes
+ * could not see the failure. This deliberately does not count ordinary Home
+ * links in the nav or footer; it pins which piece of chrome owns the logo.
+ * `document` and not `host`: the corner controls are
  * `position: fixed` children of the app's own tree, but a portal is exactly the
  * sort of thing that would move one out of it without changing what a reader
  * sees.
  */
-const waysHome = () => document.querySelectorAll(".logo-home, .dock-home");
+const waysHome = () =>
+  document.querySelectorAll('.logo-home, .dock-home, .site-nav a[aria-label="Spideryarn Reading, home"]');
 /**
  * Every Feedback trigger, **in every shape there is**, for the same reason.
  *
@@ -354,15 +358,33 @@ const PLAIN_ROUTES = [
      case for the wrong reason. router.ts § `/add` without the slash. */
   "/add/https://example.com/a",
   "/privacy",
-  "/features",
   "/contact",
-  "/pricing",
   "/profile",
-  "/read/public",
   "/an-address-nobody-minted",
 ];
 
-describe("the route walk: one way home, never two triggers", () => {
+/**
+ * **The pages that draw the marketing top bar, whose wordmark is the way home**
+ * since 2026-09-29, when it gained the spider and its own animation host. The
+ * corner copy sat on top of it, so it went — one branded control, still, just
+ * a different one. docs/plans/260929a-logo-beside-the-wordmark-beta-to-the-right-no-shelf-tagline.md.
+ */
+const BAR_ROUTES = [
+  "/features",
+  "/features/public-readable-sharing",
+  "/pricing",
+  "/read/public",
+];
+
+/**
+ * The same bars also render before sign-in. `/profile` is the useful fallback
+ * control: signed out, App answers that otherwise-private address with the
+ * landing page, so it proves the logo belongs to the page actually rendered
+ * rather than only to one of the four public route branches above.
+ */
+const SIGNED_OUT_BAR_ROUTES = ["/", ...BAR_ROUTES, "/profile"];
+
+describe("the route walk: one branded home control, never two triggers", () => {
   it.each(PLAIN_ROUTES)("signed in at %s: the corner pair, and only that", async (path) => {
     signIn();
     await show(path);
@@ -377,11 +399,33 @@ describe("the route walk: one way home, never two triggers", () => {
     expect(document.querySelector(".dock")).toBeNull();
   });
 
+  it.each(BAR_ROUTES)("signed in at %s: the top bar's wordmark, and no corner", async (path) => {
+    signIn();
+    await show(path);
+    expect(waysHome(), `${path} drew ${waysHome().length} ways home`).toHaveLength(1);
+    expect(document.querySelector(".site-nav"), `${path} lost its bar`).not.toBeNull();
+    expect(document.querySelector(".logo-home"), `${path} drew the corner too`).toBeNull();
+    expect(feedbackTriggers()).toHaveLength(1);
+    expect(document.querySelector(".dock")).toBeNull();
+  });
+
+  it.each(SIGNED_OUT_BAR_ROUTES)(
+    "signed out at %s: one top-bar wordmark and no corner",
+    async (path) => {
+      await show(path);
+      expect(waysHome(), `${path} drew ${waysHome().length} branded ways home`).toHaveLength(1);
+      expect(document.querySelector(".site-nav"), `${path} lost its bar`).not.toBeNull();
+      expect(document.querySelector(".logo-home"), `${path} drew the corner too`).toBeNull();
+      expect(feedbackTriggers()).toHaveLength(0);
+      expect(document.querySelector(".dock")).toBeNull();
+    },
+  );
+
   /**
    * **The shelf is home**, so a link to it is a dead control and `App.tsx` draws
    * none. It is the control for the walk above: without it, a version of this
-   * file that found one way home on every page would be indistinguishable from
-   * one that could not tell the pages apart.
+   * file that found one branded way home on every page would be
+   * indistinguishable from one that could not tell the pages apart.
    *
    * **And its Feedback button is in its own masthead row, not in the corner**,
    * since 2026-09-08 — the third place a trigger can be, and the second time a
@@ -457,8 +501,8 @@ describe("the route walk: one way home, never two triggers", () => {
 
   /**
    * **The three pages that mount a `Dock` for their owner** — and the whole
-   * point of the change. One way home, in the bar; one Feedback trigger, in the
-   * bar; and nothing left in either corner.
+   * point of the change. One branded way home, in the bar; one Feedback trigger,
+   * in the bar; and nothing left in either corner.
    */
   it.each([
     ["the reading view", `/read/${SLUG}`],
