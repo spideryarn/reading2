@@ -601,6 +601,13 @@ describe("the panel", () => {
     /* The keyboard reaches it too: focus opens it. */
     await act(async () => info().focus());
     expect(info().getAttribute("aria-expanded"), "focus opens it").toBe("true");
+    await act(async () =>
+      document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true })),
+    );
+    expect(info().getAttribute("aria-expanded"), "Escape closes it").toBe("false");
+    await act(async () => info().click());
+    await act(async () => document.body.dispatchEvent(new Event("pointerdown", { bubbles: true })));
+    expect(info().getAttribute("aria-expanded"), "a press elsewhere closes it").toBe("false");
     await act(async () => info().blur());
 
     const most = view({
@@ -1232,7 +1239,7 @@ describe("the band, walked", () => {
     expect(away).toBe(3);
   });
 
-  it("flashes when going round again moves the reader, and not when a depth change keeps the stop (5a)", async () => {
+  it("flashes when More detail moves the reader, and not when a depth change keeps the stop (5a)", async () => {
     await mount();
     await act(async () => host.querySelectorAll<HTMLButtonElement>(".traj-depth")[2]!.click());
     await settled();

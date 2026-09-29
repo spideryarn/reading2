@@ -158,7 +158,7 @@ describe("the door after the current stop", () => {
     expect(doorAfter(ROUTE, 1, "a")).toEqual({ kind: "next", quoteId: "d" });
   });
 
-  it("offers, at the end of a pass, stop 1 of this pass and stop 1 of the next deeper one (4N)", () => {
+  it("offers stop 1 of the next deeper pass at the end of a pass (51)", () => {
     /* Gist is a d g; More a c d f g; Most is every stop, a first. */
     expect(doorAfter(ROUTE, 1, "g")).toEqual({ kind: "end", deeper: { depth: 2, first: "a" } });
     expect(doorAfter(ROUTE, 2, "g")).toEqual({ kind: "end", deeper: { depth: 3, first: "a" } });
@@ -180,7 +180,7 @@ describe("the door after the current stop", () => {
     expect(doorAfter(short, 1, "x")).toEqual({ kind: "end", deeper: { depth: 3, first: "x" } });
   });
 
-  it("offers only going round again at the end of the deepest pass", () => {
+  it("offers no onward action at the end of the deepest pass (51)", () => {
     expect(doorAfter(ROUTE, 3, "h")).toEqual({ kind: "end", deeper: null });
   });
 

@@ -377,7 +377,7 @@ function useTrajectoryMode({
 
   /**
    * **Every direct movement along the route goes through here** — ‹ ›, ← →,
-   * the door, going round again, a depth change that moves you (Sol F29): the
+   * the door, a depth change that moves you (Sol F29): the
    * stop's block scrolled near the top and flashed when the glide settles
    * (`arrive`), and on a narrow window the band steps aside so the prose it
    * landed on can be seen. One helper, so the keys cannot do less than the

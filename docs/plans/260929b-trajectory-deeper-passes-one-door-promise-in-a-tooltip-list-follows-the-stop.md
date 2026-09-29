@@ -107,3 +107,14 @@ what stage 2 changed in the prompt is written here, under *Progress*, once it la
   `PROMPT_VERSION` records the attempt. The eval harness now takes any two same-shaped prompt
   modules (`scripts/eval/trajectory-coverage-eval.ts`) and `scripts/eval/trajectory-depth-blind.ts`
   builds the blind fixtures — both reusable for 4P.
+- Stage 1 built (Opus) as `16b8d1d7`: the list follows the stop through Summary's `useFollow`
+  (re-measured when a narrow window's band returns); *Go round again* and `again()` removed; the
+  promise in the house `Tooltip` on an *About this route* button, last in the head; no foot while
+  the outdated banner is up. **GPT Sol code review** ([prompt](260929b-trajectory-code-review-prompt.md),
+  [answer](260929b-trajectory-code-review-sol.md)), *accept after fixes*: F10 leftover "going round
+  again" wording, F11 Escape/outside dismissal tests — both fixed by Sol. **Browser check**
+  (Sonnet, 1440, 820, 420, Most with 20 stops): the current row inside the list after 37 of 38
+  steps at 1440 (the one exception is a row taller than the list, top kept at the comfort margin)
+  and all at 820; at 420 *All stops* brings the band back with the row visible; one door at the end
+  of Gist and More, none at Most; the tooltip on hover and tap, outside click closes it; no console
+  errors. Not browser-verified: Tab focus + Escape (unit-tested), the head at 420 (Sol: wraps safely).

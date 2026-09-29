@@ -41,7 +41,7 @@ v2, the scrapbook, is built on top of that:
   shows it, and a route written before cues shows its old role instead (`PROMPT_VERSION`
   `trajectory/5` marks those as out of date).
 - **The next stop's cue under the door.** Under **Next stop ›** in the prose, in small muted
-  italics, so the door says where it leads. Going round again shows the cue of the stop it lands on.
+  italics, so the door says where it leads.
 - **The stop card**, under the current row only
   ([`stop-card.ts`](../../src/web/stop-card.ts) gathers it; the panel draws it). It holds whatever
   the other modes have **already** written about this paragraph:
@@ -345,7 +345,7 @@ the role, it never says what the passage found.
 **The option we tried and did not build: a thread.** This was a line tying each stop to the one
 before it ("From the definition to real recordings — note the number"). In the spike it did the most
 to make the route feel like one walk (spike C, linked above). It was dropped because a reader
-reaches a stop from many places — a link, a row press, *go round again*, Back — so a line about
+reaches a stop from many places — a link, a row press, a depth change, Back — so a line about
 "the previous stop" is often about a stop they never came from. Doing it properly means one line per
 step between two stops, shown only when that is the step you actually took: more lines and more
 cost, for a sentence that is sometimes absent.
