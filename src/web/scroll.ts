@@ -57,12 +57,10 @@ export function controlsBar(): HTMLElement | null {
  * Height of the fixed bar along the bottom — Dock.tsx.
  *
  * The counterpart to `stickyOffset`, and it exists for the same reason: a line
- * underneath it is not on screen in any sense the reader cares about. Nothing
- * needed it while every jump put a row's *top* under the header, because what
- * the bar covers is then below the thing you are looking at. A screenful step
- * needs it, because a screenful measured without it lands the next screen's top
- * where the last one's bottom *notionally* ended — and the bottom 40px of that
- * screen was behind the bar the whole time, so those lines are never read.
+ * underneath it is not on screen in any sense the reader cares about. A
+ * top-aligned jump needs no bottom clearance, but a centred jump does: the
+ * centre of the visible area is above the centre of the whole viewport by half
+ * the dock's height.
  *
  * Measured rather than read off `--dock-h`, for the reason the header offset is
  * (see above): a number agreed between two files drifts, and drifts quietly.
@@ -77,10 +75,9 @@ export function dockOffset(): number {
    * the way on a small device scrolled down through (styles.css § a small
    * device), by `transform`, which moves where it is drawn and **does not
    * change what it measures**. Reading `.height` went on reporting a confident
-   * 52 for a bar that was entirely off screen, so every screenful step would
-   * have delivered a screen 52px short — of an article the reader then never
-   * sees those lines of. Raised by GPT Sol against the plan before it was
-   * built.
+   * 52 for a bar that was entirely off screen, so a centred jump would have
+   * landed 26px too high. The distinction was first raised by GPT Sol for the
+   * now-retired swipe screenful step.
    *
    * `innerHeight - rect.top` is the whole of it, and it needs no clamp at the
    * far end the way `stickyOffset` does: this bar is `position: fixed` and is
@@ -813,7 +810,7 @@ export type ScrollOutcome = "settled" | "cancelled" | "missing";
  * **Where the destination sits once it has arrived.**
  *
  * - `top` — its top just under the bars. Every step and every restore: ↑ / ↓,
- *   swipes, `?at=` on load or Back, the re-flow re-anchor. A stride reads down
+ *   `?at=` on load or Back, the re-flow re-anchor. A stride reads down
  *   the page, and a restored position is a top-of-section fact.
  * - `centre` — in the middle of the free area, so the reader sees what comes
  *   before and after it. Every **jump**: `beginJump` (every block link, in every

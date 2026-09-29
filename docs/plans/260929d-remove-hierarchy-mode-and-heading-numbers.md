@@ -166,3 +166,42 @@ carry one number.
   chip) and P2s F3 (species names) and F4 (Trajectory ←/→) all taken into decisions 3, 6, 7, 8 and
   the regex list above; F5 (stale-parameter wording) clarified in decision 3. It confirmed the P.S.
   answer, noting only that Masthead, Metadata, library and page head read the *root* gist.
+- 2026-09-29: stages 1–4 built (`bd7db73b`), by two Opus subagents in parallel and a Sonnet docs
+  pass. What differed from the plan:
+  - The heading function lives in its own module, `src/web/heading-number.ts`, and `scatter.ts`
+    (Diagram's scatter) reads the stripped title too. Summary's aria-labels and Structure's card
+    child names use it, so the words match what is drawn beside them.
+  - The controls bar is now **only** the visitor's: `showBar = owner === null`, holding
+    `ViewOnlyChip`. An owner has no bar.
+  - `hierarchy` joined `toc` and `contents` as a Structure alias, as `outline` did in 260910g.
+  - The Zoom showcase came off both the Features page and the Landing page (they shared one shot),
+    and the screenshot was deleted.
+  - Deleted whole: `ContextPanel.tsx`, `ContextList.tsx`, `swipe.ts`, `column-context.css`,
+    `touch.css` (it held only the swipe rule), and their tests. The keynav aim became a ref, so a
+    pointer move no longer re-renders the reader.
+  - Known false positive, accepted: a section title that begins with a decimal ("1.5 million
+    people") loses the "1.5". The rules cannot tell it from "3.2 Methods".
+  - Net: 110 files, −6,412 / +834 lines. The import pipeline is untouched.
+- 2026-09-29: GPT Sol code review, round one (write-capable), on `bd7db73b`: one real bug, C1 —
+  Structure's focus sampler dropped a first measurement of row 0 after a layout change, leaving a
+  stale row highlighted; fixed with a test, which I saw red without the fix and green with it. C2–C4
+  were stale tests, C6 swipe-only branches left in `scroll.ts`. All fixed in `bc68cbfb`. It confirmed
+  ↑/↓, Trajectory's ←/→, the visitor chip, prose touch and centring, and the title seam, and found no
+  test weakened to pass.
+- Vitest was refused for most of the session by the box's memory admission guard (swap full). The
+  50 touched test files ran once memory cleared: 48 green, and the three failures in the other two
+  (doc links to deleted files, and shared-inventory's tree row) are fixed in `bc68cbfb`.
+- 2026-09-29: GPT Sol round two, on `bd7db73b..bc68cbfb` only: PASS, no open P0 or P1. Its one
+  finding (R1, P3) was two stale comments in `scroll.ts`, fixed. Discovery closed.
+- Full suite after merging `origin/dev`: 1186 files green, 6 red. Two were the known fresh-worktree
+  pair (`cold-start-lazy-imports`, `pdf-bundle-trace`), which pass after `npm run build`. Three were
+  the fleet dashboard's tests, which need a fleet build this worktree never made, so they are not
+  this change. One was real: `eager-client-graph`'s `SHARED_WITH_READER` still listed `pill.ts` and
+  `ui/toggle.tsx`, which only the Hierarchy bar had pulled into the reader's startup; both lines were
+  removed. `npm run build` passes.
+- Browser check (Playwright, 1400px and 390px, a numbered-heading paper): `?mode=hierarchy` (with
+  and without `cols`/`text`) opens Structure; there is no Hierarchy button, even with the switch on;
+  "toc" and "hierarchy" in the command bar find Structure; Plain is centred, with no gaps; ↑/↓ step;
+  "2.1. Defining Key Dimensions" draws as "3.1 Defining Key Dimensions"; Summary and Diagram render;
+  a signed-out visitor keeps the View-only chip; no new console errors. As decision 3 accepts, the
+  address keeps `mode=hierarchy`, and so does a stored last view.

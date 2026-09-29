@@ -496,7 +496,6 @@ const SHARED_WITH_READER = [
   "src/web/Tooltip.tsx",
   "src/web/build-stamp.ts",
   "src/web/components/ui/button.tsx",
-  "src/web/components/ui/toggle.tsx",
   /* Arrived 2026-09-06 with debate's `?name=` bar, by the *first* of the two
      zero-cost routes this list's header predicts, and it is the same shape as
      `referee-views.ts` below: a categorical URL parameter needs its vocabulary
@@ -548,7 +547,6 @@ const SHARED_WITH_READER = [
   "src/web/offline.ts",
   "src/web/page-title.ts",
   "src/web/params.ts",
-  "src/web/pill.ts",
   "src/web/referee-views.ts",
   "src/web/relative-time.ts",
   "src/web/router.ts",
