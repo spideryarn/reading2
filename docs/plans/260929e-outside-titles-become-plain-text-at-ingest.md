@@ -1,6 +1,6 @@
 # Outside titles become plain text at ingest
 
-**Status:** plan, 2026-09-29. Asked for by Greg via the Overseer after session fb56 saw a Debate
+**Status:** built and on `dev`, 2026-09-29 (d5edc0cc, 5b889c4d). **Left for Greg:** the production backfill (`npx tsx scripts/backfill-plain-titles.ts`, dry run first) after the next deploy. Asked for by Greg via the Overseer after session fb56 saw a Debate
 source drawn as `Physics - <i>Landmarks</i>—Millikan Measures the Electron's Charge`. Greg wants it
 fixed "in a clean, general, robust, root-cause, reusable way, and anywhere else that might be
 affected".
