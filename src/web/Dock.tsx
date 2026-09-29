@@ -768,8 +768,8 @@ const MODES_UI = [
      (SPIDERYARN-READING2-4E), and later the same day moved Glossary, Ideas and
      Timeline *"left into the bottom-bar separator-section with Trajectory"*
      (SPIDERYARN-READING2-57) — so the three are one dimension of the piece
-     pulled out each, at the far end of the run of what the piece contains,
-     and no longer a run of their own.
+     pulled out each, at the far end of the guides run and no longer a run of
+     their own.
      docs/plans/260831i-timeline-mode.md § 3. */
   {
     mode: "timeline",
@@ -791,10 +791,10 @@ const MODES_UI = [
      the one rule this whole mode obeys: **no verdict, ever.** `Gavel` and
      `Stamp` both draw a judgement being handed down, which is the single thing
      this mode refuses to produce, and an icon that promises it would be the
-     mode's own anti-goal sitting in the bar. `ScanSearch` says "search" one
-     button along from Search. A clipboard with a tick is the referee *form* the
-     venue sends you — the criteria you were asked about — which is what the
-     mode is actually for. docs/project/icons.md. */
+     mode's own anti-goal sitting in the bar. `ScanSearch` would be too easily
+     confused with Search elsewhere in the same bar. A clipboard with a tick is
+     the referee *form* the venue sends you — the criteria you were asked about
+     — which is what the mode is actually for. docs/project/icons.md. */
   {
     mode: "referee",
     group: "critical",
@@ -825,8 +825,8 @@ const MODES_UI = [
      **`Globe`, and it is the same word this app already draws for "this came
      from the open web"** — the glossary's web lookup, chat's search, the
      reviewer brief (GlossaryPanel.tsx, ChatPanel.tsx, CandidatesPanel.tsx). No
-     other button in this bar is a globe, so it is unmistakable beside Chat's
-     two bubbles, which `MessageSquareQuote` would not have been. The glyph's
+     other button in this bar is a globe, so it is unmistakable from Chat's two
+     bubbles, which `MessageSquareQuote` would not have been. The glyph's
      other sense in this app — *shared publicly* — appears only on surfaces that
      are about sharing, and the bar is not one. docs/project/icons.md.
 
