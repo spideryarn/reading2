@@ -209,3 +209,7 @@ React's `autoFocus` scrolls.
   that the scoped runs missed — `help-sends-once` mocks Tooltip without `ControlTip`, and Sol's F7
   read `window.innerWidth`, which `layout-viewport-width` forbids (now `layoutViewportWidth()`).
   Remaining reds are build-only (cold-start, pdf-bundle, three fleet files wanting `build:fleet`).
+- 2026-09-29: all committed in the worktree `shelf-focus-and-metadata-chord`, merged with
+  origin/dev (clean), gates green on the merge. **Not pushed**: GitHub refuses the box's
+  `spideryarn` token ("Invalid username or token"), dated 2026-08-31; fetch still works. The
+  worktree is left standing until the push lands.
