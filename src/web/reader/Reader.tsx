@@ -328,7 +328,6 @@ export function Reader({
    * how you ask for its band back. The plan's F4.
    */
   const [bandAway, setBandAway] = useState(false);
-  const bandStepsAside = useCallback(() => setBandAway(true), []);
   // biome-ignore lint/correctness/useExhaustiveDependencies: `mode` is the trigger, not an input — a new mode brings its band back.
   useEffect(() => {
     setBandAway(false);
@@ -468,6 +467,7 @@ export function Reader({
    * docs/plans/260929g-on-a-phone-a-band-link-closes-the-band.md.
    */
   const bandCovers = bandOpen && fit.modeW === 0;
+  const bandBack = bandAway && bandCovers;
   /**
    * **Where focus was in the band when it stepped aside**, so it goes back
    * there when the band returns. A band that goes `display: none` takes a
@@ -475,23 +475,34 @@ export function Reader({
    * the meantime. GPT Sol, plan review, 2026-09-29.
    */
   const bandFocus = useRef<HTMLElement | null>(null);
+  const rememberBandFocus = useCallback(() => {
+    const focused = document.activeElement;
+    bandFocus.current =
+      focused instanceof HTMLElement && focused.closest(".mode-band") !== null ? focused : null;
+  }, []);
+  /* Trajectory cannot use `bandJump` because it also jumps on opening, so its
+     deliberate `onAway` path shares the focus handoff separately. */
+  const bandStepsAside = useCallback(() => {
+    /* A door can advance Trajectory while the band is already away. Preserve
+       the band control that should receive focus when it eventually returns. */
+    if (!bandAway) rememberBandFocus();
+    setBandAway(true);
+  }, [bandAway, rememberBandFocus]);
   const bandJump = useCallback(
     (blockId: BlockId, passage?: string) => {
       jumpTo(blockId, passage);
       if (!bandCovers) return;
-      const focused = document.activeElement;
-      bandFocus.current =
-        focused instanceof HTMLElement && focused.closest(".mode-band") !== null ? focused : null;
+      rememberBandFocus();
       setBandAway(true);
     },
-    [jumpTo, bandCovers],
+    [jumpTo, bandCovers, rememberBandFocus],
   );
   useEffect(() => {
-    if (bandAway) return;
+    if (bandBack) return;
     const was = bandFocus.current;
     bandFocus.current = null;
     if (was?.isConnected) was.focus({ preventScroll: true });
-  }, [bandAway]);
+  }, [bandBack]);
 
   /**
    * **Tell the Feedback dialog where the reader is.** feedback-context.ts.
@@ -1125,7 +1136,6 @@ export function Reader({
      TrajectoryDoor. Memoised on the control, which changes only with the stop
      and the door's words, so `memo(TableView)` holds between them. It also
      offers the band back while it has stepped aside on a narrow window. */
-  const bandBack = bandAway && fit.modeW === 0;
   const afterBlock = useMemo(() => {
     if (mode !== "trajectory" || !trajectoryControl?.blockId) return null;
     return {

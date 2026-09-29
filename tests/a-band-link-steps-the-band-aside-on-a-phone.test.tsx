@@ -409,6 +409,25 @@ describe("a passage link in a band, on a phone", () => {
     expect(document.activeElement, "focus did not come back to the link").toBe(link);
   });
 
+  it("restores focus when a resize makes the stepped-aside band visible again", async () => {
+    /* `bandAway` is retained across width changes, but `band-away` is only
+       painted while the band covers the prose. Growing the window therefore
+       returns the band just as surely as pressing the pill does, and must not
+       strand focus on the pill that the resize unmounts. */
+    await open(PHONE, "?mode=summary");
+    const link = await pressBandLink();
+    expect(document.activeElement).toBe(pill());
+
+    await act(async () => {
+      setWidth(DESKTOP);
+      window.dispatchEvent(new Event("resize"));
+    });
+    await until(() => !reader().classList.contains("band-covers"), "the wider layout never appeared");
+
+    expect(pill(), "the phone-only way back survived beside a visible band").toBeNull();
+    expect(document.activeElement, "focus was lost when the resize returned the band").toBe(link);
+  });
+
   it("draws no herald while the band is away, even one still pending from the press", async () => {
     /* A Dock press names the mode for three seconds (ModeHerald.tsx); a link
        pressed inside those three seconds hides the band the herald stands
@@ -491,5 +510,32 @@ describe("Trajectory, which jumps on opening", () => {
     expect(reader().classList.contains("band-covers"), "390px must be a covering width").toBe(true);
     expect(reader().classList.contains("band-away"), "the opening jump hid the band it opened").toBe(false);
     expect(pill()).toBeNull();
+  });
+
+  it("moves focus to the pill and back when a focused stop steps the band aside", async () => {
+    /* Trajectory keeps raw `jumpTo` because it jumps on opening, then uses its
+       separate `onAway` callback for deliberate route movement. That callback
+       must share `bandJump`'s focus handoff: otherwise `display: none` leaves
+       focus inside the hidden band and the return pill is skipped entirely. */
+    await open(PHONE);
+    const dock = [...host.querySelectorAll<HTMLButtonElement>('.dock-modes [role="radio"]')].find(
+      (b) => b.getAttribute("aria-label") === MODE_LABEL.trajectory,
+    );
+    expect(dock, "the bar must draw Trajectory").toBeDefined();
+    await act(async () => dock?.click());
+    await until(() => param("at") === BAND_TARGET, "opening Trajectory never made its opening jump");
+
+    const stop = host.querySelector<HTMLButtonElement>(".traj-go");
+    expect(stop, "Trajectory drew no stop to press").not.toBeNull();
+    await act(async () => stop?.focus());
+    await act(async () => stop?.click());
+    await until(() => reader().classList.contains("band-away"), "the stop did not step the band aside");
+
+    expect(document.activeElement, "focus was left inside the hidden Trajectory band").toBe(pill());
+
+    await act(async () => pill()?.click());
+    await settle();
+
+    expect(document.activeElement, "focus did not come back to the Trajectory stop").toBe(stop);
   });
 });
