@@ -1,6 +1,6 @@
 {
   "id": "0f80012e-7791-4bf9-9e29-41b15c67f93a",
-  "prevId": "09ae70cf-4e51-4086-924c-7255d874f0e6",
+  "prevId": "3b2f49a8-b1e9-405f-b8f1-b9d0e410baf1",
   "version": "7",
   "dialect": "postgresql",
   "tables": {
@@ -2843,22 +2843,6 @@
           ],
           "isUnique": true,
           "where": "\"spideryarn\".\"jobs\".\"draft_revision_id\" is not null",
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        },
-        "jobs_one_running_per_slug": {
-          "name": "jobs_one_running_per_slug",
-          "columns": [
-            {
-              "expression": "slug",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": true,
-          "where": "\"spideryarn\".\"jobs\".\"status\" = 'running'",
           "concurrently": false,
           "method": "btree",
           "with": {}

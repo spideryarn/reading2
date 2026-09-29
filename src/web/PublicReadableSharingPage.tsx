@@ -308,9 +308,12 @@ export function PublicReadableSharingPage({ signedIn }: { signedIn: boolean }) {
         <Section title="What the AI adds, and whose it is">
           <p>
             Spideryarn writes summaries at several levels of detail, a one-line gist, a glossary, a
-            timeline and diagrams. Those are written by a language model reading your text. They are
-            not quotations, they are not your words, and where one of them is wrong about your
-            argument, that is our mistake and not yours.
+            timeline, diagrams and more. Those are written by a language model reading your text.
+            They are not your words, and where one of them is wrong about your argument, that is our
+            mistake and not yours. The quotes are the exception: those are your own words, picked
+            out by a model. A reader may also have asked what the rest of the web says about your
+            piece, and then the page shows short quotations from other pages that reply to it or to
+            what it argues, each linked to where it came from.
           </p>
           <p>
             Today nothing printed beside them says so, which we think is a gap and intend to close.

@@ -40,6 +40,11 @@ and the drawing.
 - **The gutter is one generated `<style>` element**, never a prop into `TableView`, which would
   re-render every row whenever one block crossed a step. `gutterCss`,
   [`ReadingTimeStyle.tsx`](../../src/web/ReadingTimeStyle.tsx), gutter.css § reading time.
+- **The hairline says what it is on hover**, since 2026-09-29, because Greg found it and could not
+  tell what it meant (SPIDERYARN-READING2-4S). It is a `span.blk-read` with a `title`, last in the
+  gutter, and its hover strip is zero wide on a row with no reading time. Nothing yet on touch.
+  gutter.css § reading time;
+  [260929c](../plans/260929c-mode-bar-order-and-groups-experimental-switch-gutter-icons-diagram-behind-the-switch-reading-time-line-explained.md).
 - **The spine layer's place in the track is its correctness**: after the parts, before the section
   fill, the hairlines and the search marks. [`Spine.tsx`](../../src/web/Spine.tsx),
   `tests/spine-reading.test.ts`.

@@ -1,0 +1,18 @@
+-- The index said "at most one job running per article" (unique on slug, where
+-- status = 'running'). It was built for the filesystem store, which wrote every
+-- artefact into one shared data/<slug>/ directory; that store was deleted on
+-- 2026-09-05, and every job now writes its own draft revision. Mode jobs that
+-- make different columns and read nothing the other makes now run side by side
+-- on one article, and a unique index cannot say "unless compatible" — so the
+-- rule is the read inside the queue_state lock, as the global cap's became in
+-- 0032. See src/store/pg-jobs.ts § blockedByAnother, src/sharing-steps.ts, and
+-- docs/plans/260929c-modes-generate-in-parallel-on-one-article.md.
+--
+-- Nothing to backfill: the index constrained rows, it did not store anything.
+-- Either deploy order is safe: old code under the new schema still refuses a
+-- second runner with its locked read, and new code under the old schema can
+-- only be refused by the index when two compatible jobs overlap, which its
+-- claim would surface as a 500 until this lands. Going the other way is a plain
+-- CREATE UNIQUE INDEX, and it will fail while two jobs are running on one
+-- article — which is the point of it.
+DROP INDEX "spideryarn"."jobs_one_running_per_slug";

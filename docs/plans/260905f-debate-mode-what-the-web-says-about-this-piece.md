@@ -703,6 +703,20 @@ record `webSearches` and cost from the `ai_calls` ledger rows, and write the res
 
 ### Stage 4 — the shared link, and the docs
 
+**The shared link: built 2026-09-29, by plan
+[260929c](260929c-a-visitor-sees-every-stored-mode-on-a-public-article.md) stage 4**
+(SPIDERYARN-READING2-56). As built: `PublicDebate` and `publicDebate` in src/public/dto.ts, the
+`debate` column in `PUBLIC_PROJECTIONS`, `VisitorDebateBand`, `POLICY.debate` an artefact mode.
+Three departures from the text below, each deliberate. **The column guard** is the existing
+`tests/public-reads.test.ts` § *asks for the artefacts on the row it already filtered*, not a new
+`public-projection-columns` file. **The visitor's foot line** says only what the boundary withheld
+(`sourceNotPublishable` per search): the stored counts, `reportedRows` included, do not cross — they
+are facts about our search and our checking, as the FAQ's `dropped` is — so there is no
+`publicKeptRows` to compare with, and the rows on screen are that number. **And a third address**
+this plan did not name (Sol, 260929c plan review, P0): a direct row's `linked` signal and witness
+carry the article's *own* address, which is judged by `publicSourceUrl`, as the masthead's is. Not
+built here: the export put-chain, `docs/project/debate.md`.
+
 The public contract first, then the visitor: `PublicDebate`; `PUBLIC_PROJECTIONS` (a missing line here
 is the one silent failure in the whole public path); the public DTO with `publicCitationUrl` per row,
 dropping the row on refusal; `publicKeptRows` and `sourceNotPublishable` computed **at the boundary**,

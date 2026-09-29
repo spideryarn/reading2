@@ -347,16 +347,16 @@ describe("the Start this article again section", () => {
   it("refreshes the list when an extra outside the rerun rows finishes in another tab", async () => {
     await open();
     await act(async () => jobEngine.receive([]));
-    expect(checkbox()?.closest("label")?.textContent).not.toContain("Citations");
+    expect(checkbox()?.closest("label")?.textContent).not.toContain("Illustrated");
     const before = metadataReads;
-    ran.add("citations");
+    ran.add("illustrated");
 
-    await act(async () => jobEngine.receive([oneStepJob("job-citations", "citations", "running")]));
-    await act(async () => jobEngine.receive([oneStepJob("job-citations", "citations", "done")]));
+    await act(async () => jobEngine.receive([oneStepJob("job-illustrated", "illustrated", "running")]));
+    await act(async () => jobEngine.receive([oneStepJob("job-illustrated", "illustrated", "done")]));
     await settle();
 
     expect(metadataReads).toBeGreaterThan(before);
-    expect(checkbox()?.closest("label")?.textContent).toContain("Citations");
+    expect(checkbox()?.closest("label")?.textContent).toContain("Illustrated");
   });
 
   it("offers no checkbox when the article has no extras", async () => {
@@ -492,7 +492,7 @@ describe("the Start this article again section", () => {
   });
 
   it("reads metadata again when a regenerated extra outside the rerun rows finishes", async () => {
-    resetAnswer = () => json({ jobId: "job-reset", regenerate: ["faq"] }, 202);
+    resetAnswer = () => json({ jobId: "job-reset", regenerate: ["illustrated"] }, 202);
     await open();
     await act(async () => jobEngine.receive([]));
     await press(checkbox());
@@ -500,14 +500,14 @@ describe("the Start this article again section", () => {
     await press(button("Yes, start again"));
     await act(async () =>
       jobEngine.receive([
-        resetJob("job-reset", "running", ["faq"]),
-        oneStepJob("job-faq", "faq", "queued"),
+        resetJob("job-reset", "running", ["illustrated"]),
+        oneStepJob("job-illustrated", "illustrated", "queued"),
       ]),
     );
     await act(async () =>
       jobEngine.receive([
-        resetJob("job-reset", "done", ["faq"]),
-        oneStepJob("job-faq", "faq", "running"),
+        resetJob("job-reset", "done", ["illustrated"]),
+        oneStepJob("job-illustrated", "illustrated", "running"),
       ]),
     );
     await settle();
@@ -515,8 +515,8 @@ describe("the Start this article again section", () => {
 
     await act(async () =>
       jobEngine.receive([
-        resetJob("job-reset", "done", ["faq"]),
-        oneStepJob("job-faq", "faq", "done"),
+        resetJob("job-reset", "done", ["illustrated"]),
+        oneStepJob("job-illustrated", "illustrated", "done"),
       ]),
     );
     await settle();
@@ -527,8 +527,8 @@ describe("the Start this article again section", () => {
   it("recovers a published reset's active regeneration after reload", async () => {
     await act(async () =>
       jobEngine.receive([
-        resetJob("job-reset", "done", ["faq"]),
-        oneStepJob("job-faq", "faq", "running"),
+        resetJob("job-reset", "done", ["illustrated"]),
+        oneStepJob("job-illustrated", "illustrated", "running"),
       ]),
     );
     await open();
@@ -536,8 +536,8 @@ describe("the Start this article again section", () => {
 
     await act(async () =>
       jobEngine.receive([
-        resetJob("job-reset", "done", ["faq"]),
-        oneStepJob("job-faq", "faq", "done"),
+        resetJob("job-reset", "done", ["illustrated"]),
+        oneStepJob("job-illustrated", "illustrated", "done"),
       ]),
     );
     await settle();
@@ -548,13 +548,13 @@ describe("the Start this article again section", () => {
   it("does not mistake a later ordinary run for an old reset's successor", async () => {
     await act(async () =>
       jobEngine.receive([
-        resetJob("job-reset", "done", ["faq"]),
-        oneStepJob("job-faq-later", "faq", "running", "2026-09-28T00:05:00.000Z"),
+        resetJob("job-reset", "done", ["illustrated"]),
+        oneStepJob("job-illustrated-later", "illustrated", "running", "2026-09-28T00:05:00.000Z"),
       ]),
     );
     await open();
 
-    expect(card()?.textContent).not.toContain("Doing faq");
+    expect(card()?.textContent).not.toContain("Doing illustrated");
     expect(button("Stop")).toBeUndefined();
   });
 
@@ -579,51 +579,51 @@ describe("the Start this article again section", () => {
   it("stops associating later work after the reset's successor finishes", async () => {
     await act(async () =>
       jobEngine.receive([
-        resetJob("job-reset", "done", ["faq"]),
-        oneStepJob("job-faq", "faq", "running"),
+        resetJob("job-reset", "done", ["illustrated"]),
+        oneStepJob("job-illustrated", "illustrated", "running"),
       ]),
     );
     await open();
-    expect(card()?.textContent).toContain("Doing faq");
+    expect(card()?.textContent).toContain("Doing illustrated");
 
     await act(async () =>
       jobEngine.receive([
-        resetJob("job-reset", "done", ["faq"]),
-        oneStepJob("job-faq", "faq", "done"),
+        resetJob("job-reset", "done", ["illustrated"]),
+        oneStepJob("job-illustrated", "illustrated", "done"),
       ]),
     );
     await act(async () =>
       jobEngine.receive([
-        resetJob("job-reset", "done", ["faq"]),
-        oneStepJob("job-faq", "faq", "done"),
-        oneStepJob("job-faq-later", "faq", "running", "2026-09-28T00:05:00.000Z"),
+        resetJob("job-reset", "done", ["illustrated"]),
+        oneStepJob("job-illustrated", "illustrated", "done"),
+        oneStepJob("job-illustrated-later", "illustrated", "running", "2026-09-28T00:05:00.000Z"),
       ]),
     );
     await settle();
 
-    expect(card()?.textContent).not.toContain("Doing faq");
+    expect(card()?.textContent).not.toContain("Doing illustrated");
     expect(button("Stop")).toBeUndefined();
   });
 
   it("keeps a failure visible for a regenerated extra with no rerun row", async () => {
     await act(async () =>
       jobEngine.receive([
-        resetJob("job-reset", "done", ["faq"]),
-        oneStepJob("job-faq", "faq", "running"),
+        resetJob("job-reset", "done", ["illustrated"]),
+        oneStepJob("job-illustrated", "illustrated", "running"),
       ]),
     );
     await open();
-    expect(card()?.textContent).toContain("Doing faq");
+    expect(card()?.textContent).toContain("Doing illustrated");
 
     await act(async () =>
       jobEngine.receive([
-        resetJob("job-reset", "done", ["faq"]),
-        oneStepJob("job-faq", "faq", "error"),
+        resetJob("job-reset", "done", ["illustrated"]),
+        oneStepJob("job-illustrated", "illustrated", "error"),
       ]),
     );
     await settle();
 
-    expect(card()?.textContent).toContain("FAQ did not finish: Couldn't make the faq.");
+    expect(card()?.textContent).toContain("Illustrated did not finish: Couldn't make the illustrated.");
   });
 
   it("shows the server's own sentence when the reset is refused", async () => {

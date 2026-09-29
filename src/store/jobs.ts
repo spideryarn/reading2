@@ -587,9 +587,13 @@ export interface JobStore {
    * good thing to do with `busy`, which is ask again shortly.
    *
    * **The article's line is enforced here and nowhere else.** A job may claim
-   * only when no *older* active row exists for the same slug, ordered by
-   * `(created_at, id)`; otherwise `busy`, *another job on this article is ahead
-   * of it*. Called a deterministic order rather than FIFO on purpose — Postgres
+   * only when no *older* active row, and no running one, exists for the same
+   * slug, ordered by `(created_at, id)`; otherwise `busy`, *another job on this
+   * article is ahead of it*. **Unless the two may overlap** — since 2026-09-29
+   * two mode jobs that make different columns and read nothing the other makes
+   * run side by side (`mayOverlap`, src/sharing-steps.ts;
+   * docs/plans/260929c-modes-generate-in-parallel-on-one-article.md), and every
+   * other pair keeps this line exactly. Called a deterministic order rather than FIFO on purpose — Postgres
    * is given the application's millisecond timestamp and `id` is random, so two
    * requests inside one millisecond order by luck. What the rule has to
    * guarantee is that the set of predecessors is the same for every claimant and
@@ -600,9 +604,10 @@ export interface JobStore {
    * **A predecessor that is stopping still blocks.** Stop on a *queued* job
    * settles it terminal at once, so it leaves the line by itself; Stop on a
    * *running* one leaves it `running` with `cancelling` set until its claimant
-   * releases or its lease lapses, and `jobs_one_running_per_slug` still covers
-   * that row. Skipping it would buy the successor nothing but a unique
-   * violation. The successor unblocks when the cancellation becomes terminal,
+   * releases or its lease lapses, and the line still counts that row as
+   * running. Skipping it would put a second runner inside the article (it
+   * bought a unique violation on `jobs_one_running_per_slug` until that index
+   * was dropped, 2026-09-29). The successor unblocks when the cancellation becomes terminal,
    * not when Stop is pressed. GPT Sol, 2026-09-02.
    *
    * **`maxRunning` is passed in, exactly as `leaseMs` is, and for the same

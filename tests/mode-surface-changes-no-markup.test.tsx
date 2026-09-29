@@ -1961,6 +1961,44 @@ describe("the bands stage 2 migrated, as they stood before it", () => {
     }
   });
 
+  /* **An older prompt is not announced** — Greg, 2026-09-29
+     (SPIDERYARN-READING2-55): *"perhaps even don't bother showing it."* The
+     stale banner (the article changed) stays; the outdated one went, and with
+     it the footers' outdated gate, or a run on an outdated result would show
+     nowhere. docs/plans/260929c-no-notice-when-a-mode-was-made-by-an-older-prompt.md. */
+  it("shows no notice on an outdated result, but still the stale banner", async () => {
+    const cases: [string, ReactNode, ReactNode][] = [
+      ["Ideas", mountIdeas(IDEAS, { outdated: true }), mountIdeas(IDEAS, { stale: true })],
+      ["Timeline", mountTimeline(TIMELINE, { outdated: true }), mountTimeline(TIMELINE, { stale: true })],
+      ["Debate", mountDebate(DEBATE, { outdated: true }), mountDebate(DEBATE, { stale: true })],
+      ["Quiz", mountQuiz(QUIZ, { outdated: true }), mountQuiz(QUIZ, { stale: true })],
+    ];
+
+    for (const [name, outdated, stale] of cases) {
+      await paint(outdated);
+      expect(band().querySelector(".gloss-stale"), `${name} announced an older prompt`).toBeNull();
+      expect(band().textContent).not.toContain("version of the prompt");
+      await paint(stale);
+      expect(band().querySelector(".gloss-stale"), `${name} lost its stale banner`).toBeTruthy();
+    }
+  });
+
+  it("shows a running job's footer on an outdated result", async () => {
+    const cases: [string, ReactNode, string][] = [
+      ["Ideas", mountIdeas(IDEAS, { outdated: true, job: runningJob("ideas") }), "ideas-again"],
+      ["Timeline", mountTimeline(TIMELINE, { outdated: true, job: runningJob("timeline") }), "tl-again"],
+      ["Debate", mountDebate(DEBATE, { outdated: true, job: runningJob("debate") }), "dbt-again"],
+      ["Quiz", mountQuiz(QUIZ, { outdated: true, job: runningJob("quiz") }), "quiz-rewrite"],
+    ];
+
+    for (const [name, node, footClass] of cases) {
+      await paint(node);
+      const footer = band().querySelector<HTMLElement>(`:scope > .${footClass}`);
+      expect(footer, `${name}'s running job on an outdated result shows nowhere`).toBeTruthy();
+      expect(footer?.textContent).toContain("Stop");
+    }
+  });
+
   it("draws Quiz's band with the empty state where the question was", async () => {
     await paint(mountQuiz(null));
     expectShape(QUIZ_NONE);

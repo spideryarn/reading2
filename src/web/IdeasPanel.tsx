@@ -189,19 +189,20 @@ export function IdeasPanel({
           (SPIDERYARN-READING2-53): *"Same goes for any other modes that still
           have a "redo this processing" button - let's just rely on the
           Metadata mode for that."* Metadata's *Re-run AI processing* has a row
-          for this mode; the button inside the out-of-date banner stays, as a
+          for this mode; the button inside the stale banner stays, as a
           repair the page is prompting rather than a standing redo.
           docs/plans/260929b-one-place-to-re-run-ai-processing.md.
 
           The footer itself stays while a current list's job is starting,
           running or failed. It is the only place that job's progress, Stop,
           stall warning and failure can be seen in this mode; idle renders
-          nothing, so this does not put the standing button back. */
+          nothing, so this does not put the standing button back. Not on a
+          stale list, whose banner carries the job; an outdated list has no
+          banner (plan 260929c), so its job shows here. */
       foot={
         ideas &&
         owner?.status === "ready" &&
         !owner.stale &&
-        !owner.outdated &&
         (owner.job || owner.starting || owner.failed) ? (
           <div className="ideas-again">{run("Find them again", true)}</div>
         ) : null
@@ -249,15 +250,11 @@ export function IdeasPanel({
               </p>
               {run("Find them again", true)}
             </div>
-          ) : owner?.outdated ? (
-            <div className="gloss-stale">
-              <p>
-                <TriangleAlert size={13} />
-                These were written by an older version of the prompt.
-              </p>
-              {run("Find them again", true)}
-            </div>
           ) : null}
+          {/* No banner for an outdated list (older prompt, same article) —
+              Greg, 2026-09-29 (SPIDERYARN-READING2-55): *"it's not worth
+              bugging the user about it."* Re-running is in Metadata. Plan
+              260929c. */}
 
           {/* **The scroller, and it was missing.** `.mode-band` is a fixed
               flex column from the controls bar to the dock, and every other

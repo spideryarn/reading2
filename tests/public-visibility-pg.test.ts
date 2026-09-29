@@ -54,7 +54,7 @@ import { pgPublicReader } from "../src/store/public-reader.js";
 import { documentTitle } from "../src/title-text.js";
 import { safePublicCanonical } from "../src/urls.js";
 import { currentOwnerId, type OwnerId, runInRequest } from "../src/owner.js";
-import type { Glossary, Ideas, TweetThread } from "../src/types.js";
+import type { Citations, Debate, Faq, Glossary, Ideas, Trajectory, TweetThread } from "../src/types.js";
 
 loadEnvLocal();
 
@@ -101,6 +101,17 @@ const PRIVATE_PROFILE_HASH = "profilehash-nobodyelsesbusiness";
 const PUBLIC_TERM = "Integrated information theory";
 const PUBLIC_IDEA = "You cannot theorise about what you have no way to measure.";
 const PUBLIC_TWEET = "The first post of the thread.";
+/** A stored Trajectory stop's cue — on the wire once published, never before. */
+const PUBLIC_CUE = "Look for what the measurement is being asked to carry.";
+/** A stored FAQ question and a stored cited work's title — the same, since plan 260929c stages 2 and 3. */
+const PUBLIC_QUESTION = "What would a measurement of consciousness have to show?";
+const PUBLIC_WORK = "Consciousness as integrated information";
+/** A cited work's address carrying a credential: its row crosses, the address never does. */
+const CREDENTIALLED_URL = "https://reader:hunter2@papers.example.org/phi.pdf";
+/** A stored Debate claim row's quotation — on the wire once published, never before (plan 260929c stage 4). */
+const PUBLIC_DEBATE_QUOTE = "Integration is not the same thing as experience.";
+/** A Debate row's source carrying a credential: the whole row stays behind, counted. */
+const CREDENTIALLED_REPLY = "https://reader:opensesame@replies.example.org/answer";
 
 /* ── The owner's own work, which crosses since 2026-09-04 ────────────────────
    Four strings a visitor must see and six rows they must not. Real prose in
@@ -153,6 +164,10 @@ const ARTEFACTS: {
   glossary: Glossary;
   ideas: Ideas;
   tweets: TweetThread;
+  trajectory: Trajectory;
+  faq: Faq;
+  citations: Citations;
+  debate: Debate;
 } = {
   glossary: {
     version: "glossary/2",
@@ -210,6 +225,170 @@ const ARTEFACTS: {
     limit: 280,
     tweets: [{ text: PUBLIC_TWEET, chars: 29 }],
     generatedAt: "2026-02-02T00:00:00.000Z",
+    elapsedMs: 1,
+  },
+  /* **The stored route, since 2026-09-29** (SPIDERYARN-READING2-56), with the
+     profile hash planted like every artefact above: it is who the route was
+     planned for, and `publicTrajectory` must drop it. The quote id need not
+     resolve — the projection does not look it up. */
+  trajectory: {
+    version: "trajectory/7",
+    generator: "test",
+    slug: SLUG,
+    sourceHash: "abc",
+    profileHash: PRIVATE_PROFILE_HASH,
+    stops: [{ quoteId: "spya-wpvvqq", depth: 1, role: null, cue: PUBLIC_CUE }],
+    visible: [1, 1, 1],
+    offered: 4,
+    dropped: {
+      collapsed: 0,
+      unknownQuote: 0,
+      duplicate: 0,
+      sameBlock: 0,
+      malformed: 0,
+      badRole: 0,
+      badCue: 0,
+      overCap: 0,
+    },
+    generatedAt: "2026-02-02T00:00:00.000Z",
+    elapsedMs: 1,
+  },
+  /* **The stored FAQ and Citations list, since 2026-09-29** (plan 260929c).
+     Neither stage takes a profile, so neither carries a `profileHash` and the
+     `personalised` list below does not move. The one cited work's address
+     carries a credential, so a real row proves the boundary drops it. */
+  faq: {
+    version: "faq/3",
+    generator: "test",
+    slug: SLUG,
+    sourceHash: "abc",
+    questions: [
+      { id: "q1", question: PUBLIC_QUESTION, passages: [{ blockId: "spya-wpvvqq", quote: "the", start: 0 }] },
+    ],
+    dropped: { unknownIds: 0, unquoted: 0, tooLong: 0, duplicate: 0, unanchored: 0, overCap: 0, malformed: 0 },
+    generatedAt: "2026-02-02T00:00:00.000Z",
+    elapsedMs: 1,
+  },
+  citations: {
+    version: "citations/4",
+    generator: "test",
+    slug: SLUG,
+    sourceHash: "abc",
+    citations: [
+      {
+        id: "w1",
+        key: `url:${CREDENTIALLED_URL}`,
+        title: PUBLIC_WORK,
+        why: "The theory under discussion.",
+        mentions: [],
+        citedAt: [],
+        firstCited: "spya-wpvvqq",
+        citedInBody: false,
+        url: CREDENTIALLED_URL,
+        linkFrom: "article",
+      },
+    ],
+    capped: false,
+    generatedAt: "2026-02-02T00:00:00.000Z",
+    elapsedMs: 1,
+  },
+  /* **The stored Debate, since 2026-09-29** (plan 260929c stage 4). The
+     article's own address is `SIGNED_URL`, which the masthead withholds for
+     its query — and a direct row's `linked` signal and witness are exactly
+     where that address turns up. Three direct rows: one whose signal carries
+     it (kept, the address taken off), one whose witness quotes it (dropped),
+     one whose source is credentialled (dropped). One clean claim row. */
+  debate: {
+    version: "debate/9",
+    generator: "test",
+    slug: SLUG,
+    sourceHash: "abc",
+    searchedAt: "2026-02-02T00:00:00.000Z",
+    direct: {
+      rows: [
+        {
+          id: "spya-dbtpg1",
+          url: "https://replies.example.org/kept",
+          sourceQuote: "A reply that is kept.",
+          relation: "disputes",
+          lean: "leans-against",
+          applies: "It disputes the piece.",
+          articleReferenceQuote: EXTRACTED_TITLE,
+          identifies: [
+            { kind: "linked", url: SIGNED_URL },
+            { kind: "named", by: "title", witness: EXTRACTED_TITLE },
+          ],
+        },
+        {
+          id: "spya-dbtpg2",
+          url: "https://replies.example.org/quotes-the-address",
+          sourceQuote: "A reply that quotes the signed address.",
+          relation: "extends",
+          lean: "leans-for",
+          applies: "It extends the piece.",
+          articleReferenceQuote: `read it at ${SIGNED_URL}`,
+          identifies: [{ kind: "linked", url: SIGNED_URL }],
+        },
+        {
+          id: "spya-dbtpg3",
+          url: CREDENTIALLED_REPLY,
+          sourceQuote: "A reply behind a password.",
+          relation: "qualifies",
+          lean: "neither",
+          applies: "It qualifies the piece.",
+          articleReferenceQuote: EXTRACTED_TITLE,
+          identifies: [{ kind: "named", by: "title", witness: EXTRACTED_TITLE }],
+        },
+      ],
+      counts: {
+        returnedSources: 3,
+        reportedRows: 3,
+        keptRows: 3,
+        omittedOverCap: 0,
+        lost: {
+          uncited: 0,
+          selfSource: 0,
+          unverifiedSource: 0,
+          directnessUnverified: 0,
+          sourceIsCopy: 0,
+          claimNotInBlock: 0,
+          unknownBlockId: 0,
+          malformed: 0,
+        },
+        webSearches: 4,
+      },
+    },
+    claims: {
+      rows: [
+        {
+          id: "spya-dbtpg4",
+          url: "https://answers.example.org/claim",
+          sourceQuote: PUBLIC_DEBATE_QUOTE,
+          relation: "disputes",
+          lean: "leans-against",
+          applies: "It disputes the claim.",
+          claimQuote: "the",
+          blockId: "spya-wpvvqq",
+        },
+      ],
+      counts: {
+        returnedSources: 1,
+        reportedRows: 1,
+        keptRows: 1,
+        omittedOverCap: 0,
+        lost: {
+          uncited: 0,
+          selfSource: 0,
+          unverifiedSource: 0,
+          directnessUnverified: 0,
+          sourceIsCopy: 0,
+          claimNotInBlock: 0,
+          unknownBlockId: 0,
+          malformed: 0,
+        },
+        webSearches: 2,
+      },
+    },
     elapsedMs: 1,
   },
 };
@@ -647,7 +826,11 @@ describe("sharing one article", { timeout: 60_000 }, () => {
        the visibility predicate would put a private article's glossary,
        ideas and thread at a public URL, and the assertions further
        down would not notice, because they all run after publication. */
-    for (const canary of [PUBLIC_TERM, PUBLIC_IDEA, PUBLIC_TWEET]) {
+    /* The route's cue joined 2026-09-29: a private article's stored
+       Trajectory is on this row too, and must not be readable either. */
+    /* The FAQ's question and the cited work's title joined the same day. */
+    /* And the Debate's claim quotation, since plan 260929c stage 4. */
+    for (const canary of [PUBLIC_TERM, PUBLIC_IDEA, PUBLIC_TWEET, PUBLIC_CUE, PUBLIC_QUESTION, PUBLIC_WORK, PUBLIC_DEBATE_QUOTE]) {
       expect(r.text, canary).not.toContain(canary);
     }
   });
@@ -880,6 +1063,83 @@ describe("sharing one article", { timeout: 60_000 }, () => {
     expect(body.ideas?.ideas[0]?.statement).toBe(PUBLIC_IDEA);
     expect(body.tweets?.tweets[0]?.text).toBe(PUBLIC_TWEET);
     expect(body.tweets?.limit).toBe(280);
+  });
+
+  /**
+   * **The stored Trajectory route, since 2026-09-29** — the bug was a visitor
+   * to a public article with a built route being refused it
+   * (SPIDERYARN-READING2-56). The stops and `offered` cross; who the route was
+   * planned for does not, and neither does the pipeline around it. Read off a
+   * real row, because the question is whether the public `select` fetches the
+   * column at all — a DTO test only ever sees what it was handed.
+   */
+  it("serves the stored trajectory, and not who it was planned for", async () => {
+    const r = await call("GET", `/api/public/article/${SLUG}`);
+    expect(r.status).toBe(200);
+    const body = r.body as { trajectory?: Record<string, unknown> };
+    expect(body.trajectory).toEqual({
+      stops: [{ quoteId: "spya-wpvvqq", depth: 1, role: null, cue: PUBLIC_CUE }],
+      offered: 4,
+    });
+    expect(r.text).toContain(PUBLIC_CUE);
+    expect(JSON.stringify(body.trajectory)).not.toContain("profileHash");
+    expect(r.text).not.toContain(PRIVATE_PROFILE_HASH);
+  });
+
+  /**
+   * **The stored FAQ and Citations list, since 2026-09-29** (plan 260929c
+   * stages 2 and 3), off a real row for the reason the trajectory's case above
+   * gives: only a row answers whether the public `select` fetches the column.
+   * The cited work crosses with its address taken off — a credential in it —
+   * and without its `key`, which embeds the same address.
+   */
+  /**
+   * **The stored Debate, since 2026-09-29** (plan 260929c stage 4), off a real
+   * row: only a row answers whether the public `select` fetches the column.
+   * The two rows the boundary refuses are gone and counted; the kept row's
+   * `linked` signal has lost the article's signed address; neither the
+   * signature nor the credential is anywhere in the response; and no stored
+   * count crosses.
+   */
+  it("serves the stored debate, without the rows or addresses the boundary refuses", async () => {
+    const r = await call("GET", `/api/public/article/${SLUG}`);
+    expect(r.status).toBe(200);
+    const body = r.body as {
+      debate?: {
+        searchedAt: string;
+        direct: { rows: { id: string; identifies: unknown[] }[]; sourceNotPublishable: number };
+        claims: { rows: { id: string; sourceQuote: string }[]; sourceNotPublishable: number };
+      };
+    };
+    expect(body.debate?.searchedAt).toBe("2026-02-02T00:00:00.000Z");
+    expect(body.debate?.direct.rows.map((row) => row.id)).toEqual(["spya-dbtpg1"]);
+    expect(body.debate?.direct.sourceNotPublishable).toBe(2);
+    expect(body.debate?.direct.rows[0]?.identifies).toEqual([
+      { kind: "linked" },
+      { kind: "named", by: "title", witness: EXTRACTED_TITLE },
+    ]);
+    expect(body.debate?.claims.rows.map((row) => row.sourceQuote)).toEqual([PUBLIC_DEBATE_QUOTE]);
+    expect(body.debate?.claims.sourceNotPublishable).toBe(0);
+    expect(r.text).not.toContain("SECRETSIGNATURE");
+    expect(r.text).not.toContain("opensesame");
+    expect(JSON.stringify(body.debate)).not.toContain("webSearches");
+    expect(JSON.stringify(body.debate)).not.toContain("counts");
+  });
+
+  it("serves the stored faq and citations, and not a credentialled address", async () => {
+    const r = await call("GET", `/api/public/article/${SLUG}`);
+    expect(r.status).toBe(200);
+    const body = r.body as {
+      faq?: { questions: { question: string }[] };
+      citations?: { citations: Record<string, unknown>[]; capped: boolean };
+    };
+    expect(body.faq?.questions.map((q) => q.question)).toEqual([PUBLIC_QUESTION]);
+    expect(body.citations?.capped).toBe(false);
+    expect(body.citations?.citations.map((w) => w.title)).toEqual([PUBLIC_WORK]);
+    expect("url" in (body.citations?.citations[0] ?? {})).toBe(false);
+    expect("key" in (body.citations?.citations[0] ?? {})).toBe(false);
+    expect(r.text).not.toContain("hunter2");
+    expect(JSON.stringify(body.faq)).not.toContain("dropped");
   });
 
   /**
@@ -1134,13 +1394,13 @@ describe("sharing one article", { timeout: 60_000 }, () => {
          The order is `STEP_ORDER`'s, which is what the store walks.
          The case below plants a mixed set, and asserts the empty reading too,
          so this is not the only shape this field is ever seen in. */
-      personalised: ["tweets", "glossary", "ideas"],
+      personalised: ["tweets", "glossary", "ideas", "trajectory"],
       /**
        * **What a shared link would carry, against a real Postgres** — and the
        * only place that claim is checked end to end.
        *
        * `shareableArtefacts` (src/store/pg.ts) reads presence off the revision
-       * row, and the fixture plants three artefacts and not the other two — so
+       * row, and the fixture plants seven artefacts and not the rest — so
        * this asymmetry is the assertion. A unit test cannot make it: the whole
        * question is whether the columns the projection publishes are the
        * columns this field reports, and only a row answers that.
@@ -1164,6 +1424,11 @@ describe("sharing one article", { timeout: 60_000 }, () => {
         quotes: false,
         timeline: false,
         sketch: false,
+        /* Planted since 2026-09-29, so present. */
+        trajectory: true,
+        faq: true,
+        citations: true,
+        debate: true,
       },
     });
   });
@@ -1231,7 +1496,7 @@ describe("sharing one article", { timeout: 60_000 }, () => {
        canary, so it is asserted deliberately here instead of being lost. */
     await db
       .update(articleRevisions)
-      .set({ glossary: null, ideas: null, tweets: null })
+      .set({ glossary: null, ideas: null, tweets: null, trajectory: null })
       .where(eq(articleRevisions.id, REVISION_ID));
     const none = await call("GET", `/api/metadata/${SLUG}`, { as: OWNER });
     expect((none.body.sharing as { personalised: string[] }).personalised).toEqual([]);
@@ -1268,8 +1533,10 @@ describe("sharing one article", { timeout: 60_000 }, () => {
         },
         /* Nulled with the rest: this case's whole claim is about which
            artefacts are listed, and a thread left over from the fixture — which
-           carries a `profileHash` — would put another name in the list. */
+           carries a `profileHash` — would put another name in the list. The
+           route, since 2026-09-29, for the same reason. */
         tweets: null,
+        trajectory: null,
       })
       .where(eq(articleRevisions.id, REVISION_ID));
     try {

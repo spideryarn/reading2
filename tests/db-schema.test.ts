@@ -523,11 +523,12 @@ describe("the schema keeps the promises the plan makes", () => {
         c.query(
           `insert into spideryarn.jobs (id, owner_id, slug, steps, status, work_key, attempt_id, lease_expires_at)
            values ($1,$2,$3,'[]'::jsonb,'running','w',gen_random_uuid(), now() + interval '1 minute')`,
-          /* A slug each. `jobs_one_running_per_slug` allows one *running* row
-             per article, so two on one slug would be refused by *that* index and
-             this would pass while saying nothing about the cap. (It said
-             `jobs_active_slug` until 2026-09-02; the index changed, the reason
-             the slugs differ did not.) */
+          /* A slug each. Until 2026-09-29 `jobs_one_running_per_slug` allowed
+             one *running* row per article, so two on one slug would have been
+             refused by *that* index and this would have passed while saying
+             nothing about the cap. That index is gone too — see the case below
+             on two owners — and the slugs still differ so that this case stays
+             about the global cap and nothing else. */
           [id, OWNER, id],
         );
       await running("spya-aaaaaa");
@@ -715,17 +716,26 @@ describe("the schema keeps the promises the plan makes", () => {
   });
 
   /**
-   * **The article mutex and the name reservation are global on `slug`**, and
-   * that is a different scope from de-duplication on purpose.
+   * **The name reservation is global on `slug`, and the article's running rule
+   * is no longer in the schema at all.**
    *
    * `articles.slug` is globally unique because it is the URL contract
-   * (`/read/<slug>`), so two owners can build toward one name. Whose request it
-   * is decides de-duplication; nothing about whose request it is decides who
-   * gets the article. Between 2026-08-30 and 2026-09-02 nothing enforced this
-   * at all: `jobs_only_one_running` had gone and `jobs_active_slug` was
-   * owner-scoped.
+   * (`/read/<slug>`), so two owners can build toward one name, and nothing
+   * about whose request it is decides who gets the name.
+   *
+   * This case also asserted that a second *running* row on one slug — another
+   * owner's — violated `jobs_one_running_per_slug`. That index was dropped on
+   * 2026-09-29 (drizzle/20260929052845_drop_jobs_one_running_per_slug.sql):
+   * mode jobs that make different columns now run side by side on one article,
+   * and a unique index cannot say *unless compatible*. So the insert now
+   * **succeeds**, and asserting that is what keeps this file honest, exactly as
+   * the global-cap case above does: the rule is `blockedByAnother` inside the
+   * `queue_state` lock (src/store/pg-jobs.ts), pinned by the one-article cases
+   * in tests/store-jobs-parity.test.ts — including two exclusive jobs that
+   * still cannot both be claimed — and a change that quietly reinstated a
+   * schema-level mutex would turn this red and have to say why.
    */
-  it("two owners cannot run, or claim the name of, one article at once", async () => {
+  it("the schema allows two jobs running on one article, and reserves its name globally", async () => {
     await inRollback(async (c) => {
       await seed(c);
       const other = "22222222-2222-2222-2222-222222222222";
@@ -743,7 +753,7 @@ describe("the schema keeps the promises the plan makes", () => {
           [id, owner],
         );
       await running("spya-dddddd", OWNER);
-      await expectViolation(c, /jobs_one_running_per_slug/, () => running("spya-eeeeee", other));
+      await expect(running("spya-eeeeee", other)).resolves.toBeDefined();
 
       const reserving = (id: string, owner: string) =>
         c.query(

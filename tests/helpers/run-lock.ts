@@ -14,9 +14,10 @@
  * row can still make another file's cap case answer `busy`.
  *
  * `jobs_active_slug` — one job in flight per article — went on 2026-09-02, when
- * an article gained a line. `jobs_one_running_per_slug` is what is left of it,
- * and it covers `running` rows only: two *queued* jobs on one fixture slug no
- * longer collide at all. So the per-article half of this is now enforced by
+ * an article gained a line. `jobs_one_running_per_slug` was what was left of
+ * it, covering `running` rows only, so two *queued* jobs on one fixture slug no
+ * longer collided at all — and it went too on 2026-09-29, when compatible mode
+ * jobs started sharing an article. So the per-article half of this is now enforced by
  * `./running-slot.ts` looking before it inserts rather than by a constraint
  * refusing afterwards.
  *

@@ -171,9 +171,10 @@ export interface UseQuotes {
    * `more`, one verb for two buttons since 2026-09-11. On a list written from
    * this same article by the current prompt it **appends** (*Find more*, in
    * the foot); on one the article has moved out from under, or an older prompt
-   * chose, it replaces (*Choose them again*, on the stale and outdated banners,
-   * the two places that label survives). src/quotes.ts §
-   * existingFor. Forced because an unforced run on a current list would skip;
+   * chose, it replaces. *Choose them again* survives on the stale banner; an
+   * outdated list has only transient job status here and is re-run from
+   * Metadata. src/quotes.ts § existingFor. Forced because an unforced run on a
+   * current list would skip;
    * `quotes` is in FORCE_ONLY_WHEN_NAMED with `useStepJob` naming the step.
    *
    * @param useProfile defaults to true. **Find more passes the list's own

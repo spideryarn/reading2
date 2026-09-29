@@ -2442,8 +2442,8 @@ export const TEST_LANES: Readonly<Record<string, TestLane>> = {
      all, deliberately"**; it now seeds one article and drives a real
      `claimSession` claim over it, so it writes an article, a revision, its
      blocks and a job row under one fixed slug. The private lane is what keeps
-     two runs off that slug — `jobs_one_running_per_slug` would not fail the
-     second, it would make it wait. No GoTrue and no bucket: the owner is the
+     two runs off that slug — the article's line would not fail the second, it
+     would make it wait. No GoTrue and no bucket: the owner is the
      dev one the clone already seeds, and the article comes out of the committed
      corpus. */
   "tests/all-skipped-publication-log.test.ts": "private-postgres",
@@ -2767,6 +2767,10 @@ export const TEST_LANES: Readonly<Record<string, TestLane>> = {
   "tests/pg-ready.test.ts": "private-postgres",
   "tests/pg-session-exact-base.test.ts": "private-postgres",
   "tests/pg-session-real-step.test.ts": "private-postgres",
+  /* 2026-09-29: two mode jobs on one seeded article, claimed together, and the
+     rebase that publishes both. Jobs, drafts and publications under its own
+     owner and slug prefix — the same shape as pg-session-exact-base. */
+  "tests/pg-session-sharing-rebase.test.ts": "private-postgres",
   "tests/pipeline-slug-claim.test.ts": "private-postgres",
   "tests/plans-match-tiers.test.ts": "private-postgres",
   /* Stage 2b of 260906a: publication queues the free `labels` job. Postgres
@@ -2784,7 +2788,7 @@ export const TEST_LANES: Readonly<Record<string, TestLane>> = {
      that publishes: *a revision landing between the two reads* is now a second
      real publication onto a seeded article, taken while a request is halfway
      through the handler. That mints a `jobs` row, opens a draft and moves
-     `articles.current_revision_id`, and `jobs_one_running_per_slug` means a
+     `articles.current_revision_id`, and the article's line means a
      neighbouring run mid-ingest on the same slug turns it into somebody else's
      failure. No Auth service and no Storage beyond the corpus bytes the seeder
      dedups, so `shared-services` would buy nothing. */

@@ -45,11 +45,17 @@ export interface Fresh<T> {
   stale: boolean;
 }
 
+/**
+ * `Pick`s of the artefacts, not the artefacts, because a visitor's band hands
+ * the card the public payload's copies — the same lists, without the
+ * provenance a visitor is never sent (`VisitorTrajectoryBand`, since
+ * 2026-09-29).
+ */
 export interface CardSources {
-  glossary: Fresh<Glossary>;
-  ideas: Fresh<Ideas>;
-  faq: Fresh<Faq>;
-  timeline: Fresh<Timeline>;
+  glossary: Fresh<Pick<Glossary, "entries">>;
+  ideas: Fresh<Pick<Ideas, "ideas">>;
+  faq: Fresh<Pick<Faq, "questions">>;
+  timeline: Fresh<Pick<Timeline, "events">>;
 }
 
 export interface CardTerm {
@@ -138,7 +144,7 @@ export function gatherStopCard(opts: {
 }
 
 function termsAt(
-  glossary: Glossary | null,
+  glossary: Pick<Glossary, "entries"> | null,
   blockId: BlockId,
   textOf: (id: BlockId) => string | null,
   route: readonly (BlockId | null)[],
@@ -170,21 +176,21 @@ function termsAt(
   return found.sort((a, b) => a.first - b.first).map((f) => f.term);
 }
 
-function ideasAt(ideas: Ideas | null, blockId: BlockId): CardIdea[] {
+function ideasAt(ideas: Pick<Ideas, "ideas"> | null, blockId: BlockId): CardIdea[] {
   if (!ideas) return [];
   return ideas.ideas
     .filter((idea) => idea.occurrences.some((o) => o.blockId === blockId))
     .map((idea) => ({ id: idea.id, name: idea.name }));
 }
 
-function questionsAt(faq: Faq | null, blockId: BlockId): CardQuestion[] {
+function questionsAt(faq: Pick<Faq, "questions"> | null, blockId: BlockId): CardQuestion[] {
   if (!faq) return [];
   return faq.questions
     .filter((q) => q.passages.some((p) => p.blockId === blockId))
     .map((q) => ({ id: q.id, question: q.question }));
 }
 
-function eventsAt(timeline: Timeline | null, blockId: BlockId): CardEvent[] {
+function eventsAt(timeline: Pick<Timeline, "events"> | null, blockId: BlockId): CardEvent[] {
   if (!timeline) return [];
   return timeline.events
     .filter((event) => event.occurrences.some((o) => o.blockId === blockId))
