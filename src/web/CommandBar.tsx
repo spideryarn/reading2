@@ -36,9 +36,9 @@
  *
  *     The half of the call that has never changed: a mode row's Enter opens it
  *     **exactly as pressing its Dock button does** — same activation, same
- *     generate-on-open, same cost. A non-mode row can spend too: Tweets is plain
- *     navigation to the thread page, which writes on owner arrival when empty,
- *     and the row wears the `generates` marker for that consequence.
+ *     generate-on-open, same cost. A non-mode row can spend too: Tweets was plain
+ *     navigation to the thread page (until it became a mode, 2026-09-29), which wrote on owner arrival when empty,
+ *     and the row wore the `generates` marker for that consequence.
  *  2. It is reachable by **⌘/Ctrl-K and by a button in the Dock**, because
  *     ⌘-K does not exist on a phone. The Dock keeps every mode button it has —
  *     this is an additional door, never a replacement. **The button moved to

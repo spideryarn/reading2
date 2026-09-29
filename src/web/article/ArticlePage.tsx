@@ -1,5 +1,5 @@
 /**
- * **One article, fetched once for all three of its views**, and the three
+ * **One article, fetched once for all of its views**, and the three
  * components that stand for the three footings you can read it on: your own
  * (`OwnedArticle` and `OwnedReader`), or somebody else's, shared
  * (`VisitorArticle`).
@@ -45,7 +45,7 @@ import { FeedbackTrigger } from "../FeedbackButton.js";
 import { useArticleAccess } from "./access.js";
 
 /**
- * One article, fetched **once for all three of its views**.
+ * One article, fetched **once for all of its views**.
  *
  * The fetch lives here rather than in the reading view because the metadata and
  * tweet pages need the same payload, and because this component does not
@@ -499,8 +499,8 @@ function OwnedReader({
  * owner — the same page either way, because the question is *is this mine*.
  *
  * Note which components are reachable from here: `Reader`, and two small pages
- * written for this case. `Metadata` and `Tweets` are not among them, and that
- * is the seam rather than an omission (Tweets is a mode now, with a visitor band) — between them they mount the profile
+ * written for this case. `Metadata` is not among them (and `Tweets` was not, until it became a mode
+ * with a visitor band on 2026-09-29), and that is the seam rather than an omission — between them they mount the profile
  * boxes, the delete button, the provenance fetch and `useJobs`.
  */
 function VisitorArticle({
@@ -526,8 +526,8 @@ function VisitorArticle({
   /** For the call to action, and nothing else — reader-capability.ts § signedIn. */
   signedIn: boolean;
   /**
-   * **Only for what the chrome says**, and it goes to all three views rather
-   * than to the reading view alone: the other two are one click away and carry
+   * **Only for what the chrome says**, and it goes to both views rather
+   * than to the reading view alone: the other is one click away and carries
    * the same `SharedNotice`, so a reader who stepped out to the metadata page
    * would otherwise watch the explanation vanish. App.tsx § ArticleAccess.
    */

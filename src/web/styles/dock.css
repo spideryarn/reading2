@@ -655,7 +655,7 @@
    controls bar rather than floating above it.
 
    **Not on the pages that mount a `Dock` since 2026-09-06** — the article, its
-   metadata and tweets pages, and the three visitor stand-ins draw `.dock-home`
+   metadata page (and its tweets page until 2026-09-29), and the three visitor stand-ins draw `.dock-home`
    in the bottom bar instead (Dock.tsx § the way home is back). This rule is for
    everywhere else: the shelf-adjacent pages, `/privacy`, the article's loading
    and error screens, and the two refusal pages. */

@@ -720,13 +720,15 @@
    **Do the sum, do not trust a remembered count.** This note said "nine
    buttons" when it was written, GPT Sol counted eleven the same afternoon, and
    a ninth mode (`outline`) landed hours later making it twelve. The count is
-   `MODES_UI.length + 3` — the modes, then Comments, Tweets and Metadata — and
+   `MODES_UI.length + 2` — the modes, then Comments and Metadata (it was `+ 3`
+   until Tweets became a mode on 2026-09-29, which left the total unchanged) — and
    it only ever goes up.
 
    At 390px there is 383.6px of bar after `.dock`'s own padding. **Each button
    costs 40px** (the floor below) and each mode costs a further 1px of hairline;
    `.dock-modes` adds a 1px frame and 0.25rem of margin each side. So with *m*
-   modes the row is roughly `40 × (m + 3) + m + 9`. At m=8 that is 457px, at m=9
+   modes the row is roughly `40 × (m + 2) + m + 9` (the figures below are from
+   when it was `m + 3`, so read them one mode on). At m=8 that is 457px, at m=9
    it is 498, at m=10 it is 539, at m=12 it is 621, and the bar is 384. **A phone
    in portrait scrolls, and every new mode makes it scroll by another 41px.**
 

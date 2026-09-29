@@ -115,7 +115,7 @@ export interface ModeCatalogEntry {
    *
    *  - **Describe a gesture rather than the mode.** Every sentence here is
    *    read on **four** surfaces at least: the bar button on the reading view,
-   *    the loose link in the same bar on the metadata and tweets pages, and
+   *    the loose link in the same bar on the metadata page, and
    *    either of those seen by a **visitor** rather than the owner. Those
    *    surfaces do not behave alike — the loose link only navigates and arms
    *    nothing (`DockModeLinks` in src/web/Dock.tsx), and a visitor with no

@@ -165,6 +165,7 @@ import type { IdeasOwner } from "../src/web/IdeasPanel.js";
 import type { QuotesOwner } from "../src/web/QuotesPanel.js";
 import type { TimelineOwner } from "../src/web/TimelinePanel.js";
 import type { UseQuiz } from "../src/web/useQuiz.js";
+import type { UseTweets } from "../src/web/useTweets.js";
 import type { Found } from "../src/web/search-hits.js";
 import type { PublicSketch } from "../src/public-types.js";
 import type {
@@ -183,6 +184,7 @@ import type {
   Quotes,
   StepName,
   Timeline,
+  TweetThread,
 } from "../src/types.js";
 
 /* ------------------------------------------------- the reader, for Referee --
@@ -264,6 +266,7 @@ const { QuizPanel } = await import("../src/web/QuizPanel.js");
 const { QuotesPanel } = await import("../src/web/QuotesPanel.js");
 const { SummaryPanel } = await import("../src/web/SummaryPanel.js");
 const { TimelinePanel } = await import("../src/web/TimelinePanel.js");
+const { TweetsPanel } = await import("../src/web/Tweets.js");
 const { assignSlots } = await import("../src/web/hit-colours.js");
 const { buildGeometry, buildSummaryTree } = await import("../src/web/tree.js");
 
@@ -1503,6 +1506,67 @@ function mountTimeline(timeline: Timeline | null, over: Partial<TimelineOwner> =
   });
 }
 
+/* ---- Tweets --------------------------------------------------------------
+   **No "before" exists for this band.** Tweets was a page of its own until
+   2026-09-29 and became a mode with `ModeSurface` from its first line
+   (docs/plans/260929f-tweets-become-a-mode-with-a-wide-band-and-block-links.md),
+   so there is no pre-migration panel to have printed. The literals in the
+   Tweets shapes below are simply what the band draws *now*, printed from the
+   mounted panel and then checked against `Tweets.tsx` by eye: they pin the
+   shape from here on, against the next refactor, and say nothing about a
+   baseline. GPT Sol code review, findings 3 and 4. */
+
+const TWEET_THREAD: TweetThread = {
+  version: "tweets/5",
+  generator: "test-model",
+  slug: SLUG,
+  sourceHash: "hash",
+  limit: 280,
+  tweets: [
+    { text: "First post.", chars: 11, blocks: ["spya-aaaaaa" as BlockId] },
+    { text: "Second post.", chars: 12, blocks: [] },
+  ],
+  generatedAt: "2026-09-29T10:00:00.000Z",
+  elapsedMs: 4000,
+};
+
+function tweetsOwner(thread: TweetThread | null, over: Partial<UseTweets> = {}): UseTweets {
+  return {
+    status: thread ? "ready" : "none",
+    thread,
+    stale: false,
+    profileChanged: false,
+    error: null,
+    job: null,
+    failed: null,
+    stalled: false,
+    starting: false,
+    retryRead: async () => {},
+    ensure: async () => {},
+    regenerate: async () => {},
+    cancel: () => {},
+    ...over,
+  };
+}
+
+function mountTweets(owner: UseTweets): ReactNode {
+  return createElement(TweetsPanel, {
+    access: { kind: "owner", owner },
+    article: OWNED,
+    slug: SLUG,
+    onJump: noop,
+  });
+}
+
+function mountVisitorTweets(): ReactNode {
+  return createElement(TweetsPanel, {
+    access: { kind: "visitor", thread: { limit: TWEET_THREAD.limit, tweets: TWEET_THREAD.tweets } },
+    article: OWNED,
+    slug: SLUG,
+    onJump: noop,
+  });
+}
+
 function mountDebate(debate: Debate | null, over: Partial<DebateOwner> = {}): ReactNode {
   return createElement(DebatePanel, {
     access: { kind: "owner", owner: debateOwner(debate, over) },
@@ -1700,6 +1764,40 @@ const TIMELINE_LOADING: BandShape = {
   head: true,
   children: ["div.band-head", "p.gloss-quiet"],
   headChildren: [],
+};
+
+/* Tweets — see the note above `TWEET_THREAD`: these are what the band draws
+   now, not a baseline. */
+const TWEETS_SHAPE: BandShape = {
+  className: "mode-band gloss tweets",
+  label: "Tweets",
+  head: true,
+  children: ["div.band-head", "div.tw:min-h-0.tw:flex-1.tw:overflow-y-auto.tw:px-4.tw:pb-4", "div.tw:flex.tw:flex-wrap.tw:items-center.tw:gap-x-3.tw:gap-y-2.tw:px-4.tw:py-2"],
+  headChildren: ["div.tw:flex.tw:w-full.tw:flex-wrap.tw:items-center.tw:gap-x-3.tw:gap-y-1"],
+};
+
+/** No thread yet: no header, no footer, only the empty state. */
+const TWEETS_NONE: BandShape = {
+  className: "mode-band gloss tweets",
+  label: "Tweets",
+  head: false,
+  children: ["div.gloss-empty"],
+};
+
+const TWEETS_LOADING: BandShape = {
+  className: "mode-band gloss tweets",
+  label: "Tweets",
+  head: false,
+  children: ["p.gloss-quiet"],
+};
+
+/** A visitor has the counts and the posts, and no provenance footer. */
+const TWEETS_VISITOR: BandShape = {
+  className: "mode-band gloss tweets",
+  label: "Tweets",
+  head: true,
+  children: ["div.band-head", "div.tw:min-h-0.tw:flex-1.tw:overflow-y-auto.tw:px-4.tw:pb-4"],
+  headChildren: ["div.tw:flex.tw:w-full.tw:flex-wrap.tw:items-center.tw:gap-x-3.tw:gap-y-1"],
 };
 
 /**
@@ -2036,6 +2134,26 @@ describe("the bands stage 2 migrated, as they stood before it", () => {
   it("draws Outline's band, carrying data-outline-rung on the aside itself", async () => {
     await paint(mountOutline());
     expectShape(OUTLINE);
+  });
+
+  it("draws Tweets' band for the owner with a thread: header, posts, provenance footer", async () => {
+    await paint(mountTweets(tweetsOwner(TWEET_THREAD)));
+    expectShape(TWEETS_SHAPE);
+  });
+
+  it("draws Tweets' band with no header and no footer when nobody has written a thread", async () => {
+    await paint(mountTweets(tweetsOwner(null)));
+    expectShape(TWEETS_NONE);
+  });
+
+  it("draws Tweets' band with no header while the thread is being looked for", async () => {
+    await paint(mountTweets(tweetsOwner(null, { status: "loading" })));
+    expectShape(TWEETS_LOADING);
+  });
+
+  it("draws Tweets' band for a visitor, with the counts and the posts and no footer", async () => {
+    await paint(mountVisitorTweets());
+    expectShape(TWEETS_VISITOR);
   });
 
   it("draws Referee's band, through the whole reader", async () => {

@@ -188,8 +188,8 @@ export function documentTitle(
   view: ArticleView = "article",
 ): string {
   /* **The view wins over the mode, and that is `readTitle`'s rule rather than a
-     new one**: the metadata and tweets pages are pages beside the article, and
-     the mode is a band inside the reading view that neither of them has. A
+     new one**: the metadata page (and, until 2026-09-29, the tweets page) is a page beside the article, and
+     the mode is a band inside the reading view that it has not. A
      `/read/x?about=1&mode=glossary` becomes `x · Metadata · Spideryarn` on both
      sides, with the mode dropped. */
   const label =

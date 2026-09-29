@@ -75,8 +75,8 @@ function drawsShelf(route: Exclude<Route, { kind: "callback" }>, user: User): bo
 /**
  * Which page you are on, and nothing else.
  *
- * The path says which article (`/read/<slug>`) and which of its three views
- * (`/metadata`, `/tweets`, or the reading view itself), or that you want the
+ * The path says which article (`/read/<slug>`) and which of its views
+ * (`/metadata`, or the reading view itself; `/tweets` redirected to `?mode=tweets` from 2026-09-29), or that you want the
  * shelf (`/`); the query string says how you are looking at it. See router.ts
  * for that division, and params.js for the parameters themselves.
  */
@@ -111,8 +111,8 @@ export function App() {
    *
    * **And nothing here wakes it, either.** The store starts listening on its
    * first subscriber and asks the server for nobody until then. Since stage 2
-   * the subscribers are the four components that mount a `Dock` — `Reader`
-   * below, `Metadata`, `Tweets` and `VisitorDock` in PublicPages.tsx — each
+   * the subscribers are the components that mount a `Dock` — `Reader`
+   * below, `Metadata`, `VisitorDock` in PublicPages.tsx (and `Tweets`, until it became a mode on 2026-09-29) — each
    * calling `useExperimental()` and handing the answer down as a prop, because
    * the bar is told rather than going and getting it (Dock.tsx § experimental).
    * A stranger still asks for nothing: the store issues no request for a
@@ -257,7 +257,7 @@ export function App() {
      draw one unconditionally are still drawing nothing for a stranger.
 
      **And it stops covering `read`**, which is the route whose corners moved
-     into the bottom bar. The reading view, the metadata and tweets pages and
+     into the bottom bar. The reading view, the metadata page (and the tweets page until 2026-09-29) and
      the three visitor stand-ins all mount a `Dock` and draw the trigger there
      (Dock.tsx). `ArticlePage`'s four branches that have no `Dock` — loading,
      error, not-shared and reauth-required — each draw the corner trigger

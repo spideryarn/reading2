@@ -61,7 +61,7 @@
    identity already participates in the fit signature, so no separate group
    signature is needed.
 
-   The loose links on the metadata and tweets pages get the same rule at the
+   The loose links on the metadata page get the same rule at the
    same places, so both faces of the bar group alike.
    `--rule-strong`, the frame's own colour, on both faces. The old
    between-buttons `--rule` was tried first, for *subtle*, and measured in a
@@ -192,7 +192,7 @@
 .dock.dock-fit-3 .dock-feedback .dock-btn-label { display: none; }
 
 /* Rung 2 — the modes go to glyphs, and what is left with a word is Commands,
-   Comments, Tweets and Metadata. **Not "the other three":** the app cluster's
+   Comments and Metadata (and Tweets until it became a mode, 2026-09-29). **Not "the other three":** the app cluster's
    two words went at rung 1 and do not come back, and the experimental switch
    has never carried one. `Commands` joined this list on 2026-09-08 without any
    rule changing — it is a plain `.dock-btn`, so rungs 1 and 2 never named it
@@ -203,7 +203,7 @@
    2026-09-06** and is still the old `max-width: 1100px` rule's job.
 
    **Two selectors because the bar has two shapes.** On the reading view the
-   modes are one `.dock-modes` segment; on the metadata and tweets pages they
+   modes are one `.dock-modes` segment; on the metadata page they
    are thirteen loose `DockLink`s with no segment around them (Dock.tsx). A rung
    that only knew the segment did nothing on those pages, so the ladder skipped
    past it to the next rung and took every label. GPT Sol found it in the

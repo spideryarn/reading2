@@ -38,7 +38,7 @@
  *
  *  - a `?mode=ideas` link is pasted, bookmarked or shared;
  *  - Back or Forward walks through mode entries — `?mode=` is `history: "push"`;
- *  - the metadata or tweets page links in through `withMode`;
+ *  - the metadata page (or, until 2026-09-29, the tweets page) links in through `withMode`;
  *  - a history entry predates the feature entirely.
  *
  * So the press is made into data rather than inferred from the state that

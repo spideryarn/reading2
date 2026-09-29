@@ -211,7 +211,7 @@ export function VisitorBand({ gap, signedIn }: { gap: VisitorGap; signedIn: bool
 }
 
 /**
- * The same sentence, for the place that is not a mode band: the tweets page.
+ * The same sentence, for the place that is not a mode band: the tweets page (until 2026-09-29, when it became a mode).
  *
  * It served two until 2026-09-04, the other being the drawer where the owner's
  * comments would be. A shared link carries those comments now, so there is no

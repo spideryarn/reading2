@@ -11,7 +11,7 @@
  * Until 2026-09-03 every component that asked fetched its own copy. That was
  * fine while the only consumer was one settings row, and wrong the moment a
  * feature actually went behind the switch, because `App.tsx` is the router and
- * the reading view, metadata and tweets each mount **their own `Dock`**. GPT
+ * the reading view and metadata (and tweets, until 2026-09-29) each mount **their own `Dock`**. GPT
  * Sol's review of the plan has the reproduction: turn the switch on in the bar,
  * press Metadata before the `PATCH` lands, and the new Dock's `GET` overtakes
  * it and reads *off* — against a database that says on, until a reload. The
@@ -144,7 +144,7 @@ export interface ExperimentalSetting {
    *
    * The bar's own switch is drawn for signed-in readers only, and `Dock`'s
    * `signedIn` prop cannot answer the question — it is documented as
-   * visitor-copy input and Metadata.tsx and Tweets.tsx do not pass it, so a
+   * visitor-copy input and Metadata.tsx and Tweets.tsx (then a page) do not pass it, so a
    * control keyed on it would vanish when an owner pressed Metadata. (GPT Sol,
    * 2026-09-03.) The store knows the user id, so there is one answer everywhere.
    */

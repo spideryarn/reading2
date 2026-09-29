@@ -15,12 +15,14 @@
  *
  * ## The third segment
  *
- * An article now has three views, and which one is a third path segment:
- * `/read/<slug>` is the reading view, `/read/<slug>/metadata` is everything we
- * know about it (docs/plans/260825e-metadata-page.md), `/read/<slug>/tweets` is the
- * article as a numbered thread (docs/plans/260825g-tweet-thread-page.md). They are the
- * same article seen differently, so they are the same route with a `view`
- * rather than three routes.
+ * An article has two views, and which one is a third path segment:
+ * `/read/<slug>` is the reading view and `/read/<slug>/metadata` is everything we
+ * know about it (docs/plans/260825e-metadata-page.md). (`/read/<slug>/tweets`
+ * was a third, the article as a numbered thread, until 2026-09-29, when it
+ * became the mode `?mode=tweets` and the old address began to redirect there —
+ * docs/plans/260929f-tweets-become-a-mode-with-a-wide-band-and-block-links.md.)
+ * They are the same article seen differently, so they are the same route with
+ * a `view` rather than two routes.
  *
  * ## /add/<a whole URL>
  *
@@ -64,7 +66,7 @@ import { useEffect, useMemo, useSyncExternalStore } from "react";
 
 import { isSlug, PUBLIC_LIBRARY_SLUG } from "../ingest.js";
 
-/** Which of an article's three pages. `article` is the reading view itself. */
+/** Which of an article's pages (two since 2026-09-29). `article` is the reading view itself. */
 /* **Moved to src/read-address.ts on 2026-08-30** and re-exported, so nothing
    that used this name knows. The serverless function that composes a shared
    article's head has to know which view an address settles on, and it may not
@@ -185,7 +187,7 @@ export type Route =
    * The administrator's pages — `/admin` and `/admin/users`. See AdminPage.tsx
    * and docs/project/admin.md.
    *
-   * Two pages as one route with a `page`, exactly as an article's three views
+   * Two pages as one route with a `page`, exactly as an article's views
    * are one route with a `view`: they share a heading, a back-link and the
    * question of who is allowed to see them, and three routes would mean three
    * places to answer it.
