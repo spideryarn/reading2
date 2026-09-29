@@ -13,6 +13,11 @@
  * (Diagram, into the shape run), is
  * docs/plans/260929c-mode-bar-order-and-groups-experimental-switch-gutter-icons-diagram-behind-the-switch-reading-time-line-explained.md § 1.
  *
+ * Then, later the same day (SPIDERYARN-READING2-57): *"Move Glossary, Ideas,
+ * Timeline modes left into the bottom-bar separator-section with Trajectory.
+ * And move Search into section with Chat."* Six runs became five —
+ * docs/plans/260929f-mode-bar-regroup-glossary-ideas-timeline-with-trajectory-search-with-chat.md.
+ *
  * Read through `visibleModes`, which is what the bar draws; with the switch on
  * every mode is present, and with it off the lines must still fall only where
  * two surviving runs meet.
@@ -24,10 +29,9 @@ import { groupStarts, visibleModes } from "../src/web/Dock.js";
 const RUNS = [
   ["plain"],
   ["structure", "summary", "diagram"],
-  ["trajectory", "quotes", "faq", "search"],
-  ["glossary", "ideas", "timeline"],
+  ["trajectory", "quotes", "faq", "glossary", "ideas", "timeline"],
   ["referee", "citations", "debate"],
-  ["chat", "remember"],
+  ["search", "chat", "remember"],
 ] as const;
 
 describe("the mode bar's order", () => {
@@ -53,7 +57,7 @@ describe("the mode bar's order", () => {
   });
 
   it("with the switch off, draws lines only where two surviving runs meet", () => {
-    /* Structure, Summary | Trajectory, Quotes, Search | Glossary, Ideas | Chat:
+    /* Structure, Summary | Trajectory, Quotes, Glossary, Ideas | Search, Chat:
        the critical run is hidden whole, so no line is left for it. */
     const drawn = visibleModes(false, undefined);
     expect(drawn.map((m) => m.mode)).toEqual([
@@ -62,21 +66,19 @@ describe("the mode bar's order", () => {
       "summary",
       "trajectory",
       "quotes",
-      "search",
       "glossary",
       "ideas",
+      "search",
       "chat",
     ]);
-    expect([...groupStarts(drawn)].sort()).toEqual(
-      ["structure", "trajectory", "glossary", "chat"].sort(),
-    );
+    expect([...groupStarts(drawn)].sort()).toEqual(["structure", "trajectory", "search"].sort());
   });
 
   it("gives a retained experimental mode its own line when it is alone in its run", () => {
     /* A reader with the switch off, sitting in Debate by URL: the bar draws
-       Debate, and it is a run of one between Ideas and Chat. */
+       Debate, and it is a run of one between Ideas and Search. */
     const drawn = visibleModes(false, "debate");
     expect([...groupStarts(drawn)]).toContain("debate");
-    expect([...groupStarts(drawn)]).toContain("chat");
+    expect([...groupStarts(drawn)]).toContain("search");
   });
 });
