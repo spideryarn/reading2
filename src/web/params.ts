@@ -36,7 +36,9 @@ import { DIAGRAMS, type DiagramKind } from "./diagram.js";
 import type { ScatterAxis, ScatterHue } from "./scatter.js";
 import { DEFAULT_BY } from "./library-columns.js";
 import { sameList } from "./lib/table-sort.js";
-import { FAQ_ORDERS, type FaqOrder } from "./faq-order.js";
+/* Type-only: a value import would put faq-order.ts on the reader's startup
+   path (tests/eager-client-graph.test.ts). faq-order.ts § FaqOrder. */
+import type { FaqOrder } from "./faq-order.js";
 import type { ShelfFilter, ShelfView } from "./ShelfControls.js";
 
 /* Which article is NOT in here. It is the path — `/read/<slug>` — and has been
@@ -630,6 +632,11 @@ export const citeBarParam = createParser<number>({
  * src/web/faq-order.ts; docs/plans/260929g-faq-difficulty-centrality-and-a-threshold.md.
  * `push` and an unknown value falls back to the default, as `?citeby=`.
  */
+export const FAQ_ORDERS = ["prioritised", "document"] as const satisfies readonly FaqOrder[];
+/* And the other way: every `FaqOrder` is in the list, or this line stops compiling. */
+const _everyFaqOrderListed: Exclude<FaqOrder, (typeof FAQ_ORDERS)[number]> extends never ? true : never = true;
+void _everyFaqOrderListed;
+
 export const faqOrderParam = createParser<FaqOrder>({
   parse: (v) => (FAQ_ORDERS.includes(v as FaqOrder) ? (v as FaqOrder) : null),
   serialize: (v) => v,
