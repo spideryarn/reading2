@@ -20,9 +20,10 @@
  * spent on this passage**, as a hairline down the column's text-side edge. Greg
  * asked for it by name — *"something in the vertical gutter in the text as well
  * … I don't want it to be too obtrusive"* (2026-09-12) — and it is a trace of
- * the reader's own reading, not something a model wrote. It is a pseudo-element
- * driven by a style sheet rather than anything in this component, so it takes
- * no slot and this file never re-renders for it: gutter.css § reading time,
+ * the reader's own reading, not something a model wrote. The component's last
+ * child is a real `.blk-read` span so it can own a title and hover strip; CSS
+ * positions it absolutely outside the grid, so it takes no control slot. Its
+ * line remains a pseudo-element driven by `--read`: gutter.css § reading time,
  * docs/project/reading-time.md.
  *
  * And one grammar, which is what keeps it quiet: **at rest the gutter shows
@@ -411,15 +412,16 @@ export function BlockGutter({
   /**
    * Where the keyboard goes when the column unfolds, and where it comes back to.
    *
-   * **The "…" is the last child, and everything it reveals is above it**, so
-   * activating it and doing nothing else would leave the focus at the end of the
-   * gutter: a forward Tab walks straight out of the column and the newly drawn
-   * controls are reachable only by tabbing *backwards*. GPT Sol's second finding
-   * on the built code, 2026-09-05. So opening moves the focus to the head of the
-   * column and closing brings it back to the button that did it — which is the
-   * ordinary disclosure contract, and the reason this is an effect rather than
-   * two lines in the handlers: the elements it wants are not drawn until React
-   * has re-rendered.
+   * **The "…" is the last control and grid item, and everything it reveals is
+   * above it** — only the absolutely positioned, non-interactive reading-time
+   * strip follows it in the DOM. Activating it and doing nothing else would
+   * leave the focus at the end of the gutter: a forward Tab walks straight out
+   * of the column and the newly drawn controls are reachable only by tabbing
+   * *backwards*. GPT Sol's second finding on the built code, 2026-09-05. So
+   * opening moves the focus to the head of the column and closing brings it
+   * back to the button that did it — the ordinary disclosure contract. This is
+   * an effect rather than two lines in the handlers because the elements it
+   * wants are not drawn until React has re-rendered.
    *
    * `null` means "this open or close was not the keyboard's doing" — a press
    * outside, or a mouse — and then nothing is moved, because taking the focus

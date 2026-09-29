@@ -3,13 +3,13 @@
    narrows. The rest of the dock is dock.css, six files earlier. */
 
 /* ------------------------------------------------------- the mode switch --
-   The three things the middle band can be — Hierarchy, Chat, Glossary — drawn
-   as one control rather than three buttons that happen to be adjacent. See
-   DockModes in Dock.tsx, and docs/plans/260826a-chat-mode.md for what a mode is.
+   The things the middle band can be, drawn as one control rather than a row of
+   buttons that happen to be adjacent. `MODES_UI` in Dock.tsx owns the current
+   list and order; docs/plans/260826a-chat-mode.md says what a mode is.
 
    The grouping is the entire visual job here. Exactly one of these is on at any
-   moment, and three separate-looking buttons where only one ever lights up
-   reads as three toggles you could turn on together. A hairline box around them
+   moment, and separate-looking buttons where only one ever lights up read as
+   toggles you could turn on together. A hairline box around them
    says "one of these", which is what the markup already promises a screen
    reader via `role="radiogroup"` — this is the sighted half of the same claim. */
 .dock-modes {
@@ -53,14 +53,16 @@
    says the same thing more quietly. The frame still says "one of these", and
    the selected button's fill still says which.
 
-   `dock-group-start` is on the first *drawn* button of each run bar the first
+   `dock-group-start` is on the first *drawn* button of each run except the first
    — `groupStarts` in Dock.tsx, computed from the visible list, so a run the
-   switch has hidden leaves no stray line. A border that replaces a border, so
-   the row is never wider than it was; nothing here for dock-fit.ts to
-   measure.
+   switch has hidden leaves no stray line. In the segmented control the rule
+   replaces an internal adjoining border; in the loose-link form it adds 1px.
+   Both are included in the normal post-render width measurement. Visible-mode
+   identity already participates in the fit signature, so no separate group
+   signature is needed.
 
-   The loose links on the metadata and tweets pages had no lines at all, and
-   get the same one at the same places, so both faces of the bar group alike.
+   The loose links on the metadata and tweets pages get the same rule at the
+   same places, so both faces of the bar group alike.
    `--rule-strong`, the frame's own colour, on both faces. The old
    between-buttons `--rule` was tried first, for *subtle*, and measured in a
    browser it is oklch 0.27 on a bar of 0.26 — invisible, even zoomed 2x
@@ -289,5 +291,3 @@
    about the rung that hides the mode labels, which is this one. Rung 1 hides no
    mode label, so there is nothing there for this rule to put back. */
 .dock.dock-fit-2 .dock-btn.on .dock-btn-label { display: inline; }
-
-

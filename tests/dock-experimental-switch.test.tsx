@@ -269,6 +269,9 @@ describe("what it says, and what a press does", () => {
     const set = vi.fn();
     reading({ experimental: experimental({ on: true, saving: true, set }) });
     expect(theSwitch().getAttribute("aria-disabled")).toBe("true");
+    /* `aria-disabled` says the known toggle is temporarily unavailable; it
+       does not replace the toggle's value. The drawn knob remains on too. */
+    expect(theSwitch().getAttribute("aria-pressed")).toBe("true");
     expect(described()).toContain("Saving");
     press();
     expect(set).not.toHaveBeenCalled();
@@ -551,21 +554,23 @@ describe("the drawn switch", () => {
       .join(" ");
   }
 
-  it("draws the value in every state that knows it", () => {
-    const cases: [string, Partial<Parameters<typeof experimental>[0]>, string][] = [
-      ["ready, off", { on: false }, "is-off"],
-      ["ready, on", { on: true }, "is-on"],
-      ["saving, on", { on: true, saving: true }, "is-on"],
+  it("draws the value, and reports it whenever the control remains a toggle", () => {
+    const cases: [string, Partial<Parameters<typeof experimental>[0]>, string, string | null][] = [
+      ["ready, off", { on: false }, "is-off", "false"],
+      ["ready, on", { on: true }, "is-on", "true"],
+      ["saving, off", { on: false, saving: true }, "is-off", "false"],
+      ["saving, on", { on: true, saving: true }, "is-on", "true"],
       /* The case the frame's rule gets wrong: a failed save whose restored
          value is on. The frame is unlit; the knob, like aria-pressed, says on. */
-      ["save-failed, restored on", { on: true, error: "network" }, "is-on"],
-      ["save-failed, restored off", { on: false, error: "network" }, "is-off"],
-      ["stale, on", { on: true, loaded: false, stale: true }, "is-on is-stale"],
-      ["stale, off", { on: false, loaded: false, stale: true }, "is-off is-stale"],
+      ["save-failed, restored on", { on: true, error: "network" }, "is-on", "true"],
+      ["save-failed, restored off", { on: false, error: "network" }, "is-off", "false"],
+      ["stale, on", { on: true, loaded: false, stale: true }, "is-on is-stale", null],
+      ["stale, off", { on: false, loaded: false, stale: true }, "is-off is-stale", null],
     ];
-    for (const [name, over, want] of cases) {
+    for (const [name, over, wantKnob, wantPressed] of cases) {
       reading({ experimental: experimental(over) });
-      expect(knob(), name).toBe(want);
+      expect(knob(), name).toBe(wantKnob);
+      expect(theSwitch().getAttribute("aria-pressed"), name).toBe(wantPressed);
     }
   });
 

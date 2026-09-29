@@ -922,7 +922,7 @@ td.text.kind-heading .blk-gutter[data-open] {
    `pointer-events`. `span.blk-read` adds an element to the selector, so
    `.blk-gutter > span.blk-read` (0,2,1) outranks each of them (0,2,0 at most
    among the ones that match any child). The gutter itself is
-   `pointer-events: none`; this turns it back on for the strip alone.
+   `pointer-events: none`; this turns it back on for the closed strip alone.
 
    `--read` is set per row by the one style element `ReadingTimeStyle` renders
    (reading-time.ts § gutterCss) — never by `TableView`, which would re-render
@@ -941,6 +941,13 @@ td.text.kind-heading .blk-gutter[data-open] {
   pointer-events: auto;
   cursor: help;
 }
+/* Opening the "…" releases the gutter's height over the rows below. The old
+   line followed that height too, but making this new hover target follow it
+   would add a strip of "inside the open gutter" hit area down the adjacent gap:
+   a press there would neither reach the row underneath nor close the panel.
+   Keep the line, but make its explanation inert until the panel closes. This
+   more-specific rule also makes the `data-open > *` interaction explicit. */
+.blk-gutter[data-open] > span.blk-read { pointer-events: none; }
 .blk-gutter > span.blk-read::after {
   content: "";
   position: absolute;

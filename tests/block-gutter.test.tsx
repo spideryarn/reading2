@@ -712,10 +712,12 @@ describe('the "…"', () => {
   });
 
   it("puts the keyboard at the head of the column when it opens", () => {
-    /* **The "…" is the last child and everything it reveals is above it**, so
-       without this a keyboard reader activates it and then tabs straight out of
-       the gutter — the controls that just appeared are reachable only backwards.
-       GPT Sol's second finding on the built code, 2026-09-05.
+    /* **The "…" is the last control and grid item, and everything it reveals is
+       above it** — only the absolutely positioned, non-interactive reading-time
+       strip follows it in the DOM. Without this a keyboard reader activates it
+       and then tabs straight out of the gutter — the controls that just appeared
+       are reachable only backwards. GPT Sol's second finding on the built code,
+       2026-09-05.
 
        `detail: 0` is what says "keyboard": Enter and Space give 0, a real click
        gives 1. A pointer press leaves the focus where the reader put it. */

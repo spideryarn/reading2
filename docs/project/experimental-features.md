@@ -123,8 +123,10 @@ without touching the cached one — another device may have moved it since. (GPT
 and the state therefore rides in an `sr-only` description rather than in the button's name — the
 same rule, and the same mistake, as
 [`DictationStrip.tsx`](../../src/web/DictationStrip.tsx) § *The button is an action, not a toggle*.
-`aria-pressed` is drawn only where a press toggles: in *load failed* and *offline copy* the press
-asks again, which is an action.
+`aria-pressed` is drawn only where the button is a toggle with a known value: where a press
+toggles, and while *saving*, where the value just asked for is held and `aria-disabled` says it
+cannot take another press yet (since 2026-09-29, when the button gained a drawn switch showing that
+same value — GPT Sol). In *load failed* and *offline copy* the press asks again, which is an action.
 
 **`experimental.signedIn`, never `Dock`'s `signedIn` prop.** That one is optional visitor-copy input
 that `Metadata.tsx` and `Tweets.tsx` do not pass, so a switch keyed on it would vanish the moment an

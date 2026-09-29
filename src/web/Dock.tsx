@@ -106,15 +106,12 @@
  * should be Hierarchy, Summary, Glossary, Search, Chat, Questions, Thread
  * (renamed to 'Tweets'), Metadata."*
  *
- * It is not arbitrary, and the shape is worth naming so the next button knows
- * where to go: **the five modes come first, then the things that leave the
- * band.** Inside the modes it runs from the article's own words outwards —
- * Hierarchy and Summary are the article restated, Glossary and Search are ways
- * into it, Chat is a conversation about it. Then Questions (yours), Tweets
- * (the article rewritten for somewhere else) and Metadata (the machinery).
- * A new mode goes in MODES_UI, **and the compiler now asks for it** — a `Mode`
- * with no row there is a typecheck error, not a button nobody notices is
- * missing (`ModesMissingFromDock`). Anything else goes after them.
+ * That was the seed of the bar rather than a permanent enumeration. The mode
+ * list has since grown and been regrouped; `MODES_UI` below is the current
+ * source of truth, and a literal-order test makes order changes deliberate. A
+ * new mode goes there, and the compiler asks for it — a `Mode` with no row is a
+ * typecheck error, not a button nobody notices is missing
+ * (`ModesMissingFromDock`). Anything that is not a mode goes after them.
  *
  * **Since 2026-09-29 the modes are also in runs, with a line between runs** —
  * Greg reordered them and asked for *"subtle vertical separator lines between
@@ -511,23 +508,15 @@ interface Props {
 /**
  * Everything the middle band can be, in the order they sit in the bar.
  *
- * A table rather than hand-written buttons, because a radiogroup's keyboard
- * behaviour has to walk them: "the next mode" is only meaningful if there is a
- * list to be next in. Adding another is a row here — which is exactly what
- * Search and then Summary cost (docs/project/summaries.md).
+ * A table rather than hand-written buttons, because order and grouping are
+ * properties of the set rather than of an individual button. Adding another is
+ * a row here — which is exactly what Search and then Summary cost
+ * (docs/project/summaries.md).
  *
- * The order is deliberate and is not alphabetical: **Plain first, because it is
- * the default** and the one you come back to — Hierarchy held that place until
- * 2026-08-31 and now sits second, still first among the modes that show you
- * something. Left-to-right in the bar is also the order the arrow keys travel,
- * so the resting state being leftmost means every other mode is reached by
- * going right from the resting state.
- *
- * The other four were reordered by hand on 2026-08-26 — Summary, Glossary,
- * Search, Chat — and the reasoning is in the file header under "The order".
- * Short version: it runs from the article restated, through the ways into it,
- * to the conversation about it, and Chat is last because it is the one furthest
- * from the article's own words.
+ * The order is deliberate and is not alphabetical: **Plain first, because it
+ * is the default** and the one you come back to — Hierarchy held that place
+ * until 2026-08-31. The `group` values are the semantic grouping as well as the
+ * source of the separators. The literal-order test pins both order and group.
  *
  * **A new mode is a row here, and the compiler asks for it** — see
  * `ModesMissingFromDock` below. Until 2026-09-02 nothing did: this was annotated
@@ -1799,7 +1788,7 @@ export function Dock({
             honest, and it is the trigger the previous note in this file named —
             not the arrival of a third mode, but the third mode being *visible*.
             See DockModes below. Off the reading view there is no band to switch,
-            so the same five degrade to links back to it. */}
+            so the same visible mode list degrades to links back to it. */}
         {mode !== undefined && onMode ? (
           <DockModes
             modes={visible}
@@ -3280,6 +3269,11 @@ function DockExperimentalSwitch({
      things key on it: the marker, the on-state, and `aria-invalid`. */
   const broken = variant === "load-failed" || variant === "save-failed";
   const state = SWITCH_STATE[variant](setting.on);
+  /* Saving cannot accept another press, but it is still a toggle whose current
+     value is known. `aria-disabled` reports the temporary unavailability;
+     removing `aria-pressed` would instead change its role to a command button
+     while the drawn knob continues to report the value. */
+  const pressed = press === "toggle" || variant === "saving" ? setting.on : undefined;
   /* The state sentence is *described by* rather than named — see `aria-label`
      below for the APG rule that forces the split, and `PRESS` for why. */
   const stateId = useId();
@@ -3310,15 +3304,15 @@ function DockExperimentalSwitch({
            state we do not have. `soon` is the dim that goes with
            `aria-disabled`. */
         className={`dock-btn dock-experimental${setting.on && !broken ? " on" : ""}${press === "nothing" ? " soon" : ""}`}
-        /* **Only where a press actually toggles.** Two reasons, and they land on
-           the same three variants. It is a *toggle button* only where pressing
-           it moves the setting — in `load-failed` and `stale` the press asks the
-           server again, which is an action. And where there is no answer at all
-           (`waiting`) or the read failed, `aria-pressed={false}` would be the
-           button telling a screen reader the setting is off, which is the
-           silent-default mistake in its most direct form.
-           docs/reusable/silent-success.md; `PRESS` above. */
-        aria-pressed={press === "toggle" ? setting.on : undefined}
+        /* **Where this is a toggle whose value is known.** Ready and
+           save-failed accept a toggle press. Saving remains the same toggle and
+           retains its known value while `aria-disabled` separately says that it
+           cannot accept another press yet. In `load-failed` and `stale`, the
+           press asks the server again, which is an action rather than a toggle;
+           and where there is no answer at all, `aria-pressed={false}` would tell
+           a screen reader the setting is off. docs/reusable/silent-success.md;
+           `PRESS` above. */
+        aria-pressed={pressed}
         /* **A supplement, and known to be one.** `aria-invalid` is not among the
            states ARIA lists as supported on `role="button"` — it belongs to the
            input-ish roles — so how much of it survives to a screen reader is not
