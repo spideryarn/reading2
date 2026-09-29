@@ -81,13 +81,14 @@
  * closest thing in this app to that problem is docs/project/timeline.md's rule
  * about an undated row.
  *
- * ## Owner-only, on purpose, and only until Stage 4
+ * ## The visitor's half, since 2026-09-29
  *
- * `DebateAccess` has one arm. The visitor's half waits for the contract its rows
+ * `DebateAccess` has two arms. The visitor's waited for the contract its rows
  * must not bypass — `publicCitationUrl` re-judging every URL at the boundary,
- * where a refusal drops the whole row — which is Stage 4. A GPT Sol review
- * (F23) refused building the two together, because a "green" visitor panel would
- * then have been written against a sanitisation boundary that did not exist.
+ * where a refusal drops the whole row — which a GPT Sol review (F23) refused to
+ * have built after the panel. Stage 4 built it (src/public/dto.ts §
+ * `publicDebate`, plan 260929c), and a visitor's panel draws the stored rows
+ * with no job, no verb and no read: nothing on it can start a search.
  */
 import { useCallback, useMemo } from "react";
 import {
@@ -108,17 +109,18 @@ import {
   DEBATE_EXTRACTS_ONLY,
   DEBATE_NO_RANKING,
   DEBATE_RESPONSES_NONE,
+  DEBATE_CLAIMS_NONE_SHARED,
+  DEBATE_RESPONSES_NONE_SHARED,
   debateClaimsUnverified,
   debateResponsesUnverified,
+  debateWithheldOnSharedLink,
 } from "../messages.js";
 import {
   type BlockId,
-  type ClaimDebateRow,
+  type Debate,
   type DebateCounts,
   type DebateLean,
-  type DirectDebateRow,
   type IdentificationLevel,
-  type IdentificationSignal,
   distinctSources,
   identificationLevel,
   identifiesOf,
@@ -140,9 +142,25 @@ import { Tooltip } from "./Tooltip.js";
 import { useHoverCard } from "./useHoverCard.js";
 import { useRenderCount } from "./perf.js";
 import type { UseDebate } from "./useDebate.js";
+import type {
+  PublicClaimDebateRow,
+  PublicDebate,
+  PublicDirectDebateRow,
+  PublicIdentificationSignal,
+} from "../public-types.js";
+
+/**
+ * **A row as this panel draws it** — the owner's stored row and a visitor's
+ * public one alike. The public types are the narrower shape (a `linked`
+ * signal's address may be gone, `lean` is always in the current vocabulary),
+ * and every owner's `DirectDebateRow` and `ClaimDebateRow` is one of these, so
+ * the owner's path is unchanged. Since 2026-09-29, plan 260929c stage 4.
+ */
+type DirectRow = PublicDirectDebateRow;
+type ClaimRow = PublicClaimDebateRow;
 
 /** Either search's row, so one component can draw both. */
-type DebateRow = DirectDebateRow | ClaimDebateRow;
+type DebateRow = DirectRow | ClaimRow;
 
 /**
  * **Which of the two searches a sentence is about**, in the reader's terms
@@ -179,10 +197,10 @@ const RESPONSE: ThresholdNoun = { one: "response", many: "responses" };
  * **A module constant rather than a fresh `[]`**, because the memo that applies
  * the bar keys on it by identity. `NO_QUOTES` in App.tsx is the same call.
  */
-const NO_DIRECT: readonly DirectDebateRow[] = [];
+const NO_DIRECT: readonly DirectRow[] = [];
 
 /** The rows that answer a claim the article makes. */
-function claimOf(row: DebateRow): ClaimDebateRow | null {
+function claimOf(row: DebateRow): ClaimRow | null {
   return "claimQuote" in row ? row : null;
 }
 
@@ -190,7 +208,7 @@ function claimOf(row: DebateRow): ClaimDebateRow | null {
  * The rows that name this article in their own extract — the ones that carry
  * `identifies`, and therefore the ones with a level to put on a chip.
  */
-function directOf(row: DebateRow): DirectDebateRow | null {
+function directOf(row: DebateRow): DirectRow | null {
   return "articleReferenceQuote" in row ? row : null;
 }
 
@@ -425,6 +443,49 @@ function footLines(debate: {
 }
 
 /**
+ * Which of the two a debate on this panel is. The public one is the only one
+ * with a boundary count on its groups; the owner's has the stored `counts`.
+ */
+function isShared(debate: Debate | PublicDebate): debate is PublicDebate {
+  return "sourceNotPublishable" in debate.direct;
+}
+
+/**
+ * **A visitor's lead sentence** — `leadNote`'s shape, without the count.
+ *
+ * The owner's sentence tells *nothing came back* from *nothing could be
+ * checked* off `returnedSources`, which does not cross; so a visitor's empty
+ * search gets the sentence true of both. **And a group emptied by the public
+ * boundary gets no lead at all**: the search *did* keep something there, and
+ * saying it kept nothing would be false — the foot line says what was withheld.
+ */
+export function sharedLeadNote(debate: PublicDebate): string | null {
+  const noDirect = debate.direct.rows.length === 0 && debate.direct.sourceNotPublishable === 0;
+  const noClaims = debate.claims.rows.length === 0 && debate.claims.sourceNotPublishable === 0;
+  const parts: string[] = [];
+  if (noDirect) parts.push(DEBATE_RESPONSES_NONE_SHARED);
+  if (noClaims) parts.push(DEBATE_CLAIMS_NONE_SHARED);
+  else if (noDirect && debate.claims.rows.length > 0) parts.push(DEBATE_CLAIMS_FOLLOW);
+  return parts.length > 0 ? parts.join(" ") : null;
+}
+
+/**
+ * **A visitor's foot line: what the shared link left out, per search** — the
+ * boundary's own count (src/public/dto.ts § `publicDebate`), never the
+ * artefact's. 260905f § What is counted: a shorter list must say so.
+ */
+export function withheldLines(debate: PublicDebate): string[] {
+  const lines: string[] = [];
+  if (debate.direct.sourceNotPublishable > 0) {
+    lines.push(debateWithheldOnSharedLink(SEARCH_NAME.direct, debate.direct.sourceNotPublishable));
+  }
+  if (debate.claims.sourceNotPublishable > 0) {
+    lines.push(debateWithheldOnSharedLink(SEARCH_NAME.claims, debate.claims.sourceNotPublishable));
+  }
+  return lines;
+}
+
+/**
  * **When the search ran, as a date.**
  *
  * Exported so a test can assert the panel's own spelling rather than pinning
@@ -587,14 +648,20 @@ const STOP_LABEL: Record<IdentificationLevel, string> = {
  *
  * A string list rather than markup so a test can read what a reader reads.
  */
-export function identificationEvidence(row: DirectDebateRow): string[] {
+export function identificationEvidence(row: DirectRow): string[] {
   return identifiesOf(row).map(describeSignal);
 }
 
-function describeSignal(signal: IdentificationSignal): string {
+function describeSignal(signal: PublicIdentificationSignal): string {
   switch (signal.kind) {
     case "linked":
-      return `Links this article's address — ${signal.url}`;
+      /* No address on a visitor's signal the public boundary refused — the
+         article's own address, with a credential, a private host or a query
+         in it (src/public/dto.ts § `publicDebate`). The fact stays; the
+         address, which `publicMeta` also leaves off the masthead, does not. */
+      return signal.url === undefined
+        ? "Links this article's address"
+        : `Links this article's address — ${signal.url}`;
     case "quoted":
       /* Two ratios rather than one, because they answer different questions and
          the second is the one that catches a mirror: how much of the article
@@ -644,14 +711,18 @@ export type DebateOwner = UseDebate;
 /**
  * **Who is reading, and what they get — one prop, so the two cannot disagree.**
  *
- * One arm today. It is a union rather than a bare `owner` prop because the
- * second arm is already designed and deliberately deferred: Stage 4 adds
- * `{ kind: "visitor"; debate: PublicDebate; owner?: never }`, and `owner?: never`
- * is load-bearing there rather than tidy — without it the union catches only a
- * fresh object literal at the call site. GlossaryPanel.tsx § GlossaryAccess is
- * the full argument.
+ * Two arms since 2026-09-29, when Stage 4 built the public contract the
+ * visitor's arm waited for (plan 260929c). `owner?: never` is load-bearing
+ * rather than tidy — without it the union catches only a fresh object literal
+ * at the call site. GlossaryPanel.tsx § GlossaryAccess is the full argument.
  */
-export type DebateAccess = { kind: "owner"; owner: DebateOwner };
+export type DebateAccess =
+  | { kind: "owner"; owner: DebateOwner }
+  /* **The visitor's arm, since 2026-09-29** (plan 260929c stage 4): the stored
+     debate off the public payload and nothing else — no read status (it came
+     with the page), no job, no verb, so nothing on a visitor's panel can start
+     a search. */
+  | { kind: "visitor"; debate: PublicDebate; owner?: never };
 
 interface Props {
   access: DebateAccess;
@@ -680,8 +751,11 @@ interface Props {
 
 export function DebatePanel({ access, onJump, level: chosenLevel, onLevel }: Props) {
   useRenderCount("DebatePanel");
-  const owner = access.owner;
-  const debate = owner.debate;
+  /* `null` for a visitor, and every owner-only thing below is behind it. */
+  const owner = access.kind === "owner" ? access.owner : null;
+  const debate = access.kind === "owner" ? access.owner.debate : access.debate;
+  /* A visitor's debate arrived with the page, so it is ready by construction. */
+  const ready = debate !== null && (owner === null || owner.status === "ready");
   const level = chosenLevel ?? DEBATE_LEVEL_DEFAULT;
   /**
    * **The bar, applied once**, and every number on this panel is read out of
@@ -695,10 +769,10 @@ export function DebatePanel({ access, onJump, level: chosenLevel, onLevel }: Pro
    * author has ever heard of it — so they are not hidden by the bar, not in its
    * `N of M`, and not in what it says it is holding back.
    */
-  const directRows = debate?.direct.rows ?? NO_DIRECT;
+  const directRows: readonly DirectRow[] = debate?.direct.rows ?? NO_DIRECT;
   const barred = useMemo(() => visibleDirect(directRows, level), [directRows, level]);
   const rows = useMemo(
-    () => [...barred.visible, ...(debate?.claims.rows ?? [])],
+    (): DebateRow[] => [...barred.visible, ...(debate?.claims.rows ?? [])],
     [barred, debate],
   );
   /**
@@ -733,17 +807,21 @@ export function DebatePanel({ access, onJump, level: chosenLevel, onLevel }: Pro
      is handed the artefact untouched, because its subject is what the search
      came back with — a group emptied by the reader's own threshold is not a
      search that found nothing, and `hiddenNote` already says which it is. */
-  const lead = useMemo(() => (debate ? leadNote(debate) : null), [debate]);
-  const foot = useMemo(
-    () =>
-      debate
-        ? footLines({
-            direct: { rows: barred.visible, counts: debate.direct.counts },
-            claims: debate.claims,
-          })
-        : [],
-    [debate, barred],
-  );
+  const lead = useMemo(() => {
+    if (debate === null) return null;
+    return isShared(debate) ? sharedLeadNote(debate) : leadNote(debate);
+  }, [debate]);
+  const foot = useMemo(() => {
+    if (debate === null) return [];
+    /* A visitor's foot is what the public boundary withheld, and only that:
+       the stored counts behind the owner's four sentences do not cross
+       (src/public-types.ts § `PublicDebateGroup`). */
+    if (isShared(debate)) return withheldLines(debate);
+    return footLines({
+      direct: { rows: barred.visible, counts: debate.direct.counts },
+      claims: debate.claims,
+    });
+  }, [debate, barred]);
 
   /**
    * The ⓘ card's contents, looked up from whatever the pointer is on.
@@ -791,7 +869,8 @@ export function DebatePanel({ access, onJump, level: chosenLevel, onLevel }: Pro
    *   request the automatic run makes, or the two carry different `work_key`s
    *   and the reader pays for two web searches. useDebate.ts § `ensure`.
    */
-  const run = (label: string, again = false) => (
+  const run = (label: string, again = false) =>
+    owner === null ? null : (
     <JobProgress
       job={owner.job}
       starting={owner.starting}
@@ -841,6 +920,7 @@ export function DebatePanel({ access, onJump, level: chosenLevel, onLevel }: Pro
           (plan 260929c), so its job shows here. */
       foot={
         debate &&
+        owner !== null &&
         owner.status === "ready" &&
         !owner.stale &&
         (owner.job || owner.starting || owner.failed) ? (
@@ -849,13 +929,13 @@ export function DebatePanel({ access, onJump, level: chosenLevel, onLevel }: Pro
       }
     >
 
-      {owner.error && <p className="gloss-error">{owner.error}</p>}
+      {owner?.error && <p className="gloss-error">{owner.error}</p>}
 
-      {owner.status === "loading" && (
+      {owner?.status === "loading" && (
         <p className="gloss-quiet">Looking for what the web says…</p>
       )}
 
-      {owner.status === "none" && (
+      {owner?.status === "none" && (
         <div className="gloss-empty">
           <p>Nobody has asked the web about this one yet.</p>
           {/* The price, before the button rather than after it. Two model
@@ -871,7 +951,7 @@ export function DebatePanel({ access, onJump, level: chosenLevel, onLevel }: Pro
         </div>
       )}
 
-      {debate && owner.status === "ready" && (
+      {debate && ready && (
         <>
           {/* Stale wins when both are true, for the reason every sibling panel
               gives: it is the one that can make a row false rather than merely
@@ -882,7 +962,7 @@ export function DebatePanel({ access, onJump, level: chosenLevel, onLevel }: Pro
               on an unchanged article is not stale — it is dated, which is a
               thing a reader can weigh for themselves. src/types.ts §
               `Debate.searchedAt`. */}
-          {owner.stale ? (
+          {owner?.stale ? (
             <div className="gloss-stale">
               <p>
                 <TriangleAlert size={13} />
@@ -1025,7 +1105,7 @@ export function DebatePanel({ access, onJump, level: chosenLevel, onLevel }: Pro
  *    that needed a whole function; `?name=quoted` is a stop or it is nothing.
  *
  * **Direct rows only, and the type is the guard.** `rows` is
- * `DirectDebateRow[]` — claim rows carry no level, are never hidden by this, and
+ * `DirectRow[]` — claim rows carry no level, are never hidden by this, and
  * are in neither number it prints.
  */
 function NameBar({
@@ -1045,7 +1125,7 @@ function NameBar({
    * two passes agreeing only because they were handed the same array — true
    * today, and a prop away from not being.
    */
-  barred: ThresholdResult<DirectDebateRow>;
+  barred: ThresholdResult<DirectRow>;
   level: IdentificationLevel;
   moved: boolean;
   onLevel(level: IdentificationLevel | null): void;

@@ -105,7 +105,7 @@ const jumps: BlockId[] = [];
 async function draw(o: UseFaq) {
   jumps.length = 0;
   await act(async () =>
-    root.render(createElement(FaqPanel, { owner: o, onJump: (id: BlockId) => void jumps.push(id) })),
+    root.render(createElement(FaqPanel, { access: { kind: "owner", owner: o }, onJump: (id: BlockId) => void jumps.push(id) })),
   );
 }
 

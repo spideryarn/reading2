@@ -49,6 +49,7 @@ import { useEffect, useRef, useState } from "react";
 import { ChevronLeft, ChevronRight, Info, RotateCw, Route, TriangleAlert } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import type { UseTrajectory } from "./useTrajectory.js";
+import type { PublicTrajectory } from "../public-types.js";
 import type { DoorView, TrajectoryView } from "./modes/trajectory/TrajectoryMode.js";
 import { FOLLOW_ATTR, useFollow } from "./follow.js";
 import { entryProse } from "./GlossaryPanel.js";
@@ -303,17 +304,45 @@ function RouteHead({ view, total, about }: { view: TrajectoryView; total: number
   );
 }
 
+/**
+ * **Who is looking, and what they hold.** The owner's arm is the whole
+ * `useTrajectory` read — the job, the freshness, the verbs that spend. The
+ * visitor's arm is the stored route off the public payload and nothing else:
+ * no read state (it arrived with the page), no job, no verb. A union rather
+ * than a `readOnly` flag beside `owner`, so a visitor's panel has nothing to
+ * press that could plan a route — the shape `TimelinePanel`'s access has, and
+ * new-mode.md asks for. Since 2026-09-29, SPIDERYARN-READING2-56.
+ */
+export type TrajectoryAccess =
+  | { kind: "owner"; owner: UseTrajectory }
+  | { kind: "visitor"; route: PublicTrajectory };
+
+/**
+ * **The promise, for somebody the route was not planned for.** It says nothing
+ * about a profile — not *"shaped by your profile"*, which would be false, and
+ * not whether the owner had one, which `profileHash` staying off the wire
+ * exists to keep from a stranger (src/public-types.ts § `PublicTrajectory`).
+ */
+export const VISITOR_TRAJECTORY_PROMISE =
+  "The passages are the article's own words, chosen by Quotes. The order and the cues are the model's reading, planned for whoever added this article.";
+
 interface Props {
-  owner: UseTrajectory;
+  access: TrajectoryAccess;
   view: TrajectoryView;
   /** Stepped aside and not drawn — `TrajectoryBand`'s `away`. */
   away: boolean;
 }
 
-export function TrajectoryPanel({ owner, view, away }: Props) {
+export function TrajectoryPanel({ access, view, away }: Props) {
   useRenderCount("TrajectoryPanel");
-  const route = owner.trajectory;
-  const ready = route !== null && owner.status === "ready";
+  /* `null` for a visitor, and every owner-only thing below is behind it. */
+  const owner = access.kind === "owner" ? access.owner : null;
+  const route = access.kind === "owner" ? access.owner.trajectory : access.route;
+  /* A visitor's route arrived with the page, so it is ready by construction. */
+  const ready = route !== null && (owner === null || owner.status === "ready");
+  const promise = owner
+    ? trajectoryPromise(owner.trajectory?.profileHash != null)
+    : VISITOR_TRAJECTORY_PROMISE;
   const total = view.rows.length;
   const deepest = view.depths.at(-1)?.depth ?? null;
   const atMost = ready && view.depth !== null && view.depth === deepest && view.depth === 3;
@@ -341,7 +370,8 @@ export function TrajectoryPanel({ owner, view, away }: Props) {
    *   empty state's must be `ensure`, the automatic run's own request, or it
    *   buys a second model call — useIdeas.ts § `ensure`.
    */
-  const run = (label: string, again = false) => (
+  const run = (label: string, again = false) =>
+    owner === null ? null : (
     <JobProgress
       job={owner.job}
       starting={owner.starting}
@@ -369,7 +399,7 @@ export function TrajectoryPanel({ owner, view, away }: Props) {
             view={view}
             total={total}
             about={[
-              trajectoryPromise(route.profileHash !== null),
+              promise,
               ...(atMost ? [coverageNote(total, route.offered)].filter((n): n is string => n !== null) : []),
             ]}
           />
@@ -387,6 +417,7 @@ export function TrajectoryPanel({ owner, view, away }: Props) {
            failed; idle, there is no foot at all. An outdated route has no
            banner (plan 260929c), so its job shows here.
            docs/plans/260929b-one-place-to-re-run-ai-processing.md. */
+        owner &&
         ready &&
         !owner.stale &&
         !owner.profileChanged &&
@@ -397,7 +428,7 @@ export function TrajectoryPanel({ owner, view, away }: Props) {
         ) : null
       }
     >
-      {owner.error && (
+      {owner?.error && (
         <div className="traj-read-error">
           <p className="gloss-error" role="alert">
             {owner.error}
@@ -409,9 +440,9 @@ export function TrajectoryPanel({ owner, view, away }: Props) {
         </div>
       )}
 
-      {owner.status === "loading" && <p className="gloss-quiet">Looking for the route…</p>}
+      {owner?.status === "loading" && <p className="gloss-quiet">Looking for the route…</p>}
 
-      {owner.status === "none" && (
+      {owner?.status === "none" && (
         <div className="gloss-empty">
           <p>Nobody has planned a route through this piece yet.</p>
           <p className="gloss-hint">{emptyHint(owner)}</p>
@@ -421,7 +452,7 @@ export function TrajectoryPanel({ owner, view, away }: Props) {
 
       {ready && (
         <>
-          {bannerReason(owner) && (
+          {owner && bannerReason(owner) && (
             <div className="gloss-stale">
               <p>
                 <TriangleAlert size={13} />

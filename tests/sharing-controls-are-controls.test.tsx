@@ -73,6 +73,10 @@ const AVAILABLE: PublicArtefacts = {
   quotes: true,
   timeline: true,
   sketch: true,
+  trajectory: true,
+  faq: true,
+  citations: true,
+  debate: true,
 };
 
 const PRIVATE: ArticleSharing = {

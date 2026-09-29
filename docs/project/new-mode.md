@@ -119,12 +119,13 @@ for is that the second one is worth reading. The rule is
 
 So `description` is the mode in one fragment — it is also what the command bar draws inline beside
 the name, which is why it stays short — and `how` is the half a press would not have told them. For
-these fourteen that is almost always one of three things: **it reads something already built**
+the current seventeen that is almost always one of three things: **it reads something already built**
 (Hierarchy, Structure, Summary), **its content is a model pass over the article, written once and
-stored** (Glossary, Ideas, Quotes, Timeline, Debate and Diagram's Sketch — the six a press on the
-reading view can start paying for, `MODE_TARGET` in [`activation.ts`](../../src/web/activation.ts)),
-or **it waits on the reader's own words** (Search, Chat, Referee, Remember). Plain is the fourteenth
-and generates nothing at all.
+stored** (Glossary, Ideas, Quotes, Timeline, Debate, Citations, FAQ, Trajectory and Diagram's Sketch
+or Illustrated picture — the artefact-backed surfaces a press on the reading view can start paying
+for, `MODE_TARGET` in [`activation.ts`](../../src/web/activation.ts)),
+or **it waits on the reader's own words** (Search, Chat, Referee, Remember). Plain is the remaining
+one and generates nothing at all.
 
 Five things to get right, and the first is the one that cost this field a whole review round:
 
@@ -212,7 +213,12 @@ Then the residue nothing refuses at compile time:
   staleness contract, which is why there is no generic one. *Nothing.*
 - **The put-chain in [`src/store/export.ts`](../../src/store/export.ts)** — one `await put(…)` per
   artefact, and a missing line exports nothing and says nothing. *Nothing.*
-- **`PUBLIC_PROJECTIONS` and the public DTO**, if a visitor may read it:
+- **`PUBLIC_PROJECTIONS` and the public DTO** — and a visitor may read it by default. A mode that
+  stores what it generates shows the stored output to a visitor on a public article, and only
+  *making* it is the owner's; `owners-only` is for a mode whose stored output is the reader's own
+  writing (Chat, Remember, Referee). Four modes took `owners-only` as "a staging decision" and a
+  visitor was refused a Trajectory that had already been paid for —
+  [the postmortem](../postmortems/260929a-one-policy-row-decided-who-may-make-a-mode-and-who-may-see-it.md):
   [`public-reader.ts`](../../src/store/public-reader.ts) and
   [`src/public/dto.ts`](../../src/public/dto.ts).
   *[`tests/store-revision-columns.test.ts`](../../tests/store-revision-columns.test.ts)* pins each

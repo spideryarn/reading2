@@ -2124,12 +2124,12 @@ export interface VisibilityState {
  * gains nothing about artefacts, which are not the switch's business.
  */
 /**
- * **Which of the five shareable artefacts this article actually has.**
+ * **Which shareable artefacts this article actually has.**
  *
  * Declared here rather than in [public-types.ts](public-types.ts), which is
  * where it is *used* and where its history is, and which re-exports it so that
  * every existing importer is unchanged. It moved on 2026-09-02 because
- * `ArticleSharing.available` below needs the same five booleans.
+ * `ArticleSharing.available` below needs the same booleans.
  *
  * **The reason is design, not the cycle gate, and the first version of this
  * comment got that wrong.** It claimed `npm run check` would refuse a
@@ -2179,6 +2179,33 @@ export interface PublicArtefacts {
    * docs/project/security-map.md § the hazard this section is really about.
    */
   sketch: boolean;
+  /**
+   * **The eighth, since 2026-09-29** — a stored Trajectory route. It was
+   * `owners-only` for the cost of *planning* one, which a visitor was never
+   * going to pay; reading one is a column on the row the public read already
+   * fetches. SPIDERYARN-READING2-56,
+   * docs/plans/260929c-a-visitor-sees-every-stored-mode-on-a-public-article.md.
+   */
+  trajectory: boolean;
+  /**
+   * **The ninth, since 2026-09-29** — a stored FAQ. `owners-only` until then
+   * for the cost of *asking* for one; showing one is a column on the row the
+   * public read already fetches. SPIDERYARN-READING2-56, plan 260929c stage 2.
+   */
+  faq: boolean;
+  /**
+   * **The tenth, since 2026-09-29** — a stored Citations list, each work's
+   * address re-judged at the boundary and the owner's *Find it* results left
+   * behind. SPIDERYARN-READING2-56, plan 260929c stage 3.
+   */
+  citations: boolean;
+  /**
+   * **The eleventh, since 2026-09-29** — a stored Debate. `owners-only` until
+   * then, as a staging decision (the boundary its rows' addresses must pass was
+   * not built) and for the cost of *running* a search, which a visitor never
+   * pays. SPIDERYARN-READING2-56, plan 260929c stage 4.
+   */
+  debate: boolean;
 }
 
 export interface ArticleSharing extends VisibilityState {
@@ -2191,8 +2218,9 @@ export interface ArticleSharing extends VisibilityState {
    * general — which turns a sentence nobody reads into a specific fact about the
    * thing being shared.
    *
-   * Non-null `profileHash` is what decides it, and only four artefacts can carry
-   * one: `tweets`, `glossary`, `ideas` and `sketch`. The tree and the arc
+   * Non-null `profileHash` is what decides it. The exhaustive set is derived
+   * from `ArtifactMap` by `ProfileCarrying` in src/store/pg.ts, so adding a
+   * carrier cannot silently leave this list behind. The tree and the arc
    * deliberately do not vary by profile — a reader-specific tree is one that
    * shifts under a reader who edits their box (reader-profile.md) — and
    * `fetch`, `extract` and `blocks` have no model call to personalise.
@@ -2215,7 +2243,7 @@ export interface ArticleSharing extends VisibilityState {
   personalised: StepName[];
 
   /**
-   * **Which artefacts a shared link would actually carry** — the same five
+   * **Which artefacts a shared link would actually carry** — the same
    * booleans a visitor's own page is keyed on.
    *
    * Here so that the confirmation dialog can list what goes out instead of
@@ -2318,7 +2346,7 @@ export interface ArticleMetadata {
    * Metadata, this route is owner-only by construction, and the Postgres read
    * already has everything in hand: `currentRevisionQuery` selects `articles`
    * whole (where `purpose` and `archivedAt` come from), and the `metadata`
-   * projection already carries all four artefacts that can hold a
+   * projection already carries every artefact that can hold a
    * `profileHash`. No new query and no widening of `REVISION_READ_POLICY`.
    *
    * ## One block, not three optional fields
@@ -4343,12 +4371,28 @@ export type IdentificationLevel = IdentificationSignal["kind"];
  * A non-empty tuple, so the caller below can take the first element without the
  * compiler asking whether the list was empty.
  */
-export function identifiesOf(
-  row: DirectDebateRow,
-): readonly [IdentificationSignal, ...IdentificationSignal[]] {
+export function identifiesOf<S extends { kind: IdentificationLevel } = IdentificationSignal>(
+  row: IdentifiedRow<S>,
+): readonly [S | NamedSignal, ...(S | NamedSignal)[]] {
   const found = row.identifies;
   if (Array.isArray(found) && found.length > 0 && found[0]) return [found[0], ...found.slice(1)];
   return [{ kind: "named", by: "title", witness: row.articleReferenceQuote }];
+}
+
+/** The weakest arm, and the one `identifiesOf` falls back to for a pre-2026-09-06 row. */
+export type NamedSignal = Extract<IdentificationSignal, { kind: "named" }>;
+
+/**
+ * **The least a row needs for its identification to be read** — the owner's
+ * `DirectDebateRow` and a visitor's `PublicDirectDebateRow` alike. Generic in
+ * the signal because the public boundary may take a `linked` signal's address
+ * off (src/public/dto.ts § `publicDebate`), so a visitor's signal is not an
+ * `IdentificationSignal`; everything read here is the `kind`. Since
+ * 2026-09-29, plan 260929c stage 4.
+ */
+export interface IdentifiedRow<S extends { kind: IdentificationLevel } = IdentificationSignal> {
+  identifies: readonly S[];
+  articleReferenceQuote: string;
 }
 
 /**
@@ -4359,7 +4403,9 @@ export function identifiesOf(
  * the model's judgment, which is the refusal
  * [quotes.md](../docs/project/quotes.md) already makes about a prioritised row.
  */
-export function identificationLevel(row: DirectDebateRow): IdentificationLevel {
+export function identificationLevel<S extends { kind: IdentificationLevel }>(
+  row: IdentifiedRow<S>,
+): IdentificationLevel {
   const signals = identifiesOf(row);
   let best = signals[0];
   for (const signal of signals) if (strengthOf(signal) < strengthOf(best)) best = signal;
@@ -4367,8 +4413,9 @@ export function identificationLevel(row: DirectDebateRow): IdentificationLevel {
 }
 
 /** Lower is stronger. A new arm of the union is a compile error here. */
-function strengthOf(signal: IdentificationSignal): number {
-  switch (signal.kind) {
+function strengthOf(signal: { kind: IdentificationLevel }): number {
+  const kind = signal.kind;
+  switch (kind) {
     case "linked":
       return 0;
     case "quoted":
@@ -4378,7 +4425,7 @@ function strengthOf(signal: IdentificationSignal): number {
     default: {
       /* Not a `return 3`: a fourth kind of evidence must be *placed* in the
          order by whoever adds it, rather than silently ranked weakest. */
-      const unreachable: never = signal;
+      const unreachable: never = kind;
       return unreachable;
     }
   }

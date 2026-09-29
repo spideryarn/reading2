@@ -37,6 +37,7 @@ import { BadgeQuestionMark, RotateCw, TriangleAlert } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import type { BlockId, FaqDropped, FaqQuestion } from "../types.js";
 import type { UseFaq } from "./useFaq.js";
+import type { PublicFaq } from "../public-types.js";
 import { BlockRef } from "./BlockRef.js";
 import { JobProgress } from "./JobProgress.js";
 import { ModeSurface } from "./ModeSurface.js";
@@ -78,18 +79,36 @@ export function droppedNote(dropped: FaqDropped): string | null {
     : `${n} more questions or passages the model gave were left out in checking.`;
 }
 
+/**
+ * **Who is reading, and the questions they get — one prop, so the two cannot
+ * disagree.** The owner's arm is the whole `useFaq` read: its status, the job,
+ * the verbs that spend. The visitor's arm is the stored FAQ off the public
+ * payload and nothing else — no read state (it arrived with the page), no job,
+ * no verb — so a visitor's panel has nothing to press that could ask the model.
+ * `owner?: never` for `TimelineAccess`'s reason: without it the same object
+ * built in a variable first would typecheck with an owner hook inside a
+ * visitor's arm. Since 2026-09-29, SPIDERYARN-READING2-56, plan 260929c.
+ */
+export type FaqAccess =
+  | { kind: "owner"; owner: UseFaq }
+  | { kind: "visitor"; faq: PublicFaq; owner?: never };
+
 interface Props {
-  owner: UseFaq;
+  access: FaqAccess;
   onJump(id: BlockId): void;
 }
 
-export function FaqPanel({ owner, onJump }: Props) {
+export function FaqPanel({ access, onJump }: Props) {
   useRenderCount("FaqPanel");
-  const faq = owner.faq;
+  /* `null` for a visitor, and every owner-only thing below is behind it. */
+  const owner = access.kind === "owner" ? access.owner : null;
+  const faq = access.kind === "owner" ? access.owner.faq : access.faq;
   const questions = faq?.questions ?? [];
-  const ready = faq !== null && owner.status === "ready";
-  const dropped = ready ? droppedNote(faq.dropped) : null;
-  const showJob = ready && !owner.stale && (owner.job || owner.starting || owner.failed);
+  /* A visitor's FAQ arrived with the page, so it is ready by construction. */
+  const ready = faq !== null && (owner === null || owner.status === "ready");
+  /* The owner's alone: `dropped` does not cross (src/public-types.ts § PublicFaq). */
+  const dropped = owner?.faq && ready ? droppedNote(owner.faq.dropped) : null;
+  const showJob = owner !== null && ready && !owner.stale && (owner.job || owner.starting || owner.failed);
 
   /**
    * @param again whether this is the button beside a list that is already
@@ -97,7 +116,8 @@ export function FaqPanel({ owner, onJump }: Props) {
    *   request the automatic run makes — or it buys a second model call.
    *   useIdeas.ts § `ensure`.
    */
-  const run = (label: string, again = false) => (
+  const run = (label: string, again = false) =>
+    owner === null ? null : (
     <JobProgress
       job={owner.job}
       starting={owner.starting}
@@ -135,7 +155,7 @@ export function FaqPanel({ owner, onJump }: Props) {
         ) : null
       }
     >
-      {owner.error && (
+      {owner?.error && (
         <div className="faq-read-error">
           <p className="gloss-error" role="alert">
             {owner.error}
@@ -147,9 +167,9 @@ export function FaqPanel({ owner, onJump }: Props) {
         </div>
       )}
 
-      {owner.status === "loading" && <p className="gloss-quiet">Looking for the questions…</p>}
+      {owner?.status === "loading" && <p className="gloss-quiet">Looking for the questions…</p>}
 
-      {owner.status === "none" && (
+      {owner?.status === "none" && (
         <div className="gloss-empty">
           <p>Nobody has asked this piece its questions yet.</p>
           <p className="gloss-hint">
@@ -164,7 +184,7 @@ export function FaqPanel({ owner, onJump }: Props) {
         <>
           {/* Stale wins when both are true: it is the one that can make a
               passage's jump land somewhere else. */}
-          {owner.stale ? (
+          {owner?.stale ? (
             <div className="gloss-stale">
               <p>
                 <TriangleAlert size={13} />

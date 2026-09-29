@@ -35,6 +35,7 @@
 import { ScoreBars } from "./ScoreBars.js";
 import { BookText, ExternalLink, RotateCcw, Search, TriangleAlert } from "lucide-react";
 import { MAX_CITATIONS, type BlockId, type CitedWork } from "../types.js";
+import type { PublicCitations, PublicCitedWork } from "../public-types.js";
 import type { CiteOrder } from "./params.js";
 import type { FindNote, UseCitations } from "./useCitations.js";
 import { BlockRef } from "./BlockRef.js";
@@ -44,6 +45,20 @@ import { ModeSurface } from "./ModeSurface.js";
 import { useRenderCount } from "./perf.js";
 import { applyThreshold, hiddenNote, type ThresholdResult } from "./threshold.js";
 import { ControlTip, Tooltip } from "./Tooltip.js";
+
+/**
+ * **A row as this panel draws it** — the owner's `CitedWork` and a visitor's
+ * `PublicCitedWork` alike. The visitor's has no `key` (never drawn), no `found`
+ * (the owner's *Find it*, private), and a `url` that may be absent because the
+ * public boundary refused it (src/public/dto.ts § `publicCitedWork`). Every
+ * `CitedWork` is one of these, so the owner's path is unchanged. Since
+ * 2026-09-29, plan 260929c stage 3.
+ */
+export type ShownWork = Omit<PublicCitedWork, "linkFrom"> & {
+  /** The owner may have a private Find-it row; a public row cannot. */
+  linkFrom: CitedWork["linkFrom"];
+  found?: CitedWork["found"];
+};
 
 /* ------------------------------------------------------------- the scores -- */
 
@@ -70,13 +85,13 @@ export const CITATION_BAR_DEFAULT = 0.25;
  * the list should keep. Weighted to relevance so a famous but passing reference
  * does not ride its fame over the bar.
  */
-export function priorityOf(work: CitedWork): number | undefined {
+export function priorityOf(work: ShownWork): number | undefined {
   if (work.relevance === undefined || work.influence === undefined) return undefined;
   return (2 * work.relevance + work.influence) / 3;
 }
 
 /** The bar applied once: the works to draw, and how many went. threshold.ts. */
-export function visibleWorks(works: readonly CitedWork[], bar: number): ThresholdResult<CitedWork> {
+export function visibleWorks<W extends ShownWork>(works: readonly W[], bar: number): ThresholdResult<W> {
   return applyThreshold(works, bar, priorityOf);
 }
 
@@ -84,7 +99,7 @@ export function visibleWorks(works: readonly CitedWork[], bar: number): Threshol
  * The highest position the bar needs, on the glossary's hundredth grid — the
  * same `floorToGateStep`, so the thumb's top stop always shows the top work.
  */
-export function barTop(works: readonly CitedWork[]): number {
+export function barTop(works: readonly ShownWork[]): number {
   let top = 0;
   for (const work of works) {
     const p = priorityOf(work);
@@ -94,7 +109,7 @@ export function barTop(works: readonly CitedWork[]): number {
 }
 
 /** The track's maximum: the data's top, the current bar, and one step at least. */
-export function barMax(works: readonly CitedWork[], bar: number): number {
+export function barMax(works: readonly ShownWork[], bar: number): number {
   return Math.max(barTop(works), bar, GATE_STEP);
 }
 
@@ -103,7 +118,7 @@ export function barMax(works: readonly CitedWork[], bar: number): number {
  * something? `GlossaryPanel.canPrioritise`, over this list's score. A question
  * about the whole list, not about where the bar is now.
  */
-export function canPrioritise(works: readonly CitedWork[]): boolean {
+export function canPrioritise(works: readonly ShownWork[]): boolean {
   const top = barTop(works);
   for (const work of works) {
     const p = priorityOf(work);
@@ -117,7 +132,7 @@ export function canPrioritise(works: readonly CitedWork[]): boolean {
  * there is nothing to bar, so the default never labels an order that is not
  * one. `GlossaryPanel.effectiveSort`.
  */
-export function effectiveOrder(works: readonly CitedWork[], order: CiteOrder): CiteOrder {
+export function effectiveOrder(works: readonly ShownWork[], order: CiteOrder): CiteOrder {
   if (order !== "prioritised") return order;
   return canPrioritise(works) ? "prioritised" : "document";
 }
@@ -128,11 +143,11 @@ export function effectiveOrder(works: readonly CitedWork[], order: CiteOrder): C
  * two score orders are descending, unscored last, and first-cited order breaks
  * ties so equal scores do not shuffle.
  */
-export function orderWorks(
-  works: readonly CitedWork[],
+export function orderWorks<W extends ShownWork>(
+  works: readonly W[],
   order: CiteOrder,
   bar: number = CITATION_BAR_DEFAULT,
-): CitedWork[] {
+): W[] {
   switch (order) {
     case "document":
       return [...works];
@@ -140,7 +155,7 @@ export function orderWorks(
       return visibleWorks(works, bar).visible;
     case "relevance":
     case "influence": {
-      const score = (w: CitedWork) => (order === "relevance" ? w.relevance : w.influence);
+      const score = (w: W) => (order === "relevance" ? w.relevance : w.influence);
       return works
         .map((work, index) => ({ work, index }))
         .sort((a, b) => {
@@ -172,7 +187,7 @@ export function citationsNote(hidden: number, total: number): string {
  * instead of numbers ... Same goes for Glossary etc."* The numbers are in the
  * tooltip and the bars' `aria-label`; never the combined `(2r + i) / 3`.
  */
-export function scoresOf(work: CitedWork): { key: string; label: string; value: number }[] {
+export function scoresOf(work: ShownWork): { key: string; label: string; value: number }[] {
   const out: { key: string; label: string; value: number }[] = [];
   if (work.relevance !== undefined) {
     out.push({ key: "relevance", label: "relevance to this piece", value: work.relevance });
@@ -205,7 +220,7 @@ export function hostOf(url: string): string {
   }
 }
 
-export function sourceOf(work: CitedWork): Source {
+export function sourceOf(work: Pick<CitedWork, "url" | "linkFrom">): Source {
   switch (work.linkFrom) {
     case "doi":
       return { kind: "address", url: work.url, host: hostOf(work.url), how: "DOI in the article" };
@@ -251,10 +266,23 @@ export const CITATIONS_NONE = "We found no works this piece cites.";
 /* -------------------------------------------------------------- the panel -- */
 
 /** A module constant, so an empty list is the same array every render. */
-const NO_WORKS: CitedWork[] = [];
+const NO_WORKS: ShownWork[] = [];
+
+/**
+ * **Who is reading, and the list they get — one prop, so the two cannot
+ * disagree.** The owner's arm is the whole `useCitations` read: its status,
+ * the job, and the verbs that spend — the run, the re-run and *Find it*. The
+ * visitor's arm is the stored list off the public payload and nothing else, so
+ * a visitor's panel has nothing to press that could ask the model or a search
+ * provider. `owner?: never` for `TimelineAccess`'s reason. Since 2026-09-29,
+ * SPIDERYARN-READING2-56, plan 260929c stage 3.
+ */
+export type CitationsAccess =
+  | { kind: "owner"; owner: UseCitations }
+  | { kind: "visitor"; citations: PublicCitations; owner?: never };
 
 interface Props {
-  owner: UseCitations;
+  access: CitationsAccess;
   /** `?citeby=` — the order the reader asked for. `effectiveOrder` decides the one in force. */
   order: CiteOrder;
   onOrder(order: CiteOrder): void;
@@ -264,19 +292,23 @@ interface Props {
   onJump(id: BlockId): void;
 }
 
-export function CitationsPanel({ owner, order: chosenOrder, onOrder, bar: chosenBar, onBar, onJump }: Props) {
+export function CitationsPanel({ access, order: chosenOrder, onOrder, bar: chosenBar, onBar, onJump }: Props) {
   useRenderCount("CitationsPanel");
-  const citations = owner.citations;
-  const all = citations?.citations ?? NO_WORKS;
+  /* `null` for a visitor, and every owner-only thing below is behind it. */
+  const owner = access.kind === "owner" ? access.owner : null;
+  const citations = access.kind === "owner" ? access.owner.citations : access.citations;
+  const all: readonly ShownWork[] = citations?.citations ?? NO_WORKS;
   const bar = chosenBar ?? CITATION_BAR_DEFAULT;
   /* One answer for the order in force, passed down, so the list, the pressed
      button and the slider's presence cannot disagree. */
   const order = effectiveOrder(all, chosenOrder);
   const shown = orderWorks(all, order, bar);
-  const ready = citations !== null && owner.status === "ready";
-  const showJob = ready && !owner.stale && (owner.job || owner.starting || owner.failed);
+  /* A visitor's list arrived with the page, so it is ready by construction. */
+  const ready = citations !== null && (owner === null || owner.status === "ready");
+  const showJob = owner !== null && ready && !owner.stale && (owner.job || owner.starting || owner.failed);
 
-  const run = (label: string, again = false) => (
+  const run = (label: string, again = false) =>
+    owner === null ? null : (
     <JobProgress
       job={owner.job}
       starting={owner.starting}
@@ -335,11 +367,11 @@ export function CitationsPanel({ owner, order: chosenOrder, onOrder, bar: chosen
         <BarSlider works={all} bar={bar} moved={chosenBar !== null} onBar={onBar} />
       )}
 
-      {owner.error && <p className="gloss-error">{owner.error}</p>}
+      {owner?.error && <p className="gloss-error">{owner.error}</p>}
 
-      {owner.status === "loading" && <p className="gloss-quiet">Looking for the citations…</p>}
+      {owner?.status === "loading" && <p className="gloss-quiet">Looking for the citations…</p>}
 
-      {owner.status === "none" && (
+      {owner?.status === "none" && (
         <div className="gloss-empty">
           <p>Nobody has listed the works this piece cites yet.</p>
           <p className="gloss-hint">
@@ -354,7 +386,7 @@ export function CitationsPanel({ owner, order: chosenOrder, onOrder, bar: chosen
         <>
           {/* Stale wins when both are true: it is the one that can make a
               "first cited" jump land somewhere else. */}
-          {owner.stale ? (
+          {owner?.stale ? (
             <div className="gloss-stale">
               <p>
                 <TriangleAlert size={13} />
@@ -379,9 +411,16 @@ export function CitationsPanel({ owner, order: chosenOrder, onOrder, bar: chosen
                     work={work}
                     unscored={order === "prioritised" && priorityOf(work) === undefined}
                     onJump={onJump}
-                    finding={owner.finding}
-                    note={owner.findNote?.id === work.id ? owner.findNote : null}
-                    onFind={owner.find}
+                    /* The owner's alone: a visitor's row draws no *Find it*. */
+                    find={
+                      owner === null
+                        ? null
+                        : {
+                            finding: owner.finding,
+                            note: owner.findNote?.id === work.id ? owner.findNote : null,
+                            onFind: owner.find,
+                          }
+                    }
                   />
                 ))}
               </ol>
@@ -400,7 +439,7 @@ function OrderBar({
   order,
   onOrder,
 }: {
-  works: readonly CitedWork[];
+  works: readonly ShownWork[];
   order: CiteOrder;
   onOrder(order: CiteOrder): void;
 }) {
@@ -466,7 +505,7 @@ function BarSlider({
   moved,
   onBar,
 }: {
-  works: readonly CitedWork[];
+  works: readonly ShownWork[];
   bar: number;
   moved: boolean;
   onBar(bar: number | null): void;
@@ -516,24 +555,33 @@ function BarSlider({
 
 /* ------------------------------------------------------------------ a row -- */
 
-function WorkRow({
-  work,
-  unscored,
-  onJump,
-  finding,
-  note,
-  onFind,
-}: {
-  work: CitedWork;
-  unscored: boolean;
-  onJump(id: BlockId): void;
+/** A row's *Find it* — the owner's alone, so `null` on a visitor's row. */
+interface RowFind {
   /** The work whose *Find it* is running anywhere in the list, or null. */
   finding: string | null;
   /** What this row's last *Find it* said, when it found nothing or failed. */
   note: FindNote | null;
   onFind(id: string): Promise<void>;
+}
+
+function WorkRow({
+  work,
+  unscored,
+  onJump,
+  find,
+}: {
+  work: ShownWork;
+  unscored: boolean;
+  onJump(id: BlockId): void;
+  find: RowFind | null;
 }) {
-  const source = sourceOf(work);
+  /* **No source at all when the public boundary refused the address** — a
+     visitor's row whose link carried a credential or a private host. The row
+     stays, drawn as a citation with no link, and says nothing about why: the
+     `publicMeta` rule, since there is nothing a visitor could do differently. */
+  const source = work.url === undefined ? null : sourceOf({ url: work.url, linkFrom: work.linkFrom });
+  const finding = find?.finding ?? null;
+  const note = find?.note ?? null;
   const scores = scoresOf(work);
   const by = [work.authors, work.year].filter(Boolean).join(" · ");
   /* The found page's own title, in the tooltip: the search result's words,
@@ -547,7 +595,7 @@ function WorkRow({
       {...(unscored && { title: "Not scored for prioritising — shown regardless of the threshold" })}
     >
       <p className="cite-title">
-        {source.kind === "address" ? (
+        {source?.kind === "address" ? (
           /* Every link that leaves the app opens a new tab — docs/project/links.md
              — and `noreferrer noopener`, as everything outbound here is. */
           <a
@@ -567,7 +615,7 @@ function WorkRow({
       <p className="cite-why">{work.why}</p>
       <p className="cite-meta">
         {scores.length > 0 && <ScoreBars className="cite-scores" scores={scores} />}
-        {source.kind === "address" ? (
+        {source === null ? null : source.kind === "address" ? (
           <span className="cite-source">
             {source.host} · {source.how}
           </span>
@@ -586,7 +634,7 @@ function WorkRow({
             runs, not just this one — each is a paid search, and a list that
             fires five because five were clicked spends money on a mis-click
             (GlossaryPanel.tsx § Check the web makes the same call). */}
-        {source.kind === "search" && (
+        {find !== null && source?.kind === "search" && (
           <Tooltip
             placement="bottom"
             keepSide
@@ -634,7 +682,7 @@ function WorkRow({
               aria-disabled={finding !== null}
               onClick={() => {
                 if (finding !== null) return;
-                void onFind(work.id);
+                void find.onFind(work.id);
               }}
             >
               <Search size={11} aria-hidden="true" />
