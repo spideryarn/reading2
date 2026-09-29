@@ -140,16 +140,25 @@ its ending.
 
 ## Measurements (Stage 1)
 
-**Decision** (coordinator, 2026-09-29, on the numbers below): a vague single word is **held to a
-higher density, not dropped** — Greg's first idea, `vagueDensityPer1000: 2` — and **phrases are
-never judged vague**; they keep only the extractor's shape test on their head.
+**Decision** (coordinator, 2026-09-29): a vague single word is **held to a higher density, not
+dropped** — Greg's first idea, `vagueDensityPer1000: 2` — and **phrases are never judged vague**;
+they keep only the extractor's shape test on their head. After GPT Sol's stage-1 review (S1-1: the
+SUBTLEX permission covers `wordfreq`, not our processing of the original file), **vague is decided
+by the Glasgow Norms alone** (CC BY 4.0); nothing from SUBTLEX ships.
 
-**The rule, as built.** A single word is *vague* unless SUBTLEX-US says it is **not common**
-(Zipf < 4.0), or the Glasgow Norms rate it **≥ 4.5** on their 1–7 scale — looked up as the word,
-its plural, then *-s/-es/-ed/-d/-ing/-ing→e* lemmas, first hit decides. A vague word counts for an
-article only at `max(4, 2 per 1,000 words)` prose uses, against `max(2, 0.3 per 1,000)` for every
-other candidate: *following* used heavily in one article still names it; used in passing across
-many, it names none. Adjacency (R7) as § Reviews.
+**The rule, as built.** A single word is *vague* when the Glasgow Norms rate it — or the first of
+its lookup forms they know: the word, its plural, then *-s/-es/-ed/-d/-ing→e/-ing* lemmas — below
+**4.5** concreteness on their 1–7 scale. A word the norms do not rate is not vague: they are 4,682
+mostly everyday words, so absence is no evidence (*irreducibility*, *Wagan*, but also *parent*,
+*technology*, *July*). A vague word counts for an article only at `max(4, 2 per 1,000 words)` prose
+uses, against `max(2, 0.3 per 1,000)` for every other candidate. Adjacency (R7) as § Reviews.
+
+**Familiarity, measured and not adopted.** The same data rates familiarity, so "vague = abstract
+**and** familiar" would let a rare abstract word keep the ordinary rule (*neural*: concreteness
+4.1, familiarity 3.9). At familiarity ≥ 4.5 and ≥ 5.0 it chose exactly the same 30 as concreteness
+alone; at ≥ 5.5, @5 and @12 each fell by one. No gain on this shelf, so the default is
+concreteness alone; `familiarityMin` stays as an option (default null) so the report can re-measure
+on Greg's production shelf.
 
 Local shelf, owner `f4d08b58…`, 37 eligible articles (32 works), K = 30, rank order —
 `npm run shelf-terms:report -- --owner <uuid>`, section *Vague words and adjacency*. Articles
@@ -159,58 +168,44 @@ covered, of 37:
 |---|---|---|---|---|---|
 | before (both rules off) | 16 | 26 | 35 | 37 | 0 |
 | adjacency only | 16 | 26 | 35 | 37 | 0 |
-| vague words dropped outright, ≥ 4.5 | 17 | 25 | 33 | 37 | 0 |
-| density D = 1.0 | 16 | 25 | 33 | 37 | 0 |
-| **density D = 2.0, ≥ 4.5 (the default)** | **17** | **25** | **33** | **37** | **0** |
-| density D = 3.0 | 17 | 25 | 33 | 37 | 0 |
-| D = 2, concreteness ≥ 4.0 | 16 | 25 | 33 | 37 | 0 |
-| D = 2, concreteness ≥ 5.0 | 16 | 25 | 33 | 37 | 0 |
+| **Glasgow < 4.5, D = 2 (the default)** | **17** | **28** | **34** | **36** | **0** |
+| vague words dropped outright | 17 | 28 | 34 | 36 | 0 |
+| concreteness < 4.0 | 16 | 28 | 34 | 36 | 0 |
+| concreteness < 5.0 | 17 | 28 | 34 | 36 | 0 |
+| + familiarity ≥ 4.5 / ≥ 5.0 | 17 | 28 | 34 | 36 | 0 |
+| + familiarity ≥ 5.5 | 16 | 28 | 33 | 36 | 0 |
 
-- **The gate holds.** @5 gains one; @8 loses one net (three articles out — one only in *parent*,
-  vague, two in *shape*, which the new path no longer reaches — and two in); @12 loses two, both
-  covered before only by *mistake*, vague.
-- **D = 2 and D = 3 choose exactly the 30 that dropping does**, so the decision costs nothing here.
-  D = 1 keeps *Turing machine* and brings in *mind*, *essay*, *cells* for *boy*, *features*, *door*,
-  *quantity*.
-- **Left the chosen 30 as vague:** parent, learning, mistake, July, memory, breaking, solve, dreams,
-  technology, forget. Also left, displaced: Turing machine (absorbed by *machine*), shape, board,
-  computational irreducibility, language models, rats, scientists, mutual, children. Joined:
-  machine, message, principle, club, mechanical, white, error, father, water, cycle, mother, neural
-  activity, contemporary, model, window, boy, features, door, quantity.
+- **The gate holds.** @5 +1, @8 +2, @12 −1, all 30 −1 — and the one article lost, *todo* (234
+  words), was covered only by *mistake*, which is vague. (At @8 two articles covered before only
+  by *learning*, vague, are lost too, and the new path covers four others.)
 - **First 12, before:** ball lightning, conscious experience, Wagan Watson, Turing machine,
   mechanism, parent, learning, shape, board, mistake, writers, computational irreducibility.
-  **After:** ball lightning, conscious experience, Wagan Watson, machine, mechanism, message,
-  principle, kids, neural networks, club, writers, mechanical.
-- **memory, learning, following, parent, mistake: none is in the 30 at any D.** *memory* still has
-  members — 6 / 5 / 4 articles at D = 1 / 2 / 3, against 8 — but the greedy fills the 30 first.
-  *following* would count in 3 / 0 / 0 articles, *parent* 2 / 1 / 0, *mistake* 1 / 1 / 1,
-  *learning* 2 / 1 / 1. On a shelf where one of them is used heavily, it can come back; that is the
-  point of the density rule over dropping.
-- **Adjacency never fires on this shelf** — 0 pairs with the rule off as well — so the local shelf
-  cannot show it; the unit test built from Greg's *neural networks* → *neural activity* is the
-  evidence, and production is where it will be seen.
-- **Taking phrases out of the vague test changed nothing in this shelf's 30.** The seven phrases it
-  had caught — *equal partners*, *moving forward*, *natural language*, *personal communication*,
-  *Philip Bay*, *power station*, *Stolen Generations* — are candidates again but none reaches the
-  30. It was removed because what it caught included real topics (proper nouns made of common
-  words; *station*, unrated; *natural* 3.6 and *language* 3.4) and Greg's examples were single
-  words. Density would not have rescued them: at D = 1 only *Stolen Generations* keeps its articles.
+  **After:** ball lightning, conscious experience, Wagan Watson, machine, mechanism, parent, AI,
+  shape, principle, writers, window, startups.
+- **In the 30: *parent* (6th, 4 articles). Not: *memory*, *learning*, *following*, *mistake*.**
+  *parent* is back because the norms do not rate it; *memory* (2.9), *learning* (3.5), *mistake*
+  (3.4) are vague and none is used heavily enough in enough articles to reach the 30; *following*
+  was never in this shelf's 30.
+- **Left the 30 as vague:** learning, mistake, memory, breaking, dreams, forget. Also left,
+  displaced: Turing machine (absorbed by *machine*), computational irreducibility, July, language
+  models, rats, children. Joined: machine, principle, window, cycle, water, neural nets, training,
+  commercial, mother, potential, behavior, white.
+- **Against the SUBTLEX version** (common = Zipf ≥ 4.0; 17 / 25 / 33 / 37): Glasgow alone covers
+  more in the first 8 and 12, and keeps *parent*, *technology* and *solve* — unrated everyday words
+  the SUBTLEX rule held back — while losing *todo* from the 30.
+- **Adjacency never fires on this shelf** — 0 pairs with the rule off as well — so the unit test
+  built from Greg's *neural networks* → *neural activity* is the evidence, and production is where
+  it will be seen.
+- **Phrases.** Before the decision, a phrase with no passing word was dropped; it caught *equal
+  partners*, *moving forward*, *natural language*, *personal communication*, *Philip Bay*, *power
+  station*, *Stolen Generations* — real topics among them — and removing the rule changed nothing
+  in this shelf's 30.
+- **4.5.** 4.0 lets *entered* (by *enter*, 4.1) and *breaking* (*break*, 4.4) through; 5.0 also
+  catches *signals* (4.9). *entered* cannot be a single-word topic anyway (`nounishShape` rejects
+  it, R6), and the phrase Greg saw it in was not reproduced.
 
-Two departures from § Reviews, both measured:
-
-- **Rarity rescues a rated word too.** The review's rule let a Glasgow rating decide alone. Then
-  *entered* (by its lemma *enter*, 4.11) and *neural* (4.14) sit 0.03 apart, and any threshold that
-  catches the first catches the second. Checking frequency first removes that knife-edge. The cost:
-  rare abstract words pass (*principle*, *error*, *quantity*, *contemporary* joined the 30).
-- **4.5, not ~3.0 or 4.0.** 4.0 lets *entered* and *breaking* (*break* 4.39) through; 5.0 also
-  catches *signals* (4.89). Common-but-abstract topical words are vague at any threshold that
-  catches *following* — **memory (2.85), learning (3.53), technology (unrated)** — and the density
-  rule, not the threshold, is what gives them a way back.
-- *entered*, the reported word, **cannot be a single-word topic** (`nounishShape` rejects it, R6);
-  as the first word of a phrase it is now left alone like every phrase. The report did not
-  reproduce the phrase Greg saw.
-
-**Why concreteness and frequency, not part-of-speech tagging:** no tagger dependency, and plan
-260928a measured that `compromise` did worse on this shelf than the shape rules. The word lists are
-generated modules, `src/shelf-terms/data/` (concreteness.ts 36 KB, 4,682 words; common-words.ts
-31 KB, 4,380 words), built by `scripts/build-word-lists.ts`; licences in its `ATTRIBUTION.md`.
+**Why concreteness, not part-of-speech tagging:** no tagger dependency, and plan 260928a measured
+that `compromise` did worse on this shelf than the shape rules. The list is one generated module,
+`src/shelf-terms/data/glasgow-norms.ts` (46 KB, 4,682 words, concreteness and familiarity), built by
+`scripts/build-word-lists.ts` and inlined in the API bundle — nothing reads a word list from disk at
+run time; licence and what was not shipped in its `ATTRIBUTION.md`.

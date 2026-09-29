@@ -19,8 +19,7 @@
  * topics however the articles and their candidates arrive. The tests shuffle
  * both to prove it.
  */
-import { isCommonWord } from "./data/common-words.js";
-import { glasgowConcreteness } from "./data/concreteness.js";
+import { glasgowRating } from "./data/glasgow-norms.js";
 import { type Candidate, pickLabel } from "./extract.js";
 
 /** One article, as step 2 needs it: step 1's stored output plus the slug. */
@@ -103,8 +102,14 @@ export interface ChooseOptions {
    * tests. Phrases are never vague.
    */
   dropVague?: boolean;
-  /** Glasgow concreteness (1–7) at or above which a common word passes. */
+  /** Glasgow concreteness (1–7) below which a rated word may be vague. */
   concretenessMin?: number;
+  /**
+   * A number: a word below `concretenessMin` is vague only when Glasgow also
+   * rates it at least this familiar (1–7), so a rare abstract word keeps the
+   * ordinary rule. Null: concreteness alone decides.
+   */
+  familiarityMin?: number | null;
   /**
    * A number D: a vague word counts for an article only at
    * `max(4, D × words / 1000)` prose uses — Greg's "common words need to
@@ -121,7 +126,7 @@ export interface ChooseOptions {
 }
 
 /**
- * The Glasgow concreteness (1–7) a common word needs to name a topic. Tuned
+ * The Glasgow concreteness (1–7) a rated word needs to name a topic freely. Tuned
  * on the local shelf (plan 260929a § Measurements): 4.5 is the lowest that
  * catches *entered* and *breaking* by their lemmas (*enter* 4.1, *break* 4.4);
  * 5.0 also catches *signals* (4.9), which is a topic.
@@ -144,6 +149,7 @@ const DEFAULTS: Required<ChooseOptions> = {
   phraseBonus: 1,
   dropVague: true,
   concretenessMin: CONCRETENESS_MIN,
+  familiarityMin: null,
   vagueDensityPer1000: 2,
   adjacency: true,
 };
@@ -191,23 +197,27 @@ function lookupForms(word: string): string[] {
 /**
  * **Is this one word specific enough to name a topic?** (plan 260929a.)
  * Greg's 4T: *following* and *entered* are vague, *rat* is not, though all
- * three are everyday words. So a word passes when it is **not common** in
- * English (SUBTLEX-US Zipf < 4.0 — technical terms, proper nouns, *neural*,
- * *irreducibility*), or when the Glasgow norms rate it **concrete**, at or
- * above `min` on their 1–7 scale (*rat* 6.7). A common word the norms rate
- * lower (*process* 3.0), or do not rate (*following*), fails.
- *
- * Rarity rescues a rated word too, which the plan's first cut did not: at
- * any threshold that catches *entered* (by its lemma *enter*, 4.1), *neural*
- * (4.1) would be caught with it.
+ * three are everyday words. The Glasgow norms decide, by the first of
+ * `lookupForms` they rate: below `concretenessMin` on their 1–7 scale is
+ * vague (*process* 3.0, *following* by *follow* 3.4, *entered* by *enter*
+ * 4.1); at or above passes (*rat* 6.7). With `familiarityMin` set, a word
+ * must also be rated at least that familiar to be vague. A word the norms do
+ * not rate — a technical term, a proper noun, *irreducibility* — passes: the
+ * norms are 4,682 mostly everyday words, and absence from them is no
+ * evidence of vagueness.
  */
-export function passesVagueTest(word: string, min: number): boolean {
-  if (!isCommonWord(word)) return true;
+export function passesVagueTest(
+  word: string,
+  concretenessMin: number,
+  familiarityMin: number | null = null,
+): boolean {
   for (const form of lookupForms(word)) {
-    const rating = glasgowConcreteness(form);
-    if (rating !== undefined) return rating >= min;
+    const rating = glasgowRating(form);
+    if (rating === undefined) continue;
+    if (rating.concreteness >= concretenessMin) return true;
+    return familiarityMin !== null && rating.familiarity < familiarityMin;
   }
-  return false;
+  return true;
 }
 
 /**
@@ -216,8 +226,8 @@ export function passesVagueTest(word: string, min: number): boolean {
  * *Stolen Generations*, *natural language*, *power station* (plan 260929a §
  * Measurements).
  */
-function isVague(key: string, min: number): boolean {
-  return !key.includes(" ") && !passesVagueTest(key, min);
+function isVague(key: string, o: Required<ChooseOptions>): boolean {
+  return !key.includes(" ") && !passesVagueTest(key, o.concretenessMin, o.familiarityMin);
 }
 
 function jaccard(a: ReadonlySet<string>, b: ReadonlySet<string>): number {
@@ -283,7 +293,7 @@ function collect(articles: ChooseArticle[], o: Required<ChooseOptions>): Collect
   const D = o.dropVague ? o.vagueDensityPer1000 : null;
   const raised = new Map<string, boolean>();
   const isRaised = (key: string) =>
-    getOrSet(raised, key, () => D !== null && isVague(key, o.concretenessMin));
+    getOrSet(raised, key, () => D !== null && isVague(key, o));
   for (const a of articles) {
     const need = Math.max(2, (o.densityPer1000 * a.words) / 1000);
     const needVague = D === null ? need : Math.max(4, (D * a.words) / 1000);
@@ -618,7 +628,7 @@ function buildPool(articles: ChooseArticle[], N: number, o: Required<ChooseOptio
   for (const key of [...members.keys()].sort(byString)) {
     /* By default `collect` has already held a vague word to its higher bar;
        with no density given, the report's other design drops it here. */
-    if (o.dropVague && o.vagueDensityPer1000 === null && isVague(key, o.concretenessMin)) continue;
+    if (o.dropVague && o.vagueDensityPer1000 === null && isVague(key, o)) continue;
     const m = members.get(key);
     const p = m ? toPool(key, m, dfAll.get(key)?.size ?? 1, N, band, o.phraseBonus) : null;
     if (p) pool.push(p);

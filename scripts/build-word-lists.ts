@@ -1,141 +1,102 @@
 /**
- * **Builds the two word lists the shelf-topic chooser ships** —
- * src/shelf-terms/data/concreteness.ts and common-words.ts — from the
- * published files, which are downloaded by hand and never committed:
+ * **Builds the word list the shelf-topic chooser ships** —
+ * src/shelf-terms/data/glasgow-norms.ts — from the published file, which is
+ * downloaded by hand and never committed:
  *
  *     npx tsx scripts/build-word-lists.ts <dir>
  *
- * `<dir>` holds:
+ * `<dir>` holds `glasgow-norms.csv` — save the Glasgow Norms (Scott et al.
+ * 2019) supplementary file `13428_2018_1099_MOESM2_ESM.csv` under this name;
+ * download it from https://link.springer.com/article/10.3758/s13428-018-1099-3
  *
- * - `glasgow-norms.csv` — save the Glasgow Norms (Scott et al. 2019)
- *   supplementary file `13428_2018_1099_MOESM2_ESM.csv` under this name; download it from
- *   https://link.springer.com/article/10.3758/s13428-018-1099-3
- * - `SUBTLEXus74286wordstextversion.txt` — SUBTLEX-US (Brysbaert & New 2009),
- *   inside subtlexus2.zip from
- *   https://www.ugent.be/pp/experimentele-psychologie/en/research/documents/subtlexus
+ * Licence and credit: src/shelf-terms/data/ATTRIBUTION.md, which also says
+ * why SUBTLEX-US, tried first, is not shipped. Why the list and the rule that
+ * reads it: docs/plans/260929a-shelf-topics-round-three-concreteness-zero-pills-archived-toggle.md.
  *
- * Licences and credit: src/shelf-terms/data/ATTRIBUTION.md. Why the lists and
- * the rule that reads them: docs/plans/260929a-shelf-topics-round-three-concreteness-zero-pills-archived-toggle.md.
- *
- * The outputs are TypeScript, not JSON read at run time, so the serverless
- * bundle carries them with no file-system read; each is one string per
- * bucket, split once on first use, to stay small.
+ * The output is TypeScript, not JSON read at run time, so the serverless
+ * bundle carries it with no file-system read; it is one string per
+ * concreteness bucket, split once on first use, to stay small.
  */
 import { readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 
-/**
- * **Zipf ≥ 4.0 is "common"** — 10 or more per million words of subtitles.
- * Van Heuven et al. (2014), who defined the Zipf scale, put the line between
- * low- and high-frequency words at 3 / 4; 4.0 is the high side, so a word
- * has to be unmistakably everyday to count. On this list that is ~4,400
- * words: *following* (4.66), *entered* (4.17), *process* (4.45) are in;
- * *neuron* (2.15), *consciousness* (3.91), *evolution* (3.73) are not.
- */
-export const COMMON_ZIPF = 4.0;
-
 const dir = process.argv[2];
 if (!dir) {
-  console.error("Usage: npx tsx scripts/build-word-lists.ts <dir holding the downloads>");
+  console.error("Usage: npx tsx scripts/build-word-lists.ts <dir holding glasgow-norms.csv>");
   process.exit(1);
 }
 const out = join(import.meta.dirname, "..", "src", "shelf-terms", "data");
 const WORD = /^[a-z][a-z'-]*$/;
 
-/* ── Glasgow: word → concreteness (1–7), one decimal ─────────────────────── */
-
 /** A tiny CSV reader: the Glasgow file has no quoted fields. */
-const glasgowRows = readFileSync(join(dir, "glasgow-norms.csv"), "latin1").split(/\r?\n/);
-const header = glasgowRows[0]?.split(",") ?? [];
+const rows = readFileSync(join(dir, "glasgow-norms.csv"), "latin1").split(/\r?\n/);
+const header = rows[0]?.split(",") ?? [];
 const cnc = header.indexOf("CNC");
-if (header[0] !== "Words" || cnc < 0) throw new Error("glasgow-norms.csv: unexpected header");
-const concreteness = new Map<string, number>();
-for (const line of glasgowRows.slice(2)) {
+const fam = header.indexOf("FAM");
+if (header[0] !== "Words" || cnc < 0 || fam < 0) throw new Error("glasgow-norms.csv: unexpected header");
+
+/** word → [concreteness, familiarity], each the mean on 1–7, one decimal */
+const ratings = new Map<string, [number, number]>();
+const scale = (cells: string[], at: number, word: string): number => {
+  const mean = Number(cells[at]);
+  if (!Number.isFinite(mean) || mean < 1 || mean > 7) throw new Error(`glasgow: bad ${header[at]} for ${word}`);
+  return Math.round(mean * 10) / 10;
+};
+for (const line of rows.slice(2)) {
   const cells = line.split(",");
   const word = cells[0]?.trim().toLowerCase() ?? "";
   /* "bank (river)" rates one sense; the bare "bank" row rates the word as a
      reader meets it without context, which is how a topic chip meets them. */
   if (!WORD.test(word)) continue;
-  const mean = Number(cells[cnc]);
-  if (!Number.isFinite(mean) || mean < 1 || mean > 7) throw new Error(`glasgow: bad CNC for ${word}`);
-  concreteness.set(word, Math.round(mean * 10) / 10);
+  ratings.set(word, [scale(cells, cnc, word), scale(cells, fam, word)]);
 }
 
-const byRating = new Map<string, string[]>();
-for (const [word, r] of [...concreteness].sort((a, b) => (a[0] < b[0] ? -1 : 1)))
-  byRating.set(r.toFixed(1), [...(byRating.get(r.toFixed(1)) ?? []), word]);
-const buckets = [...byRating]
+/* Bucketed by concreteness; each word carries its familiarity × 10 as two
+   trailing digits ("abbey59" … familiarity 5.9). */
+const byConcreteness = new Map<string, string[]>();
+for (const [word, [c, f]] of [...ratings].sort((a, b) => (a[0] < b[0] ? -1 : 1))) {
+  const key = c.toFixed(1);
+  byConcreteness.set(key, [...(byConcreteness.get(key) ?? []), `${word}${Math.round(f * 10)}`]);
+}
+const buckets = [...byConcreteness]
   .sort((a, b) => Number(a[0]) - Number(b[0]))
   .map(([r, words]) => `  "${r}": "${words.join(" ")}",`)
   .join("\n");
 
 writeFileSync(
-  join(out, "concreteness.ts"),
+  join(out, "glasgow-norms.ts"),
   `/**
  * GENERATED by scripts/build-word-lists.ts — do not edit by hand.
  *
- * Concreteness ratings from the Glasgow Norms (Scott, Keitel, Becirspahic, Yao
- * & Sereno, 2019), CC BY 4.0: src/shelf-terms/data/ATTRIBUTION.md. The mean
- * rating on the norms' 1 (abstract) – 7 (concrete) scale, rounded to one
- * decimal, for the ${concreteness.size} single words the norms rate without a sense given.
- * Grouped by rating to keep the file small.
+ * Concreteness and familiarity from the Glasgow Norms (Scott, Keitel,
+ * Becirspahic, Yao & Sereno, 2019), CC BY 4.0: src/shelf-terms/data/ATTRIBUTION.md.
+ * Each is the mean rating on the norms' 1–7 scale (abstract → concrete,
+ * unfamiliar → familiar), rounded to one decimal, for the ${ratings.size} single words
+ * the norms rate without a sense given. Keyed by concreteness; each word ends
+ * in its familiarity × 10.
  */
-const BY_RATING: Record<string, string> = {
+const BY_CONCRETENESS: Record<string, string> = {
 ${buckets}
 };
 
-let table: Map<string, number> | undefined;
+export interface GlasgowRating {
+  concreteness: number;
+  familiarity: number;
+}
 
-/** The word's Glasgow concreteness, 1–7, or undefined when the norms do not rate it. */
-export function glasgowConcreteness(word: string): number | undefined {
+let table: Map<string, GlasgowRating> | undefined;
+
+/** The word's Glasgow ratings, or undefined when the norms do not rate it. */
+export function glasgowRating(word: string): GlasgowRating | undefined {
   if (!table) {
     table = new Map();
-    for (const [rating, words] of Object.entries(BY_RATING))
-      for (const w of words.split(" ")) table.set(w, Number(rating));
+    for (const [concreteness, words] of Object.entries(BY_CONCRETENESS))
+      for (const w of words.split(" "))
+        table.set(w.slice(0, -2), { concreteness: Number(concreteness), familiarity: Number(w.slice(-2)) / 10 });
   }
   return table.get(word);
 }
 `,
 );
 
-/* ── SUBTLEX-US: the set of common words ─────────────────────────────────── */
-
-const subtlexRows = readFileSync(join(dir, "SUBTLEXus74286wordstextversion.txt"), "latin1").split(/\r?\n/);
-const cols = subtlexRows[0]?.split("\t") ?? [];
-const wf = cols.indexOf("SUBTLWF");
-if (cols[0] !== "Word" || wf < 0) throw new Error("SUBTLEX-US: unexpected header");
-const common = new Set<string>();
-for (const line of subtlexRows.slice(1)) {
-  const cells = line.split("\t");
-  const word = cells[0]?.trim().toLowerCase() ?? "";
-  const perMillion = Number(cells[wf]);
-  if (!WORD.test(word) || !Number.isFinite(perMillion) || perMillion <= 0) continue;
-  /* Zipf = log10(frequency per million) + 3 (van Heuven et al. 2014) */
-  if (Math.log10(perMillion) + 3 >= COMMON_ZIPF) common.add(word);
-}
-
-writeFileSync(
-  join(out, "common-words.ts"),
-  `/**
- * GENERATED by scripts/build-word-lists.ts — do not edit by hand.
- *
- * The ${common.size} words with a SUBTLEX-US frequency (Brysbaert & New, 2009) of Zipf
- * ≥ ${COMMON_ZIPF.toFixed(1)}, i.e. at least ${10 ** (COMMON_ZIPF - 3)} per million words of film and TV subtitles, lowercased.
- * Credit and permission: src/shelf-terms/data/ATTRIBUTION.md.
- */
-const WORDS =
-  "${[...common].sort().join(" ")}";
-
-let set: Set<string> | undefined;
-
-/** Is this lowercase word common in everyday English? */
-export function isCommonWord(word: string): boolean {
-  set ??= new Set(WORDS.split(" "));
-  return set.has(word);
-}
-`,
-);
-
-console.log(
-  `concreteness.ts: ${concreteness.size} words, ${byRating.size} ratings; common-words.ts: ${common.size} words (Zipf ≥ ${COMMON_ZIPF})`,
-);
+console.log(`glasgow-norms.ts: ${ratings.size} words, ${byConcreteness.size} concreteness buckets`);

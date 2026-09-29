@@ -327,8 +327,7 @@ describe("containment and coverage first (plan 260928d)", () => {
     const arts = shelf(10);
     give(arts, "ais", range(0, 2));
     give(arts, "gas", range(3, 5));
-    /* gas is common and unrated: held to the vague-word bar, which this test is not about */
-    expect(keysOf(chooseTerms(arts, { dropVague: false }).terms).sort()).toEqual(["ais", "gas"]);
+    expect(keysOf(chooseTerms(arts).terms).sort()).toEqual(["ais", "gas"]);
   });
 
   it("does not merge two real short words merely because one key is the other plus s", () => {
@@ -345,8 +344,7 @@ describe("containment and coverage first (plan 260928d)", () => {
       give(arts, singular, range(i * 2, i * 2 + 1));
       give(arts, endingInS, range(12 + i * 2, 13 + i * 2));
     }
-    /* it, its, up, yes are common and vague: the vague-word rule is not what this tests */
-    expect(keysOf(chooseTerms(arts, { dropVague: false }).terms).sort()).toEqual([
+    expect(keysOf(chooseTerms(arts).terms).sort()).toEqual([
       "bu",
       "bus",
       "ga",
@@ -380,7 +378,6 @@ describe("containment and coverage first (plan 260928d)", () => {
 });
 
 describe("vague words (plan 260929a, Greg's 4T: following, entered)", () => {
-  /** Each key on three articles of its own, so no redundancy rule can be what removes it. */
   /**
    * Each key on three 1,000-word articles of its own, so no redundancy rule
    * can be what removes it — used 3 times in each: enough for an ordinary word
@@ -392,22 +389,30 @@ describe("vague words (plan 260929a, Greg's 4T: following, entered)", () => {
     return arts;
   }
 
-  it("does not count a common word the norms rate abstract, or do not rate, where it is used in passing", () => {
-    const arts = spread(["following", "process", "rat", "spider"]);
+  it("does not count a word the norms rate abstract where it is used in passing", () => {
+    const arts = spread(["following", "process", "entered", "rat", "spider"]);
     const keys = keysOf(chooseTerms(arts).terms);
-    expect(keys).not.toContain("following"); // common, unrated (follow, 3.4, by its lemma)
-    expect(keys).not.toContain("process"); // common, rated 3.0
-    expect(keys).toContain("rat"); // common, and concrete (6.7)
-    expect(keys).toContain("spider");
+    expect(keys).not.toContain("following"); // by its lemma, follow 3.4
+    expect(keys).not.toContain("process"); // 3.0
+    expect(keys).not.toContain("entered"); // by its lemma, enter 4.1
+    expect(keys).toContain("rat"); // concrete, 6.7
+    expect(keys).toContain("spider"); // 6.7
   });
 
   it("tries the dropped-e lemma before a different word made by stripping -ing", () => {
     /* staring → stare (4.1), not star (6.2): the latter would wrongly let a
-       common, non-concrete participle keep the ordinary density threshold. */
+       non-concrete participle keep the ordinary density threshold. */
     expect(passesVagueTest("staring", 4.5)).toBe(false);
   });
 
-  it("counts a vague word only where an article uses it heavily (Greg: common words must occur more)", () => {
+  it("with familiarityMin, lets an abstract word the norms rate unfamiliar keep the ordinary rule", () => {
+    /* neural: concreteness 4.1, familiarity 3.9; memory: 2.9, 6.4 */
+    expect(passesVagueTest("neural", 4.5)).toBe(false);
+    expect(passesVagueTest("neural", 4.5, 5)).toBe(true);
+    expect(passesVagueTest("memory", 4.5, 5)).toBe(false);
+  });
+
+  it("counts a vague word only where an article uses it heavily (Greg: common words must occur more often)", () => {
     const arts = shelf(12);
     /* 1,000-word articles: a vague word needs max(4, 2) = 4 uses; an ordinary one 2 */
     give(arts, "memory", range(0, 2), 6);
@@ -421,12 +426,18 @@ describe("vague words (plan 260929a, Greg's 4T: following, entered)", () => {
     expect(keysOf(chooseTerms(arts).terms)).toContain("rat");
   });
 
-  it("keeps a rare word the norms do not know, and a proper-noun-like one", () => {
-    const arts = spread(["irreducibility", "wagan", "ruliology"]);
-    expect(keysOf(chooseTerms(arts).terms).sort()).toEqual(["irreducibility", "ruliology", "wagan"]);
+  it("treats a word the norms do not rate as ordinary: technical, proper-noun-like, or everyday", () => {
+    const arts = spread(["irreducibility", "wagan", "ruliology", "parent", "technology"]);
+    expect(keysOf(chooseTerms(arts).terms).sort()).toEqual([
+      "irreducibility",
+      "parent",
+      "ruliology",
+      "technology",
+      "wagan",
+    ]);
   });
 
-  it("leaves phrases alone, even when every word in them is common and abstract", () => {
+  it("leaves phrases alone, even when every word in them is abstract", () => {
     const arts = spread(["stolen generation", "natural language", "power station", "following"]);
     const keys = keysOf(chooseTerms(arts).terms);
     expect(keys).toContain("stolen generation");

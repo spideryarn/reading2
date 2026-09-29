@@ -258,9 +258,11 @@ function vagueAndAdjacency(input: Parameters<typeof chooseTerms>[0], slugs: stri
     [`drop, c≥${CONCRETENESS_MIN}`, { vagueDensityPer1000: null }],
     ["c≥4.0 D=2", { concretenessMin: 4.0 }],
     ["c≥5.0 D=2", { concretenessMin: 5.0 }],
-    ["D=1.0", { vagueDensityPer1000: 1 }],
     [`D=2.0, c≥${CONCRETENESS_MIN} (default)`, {}],
-    ["D=3.0", { vagueDensityPer1000: 3 }],
+    /* vague only when also familiar: a rare abstract word keeps the ordinary rule */
+    ["D=2, familiar ≥ 4.5", { familiarityMin: 4.5 }],
+    ["D=2, familiar ≥ 5.0", { familiarityMin: 5.0 }],
+    ["D=2, familiar ≥ 5.5", { familiarityMin: 5.5 }],
   ];
   const watched = ["memory", "learning", "following", "parent", "mistake"];
   const lists: string[] = [];
@@ -277,9 +279,10 @@ function vagueAndAdjacency(input: Parameters<typeof chooseTerms>[0], slugs: stri
     lists.push(`  ${variant} (${r.terms.length}): ${r.terms.slice(0, 12).map((t) => `${t.label} ${t.articles.length}`).join(", ")}`);
     if (opts?.dropVague === false) continue;
     const min = opts?.concretenessMin ?? CONCRETENESS_MIN;
+    const fam = opts?.familiarityMin ?? null;
     const keys = new Set(r.terms.map((t) => t.key));
     const removed = before.terms.filter(
-      (t) => !keys.has(t.key) && !t.key.includes(" ") && !passesVagueTest(t.key, min),
+      (t) => !keys.has(t.key) && !t.key.includes(" ") && !passesVagueTest(t.key, min, fam),
     );
     const at = (key: string) => {
       const i = r.terms.findIndex((t) => t.key === key);
