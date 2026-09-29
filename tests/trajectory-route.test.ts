@@ -1,24 +1,24 @@
 /**
  * **The arithmetic of walking a Trajectory** — src/web/trajectory-route.ts.
  *
- * Every rule here is quoted from the plan's § The mode (client)
- * (docs/plans/260928a-trajectory-mode-skim-a-paper-at-increasing-depth.md), and
- * the depth-change rule most of all: it is the one a reader feels, and the one a
- * plausible implementation gets subtly wrong at the end of a pass.
+ * The rules were first quoted from the plan's § The mode (client)
+ * (docs/plans/260928a-trajectory-mode-skim-a-paper-at-increasing-depth.md);
+ * since plan 260929e each pass is only its own stops, so a deeper pass never
+ * walks the reader through a stop a shallower one already did.
  */
 import { describe, expect, it } from "vitest";
 import type { Block, BlockId, TrajectoryStop } from "../src/types.js";
 import {
-  countAt,
   doorAfter,
   effectiveDepth,
-  currentStop,
+  firstStopOf,
+  locate,
   offeredDepths,
+  passCount,
+  passRoute,
   positionOf,
   positionsOf,
   stepStop,
-  stopAfterDepthChange,
-  visibleRoute,
 } from "../src/web/trajectory-route.js";
 
 /**
@@ -26,8 +26,11 @@ import {
  *
  *   route  a1 b3 c2 d1 e3 f2 g1 h3
  *   Gist   a        d        g         → a d g
- *   More   a     c  d     f  g         → a c d f g
- *   Most   a  b  c  d  e  f  g  h      → all eight
+ *   More         c        f            → c f
+ *   Most      b        e        h      → b e h
+ *
+ * **Each pass is only its own stops** (plan 260929e, SPIDERYARN-READING2-4P):
+ * a reader who has walked Gist is not walked through a, d and g again at More.
  */
 const ROUTE: TrajectoryStop[] = [
   { quoteId: "a", depth: 1, role: "The headline result" },
@@ -41,143 +44,124 @@ const ROUTE: TrajectoryStop[] = [
 ];
 
 const ids = (stops: readonly TrajectoryStop[]) => stops.map((s) => s.quoteId);
+const stop = (quoteId: string, depth: 1 | 2 | 3): TrajectoryStop => ({ quoteId, depth, role: null });
 
-describe("the visible route", () => {
-  it("shows every stop at or above the depth, in route order", () => {
-    expect(ids(visibleRoute(ROUTE, 1))).toEqual(["a", "d", "g"]);
-    expect(ids(visibleRoute(ROUTE, 2))).toEqual(["a", "c", "d", "f", "g"]);
-    expect(ids(visibleRoute(ROUTE, 3))).toEqual(["a", "b", "c", "d", "e", "f", "g", "h"]);
-    expect([countAt(ROUTE, 1), countAt(ROUTE, 2), countAt(ROUTE, 3)]).toEqual([3, 5, 8]);
+describe("a pass", () => {
+  it("is only the stops with exactly that depth, in route order", () => {
+    expect(ids(passRoute(ROUTE, 1))).toEqual(["a", "d", "g"]);
+    expect(ids(passRoute(ROUTE, 2))).toEqual(["c", "f"]);
+    expect(ids(passRoute(ROUTE, 3))).toEqual(["b", "e", "h"]);
+    expect([passCount(ROUTE, 1), passCount(ROUTE, 2), passCount(ROUTE, 3)]).toEqual([3, 2, 3]);
   });
 
-  it("offers only the depths that add stops", () => {
+  it("never walks a stop twice across the three passes", () => {
+    const walked = ([1, 2, 3] as const).flatMap((d) => ids(passRoute(ROUTE, d)));
+    expect(new Set(walked).size).toBe(walked.length);
+    expect(walked).toHaveLength(ROUTE.length);
+  });
+
+  it("offers every depth that has a stop, even when a deeper pass is no bigger (Sol F1)", () => {
     expect(offeredDepths(ROUTE)).toEqual([1, 2, 3]);
-    /* A short spiral: More adds nothing, so there is no More button. */
-    const short: TrajectoryStop[] = [
-      { quoteId: "x", depth: 1, role: null },
-      { quoteId: "y", depth: 3, role: null },
-    ];
-    expect(offeredDepths(short)).toEqual([1, 3]);
-    expect(offeredDepths([{ quoteId: "x", depth: 1, role: null }])).toEqual([1]);
+    /* 2 / 2 / 4 — a real route's pass sizes; More must not vanish for being no bigger. */
+    const equal = [stop("a", 1), stop("b", 2), stop("c", 1), stop("d", 2), stop("e", 3), stop("f", 3), stop("g", 3), stop("h", 3)];
+    expect(offeredDepths(equal)).toEqual([1, 2, 3]);
+    /* Shrinking: 3 / 2 / 1. */
+    const shrinking = [stop("a", 1), stop("b", 1), stop("c", 1), stop("d", 2), stop("e", 2), stop("f", 3)];
+    expect(offeredDepths(shrinking)).toEqual([1, 2, 3]);
+    expect(offeredDepths([stop("x", 1), stop("y", 3)])).toEqual([1, 3]);
+    expect(offeredDepths([stop("x", 1)])).toEqual([1]);
     expect(offeredDepths([])).toEqual([]);
   });
 
   it("draws the asked depth if offered, else the deepest offered below it", () => {
-    const short: TrajectoryStop[] = [
-      { quoteId: "x", depth: 1, role: null },
-      { quoteId: "y", depth: 2, role: null },
-    ];
+    const short = [stop("x", 1), stop("y", 2)];
     expect(effectiveDepth(ROUTE, null)).toBe(1);
     expect(effectiveDepth(ROUTE, 2)).toBe(2);
     expect(effectiveDepth(short, 3)).toBe(2);
+    expect(effectiveDepth([stop("x", 1), stop("y", 3)], 2)).toBe(1);
     expect(effectiveDepth([], 2)).toBeNull();
   });
+});
 
-  it("falls back to the first stop when ?stop= names nothing on this pass", () => {
-    const gist = visibleRoute(ROUTE, 1);
-    expect(currentStop(gist, "d")?.quoteId).toBe("d");
-    expect(currentStop(gist, "gone")?.quoteId).toBe("a");
-    /* On the route, but not on this pass. */
-    expect(currentStop(gist, "b")?.quoteId).toBe("a");
-    expect(currentStop(gist, null)?.quoteId).toBe("a");
-    expect(currentStop([], "a")).toBeNull();
+describe("where the reader is (Sol F4)", () => {
+  it("a link's stop wins over its depth: the stop's own pass is drawn", () => {
+    /* ?depth=2&stop=d — d is a Gist stop, as links from before 260929e can say. */
+    const at = locate(ROUTE, 2, "d");
+    expect(at.depth).toBe(1);
+    expect(ids(at.route)).toEqual(["a", "d", "g"]);
+    expect(at.current?.quoteId).toBe("d");
+    expect(locate(ROUTE, 1, "h").depth).toBe(3);
+  });
+
+  it("with a stop on the asked pass, is exactly that", () => {
+    const at = locate(ROUTE, 2, "f");
+    expect(at.depth).toBe(2);
+    expect(at.current?.quoteId).toBe("f");
+  });
+
+  it("with no stop, or one on no pass, is the asked depth's first stop", () => {
+    expect(locate(ROUTE, 2, null).current?.quoteId).toBe("c");
+    const gone = locate(ROUTE, 3, "gone");
+    expect(gone.depth).toBe(3);
+    expect(gone.current?.quoteId).toBe("b");
+    expect(locate(ROUTE, null, null).current?.quoteId).toBe("a");
+  });
+
+  it("with no route, is nowhere", () => {
+    expect(locate([], 2, "a")).toEqual({ depth: null, route: [], current: null });
   });
 });
 
 describe("next and previous", () => {
-  const more = visibleRoute(ROUTE, 2);
+  const more = passRoute(ROUTE, 2);
 
-  it("steps one stop along the pass", () => {
-    expect(stepStop(more, "c", 1)).toBe("d");
-    expect(stepStop(more, "c", -1)).toBe("a");
+  it("steps one stop along the pass, skipping the shallower pass's stops", () => {
+    expect(stepStop(more, "c", 1)).toBe("f");
+    expect(stepStop(more, "f", -1)).toBe("c");
   });
 
   it("does not wrap at either end", () => {
-    expect(stepStop(more, "g", 1)).toBeNull();
-    expect(stepStop(more, "a", -1)).toBeNull();
+    expect(stepStop(more, "f", 1)).toBeNull();
+    expect(stepStop(more, "c", -1)).toBeNull();
   });
 
   it("steps from a stop that is not on this pass to the first", () => {
-    expect(stepStop(more, "b", 1)).toBe("a");
+    expect(stepStop(more, "b", 1)).toBe("c");
     expect(stepStop([], "a", 1)).toBeNull();
   });
 });
 
 describe("changing depth", () => {
-  it("depth up from the last stop of a pass keeps your place — going round is the door's (plan 260929a)", () => {
-    /* g is the last of Gist and of More; every deeper pass still has it. */
-    expect(stopAfterDepthChange(ROUTE, 1, 2, "g")).toBe("g");
-    expect(stopAfterDepthChange(ROUTE, 2, 3, "g")).toBe("g");
-    expect(stopAfterDepthChange(ROUTE, 1, 3, "g")).toBe("g");
+  it("lands on stop 1 of the new pass, either way (plan 260929e)", () => {
+    expect(firstStopOf(ROUTE, 2)).toBe("c");
+    expect(firstStopOf(ROUTE, 3)).toBe("b");
+    expect(firstStopOf(ROUTE, 1)).toBe("a");
   });
 
-  it("depth up from anywhere else stays on the current stop", () => {
-    expect(stopAfterDepthChange(ROUTE, 1, 2, "a")).toBe("a");
-    expect(stopAfterDepthChange(ROUTE, 1, 3, "d")).toBe("d");
-    expect(stopAfterDepthChange(ROUTE, 2, 3, "f")).toBe("f");
-  });
-
-  it("depth down stays when the shallower pass has the stop", () => {
-    expect(stopAfterDepthChange(ROUTE, 3, 1, "d")).toBe("d");
-    expect(stopAfterDepthChange(ROUTE, 3, 2, "c")).toBe("c");
-  });
-
-  it("depth down otherwise goes to the nearest earlier stop the shallower pass has", () => {
-    /* e is Most only; the nearest earlier stop at depth ≤ 2 is d, at ≤ 1 is d. */
-    expect(stopAfterDepthChange(ROUTE, 3, 2, "e")).toBe("d");
-    /* f is More; nearest earlier at Gist is d, not the nearer-in-array e. */
-    expect(stopAfterDepthChange(ROUTE, 2, 1, "f")).toBe("d");
-    /* h: nearest earlier at More is g. */
-    expect(stopAfterDepthChange(ROUTE, 3, 2, "h")).toBe("g");
-  });
-
-  it("depth down with nothing earlier goes to the shallower pass's first stop", () => {
-    const late: TrajectoryStop[] = [
-      { quoteId: "p", depth: 3, role: null },
-      { quoteId: "q", depth: 1, role: null },
-    ];
-    expect(stopAfterDepthChange(late, 3, 1, "p")).toBe("q");
-  });
-
-  it("depth up past a pass that adds nothing stays put rather than inventing a stop", () => {
-    const flat: TrajectoryStop[] = [
-      { quoteId: "x", depth: 1, role: null },
-      { quoteId: "y", depth: 1, role: null },
-    ];
-    expect(stopAfterDepthChange(flat, 1, 3, "y")).toBe("y");
-  });
-
-  it("lands on the first stop when there is no current stop", () => {
-    expect(stopAfterDepthChange(ROUTE, 1, 2, null)).toBe("a");
-    expect(stopAfterDepthChange(ROUTE, 1, 2, "gone")).toBe("a");
+  it("is null for a pass with no stops", () => {
+    expect(firstStopOf([stop("x", 1)], 2)).toBeNull();
   });
 });
 
 describe("the door after the current stop", () => {
   it("offers the next stop on the pass", () => {
     expect(doorAfter(ROUTE, 1, "a")).toEqual({ kind: "next", quoteId: "d" });
+    expect(doorAfter(ROUTE, 2, "c")).toEqual({ kind: "next", quoteId: "f" });
   });
 
-  it("offers stop 1 of the next deeper pass at the end of a pass (51)", () => {
-    /* Gist is a d g; More a c d f g; Most is every stop, a first. */
-    expect(doorAfter(ROUTE, 1, "g")).toEqual({ kind: "end", deeper: { depth: 2, first: "a" } });
-    expect(doorAfter(ROUTE, 2, "g")).toEqual({ kind: "end", deeper: { depth: 3, first: "a" } });
+  it("offers stop 1 of the next deeper pass at the end of a pass — a stop not walked yet", () => {
+    expect(doorAfter(ROUTE, 1, "g")).toEqual({ kind: "end", deeper: { depth: 2, first: "c" } });
+    expect(doorAfter(ROUTE, 2, "f")).toEqual({ kind: "end", deeper: { depth: 3, first: "b" } });
   });
 
-  it("lands More detail on the deeper pass's own first stop when that is new at it", () => {
-    const late: TrajectoryStop[] = [
-      { quoteId: "p", depth: 2, role: null },
-      { quoteId: "q", depth: 1, role: null },
-    ];
-    expect(doorAfter(late, 1, "q")).toEqual({ kind: "end", deeper: { depth: 2, first: "p" } });
+  it("skips a depth with no stops when offering more detail", () => {
+    const short = [stop("x", 1), stop("y", 3)];
+    expect(doorAfter(short, 1, "x")).toEqual({ kind: "end", deeper: { depth: 3, first: "y" } });
   });
 
-  it("skips a depth that adds nothing when offering more detail", () => {
-    const short: TrajectoryStop[] = [
-      { quoteId: "x", depth: 1, role: null },
-      { quoteId: "y", depth: 3, role: null },
-    ];
-    expect(doorAfter(short, 1, "x")).toEqual({ kind: "end", deeper: { depth: 3, first: "x" } });
+  it("offers More detail even when the deeper pass is smaller (Sol F1)", () => {
+    const shrinking = [stop("a", 1), stop("b", 1), stop("c", 1), stop("d", 2)];
+    expect(doorAfter(shrinking, 1, "c")).toEqual({ kind: "end", deeper: { depth: 2, first: "d" } });
   });
 
   it("offers no onward action at the end of the deepest pass (51)", () => {

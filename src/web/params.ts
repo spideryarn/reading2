@@ -406,7 +406,9 @@ export const eventParam = parseAsBlockId.withOptions({ history: "replace" });
  *
  * A depth the route does not offer is not refused here — this parser cannot see
  * the route — but `effectiveDepth` (src/web/trajectory-route.ts) draws the
- * deepest offered pass below it.
+ * deepest offered pass below it. **A `?stop=` on the route wins over this**
+ * (`locate`): each pass walks only its own stops (plan 260929e), so the stop's
+ * own pass is drawn whatever the depth says.
  */
 export const depthParam = createParser<TrajectoryDepth>({
   parse: (v) => (v === "1" ? 1 : v === "2" ? 2 : v === "3" ? 3 : null),
@@ -419,8 +421,8 @@ export const depthParam = createParser<TrajectoryDepth>({
  *
  * `replace`: stepping along the route is traversal, and twenty stops must not
  * cost twenty presses of Back — comment-jump.ts's argument for its arrows. A
- * stop that is not on the current pass (a stale link, a quote chosen again)
- * falls back to the first stop, in `currentStop`.
+ * stop on the route draws its own pass; one on no pass (a stale link, a quote
+ * chosen again) falls back to the asked pass's first stop, in `locate`.
  */
 export const stopParam = parseAsBlockId.withOptions({ history: "replace" });
 

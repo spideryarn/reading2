@@ -41,16 +41,14 @@ import { dropPendingFlash, flashBlock } from "../../flash.js";
 import { scrollToBlock } from "../../scroll.js";
 import { type Found, quoteMarkKey, resolveTrajectoryStop } from "../../search-hits.js";
 import {
-  countAt,
-  currentStop,
   DEPTH_LABEL,
   doorAfter,
-  effectiveDepth,
+  firstStopOf,
+  locate,
   offeredDepths,
+  passCount,
   positionsOf,
   stepStop,
-  stopAfterDepthChange,
-  visibleRoute,
 } from "../../trajectory-route.js";
 import type { QuotesRead } from "../../useQuotes.js";
 import { useTrajectory } from "../../useTrajectory.js";
@@ -414,9 +412,12 @@ function useTrajectoryMode({
     stop: stopParam,
   });
 
-  const depth = effectiveDepth(stops, asked.depth);
-  const route = useMemo(() => (depth === null ? NO_STOPS : visibleRoute(stops, depth)), [stops, depth]);
-  const current = currentStop(route, asked.stop);
+  /* **The stop wins over the depth** (Sol, plan 260929e review F4): a
+     `?stop=` draws its own pass, since passes no longer share a stop. */
+  const { depth, route, current } = useMemo(
+    () => locate(stops, asked.depth, asked.stop),
+    [stops, asked.depth, asked.stop],
+  );
 
   const byId = useMemo(() => new Map(quotes.map((q) => [q.id, q])), [quotes]);
   const index = useMemo(() => blockIndex(blocks), [blocks]);
@@ -468,6 +469,22 @@ function useTrajectoryMode({
     [covers, onAway],
   );
 
+  /**
+   * A stop determines its pass, so keep the URL's two coordinates in step when
+   * traversal replaces the current entry. This matters for an old link whose
+   * valid `?stop=` disagrees with `?depth=`: `locate` correctly draws the stop's
+   * pass, and the first interaction canonicalises the address to that pass.
+   * Gist keeps the documented absent-depth default.
+   */
+  const replaceStop = useCallback(
+    (quoteId: string) => {
+      if (depth === null) return false;
+      void setRoute({ depth: depth === 1 ? null : depth, stop: quoteId }, { history: "replace" });
+      return true;
+    },
+    [depth, setRoute],
+  );
+
   /** A step along the route: replaces, and moves the reader to the stop. */
   const goStep = useCallback(
     (quoteId: string): boolean => {
@@ -477,26 +494,27 @@ function useTrajectoryMode({
          page cannot perform: there would be no later event to supply its flash,
          and an older held flash could then surface under the wrong stop. */
       if (block === null) return false;
-      void setRoute({ stop: quoteId }, { history: "replace" });
+      if (!replaceStop(quoteId)) return false;
       moveTo(block, quoteId);
       return true;
     },
-    [setRoute, blockOf, moveTo],
+    [blockOf, replaceStop, moveTo],
   );
 
   const changeDepth = useCallback(
     /** @param land where to stand instead of where a depth change keeps you — *More detail ›*. */
     (to: TrajectoryDepth, land?: string) => {
       if (depth === null) return;
-      const next = land ?? stopAfterDepthChange(stops, depth, to, current?.quoteId ?? null);
+      /* Stop 1 of the new pass: passes share no stop to stay on (260929e). */
+      const next = land ?? firstStopOf(stops, to);
       const moved = next !== null && next !== current?.quoteId;
       const block = moved ? blockOf(next) : null;
       if (moved && block === null) return;
       /* **One update, pushed** — depth and stop together. */
       void setRoute({ depth: to, stop: next }, { history: "push" });
-      /* Scroll — and flash — only when the change moved the reader. Staying
-         put is the point of "changing depth keeps your place", and nothing
-         was jumped to. */
+      /* Scroll — and flash — only when the change moved the reader, which,
+         since passes stopped sharing stops (260929e), is every time there is
+         a stop to go to. */
       if (block !== null && next !== null) moveTo(block, next);
     },
     [depth, stops, current, setRoute, blockOf, moveTo],
@@ -530,15 +548,15 @@ function useTrajectoryMode({
   const doorCue = nextStop ? cueOf(nextStop) : null;
   const passLabel = depth === null ? "" : DEPTH_LABEL[depth];
   const deeperLabel = door?.kind === "end" && door.deeper ? DEPTH_LABEL[door.deeper.depth] : null;
-  const passCount = route.length;
+  const passSize = route.length;
   const doorView = useMemo<DoorView | null>(
     () =>
       doorKind === null
         ? null
         : doorKind === "next"
           ? { kind: "next", cue: doorCue }
-          : { kind: "end", pass: passLabel, count: passCount, deeper: deeperLabel },
-    [doorKind, doorCue, passLabel, passCount, deeperLabel],
+          : { kind: "end", pass: passLabel, count: passSize, deeper: deeperLabel },
+    [doorKind, doorCue, passLabel, passSize, deeperLabel],
   );
 
   /* ------------------------------------------------ published upward --
@@ -549,7 +567,7 @@ function useTrajectoryMode({
   const stableStep = useCallback((dir: -1 | 1) => latest.current.step(dir), []);
   const stableAdvance = useCallback(() => latest.current.advance(), []);
   const stableDeeper = useCallback(() => latest.current.deeper(), []);
-  const stopBlock = quote?.blockId ?? null;
+  const stopBlock = current === null ? null : blockOf(current.quoteId);
 
   /* **This mount claims the arrival before it waits for data.** The mailbox is
      cleared in a layout effect, while the claimed token stays in this band's
@@ -624,7 +642,7 @@ function useTrajectoryMode({
   /* ------------------------------------------------ the panel's view -- */
   const depths = useMemo(
     () =>
-      offeredDepths(stops).map((d) => ({ depth: d, label: DEPTH_LABEL[d], count: countAt(stops, d) })),
+      offeredDepths(stops).map((d) => ({ depth: d, label: DEPTH_LABEL[d], count: passCount(stops, d) })),
     [stops],
   );
   const positions = useMemo(() => positionsOf(blocks), [blocks]);
@@ -638,8 +656,6 @@ function useTrajectoryMode({
           n: i + 1,
           place: path.length > 0 ? path.join(" › ") : null,
           cue: cueOf(stop),
-          /* A shallower pass's stop, already seen on the way round. */
-          seen: depth !== null && stop.depth < depth,
           current: stop.quoteId === current?.quoteId,
           /* A stop whose quote is no longer in the Quotes: a row with nowhere
              to go. The stale banner says why. */
@@ -650,7 +666,7 @@ function useTrajectoryMode({
           words: byId.get(stop.quoteId)?.text ?? null,
         };
       }),
-    [route, blockOf, index, tree, depth, current, positions, byId],
+    [route, blockOf, index, tree, current, positions, byId],
   );
 
   /** Choosing a stop in the band: a jump, and on a narrow window the band steps aside. */
@@ -660,12 +676,12 @@ function useTrajectoryMode({
          drawer is (comment-jump.ts): an arbitrary distance, so it pushes one
          entry via `jumpTo`. The stop is queued in the same tick, and nuqs
          upgrades the combined flush to the push, so both land on one entry. */
-      void setRoute({ stop: quoteId }, { history: "replace" });
       const block = blockOf(quoteId);
-      if (block) onJump(block, quoteMarkKey(quoteId, block));
+      if (block === null || !replaceStop(quoteId)) return;
+      onJump(block, quoteMarkKey(quoteId, block));
       if (covers) onAway();
     },
-    [setRoute, blockOf, onJump, covers, onAway],
+    [blockOf, replaceStop, onJump, covers, onAway],
   );
   /* ‹ › — the band's own buttons. Stepping aside is `moveTo`'s, so the keys get it too. */
   const onStep = useCallback(

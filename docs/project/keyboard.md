@@ -171,7 +171,9 @@ the table by adding one attribute, and why a new panel would too.
 
 ## ← / → in Trajectory
 
-**While Trajectory is the mode, ← / → step its stops instead of moving the stride.** Everywhere else
+**While Trajectory is the mode, ← / → step its stops instead of moving the stride** — the stops
+of the pass drawn, which since 2026-09-29 are only that pass's own, so More never steps you back
+through Gist ([260929e](../plans/260929e-trajectory-each-pass-walks-only-its-new-stops.md)). Everywhere else
 they move the stride exactly as above, and ↑ / ↓ are the article's in every mode, Trajectory
 included. This is the direction Greg's 2026-08-31 answer pointed — *"we can use left/right for
 mode-specific behaviours"* — and the one he asked for in the brief:

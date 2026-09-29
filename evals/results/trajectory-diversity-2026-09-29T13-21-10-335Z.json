@@ -1,0 +1,1883 @@
+{
+  "near": 0.2,
+  "report": [
+    {
+      "slug": "antikythera-mechanism-spya-zhxrzm",
+      "version": "trajectory/6",
+      "stale": false,
+      "visible": [
+        3,
+        8,
+        15
+      ],
+      "ideas": null,
+      "stops": [
+        {
+          "label": "#1(d1)",
+          "quoteId": "spya-hjevyy",
+          "depth": 1,
+          "cue": "Look for what kinds of future astronomical events this device could predict.",
+          "section": "Discovery and dating › Mechanism overview",
+          "at": 3,
+          "carries": [],
+          "beside": [],
+          "text": "It could be used to predict astronomical positions and eclipses decades in advance."
+        },
+        {
+          "label": "#2(d1)",
+          "quoteId": "spya-y4ykm8",
+          "depth": 1,
+          "cue": "Notice how many centuries passed before comparable machinery reappeared.",
+          "section": "Discovery and dating › Mechanism overview",
+          "at": 6,
+          "carries": [],
+          "beside": [],
+          "text": "Machines with similar complexity did not appear again until the 14th century in western Europe."
+        },
+        {
+          "label": "#3(d1)",
+          "quoteId": "spya-vkr7jz",
+          "depth": 1,
+          "cue": "Look for what evidence is missing or unaccounted for regarding planetary displays.",
+          "section": "Complexity and planet debate › Complexity and planetary debate",
+          "at": 94,
+          "carries": [],
+          "beside": [],
+          "text": "There is debate as to whether the mechanism had indicators for all five of the planets known to the ancient Greeks. No gearing for such a planetary display survives and all gears are accounted for—with the exception of one 63-toothed gear (r1) otherwise unaccounted for in fragment D."
+        },
+        {
+          "label": "#4(d2)",
+          "quoteId": "spya-m0weyc",
+          "depth": 2,
+          "cue": "Ask why this piece was overlooked at first among the wreck's finds.",
+          "section": "Discovery and dating › Discovery of the wreck",
+          "at": 9,
+          "carries": [],
+          "beside": [],
+          "text": "It went unnoticed for two years, while museum staff worked on piecing together more obvious treasures, such as the statues."
+        },
+        {
+          "label": "#5(d2)",
+          "quoteId": "spya-zkfd7d",
+          "depth": 2,
+          "cue": "Note how few of the fragments carry most of the mechanism's information.",
+          "section": "Fragments › Fragmentation of the mechanism",
+          "at": 20,
+          "carries": [],
+          "beside": [],
+          "text": "Of the 82 known fragments, seven are mechanically significant and contain the majority of the mechanism and inscriptions."
+        },
+        {
+          "label": "#6(d2)",
+          "quoteId": "spya-ktzmqx",
+          "depth": 2,
+          "cue": "Look for what athletic event the mechanism was found to track.",
+          "section": "Zodiac dial and indicators › Moon and Sun pointers",
+          "at": 60,
+          "carries": [],
+          "beside": [],
+          "text": "In 2008, scientists reported new findings in Nature showing the mechanism not only tracked the Metonic calendar and predicted solar eclipses, but also calculated the timing of panhellenic athletic games, such as the ancient Olympic Games."
+        },
+        {
+          "label": "#7(d2)",
+          "quoteId": "spya-r3kre0",
+          "depth": 2,
+          "cue": "Notice which calendar type the count of intervals points toward.",
+          "section": "Front dial and calendar › Calendar day-count debate",
+          "at": 30,
+          "carries": [],
+          "beside": [],
+          "text": "Since the discovery of the mechanism more than a century ago, this outer ring has been presumed to represent a 365-day Egyptian solar calendar, but research (Budiselic, et al., 2020) challenged this presumption and provided direct statistical evidence there are 354 intervals, suggesting a lunar calendar."
+        },
+        {
+          "label": "#8(d2)",
+          "quoteId": "spya-gyaqny",
+          "depth": 2,
+          "cue": "Compare the miniaturisation here to what era of clockmaking.",
+          "section": "Complexity and planet debate › Complexity and planetary debate",
+          "at": 93,
+          "carries": [],
+          "beside": [],
+          "text": "The mechanism is remarkable for the level of miniaturisation and the complexity of its parts, which is comparable to that of 14th-century astronomical clocks."
+        },
+        {
+          "label": "#9(d3)",
+          "quoteId": "spya-xtxkwc",
+          "depth": 3,
+          "cue": "Look for what limitation the researchers admit about their own scanning method.",
+          "section": "Reconstruction efforts › Proposed gear schemes",
+          "at": 149,
+          "carries": [],
+          "beside": [],
+          "text": "In 2025, one research team concluded that manufacture error in the original mechanism's gears is too great for the mechanism to have ever worked; they emphasized that the scans they used could be incorrect about the extent of imperfections."
+        },
+        {
+          "label": "#10(d3)",
+          "quoteId": "spya-h2hhu9",
+          "depth": 3,
+          "cue": "Notice which direction this pointer moves compared to the others.",
+          "section": "Back dials › Games dial",
+          "at": 77,
+          "carries": [],
+          "beside": [],
+          "text": "it is the only pointer on the instrument that travels in an anticlockwise direction as time advances."
+        },
+        {
+          "label": "#11(d3)",
+          "quoteId": "spya-yq2ptz",
+          "depth": 3,
+          "cue": "Ask what this level of craftsmanship implies about how it was learned.",
+          "section": "Similar devices in ancient literature › Ancient literary accounts",
+          "at": 158,
+          "carries": [],
+          "beside": [],
+          "text": "The level of refinement of the mechanism indicates that the device was not unique, and possibly required expertise built over several generations."
+        },
+        {
+          "label": "#12(d3)",
+          "quoteId": "spya-x30nak",
+          "depth": 3,
+          "cue": "Look for how the timing rules out specific historical figures' devices.",
+          "section": "Similar devices in ancient literature › Ancient literary accounts",
+          "at": 165,
+          "carries": [],
+          "beside": [],
+          "text": "It is unlikely that any one of these machines was the particular Antikythera mechanism found in the shipwreck since both the devices fabricated by Archimedes and mentioned by Cicero were located in Rome at least 30 years later than the estimated date of the shipwreck, and the third device was almost certainly in the hands of Posidonius by that date."
+        },
+        {
+          "label": "#13(d3)",
+          "quoteId": "spya-rzsa46",
+          "depth": 3,
+          "cue": "Look for which later civilizations may have inherited this mechanical tradition.",
+          "section": "Similar devices in ancient literature › Eastern Mediterranean and others",
+          "at": 170,
+          "carries": [],
+          "beside": [],
+          "text": "This evidence that the Antikythera mechanism was not unique adds support to the idea that there was an ancient Greek tradition of complex mechanical technology that was later, at least in part, transmitted to the Byzantine and Islamic worlds, where mechanical devices which were complex, albeit simpler than the Antikythera mechanism, were built during the Middle Ages."
+        },
+        {
+          "label": "#14(d3)",
+          "quoteId": "spya-u5ek4z",
+          "depth": 3,
+          "cue": "Notice what unusual material was used to recreate the mechanism.",
+          "section": "Popular culture and museum replicas › Media and popular depictions",
+          "at": 178,
+          "carries": [],
+          "beside": [],
+          "text": "A functioning Lego reconstruction of the Antikythera mechanism was built in 2010 by hobbyist Andy Carol, and featured in a short film produced by Small Mammal in 2011."
+        },
+        {
+          "label": "#15(d3)",
+          "quoteId": "spya-j9858x",
+          "depth": 3,
+          "cue": "Notice what alternate name the mechanism is given in this fictional treatment.",
+          "section": "Popular culture and museum replicas › Media and popular depictions",
+          "at": 181,
+          "carries": [],
+          "beside": [],
+          "text": "The film Indiana Jones and the Dial of Destiny (2023) features a plot around a fictionalized version of the mechanism (also referred to as Archimedes' Dial, the titular Dial of Destiny)."
+        }
+      ],
+      "rows": [
+        {
+          "policy": "nested",
+          "depth": 1,
+          "walk": 3,
+          "seenAgain": 0,
+          "restates": [],
+          "ideaAgain": 0,
+          "sameIdeaPairs": 0,
+          "nearPairs": [],
+          "closeConsecutive": 0,
+          "sameSectionConsecutive": 1,
+          "meanQuoteChars": 154
+        },
+        {
+          "policy": "nested",
+          "depth": 2,
+          "walk": 8,
+          "seenAgain": 3,
+          "restates": [],
+          "ideaAgain": 0,
+          "sameIdeaPairs": 0,
+          "nearPairs": [],
+          "closeConsecutive": 0,
+          "sameSectionConsecutive": 1,
+          "meanQuoteChars": 176
+        },
+        {
+          "policy": "nested",
+          "depth": 3,
+          "walk": 15,
+          "seenAgain": 8,
+          "restates": [],
+          "ideaAgain": 0,
+          "sameIdeaPairs": 0,
+          "nearPairs": [],
+          "closeConsecutive": 0,
+          "sameSectionConsecutive": 4,
+          "meanQuoteChars": 198
+        },
+        {
+          "policy": "added",
+          "depth": 1,
+          "walk": 3,
+          "seenAgain": 0,
+          "restates": [],
+          "ideaAgain": 0,
+          "sameIdeaPairs": 0,
+          "nearPairs": [],
+          "closeConsecutive": 0,
+          "sameSectionConsecutive": 1,
+          "meanQuoteChars": 154
+        },
+        {
+          "policy": "added",
+          "depth": 2,
+          "walk": 5,
+          "seenAgain": 0,
+          "restates": [],
+          "ideaAgain": 0,
+          "sameIdeaPairs": 0,
+          "nearPairs": [],
+          "closeConsecutive": 0,
+          "sameSectionConsecutive": 0,
+          "meanQuoteChars": 189
+        },
+        {
+          "policy": "added",
+          "depth": 3,
+          "walk": 7,
+          "seenAgain": 0,
+          "restates": [],
+          "ideaAgain": 0,
+          "sameIdeaPairs": 0,
+          "nearPairs": [],
+          "closeConsecutive": 0,
+          "sameSectionConsecutive": 3,
+          "meanQuoteChars": 223
+        }
+      ]
+    },
+    {
+      "slug": "cargocult-spya-rz663q",
+      "version": "trajectory/7",
+      "stale": false,
+      "visible": [
+        3,
+        6,
+        11
+      ],
+      "ideas": [
+        "I1 · A result only counts if it could have come out otherwise",
+        "I2 · A shrinking effect under better controls was never real",
+        "I3 · Cargo Cult Science copies form, not substance",
+        "I4 · Integrity means volunteering evidence against yourself",
+        "I5 · You must catch your own self-deception first"
+      ],
+      "stops": [
+        {
+          "label": "#1(d1)",
+          "quoteId": "spya-zat4mm",
+          "depth": 1,
+          "cue": "What essential ingredient does Feynman say Cargo Cult Science is missing despite following scientific form?",
+          "section": "Defining Cargo Cult Science › The Cargo Cult Story",
+          "at": 14,
+          "carries": [
+            "I3"
+          ],
+          "beside": [
+            "I4"
+          ],
+          "text": "So I call these things Cargo Cult Science, because they follow all the apparent precepts and forms of scientific investigation, but they’re missing something essential, because the planes don’t land."
+        },
+        {
+          "label": "#2(d1)",
+          "quoteId": "spya-zwbtkt",
+          "depth": 1,
+          "cue": "Whose deception does Feynman say a scientist must guard against before worrying about honesty to others?",
+          "section": "Self-Deception in Experiments › Not Fooling Yourself",
+          "at": 24,
+          "carries": [
+            "I5"
+          ],
+          "beside": [],
+          "text": "The first principle is that you must not fool yourself—and you are the easiest person to fool. So you have to be very careful about that. After you’ve not fooled yourself, it’s easy not to fool other scientists. You just have to be honest in a conventional way after that."
+        },
+        {
+          "label": "#3(d1)",
+          "quoteId": "spya-hz6mw5",
+          "depth": 1,
+          "cue": "What test does Feynman say a real effect must pass, and why does parapsychology fail it?",
+          "section": "Case Studies in Poor Science › The Rhine Parapsychology Case",
+          "at": 38,
+          "carries": [
+            "I1",
+            "I2"
+          ],
+          "beside": [],
+          "text": "All the parapsychologists are looking for some experiment that can be repeated—that you can do again and get the same effect—statistically, even. They run a million rats—no, it’s people this time—they do a lot of things and get a certain statistical effect. Next time they try it they don’t get it any more. And now you find a man saying that it is an irrelevant demand to expect a repeatable experiment. This is science?"
+        },
+        {
+          "label": "#4(d2)",
+          "quoteId": "spya-y38mpq",
+          "depth": 2,
+          "cue": "Notice how researchers treated measurements that disagreed with Millikan's number versus ones that agreed.",
+          "section": "Self-Deception in Experiments › The Millikan Oil-Drop Story",
+          "at": 22,
+          "carries": [
+            "I5"
+          ],
+          "beside": [],
+          "text": "Why didn’t they discover that the new number was higher right away? It’s a thing that scientists are ashamed of—this history—because it’s apparent that people did things like this: When they got a number that was too high above Millikan’s, they thought something must be wrong—and they would look for and find a reason why something might be wrong. When they got a number closer to Millikan’s value they didn’t look so hard. And so they eliminated the numbers that were too far off, and did other things like that."
+        },
+        {
+          "label": "#5(d2)",
+          "quoteId": "spya-zz5jad",
+          "depth": 2,
+          "cue": "What kind of evidence does Feynman say you must disclose even when it weakens your own theory?",
+          "section": "Defining Cargo Cult Science › Principle of Scientific Integrity",
+          "at": 16,
+          "carries": [
+            "I4"
+          ],
+          "beside": [
+            "I3"
+          ],
+          "text": "If you make a theory, for example, and advertise it, or put it out, then you must also put down all the facts that disagree with it, as well as those that agree with it."
+        },
+        {
+          "label": "#6(d2)",
+          "quoteId": "spya-jw75b8",
+          "depth": 2,
+          "cue": "Why did other researchers ignore Young's careful rat experiment rather than build on it?",
+          "section": "Case Studies in Poor Science › Mr. Young's Rat Experiment",
+          "at": 37,
+          "carries": [],
+          "beside": [
+            "I1",
+            "I2"
+          ],
+          "text": "They just went right on running rats in the same old way, and paid no attention to the great discoveries of Mr. Young, and his papers are not referred to, because he didn’t discover anything about the rats. In fact, he discovered all the things you have to do to discover something about rats. But not paying attention to experiments like that is a characteristic of Cargo Cult Science."
+        },
+        {
+          "label": "#7(d3)",
+          "quoteId": "spya-gk7rfh",
+          "depth": 3,
+          "cue": "What happens to a study's chance of being published depending on which way its answer comes out?",
+          "section": "Self-Deception in Experiments › Publishing All Results",
+          "at": 28,
+          "carries": [],
+          "beside": [
+            "I4"
+          ],
+          "text": "If your answer happens to come out in the direction the government or the politicians like, they can use it as an argument in their favor; if it comes out the other way, they don’t publish it at all. That’s not giving scientific advice."
+        },
+        {
+          "label": "#8(d3)",
+          "quoteId": "spya-qz4f53",
+          "depth": 3,
+          "cue": "Look for what Feynman says should never determine whether a result gets published.",
+          "section": "Self-Deception in Experiments › Publishing All Results",
+          "at": 27,
+          "carries": [
+            "I4"
+          ],
+          "beside": [],
+          "text": "In other words, publication probability depends upon the answer. That should not be done."
+        },
+        {
+          "label": "#9(d3)",
+          "quoteId": "spya-zhmerc",
+          "depth": 3,
+          "cue": "What made Young's rat experiment worth calling first-rate, according to Feynman?",
+          "section": "Case Studies in Poor Science › Mr. Young's Rat Experiment",
+          "at": 36,
+          "carries": [],
+          "beside": [],
+          "text": "Now, from a scientific standpoint, that is an A‑Number‑l experiment. That is the experiment that makes rat‑running experiments sensible, because it uncovers the clues that the rat is really using—not what you think it’s using."
+        },
+        {
+          "label": "#10(d3)",
+          "quoteId": "spya-z6r8uh",
+          "depth": 3,
+          "cue": "What danger does Feynman see in teaching students to get results rather than to run honest experiments?",
+          "section": "Case Studies in Poor Science › The Rhine Parapsychology Case",
+          "at": 39,
+          "carries": [
+            "I2"
+          ],
+          "beside": [
+            "I1"
+          ],
+          "text": "It is very dangerous to have such a policy in teaching—to teach students only how to get certain results, rather than how to do an experiment with scientific integrity."
+        },
+        {
+          "label": "#11(d3)",
+          "quoteId": "spya-mn57wu",
+          "depth": 3,
+          "cue": "What kind of freedom does Feynman wish for his listeners so they can keep their integrity?",
+          "section": "Case Studies in Poor Science › Final Wish for Integrity",
+          "at": 40,
+          "carries": [],
+          "beside": [
+            "I2"
+          ],
+          "text": "So I wish to you—I have no more time, so I have just one wish for you—the good luck to be somewhere where you are free to maintain the kind of integrity I have described, and where you do not feel forced by a need to maintain your position in the organization, or financial support, or so on, to lose your integrity."
+        }
+      ],
+      "rows": [
+        {
+          "policy": "nested",
+          "depth": 1,
+          "walk": 3,
+          "seenAgain": 0,
+          "restates": [],
+          "ideaAgain": 0,
+          "sameIdeaPairs": 0,
+          "nearPairs": [],
+          "closeConsecutive": 0,
+          "sameSectionConsecutive": 0,
+          "meanQuoteChars": 297
+        },
+        {
+          "policy": "nested",
+          "depth": 2,
+          "walk": 6,
+          "seenAgain": 3,
+          "restates": [],
+          "ideaAgain": 1,
+          "sameIdeaPairs": 1,
+          "nearPairs": [],
+          "closeConsecutive": 0,
+          "sameSectionConsecutive": 0,
+          "meanQuoteChars": 327
+        },
+        {
+          "policy": "nested",
+          "depth": 3,
+          "walk": 11,
+          "seenAgain": 6,
+          "restates": [],
+          "ideaAgain": 2,
+          "sameIdeaPairs": 3,
+          "nearPairs": [],
+          "closeConsecutive": 2,
+          "sameSectionConsecutive": 3,
+          "meanQuoteChars": 272
+        },
+        {
+          "policy": "added",
+          "depth": 1,
+          "walk": 3,
+          "seenAgain": 0,
+          "restates": [],
+          "ideaAgain": 0,
+          "sameIdeaPairs": 0,
+          "nearPairs": [],
+          "closeConsecutive": 0,
+          "sameSectionConsecutive": 0,
+          "meanQuoteChars": 297
+        },
+        {
+          "policy": "added",
+          "depth": 2,
+          "walk": 3,
+          "seenAgain": 0,
+          "restates": [],
+          "ideaAgain": 1,
+          "sameIdeaPairs": 0,
+          "nearPairs": [],
+          "closeConsecutive": 0,
+          "sameSectionConsecutive": 0,
+          "meanQuoteChars": 356
+        },
+        {
+          "policy": "added",
+          "depth": 3,
+          "walk": 5,
+          "seenAgain": 0,
+          "restates": [],
+          "ideaAgain": 2,
+          "sameIdeaPairs": 0,
+          "nearPairs": [],
+          "closeConsecutive": 2,
+          "sameSectionConsecutive": 3,
+          "meanQuoteChars": 207
+        }
+      ]
+    },
+    {
+      "slug": "entropy-24-00930-spya-pywwkq",
+      "version": "trajectory/6",
+      "stale": false,
+      "visible": [
+        4,
+        10,
+        20
+      ],
+      "ideas": [
+        "I1 · Statistically inferred links stand in for real circuit wiring",
+        "I2 · Undirected similarity versus directed flow",
+        "I3 · Synergy marks genuine computation, not just relay",
+        "I4 · Shannon theory alone cannot split information into parts; you must supply a redundancy rule",
+        "I5 · Computation concentrates in richly connected hubs",
+        "I6 · Loops among inputs boost synergy more than loops back from the target",
+        "I7 · Synergy peaks at intermediate input similarity, then gives way to redundancy",
+        "I8 · The redundancy/synergy balance shifts with what the brain is doing",
+        "I9 · Information sharing can be resolved moment-by-moment, not just as an average",
+        "I10 · The same decomposition can apply to multiple targets or across time"
+      ],
+      "stops": [
+        {
+          "label": "#1(d1)",
+          "quoteId": "spya-v025zn",
+          "depth": 1,
+          "cue": "Look for how comparing whole versus summed parts reveals synergy or redundancy.",
+          "section": "4. PID: Partial Information Decomposition › 4.1. The Basic Problem and Intuition",
+          "at": 28,
+          "carries": [
+            "I3"
+          ],
+          "beside": [],
+          "text": "If the left-hand side of Equation (4) (the “whole”) is greater than the right-hand side (the sum of the “parts”), then there is some information about Y that is disclosed by the joint state of all the neurons that is not disclosed by any individual parent. In this case, the system exhibits synergistic dynamics, and the target neuron can be thought of as performing a kind of integrating “computation” on all of its inputs considered jointly (this is also sometimes referred to as “information modification” in the literature [19]). Conversely, if the whole is less than the sum of its parts, then there must be redundant information about Y instantiated multiple times over the parent neurons that is “double counted” when summing the marginals."
+        },
+        {
+          "label": "#2(d1)",
+          "quoteId": "spya-rf5knz",
+          "depth": 1,
+          "cue": "Notice what information transfer measures alone cannot show about neurons combining inputs.",
+          "section": "3. Information Processing in Neural Circuits › Limits of Information Transfer",
+          "at": 21,
+          "carries": [
+            "I3"
+          ],
+          "beside": [],
+          "text": "Information transfer captures the overall “flow” of information through the system; however, it is limited in its ability to reveal how different streams of information “interact” and how neurons produce novel or modified information from multiple sources [19]. How does one examine information processing itself? We propose that one successful avenue is that of multivariate information decomposition [1]."
+        },
+        {
+          "label": "#3(d1)",
+          "quoteId": "spya-y4cdmx",
+          "depth": 1,
+          "cue": "Look for how densely connected hub neurons compare to others in processing information.",
+          "section": "5. PID in Action › 5.1. Synergy in Rich Clubs",
+          "at": 56,
+          "carries": [
+            "I5"
+          ],
+          "beside": [],
+          "text": "Unambiguously, rich club triads processed more information than triads outside rich clubs. Numerically, the triads inside the rich clubs had 2.7 times the amount of synergy as the triads not in the rich club (Figure 4B)."
+        },
+        {
+          "label": "#4(d1)",
+          "quoteId": "spya-rwuyy2",
+          "depth": 1,
+          "cue": "Consider what this implies about whether neurons simply add up their inputs.",
+          "section": "8. Summary and Closing Matter › 8. Summary",
+          "at": 93,
+          "carries": [],
+          "beside": [],
+          "text": "The existence of synergy in empirical data shows us that neurons do not appear to blindly sum the number of inputs and fire in response to the total (as would be expected from a basic threshold model or complex contagion model), but instead they are also sensitive to the particular patterns of incoming stimuli."
+        },
+        {
+          "label": "#5(d2)",
+          "quoteId": "spya-n8r3m7",
+          "depth": 2,
+          "cue": "Notice how broadly distributed this collective activity is described as being across the brain.",
+          "section": "1. Introduction › Open Questions in Processing",
+          "at": 6,
+          "carries": [],
+          "beside": [],
+          "text": "It is known, however, that such processes are distributed over integrative interactions in neural circuits throughout the brain and involve large numbers of interacting neurons. We refer to this collective activity as neural information processing."
+        },
+        {
+          "label": "#6(d2)",
+          "quoteId": "spya-ba5p3n",
+          "depth": 2,
+          "cue": "Look for what two obstacles once blocked study of how neural circuits process information.",
+          "section": "1. Introduction › Historical Limitations",
+          "at": 8,
+          "carries": [],
+          "beside": [],
+          "text": "Historically, there have been two key limitations hindering the study of information processing by neural circuits. The first was a lack of appropriate data, since the analysis of synergistic dynamics requires large amounts of data to accurately infer the structure of multivariate dependence."
+        },
+        {
+          "label": "#7(d2)",
+          "quoteId": "spya-pghzsz",
+          "depth": 2,
+          "cue": "Ask how this measure differs from a simple correlation between two signals.",
+          "section": "2. Tracking Information in Neural Circuits › 2.2. Tracking Information",
+          "at": 19,
+          "carries": [
+            "I2"
+          ],
+          "beside": [],
+          "text": "TE is understood as quantifying how much the past of the source variable reduces our uncertainty about the future of the target variable, after accounting for information disclosed by the target variable’s own past (autocorrelation). Whereas mutual information is a measure of functional connectivity, transfer entropy measures effective connectivity [14]. In other words, transfer entropy provides a measure of information propagation."
+        },
+        {
+          "label": "#8(d2)",
+          "quoteId": "spya-vw0zh2",
+          "depth": 2,
+          "cue": "Look for what earlier work lacked despite recognizing this same inequality.",
+          "section": "4. PID: Partial Information Decomposition › 4.1. The Basic Problem and Intuition",
+          "at": 30,
+          "carries": [],
+          "beside": [],
+          "text": "This inequality has been recognized for decades; however, it was not until the seminal work of Williams and Beer [1] that it was recognized how to algebraically decompose the total joint mutual information into the particular contributions of the parts (and higher-order ensembles of parts)."
+        },
+        {
+          "label": "#9(d2)",
+          "quoteId": "spya-s6mdbh",
+          "depth": 2,
+          "cue": "Ask how the similarity between converging inputs relates to the amount of synergy produced.",
+          "section": "5. PID in Action › 5.3. Synergy from Correlated Convergence",
+          "at": 62,
+          "carries": [
+            "I7"
+          ],
+          "beside": [
+            "I6"
+          ],
+          "text": "The result was unambiguous. The greater the mutual information between source neurons at the synaptic timescale, the greater the synergy [3]. More information processing occurs where similar information streams converge (Figure 4E, the three leftmost panels for synaptic timescales)."
+        },
+        {
+          "label": "#10(d2)",
+          "quoteId": "spya-hx0qes",
+          "depth": 2,
+          "cue": "Look for how the balance between synergy and redundancy shifts during a specific action.",
+          "section": "5. PID in Action › 5.5. PID in Behaving Primates",
+          "at": 69,
+          "carries": [
+            "I8"
+          ],
+          "beside": [],
+          "text": "The researchers found that while brain activity was generally synergy-dominated (as opposed to redundancy-dominated), during movement execution (a reach-and-grasp action) the relative abundance of redundant information increased dramatically."
+        },
+        {
+          "label": "#11(d3)",
+          "quoteId": "spya-nfrxa9",
+          "depth": 3,
+          "cue": "Ask how this measure captures shared dependency between two patterns of activity.",
+          "section": "2. Tracking Information in Neural Circuits › 2.2. Tracking Information",
+          "at": 18,
+          "carries": [
+            "I2"
+          ],
+          "beside": [],
+          "text": "I(X;Y) measures how our ability to correctly infer the state of X changes, depending on whether we are accounting for (potentially) shared dependencies with Y. It can be thought of as a nonlinear correlation between two patterns of activity [3,13]."
+        },
+        {
+          "label": "#12(d3)",
+          "quoteId": "spya-bd0msy",
+          "depth": 3,
+          "cue": "Look for why classical information theory struggles to pin down a single measure here.",
+          "section": "4. PID: Partial Information Decomposition › The Special Case of Two Parents",
+          "at": 36,
+          "carries": [
+            "I4"
+          ],
+          "beside": [],
+          "text": "Unfortunately, classical Shannon information theory provides no unique solution to any of these, and so considerable work has been devoted to developing formal measures of each."
+        },
+        {
+          "label": "#13(d3)",
+          "quoteId": "spya-skhc7m",
+          "depth": 3,
+          "cue": "Consider why different situations might call for different choices of this measure.",
+          "section": "4. PID: Partial Information Decomposition › 4.3. Choosing a Redundancy Measure",
+          "at": 47,
+          "carries": [
+            "I4"
+          ],
+          "beside": [],
+          "text": "In the absence of a single accepted measure, different contexts may require the choice of different functions."
+        },
+        {
+          "label": "#14(d3)",
+          "quoteId": "spya-j49b36",
+          "depth": 3,
+          "cue": "Look for what link is drawn between forward information flow and actual processing.",
+          "section": "5. PID in Action › Empirical Setup",
+          "at": 52,
+          "carries": [],
+          "beside": [],
+          "text": "The implication of this is that feedforward information propagation between source neurons and a target neuron is a reliable predictor of information processing."
+        },
+        {
+          "label": "#15(d3)",
+          "quoteId": "spya-sa6kvs",
+          "depth": 3,
+          "cue": "Ask how recurrent versus feedback connections relate to synergy differently.",
+          "section": "5. PID in Action › 5.2. Feedforward, Feedback, Recurrent",
+          "at": 60,
+          "carries": [
+            "I6"
+          ],
+          "beside": [
+            "I1",
+            "I7"
+          ],
+          "text": "Using PID, we found that triads with more recurrent connections also had greater synergy [4]. Feedback connections were less predictive of synergy but tended to correlate with reduced synergy."
+        },
+        {
+          "label": "#16(d3)",
+          "quoteId": "spya-f9950a",
+          "depth": 3,
+          "cue": "Look for what happens to synergy once similarity between inputs passes a certain point.",
+          "section": "5. PID in Action › 5.3. Synergy from Correlated Convergence",
+          "at": 63,
+          "carries": [
+            "I7"
+          ],
+          "beside": [],
+          "text": "Interestingly, synergy only increased up to a point. The peak in synergy occurred when the mutual information was about 7% of the maximal value, regardless of the timescale. Past this level, the synergy began to decrease (this level is marked by the vertical dotted line in Figure 4E)."
+        },
+        {
+          "label": "#17(d3)",
+          "quoteId": "spya-f9uk98",
+          "depth": 3,
+          "cue": "Ask what explanation is offered for synergy dropping off past a certain similarity level.",
+          "section": "5. PID in Action › 5.3. Synergy from Correlated Convergence",
+          "at": 64,
+          "carries": [
+            "I7"
+          ],
+          "beside": [
+            "I1"
+          ],
+          "text": "This suggests that as the similarity of the converging information grows past some point, it becomes redundant, and the total amount of synergistic output is suppressed."
+        },
+        {
+          "label": "#18(d3)",
+          "quoteId": "spya-pgxy5r",
+          "depth": 3,
+          "cue": "Notice what this says about synergy appearing during rest versus during specific behavior.",
+          "section": "5. PID in Action › 5.5. PID in Behaving Primates",
+          "at": 70,
+          "carries": [
+            "I8"
+          ],
+          "beside": [],
+          "text": "These results show not only that synergistic information dynamics is a feature of ongoing, spontaneous neural activity but also that synergy seems to reflect behaviorally specific patterns of dynamical activity in the cortex."
+        },
+        {
+          "label": "#19(d3)",
+          "quoteId": "spya-ysau24",
+          "depth": 3,
+          "cue": "Look for what limitation is admitted about explaining why neurons show these patterns.",
+          "section": "6. Practical Considerations in PID › 6.2. Interpreting PID Results",
+          "at": 79,
+          "carries": [],
+          "beside": [],
+          "text": "One important caveat to note with respect to PID applied to neural data is that while it provides a powerful framework for recognizing statistical dependencies between neurons, it does not necessarily provide a mechanistic explanation for why particular neurons are synergy-dominated or redundancy-dominated."
+        },
+        {
+          "label": "#20(d3)",
+          "quoteId": "spya-pa40p4",
+          "depth": 3,
+          "cue": "Note how quickly the number of components to interpret grows with more neurons.",
+          "section": "6. Practical Considerations in PID › 6.3. Practical Limitations",
+          "at": 81,
+          "carries": [],
+          "beside": [],
+          "text": "This sequence of numbers grows appallingly fast: in the case of six parent neurons, there are 7,828,354 distinct PI atoms, the vast majority of which are difficult to interpret."
+        }
+      ],
+      "rows": [
+        {
+          "policy": "nested",
+          "depth": 1,
+          "walk": 4,
+          "seenAgain": 0,
+          "restates": [],
+          "ideaAgain": 1,
+          "sameIdeaPairs": 1,
+          "nearPairs": [],
+          "closeConsecutive": 0,
+          "sameSectionConsecutive": 0,
+          "meanQuoteChars": 421
+        },
+        {
+          "policy": "nested",
+          "depth": 2,
+          "walk": 10,
+          "seenAgain": 4,
+          "restates": [],
+          "ideaAgain": 0,
+          "sameIdeaPairs": 1,
+          "nearPairs": [],
+          "closeConsecutive": 1,
+          "sameSectionConsecutive": 2,
+          "meanQuoteChars": 348
+        },
+        {
+          "policy": "nested",
+          "depth": 3,
+          "walk": 20,
+          "seenAgain": 10,
+          "restates": [],
+          "ideaAgain": 5,
+          "sameIdeaPairs": 7,
+          "nearPairs": [],
+          "closeConsecutive": 3,
+          "sameSectionConsecutive": 8,
+          "meanQuoteChars": 277
+        },
+        {
+          "policy": "added",
+          "depth": 1,
+          "walk": 4,
+          "seenAgain": 0,
+          "restates": [],
+          "ideaAgain": 1,
+          "sameIdeaPairs": 1,
+          "nearPairs": [],
+          "closeConsecutive": 0,
+          "sameSectionConsecutive": 0,
+          "meanQuoteChars": 421
+        },
+        {
+          "policy": "added",
+          "depth": 2,
+          "walk": 6,
+          "seenAgain": 0,
+          "restates": [],
+          "ideaAgain": 0,
+          "sameIdeaPairs": 0,
+          "nearPairs": [],
+          "closeConsecutive": 1,
+          "sameSectionConsecutive": 2,
+          "meanQuoteChars": 299
+        },
+        {
+          "policy": "added",
+          "depth": 3,
+          "walk": 10,
+          "seenAgain": 0,
+          "restates": [],
+          "ideaAgain": 5,
+          "sameIdeaPairs": 2,
+          "nearPairs": [],
+          "closeConsecutive": 2,
+          "sameSectionConsecutive": 6,
+          "meanQuoteChars": 205
+        }
+      ]
+    },
+    {
+      "slug": "source-spya-furjgs",
+      "version": "trajectory/6",
+      "stale": false,
+      "visible": [
+        3,
+        7,
+        13
+      ],
+      "ideas": [
+        "I1 · Physical after-effects as stand-ins for direct measurement",
+        "I2 · Professional training upgrades eyewitness reliability",
+        "I3 · Popular imagery can outlive and distort the documented facts",
+        "I4 · Ball lightning may be several different phenomena",
+        "I5 · Isolated, uncoordinated research fragments a field",
+        "I6 · Independent lightning-detection data can corroborate testimony",
+        "I7 · Elite samples reveal reporting biases when compared to mass data",
+        "I8 · Shock trauma splits into separate immediate and lasting effects"
+      ],
+      "stops": [
+        {
+          "label": "#1(d1)",
+          "quoteId": "spya-ur90mw",
+          "depth": 1,
+          "cue": "What makes this phenomenon so hard to document scientifically?",
+          "section": "1 Historical outline › Origins of the term",
+          "at": 8,
+          "carries": [],
+          "beside": [
+            "I3"
+          ],
+          "text": "Ball lightning appears seemingly random in time and space, lasts a few seconds, and disappears with traces or without. Because of its unpredictable occurrence, most of the collected material remains anecdotal."
+        },
+        {
+          "label": "#2(d1)",
+          "quoteId": "spya-r026vz",
+          "depth": 1,
+          "cue": "How does the unpredictable nature of the phenomenon distort normal scientific method?",
+          "section": "7 Conclusions › Concluding discussion",
+          "at": 88,
+          "carries": [
+            "I3",
+            "I5"
+          ],
+          "beside": [],
+          "text": "The main difference between modern science and Frankenstein’s laboratory is guiding research paradigms that – in the case of natural phenomena – condition a proper order of systematic data acquisition, formation, and testing of hypotheses and theories, and – if possible – laboratory simulation. In the case of ball lightning, the research logic is distorted by a random phenomenon that is hard to observe, irreproducible, and mostly reported by change."
+        },
+        {
+          "label": "#3(d1)",
+          "quoteId": "spya-u8e7gf",
+          "depth": 1,
+          "cue": "What kind of evidence and modern tools could build a solid future database?",
+          "section": "7 Conclusions › Concluding discussion",
+          "at": 89,
+          "carries": [],
+          "beside": [
+            "I3",
+            "I5"
+          ],
+          "text": "With physical evidence cases like the Dorstone tub, the Poughquag glass, or the Qinghai spectrum as benchmarks and digital material from abundantly present mobile phones and webcams, systematic multidisciplinary case documentation and discussion can lead to a database against which ball lightning theories and simulations can be critically assessed."
+        },
+        {
+          "label": "#4(d2)",
+          "quoteId": "spya-uyucc0",
+          "depth": 2,
+          "cue": "What specific kinds of scientific documentation are missing from most reports?",
+          "section": "1 Historical outline › Assessing the research literature",
+          "at": 10,
+          "carries": [
+            "I4",
+            "I5"
+          ],
+          "beside": [
+            "I3"
+          ],
+          "text": "Rakov and Uman (2003, p. 656, p. 658) characterized ball lightning as “a phenomenon for which there exists numerous witness reports but little, if any, scientific documentation such as photographs, videotapes, or other scientific recordings.”"
+        },
+        {
+          "label": "#5(d2)",
+          "quoteId": "spya-knxj5e",
+          "depth": 2,
+          "cue": "Why might excluding unusual cases from a strict definition be a mistake?",
+          "section": "5 Synopsis of cases › Diversity of case types",
+          "at": 75,
+          "carries": [
+            "I4"
+          ],
+          "beside": [],
+          "text": "Epistemologically, it would be odd to define a “ball lightning norm” and a priori exclude cases that do not meet this definition. Regardless of all problems with an explanatory theory, detailed case reports should be documented."
+        },
+        {
+          "label": "#6(d2)",
+          "quoteId": "spya-gspp08",
+          "depth": 2,
+          "cue": "Why might reports from scientifically trained childhood witnesses carry extra weight?",
+          "section": "3 Scientists as ball lightning observers › 3.2 Childhood reports of later natural scientists",
+          "at": 41,
+          "carries": [
+            "I2"
+          ],
+          "beside": [],
+          "text": "A special category of reports is ball lightning encountered by children who, in their later life, followed a scientific career and then described in detail what they saw. It can be argued that all children have similar observation capabilities. However, scientific training and profession might improve the quality of their recalled eyewitness testimony."
+        },
+        {
+          "label": "#7(d2)",
+          "quoteId": "spya-t8duv0",
+          "depth": 2,
+          "cue": "What is lost when human weather observers are replaced by automated stations?",
+          "section": "4 Other trained observers › 4.1 Weather observers and coastguards",
+          "at": 56,
+          "carries": [],
+          "beside": [],
+          "text": "The tendency of weather services to do without observers and automate synoptic stations (including German mountain-top observatories) may be justified from an economic standpoint, but it eliminates high-quality observations of rare phenomena such as ball lightning."
+        },
+        {
+          "label": "#8(d3)",
+          "quoteId": "spya-dz3qz0",
+          "depth": 3,
+          "cue": "How rare is it to catch this phenomenon on camera by chance, based on this search effort?",
+          "section": "2 Methodology › Rarity of direct evidence",
+          "at": 12,
+          "carries": [
+            "I2"
+          ],
+          "beside": [],
+          "text": "Chances to monitor the transient phenomenon directly are minimal: Tompkins et al. (1975) searched about 12 000 photographic records of the US Prairie Meteorite Network that observed the night sky daily for over 10 years and found two probable ball lightning events."
+        },
+        {
+          "label": "#9(d3)",
+          "quoteId": "spya-p5ysre",
+          "depth": 3,
+          "cue": "What details does this early academy scientist's account add to the historical record?",
+          "section": "3 Scientists as ball lightning observers › Haidinger and early cases",
+          "at": 17,
+          "carries": [],
+          "beside": [],
+          "text": "Wilhelm von Haidinger, member of the Imperial Academy of Sciences at Vienna, observed ball lightning from his home at Vienna’s 3rd district Landstrasse on 20 October 1868, in a heavy thunderstorm between 17:15 and 17:30 LT"
+        },
+        {
+          "label": "#10(d3)",
+          "quoteId": "spya-atfq79",
+          "depth": 3,
+          "cue": "Notice the unusual speed figure and what puzzle it creates about sound.",
+          "section": "3 Scientists as ball lightning observers › Physicists' reports, 1903–1967",
+          "at": 23,
+          "carries": [
+            "I1"
+          ],
+          "beside": [],
+          "text": "Gerlach also mentioned bluish “spraying” of electrical wires and blown fuses in “a whole row of houses” (Gerlach, 1927). His speed calculation of 1225 m s−1 is quite amazing, because it means the object travelled at a speed of Mach 3.6 “soundless”, without an acoustic effect (sonic boom). This is one of the rare occasions where ball lightning met a gifted experimental physicist."
+        },
+        {
+          "label": "#11(d3)",
+          "quoteId": "spya-mamcdp",
+          "depth": 3,
+          "cue": "What credibility does this witness's professional background lend to the sighting?",
+          "section": "3 Scientists as ball lightning observers › Physicists' reports, 1903–1967",
+          "at": 26,
+          "carries": [],
+          "beside": [],
+          "text": "Coroner Leopold Breitenecker, later a forensic medicine professor at Vienna University, encountered ball lightning at Ternitz, Lower Austria, in the summer of 1955, 16–17:00 LT."
+        },
+        {
+          "label": "#12(d3)",
+          "quoteId": "spya-qe8vxc",
+          "depth": 3,
+          "cue": "How did ordinary lightning strikes shape the public image of this rarer phenomenon?",
+          "section": "6 Other influential or notable cases › Richmann and Charcot cases",
+          "at": 77,
+          "carries": [
+            "I3"
+          ],
+          "beside": [
+            "I8"
+          ],
+          "text": "Ball lightning acquired a deadly and destructive popular image fed by injuries and damage caused by ordinary cloud–ground strokes."
+        },
+        {
+          "label": "#13(d3)",
+          "quoteId": "spya-smgpkx",
+          "depth": 3,
+          "cue": "What did lab attempts actually produce, if not the real phenomenon?",
+          "section": "6 Other influential or notable cases › Modern experimental and field studies",
+          "at": 83,
+          "carries": [],
+          "beside": [],
+          "text": "Uman and colleagues call what was produced not ball lightning but point to interesting effects of different materials under the influence of lightning."
+        }
+      ],
+      "rows": [
+        {
+          "policy": "nested",
+          "depth": 1,
+          "walk": 3,
+          "seenAgain": 0,
+          "restates": [],
+          "ideaAgain": 0,
+          "sameIdeaPairs": 0,
+          "nearPairs": [],
+          "closeConsecutive": 1,
+          "sameSectionConsecutive": 1,
+          "meanQuoteChars": 337
+        },
+        {
+          "policy": "nested",
+          "depth": 2,
+          "walk": 7,
+          "seenAgain": 3,
+          "restates": [],
+          "ideaAgain": 1,
+          "sameIdeaPairs": 2,
+          "nearPairs": [],
+          "closeConsecutive": 1,
+          "sameSectionConsecutive": 1,
+          "meanQuoteChars": 300
+        },
+        {
+          "policy": "nested",
+          "depth": 3,
+          "walk": 13,
+          "seenAgain": 7,
+          "restates": [],
+          "ideaAgain": 2,
+          "sameIdeaPairs": 4,
+          "nearPairs": [],
+          "closeConsecutive": 1,
+          "sameSectionConsecutive": 4,
+          "meanQuoteChars": 264
+        },
+        {
+          "policy": "added",
+          "depth": 1,
+          "walk": 3,
+          "seenAgain": 0,
+          "restates": [],
+          "ideaAgain": 0,
+          "sameIdeaPairs": 0,
+          "nearPairs": [],
+          "closeConsecutive": 1,
+          "sameSectionConsecutive": 1,
+          "meanQuoteChars": 337
+        },
+        {
+          "policy": "added",
+          "depth": 2,
+          "walk": 4,
+          "seenAgain": 0,
+          "restates": [],
+          "ideaAgain": 1,
+          "sameIdeaPairs": 1,
+          "nearPairs": [],
+          "closeConsecutive": 0,
+          "sameSectionConsecutive": 0,
+          "meanQuoteChars": 272
+        },
+        {
+          "policy": "added",
+          "depth": 3,
+          "walk": 6,
+          "seenAgain": 0,
+          "restates": [],
+          "ideaAgain": 2,
+          "sameIdeaPairs": 0,
+          "nearPairs": [],
+          "closeConsecutive": 0,
+          "sameSectionConsecutive": 3,
+          "meanQuoteChars": 221
+        }
+      ]
+    },
+    {
+      "slug": "the-mythology-of-conscious-ai-spya-rn5m0q",
+      "version": "trajectory/6",
+      "stale": false,
+      "visible": [
+        5,
+        12,
+        36
+      ],
+      "ideas": null,
+      "stops": [
+        {
+          "label": "#1(d1)",
+          "quoteId": "spya-z9rjkx",
+          "depth": 1,
+          "cue": "Look for the overall verdict on whether consciousness comes free with smarter AI.",
+          "section": "Consciousness & Computation › 4: Simulation Is Not Instantiation",
+          "at": 110,
+          "carries": [],
+          "beside": [],
+          "text": "Collectively, these arguments make the case that consciousness is very unlikely to simply come along for the ride as AI gets smarter, and that achieving it may well be impossible for AI systems in general, at least for the silicon-based digital computers we are familiar with."
+        },
+        {
+          "label": "#2(d1)",
+          "quoteId": "spya-wywkf3",
+          "depth": 1,
+          "cue": "Ask what distinction is being drawn between doing and being.",
+          "section": "The Temptations Of Conscious AI › Intelligence versus consciousness",
+          "at": 20,
+          "carries": [],
+          "beside": [],
+          "text": "Consciousness, in contrast to intelligence, is mostly about being."
+        },
+        {
+          "label": "#3(d1)",
+          "quoteId": "spya-x6gbm7",
+          "depth": 1,
+          "cue": "Notice the hidden assumption said to underlie the whole idea of conscious AI.",
+          "section": "Consciousness & Computation › 1: Brains Are Not Computers",
+          "at": 37,
+          "carries": [],
+          "beside": [],
+          "text": "The very idea of conscious AI rests on the assumption that consciousness is a matter of computation. More specifically, that implementing the right kind of computation, or information processing, is sufficient for consciousness to arise. This assumption, which philosophers call computational functionalism, is so deeply ingrained that it can be difficult to recognize it as an assumption at all."
+        },
+        {
+          "label": "#4(d1)",
+          "quoteId": "spya-ugk3ys",
+          "depth": 1,
+          "cue": "Consider what alternative to information processing is proposed as the source of experience.",
+          "section": "Consciousness & Computation › 3: Life Matters",
+          "at": 91,
+          "carries": [],
+          "beside": [],
+          "text": "We experience the world around us and ourselves within it — with, through and because of our living bodies. Perhaps it is life, rather than information processing, that breathes fire into the equations of experience."
+        },
+        {
+          "label": "#5(d1)",
+          "quoteId": "spya-mxnn4q",
+          "depth": 1,
+          "cue": "Look for the ethical stance taken toward deliberately building conscious machines.",
+          "section": "What (Not) To Do? › The stakes of getting it wrong",
+          "at": 118,
+          "carries": [],
+          "beside": [],
+          "text": "As redundant as it may sound, nobody should be deliberately setting out to create conscious AI, whether in the service of some poorly thought-through techno-rapture, or for any other reason. Creating conscious machines would be an ethical disaster."
+        },
+        {
+          "label": "#6(d2)",
+          "quoteId": "spya-sus9n3",
+          "depth": 2,
+          "cue": "Note the everyday examples used to characterize intelligent behavior.",
+          "section": "The Temptations Of Conscious AI › Intelligence versus consciousness",
+          "at": 17,
+          "carries": [],
+          "beside": [],
+          "text": "Intelligence is mainly about doing: solving a crossword puzzle, assembling some furniture, navigating a tricky family situation, walking to the shop — all involve intelligent behavior of some kind."
+        },
+        {
+          "label": "#7(d2)",
+          "quoteId": "spya-x8syqr",
+          "depth": 2,
+          "cue": "Ask what remains uncertain about AI even once intelligence is granted.",
+          "section": "The Temptations Of Conscious AI › Intelligence versus consciousness",
+          "at": 21,
+          "carries": [],
+          "beside": [],
+          "text": "AI systems can reasonably lay claim to intelligence in some form, since they can certainly do things, but it is harder to say whether there is anything-it-is-like-to-be ChatGPT."
+        },
+        {
+          "label": "#8(d2)",
+          "quoteId": "spya-stxuyx",
+          "depth": 2,
+          "cue": "Look for how taking the human case as the default standard could mislead.",
+          "section": "The Temptations Of Conscious AI › Three psychological biases",
+          "at": 23,
+          "carries": [],
+          "beside": [],
+          "text": "The first is anthropocentrism. This is the tendency to see things through the lens of being human: to take the human example as definitional, rather than as one example of how different properties might come together."
+        },
+        {
+          "label": "#9(d2)",
+          "quoteId": "spya-h2kp7h",
+          "depth": 2,
+          "cue": "See what combination of biases explains our impulse to see minds in capable machines.",
+          "section": "The Temptations Of Conscious AI › Three psychological biases",
+          "at": 25,
+          "carries": [],
+          "beside": [],
+          "text": "Taken together, these biases explain why it’s hardly surprising that when things exhibit abilities we think of as distinctively human, such as intelligence, we naturally imbue them with other qualities we feel are characteristically or even distinctively human: understanding, mindedness and consciousness, too."
+        },
+        {
+          "label": "#10(d2)",
+          "quoteId": "spya-v38yv6",
+          "depth": 2,
+          "cue": "Compare how brain and computer are described in terms of separating parts.",
+          "section": "Consciousness & Computation › 1: Brains Are Not Computers",
+          "at": 51,
+          "carries": [],
+          "beside": [],
+          "text": "Inside a brain, there’s no sharp separation between “mindware” and “wetware” as there is between software and hardware in a computer. The more you delve into the intricacies of the biological brain, the more you realize how rich and dynamic it is, compared to the dead sand of silicon."
+        },
+        {
+          "label": "#11(d2)",
+          "quoteId": "spya-vnxwvy",
+          "depth": 2,
+          "cue": "Look for how the question shifts once we move away from pure computation.",
+          "section": "Consciousness & Computation › 2: Other Games In Town",
+          "at": 77,
+          "carries": [],
+          "beside": [],
+          "text": "The challenge for machine consciousness here is that the further we venture from Turing world, the more deeply entangled we become in randomness, dynamics and entropy, and the more deeply tied we are to the properties of a particular material substrate. The question is no longer about which algorithms give rise to consciousness; it’s about how brain-like a system has to be to move the needle on its potential to be conscious."
+        },
+        {
+          "label": "#12(d2)",
+          "quoteId": "spya-akrcjt",
+          "depth": 2,
+          "cue": "Notice the analogy used to judge how likely simulation is to produce the real thing.",
+          "section": "Consciousness & Computation › 4: Simulation Is Not Instantiation",
+          "at": 100,
+          "carries": [],
+          "beside": [],
+          "text": "If an exquisitely detailed brain model is needed, then you are no more likely to exist in the simulation than a hailstorm is likely to arise inside the computers of the U.K. meteorological office."
+        },
+        {
+          "label": "#13(d3)",
+          "quoteId": "spya-c3ej2y",
+          "depth": 3,
+          "cue": "Ask what is implied about experience when we use certain words for AI errors.",
+          "section": "The Temptations Of Conscious AI › Language and hallucination talk",
+          "at": 27,
+          "carries": [],
+          "beside": [],
+          "text": "Hallucinations in human beings are mainly conscious experiences that have lost their grip on reality (uncontrolled perceptions, one might say). We hallucinate when we hear voices that aren’t there or see a dead relative standing at the foot of the bed. When we say that AI systems “hallucinate,” we implicitly confer on them a capacity for experience. If we must use a human analogy, it would be far better to say that they “confabulate.”"
+        },
+        {
+          "label": "#14(d3)",
+          "quoteId": "spya-s84e97",
+          "depth": 3,
+          "cue": "Consider what mistake follows from equating consciousness with familiar human traits.",
+          "section": "The Temptations Of Conscious AI › Language and hallucination talk",
+          "at": 28,
+          "carries": [],
+          "beside": [],
+          "text": "When we identify conscious experience with seemingly human qualities like intelligence and language, we become more likely to see consciousness where it doesn’t exist, and to miss seeing it where it does."
+        },
+        {
+          "label": "#15(d3)",
+          "quoteId": "spya-stx5t6",
+          "depth": 3,
+          "cue": "Look for what property of exponential growth creates a false sense of imminent breakthrough.",
+          "section": "The Temptations Of Conscious AI › Exponential growth and techno-rapture",
+          "at": 29,
+          "carries": [],
+          "beside": [],
+          "text": "Exponential growth has the psychologically destabilizing property that what’s ahead seems impossibly steep, and what’s behind seems irrelevantly flat. Crucially, things seem this way wherever you are on the curve — that’s what makes it exponential. Because of this, it’s tempting to feel like we are always on the cusp of a major transition, and what could be more major than the creation of real artificial consciousness? But on an exponential curve, every point is an inflection point."
+        },
+        {
+          "label": "#16(d3)",
+          "quoteId": "spya-p9crjd",
+          "depth": 3,
+          "cue": "Look for the claim about whether brain function can be separated from brain structure.",
+          "section": "Consciousness & Computation › 1: Brains Are Not Computers",
+          "at": 53,
+          "carries": [],
+          "beside": [],
+          "text": "Unlike computers, even computers running neural network algorithms, brains are the kinds of things for which it is difficult, and likely impossible, to separate what they do from what they are."
+        },
+        {
+          "label": "#17(d3)",
+          "quoteId": "spya-s06en2",
+          "depth": 3,
+          "cue": "Notice what assumption about substrates this separation is said to support.",
+          "section": "Consciousness & Computation › 1: Brains Are Not Computers",
+          "at": 56,
+          "carries": [],
+          "beside": [],
+          "text": "This matters because the idea of the brain as a meat-based (universal) Turing machine rests precisely on this sharp separation of scales, on the substrate independence that motivated Turing’s definition in the first place. If you cannot separate what brains do from what they are, the mathematical marriage of convenience starts to fall apart, and there is less reason to think of biological wetware as there simply to implement algorithmic mindware."
+        },
+        {
+          "label": "#18(d3)",
+          "quoteId": "spya-xhg009",
+          "depth": 3,
+          "cue": "Consider what this claim implies about replacing neurons with artificial parts.",
+          "section": "Consciousness & Computation › 1: Brains Are Not Computers",
+          "at": 58,
+          "carries": [],
+          "beside": [],
+          "text": "The only way to seamlessly replace a biological neuron is with another biological neuron — and ideally, the same one."
+        },
+        {
+          "label": "#19(d3)",
+          "quoteId": "spya-v78e05",
+          "depth": 3,
+          "cue": "Look for why a well-known thought experiment about neuron replacement is said to fail.",
+          "section": "Consciousness & Computation › 1: Brains Are Not Computers",
+          "at": 59,
+          "carries": [],
+          "beside": [],
+          "text": "This thought experiment has become a prominent trope in discussions of artificial consciousness, usually invoked to support its possibility. Hinton recently appealed to it in just this way, in an interview where he claimed that conscious AI was already with us. But the argument fails at its first hurdle, given the impossibility of replacing any part of the brain with a perfect silicon equivalent."
+        },
+        {
+          "label": "#20(d3)",
+          "quoteId": "spya-g3twaj",
+          "depth": 3,
+          "cue": "Ask what physical law is invoked to describe how living systems resist decay.",
+          "section": "Consciousness & Computation › 1: Brains Are Not Computers",
+          "at": 61,
+          "carries": [],
+          "beside": [],
+          "text": "Living systems must continuously resist the decay and disorder that lies along the trajectory to entropic sameness mandated by the inviolable second law of thermodynamics. This means that neurobiological activity is anchored in continuous time in ways that algorithms, by design, are not."
+        },
+        {
+          "label": "#21(d3)",
+          "quoteId": "spya-vdswp2",
+          "depth": 3,
+          "cue": "Notice the contrast drawn between discrete steps and continuous flow.",
+          "section": "Consciousness & Computation › 1: Brains Are Not Computers",
+          "at": 62,
+          "carries": [],
+          "beside": [],
+          "text": "It does not stutter from one state to another; it flows. Abstracting the brain into the arid sequence space of algorithms does justice neither to our biology nor to the phenomenology of the stream of consciousness."
+        },
+        {
+          "label": "#22(d3)",
+          "quoteId": "spya-p987d5",
+          "depth": 3,
+          "cue": "Look for what a named philosopher's view says life must contribute to consciousness.",
+          "section": "Consciousness & Computation › 3: Life Matters",
+          "at": 79,
+          "carries": [],
+          "beside": [],
+          "text": "This is the idea — called biological naturalism by the philosopher John Searle— that properties of life are necessary, though not necessarily sufficient, for consciousness."
+        },
+        {
+          "label": "#23(d3)",
+          "quoteId": "spya-yng5sr",
+          "depth": 3,
+          "cue": "Ask how perception is described as a two-way predictive process.",
+          "section": "Consciousness & Computation › 3: Life Matters",
+          "at": 82,
+          "carries": [],
+          "beside": [],
+          "text": "Conscious experience in this light is a kind of controlled hallucination: a top-down inside-out perceptual inference in which the brain’s predictions about what’s going on are continually calibrated by sensory signals coming from the bottom-up (or outside-in)."
+        },
+        {
+          "label": "#24(d3)",
+          "quoteId": "spya-qv4nfx",
+          "depth": 3,
+          "cue": "Consider how far down into cells this predictive process is said to reach.",
+          "section": "Consciousness & Computation › 3: Life Matters",
+          "at": 89,
+          "carries": [],
+          "beside": [],
+          "text": "This drive to stay alive doesn’t bottom out anywhere in particular. It reaches deep into the interior of each cell, into the molecular furnaces of metabolism. Within these whirls of metabolic activity, the ubiquitous process of prediction error minimization becomes inseparable from the materiality of life itself."
+        },
+        {
+          "label": "#25(d3)",
+          "quoteId": "spya-cznw64",
+          "depth": 3,
+          "cue": "Look for the distinction drawn between a model of a process and the process itself.",
+          "section": "Consciousness & Computation › 4: Simulation Is Not Instantiation",
+          "at": 94,
+          "carries": [],
+          "beside": [],
+          "text": "But we should not confuse the map with the territory, or the model with the mechanism. An algorithmic simulation of a continuous process is just that — a simulation, not the process itself."
+        },
+        {
+          "label": "#26(d3)",
+          "quoteId": "spya-ab0q3c",
+          "depth": 3,
+          "cue": "Notice the everyday examples used to show what simulations fail to do.",
+          "section": "Consciousness & Computation › 4: Simulation Is Not Instantiation",
+          "at": 95,
+          "carries": [],
+          "beside": [],
+          "text": "Computational simulations generally lack the causal powers and intrinsic properties of the things being simulated. A simulation of the digestive system does not actually digest anything. A simulation of a rainstorm does not make anything actually wet. If we simulate a living creature, we have not created life."
+        },
+        {
+          "label": "#27(d3)",
+          "quoteId": "spya-uvp9ae",
+          "depth": 3,
+          "cue": "Ask what unexamined assumption is being pointed out here.",
+          "section": "Consciousness & Computation › 4: Simulation Is Not Instantiation",
+          "at": 103,
+          "carries": [],
+          "beside": [],
+          "text": "That this strong assumption is taken on board without examination in a philosophical discussion that is all about the validity of assumptions is yet another indication of how deeply ingrained the computational view of mind and brain has become."
+        },
+        {
+          "label": "#28(d3)",
+          "quoteId": "spya-mjt39y",
+          "depth": 3,
+          "cue": "Look for what alternative source of accidental consciousness is raised as more worrying.",
+          "section": "What (Not) To Do? › The stakes of getting it wrong",
+          "at": 119,
+          "carries": [],
+          "beside": [],
+          "text": "For my money, we ought to be more worried about the accidental emergence of consciousness in cerebral organoids (brain-like structures typically grown from human embryonic stem cells) than in any new wave of LLM."
+        },
+        {
+          "label": "#29(d3)",
+          "quoteId": "spya-w0djfp",
+          "depth": 3,
+          "cue": "Notice the distinction drawn between actually conscious and merely seeming so.",
+          "section": "What (Not) To Do? › Conscious-seeming versus conscious",
+          "at": 120,
+          "carries": [],
+          "beside": [],
+          "text": "When it comes to the impact of AI in society, it is essential to draw a distinction between AI systems that are actually conscious and those that persuasively seem to be conscious but are, in fact, not."
+        },
+        {
+          "label": "#30(d3)",
+          "quoteId": "spya-cewcpc",
+          "depth": 3,
+          "cue": "Consider the two risks described depending on how we treat conscious-seeming AI.",
+          "section": "What (Not) To Do? › Conscious-seeming versus conscious",
+          "at": 122,
+          "carries": [],
+          "beside": [],
+          "text": "More generally, either we decide to care about conscious-seeming AI, distorting our circles of moral concern, or we decide not to, and risk brutalizing our minds."
+        },
+        {
+          "label": "#31(d3)",
+          "quoteId": "spya-nhahqr",
+          "depth": 3,
+          "cue": "Ask what kind of illusion is compared to this feeling about AI.",
+          "section": "What (Not) To Do? › Illusions we can't shake",
+          "at": 125,
+          "carries": [],
+          "beside": [],
+          "text": "One overlooked factor here is that even if we know, or believe, that an AI is not conscious, we still might be unable to resist feeling that it is. Illusions of artificial consciousness might be as impenetrable to our minds as some visual illusions."
+        },
+        {
+          "label": "#32(d3)",
+          "quoteId": "spya-yru2hr",
+          "depth": 3,
+          "cue": "Look for which kinds of similarity to us are said to matter and which do not.",
+          "section": "What (Not) To Do? › Illusions we can't shake",
+          "at": 130,
+          "carries": [],
+          "beside": [],
+          "text": "Our psychological biases are more likely to lead to false positives than false negatives. Compared to non-human animals, the apparent wonders of AI may be more similar to us in ways that do not matter for consciousness, like linguistic ability, and less similar in ways that do, like being alive."
+        },
+        {
+          "label": "#33(d3)",
+          "quoteId": "spya-bp2kw2",
+          "depth": 3,
+          "cue": "Notice what is said to make illusions of conscious AI dangerous even if not real.",
+          "section": "Soul Machine › Urgency amid the hype",
+          "at": 133,
+          "carries": [],
+          "beside": [],
+          "text": "Real artificial consciousness would change everything — and very much for the worse. Illusions of conscious AI are dangerous in their own distinctive ways, especially if we are constantly distracted and fascinated by the lure of truly sentient machines."
+        },
+        {
+          "label": "#34(d3)",
+          "quoteId": "spya-jryyy0",
+          "depth": 3,
+          "cue": "Ask what near-term harm is described from conflating machines with biological minds.",
+          "section": "Soul Machine › Urgency amid the hype",
+          "at": 135,
+          "carries": [],
+          "beside": [],
+          "text": "This mechanization of the mind is perhaps the most pernicious near-term consequence of the unseemly rush toward human-like AI. If we conflate the richness of biological brains and human experience with the information-processing machinations of deepfake-boosted chatbots, or whatever the latest AI wizardry might be, we do our minds, brains and bodies a grave injustice."
+        },
+        {
+          "label": "#35(d3)",
+          "quoteId": "spya-ht6yru",
+          "depth": 3,
+          "cue": "Look for what older idea of the self this vision of AI is said to resemble.",
+          "section": "Soul Machine › Rethinking the soul",
+          "at": 139,
+          "carries": [],
+          "beside": [],
+          "text": "The cartoon dreams of a silicon rapture, with its tropes of mind uploading, of disembodied eternal existence and of cloud-based reunions with other chosen ones, is a regression to the Cartesian soul."
+        },
+        {
+          "label": "#36(d3)",
+          "quoteId": "spya-jwznnu",
+          "depth": 3,
+          "cue": "Consider what deeper source of identity is proposed instead.",
+          "section": "Soul Machine › Rethinking the soul",
+          "at": 140,
+          "carries": [],
+          "beside": [],
+          "text": "Perhaps what makes us us harks even further back, to Ancient Greece and to the plains of India, where our innermost essence arises as an inchoate feeling of just being alive — more breath than thought and more meat than machine."
+        }
+      ],
+      "rows": [
+        {
+          "policy": "nested",
+          "depth": 1,
+          "walk": 5,
+          "seenAgain": 0,
+          "restates": [],
+          "ideaAgain": 0,
+          "sameIdeaPairs": 0,
+          "nearPairs": [],
+          "closeConsecutive": 0,
+          "sameSectionConsecutive": 1,
+          "meanQuoteChars": 240
+        },
+        {
+          "policy": "nested",
+          "depth": 2,
+          "walk": 12,
+          "seenAgain": 5,
+          "restates": [],
+          "ideaAgain": 0,
+          "sameIdeaPairs": 0,
+          "nearPairs": [],
+          "closeConsecutive": 2,
+          "sameSectionConsecutive": 6,
+          "meanQuoteChars": 251
+        },
+        {
+          "policy": "nested",
+          "depth": 3,
+          "walk": 36,
+          "seenAgain": 12,
+          "restates": [],
+          "ideaAgain": 0,
+          "sameIdeaPairs": 0,
+          "nearPairs": [],
+          "closeConsecutive": 13,
+          "sameSectionConsecutive": 26,
+          "meanQuoteChars": 263
+        },
+        {
+          "policy": "added",
+          "depth": 1,
+          "walk": 5,
+          "seenAgain": 0,
+          "restates": [],
+          "ideaAgain": 0,
+          "sameIdeaPairs": 0,
+          "nearPairs": [],
+          "closeConsecutive": 0,
+          "sameSectionConsecutive": 1,
+          "meanQuoteChars": 240
+        },
+        {
+          "policy": "added",
+          "depth": 2,
+          "walk": 7,
+          "seenAgain": 0,
+          "restates": [],
+          "ideaAgain": 0,
+          "sameIdeaPairs": 0,
+          "nearPairs": [],
+          "closeConsecutive": 2,
+          "sameSectionConsecutive": 5,
+          "meanQuoteChars": 259
+        },
+        {
+          "policy": "added",
+          "depth": 3,
+          "walk": 24,
+          "seenAgain": 0,
+          "restates": [],
+          "ideaAgain": 0,
+          "sameIdeaPairs": 0,
+          "nearPairs": [],
+          "closeConsecutive": 11,
+          "sameSectionConsecutive": 20,
+          "meanQuoteChars": 269
+        }
+      ]
+    },
+    {
+      "slug": "vb-spya-vu3xen",
+      "version": "trajectory/7",
+      "stale": false,
+      "visible": [
+        2,
+        4,
+        8
+      ],
+      "ideas": [
+        "I1 · You can usually choose your way out of forced obligations",
+        "I2 · Counting turns abstract time into felt scarcity",
+        "I3 · Self-chosen distractions are harder to escape than imposed ones"
+      ],
+      "stops": [
+        {
+          "label": "#1(d1)",
+          "quoteId": "spya-w4y7yu",
+          "depth": 1,
+          "cue": "What three-part practice does the author offer as the overall response to short life?",
+          "section": "Savoring the Time You Have › Squeezing Out Experience",
+          "at": 32,
+          "carries": [],
+          "beside": [],
+          "text": "Relentlessly prune bullshit, don't wait to do things that matter, and savor the time you have. That's what you do when life is short."
+        },
+        {
+          "label": "#2(d1)",
+          "quoteId": "spya-xcg2ub",
+          "depth": 1,
+          "cue": "Look for how counting small numbers of events changes how long life feels.",
+          "section": "Life Actually Is Short › Counting in Peanuts",
+          "at": 6,
+          "carries": [
+            "I2"
+          ],
+          "beside": [],
+          "text": "Having kids showed me how to convert a continuous quantity, time, into discrete quantities. You only get 52 weekends with your 2 year old. If Christmas-as-magic lasts from say ages 3 to 10, you only get to watch your child experience it 8 times."
+        },
+        {
+          "label": "#3(d2)",
+          "quoteId": "spya-mjpuqh",
+          "depth": 2,
+          "cue": "What test does the author suggest for deciding whether to cut something out?",
+          "section": "Eliminating Bullshit › The Character of Bullshit",
+          "at": 8,
+          "carries": [],
+          "beside": [],
+          "text": "If you find yourself thinking that life is too short for something, you should try to eliminate it if you can."
+        },
+        {
+          "label": "#4(d2)",
+          "quoteId": "spya-x5nsuk",
+          "depth": 2,
+          "cue": "What habit does the author recommend for things you want to do but keep postponing?",
+          "section": "Surprised by Loss › Taken by Surprise",
+          "at": 26,
+          "carries": [],
+          "beside": [],
+          "text": "Perhaps a better solution is to look at the problem from the other end. Cultivate a habit of impatience about the things you most want to do. Don't wait before climbing that mountain or writing that book or visiting your mother. You don't need to be constantly reminding yourself why you shouldn't wait. Just don't wait."
+        },
+        {
+          "label": "#5(d3)",
+          "quoteId": "spya-pqhnug",
+          "depth": 3,
+          "cue": "What two routes let unwanted obligations into your life, and how much choice do you really have?",
+          "section": "Eliminating Bullshit › Bullshit Forced On You",
+          "at": 12,
+          "carries": [
+            "I1",
+            "I3"
+          ],
+          "beside": [],
+          "text": "There are two ways this kind of thing gets into your life: it's either forced on you, or it tricks you."
+        },
+        {
+          "label": "#6(d3)",
+          "quoteId": "spya-hcjrw7",
+          "depth": 3,
+          "cue": "Notice which instinct makes online arguments so hard to walk away from.",
+          "section": "Eliminating Bullshit › Bullshit You Choose",
+          "at": 15,
+          "carries": [
+            "I3"
+          ],
+          "beside": [
+            "I1"
+          ],
+          "text": "When someone contradicts you, they're in a sense attacking you. Sometimes pretty overtly. Your instinct when attacked is to defend yourself. But like a lot of instincts, this one wasn't designed for the world we now live in. Counterintuitive as it feels, it's better most of the time not to defend yourself. Otherwise these people are literally taking your life."
+        },
+        {
+          "label": "#7(d3)",
+          "quoteId": "spya-ne583p",
+          "depth": 3,
+          "cue": "What quick test does the author give for telling real value from something that only feels urgent?",
+          "section": "Seeking What Matters › Learning What Matters",
+          "at": 22,
+          "carries": [],
+          "beside": [],
+          "text": "One heuristic for distinguishing stuff that matters is to ask yourself whether you'll care about it in the future. Fake stuff that matters usually has a sharp peak of seeming to matter. That's how it tricks you. The area under the curve is small, but its shape jabs into your consciousness like a pin."
+        },
+        {
+          "label": "#8(d3)",
+          "quoteId": "spya-b4cu85",
+          "depth": 3,
+          "cue": "How does the author say we tend to notice life's shortness, and when?",
+          "section": "Surprised by Loss › Taken by Surprise",
+          "at": 25,
+          "carries": [],
+          "beside": [],
+          "text": "If life is short, we should expect its shortness to take us by surprise. And that is just what tends to happen. You take things for granted, and then they're gone."
+        }
+      ],
+      "rows": [
+        {
+          "policy": "nested",
+          "depth": 1,
+          "walk": 2,
+          "seenAgain": 0,
+          "restates": [],
+          "ideaAgain": 0,
+          "sameIdeaPairs": 0,
+          "nearPairs": [],
+          "closeConsecutive": 0,
+          "sameSectionConsecutive": 0,
+          "meanQuoteChars": 189
+        },
+        {
+          "policy": "nested",
+          "depth": 2,
+          "walk": 4,
+          "seenAgain": 2,
+          "restates": [],
+          "ideaAgain": 0,
+          "sameIdeaPairs": 0,
+          "nearPairs": [],
+          "closeConsecutive": 1,
+          "sameSectionConsecutive": 0,
+          "meanQuoteChars": 202
+        },
+        {
+          "policy": "nested",
+          "depth": 3,
+          "walk": 8,
+          "seenAgain": 4,
+          "restates": [],
+          "ideaAgain": 1,
+          "sameIdeaPairs": 1,
+          "nearPairs": [],
+          "closeConsecutive": 1,
+          "sameSectionConsecutive": 1,
+          "meanQuoteChars": 217
+        },
+        {
+          "policy": "added",
+          "depth": 1,
+          "walk": 2,
+          "seenAgain": 0,
+          "restates": [],
+          "ideaAgain": 0,
+          "sameIdeaPairs": 0,
+          "nearPairs": [],
+          "closeConsecutive": 0,
+          "sameSectionConsecutive": 0,
+          "meanQuoteChars": 189
+        },
+        {
+          "policy": "added",
+          "depth": 2,
+          "walk": 2,
+          "seenAgain": 0,
+          "restates": [],
+          "ideaAgain": 0,
+          "sameIdeaPairs": 0,
+          "nearPairs": [],
+          "closeConsecutive": 0,
+          "sameSectionConsecutive": 0,
+          "meanQuoteChars": 215
+        },
+        {
+          "policy": "added",
+          "depth": 3,
+          "walk": 4,
+          "seenAgain": 0,
+          "restates": [],
+          "ideaAgain": 1,
+          "sameIdeaPairs": 1,
+          "nearPairs": [],
+          "closeConsecutive": 0,
+          "sameSectionConsecutive": 1,
+          "meanQuoteChars": 232
+        }
+      ]
+    }
+  ],
+  "totals": {
+    "nested d1": {
+      "walk": 20,
+      "seenAgain": 0,
+      "restates": 0,
+      "ideaAgain": 1,
+      "sameIdeaPairs": 1,
+      "nearPairs": 0,
+      "closeConsecutive": 1,
+      "sameSectionConsecutive": 3
+    },
+    "nested d2": {
+      "walk": 47,
+      "seenAgain": 20,
+      "restates": 0,
+      "ideaAgain": 2,
+      "sameIdeaPairs": 4,
+      "nearPairs": 0,
+      "closeConsecutive": 5,
+      "sameSectionConsecutive": 10
+    },
+    "nested d3": {
+      "walk": 103,
+      "seenAgain": 47,
+      "restates": 0,
+      "ideaAgain": 10,
+      "sameIdeaPairs": 15,
+      "nearPairs": 0,
+      "closeConsecutive": 20,
+      "sameSectionConsecutive": 46
+    },
+    "added d1": {
+      "walk": 20,
+      "seenAgain": 0,
+      "restates": 0,
+      "ideaAgain": 1,
+      "sameIdeaPairs": 1,
+      "nearPairs": 0,
+      "closeConsecutive": 1,
+      "sameSectionConsecutive": 3
+    },
+    "added d2": {
+      "walk": 27,
+      "seenAgain": 0,
+      "restates": 0,
+      "ideaAgain": 2,
+      "sameIdeaPairs": 1,
+      "nearPairs": 0,
+      "closeConsecutive": 3,
+      "sameSectionConsecutive": 7
+    },
+    "added d3": {
+      "walk": 56,
+      "seenAgain": 0,
+      "restates": 0,
+      "ideaAgain": 10,
+      "sameIdeaPairs": 3,
+      "nearPairs": 0,
+      "closeConsecutive": 15,
+      "sameSectionConsecutive": 36
+    }
+  }
+}

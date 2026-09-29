@@ -21,8 +21,9 @@ v1, for the article's owner only, and behind the experimental switch until later
 - **The band** ([`TrajectoryPanel.tsx`](../../src/web/TrajectoryPanel.tsx),
   [`modes/trajectory/TrajectoryMode.tsx`](../../src/web/modes/trajectory/TrajectoryMode.tsx)): a
   pinned head with `‹ Stop k of N ›` and **Gist · More · Most** (only the depths that add stops),
-  then the stops with their section paths and (since 260928e) their words, the role shown on the current row only, and a shallower
-  pass's stops dimmed.
+  then the stops with their section paths and (since 260928e) their words, the role shown on the current row only. Until
+  2026-09-29 a deeper pass also listed the shallower passes' stops, dimmed; since then each pass
+  lists and walks only its own (below).
 - **In the prose**: the current stop's quote is ringed and barred, brought into view on every
   step (centred since 2026-09-29, below), and followed by a **Next stop ›** door — *More detail ›*
   at the end of a pass, and nothing at the end of the deepest, since 2026-09-29, below. On a narrow window the band steps aside once a stop is
@@ -146,7 +147,7 @@ his words quoted there):
   same pass, and **More detail ›**, to stop 1 of the next deeper pass — offered only when there is
   one, so the end of *Most* offers going round again alone. Under them, *End of Gist — 5 stops.* The
   depth buttons in the head no longer go round when pressed on the last stop: a depth change always
-  keeps your place, and going round is the doors' job. *Go round again* went later the same day
+  keeps your place (until 260929e, below, when it began landing on stop 1 of the new pass), and going round is the doors' job. *Go round again* went later the same day
   (SPIDERYARN-READING2-51, below).
 - **Every arrival is centred** (SPIDERYARN-READING2-4M) — the stop's quote in the middle of the
   window, so you see what is round it; a quote too tall to centre goes to the top. This is every
@@ -170,6 +171,37 @@ his words quoted there):
   band's own list scrolls just enough to show its row — Summary's `useFollow`
   ([`follow.ts`](../../src/web/follow.ts)), which moves that scroller and never the page — and
   measures again when a band that stepped aside on a narrow window comes back.
+
+**Each pass walks only its own stops** — Greg's SPIDERYARN-READING2-4P, 2026-09-29
+([plan 260929e](../plans/260929e-trajectory-each-pass-walks-only-its-new-stops.md), which quotes
+the whole report):
+
+> In Trajectory mode, it's a bit annoying for the more detailed levels of granularity to reuse the
+> same snippets as the coarser levels if I've just read the coarser level. [...] The main thing is
+> to ensure that there's diversity within levels, and perhaps ideally between them.
+>
+> — Greg, 2026-09-29
+
+Measured first, on the six local routes: 43% of the More walk and 46% of the Most walk were stops
+the reader had just stood at, because the passes contained one another. Within a pass, a strict
+read found no two stops making the same point at Gist or More, and three adjacent pairs in 56 at
+Most. So:
+
+- **Gist walks the depth-1 stops, More the depth-2 ones, Most the depth-3 ones.** The list, `Stop k
+  of N`, ← / →, the door and the depth buttons' counts are all the pass's own. No row is dimmed any
+  more, because no row is from another pass. **More and Most are what the passes before them left
+  out, not skims that stand alone** — a reader who opens More without Gist gets only More's stops.
+  Greg: *"I suppose it's possible that a user might jump straight to the more detailed levels...
+  but I suspect they won't."*
+- **A depth change lands on stop 1 of the new pass**, as *More detail ›* does, and moves the reader
+  there. It used to keep your stop, which a deeper pass then contained.
+- **A link's `?stop=` wins over its `?depth=`**: the stop's own pass is drawn, so a link from before
+  this change still arrives at its stop.
+- **The route and its prompt are unchanged.** The model still plans the passes as nesting — depth 2
+  covering Gist and More — which is the allocation wanted either way; `Trajectory.visible` still
+  counts that way. The prompt's description was left alone because 260929b measured the "the reader
+  has read the earlier pass" framing with no gain. Longer snippets at deeper passes, Summary or
+  Glossary stops at the coarser ones, and variety within Most are deferred in the plan.
 
 ### What we tried for v2
 
@@ -241,10 +273,13 @@ Three things follow from Greg's words and they shape everything below:
 - **The order is the mode's, not the paper's.** A paper is written in the order it was done;
   somebody skimming wants it in the order that makes sense fastest. So the route can start at the
   results and loop back to the methods, and it can differ from paper to paper.
-- **Going round again keeps what you already read.** The second pass contains the first pass's
+- ~~**Going round again keeps what you already read.** The second pass contains the first pass's
   stops, in the same order, with more between them; the third contains the second. That is what
   makes it a spiral rather than three unrelated lists — you never lose your place when you turn the
-  depth up, because the stop you are on is still there.
+  depth up, because the stop you are on is still there.~~ **Reversed 2026-09-29**: walking the
+  first pass's stops again at the second was the thing Greg found annoying, so each pass now walks
+  only the stops it adds (above, under *Each pass walks only its own stops*). The route is still
+  one order, planned as nesting passes; only the walk changed.
 
 **Who is reading changes the route.** When the reader has said who they are
 ([reader-profile.md](reader-profile.md) — *About you*) or why they are reading this piece (the
@@ -273,8 +308,8 @@ better for every mode that reads it.
   and gives each a depth, written once and stored. If there are no Quotes yet, they are made first.
 - The band shows **Stop 3 of 5**, a **‹ ›** pair, and a three-step depth control, **Gist · More ·
   Most**, with the number of stops on each. Below it are the stops of the current depth, each with
-  the section it is in; the current one also shows its role line, stops from an earlier pass are
-  dimmed, and pressing one goes to it.
+  the section it is in; the current one also shows its role line, stops from an earlier pass were
+  dimmed (until 2026-09-29, when each pass became only its own stops), and pressing one goes to it.
 - The current stop's passage is marked in the prose and scrolled to near the top, with a **Next
   stop ›** door after it — on an iPad your thumb is in the prose, not the band. At the end of a pass
   the door offers to go round again, one depth deeper.

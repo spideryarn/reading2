@@ -72,8 +72,6 @@ export interface TrajectoryRow {
    * where it has no cue. Drawn on the current row only.
    */
   cue: string | null;
-  /** From a shallower pass — already seen on the way round. Dimmed. */
-  seen: boolean;
   current: boolean;
   /** Its quote is no longer in the Quotes. */
   missing: boolean;
@@ -149,17 +147,20 @@ export function trajectoryPromise(profiled: boolean): string {
 }
 
 /**
- * At Most, how much of the Quotes offered to this route it walks — *"every one
- * of the N quotes offered to this route"*, or *"M of N"*. The denominator is
- * the route's stored `offered`, not today's raw Quotes count: abstract quotes
- * were deliberately never offered. `null` below Most, or with no Quotes.
+ * At Most, how much of the Quotes offered to this route the three passes walk
+ * between them — *"every one of the N quotes offered to this route"*, or *"M of
+ * N"*. **All three, not Most alone**: since plan 260929e each pass walks only
+ * its own stops, so Most by itself is the last tranche, and "this pass" would
+ * undercount. The denominator is the route's stored `offered`, not today's raw
+ * Quotes count: abstract quotes were deliberately never offered. `null` below
+ * Most, or with no Quotes.
  */
-export function coverageNote(atMost: number, offered: number): string | null {
+export function coverageNote(walked: number, offered: number): string | null {
   if (offered === 0) return null;
-  if (atMost >= offered) {
-    return `This pass stops at every one of the ${offered} quotes offered to this route.`;
+  if (walked >= offered) {
+    return `Gist, More and Most together stop at every one of the ${offered} quotes offered to this route.`;
   }
-  return `This pass stops at ${atMost} of the ${offered} quotes offered to this route.`;
+  return `Gist, More and Most together stop at ${walked} of the ${offered} quotes offered to this route.`;
 }
 
 /**
@@ -400,7 +401,7 @@ export function TrajectoryPanel({ access, view, away }: Props) {
             total={total}
             about={[
               promise,
-              ...(atMost ? [coverageNote(total, route.offered)].filter((n): n is string => n !== null) : []),
+              ...(atMost ? [coverageNote(route.stops.length, route.offered)].filter((n): n is string => n !== null) : []),
             ]}
           />
         ) : null
@@ -501,7 +502,7 @@ export function TrajectoryPanel({ access, view, away }: Props) {
                     return (
                       <li
                         key={row.quoteId}
-                        className={`traj-row${row.current ? " current" : ""}${row.seen ? " seen" : ""}`}
+                        className={`traj-row${row.current ? " current" : ""}`}
                         data-stop={row.quoteId}
                         {...{ [FOLLOW_ATTR]: row.quoteId }}
                       >
@@ -695,7 +696,7 @@ export function TrajectoryDoor({
           <button
             type="button"
             className="traj-door-btn"
-            title={`Go round at ${door.deeper}, with more stops between these`}
+            title={`Go on to ${door.deeper}: the stops the passes before it left out`}
             onClick={onDeeper}
           >
             More detail ›

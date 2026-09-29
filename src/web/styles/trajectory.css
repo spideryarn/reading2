@@ -145,7 +145,6 @@
    current one, whose row shows them whole. A touch smaller than the path,
    so the section still reads as the row's heading. */
 .traj-words { color: var(--ink-soft); font-size: 0.84rem; line-height: 1.4; overflow-wrap: anywhere; }
-.traj-row.seen .traj-words { color: var(--ink-faint); }
 .traj-row.current .traj-words { color: var(--ink); }
 /* A quote may run to 1,200 characters (src/quotes.ts), so the card is wider
    than the shared 22rem and breaks an unbroken token. At that width the
@@ -158,8 +157,6 @@
   line-height: 1.4;
 }
 
-/* A shallower pass's stop, already seen on the way round. */
-.traj-row.seen .traj-go { color: var(--ink-faint); }
 .traj-row.current .traj-go {
   background: var(--surface-raised);
   box-shadow: inset 3px 0 0 var(--highlight);

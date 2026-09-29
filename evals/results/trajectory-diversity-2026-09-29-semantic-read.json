@@ -1,0 +1,88 @@
+{
+  "judge": "Opus subagent, 2026-09-29",
+  "rubric": "A pair (or a restatement of a shallower stop) counts only when a reader who has just read the first stop would learn essentially nothing new from the second, i.e. the same claim closely paraphrased; two different facts or angles on one topic do not count, and borderline cases are noted under monotony rather than counted.",
+  "articles": [
+    {
+      "slug": "antikythera-mechanism-spya-zhxrzm",
+      "passes": [
+        {"depth": 1, "stops": 3, "withinPairs": [], "restatesShallower": [], "monotony": "none"},
+        {"depth": 2, "stops": 5, "withinPairs": [],
+         "restatesShallower": [{"stop": "#8(d2)", "of": "#2(d1)", "why": "'complexity ... comparable to that of 14th-century astronomical clocks' repeats 'similar complexity did not appear again until the 14th century'; only 'miniaturisation' is new."}],
+         "monotony": "none; spread over five sections"},
+        {"depth": 3, "stops": 7, "withinPairs": [], "restatesShallower": [],
+         "monotony": "three stops in a row (#11-#13) from 'Similar devices in ancient literature'; #11 and #13 both open on 'the device was not unique' but #13 adds the Byzantine/Islamic transmission, so not counted; ends on two pop-culture trivia stops (#14, #15)"}
+      ]
+    },
+    {
+      "slug": "cargocult-spya-rz663q",
+      "passes": [
+        {"depth": 1, "stops": 3, "withinPairs": [], "restatesShallower": [], "monotony": "none"},
+        {"depth": 2, "stops": 3, "withinPairs": [], "restatesShallower": [], "monotony": "none"},
+        {"depth": 3, "stops": 5,
+         "withinPairs": [{"a": "#7(d3)", "b": "#8(d3)", "why": "Adjacent sentences: #7 says politicians publish only results that come out their way; #8 'publication probability depends upon the answer' is the same point in one line."}],
+         "restatesShallower": [],
+         "monotony": "#9 (Young's rat experiment is 'A-Number-1') returns to the case #6(d2) already covered, from a different angle; not counted"}
+      ]
+    },
+    {
+      "slug": "entropy-24-00930-spya-pywwkq",
+      "passes": [
+        {"depth": 1, "stops": 4, "withinPairs": [], "restatesShallower": [], "monotony": "none"},
+        {"depth": 2, "stops": 6, "withinPairs": [], "restatesShallower": [], "monotony": "none"},
+        {"depth": 3, "stops": 10, "withinPairs": [], "restatesShallower": [],
+         "monotony": "borderline, not counted: #12 ('Shannon theory provides no unique solution') and #13 ('in the absence of a single accepted measure') overlap heavily; #16/#17 are a result then its interpretation; five of ten stops from section 5"}
+      ]
+    },
+    {
+      "slug": "source-spya-furjgs",
+      "passes": [
+        {"depth": 1, "stops": 3, "withinPairs": [], "restatesShallower": [],
+         "monotony": "borderline, not counted: #1 ('appears seemingly random ... material remains anecdotal') and #2 ('a random phenomenon that is hard to observe, irreproducible') share their core, but #2's point is about research paradigms"},
+        {"depth": 2, "stops": 4, "withinPairs": [],
+         "restatesShallower": [{"stop": "#4(d2)", "of": "#1(d1)", "why": "'numerous witness reports but little, if any, scientific documentation' is the same claim as 'most of the collected material remains anecdotal'."}],
+         "monotony": "all four stops are about the quality of witness evidence"},
+        {"depth": 3, "stops": 6, "withinPairs": [], "restatesShallower": [],
+         "monotony": "#9 and #11 are bare date-and-place observation records, low on content"}
+      ]
+    },
+    {
+      "slug": "the-mythology-of-conscious-ai-spya-rn5m0q",
+      "passes": [
+        {"depth": 1, "stops": 5, "withinPairs": [], "restatesShallower": [], "monotony": "none"},
+        {"depth": 2, "stops": 7, "withinPairs": [], "restatesShallower": [],
+         "monotony": "#6 and #7 are the 'intelligence is doing' complement of #2(d1): new content, not a restatement"},
+        {"depth": 3, "stops": 24,
+         "withinPairs": [
+           {"a": "#20(d3)", "b": "#21(d3)", "why": "'anchored in continuous time in ways that algorithms ... are not' then 'It does not stutter from one state to another; it flows': the same claim twice, consecutive."},
+           {"a": "#25(d3)", "b": "#26(d3)", "why": "'a simulation, not the process itself' then 'simulations generally lack the causal powers ... of the things being simulated'; #26 only adds examples."}
+         ],
+         "restatesShallower": [
+           {"stop": "#16(d3)", "of": "#10(d2)", "why": "'difficult ... to separate what they do from what they are' repeats 'no sharp separation between mindware and wetware'."},
+           {"stop": "#26(d3)", "of": "#12(d2)", "why": "'A simulation of a rainstorm does not make anything actually wet' is the hailstorm-in-the-Met-Office point again."},
+           {"stop": "#14(d3)", "of": "#9(d2)", "why": "'when we identify conscious experience with ... intelligence and language, we become more likely to see consciousness where it doesn't exist' restates the biases that make us imbue intelligent things with consciousness."},
+           {"stop": "#33(d3)", "of": "#5(d1)", "why": "'Real artificial consciousness would change everything, and very much for the worse' repeats 'Creating conscious machines would be an ethical disaster'; its second sentence on illusions is new."},
+           {"stop": "#27(d3)", "of": "#3(d1)", "why": "'yet another indication of how deeply ingrained the computational view ... has become' repeats 'so deeply ingrained that it can be difficult to recognize it as an assumption'."}
+         ],
+         "monotony": "24 stops is long; #16-#21 are six consecutive stops from '1: Brains Are Not Computers' all on substrate and continuity, and #25-#27 three in a row on simulation"}
+      ]
+    },
+    {
+      "slug": "vb-spya-vu3xen",
+      "passes": [
+        {"depth": 1, "stops": 2, "withinPairs": [], "restatesShallower": [], "monotony": "none"},
+        {"depth": 2, "stops": 2, "withinPairs": [],
+         "restatesShallower": [
+           {"stop": "#3(d2)", "of": "#1(d1)", "why": "'if ... life is too short for something, you should try to eliminate it' is 'Relentlessly prune bullshit'."},
+           {"stop": "#4(d2)", "of": "#1(d1)", "why": "'Don't wait ... Just don't wait' expands 'don't wait to do things that matter'."}
+         ],
+         "monotony": "the whole More pass restates Gist stop #1, which is the essay's own summary sentence"},
+        {"depth": 3, "stops": 4, "withinPairs": [], "restatesShallower": [], "monotony": "none"}
+      ]
+    }
+  ],
+  "totals": {
+    "d1": {"stops": 20, "withinPairs": 0, "stopsInAPair": 0},
+    "d2": {"stops": 27, "withinPairs": 0, "stopsInAPair": 0, "restatesShallower": 4},
+    "d3": {"stops": 56, "withinPairs": 3, "stopsInAPair": 6, "restatesShallower": 5}
+  }
+}
