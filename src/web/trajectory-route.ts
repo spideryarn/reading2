@@ -5,11 +5,18 @@
  * keys and the door all ask one module the same question.
  *
  * The stored route is one list (src/types.ts § `Trajectory`): **the array order
- * is the route, and depth *d* shows every stop with `depth ≤ d`.** So the passes
- * nest by construction, and nothing here has three lists to keep in step.
+ * is the route, and each stop has the depth of the pass it belongs to.** The
+ * model plans the passes as nesting — depth *d* covering every stop with
+ * `depth ≤ d` — but **the reader walks each pass as only its own stops**: Gist
+ * the depth-1 stops, More the depth-2 ones, Most the depth-3 ones. Greg,
+ * SPIDERYARN-READING2-4P: *"it's a bit annoying for the more detailed levels of
+ * granularity to reuse the same snippets as the coarser levels if I've just read
+ * the coarser level."* So More and Most are what the shallower passes left out,
+ * not skims that stand alone — plan
+ * docs/plans/260929e-trajectory-each-pass-walks-only-its-new-stops.md.
  *
  * docs/plans/260928a-trajectory-mode-skim-a-paper-at-increasing-depth.md
- * § The mode (client) is the spec every rule below is quoted from.
+ * § The mode (client) is where the other rules below were first specified.
  */
 import type { Block, BlockId, TrajectoryDepth, TrajectoryStop } from "../types.js";
 
@@ -23,35 +30,30 @@ export const DEPTH_LABEL: Record<TrajectoryDepth, string> = {
   3: "Most",
 };
 
-/** The stops a depth shows, in route order. */
-export function visibleRoute(
+/** The stops a pass walks — exactly that depth's, in route order. */
+export function passRoute(
   stops: readonly TrajectoryStop[],
   depth: TrajectoryDepth,
 ): TrajectoryStop[] {
-  return stops.filter((s) => s.depth <= depth);
+  return stops.filter((s) => s.depth === depth);
 }
 
-/** How many stops a depth shows. */
-export function countAt(stops: readonly TrajectoryStop[], depth: TrajectoryDepth): number {
-  return stops.reduce((n, s) => (s.depth <= depth ? n + 1 : n), 0);
+/** How many stops a pass walks. */
+export function passCount(stops: readonly TrajectoryStop[], depth: TrajectoryDepth): number {
+  return stops.reduce((n, s) => (s.depth === depth ? n + 1 : n), 0);
 }
 
 /**
- * **The depths that add something**, shallowest first. A short spiral is
- * allowed on an article with few quotes (the plan's growth rule), and a depth
- * that shows exactly what the one before it showed is not a choice worth a
- * button. Gist is kept whenever there is any stop at all, so a route always has
- * a first pass.
+ * **The depths with a stop**, shallowest first. A short spiral is allowed on
+ * an article with few quotes (the plan's growth rule), so a depth can have
+ * none, and a pass with nothing to walk is not a choice worth a button.
+ *
+ * **Any stop at all is enough** — a deeper pass no bigger than the one before
+ * it is still a pass of stops the reader has not stood at (Sol, plan review
+ * F1: a real route's passes are 2 / 2 / 4).
  */
 export function offeredDepths(stops: readonly TrajectoryStop[]): TrajectoryDepth[] {
-  const out: TrajectoryDepth[] = [];
-  let before = 0;
-  for (const d of DEPTHS) {
-    const n = countAt(stops, d);
-    if (n > before || (d === 1 && n > 0)) out.push(d);
-    before = n;
-  }
-  return out;
+  return DEPTHS.filter((d) => stops.some((s) => s.depth === d));
 }
 
 /**
@@ -60,8 +62,7 @@ export function offeredDepths(stops: readonly TrajectoryStop[]): TrajectoryDepth
  * was asked. `null` only for a route with no stops.
  *
  * "Below it" rather than "nearest" because a link that said `?depth=3` on a
- * route whose third pass adds nothing is asking for *everything*, and the
- * deepest pass that exists is everything.
+ * route with no third pass was asking to go as deep as the route goes.
  */
 export function effectiveDepth(
   stops: readonly TrajectoryStop[],
@@ -75,23 +76,40 @@ export function effectiveDepth(
   return below.length > 0 ? below[below.length - 1]! : offered[0]!;
 }
 
-/**
- * The stop the reader is on: the one asked for if this depth shows it, else
- * the first stop. **A stale `?stop=` falls back to the first stop** (the plan's
- * § URL) — a quote chosen again, or a link from before a rebuild.
- */
-export function currentStop(
-  route: readonly TrajectoryStop[],
-  asked: string | null,
-): TrajectoryStop | null {
-  if (route.length === 0) return null;
-  return route.find((s) => s.quoteId === asked) ?? route[0]!;
+/** Where the reader is: the pass drawn, its stops, and the one stood at. */
+export interface Location {
+  depth: TrajectoryDepth | null;
+  route: TrajectoryStop[];
+  current: TrajectoryStop | null;
 }
 
 /**
- * **One step along the route, with no wrap at either end.** `null` means there
+ * **Where `?depth=` and `?stop=` put the reader — the stop wins** (Sol, plan
+ * review F4). A stop is the precise address and a depth only the pass around
+ * it; with separate passes the two can disagree, as every link written before
+ * plan 260929e that names a Gist stop at `depth=2` does. So:
+ *
+ * 1. a `?stop=` on the route draws that stop's own pass, standing on it;
+ * 2. otherwise the asked depth (`effectiveDepth`), on its first stop — **a stale
+ *    `?stop=` falls back to stop 1** (the plan's § URL): a quote chosen again,
+ *    or a link from before a rebuild.
+ */
+export function locate(
+  stops: readonly TrajectoryStop[],
+  askedDepth: TrajectoryDepth | null,
+  askedStop: string | null,
+): Location {
+  const named = askedStop === null ? undefined : stops.find((s) => s.quoteId === askedStop);
+  const depth = named ? named.depth : effectiveDepth(stops, askedDepth);
+  if (depth === null) return { depth: null, route: [], current: null };
+  const route = passRoute(stops, depth);
+  return { depth, route, current: named ?? route[0] ?? null };
+}
+
+/**
+ * **One step along the pass, with no wrap at either end.** `null` means there
  * is nowhere to go — the caller hands the key back rather than swallowing it.
- * A current stop that is not on this route steps to the first.
+ * A current stop that is not on this pass steps to the first.
  */
 export function stepStop(
   route: readonly TrajectoryStop[],
@@ -105,56 +123,25 @@ export function stepStop(
 }
 
 /**
- * **Where a change of depth lands** — "changing depth keeps your place":
- *
- * - **Depth up**: stay on the current stop. The deeper pass contains it.
- * - **Depth down**: stay on the current stop if the shallower pass has it.
- *   Otherwise go to the nearest earlier stop that it has, or to its first stop
- *   if none comes earlier.
- *
- * With no current stop, or one that is not on the pass being left, it lands on
- * the new pass's first stop. `null` only when the new pass is empty.
- *
- * **Going round again is not here any more.** Until plan 260929a a depth-up on
- * the last stop of a pass jumped to the first stop new at the deeper pass. The
- * door at the end of a pass now names that choice itself — *More detail ›*
- * (Greg, SPIDERYARN-READING2-4N and 51) — so the depth buttons keep
- * one rule, and the doors choose their own landing (`doorAfter`).
+ * **Where a change of depth lands: stop 1 of the new pass**, deeper or
+ * shallower. Until plan 260929e a depth change kept your stop, because a deeper
+ * pass contained it; separate passes never share a stop, and stop 1 is where
+ * *More detail ›* lands too, so the buttons and the door agree. Remembering
+ * where you were in each pass is deferred (the plan's § Deferred). `null` for a
+ * pass with no stops.
  */
-export function stopAfterDepthChange(
-  stops: readonly TrajectoryStop[],
-  from: TrajectoryDepth,
-  to: TrajectoryDepth,
-  current: string | null,
-): string | null {
-  const next = visibleRoute(stops, to);
-  if (next.length === 0) return null;
-  const first = next[0]!.quoteId;
-  const pass = visibleRoute(stops, from);
-  const at = pass.findIndex((s) => s.quoteId === current);
-  if (at === -1) return first;
-  const here = pass[at]!;
-
-  if (to >= from) return here.quoteId;
-
-  if (here.depth <= to) return here.quoteId;
-  /* The nearest earlier stop the shallower pass has, walking back along the
-     route as it stood — the full list, since `pass` is a superset of `next`. */
-  const whole = stops.findIndex((s) => s.quoteId === here.quoteId);
-  for (let i = whole - 1; i >= 0; i--) {
-    const s = stops[i]!;
-    if (s.depth <= to) return s.quoteId;
-  }
-  return first;
+export function firstStopOf(stops: readonly TrajectoryStop[], depth: TrajectoryDepth): string | null {
+  return stops.find((s) => s.depth === depth)?.quoteId ?? null;
 }
 
 /**
  * **What the door after the current stop's block offers.**
  *
  * - `next`: the next stop on this pass.
- * - `end`: the last stop of the pass. When a deeper offered pass exists, *More
- *   detail ›* — that `deeper` depth, landing on **its** stop 1. At the end of
- *   the deepest pass `deeper` is `null` and the door offers no button, only the
+ * - `end`: the last stop of the pass. When a deeper pass exists, *More
+ *   detail ›* — that `deeper` depth, landing on **its** stop 1, which since plan
+ *   260929e is always a stop the reader has not stood at. At the end of the
+ *   deepest pass `deeper` is `null` and the door offers no button, only the
  *   line saying which pass ended. *Go round again* (stop 1 of this pass) went in
  *   plan 260929b: ← walks back (SPIDERYARN-READING2-51).
  *
@@ -169,15 +156,15 @@ export function doorAfter(
   depth: TrajectoryDepth,
   current: string | null,
 ): Door | null {
-  const route = visibleRoute(stops, depth);
+  const route = passRoute(stops, depth);
   if (route.length === 0) return null;
   const next = stepStop(route, current, 1);
   if (next !== null) return { kind: "next", quoteId: next };
   const d = offeredDepths(stops).find((x) => x > depth);
-  const deeperFirst = d === undefined ? undefined : visibleRoute(stops, d)[0];
+  const deeperFirst = d === undefined ? null : firstStopOf(stops, d);
   return {
     kind: "end",
-    deeper: d === undefined || deeperFirst === undefined ? null : { depth: d, first: deeperFirst.quoteId },
+    deeper: d === undefined || deeperFirst === null ? null : { depth: d, first: deeperFirst },
   };
 }
 

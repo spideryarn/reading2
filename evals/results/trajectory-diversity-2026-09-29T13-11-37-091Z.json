@@ -1,0 +1,607 @@
+{
+  "near": 0.2,
+  "report": [
+    {
+      "slug": "antikythera-mechanism-spya-zhxrzm",
+      "version": "trajectory/6",
+      "stale": false,
+      "visible": [
+        3,
+        8,
+        15
+      ],
+      "rows": [
+        {
+          "policy": "nested",
+          "depth": 1,
+          "walk": 3,
+          "seenAgain": 0,
+          "restates": [],
+          "ideaAgain": 0,
+          "sameIdeaPairs": 0,
+          "nearPairs": [],
+          "closeConsecutive": 0,
+          "sameSectionConsecutive": 1,
+          "meanQuoteChars": 154
+        },
+        {
+          "policy": "nested",
+          "depth": 2,
+          "walk": 8,
+          "seenAgain": 3,
+          "restates": [],
+          "ideaAgain": 0,
+          "sameIdeaPairs": 0,
+          "nearPairs": [],
+          "closeConsecutive": 0,
+          "sameSectionConsecutive": 1,
+          "meanQuoteChars": 176
+        },
+        {
+          "policy": "nested",
+          "depth": 3,
+          "walk": 15,
+          "seenAgain": 8,
+          "restates": [],
+          "ideaAgain": 0,
+          "sameIdeaPairs": 0,
+          "nearPairs": [],
+          "closeConsecutive": 0,
+          "sameSectionConsecutive": 4,
+          "meanQuoteChars": 198
+        },
+        {
+          "policy": "added",
+          "depth": 1,
+          "walk": 3,
+          "seenAgain": 0,
+          "restates": [],
+          "ideaAgain": 0,
+          "sameIdeaPairs": 0,
+          "nearPairs": [],
+          "closeConsecutive": 0,
+          "sameSectionConsecutive": 1,
+          "meanQuoteChars": 154
+        },
+        {
+          "policy": "added",
+          "depth": 2,
+          "walk": 5,
+          "seenAgain": 0,
+          "restates": [],
+          "ideaAgain": 0,
+          "sameIdeaPairs": 0,
+          "nearPairs": [],
+          "closeConsecutive": 0,
+          "sameSectionConsecutive": 0,
+          "meanQuoteChars": 189
+        },
+        {
+          "policy": "added",
+          "depth": 3,
+          "walk": 7,
+          "seenAgain": 0,
+          "restates": [],
+          "ideaAgain": 0,
+          "sameIdeaPairs": 0,
+          "nearPairs": [],
+          "closeConsecutive": 0,
+          "sameSectionConsecutive": 3,
+          "meanQuoteChars": 223
+        }
+      ]
+    },
+    {
+      "slug": "cargocult-spya-rz663q",
+      "version": "trajectory/7",
+      "stale": false,
+      "visible": [
+        3,
+        6,
+        11
+      ],
+      "rows": [
+        {
+          "policy": "nested",
+          "depth": 1,
+          "walk": 3,
+          "seenAgain": 0,
+          "restates": [],
+          "ideaAgain": 0,
+          "sameIdeaPairs": 0,
+          "nearPairs": [],
+          "closeConsecutive": 0,
+          "sameSectionConsecutive": 0,
+          "meanQuoteChars": 297
+        },
+        {
+          "policy": "nested",
+          "depth": 2,
+          "walk": 6,
+          "seenAgain": 3,
+          "restates": [],
+          "ideaAgain": 1,
+          "sameIdeaPairs": 1,
+          "nearPairs": [],
+          "closeConsecutive": 0,
+          "sameSectionConsecutive": 0,
+          "meanQuoteChars": 327
+        },
+        {
+          "policy": "nested",
+          "depth": 3,
+          "walk": 11,
+          "seenAgain": 6,
+          "restates": [],
+          "ideaAgain": 2,
+          "sameIdeaPairs": 3,
+          "nearPairs": [],
+          "closeConsecutive": 2,
+          "sameSectionConsecutive": 3,
+          "meanQuoteChars": 272
+        },
+        {
+          "policy": "added",
+          "depth": 1,
+          "walk": 3,
+          "seenAgain": 0,
+          "restates": [],
+          "ideaAgain": 0,
+          "sameIdeaPairs": 0,
+          "nearPairs": [],
+          "closeConsecutive": 0,
+          "sameSectionConsecutive": 0,
+          "meanQuoteChars": 297
+        },
+        {
+          "policy": "added",
+          "depth": 2,
+          "walk": 3,
+          "seenAgain": 0,
+          "restates": [],
+          "ideaAgain": 1,
+          "sameIdeaPairs": 0,
+          "nearPairs": [],
+          "closeConsecutive": 0,
+          "sameSectionConsecutive": 0,
+          "meanQuoteChars": 356
+        },
+        {
+          "policy": "added",
+          "depth": 3,
+          "walk": 5,
+          "seenAgain": 0,
+          "restates": [],
+          "ideaAgain": 2,
+          "sameIdeaPairs": 0,
+          "nearPairs": [],
+          "closeConsecutive": 2,
+          "sameSectionConsecutive": 3,
+          "meanQuoteChars": 207
+        }
+      ]
+    },
+    {
+      "slug": "entropy-24-00930-spya-pywwkq",
+      "version": "trajectory/6",
+      "stale": false,
+      "visible": [
+        4,
+        10,
+        20
+      ],
+      "rows": [
+        {
+          "policy": "nested",
+          "depth": 1,
+          "walk": 4,
+          "seenAgain": 0,
+          "restates": [],
+          "ideaAgain": 1,
+          "sameIdeaPairs": 1,
+          "nearPairs": [],
+          "closeConsecutive": 0,
+          "sameSectionConsecutive": 0,
+          "meanQuoteChars": 421
+        },
+        {
+          "policy": "nested",
+          "depth": 2,
+          "walk": 10,
+          "seenAgain": 4,
+          "restates": [],
+          "ideaAgain": 0,
+          "sameIdeaPairs": 1,
+          "nearPairs": [],
+          "closeConsecutive": 1,
+          "sameSectionConsecutive": 2,
+          "meanQuoteChars": 348
+        },
+        {
+          "policy": "nested",
+          "depth": 3,
+          "walk": 20,
+          "seenAgain": 10,
+          "restates": [],
+          "ideaAgain": 5,
+          "sameIdeaPairs": 7,
+          "nearPairs": [],
+          "closeConsecutive": 3,
+          "sameSectionConsecutive": 8,
+          "meanQuoteChars": 277
+        },
+        {
+          "policy": "added",
+          "depth": 1,
+          "walk": 4,
+          "seenAgain": 0,
+          "restates": [],
+          "ideaAgain": 1,
+          "sameIdeaPairs": 1,
+          "nearPairs": [],
+          "closeConsecutive": 0,
+          "sameSectionConsecutive": 0,
+          "meanQuoteChars": 421
+        },
+        {
+          "policy": "added",
+          "depth": 2,
+          "walk": 6,
+          "seenAgain": 0,
+          "restates": [],
+          "ideaAgain": 0,
+          "sameIdeaPairs": 0,
+          "nearPairs": [],
+          "closeConsecutive": 1,
+          "sameSectionConsecutive": 2,
+          "meanQuoteChars": 299
+        },
+        {
+          "policy": "added",
+          "depth": 3,
+          "walk": 10,
+          "seenAgain": 0,
+          "restates": [],
+          "ideaAgain": 5,
+          "sameIdeaPairs": 2,
+          "nearPairs": [],
+          "closeConsecutive": 2,
+          "sameSectionConsecutive": 6,
+          "meanQuoteChars": 205
+        }
+      ]
+    },
+    {
+      "slug": "source-spya-furjgs",
+      "version": "trajectory/6",
+      "stale": false,
+      "visible": [
+        3,
+        7,
+        13
+      ],
+      "rows": [
+        {
+          "policy": "nested",
+          "depth": 1,
+          "walk": 3,
+          "seenAgain": 0,
+          "restates": [],
+          "ideaAgain": 0,
+          "sameIdeaPairs": 0,
+          "nearPairs": [],
+          "closeConsecutive": 1,
+          "sameSectionConsecutive": 1,
+          "meanQuoteChars": 337
+        },
+        {
+          "policy": "nested",
+          "depth": 2,
+          "walk": 7,
+          "seenAgain": 3,
+          "restates": [],
+          "ideaAgain": 1,
+          "sameIdeaPairs": 2,
+          "nearPairs": [],
+          "closeConsecutive": 1,
+          "sameSectionConsecutive": 1,
+          "meanQuoteChars": 300
+        },
+        {
+          "policy": "nested",
+          "depth": 3,
+          "walk": 13,
+          "seenAgain": 7,
+          "restates": [],
+          "ideaAgain": 2,
+          "sameIdeaPairs": 4,
+          "nearPairs": [],
+          "closeConsecutive": 1,
+          "sameSectionConsecutive": 4,
+          "meanQuoteChars": 264
+        },
+        {
+          "policy": "added",
+          "depth": 1,
+          "walk": 3,
+          "seenAgain": 0,
+          "restates": [],
+          "ideaAgain": 0,
+          "sameIdeaPairs": 0,
+          "nearPairs": [],
+          "closeConsecutive": 1,
+          "sameSectionConsecutive": 1,
+          "meanQuoteChars": 337
+        },
+        {
+          "policy": "added",
+          "depth": 2,
+          "walk": 4,
+          "seenAgain": 0,
+          "restates": [],
+          "ideaAgain": 1,
+          "sameIdeaPairs": 1,
+          "nearPairs": [],
+          "closeConsecutive": 0,
+          "sameSectionConsecutive": 0,
+          "meanQuoteChars": 272
+        },
+        {
+          "policy": "added",
+          "depth": 3,
+          "walk": 6,
+          "seenAgain": 0,
+          "restates": [],
+          "ideaAgain": 2,
+          "sameIdeaPairs": 0,
+          "nearPairs": [],
+          "closeConsecutive": 0,
+          "sameSectionConsecutive": 3,
+          "meanQuoteChars": 221
+        }
+      ]
+    },
+    {
+      "slug": "the-mythology-of-conscious-ai-spya-rn5m0q",
+      "version": "trajectory/6",
+      "stale": false,
+      "visible": [
+        5,
+        12,
+        36
+      ],
+      "rows": [
+        {
+          "policy": "nested",
+          "depth": 1,
+          "walk": 5,
+          "seenAgain": 0,
+          "restates": [],
+          "ideaAgain": 0,
+          "sameIdeaPairs": 0,
+          "nearPairs": [],
+          "closeConsecutive": 0,
+          "sameSectionConsecutive": 1,
+          "meanQuoteChars": 240
+        },
+        {
+          "policy": "nested",
+          "depth": 2,
+          "walk": 12,
+          "seenAgain": 5,
+          "restates": [],
+          "ideaAgain": 0,
+          "sameIdeaPairs": 0,
+          "nearPairs": [],
+          "closeConsecutive": 2,
+          "sameSectionConsecutive": 6,
+          "meanQuoteChars": 251
+        },
+        {
+          "policy": "nested",
+          "depth": 3,
+          "walk": 36,
+          "seenAgain": 12,
+          "restates": [],
+          "ideaAgain": 0,
+          "sameIdeaPairs": 0,
+          "nearPairs": [],
+          "closeConsecutive": 13,
+          "sameSectionConsecutive": 26,
+          "meanQuoteChars": 263
+        },
+        {
+          "policy": "added",
+          "depth": 1,
+          "walk": 5,
+          "seenAgain": 0,
+          "restates": [],
+          "ideaAgain": 0,
+          "sameIdeaPairs": 0,
+          "nearPairs": [],
+          "closeConsecutive": 0,
+          "sameSectionConsecutive": 1,
+          "meanQuoteChars": 240
+        },
+        {
+          "policy": "added",
+          "depth": 2,
+          "walk": 7,
+          "seenAgain": 0,
+          "restates": [],
+          "ideaAgain": 0,
+          "sameIdeaPairs": 0,
+          "nearPairs": [],
+          "closeConsecutive": 2,
+          "sameSectionConsecutive": 5,
+          "meanQuoteChars": 259
+        },
+        {
+          "policy": "added",
+          "depth": 3,
+          "walk": 24,
+          "seenAgain": 0,
+          "restates": [],
+          "ideaAgain": 0,
+          "sameIdeaPairs": 0,
+          "nearPairs": [],
+          "closeConsecutive": 11,
+          "sameSectionConsecutive": 20,
+          "meanQuoteChars": 269
+        }
+      ]
+    },
+    {
+      "slug": "vb-spya-vu3xen",
+      "version": "trajectory/7",
+      "stale": false,
+      "visible": [
+        2,
+        4,
+        8
+      ],
+      "rows": [
+        {
+          "policy": "nested",
+          "depth": 1,
+          "walk": 2,
+          "seenAgain": 0,
+          "restates": [],
+          "ideaAgain": 0,
+          "sameIdeaPairs": 0,
+          "nearPairs": [],
+          "closeConsecutive": 0,
+          "sameSectionConsecutive": 0,
+          "meanQuoteChars": 189
+        },
+        {
+          "policy": "nested",
+          "depth": 2,
+          "walk": 4,
+          "seenAgain": 2,
+          "restates": [],
+          "ideaAgain": 0,
+          "sameIdeaPairs": 0,
+          "nearPairs": [],
+          "closeConsecutive": 1,
+          "sameSectionConsecutive": 0,
+          "meanQuoteChars": 202
+        },
+        {
+          "policy": "nested",
+          "depth": 3,
+          "walk": 8,
+          "seenAgain": 4,
+          "restates": [],
+          "ideaAgain": 1,
+          "sameIdeaPairs": 1,
+          "nearPairs": [],
+          "closeConsecutive": 1,
+          "sameSectionConsecutive": 1,
+          "meanQuoteChars": 217
+        },
+        {
+          "policy": "added",
+          "depth": 1,
+          "walk": 2,
+          "seenAgain": 0,
+          "restates": [],
+          "ideaAgain": 0,
+          "sameIdeaPairs": 0,
+          "nearPairs": [],
+          "closeConsecutive": 0,
+          "sameSectionConsecutive": 0,
+          "meanQuoteChars": 189
+        },
+        {
+          "policy": "added",
+          "depth": 2,
+          "walk": 2,
+          "seenAgain": 0,
+          "restates": [],
+          "ideaAgain": 0,
+          "sameIdeaPairs": 0,
+          "nearPairs": [],
+          "closeConsecutive": 0,
+          "sameSectionConsecutive": 0,
+          "meanQuoteChars": 215
+        },
+        {
+          "policy": "added",
+          "depth": 3,
+          "walk": 4,
+          "seenAgain": 0,
+          "restates": [],
+          "ideaAgain": 1,
+          "sameIdeaPairs": 1,
+          "nearPairs": [],
+          "closeConsecutive": 0,
+          "sameSectionConsecutive": 1,
+          "meanQuoteChars": 232
+        }
+      ]
+    }
+  ],
+  "totals": {
+    "nested d1": {
+      "walk": 20,
+      "seenAgain": 0,
+      "restates": 0,
+      "ideaAgain": 1,
+      "sameIdeaPairs": 1,
+      "nearPairs": 0,
+      "closeConsecutive": 1,
+      "sameSectionConsecutive": 3
+    },
+    "nested d2": {
+      "walk": 47,
+      "seenAgain": 20,
+      "restates": 0,
+      "ideaAgain": 2,
+      "sameIdeaPairs": 4,
+      "nearPairs": 0,
+      "closeConsecutive": 5,
+      "sameSectionConsecutive": 10
+    },
+    "nested d3": {
+      "walk": 103,
+      "seenAgain": 47,
+      "restates": 0,
+      "ideaAgain": 10,
+      "sameIdeaPairs": 15,
+      "nearPairs": 0,
+      "closeConsecutive": 20,
+      "sameSectionConsecutive": 46
+    },
+    "added d1": {
+      "walk": 20,
+      "seenAgain": 0,
+      "restates": 0,
+      "ideaAgain": 1,
+      "sameIdeaPairs": 1,
+      "nearPairs": 0,
+      "closeConsecutive": 1,
+      "sameSectionConsecutive": 3
+    },
+    "added d2": {
+      "walk": 27,
+      "seenAgain": 0,
+      "restates": 0,
+      "ideaAgain": 2,
+      "sameIdeaPairs": 1,
+      "nearPairs": 0,
+      "closeConsecutive": 3,
+      "sameSectionConsecutive": 7
+    },
+    "added d3": {
+      "walk": 56,
+      "seenAgain": 0,
+      "restates": 0,
+      "ideaAgain": 10,
+      "sameIdeaPairs": 3,
+      "nearPairs": 0,
+      "closeConsecutive": 15,
+      "sameSectionConsecutive": 36
+    }
+  }
+}

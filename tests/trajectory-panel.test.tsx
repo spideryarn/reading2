@@ -5,8 +5,8 @@
  *
  * Two halves. The panel, from a posed hook and view: the pinned head, the depth
  * control that offers only the depths that add stops, the role line on the
- * current row only, the dimmed stops of a shallower pass, and the foot's
- * promise. Then the band, for real, over a stubbed network inside a
+ * current row only, each pass's own stops, and the foot's promise. Then the
+ * band, for real, over a stubbed network inside a
  * `NuqsAdapter`: what a step and a depth change write to the address and to the
  * history stack, that a stale `?stop=` falls back to the first stop, and that
  * the passage it publishes is the quote's own mark.
@@ -251,7 +251,9 @@ const QUOTES: Quotes = {
 };
 
 /**
- * Route order q2 q0 q3 q1; Gist is q2 and q0, More adds q3, Most adds q1.
+ * Route order q2 q0 q3 q1; Gist is q2 and q0, More adds q3, Most adds q1 —
+ * and since plan 260929e each pass walks only what it adds: Gist q2 q0, More
+ * q3, Most q1.
  */
 const STOPS: TrajectoryStop[] = [
   { quoteId: Q[2]!, depth: 1, role: null, cue: "What does earlier work miss, by their account?" },
@@ -367,9 +369,9 @@ function view(over: Partial<TrajectoryView> = {}): TrajectoryView {
       { depth: 3, label: "Most", count: 4 },
     ],
     rows: [
-      { quoteId: Q[2]!, n: 1, place: "Methods", cue: "What earlier work missed", seen: true, current: false, missing: false, position: null, words: null },
-      { quoteId: Q[0]!, n: 2, place: "Results", cue: "The headline result", seen: true, current: true, missing: false, position: null, words: null },
-      { quoteId: Q[3]!, n: 3, place: "Methods", cue: "Where it stops holding", seen: false, current: false, missing: false, position: null, words: null },
+      { quoteId: Q[2]!, n: 1, place: "Methods", cue: "What earlier work missed", current: false, missing: false, position: null, words: null },
+      { quoteId: Q[0]!, n: 2, place: "Results", cue: "The headline result", current: true, missing: false, position: null, words: null },
+      { quoteId: Q[3]!, n: 3, place: "Methods", cue: "Where it stops holding", current: false, missing: false, position: null, words: null },
     ],
     position: 2,
     card: null,
@@ -444,8 +446,8 @@ describe("the panel", () => {
   it("draws a repeated section path for a screen reader only — no ditto mark beside a quote (260928e)", async () => {
     const repeated = view({
       rows: [
-        { quoteId: Q[2]!, n: 1, place: "Methods", cue: null, seen: false, current: false, missing: false, position: null, words: "First." },
-        { quoteId: Q[3]!, n: 2, place: "Methods", cue: null, seen: false, current: false, missing: false, position: null, words: "Second." },
+        { quoteId: Q[2]!, n: 1, place: "Methods", cue: null, current: false, missing: false, position: null, words: "First." },
+        { quoteId: Q[3]!, n: 2, place: "Methods", cue: null, current: false, missing: false, position: null, words: "Second." },
       ],
       position: 1,
     });
@@ -586,10 +588,11 @@ describe("the panel", () => {
     });
   });
 
-  it("dims the stops of a shallower pass", async () => {
+  it("dims no row: every row is a stop of this pass (260929e)", async () => {
     await draw(owner(), view());
     const rows = [...host.querySelectorAll<HTMLElement>(".traj-row")];
-    expect(rows.map((r) => r.classList.contains("seen"))).toEqual([true, true, false]);
+    expect(rows).toHaveLength(3);
+    expect(rows.map((r) => r.classList.contains("seen"))).toEqual([false, false, false]);
   });
 
   it("hands a row, the arrows and a depth to the view", async () => {
@@ -638,13 +641,15 @@ describe("the panel", () => {
 
     const most = view({
       depth: 3,
-      rows: [...view().rows, { quoteId: Q[1]!, n: 4, place: "Results", cue: null, seen: false, current: false, missing: false, position: null, words: null }],
+      /* Most walks only its own stop (260929e), so the count must come from the
+         whole route, not from the rows drawn. */
+      rows: [{ quoteId: Q[1]!, n: 1, place: "Results", cue: null, current: true, missing: false, position: null, words: null }],
     });
     /* The live Quotes list may include two abstract quotes; the route records
        the four it was actually offered, which is the honest denominator. */
     await draw(owner(), most);
     await act(async () => info().click());
-    expect(tip()).toContain("every one of the 4 quotes offered to this route");
+    expect(tip()).toContain("Gist, More and Most together stop at every one of the 4 quotes offered to this route");
     await act(async () => info().click());
     await draw(owner({ trajectory: { ...ROUTE, offered: 6 } }), most);
     await act(async () => info().click());
@@ -1061,28 +1066,74 @@ describe("the band, walked", () => {
     await act(async () => control!.deeper());
     await settled();
     expect(history.length, "one entry for the depth and the stop").toBe(before + 1);
-    expect([param("depth"), param("stop")]).toEqual(["2", Q[2]]);
-    expect(scrolled).toEqual([B[2]]);
-    expect(text(".band-head")).toContain("Stop 1 of 3");
+    /* More's own stop 1 — not Gist's first stop again (260929e, 4P). */
+    expect([param("depth"), param("stop")]).toEqual(["2", Q[3]]);
+    expect(scrolled).toEqual([B[3]]);
+    expect(text(".band-head")).toContain("Stop 1 of 1");
   });
 
   it("offers nothing past the end of the deepest pass", async () => {
     history.replaceState(null, "", `/read/a-route?mode=trajectory&depth=3&stop=${Q[1]}`);
     await mount();
-    expect(control?.door).toEqual({ kind: "end", pass: "Most", count: 4, deeper: null });
+    expect(control?.door).toEqual({ kind: "end", pass: "Most", count: 1, deeper: null });
     await act(async () => control!.deeper());
     await settled();
     expect(param("stop"), "no deeper pass: nothing moves").toBe(Q[1]);
   });
 
-  it("does not go round on a depth button pressed at the end of a pass — it keeps your place", async () => {
+  it("a depth button lands on stop 1 of the new pass, as the door does (260929e)", async () => {
     history.replaceState(null, "", `/read/a-route?mode=trajectory&depth=1&stop=${Q[0]}`);
     await mount();
     scrolled.length = 0;
+    const before = history.length;
     await act(async () => host.querySelectorAll<HTMLButtonElement>(".traj-depth")[1]!.click());
     await settled();
-    expect([param("depth"), param("stop")]).toEqual(["2", Q[0]]);
-    expect(scrolled).toEqual([]);
+    expect(history.length, "one entry for the depth and the stop").toBe(before + 1);
+    expect([param("depth"), param("stop")]).toEqual(["2", Q[3]]);
+    expect(scrolled).toEqual([B[3]]);
+  });
+
+  it("Back and Forward across a depth change restore one matching URL, pass and passage", async () => {
+    await mount();
+    await act(async () => void control!.step(1));
+    await settled();
+    await act(async () => host.querySelectorAll<HTMLButtonElement>(".traj-depth")[1]!.click());
+    await settled();
+    expect([param("depth"), param("stop"), current(), control?.blockId]).toEqual([
+      "2",
+      Q[3],
+      Q[3],
+      B[3],
+    ]);
+
+    const traverse = async (go: () => void) => {
+      await act(async () => {
+        const popped = new Promise<void>((resolve) =>
+          window.addEventListener("popstate", () => resolve(), { once: true }),
+        );
+        go();
+        await popped;
+      });
+      await settled();
+    };
+
+    await traverse(() => history.back());
+    expect([param("depth"), param("stop"), current(), control?.blockId, published[0]?.blockId]).toEqual([
+      null,
+      Q[0],
+      Q[0],
+      B[0],
+      B[0],
+    ]);
+
+    await traverse(() => history.forward());
+    expect([param("depth"), param("stop"), current(), control?.blockId, published[0]?.blockId]).toEqual([
+      "2",
+      Q[3],
+      Q[3],
+      B[3],
+      B[3],
+    ]);
   });
 
   it("← on stop 1 goes to stop 1's passage again, and so does ‹ (4K)", async () => {
@@ -1192,32 +1243,55 @@ describe("the band, walked", () => {
     }
   });
 
-  it("keeps the reader's place on a depth change that is not the end of a pass", async () => {
+  it("a depth change down lands on stop 1 of the shallower pass too", async () => {
+    history.replaceState(null, "", `/read/a-route?mode=trajectory&depth=2&stop=${Q[3]}`);
     await mount();
     scrolled.length = 0;
-    await act(async () => host.querySelectorAll<HTMLButtonElement>(".traj-depth")[2]!.click());
+    await act(async () => host.querySelectorAll<HTMLButtonElement>(".traj-depth")[0]!.click());
     await settled();
-    expect([param("depth"), param("stop")]).toEqual(["3", Q[2]]);
-    expect(scrolled, "staying put is not a scroll").toEqual([]);
+    expect([param("depth"), param("stop")]).toEqual(["1", Q[2]]);
+    expect(scrolled).toEqual([B[2]]);
   });
 
-  it("falls back to the first stop when ?stop= names nothing on the pass", async () => {
+  it("draws a link's stop on its own pass when the link's depth disagrees (Sol F4)", async () => {
+    /* A link from before 260929e: depth=1, but q1 is a Most stop. */
     history.replaceState(null, "", `/read/a-route?mode=trajectory&depth=1&stop=${Q[1]}`);
     await mount();
-    expect(current()).toBe(Q[2]);
+    expect(current()).toBe(Q[1]);
+    expect(host.querySelector(".traj-depth.on")?.textContent).toContain("Most");
+    expect(text(".band-head")).toContain("Stop 1 of 1");
   });
 
-  it("dims the stops of a shallower pass once the depth goes up", async () => {
+  it("canonicalises a conflicting link's depth on the next step, without pushing", async () => {
+    history.replaceState(null, "", `/read/a-route?mode=trajectory&depth=1&stop=${Q[1]}`);
+    const before = history.length;
+    await mount();
+
+    /* Most has one stop, so ← revisits stop 1 (4K). It still counts as the
+       first traversal after the old link and must repair the stale depth. */
+    await act(async () => {
+      expect(control!.step(-1)).toBe(true);
+    });
+    await settled();
+
+    expect([param("depth"), param("stop")]).toEqual(["3", Q[1]]);
+    expect(history.length).toBe(before);
+    expect([current(), control?.blockId, scrolled.at(-1)]).toEqual([Q[1], B[1], B[1]]);
+  });
+
+  it("falls back to the asked pass's first stop when ?stop= names no stop on the route", async () => {
+    history.replaceState(null, "", "/read/a-route?mode=trajectory&depth=2&stop=spya-zz9zzz");
+    await mount();
+    expect(current()).toBe(Q[3]);
+  });
+
+  it("draws Most as only the stops Most adds, none dimmed (260929e)", async () => {
     history.replaceState(null, "", "/read/a-route?mode=trajectory&depth=3");
     await mount();
     const rows = [...host.querySelectorAll<HTMLElement>(".traj-row")];
-    expect(rows.map((r) => r.classList.contains("seen"))).toEqual([true, true, true, false]);
-    expect(rows.map((r) => r.querySelector(".traj-place")?.textContent)).toEqual([
-      "Methods",
-      "Results",
-      "Methods",
-      "Results",
-    ]);
+    expect(rows.map((r) => r.classList.contains("seen"))).toEqual([false]);
+    expect(rows.map((r) => r.querySelector(".traj-place")?.textContent)).toEqual(["Results"]);
+    expect([...host.querySelectorAll(".traj-depth-n")].map((n) => n.textContent)).toEqual(["2", "1", "1"]);
   });
 
   it("steps aside on a narrow window when a stop is chosen from the band", async () => {
@@ -1230,11 +1304,10 @@ describe("the band, walked", () => {
   });
 
   it("places each row's stop in the article by its words (5b)", async () => {
-    history.replaceState(null, "", "/read/a-route?mode=trajectory&depth=3");
     await mount();
-    /* Four blocks of seven words each; route order is blocks 2, 0, 3, 1. */
+    /* Four blocks of seven words each; Gist walks blocks 2 then 0. */
     const left = [...host.querySelectorAll<HTMLElement>(".traj-pos-dot")].map((d) => d.style.top);
-    expect(left).toEqual(["63%", "13%", "88%", "38%"]);
+    expect(left).toEqual(["63%", "13%"]);
   });
 
   it("does not flash on an ordinary open, with no stop in the address (5a)", async () => {
@@ -1277,41 +1350,38 @@ describe("the band, walked", () => {
     expect(away).toBe(1);
   });
 
-  it("steps aside on ← → and on a depth change that moves, as on ‹ › (Sol F29)", async () => {
+  it("steps aside on ← → and on a depth change, as on ‹ › (Sol F29)", async () => {
     await mount(true);
-    /* A depth change that keeps the stop moves nobody, so the band stays. */
-    await act(async () => host.querySelectorAll<HTMLButtonElement>(".traj-depth")[2]!.click());
-    await settled();
-    expect([param("stop"), flashed, away]).toEqual([Q[2], [], 0]);
     /* The keys reach the band through the published control, not the panel. */
     await act(async () => void control!.step(1));
     await settled();
     expect([flashed, away]).toEqual([[B[0]], 1]);
-    /* The door, to the next stop on Most. */
+    /* The door, back to the next stop: ← then the door's Next stop. */
+    await act(async () => void control!.step(-1));
+    await settled();
     await act(async () => control!.advance());
     await settled();
-    expect([flashed, away]).toEqual([[B[0], B[3]], 2]);
-    /* Back to Gist, which does not have that stop: the reader is moved. */
-    await act(async () => host.querySelectorAll<HTMLButtonElement>(".traj-depth")[0]!.click());
+    expect([flashed, away]).toEqual([[B[0], B[2], B[0]], 3]);
+    /* A depth change always moves the reader now: Most's own stop 1. */
+    await act(async () => host.querySelectorAll<HTMLButtonElement>(".traj-depth")[2]!.click());
     await settled();
-    expect(param("depth")).toBe("1");
-    expect(flashed).toHaveLength(3);
-    expect(away).toBe(3);
+    expect([param("depth"), param("stop")]).toEqual(["3", Q[1]]);
+    expect([flashed.at(-1), away]).toEqual([B[1], 4]);
   });
 
-  it("flashes when More detail moves the reader, and not when a depth change keeps the stop (5a)", async () => {
+  it("flashes when More detail or a depth button moves the reader (5a)", async () => {
     await mount();
     await act(async () => host.querySelectorAll<HTMLButtonElement>(".traj-depth")[2]!.click());
     await settled();
-    expect(flashed, "the same stop: nothing was jumped to").toEqual([]);
+    expect(flashed).toEqual([B[1]]);
 
     history.replaceState(null, "", `/read/a-route?mode=trajectory&depth=1&stop=${Q[0]}`);
     await mount();
     flashed.length = 0;
     await act(async () => control!.deeper());
     await settled();
-    expect(param("stop")).toBe(Q[2]);
-    expect(flashed).toEqual([B[2]]);
+    expect(param("stop")).toBe(Q[3]);
+    expect(flashed).toEqual([B[3]]);
   });
 
   it("leaves a row press's quote flash to the jump it makes, so it flashes once (5a, 7b)", async () => {
@@ -1332,10 +1402,11 @@ describe("the band, walked", () => {
     /* Once: a re-render, or the data settling, does not do it again. */
     await settled();
     expect([scrolled, flashed]).toEqual([[B[3]], [B[3]]]);
-    /* And a step after it is its own arrival, not a second deep link. */
+    /* And a step after it is its own arrival, not a second deep link: ← on
+       More's only stop goes to its passage again (4K). */
     await act(async () => void control!.step(-1));
     await settled();
-    expect(flashed).toEqual([B[3], B[0]]);
+    expect(flashed).toEqual([B[3], B[3]]);
   });
 
   it("does not re-arm the deep-link arrival when the Trajectory band remounts", async () => {
@@ -1396,6 +1467,58 @@ describe("the band, walked", () => {
     expect([scrolled, flashed]).toEqual([[], []]);
   });
 
+  it("can leave a missing current stop for a valid new pass", async () => {
+    const missing = "spya-tq6pqr";
+    trajectoryBody = {
+      ...TRAJECTORY_BODY,
+      stale: true,
+      trajectory: {
+        ...ROUTE,
+        stops: [
+          { quoteId: missing, depth: 1, role: null },
+          { quoteId: Q[3]!, depth: 2, role: null },
+        ],
+        visible: [1, 2, 2],
+      },
+    };
+    await mount();
+    expect([current(), control?.blockId]).toEqual([missing, null]);
+
+    await act(async () => host.querySelectorAll<HTMLButtonElement>(".traj-depth")[1]!.click());
+    await settled();
+
+    expect([param("depth"), param("stop")]).toEqual(["2", Q[3]]);
+    expect([current(), control?.blockId, scrolled.at(-1)]).toEqual([Q[3], B[3], B[3]]);
+  });
+
+  it("refuses a depth change when the new pass's required stop 1 has no passage", async () => {
+    const missing = "spya-tq6pqr";
+    trajectoryBody = {
+      ...TRAJECTORY_BODY,
+      stale: true,
+      trajectory: {
+        ...ROUTE,
+        stops: [
+          { quoteId: Q[2]!, depth: 1, role: null },
+          { quoteId: missing, depth: 2, role: null },
+          { quoteId: Q[3]!, depth: 2, role: null },
+        ],
+        visible: [1, 3, 3],
+      },
+    };
+    await mount();
+    scrolled.length = 0;
+
+    await act(async () => host.querySelectorAll<HTMLButtonElement>(".traj-depth")[1]!.click());
+    await settled();
+
+    /* Updating only the band and URL would leave the prose at the old stop;
+       skipping stop 1 would break the depth-change contract. Replanning the
+       stale route is the available recovery, so the whole movement is refused. */
+    expect([param("depth"), param("stop")]).toEqual([null, null]);
+    expect([current(), control?.blockId, scrolled]).toEqual([Q[2], B[2], []]);
+  });
+
   it("leaves the band open over a deep link on a narrow window", async () => {
     /* A shared link opens the band (Reader.tsx § bandAway); the flash is held
        behind it and fires when the band steps aside (flash.ts). */
@@ -1404,8 +1527,8 @@ describe("the band, walked", () => {
     expect([scrolled, away]).toEqual([[B[3]], 0]);
   });
 
-  it("lands a deep link whose stop is not on the pass on the first stop, without a push (Sol F4)", async () => {
-    history.replaceState(null, "", `/read/a-route?mode=trajectory&depth=1&stop=${Q[1]}`);
+  it("lands a deep link whose stop is not on the route on the first stop, without a push (Sol F4)", async () => {
+    history.replaceState(null, "", "/read/a-route?mode=trajectory&depth=1&stop=spya-zz9zzz");
     const before = history.length;
     await mount();
     expect([scrolled, flashed]).toEqual([[B[2]], [B[2]]]);

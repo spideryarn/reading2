@@ -1203,7 +1203,12 @@ export interface QuotesResponse {
    the block id (docs/project/block-ids.md). So the route has no ids of its own
    to keep, and a re-run simply replaces it. */
 
-/** The shallowest pass a stop belongs to. Depth *d* shows every stop with `depth ≤ d`. */
+/**
+ * The pass a stop belongs to. **The model plans the passes as nesting** (depth
+ * *d* covering every stop with `depth ≤ d`, which is what `Trajectory.visible`
+ * counts); **the reader walks each pass as only its own stops** — plan 260929e,
+ * src/web/trajectory-route.ts.
+ */
 export type TrajectoryDepth = 1 | 2 | 3;
 
 export interface TrajectoryStop {
@@ -1285,9 +1290,12 @@ export interface Trajectory {
    * here. src/trajectory.ts § `routeProfileIsStale`.
    */
   profileHash: string | null;
-  /** **The array order is the route.** Depth *d* shows every stop with `depth ≤ d`, in this order. */
+  /** **The array order is the route.** Each pass walks its own stops in this order (see `TrajectoryDepth`). */
   stops: TrajectoryStop[];
-  /** How many stops are visible at depth ≤ 1, ≤ 2 and ≤ 3. Growing, by construction. */
+  /**
+   * How many stops there are at depth ≤ 1, ≤ 2 and ≤ 3 — **cumulative**, as the route was planned
+   * and validated. Growing, by construction. Not what the band counts: it counts each pass's own.
+   */
   visible: [number, number, number];
   /**
    * How many quotes the model was offered — one per represented block, after
