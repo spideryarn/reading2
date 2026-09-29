@@ -899,20 +899,54 @@ td.text.kind-heading .blk-gutter[data-open] {
    >
    > — Greg, 2026-09-12
 
-   A pseudo-element, so it is not a slot and changes nothing about how many
-   icons the row has room for (§ the column that truncates): absolutely placed
-   inside a box that is already `position: absolute`, it is out of the grid.
+   **An element since 2026-09-29, so it can say what it is on hover.** It was a
+   `::after` on the gutter, and Greg could see it and not find out what it
+   meant (SPIDERYARN-READING2-4S). `span.blk-read` is the gutter's *last* child
+   — the column counts its controls with `:nth-child` from the front — and it
+   carries a `title`. Absolutely placed inside a box that is already
+   `position: absolute`, so it is out of the grid and changes nothing about how
+   many icons the row has room for (§ the column that truncates).
+
+   **Its box is the hover target and its `::after` is the line.** The line is
+   2px, too thin to find with a pointer, so the box widens it — but only into
+   the gap between the column and the prose (`--blk-gutter-x`), never back
+   over the column. Every control owns the column's full width, and a strip
+   that reached 5px into it took the right edge of every icon's click (GPT Sol,
+   plan review, 2026-09-29). The line is drawn back at the column's own edge,
+   where it has always been, with `pointer-events: none` so it cannot take a
+   click either. The width is `--read` times the gap, clamped, so on a row with
+   no reading time it is zero wide and there is nothing to hover.
+
+   **It has to win every `.blk-gutter > *` rule**, which are written for
+   controls: `display`, `width`, `min-height`, the reveals' `opacity` and
+   `pointer-events`. `span.blk-read` adds an element to the selector, so
+   `.blk-gutter > span.blk-read` (0,2,1) outranks each of them (0,2,0 at most
+   among the ones that match any child). The gutter itself is
+   `pointer-events: none`; this turns it back on for the strip alone.
 
    `--read` is set per row by the one style element `ReadingTimeStyle` renders
    (reading-time.ts § gutterCss) — never by `TableView`, which would re-render
    every row whenever one block crossed a step. Unset means 0, which draws
    nothing. */
-.blk-gutter::after {
+.blk-gutter > span.blk-read {
+  display: block;
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 100%;
+  width: clamp(0px, calc(var(--read, 0) * var(--blk-gutter-x)), var(--blk-gutter-x));
+  min-height: 0;
+  padding: 0;
+  opacity: 1;
+  pointer-events: auto;
+  cursor: help;
+}
+.blk-gutter > span.blk-read::after {
   content: "";
   position: absolute;
   top: 0;
   bottom: 0;
-  right: 0;
+  left: -2px;
   width: 2px;
   pointer-events: none;
   background: var(--ink);

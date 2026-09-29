@@ -407,13 +407,18 @@ describe('the "?"', () => {
        coming back. */
   });
 
-  it("draws the same 12px ink as the other three", () => {
-    // Stage 1 grew the hit box to 24px and deliberately left the glyphs at 12.
-    // A fourth icon drawn larger would be the loudest thing in a column whose
-    // rule is that it stays quiet.
+  it("draws the same 15px ink as the other three", () => {
+    // Stage 1 grew the hit box to 24px and deliberately left the glyphs at 12;
+    // Greg asked for them "a bit bigger" on 2026-09-29 (SPIDERYARN-READING2-4A)
+    // and all of them went to 15 together. A fourth icon drawn at a different
+    // size would be the loudest thing in a column whose rule is that it stays
+    // quiet — so every glyph in the column is checked, not only this one.
     paint();
     const svg = host.querySelector(".blk-help svg") as SVGElement;
-    expect(svg.getAttribute("width")).toBe("12");
+    expect(svg.getAttribute("width")).toBe("15");
+    const widths = [...host.querySelectorAll(".blk-gutter svg")].map((el) => el.getAttribute("width"));
+    expect(widths.length).toBeGreaterThan(1);
+    expect(new Set(widths)).toEqual(new Set(["15"]));
     /* `circle-question-mark`, because `CircleHelp` is lucide v1's alias for it
        — the class is the glyph's own name and the import's is a synonym. */
     expect(svg.getAttribute("class")).toContain("circle-question-mark");
@@ -432,10 +437,26 @@ describe('the "?"', () => {
        directly, 2026-09-05 — so a note is never the thing that falls off a short
        paragraph. styles.css § the gutter has the table. */
     paint([comment("c1", 5)]);
-    const classes = [...host.querySelectorAll(".blk-gutter > *")].map(
-      (el) => el.className.split(" ")[0],
-    );
+    /* The reading-time strip is a child too, and not a control: it is filtered
+       out here and pinned last by the test below, because anywhere earlier it
+       would take a control's `:nth-child` slot. */
+    const classes = [...host.querySelectorAll(".blk-gutter > *")]
+      .map((el) => el.className.split(" ")[0])
+      .filter((c) => c !== "blk-read");
     expect(classes).toEqual(["blk-cmt", "blk-permalink", "block-chat", "blk-help", "blk-more"]);
+  });
+
+  it("puts the reading-time strip last, with its explanation, outside the tab order", () => {
+    /* SPIDERYARN-READING2-4S: Greg saw the hairline and could not find out what
+       it meant. The column counts its controls with `:nth-child` from the
+       front, so the strip has to be the last child or it would push a control
+       out of its slot (gutter.css § reading time). */
+    paint([comment("c1", 5)]);
+    const last = host.querySelector(".blk-gutter")?.lastElementChild;
+    expect(last?.className).toBe("blk-read");
+    expect(last?.getAttribute("title")).toMatch(/^Reading time: /);
+    expect(last?.getAttribute("aria-hidden")).toBe("true");
+    expect(last?.hasAttribute("tabindex")).toBe(false);
   });
 });
 

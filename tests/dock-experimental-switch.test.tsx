@@ -530,3 +530,65 @@ describe("the fit signature", () => {
     expect(sig("ready")).toBe(sig("ready"));
   });
 });
+
+/**
+ * **The drawn switch** — SPIDERYARN-READING2-4F, Greg asking for the button to
+ * read "more visibly a toggle". Where its knob sits is `SWITCH_LOOK` in
+ * Dock.tsx, and it is *not* the lit frame's rule: the frame goes dark for any
+ * failure, but after a failed save the store has already restored the real
+ * value and `aria-pressed` reports it, so the knob must agree with that, and
+ * where nothing has been read at all the knob must not draw "off". GPT Sol,
+ * plan review, 2026-09-29.
+ */
+describe("the drawn switch", () => {
+  function knob(): string {
+    const el = theSwitch().querySelector(".dock-switch");
+    if (!el) throw new Error("the switch has no drawn track");
+    expect(el.getAttribute("aria-hidden")).toBe("true");
+    return [...el.classList]
+      .filter((c) => c !== "dock-switch")
+      .sort()
+      .join(" ");
+  }
+
+  it("draws the value in every state that knows it", () => {
+    const cases: [string, Partial<Parameters<typeof experimental>[0]>, string][] = [
+      ["ready, off", { on: false }, "is-off"],
+      ["ready, on", { on: true }, "is-on"],
+      ["saving, on", { on: true, saving: true }, "is-on"],
+      /* The case the frame's rule gets wrong: a failed save whose restored
+         value is on. The frame is unlit; the knob, like aria-pressed, says on. */
+      ["save-failed, restored on", { on: true, error: "network" }, "is-on"],
+      ["save-failed, restored off", { on: false, error: "network" }, "is-off"],
+      ["stale, on", { on: true, loaded: false, stale: true }, "is-on is-stale"],
+      ["stale, off", { on: false, loaded: false, stale: true }, "is-off is-stale"],
+    ];
+    for (const [name, over, want] of cases) {
+      reading({ experimental: experimental(over) });
+      expect(knob(), name).toBe(want);
+    }
+  });
+
+  it("save-failed with the value restored on: the knob and aria-pressed agree", () => {
+    reading({ experimental: experimental({ on: true, error: "network" }) });
+    expect(theSwitch().getAttribute("aria-pressed")).toBe("true");
+    expect(knob()).toBe("is-on");
+  });
+
+  it("draws neither position where no value has been read", () => {
+    for (const over of [{ loaded: false }, { loaded: false, loadError: "no" }]) {
+      /* Both values underneath, so a knob that leaked either would show. */
+      reading({ experimental: experimental({ ...over, on: true }) });
+      expect(knob()).toBe("is-unknown");
+      reading({ experimental: experimental({ ...over, on: false }) });
+      expect(knob()).toBe("is-unknown");
+    }
+  });
+
+  it("says what a press does, once it is a switch that works", () => {
+    reading({ experimental: experimental({ on: false }) });
+    expect(stateNote()).toMatch(/Press to turn it on\.$/);
+    reading({ experimental: experimental({ on: true }) });
+    expect(stateNote()).toMatch(/Press to turn it off\.$/);
+  });
+});
