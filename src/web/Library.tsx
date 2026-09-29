@@ -92,6 +92,7 @@ import { useSession } from "./useSession.js";
 import { useShelf } from "./useShelf.js";
 import { useSlow } from "./useSlow.js";
 import { useRenderCount } from "./perf.js";
+import { layoutViewportWidth } from "./reader/measure.js";
 
 export function Library({
   readerId,
@@ -938,7 +939,7 @@ function takesFocusOnArrival(input: HTMLInputElement, arrivingQuery: string): bo
   const box = input.getBoundingClientRect();
   return (
     box.top >= 0 &&
-    box.right <= window.innerWidth &&
+    box.right <= layoutViewportWidth() &&
     box.bottom <= window.innerHeight &&
     box.left >= 0
   );

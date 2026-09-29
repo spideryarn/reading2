@@ -201,3 +201,11 @@ React's `autoFocus` scrolls.
   the read matters). Chat's Send now uses `aria-disabled` rather than `disabled`, so its tooltip
   opens on an empty box (tooltips.md); the click is stopped and `submit` refuses the same states.
   touch.md now names all three Enter-sends boxes. Red first: 10 tests.
+- 2026-09-29: Sol code review of Part C — approve, no findings. Browser check (Playwright, Sonnet
+  subagent) passed A–G: focus on `/`, none with `?q=`, none in a `hasTouch` context where
+  `(pointer: coarse)` was confirmed true; ⌘- and Ctrl-Enter reach Metadata, not from the chat box
+  and not from a focused link; both tooltips read right. The off-screen-after-Back case could not
+  be produced (Back landed at scrollY 0), so it rests on the unit test. Full suite: two of ours
+  that the scoped runs missed — `help-sends-once` mocks Tooltip without `ControlTip`, and Sol's F7
+  read `window.innerWidth`, which `layout-viewport-width` forbids (now `layoutViewportWidth()`).
+  Remaining reds are build-only (cold-start, pdf-bundle, three fleet files wanting `build:fleet`).
