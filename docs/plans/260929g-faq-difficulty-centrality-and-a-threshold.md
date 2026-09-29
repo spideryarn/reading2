@@ -231,3 +231,25 @@ change above (where this section and the design disagree, **this section wins**)
   `after-2` in prioritised order tests the sort's stability. The default bar is chosen on three
   articles to show at least 80% on average (predeclared, the Glossary's 87% being the reference) and
   checked on the other three.
+
+### Stage 4 — code review (GPT Sol, 2026-09-29): approve
+
+[The review](260929g-faq-difficulty-centrality-and-a-threshold-code-review-sol.md) of `f23e1346`: no
+P0 or P1. Two P2 test gaps, fixed by the reviewer in the stage — the unscored-list guarantee pinned
+for a visitor as well as the owner, and partly scored lists and a `?faqbar=` above the data pinned
+end to end. It checked the Glossary and Citations wrappers against the grid edge cases, and the
+eval's conclusion: it also confirmed that the default bar changed none of the twelve judged
+openings, so the 7–1 is the ordering rather than the threshold. Gates after its edits: the five FAQ,
+glossary and public-DTO suites (200 tests) and `npm run typecheck`, green.
+
+### Stage 5 — browser check (Sonnet subagent, Playwright on the box, 2026-09-29): pass
+
+- **An old list** (`entropy-24-00930`, `faq/3`): ten rows, no order row, no slider, no bars.
+- **A new list**, made by re-running FAQ from Metadata on `noema-mythology-of-conscious-ai` (one call,
+  $0.08, 38 s): *prioritised* pressed; `threshold 0.20 · 8 of 8`, track to 0.51; bars on all eight
+  rows, priorities falling 0.51 → 0.24. At `0.26` the bottom row went (`7 of 8`, foot line agreeing);
+  at `0.36` three rows, `5 questions are hidden`, the `0.36` row kept (inclusive). *Reading order*
+  wrote `?faqby=document`, brought all eight back in stored order with no slider and no bars.
+- **Phone, 390 px:** no horizontal scroll; bars 38 px beside a 309 px question.
+- **Console:** nothing from the FAQ band. A React *"Cannot update a component while rendering a
+  different component"* on page load names `App`/`SignedIn`, which this change does not touch.

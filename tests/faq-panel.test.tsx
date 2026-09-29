@@ -375,17 +375,35 @@ describe("the prioritised order", () => {
     expect(row(ISOLATED.id).title).toMatch(/Not scored/);
   });
 
-  it("draws a list from before faq/4 exactly as before: reading order, no order row, no slider", async () => {
-    await draw(owner({ faq: artefact([ISOLATED, FRIDGE]) }));
-    expect(questionsShown()).toEqual([ISOLATED.question, FRIDGE.question]);
-    expect(host.querySelector(".gloss-sort")).toBeNull();
-    expect(host.querySelector("#faq-bar")).toBeNull();
-    expect(host.querySelector(".score-bars")).toBeNull();
+  it("draws a list from before faq/4 exactly as before for both owner and visitor", async () => {
+    const old = [ISOLATED, FRIDGE];
+    for (const access of [
+      { kind: "owner" as const, owner: owner({ faq: artefact(old) }) },
+      { kind: "visitor" as const, faq: { questions: old } },
+    ]) {
+      await drawAccess(access);
+      expect(questionsShown()).toEqual([ISOLATED.question, FRIDGE.question]);
+      expect(host.querySelector(".gloss-sort")).toBeNull();
+      expect(host.querySelector("#faq-bar")).toBeNull();
+      expect(host.querySelector(".score-bars")).toBeNull();
+    }
   });
 
   it("gives a visitor the same order and the same bar", async () => {
     await drawAccess({ kind: "visitor", faq: { questions: SCORED } });
     expect(questionsShown()).toEqual([BROAD.question, FRIDGE.question]);
     expect(host.querySelector("#faq-bar")).not.toBeNull();
+  });
+
+  it("keeps the list, count, foot line and pressed order together above the data's top", async () => {
+    await draw(owner({ faq: artefact([ISOLATED, ...SCORED]) }), { bar: 0.9 });
+    expect(questionsShown()).toEqual([ISOLATED.question]);
+    expect(host.querySelector(".gloss-gate-value")?.textContent).toContain("1 of 4");
+    expect(host.querySelector(".gloss-gate-note")?.textContent).toBe(
+      "3 questions are hidden by this threshold. Drag the slider left to show them.",
+    );
+    expect(host.querySelector<HTMLInputElement>("#faq-bar")?.max).toBe("0.9");
+    const pressed = host.querySelector<HTMLButtonElement>('.gloss-sort-btn[aria-pressed="true"]');
+    expect(pressed?.textContent).toBe("prioritised");
   });
 });

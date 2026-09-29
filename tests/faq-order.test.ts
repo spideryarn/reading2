@@ -81,6 +81,16 @@ describe("the FAQ's compound", () => {
     expect(orderQuestions([a, b, c, d, e], "prioritised", 0).map((q) => q.id)).toEqual(["e", "a", "c", "b", "d"]);
   });
 
+  it("treats a partly scored question as unscored: always visible and after complete scores", () => {
+    const low = { id: "low", difficulty: 0.8, centrality: 0.5 };
+    const centralityOnly = { id: "partial", centrality: 1 };
+    const high = { id: "high", difficulty: 0.1, centrality: 0.9 };
+    expect(canPrioritise([low, centralityOnly, high])).toBe(true);
+    expect(orderQuestions([low, centralityOnly, high], "prioritised", 0.9).map((q) => q.id)).toEqual([
+      "partial",
+    ]);
+  });
+
   it("falls back to reading order for a list with no scores, and so does the default view", () => {
     const old = [bare("x"), bare("y")];
     expect(canPrioritise(old)).toBe(false);
