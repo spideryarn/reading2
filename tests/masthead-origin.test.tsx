@@ -366,7 +366,7 @@ describe("a guessed address for an upload", () => {
       MATCHING,
       "people.example.edu",
       "/~ada/paper.pdf",
-      "same title, first author and text",
+      "same title and text",
     ],
   ] as const)(
     "draws a %s guess after the upload words, host first, with a ?",
@@ -399,6 +399,14 @@ describe("a guessed address for an upload", () => {
     const card = await cardText();
     expect(card).toContain("its arXiv page");
     expect(card).toContain("can't be sure it's the original");
+  });
+
+  it("does not claim a first-author match when the safe authorless path may have been used", async () => {
+    await mountGuess(CANONICAL, true);
+    const card = await cardText();
+    expect(card).toContain("the title and identifier match");
+    expect(card).toContain("the first author or the paper's text confirms");
+    expect(card).not.toContain("first author and identifier all match");
   });
 
   it.each([

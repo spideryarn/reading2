@@ -576,13 +576,13 @@ function guessTip(guess: Extract<SourceGuess, { status: "found" }>): {
           : "its page";
     return {
       head: "Our guess at where this came from",
-      what: `We searched the web for your file and found ${page} — the title, first author and identifier all match.`,
+      what: `We searched the web for your file and found ${page} — the title and identifier match, and the first author or the paper's text confirms it is the same paper.`,
       how: "You uploaded the file, so we can't be sure it's the original.",
     };
   }
   return {
     head: "A page that matches your file",
-    what: "We searched the web and found a page with the same title, first author and text.",
+    what: "We searched the web and found a page with the same title and text; when your file names a first author, that author matches too.",
     how: "It may be a copy rather than the original.",
   };
 }

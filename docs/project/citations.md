@@ -166,6 +166,11 @@ same row being pressed again: the `citation-find` bucket of the shared per-owner
 after the checks that refuse for free. The numbers are guesses, written as such. Added by the owed
 code review, GPT Sol F11.
 
+**The search itself is shared.** `findWorkPage`, the call and its verdict without the route, the
+allowance or the store, has a second caller: an uploaded paper's guessed web address
+([ingest-queue.md § A guessed web address](ingest-queue.md#a-guessed-web-address-looked-for-once)),
+which brings its own job id and allowance and judges the page more strictly than `pageNamesTitle`.
+
 ## Chat can read it
 
 Chat — typed, a passage question, and Live — can read the stored list through the

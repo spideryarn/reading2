@@ -153,6 +153,19 @@ describe("isSamePaper", () => {
     expect(verdict).toEqual({ same: false, why: "title-mismatch" });
   });
 
+  it("does not take the exact title from a stale search result when the fetched page names another paper", () => {
+    const verdict = isSamePaper(
+      identity(),
+      candidate({
+        title: "Dense Passage Retrieval for Open Domain Question Answering",
+        resultTitle: TITLE,
+        meta: { doi: "10.1234/smre.2024.001", authors: ["Müller, Ana"] },
+        text: "Ana Müller. This fetched destination is a different paper.",
+      }),
+    );
+    expect(verdict).toEqual({ same: false, why: "title-mismatch" });
+  });
+
   it("a title that only overlaps — a subset or a superset — is not exact", () => {
     const meta = { doi: "10.1234/smre.2024.001", authors: ["Ana Müller"] };
     const superset = isSamePaper(identity(), candidate({ title: `${TITLE}: Extended Version`, meta }));
@@ -185,10 +198,15 @@ describe("isSamePaper", () => {
     expect(verdict).toEqual({ same: true, matchedBy: "content", canonicalUrl: null });
   });
 
-  it("a search result's title matches once arXiv's [id] prefix is removed", () => {
+  it("an arXiv PDF establishes its title from the fetched paper, not the search annotation", () => {
     const verdict = isSamePaper(
       identity({ firstPagesText: `${TITLE}\narXiv:2401.01234` }),
-      candidate({ url: "https://arxiv.org/abs/2401.01234", resultTitle: `[2401.01234] ${TITLE}`, text: "Ana Müller" }),
+      candidate({
+        url: "https://arxiv.org/pdf/2401.01234",
+        format: "pdf",
+        resultTitle: "A stale title from the search index",
+        text: `${TITLE}\nAna Müller`,
+      }),
     );
     expect(verdict).toEqual({ same: true, matchedBy: "arxiv", canonicalUrl: "https://arxiv.org/abs/2401.01234" });
   });

@@ -29,7 +29,7 @@ import { openRouterJson } from "./ai-call.js";
 import { type FoundWorkPage, findWorkPage, hostOfPage, type WorkToFind } from "./citation-find.js";
 import { jsdom } from "./jsdom-lazy.js";
 import { errorFields, log, since } from "./log.js";
-import { SOURCE_GUESS_BUSY, SOURCE_GUESS_LIMITED, SOURCE_GUESS_RESTING } from "./messages.js";
+import { SOURCE_GUESS_BUSY, SOURCE_GUESS_LIMITED, SOURCE_GUESS_RESTING, tookTooLong } from "./messages.js";
 import { modelFor } from "./models.js";
 import { normaliseWhitespace, type PaperText, readPaperText } from "./paper-text.js";
 import { pass0 } from "./pdf.js";
@@ -44,6 +44,7 @@ import type {
 } from "./store/contracts.js";
 import { SOURCE_GUESS_MAX_ATTEMPTS } from "./store/contracts.js";
 import type { Article, Block, Meta, SourceGuess } from "./types.js";
+import { isWebUrl } from "./urls.js";
 
 /**
  * **The one deadline**, from the claim to the end of the page read. A title
@@ -146,11 +147,11 @@ function refusedBy(kind: Exclude<AllowanceTaken["kind"], "allowed">): Error {
  * **Did this come off the owner's disk, with no address of its own?** The
  * server's `cameOffADisk` (src/web/SourceLink.tsx): `raw_filename` is the
  * evidence, and a PDF from before that column existed counts too — but only
- * when it has no address, so a PDF fetched from a URL is never searched for
- * the address it already has.
+ * when it has no web address, so a PDF fetched from a web URL is never searched
+ * for the address it already has.
  */
 export function isAnUpload(meta: Meta): boolean {
-  if (meta.url) return false;
+  if (meta.url && isWebUrl(meta.url)) return false;
   return meta.filename !== undefined || meta.source === "pdf";
 }
 
@@ -213,7 +214,17 @@ export function openingProse(blocks: readonly Block[]): string {
   return words.slice(0, OPENING_WORDS).join(" ");
 }
 
+/**
+ * Licence, copyright and permissions paragraphs are prose by shape, and the
+ * same words are on thousands of unrelated pages — so a same-titled page that
+ * carries the same licence could pass the text check on boilerplate alone
+ * (Sol code review F6). Skipped wherever they fall.
+ */
+const BOILERPLATE =
+  /creative commons|open access|all rights reserved|©|\(c\)\s*\d{4}|copyright|licen[cs]e|permission (?:of|from) the|reproduced without/i;
+
 function looksLikeProse(text: string): boolean {
+  if (BOILERPLATE.test(text)) return false;
   const words = text.split(/\s+/).filter((w) => /\p{L}/u.test(w));
   if (words.length < PROSE_MIN_WORDS) return false;
   const lower = words.filter((w) => /^[^\p{L}]*\p{Ll}/u.test(w)).length;
@@ -233,7 +244,40 @@ interface Meter {
 }
 
 type Tools = { find: NonNullable<GuessSourceDeps["find"]>; read: NonNullable<GuessSourceDeps["read"]> };
-type Clock = { deadline: AbortSignal; remaining: () => number; line: ReturnType<typeof log> };
+type Clock = { deadline: AbortSignal; remaining: () => number; timeoutMs: number; line: ReturnType<typeof log> };
+
+function deadlineError(timeoutMs: number): Error {
+  return httpError(504, tookTooLong(Math.ceil(timeoutMs / 1000)).message);
+}
+
+function requireTime(clock: Clock): void {
+  if (clock.deadline.aborted) throw deadlineError(clock.timeoutMs);
+}
+
+/**
+ * Bound work that cannot itself take the shared signal. `pass0` is the important
+ * case: its callers can check the clock only after PDF parsing. The work may
+ * finish its own cleanup later, but its answer cannot buy a search or settle the
+ * claimed row after the request's deadline.
+ */
+function withinDeadline<T>(start: () => Promise<T>, clock: Clock): Promise<T> {
+  if (clock.deadline.aborted) return Promise.reject(deadlineError(clock.timeoutMs));
+  const work = start();
+  return new Promise<T>((resolve, reject) => {
+    const onAbort = () => reject(deadlineError(clock.timeoutMs));
+    clock.deadline.addEventListener("abort", onAbort, { once: true });
+    void work.then(
+      (value) => {
+        clock.deadline.removeEventListener("abort", onAbort);
+        resolve(value);
+      },
+      (err: unknown) => {
+        clock.deadline.removeEventListener("abort", onAbort);
+        reject(err);
+      },
+    );
+  });
+}
 
 /**
  * **Search, read, judge** — the paid half, under the one deadline. Answers the
@@ -248,7 +292,9 @@ async function searchAndJudge(
   meter: Meter,
 ): Promise<SourceGuessOutcome> {
   const none = (why: GuessWhy): SourceGuessOutcome => ({ status: "none", why, ...meter });
+  requireTime(clock);
   const found = await tools.find(workToFind(meta), { timeoutMs: clock.remaining(), line: clock.line });
+  requireTime(clock);
   meter.searches = found.reading.searches;
   meter.model = found.model;
   const { verdict } = found.reading;
@@ -256,6 +302,7 @@ async function searchAndJudge(
   const page = verdict.page;
 
   const paper = await tools.read(page.url, { signal: clock.deadline, timeoutMs: clock.remaining() });
+  requireTime(clock);
   if (paper.kind === "unreadable") return none(`read:${paper.why}`);
 
   const judged = isSamePaper(identity, { read: paper, result: page });
@@ -325,6 +372,7 @@ export function makeGuessSource(deps: GuessSourceDeps): (slug: string) => Promis
     const clock: Clock = {
       deadline: AbortSignal.timeout(timeoutMs),
       remaining: () => Math.max(1, timeoutMs - (Date.now() - started)),
+      timeoutMs,
       line: log("model").child({ slug }),
     };
     const meter: Meter = { searches: null, model: null };
@@ -367,7 +415,10 @@ export function makeGuessSource(deps: GuessSourceDeps): (slug: string) => Promis
 
     let identity: PaperIdentity | null;
     try {
-      identity = await identityOf(article, await deps.reader.loadSource(slug), firstPages);
+      identity = await withinDeadline(
+        () => deps.reader.loadSource(slug).then((source) => identityOf(article, source, firstPages)),
+        clock,
+      );
     } catch (err) {
       return failed(err);
     }
@@ -387,7 +438,10 @@ export function makeGuessSource(deps: GuessSourceDeps): (slug: string) => Promis
 
     let result: { ok: true; outcome: SourceGuessOutcome } | { ok: false; err: unknown };
     try {
-      result = { ok: true, outcome: await searchAndJudge(identity, article.meta, tools, clock, meter) };
+      result = {
+        ok: true,
+        outcome: await withinDeadline(() => searchAndJudge(identity, article.meta, tools, clock, meter), clock),
+      };
     } catch (err) {
       result = { ok: false, err };
     } finally {

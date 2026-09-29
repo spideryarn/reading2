@@ -170,8 +170,11 @@ function ownIds(strings: readonly string[]): { dois: string[]; arxivs: string[] 
   return { dois, arxivs: [...arxivs] };
 }
 
-function titleMatches(want: readonly string[], { read, result }: SourceCandidate): boolean {
-  const titles = [read.meta?.title, read.title, result.title && searchTitle(result.title)];
+function titleMatches(want: readonly string[], { read }: SourceCandidate): boolean {
+  /* The fetched page has to name the paper itself. A search annotation is only
+     a pointer to that page; after a redirect or a stale result it may describe
+     a different document, and evidence from the two must never be combined. */
+  const titles = [read.meta?.title, read.title];
   if (titles.some((t) => t && sameWords(wordsOf(t), want))) return true;
   /* A bare PDF has no title we trust (paper-text.ts: its metadata title is too
      often a filename), but a paper's PDF begins with its title. A run, not a
@@ -184,16 +187,6 @@ function titleMatches(want: readonly string[], { read, result }: SourceCandidate
     }
   }
   return false;
-}
-
-/**
- * A search result's title, less the furniture we can remove safely: arXiv's
- * `[2401.01234] ` prefix and a trailing arXiv site name. Any other site suffix
- * (`| Nature`) is left on and makes the title a mismatch — a missed link, not a
- * wrong one; the page's own meta title is the usual match anyway.
- */
-function searchTitle(title: string): string {
-  return title.replace(/^\s*\[[^\]]{4,20}\]\s*/, "").replace(/\s+[-|–—]\s+arxiv(?:\.org)?\s*$/i, "");
 }
 
 function sameWords(a: readonly string[], b: readonly string[]): boolean {

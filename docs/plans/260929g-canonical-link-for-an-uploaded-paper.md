@@ -183,3 +183,15 @@ dependency) for pages the fetch cannot read.
   Not built, for Greg: when the found page is bot-walled, ask doi.org for the DOI's registered title
   (free) — but that is title + identifier without author or text, the combination F1 refused.
   The safer lever is better author extraction for PDF uploads, which is outside this report.
+- Stage 3 landed (44a6fd52): the hook is mounted in `OwnedArticle` rather than `OwnedReader`, so
+  the reading view and Metadata share one live answer.
+- **GPT Sol code review** ([review](260929g-canonical-link-for-an-uploaded-paper-code-review-sol.md)),
+  write-capable. Fixed by Sol, red→green: F1 (P1) the title must come from the fetched page, never
+  the search annotation — evidence from two documents must not combine; F2 (P1) the deadline fences
+  every stage; F3 (P1) a `file://` source was refused with a 409 on every open; F4 (P3) the tip's
+  claim about the author. Fixed by me: F6, licence/copyright paragraphs are never opening prose.
+  **Left, by decision:** F5, the strict identifier-conflict rule can miss a right link — safe
+  direction, and loosening it needs corpus evidence the local set does not have; F7, `pass0` parses
+  the whole PDF for two pages' identifiers and cannot be cancelled — CPU only, it can no longer
+  spend or settle after the deadline, and fixing it means changing the shared PDF reader. The eval
+  re-run after the fixes: the same three right links, $0.16.

@@ -180,6 +180,8 @@ interface HarnessOptions {
   allowance?: AllowanceTaken;
   store?: ReturnType<typeof memoryStore>;
   onFind?: () => void;
+  delay?: "identity" | "allowance" | "search" | "read";
+  timeoutMs?: number;
 }
 
 function harness(opts: HarnessOptions = {}) {
@@ -204,6 +206,7 @@ function harness(opts: HarnessOptions = {}) {
     guesses: store.store,
     allowance: {
       async take(bucket, policy) {
+        if (opts.delay === "allowance") await new Promise((go) => setTimeout(go, 300));
         taken.push({ bucket, policy });
         return opts.allowance ?? { kind: "allowed", id: "lease-1" };
       },
@@ -212,6 +215,7 @@ function harness(opts: HarnessOptions = {}) {
       },
     },
     find: async (work) => {
+      if (opts.delay === "search") await new Promise((go) => setTimeout(go, 300));
       finds.push(work);
       opts.onFind?.();
       const answer = opts.find ?? kept();
@@ -219,13 +223,16 @@ function harness(opts: HarnessOptions = {}) {
       return answer;
     },
     read: async (url) => {
+      if (opts.delay === "read") await new Promise((go) => setTimeout(go, 300));
       reads.push(url);
       return opts.read ?? readPage();
     },
     firstPages: async (source) => {
+      if (opts.delay === "identity") await new Promise((go) => setTimeout(go, 300));
       firstPagesCalls.push(source);
       return opts.firstPages ?? `${TITLE}\nAna Müller\nhttps://doi.org/${DOI}\nReceived 2024`;
     },
+    ...(opts.timeoutMs === undefined ? {} : { timeoutMs: opts.timeoutMs }),
   });
   return { guess, store, finds, reads, taken, finished, firstPagesCalls };
 }
@@ -390,6 +397,30 @@ describe("a provider failure is not 'no page matched'", () => {
   });
 });
 
+/* ---------------------------------------------------------- deadline -- */
+
+describe("the one deadline", () => {
+  it.each(["identity", "allowance", "search", "read"] as const)("covers %s work", async (delay) => {
+    const h = harness({ delay, timeoutMs: 100 });
+
+    await expect(h.guess("an-upload")).rejects.toMatchObject({ status: 504 });
+    expect(h.store.log).toEqual(["claim", "release:keep"]);
+    expect(h.store.row()).toMatchObject({ status: "searching", attempts: 1, stale: true });
+    if (delay === "identity") {
+      expect(h.taken).toEqual([]);
+      expect(h.finds).toEqual([]);
+    } else {
+      expect(h.taken).toHaveLength(1);
+      expect(h.finished).toEqual(["lease-1"]);
+    }
+    if (delay === "allowance") expect(h.finds).toEqual([]);
+    if (delay === "search") {
+      await new Promise((go) => setTimeout(go, 250));
+      expect(h.reads).toEqual([]);
+    }
+  });
+});
+
 /* --------------------------------------------------------------- fence -- */
 
 describe("an answer written after the claim was lost is discarded", () => {
@@ -418,12 +449,25 @@ describe("the opening prose", () => {
     const note = { ...block("text", ABSTRACT), role: "footnote" as const };
     expect(openingProse([note])).toBe("");
   });
+
+  it("never takes a licence or copyright paragraph, which many unrelated pages share (Sol code review F6)", () => {
+    const licence = block(
+      "text",
+      "This article is an open access article distributed under the terms and conditions of the Creative Commons Attribution license, which permits unrestricted use, distribution and reproduction in any medium provided the original work is properly cited.",
+    );
+    const copyright = block(
+      "text",
+      "© 2021 the authors. all rights reserved by the publisher and no part of this work may be reproduced without the written permission of the copyright holder in any form whatsoever.",
+    );
+    expect(openingProse([licence, copyright])).toBe("");
+  });
 });
 
 describe("what counts as an upload", () => {
   it("is a file off the owner's disk, or an old PDF with no address — never a fetched page", () => {
     expect(isAnUpload({ slug: "a", title: "t", filename: "x.html" } as Meta)).toBe(true);
     expect(isAnUpload({ slug: "a", title: "t", source: "pdf" } as Meta)).toBe(true);
+    expect(isAnUpload({ slug: "a", title: "t", source: "pdf", url: "file:///Users/greg/paper.pdf" } as Meta)).toBe(true);
     expect(isAnUpload({ slug: "a", title: "t", source: "pdf", url: "https://x.org/a.pdf" } as Meta)).toBe(false);
     expect(isAnUpload({ slug: "a", title: "t", url: "https://x.org/a" } as Meta)).toBe(false);
   });
