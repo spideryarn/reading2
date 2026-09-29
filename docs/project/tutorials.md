@@ -34,6 +34,11 @@ diagram actually looked at in a browser rather than trusted from the markup.
   person typing can see, a settings key that is ignored, a tilde that hashes to a different Keychain
   box. The rules are in
   [claude-subscriptions.md](../reusable/claude-subscriptions.md).
+- [260929a-decorated-mode.html](../tutorials/260929a-decorated-mode.html) — Decorated mode: the
+  whole article word for word, decorated so the argument is easier to follow. The research (six
+  passes, 168 ideas, the reading-science case against the obvious ones), the rules, the playground
+  in `experiments/decorated/`, one paragraph where the skim path highlights the view the essay
+  rejects, and the five decisions still open.
 
 ## Naming
 
