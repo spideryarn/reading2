@@ -209,3 +209,43 @@ that `compromise` did worse on this shelf than the shape rules. The list is one 
 `src/shelf-terms/data/glasgow-norms.ts` (46 KB, 4,682 words, concreteness and familiarity), built by
 `scripts/build-word-lists.ts` and inlined in the API bundle — nothing reads a word list from disk at
 run time; licence and what was not shipped in its `ATTRIBUTION.md`.
+- **GPT Sol, stage 1 code, round 1** —
+  [260929a-shelf-topics-round-three-concreteness-zero-pills-archived-toggle-stage1-review-sol.md](260929a-shelf-topics-round-three-concreteness-zero-pills-archived-toggle-stage1-review-sol.md).
+  Fixed S1-2 (`staring` looked up as *star*), S1-3 (`admit` could undo the neighbour rule), S1-4
+  (attribution). **S1-1: the SUBTLEX-US permission covers `wordfreq`, not us** — so SUBTLEX was
+  withdrawn and the rule rebuilt on the Glasgow Norms alone (39915055); it measured *better* on the
+  local shelf (@8 28 of 37, against 25 with SUBTLEX). **Round 2**, scoped to that fix —
+  [260929a-shelf-topics-round-three-concreteness-zero-pills-archived-toggle-stage1-round2-sol.md](260929a-shelf-topics-round-three-concreteness-zero-pills-archived-toggle-stage1-round2-sol.md):
+  S1-1 closed, no findings.
+- **GPT Sol, stage 2 code** —
+  [260929a-shelf-topics-round-three-concreteness-zero-pills-archived-toggle-stage2-review-sol.md](260929a-shelf-topics-round-three-concreteness-zero-pills-archived-toggle-stage2-review-sol.md).
+  Fixed S2-1 (a late shelf or archive response could resurrect, duplicate or hide a just-archived
+  row), S2-2 (Undo and Put back depended on a follow-up read), S2-3 (a stale error after retry),
+  S2-4 (an unexplained empty detail view). No unresolved finding.
+
+## Browser check
+
+Sonnet subagent, Playwright, 2026-09-29 ~03:40 UTC, the local 38-article shelf, 1280 and 390 wide:
+all nine checks passed — the Archived chip beside Unread and no section at the foot
+([top](260929a-shots/01-desktop-shelf-top.png)); archived articles interleaved in the one list by
+the sort, marked *Archived*, with Put back ([title sort](260929a-shots/02-desktop-archived-on-title-sort.png));
+Put back and Archive leave the card in place, with Undo
+([undo](260929a-shots/24-after-rearchive-with-undo.png)) — the data was left as found; zero-match
+pills gone after a pick, in both views ([detail](260929a-shots/28-more-detail-topic-picked.png));
+`/?archived=1` shows "Loading archived…" briefly and never an empty-shelf message; no horizontal
+scroll at 390px ([phone menu](260929a-shots/12-mobile-kebab-menu-open.png)); no console errors;
+`/api/library/terms` 200. First 12 locally: *ball lightning, conscious experience, Wagan Watson,
+machine, mechanism, parent, AI, shape, principle, writers, window, startups* — no *following* or
+*process*. Not exercised: a chosen pill whose count has fallen to 0 (covered by a unit test).
+
+## What is left
+
+- **Some plain words remain** (*window, shape, parent*, and after picking *ball lightning*: *red,
+  July, water, white*). Glasgow does not rate every word, and concrete ones like *red* pass by design.
+  Greg called it "minor tweaks"; this is that, not a full cure.
+- **Near-copies of one article still count as separate works** (*Wagan Watson*, *ball lightning*) —
+  the v2 named in 260928a.
+- **The neighbour rule never fired on the local shelf**; its evidence is a unit test until Greg's
+  shelf shows it.
+- **"(n active + m archived)"** appears only when something narrows the list, as the count line
+  always has.
