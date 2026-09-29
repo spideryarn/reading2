@@ -390,6 +390,23 @@ Reported, not fixed, and left as they are:
   prompt change with its own measurement; the clause is harmless to the model, so it waits for the
   next `debate/` bump.
 
+## The code review, round 2 (GPT Sol, read-only, on the reviewer's own fixes)
+
+C3–C8 correct and complete. Two P1s in the round-1 fixes, both fixed here red-first:
+
+- **R1** — C2 made the order drawn depend on the identification bar, and the fallback for an order
+  that lost its data was *by claim* by name, which can be the order folded away as a duplicate of
+  *prioritised*: the URL said `date`, the panel drew *by claim*, no button was pressed. **Fix: the
+  fallback is the first order on the bar** (`effectiveDebateOrder`), and a test asserts, over a
+  spread of debates and every asked-for order, that the order drawn is always one of the buttons.
+  Simpler than the reviewer's suggestion (validity from all rows, drawing from the visible ones),
+  and it states the invariant directly.
+- **R2** — C1's judged-only denominator also went to `hiddenNote`, so with every judged row hidden
+  and an unjudged one still drawn it said *"All 2 answers … are hidden"* over a visible answer. The
+  note now counts every row the bar governs; only the *N of M judged* narrows.
+
+Discovery closed after this round; the two fixes had a narrowly scoped check of their own (below).
+
 ## Deferred: authors and year from a lookup
 
 Greg asked for the authors by name. The page's own text, as the search returns it, does not carry

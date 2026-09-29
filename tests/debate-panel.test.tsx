@@ -1688,6 +1688,29 @@ describe("prioritised, and the relevance bar", () => {
     expect(host.querySelector(".dbt-rel .dbt-bar-reset")).not.toBeNull();
   });
 
+  /* GPT Sol round 2, R2: with every judged row hidden and an unjudged one still
+     drawn, the note said "All 2 answers to its claims are hidden" over a list
+     with an answer on it. The count may say "judged"; the note is about the
+     list, so it counts every claim row. */
+  it("never says all are hidden while an unjudged answer is still on the list", () => {
+    const allJudgedHidden = artefact({
+      claims: {
+        rows: [
+          claim3({ id: "spya-c7w2d2", url: "https://loose.example/x", title: "Loose", bears: "loosely" }),
+          claim3({ id: "spya-c7w2d4", url: "https://unjudged.example/x", title: "Unjudged" }),
+          claim3({ id: "spya-c7w2d5", url: "https://part.example/x", title: "Part", bears: "partly" }),
+        ],
+        counts: counts({ returnedSources: 3, reportedRows: 3, keptRows: 3 }),
+      },
+    });
+    paint(owner({ debate: allJudgedHidden }), "named", "prioritised", new Map(), { relevance: "directly" });
+    expect(sequence()).toContain("Unjudged");
+    expect(host.querySelector(".dbt-rel .dbt-bar-value")?.textContent).toBe("bears directly · 0 of 2 judged");
+    const note = host.querySelector(".dbt-rel .dbt-bar-note")?.textContent ?? "";
+    expect(note).not.toMatch(/^All /);
+    expect(note).toBe("2 answers to its claims are hidden by this threshold. Drag the slider left to show them.");
+  });
+
   it("hands the drag back as a word", () => {
     paint(owner({ debate: judged() }));
     const slider = document.getElementById("dbt-rel-bar") as HTMLInputElement | null;

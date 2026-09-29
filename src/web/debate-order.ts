@@ -452,7 +452,8 @@ export function debateOrderOptions<D extends OrderableRow, C extends ClaimLikeRo
  * URL asked for — Glossary's `effectiveSort`, and the plan's F6.
  *
  *  - Asked for an order this debate has no data for (prioritised or date on
- *    anything before `debate/3`, or on a visitor's rows) → *by claim*.
+ *    anything before `debate/3`, or on a visitor's rows) → the first order on
+ *    the bar: *prioritised* where it has its data, else *by claim*.
  *  - Asked for one that would draw the same list as an order preferred before
  *    it → that order, so the bar's pressed button is the list on screen.
  *
@@ -465,9 +466,15 @@ export function effectiveDebateOrder<D extends OrderableRow, C extends ClaimLike
   blockOrder: ReadonlyMap<BlockId, number>,
   articleYear: number | null = null,
 ): DebateOrder {
-  if (!hasDataFor(requested, direct, claims)) return "claim";
+  /* **The fallback is the first order on the bar, not *by claim* by name** —
+     GPT Sol's R1. *By claim* is folded away whenever it draws what
+     *prioritised* draws, so naming it here could draw an order with no button
+     pressed; `distinct` is never empty (*by claim* always has its data), and
+     its first entry is the button a reader would see first. */
   const distinct = distinctOrders(direct, claims, blockOrder, articleYear);
+  const first = distinct[0]?.order ?? "claim";
+  if (!hasDataFor(requested, direct, claims)) return first;
   if (distinct.some((d) => d.order === requested)) return requested;
   const sig = signature(requested, orderDebateRows(direct, claims, requested, blockOrder, articleYear), claims);
-  return distinct.find((d) => d.sig === sig)?.order ?? "claim";
+  return distinct.find((d) => d.sig === sig)?.order ?? first;
 }

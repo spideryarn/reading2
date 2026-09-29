@@ -1301,7 +1301,10 @@ function StopBar<L extends string>({
   const visibleCount = barred.visible.length - (judgedOnly ? barred.unscoredCount : 0);
   const total = visibleCount + barred.hiddenCount;
   const count = `${visibleCount} of ${total}${judgedOnly ? " judged" : ""}`;
-  const note = hiddenNote(barred.hiddenCount, total, noun);
+  /* The note is about the list, so it counts every row the bar governs — an
+     unjudged row is still drawn, and "All 2 are hidden" over it was false (GPT
+     Sol's R2). Only the count above may narrow to the judged ones. */
+  const note = hiddenNote(barred.hiddenCount, barred.visible.length + barred.hiddenCount, noun);
 
   return (
     <div className={`dbt-bar ${kind}`}>

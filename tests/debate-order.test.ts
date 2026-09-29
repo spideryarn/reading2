@@ -404,3 +404,63 @@ describe("which orders are offered, and which one is drawn", () => {
     expect(effectiveDebateOrder([], rows, "date", ARTICLE, 2022)).toBe("date");
   });
 });
+
+/* GPT Sol round 2, R1: once a bar is drawn, the order on screen must be one of
+   its buttons. Moving the identification bar can take away the only row an
+   asked-for order needed; the fallback then has to land on a button that is
+   there, not on *by claim* when *by claim* was folded into *prioritised*. */
+describe("the order drawn is always a button on the bar", () => {
+  it("falls back to an offered order when the asked-for one lost its data and by claim was folded away", () => {
+    /* One claim, two rows, both judged, different stances: by claim draws one
+       heading (which is not structure), so it signs the same as prioritised
+       and is not offered; date has no year to sort by. */
+    const rows = [
+      claim("a", B1, "one", { lean: "leans-for", bears: "directly" }),
+      claim("b", B1, "one", { lean: "leans-against", bears: "directly" }),
+    ];
+    const options = debateOrderOptions([], rows, ARTICLE);
+    expect(options).toEqual(["prioritised", "stance"]);
+    expect(options).toContain(effectiveDebateOrder([], rows, "date", ARTICLE));
+  });
+
+  it("holds for every order asked for, over a spread of debates", () => {
+    const debates: { direct: DirectDebateRow[]; claims: ClaimDebateRow[]; year: number | null }[] = [
+      {
+        direct: [],
+        claims: [
+          claim("a", B1, "one", { bears: "directly" }),
+          claim("b", B1, "one", { lean: "leans-against", bears: "directly" }),
+        ],
+        year: null,
+      },
+      { direct: [direct("d")], claims: [claim("a", B1, "one", { lean: "leans-for" }), claim("b", B2, "two")], year: null },
+      {
+        direct: [],
+        claims: [
+          claim("a", B1, "one", { publishedYear: 2001, lean: "leans-for" }),
+          claim("b", B2, "two", { publishedYear: 1999 }),
+        ],
+        year: 2000,
+      },
+      {
+        direct: [direct("d", "leans-for")],
+        claims: [
+          claim("a", B2, "two", { bears: "partly", publishedYear: 2010 }),
+          claim("b", B1, "one", { bears: "directly" }),
+        ],
+        year: 2005,
+      },
+    ];
+    let checked = 0;
+    for (const d of debates) {
+      const options = debateOrderOptions(d.direct, d.claims, ARTICLE, d.year);
+      if (options.length === 0) continue;
+      for (const asked of ["prioritised", "claim", "date", "stance"] as const) {
+        expect(options).toContain(effectiveDebateOrder(d.direct, d.claims, asked, ARTICLE, d.year));
+        checked += 1;
+      }
+    }
+    /* A loop that skipped every debate would pass having checked nothing. */
+    expect(checked).toBeGreaterThanOrEqual(12);
+  });
+});
