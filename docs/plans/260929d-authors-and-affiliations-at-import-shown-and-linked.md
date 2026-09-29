@@ -227,6 +227,24 @@ not get the list yet. *Sol's P8 asked for this to be decided rather than left op
   publisher's own public metadata, so the risk is low, but the file is on the list for a reason and
   the call is his.
 - **A tap-to-reveal card on touch**, above.
+- **The byline as printed in a PDF's body.** The masthead and the Metadata page now say
+  `Ehren L. Newman; Thomas F. Varley; …`, but the article's own first page, transcribed, still reads
+  `Ehren L. Newman 1,* , Thomas F. Varley 1,* …` a few lines below — that is the page as printed,
+  and rewriting transcribed prose is a different decision from cleaning metadata. The simple next
+  step would be to hide the byline and affiliation records in the reading view when `authors` is
+  present, since the masthead now says the same thing better.
+
+## Browser check, 2026-09-29
+
+On the local copy of the Entropy paper, re-extracted through `scripts/stage.ts extract --force`:
+the stored byline went from `Ehren L. Newman 1,* , Thomas F. Varley 1,* …` to the five names, each
+with the affiliation the page prints. A Sonnet subagent then checked, at 1280×800 and 390×844
+(Playwright; touch itself not emulated, focus stood in for it): the masthead's three names and
+"+ 2 more", no `·` between names, the tooltip card with affiliation (on phone it fits, x=34–380 of
+390), "+ 2 more" ⇄ "Show fewer", a name click landing on `/?q=Samantha%20Sherrill` with this
+article the one result, and the Metadata page's Authors section with no horizontal overflow. It
+noticed `8,580 words` and `9 parts` breaking across a wrap, fixed by keeping each measurement on one
+line. Screenshots: `260929d-shot-*.png` beside this plan.
 
 ## Stages
 
