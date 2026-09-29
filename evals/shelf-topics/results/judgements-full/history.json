@@ -1,0 +1,9 @@
+{"case":"history","judgements":[
+{"id":"f031","winner":"A","scoreA":8,"scoreB":4,"reason":"Both share the same strong first five pills, but B pads the list with incidental-word pills (horse, letter, morning, wife, town) whose members are incoherent, while A stays on real themes."},
+{"id":"f032","winner":"A","scoreA":8,"scoreB":7,"reason":"B adds meaningful but near-duplicate pills (legions inside Roman Empire; natural selection, Newton and printing inside Royal Society; children inside cotton mills), so A's cleaner seven-pill set covering the same themes is preferable."},
+{"id":"f033","winner":"tie","scoreA":4,"scoreB":4,"reason":"Identical lists: good first five pills followed by incidental-word pills like horse, morning and wife."},
+{"id":"f034","winner":"A","scoreA":8,"scoreB":7,"reason":"Same core pills, but A also includes roads, giving the Roman road network article a second route in; B is otherwise equivalent."},
+{"id":"f035","winner":"B","scoreA":7,"scoreB":8,"reason":"Same core pills, but B adds a roads pill that A lacks, a small gain in coverage."},
+{"id":"f036","winner":"A","scoreA":7,"scoreB":4,"reason":"A is a clean set of real themes, while B adds five incidental-word pills (horse, letter, morning, wife, town) that make incoherent filters."},
+{"id":"f037","winner":"A","scoreA":8,"scoreB":7,"reason":"Same core pills, but A adds roads for slightly better coverage of the Roman material."}
+]}

@@ -1,0 +1,9 @@
+{"case":"local","judgements":[
+{"id":"f038","winner":"A","scoreA":6,"scoreB":4,"reason":"A covers the shelf's non-AI essays with 'kids', 'startups' and the Australia group; B spends slots on incoherent 'substrate' and 'signals' pills and leaves those themes out."},
+{"id":"f039","winner":"B","scoreA":5,"scoreB":6,"reason":"A fits the reader's consciousness and neuro interests, but 'waves', 'sensory', 'conscious experience' and 'AI systems' all repeat the same few articles, and it drops ball lightning, the Paul Graham-style essays and the Australia essay that B covers."},
+{"id":"f040","winner":"B","scoreA":2,"scoreB":5,"reason":"A is dominated by incidental-word pills like 'machine', 'parent', 'shape', 'window' and 'principle' that group unrelated articles; B's first pills are real themes."},
+{"id":"f041","winner":"B","scoreA":5,"scoreB":6,"reason":"Both lead with the same good core; B also reaches the work/startup essays and the Australia essay, while A's tail ('psi', 'Claude', 'compositional') is narrow and misses those themes."},
+{"id":"f042","winner":"A","scoreA":6,"scoreB":5,"reason":"The core pills are the same; A covers more of the shelf (the essays and the Australia group), while B's tail pills are narrow two-article groups."},
+{"id":"f043","winner":"tie","scoreA":2,"scoreB":2,"reason":"The two lists are identical."},
+{"id":"f044","winner":"B","scoreA":2,"scoreB":6,"reason":"B leads with the reader's real themes (AI, neural activity, agents, neural networks); A's pills are mostly incidental words that group unrelated articles."}
+]}

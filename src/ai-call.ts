@@ -647,6 +647,17 @@ export const AI_JOB_ROUTE: Record<RoutedJob, Route> = {
     wire: "chat",
     provider: { require_parameters: true, allow_fallbacks: false },
   },
+  /* **The shelf's topics, scored** (src/shelf-terms/model-scores.ts). The same
+     policy as the eval row that chose the model, and `pdf-figure-locate`'s
+     reason: the answer is a strict JSON schema, and an upstream that dropped
+     `response_format` or `max_completion_tokens` would answer in a shape the
+     parser refuses — money spent and the reader left on the program's list,
+     with nothing to say why. No `order`: an OpenAI model, and nothing cached. */
+  "shelf-topics": {
+    path: "/v1/chat/completions",
+    wire: "chat",
+    provider: { require_parameters: true, allow_fallbacks: false },
+  },
   embeddings: { path: "/v1/embeddings", wire: "embeddings", provider: {} },
   /* **Forbids fallback — and my first reason for it was wrong.** I wrote that a
      silent fallback would substitute a different *model*; GPT Sol corrected it:
@@ -834,6 +845,16 @@ export const CHAT_REASONING: Record<ChatJob, ReasoningDecision> = {
   },
   "pdf-figure-locate": {
     providerDefault: "Not measured. One page image, not the article.",
+  },
+  /* Left at the default because the default is what the eval measured and
+     judged: 27 calls, 330–1,650 reasoning tokens, 6–20 s, ~$0.001. Nobody
+     waits on it — the program's list is sent first — so `low` would buy
+     seconds nobody sees at a quality nobody has measured.
+     docs/plans/260929c-shelf-topics-chosen-by-a-model.md § Stage 1. */
+  "shelf-topics": {
+    providerDefault:
+      "Measured 2026-09-29 by the eval that chose the model: 330–1,650 reasoning tokens, " +
+      "6–20 s, ~$0.001 a call (plan 260929c). Unmeasured at any named effort.",
   },
   eval: {
     providerDefault:

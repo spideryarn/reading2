@@ -1,0 +1,11 @@
+{"case":"greg-like","judgements":[
+{"id":"p001","winner":"tie","scoreA":5,"scoreB":5,"reason":"Identical lists."},
+{"id":"p002","winner":"A","scoreA":7,"scoreB":6,"reason":"A has neural networks and language pills and no near-duplicate, while B wastes slots on 'predict' (duplicates 'prediction') and the incidental 'artificial'."},
+{"id":"p003","winner":"B","scoreA":6,"scoreB":7,"reason":"Nearly identical, but A spends a slot on the broad 'model' pill that overlaps 'language', where B has the coherent 'neuron' pill."},
+{"id":"p004","winner":"B","scoreA":5,"scoreB":7,"reason":"A puts the incidental 'female' and 'breakfast' pills in its list, while B keeps dopamine and reinforcement learning as separate meaningful themes."},
+{"id":"p005","winner":"A","scoreA":8,"scoreB":7,"reason":"A offers sharper themes for this reader (predictive coding, global workspace, integrated information, mindfulness) and avoids B's incoherent 'training' and broad 'brain' pills."},
+{"id":"p006","winner":"A","scoreA":7,"scoreB":5,"reason":"B puts the incidental 'kitchen', 'female' and 'bowl' pills in its top ten and pushes Buddhism and consciousness down; A leads with the reader's real themes."},
+{"id":"p007","winner":"B","scoreA":5,"scoreB":6,"reason":"A has the noise pills 'kitchen', 'female' and 'bowl' in prominent slots; B stays on theme despite the 'predict' duplicate and weak 'artificial'."},
+{"id":"p008","winner":"B","scoreA":6,"scoreB":7,"reason":"B includes neural networks and language models and avoids A's 'predict'/'prediction' duplicate and incidental 'artificial'."},
+{"id":"p009","winner":"B","scoreA":5,"scoreB":6,"reason":"A includes the incidental 'kitchen', 'female' and 'food' pills, while B stays on the reader's themes, though it has a duplicate of its own."}
+]}

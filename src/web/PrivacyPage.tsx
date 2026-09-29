@@ -390,6 +390,9 @@ export function PrivacyPage() {
         <p className="tw:text-xs tw:text-ink-faint">
           The default models, as of the date above: <code>claude-sonnet-5</code> for most of the reading
           aids, chat and search; <code>gpt-5.6-luna</code> for quick jobs and for reading PDFs;{" "}
+          <code>gpt-6-luna</code> to choose the topics above your shelf, for which it is shown your
+          articles’ titles and one-line summaries, the candidate topics, and your profile if you wrote
+          one;{" "}
           <code>voyage-4</code> to turn passages into the numbers that make search-by-meaning work;{" "}
           <code>gpt-transcribe</code> for dictation;{" "}
           <code>gemini-3-flash-preview</code> to find a figure in a PDF when the page alone

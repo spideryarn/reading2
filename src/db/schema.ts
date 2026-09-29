@@ -1363,6 +1363,66 @@ export const revisionPhraseRuns = spideryarn.table(
   ],
 );
 
+/**
+ * **A model's scores for one reader's candidate topics, per scope** —
+ * docs/plans/260929c-shelf-topics-chosen-by-a-model.md § Stage 2; written by
+ * src/shelf-topics.ts through src/store/pg-shelf-terms.ts.
+ *
+ * - **Keyed on `(owner_id, scope)`**: one row for the shelf proper
+ *   (`active`) and one for active + archived (`all`). The route reads it on
+ *   every topic request and feeds `scores` to the chooser.
+ * - **`input_hash` says what the scores were computed from** — sha256 of the
+ *   model, the prompt version and the exact messages (`inputHash` in
+ *   src/shelf-terms/model-scores.ts). A mismatch is a stale row: still used,
+ *   and refreshed once the shelf's candidates are complete.
+ * - **The claim is three columns and a lease**, not a status: `claim_id`
+ *   fences the write (only the claimant's answer lands), `claim_hash` is the
+ *   input it was taken for, `claimed_until` bounds a claimant that died.
+ * - **`failures` and `retry_after` are the backoff**: a failed refresh pushes
+ *   the next one out, so a broken provider costs one call per window rather
+ *   than one per shelf load. Reset by a success.
+ * - **`scores` is JSONB** under docs/project/sql.md § Columns, not JSON: a
+ *   key → 0–3 map, always read and written whole, never queried inside.
+ * - **A cache**, so the owner key is ON DELETE CASCADE, like `link_summaries`
+ *   (the custom migration beside this one's). Dropping every row costs one
+ *   model call per shelf.
+ */
+export const shelfTopicScores = spideryarn.table(
+  "shelf_topic_scores",
+  {
+    /** `auth.users(id)`. FK in the custom migration, as with every `owner_id`. */
+    ownerId: uuid("owner_id").notNull(),
+    /** `active` or `all` — `?archived=1` is `all`. */
+    scope: text("scope").notNull(),
+    /** Null until the first success; set with the four below it, or none of them. */
+    inputHash: text("input_hash"),
+    model: text("model"),
+    promptVersion: integer("prompt_version"),
+    /** candidate key → 0–3. */
+    scores: jsonb("scores").$type<Record<string, number>>(),
+    computedAt: timestamp("computed_at", { withTimezone: true }),
+    claimId: uuid("claim_id"),
+    claimHash: text("claim_hash"),
+    claimedUntil: timestamp("claimed_until", { withTimezone: true }),
+    failures: integer("failures").notNull().default(0),
+    retryAfter: timestamp("retry_after", { withTimezone: true }),
+  },
+  (t) => [
+    primaryKey({ columns: [t.ownerId, t.scope] }),
+    check("shelf_topic_scores_scope", sql`${t.scope} in ('active','all')`),
+    check("shelf_topic_scores_failures", sql`${t.failures} >= 0`),
+    check(
+      "shelf_topic_scores_result",
+      sql`num_nonnulls(${t.inputHash}, ${t.model}, ${t.promptVersion}, ${t.scores}, ${t.computedAt}) in (0, 5)`,
+    ),
+    check(
+      "shelf_topic_scores_scores_object",
+      sql`${t.scores} is null or jsonb_typeof(${t.scores}) = 'object'`,
+    ),
+    check("shelf_topic_scores_claim", sql`num_nonnulls(${t.claimId}, ${t.claimHash}, ${t.claimedUntil}) in (0, 3)`),
+  ],
+);
+
 /* ----------------------------------------------------- referee criteria -- */
 
 /**
@@ -5031,7 +5091,7 @@ export const rateLimitEvents = spideryarn.table(
   (t) => [
     check(
       "rate_limit_events_bucket",
-      sql`${t.bucket} in ('link-preview-fetch', 'link-summary-fill', 'citation-find')`,
+      sql`${t.bucket} in ('link-preview-fetch', 'link-summary-fill', 'citation-find', 'shelf-topics')`,
     ),
     /** Both counting queries, and the sweep, run over exactly this. */
     index("rate_limit_events_owner_bucket_started").on(t.ownerId, t.bucket, t.startedAt),

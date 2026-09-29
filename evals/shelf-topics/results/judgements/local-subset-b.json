@@ -1,0 +1,9 @@
+{"case":"local-subset-b","judgements":[
+{"id":"p052","winner":"A","scoreA":5,"scoreB":4,"reason":"A's three pills (AI, memory, representations) are all real themes, while B adds coverage but fills its top 8 with incidental words like organization, white and machine."},
+{"id":"p053","winner":"A","scoreA":4,"scoreB":3,"reason":"A opens with AI, memory and neurons before its noise; B leads with an obscure poet's name and incidental words (mechanism, sphere, cycle, red, lady) and pushes AI down to 9."},
+{"id":"p054","winner":"A","scoreA":4,"scoreB":3,"reason":"Both carry junk pills, but A has neurons in its top 3 and good work-essay pills, whereas B leads with the vague 'model' and adds easier/principle/collective noise."},
+{"id":"p055","winner":"tie","scoreA":3,"scoreB":3,"reason":"The lists are identical."},
+{"id":"p056","winner":"A","scoreA":5,"scoreB":3,"reason":"A is short but every pill is meaningful; B is dominated by incidental words and a proper name, with AI and memory buried at 8-9."},
+{"id":"p057","winner":"A","scoreA":5,"scoreB":4,"reason":"A stays on real themes (AI, neurons, representations, code, memory) with some overlap, while B spends top slots on organization, white and machine."},
+{"id":"p058","winner":"B","scoreA":4,"scoreB":5,"reason":"B's three pills are all meaningful themes, whereas A's extra coverage comes with incidental pills like white, organization and machine in its top 8."}
+]}

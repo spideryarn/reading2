@@ -1,6 +1,6 @@
 {
-  "id": "858fae45-1aaa-4382-98e0-4fcad1f53662",
-  "prevId": "3b2f49a8-b1e9-405f-b8f1-b9d0e410baf1",
+  "id": "168510b0-8135-4c85-b49f-37bae9fe6c98",
+  "prevId": "0f80012e-7791-4bf9-9e29-41b15c67f93a",
   "version": "7",
   "dialect": "postgresql",
   "tables": {
@@ -3441,7 +3441,7 @@
       "checkConstraints": {
         "rate_limit_events_bucket": {
           "name": "rate_limit_events_bucket",
-          "value": "\"spideryarn\".\"rate_limit_events\".\"bucket\" in ('link-preview-fetch', 'link-summary-fill', 'citation-find')"
+          "value": "\"spideryarn\".\"rate_limit_events\".\"bucket\" in ('link-preview-fetch', 'link-summary-fill', 'citation-find', 'shelf-topics')"
         }
       },
       "isRLSEnabled": false
@@ -4586,6 +4586,121 @@
         "search_runs_attempt_both": {
           "name": "search_runs_attempt_both",
           "value": "(\"spideryarn\".\"search_runs\".\"attempt_id\" is null) = (\"spideryarn\".\"search_runs\".\"attempt_started_at\" is null)"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "spideryarn.shelf_topic_scores": {
+      "name": "shelf_topic_scores",
+      "schema": "spideryarn",
+      "columns": {
+        "owner_id": {
+          "name": "owner_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "scope": {
+          "name": "scope",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "input_hash": {
+          "name": "input_hash",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "model": {
+          "name": "model",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "prompt_version": {
+          "name": "prompt_version",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "scores": {
+          "name": "scores",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "computed_at": {
+          "name": "computed_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "claim_id": {
+          "name": "claim_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "claim_hash": {
+          "name": "claim_hash",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "claimed_until": {
+          "name": "claimed_until",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "failures": {
+          "name": "failures",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 0
+        },
+        "retry_after": {
+          "name": "retry_after",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {},
+      "compositePrimaryKeys": {
+        "shelf_topic_scores_owner_id_scope_pk": {
+          "name": "shelf_topic_scores_owner_id_scope_pk",
+          "columns": [
+            "owner_id",
+            "scope"
+          ]
+        }
+      },
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {
+        "shelf_topic_scores_scope": {
+          "name": "shelf_topic_scores_scope",
+          "value": "\"spideryarn\".\"shelf_topic_scores\".\"scope\" in ('active','all')"
+        },
+        "shelf_topic_scores_failures": {
+          "name": "shelf_topic_scores_failures",
+          "value": "\"spideryarn\".\"shelf_topic_scores\".\"failures\" >= 0"
+        },
+        "shelf_topic_scores_result": {
+          "name": "shelf_topic_scores_result",
+          "value": "num_nonnulls(\"spideryarn\".\"shelf_topic_scores\".\"input_hash\", \"spideryarn\".\"shelf_topic_scores\".\"model\", \"spideryarn\".\"shelf_topic_scores\".\"prompt_version\", \"spideryarn\".\"shelf_topic_scores\".\"scores\", \"spideryarn\".\"shelf_topic_scores\".\"computed_at\") in (0, 5)"
+        },
+        "shelf_topic_scores_scores_object": {
+          "name": "shelf_topic_scores_scores_object",
+          "value": "\"spideryarn\".\"shelf_topic_scores\".\"scores\" is null or jsonb_typeof(\"spideryarn\".\"shelf_topic_scores\".\"scores\") = 'object'"
+        },
+        "shelf_topic_scores_claim": {
+          "name": "shelf_topic_scores_claim",
+          "value": "num_nonnulls(\"spideryarn\".\"shelf_topic_scores\".\"claim_id\", \"spideryarn\".\"shelf_topic_scores\".\"claim_hash\", \"spideryarn\".\"shelf_topic_scores\".\"claimed_until\") in (0, 3)"
         }
       },
       "isRLSEnabled": false

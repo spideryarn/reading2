@@ -14,6 +14,7 @@ import {
   passesVagueTest,
   type ShelfTerm,
   byArticleCount,
+  candidatePool,
   shelfTermHeadMetrics,
   shelfTermMetrics,
   stemForOverlap,
@@ -579,6 +580,91 @@ describe("a total order everywhere (Sol F7)", () => {
       }));
       expect(chooseTerms(shuffled)).toEqual(base);
     }
+  });
+});
+
+describe("external quality: a model's per-candidate score in place of the computed one (plan 260929c R8)", () => {
+  /* alpha has the higher computed quality (tf 8 against 2, same idf), so it
+     comes first by default; the external map says the opposite. */
+  const fixture = () => {
+    const arts = shelf(10);
+    give(arts, "alpha", range(0, 2), 8);
+    give(arts, "beta", range(3, 5), 2);
+    give(arts, "gamma", range(6, 8), 4);
+    return arts;
+  };
+
+  it("is behaviour-preserving when unset or null", () => {
+    const arts = fixture();
+    expect(keysOf(chooseTerms(arts).terms)[0]).toBe("alpha");
+    expect(chooseTerms(arts, { quality: null })).toEqual(chooseTerms(arts));
+  });
+
+  it("ranks by the external score instead of the computed quality", () => {
+    const quality = new Map([
+      ["alpha", 1],
+      ["beta", 3],
+      ["gamma", 2],
+    ]);
+    expect(keysOf(chooseTerms(fixture(), { quality }).terms)).toEqual(["beta", "gamma", "alpha"]);
+  });
+
+  it("excludes a candidate the map does not name, and one it scores 0", () => {
+    const quality = new Map([
+      ["alpha", 0],
+      ["beta", 2],
+    ]);
+    expect(keysOf(chooseTerms(fixture(), { quality }).terms)).toEqual(["beta"]);
+  });
+
+  it("refuses a negative or non-finite score rather than ranking by it", () => {
+    for (const bad of [-1, Number.NaN, Number.POSITIVE_INFINITY])
+      expect(() => chooseTerms(fixture(), { quality: new Map([["alpha", bad]]) })).toThrow(RangeError);
+  });
+
+  it("refuses an invalid score even when the shelf is too small to choose from", () => {
+    const arts = shelf(7);
+    give(arts, "alpha", range(0, 2));
+    expect(() => chooseTerms(arts, { quality: new Map([["alpha", Number.NaN]]) })).toThrow(
+      RangeError,
+    );
+    expect(() => candidatePool(arts, { quality: new Map([["alpha", Number.NaN]]) })).toThrow(
+      RangeError,
+    );
+  });
+
+  it("gives the same topics however the input is ordered", () => {
+    const quality = new Map([
+      ["alpha", 1.5],
+      ["beta", 1.5],
+      ["gamma", 2.25],
+    ]);
+    const base = chooseTerms(fixture(), { quality });
+    const rand = mulberry32(260929);
+    for (let i = 0; i < 20; i++) {
+      const shuffled = shuffle(fixture(), rand).map((a) => ({ ...a, candidates: shuffle(a.candidates, rand) }));
+      expect(chooseTerms(shuffled, { quality })).toEqual(base);
+    }
+  });
+});
+
+describe("candidatePool: what a model is shown", () => {
+  it("lists every candidate with its label, key, member slugs and computed quality, best first", () => {
+    const arts = shelf(10);
+    give(arts, "alpha", range(0, 2), 8);
+    give(arts, "beta", range(3, 5), 2);
+    const pool = candidatePool(arts);
+    expect(pool.map((c) => c.key)).toEqual(["alpha", "beta"]);
+    const [alpha] = pool;
+    expect(alpha).toMatchObject({ key: "alpha", label: "alpha", works: 3 });
+    expect(alpha?.articles.map((a) => a.slug)).toEqual(["s00", "s01", "s02"]);
+    expect(alpha?.quality).toBeGreaterThan(pool[1]?.quality ?? Number.POSITIVE_INFINITY);
+  });
+
+  it("is empty below the minimum number of works, like chooseTerms", () => {
+    const arts = shelf(7);
+    give(arts, "alpha", range(0, 2));
+    expect(candidatePool(arts)).toEqual([]);
   });
 });
 

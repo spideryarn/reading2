@@ -172,6 +172,8 @@ export function headingTitleOf(blocks: readonly Block[]): string | null {
  */
 export function describeArticle(input: {
   slug: string;
+  /** The published revision this shelf row describes. */
+  revisionId: string;
   meta: Meta;
   /**
    * The five, **received rather than derived** — since 2026-08-28.
@@ -221,6 +223,7 @@ export function describeArticle(input: {
   // See docs/project/typechecking.md.
   return {
     slug,
+    revisionId: input.revisionId,
     // Through `titleFor`, which is also what `loadArticle` uses — so the card
     // and the masthead cannot end up calling one article two things.
     title: titleFor(meta, shelf).title,

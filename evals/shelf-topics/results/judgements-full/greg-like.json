@@ -1,0 +1,11 @@
+{"case":"greg-like","judgements":[
+{"id":"f001","winner":"B","scoreA":5,"scoreB":6,"reason":"Both lead with the vague 'prediction' and 'model' pills, but A spends slot 8 onward on incidental kitchen/female/food groupings while B's tail (brain, predict, artificial) is weak but at least on-topic."},
+{"id":"f002","winner":"tie","scoreA":5,"scoreB":5,"reason":"Identical lists: the broad 'model' pill leads and the incidental kitchen and female pills sit in the top 8, while hippocampus is missing."},
+{"id":"f003","winner":"B","scoreA":7,"scoreB":8,"reason":"B's first eight are all distinct, real themes, while A puts the incoherent 'model' in its top six, repeats itself with mindfulness/meditation and GWT/IIT, and has no language-model pill."},
+{"id":"f004","winner":"B","scoreA":6,"scoreB":8,"reason":"B opens with clean core themes and adds a coherent language pill, where A leads with the vague prediction/model pills and ends on the near-duplicate 'predict' and a thin 'artificial'."},
+{"id":"f005","winner":"B","scoreA":6,"scoreB":8,"reason":"The top eight are similar ('reward' is a decent merge), but A's tail wastes slots on incidental female and breakfast pills and drops dopamine/RL, while B keeps them."},
+{"id":"f006","winner":"B","scoreA":5,"scoreB":8,"reason":"A leads with the incoherent 'model' pill, puts kitchen and female in its top seven and has no hippocampus pill, while B's top eight are all real themes for this reader."},
+{"id":"f007","winner":"A","scoreA":6,"scoreB":5,"reason":"Both lead with a vague 'model' pill, but B also puts the incidental kitchen and female pills in its top seven and adds 'bowl', while A stays on-topic."},
+{"id":"f008","winner":"A","scoreA":8,"scoreB":6,"reason":"A's top eight are distinct, meaningful themes plus a language pill, while B leads with the vague prediction/model pills and ends on the duplicate 'predict' and thin 'artificial'."},
+{"id":"f009","winner":"A","scoreA":8,"scoreB":7,"reason":"The two are nearly identical, but B spends slot 10 on the broad, mixed 'model' pill, which duplicates 'language', where A has a narrow but coherent 'neuron' pill."}
+]}

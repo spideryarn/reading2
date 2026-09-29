@@ -1,0 +1,9 @@
+{"case":"kitchen-garden","judgements":[
+{"id":"f024","winner":"B","scoreA":5,"scoreB":7,"reason":"A fills four slots with incidental-word pills (weekend, morning, phone, car) that group unrelated articles, while B keeps to real themes like beekeeping and compost, only weakening at the vague season/harvest tail."},
+{"id":"f025","winner":"tie","scoreA":7,"scoreB":7,"reason":"The lists are identical except for B's extra ninth-place 'kitchen' pill, which is loosely coherent but largely overlaps seasonal cooking and kimchi/sourdough, so it neither helps nor hurts meaningfully."},
+{"id":"f026","winner":"tie","scoreA":5,"scoreB":5,"reason":"Identical lists."},
+{"id":"f027","winner":"tie","scoreA":7,"scoreB":7,"reason":"Same pills, differing only in the order of kimchi/sourdough and compost/seasonal cooking in the top six, which makes no practical difference."},
+{"id":"f028","winner":"tie","scoreA":7,"scoreB":7,"reason":"Same pills with only minor reordering among equally strong top-six themes."},
+{"id":"f029","winner":"B","scoreA":5,"scoreB":7,"reason":"A includes junk pills (weekend, morning, phone, car) grouping unrelated articles, whereas B's pills are all genuine shelf themes apart from the vague season/harvest pair at the end."},
+{"id":"f030","winner":"B","scoreA":7,"scoreB":8,"reason":"B leads with the core fermentation themes, adds a coherent raised-beds pill and avoids vague season/harvest pills; its only flaw is 'starter' duplicating sourdough, while A lacks raised beds and ends on fuzzy pills."}
+]}

@@ -1,0 +1,189 @@
+{
+ "case": "history",
+ "profile": "A history reader interested in the Industrial Revolution, the Roman Empire and the history of science.",
+ "shelf": [
+  "1. The Steam Engine and the Age of Machines — Explains how the steam engine, refined over decades, freed factories from rivers and became the mechanical heart of the industrial revolution.",
+  "2. Cotton Mills of Lancashire — An essay on how the cotton mills of Lancashire depended on child labour and reshaped whole towns around the rhythm of the machine.",
+  "3. Children of the Factory Floor — A news-style report on child labour in the industrial revolution's cotton mills, and the campaign that finally brought railways of inspectors and reformers to the factory gates.",
+  "4. Iron Rails, Iron Will: Building Britain's Railways — A blog post celebrating how railways, powered by the steam engine, replaced the horse and stitched the country together faster than anyone expected.",
+  "5. The Roman Legions on the March — An essay on how the discipline of the Roman legions, more than any single general, held the Roman Empire together for centuries.",
+  "6. Roads That Built an Empire — An explainer on how the Roman Empire's road network, engineered to outlast the men who built it, bound distant provinces of the Roman Empire together.",
+  "7. The Fall of Rome, Revisited — An essay reconsidering why the Roman Empire's legions, once unbeatable, could no longer hold the frontier by the empire's final morning.",
+  "8. Hadrian's Wall: The Empire's Northern Edge — A blog post on Hadrian's Wall as the visible edge of the Roman Empire, patrolled by legions who traded the horse for a life on foot along the frontier.",
+  "9. The Royal Society and the Birth of Modern Science — An explainer on how the Royal Society turned scattered curiosity into a shared method, corresponding by letter about experiments including Darwin's later work on natural selection.",
+  "10. Newton's Quiet Revolution — An essay on how Isaac Newton, working largely alone, used the Royal Society and the printing press to turn private calculation into shared, lasting science.",
+  "11. Darwin's Voyage and the Idea of Natural Selection — A news-style account of how Charles Darwin's voyage supplied the evidence behind natural selection, which he later brought before the Royal Society and set in print by the printing press.",
+  "12. The Printing Press and the Spread of Ideas — An essay on how the printing press turned the rare, hand-copied book into an ordinary object, letting the Royal Society and ideas like natural selection reach a wide public.",
+  "13. Threads of Change: Cotton, Steam and the Factory Age — A blog post tying together the steam engine, the railways and the cotton mills of the industrial revolution, and the child labour that powered all three."
+ ],
+ "pairs": [
+  {
+   "id": "p031",
+   "A": [
+    "1. Roman Empire (4): Roads That Built an Empire; The Fall of Rome, Revisited; The Roman Legions on the March; Hadrian's Wall: The Empire's Northern Edge",
+    "2. Royal Society (4): The Royal Society and the Birth of Modern Science; Newton's Quiet Revolution; The Printing Press and the Spread of Ideas; Darwin's Voyage and the Idea of Natural Selection",
+    "3. cotton mills (3): Cotton Mills of Lancashire; Children of the Factory Floor; Threads of Change: Cotton, Steam and the Factory Age",
+    "4. steam engine (3): The Steam Engine and the Age of Machines; Threads of Change: Cotton, Steam and the Factory Age; Iron Rails, Iron Will: Building Britain's Railways",
+    "5. industrial revolution (3): Children of the Factory Floor; The Steam Engine and the Age of Machines; Threads of Change: Cotton, Steam and the Factory Age",
+    "6. roads (3): Roads That Built an Empire; Iron Rails, Iron Will: Building Britain's Railways; The Roman Legions on the March",
+    "7. railways (3): Iron Rails, Iron Will: Building Britain's Railways; Threads of Change: Cotton, Steam and the Factory Age; Children of the Factory Floor"
+   ],
+   "B": [
+    "1. Roman Empire (4): Roads That Built an Empire; The Fall of Rome, Revisited; The Roman Legions on the March; Hadrian's Wall: The Empire's Northern Edge",
+    "2. cotton mills (3): Cotton Mills of Lancashire; Children of the Factory Floor; Threads of Change: Cotton, Steam and the Factory Age",
+    "3. Royal Society (4): The Royal Society and the Birth of Modern Science; Newton's Quiet Revolution; The Printing Press and the Spread of Ideas; Darwin's Voyage and the Idea of Natural Selection",
+    "4. steam engine (3): The Steam Engine and the Age of Machines; Threads of Change: Cotton, Steam and the Factory Age; Iron Rails, Iron Will: Building Britain's Railways",
+    "5. industrial revolution (3): Children of the Factory Floor; The Steam Engine and the Age of Machines; Threads of Change: Cotton, Steam and the Factory Age",
+    "6. horse (4): Iron Rails, Iron Will: Building Britain's Railways; Hadrian's Wall: The Empire's Northern Edge; Threads of Change: Cotton, Steam and the Factory Age; Roads That Built an Empire",
+    "7. letter (3): The Printing Press and the Spread of Ideas; The Royal Society and the Birth of Modern Science; Roads That Built an Empire",
+    "8. morning (3): Darwin's Voyage and the Idea of Natural Selection; The Fall of Rome, Revisited; Iron Rails, Iron Will: Building Britain's Railways",
+    "9. wife (3): Hadrian's Wall: The Empire's Northern Edge; The Roman Legions on the March; Cotton Mills of Lancashire",
+    "10. railways (3): Iron Rails, Iron Will: Building Britain's Railways; Threads of Change: Cotton, Steam and the Factory Age; Children of the Factory Floor",
+    "11. town (6): The Fall of Rome, Revisited; The Roman Legions on the March; Children of the Factory Floor; Cotton Mills of Lancashire; Iron Rails, Iron Will: Building Britain's Railways; +1 more",
+    "12. roads (3): Roads That Built an Empire; Iron Rails, Iron Will: Building Britain's Railways; The Roman Legions on the March"
+   ]
+  },
+  {
+   "id": "p032",
+   "A": [
+    "1. Roman Empire (4): Roads That Built an Empire; The Fall of Rome, Revisited; The Roman Legions on the March; Hadrian's Wall: The Empire's Northern Edge",
+    "2. cotton mills (3): Cotton Mills of Lancashire; Children of the Factory Floor; Threads of Change: Cotton, Steam and the Factory Age",
+    "3. Royal Society (4): The Royal Society and the Birth of Modern Science; Newton's Quiet Revolution; The Printing Press and the Spread of Ideas; Darwin's Voyage and the Idea of Natural Selection",
+    "4. steam engine (3): The Steam Engine and the Age of Machines; Threads of Change: Cotton, Steam and the Factory Age; Iron Rails, Iron Will: Building Britain's Railways",
+    "5. industrial revolution (3): Children of the Factory Floor; The Steam Engine and the Age of Machines; Threads of Change: Cotton, Steam and the Factory Age",
+    "6. horse (4): Iron Rails, Iron Will: Building Britain's Railways; Hadrian's Wall: The Empire's Northern Edge; Threads of Change: Cotton, Steam and the Factory Age; Roads That Built an Empire",
+    "7. letter (3): The Printing Press and the Spread of Ideas; The Royal Society and the Birth of Modern Science; Roads That Built an Empire",
+    "8. morning (3): Darwin's Voyage and the Idea of Natural Selection; The Fall of Rome, Revisited; Iron Rails, Iron Will: Building Britain's Railways",
+    "9. wife (3): Hadrian's Wall: The Empire's Northern Edge; The Roman Legions on the March; Cotton Mills of Lancashire",
+    "10. railways (3): Iron Rails, Iron Will: Building Britain's Railways; Threads of Change: Cotton, Steam and the Factory Age; Children of the Factory Floor",
+    "11. town (6): The Fall of Rome, Revisited; The Roman Legions on the March; Children of the Factory Floor; Cotton Mills of Lancashire; Iron Rails, Iron Will: Building Britain's Railways; +1 more",
+    "12. roads (3): Roads That Built an Empire; Iron Rails, Iron Will: Building Britain's Railways; The Roman Legions on the March"
+   ],
+   "B": [
+    "1. Roman Empire (4): Roads That Built an Empire; The Fall of Rome, Revisited; The Roman Legions on the March; Hadrian's Wall: The Empire's Northern Edge",
+    "2. cotton mills (3): Cotton Mills of Lancashire; Children of the Factory Floor; Threads of Change: Cotton, Steam and the Factory Age",
+    "3. Royal Society (4): The Royal Society and the Birth of Modern Science; Newton's Quiet Revolution; The Printing Press and the Spread of Ideas; Darwin's Voyage and the Idea of Natural Selection",
+    "4. steam engine (3): The Steam Engine and the Age of Machines; Threads of Change: Cotton, Steam and the Factory Age; Iron Rails, Iron Will: Building Britain's Railways",
+    "5. industrial revolution (3): Children of the Factory Floor; The Steam Engine and the Age of Machines; Threads of Change: Cotton, Steam and the Factory Age",
+    "6. horse (4): Iron Rails, Iron Will: Building Britain's Railways; Hadrian's Wall: The Empire's Northern Edge; Threads of Change: Cotton, Steam and the Factory Age; Roads That Built an Empire",
+    "7. letter (3): The Printing Press and the Spread of Ideas; The Royal Society and the Birth of Modern Science; Roads That Built an Empire",
+    "8. morning (3): Darwin's Voyage and the Idea of Natural Selection; The Fall of Rome, Revisited; Iron Rails, Iron Will: Building Britain's Railways",
+    "9. wife (3): Hadrian's Wall: The Empire's Northern Edge; The Roman Legions on the March; Cotton Mills of Lancashire",
+    "10. railways (3): Iron Rails, Iron Will: Building Britain's Railways; Threads of Change: Cotton, Steam and the Factory Age; Children of the Factory Floor",
+    "11. town (6): The Fall of Rome, Revisited; The Roman Legions on the March; Children of the Factory Floor; Cotton Mills of Lancashire; Iron Rails, Iron Will: Building Britain's Railways; +1 more",
+    "12. roads (3): Roads That Built an Empire; Iron Rails, Iron Will: Building Britain's Railways; The Roman Legions on the March"
+   ]
+  },
+  {
+   "id": "p033",
+   "A": [
+    "1. Roman Empire (4): Roads That Built an Empire; The Fall of Rome, Revisited; The Roman Legions on the March; Hadrian's Wall: The Empire's Northern Edge",
+    "2. Royal Society (4): The Royal Society and the Birth of Modern Science; Newton's Quiet Revolution; The Printing Press and the Spread of Ideas; Darwin's Voyage and the Idea of Natural Selection",
+    "3. cotton mills (3): Cotton Mills of Lancashire; Children of the Factory Floor; Threads of Change: Cotton, Steam and the Factory Age",
+    "4. steam engine (3): The Steam Engine and the Age of Machines; Threads of Change: Cotton, Steam and the Factory Age; Iron Rails, Iron Will: Building Britain's Railways",
+    "5. industrial revolution (3): Children of the Factory Floor; The Steam Engine and the Age of Machines; Threads of Change: Cotton, Steam and the Factory Age",
+    "6. railways (3): Iron Rails, Iron Will: Building Britain's Railways; Threads of Change: Cotton, Steam and the Factory Age; Children of the Factory Floor"
+   ],
+   "B": [
+    "1. Roman Empire (4): Roads That Built an Empire; The Fall of Rome, Revisited; The Roman Legions on the March; Hadrian's Wall: The Empire's Northern Edge",
+    "2. Royal Society (4): The Royal Society and the Birth of Modern Science; Newton's Quiet Revolution; The Printing Press and the Spread of Ideas; Darwin's Voyage and the Idea of Natural Selection",
+    "3. cotton mills (3): Cotton Mills of Lancashire; Children of the Factory Floor; Threads of Change: Cotton, Steam and the Factory Age",
+    "4. steam engine (3): The Steam Engine and the Age of Machines; Threads of Change: Cotton, Steam and the Factory Age; Iron Rails, Iron Will: Building Britain's Railways",
+    "5. industrial revolution (3): Children of the Factory Floor; The Steam Engine and the Age of Machines; Threads of Change: Cotton, Steam and the Factory Age",
+    "6. roads (3): Roads That Built an Empire; Iron Rails, Iron Will: Building Britain's Railways; The Roman Legions on the March",
+    "7. railways (3): Iron Rails, Iron Will: Building Britain's Railways; Threads of Change: Cotton, Steam and the Factory Age; Children of the Factory Floor"
+   ]
+  },
+  {
+   "id": "p034",
+   "A": [
+    "1. Roman Empire (4): Roads That Built an Empire; The Fall of Rome, Revisited; The Roman Legions on the March; Hadrian's Wall: The Empire's Northern Edge",
+    "2. Royal Society (4): The Royal Society and the Birth of Modern Science; Newton's Quiet Revolution; The Printing Press and the Spread of Ideas; Darwin's Voyage and the Idea of Natural Selection",
+    "3. steam engine (3): The Steam Engine and the Age of Machines; Threads of Change: Cotton, Steam and the Factory Age; Iron Rails, Iron Will: Building Britain's Railways",
+    "4. cotton mills (3): Cotton Mills of Lancashire; Children of the Factory Floor; Threads of Change: Cotton, Steam and the Factory Age",
+    "5. industrial revolution (3): Children of the Factory Floor; The Steam Engine and the Age of Machines; Threads of Change: Cotton, Steam and the Factory Age",
+    "6. railways (3): Iron Rails, Iron Will: Building Britain's Railways; Threads of Change: Cotton, Steam and the Factory Age; Children of the Factory Floor"
+   ],
+   "B": [
+    "1. Roman Empire (4): Roads That Built an Empire; The Fall of Rome, Revisited; The Roman Legions on the March; Hadrian's Wall: The Empire's Northern Edge",
+    "2. Royal Society (4): The Royal Society and the Birth of Modern Science; Newton's Quiet Revolution; The Printing Press and the Spread of Ideas; Darwin's Voyage and the Idea of Natural Selection",
+    "3. cotton mills (3): Cotton Mills of Lancashire; Children of the Factory Floor; Threads of Change: Cotton, Steam and the Factory Age",
+    "4. steam engine (3): The Steam Engine and the Age of Machines; Threads of Change: Cotton, Steam and the Factory Age; Iron Rails, Iron Will: Building Britain's Railways",
+    "5. industrial revolution (3): Children of the Factory Floor; The Steam Engine and the Age of Machines; Threads of Change: Cotton, Steam and the Factory Age",
+    "6. roads (3): Roads That Built an Empire; Iron Rails, Iron Will: Building Britain's Railways; The Roman Legions on the March",
+    "7. railways (3): Iron Rails, Iron Will: Building Britain's Railways; Threads of Change: Cotton, Steam and the Factory Age; Children of the Factory Floor"
+   ]
+  },
+  {
+   "id": "p035",
+   "A": [
+    "1. Roman Empire (4): Roads That Built an Empire; The Fall of Rome, Revisited; The Roman Legions on the March; Hadrian's Wall: The Empire's Northern Edge",
+    "2. Royal Society (4): The Royal Society and the Birth of Modern Science; Newton's Quiet Revolution; The Printing Press and the Spread of Ideas; Darwin's Voyage and the Idea of Natural Selection",
+    "3. cotton mills (3): Cotton Mills of Lancashire; Children of the Factory Floor; Threads of Change: Cotton, Steam and the Factory Age",
+    "4. steam engine (3): The Steam Engine and the Age of Machines; Threads of Change: Cotton, Steam and the Factory Age; Iron Rails, Iron Will: Building Britain's Railways",
+    "5. industrial revolution (3): Children of the Factory Floor; The Steam Engine and the Age of Machines; Threads of Change: Cotton, Steam and the Factory Age",
+    "6. roads (3): Roads That Built an Empire; Iron Rails, Iron Will: Building Britain's Railways; The Roman Legions on the March",
+    "7. railways (3): Iron Rails, Iron Will: Building Britain's Railways; Threads of Change: Cotton, Steam and the Factory Age; Children of the Factory Floor"
+   ],
+   "B": [
+    "1. Roman Empire (4): Roads That Built an Empire; The Fall of Rome, Revisited; The Roman Legions on the March; Hadrian's Wall: The Empire's Northern Edge",
+    "2. Royal Society (4): The Royal Society and the Birth of Modern Science; Newton's Quiet Revolution; The Printing Press and the Spread of Ideas; Darwin's Voyage and the Idea of Natural Selection",
+    "3. steam engine (3): The Steam Engine and the Age of Machines; Threads of Change: Cotton, Steam and the Factory Age; Iron Rails, Iron Will: Building Britain's Railways",
+    "4. cotton mills (3): Cotton Mills of Lancashire; Children of the Factory Floor; Threads of Change: Cotton, Steam and the Factory Age",
+    "5. industrial revolution (3): Children of the Factory Floor; The Steam Engine and the Age of Machines; Threads of Change: Cotton, Steam and the Factory Age",
+    "6. railways (3): Iron Rails, Iron Will: Building Britain's Railways; Threads of Change: Cotton, Steam and the Factory Age; Children of the Factory Floor"
+   ]
+  },
+  {
+   "id": "p036",
+   "A": [
+    "1. Roman Empire (4): Roads That Built an Empire; The Fall of Rome, Revisited; The Roman Legions on the March; Hadrian's Wall: The Empire's Northern Edge",
+    "2. industrial revolution (3): Children of the Factory Floor; The Steam Engine and the Age of Machines; Threads of Change: Cotton, Steam and the Factory Age",
+    "3. Royal Society (4): The Royal Society and the Birth of Modern Science; Newton's Quiet Revolution; The Printing Press and the Spread of Ideas; Darwin's Voyage and the Idea of Natural Selection",
+    "4. steam engine (3): The Steam Engine and the Age of Machines; Threads of Change: Cotton, Steam and the Factory Age; Iron Rails, Iron Will: Building Britain's Railways",
+    "5. cotton mills (3): Cotton Mills of Lancashire; Children of the Factory Floor; Threads of Change: Cotton, Steam and the Factory Age",
+    "6. legions (3): The Roman Legions on the March; The Fall of Rome, Revisited; Hadrian's Wall: The Empire's Northern Edge",
+    "7. natural selection (3): Darwin's Voyage and the Idea of Natural Selection; The Royal Society and the Birth of Modern Science; The Printing Press and the Spread of Ideas",
+    "8. railways (3): Iron Rails, Iron Will: Building Britain's Railways; Threads of Change: Cotton, Steam and the Factory Age; Children of the Factory Floor",
+    "9. Newton (2): Newton's Quiet Revolution; The Printing Press and the Spread of Ideas",
+    "10. printing (3): The Printing Press and the Spread of Ideas; Newton's Quiet Revolution; Darwin's Voyage and the Idea of Natural Selection",
+    "11. roads (3): Roads That Built an Empire; Iron Rails, Iron Will: Building Britain's Railways; The Roman Legions on the March",
+    "12. children (2): Children of the Factory Floor; Cotton Mills of Lancashire"
+   ],
+   "B": [
+    "1. Roman Empire (4): Roads That Built an Empire; The Fall of Rome, Revisited; The Roman Legions on the March; Hadrian's Wall: The Empire's Northern Edge",
+    "2. Royal Society (4): The Royal Society and the Birth of Modern Science; Newton's Quiet Revolution; The Printing Press and the Spread of Ideas; Darwin's Voyage and the Idea of Natural Selection",
+    "3. cotton mills (3): Cotton Mills of Lancashire; Children of the Factory Floor; Threads of Change: Cotton, Steam and the Factory Age",
+    "4. steam engine (3): The Steam Engine and the Age of Machines; Threads of Change: Cotton, Steam and the Factory Age; Iron Rails, Iron Will: Building Britain's Railways",
+    "5. industrial revolution (3): Children of the Factory Floor; The Steam Engine and the Age of Machines; Threads of Change: Cotton, Steam and the Factory Age",
+    "6. roads (3): Roads That Built an Empire; Iron Rails, Iron Will: Building Britain's Railways; The Roman Legions on the March",
+    "7. railways (3): Iron Rails, Iron Will: Building Britain's Railways; Threads of Change: Cotton, Steam and the Factory Age; Children of the Factory Floor"
+   ]
+  },
+  {
+   "id": "p037",
+   "A": [
+    "1. Roman Empire (4): Roads That Built an Empire; The Fall of Rome, Revisited; The Roman Legions on the March; Hadrian's Wall: The Empire's Northern Edge",
+    "2. cotton mills (3): Cotton Mills of Lancashire; Children of the Factory Floor; Threads of Change: Cotton, Steam and the Factory Age",
+    "3. Royal Society (4): The Royal Society and the Birth of Modern Science; Newton's Quiet Revolution; The Printing Press and the Spread of Ideas; Darwin's Voyage and the Idea of Natural Selection",
+    "4. steam engine (3): The Steam Engine and the Age of Machines; Threads of Change: Cotton, Steam and the Factory Age; Iron Rails, Iron Will: Building Britain's Railways",
+    "5. industrial revolution (3): Children of the Factory Floor; The Steam Engine and the Age of Machines; Threads of Change: Cotton, Steam and the Factory Age",
+    "6. horse (4): Iron Rails, Iron Will: Building Britain's Railways; Hadrian's Wall: The Empire's Northern Edge; Threads of Change: Cotton, Steam and the Factory Age; Roads That Built an Empire",
+    "7. letter (3): The Printing Press and the Spread of Ideas; The Royal Society and the Birth of Modern Science; Roads That Built an Empire",
+    "8. morning (3): Darwin's Voyage and the Idea of Natural Selection; The Fall of Rome, Revisited; Iron Rails, Iron Will: Building Britain's Railways",
+    "9. wife (3): Hadrian's Wall: The Empire's Northern Edge; The Roman Legions on the March; Cotton Mills of Lancashire",
+    "10. railways (3): Iron Rails, Iron Will: Building Britain's Railways; Threads of Change: Cotton, Steam and the Factory Age; Children of the Factory Floor",
+    "11. town (6): The Fall of Rome, Revisited; The Roman Legions on the March; Children of the Factory Floor; Cotton Mills of Lancashire; Iron Rails, Iron Will: Building Britain's Railways; +1 more",
+    "12. roads (3): Roads That Built an Empire; Iron Rails, Iron Will: Building Britain's Railways; The Roman Legions on the March"
+   ],
+   "B": [
+    "1. Roman Empire (4): Roads That Built an Empire; The Fall of Rome, Revisited; The Roman Legions on the March; Hadrian's Wall: The Empire's Northern Edge",
+    "2. Royal Society (4): The Royal Society and the Birth of Modern Science; Newton's Quiet Revolution; The Printing Press and the Spread of Ideas; Darwin's Voyage and the Idea of Natural Selection",
+    "3. steam engine (3): The Steam Engine and the Age of Machines; Threads of Change: Cotton, Steam and the Factory Age; Iron Rails, Iron Will: Building Britain's Railways",
+    "4. cotton mills (3): Cotton Mills of Lancashire; Children of the Factory Floor; Threads of Change: Cotton, Steam and the Factory Age",
+    "5. industrial revolution (3): Children of the Factory Floor; The Steam Engine and the Age of Machines; Threads of Change: Cotton, Steam and the Factory Age",
+    "6. railways (3): Iron Rails, Iron Will: Building Britain's Railways; Threads of Change: Cotton, Steam and the Factory Age; Children of the Factory Floor"
+   ]
+  }
+ ]
+}

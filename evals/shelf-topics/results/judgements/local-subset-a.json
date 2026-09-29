@@ -1,0 +1,9 @@
+{"case":"local-subset-a","judgements":[
+{"id":"p045","winner":"B","scoreA":5,"scoreB":6,"reason":"B is short but every pill is a real theme for this reader (AI, representations, brain, neurons), while A dilutes its top 8 with incidental words like 'money' and 'signals', though A does keep the useful 'writers' pill."},
+{"id":"p046","winner":"tie","scoreA":4,"scoreB":4,"reason":"Identical lists."},
+{"id":"p047","winner":"B","scoreA":4,"scoreB":6,"reason":"A puts incidental words ('window', 'signals') in its top 6 and pushes AI down to 7th, while B leads with AI and neuroscience themes that match the profile."},
+{"id":"p048","winner":"A","scoreA":5,"scoreB":4,"reason":"B stacks near-duplicate AI/neuro pills (neural networks, brain, neurons, computation, model, Turing machine) and misses the writing and ball-lightning groups; A covers more of the shelf."},
+{"id":"p049","winner":"A","scoreA":6,"scoreB":5,"reason":"A's pills are all meaningful for this reader, while B adds incidental ones ('money', 'signals', 'data', 'continuous'), though B's 'writers' pill covers a theme A misses."},
+{"id":"p050","winner":"B","scoreA":4,"scoreB":5,"reason":"A's top 8 includes vague words ('possibility', 'data', 'continuous', 'money') and no writing pill; B at least keeps 'writers' and 'memory' up front."},
+{"id":"p051","winner":"B","scoreA":4,"scoreB":5,"reason":"A leads with ball lightning, puts 'window' and 'signals' in its top 6 and buries AI at 7th; B leads with AI, representations and writers."}
+]}

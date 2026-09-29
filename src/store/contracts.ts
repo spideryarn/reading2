@@ -55,6 +55,7 @@ import type { AnswerPatch, MarkPatch, NewComment } from "../comments.js";
 import type { ClaimsRun } from "../referee-claims.js";
 import type { RefereeCriterionConfig } from "../referee-criteria.js";
 import type { SavedCriterion } from "../saved-criteria.js";
+import type { ChooseArticle } from "../shelf-terms/choose.js";
 import type {
   AdminFeedbackDetail,
   AdminFeedbackPage,
@@ -755,6 +756,75 @@ export interface ShelfTermsStore {
    * `pending`.
    */
   terms(scope: { archived: boolean }, opts?: { budgetMs?: number }): Promise<LibraryTermsResponse>;
+
+  /**
+   * What `terms` computes its answer from, before the chooser runs: the same
+   * owner-scoped set, the same bounded fill. src/shelf-topics.ts chooses from
+   * it, with or without a model's scores.
+   */
+  snapshot(scope: { archived: boolean }, opts?: { budgetMs?: number }): Promise<ShelfTermsSnapshot>;
+
+  /* ---- the model's scores, one row per (owner, scope) — src/shelf-topics.ts ---- */
+
+  /** The ambient reader's stored row for this scope, or `null` if there is none. */
+  readScores(scope: TopicScope): Promise<StoredTopicScores | null>;
+  /**
+   * **Take the refresh, or learn somebody else has it.** One statement: the
+   * claim lands only when no live claim exists, `retry_after` has passed, and
+   * the stored result is not already for `inputHash`. Returns the claim id to
+   * fence the write with, or `null`.
+   */
+  claimScores(scope: TopicScope, inputHash: string, leaseMs: number): Promise<string | null>;
+  /**
+   * Store a result, **only if `claimId` is still the row's claim** — so a
+   * claimant that outlived its lease cannot write over its successor. Clears the
+   * claim and the backoff. `false` when the fence refused.
+   */
+  writeScores(scope: TopicScope, claimId: string, result: TopicScoresResult): Promise<boolean>;
+  /** A failed refresh: clears the claim, counts the failure, and pushes `retry_after` out by the backoff. */
+  failScores(scope: TopicScope, claimId: string): Promise<void>;
+  /** Give the claim back without counting a failure, and wait `retryAfterMs` before the next — the fuse's answer. */
+  releaseScores(scope: TopicScope, claimId: string, retryAfterMs: number): Promise<void>;
+}
+
+/** `active` is the shelf proper; `all` is active + archived (`?archived=1`). */
+export type TopicScope = "active" | "all";
+
+/** What the model is shown of one article. */
+export interface ShelfTopicArticle {
+  slug: string;
+  /** The reader's rename if they made one, else the revision's title, else the slug. */
+  title: string;
+  /** `article_revisions.root_gist`, or null. */
+  gist: string | null;
+}
+
+export interface ShelfTermsSnapshot {
+  /** Step 2's input: every in-scope article that has been read and not skipped. */
+  input: ChooseArticle[];
+  /** The same articles as the model sees them, newest first. */
+  articles: ShelfTopicArticle[];
+  scope: { articles: number; skipped: number };
+  /** In-scope articles not yet read. */
+  pending: number;
+}
+
+/** A model's answer, as stored. */
+export interface TopicScoresResult {
+  inputHash: string;
+  model: string;
+  promptVersion: number;
+  /** candidate key → 0–3. */
+  scores: Record<string, number>;
+}
+
+export interface StoredTopicScores {
+  /** Null until a refresh has succeeded once. */
+  result: (TopicScoresResult & { computedAt: Date }) | null;
+  /** A refresh somebody has taken, and the input it was taken for. */
+  claim: { hash: string; until: Date } | null;
+  failures: number;
+  retryAfter: Date | null;
 }
 
 /**
@@ -2183,8 +2253,12 @@ export type PreviewClaim =
  * wrong by the second measure. `citation-find` is money too — Citations mode's
  * *Find it*, a billed web search per press (src/citation-find.ts) — and its own
  * bucket because a reader summarising links has not spent any of it.
+ * `shelf-topics` is the model scoring a reader's candidate topics
+ * (src/shelf-topics.ts): money, spent when the shelf changes rather than when
+ * anybody presses anything, and bounded so a shelf that changes on every load
+ * cannot spend on every load.
  */
-export type RateBucket = "link-preview-fetch" | "link-summary-fill" | "citation-find";
+export type RateBucket = "link-preview-fetch" | "link-summary-fill" | "citation-find" | "shelf-topics";
 
 /**
  * **How many outbound fetches one reader's pointer may cause.**

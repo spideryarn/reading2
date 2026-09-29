@@ -1,0 +1,9 @@
+{"case":"history","judgements":[
+{"id":"p031","winner":"A","scoreA":8,"scoreB":4,"reason":"Both share the same strong core, but B pads it with incidental-word pills (horse, letter, morning, wife, town) that make meaningless filters."},
+{"id":"p032","winner":"tie","scoreA":4,"scoreB":4,"reason":"Identical lists: a good core of themes diluted by incidental-word pills like morning, wife and town."},
+{"id":"p033","winner":"A","scoreA":8,"scoreB":7,"reason":"Same clean themes covering the whole shelf; B's extra 'roads' pill mixes Roman roads with railways and adds little over Roman Empire and railways."},
+{"id":"p034","winner":"A","scoreA":8,"scoreB":7,"reason":"Equivalent strong themes; B adds a muddled 'roads' pill blending Roman roads with Britain's railways."},
+{"id":"p035","winner":"B","scoreA":7,"scoreB":8,"reason":"Same core themes covering the shelf; A's 'roads' pill is an incoherent mix of Roman and railway articles."},
+{"id":"p036","winner":"A","scoreA":8,"scoreB":7,"reason":"A covers the same main themes and adds meaningful history-of-science and Roman subtopics (natural selection, printing, Newton, legions), at the cost of a few near-duplicates."},
+{"id":"p037","winner":"B","scoreA":4,"scoreB":8,"reason":"B is a clean set of real themes covering the shelf, while A includes junk pills like horse, letter, morning, wife and town."}
+]}

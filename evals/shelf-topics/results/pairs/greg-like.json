@@ -1,0 +1,309 @@
+{
+ "case": "greg-like",
+ "profile": "Interested in computational neuroscience, consciousness, Buddhism, AI.",
+ "shelf": [
+  "1. The Brain as a Prediction Machine — Argues the brain is best understood as a prediction machine that treats perception as a running guess corrected by prediction error, with dopamine supplying one measurable version of that error signal.",
+  "2. What the Cortex Might Share with a Neural Network — Compares artificial neural networks to the cortex and to the hippocampus, arguing the analogy is useful but only partial.",
+  "3. How the Hippocampus Builds a Map of Where You've Been — Explains how the hippocampus builds a cognitive map and consolidates memory, and how recent work on female animals has revealed cycle-linked differences the classic male-only studies missed.",
+  "4. Why a Predictable Treat Barely Moves the Needle — Explains how dopamine neurons encode a reinforcement-learning-style prediction error around food reward, and how female rats' hormonal cycles change that signal in ways male-only research missed.",
+  "5. Modeling a Neuron One Spike at a Time — Explains how spiking neuron models differ from ordinary neural networks by simulating exact spike timing rather than an averaged firing rate.",
+  "6. Consciousness as a Broadcast System — Explains global workspace theory's account of consciousness as information broadcast from a winning process to the rest of the brain.",
+  "7. Measuring Consciousness in Bits — Explains integrated information theory's claim that consciousness is a matter of integration, and contrasts it with global workspace theory.",
+  "8. The Question Neuroscience Cannot Answer Yet — Explains the hard problem of consciousness and why it persists even once every mechanism behind behavior is explained.",
+  "9. Could a Language Model Ever Be Conscious? — Asks what global workspace theory, integrated information theory and the hard problem each say about whether a language model could be conscious.",
+  "10. What a Wandering Mind Looks Like on a Screen — Explains how meditation and mindfulness practice, aided by a fixed retreat schedule including breakfast, can be understood through predictive coding as down-weighting habitual predictions.",
+  "11. The Self That Predictive Processing and Buddhism Both Doubt — Draws out the parallel between the Buddhist doctrine of non-self and predictive coding's account of the self as a constructed prediction.",
+  "12. A Day Inside a Forest Monastery — Describes a forest monastery's fixed daily schedule of bowl, kitchen duty, and breakfast as itself a mindfulness practice within Buddhism.",
+  "13. The Question That Isn't Meant to Be Answered — Explains how Zen koans use bowl-shaped bells and water imagery to interrupt ordinary reasoning during meditation, in service of a central Buddhist point.",
+  "14. The First Teaching: Suffering and Its End — Explains the four noble truths and how Buddhism uses meditation and mindfulness to investigate suffering directly rather than accept it on authority.",
+  "15. How a Language Model Actually Predicts the Next Word — Explains how language models are trained to predict the next word and how that simple objective produces broad capability.",
+  "16. Learning From Reward Alone — Explains reinforcement learning's reward-driven framework and its historical connection to dopamine's prediction-error signal in the brain.",
+  "17. Getting an AI to Want What We Want — Explains how reinforcement learning from human feedback is used to align language models, and how that process can be gamed.",
+  "18. Looking Inside a Model That Was Never Meant to Be Read — Explains why neural networks, especially language models, are hard to interpret and what researchers are doing about it.",
+  "19. A Grain Bowl for Busy Weeknights — A recipe for a weeknight grain bowl, walking through cooking the grain, roasting vegetables, and making a tahini water dressing.",
+  "20. Riverside Women's Football Club Wins Promotion — A local news report on a women's football club's promotion after a demanding week of preparation.",
+  "21. The Breakfast Habit That Changed My Mornings — A first-person lifestyle piece about renovating a kitchen corner to make breakfast a planned daily ritual.",
+  "22. A Week in a Cornish Kitchen Garden — A travel piece about a week spent helping tend a walled kitchen garden above a Cornish cove."
+ ],
+ "pairs": [
+  {
+   "id": "p001",
+   "A": [
+    "1. model (7): Getting an AI to Want What We Want; Could a Language Model Ever Be Conscious?; How a Language Model Actually Predicts the Next Word; Looking Inside a Model That Was Never Meant to Be Read; The Self That Predictive Processing and Buddhism Both Doubt; +2 more",
+    "2. predictive coding (3): The Self That Predictive Processing and Buddhism Both Doubt; The Brain as a Prediction Machine; What a Wandering Mind Looks Like on a Screen",
+    "3. global workspace theory (2): Consciousness as a Broadcast System; Measuring Consciousness in Bits",
+    "4. neural networks (3): What the Cortex Might Share with a Neural Network; Looking Inside a Model That Was Never Meant to Be Read; Modeling a Neuron One Spike at a Time",
+    "5. reinforcement learning (3): Learning From Reward Alone; Getting an AI to Want What We Want; Why a Predictable Treat Barely Moves the Needle",
+    "6. kitchen (4): The Breakfast Habit That Changed My Mornings; A Week in a Cornish Kitchen Garden; A Day Inside a Forest Monastery; A Grain Bowl for Busy Weeknights",
+    "7. female (3): Riverside Women's Football Club Wins Promotion; How the Hippocampus Builds a Map of Where You've Been; Why a Predictable Treat Barely Moves the Needle",
+    "8. Buddhism (4): The First Teaching: Suffering and Its End; The Self That Predictive Processing and Buddhism Both Doubt; The Question That Isn't Meant to Be Answered; A Day Inside a Forest Monastery",
+    "9. consciousness (4): Measuring Consciousness in Bits; Could a Language Model Ever Be Conscious?; Consciousness as a Broadcast System; The Question Neuroscience Cannot Answer Yet",
+    "10. bowl (4): A Grain Bowl for Busy Weeknights; A Day Inside a Forest Monastery; The Question That Isn't Meant to Be Answered; The Breakfast Habit That Changed My Mornings",
+    "11. dopamine (3): Why a Predictable Treat Barely Moves the Needle; The Brain as a Prediction Machine; Learning From Reward Alone",
+    "12. mindfulness (3): The First Teaching: Suffering and Its End; What a Wandering Mind Looks Like on a Screen; A Day Inside a Forest Monastery"
+   ],
+   "B": [
+    "1. model (7): Getting an AI to Want What We Want; Could a Language Model Ever Be Conscious?; How a Language Model Actually Predicts the Next Word; Looking Inside a Model That Was Never Meant to Be Read; The Self That Predictive Processing and Buddhism Both Doubt; +2 more",
+    "2. predictive coding (3): The Self That Predictive Processing and Buddhism Both Doubt; The Brain as a Prediction Machine; What a Wandering Mind Looks Like on a Screen",
+    "3. global workspace theory (2): Consciousness as a Broadcast System; Measuring Consciousness in Bits",
+    "4. neural networks (3): What the Cortex Might Share with a Neural Network; Looking Inside a Model That Was Never Meant to Be Read; Modeling a Neuron One Spike at a Time",
+    "5. reinforcement learning (3): Learning From Reward Alone; Getting an AI to Want What We Want; Why a Predictable Treat Barely Moves the Needle",
+    "6. kitchen (4): The Breakfast Habit That Changed My Mornings; A Week in a Cornish Kitchen Garden; A Day Inside a Forest Monastery; A Grain Bowl for Busy Weeknights",
+    "7. female (3): Riverside Women's Football Club Wins Promotion; How the Hippocampus Builds a Map of Where You've Been; Why a Predictable Treat Barely Moves the Needle",
+    "8. Buddhism (4): The First Teaching: Suffering and Its End; The Self That Predictive Processing and Buddhism Both Doubt; The Question That Isn't Meant to Be Answered; A Day Inside a Forest Monastery",
+    "9. consciousness (4): Measuring Consciousness in Bits; Could a Language Model Ever Be Conscious?; Consciousness as a Broadcast System; The Question Neuroscience Cannot Answer Yet",
+    "10. bowl (4): A Grain Bowl for Busy Weeknights; A Day Inside a Forest Monastery; The Question That Isn't Meant to Be Answered; The Breakfast Habit That Changed My Mornings",
+    "11. dopamine (3): Why a Predictable Treat Barely Moves the Needle; The Brain as a Prediction Machine; Learning From Reward Alone",
+    "12. mindfulness (3): The First Teaching: Suffering and Its End; What a Wandering Mind Looks Like on a Screen; A Day Inside a Forest Monastery"
+   ]
+  },
+  {
+   "id": "p002",
+   "A": [
+    "1. Buddhism (4): The First Teaching: Suffering and Its End; The Self That Predictive Processing and Buddhism Both Doubt; The Question That Isn't Meant to Be Answered; A Day Inside a Forest Monastery",
+    "2. consciousness (4): Measuring Consciousness in Bits; Could a Language Model Ever Be Conscious?; Consciousness as a Broadcast System; The Question Neuroscience Cannot Answer Yet",
+    "3. dopamine (3): Why a Predictable Treat Barely Moves the Needle; The Brain as a Prediction Machine; Learning From Reward Alone",
+    "4. neural networks (3): What the Cortex Might Share with a Neural Network; Looking Inside a Model That Was Never Meant to Be Read; Modeling a Neuron One Spike at a Time",
+    "5. prediction (5): What a Wandering Mind Looks Like on a Screen; The Brain as a Prediction Machine; The Self That Predictive Processing and Buddhism Both Doubt; Measuring Consciousness in Bits; How a Language Model Actually Predicts the Next Word",
+    "6. reinforcement learning (3): Learning From Reward Alone; Getting an AI to Want What We Want; Why a Predictable Treat Barely Moves the Needle",
+    "7. hippocampus (3): How the Hippocampus Builds a Map of Where You've Been; What the Cortex Might Share with a Neural Network; Why a Predictable Treat Barely Moves the Needle",
+    "8. meditation (4): What a Wandering Mind Looks Like on a Screen; The Question That Isn't Meant to Be Answered; The First Teaching: Suffering and Its End; A Day Inside a Forest Monastery",
+    "9. language (4): Could a Language Model Ever Be Conscious?; How a Language Model Actually Predicts the Next Word; Getting an AI to Want What We Want; Looking Inside a Model That Was Never Meant to Be Read",
+    "10. training (4): How a Language Model Actually Predicts the Next Word; A Day Inside a Forest Monastery; Learning From Reward Alone; Modeling a Neuron One Spike at a Time",
+    "11. brain (4): Measuring Consciousness in Bits; The Brain as a Prediction Machine; The Self That Predictive Processing and Buddhism Both Doubt; What the Cortex Might Share with a Neural Network",
+    "12. neuron (2): Modeling a Neuron One Spike at a Time; Why a Predictable Treat Barely Moves the Needle"
+   ],
+   "B": [
+    "1. prediction (5): What a Wandering Mind Looks Like on a Screen; The Brain as a Prediction Machine; The Self That Predictive Processing and Buddhism Both Doubt; Measuring Consciousness in Bits; How a Language Model Actually Predicts the Next Word",
+    "2. model (7): Getting an AI to Want What We Want; Could a Language Model Ever Be Conscious?; How a Language Model Actually Predicts the Next Word; Looking Inside a Model That Was Never Meant to Be Read; The Self That Predictive Processing and Buddhism Both Doubt; +2 more",
+    "3. Buddhism (4): The First Teaching: Suffering and Its End; The Self That Predictive Processing and Buddhism Both Doubt; The Question That Isn't Meant to Be Answered; A Day Inside a Forest Monastery",
+    "4. consciousness (4): Measuring Consciousness in Bits; Could a Language Model Ever Be Conscious?; Consciousness as a Broadcast System; The Question Neuroscience Cannot Answer Yet",
+    "5. reinforcement learning (3): Learning From Reward Alone; Getting an AI to Want What We Want; Why a Predictable Treat Barely Moves the Needle",
+    "6. hippocampus (3): How the Hippocampus Builds a Map of Where You've Been; What the Cortex Might Share with a Neural Network; Why a Predictable Treat Barely Moves the Needle",
+    "7. meditation (4): What a Wandering Mind Looks Like on a Screen; The Question That Isn't Meant to Be Answered; The First Teaching: Suffering and Its End; A Day Inside a Forest Monastery",
+    "8. dopamine (3): Why a Predictable Treat Barely Moves the Needle; The Brain as a Prediction Machine; Learning From Reward Alone",
+    "9. neuron (2): Modeling a Neuron One Spike at a Time; Why a Predictable Treat Barely Moves the Needle",
+    "10. brain (4): Measuring Consciousness in Bits; The Brain as a Prediction Machine; The Self That Predictive Processing and Buddhism Both Doubt; What the Cortex Might Share with a Neural Network",
+    "11. predict (3): How a Language Model Actually Predicts the Next Word; Getting an AI to Want What We Want; Why a Predictable Treat Barely Moves the Needle",
+    "12. artificial (2): What the Cortex Might Share with a Neural Network; Learning From Reward Alone"
+   ]
+  },
+  {
+   "id": "p003",
+   "A": [
+    "1. Buddhism (4): The First Teaching: Suffering and Its End; The Self That Predictive Processing and Buddhism Both Doubt; The Question That Isn't Meant to Be Answered; A Day Inside a Forest Monastery",
+    "2. consciousness (4): Measuring Consciousness in Bits; Could a Language Model Ever Be Conscious?; Consciousness as a Broadcast System; The Question Neuroscience Cannot Answer Yet",
+    "3. dopamine (3): Why a Predictable Treat Barely Moves the Needle; The Brain as a Prediction Machine; Learning From Reward Alone",
+    "4. neural networks (3): What the Cortex Might Share with a Neural Network; Looking Inside a Model That Was Never Meant to Be Read; Modeling a Neuron One Spike at a Time",
+    "5. prediction (5): What a Wandering Mind Looks Like on a Screen; The Brain as a Prediction Machine; The Self That Predictive Processing and Buddhism Both Doubt; Measuring Consciousness in Bits; How a Language Model Actually Predicts the Next Word",
+    "6. reinforcement learning (3): Learning From Reward Alone; Getting an AI to Want What We Want; Why a Predictable Treat Barely Moves the Needle",
+    "7. hippocampus (3): How the Hippocampus Builds a Map of Where You've Been; What the Cortex Might Share with a Neural Network; Why a Predictable Treat Barely Moves the Needle",
+    "8. meditation (4): What a Wandering Mind Looks Like on a Screen; The Question That Isn't Meant to Be Answered; The First Teaching: Suffering and Its End; A Day Inside a Forest Monastery",
+    "9. language (4): Could a Language Model Ever Be Conscious?; How a Language Model Actually Predicts the Next Word; Getting an AI to Want What We Want; Looking Inside a Model That Was Never Meant to Be Read",
+    "10. model (7): Getting an AI to Want What We Want; Could a Language Model Ever Be Conscious?; How a Language Model Actually Predicts the Next Word; Looking Inside a Model That Was Never Meant to Be Read; The Self That Predictive Processing and Buddhism Both Doubt; +2 more",
+    "11. training (4): How a Language Model Actually Predicts the Next Word; A Day Inside a Forest Monastery; Learning From Reward Alone; Modeling a Neuron One Spike at a Time",
+    "12. brain (4): Measuring Consciousness in Bits; The Brain as a Prediction Machine; The Self That Predictive Processing and Buddhism Both Doubt; What the Cortex Might Share with a Neural Network"
+   ],
+   "B": [
+    "1. Buddhism (4): The First Teaching: Suffering and Its End; The Self That Predictive Processing and Buddhism Both Doubt; The Question That Isn't Meant to Be Answered; A Day Inside a Forest Monastery",
+    "2. consciousness (4): Measuring Consciousness in Bits; Could a Language Model Ever Be Conscious?; Consciousness as a Broadcast System; The Question Neuroscience Cannot Answer Yet",
+    "3. dopamine (3): Why a Predictable Treat Barely Moves the Needle; The Brain as a Prediction Machine; Learning From Reward Alone",
+    "4. neural networks (3): What the Cortex Might Share with a Neural Network; Looking Inside a Model That Was Never Meant to Be Read; Modeling a Neuron One Spike at a Time",
+    "5. prediction (5): What a Wandering Mind Looks Like on a Screen; The Brain as a Prediction Machine; The Self That Predictive Processing and Buddhism Both Doubt; Measuring Consciousness in Bits; How a Language Model Actually Predicts the Next Word",
+    "6. reinforcement learning (3): Learning From Reward Alone; Getting an AI to Want What We Want; Why a Predictable Treat Barely Moves the Needle",
+    "7. hippocampus (3): How the Hippocampus Builds a Map of Where You've Been; What the Cortex Might Share with a Neural Network; Why a Predictable Treat Barely Moves the Needle",
+    "8. meditation (4): What a Wandering Mind Looks Like on a Screen; The Question That Isn't Meant to Be Answered; The First Teaching: Suffering and Its End; A Day Inside a Forest Monastery",
+    "9. language (4): Could a Language Model Ever Be Conscious?; How a Language Model Actually Predicts the Next Word; Getting an AI to Want What We Want; Looking Inside a Model That Was Never Meant to Be Read",
+    "10. training (4): How a Language Model Actually Predicts the Next Word; A Day Inside a Forest Monastery; Learning From Reward Alone; Modeling a Neuron One Spike at a Time",
+    "11. brain (4): Measuring Consciousness in Bits; The Brain as a Prediction Machine; The Self That Predictive Processing and Buddhism Both Doubt; What the Cortex Might Share with a Neural Network",
+    "12. neuron (2): Modeling a Neuron One Spike at a Time; Why a Predictable Treat Barely Moves the Needle"
+   ]
+  },
+  {
+   "id": "p004",
+   "A": [
+    "1. Buddhism (4): The First Teaching: Suffering and Its End; The Self That Predictive Processing and Buddhism Both Doubt; The Question That Isn't Meant to Be Answered; A Day Inside a Forest Monastery",
+    "2. consciousness (4): Measuring Consciousness in Bits; Could a Language Model Ever Be Conscious?; Consciousness as a Broadcast System; The Question Neuroscience Cannot Answer Yet",
+    "3. reward (4): Learning From Reward Alone; The Brain as a Prediction Machine; Getting an AI to Want What We Want; Why a Predictable Treat Barely Moves the Needle",
+    "4. neural networks (3): What the Cortex Might Share with a Neural Network; Looking Inside a Model That Was Never Meant to Be Read; Modeling a Neuron One Spike at a Time",
+    "5. prediction (5): What a Wandering Mind Looks Like on a Screen; The Brain as a Prediction Machine; The Self That Predictive Processing and Buddhism Both Doubt; Measuring Consciousness in Bits; How a Language Model Actually Predicts the Next Word",
+    "6. hippocampus (3): How the Hippocampus Builds a Map of Where You've Been; What the Cortex Might Share with a Neural Network; Why a Predictable Treat Barely Moves the Needle",
+    "7. meditation (4): What a Wandering Mind Looks Like on a Screen; The Question That Isn't Meant to Be Answered; The First Teaching: Suffering and Its End; A Day Inside a Forest Monastery",
+    "8. language (4): Could a Language Model Ever Be Conscious?; How a Language Model Actually Predicts the Next Word; Getting an AI to Want What We Want; Looking Inside a Model That Was Never Meant to Be Read",
+    "9. female (3): Riverside Women's Football Club Wins Promotion; How the Hippocampus Builds a Map of Where You've Been; Why a Predictable Treat Barely Moves the Needle",
+    "10. breakfast (3): The Breakfast Habit That Changed My Mornings; What a Wandering Mind Looks Like on a Screen; A Day Inside a Forest Monastery",
+    "11. training (4): How a Language Model Actually Predicts the Next Word; A Day Inside a Forest Monastery; Learning From Reward Alone; Modeling a Neuron One Spike at a Time",
+    "12. brain (4): Measuring Consciousness in Bits; The Brain as a Prediction Machine; The Self That Predictive Processing and Buddhism Both Doubt; What the Cortex Might Share with a Neural Network"
+   ],
+   "B": [
+    "1. Buddhism (4): The First Teaching: Suffering and Its End; The Self That Predictive Processing and Buddhism Both Doubt; The Question That Isn't Meant to Be Answered; A Day Inside a Forest Monastery",
+    "2. consciousness (4): Measuring Consciousness in Bits; Could a Language Model Ever Be Conscious?; Consciousness as a Broadcast System; The Question Neuroscience Cannot Answer Yet",
+    "3. dopamine (3): Why a Predictable Treat Barely Moves the Needle; The Brain as a Prediction Machine; Learning From Reward Alone",
+    "4. neural networks (3): What the Cortex Might Share with a Neural Network; Looking Inside a Model That Was Never Meant to Be Read; Modeling a Neuron One Spike at a Time",
+    "5. prediction (5): What a Wandering Mind Looks Like on a Screen; The Brain as a Prediction Machine; The Self That Predictive Processing and Buddhism Both Doubt; Measuring Consciousness in Bits; How a Language Model Actually Predicts the Next Word",
+    "6. reinforcement learning (3): Learning From Reward Alone; Getting an AI to Want What We Want; Why a Predictable Treat Barely Moves the Needle",
+    "7. hippocampus (3): How the Hippocampus Builds a Map of Where You've Been; What the Cortex Might Share with a Neural Network; Why a Predictable Treat Barely Moves the Needle",
+    "8. meditation (4): What a Wandering Mind Looks Like on a Screen; The Question That Isn't Meant to Be Answered; The First Teaching: Suffering and Its End; A Day Inside a Forest Monastery",
+    "9. language (4): Could a Language Model Ever Be Conscious?; How a Language Model Actually Predicts the Next Word; Getting an AI to Want What We Want; Looking Inside a Model That Was Never Meant to Be Read",
+    "10. training (4): How a Language Model Actually Predicts the Next Word; A Day Inside a Forest Monastery; Learning From Reward Alone; Modeling a Neuron One Spike at a Time",
+    "11. brain (4): Measuring Consciousness in Bits; The Brain as a Prediction Machine; The Self That Predictive Processing and Buddhism Both Doubt; What the Cortex Might Share with a Neural Network",
+    "12. neuron (2): Modeling a Neuron One Spike at a Time; Why a Predictable Treat Barely Moves the Needle"
+   ]
+  },
+  {
+   "id": "p005",
+   "A": [
+    "1. consciousness (4): Measuring Consciousness in Bits; Could a Language Model Ever Be Conscious?; Consciousness as a Broadcast System; The Question Neuroscience Cannot Answer Yet",
+    "2. Buddhism (4): The First Teaching: Suffering and Its End; The Self That Predictive Processing and Buddhism Both Doubt; The Question That Isn't Meant to Be Answered; A Day Inside a Forest Monastery",
+    "3. predictive coding (3): The Self That Predictive Processing and Buddhism Both Doubt; The Brain as a Prediction Machine; What a Wandering Mind Looks Like on a Screen",
+    "4. neural networks (3): What the Cortex Might Share with a Neural Network; Looking Inside a Model That Was Never Meant to Be Read; Modeling a Neuron One Spike at a Time",
+    "5. reinforcement learning (3): Learning From Reward Alone; Getting an AI to Want What We Want; Why a Predictable Treat Barely Moves the Needle",
+    "6. model (7): Getting an AI to Want What We Want; Could a Language Model Ever Be Conscious?; How a Language Model Actually Predicts the Next Word; Looking Inside a Model That Was Never Meant to Be Read; The Self That Predictive Processing and Buddhism Both Doubt; +2 more",
+    "7. mindfulness (3): The First Teaching: Suffering and Its End; What a Wandering Mind Looks Like on a Screen; A Day Inside a Forest Monastery",
+    "8. meditation (4): What a Wandering Mind Looks Like on a Screen; The Question That Isn't Meant to Be Answered; The First Teaching: Suffering and Its End; A Day Inside a Forest Monastery",
+    "9. dopamine (3): Why a Predictable Treat Barely Moves the Needle; The Brain as a Prediction Machine; Learning From Reward Alone",
+    "10. hippocampus (3): How the Hippocampus Builds a Map of Where You've Been; What the Cortex Might Share with a Neural Network; Why a Predictable Treat Barely Moves the Needle",
+    "11. global workspace theory (2): Consciousness as a Broadcast System; Measuring Consciousness in Bits",
+    "12. integrated information (2): Measuring Consciousness in Bits; Could a Language Model Ever Be Conscious?"
+   ],
+   "B": [
+    "1. Buddhism (4): The First Teaching: Suffering and Its End; The Self That Predictive Processing and Buddhism Both Doubt; The Question That Isn't Meant to Be Answered; A Day Inside a Forest Monastery",
+    "2. consciousness (4): Measuring Consciousness in Bits; Could a Language Model Ever Be Conscious?; Consciousness as a Broadcast System; The Question Neuroscience Cannot Answer Yet",
+    "3. dopamine (3): Why a Predictable Treat Barely Moves the Needle; The Brain as a Prediction Machine; Learning From Reward Alone",
+    "4. neural networks (3): What the Cortex Might Share with a Neural Network; Looking Inside a Model That Was Never Meant to Be Read; Modeling a Neuron One Spike at a Time",
+    "5. prediction (5): What a Wandering Mind Looks Like on a Screen; The Brain as a Prediction Machine; The Self That Predictive Processing and Buddhism Both Doubt; Measuring Consciousness in Bits; How a Language Model Actually Predicts the Next Word",
+    "6. reinforcement learning (3): Learning From Reward Alone; Getting an AI to Want What We Want; Why a Predictable Treat Barely Moves the Needle",
+    "7. hippocampus (3): How the Hippocampus Builds a Map of Where You've Been; What the Cortex Might Share with a Neural Network; Why a Predictable Treat Barely Moves the Needle",
+    "8. meditation (4): What a Wandering Mind Looks Like on a Screen; The Question That Isn't Meant to Be Answered; The First Teaching: Suffering and Its End; A Day Inside a Forest Monastery",
+    "9. language (4): Could a Language Model Ever Be Conscious?; How a Language Model Actually Predicts the Next Word; Getting an AI to Want What We Want; Looking Inside a Model That Was Never Meant to Be Read",
+    "10. training (4): How a Language Model Actually Predicts the Next Word; A Day Inside a Forest Monastery; Learning From Reward Alone; Modeling a Neuron One Spike at a Time",
+    "11. brain (4): Measuring Consciousness in Bits; The Brain as a Prediction Machine; The Self That Predictive Processing and Buddhism Both Doubt; What the Cortex Might Share with a Neural Network",
+    "12. neuron (2): Modeling a Neuron One Spike at a Time; Why a Predictable Treat Barely Moves the Needle"
+   ]
+  },
+  {
+   "id": "p006",
+   "A": [
+    "1. Buddhism (4): The First Teaching: Suffering and Its End; The Self That Predictive Processing and Buddhism Both Doubt; The Question That Isn't Meant to Be Answered; A Day Inside a Forest Monastery",
+    "2. consciousness (4): Measuring Consciousness in Bits; Could a Language Model Ever Be Conscious?; Consciousness as a Broadcast System; The Question Neuroscience Cannot Answer Yet",
+    "3. dopamine (3): Why a Predictable Treat Barely Moves the Needle; The Brain as a Prediction Machine; Learning From Reward Alone",
+    "4. neural networks (3): What the Cortex Might Share with a Neural Network; Looking Inside a Model That Was Never Meant to Be Read; Modeling a Neuron One Spike at a Time",
+    "5. prediction (5): What a Wandering Mind Looks Like on a Screen; The Brain as a Prediction Machine; The Self That Predictive Processing and Buddhism Both Doubt; Measuring Consciousness in Bits; How a Language Model Actually Predicts the Next Word",
+    "6. reinforcement learning (3): Learning From Reward Alone; Getting an AI to Want What We Want; Why a Predictable Treat Barely Moves the Needle",
+    "7. hippocampus (3): How the Hippocampus Builds a Map of Where You've Been; What the Cortex Might Share with a Neural Network; Why a Predictable Treat Barely Moves the Needle",
+    "8. meditation (4): What a Wandering Mind Looks Like on a Screen; The Question That Isn't Meant to Be Answered; The First Teaching: Suffering and Its End; A Day Inside a Forest Monastery",
+    "9. language (4): Could a Language Model Ever Be Conscious?; How a Language Model Actually Predicts the Next Word; Getting an AI to Want What We Want; Looking Inside a Model That Was Never Meant to Be Read",
+    "10. training (4): How a Language Model Actually Predicts the Next Word; A Day Inside a Forest Monastery; Learning From Reward Alone; Modeling a Neuron One Spike at a Time",
+    "11. brain (4): Measuring Consciousness in Bits; The Brain as a Prediction Machine; The Self That Predictive Processing and Buddhism Both Doubt; What the Cortex Might Share with a Neural Network",
+    "12. neuron (2): Modeling a Neuron One Spike at a Time; Why a Predictable Treat Barely Moves the Needle"
+   ],
+   "B": [
+    "1. model (7): Getting an AI to Want What We Want; Could a Language Model Ever Be Conscious?; How a Language Model Actually Predicts the Next Word; Looking Inside a Model That Was Never Meant to Be Read; The Self That Predictive Processing and Buddhism Both Doubt; +2 more",
+    "2. predictive coding (3): The Self That Predictive Processing and Buddhism Both Doubt; The Brain as a Prediction Machine; What a Wandering Mind Looks Like on a Screen",
+    "3. global workspace theory (2): Consciousness as a Broadcast System; Measuring Consciousness in Bits",
+    "4. neural networks (3): What the Cortex Might Share with a Neural Network; Looking Inside a Model That Was Never Meant to Be Read; Modeling a Neuron One Spike at a Time",
+    "5. reinforcement learning (3): Learning From Reward Alone; Getting an AI to Want What We Want; Why a Predictable Treat Barely Moves the Needle",
+    "6. kitchen (4): The Breakfast Habit That Changed My Mornings; A Week in a Cornish Kitchen Garden; A Day Inside a Forest Monastery; A Grain Bowl for Busy Weeknights",
+    "7. female (3): Riverside Women's Football Club Wins Promotion; How the Hippocampus Builds a Map of Where You've Been; Why a Predictable Treat Barely Moves the Needle",
+    "8. Buddhism (4): The First Teaching: Suffering and Its End; The Self That Predictive Processing and Buddhism Both Doubt; The Question That Isn't Meant to Be Answered; A Day Inside a Forest Monastery",
+    "9. consciousness (4): Measuring Consciousness in Bits; Could a Language Model Ever Be Conscious?; Consciousness as a Broadcast System; The Question Neuroscience Cannot Answer Yet",
+    "10. bowl (4): A Grain Bowl for Busy Weeknights; A Day Inside a Forest Monastery; The Question That Isn't Meant to Be Answered; The Breakfast Habit That Changed My Mornings",
+    "11. dopamine (3): Why a Predictable Treat Barely Moves the Needle; The Brain as a Prediction Machine; Learning From Reward Alone",
+    "12. mindfulness (3): The First Teaching: Suffering and Its End; What a Wandering Mind Looks Like on a Screen; A Day Inside a Forest Monastery"
+   ]
+  },
+  {
+   "id": "p007",
+   "A": [
+    "1. model (7): Getting an AI to Want What We Want; Could a Language Model Ever Be Conscious?; How a Language Model Actually Predicts the Next Word; Looking Inside a Model That Was Never Meant to Be Read; The Self That Predictive Processing and Buddhism Both Doubt; +2 more",
+    "2. predictive coding (3): The Self That Predictive Processing and Buddhism Both Doubt; The Brain as a Prediction Machine; What a Wandering Mind Looks Like on a Screen",
+    "3. global workspace theory (2): Consciousness as a Broadcast System; Measuring Consciousness in Bits",
+    "4. neural networks (3): What the Cortex Might Share with a Neural Network; Looking Inside a Model That Was Never Meant to Be Read; Modeling a Neuron One Spike at a Time",
+    "5. reinforcement learning (3): Learning From Reward Alone; Getting an AI to Want What We Want; Why a Predictable Treat Barely Moves the Needle",
+    "6. kitchen (4): The Breakfast Habit That Changed My Mornings; A Week in a Cornish Kitchen Garden; A Day Inside a Forest Monastery; A Grain Bowl for Busy Weeknights",
+    "7. female (3): Riverside Women's Football Club Wins Promotion; How the Hippocampus Builds a Map of Where You've Been; Why a Predictable Treat Barely Moves the Needle",
+    "8. Buddhism (4): The First Teaching: Suffering and Its End; The Self That Predictive Processing and Buddhism Both Doubt; The Question That Isn't Meant to Be Answered; A Day Inside a Forest Monastery",
+    "9. consciousness (4): Measuring Consciousness in Bits; Could a Language Model Ever Be Conscious?; Consciousness as a Broadcast System; The Question Neuroscience Cannot Answer Yet",
+    "10. bowl (4): A Grain Bowl for Busy Weeknights; A Day Inside a Forest Monastery; The Question That Isn't Meant to Be Answered; The Breakfast Habit That Changed My Mornings",
+    "11. dopamine (3): Why a Predictable Treat Barely Moves the Needle; The Brain as a Prediction Machine; Learning From Reward Alone",
+    "12. mindfulness (3): The First Teaching: Suffering and Its End; What a Wandering Mind Looks Like on a Screen; A Day Inside a Forest Monastery"
+   ],
+   "B": [
+    "1. prediction (5): What a Wandering Mind Looks Like on a Screen; The Brain as a Prediction Machine; The Self That Predictive Processing and Buddhism Both Doubt; Measuring Consciousness in Bits; How a Language Model Actually Predicts the Next Word",
+    "2. model (7): Getting an AI to Want What We Want; Could a Language Model Ever Be Conscious?; How a Language Model Actually Predicts the Next Word; Looking Inside a Model That Was Never Meant to Be Read; The Self That Predictive Processing and Buddhism Both Doubt; +2 more",
+    "3. Buddhism (4): The First Teaching: Suffering and Its End; The Self That Predictive Processing and Buddhism Both Doubt; The Question That Isn't Meant to Be Answered; A Day Inside a Forest Monastery",
+    "4. consciousness (4): Measuring Consciousness in Bits; Could a Language Model Ever Be Conscious?; Consciousness as a Broadcast System; The Question Neuroscience Cannot Answer Yet",
+    "5. reinforcement learning (3): Learning From Reward Alone; Getting an AI to Want What We Want; Why a Predictable Treat Barely Moves the Needle",
+    "6. hippocampus (3): How the Hippocampus Builds a Map of Where You've Been; What the Cortex Might Share with a Neural Network; Why a Predictable Treat Barely Moves the Needle",
+    "7. meditation (4): What a Wandering Mind Looks Like on a Screen; The Question That Isn't Meant to Be Answered; The First Teaching: Suffering and Its End; A Day Inside a Forest Monastery",
+    "8. dopamine (3): Why a Predictable Treat Barely Moves the Needle; The Brain as a Prediction Machine; Learning From Reward Alone",
+    "9. neuron (2): Modeling a Neuron One Spike at a Time; Why a Predictable Treat Barely Moves the Needle",
+    "10. brain (4): Measuring Consciousness in Bits; The Brain as a Prediction Machine; The Self That Predictive Processing and Buddhism Both Doubt; What the Cortex Might Share with a Neural Network",
+    "11. predict (3): How a Language Model Actually Predicts the Next Word; Getting an AI to Want What We Want; Why a Predictable Treat Barely Moves the Needle",
+    "12. artificial (2): What the Cortex Might Share with a Neural Network; Learning From Reward Alone"
+   ]
+  },
+  {
+   "id": "p008",
+   "A": [
+    "1. prediction (5): What a Wandering Mind Looks Like on a Screen; The Brain as a Prediction Machine; The Self That Predictive Processing and Buddhism Both Doubt; Measuring Consciousness in Bits; How a Language Model Actually Predicts the Next Word",
+    "2. model (7): Getting an AI to Want What We Want; Could a Language Model Ever Be Conscious?; How a Language Model Actually Predicts the Next Word; Looking Inside a Model That Was Never Meant to Be Read; The Self That Predictive Processing and Buddhism Both Doubt; +2 more",
+    "3. Buddhism (4): The First Teaching: Suffering and Its End; The Self That Predictive Processing and Buddhism Both Doubt; The Question That Isn't Meant to Be Answered; A Day Inside a Forest Monastery",
+    "4. consciousness (4): Measuring Consciousness in Bits; Could a Language Model Ever Be Conscious?; Consciousness as a Broadcast System; The Question Neuroscience Cannot Answer Yet",
+    "5. reinforcement learning (3): Learning From Reward Alone; Getting an AI to Want What We Want; Why a Predictable Treat Barely Moves the Needle",
+    "6. hippocampus (3): How the Hippocampus Builds a Map of Where You've Been; What the Cortex Might Share with a Neural Network; Why a Predictable Treat Barely Moves the Needle",
+    "7. meditation (4): What a Wandering Mind Looks Like on a Screen; The Question That Isn't Meant to Be Answered; The First Teaching: Suffering and Its End; A Day Inside a Forest Monastery",
+    "8. dopamine (3): Why a Predictable Treat Barely Moves the Needle; The Brain as a Prediction Machine; Learning From Reward Alone",
+    "9. neuron (2): Modeling a Neuron One Spike at a Time; Why a Predictable Treat Barely Moves the Needle",
+    "10. brain (4): Measuring Consciousness in Bits; The Brain as a Prediction Machine; The Self That Predictive Processing and Buddhism Both Doubt; What the Cortex Might Share with a Neural Network",
+    "11. predict (3): How a Language Model Actually Predicts the Next Word; Getting an AI to Want What We Want; Why a Predictable Treat Barely Moves the Needle",
+    "12. artificial (2): What the Cortex Might Share with a Neural Network; Learning From Reward Alone"
+   ],
+   "B": [
+    "1. Buddhism (4): The First Teaching: Suffering and Its End; The Self That Predictive Processing and Buddhism Both Doubt; The Question That Isn't Meant to Be Answered; A Day Inside a Forest Monastery",
+    "2. consciousness (4): Measuring Consciousness in Bits; Could a Language Model Ever Be Conscious?; Consciousness as a Broadcast System; The Question Neuroscience Cannot Answer Yet",
+    "3. dopamine (3): Why a Predictable Treat Barely Moves the Needle; The Brain as a Prediction Machine; Learning From Reward Alone",
+    "4. neural networks (3): What the Cortex Might Share with a Neural Network; Looking Inside a Model That Was Never Meant to Be Read; Modeling a Neuron One Spike at a Time",
+    "5. prediction (5): What a Wandering Mind Looks Like on a Screen; The Brain as a Prediction Machine; The Self That Predictive Processing and Buddhism Both Doubt; Measuring Consciousness in Bits; How a Language Model Actually Predicts the Next Word",
+    "6. reinforcement learning (3): Learning From Reward Alone; Getting an AI to Want What We Want; Why a Predictable Treat Barely Moves the Needle",
+    "7. hippocampus (3): How the Hippocampus Builds a Map of Where You've Been; What the Cortex Might Share with a Neural Network; Why a Predictable Treat Barely Moves the Needle",
+    "8. meditation (4): What a Wandering Mind Looks Like on a Screen; The Question That Isn't Meant to Be Answered; The First Teaching: Suffering and Its End; A Day Inside a Forest Monastery",
+    "9. language (4): Could a Language Model Ever Be Conscious?; How a Language Model Actually Predicts the Next Word; Getting an AI to Want What We Want; Looking Inside a Model That Was Never Meant to Be Read",
+    "10. training (4): How a Language Model Actually Predicts the Next Word; A Day Inside a Forest Monastery; Learning From Reward Alone; Modeling a Neuron One Spike at a Time",
+    "11. brain (4): Measuring Consciousness in Bits; The Brain as a Prediction Machine; The Self That Predictive Processing and Buddhism Both Doubt; What the Cortex Might Share with a Neural Network",
+    "12. neuron (2): Modeling a Neuron One Spike at a Time; Why a Predictable Treat Barely Moves the Needle"
+   ]
+  },
+  {
+   "id": "p009",
+   "A": [
+    "1. prediction (5): What a Wandering Mind Looks Like on a Screen; The Brain as a Prediction Machine; The Self That Predictive Processing and Buddhism Both Doubt; Measuring Consciousness in Bits; How a Language Model Actually Predicts the Next Word",
+    "2. model (7): Getting an AI to Want What We Want; Could a Language Model Ever Be Conscious?; How a Language Model Actually Predicts the Next Word; Looking Inside a Model That Was Never Meant to Be Read; The Self That Predictive Processing and Buddhism Both Doubt; +2 more",
+    "3. Buddhism (4): The First Teaching: Suffering and Its End; The Self That Predictive Processing and Buddhism Both Doubt; The Question That Isn't Meant to Be Answered; A Day Inside a Forest Monastery",
+    "4. consciousness (4): Measuring Consciousness in Bits; Could a Language Model Ever Be Conscious?; Consciousness as a Broadcast System; The Question Neuroscience Cannot Answer Yet",
+    "5. reinforcement learning (3): Learning From Reward Alone; Getting an AI to Want What We Want; Why a Predictable Treat Barely Moves the Needle",
+    "6. hippocampus (3): How the Hippocampus Builds a Map of Where You've Been; What the Cortex Might Share with a Neural Network; Why a Predictable Treat Barely Moves the Needle",
+    "7. meditation (4): What a Wandering Mind Looks Like on a Screen; The Question That Isn't Meant to Be Answered; The First Teaching: Suffering and Its End; A Day Inside a Forest Monastery",
+    "8. kitchen (4): The Breakfast Habit That Changed My Mornings; A Week in a Cornish Kitchen Garden; A Day Inside a Forest Monastery; A Grain Bowl for Busy Weeknights",
+    "9. dopamine (3): Why a Predictable Treat Barely Moves the Needle; The Brain as a Prediction Machine; Learning From Reward Alone",
+    "10. female (3): Riverside Women's Football Club Wins Promotion; How the Hippocampus Builds a Map of Where You've Been; Why a Predictable Treat Barely Moves the Needle",
+    "11. food (3): Why a Predictable Treat Barely Moves the Needle; The Breakfast Habit That Changed My Mornings; A Grain Bowl for Busy Weeknights",
+    "12. neuron (2): Modeling a Neuron One Spike at a Time; Why a Predictable Treat Barely Moves the Needle"
+   ],
+   "B": [
+    "1. prediction (5): What a Wandering Mind Looks Like on a Screen; The Brain as a Prediction Machine; The Self That Predictive Processing and Buddhism Both Doubt; Measuring Consciousness in Bits; How a Language Model Actually Predicts the Next Word",
+    "2. model (7): Getting an AI to Want What We Want; Could a Language Model Ever Be Conscious?; How a Language Model Actually Predicts the Next Word; Looking Inside a Model That Was Never Meant to Be Read; The Self That Predictive Processing and Buddhism Both Doubt; +2 more",
+    "3. Buddhism (4): The First Teaching: Suffering and Its End; The Self That Predictive Processing and Buddhism Both Doubt; The Question That Isn't Meant to Be Answered; A Day Inside a Forest Monastery",
+    "4. consciousness (4): Measuring Consciousness in Bits; Could a Language Model Ever Be Conscious?; Consciousness as a Broadcast System; The Question Neuroscience Cannot Answer Yet",
+    "5. reinforcement learning (3): Learning From Reward Alone; Getting an AI to Want What We Want; Why a Predictable Treat Barely Moves the Needle",
+    "6. hippocampus (3): How the Hippocampus Builds a Map of Where You've Been; What the Cortex Might Share with a Neural Network; Why a Predictable Treat Barely Moves the Needle",
+    "7. meditation (4): What a Wandering Mind Looks Like on a Screen; The Question That Isn't Meant to Be Answered; The First Teaching: Suffering and Its End; A Day Inside a Forest Monastery",
+    "8. dopamine (3): Why a Predictable Treat Barely Moves the Needle; The Brain as a Prediction Machine; Learning From Reward Alone",
+    "9. neuron (2): Modeling a Neuron One Spike at a Time; Why a Predictable Treat Barely Moves the Needle",
+    "10. brain (4): Measuring Consciousness in Bits; The Brain as a Prediction Machine; The Self That Predictive Processing and Buddhism Both Doubt; What the Cortex Might Share with a Neural Network",
+    "11. predict (3): How a Language Model Actually Predicts the Next Word; Getting an AI to Want What We Want; Why a Predictable Treat Barely Moves the Needle",
+    "12. artificial (2): What the Cortex Might Share with a Neural Network; Learning From Reward Alone"
+   ]
+  }
+ ]
+}

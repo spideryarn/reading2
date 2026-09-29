@@ -76,6 +76,8 @@ const ACTIVE_TERMS: LibraryTermsResponse = {
   ],
   scope: { articles: 4, works: 4, skipped: 0 },
   pending: 0,
+  chosenBy: "program",
+  refreshing: false,
 };
 const ALL_TERMS: LibraryTermsResponse = {
   terms: [
@@ -85,6 +87,8 @@ const ALL_TERMS: LibraryTermsResponse = {
   ],
   scope: { articles: 6, works: 6, skipped: 0 },
   pending: 0,
+  chosenBy: "program",
+  refreshing: false,
 };
 
 /** Every URL `apiFetch` was asked for, in order. */
@@ -169,6 +173,7 @@ Object.defineProperty(window, "matchMedia", {
 enableHistorySync();
 
 const { Library } = await import("../src/web/Library.js");
+const { REFRESHING_RETRIES, REFRESHING_RETRY_MS, shelfKeyOf } = await import("../src/web/useShelfTerms.js");
 
 let host: HTMLDivElement;
 let root: Root;
@@ -451,8 +456,36 @@ describe("the Topics row", () => {
     expect(host.textContent).not.toContain("Reading 2 more articles…");
   });
 
+  it("asks again while the model is choosing — and shows its pick — but only a bounded number of times", async () => {
+    let calls = 0;
+    answer = async () => {
+      calls++;
+      /* The model's pick arrives on the second answer, and that answer still
+         says a refresh is under way, so the bound is what stops the asking. */
+      return calls === 1
+        ? { ...ACTIVE_TERMS, refreshing: true }
+        : { ...ACTIVE_TERMS, terms: [term("neuron", ["neurons", 8], ["mem-brain", 3])], chosenBy: "model", refreshing: true };
+    };
+    vi.useFakeTimers({ shouldAdvanceTime: true, toFake: ["setTimeout", "clearTimeout"] });
+    try {
+      await show("/");
+      expect(calls).toBe(1);
+      expect(chips()).toHaveLength(3);
+      for (let i = 0; i < REFRESHING_RETRIES + 2; i++) {
+        await act(async () => {
+          await vi.advanceTimersByTimeAsync(REFRESHING_RETRY_MS + 10);
+        });
+        await settle();
+      }
+      expect(calls).toBe(1 + REFRESHING_RETRIES);
+      expect(chips().map((b) => b.getAttribute("aria-label")?.split(" ")[0])).toEqual(["neuron"]);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it("says why there are no topics on a small shelf", async () => {
-    answer = async () => ({ terms: [], scope: { articles: 4, works: 3, skipped: 0 }, pending: 0 });
+    answer = async () => ({ terms: [], scope: { articles: 4, works: 3, skipped: 0 }, pending: 0, chosenBy: "program", refreshing: false });
     await show("/");
     expect(host.textContent).toContain("Topics appear once there are about eight different articles");
   });
@@ -610,9 +643,21 @@ describe("the archive in scope", () => {
       terms: [term("memory", ["old-memory", 4])],
       scope: { articles: 8, works: 8, skipped: 0 },
       pending: 0,
+      chosenBy: "program",
+      refreshing: false,
     });
     await show("/?archived=1");
     await waitFor(() => archivedRows().length === 8, "the archived list");
     expect(chipCount("memory")).toBe(1);
+  });
+});
+
+/* Pure, so outside the block above: its afterEach unmounts a root this test
+   never mounts. */
+describe("shelfKeyOf", () => {
+  it("asks a new question for a new revision even when its counts and words are unchanged", () => {
+    const before = [entry("same", "Same title", { revisionId: "6849672c-0fe4-4b17-8fec-3e1be53fa862" })];
+    const after = [entry("same", "Same title", { revisionId: "66f7a3c7-9bcc-4b79-aeee-8157433948a1" })];
+    expect(shelfKeyOf(after, null, false)).not.toBe(shelfKeyOf(before, null, false));
   });
 });
