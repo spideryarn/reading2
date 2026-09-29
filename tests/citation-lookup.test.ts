@@ -307,6 +307,22 @@ describe("resultIsTheWork — R-1, stricter than Find it's title rule", () => {
     }
     /* A journal whose name merely contains "Review" is still a site tail. */
     expect(resultIsTheWork({ url: "https://x.example", title: `${TITLE} | Physical Review`, excerpt: "Jared Kaplan" }, search)).toBe(true);
+    /* …but a tail that is a review of it is not (Sol's re-check). */
+    expect(resultIsTheWork({ url: "https://x.example", title: `${TITLE} - Review`, excerpt: "Jared Kaplan" }, search)).toBe(false);
+  });
+
+  it("accepts a site tail in several short parts, as the Royal Society titles its pages (real run)", () => {
+    const search = context();
+    const page = { url: "https://x.example", title: `${TITLE} | Proceedings B | The Royal Society`, excerpt: "Jared Kaplan" };
+    expect(resultIsTheWork(page, search)).toBe(true);
+    const notice = { ...page, title: `${TITLE} | Proceedings B | Retraction` };
+    expect(resultIsTheWork(notice, search)).toBe(false);
+  });
+
+  it("wants the year as well as the surname behind a cut title, where the list has one (Sol's re-check)", () => {
+    const cut = { url: "https://x.example", title: "Scaling Laws for Neural Language ...", excerpt: "Jared Kaplan, 2019." };
+    expect(resultIsTheWork(cut, context())).toBe(false);
+    expect(resultIsTheWork({ ...cut, excerpt: "Jared Kaplan, 2020." }, context())).toBe(true);
   });
 
   it("refuses a sibling sharing a seven-token prefix when only the year matches (N-2)", () => {

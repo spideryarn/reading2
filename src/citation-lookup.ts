@@ -71,7 +71,7 @@ import type {
  * user turn, or any rule in this file changes what a lookup would say** — it is
  * inside the context fingerprint, so a bump detaches every stored lookup.
  */
-export const CITATION_LOOKUP_VERSION = "citation-lookup/5";
+export const CITATION_LOOKUP_VERSION = "citation-lookup/6";
 
 /** R-7: the citing passage sent, in characters. */
 export const PASSAGE_CAP = 1_200;
@@ -274,9 +274,24 @@ function titleNamesWork(pageTitle: string | undefined, workTitle: string): "whol
   if (have.length === want.length && startsWith(have, want)) return "whole";
   for (const delimiter of title.matchAll(SITE_DELIMITER)) {
     const head = tokens(title.slice(0, delimiter.index));
-    const tail = tokens(title.slice(delimiter.index + delimiter[0].length));
-    const aSite = tail.length <= MAX_SITE_TAIL_TOKENS && !tail.some((w) => NOTICE_TAIL.has(w));
-    if (head.length === want.length && startsWith(head, want) && aSite) return "whole";
+    if (head.length !== want.length || !startsWith(head, want)) continue;
+    /* The tail may be several delimited parts ("| Proceedings B | The Royal
+       Society"), each judged on its own: short, no notice word anywhere, and
+       not led by "review" ("- Review" is about the work; "| Physical Review"
+       is a journal). A real run lost the Royal Society's own page to one cap
+       over the whole tail. */
+    const parts = title
+      .slice(delimiter.index + delimiter[0].length)
+      .split(SITE_DELIMITER)
+      .map(tokens);
+    const aSite = parts.every(
+      (part) =>
+        part.length > 0 &&
+        part.length <= MAX_SITE_TAIL_TOKENS &&
+        !part.some((w) => NOTICE_TAIL.has(w)) &&
+        part[0] !== "review",
+    );
+    return aSite ? "whole" : null;
   }
   return null;
 }
@@ -289,6 +304,10 @@ export function resultIsTheWork(page: SearchEvidence, context: LookupContext): b
   const surname = surnameOf(context.authors);
   const seen = new Set(tokens(`${page.title ?? ""} ${page.excerpt ?? ""}`));
   const surnameSeen = surname !== null && seen.has(surname);
+  /* A cut title needs the surname, and the year too where the list has one:
+     a same-author sibling sharing the opening words is the case left (N-2). */
+  const year = yearOf(context.year);
+  const cutTitleBacked = surnameSeen && (year === null || seen.has(year));
 
   const anchor = context.anchor;
   if (anchor) {
@@ -308,15 +327,14 @@ export function resultIsTheWork(page: SearchEvidence, context: LookupContext): b
        needs the surname. arXiv ids stay URL-only. */
     if (anchor.kind !== "doi" || !pattern.test((page.excerpt ?? "").toLowerCase())) return false;
     const named = titleNamesWork(page.title, context.title);
-    return named === "whole" || (named === "truncated" && surnameSeen);
+    return named === "whole" || (named === "truncated" && cutTitleBacked);
   }
 
   const named = titleNamesWork(page.title, context.title);
   if (named === null) return false;
   /* A cut title could be a sibling sharing the work's opening words and its
      year; only the first author's surname tells them apart. No author, no match. */
-  if (named === "truncated") return surnameSeen;
-  const year = yearOf(context.year);
+  if (named === "truncated") return cutTitleBacked;
   if (!surname && !year) return true;
   return surnameSeen || (year !== null && seen.has(year));
 }

@@ -1,0 +1,3 @@
+- N-1 **open** — `Conclusions from the Functional Reconstruction of an Ancient Protein Family - Review` passes the DOI fallback.
+- N-2 **open** — `Conclusions from the Functional Reconstruction of an ...` passes for a wrong same-author sibling when `Thornton` appears.
+- New hole: **none introduced beyond those residual cases**; requested tests pass, 60/60.
