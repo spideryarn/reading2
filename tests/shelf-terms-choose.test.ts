@@ -11,6 +11,7 @@ import {
   adjacentSharedPairs,
   type ChooseArticle,
   chooseTerms,
+  passesVagueTest,
   type ShelfTerm,
   byArticleCount,
   shelfTermHeadMetrics,
@@ -400,6 +401,12 @@ describe("vague words (plan 260929a, Greg's 4T: following, entered)", () => {
     expect(keys).toContain("spider");
   });
 
+  it("tries the dropped-e lemma before a different word made by stripping -ing", () => {
+    /* staring → stare (4.1), not star (6.2): the latter would wrongly let a
+       common, non-concrete participle keep the ordinary density threshold. */
+    expect(passesVagueTest("staring", 4.5)).toBe(false);
+  });
+
   it("counts a vague word only where an article uses it heavily (Greg: common words must occur more)", () => {
     const arts = shelf(12);
     /* 1,000-word articles: a vague word needs max(4, 2) = 4 uses; an ordinary one 2 */
@@ -451,6 +458,18 @@ describe("a topic sharing a word with the one before it does not come next (plan
     give(arts, "neural activity", range(6, 10), 8);
     give(arts, "zeta", range(11, 14), 3);
     expect(keysOf(chooseTerms(arts).terms)).toEqual(["neural network", "neural activity", "zeta"]);
+  });
+
+  it("keeps the separator after a later superset replaces an earlier topic in its place", () => {
+    const arts = shelf(30);
+    give(arts, "ai system", range(0, 2), 1_000);
+    give(arts, "neural network", range(20, 25), 50);
+    give(arts, "ai neural", range(0, 9), 4);
+    give(arts, "zeta", range(10, 16), 2);
+
+    const terms = chooseTerms(arts, { maxTerms: 4 }).terms;
+    expect(keysOf(terms)).toEqual(["ai neural", "zeta", "neural network"]);
+    expect(adjacentSharedPairs(terms)).toEqual([]);
   });
 
   it("counts neighbours sharing a stem on the list as given", () => {

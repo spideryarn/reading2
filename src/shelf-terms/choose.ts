@@ -169,8 +169,9 @@ export function stemForOverlap(word: string): string {
  * The forms to look a key's word up by in the Glasgow norms, which rate
  * mostly base forms and the odd plural: the word, its plural (keys are
  * plural-folded, and the norms have *kids* but not *kid*), then crude lemmas
- * — *-s*, *-es*, *-ed*, *-d*, *-ing*, *-ing* → *-e*. The first form the norms
- * know decides.
+ * — *-s*, *-es*, *-ed*, *-d*, *-ing* → *-e*, *-ing*. The first form the norms
+ * know decides. Try the dropped-e form first: *staring* is *stare*, not the
+ * more concrete and unrelated *star*.
  */
 function lookupForms(word: string): string[] {
   const forms = [word, `${word}s`];
@@ -182,8 +183,8 @@ function lookupForms(word: string): string[] {
   strip("es");
   strip("ed");
   strip("d");
-  strip("ing");
   strip("ing", "e");
+  strip("ing");
   return forms;
 }
 
@@ -491,6 +492,38 @@ function greedy(pool: Pool[], K: number, o: Required<ChooseOptions>, short: Read
   return chosen;
 }
 
+/**
+ * `admit` can replace a term in an earlier slot after the adjacency decision
+ * was made at the end of the list. Run the same decision over the final terms
+ * so that a separator which was already selected stays between the new
+ * neighbours. This only reorders selected topics; it cannot change coverage.
+ */
+function separateAfterReplacements(
+  chosen: Pool[],
+  o: Required<ChooseOptions>,
+  short: ReadonlySet<string>,
+): Pool[] {
+  const ordered = [...chosen];
+  const covered = new Map<string, number>();
+  for (let i = 0; i < ordered.length; i++) {
+    const current = ordered[i];
+    if (!current) continue;
+    const steps = ordered
+      .slice(i)
+      .sort((a, b) => byString(a.key, b.key))
+      .map((c) => ({ c, step: measure(c, covered, short) }));
+    const measured = steps.find((m) => m.c === current);
+    if (!measured) continue;
+    const next = notBesidePrevious(measured, steps, ordered.slice(0, i), o);
+    if (next.c !== current) {
+      const j = ordered.indexOf(next.c, i + 1);
+      if (j >= 0) [ordered[i], ordered[j]] = [next.c, current];
+    }
+    for (const w of next.c.works) covered.set(w, (covered.get(w) ?? 0) + 1);
+  }
+  return ordered;
+}
+
 interface Measured {
   c: Pool;
   step: Step;
@@ -619,7 +652,8 @@ export function chooseTerms(articles: ChooseArticle[], opts: ChooseOptions = {})
   if (N < o.minWorks) return { terms: [], works: N };
 
   const short = new Set(articles.filter((a) => a.words < o.minCoverageWords).map((a) => a.textHash));
-  const chosen = greedy(buildPool(articles, N, o), Math.min(o.maxTerms, N), o, short);
+  const selected = greedy(buildPool(articles, N, o), Math.min(o.maxTerms, N), o, short);
+  const chosen = o.adjacency ? separateAfterReplacements(selected, o, short) : selected;
   return {
     terms: chosen.map((t) => ({ key: t.key, label: t.label, articles: t.articles })),
     works: N,

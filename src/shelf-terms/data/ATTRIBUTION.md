@@ -2,14 +2,14 @@
 
 The two generated modules beside this file are built by
 [`scripts/build-word-lists.ts`](../../../scripts/build-word-lists.ts) from the published files,
-which are downloaded by hand and not committed. The chooser reads them to drop vague single words
-and phrases from the shelf's topics
+which are downloaded by hand and not committed. The chooser reads them to hold vague single words
+to a higher per-article density threshold; phrases are unchanged
 ([plan 260929a](../../../docs/plans/260929a-shelf-topics-round-three-concreteness-zero-pills-archived-toggle.md)).
 
 ## `concreteness.ts` — the Glasgow Norms
 
 Scott, G. G., Keitel, A., Becirspahic, M., Yao, B., & Sereno, S. C. (2019). The Glasgow Norms:
-Ratings of 5,553 English words on nine dimensions. *Behavior Research Methods*, 51(3), 1258–1270.
+Ratings of 5,500 words on nine scales. *Behavior Research Methods*, 51(3), 1258–1270.
 <https://doi.org/10.3758/s13428-018-1099-3>
 
 Licence: **Creative Commons Attribution 4.0 International (CC BY 4.0)**,

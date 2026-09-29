@@ -7,8 +7,8 @@
  *
  * `<dir>` holds:
  *
- * - `glasgow-norms.csv` — the Glasgow Norms (Scott et al. 2019), the
- *   supplementary file 13428_2018_1099_MOESM2_ESM.csv from
+ * - `glasgow-norms.csv` — save the Glasgow Norms (Scott et al. 2019)
+ *   supplementary file `13428_2018_1099_MOESM2_ESM.csv` under this name; download it from
  *   https://link.springer.com/article/10.3758/s13428-018-1099-3
  * - `SUBTLEXus74286wordstextversion.txt` — SUBTLEX-US (Brysbaert & New 2009),
  *   inside subtlexus2.zip from
