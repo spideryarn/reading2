@@ -324,8 +324,33 @@ const PUBLIC_PROJECTIONS = {
        public path**: the value arrives `undefined`, the reader hands `null` to
        the projection, the key is absent, and the article reports itself as
        never having had a timeline. Nothing goes red anywhere.
-       tests/public-projection-columns.test.ts is what would. */
+       tests/public-reads.test.ts § the artefacts on the row is what would. */
     timeline: articleRevisions.timeline,
+    /* **The eighth, 2026-09-29: the Trajectory route**, another `jsonb` column
+       on this row. It was withheld for the cost of *planning* one, which a
+       visitor never pays; reading it costs nothing (SPIDERYARN-READING2-56).
+       `profileHash` comes across inside the document and is dropped by
+       `publicTrajectory` in ../public/dto.ts.
+       docs/plans/260929c-a-visitor-sees-every-stored-mode-on-a-public-article.md. */
+    trajectory: articleRevisions.trajectory,
+    /* **The ninth and tenth, 2026-09-29: the FAQ and the Citations list**, two
+       more `jsonb` columns on this row, withheld until then for the cost of
+       *making* them (SPIDERYARN-READING2-56). Neither carries a profile. Every
+       cited work's address is re-judged by `publicCitationUrl`, and its `key`
+       and the owner's *Find it* results stay behind — `publicCitationsList` in
+       ../public/dto.ts. The finds are a separate table this read never joins.
+       docs/plans/260929c-a-visitor-sees-every-stored-mode-on-a-public-article.md. */
+    faq: articleRevisions.faq,
+    citations: articleRevisions.citations,
+    /* **The eleventh, 2026-09-29: the Debate** — withheld until then for the
+       cost of *running* a search (two metered web searches), which a visitor
+       never pays, and because the boundary its rows must pass was not built.
+       It is now: every row's address re-judged by `publicCitationUrl`, a
+       refusal dropping the row and counting it, and the article's own address
+       — inside a direct row's witness and its `linked` signal — judged by
+       `publicSourceUrl`, as the masthead's is. `publicDebate` in
+       ../public/dto.ts. docs/plans/260929c-a-visitor-sees-every-stored-mode-on-a-public-article.md. */
+    debate: articleRevisions.debate,
     /* **The seventh, and the one that cost real money to make.** A visitor sees
        the Sketch the owner already paid for; nothing on their side can start
        another. docs/project/security-map.md § the hazard this section is really
@@ -751,6 +776,10 @@ export const pgPublicReader: PublicArticleReader = {
         quotes: found.revision.quotes,
         tweets: found.revision.tweets,
         timeline: found.revision.timeline,
+        trajectory: found.revision.trajectory,
+        faq: found.revision.faq,
+        citations: found.revision.citations,
+        debate: found.revision.debate,
         sketch: found.revision.sketch,
         navLabelStatus: found.revision.navLabelStatus,
         /* `null` columns become absent keys, exactly as the artefacts do — the

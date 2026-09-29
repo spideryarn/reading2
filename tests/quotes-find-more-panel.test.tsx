@@ -173,19 +173,30 @@ describe("the foot", () => {
 });
 
 describe("the banners", () => {
-  it("an outdated list: Choose them again on the banner, and no Find more — appending cannot lengthen old quotes", async () => {
-    const regenerate = vi.fn(async () => {});
-    await mount(owner(list({ version: "quotes/3" }), { outdated: true, regenerate }));
-    expect(banner()?.textContent).toContain("earlier version of the prompt");
-    const again = [...(banner()?.querySelectorAll("button") ?? [])].find((b) =>
-      /choose them again/i.test(b.textContent ?? ""),
-    );
-    if (!again) throw new Error("no Choose them again on the outdated banner");
+  /* **No banner on an outdated list** since 2026-09-29 — Greg
+     (SPIDERYARN-READING2-55): *"perhaps even don't bother showing it."* Find
+     more stays hidden (appending cannot lengthen old quotes), so the list is
+     simply as it is; re-running is in Metadata. plan 260929c. */
+  it("an outdated list: no banner, no Choose them again, and no Find more — appending cannot lengthen old quotes", async () => {
+    await mount(owner(list({ version: "quotes/3" }), { outdated: true }));
+    expect(banner()).toBeNull();
+    expect(host.textContent).not.toContain("version of the prompt");
+    expect(buttons().some((b) => /choose them again/i.test(b))).toBe(false);
     expect(foot()).toBeNull();
     expect(buttons().some((b) => /find more/i.test(b))).toBe(false);
-    /* The stale banner's own request: a list of its own, for the profile. */
-    await act(async () => again.click());
-    expect(regenerate.mock.calls).toEqual([[]]);
+  });
+
+  it("an outdated list: a run started elsewhere shows in a status-only foot, still with no Find more", async () => {
+    await mount(owner(list({ version: "quotes/3" }), { outdated: true, starting: true }));
+    expect(foot()).not.toBeNull();
+    expect(buttons().some((b) => /find more/i.test(b))).toBe(false);
+    await mount(
+      owner(list({ version: "quotes/3" }), {
+        outdated: true,
+        failed: { message: "The re-run failed visibly.", retryable: false, retry: null },
+      }),
+    );
+    expect(foot()?.textContent).toContain("The re-run failed visibly.");
   });
 
   it("a stale list: Choose them again on the banner — the one place it survives — and no Find more", async () => {

@@ -556,7 +556,7 @@ The loop that made Greg choose a button in the first place —
 the request goes out. The two verbs exist for the same reason: `ensure` is unforced and is what
 **both** the automatic run and the empty state's button call, because `work_key` is computed from the
 request and two keys are two paid jobs; `regenerate` is forced and is **Find more** beside a
-result that is already there — and, on a stale or outdated one, *Choose them again* (§ Find more
+result that is already there — and, on a stale one, *Choose them again* (§ Find more
 appends).
 [`src/web/useAutoRun.ts`](../../src/web/useAutoRun.ts).
 
@@ -597,8 +597,10 @@ written before `quotes/4` would not silently replace it. Then `quotes/6` changed
 a passage long enough to stand on its own — and an append cannot deliver that: the old short span
 wins every overlap, so the longer version of it is dropped (GPT Sol, 260912e finding 1). So an
 outdated list is the second state, beside a stale one, where a list of its own is the honest action.
-Its banner carries *Choose them again* and the foot, Find more included, is not drawn — on that list
-Find more would send a rewrite under an append's name. **What the reader gave up**: an outdated list
+Since 2026-09-29 it has no banner (Greg, SPIDERYARN-READING2-55: *"it's not worth bugging the user
+about it"*; [260929c](../plans/260929c-no-notice-when-a-mode-was-made-by-an-older-prompt.md)) —
+re-running is in Metadata, and the foot shows only a run's progress or failure. Find more is not
+drawn — on that list Find more would send a rewrite under an append's name. **What the reader gave up**: an outdated list
 can no longer be extended in place, and today that is every list written before `quotes/6`. The
 alternative — both buttons, and a request field saying which — was passed over as a second mechanism
 beside the state-decided one, for the privilege of appending to a list appending cannot fix.
@@ -629,9 +631,11 @@ counts the runs; `discarded` and `elapsedMs` accumulate across them. The list is
 left, at the ceiling no call is made, and the foot says so instead of offering the button.
 
 **What the reader gave up** is a whole rewrite of a current list, including one for a new profile —
-*Choose them again* was the only way to throw a current list away. It survives on the **stale** and
-**outdated** banners, the two states where extending cannot give the reader what the current prompt
-would.
+*Choose them again* was the only way to throw a current list away. It survives on the **stale**
+banner; the **outdated** banner, the other state where extending cannot give the reader what the
+current prompt would, went on 2026-09-29
+([260929c](../plans/260929c-no-notice-when-a-mode-was-made-by-an-older-prompt.md)), and that list is
+rewritten from Metadata.
 
 **Ids on the outdated rewrite are inherited by exact words, and nowhere else.** This is the
 same-article rewrite `idsByText` was kept for. The article has not moved, so an old quote's words are
@@ -744,7 +748,7 @@ wrong — but worth knowing.
   token allowance is computed from the ceiling at one token a character (`answerTokensFor`). **Old
   lists keep their short quotes until the reader presses *Choose them again***: Find more's taken
   spans win every overlap, so it cannot lengthen them, and since 2026-09-24 an outdated list is
-  offered the rewrite instead (§ Find more appends). Nothing rewrites one unasked. One article, three samples;
+  rewritten by a re-run instead — from Metadata since 2026-09-29 (§ Find more appends). Nothing rewrites one unasked. One article, three samples;
   [260912e](../plans/260912e-quotes-long-enough-to-stand-on-their-own.md). **Longer quotes mark more
   of the prose**, which makes the density point below more pressing — and make the known gap likelier:
   text inside `<svg>` or `<math>` is counted but not wrapped (`annotateHtml`), so a quote crossing a

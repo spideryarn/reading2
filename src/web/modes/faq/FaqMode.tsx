@@ -1,21 +1,28 @@
 /**
- * **FAQ mode's controller.** The owner's band, and nothing else.
+ * **FAQ mode's controller.** The owner's band, and — since 2026-09-29 — the
+ * visitor's.
  *
  * The shape of `modes/<feature>/` since 2026-09-06
  * (docs/plans/260906c-separate-article-access-reader-composition-and-mode-controllers.md),
- * with three things missing on purpose:
+ * with two things missing on purpose:
  *
- * - **no visitor twin** — `POLICY.faq` is `owners-only` for v1, so a visitor
- *   meets `VisitorBand`'s sentence, not this (src/web/visitor.ts);
  * - **no passages** — each passage under a question is a jump through `onJump`,
  *   not a selection, so there is no `usePassageLifecycle` here and
  *   `selectPassages` answers `NOTHING` (src/web/reader/passages.ts);
  * - **no URL parameters** — nothing addresses a question yet.
  *
+ * **The visitor twin, `VisitorFaqBand`**, draws the stored FAQ off the public
+ * payload with no `useFaq` under it, so it can neither read the owner's FAQ nor
+ * ask for one. It was `owners-only` until a signed-out reader of a public
+ * article was refused a stored Trajectory for the cost of making one
+ * (SPIDERYARN-READING2-56,
+ * docs/plans/260929c-a-visitor-sees-every-stored-mode-on-a-public-article.md).
+ *
  * docs/project/faq.md.
  */
 
 import type { BlockId } from "../../../types.js";
+import type { PublicFaq } from "../../../public-types.js";
 import { useRenderCount } from "../../perf.js";
 import { useFaq } from "../../useFaq.js";
 import { FaqPanel } from "../../FaqPanel.js";
@@ -31,5 +38,20 @@ import { FaqPanel } from "../../FaqPanel.js";
 export function FaqBand({ slug, onJump }: { slug: string; onJump(id: BlockId): void }) {
   useRenderCount("FaqBand");
   const owner = useFaq(slug);
-  return <FaqPanel owner={owner} onJump={onJump} />;
+  return <FaqPanel access={{ kind: "owner", owner }} onJump={onJump} />;
+}
+
+/**
+ * **The same panel, for somebody who does not own the article.**
+ *
+ * The questions came in the page's own payload. No `useFaq`, so no read of
+ * `/api/faq/:slug`, no `useAutoRun` and no job — nothing here can ask the
+ * model, which is why this is a second band rather than a flag on the first:
+ * a hook cannot be called conditionally, so the owner/visitor seam is a
+ * component boundary (src/web/reader-capability.ts; `VisitorTimelineBand` is
+ * the sibling).
+ */
+export function VisitorFaqBand({ faq, onJump }: { faq: PublicFaq; onJump(id: BlockId): void }) {
+  useRenderCount("VisitorFaqBand");
+  return <FaqPanel access={{ kind: "visitor", faq }} onJump={onJump} />;
 }

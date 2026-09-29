@@ -49,6 +49,7 @@ import { useEffect, useRef, useState } from "react";
 import { ChevronLeft, ChevronRight, Info, RotateCw, Route, TriangleAlert } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import type { UseTrajectory } from "./useTrajectory.js";
+import type { PublicTrajectory } from "../public-types.js";
 import type { DoorView, TrajectoryView } from "./modes/trajectory/TrajectoryMode.js";
 import { FOLLOW_ATTR, useFollow } from "./follow.js";
 import { entryProse } from "./GlossaryPanel.js";
@@ -196,9 +197,17 @@ export function emptyHint(owner: Pick<UseTrajectory, "quotesFirst" | "ideasFirst
   return `A short model pass puts the article's Quotes in an order, and takes a few seconds. ${kept}`;
 }
 
-export function outdatedBy(
-  owner: Pick<UseTrajectory, "stale" | "profileChanged" | "outdated">,
-): string | null {
+/**
+ * The one banner over a route, and why it is there — or `null`.
+ *
+ * **Not for an outdated route.** A route planned by an older prompt, over the
+ * same article, is not announced: Greg, 2026-09-29 (SPIDERYARN-READING2-55),
+ * *"There are probably lots of cases where the prompt will get out of date,
+ * and it's not worth bugging the user about it."* Re-running is in Metadata.
+ * `outdated` itself is still read — the stop card treats outdated sources as
+ * usable. docs/plans/260929c-no-notice-when-a-mode-was-made-by-an-older-prompt.md.
+ */
+export function bannerReason(owner: Pick<UseTrajectory, "stale" | "profileChanged">): string | null {
   if (owner.stale) {
     /* One input hash covers all three, so this read cannot honestly attribute
        the mismatch to Quotes. `notOnRoute` is also only a present-day count: a
@@ -207,7 +216,6 @@ export function outdatedBy(
     return "The Quotes, Ideas, or outline have changed since this route was planned.";
   }
   if (owner.profileChanged) return "This route was planned before your profile said what it says now.";
-  if (owner.outdated) return "This route was planned by an older version of the prompt.";
   return null;
 }
 
@@ -296,17 +304,45 @@ function RouteHead({ view, total, about }: { view: TrajectoryView; total: number
   );
 }
 
+/**
+ * **Who is looking, and what they hold.** The owner's arm is the whole
+ * `useTrajectory` read — the job, the freshness, the verbs that spend. The
+ * visitor's arm is the stored route off the public payload and nothing else:
+ * no read state (it arrived with the page), no job, no verb. A union rather
+ * than a `readOnly` flag beside `owner`, so a visitor's panel has nothing to
+ * press that could plan a route — the shape `TimelinePanel`'s access has, and
+ * new-mode.md asks for. Since 2026-09-29, SPIDERYARN-READING2-56.
+ */
+export type TrajectoryAccess =
+  | { kind: "owner"; owner: UseTrajectory }
+  | { kind: "visitor"; route: PublicTrajectory };
+
+/**
+ * **The promise, for somebody the route was not planned for.** It says nothing
+ * about a profile — not *"shaped by your profile"*, which would be false, and
+ * not whether the owner had one, which `profileHash` staying off the wire
+ * exists to keep from a stranger (src/public-types.ts § `PublicTrajectory`).
+ */
+export const VISITOR_TRAJECTORY_PROMISE =
+  "The passages are the article's own words, chosen by Quotes. The order and the cues are the model's reading, planned for whoever added this article.";
+
 interface Props {
-  owner: UseTrajectory;
+  access: TrajectoryAccess;
   view: TrajectoryView;
   /** Stepped aside and not drawn — `TrajectoryBand`'s `away`. */
   away: boolean;
 }
 
-export function TrajectoryPanel({ owner, view, away }: Props) {
+export function TrajectoryPanel({ access, view, away }: Props) {
   useRenderCount("TrajectoryPanel");
-  const route = owner.trajectory;
-  const ready = route !== null && owner.status === "ready";
+  /* `null` for a visitor, and every owner-only thing below is behind it. */
+  const owner = access.kind === "owner" ? access.owner : null;
+  const route = access.kind === "owner" ? access.owner.trajectory : access.route;
+  /* A visitor's route arrived with the page, so it is ready by construction. */
+  const ready = route !== null && (owner === null || owner.status === "ready");
+  const promise = owner
+    ? trajectoryPromise(owner.trajectory?.profileHash != null)
+    : VISITOR_TRAJECTORY_PROMISE;
   const total = view.rows.length;
   const deepest = view.depths.at(-1)?.depth ?? null;
   const atMost = ready && view.depth !== null && view.depth === deepest && view.depth === 3;
@@ -334,7 +370,8 @@ export function TrajectoryPanel({ owner, view, away }: Props) {
    *   empty state's must be `ensure`, the automatic run's own request, or it
    *   buys a second model call — useIdeas.ts § `ensure`.
    */
-  const run = (label: string, again = false) => (
+  const run = (label: string, again = false) =>
+    owner === null ? null : (
     <JobProgress
       job={owner.job}
       starting={owner.starting}
@@ -362,7 +399,7 @@ export function TrajectoryPanel({ owner, view, away }: Props) {
             view={view}
             total={total}
             about={[
-              trajectoryPromise(route.profileHash !== null),
+              promise,
               ...(atMost ? [coverageNote(total, route.offered)].filter((n): n is string => n !== null) : []),
             ]}
           />
@@ -374,18 +411,24 @@ export function TrajectoryPanel({ owner, view, away }: Props) {
            Greg, 2026-09-29 (SPIDERYARN-READING2-53): *"remove the "Plan it
            again" button … let's just rely on the Metadata mode for that."*
            Metadata's *Re-run AI processing* has a Trajectory row, and the
-           outdated banner keeps its own button. What is left is a job's
-           progress, Stop and failure while one is starting, running or
-           failed; idle, there is no foot at all.
+           stale and profile-changed banners keep their own button, which
+           carries the job there — hence the gate on those two. What is left is
+           a job's progress, Stop and failure while one is starting, running or
+           failed; idle, there is no foot at all. An outdated route has no
+           banner (plan 260929c), so its job shows here.
            docs/plans/260929b-one-place-to-re-run-ai-processing.md. */
-        ready && !outdatedBy(owner) && (owner.job || owner.starting || owner.failed) ? (
+        owner &&
+        ready &&
+        !owner.stale &&
+        !owner.profileChanged &&
+        (owner.job || owner.starting || owner.failed) ? (
           <div className="traj-foot">
             <div className="traj-again">{run("Plan it again", true)}</div>
           </div>
         ) : null
       }
     >
-      {owner.error && (
+      {owner?.error && (
         <div className="traj-read-error">
           <p className="gloss-error" role="alert">
             {owner.error}
@@ -397,9 +440,9 @@ export function TrajectoryPanel({ owner, view, away }: Props) {
         </div>
       )}
 
-      {owner.status === "loading" && <p className="gloss-quiet">Looking for the route…</p>}
+      {owner?.status === "loading" && <p className="gloss-quiet">Looking for the route…</p>}
 
-      {owner.status === "none" && (
+      {owner?.status === "none" && (
         <div className="gloss-empty">
           <p>Nobody has planned a route through this piece yet.</p>
           <p className="gloss-hint">{emptyHint(owner)}</p>
@@ -409,11 +452,11 @@ export function TrajectoryPanel({ owner, view, away }: Props) {
 
       {ready && (
         <>
-          {outdatedBy(owner) && (
+          {owner && bannerReason(owner) && (
             <div className="gloss-stale">
               <p>
                 <TriangleAlert size={13} />
-                {outdatedBy(owner)}
+                {bannerReason(owner)}
               </p>
               {run("Plan it again", true)}
             </div>

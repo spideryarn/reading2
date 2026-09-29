@@ -183,6 +183,46 @@ describe("the gutter's targets meet WCAG 2.5.8 at every root", () => {
   });
 });
 
+/**
+ * The reading-time strip is a child for semantics, but not a control for
+ * layout. These declarations are the CSS half of the last-child assertion in
+ * tests/block-gutter.test.tsx. The exact selector matters: its (0,2,1)
+ * specificity beats the generic, count, nth-child, container-query and open
+ * rules that can also match this last child, whose generic matching selectors
+ * top out at (0,2,0). The one intentional exception names both `data-open` and
+ * the strip to turn its enlarged hover area off while the panel is unfolded.
+ */
+describe("the reading-time strip stays outside the gutter's control slots", () => {
+  it("overrides every generic child rule and has no hit area when unread", () => {
+    const strip = rule(".blk-gutter > span.blk-read");
+    expect(strip).toContain("display: block");
+    expect(strip).toContain("position: absolute");
+    expect(strip).toContain("left: 100%");
+    expect(strip).toContain(
+      "width: clamp(0px, calc(var(--read, 0) * var(--blk-gutter-x)), var(--blk-gutter-x))",
+    );
+    expect(strip).toContain("min-height: 0");
+    expect(strip).toContain("padding: 0");
+    expect(strip).toContain("opacity: 1");
+    expect(strip).toContain("pointer-events: auto");
+
+    /* Opening the "…" deliberately reveals every child with a less-specific
+       generic selector. The read rule above must keep winning so the span stays
+       absolute, slotless and zero-width when --read is absent. */
+    const openChildren = rule(".blk-gutter[data-open] > *");
+    expect(openChildren).toContain("display: inline-flex");
+    expect(openChildren).toContain("opacity: 1");
+    expect(openChildren).toContain("pointer-events: auto");
+    expect(rule(".blk-gutter[data-open] > span.blk-read")).toContain("pointer-events: none");
+
+    const line = rule(".blk-gutter > span.blk-read::after");
+    expect(line).toContain("left: -2px");
+    expect(line).toContain("width: 2px");
+    expect(line).toContain("pointer-events: none");
+    expect(line).toContain("opacity: calc(var(--read, 0) * 0.1)");
+  });
+});
+
 /** Every rule whose selector *list* contains this exact selector. */
 function rulesWith(selector: string): Array<{ sel: string; body: string }> {
   const out: Array<{ sel: string; body: string }> = [];

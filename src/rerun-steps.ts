@@ -1,7 +1,7 @@
 /**
  * **Which steps the Metadata page offers a "Re-run AI processing" row for.**
  *
- * An explicit list of ten, and the explicitness is the design rather than a
+ * An explicit list, and the explicitness is the design rather than a
  * shortcut: a control that spends our money on a press needs three answers the
  * pipeline's own sets do not give — how many metered calls one press buys,
  * whether the step has a prerequisite it will refuse without, and whether a
@@ -62,7 +62,7 @@
 import type { StepName } from "./types.js";
 
 /**
- * The ten, in `STEP_ORDER`'s order so the page's rows read down the pipeline.
+ * The list, in `STEP_ORDER`'s order so the page's rows read down the pipeline.
  *
  * **`trajectory` joined on 2026-09-29**, when the modes lost their standing
  * redo buttons and Metadata became the one place to ask for one
@@ -71,10 +71,28 @@ import type { StepName } from "./types.js";
  * refuses without Quotes, and says so in the row; and a route that planned is
  * safe to publish over the old one, draft-then-publish.
  *
+ * **`faq` and `citations` joined the same day**, when their out-of-date banner
+ * went — it was their only redo
+ * (docs/plans/260929c-no-notice-when-a-mode-was-made-by-an-older-prompt.md).
+ * The three answers, the same for both: **one** metered call a press, and no
+ * web search — each step is a single `streamMessage` with no tools
+ * (`generateFaq`, `generateCitations`); Citations' per-row *Find it* is the
+ * search, and it is its own route that a press here never reaches. **No
+ * prerequisite** beyond the article itself; the one refusal is Citations'
+ * `previousCitationsFrom`, which throws before the call if the list already
+ * there is unreadable, rather than minting fresh ids over it. And **safe to
+ * publish over a good list**, draft-then-publish: an answer that validation
+ * empties throws and writes nothing (`buildFaq`, `buildCitations`); only the
+ * model's own empty list is kept, as a real answer. A work found again keeps
+ * its id (`keysOf` in src/citations.ts), and with it any link *Find it* stored.
+ * Both modes are behind the experimental switch and their rows are not, like
+ * Timeline's, Quiz's and Debate's — the switch hides a bar's clutter, never a
+ * way to redo something already made (docs/project/experimental-features.md).
+ *
  * `satisfies` rather than a `StepName[]` annotation, so the members stay
- * literal and `MetadataRerunStep` below is the ten rather than the sixteen —
+ * literal and `MetadataRerunStep` below is these rather than every `StepName` —
  * which is what makes a per-step copy or label map a compile error when
- * somebody adds an eleventh.
+ * somebody adds one.
  */
 export const METADATA_RERUN_STEPS = [
   "arc",
@@ -84,10 +102,12 @@ export const METADATA_RERUN_STEPS = [
   "ideas",
   "timeline",
   "quiz",
+  "faq",
   "sketch",
   "trajectory",
   "debate",
+  "citations",
 ] as const satisfies readonly StepName[];
 
-/** One of the ten. */
+/** One of the list. */
 export type MetadataRerunStep = (typeof METADATA_RERUN_STEPS)[number];

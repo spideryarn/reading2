@@ -780,7 +780,8 @@ describe("a press", () => {
   });
 
   it("draws the sketch, which is the picture Diagram opens on", async () => {
-    /* **The dearest button in the bar that is in front of every reader** —
+    /* **The dearest button in the bar that was in front of every reader**
+       until the mode went behind the experimental switch on 2026-09-29 —
        ~$0.20 and about two minutes — and the newest thing arming anything
        (2026-09-06). Until that day opening Diagram bought nothing and the empty
        state's Draw button was the only way in; the argument for the change is
