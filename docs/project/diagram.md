@@ -97,8 +97,8 @@ were both the containment tree with different geometry — which is the comparis
 GPT Sol had already called for `tree` on the grounds that it was done and `tree`
 had won. Arc drew the vocabulary edges that Force draws, on a line rather than
 in a plane. And Tree, which outlasted them by three days, lost the same argument
-to two things outside this mode: the outline panel and the gist columns, which
-already show the reader the contents page and do it better in a band this
+to two things outside this mode: the outline panel and the gist columns (removed with Hierarchy mode on 2026-09-29), which
+already showed the reader the contents page and do it better in a band this
 narrow. Eight chips is also more than a 288px band can show without wrapping to
 two rows, and a toggle you have to read twice is not a toggle you press.
 
@@ -106,7 +106,7 @@ two rows, and a toggle you have to read twice is not a toggle you press.
 was the only picture here that was *to scale*: a band's height was how much of
 the article that section is, in words, and it was the only thing in this app
 that answered **"how much of the piece is that section?"** The gist columns
-cannot — a section holding forty blocks and one holding three are identical L2
+could not — a section holding forty blocks and one holding three are identical L2
 cells, which is the complaint
 [structure-panel.md](original-version/structure-panel.md) records against the
 previous version.
@@ -912,7 +912,7 @@ activating opens something you cannot undo. Here activating means *scrolling*,
 the cheapest and most reversible thing this app does, so following focus costs
 nothing and turns the picture into something you read the article **with**. It
 is the documented follow-focus variant, and it is what the gist columns beside
-this panel already do. ← and → do not follow on Force, where they walk to the
+this panel did, before Hierarchy mode and its columns were removed on 2026-09-29. ← and → do not follow on Force, where they walk to the
 parent and into the first child: moving around the *structure* is a statement
 about the picture, and should not move the reader out of the paragraph they are
 in.

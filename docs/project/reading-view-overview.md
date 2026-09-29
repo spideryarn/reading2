@@ -6,10 +6,10 @@ whichever mode is on. The first two are permanent; the band is the surface the m
 [the list is below](#the-modes-in-the-band), and naming them here as well only means one of the two
 goes stale.
 
-**Two modes open no band at all**, and the default is one of them. `plain` is the article
-by itself — no band, and no gist columns either — and it is what a bare `/read/<slug>` shows since
-2026-08-31; `hierarchy` is the granularity columns beside the prose, which is what the default used
-to be. So *a mode is open* and *a band is open* are separate questions
+**One mode opens no band at all**, and it is the default. `plain` is the article by itself, and it is
+what a bare `/read/<slug>` shows since 2026-08-31. (Hierarchy — the gist columns beside the prose,
+which the default used to be — was removed on 2026-09-29; `?mode=hierarchy` opens Structure,
+[260929d](../plans/260929d-remove-hierarchy-mode-and-heading-numbers.md).) So *a mode is open* and *a band is open* are separate questions
 ([plain-mode-and-the-way-out.md](../plans/plain-mode-and-the-way-out.md)).
 
 The feature the app is *for* is **[granularity zoom](granularity-zoom.md)**: the article at any level
@@ -92,8 +92,11 @@ readers never are.
   two columns, built behind the switch on 2026-09-06 so the three structural modes could be compared;
   and [260828aw](../plans/260828aw-outline-mode.md) is the nested list, which was **Outline mode**
   until 2026-09-10. That comparison ended with Outline retired, its list kept as Structure's narrow
-  face, Structure out from behind the switch in Outline's place in the bar, and Hierarchy unchanged.
-  `?mode=outline` still opens Structure.
+  face, Structure out from behind the switch in Outline's place in the bar, and Hierarchy unchanged
+  — until Hierarchy was removed on 2026-09-29 in Structure's favour. `?mode=outline` and
+  `?mode=hierarchy` both still open Structure. Where Structure draws its own numbers, section titles
+  drop the article's own leading number ("3.2 Methods" becomes "Methods"), so the two never
+  disagree; the Spine and the prose keep it ([260929d](../plans/260929d-remove-hierarchy-mode-and-heading-numbers.md)).
 - **[glossary.md](glossary.md)** — the terms this piece uses, defined from the piece and underlined
   wherever it uses them. Open it for the two bugs from the previous version it is shaped around.
 - **[summaries.md](summaries.md)** — a sentence on every part of the article, the depth control that
@@ -133,7 +136,7 @@ readers never are.
 
 The last two band modes — **chat** and **remember**, and the quiz that is remember's other half — are
 under the next heading instead, because what they are about is a passage rather than the whole piece.
-That is every band mode; `plain` and `hierarchy` are the two that open no band.
+That is every band mode; `plain` is the only one that opens no band.
 
 ### Marking a passage, and asking about one
 
@@ -157,10 +160,9 @@ That is every band mode; `plain` and `hierarchy` are the two that open no band.
   goes; also the measurement showing Readability-in-the-browser is a wall, not a decision.
 - **[tooltips.md](tooltips.md)** — the library choice, and why there are two implementations: the
   glossary card's triggers are injected HTML with no React element to wrap.
-- **[keyboard.md](keyboard.md)** — ↑ / ↓ take the step, ← / → choose the stride, and the pointer's
-  column decides how big a step is.
-- **[touch.md](touch.md)** — reading on an iPad: a swipe over a gist column steps, the prose keeps
-  momentum scrolling. Open it for why not `scroll-snap`.
+- **[keyboard.md](keyboard.md)** — ↑ / ↓ take the step; ← / → step Trajectory stops.
+- **[touch.md](touch.md)** — reading on an iPad: the prose keeps momentum scrolling (a swipe over a
+  gist column stepped, before the columns were removed). Open it for why not `scroll-snap`.
 - **[url-state.md](url-state.md)** — every parameter, which push history and which replace, and why
   position is a *section* rather than an offset. Also the home of the **↩ Back to …** chip: every
   jump in every mode — a block link, a glossary term, a citation, a Trajectory row, opening
@@ -211,7 +213,7 @@ empty state preferred to a helpful guess.
 Three pieces of it are worth knowing about:
 
 - **The words it will accept** are the mode's name, its description, and its **aliases** — `toc` for
-  Hierarchy, `define` and `terms` for Glossary — which live in
+  Structure, `define and `terms` for Glossary — which live in
   [`src/mode-catalog.ts`](../../src/mode-catalog.ts) beside the sentence each mode is described by.
   Aliases are deliberately sparse: the cost of a loose one is not a missed match, it is the *wrong*
   mode ranked first for somebody who typed the right thing. The ranking is five named tiers in

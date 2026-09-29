@@ -345,13 +345,13 @@ describe("readHref", () => {
 
 describe("carriedSearch", () => {
   it("keeps the reader's place when they step off the article and back", () => {
-    expect(carriedSearch("?at=spya-k3m9qt&cols=0,1&text=0")).toBe(
-      "at=spya-k3m9qt&cols=0,1&text=0",
+    expect(carriedSearch("?at=spya-k3m9qt&crits=spya-a,spya-b&mode=summary")).toBe(
+      "at=spya-k3m9qt&crits=spya-a,spya-b&mode=summary",
     );
   });
 
-  it("leaves the commas in cols alone, so a pasted link stays readable", () => {
-    expect(carriedSearch("?cols=0,1,2")).toContain("cols=0,1,2");
+  it("leaves the commas in a list alone, so a pasted link stays readable", () => {
+    expect(carriedSearch("?crits=spya-a,spya-b")).toContain("crits=spya-a,spya-b");
   });
 
   it("drops the drawer, which is not a place you were", () => {
@@ -360,7 +360,7 @@ describe("carriedSearch", () => {
   });
 
   it("takes a search string with or without the question mark, and an empty one", () => {
-    expect(carriedSearch("text=0")).toBe("text=0");
+    expect(carriedSearch("mode=summary")).toBe("mode=summary");
     expect(carriedSearch("")).toBe("");
     expect(carriedSearch("?")).toBe("");
   });

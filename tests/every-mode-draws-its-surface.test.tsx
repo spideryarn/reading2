@@ -166,9 +166,9 @@ const PARAGRAPH =
 const SECOND = "A later chapter revisits the same episode from the other side.";
 
 /**
- * **What the gist columns must be showing** — Hierarchy's whole surface, and it
- * is not a band. Deliberately different from every string in `DRAWS`, so that
- * "Hierarchy drew its columns" cannot be satisfied by a band's content.
+ * **The child node's gist.** Deliberately different from every string in
+ * `DRAWS`, so no band's assertion can be satisfied by it. (It was what
+ * Hierarchy's gist columns had to show, until that mode retired on 2026-09-29.)
  */
 const COLUMN_GIST = "Where the argument finally lands.";
 /** The root's gist, which is what Summary's band is built from. */
@@ -1099,8 +1099,6 @@ type Spend =
 const SPENDS: Record<Mode, Spend> = {
   /* The way out of every other mode: the article and nothing else. */
   plain: { kind: "none", why: "the article and nothing else — there is nothing to generate" },
-  /* The gist columns are drawn from the tree the pipeline already built. */
-  hierarchy: { kind: "none", why: "the gist columns come from the tree that is already there" },
   /* The same tree again, in linked columns or one nested list. */
   structure: { kind: "none", why: "the columns and the list are that same tree; no model call" },
   /* And the same gists again, in a band instead of in the columns. */
@@ -1273,31 +1271,13 @@ type Draws =
   | {
       kind: "none";
       why: string;
-      /* Spelled out rather than built from the mode, because Hierarchy needs
-         `&cols=1` — see its note below. */
+      /* Spelled out rather than built from the mode. (Hierarchy needed
+         `&cols=1` until it retired on 2026-09-29.) */
       query: string;
       control: { where: string; says: string };
     };
 
 const DRAWS: Record<Mode, Draws> = {
-  /**
-   * **Scoped to the gist cells themselves**, and that scope is the whole of the
-   * positive control. Read from the page as a whole, the root's own gist is in
-   * the masthead in *every* mode — so a page-wide assertion would be satisfied
-   * by a Hierarchy that drew no columns at all. `COLUMN_GIST` is the child
-   * node's, which only a rendered column can be showing.
-   *
-   * **`?cols=1` is spelled out**, and it is not a cheat: an absent `cols` means
-   * *whatever fits* (App.tsx), and nothing fits in jsdom, where every element
-   * measures zero. So a link that names the column is the only way to reach the
-   * surface a reader with a window gets by default.
-   */
-  hierarchy: {
-    kind: "none",
-    why: "it draws the gist columns beside the prose, not a band",
-    query: "?mode=hierarchy&cols=1",
-    control: { where: ".gist-text", says: COLUMN_GIST },
-  },
   /* The article, and nothing over it. */
   plain: {
     kind: "none",
@@ -1306,9 +1286,9 @@ const DRAWS: Record<Mode, Draws> = {
     control: { where: ".prose", says: PARAGRAPH },
   },
   /* The child node's title, from the tree in the payload — the one row this
-     fixture's structure can produce. Deliberately **not** a gist: gists are in
-     the columns beside the prose as well, so a gist would pass over an empty
-     band the moment the columns happened to be open. */
+     fixture's structure can produce. Deliberately **not** a gist: gists were in
+     the columns beside the prose as well, so a gist would have passed over an
+     empty band the moment the columns happened to be open. */
   /* **The part's title, and it is `OUTLINE_ROW` because the fixture has one
      depth-1 node and that is its title.** The name is from when Outline was a
      mode with its own row here; since 2026-09-10 Outline's list is Structure's
@@ -1322,7 +1302,7 @@ const DRAWS: Record<Mode, Draws> = {
      no section, so there is no depth-2 title to name and no reader position that
      puts column B on screen; a Structure that never rendered its right-hand
      column would satisfy this row exactly. Widening the fixture would change
-     what Hierarchy and Summary draw in the same run, so the other half
+     what Summary draws in the same run, so the other half
      is asserted in a file of its own —
      tests/structure-panel-draws-both-columns.test.tsx, which mounts the panel on
      a two-part tree and reads both columns by position. GPT Sol's review of the

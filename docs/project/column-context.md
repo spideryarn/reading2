@@ -1,5 +1,9 @@
 # Column context: what a gist column shows around where you are
 
+> **Status, 2026-09-29.** The fisheye described here belonged to the gist columns of Hierarchy mode,
+> which was removed that day ([260929d](../plans/260929d-remove-hierarchy-mode-and-heading-numbers.md)). Only the focus sampling (`useColumnContext`) and the
+> `Tier` type survive, for Structure. Read the rest as history.
+
 How the coarse columns became scannable. Four treatments were built side by side as pills you could
 toggle, compared, and cut down to the one described here — there is no control and no URL state
 left, and the pills and their tooltips are gone with them. The plan they were built from, and GPT's

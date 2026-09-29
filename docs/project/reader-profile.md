@@ -117,7 +117,7 @@ actually do goes last.** So chat and explain put the profile before the question
 put it near the top with the other framing.
 
 **Not the structural stages.** The hierarchy, the arc and the section labels never see it. The tree is
-[the one structure](granularity-zoom.md#the-tree) that Hierarchy, the zoom, the summaries and the spine
+[the one structure](granularity-zoom.md#the-tree) that Structure, the zoom, the summaries and the spine
 all address, and a reader-specific tree is one that shifts under a reader who edits their profile.
 Structure stays shared; only the prose *about* it is personalised. **Not semantic search** either:
 "where does this piece say X" has an answer that does not depend on who is asking.

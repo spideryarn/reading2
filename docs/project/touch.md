@@ -1,5 +1,10 @@
 # Touch: a swipe in a column steps, the prose scrolls
 
+> **Status, 2026-09-29.** The gist columns this doc is about were part of Hierarchy mode, which was
+> removed that day ([260929d](../plans/260929d-remove-hierarchy-mode-and-heading-numbers.md)), so there is no column to swipe now and the prose scrolls
+> natively everywhere. The design, the reasons and the accident notes below are history, kept for the
+> next time somebody wants stepped touch scrolling.
+
 > We're going to want to read on an iPad a lot.
 >
 > Can we play with the way touch-scrolling works so that it jumps step-by-step if I scroll within a

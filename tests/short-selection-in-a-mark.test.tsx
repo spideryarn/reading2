@@ -78,29 +78,17 @@ interface Spies {
 
 function propsFor(article: Article, comments: Comment[], spies: Spies) {
   const geometry = buildGeometry(article.tree, article.blocks);
-  const gistDepths = geometry.columnDepths.filter((d) => d < geometry.leafDepth);
-  const fit = fitView({
-    windowWidth: 1400,
-    gistDepths,
-    leafDepth: geometry.leafDepth,
-    showText: true,
-    chosen: null,
-  });
+  const fit = fitView({ windowWidth: 1400 });
   return {
     article,
     geometry,
-    columns: fit.columns,
     layout: fit,
-    showText: true,
-    navDepth: geometry.leafDepth,
     onJump: () => {},
     comments,
     openComment: null,
     chats: [],
     chatCounts: new Map<string, number>(),
     openChat: null,
-    sections: [],
-    layoutKey: "test",
     linkBase: "/read/x",
     ...spies,
   };

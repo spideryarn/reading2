@@ -23,7 +23,7 @@
  * holds it has to be one both can reach. A component that imports React,
  * `lucide-react`, the router and eleven client hooks is not that file.
  *
- * `aliases` is new and has nowhere else it could go. `toc` for Hierarchy,
+ * `aliases` is new and has nowhere else it could go. `toc` for Structure,
  * `define` for Glossary — they are not layout, not policy, and not a label.
  * Adding them as a fifth field on a Dock row is exactly how `MODES_UI` became
  * the place everything about a mode ended up.
@@ -233,38 +233,13 @@ export interface ModeCatalogEntry {
 export const MODE_CATALOG: Record<Mode, ModeCatalogEntry> = {
   plain: {
     description: "Just the article — no columns, no panel",
-    how: "Nothing here is generated — this is the same text every other mode annotates, with the middle band and the gist columns closed. It is also the way out of a mode: choosing it shuts whatever was open.",
+    how: "Nothing here is generated — this is the same text every other mode annotates, with the middle band closed. It is also the way out of a mode: choosing it shuts whatever was open.",
     /* The way *out* of a mode, so the words are the ones somebody reaches for
        when they want the piece and nothing else. `article` first because that
        is what they are asking for; the mode's own name is a description of
        what is missing rather than of what they get. */
     aliases: ["article", "text", "reading"],
     experimental: false,
-  },
-  hierarchy: {
-    description: "The article's own shape, one column per level of detail",
-    how: "The columns are the tree the pipeline wrote before you opened the article, so there is nothing to generate and nothing to wait for. It is the same tree Structure and Summary read — three views of one structure rather than three passes over the piece.",
-    /* `toc` was this mode's name until 2026-08-29 and is still what most people
-       call the thing, so it is the alias that will be typed most. It is also
-       the pipeline step that builds the tree (src/step-order.ts), which is a
-       collision the rename resolved in the *step's* favour — harmless here,
-       since nothing a reader types addresses a step. */
-    /* **`structure` came out of this list on 2026-09-07**, the day Structure
-       became a mode of its own. `label-prefix` outranks `alias-prefix`
-       (src/web/command-match.ts § TIERS), so leaving it would not have ranked
-       Hierarchy above Structure for somebody typing the word — but it would
-       have put Hierarchy in the list underneath, telling a reader that the two
-       adjacent buttons are two names for one thing. An alias that is another
-       mode's actual name is the loose alias this table refuses. */
-    aliases: ["toc", "contents"],
-    /* **Behind the switch since 2026-09-12**, the day Structure became the
-       structural view everybody is given. Greg (SPIDERYARN-READING2-35):
-       "Hierarchy mode should be one of the Experimental Features." Only its
-       Dock entry points go — the button and the command-bar row: the tree is
-       the one Structure and Summary read, the pipeline still builds it, and
-       `?mode=hierarchy` still opens the columns.
-       docs/project/experimental-features.md. */
-    experimental: true,
   },
   chat: {
     description: "Ask about this article — answers point back at the paragraphs they came from",
@@ -444,13 +419,15 @@ export const MODE_CATALOG: Record<Mode, ModeCatalogEntry> = {
        of the columns is what a reader would otherwise have to infer from
        watching the right-hand one change at a boundary.
        StructureMode.tsx § `structureFace` is the switch. */
-    how: "The same already-built tree as Hierarchy and Summary, so there is nothing to generate. With room, two columns read left to right — the right-hand one is always the inside of the row marked in the left; without it, one nested list that opens up around the part you are reading.",
+    how: "The same already-built tree as Summary, so there is nothing to generate. With room, two columns read left to right — the right-hand one is always the inside of the row marked in the left; without it, one nested list that opens up around the part you are reading.",
     /* `columns` is about the wide face. `tree`, `map` and `outline` came from
        Outline on 2026-09-10 with its list: `outline` so the retired mode's own
        name still finds the mode that holds it, the other two because they were
-       Outline's nicknames and Outline is now this. None of them is Hierarchy's
-       (`contents`, `toc`), which is the loose alias this table refuses. */
-    aliases: ["columns", "outline", "tree", "map"],
+       Outline's nicknames and Outline is now this. `hierarchy`, `toc` and
+       `contents` came from Hierarchy on 2026-09-29 for the same reason, when
+       it retired into this mode.
+       docs/plans/260929d-remove-hierarchy-mode-and-heading-numbers.md. */
+    aliases: ["columns", "outline", "tree", "map", "hierarchy", "toc", "contents"],
     /* **Out of the switch since 2026-09-10.** It was behind it as an
        instrument — a third structural view for Greg to compare against the
        other two, kept off an ordinary reader's bar while the comparison ran.

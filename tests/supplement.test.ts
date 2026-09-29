@@ -25,7 +25,6 @@ import {
 } from "../src/supplement.js";
 import { checkTree } from "../src/tree-invariants.js";
 import type { Block, NodeId, Tree, TreeNode } from "../src/types.js";
-import { itemsFromCells, currentIndex } from "../src/web/context.js";
 import { navPlan, stepTarget } from "../src/web/keynav.js";
 import { activeSectionIndex, buildSections, sectionDepth } from "../src/web/position.js";
 import {
@@ -519,7 +518,7 @@ describe("the arc", () => {
   });
 });
 
-/* ---------------------------------------- the fisheye and its three peers -- */
+/* ------------------------------------- the reader mid-Notes, and its peers -- */
 
 describe("a reader standing mid-Notes", () => {
   const geometry = buildGeometry(tree, blocks);
@@ -534,23 +533,8 @@ describe("a reader standing mid-Notes", () => {
     expect(collapsed[0]!.node.id).toBe(supplement.id);
   });
 
-  it("is IN the Notes item in the fisheye", () => {
-    const { items, starts } = itemsFromCells(
-      geometry.cells[depth]!,
-      (row) => blocks[row]?.id,
-      geometry.supplementOf,
-    );
-    const cur = currentIndex(starts, midNoteRow);
-    expect(cur).not.toBe(-1); // not nowhere
-    expect(items[cur]!.node.title).toBe("Notes"); // not the last part of the argument
-    expect(items[cur]!.supplement).toBe(true);
-    expect(items[cur]!.blockId).toBe(blocks[firstNoteRow]!.id);
-    // One entry for the apparatus, not six.
-    expect(items.filter((i) => i.supplement).length).toBe(1);
-  });
-
   it("is in the same item as far as keyboard navigation is concerned", () => {
-    const plan = navPlan(geometry, [1, depth], false);
+    const plan = navPlan(geometry);
     const starts = plan.starts[depth]!;
     expect(starts.filter((s) => s >= firstNoteRow)).toEqual([firstNoteRow]);
     // ↑ from inside the notes goes to the top of the notes, not back a note.
@@ -572,20 +556,12 @@ describe("a reader standing mid-Notes", () => {
     expect(sections[active]!.title).toBe("Notes");
   });
 
-  /* **The same agreement, over every supplement shape the invariants admit** —
-     and compared against the *fisheye*, not against `buildSections`.
-
-     The first version of this compared `navigableItems` with `buildSections`,
-     which was tautological: `buildSections` is a thin wrapper over
-     `navigableItems`, so the two agreed by construction and the test would have
-     passed with the bug below fully present. It also ran all three cases over
-     one depth-3 topology. GPT Sol caught both, 2026-08-29.
-
-     What the comparison has to be is `itemsFromCells` — the fisheye — against
-     `buildSections`, because the fisheye applies a filter of its own that the
-     saved position does not: it drops continuation items. That is the seam the
-     two can actually part company at, and `deepened()` below is the shape where
-     they did. */
+  /* **Every supplement shape the invariants admit.** The fisheye over the gist
+     columns was compared against `buildSections` here, because it dropped
+     continuation items and the saved position did not — the seam the two
+     parted company at under `deepened()`. The fisheye went with the Hierarchy
+     mode on 2026-09-29; what is left is the one projection, and the arrow keys'
+     rows over it. */
   const shapes: Array<[string, number, "footnote" | "reference", boolean]> = [
     ["one note", 1, "footnote", false],
     ["six notes", 6, "footnote", false],
@@ -595,29 +571,17 @@ describe("a reader standing mid-Notes", () => {
     ["six notes under a deeper body", 6, "footnote", true],
   ];
 
-  it.each(shapes)(
-    "shows the apparatus in the fisheye and in ?at= alike — %s",
-    (_name, count, role, deeper) => {
-      const article = withNotes(count, role, deeper);
-      // A precondition, not a formality: the whole point is that this tree is
-      // *valid* and the two projections still disagreed.
-      expect(checkTree(article.blocks, article.tree).problems).toEqual([]);
-      const geo = buildGeometry(article.tree, article.blocks);
-      const d = sectionDepth(geo);
-      const fisheye = itemsFromCells(
-        geo.cells[d]!,
-        (row) => article.blocks[row]?.id,
-        geo.supplementOf,
-      ).items.filter((i) => i.supplement);
-      const sections = buildSections(geo, article.blocks).filter((sec) => sec.title === "Notes" || sec.title === "References");
-
-      expect(fisheye.length).toBe(1);
-      expect(sections.length).toBe(1);
-      // Same anchor block, which is what "the same item" has to mean: it is the
-      // id `?at=` stores and the row the fisheye marks current.
-      expect(fisheye[0]!.blockId).toBe(sections[0]!.blockId);
-    },
-  );
+  it.each(shapes)("shows the apparatus as one item in ?at= — %s", (_name, count, role, deeper) => {
+    const article = withNotes(count, role, deeper);
+    // A precondition, not a formality: the whole point is that this tree is
+    // *valid*.
+    expect(checkTree(article.blocks, article.tree).problems).toEqual([]);
+    const geo = buildGeometry(article.tree, article.blocks);
+    const sections = buildSections(geo, article.blocks).filter(
+      (sec) => sec.title === "Notes" || sec.title === "References",
+    );
+    expect(sections.length).toBe(1);
+  });
 
   /* **Two supplements side by side, under a deeper body.** Only `"footnote"` is
      assigned in v1, so Notes-then-References is the shape the second role has
@@ -629,40 +593,26 @@ describe("a reader standing mid-Notes", () => {
     const treeTwo = appendSupplement(deepen(bodyTree), splitBlocks(blocksTwo).groups);
     expect(checkTree(blocksTwo, treeTwo).problems).toEqual([]);
     const geo = buildGeometry(treeTwo, blocksTwo);
-    const d = sectionDepth(geo);
-    const fisheye = itemsFromCells(geo.cells[d]!, (r) => blocksTwo[r]?.id, geo.supplementOf);
-    const supplements = fisheye.items.filter((i) => i.supplement);
-    expect(supplements.length).toBe(2);
-    expect(supplements.map((i) => i.node.title)).toEqual(["Notes", "References"]);
     const sections = buildSections(geo, blocksTwo).filter(
       (sec) => sec.title === "Notes" || sec.title === "References",
     );
     expect(sections.map((sec) => sec.title)).toEqual(["Notes", "References"]);
-    expect(supplements.map((i) => i.blockId)).toEqual(sections.map((sec) => sec.blockId));
+    expect(new Set(sections.map((sec) => sec.blockId)).size).toBe(2);
   });
 
-  /* **No two items may be anchored on one row.** `currentIndex` walks `starts`
-     and takes the last one at or before the reader's row, so a duplicate makes
-     one of the two unreachable — the reader could never be "in" it however far
-     they scrolled. Cheap to state, and it is the one thing about the
-     continuation change I could not rule out by argument. */
+  /* **No two items may be anchored on one row.** A step walks `starts` and
+     takes the last one at or before the reader's row, so a duplicate makes one
+     of the two unreachable — the reader could never be "in" it however far they
+     scrolled. */
   it.each(shapes)("anchors every item on its own row — %s", (_name, count, role, deeper) => {
     const article = withNotes(count, role, deeper);
     const geo = buildGeometry(article.tree, article.blocks);
-    const { starts } = itemsFromCells(
-      geo.cells[sectionDepth(geo)]!,
-      (row) => article.blocks[row]?.id,
-      geo.supplementOf,
-    );
+    const starts = navPlan(geo).starts[sectionDepth(geo)] ?? [];
     expect(starts.length).toBeGreaterThan(0);
     expect(new Set(starts).size).toBe(starts.length);
     expect([...starts].sort((a, b) => a - b)).toEqual(starts);
   });
 
-  /* And the reader standing mid-Notes is IN it, in the deep shape too —
-     `currentIndex` reads the fisheye's own `starts`, so an apparatus the
-     fisheye dropped puts the reader in the last part of the argument instead of
-     in the notes. The count above would not notice that on its own. */
   /* **Summary mode treated the apparatus as argument structure.** The summary
      tree descended into the supplement, so `SummaryPanel` numbered "Notes" as
      part 3, gave it children 3.1 … 3.6 — one phantom row per endnote, each with
@@ -691,16 +641,9 @@ describe("a reader standing mid-Notes", () => {
   it("puts a reader standing mid-Notes in the Notes item, under a deeper body", () => {
     const article = withNotes(6, "footnote", true);
     const geo = buildGeometry(article.tree, article.blocks);
-    const d = sectionDepth(geo);
-    const { items, starts } = itemsFromCells(
-      geo.cells[d]!,
-      (row) => article.blocks[row]?.id,
-      geo.supplementOf,
-    );
-    const cur = currentIndex(starts, bodyBlocks.length + 3);
-    expect(cur).not.toBe(-1);
-    expect(items[cur]!.supplement).toBe(true);
-    expect(items[cur]!.node.title).toBe("Notes");
+    const sections = buildSections(geo, article.blocks);
+    const cur = activeSectionIndex(sections.map((sec) => sec.row), bodyBlocks.length + 3);
+    expect(sections[cur]!.title).toBe("Notes");
   });
 
   it("and the arc's numbering agrees with all three", () => {

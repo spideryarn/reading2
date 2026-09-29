@@ -186,7 +186,7 @@ function sectionsByRow(root: SummaryNode, rows: number): (Section | null)[] {
     const label = {
       part: entry.part,
       number: entry.node.number,
-      title: entry.node.node.title,
+      title: entry.node.title,
     };
     for (let r = entry.node.startRow; r <= entry.node.endRow && r < rows; r++) {
       if (r < 0) continue;

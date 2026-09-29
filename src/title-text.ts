@@ -170,8 +170,8 @@ export function articleTitle(title: string | null): string {
  * **The mode is part of it**, and the default one is left out — the rule
  * `readTitle` in src/web/page-title.ts has always followed, now applied on both
  * sides. A reader with the same article open in three modes gets three tabs they
- * can tell apart, and `Hierarchy` in nearly every tab would distinguish nearly
- * nothing while costing eleven characters of a string that is already being cut.
+ * can tell apart, and `Plain` in nearly every tab would distinguish nearly
+ * nothing while costing characters of a string that is already being cut.
  * An unrecognised `?mode=` is not this function's problem: the caller resolves
  * it to the default first, with `isMode` in src/modes.ts, exactly as `modeParam`
  * does on the client.
@@ -235,7 +235,6 @@ export const VIEW_LABEL: Record<Exclude<ArticleView, "article">, string> = {
  */
 export const MODE_LABEL: Record<Mode, string> = {
   plain: "Plain",
-  hierarchy: "Hierarchy",
   summary: "Summary",
   glossary: "Glossary",
   ideas: "Ideas",

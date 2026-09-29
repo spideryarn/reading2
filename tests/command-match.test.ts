@@ -26,7 +26,7 @@
  * per tier, the assertion is the tier order and nothing else.
  *
  * **These do lean on the real catalog and the real labels**, deliberately: a
- * fixture would let the ranking pass here and be wrong about Hierarchy, which
+ * fixture would let the ranking pass here and be wrong about Structure, which
  * is the mode a reader is most likely to reach for by a nickname (`toc`).
  * Where a test depends on a particular word, the comment says which word and
  * why it was chosen, so that whoever breaks it by editing copy can see what to
@@ -128,9 +128,16 @@ describe("the ranking ranks by how a query hits a mode", () => {
 
   it("finds a mode by its alias alone", () => {
     /* `toc` was Hierarchy's name until 2026-08-29 and is still what most people
-       call the thing, so it is the alias most likely to be typed. Nothing else
-       in the app contains the letters. */
-    expect(rankModes("toc", MODES)).toEqual(["hierarchy"]);
+       call the thing, so it is the alias most likely to be typed. It moved to
+       Structure when Hierarchy retired into it on 2026-09-29. Nothing else in
+       the app contains the letters. */
+    expect(rankModes("toc", MODES)).toEqual(["structure"]);
+  });
+
+  it("finds Structure by the name of the mode it replaced", () => {
+    /* `?mode=hierarchy` opens Structure (src/modes.ts § RETIRED_MODES), so the
+       word typed into the bar does too — the same courtesy `outline` gets. */
+    expect(rankModes("hierarchy", MODES)).toEqual(["structure"]);
   });
 });
 
@@ -163,11 +170,11 @@ describe("the ranking breaks ties in the order it was handed", () => {
 
 describe("the ranking normalises what the reader typed", () => {
   it("ignores case", () => {
-    expect(rankModes("TOC", MODES)).toEqual(["hierarchy"]);
+    expect(rankModes("TOC", MODES)).toEqual(["structure"]);
   });
 
   it("ignores padding", () => {
-    expect(rankModes("  toc  ", MODES)).toEqual(["hierarchy"]);
+    expect(rankModes("  toc  ", MODES)).toEqual(["structure"]);
   });
 
   /**
@@ -303,10 +310,10 @@ describe("a command says which one it is", () => {
    * drawing last month's wording.
    */
   it("reads a mode's label, aliases and sentence out of the catalog", () => {
-    const text = commandText(modeCommand("hierarchy"));
-    expect(text.label).toBe(MODE_LABEL.hierarchy);
-    expect(text.aliases).toEqual(MODE_CATALOG.hierarchy.aliases);
-    expect(text.description).toBe(MODE_CATALOG.hierarchy.description);
+    const text = commandText(modeCommand("structure"));
+    expect(text.label).toBe(MODE_LABEL.structure);
+    expect(text.aliases).toEqual(MODE_CATALOG.structure.aliases);
+    expect(text.description).toBe(MODE_CATALOG.structure.description);
   });
 
   it("reads a page's out of the page itself", () => {

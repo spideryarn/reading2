@@ -510,7 +510,7 @@ Two things changed, and the second is the more important:
    remembering.
 
 **The fifth arrived on 2026-09-05**, `liftStrandedText`, and it is the first that changes the *mode*
-rather than the page: `?mode=hierarchy&text=0` became a state with no exit when the `Text` pill left
+rather than the page: `?mode=hierarchy&text=0` (Hierarchy mode is removed as of 2026-09-29; the rewrite went with it, [260929d](../plans/260929d-remove-hierarchy-mode-and-heading-numbers.md)) became a state with no exit when the `Text` pill left
 the controls bar, so it is rewritten to `?mode=structure` (`?mode=outline` until 2026-09-10)
 ([url-state.md](url-state.md#the-parameters)). The mode is in the tab, so this is a title divergence
 by construction and `readMode` in [read-address.ts](../../src/read-address.ts) predicts it — the same

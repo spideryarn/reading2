@@ -582,22 +582,10 @@ h1 a:hover { text-decoration: underline; text-decoration-color: var(--highlight)
    header cells a `transition: top` written for chrome that slides under a bar
    they do not have.
 
-   `td.gist .sticky` is in the list because it was missed first time and snapped
-   while everything around it slid — GPT Sol, 2026-08-27.
-
-   **Two things are deliberately NOT in it**, and the pair is the whole of
-   column-context.css § the panels and the measuring stick:
-
-    - `:where(table.zoom > thead) > tr > th` **was** here and went on 2026-09-07.
-      Animating it was never visible — since 2026-09-05 that row is `height: 0`
-      with its labels in `.sr-only` spans — and it was actively harmful, because
-      useColumnContext.ts derives every fisheye panel's `top` from
-      `th.getBoundingClientRect().bottom`. While the measuring stick travelled,
-      every panel chased a number that had not arrived.
-    - `.ctx-panel` is not here either, but for the opposite reason: it needs the
-      slide and must not have it at any other time. Its `top` also changes on
-      ordinary scrolling, so its transition is scoped to `[data-bar-moving]`. */
-td.gist .sticky,
+   `:where(table.zoom > thead) > tr > th` **was** here and went on 2026-09-07:
+   that row is `height: 0`, so animating it was never visible. (So did
+   `td.gist .sticky` and the fisheye panels' own scoped slide, with the gist
+   columns, on 2026-09-29.) */
 .spine,
 .mode-band,
 .mode-herald-slot, /* the band's own box, so it has to travel with it — mode-band.css § the herald */
@@ -608,8 +596,10 @@ td.gist .sticky,
 /* **Never hide a bar somebody is using.** A keyboard reader tabbing along the
    granularity pills scrolls the page as focus moves, and without this the
    control they are on slides off the top mid-tab — focus lands somewhere
-   invisible and the page looks broken. That is Hierarchy, which is the mode
-   this whole rule was extended to laptops for.
+   invisible and the page looks broken. (That was Hierarchy's pills, which this
+   rule was extended to laptops for; the bar holds only a visitor's read-only
+   chip since 2026-09-29, and the rule still holds for whatever is focusable
+   in it.)
 
    `:root:has(…)` rather than the obvious `.controls:focus-within`, and the
    difference is the whole rule: `--bar-bottom` is an inherited property that
@@ -741,27 +731,6 @@ td.gist .sticky,
   text-transform: uppercase;
   color: var(--ink-faint);
   margin-left: 0.5rem;
-}
-
-/* **A sentence standing where a pill would be**, when the control has nothing
-   to open — today that is the `Paragraphs` pill while the labels are still
-   arriving or a run failed to produce them (src/web/nav-labels.ts).
-
-   Not a disabled `Toggle`: a disabled control still reads as a control, and its
-   explanation would have to live in a tooltip that a touch reader cannot open —
-   which is the argument that named these pills `Paragraphs` rather than `L3` in
-   the first place (src/web/tree.ts § `columnLabel`). So the control is replaced
-   by the reason, in the bar's own voice: italic and faint, like `.mode` beside
-   it, and no border, because a bordered thing in this row is something you can
-   press. It wraps to the pills' own metrics rather than growing the bar. */
-.pill-note {
-  font-size: 0.72rem;
-  line-height: 1.55;
-  font-style: italic;
-  color: var(--ink-faint);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
 }
 
 /* `.provenance` was here — the dashed monospace chip in the controls holding the

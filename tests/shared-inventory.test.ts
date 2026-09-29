@@ -159,9 +159,9 @@ describe("the sweep over the modes", () => {
     expect(keys(sharedInventory(EVERYTHING).withheld)).toContain(mode);
   });
 
-  /* The four that cost nothing and are drawn from the payload the visitor
+  /* The ones that cost nothing and are drawn from the payload the visitor
      already holds — the whole point of the feature, so they are pinned. */
-  it.each(["hierarchy", "structure", "summary"])("always shares %s", (mode) => {
+  it.each(["structure", "summary"])("always shares %s", (mode) => {
     expect(keys(sharedInventory(NOTHING).shared)).toContain(mode);
   });
 

@@ -58,10 +58,11 @@ import { diagramParam, type Mode, refereeParam, rememberParam } from "../params.
  * completeness check from `MODES`, pins the exemptions by name, and throws inside
  * every `contained` band to show the fallback is really there.
  *
- * **Two exemptions, and both are the article.** Neither has a band: Plain is the
- * prose alone and Hierarchy is the gist columns of the table the prose is in. A
- * boundary around either would have to take the article with it, which is the
- * one thing this exists to prevent — so a throw there stays `AppBoundary`'s.
+ * **One exemption, and it is the article.** Plain has no band: it is the prose
+ * alone. A boundary around it would have to take the article with it, which is
+ * the one thing this exists to prevent — so a throw there stays `AppBoundary`'s.
+ * (Hierarchy, the gist columns, was the second exemption until it retired on
+ * 2026-09-29.)
  */
 export type Containment = { kind: "contained" } | { kind: "exempt"; reason: string };
 
@@ -69,10 +70,6 @@ const BAND: Containment = { kind: "contained" };
 
 export const MODE_CONTAINMENT: Record<Mode, Containment> = {
   plain: { kind: "exempt", reason: "no band: the prose alone, which is what a fallback protects" },
-  hierarchy: {
-    kind: "exempt",
-    reason: "no band: the gist columns are the article's own table, not a band beside it",
-  },
   chat: BAND,
   glossary: BAND,
   search: BAND,

@@ -36,18 +36,14 @@ export const MODES = [
 
      docs/plans/plain-mode-and-the-way-out.md. */
   "plain",
-  /* Renamed from `toc` on 2026-08-29, at Greg's request: the reader sees
-     "Hierarchy" and the code now says the same word. It also ends a collision
-     that had lasted as long as the list — `toc` was simultaneously this mode and
-     the *pipeline step* that builds tree.json (src/step-order.ts § STEP_ORDER), so
-     one word meant two things in one repo. The step keeps the name; the mode
-     gives it up. docs/plans/260829f-defer-arc-and-rename-hierarchy.md § 3.
-
-     Superseded on 2026-08-31: Greg reversed the second half, and the pipeline
-     step is being renamed `toc` → `hierarchy` too, so the UI, the code and the
-     database all say one word. The collision is gone rather than resolved in
-     the mode's favour. docs/plans/260831ak-rename-the-toc-step-to-hierarchy-everywhere.md. */
-  "hierarchy",
+  /* **`hierarchy` was the first mode, and it is not a mode any more** — the
+     gist columns beside the prose, one per level of the tree. It was `toc`
+     until 2026-08-29, renamed to end a collision with the pipeline step of that
+     name. Retired 2026-09-29 — Greg (SPIDERYARN-READING2-4B): "Remove the
+     Hierarchy mode altogether. I think the Structure mode is
+     better/sufficient." `?mode=hierarchy` opens Structure, through
+     `RETIRED_MODES` below. The tree and the pipeline step keep the name.
+     docs/plans/260929d-remove-hierarchy-mode-and-heading-numbers.md. */
   "chat",
   "glossary",
   "search",
@@ -189,7 +185,7 @@ export const MODES = [
      Greg liked the two columns and not the stacked pair a narrow band got, so
      Structure kept its columns where there is room, took Outline's list where
      there is not, and came out from behind the switch in Outline's place.
-     Hierarchy stays. docs/plans/260910g-structure-mode-subsumes-outline.md. */
+     Hierarchy stayed, until 2026-09-29. docs/plans/260910g-structure-mode-subsumes-outline.md. */
   "structure",
   /* 2026-09-11: every work the piece cites, each with a link out, ranked the
      way Glossary is — asked for through the Feedback button (SPIDERYARN-READING2-2Y).
@@ -269,6 +265,9 @@ export function isMode(value: string | null | undefined): value is Mode {
  */
 export const RETIRED_MODES: Readonly<Record<string, Mode>> = {
   outline: "structure",
+  /* The gist columns, retired 2026-09-29; Structure draws the same tree.
+     docs/plans/260929d-remove-hierarchy-mode-and-heading-numbers.md. */
+  hierarchy: "structure",
 };
 
 /**

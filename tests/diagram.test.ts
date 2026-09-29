@@ -80,6 +80,7 @@ function node(
       ...(depth < 3 && { gist: `A one sentence gist for ${id}, long enough to need wrapping.` }),
     },
     number,
+    title: `Title of ${id}`,
     startRow,
     endRow,
     blocks: endRow - startRow + 1,

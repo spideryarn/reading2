@@ -112,11 +112,12 @@ function only(built: keyof PublicArtefacts): PublicArtefacts {
 }
 
 describe("what a visitor is told, mode by mode", () => {
-  it("gives the table of contents away, which is the whole feature", () => {
-    // The tree, the zoom, the spine — all drawn from the payload the visitor
-    // already holds, and none of it costs anything to serve.
-    expect(visitorGap("hierarchy", EVERYTHING_BUILT)).toBeNull();
-    expect(visitorGap("hierarchy", NOTHING_BUILT)).toBeNull();
+  it("gives the article's structure away, which is the whole feature", () => {
+    // The tree and the spine — all drawn from the payload the visitor already
+    // holds, and none of it costs anything to serve. (This asked of Hierarchy
+    // until it retired into Structure on 2026-09-29.)
+    expect(visitorGap("structure", EVERYTHING_BUILT)).toBeNull();
+    expect(visitorGap("structure", NOTHING_BUILT)).toBeNull();
   });
 
   /**
@@ -269,7 +270,6 @@ describe("what a visitor is told, mode by mode", () => {
        docs/plans/260910g-structure-mode-subsumes-outline.md. */
     const ALWAYS_FREE: Mode[] = [
       "plain",
-      "hierarchy",
       "structure",
       "summary",
       "diagram",
@@ -320,7 +320,6 @@ describe("what a visitor is told, mode by mode", () => {
       const gap = visitorGap(mode, EVERYTHING_BUILT);
       if (
         mode === "plain" ||
-        mode === "hierarchy" ||
         /* Same tree, in columns or (Outline's) nested list, and it reaches no
            artefact that could be missing — so a visitor is short of nothing
            and there is no gap to report.

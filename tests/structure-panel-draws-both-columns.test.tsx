@@ -342,4 +342,39 @@ describe("the Structure band", () => {
     expect(band.querySelector(".band-head")).toBeNull();
     expect(band.getAttribute("aria-label")).toBe("Structure");
   });
+
+  it("draws our number beside the title, not ours and the article's (SPIDERYARN-READING2-4Q)", () => {
+    /* The article's headings carry their own numbers, which do not match ours:
+       the reader saw "2.1 3.1 SECTION 0 TITLE". tree.ts § SummaryNode.title. */
+    const numbered: Tree = structuredClone(tree);
+    const own = (id: string, prefix: string) => {
+      const n = numbered.nodes[id];
+      if (!n) throw new Error(`no node ${id}`);
+      n.title = `${prefix} ${n.title}`;
+    };
+    own("n-p2", "III.");
+    own("n-s0", "3.1");
+    own("n-s1", "(3.2)");
+    act(() => {
+      reactRoot.render(
+        <StructurePanel
+          root={buildSummaryTree(numbered, blocks, geometry.leafDepth)}
+          focusRow={IN_SECTION_0}
+          allowParagraphs={true}
+          onJump={() => {}}
+        />,
+      );
+    });
+    const band = host.querySelector(".mode-band.struct");
+    if (!band) throw new Error("no Structure band rendered");
+    const { a, b } = columns(band);
+    expect(a).toEqual(["PART ONE TITLE", "PART TWO TITLE"]);
+    expect(b).toEqual(["SECTION 0 TITLE", "SECTION 1 TITLE", "SECTION 2 TITLE"]);
+    const firstB = band.querySelectorAll(".struct-grid > .struct-side")[1]?.querySelector(".struct-row");
+    expect(firstB?.querySelector(".struct-num")?.textContent).toBe("2.1");
+    expect(firstB?.querySelector(".struct-text")?.textContent).toBe("SECTION 0 TITLE");
+    expect(band.querySelector(".struct-of")?.textContent).not.toContain("III.");
+    // The stored tree keeps the article's own words.
+    expect(numbered.nodes["n-s0"]?.title).toBe("3.1 SECTION 0 TITLE");
+  });
 });

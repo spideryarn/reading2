@@ -80,16 +80,8 @@ import {
   hitMarks as buildHitMarks,
   type Found,
 } from "../search-hits.js";
-import { Toggle } from "@/components/ui/toggle";
+import { buildArcColumn, buildGeometry, buildOutline } from "../tree.js";
 import {
-  buildArcColumn,
-  buildGeometry,
-  buildOutline,
-  columnHint,
-  columnLabel,
-} from "../tree.js";
-import {
-  colsParam,
   modeParam,
   noteParam,
   panelParam,
@@ -100,7 +92,6 @@ import {
   ideaParam,
   eventParam,
   spineParam,
-  textParam,
   threadParam,
   type Mode,
 } from "../params.js";
@@ -108,17 +99,14 @@ import { arrivalTarget, clearArrivalAnchor, isBlockOnScreen, scrollToBlock } fro
 import { orderComments, positionOf, stepComment } from "../comment-nav.js";
 import { jumpToComment, stepToComment } from "../comment-jump.js";
 import { buildSections, sectionDepth } from "../position.js";
-import { bandCoversProse, barHasContent, fitView, offerableGists, proseVisible } from "../layout.js";
+import { bandCoversProse, fitView } from "../layout.js";
 import { navPlan, useArrowNav } from "../keynav.js";
-import { paragraphLabelNotice, paragraphPill } from "../nav-labels.js";
 import { ReturnChip } from "../ReturnChip.js";
 import { BlockLinkProvider, buildBlockLinkIndex } from "../BlockLinkCard.js";
 import { flushPendingFlash, resetFlash } from "../flash.js";
 import { ViewportProbe } from "../ViewportProbe.js";
-import { useSwipeNav } from "../swipe.js";
 import { ChatDialog, type ChatTarget } from "../ChatDialog.js";
 import { anchored, countByBlock, helpThreadFor, threadFor } from "../useChatAnchors.js";
-import { PILL } from "../pill.js";
 import { pageTitle, useDocumentTitle } from "../page-title.js";
 import {
   NO_SEARCHES,
@@ -147,20 +135,6 @@ import { proseFound, selectPassages } from "./passages.js";
  * slightly different ways. visitor.ts § markedModes.
  */
 const EVERY_MODE_AVAILABLE: ReadonlyMap<Mode, string> = new Map();
-
-/**
- * **No gist-column depths.** Plain mode hands it to `fitView` as `chosen`, which
- * is the whole of how that mode empties the table — see `plainCols` below. (The
- * Outline band used it too, to ask `useColumnContext` for no rects; that band
- * is Structure's list face since 2026-09-10 and `StructureBand` keeps its own
- * copy.)
- *
- * Module-level so its identity is stable. A fresh `[]` each render would be a
- * new dependency each render, which restarts the hook's effect — and that
- * effect adds a scroll listener and a `ResizeObserver`. Same reason `layoutKey`
- * below is a string rather than the array it describes.
- */
-const EMPTY_DEPTHS: number[] = [];
 
 /**
  * The reading view — **one reading view, for the owner and for a visitor.**
@@ -284,39 +258,6 @@ export function Reader({
   const rootFontPx = useRootFontPx();
 
   /**
-   * Every gist depth this article has, 0 … leafDepth-1 — what `fitView` asks
-   * for, and it asks for all of them.
-   *
-   * The leaf column is not one: it only makes sense in outline mode, where it
-   * is the deepest rung of the table of contents, and is meaningless beside the
-   * prose it labels — so it gets its own pill below rather than a place here.
-   */
-  const gistDepths = useMemo(
-    () => geometry.columnDepths.filter((d) => d < geometry.leafDepth),
-    [geometry],
-  );
-
-  /**
-   * The subset a reader may actually open — 1 … leafDepth-1, because depth 0
-   * stopped being a column on 2026-09-05.
-   *
-   * Separate from `gistDepths` on purpose: `fitView` documents its input as the
-   * article's *full* depth range and applies the same rule itself, so handing it
-   * a pre-filtered list would quietly make the two disagree about what they are
-   * saying. One rule, `offerableGists` in layout.ts; two callers that need
-   * different things from it. This one is the pill inventory — a pill for a
-   * column the fit will never open is a control that does nothing.
-   */
-  const offerableGistDepths = useMemo(() => offerableGists(gistDepths), [gistDepths]);
-
-  const [cols, setCols] = useQueryState("cols", colsParam);
-  /* Read-only since 2026-09-05: the `Text` pill that wrote it went with the
-     rest of the controls bar, so `?text=0` is something a reader arrives with
-     rather than something they can ask for here. Outline mode itself is
-     unchanged — docs/project/url-state.md § `?text=`. */
-  const [showText] = useQueryState("text", textParam);
-
-  /**
    * Whether the reader has had a view about the spine — see params.ts §
    * spineParam and layout.ts § showSpine.
    *
@@ -356,31 +297,14 @@ export function Reader({
      distinguishes nothing. `plain` since 2026-08-31; the rule is about the
      default rather than about any particular mode. See src/web/page-title.ts. */
   useDocumentTitle(pageTitle({ kind: "read", title: article.meta.title, view: "article", mode }));
-  /* **Any mode that is not the hierarchy has no gist columns, and forces the
-     prose on.** Written as "not hierarchy" rather than as `chat || glossary` on
-     purpose: the third mode cost this line nothing, which is the property the
-     slot was built for, and the tenth cost it nothing either.
-
-     It is not the same question as "is a panel open" — `bandOpen` below is, and
-     Plain is where they differ. */
-  const inMode = mode !== "hierarchy";
   /**
-   * **Is there a panel in the middle band?** — which is a narrower question than
-   * `inMode`, and since Plain arrived on 2026-08-31 they have different answers.
-   *
-   * Plain is a mode with no band and no gist columns: the spine, the article,
-   * and nothing else. So it answers `inMode` the same way every other mode does
-   * — *the granularity controls do not apply here, and the prose is on whatever
-   * `?text=` says* — and answers this one the way `hierarchy` does.
-   *
-   * Two names rather than one `mode === …` test at each site, because the last
-   * time this file had one rule doing two jobs the two drifted: `proseVisible`
-   * exists in layout.ts precisely because "in a mode the prose is on" was
-   * asserted in the arithmetic and not in the component, which rendered a chat
-   * panel beside an entirely empty table. Naming both questions is what stops
-   * the third caller having to guess which one it wanted.
+   * **Is there a panel in the middle band?** Every mode but Plain has one.
+   * (Until 2026-09-29 Hierarchy had none either — its gist columns were part
+   * of the table — and an `inMode` beside this said whether the granularity
+   * controls applied. Both went with that mode:
+   * docs/plans/260929d-remove-hierarchy-mode-and-heading-numbers.md.)
    */
-  const bandOpen = inMode && mode !== "plain";
+  const bandOpen = mode !== "plain";
   /**
    * **The band has stepped aside from the prose** — on a narrow window, where
    * it lies over the whole article (`band-covers`), after the reader chooses a
@@ -423,10 +347,9 @@ export function Reader({
   /**
    * What stands between a visitor and the mode they have opened, if anything.
    *
-   * `null` for the owner and `null` for `hierarchy`, which is the mode the whole
-   * feature is about: the table of contents, the granularity zoom and the spine
-   * are drawn from the tree in the payload the visitor already holds, so they
-   * cost nothing and a stranger gets all of them. visitor.ts.
+   * `null` for the owner, and for every mode drawn from the payload the visitor
+   * already holds — Plain, Structure, Summary: they cost nothing, so a stranger
+   * gets all of them. visitor.ts.
    */
   const gap = owner ? null : visitorGap(mode, available);
   /* The dimmed buttons in the bottom bar. Memoised because it builds a Set and
@@ -438,46 +361,10 @@ export function Reader({
   );
   /* The bar's Comments drawer needs it for the same one reason the bands do. */
 
-  /**
-   * An absent `cols` means "whatever fits", not "all of them". All of them is
-   * 70rem of table, so on any laptop the obvious default buries a column
-   * permanently under the pinned prose. The arithmetic lives in layout.ts, where
-   * it can be tested without a DOM. An explicit `cols=` still wins outright, so a
-   * pasted link shows exactly what it says.
-   */
-  /**
-   * Whether the prose is on screen — see layout.ts § proseVisible. In a mode it
-   * always is, whatever `?text=` says, because outline mode is a way of reading
-   * the table of contents and a mode has none. Passed to `fitView` AND to
-   * TableView from one place: reading them apart is the bug this fixes.
-   */
-  const proseOn = proseVisible(showText, inMode);
-
-  /**
-   * **The columns `fitView` is asked for, which in Plain is none of them.**
-   *
-   * Plain is `?cols=none` with a name, and it is expressed here rather than in
-   * layout.ts on purpose: `fitView`'s non-mode arm already handles an empty
-   * `chosen` exactly right — no gist columns, no leaf column, and `detailW`
-   * relaxing to the whole available width — so the mode costs that file nothing
-   * and cannot introduce a fourth width negotiation for somebody to get wrong.
-   *
-   * **The reader's own `?cols=` is not overwritten, only overridden.** It stays
-   * in the URL untouched, so leaving Plain for the hierarchy puts back the
-   * columns they had rather than the ones the window would have picked — the
-   * same property `?cols=` already has on a trip through chat (layout.ts
-   * § fitView).
-   */
-  const plainCols = mode === "plain" ? EMPTY_DEPTHS : cols;
-
   const fit = useMemo(
     () =>
       fitView({
         windowWidth,
-        gistDepths,
-        leafDepth: geometry.leafDepth,
-        showText: proseOn,
-        chosen: plainCols,
         modeBand: bandOpen,
         /* Structure's two columns want a band of their own width where they
            fit (layout.ts § `structureColumnsBand`); every other band is the
@@ -486,7 +373,7 @@ export function Reader({
         rootFontPx,
         showSpine,
       }),
-    [windowWidth, rootFontPx, gistDepths, geometry.leafDepth, proseOn, plainCols, bandOpen, showSpine, mode],
+    [windowWidth, rootFontPx, bandOpen, showSpine, mode],
   );
 
   /**
@@ -496,9 +383,7 @@ export function Reader({
    * **Structure's list face is the only thing that reads this now**, as its
    * rung 4 (`OutlinePanel` § `row.arc`) — Outline mode's, until Outline became
    * that face on 2026-09-10. It used to draw Hierarchy's L0 column as
-   * well; that column went on 2026-09-05 with the rest of the declutter
-   * (layout.ts § `offerableGists`) and the artefact did not — `src/arc.ts`, the
-   * `arc` job step and `arc.json` are all untouched.
+   * well, until that column went on 2026-09-05.
    *
    * **The owner's live arc, falling back to the payload's.** An owner may have
    * arrived without one and had it written while they read, so theirs comes
@@ -512,17 +397,17 @@ export function Reader({
     [geometry, liveArc],
   );
 
-  // A string, not the array: a fresh array every render would restart the scroll
+  // A string, so it compares by value: a fresh object every render would restart the scroll
   // listener every render. `modeW` is in it because entering a mode moves every
   // row on the page sideways, and the `?at=` tracker holds row elements it
   // measured before the move. `spine` is in it for a stronger reason than
   // sideways: the rail's width is taken out of the prose column's, so hiding it
   // rewraps every paragraph in the article and every row changes height.
-  const layoutKey = `${fit.columns.join(",")}|${proseOn}|${windowWidth}|${fit.modeW}|${fit.spine}`;
+  const layoutKey = `${windowWidth}|${fit.modeW}|${fit.spine}`;
 
   /**
    * **Is the prose on screen, for the reading-time recorder** — only this
-   * component knows. Text shown, and no band lying over it: `fit.modeW === 0`
+   * component knows. No band lying over it: `fit.modeW === 0`
    * alone is also true with no band open at all (Plain on a phone), which is
    * why `.band-covers` could not be the test.
    * docs/plans/260916c-show-where-you-have-spent-time-reading-in-the-spine-and-gutter.md
@@ -531,7 +416,7 @@ export function Reader({
   const setReadingCounting = owner?.readingTime.setCounting;
   /* A band that has stepped aside (`bandAway`) is not lying over anything. */
   const bandOverProse = bandOpen && fit.modeW === 0 && !bandAway;
-  const proseOnScreen = proseOn && !bandOverProse;
+  const proseOnScreen = !bandOverProse;
   useEffect(() => {
     setReadingCounting?.(proseOnScreen);
   }, [setReadingCounting, proseOnScreen]);
@@ -575,13 +460,14 @@ export function Reader({
       revisionId: null,
       view: "article",
       mode,
-      level: fit.columns.length,
+      /* No gist columns since 2026-09-29, so no granularity level to report. */
+      level: null,
       blockCount: article.blocks.length,
       rootBlockId: article.tree.nodes[article.tree.rootId]?.range[0] ?? null,
       blockIds: article.blocks.slice(from, from + FEEDBACK_BLOCK_IDS).map((b) => b.id),
     });
     return () => setFeedbackArticleContext(null);
-  }, [slug, article, mode, fit.columns.length, at]);
+  }, [slug, article, mode, at]);
 
 
   /**
@@ -1148,33 +1034,24 @@ export function Reader({
 
   /**
    * ↑ / ↓ step through one level of the tree, and *which* level is whichever
-   * column the pointer is sitting in — see keynav.ts. It writes no state of its
-   * own: it scrolls, and the listener above notices, exactly as it would for a
-   * wheel. Off any tagged column the stride falls back to the section, which is
-   * the unit `?at=` already stores.
-   *
-   * ← / → move that aim across the columns, so the level can be chosen without
-   * touching the mouse — Greg, 2026-08-26: "so that I can choose the level of
-   * granularity with keyboard when jumping up/down". The rungs they step
-   * between are the columns actually on screen, which is why the ladder is
-   * built here, beside `fit`, rather than inside the hook.
+   * zone the pointer is over — the spine steps by part, the prose by paragraph;
+   * see keynav.ts. It writes no state of its own: it scrolls, and the listener
+   * above notices, exactly as it would for a wheel. Off any tagged zone the
+   * stride falls back to the section, which is the unit `?at=` already stores.
    *
    * Suspended while the drawer is open. A reader looking at their questions is
    * not reading, and the article scrolling away underneath the dim — silently,
    * because they cannot see it move — is the kind of thing you only notice
    * afterwards, when you have lost your place.
    */
-  const nav = useMemo(
-    () => navPlan(geometry, fit.columns, proseOn),
-    [geometry, fit.columns, proseOn],
-  );
-  /* **← / → step Trajectory's stops while it is the mode**, and move the
-     stride everywhere else — keyboard.md § ← / → in Trajectory. The handler is
-     the band's own `step`, so the keys, the band's arrows and the door are one
-     rule. `null` in every other mode, which is the stride as it was. */
+  const nav = useMemo(() => navPlan(geometry), [geometry]);
+  /* **← / → step Trajectory's stops while it is the mode** — keyboard.md §
+     ← / → in Trajectory. The handler is the band's own `step`, so the keys, the
+     band's arrows and the door are one rule. `null` in every other mode, where
+     ← / → are the browser's. */
   const trajectoryKeys =
     mode === "trajectory" && trajectoryControl ? trajectoryControl.step : null;
-  const navDepth = useArrowNav(
+  useArrowNav(
     nav,
     article.blocks,
     sectionDepth(geometry),
@@ -1201,18 +1078,6 @@ export function Reader({
       ),
     };
   }, [mode, trajectoryControl, bandBack]);
-
-  /**
-   * The same step, taken with a finger — Greg, 2026-08-26: "jumps step-by-step
-   * if I scroll within a column, kinda like the up/down buttons". A swipe over
-   * a gist column moves one item at that column's level; the prose column keeps
-   * ordinary iPad scrolling, which is the point rather than a limitation. See
-   * swipe.ts and docs/project/touch.md.
-   *
-   * Reading mode only. Outline mode is gist columns all the way across, so
-   * there would be nothing left that scrolls continuously.
-   */
-  useSwipeNav(nav, article.blocks, proseOn && !drawerOpen);
 
   /**
    * Reading order, not ask order — the panel's arrows walk you *down the
@@ -1641,24 +1506,13 @@ export function Reader({
    */
   const address = useAddress();
 
-  /** Whether the paragraph-level nav labels are riding beside the prose. */
-  const leafOn = showText && fit.columns.includes(geometry.leafDepth);
-
   /**
-   * What stands where the `Paragraphs` pill would be when there is nothing for
-   * it to open, or `null` in the ordinary case — nav-labels.ts owns the rule.
-   *
-   * Read here for the bar below. Structure's band draws the same labels (its
-   * list face's rung 5, its columns' paragraph rows) and makes the same decision
-   * off the same `article` with `paragraphLabelsReady` (StructureMode.tsx), and
-   * `TableView` asks for itself.
-   */
-  const paragraphNotice = paragraphLabelNotice(article.navLabelStatus);
-
-  /**
-   * **Is the controls bar drawn at all?** Not since 2026-09-08, on most reading
-   * views — see `barHasContent` in layout.ts for what is left in it and why so
-   * little, and the plan for the reader who reported the empty strip.
+   * **Is the controls bar drawn at all?** Only for a visitor, since 2026-09-29:
+   * the read-only chip is all that is left in it. The Parts / Sections /
+   * Paragraphs pills that were the rest of it went with the Hierarchy mode
+   * (docs/plans/260929d-remove-hierarchy-mode-and-heading-numbers.md § 7). On
+   * a narrow mode view that chip is the only thing telling a visitor they are
+   * read-only, so the bar stays for it.
    *
    * The CSS half is `:root:not(:has(.controls))` in shell.css § the bar that
    * leaves while you read, which lets `--bar-bottom` fall to the status-bar
@@ -1666,31 +1520,7 @@ export function Reader({
    * `stickyOffset` and `stickyDestination` already answer `--safe-top` for an
    * absent bar.
    */
-  const showBar = barHasContent({
-    owner: owner !== null,
-    inMode,
-    offerableGists: offerableGistDepths.length,
-    showText,
-  });
-
-  /** The gist columns actually on screen — the leaf column isn't one of them. */
-  const shownGists = useMemo(
-    () => fit.columns.filter((d) => d !== geometry.leafDepth),
-    [fit.columns, geometry.leafDepth],
-  );
-
-  // Toggling writes the set into the URL, which also takes the columns off
-  // automatic — the window should not quietly overrule a choice the reader made.
-  // **And there is no way back to automatic** since the `auto` control went with
-  // the rest of the bar on 2026-09-05: only deleting `?cols=` by hand restores
-  // it. Deliberate — the pills are how a reader says what they want, and a
-  // control whose whole job is undoing them was part of what made this bar
-  // unreadable (docs/plans/260905d-declutter-the-reading-view-top-bars.md).
-  const toggle = (d: number) => {
-    const next = new Set(fit.columns);
-    next.has(d) ? next.delete(d) : next.add(d);
-    setCols([...next].sort((a, b) => a - b));
-  };
+  const showBar = owner === null;
 
   /**
    * **The band the modes take turns in — one switch, and the compiler checks
@@ -1713,8 +1543,8 @@ export function Reader({
    * branch, the owner-only bands, and `key={mode}` on `ConversationBand`, which
    * is correctness rather than tidiness.
    *
-   * `plain` and `hierarchy` return `null` explicitly: they are modes with no
-   * band, not a default that would silently accept a fifteenth mode.
+   * `plain` returns `null` explicitly: it is a mode with no band, not a
+   * default that would silently accept a fifteenth mode.
    *
    * docs/plans/260906c-separate-article-access-reader-composition-and-mode-controllers.md
    * § Stage 4b, and docs/project/new-mode.md.
@@ -1724,11 +1554,9 @@ export function Reader({
    */
   function modeBand(): ReactNode {
     switch (mode) {
-      /* **The two modes with no band at all**, said rather than fallen into.
-         Plain is the way out to the article and the hierarchy is the gist
-         columns; neither has anything to put in the middle. */
+      /* **The mode with no band at all**, said rather than fallen into. Plain
+         is the way out to the article; it has nothing to put in the middle. */
       case "plain":
-      case "hierarchy":
         return null;
       case "chat":
         /* **The key is inert today, and it is kept for the day it is not.**
@@ -2122,16 +1950,6 @@ export function Reader({
       className={`reader spine-${fit.spine}${fit.alone ? " text-alone" : ""}${
         fit.modeW === 0 ? " band-covers" : ""
       }${bandBack ? " band-away" : ""}`}
-      /* **Which column ← / → are pointed at** — styles.css § the aimed column,
-         keyboard.md. It is here rather than on the table for two reasons, and
-         the first is the one that forced it: the fisheye panels are `position:
-         fixed` elements *beside* the table, they are opaque, and in Hierarchy
-         they cover every gist column — so the surface that has to carry the tint
-         is not inside the table at all. `.reader` is the nearest thing that
-         holds both. The second is that `TableView` is `memo`ised over ~2,200
-         cells and no longer takes `navDepth` as a prop, so moving the pointer
-         re-renders nothing below this element. */
-      data-aim={navDepth}
       /* The wrapper must be as wide as its content for the sticky bars inside it
          to have anywhere to slide — a sticky element is clamped to its containing
          block, so one exactly its own width has a sticky range of zero and never
@@ -2212,8 +2030,8 @@ export function Reader({
 
           Two things say what the old chrome said, more quietly: the Dock at the
           foot of the page names the open mode and is the way out of it, and
-          the URL still carries `?spine=`, `?text=` and `?cols=` for anybody who
-          wants to pin the layout by hand (docs/project/url-state.md). */}
+          the URL still carries `?spine=` for anybody who wants to pin the rail
+          by hand (docs/project/url-state.md). */}
       {/* **And since 2026-09-08 it is not drawn at all when that leaves it
           empty**, which on a reading view is most of the time: `showBar` above,
           `barHasContent` in layout.ts, and shell.css for the 44px that then
@@ -2234,73 +2052,6 @@ export function Reader({
           {/* First of all: what footing you are reading on outranks every control
               that follows. */}
           {!owner && <ViewOnlyChip sessionUnconfirmed={sessionUnconfirmed} />}
-          {/* The granularity controls belong to the table-of-contents mode, so
-              they go with it. Leaving them on screen in another mode would offer
-              columns that are not there — a control that looks live, does
-              nothing, and gives the reader no way to tell which. Nothing takes
-              their place: the mode's name is on the Dock, and saying it twice is
-              what this bar was full of.
-  
-              **They wear the column's full name now** — `Parts`, `Sections`,
-              `Paragraphs` rather than `L1`, `L2`, `Para`. The numbers were
-              defensible while the table's own header row said the words above
-              each column; that row lost its height on 2026-09-05
-              (TableView.tsx § the head), so this is the only place a column is
-              named at all. tree.ts § `columnLabel`. */}
-          {!inMode && (
-            <>
-              {offerableGistDepths.map((d) => (
-                <Toggle
-                  key={d}
-                  className={PILL}
-                  pressed={shownGists.includes(d)}
-                  onPressedChange={() => toggle(d)}
-                  title={columnHint(d, geometry.leafDepth)}
-                >
-                  {columnLabel(d, geometry.leafDepth)}
-                </Toggle>
-              ))}
-              {/* The paragraph outline, beside the prose rather than instead of
-                  it. Only offered in reading mode: in outline mode this column is
-                  the view, and turning it off would leave nothing.
-  
-                  **And only while there are labels to draw.** Where there are
-                  not, the control is replaced by the sentence saying why rather
-                  than disabled with the sentence in its tooltip — a touch reader
-                  cannot open a tooltip, which is the argument that took the pills
-                  from `L3` to `Paragraphs` in the first place (tree.ts §
-                  `columnLabel`). A pill that opened a column of blank cells is
-                  the failure nav-labels.ts exists to prevent; a pill that opened
-                  a column of one repeated notice would be worse still.
-  
-                  **`|| leafOn` is the door back out, and it is not a hedge.**
-                  `toggle` is the only caller of `setCols` in this file, so
-                  replacing the control replaces the only way to *close* the
-                  column as well as the only way to open it. The leaf depth can
-                  already be on without this pill — `?cols=` naming it, shared or
-                  bookmarked — and such a reader was left with a wide column of
-                  one repeated sentence and nothing to shut it with: for ever, if
-                  the status is `failed`. So the notice stands in for the pill
-                  only while the column is shut, which is the case it was written
-                  for; once the column is open the pill comes back, because the
-                  column itself is already carrying the sentence
-                  (TableView § `withheldLeafCell`) and what the reader needs from
-                  the bar is the way out. GPT Sol's F2 on stage 1, 2026-09-06. */}
-              {showText &&
-                (paragraphPill(article.navLabelStatus, leafOn) === "toggle" ? (
-                  <Toggle
-                    className={PILL}
-                    pressed={leafOn}
-                    onPressedChange={() => toggle(geometry.leafDepth)}
-                    title={columnHint(geometry.leafDepth, geometry.leafDepth)}
-                  >
-                    {columnLabel(geometry.leafDepth, geometry.leafDepth)}
-                  </Toggle>
-                ) : (
-                  <span className="pill-note">{paragraphNotice}</span>
-                ))}
-            </>
-          )}
           {/* **Failures of the comment transport left this bar on 2026-09-08**,
               for the Dock's Comments button — which is the control they are about,
               and which is on screen whether or not this bar is. They were here
@@ -2333,8 +2084,6 @@ export function Reader({
            has the reason, and it is the same one `Origin` gives in
            Metadata.tsx. */
         slug={slug}
-        sections={sections}
-        layoutKey={layoutKey}
         /* The permalink base — this page's whole address, including every
            parameter added after this line was written, minus the one the link
            is about to set.
@@ -2355,14 +2104,7 @@ export function Reader({
            does not. TableView.tsx § `Props.linkBase`. */
         linkBase={addressWithout(address, "at")}
         geometry={geometry}
-        columns={fit.columns}
         layout={fit}
-        showText={proseOn}
-        /* **`navDepth` is not passed here any more**, and that is a small win
-           rather than an omission. It used to light a `<th>`, so every pointer
-           move re-rendered a memoised table of ~2,200 cells to change one
-           underline. The aim is now `data-aim` on `.reader` above and a rule in
-           styles.css § the aimed column, so it costs one attribute write. */
         onJump={jumpTo}
         notes={notes}
         noteReturn={noteReturn}

@@ -71,10 +71,11 @@ describe("adding an article no longer writes an arc", () => {
 });
 
 describe("what a visitor gets, and does not", () => {
-  it("still opens the hierarchy for free, with no arc built", () => {
-    // The tree, the zoom and the spine come from the payload the visitor already
-    // holds. Losing the arc must not cost them the mode itself.
-    expect(visitorGap("hierarchy", NOTHING_BUILT)).toBeNull();
+  it("still opens Structure for free, with no arc built", () => {
+    // The tree and the spine come from the payload the visitor already holds,
+    // and Structure's list face skips the arc rung without one. Losing the arc
+    // must not cost them the mode itself.
+    expect(visitorGap("structure", NOTHING_BUILT)).toBeNull();
   });
 
   it("draws no arc column rather than a partial one", () => {

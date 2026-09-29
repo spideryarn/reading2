@@ -1,18 +1,15 @@
 /**
- * The tabular granularity view — see tree.ts for the geometry, and
- * docs/project/granularity-zoom.md#the-tabular-view for the intent.
+ * The article's prose — one table row per block, and every mark, gutter and
+ * door the modes put on it.
  *
- * One row per block. Columns run coarse (left) to verbatim (right), exactly as
- * described in the brief: "so by scrolling rightwards, you get more detail. By
- * scrolling downwards, you progress through the chronology of the article."
- *
- * Two modes, one table:
- *  - Reading mode (text column on) — gists beside the real prose.
- *  - Outline mode (text column off) — rows collapse to their natural height and
- *    the same table becomes a compact, whole-article table of contents. The
- *    leaf column appears only here, carrying navLabels. That is the one place
- *    navLabels belong: navigation chrome, never shown in place of prose that
- *    could be displayed (granularity-zoom.md#node-shape).
+ * **A table because it was the tabular granularity view**: gist columns coarse
+ * to fine on the left, the prose on the right (granularity-zoom.md#the-tabular-view).
+ * Those columns went with the Hierarchy mode on 2026-09-29
+ * (docs/plans/260929d-remove-hierarchy-mode-and-heading-numbers.md), and the
+ * prose column is what is left. It stays a table because everything downstream
+ * addresses it as one — `tr[data-block]` for the reading position and the
+ * arrow keys, `td.text .prose` for comment offsets, `thead` for the sticky
+ * offsets — and none of that was worth moving for its own sake.
  */
 import {
   memo,
@@ -29,14 +26,10 @@ import type {
   Block,
   BlockId,
   Comment,
-  NavLabelStatus,
-  NodeId,
-  TreeNode,
 } from "../types.js";
 import { useRenderCount } from "./perf.js";
-import { columnLabel, type Geometry } from "./tree.js";
-import { paragraphLabelNotice } from "./nav-labels.js";
-import type { Layout } from "./layout.js";
+import type { Geometry } from "./tree.js";
+import type { Fit } from "./layout.js";
 import {
   annotateHtml,
   BAR_HUES,
@@ -60,15 +53,9 @@ import {
   type NoteReturn,
   type NoteStart,
 } from "./notes-view.js";
-import type { Section } from "./position.js";
-import { currentIndex, itemsFromCells, levelList, type ContextItem } from "./context.js";
-import { ContextPanel } from "./ContextPanel.js";
-import { useColumnContext } from "./useColumnContext.js";
-import { BlockRange } from "./BlockRef.js";
 import { BlockGutter } from "./BlockGutter.js";
 import { commentsByBlock } from "./comment-nav.js";
 import { costOn, NO_CLOCK, noteCost } from "./annotation-cost.js";
-import { SWIPE_ATTR } from "./swipe.js";
 import type { AnchoredThread } from "./useChatAnchors.js";
 import { Lightbox } from "./Lightbox.js";
 import {
@@ -453,8 +440,8 @@ const NOT_A_BLOCK_SELECTION = [
  * `detail === 0` is a click no pointer produced — a keyboard or
  * assistive-technology activation, which fires `click` with no preceding
  * `mouseenter`. Without this guard, tabbing to a link in the prose and pressing
- * Enter would move the selected row, paint the wash and shift `activeChain`,
- * on input that never touched the row. GPT Sol, 2026-09-07.
+ * Enter would move the selected row and paint the wash, on input that never
+ * touched the row. GPT Sol, 2026-09-07.
  */
 function isBlockSelectionTap(event: {
   target: EventTarget | null;
@@ -466,85 +453,15 @@ function isBlockSelectionTap(event: {
   return target.closest(NOT_A_BLOCK_SELECTION) === null;
 }
 
-/**
- * **The leaf column for an article whose paragraph labels are not there**, or
- * `null` when they are and it should draw itself as usual.
- *
- * One `<td>` for the whole table rather than one per paragraph, because that is
- * the difference between saying something once and repeating it two thousand
- * times. It carries the gist columns' own classes so it is still visibly that
- * column, plus `labels-withheld`, which is what takes the pointer off it —
- * there is nothing here to jump to.
- *
- * A free function rather than a branch inside the cell map, so the map keeps a
- * single job. `paragraphLabelNotice` is the rule and the words
- * (src/web/nav-labels.ts); nothing about the decision varies with the row.
- */
-function withheldLeafCell(
-  status: NavLabelStatus,
-  columns: readonly number[],
-  leafDepth: number,
-  rows: number,
-  pinLeft: number | undefined,
-  pinRight: number | "text" | undefined,
-): ReactElement | null {
-  const notice = paragraphLabelNotice(status);
-  if (notice === null) return null;
-  /* **Only where the column would have been drawn**, and this line is a bug
-     found in a browser on 2026-09-06 rather than a precaution. `columns` is what
-     `<colgroup>` allocates a `<col>` for, and the leaf is not in it unless the
-     reader asked (`fitView` never opens it by itself). Without this test the row
-     emitted one more `<td>` than the table had columns, so the extra cell took
-     the *prose* column's width and `td.text` came out 0px wide, off the right
-     edge of the window: the whole article invisible, with nothing thrown and
-     nothing logged. Withholding a layer that is not on screen is not a thing to
-     announce. */
-  if (!columns.includes(leafDepth)) return null;
-  return (
-    <td
-      rowSpan={rows}
-      data-nav-depth={leafDepth}
-      className={[
-        "gist",
-        `depth-${leafDepth}`,
-        "leaf",
-        "labels-withheld",
-        leafDepth === pinLeft ? "pin-left" : "",
-        leafDepth === pinRight ? "pin-right" : "",
-      ]
-        .filter(Boolean)
-        .join(" ")}
-    >
-      <div className="sticky">
-        <div className="nav-label nav-label-absent">{notice}</div>
-      </div>
-    </td>
-  );
-}
-
 interface Props {
   article: Article;
-  /** Built once in App, because the reading-position code needs it too. */
+  /** Built once in Reader, because the reading-position code needs it too. */
   geometry: Geometry;
-  /** Visible column depths, coarse to fine. Chosen by layout.ts § fitView. */
-  columns: number[];
-  /** Explicit pixel widths, one per rendered column. See layout.ts. */
-  layout: Layout;
-  showText: boolean;
-  /* **No `navDepth` here since 2026-09-05.** The depth ← / → are aimed at used
-     to come in as a prop so the header row could light the matching `<th>`.
-     That row has no height now, and the aim is drawn by tinting the column —
-     which has to reach the fisheye panels, which are `position: fixed` outside
-     this table. So it is one `data-aim` attribute on `.reader` (App.tsx) and a
-     rule in styles.css § the aimed column, and this component stops re-rendering
-     on every twitch of the pointer. The cells still carry `data-nav-depth`,
-     which is what that rule matches and what keynav.ts resolves an aim with. */
-  /* **No `arcCells` here since 2026-09-05.** The L0 column drew the arc — one
-     sentence per part, with a `3 / 7` step marker and a loading tint while the
-     stage was still running — and Greg took the column out: "let's get rid of
-     the 'Arg' button and functionality altogether". The arc itself is alive and
-     well; Reader hands it through `StructureBand` to `OutlinePanel` instead
-     (docs/plans/260905d-declutter-the-reading-view-top-bars.md § Decisions 5). */
+  /** The prose column's width, and whether it overflows. See layout.ts. */
+  layout: Fit;
+  /* **No gist columns since 2026-09-29** — no `columns`, no `showText`, and no
+     `sections` or `layoutKey`, which only the fisheye panels over those
+     columns read. docs/plans/260929d-remove-hierarchy-mode-and-heading-numbers.md. */
   /** Jump to a block, recording it in the URL. See App § useReadingPosition. */
   onJump(blockId: BlockId): void;
   /**
@@ -669,13 +586,9 @@ interface Props {
   hitStrength?: Map<BlockId, number> | undefined;
   /** The palette slots of every search that matched in each block — `blockHues`. */
   hitHues?: Map<BlockId, number[]> | undefined;
-  /** The sections, for the live "which cell am I in" — see useColumnContext.ts. */
-  sections: Section[];
-  /** Same key as the `?at=` tracker: re-measure when the columns change. */
-  layoutKey: string;
   /**
-   * This page's address with `at` dropped — `"/read/x?cols=0,2"`. What the 551
-   * block permalinks in the gutter and the gist cells are built from.
+   * This page's address with `at` dropped — `"/read/x?mode=summary"`. What the
+   * 551 block permalinks in the gutter are built from.
    *
    * **It is a prop rather than a read of `location` because this component is
    * `memo`ised.** `blockHref` used to read the address bar during render,
@@ -728,8 +641,8 @@ interface Props {
  * reading line — a deliberate feature (docs/project/url-state.md) — and that
  * re-renders `Reader` **87–88 times during one scroll** of a 551-block article,
  * measured 2026-09-04. None of this table's 29 props depends on `at`, so every
- * one of those renders reconciled 551 rows, ~2,200 cells, `thead`, `colgroup`,
- * `ColumnPanels` and `Lightbox` to produce the same tree.
+ * one of those renders reconciled 551 rows, their cells, `thead`, `colgroup`
+ * and `Lightbox` to produce the same tree.
  *
  * The default shallow comparison is deliberate, and a custom `areEqual` here
  * would be a bug rather than an optimisation: the tempting one compares
@@ -757,9 +670,7 @@ export const TableView = memo(TableViewInner);
 function TableViewInner({
   article,
   geometry,
-  columns,
   layout,
-  showText,
   onJump,
   notes,
   noteReturn,
@@ -781,8 +692,6 @@ function TableViewInner({
   hitMarks,
   hitStrength,
   hitHues,
-  sections,
-  layoutKey,
   linkBase,
   slug,
   afterBlock,
@@ -790,8 +699,6 @@ function TableViewInner({
   useRenderCount("TableView");
   const { blocks } = article;
   const [hoveredRow, setHoveredRow] = useState<number | null>(null);
-  /** The panel entry under the pointer, if any — see activeChain below. */
-  const [hoveredNode, setHoveredNode] = useState<NodeId | null>(null);
   /**
    * The figure the reader asked to see larger, or null. A *copy* of the html
    * rather than the node itself, because the node belongs to injected markup
@@ -801,97 +708,6 @@ function TableViewInner({
    */
   const [zoomed, setZoomed] = useState<ZoomedFigure | null>(null);
   const bodyRef = useRef<HTMLTableSectionElement>(null);
-
-  /**
-   * Column context — see docs/project/column-context.md. In reading mode
-   * every gist column is drawn by a ContextPanel laid over it, and the cells
-   * underneath draw only their boundaries; the panel's current entry carries
-   * everything the cell's sticky box used to. In outline mode the table is
-   * the list, so the cells draw themselves as they always did.
-   *
-   * **And there must be a column for a panel to be laid over.** `showText`
-   * alone was enough for as long as reading mode always had at least one gist
-   * column; since 2026-08-27 it can have none (layout.ts § gistsThatFit), and
-   * on that path `ColumnPanels` mounted with an empty depth set and
-   * `useColumnContext` went on measuring every section row on every scroll to
-   * decide which entry of nothing to highlight. Pure waste, and it landed on
-   * the narrow window least able to afford it — performance.md is specifically
-   * about this hook's geometry work. Found by GPT Sol, 2026-08-27.
-   */
-  const panels = showText && columns.length > 0;
-
-  /**
-   * Reading mode only: a vertical swipe over a gist column steps one item
-   * rather than scrolling (swipe.ts). The panel over the column is the surface
-   * a finger usually lands on, but not always — it is a bounded window, so the
-   * column above and below it is bare cell — and the two must behave the same,
-   * or the stride would depend on how far down the column you happened to
-   * touch.
-   *
-   * **Gated on reading mode, and the gate is the CSS's as much as the hook's.**
-   * `touch-action` takes native scrolling away wherever the attribute lands,
-   * and outline mode has no prose column — so tagging these cells there would
-   * leave the whole viewport unable to scroll continuously at all. The hook is
-   * disabled there too, but a disabled hook does not put the scrolling back.
-   */
-  const swipeable = panels ? { [SWIPE_ATTR]: "" } : {};
-
-  /* The items of each gist column, in document order, with the row each one
-     starts on. Every column is now built the same way; until 2026-09-05 depth 0
-     was a special case that read the arc's cells instead, carrying a sentence
-     and a `3 / 7` marker where the others carry a title. `ContextItem` carried
-     a `text` and a `step` for it, and lost both the same day — context.ts. */
-  const colKey = columns.join(",");
-  const levels = useMemo(() => {
-    const m = new Map<number, { items: ContextItem[]; starts: number[] }>();
-    // `filter(Boolean)` before `Number`: an empty column set splits to [""],
-    // and Number("") is 0, which would conjure a level out of nothing.
-    for (const d of colKey.split(",").filter(Boolean).map(Number)) {
-      if (d === geometry.leafDepth) continue; // leaves have no gist to list
-      m.set(
-        d,
-        itemsFromCells(geometry.cells[d] ?? [], (row) => blocks[row]?.id, geometry.supplementOf),
-      );
-    }
-    return m;
-  }, [colKey, geometry, blocks]);
-  const depths = useMemo(() => [...levels.keys()], [levels]);
-  // The ancestor path of the hovered row — used to light up the chain across
-  // every level at once, which is the whole point of seeing them side by side.
-  // The panels carry it too, since they are the levels now (ContextList.tsx).
-  // A panel that unmounts fires no mouseleave, so a hover held when the columns
-  // change — or when the mode switches to outline, where there are no panels —
-  // would win over every row hover for the rest of the session.
-  // biome-ignore lint/correctness/useExhaustiveDependencies: deliberate re-run triggers
-  useEffect(() => setHoveredNode(null), [panels, colKey]);
-
-  const activeChain = useMemo<Set<NodeId>>(() => {
-    // A panel entry wins over a row, because pointing at one means leaving the
-    // table: `tbody`'s mouseleave clears hoveredRow on the way. The chain is
-    // the entry's ancestors, so pointing at a section still lights the part it
-    // belongs to and whatever is coarser than that — one entry per coarser
-    // column, which is what a row hover gives. Its own sections are not lit:
-    // a part holds many, and lighting all of them would be a different gesture.
-    if (hoveredNode) {
-      const chain = new Set<NodeId>();
-      for (let id: NodeId | null = hoveredNode; id; id = article.tree.nodes[id]?.parent ?? null) {
-        if (chain.has(id)) break; // a cycle would hang the render; the tree should never have one
-        chain.add(id);
-      }
-      return chain;
-    }
-    return new Set(hoveredRow === null ? [] : geometry.chains[hoveredRow]);
-  }, [hoveredNode, hoveredRow, geometry, article.tree.nodes]);
-  /** The crumb on a landmark's tooltip: the part a section is in, or which part this is. */
-  const crumbFor = (item: ContextItem): string | null => {
-    const parent = item.node.parent === null ? undefined : article.tree.nodes[item.node.parent];
-    if (parent && parent.depth >= 1) return parent.title;
-    const level = levels.get(item.node.depth);
-    // By node, not by identity: a group heading's item is built fresh in
-    // levelList and is never the same object as the one in `levels`.
-    const n = level ? level.items.findIndex((i) => i.node.id === item.node.id) + 1 : 0;
-    return n ? `Part ${n} of ${level!.items.length}` : null;
-  };
 
   /**
    * The article's blocks by id, for `resolveAnchors` above — which is where
@@ -1301,73 +1117,6 @@ function TableViewInner({
     proseHtml,
   ]);
 
-  // Whether the end columns need to read as a layer depends on whether the
-  // table actually outruns the window — which App knows exactly, because it
-  // chose the width. Not a viewport breakpoint: the column count changes with
-  // the mode as well as with the window.
-  const { overflowing } = layout;
-
-  // With a deep tree the columns can outrun the viewport, so the page scrolls
-  // horizontally and the two ends pin: the coarsest column on the left keeps
-  // the big picture, the prose on the right stays readable, and the middle
-  // levels scroll between them.
-  const pinLeft = columns[0];
-  const pinRight = showText ? "text" : columns[columns.length - 1];
-
-  /**
-   * **The leaf column, for an article with no paragraph labels to put in it** —
-   * one `<td>` spanning the whole table, or `null` when the labels are there and
-   * the column draws itself as usual. nav-labels.ts owns the rule and the words.
-   *
-   * Built once, out here, rather than decided per cell, and both halves of that
-   * matter. The whole column makes **one** decision, where a per-row test could
-   * withhold some rows and draw others — the partly-drawn level `outline.ts`
-   * calls "a lie about the structure". And nothing in it varies with the row, so
-   * the body below only has to place it.
-   *
-   * The cells it stands in for are `navLabel ?? title`, and on a leaf `title` is
-   * normally `""` — so without this the column is a run of blank rows, which
-   * reads as forty paragraphs the article could not name rather than as work
-   * that has not finished (tree.ts § "a run of forty blank leaf cells"). The
-   * sticky wrapper is the gist columns' own, so the sentence stays on screen
-   * wherever the reader is standing.
-   *
-   * **Which readers see it, checked in a browser rather than assumed.** The pill
-   * offers the notice instead of the column (App.tsx), so a reader cannot open
-   * this column while the labels are missing — what is left is a `?cols=` that
-   * names the leaf depth by hand, and a reader who had it open when the labels
-   * went. The table's own outline mode (`showText` false), where this column
-   * would have been the view, is unreachable: nothing sets that flag any more
-   * and `?text=0` is rewritten to `?mode=structure`, whose narrow face is the band
-   * (`OutlinePanel`) and a different feature — docs/project/browser-testing.md
-   * says so, and it was confirmed on 2026-09-06.
-   */
-  const withheldLeaf = withheldLeafCell(
-    article.navLabelStatus,
-    columns,
-    geometry.leafDepth,
-    blocks.length,
-    pinLeft,
-    pinRight,
-  );
-
-  /**
-   * The columns the cell loop still draws — every one of them, unless the leaf
-   * column has been withheld, in which case that one is not a cell loop's
-   * business at all.
-   *
-   * **Taken out here rather than branched on per cell**, and the reason is that
-   * the loop runs once per column per block: a withheld column is one fact about
-   * the article, and asking it again for every paragraph would be the same
-   * answer two thousand times. It also keeps the loop to the one job it had.
-   *
-   * The withheld cell is drawn straight after this list, which is where it
-   * belongs: `fitView` returns `[...gists, leafDepth]`, so the leaf is always
-   * the rightmost of the table's own columns (only the prose sits right of it).
-   */
-  const drawnColumns =
-    withheldLeaf === null ? columns : columns.filter((d) => d !== geometry.leafDepth);
-
   return (
     <>
     <table
@@ -1378,26 +1127,9 @@ function TableViewInner({
          row), so that rule went and this class is now only what centres the
          masthead over a centred column (styles.css § plain, centred).
 
-         The condition is `no gist columns AND the prose is on`, not
-         `one column`: a single *gist* column still has to say which level it
-         is, and in outline mode that is the only place saying so. Reached
-         three ways — a phone in reading mode, and either width of mode band.
-
-         **The head could not have gone on being `display: none` here**, which
-         is worth stating because it looks like the obvious tidy-up: that takes
-         the element out of the box tree, and `useColumnContext.ts` measures
-         `thead th[data-col]` for every fisheye panel's rectangle. A hidden head
-         means panels with no geometry, over gist cells that deliberately draw
-         nothing while panels are on. Zero height costs none of that.
-
-         **`only-prose` also switches the aim tint off**, which is the other
-         thing it now does: with no gist columns the prose is the only rung
-         there is, the pointer rests on it permanently, and the tint would be a
-         standing orange cast over the whole article rather than a choice
-         between columns. styles.css § the aimed column. */
-      className={`zoom ${showText ? "reading" : "outline"}${overflowing ? " overflowing" : ""}${
-        columns.length === 0 && showText ? " only-prose" : ""
-      }`}
+         Since the gist columns went on 2026-09-29 it is always true, and it
+         stays because the stylesheet keys off it. */
+      className={`zoom reading only-prose${layout.overflowing ? " overflowing" : ""}`}
       style={{ width: layout.tableW }}
     >
       <colgroup>
@@ -1408,53 +1140,17 @@ function TableViewInner({
           <col key={i} style={{ width: w }} />
         ))}
       </colgroup>
-      {/* **A head with no height, and every one of its jobs intact.** Greg
-          asked for the row of `PARTS L1` / `SECTIONS L2` labels back as
-          vertical space, 2026-09-05, and the words moved into the controls
-          bar's pills (App.tsx § the controls bar). What could not move is
-          everything else this row does:
-
-           - `data-col` is where `useColumnContext.ts` gets each column's
-             `left`, `width` and `bottom` from. Delete the head and every
-             fisheye panel returns `null`, over gist cells that draw nothing
-             while panels are on — Hierarchy's Parts and Sections columns
-             become empty boxes.
-           - `scope="col"` is what makes a screen reader say "Sections" before
-             reading a cell. The pills are outside the table and can never do
-             this: they are buttons, not headers.
-           - The head's sticky `top` is the y a panel starts at, and at zero
-             height that is the bar's own bottom edge — so the panels now sit
-             directly under the bar rather than a head's height below it.
-
-          So the label wears the shared `.sr-only` clip-rect utility rather than
-          removed, and the cell keeps its position in the table's layout. The
-          `L{d}` depth tag went with the visible row: a number that said where a
-          column sits in the tree rather than what is in it, and nothing to read
-          out loud. styles.css § the head with no row. */}
+      {/* **A head with no height**, kept for the screen reader's column
+          header and for the sticky offsets that measure it (styles.css § the
+          head with no row). The gist columns' headers went on 2026-09-29. */}
       <thead>
         <tr>
-          {columns.map((d) => (
-            <th
-              key={d}
-              scope="col"
-              data-nav-depth={d}
-              data-col={d}
-              className={[
-                d === pinLeft ? "pin-left" : "",
-                d === pinRight ? "pin-right" : "",
-              ].filter(Boolean).join(" ")}
-            >
-              <span className="sr-only">{columnLabel(d, geometry.leafDepth)}</span>
-            </th>
-          ))}
-          {showText && (
-            /* The prose column is the finest granularity there is, so the
-               arrows mean the same thing over it as over the leaf column: one
-               paragraph at a time. Leaves are 1:1 with blocks (src/hierarchy.ts). */
-            <th scope="col" data-nav-depth={geometry.leafDepth} className="text pin-right">
-              <span className="sr-only">Text verbatim</span>
-            </th>
-          )}
+          {/* The prose column is the finest granularity there is, so ↑ / ↓
+              over it step one paragraph at a time. Leaves are 1:1 with blocks
+              (src/hierarchy.ts). */}
+          <th scope="col" data-nav-depth={geometry.leafDepth} className="text pin-right">
+            <span className="sr-only">Text verbatim</span>
+          </th>
         </tr>
       </thead>
       {/* biome-ignore lint/a11y/useKeyWithClickEvents: the click being handled
@@ -1642,75 +1338,7 @@ function TableViewInner({
             }}
             className={hoveredRow === row ? "row-active" : undefined}
           >
-            {drawnColumns.map((depth) => {
-              const cell = geometry.cellAt.get(`${depth}:${row}`);
-              if (!cell) return null; // covered by a rowSpan above
-              const { node } = cell;
-              const active = activeChain.has(node.id);
-              return (
-                <td
-                  key={depth}
-                  rowSpan={cell.rowSpan}
-                  data-nav-depth={depth}
-                  {...swipeable}
-                  className={[
-                    "gist",
-                    // On the <td>, NOT the <col>: custom properties inherit
-                    // through the DOM tree, and a <col> is not an ancestor of a
-                    // cell. Only background/border/width/visibility cross from
-                    // column to cell, by a special table mechanism that has
-                    // nothing to do with inheritance — so `--tint` set on the
-                    // <col> resolves on an element that nothing reads it from.
-                    `depth-${depth}`,
-                    active ? "active" : "",
-                    cell.continuation ? "continuation" : "",
-                    depth === geometry.leafDepth ? "leaf" : "",
-                    depth === pinLeft ? "pin-left" : "",
-                    depth === pinRight ? "pin-right" : "",
-                  ].filter(Boolean).join(" ")}
-                  onClick={() => onJump(node.range[0])}
-                >
-                  {/* A gist cell under a panel draws only its boundary; the
-                      panel's current entry carries its content. The leaf
-                      column is never under a panel — it has no gist, and
-                      context.ts lists nothing for it (granularity-zoom.md#node-shape). */}
-                  {!cell.continuation && !(panels && depth !== geometry.leafDepth) && (
-                    <div className="sticky">
-                      {node.gist ? (
-                        <>
-                          <div className="title">
-                            {node.title}
-                            {node.sourceHeading && (
-                              <span className="own" title="the author's own heading">§</span>
-                            )}
-                          </div>
-                          <p className="gist-text">{node.gist}</p>
-                          <BlockRange
-                            className="range"
-                            range={node.range}
-                            onJump={onJump}
-                            linkBase={linkBase}
-                          />
-                        </>
-                      ) : (
-                        // A leaf: navigation chrome only, and only in outline mode.
-                        <div className="nav-label">{node.navLabel ?? node.title}</div>
-                      )}
-                    </div>
-                  )}
-                </td>
-              );
-            })}
-            {/* **The leaf column, when there is nothing to put in it** — drawn
-                on the first row and spanning the rest, so it is one sentence
-                about the article rather than a blank cell per paragraph.
-                `withheldLeafCell` above says why, and `drawnColumns` is what
-                took the leaf out of the loop that would otherwise have drawn
-                it here. `null` on every other row, which is exactly what a
-                rowSpan needs from the rows it covers. */}
-            {row === 0 && withheldLeaf}
-            {showText && (
-              // biome-ignore lint/a11y/useKeyWithClickEvents: there is deliberately no keyboard equivalent. This exists so a finger can say which row it is on, and `isBlockSelectionTap` refuses a click no pointer produced for exactly that reason — a keyboard reader reaches the gutter by tabbing to it, where `:focus-visible` reveals it at full strength on any row.
+            {/* biome-ignore lint/a11y/useKeyWithClickEvents: there is deliberately no keyboard equivalent. This exists so a finger can say which row it is on, and `isBlockSelectionTap` refuses a click no pointer produced for exactly that reason — a keyboard reader reaches the gutter by tabbing to it, where `:focus-visible` reveals it at full strength on any row. */}
               <td
                 data-nav-depth={geometry.leafDepth}
                 /* **Selecting this block**, which on a touch device is what
@@ -1880,33 +1508,10 @@ function TableViewInner({
                 {/* The open mode's door, after its block — `Props.afterBlock`. */}
                 {afterBlock?.blockId === block.id && afterBlock.node}
               </td>
-            )}
           </tr>
         ))}
       </tbody>
     </table>
-    {/* One panel per gist column, laid over it, following the focus line —
-        see useColumnContext.ts. `depths` and not `panels` alone: `columns` can
-        be the leaf column on its own (`?cols=3`, or Para with every gist pill
-        off), which passes `panels` and yields no levels at all — and then the
-        hook measures every row on every scroll to decide which entry of nothing
-        to highlight. Same waste `panels` was given its `columns.length` guard
-        for in 2026-08-27; that guard simply cannot see the leaf column, because
-        `levels` is what drops it. */}
-    {panels && depths.length > 0 && (
-      <ColumnPanels
-        sections={sections}
-        depths={depths}
-        layoutKey={layoutKey}
-        levels={levels}
-        nodes={article.tree.nodes}
-        pinLeft={pinLeft}
-        activeChain={activeChain}
-        crumbFor={crumbFor}
-        onJump={onJump}
-        onHoverNode={setHoveredNode}
-      />
-    )}
     {/* One overlay for the whole article, always mounted and empty until a
         figure is pressed. Mounted rather than conditionally rendered because
         `showModal()` has to be called on an element that is already in the
@@ -1924,86 +1529,6 @@ function TableViewInner({
          a stranger's href and returns a string. */
       onJump={(blockId) => onJump(blockId as BlockId)}
     />
-    </>
-  );
-}
-
-/* ---------------------------------------------------- the gist panels ------
-
-   **This exists to keep a scroll out of the table's renderer.**
-
-   `useColumnContext` samples geometry on every animation frame of a scroll and
-   calls `setLive` whenever the answer changes — which, near the masthead where
-   the header is still sticking, is most frames. While that hook was called by
-   `TableView`, each of those was a re-render of `TableView`: the whole
-   block-by-column map, several hundred rows of it, to move three overlays a few
-   pixels. GPT Sol found this, and it is much the largest thing a scroll used to
-   cost here.
-
-   Owning the hook one level down changes nothing about what is drawn. The
-   panels re-render per frame exactly as before; the table no longer does.
-
-   The traffic that still goes upward is deliberate and rare: hovering a panel
-   entry calls `onHoverNode`, and the chain it lights crosses every column, so
-   that one *must* re-render the table. A hover is a gesture; a scroll is sixty
-   frames a second. */
-interface ColumnPanelsProps {
-  sections: Section[];
-  depths: number[];
-  layoutKey: string;
-  levels: Map<number, { items: ContextItem[]; starts: number[] }>;
-  nodes: Record<NodeId, TreeNode>;
-  pinLeft: number | undefined;
-  activeChain: Set<NodeId>;
-  crumbFor: (item: ContextItem) => string | null;
-  onJump: (blockId: BlockId) => void;
-  onHoverNode: (id: NodeId | null) => void;
-}
-
-function ColumnPanels({
-  sections,
-  depths,
-  layoutKey,
-  levels,
-  nodes,
-  pinLeft,
-  activeChain,
-  crumbFor,
-  onJump,
-  onHoverNode,
-}: ColumnPanelsProps) {
-  useRenderCount("ColumnPanels");
-  const live = useColumnContext({ sections, depths, enabled: true, layoutKey });
-  /* Built once per change of *position* rather than once per render: a fresh
-     `entries` array would send every panel back through its layout effect. */
-  const panelLists = useMemo(
-    () =>
-      new Map(
-        [...levels].map(([d, l]) => [
-          d,
-          levelList(l.items, currentIndex(l.starts, live.focusRow), nodes),
-        ]),
-      ),
-    [levels, live.focusRow, nodes],
-  );
-  return (
-    <>
-      {[...panelLists].map(([d, entries]) => (
-        <ContextPanel
-          key={d}
-          depth={d}
-          entries={entries}
-          rect={live.rects.get(d) ?? null}
-          viewportH={live.viewportH}
-          stableH={live.stableH}
-          clipLeft={live.clipLeft}
-          pinned={d === pinLeft}
-          activeChain={activeChain}
-          crumbFor={crumbFor}
-          onJump={onJump}
-          onHoverNode={onHoverNode}
-        />
-      ))}
     </>
   );
 }

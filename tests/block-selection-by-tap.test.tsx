@@ -130,20 +130,11 @@ function articleFrom(loaded: Loaded): Article {
  */
 function propsFor(article: Article, hitMarks?: ReadonlyMap<BlockId, readonly Mark[]>) {
   const geometry = buildGeometry(article.tree, article.blocks);
-  const gistDepths = geometry.columnDepths.filter((d) => d < geometry.leafDepth);
-  const fit = fitView({
-    windowWidth: 1400,
-    gistDepths,
-    leafDepth: geometry.leafDepth,
-    showText: true,
-    chosen: null,
-  });
+  const fit = fitView({ windowWidth: 1400 });
   return {
     article,
     geometry,
-    columns: fit.columns,
     layout: fit,
-    showText: true,
     onJump: vi.fn(),
     comments: [],
     openComment: null,
@@ -156,8 +147,6 @@ function propsFor(article: Article, hitMarks?: ReadonlyMap<BlockId, readonly Mar
     onChatAbout: vi.fn(),
     onHelp: vi.fn(),
     hitMarks,
-    sections: [],
-    layoutKey: "test",
     linkBase: "",
     slug: "noema-mythology-of-conscious-ai",
   };

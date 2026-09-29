@@ -214,7 +214,7 @@ describe("beginJump and the flash", () => {
 
 describe("stepping does not flash", () => {
   function Harness() {
-    useArrowNav({ ladder: [0], starts: [Array.from({ length: 30 }, (_, i) => i)] }, BLOCKS, 0);
+    useArrowNav({ starts: [Array.from({ length: 30 }, (_, i) => i)] }, BLOCKS, 0);
     return null;
   }
 

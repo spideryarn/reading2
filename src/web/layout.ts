@@ -1,33 +1,16 @@
 /**
- * Choosing which columns to show, and how wide — the pure half of "§ fitting".
+ * How wide the prose is, and how wide the mode band beside it — the pure half of
+ * "§ fitting".
  *
- * Kept out of App.tsx so it can be tested without a DOM: every number below is
- * checkable arithmetic, and the worked examples in
- * granularity-zoom.md#too-many-levels-fit-the-columns-dont-just-scroll-them are
- * the test cases.
+ * Kept out of Reader.tsx so it can be tested without a DOM: every number below
+ * is checkable arithmetic.
  *
- * The problem, from that doc: minimum widths plus horizontal scrolling works,
- * but on any laptop it leaves a column permanently buried under the pinned
- * prose — three gist columns and the reading column come to 70rem, so a 1000px
- * window is short before you have done anything, and scrolling to a column you
- * can never see all of is not really an answer. So the view chooses.
- *
- * Two rules carry it:
- *
- *  - **Shrink first, drop second.** Gists squeeze from a comfortable 15rem down
- *    to 11rem before any level is given up.
- *  - **L0 is not a candidate at all** — the spine already shows what it would,
- *    and since 2026-09-05 it is not an offerable column from any source
- *    (`offerableGists`). Among what is left, the *finest* goes first: a reader
- *    squeezed to one column is choosing between "the part I'm in" and "the
- *    paragraph I'm in", and the part is what orients them, so L2 goes before
- *    L1. See the `chosen === null` branch of `fitView` for the history.
- *
- * The detail column — prose in reading mode, the leaf column in outline mode —
- * takes whatever is left, so the table fills the window exactly when it can and
- * overflows by a known amount when it can't. Knowing that amount is what lets
- * TableView draw the pinned ends as a layer only when something is actually
- * underneath them, rather than guessing from a viewport breakpoint.
+ * **There were gist columns here until 2026-09-29**, and most of this file's
+ * history is the negotiation between them and the prose — shrink first, drop
+ * second, L0 never a candidate. They went with the Hierarchy mode
+ * (docs/plans/260929d-remove-hierarchy-mode-and-heading-numbers.md), which
+ * leaves two layouts: the prose alone (`fitView`), and the prose beside a mode
+ * band (`fitMode`). granularity-zoom.md keeps the history of the columns.
  */
 
 /**
@@ -61,8 +44,9 @@
  */
 export const SPINE_W = 12;
 
-const GIST_IDEAL = 240; // 15rem — comfortable for a one-sentence gist
-/* Exported for `tests/spine-width.test.ts` alone: both breakpoints in styles.css
+/* **The narrowest a gist column read at, when there were gist columns** — and
+   still a term of the phone breakpoint, which is why it outlived them.
+   Exported for `tests/spine-width.test.ts` alone: both breakpoints in styles.css
    are `GIST_MIN + PROSE_MIN + SPINE_W − 1`, performed by hand because a `@media`
    query cannot read a custom property, and that test is the only thing that can
    notice when one of them moves and the others don't. **The mode crossover is
@@ -139,19 +123,17 @@ export const MODE_PROSE_FLOOR = 400; // 25rem
  * **The widest the reading column goes when it is the only column there is —
  * in rem, because it is a measure of type rather than of screen.**
  *
- * Everywhere else the detail column takes whatever the gists and the band have
- * left, and there is always something beside it to take the rest. In Plain
+ * Beside a band the prose takes whatever the band has left, and there is
+ * always something beside it to take the rest. In Plain
  * there is nothing: the article had the whole window and sat hard against the
  * left of it, with 800px of empty page to its right on a 1600px screen. Greg,
  * 2026-09-03: *"In Plain mode, can you centre the text on the page?"* Capping
  * the column is what leaves a margin for `styles.css` § plain, centred to
  * divide between the two sides.
  *
- * **The condition is "no other column", not "Plain".** The same thing is true
- * of Hierarchy with `?cols=` set to nothing, and of an article whose tree has
- * no gist depths at all — the mode is not what makes the page lopsided, being
- * alone is. Keeping it that way is also what keeps this file free of mode
- * names, which is the point of `plainCols` in App.tsx.
+ * **The condition is "no band", not "Plain"** — the mode is not what makes the
+ * page lopsided, being alone is, and keeping it that way keeps this file free
+ * of mode names.
  *
  * **Everything in it except the gutter is rem, so it is not one number any
  * more.** `proseAloneMaxPx` below is the cap; this is the rem part of it.
@@ -233,14 +215,11 @@ export const DEFAULT_ROOT_PX = 16;
 
 /**
  * The **mode band** — the strip between the spine and the prose when the middle
- * is something other than the table of contents (chat, and whatever comes after
- * it). See docs/plans/260826a-chat-mode.md, and note what it replaces: in a mode, the
- * gist columns are not squeezed, they are *gone*, so this is not a fourth term
- * in the shrink-then-drop negotiation. It is what the negotiation is about
- * instead.
+ * holds a mode (chat, and whatever came after it). See
+ * docs/plans/260826a-chat-mode.md.
  *
- * Wider than a gist column because it holds a conversation rather than a
- * sentence: an answer at 176px would be four words a line. It still yields to
+ * Wide enough to hold a conversation rather than a sentence: an answer at
+ * 176px would be four words a line. It still yields to
  * the prose — `PROSE_MIN` wins, and the band shrinks to `MODE_MIN` before the
  * reading column gives up a pixel.
  */
@@ -313,8 +292,9 @@ export function structureColumnsBand(rootFontPx: number): { min: number; ideal: 
 
 export type SpineMode = "on" | "off";
 
-export interface Layout {
-  /** Explicit pixel widths, one per rendered column, in render order. */
+export interface Fit {
+  /** Explicit pixel widths, one per rendered column, in render order — one,
+      the prose, since the gist columns went. */
   widths: number[];
   /** The table's own width — the sum of `widths`. */
   tableW: number;
@@ -323,11 +303,6 @@ export interface Layout {
    * exactly, because it chose the width.
    */
   overflowing: boolean;
-}
-
-export interface Fit extends Layout {
-  /** Column depths to render, coarse to fine. Includes the leaf in outline mode. */
-  columns: number[];
   spine: SpineMode;
   /** What `.reader` needs as an inline min-width so the sticky bars have range. */
   minWidth: number;
@@ -337,51 +312,21 @@ export interface Fit extends Layout {
    * reads it from there (styles.css § mode band).
    *
    * It is `0` in two cases, and reading it as "there is no band" is wrong in
-   * the second: the table-of-contents mode, where there genuinely is no band —
-   * and **a window under `MODE_MIN + MODE_PROSE_FLOOR` plus whatever the rail
-   * costs — 700px with it, 688 with `?spine=0` — where there is one and it
-   * takes no room from the table because it covers it instead** (`fitMode`,
-   * and `bandCoversProse` for the one statement of that width; it takes
-   * `showSpine` precisely because the answer is not a single number).
-   * Ask `mode !== "hierarchy"`
-   * if what you want to know is whether a band is open.
+   * the second: Plain, where there genuinely is no band — and **a window under
+   * `MODE_MIN + MODE_PROSE_FLOOR` plus whatever the rail costs — 700px with it,
+   * 688 with `?spine=0` — where there is one and it takes no room from the
+   * table because it covers it instead** (`fitMode`, and `bandCoversProse` for
+   * the one statement of that width; it takes `showSpine` precisely because the
+   * answer is not a single number). Ask `mode !== "plain"` if what you want to
+   * know is whether a band is open.
    */
   modeW: number;
   /**
-   * **The article is the only thing on this page** — no gist column, no band,
-   * just the prose across the whole window. Plain reaches it by handing
-   * `fitView` no columns to fit, and it is where `PROSE_ALONE_MAX_REM` and the auto
+   * **The article is the only thing on this page** — no band, just the prose
+   * across the whole window. It is where `PROSE_ALONE_MAX_REM` and the auto
    * margins in styles.css § plain, centred come in.
-   *
-   * **Not the same question as `table.only-prose`**, which TableView asks to
-   * decide whether the table head is worth its 40px, and which a band mode also
-   * answers yes to: there the prose is the table's only column but it is not
-   * alone on the page, and the band already takes the space this would centre
-   * into. Two facts, deliberately two names — `inMode` and `bandOpen` in
-   * App.tsx are the same care.
    */
   alone: boolean;
-}
-
-/**
- * Is the prose column on screen?
- *
- * **A named rule because it was silently two rules.** `fitMode` reserves width
- * for the prose unconditionally and its comment said `showText` was ignored —
- * but "ignored" was only true of the arithmetic. App went on passing the
- * reader's own `showText` to TableView, so arriving in a mode from *outline*
- * mode (`?text=0`) rendered no gist cells, because a mode has none, and no
- * prose cells, because `showText` was false. The result was a chat panel beside
- * an entirely empty table, and every doc claiming the article is permanent was
- * false. Found by a GPT-5.6 review, 2026-08-26.
- *
- * So the rule gets one home and both callers read it: **in a mode the prose is
- * always on.** Outline mode is a way of looking at the table of contents, and
- * in a mode there is no table of contents to outline — what would be left is
- * nothing at all.
- */
-export function proseVisible(showText: boolean, modeBand: boolean): boolean {
-  return modeBand || showText;
 }
 
 function spineWidth(mode: SpineMode): number {
@@ -398,10 +343,10 @@ function spineWidth(mode: SpineMode): number {
  * question one press earlier.
  *
  * **It is deliberately not `Fit.spine`**, which is what the *current* layout
- * resolved to and answers a different question — `fitView` turns the rail off
- * in outline mode, where there is no band at all. A caller asking "would a band
- * cover the article" has to be told about the rail the band would find, not the
- * one on screen beside something else.
+ * resolved to. The two agree today; a caller asking "would a band cover the
+ * article" is asking about the rail the band would find, not the one on screen
+ * now, and keeping the questions apart is cheaper than re-deriving it the day
+ * they differ again.
  */
 function modeSpine(showSpine: boolean | null): SpineMode {
   return showSpine === false ? "off" : "on";
@@ -442,151 +387,27 @@ export function bandCoversProse(windowWidth: number, showSpine: boolean | null =
 
 const clamp = (v: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, v));
 
-/**
- * The gist columns a reader may open, out of every gist depth the article has.
- *
- * **Depth 0 is not one of them, whoever asks.** Until 2026-09-05 it was merely
- * closed by automatic fit and still honoured from `?cols=`; Greg took the whole
- * column out — *"For Hierarchy mode, let's get rid of the 'Arg' button and
- * functionality altogether"* — so the exclusion moved in front of the reader's
- * choice as well. An old `?cols=0,1,2` therefore drops the `0` in silence and
- * opens 1 and 2: a link somebody saved is not an error, and a column with one
- * cell in it spanning the whole article was close to zero information per
- * pixel anyway ("I can't currently see any value to the L0 column", Greg —
- * granularity-zoom.md).
- *
- * **The arc artefact is not what left.** `src/arc.ts`, the `arc` job step and
- * `arc.json` all still run, and Structure's list face still renders the arc
- * sentence for the part you are in. What went is the *column* in Hierarchy that
- * used to draw it — docs/plans/260905d-declutter-the-reading-view-top-bars.md §
- * Decisions 5.
- *
- * Exported because two things have to agree about it: this file, which decides
- * which columns are on screen, and the pill row in App.tsx, which offers them.
- * A pill for a column the fit will never open is a control that does nothing.
- */
-export function offerableGists(gistDepths: number[]): number[] {
-  return gistDepths.filter((d) => d !== 0);
-}
-
-/**
- * Everything that can put something in the controls bar. `Reader` holds all
- * five and nothing else does.
- */
-export interface BarContents {
-  /**
-   * Is this reader the owner? A **visitor** gets the read-only chip, which is
-   * the one fact in this bar that outranks the controls — PublicChrome.tsx
-   * § `ViewOnlyChip`.
-   */
-  owner: boolean;
-  /**
-   * `mode !== "hierarchy"`, spelled as `Reader` spells it. The granularity
-   * controls belong to the table-of-contents mode and are drawn nowhere else,
-   * so this being true is what empties the bar in the first place.
-   */
-  inMode: boolean;
-  /**
-   * How many gist columns can be offered — `offerableGists(…).length`. A flat
-   * article offers none, and then Hierarchy's own bar is down to the paragraph
-   * pill alone.
-   */
-  offerableGists: number;
-  /**
-   * The reader's `?text=`, which is what draws the paragraph pill **or** the
-   * sentence standing in for it. Either way it is content: `paragraphPill`
-   * returns `"notice"` only for a status `paragraphLabelNotice` has a sentence
-   * for (nav-labels.ts), so there is no combination that renders an empty span.
-   */
-  showText: boolean;
-  /**
-   * **There is deliberately no `commentError` here.** A refused comment write
-   * was the bar's third possible occupant, and it moved to the Dock's Comments
-   * button on the same day this predicate was written — because a bar drawn
-   * only when it has content would otherwise have made a failed delete summon
-   * 44px of chrome and push the article down. Dock.tsx § the Comments button;
-   * docs/plans/260908a-… § Stage 2. If anything transient is ever put back in
-   * this bar, this note is the argument against it.
-   */
-}
-
-/**
- * **Is there anything to put in the controls bar?** If not, `Reader` does not
- * render it and § the bar that leaves while you read (shell.css) lets
- * `--bar-bottom` fall, so the reading view starts at the top of the screen.
- *
- * The bar lost the Spine toggle, the mode chip, the `×`, the `Text` pill,
- * `fit`/`auto`, the `reading`/`outline` chip, the `↑↓` readout and the tree
- * version on 2026-09-05 (260905d), and its two corners on 2026-09-06 (260905g
- * stages 1–2). What was left is drawn in **one** mode and for **one** kind of
- * reader, so on every other reading view it was 44px of nothing, held on screen
- * in a band mode by the `.mode-band` guard that stops the bar sliding out from
- * under a reader who needs the way out of a mode. A reader reported the strip
- * on 2026-09-07 (`SPIDERYARN-READING2-2E`);
- * docs/plans/260908a-the-top-bar-stops-being-drawn-when-it-has-nothing-in-it.md.
- *
- * **A function here rather than three conditions inlined in the JSX**, for the
- * reason `paragraphPill` gives one file over: the mistake this can make is a
- * bar that is drawn empty (the bug) or *not* drawn over a control somebody can
- * still reach (worse — a visitor with no footing, or a failure nobody is told
- * about), and neither is visible in a component test of the reading view. Here
- * it is eleven cases and a table.
- *
- * **It must stay the exact complement of what the JSX renders.** Reader.tsx
- * § the controls bar is the other half, and the two drifting apart is silent in
- * both directions.
- */
-export function barHasContent(bar: BarContents): boolean {
-  if (!bar.owner) return true; // the read-only chip
-  // Hierarchy's granularity controls, and only Hierarchy's.
-  return !bar.inMode && (bar.offerableGists > 0 || bar.showText);
-}
-
 export interface FitInput {
   windowWidth: number;
-  /** Every gist depth this article has: 0 … leafDepth-1. */
-  gistDepths: number[];
-  leafDepth: number;
-  showText: boolean;
   /**
-   * The depths the reader picked, or `null` for automatic.
-   *
-   * A manual choice is honoured exactly, including one that doesn't fit —
-   * "the window should not quietly overrule a choice you made". Automatic is
-   * free to drop coarse levels.
-   */
-  chosen: number[] | null;
-  /**
-   * True when the middle band belongs to a mode rather than to the table of
-   * contents — see `MODE_IDEAL`. The gist columns are dropped entirely and the
-   * band takes their place.
+   * True when a mode's band is open — every mode but Plain. See `MODE_IDEAL`.
    */
   modeBand?: boolean;
   /**
    * Whether the reader has said the rail should be on screen, or `null` for
-   * automatic — see params.ts § spineParam.
-   *
-   * Three states rather than two, for the same reason `chosen` has three: a
-   * reader who has hidden the rail and a reader who is in outline mode are both
-   * looking at a page with no rail, and they want opposite things when the text
-   * comes back. `false` also survives a trip through a mode, where the rail is
-   * otherwise unconditional.
-   *
-   * On or off is now the whole of it: there is one rail rather than a labelled
-   * one and a collapsed one, so the window width no longer has anything to say
-   * about the spine.
+   * automatic — see params.ts § spineParam. Three states rather than two so
+   * that `false` survives a trip through a mode; `null` means on.
    */
   showSpine?: boolean | null;
   /**
    * The root font size this page is painted at, in px — `useRootFontPx()` in
-   * App.tsx, `DEFAULT_ROOT_PX` for anything that has no DOM to ask.
+   * Reader.tsx, `DEFAULT_ROOT_PX` for anything that has no DOM to ask.
    *
    * Two things need it, and only because each is a measure of type rather than
    * of screen: `PROSE_ALONE_MAX_REM`, and Structure's columns
    * (`structureColumnsBand`). Every other constant in this file is a *screen*
-   * width — how narrow a gist still reads at, how much room a chat answer needs
-   * — and those are px on purpose, because they are compared with a window
-   * measured in px.
+   * width, and those are px on purpose, because they are compared with a
+   * window measured in px.
    */
   rootFontPx?: number;
   /**
@@ -596,213 +417,44 @@ export interface FitInput {
   bandShape?: BandShape;
 }
 
+/**
+ * **The layout for this window**: the prose beside a mode's band, or the prose
+ * alone.
+ *
+ * **The rail is on unless the URL says otherwise** — Greg, 2026-09-05: "we
+ * don't need the 'Spine' button (let's just default to always showing it)".
+ * `?spine=0` still wins outright, which is why the parameter stays
+ * three-state rather than boolean. `modeSpine` is the one statement of that,
+ * shared with `fitMode` and `bandCoversProse`.
+ *
+ * **Alone, the prose stops growing at the measure.** A 1588px cell holding a
+ * 738px measure is 850px of empty page rather than a wide reading column. See
+ * `PROSE_ALONE_MAX_REM` for why the cap is phrased as "alone" rather than
+ * "Plain", `proseAloneMaxPx` for why it is a function of the root rather than
+ * one number, and styles.css § plain, centred for the auto margins that put the
+ * leftover on both sides instead of one. Below the cap the prose takes the
+ * whole window, however narrow — a 390px phone gets a 378px column, and the
+ * page never scrolls sideways.
+ */
 export function fitView({
   windowWidth,
-  gistDepths,
-  leafDepth,
-  showText,
-  chosen,
   modeBand = false,
   showSpine = null,
   rootFontPx = DEFAULT_ROOT_PX,
   bandShape = "standard",
 }: FitInput): Fit {
-  /* A mode owns the middle band, so there are no gist columns to fit and no
-     choice for the reader to have made about them. Handled first and returned
-     early rather than woven into the arithmetic below, because every line of
-     that arithmetic is about a negotiation that does not happen here — and a
-     `modeBand &&` on each of them would be five chances to get one wrong.
-
-     Note what this does NOT do: it does not consult `chosen`. `?cols=` survives
-     the trip through chat untouched and means what it always meant when the
-     reader comes back. */
   if (modeBand) return fitMode(windowWidth, showSpine, bandShape, rootFontPx);
-
-  // Outline mode has no prose; the leaf column is the detail column, and it
-  // holds nav labels rather than paragraphs, so it needs far less room.
-  const detailMin = showText ? PROSE_MIN : GIST_IDEAL;
-
-  /**
-   * How many gist columns survive auto-fit in `avail` px.
-   *
-   * **It may return zero, and until 2026-08-27 it could not.** The loop stopped
-   * at one, on the reasoning that "a single gist beside the prose is the point
-   * of the view, so we overflow rather than lose it". That is true of a laptop
-   * and false of a phone: below `GIST_MIN + PROSE_MIN` (720px) the promise to
-   * keep one gist and the promise to give the prose 544px cannot both be kept,
-   * so the table became wider than the window and the page scrolled sideways —
-   * measured at 390px, a 720px table in which every line of prose was cut
-   * mid-word. Reading a line by scrolling to it is not a worse trade-off, it is
-   * a failure.
-   *
-   * So the rule this file already states is followed one step further: shrink
-   * first, drop second, and **drop all the way to zero when zero is what fits**.
-   * There is no new breakpoint — the crossover falls out of the two constants
-   * that were already here, which is why the same change improves a 700px
-   * laptop window for the same reason it rescues a phone.
-   *
-   * **What the reader loses on a phone is real, and it is bought back by a
-   * switch rather than by a scroll.** Two coarse views are one tap away and
-   * both are full-screen on a narrow window: outline mode (the `Text` pill) is
-   * the paragraph outline at full width, and Summary mode is the article at
-   * whichever length you ask for. The whole-article gist is in the masthead as
-   * ordinary text. So the horizontal axis stops being a scroll and becomes a
-   * switch — which is what the `Text` toggle already was.
-   *
-   * **The spine is not part of that answer, though the obvious sentence says it
-   * is.** An earlier version of this comment claimed the coarse levels are what
-   * the rail already shows. They are not, on this device: the rail is 12px of
-   * slivers and every name, gist and count it carries lives in a *hover* card
-   * (Spine.tsx), which a finger cannot open. A touch reader gets the rail's
-   * shape and its jumps and none of its words. GPT Sol caught the claim,
-   * 2026-08-27.
-   *
-   * Whether a phone should also stack the current section's gist above the
-   * prose — orientation without a mode switch — is a design question for Greg
-   * rather than something to decide here. docs/plans/260827t-mobile-reading-view.md
-   * § Open for Greg.
-   *
-   * Takes `maxN` rather than always starting from `gistDepths.length`, because
-   * the pool it is choosing among is `offerableGists` rather than the
-   * article's full depth range — smaller by one on every article that has an
-   * L0 at all.
-   */
-  const gistsThatFit = (avail: number, maxN: number) => {
-    let n = maxN;
-    while (n > 0 && n * GIST_MIN + detailMin > avail) n--;
-    return n;
-  };
-
-  /**
-   * **The rail is on unless the URL says otherwise** — Greg, 2026-09-05: "we
-   * don't need the 'Spine' button (let's just default to always showing it)".
-   * The pill that asked the question went with the rest of the controls bar
-   * (docs/plans/260905d-declutter-the-reading-view-top-bars.md), so nothing on
-   * screen can turn the rail on any more and a default of "off" would be a
-   * state the reader has no way out of. `?spine=0` still wins outright — same
-   * rule `chosen` follows, that the window must not overrule a choice somebody
-   * made — which is why the parameter stays three-state rather than boolean.
-   *
-   * **What this overrules, and it was a real argument**: until 2026-09-05 the
-   * default was `showSpine ?? showText`, on the reasoning that in outline mode
-   * the table *is* a whole-article overview, so a bird's-eye rail beside it is
-   * a second copy of the same thing and the 12px is better spent on the
-   * columns. Still true, and now outweighed by the rail being unaskable-for.
-   *
-   * The window width is not consulted at all, and used to be: the rail had a
-   * labelled 13rem form that appeared when it was affordable, and deciding
-   * *when* was the fiddliest arithmetic in this file. One width means the
-   * question no longer exists — the rail is 12px at every size, so there is no
-   * width at which it fails to fit.
-   *
-   * **The same rule `fitMode` and `SmallScreenHint` follow, and now literally
-   * the same function.** This landed as its own `showSpine ?? true` on the same
-   * day `modeSpine` was extracted on `dev` for the band's crossover; two
-   * phrasings of one rule is the drift that function exists to prevent, so the
-   * merge collapsed them.
-   */
   const spine: SpineMode = modeSpine(showSpine);
   const avail = Math.max(0, windowWidth - spineWidth(spine));
-
-  /**
-   * The choice, out of the columns there are to choose from — and `?cols=`
-   * cannot reach past that pool, which is the whole of what changed on
-   * 2026-09-05. See `offerableGists`.
-   */
-  const offerable = offerableGists(gistDepths);
-  let gists = chosen === null ? offerable : offerable.filter((d) => chosen.includes(d));
-
-  /**
-   * The leaf column — one nav label per paragraph — beside the prose.
-   *
-   * Greg, 2026-08-25: "I really like the Outline 1-sentence-paragraphs. But I
-   * also always want to be able to see the full text." In outline mode the leaf
-   * column is the whole point and is always on; this is the same column, kept
-   * when the text comes back, so reading mode contains everything outline mode
-   * had *plus* the article.
-   *
-   * Opt-in only — never chosen by auto-fit — because it costs a column's width
-   * and most reading doesn't want it. And note it does not breach the navLabel
-   * contract (granularity-zoom.md#node-shape): a nav label must never be shown
-   * *instead of* prose that could be displayed, and here the prose is right
-   * beside it. Annotation, not substitution.
-   */
-  const leafBesideText = showText && (chosen?.includes(leafDepth) ?? false);
-
-  if (chosen === null) {
-    /* Within what's left after L0 is excluded above, drop the *finest* level
-     * first — the opposite direction from the old rule, and deliberate: Greg
-     * reported landing on a narrow window (`?cols=1,2` on an iPad) and wanting
-     * L1 and L2 by default, and squeezed to one column that has to be L1 —
-     * L2's whole point is being the finest-grained context, which is the
-     * first thing worth losing on a screen too narrow for both. `gists` is
-     * ascending (coarse to fine) with L0 already gone, so keeping the front
-     * keeps the coarser survivors. See `gistsThatFit` for why the floor is
-     * zero rather than one. */
-    gists = gists.slice(0, gistsThatFit(avail, gists.length));
-  }
-
-  // Fixed-width columns: the gists, plus the leaf column when it is riding
-  // alongside the prose rather than standing in for it.
-  const fixedCount = gists.length + (leafBesideText ? 1 : 0);
-  const gistW =
-    fixedCount === 0
-      ? 0
-      : clamp(Math.floor((avail - detailMin) / fixedCount), GIST_MIN, GIST_IDEAL);
-  /**
-   * **A minimum that protects nothing is not a minimum.**
-   *
-   * `detailMin` exists to stop the gist columns squeezing the reading column,
-   * and dropping the last gist to zero (above) was only half the fix without
-   * this line: at 390px the table came out `0 + 544` and the page went on
-   * scrolling sideways, because the floor was still being applied to a column
-   * that had nothing left to be protected from.
-   *
-   * So the floor yields to the window itself. Note where it does *not* bite: it
-   * is `min(detailMin, avail)`, so it changes nothing whenever the window is at
-   * least as wide as the prose minimum — including the case the file promises
-   * to leave alone, a manual `?cols=` that does not fit. A reader who asks for
-   * four columns on a 900px window still gets four columns and still overflows.
-   * Only a window narrower than one reading column is affected, and there the
-   * alternative is not a wider column, it is a column you scroll to read.
-   */
-  const detailW = Math.max(Math.min(detailMin, avail), avail - fixedCount * gistW);
-
-  /**
-   * **When the prose is the only column, it stops growing at the measure.**
-   *
-   * Everything above is a negotiation between columns, and with one column
-   * there is nothing to negotiate: `detailW` came out as the whole window, and
-   * a 1588px cell holding a 738px measure is 850px of empty page rather than a
-   * wide reading column. See `PROSE_ALONE_MAX_REM` for why the cap is phrased as
-   * "alone" rather than "Plain", `proseAloneMaxPx` for why it is a function of
-   * the root rather than one number, and styles.css § plain, centred for the
-   * auto margins that put the leftover on both sides instead of one.
-   *
-   * Outline mode is excluded by `showText`: its lone column is nav labels, not
-   * prose, and `--reading-measure` has nothing to say about those.
-   */
-  const alone = fixedCount === 0 && showText;
-  const columnW = alone
-    ? Math.min(detailW, proseAloneMaxPx(rootFontPx))
-    : detailW;
-
-  const widths = [...Array<number>(fixedCount).fill(gistW), columnW];
-  const tableW = widths.reduce((a, b) => a + b, 0);
-
+  const proseW = Math.min(avail, proseAloneMaxPx(rootFontPx));
   return {
-    columns: showText
-      ? leafBesideText
-        ? [...gists, leafDepth]
-        : gists
-      : [...gists, leafDepth],
-    widths,
-    tableW,
-    overflowing: tableW > avail,
-    minWidth: spineWidth(spine) + tableW,
+    widths: [proseW],
+    tableW: proseW,
+    overflowing: false,
+    minWidth: spineWidth(spine) + proseW,
     spine,
     modeW: 0,
-    alone,
+    alone: true,
   };
 }
 
@@ -816,8 +468,7 @@ export function fitView({
  *    the only thing that turns the rail off in a mode.
  *  - **The prose wins, and then it yields to a floor.** The band shrinks from
  *    `MODE_IDEAL` to `MODE_MIN` before the reading column drops below
- *    `PROSE_MIN` — same order of preference the ToC layout has, because the
- *    article is what is being read. Past that the *prose* narrows, from 544 to
+ *    `PROSE_MIN`, because the article is what is being read. Past that the *prose* narrows, from 544 to
  *    `MODE_PROSE_FLOOR`, and past *that* the band gives up sharing the screen
  *    and covers the article instead. **The page never overflows and never
  *    scrolls sideways**; it said it did until 2026-09-06, and that was already
@@ -825,10 +476,8 @@ export function fitView({
  *  - **Structure's columns are the one band that can be wider**, and only once
  *    they fit beside `PROSE_MIN` — `bandWidth` below, and
  *    `structureColumnsBand` above it.
- *  - **The prose is always on**, which is `proseVisible`'s job rather than this
- *    function's. It used to be asserted here and nowhere else, and that is
- *    exactly how the outline-mode bug got in: a comment claiming a fact the
- *    only other caller did not know about.
+ *  - **The prose is always on.** There is no longer any view that hides it
+ *    (`?text=0` went with the Hierarchy mode on 2026-09-29).
  */
 function fitMode(
   windowWidth: number,
@@ -871,10 +520,8 @@ function fitMode(
    * `calc(100vw - --spine-w - --mode-w)` zero, which is the masthead and the
    * controls bar. Caught by GPT Sol reviewing this plan, 2026-08-27.
    *
-   * The prose does not go away, for the reason `proseVisible` exists: a mode
-   * with no article behind it is how the outline-mode bug produced an empty
-   * table beside a chat panel. It is still there, still full width, one tap on
-   * the dock's Hierarchy button away.
+   * The prose does not go away: it is still there, still full width, one tap
+   * on the dock's Plain button away.
    */
   /**
    * **This crossover is conditional, and since 2026-09-03 nothing else tries to
@@ -916,7 +563,6 @@ function fitMode(
    */
   if (bandCoversProse(windowWidth, showSpine)) {
     return {
-      columns: [],
       widths: [avail],
       tableW: avail,
       overflowing: false,
@@ -943,10 +589,6 @@ function fitMode(
   const modeW = bandWidth(avail, bandShape, rootFontPx);
   const proseW = Math.max(MODE_PROSE_FLOOR, avail - modeW);
   return {
-    // The table is the prose column and nothing else. Its own `pin-left` and
-    // `pin-right` land on the same single column, which is what they already do
-    // in outline mode with one level.
-    columns: [],
     widths: [proseW],
     tableW: proseW,
     overflowing: modeW + proseW > avail,

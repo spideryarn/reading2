@@ -154,10 +154,6 @@ const POLICY: Record<Mode, VisitorPolicy> = {
      visitor could be short of: no artefact is read, no model call is made, and
      the prose is the payload they already hold. */
   plain: { kind: "available" },
-  /* The table of contents, the granularity zoom and the spine are the whole
-     point of the feature and cost nothing: they are drawn from the tree in the
-     payload the visitor already has. */
-  hierarchy: { kind: "available" },
   /* **Structure — which since 2026-09-10 is Outline too — is the same bargain,
      and had to be named to get it.** Outline had to be first: the old
      fall-through was deliberately fail-closed, so a mode added later was

@@ -192,7 +192,7 @@ Two things the same review got right about the badge as a control, both since fi
   browser pass saw the guard read false and reported a distinction that does not exist.
 
 The paragraph count on every row (`18¶`) is the other half of that borrowing, and it answers a
-question our gist columns cannot: *how much am I not seeing?* A section holding forty paragraphs and
+question the gist columns (Hierarchy mode, removed 2026-09-29) could not: *how much am I not seeing?* A section holding forty paragraphs and
 one holding three look identical in an L2 cell. This is item 5 on
 [the borrow list](original-version/borrow-list.md).
 
@@ -201,7 +201,7 @@ one holding three look identical in an L2 cell. This is item 5 on
 | Parameter | Values | History | Why |
 |---|---|---|---|
 | `mode=summary` | | push | A mode is where you are, not a glance — [url-state.md](url-state.md) |
-| `deep` | `0`, `1` (default), `2` | push | How much of the article's shape you are looking at is a deliberate act on the view, like `cols` and `text` |
+| `deep` | `0`, `1` (default), `2` | push | How much of the article's shape you are looking at is a deliberate act on the view, like the retired `cols` and `text` did |
 
 `?len=` was the third row until 2026-08-31 and went with the ladder.
 

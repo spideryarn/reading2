@@ -354,10 +354,6 @@ const COVERS_CLASS = "band-covers";
 const bandFit = (windowWidth: number, spineOff: boolean) =>
   fitView({
     windowWidth,
-    gistDepths: [0, 1],
-    leafDepth: 2,
-    showText: true,
-    chosen: null,
     modeBand: true,
     showSpine: spineOff ? false : null,
   });

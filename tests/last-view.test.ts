@@ -38,10 +38,11 @@ describe("rememberableSearch", () => {
   });
 
   it("keeps each pair byte-for-byte, so a comma list is not reserialised", () => {
-    /* `URLSearchParams` would hand back `cols=0%2C1%2C2`, which parses to the
-       same thing and reads as somebody else's URL. Same reason router.ts's
-       rewrites are textual. */
-    expect(rememberableSearch("?cols=0,1,2")).toBe("?cols=0,1,2");
+    /* `URLSearchParams` would hand back `crits=spya-a%2Cspya-b`, which parses
+       to the same thing and reads as somebody else's URL. Same reason
+       router.ts's rewrites are textual. (This was `?cols=0,1,2` until that
+       parameter retired with the Hierarchy mode on 2026-09-29.) */
+    expect(rememberableSearch("?crits=spya-a,spya-b")).toBe("?crits=spya-a,spya-b");
   });
 
   it("drops the dialog, the drawer, the conversation and the search", () => {
@@ -71,7 +72,7 @@ describe("rememberableSearch", () => {
   });
 
   it("keeps every other mode as it stands", () => {
-    for (const mode of ["plain", "hierarchy", "glossary", "search", "referee", "summary", "ideas", "structure", "quotes", "timeline"]) {
+    for (const mode of ["plain", "glossary", "search", "referee", "summary", "ideas", "structure", "quotes", "timeline"]) {
       expect(rememberableSearch(`?mode=${mode}`), mode).toBe(`?mode=${mode}`);
     }
     expect(rememberableSearch("?mode=glossary&term=spya-h4r2wd")).toBe(
@@ -159,14 +160,15 @@ describe("restoredHref", () => {
    * stops tomorrow's writes and does nothing whatever about yesterday's. On
    * 2026-09-05 `text` moved to `NEVER_REMEMBERED`, because the `Text` pill that
    * turned the prose back on had gone and `?mode=hierarchy&text=0` became a
-   * state with no exit — `settleAddress` rewrites it to `?mode=structure` at boot
-   * for exactly that reason (router.ts § `liftStrandedText`).
+   * state with no exit — `settleAddress` rewrote it to `?mode=structure` at boot
+   * for exactly that reason, until the Hierarchy mode retired on 2026-09-29.
    *
    * But a restore runs from a layout effect, *after* boot. So a browser holding
-   * the old value would put the reader straight back into the stranded state
-   * the rewrite exists to prevent, walking past it — and the passive save that
-   * would clean the storage up happens too late to help the address they are
-   * already looking at.
+   * the old value would have put the reader straight back into the stranded
+   * state the rewrite existed to prevent, walking past it — and the passive
+   * save that would clean the storage up happens too late to help the address
+   * they are already looking at. `text` and `cols` have since left both lists,
+   * and this is what drops them from a browser that still holds them.
    *
    * Filtering on the way **out** as well as on the way in is the general fix
    * rather than a patch for `text`: it makes the current policy authoritative
@@ -181,8 +183,8 @@ describe("restoredHref", () => {
     // Nothing left worth restoring is the same as nothing stored.
     expect(restoredHref("/read/x", "", "?text=0")).toBe(null);
     // And a parameter that is still remembered rides through untouched.
-    expect(restoredHref("/read/x", "", "?at=spya-a&text=0&cols=1,2")).toBe(
-      "/read/x?at=spya-a&cols=1,2",
+    expect(restoredHref("/read/x", "", "?at=spya-a&text=0&cols=1,2&deep=2")).toBe(
+      "/read/x?at=spya-a&deep=2",
     );
   });
 

@@ -31,8 +31,7 @@ pure and both are tested — [`tests/url-state.test.ts`](../../tests/url-state.t
 
 | Param | Meaning | History | Example |
 |---|---|---|---|
-| `cols` | which gist columns are on. **Absent means automatic** — fit to the window ([granularity-zoom.md § fitting](granularity-zoom.md#too-many-levels-fit-the-columns-dont-just-scroll-them)). Present means the reader chose, and the window must not overrule them. **A `0` is dropped in silence** since 2026-09-05: there is no L0 column any more, and an old link is not an error (`offerableGists`, [layout.ts](../../src/web/layout.ts)). | push | `?cols=1,2`, or `?cols=none` |
-| `text` | `1` reading mode, `0` outline mode. **Nothing writes it and `0` does not survive arrival, since 2026-09-05** — an incoming `?mode=hierarchy&text=0` is rewritten to `?mode=structure` (to `?mode=outline` until 2026-09-10) and the pair is dropped whatever the mode, because the pill that could put the prose back has gone; see below | push | `?text=0` |
+| `cols`, `text` | **Retired on 2026-09-29** with Hierarchy mode, the only thing that read them; both are ignored like any unknown parameter, and `?mode=hierarchy` opens Structure ([260929d](../plans/260929d-remove-hierarchy-mode-and-heading-numbers.md)). They were the gist columns that were on, and reading versus outline mode. | — | — |
 | `spine` | whether the bird's-eye rail is on screen. **Absent means on**, in every mode ([granularity-zoom.md § the spine](granularity-zoom.md#the-spine-a-birds-eye-rail)); `0` is the only thing that takes it away. **Read-only since 2026-09-05** — see below | push | `?spine=0` |
 | `at` | the section in view, as its first block's id | **replace**, debounced | `?at=spya-tgnssb` |
 | `note` | the explanation dialog that is open, as its comment id — [comments.md](comments.md) | **replace** | `?note=spya-k6fpme` |
@@ -155,6 +154,10 @@ has said otherwise, outline mode included, and nothing on screen writes `?spine=
 more ([260905d](../plans/260905d-declutter-the-reading-view-top-bars.md)). Both are still honoured
 on arrival: `?spine=0` still hides the rail.
 
+> **2026-09-29: this whole history is moot.** Hierarchy mode, `?cols=`, `?text=` and the `liftStrandedText`
+> rewrite are gone; `?mode=hierarchy` is a retired mode that opens Structure, as `?mode=outline` does
+> ([260929d](../plans/260929d-remove-hierarchy-mode-and-heading-numbers.md)). What follows is what happened before.
+
 **`?text=0` does not survive arrival, since stage 3 of that plan.** It was the one address the
 reader could not leave: the `Text` pill was the only way back to the prose and it went with the bar.
 So `settleAddress` rewrites it (`liftStrandedText` in [router.ts](../../src/web/router.ts)) —
@@ -232,8 +235,8 @@ the middle band between the spine and the prose ([260826a-chat-mode.md](../plans
 [glossary.md](glossary.md), [search.md](search.md)).
 
 **The default is `plain` since 2026-08-31**, and it was `hierarchy` before that. Plain is the
-article and nothing else — no band, and no gist columns either — so a bare `/read/<slug>` opens the
-prose, and `?mode=hierarchy` is what asks for the gist columns
+article and nothing else — no band — so a bare `/read/<slug>` opens the
+prose. (`?mode=hierarchy` used to ask for the gist columns; since 2026-09-29 it opens Structure.)
 ([plain-mode-and-the-way-out.md](../plans/plain-mode-and-the-way-out.md)). Two consequences:
 `?mode=hierarchy` now appears in copied URLs where nothing appeared before, since `withMode` in
 [`Dock.tsx`](../../src/web/Dock.tsx) omits whichever mode is the default; and **every link written
