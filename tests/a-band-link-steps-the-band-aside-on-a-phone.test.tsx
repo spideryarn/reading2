@@ -203,6 +203,7 @@ const OWNED: Article = {
   blocks: BLOCKS,
   tree: TREE,
   assets: undefined,
+  sourceGuess: undefined,
   navLabelStatus: "ready",
   meta: { slug: SLUG, title: "A piece", url: "https://example.com/a" },
 };
