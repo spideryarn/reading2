@@ -27,7 +27,7 @@
  * first (2026-09-28) and got one small menu of its own, `ColumnsMenu`, shown
  * in table view only: one dimension did not yet earn a popover of popovers.
  */
-import { EyeOff, Rows3, Table as TableIcon } from "lucide-react";
+import { Archive, EyeOff, Rows3, Table as TableIcon } from "lucide-react";
 import { RadioGroup } from "radix-ui";
 import type { Table } from "@tanstack/react-table";
 import type { LibraryEntry } from "../types.js";
@@ -44,6 +44,9 @@ export function ShelfControls({
   onView,
   filter,
   onFilter,
+  archived,
+  onArchived,
+  bare = false,
 }: {
   table: Table<LibraryEntry>;
   /** Last opened first, because it is the default sort — library-columns.tsx § CHIP_ORDER. */
@@ -52,7 +55,44 @@ export function ShelfControls({
   onView: (v: ShelfView) => void;
   filter: ShelfFilter;
   onFilter: (f: ShelfFilter) => void;
+  /** `?archived=1`: archived articles on the shelf too. */
+  archived: boolean;
+  onArchived: (on: boolean) => void;
+  /**
+   * **Nothing is in scope** — no active article, and the archive either off
+   * or empty — so only the Archived chip is drawn. A sort control over an
+   * empty shelf is furniture, but a reader whose every article is archived
+   * must still be able to reach them (plan 260929a, GPT Sol R2): the chip
+   * used to live at the foot of the shelf, outside the guard that hid these
+   * controls from an empty shelf.
+   */
+  bare?: boolean;
 }) {
+  /* Every accessible name here **begins with the visible text** — see the
+     Unread chip below for why. */
+  const archivedChip = (
+    <Chip
+      pressed={archived}
+      describe={
+        archived
+          ? "Archived — showing archived articles on the shelf too, each marked. Activate to hide them."
+          : "Archived — show archived articles on the shelf too, sorted and filtered with the rest"
+      }
+      onClick={() => onArchived(!archived)}
+    >
+      <Archive size={12} />
+      Archived
+    </Chip>
+  );
+
+  if (bare) {
+    return (
+      <div className="tw:mb-4 tw:flex tw:flex-wrap tw:items-center tw:justify-end tw:gap-2">
+        {archivedChip}
+      </div>
+    );
+  }
+
   return (
     <div className="tw:mb-4 tw:flex tw:flex-wrap tw:items-center tw:gap-x-3 tw:gap-y-2">
       <SortChips table={table} order={chipOrder} />
@@ -83,6 +123,16 @@ export function ShelfControls({
             <EyeOff size={12} />
             Unread
           </Chip>
+
+          {/* **Archived, beside Unread**, since plan 260929a. Greg,
+              2026-09-29 (SPIDERYARN-READING2-4V): *"it would be better if it
+              was a (default-hide-archived) toggle at the top (like for
+              "Unread"), so that it's easy to show some/all (so we can use the
+              faceted-search-topic-pills and/or sort to look through the
+              Archived articles easily too)"*. It was a disclosure at the foot
+              of the shelf. On, the archived articles join the one list, so the
+              sort, the search, Unread and the topics all apply to them. */}
+          {archivedChip}
 
           {/* **Columns, in table view only** — the cards have no columns to
               hide. Beside the switch, because which columns the table shows is a

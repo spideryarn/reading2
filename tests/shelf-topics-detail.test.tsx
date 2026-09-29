@@ -62,7 +62,11 @@ function Harness() {
   const [selected, setSelected] = useState<string[]>([]);
   return createElement(ShelfTerms, {
     data,
-    counts: new Map(KEYS.map((k) => [k, countOf(k)])),
+    /* A topic of a test's own `data` counts all its articles: at zero it
+       would not be drawn at all (plan 260929a, `availableTopics`). */
+    counts: new Map(
+      data.terms.map((t) => [t.key, KEYS.includes(t.key) ? countOf(t.key) : t.articles.length]),
+    ),
     selected,
     onToggle: (key: string) => {
       toggled.push(key);

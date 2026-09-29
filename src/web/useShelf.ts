@@ -79,9 +79,23 @@ export interface Shelf {
   actionError: string | null;
   /** The archived articles, once somebody has asked to see them. */
   archived: LibraryEntry[] | null;
-  /** Fetch the other half of the shelf. Idempotent. */
+  /**
+   * The last `loadArchived` failed, and `archived` is still `null` because of
+   * it — so the shelf can say "couldn't" rather than "loading" for ever. The
+   * reason itself is in `actionError`. Cleared by the next attempt.
+   */
+  archivedFailed: boolean;
+  /** Fetch the other half of the shelf. Idempotent, and one request at a time. */
   loadArchived: () => Promise<void>;
-  /** Put an archived article back on the shelf, from the archived list. */
+  /**
+   * Put an archived article back on the shelf.
+   *
+   * Since plan 260929a the archived articles are in the shelf's one list while
+   * Archived is on, so the entry moves between the two arrays **in one
+   * commit** — the server's answer lands in `articles` as it leaves
+   * `archived` — and the row stays where it is, un-marked, instead of
+   * vanishing until a reload brings it back.
+   */
   restore: (slug: string) => Promise<void>;
   /**
    * Which article is being renamed in place, if any.
@@ -122,6 +136,13 @@ export function useShelf(readerId: string): Shelf {
   const [actionError, setActionError] = useState<string | null>(null);
   const [undoable, setUndoable] = useState<LibraryEntry | null>(null);
   const [archived, setArchived] = useState<LibraryEntry[] | null>(null);
+  const [archivedFailed, setArchivedFailed] = useState(false);
+  /**
+   * A `loadArchived` in flight. The shelf page asks from an effect keyed on
+   * "Archived is on and the list is missing", and a second ask while the first
+   * is out is a second request for the same answer.
+   */
+  const loadingArchived = useRef(false);
   const [renaming, setRenaming] = useState<string | null>(null);
   const undoTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   /**
@@ -284,6 +305,8 @@ export function useShelf(readerId: string): Shelf {
     setError(null);
     setUndoable(null);
     setArchived(null);
+    setArchivedFailed(false);
+    loadingArchived.current = false;
     setRenaming(null);
     setActionError(null);
     archiving.current.clear();
@@ -354,10 +377,16 @@ export function useShelf(readerId: string): Shelf {
         const entry = await patch(slug, { archived: true });
         if (!stillOurs(asked)) return;
         setArticles((list) => list?.filter((a) => a.slug !== slug) ?? null);
-        // Dropped rather than appended to: an archived list built from a
-        // stale copy plus one new entry is a list that can disagree with the
-        // server about what is in it. It is refetched when next opened.
-        setArchived(null);
+        /* **Moved into the archived list, if it is loaded**, since plan
+           260929a. It used to be dropped and refetched when next opened, on
+           the argument that a stale copy plus one entry can disagree with the
+           server. But with Archived on, the archived list is *on the shelf*, so
+           dropping it blanked every archived row until the refetch landed, and
+           the card the reader had just archived vanished and came back. The
+           entry is the server's own answer (the rule at the top of this file)
+           and the order is the page's, so nothing is derived twice here. Not
+           loaded, it stays not loaded. */
+        setArchived((list) => (list ? [entry, ...list.filter((a) => a.slug !== slug)] : null));
         setUndoable(entry);
         if (undoTimer.current) clearTimeout(undoTimer.current);
         undoTimer.current = setTimeout(() => setUndoable(null), UNDO_MS);
@@ -390,7 +419,9 @@ export function useShelf(readerId: string): Shelf {
          it back already gone. */
       await reload();
       if (!stillOurs(asked)) return;
-      setArchived(null);
+      /* Out of the archived list rather than dropping the list — the reason
+         is in `archive` above. */
+      setArchived((list) => list?.filter((a) => a.slug !== entry.slug) ?? null);
       setUndoable(null);
       if (undoTimer.current) clearTimeout(undoTimer.current);
     } catch (e) {
@@ -408,7 +439,12 @@ export function useShelf(readerId: string): Shelf {
       try {
         const entry = await patch(slug, { title });
         if (!stillOurs(asked)) return;
-        setArticles((list) => list?.map((a) => (a.slug === slug ? entry : a)) ?? null);
+        /* In both lists: with Archived on, the card being renamed may be an
+           archived one (plan 260929a, Sol R4). A slug is in one of them. */
+        const swap = (list: LibraryEntry[] | null) =>
+          list?.map((a) => (a.slug === slug ? entry : a)) ?? null;
+        setArticles(swap);
+        setArchived(swap);
       } catch (e) {
         if (stillOurs(asked)) setActionError(readableFailure(e));
       }
@@ -420,7 +456,10 @@ export function useShelf(readerId: string): Shelf {
   const cancelRename = useCallback(() => setRenaming(null), []);
 
   const loadArchived = useCallback(async () => {
+    if (loadingArchived.current) return;
+    loadingArchived.current = true;
     const asked = reader.current;
+    setArchivedFailed(false);
     try {
       const r = await apiFetch("/api/library?archived=1");
       const body = await readJson<LibraryResponse>(r);
@@ -430,7 +469,14 @@ export function useShelf(readerId: string): Shelf {
       if (!stillOurs(asked)) return;
       setArchived(body.articles);
     } catch (e) {
-      if (stillOurs(asked)) setActionError(readableFailure(e));
+      if (stillOurs(asked)) {
+        setActionError(readableFailure(e));
+        setArchivedFailed(true);
+      }
+    } finally {
+      /* Another reader's reset has already cleared it, and theirs may be
+         in flight now. */
+      if (stillOurs(asked)) loadingArchived.current = false;
     }
   }, [stillOurs]);
 
@@ -444,9 +490,13 @@ export function useShelf(readerId: string): Shelf {
     async (slug: string) => {
       const asked = reader.current;
       try {
-        await patch(slug, { archived: false });
+        const entry = await patch(slug, { archived: false });
         if (!stillOurs(asked)) return;
         setArchived((list) => list?.filter((a) => a.slug !== slug) ?? null);
+        /* Into the active list at once, from the server's answer, so the row
+           stays on screen through the reload rather than blinking out. The
+           reload is then the reconciliation, not the only way back. */
+        setArticles((list) => (list ? [entry, ...list.filter((a) => a.slug !== slug)] : list));
         await reload();
       } catch (e) {
         if (stillOurs(asked)) setActionError(readableFailure(e));
@@ -478,6 +528,7 @@ export function useShelf(readerId: string): Shelf {
       actionError,
       report,
       archived,
+      archivedFailed,
       loadArchived,
       restore,
       renaming,
@@ -495,6 +546,7 @@ export function useShelf(readerId: string): Shelf {
       actionError,
       report,
       archived,
+      archivedFailed,
       loadArchived,
       restore,
       renaming,

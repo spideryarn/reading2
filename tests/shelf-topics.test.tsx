@@ -9,10 +9,12 @@
  *
  *  - the chips' counts follow the one formula (shelf-narrow.ts) as the view
  *    narrows, and two chosen topics AND;
- *  - an unchosen chip at zero is disabled, a chosen one at zero is not;
+ *  - an unchosen chip at zero is not drawn at all, a chosen one at zero is,
+ *    and the first twelve are the first twelve that have something to show
+ *    (plan 260929a, Greg's report 4Y);
  *  - the "n of m" line equals the cards drawn, and the table obeys the filter;
- *  - `?archived=1` widens the topics' scope and narrows the archived list by
- *    the same search, and that list stays up during a search;
+ *  - `?archived=1` widens the topics' scope and merges the archived articles
+ *    into the one list, narrowed by the same search and topics (report 4V);
  *  - a stale `?topics=` key is never applied before the topics load, and is
  *    dropped from the URL after;
  *  - "More detail" lists each topic's top articles, as links;
@@ -50,9 +52,12 @@ const ACTIVE: LibraryEntry[] = [
   entry("palaces", "Memory palaces", { opens: 0 }),
   entry("startups", "Startups and founders"),
 ];
+/* `archivedAt`, as the server sets on every entry of the archived listing —
+   it is what marks a merged row (shelf-narrow.ts § isArchived). */
+const GONE = { archivedAt: "2026-09-20T00:00:00.000Z" };
 const ARCHIVED: LibraryEntry[] = [
-  entry("old-memory", "An old piece on memory"),
-  entry("old-other", "Something else archived"),
+  entry("old-memory", "An old piece on memory", GONE),
+  entry("old-other", "Something else archived", GONE),
 ];
 let activeArticles = ACTIVE;
 let archivedArticles = ARCHIVED;
@@ -119,6 +124,7 @@ vi.mock("../src/web/useShelf.js", async () => {
           actionError: null,
           report: () => {},
           archived,
+          archivedFailed: false,
           loadArchived,
           restore: async () => {},
           renaming: null,
@@ -209,7 +215,7 @@ const params = () => new URLSearchParams(location.search);
 /** The topic chips in the row (not the rows of the "More detail" view). */
 function chips(): HTMLButtonElement[] {
   return [...host.querySelectorAll<HTMLButtonElement>("button[aria-pressed]")].filter(
-    (b) => !b.closest('[aria-label="Topics in detail"]') && /^(memory|neuron|startup) /.test(b.getAttribute("aria-label") ?? ""),
+    (b) => !b.closest('[aria-label="Topics in detail"]') && /^\S+ \d+ — /.test(b.getAttribute("aria-label") ?? ""),
   );
 }
 function chip(key: string): HTMLButtonElement {
@@ -219,14 +225,29 @@ function chip(key: string): HTMLButtonElement {
 }
 const chipCount = (key: string) => Number(chip(key).getAttribute("aria-label")?.split(" ")[1]);
 
-/** The titles of the cards drawn — the cards `<ul>` is the page's one unlabelled list at top level. */
-function cards(): string[] {
-  return [...host.querySelectorAll("main > ul:not([aria-label]) > li")].map((li) =>
-    ACTIVE.find((e) => li.textContent?.includes(e.title))?.title ?? "?",
-  );
+/** The cards drawn — the cards `<ul>` is the page's one unlabelled list at top level. */
+function cardItems(): HTMLLIElement[] {
+  return [...host.querySelectorAll<HTMLLIElement>("main > ul:not([aria-label]) > li")];
 }
+/** The titles of the active cards drawn. */
+function cards(): string[] {
+  return cardItems()
+    .filter((li) => !li.querySelector("[data-archived-mark]"))
+    .map((li) => li.querySelector("h2")?.textContent?.trim() ?? "?");
+}
+/** The archived cards, which since plan 260929a are in the same list, marked. */
 function archivedRows(): string[] {
-  return [...host.querySelectorAll('ul[aria-label="Archived articles"] > li')].map((li) => li.textContent ?? "");
+  return cardItems()
+    .filter((li) => li.querySelector("[data-archived-mark]"))
+    .map((li) => li.querySelector("h2")?.textContent?.trim() ?? "?");
+}
+/** The Archived chip beside Unread. */
+function archivedChip(): HTMLButtonElement {
+  const found = [...host.querySelectorAll<HTMLButtonElement>("button[aria-pressed]")].find((b) =>
+    (b.getAttribute("aria-label") ?? "").startsWith("Archived"),
+  );
+  if (!found) throw new Error("no Archived chip");
+  return found;
 }
 function countLine(): string | null {
   const p = [...host.querySelectorAll("p")].find((el) => /\bof \d+ articles?\b/.test(el.textContent ?? ""));
@@ -269,7 +290,7 @@ describe("the Topics row", () => {
     expect(cards().sort()).toEqual(["Memory and the brain", "Memory palaces", "Neurons firing"]);
     expect(chipCount("memory")).toBe(3);
     expect(chipCount("neuron")).toBe(2);
-    expect(chipCount("startup")).toBe(0);
+    expect(chips().map((b) => b.getAttribute("aria-label")?.split(" ")[0])).not.toContain("startup");
     expect(chip("memory").getAttribute("aria-pressed")).toBe("true");
   });
 
@@ -280,19 +301,18 @@ describe("the Topics row", () => {
     expect(chipCount("neuron")).toBe(2);
   });
 
-  it("greys and disables an unchosen chip at zero, and keeps a chosen one at zero removable", async () => {
+  it("hides an unchosen chip at zero, and keeps a chosen one at zero removable", async () => {
+    /* Greg, 2026-09-29 (4Y): *"it should hide (or shunt to the right) any
+       topic-pills that match 0 of the filtered articles"*. Hidden, not greyed. */
     await show("/?topics=memory");
-    const unavailable = chip("startup");
-    expect(unavailable.getAttribute("aria-disabled")).toBe("true");
-    click(unavailable);
-    await settle();
-    expect(params().get("topics")).toBe("memory");
+    expect(chips().map((b) => b.getAttribute("aria-label")?.split(" ")[0])).toEqual(["memory", "neuron"]);
+    expect(chips().some((b) => b.hasAttribute("aria-disabled"))).toBe(false);
 
     await act(async () => root.unmount());
     host.remove();
     await show("/?topics=startup&show=unread");
     expect(chipCount("startup")).toBe(0);
-    expect(chip("startup").getAttribute("aria-disabled")).toBe("false");
+    expect(chip("startup").getAttribute("aria-pressed")).toBe("true");
     click(chip("startup"));
     await settle();
     expect(params().get("topics")).toBeNull();
@@ -351,7 +371,7 @@ describe("the Topics row", () => {
     expect(params().get("topics")).toBe("memory,neuron");
     expect(cards()).toHaveLength(2);
 
-    click([...host.querySelectorAll("button")].find((b) => b.textContent === "Show archived")!);
+    click(archivedChip());
     await settle();
     expect(params().get("archived")).toBe("1");
     await traverse(() => history.back());
@@ -392,16 +412,23 @@ describe("the Topics row", () => {
     expect(text).toContain("nobody wrote this list");
   });
 
-  it("keeps a zero-count disabled chip's tooltip available to keyboard users", async () => {
-    await show("/?topics=memory");
-    const target = chip("startup");
-    expect(target.disabled).toBe(false);
-    expect(target.getAttribute("aria-disabled")).toBe("true");
-    await act(async () => {
-      target.focus();
-    });
-    await settle(500);
-    expect(document.body.textContent).toContain("0 match this view · 1 of 4 on the shelf");
+  it("hides zero pills in the detail view too, keeping a chosen one", async () => {
+    await show("/?topics=memory&topicsView=detail");
+    const rowKeys = () =>
+      [...host.querySelectorAll('[aria-label="Topics in detail"] > li')].map(
+        (r) => r.querySelector("button[aria-pressed]")?.getAttribute("aria-label")?.split(" ")[0],
+      );
+    expect(rowKeys()).toEqual(["memory", "neuron"]);
+
+    await act(async () => root.unmount());
+    host.remove();
+    await show("/?topics=startup&show=unread&topicsView=detail");
+    expect(rowKeys()).toEqual(["startup"]);
+  });
+
+  it("hides zero pills when a search narrows the shelf, with no topic chosen", async () => {
+    await show("/?q=startups");
+    expect(chips().map((b) => b.getAttribute("aria-label")?.split(" ")[0])).toEqual(["startup"]);
   });
 
   it("says it is still reading, and asks again until nothing is pending", async () => {
@@ -445,8 +472,7 @@ describe("the archive in scope", () => {
     await show("/?topics=memory");
     expect(cards()).toHaveLength(3);
 
-    const toggle = [...host.querySelectorAll("button")].find((b) => b.textContent === "Show archived");
-    click(toggle as HTMLButtonElement);
+    click(archivedChip());
     await settle();
 
     expect(asked).toContain("/api/library/terms?archived=1");
@@ -464,14 +490,15 @@ describe("the archive in scope", () => {
     expect(chipCount("memory")).toBe(4);
     expect(archivedRows()).toHaveLength(1);
     expect(archivedRows()[0]).toContain("An old piece on memory");
+    expect(cardItems()).toHaveLength(4);
     expect(countLine()).toMatch(/^4 of 6 articles \(3 active \+ 1 archived\)/);
   });
 
-  it("keeps the combined count equal to the table rows and archived rows", async () => {
+  it("keeps the combined count equal to the table rows, archived ones included", async () => {
     await show("/?view=table&archived=1&topics=memory");
-    await waitFor(() => archivedRows().length > 0, "the archived list");
-    expect(host.querySelectorAll("tbody tr")).toHaveLength(3);
-    expect(archivedRows()).toHaveLength(1);
+    await waitFor(() => host.querySelectorAll("tbody tr [data-archived-mark]").length > 0, "the archived rows");
+    expect(host.querySelectorAll("tbody tr")).toHaveLength(4);
+    expect(host.querySelectorAll("tbody tr [data-archived-mark]")).toHaveLength(1);
     expect(countLine()).toMatch(/^4 of 6 articles \(3 active \+ 1 archived\)/);
   });
 
@@ -483,17 +510,15 @@ describe("the archive in scope", () => {
     expect(cards()).toHaveLength(0);
   });
 
-  it("is switched by the existing Show archived control, through the URL", async () => {
+  it("is switched by the Archived chip beside Unread, through the URL", async () => {
     await show("/");
-    const toggle = [...host.querySelectorAll("button")].find((b) => b.textContent === "Show archived");
-    expect(toggle).toBeTruthy();
-    click(toggle as HTMLButtonElement);
+    click(archivedChip());
     await settle();
     expect(params().get("archived")).toBe("1");
     await waitFor(() => archivedRows().length === 2, "the archived list");
   });
 
-  it("draws chips in the server's rank order, not by count, and pressing one moves nothing (plan 260928d)", async () => {
+  it("draws chips in the server's rank order, not by count, and pressing one reorders nothing (plans 260928d, 260929a)", async () => {
     /* rank order startup (1 article), neuron (2), memory (3) — the reverse of count order */
     answer = async () => ({ ...ACTIVE_TERMS, terms: [...ACTIVE_TERMS.terms].reverse() });
     await show("/");
@@ -501,7 +526,9 @@ describe("the archive in scope", () => {
     expect(order()).toEqual(["startup", "neuron", "memory"]);
     click(chip("memory"));
     await settle();
-    expect(order()).toEqual(["startup", "neuron", "memory"]);
+    /* "startup" has nothing left to show once "memory" is chosen, so it goes
+       (plan 260929a, 4Y); the others keep their order. */
+    expect(order()).toEqual(["neuron", "memory"]);
   });
 
   it("draws the first twelve by rank, plus a chosen one further down in its own place", async () => {
@@ -520,11 +547,57 @@ describe("the archive in scope", () => {
     expect(order()).toEqual([...keys.slice(0, 12), "topic13"]);
   });
 
+  it("takes the first twelve from the pills that have something to show — no holes (Sol R5)", async () => {
+    /* Sixteen topics; the odd-numbered ones use only "startups", so choosing
+       topic00 (palaces + neurons) zeroes them. The row must then be the first
+       twelve *available* — ten even ones by rank would leave holes. */
+    const keys = Array.from({ length: 16 }, (_, i) => `topic${String(i).padStart(2, "0")}`);
+    answer = async () => ({
+      ...ACTIVE_TERMS,
+      terms: keys.map((k, i) => (i % 2 ? term(k, ["startups", 3]) : term(k, ["palaces", 3], ["neurons", 2]))),
+    });
+    await show("/?topics=topic00");
+    const order = () =>
+      [...host.querySelectorAll<HTMLButtonElement>("button[aria-pressed]")]
+        .filter((b) => !b.closest('[aria-label="Topics in detail"]'))
+        .map((b) => (b.getAttribute("aria-label") ?? "").split(" ")[0])
+        .filter((k) => /^topic\d\d$/.test(k ?? ""));
+    await waitFor(() => order().length > 0, "the chips");
+    const even = keys.filter((_, i) => i % 2 === 0);
+    expect(order()).toEqual(even);
+    // Eight available, so no "All N topics" to offer.
+    expect([...host.querySelectorAll("button")].some((b) => /^All \d+ topics/.test(b.textContent ?? ""))).toBe(false);
+  });
+
+  it("counts only the pills it would show in \"All N topics\"", async () => {
+    const keys = Array.from({ length: 20 }, (_, i) => `topic${String(i).padStart(2, "0")}`);
+    answer = async () => ({
+      ...ACTIVE_TERMS,
+      /* 0–14 on palaces, 15–19 only on startups: 20 topics, 15 once a
+         palaces topic is chosen. */
+      terms: keys.map((k, i) => (i < 15 ? term(k, ["palaces", 3]) : term(k, ["startups", 3]))),
+    });
+    await show("/");
+    const all = () => [...host.querySelectorAll("button")].find((b) => /^All \d+ topics/.test(b.textContent ?? ""));
+    await waitFor(() => !!all(), "the All button");
+    expect(all()?.textContent).toMatch(/^All 20 topics/);
+
+    click(chip("topic00"));
+    await settle();
+    expect(all()?.textContent).toMatch(/^All 15 topics/);
+    click(all()!);
+    await settle();
+    const drawn = [...host.querySelectorAll<HTMLButtonElement>("button[aria-pressed]")]
+      .map((b) => (b.getAttribute("aria-label") ?? "").split(" ")[0])
+      .filter((k) => /^topic\d\d$/.test(k ?? ""));
+    expect(drawn).toEqual(keys.slice(0, 15));
+  });
+
   it("shows topics when every article is archived and the active shelf is empty", async () => {
     activeArticles = [];
     archivedArticles = [
-      entry("old-memory", "An old piece on memory"),
-      ...Array.from({ length: 7 }, (_, i) => entry(`old-${i}`, `Old article ${i}`)),
+      entry("old-memory", "An old piece on memory", GONE),
+      ...Array.from({ length: 7 }, (_, i) => entry(`old-${i}`, `Old article ${i}`, GONE)),
     ];
     answer = async () => ({
       terms: [term("memory", ["old-memory", 4])],

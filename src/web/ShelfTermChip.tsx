@@ -2,7 +2,8 @@
  * **One shelf topic as a pressable chip**, with its tooltip — shared by the
  * Topics row's pills and by every row of its "More detail" view, so that the
  * two are the same control and cannot drift: same toggle, same `aria-pressed`,
- * same disabled-at-zero rule, same card on hover (plan 260928d § Stage 2).
+ * same card on hover (plan 260928d § Stage 2). Which chips are drawn at all —
+ * none at zero unless chosen — is decided above, by `availableTopics`.
  *
  * It draws; it decides nothing. The count comes in already computed by the
  * one formula in shelf-narrow.ts, and a press goes back up as a key.
@@ -90,17 +91,14 @@ export function TermChip({
   scope: TermTipScope;
   className?: string;
 }) {
-  /* An unchosen chip at zero is greyed and aria-disabled in place, rather
-     than removed — a row that reshuffles under the pointer is worse than a
-     dead chip. It remains focusable so its explanatory tooltip is available
-     from the keyboard; the handler enforces the disabled state. A chosen one
-     at zero stays pressable, or it could not be removed. */
-  const dead = !on && count === 0;
-  const action = dead
-    ? "unavailable because no articles match the current view"
-    : on
-      ? "chosen; activate to remove"
-      : "show only articles about this";
+  /* **No dead state since plan 260929a.** An unchosen chip at zero used to be
+     greyed and aria-disabled in place, on the argument that a row reshuffling
+     under the pointer was worse than a dead chip. Greg's report 4Y weighed it
+     the other way — the row is for choosing the next filter, and a chip that
+     leads to nothing is a distraction — so such a chip is no longer drawn
+     (`availableTopics`). The only chip at zero now is a chosen one, which
+     must stay pressable so it can be removed. */
+  const action = on ? "chosen; activate to remove" : "show only articles about this";
   return (
     <Tooltip
       placement="bottom"
@@ -109,16 +107,13 @@ export function TermChip({
     >
       <button
         type="button"
-        onClick={() => {
-          if (!dead) onToggle(term.key);
-        }}
-        aria-disabled={dead}
+        onClick={() => onToggle(term.key)}
         aria-pressed={on}
         /* Begins with what is on the chip, so a reader driving the page by
            voice can say what they see (WCAG 2.5.3) — the rule ShelfControls
            states for Unread. */
         aria-label={`${term.label} ${count} — ${action}`}
-        className={`${chipClass(on)} ${dead ? "tw:cursor-default tw:opacity-40" : ""} ${className}`}
+        className={`${chipClass(on)} ${className}`}
       >
         {slot !== null && <TopicDot slot={slot} />}
         <span className="tw:min-w-0 tw:truncate">{term.label}</span>

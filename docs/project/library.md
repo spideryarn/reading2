@@ -257,10 +257,29 @@ and every check anybody ran with a mouse would look fine.
 So there is **no confirmation dialog**: the Undo strip is the confirmation, and it costs the common
 case nothing. `GET /api/library?archived=1` is the other half of the shelf.
 
-A **Show archived** disclosure at the foot of the shelf is the other way back, and it is not
-optional decoration: without it Archive is permanent from the interface the moment the nine-second
-Undo strip goes, which would make "nothing is destroyed" true of the database and false of the
-product. It does not fetch until opened.
+The **Archived** chip beside Unread is the other way back, and it is not optional decoration:
+without it Archive is permanent from the interface the moment the nine-second Undo strip goes, which
+would make "nothing is destroyed" true of the database and false of the product. It is off by
+default and does not fetch until turned on (`?archived=1`, a direct link included).
+
+**On, the archived articles join the shelf's one list** — since 2026-09-29, when Greg asked for it
+*"at the top (like for "Unread"), so that it's easy to show some/all (so we can use the
+faceted-search-topic-pills and/or sort to look through the Archived articles easily too)"*
+(SPIDERYARN-READING2-4V, plan
+[260929a](../plans/260929a-shelf-topics-round-three-concreteness-zero-pills-archived-toggle.md)).
+Until then it was a **Show archived** disclosure at the foot of the shelf with a second, plainer
+list, which neither the sort nor the row cap reached. Now the two arrays are combined in
+`Library.tsx` *before* TanStack sorts, so the sort, the fixture sink, the row cap, search, Unread,
+topics and "n of m" apply to both as one list, in both views. Each archived row says **Archived**
+on its card and its table row (`ArchivedMark`, keyed on the entry's own `archivedAt`), and offers
+**Put back** where Archive would be — the name the metadata page already gives the same act.
+Put back, rename and archive all reconcile both arrays in `useShelf`, so a card put back stays where it is and loses its mark, and a card archived while the
+chip is on stays too, gaining it — Archive's tooltip says so rather than promising the card leaves.
+While the archive is loading or has failed, the active rows stay painted and one line says which.
+
+The chip is drawn **whenever the shelf has answered**, even over an empty active shelf — alone,
+without the sort chips — because a reader whose every article is archived must still be able to
+reach them (GPT Sol R2); the empty-shelf message comes from the combined list.
 
 **An archived article is still readable by direct link.** Only the shelf filters. That is a decision
 rather than an oversight — the shelf is a shelf, not an access control list, and a link that stops
@@ -521,9 +540,10 @@ explicitly.
 ### Topics, and the archive in the same search
 
 Since 2026-09-28 a **Topics** row sits between `ShelfControls` and the "n of m" line: chips picked by
-a program from the articles' own words, which narrow the shelf in both views. With **Show archived**
-open (`?archived=1`), the archived list is narrowed by the same search, Unread and topics, and so no
-longer disappears during a search. All of it is in [shelf-terms.md](shelf-terms.md).
+a program from the articles' own words, which narrow the shelf in both views. With the **Archived**
+chip on (`?archived=1`), the archived articles are in the same list and narrowed by the same search,
+Unread and topics. A topic with nothing left to show is not drawn unless chosen. All of it is in
+[shelf-terms.md](shelf-terms.md).
 
 ## Sorting the shelf
 

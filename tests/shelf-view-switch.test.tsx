@@ -82,6 +82,8 @@ function render(view: "cards" | "table", onView = vi.fn()) {
         onView,
         filter: "all" as const,
         onFilter: vi.fn(),
+        archived: false,
+        onArchived: vi.fn(),
       }),
     );
   });

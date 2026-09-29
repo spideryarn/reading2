@@ -15,9 +15,9 @@
  * "All N topics" list was: a tap on a chip toggles, and what hovering would
  * have told a mouse is written in the row (shelf-terms.md § Touch).
  *
- * It draws the topics it is handed, in the order handed — every topic, in the
- * server's rank order, is ShelfTerms.tsx's call (plan 260928d § Stage 2, the
- * state machine). **The colour is decoration only**: the label is always
+ * It draws the topics it is handed, in the order handed — every topic worth
+ * offering, in the server's rank order, is ShelfTerms.tsx's call (plan 260928d
+ * § Stage 2, the state machine; the zeros dropped since plan 260929a). **The colour is decoration only**: the label is always
  * drawn, and every swatch and bar is `aria-hidden`.
  *
  * **Compact table-like rows**, chosen over cards and two-line rows from
