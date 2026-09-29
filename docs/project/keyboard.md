@@ -1,5 +1,11 @@
 # Keyboard: ↑ / ↓ take the step, ← / → choose the stride
 
+> **Status, 2026-09-29.** The stride belonged to the gist columns of Hierarchy mode, which was removed
+> that day ([260929d](../plans/260929d-remove-hierarchy-mode-and-heading-numbers.md)). **← / → no longer move a stride; they step Trajectory stops
+> (further down), and are the browser's everywhere else.** ↑ / ↓ still take the step in
+> the article. Everything here about columns, the pointer's level, the aim and the `L1 / L2` buttons is
+> history.
+
 > Ok, let's add keyboard shortcuts. As an experiment, I want to use left and right arrows, and what
 > they do should depend on where my mouse is. If it's in the L2 column, say, left/right should jump
 > to the prev/next L2 item, and so on.

@@ -27,7 +27,9 @@
  * which mechanism takes it away). Both spread `useLogoAnimation()` onto their
  * `<a>`, so there is one implementation of *when* an animation runs and one
  * class name for the stylesheet to key on. `ShelfSpider` uses the same hook on
- * the shelf's decorative mark-only `<span>`.
+ * the shelf's decorative mark-only `<span>`, and since 2026-09-29 so do the
+ * marketing bar's home link and every `SiteFooter`, whose `Wordmark` draws the
+ * same letters and mark as the two above (LogoGlyphs.tsx).
  *
  * That is also why the CSS selects on `.logo-letter` and `.logo-image` and
  * never on `.logo-text`: only the corner copy has that wrapper.

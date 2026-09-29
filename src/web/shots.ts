@@ -32,8 +32,8 @@
  * **What cost the afternoon, so it does not cost the next one** — the whole
  * recipe is in docs/project/marketing-pages.md, but three things in particular:
  * the mode bar's controls are `role="radio"` and not `button` (Dock.tsx), so
- * `getByRole("button")` finds nothing; `?mode=hierarchy` must be named, because
- * a bare article URL opens in Plain and photographs as prose with no columns;
+ * `getByRole("button")` finds nothing; the `?mode=` must be named, because
+ * a bare article URL opens in Plain and photographs as prose with no band;
  * and an on-demand mode renders an empty "nobody has found the terms for this
  * one yet" state on a bare URL visit — the run only starts when the mode-bar
  * control is actually pressed, and pressing it while already in that mode
@@ -54,7 +54,6 @@ import refereeShot from "./assets/referee-criteria.png";
 import rememberShot from "./assets/remember.png";
 import meaningPanelShot from "./assets/search-meaning-panel.png";
 import meaningShot from "./assets/search-meaning.png";
-import zoomShot from "./assets/zoom-columns.png";
 
 export interface Shot {
   src: string;
@@ -78,13 +77,6 @@ export const SHOTS = {
     w: 2160,
     h: 1350,
     alt: "A table of contents beside the prose, detailed for the section being read and its neighbours and sparser further away.",
-  },
-  zoom: {
-    src: zoomShot,
-    file: "zoom-columns.png",
-    w: 2160,
-    h: 1350,
-    alt: "Four columns of increasingly detailed summary — argument, parts, sections — beside the article's own prose, with the current path marked down all four.",
   },
   meaning: {
     src: meaningShot,

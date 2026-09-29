@@ -23,7 +23,7 @@
  * `className="site"` and a `SiteNav`, and carry the `--site-*` token scope with
  * them — a hero and a glow. That shell exists to sell something to a stranger
  * over a long scroll. This page is three short paragraphs, so it takes
- * `PrivacyPage.tsx`'s shape instead: an `← Home` link, an `h1`, prose, and the
+ * `PrivacyPage.tsx`'s shape instead: a Home icon link, an `h1`, prose, and the
  * same `SiteFooter` every other page a reader lands on carries.
  *
  * **The footer is no longer one of the differences.** It was — the marketing
@@ -57,10 +57,9 @@
  * The address is imported rather than typed —
  * docs/project/website-text.md § The contact address.
  */
-import { ArrowLeft } from "lucide-react";
 
 import { CONTACT_EMAIL } from "../site-text.js";
-import { Link } from "./Link.js";
+import { BackLink } from "./BackLink.js";
 import { SiteFooter } from "./SiteFooter.js";
 import { pageTitle, useDocumentTitle } from "./page-title.js";
 
@@ -77,13 +76,7 @@ export function ContactPage() {
           article — so there was often no "back" for it to mean. It is also the
           label the footer uses for the same destination, and one page should not
           call one address two things. */}
-      <Link
-        href="/"
-        className="tw:mb-6 tw:inline-flex tw:items-center tw:gap-1 tw:text-xs tw:text-ink-faint tw:no-underline tw:hover:text-highlight"
-      >
-        <ArrowLeft size={13} />
-        Home
-      </Link>
+      <BackLink href="/" label="Home" icon="home" className="tw:mb-6" />
 
       <h1 className="tw:m-0 tw:font-prose tw:text-2xl tw:leading-snug tw:text-foreground">
         Contact

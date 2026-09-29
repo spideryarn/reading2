@@ -404,34 +404,24 @@ click. Google needs the port to be on the local redirect allow-list; see
 
 ## The URLs and widths worth checking
 
-**`/` is Plain, not Hierarchy** — `DEFAULT_MODE` in [`src/modes.ts`](../../src/modes.ts) has been
-`plain` since 2026-08-29, so every case below that is about columns says `?mode=hierarchy`
-explicitly. A pass run against a bare `/` looks fine and exercises none of it.
+**`/` is Plain** — `DEFAULT_MODE` in [`src/modes.ts`](../../src/modes.ts) has been
+`plain` since 2026-08-29, so every case below that is about a mode names it explicitly. A pass run
+against a bare `/` looks fine and exercises none of it.
 
 | URL | What you're looking at |
 |---|---|
 | `/` | **Plain** — the article and nothing else. Since 2026-09-05 there is no controls bar to speak of here at all |
-| `/?mode=hierarchy` | reading mode: a controls bar of `Parts · Sections · Paragraphs` and nothing else. **No column-header row** — since 2026-09-05 the `<thead>` is still in the DOM and has zero height, which is not the same as being gone: read `document.querySelector('thead th').getBoundingClientRect().height` and expect exactly `0`, and check the fisheye panels still have their contents ([granularity-zoom.md § the header row](granularity-zoom.md#the-header-row)) |
-| `/?mode=hierarchy&text=0` | an old link from before the `Text` pill went. It must **rewrite itself to `?mode=structure`** (`?mode=outline` until 2026-09-10) before the page paints, dropping the `text` pair — the address had no way back to the prose ([url-state.md](url-state.md#the-parameters)) |
-| `/?mode=hierarchy&cols=0,1,2` | an old link from before the L0 column went. It must open **1 and 2**, silently dropping the `0` — not error, not draw an empty column |
+| `/?mode=hierarchy` | a retired mode since 2026-09-29. It must open **Structure**, with the tab saying Structure; there is no controls bar of `Parts · Sections · Paragraphs` and no gist columns any more ([260929d](../plans/260929d-remove-hierarchy-mode-and-heading-numbers.md)) |
+| `/?mode=hierarchy&text=0&cols=1,2` | old links. Both `text` and `cols` are **ignored** (no rewrite, no error); the page opens Structure. Before 2026-09-29 these were the stranded-prose and L0-column cases |
 | `/?mode=outline` | a retired mode since 2026-09-10. It must open **Structure**, with the tab saying Structure, and the address keeps `mode=outline` until the reader changes mode ([260910g](../plans/260910g-structure-mode-subsumes-outline.md)). This row used to describe the compact table with the prose off, which cannot be drawn at all since 2026-09-05 — see below |
 | `/?mode=structure` | **two faces**: two linked columns where the band's border box is at least 609px (a 1165px window; the band widens for them), the nested list where it is narrower. Resize across the threshold and check it swaps without flicker, and that list titles wrap rather than being cut to one line |
-| `/?mode=hierarchy&at=spya-k6fpme` | deep link, opens scrolled to that section — [block-ids.md](block-ids.md), [url-state.md](url-state.md) |
+| `/?mode=structure&at=spya-k6fpme` | deep link, opens scrolled to that section — [block-ids.md](block-ids.md), [url-state.md](url-state.md) |
 | `/#spya-k6fpme` | the old spelling. Should *rewrite itself* to `?at=` before the page paints; if you ever see the hash survive in the address bar, the migration in `main.tsx` broke |
-| `/?mode=hierarchy&cols=1,2` | an explicit column choice, which pins the columns and takes them off auto-fit. There is no way back to automatic from the UI — the `auto` control went on 2026-09-05 |
-| `/?mode=hierarchy&spine=0` | the rail hidden by hand. Check the article **reflows into the reclaimed 12px** rather than leaving a gutter. The second half of this row used to be *"and the corner wordmark clears the controls bar"*, and **there is no corner wordmark on this page since 2026-09-06** — it is `.dock-home` in the bottom bar ([260905g](../plans/260905g-move-the-wordmark-and-feedback-button-into-the-dock.md)). The padding compensation `--spine-w: 0` was load-bearing for is still in the stylesheet, now holding a gutter open for nothing; stage 2 of that plan takes it out, and this row gets a number to check against then. The compensation itself still matters on every page that keeps the corner ([HomeLogo.tsx](../../src/web/HomeLogo.tsx)) |
 | `/?mode=structure&spine=0` | since 2026-09-05 the rail is **on** in every mode, including the compact table it used to be off in by default, so a mode with the rail hidden by hand is the combination that proves `?spine=` still bites. This row said `?mode=outline` until 2026-09-10 |
 | `/?mode=chat&spine=0` | the rail hidden with a mode band open, which is the only way `fitMode` returns `off`. Both smallest terms of the sticky bars' `left` at once |
 | `/?slug=<slug>` | a different article; defaults to `example` |
 
-**Widths.** Auto-fit opens two gist columns at most — L1 and L2, never L0 — so the default
-Hierarchy table is those two plus the prose, and it fits the window rather than overflowing it
-(`tests/layout.test.ts` has the worked numbers). Overflow is now something you have to **ask for**:
-`?mode=hierarchy&cols=1,2,3` in a narrow window is the way to see the pinned end columns overlap the
-middle ones, which is the design and not a fault — the pinned columns sit *on top* and the drop
-shadow is there to say "more to scroll". 1000×900 is a good window for exercising it; a full-width
-window hides the whole class of bug. Below the `td.text` minimum of 34rem the prose measure clamps
-rather than breaking.
+**Widths.** The gist columns, their auto-fit and `?cols=` went with Hierarchy mode on 2026-09-29; what still changes with width is Structure's two faces (609px band threshold, above) and the mode bar's fit ladder. A full-width window hides that whole class of bug, so also try ~1000×900.
 
 ## Scroll, then read the address bar
 

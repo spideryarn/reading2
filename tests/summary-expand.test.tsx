@@ -63,6 +63,7 @@ function section(id: string, title: string, row: number, parent: string): Summar
   return {
     node: node(id, 2, title, parent),
     number: id,
+    title,
     startRow: row,
     endRow: row,
     blocks: 1,
@@ -82,6 +83,7 @@ function apparatus(): SummaryNode {
   return {
     node: n,
     number: "",
+    title: "Notes",
     startRow: 6,
     endRow: 11,
     blocks: 6,
@@ -105,14 +107,15 @@ function tree(withApparatus = false): SummaryNode {
   return {
     node: node("root", 0, "The whole thing", null, ["1", "2"]),
     number: "",
+    title: "The whole thing",
     startRow: 0,
     endRow: 5,
     blocks: 6,
     gist: "The gist of the whole thing.",
     children: [
-      { node: node("1", 1, "First part", "root", ids(one)), number: "1", startRow: 0, endRow: 2,
+      { node: node("1", 1, "First part", "root", ids(one)), number: "1", title: "First part", startRow: 0, endRow: 2,
         blocks: 3, gist: "The gist of the first part.", children: one },
-      { node: node("2", 1, "Second part", "root", ids(two)), number: "2", startRow: 3, endRow: 5,
+      { node: node("2", 1, "Second part", "root", ids(two)), number: "2", title: "Second part", startRow: 3, endRow: 5,
         blocks: 3, gist: "The gist of the second part.", children: two },
       ...(withApparatus ? [apparatus()] : []),
     ],
@@ -475,7 +478,7 @@ describe("an article with nothing to outline", () => {
   const lonely = (): SummaryNode => {
     const n = node("root", 0, "The whole thing", null);
     delete (n as { gist?: string }).gist;
-    return { node: n, number: "", startRow: 0, endRow: 0, blocks: 1, children: [] };
+    return { node: n, number: "", title: "The whole thing", startRow: 0, endRow: 0, blocks: 1, children: [] };
   };
 
   const render = (r: SummaryNode) =>

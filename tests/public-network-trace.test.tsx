@@ -822,8 +822,8 @@ const OUTLINE_ROW = "The argument it makes";
  * would pass just as happily against a mode that rendered nothing at all. So
  * each mode carries **two** facts, because one was not enough:
  *
- *  - `where` — the band that must be open, as a selector, or `null` for the two
- *    modes that open none. Asserted both ways. This was `.mode-close`'s absence
+ *  - `where` — the band that must be open, as a selector, or `null` for the
+ *    mode that opens none (Plain). Asserted both ways. This was `.mode-close`'s absence
  *    at first, which is a proxy twice over: a band that lost its close button
  *    would have satisfied it, and so would a mode that grew a band it should
  *    not have. Sol's review of this stage, 2026-09-02.
@@ -844,10 +844,6 @@ const BAND_SAYS: Record<Mode, { where: string | null; says: string | null }> = {
   /* The way out: the article and nothing else — no band, and nothing to check
      beyond its absence. */
   plain: { where: null, says: null },
-  /* No band either. It is the *gist columns*, drawn from the tree in the
-     payload, so the string is read from the page rather than from a band —
-     which is why these two facts had to come apart. */
-  hierarchy: { where: null, says: PUBLIC_GIST },
   /* Structure, free for a visitor on the terms Outline was (slice 1b): the same
      tree, in columns — or, on a narrow band, in the nested list that was Outline
      mode until 2026-09-10. jsdom lays nothing out, so this file always gets the

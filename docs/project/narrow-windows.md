@@ -39,8 +39,8 @@ document.documentElement.scrollWidth - document.documentElement.clientWidth  // 
 
 Everything above is the shelf, where a narrow window breaks *rows*. On the reading view it breaks
 the **columns**, and the fix is not CSS at all — it is arithmetic in
-[`src/web/layout.ts`](../../src/web/layout.ts), which stops offering gist columns once one will not
-fit beside the prose. [`styles/narrow-window.css`](../../src/web/styles/narrow-window.css)
+[`src/web/layout.ts`](../../src/web/layout.ts), which stopped offering gist columns once one would not
+fit beside the prose (Structure's two faces still use it; the gist columns went with Hierarchy mode on 2026-09-29, [260929d](../plans/260929d-remove-hierarchy-mode-and-heading-numbers.md)). [`styles/narrow-window.css`](../../src/web/styles/narrow-window.css)
 § **a narrow window** and § **a short viewport**, near the end of the import order, are only what is
 left over after that: the wordmark and the two bars that were silently clipping
 their own controls. **Two more used to be on that list and are not any more**, and both left for the
@@ -112,8 +112,8 @@ Three things worth carrying to whatever is built next:
   [`styles/dock-fit.css`](../../src/web/styles/dock-fit.css) § the bar's fit ladder, and
   [260902k](../plans/260902k-the-bottom-bar-measures-its-own-fit.md) for the shape of the argument.
   A breakpoint is right when the *window* is what changed; this bar keeps growing instead.
-- **`.controls` is usually not there at all**, since 2026-09-08. What is left in it is Hierarchy's
-  granularity pills and a visitor's read-only chip, so on every other reading view it was 44px of
+- **`.controls` is usually not there at all**, since 2026-09-08. What was left in it, until Hierarchy mode
+  went on 2026-09-29, was its granularity pills; now it is only a visitor's read-only chip, so on every other reading view it was 44px of
   nothing — held on screen in a band mode by the guard below, which is how a reader came to report
   it. `Reader` draws it only when `barHasContent` ([`src/web/layout.ts`](../../src/web/layout.ts))
   says there is something to put in it, and `:root:not(:has(:where(.reader) > .controls))` in

@@ -33,7 +33,7 @@ Why the feature exists and what a gist may and may not be:
 | [`src/web/jobEngine.ts`](../../src/web/jobEngine.ts) | **the one thing here that is not a component and not view state**: a module-scope service, one per tab, that polls the job list and walks each job through its steps. On Vercel the browser is the worker, and `App()` is a chain of early returns — so while this lived in `useJobs`, whether an import kept running depended on whether the route you opened happened to mount an unrelated feature hook. `useJobSession` (in `useJobs.ts`) starts and stops it on `user.id` and resumes it on a fresh access token; `useJobs` is a `useSyncExternalStore` subscriber over it. [ingest-queue.md § The browser is the worker](ingest-queue.md#the-browser-is-the-worker) |
 | [`src/web/uploadEngine.ts`](../../src/web/uploadEngine.ts) + [`useUpload.ts`](../../src/web/useUpload.ts) | **the second one**, and it exists for the same reason: getting a PDF from the reader's disk into an article — hash, grant, PUT, `POST /api/jobs` — takes minutes, and the reader is meant to walk away from it. Held in a mount, it died the moment they did. One transfer at a time, bound to `user.id` in the same `useJobSession`, every reply fenced so a PUT landing after a sign-out or a Stop writes nothing. It reports its queue POST through `jobEngine.epoch()` / `actionSucceeded` rather than waking the poller itself. [ingest-queue.md § Add commits, and does not wait](ingest-queue.md#add-commits-and-does-not-wait) |
 | [`src/web/tree.ts`](../../src/web/tree.ts) | tree → table geometry (`rowSpan` per node range) |
-| [`src/web/TableView.tsx`](../../src/web/TableView.tsx) | the table itself: the gist columns, the hover chain and deep links — [granularity-zoom.md](granularity-zoom.md) |
+| [`src/web/TableView.tsx`](../../src/web/TableView.tsx) | the prose column. It was the whole table — gist columns beside the prose — until Hierarchy mode was retired on 2026-09-29 ([260929d](../plans/260929d-remove-hierarchy-mode-and-heading-numbers.md)); the columns went, the prose stayed |
 | [`src/web/nav-labels.ts`](../../src/web/nav-labels.ts) | **whether to draw the paragraph-label layer at all, and what to say instead** — four surfaces read the one rule, so it is not four `=== "ready"`s. An absent `navLabel` has always meant *deliberately unlabelled*, so a label that is merely not written yet draws a blank cell; while `Article.navLabelStatus` says otherwise the whole layer is withheld — [hierarchy.md § Absence on a node](hierarchy.md#absence-on-a-node-is-deliberately-unlabelled-not-written-yet-is-a-column) |
 | [`src/web/Masthead.tsx`](../../src/web/Masthead.tsx) | title, byline, source and counts — everything about the article that does not vary with position. The provenance behind a `▾` used to be here and is now a drawer panel. Directly under the title is the **origin line**: the article's own web address, host first with the path faded and truncated after it, or — for the owner, and never for a visitor — the words *Uploaded from a file* / *No web address was recorded*. It was a ↗ glyph beside the title until 2026-09-06, when Greg asked to be *"prominent about the origin"*. Beside the title, for the owner only, one mark is left, saying **who can read it**: a globe or a lock linking to the metadata page's sharing switch ([library.md § The Shared badge](library.md#the-shared-badge)) |
 | [`src/web/Dock.tsx`](../../src/web/Dock.tsx) | the bottom bar and the drawer that rises out of it: the mode switch (fourteen of them, `MODES_UI`), your questions, and the links to the tweets and metadata pages — [260825c-bottom-bar.md](../plans/260825c-bottom-bar.md). Its buttons are **five** kinds — navigate, open a drawer, switch mode, the experimental-features toggle, and, since 2026-09-06, open a modal (Feedback, and since 2026-09-07 the command bar) — and the markup says which (`aria-current` / `aria-expanded` / `aria-checked` / `aria-pressed`; a modal opener carries `aria-haspopup="dialog"` and none of the other four, because it neither goes anywhere nor holds a state). The order is Greg's, set by hand. **The way home came back on 2026-09-06** as `DockHome` at the left-hand end, along with a Feedback trigger at the right, when both left the window's top corners on the pages that mount a bar (the article, its metadata page and its tweets page, in both an owner's and a visitor's shape) — [260905g](../plans/260905g-move-the-wordmark-and-feedback-button-into-the-dock.md). Neither is a mode: the wordmark is outside the `role="radiogroup"`, is a `Link`, and wears `.dock-home` rather than `.dock-btn` so it cannot take the hover wash |
@@ -101,9 +101,10 @@ prose) — and the band between them is the working surface. `?mode=` says which
 `fitView` reserves the band's width; and four CSS rules add a `--mode-w` term that is `0px` whenever
 no band is open.
 
-**Two modes open no band at all**, and they differ in what is left: `hierarchy` is the granularity
-columns beside the prose, and `plain` — the default since 2026-08-31 — is the prose on its own, with
-the columns gone as well ([plain-mode-and-the-way-out.md](../plans/plain-mode-and-the-way-out.md)).
+**One mode opens no band at all**: `plain`, the default since 2026-08-31, is the prose on its own
+([plain-mode-and-the-way-out.md](../plans/plain-mode-and-the-way-out.md)). It used to share that with
+`hierarchy` (the granularity columns beside the prose), removed on 2026-09-29
+([260929d](../plans/260929d-remove-hierarchy-mode-and-heading-numbers.md)).
 So *a mode is open* and *a band is open* are two questions now, named `inMode` and `bandOpen` in
 [`reader/Reader.tsx`](../../src/web/reader/Reader.tsx). Reading either one as the other is the
 mistake `proseVisible`
@@ -115,12 +116,12 @@ exactly that, in every mode. There was a `Spine` pill in the controls bar until 
 was the one granularity-bar control that stayed on screen in a mode; now the rail is simply on
 unless the URL says otherwise ([granularity-zoom.md § the spine](granularity-zoom.md#the-spine-a-birds-eye-rail),
 [url-state.md](url-state.md) for `?spine=`). The prose has no off switch at all any more: `?text=0`
-hid it in the hierarchy mode and nowhere else — which is what `proseVisible` in
+hid it in the (now removed) hierarchy mode and nowhere else — which is what `proseVisible` in
 [`layout.ts`](../../src/web/layout.ts) exists to say once rather than twice — and since 2026-09-05
 that address is rewritten on arrival — to `?mode=structure` since 2026-09-10, `?mode=outline` before — because the pill that put the prose back
 went with the controls bar ([url-state.md](url-state.md#the-parameters)).
 
-Chat is the first mode that is not the hierarchy
+Chat was the first mode that was not the hierarchy
 ([260826a-chat-mode.md](../plans/260826a-chat-mode.md)). Adding a second — the Glossary in Greg's example — is a
 value in `MODES`, a component, and a width; it is deliberately not a new negotiation with
 `layout.ts` each time.
@@ -153,8 +154,8 @@ dearest press in the app — the second, on 2026-09-10.
 **Since 2026-09-11 every band is inside one**, and not by twelve copies: `Reader` § `band()` wraps
 whatever the band switch returns in [`ModeBoundary`](../../src/web/reader/ModeBoundary.tsx), keyed
 on the mode. `MODE_CONTAINMENT` there is a `Record<Mode, …>`, so a new mode does not compile until
-somebody has said whether its band is contained; the only exemptions are Plain and Hierarchy, which
-have no band — a boundary around either would have to take the article with it. The token a band's
+somebody has said whether its band is contained; the only exemption is Plain, which
+has no band — a boundary around either would have to take the article with it. The token a band's
 boundary retires is `bandTarget` in `activation.ts`, answered from the same tables the presses arm
 from, including Diagram's picture and the Referee and Remember chips. `band()` makes the visitor's
 not-available `VisitorBand` part of that same choice, so the sentence that replaces an owner-only or

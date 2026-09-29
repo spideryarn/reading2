@@ -38,7 +38,7 @@ npx tsx scripts/measure-cpu.ts --local-sign-in \
 # Structure replaced Outline in the Dock on 2026-09-10; the dated numbers below say Outline.
 npx tsx scripts/measure-cpu.ts --local-sign-in \
   --url "http://localhost:5273/read/constitution?perf=1" --settle 25 \
-  --modes "Hierarchy,Summary,Structure,Plain" --repeats 3
+  --modes "Summary,Structure,Plain" --repeats 3
 
 # The same page while somebody scrolls it. Real wheel events, through the compositor.
 npx tsx scripts/measure-cpu.ts --local-sign-in \

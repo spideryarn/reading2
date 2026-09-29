@@ -4197,16 +4197,13 @@ export const NEVER_SHARED = [
  */
 export const OWNER_MODE_NOTE: Record<Mode, string> = {
   plain: "The article on its own, with no panel open.",
-  /* **"where there are gists", on all three**, because a *provisional* tree has
+  /* **"where there are gists", here and on Structure**, because a *provisional* tree has
      none: it is carved from the author's own headings while the real one is
      still being written, and `publicTree` publishes that state on purpose so a
      visitor is not shown empty cells with no way to read them
      (src/public/dto.ts § `provisional`). A flat promise of a gist per section is
      a claim about an article that has finished ingesting, and these rows are
      shown about articles that have not. GPT Sol's review, 2026-09-02. */
-  hierarchy:
-    "The nested table of contents and the zoom levels — the headings, and the model's one-line " +
-    "gist for each section where there are gists.",
   summary: "The one-line gist written for each section, down the page, where there is one.",
   glossary:
     "The terms the model pulled out of the piece, and what each one means here. Your lookups are " +
@@ -4239,19 +4236,17 @@ export const OWNER_MODE_NOTE: Record<Mode, string> = {
   debate:
     "What we went looking for on the open web: replies to this piece, and the argument around " +
     "the claims it makes.",
-  /* **The same three words as `hierarchy` do the work here** — "where there
-     are gists" — for the reason that row carries them: a provisional tree has
-     none, and this row is read about articles that have not finished ingesting
-     (src/public/dto.ts § `provisional`).
+  /* **"where there are gists"**, for the reason the note above `summary`
+     gives: a provisional tree has none, and this row is read about articles
+     that have not finished ingesting (src/public/dto.ts § `provisional`).
 
-     "Those same" on purpose. This mode adds no content to what an owner is
-     about to publish; it is another arrangement of the two things the
-     Hierarchy row already named, and a row implying otherwise would over-state
-     what sharing hands over. Since 2026-09-10 it is also the nested list
+     It named "those same headings and gists" until 2026-09-29, pointing at the
+     Hierarchy row above it; that mode retired into this one, so this row says
+     what the content is itself. Since 2026-09-10 it is also the nested list
      Outline used to be, which is why it names both arrangements. */
   structure:
-    "Those same headings and gists, arranged as two linked columns or, on a narrow screen, one " +
-    "nested list — where there are gists.",
+    "The headings and the model's one-line gist for each section, arranged as two linked " +
+    "columns or, on a narrow screen, one nested list — where there are gists.",
   /* "The model found", because the list is its reading — a work cited only by
      name in running text is on it only if the model noticed it — while the
      links are not the model's: each is one the article gave, or a search that

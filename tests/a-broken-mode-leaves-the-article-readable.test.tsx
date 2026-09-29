@@ -1435,7 +1435,7 @@ const WITNESS: Partial<Record<AnyMode, Witness[]>> = {
 };
 
 /** The modes allowed to have no boundary, by name. Growing this is a decision. */
-const EXEMPT = ["plain", "hierarchy"];
+const EXEMPT = ["plain"];
 
 /** No public artefacts, so every artefact-backed visitor gap is reachable. */
 const NOTHING_AVAILABLE: PublicArtefacts = {

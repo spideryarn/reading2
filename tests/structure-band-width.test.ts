@@ -33,12 +33,8 @@ import {
 } from "../src/web/layout.js";
 import { structureFace } from "../src/web/modes/structure/StructureMode.js";
 
-const article = { gistDepths: [0, 1, 2], leafDepth: 3 };
 const band = (windowWidth: number, o: Partial<FitInput> = {}) =>
   fitView({
-    ...article,
-    showText: true,
-    chosen: null,
     windowWidth,
     modeBand: true,
     bandShape: "structure",
@@ -95,7 +91,7 @@ describe("fitView with Structure's band", () => {
 
   it("leaves every other mode's band exactly as it was", () => {
     for (const w of [700, 900, 1165, 1440, 2560]) {
-      const standard = fitView({ ...article, showText: true, chosen: null, windowWidth: w, modeBand: true });
+      const standard = fitView({ windowWidth: w, modeBand: true });
       expect(standard.modeW, `${w}`).toBe(Math.min(MODE_IDEAL, Math.max(288, w - SPINE_W - PROSE_MIN)));
     }
   });

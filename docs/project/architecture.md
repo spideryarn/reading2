@@ -72,8 +72,9 @@ constraint, not an apology — keep it boring while the ideas are still moving.
 
 Stages 4 and 5 are drawn separately but produce **one structure**. See
 [the tree](granularity-zoom.md#the-tree): a deeply-nested table of contents that goes "all the way
-down to a paragraph level" *is* the granularity-zoom tree. Hierarchy is that tree rendered as
-navigation; the zoom view is that tree rendered as text. They must not diverge into two trees.
+down to a paragraph level" *is* the granularity-zoom tree. Structure is that tree rendered as
+navigation (the zoom view, that tree as text, was the Hierarchy mode removed on 2026-09-29,
+[260929d](../plans/260929d-remove-hierarchy-mode-and-heading-numbers.md)). They must not diverge into two trees.
 
 ## What a block is <a id="what-a-block-is"></a>
 
@@ -99,13 +100,13 @@ descended into. Blocks in the flat sequence must never contain one another's tex
 ranges would overlap.
 
 Not every block gets summarised. Images, rules, and pull-quotes that repeat body text carry
-`gistable: false` — addressable, so Hierarchy can point at a diagram, but never the subject of a row
+`gistable: false` — addressable, so Structure can point at a diagram, but never the subject of a row
 of their own. See [block-ids.md § What gets an id](block-ids.md#what-gets-an-id).
 
 **`gistable` is not the policy, and since 2026-08-28 it does not pretend to be.** It is the
 splitter's intrinsic "this block has independently describable prose" fact, and nothing else.
 The five questions the rest of the pipeline actually asks — may this be searched, may an automatic
-model call read it, may it be embedded, may Hierarchy write a row about it, does it go on the clock —
+model call read it, may it be embedded, may the hierarchy step write a row about it, does it go on the clock —
 are named predicates in [`src/block-policy.ts`](../../src/block-policy.ts), which is `gistable`'s
 only policy-reading consumer. They are **not** five spellings of one formula: a footnote is
 searchable and is not on the clock, and a pull-quote is on the clock and gets no row.

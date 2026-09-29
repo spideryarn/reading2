@@ -68,6 +68,7 @@ function part(id: string, title: string, row: number, question?: string): Summar
   return {
     node: n,
     number: id,
+    title,
     startRow: row,
     endRow: row,
     blocks: 3,
@@ -87,6 +88,7 @@ function tree(parts: SummaryNode[], rootQuestion?: string): SummaryNode {
       parts.map((p) => p.node.id),
     ),
     number: "",
+    title: "The whole thing",
     startRow: 0,
     endRow: parts.length - 1,
     blocks: parts.length,

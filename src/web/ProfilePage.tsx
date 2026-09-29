@@ -49,9 +49,10 @@
  * the original's homepage did not have either. This is a reading tool.
  */
 import { useEffect, useState } from "react";
-import { ArrowLeft, BookOpen, Cpu, SlidersHorizontal, TriangleAlert, User, UserCheck, Wallet } from "lucide-react";
+import { BookOpen, Cpu, SlidersHorizontal, TriangleAlert, User, UserCheck, Wallet } from "lucide-react";
 import { MAX_PROFILE_CHARS, type LibraryEntry } from "../types.js";
 import { apiFetch, readJson } from "./lib/api.js";
+import { BackLink } from "./BackLink.js";
 import { Link } from "./Link.js";
 import { pageTitle, useDocumentTitle } from "./page-title.js";
 import { readHref } from "./router.js";
@@ -196,13 +197,7 @@ export function ProfilePage() {
 
   return (
     <main className="tw:mx-auto tw:max-w-3xl tw:px-6 tw:pt-[calc(3.5rem_+_var(--safe-top))] tw:font-sans">
-      <Link
-        href="/"
-        className="tw:mb-6 tw:inline-flex tw:items-center tw:gap-1 tw:text-xs tw:text-ink-faint tw:no-underline tw:hover:text-highlight"
-      >
-        <ArrowLeft size={13} />
-        Back to the shelf
-      </Link>
+      <BackLink href="/" label="Back to your library" className="tw:mb-6" />
 
       <h1 className="tw:m-0 tw:font-prose tw:text-2xl tw:leading-snug tw:text-foreground">Profile</h1>
       {/* Three things now, and the sentence names all three: what the model is

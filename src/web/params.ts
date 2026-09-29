@@ -69,35 +69,10 @@ export const parseAsBlockId = createParser<string>({
   serialize: (value) => value,
 });
 
-/** `text=1` / `text=0` — the spelling this app already documented, kept. */
+/** `1` / `0` — the spelling `?text=` used, kept for every boolean parameter. */
 export const parseAsBit = createParser<boolean>({
   parse: (value) => (value === "1" ? true : value === "0" ? false : null),
   serialize: (value) => (value ? "1" : "0"),
-});
-
-/** The empty column set, which would otherwise serialize to an empty string. */
-const NO_COLUMNS = "none";
-
-/**
- * `cols=0,1,2`, and `cols=none` when every gist column is off.
- *
- * Written out rather than encoded, because these URLs get pasted to people: a
- * reader should be able to see what a link is going to show them.
- */
-export const parseAsDepths = createParser<number[]>({
-  parse(value) {
-    if (value === NO_COLUMNS) return [];
-    const parts = value.split(",").map((p) => Number.parseInt(p, 10));
-    if (parts.length === 0 || parts.some((n) => !Number.isInteger(n) || n < 0)) {
-      return null;
-    }
-    return [...new Set(parts)].sort((a, b) => a - b);
-  },
-  serialize: (value) =>
-    value.length === 0
-      ? NO_COLUMNS
-      : [...new Set(value)].sort((a, b) => a - b).join(","),
-  eq: (a, b) => a.length === b.length && a.every((n, i) => n === b[i]),
 });
 
 /* ------------------------------------------------------------ the params --
@@ -106,25 +81,15 @@ export const parseAsDepths = createParser<number[]>({
    > scrolling should replace rather than adding to history because we don't
    > need the back button to change scrolling
 
-   So position replaces, and the deliberate acts — toggling a column, switching
-   to outline mode, opening an article from the library — push. Back then undoes
-   the last thing you *did*, and never crawls you back up the page one screen at
-   a time. Clicking a gist to jump is the one scroll that pushes, because it is
-   a deliberate act too; that override lives at the call site in TableView. */
-
-/** Reading mode (text column on) vs outline mode. Read-only since 2026-09-05:
-    the `Text` pill that wrote it went with the controls bar, so `?text=0` is
-    something a reader arrives with — docs/project/url-state.md. */
-export const textParam = parseAsBit
-  .withDefault(true)
-  .withOptions({ history: "push" });
+   So position replaces, and the deliberate acts — switching mode, opening an
+   article from the library — push. Back then undoes the last thing you *did*,
+   and never crawls you back up the page one screen at a time. */
 
 /**
  * Whether the bird's-eye rail down the left is on screen — see Spine.tsx.
  *
- * **No default, deliberately** — the same call `colsParam` makes below.
- * Absent means *nobody has touched this*, which since 2026-09-05 resolves to
- * *on* (layout.ts § `spine`): the pill that used to write this went with the
+ * **No default, deliberately.** Absent means *nobody has touched this*, which
+ * since 2026-09-05 resolves to *on* (layout.ts § `spine`): the pill that used to write this went with the
  * rest of the controls bar, so a rail nobody can ask for has to be there by
  * default. `?spine=0` is the only thing that takes it away, and the third state
  * survives because App.tsx puts `null` back — not `true` — when Search or Ideas
@@ -132,20 +97,11 @@ export const textParam = parseAsBit
  *
  * It only says on or off; there is one rail, 12px wide at every window size.
  *
- * `push`, like `cols` and `text`: hiding a whole column of the view is a
- * deliberate act, and Back should undo it. Nothing in the UI writes it any
- * more, so in practice it arrives in the URL — docs/project/url-state.md.
+ * `push`: hiding a whole column of the view is a deliberate act, and Back
+ * should undo it. Nothing in the UI writes it any more, so in practice it
+ * arrives in the URL — docs/project/url-state.md.
  */
 export const spineParam = parseAsBit.withOptions({ history: "push" });
-
-/**
- * Which gist columns are visible.
- *
- * No default, deliberately: the sensible default is "all of them", and how many
- * there are depends on how deep this particular article's tree turned out. Absent
- * means "whatever this article's full set is" and is resolved in App.
- */
-export const colsParam = parseAsDepths.withOptions({ history: "push" });
 
 /**
  * Reading position, as a block id. Ordinary scrolling writes the first block of
@@ -263,7 +219,8 @@ export const panelParam = createParser<Panel>({
  * > middle sections are just such a mode that can be chosen from the bottom-bar
  * > (the default).
  *
- * So `hierarchy` is a real value with a real name, even though it is the default.
+ * So `hierarchy` was a real value with a real name, even though it was the default
+ * (retired into `structure` on 2026-09-29 — src/modes.ts § `RETIRED_MODES`).
  * Naming it is what makes the next mode an addition to a list rather than a
  * second special case.
  *
@@ -280,8 +237,7 @@ export const panelParam = createParser<Panel>({
  * breaking urls — we're in alpha and have no users yet."*
  *
  * **`push`, unlike `?panel=`.** A drawer is a glance; a mode is where you are.
- * Switching to chat and pressing Back should put the article back,
- * the same way toggling a column does — and unlike opening and closing a panel,
+ * Switching to chat and pressing Back should put the article back — and unlike opening and closing a panel,
  * you do not do it twice in ten seconds, so it will not fill the history.
  *
  * An unknown value parses to the **default** rather than throwing, so a link
@@ -339,7 +295,8 @@ export const modeParam = createParser<Mode>({
      2026-08-30.
 
      `modeFromParam` since 2026-09-10, which is `isMode` plus the retired names —
-     `?mode=outline` opens Structure (src/modes.ts § `RETIRED_MODES`). */
+     `?mode=outline` and `?mode=hierarchy` open Structure (src/modes.ts §
+     `RETIRED_MODES`). */
   parse: (v) => modeFromParam(v),
   serialize: (v) => v,
 })
@@ -592,8 +549,7 @@ export const sortParam = createParser<TermSort>({
  * out, and anything outside 0–1 parses to null rather than throwing, which is
  * the same rule every other parser in this file follows.
  *
- * **No default, deliberately** — the same call `colsParam` makes above, for the
- * same reason. Absent means *nobody has touched this*, and the panel resolves it
+ * **No default, deliberately.** Absent means *nobody has touched this*, and the panel resolves it
  * to `PRIORITY_GATE`. Giving it a default here would put the constant in two
  * files and make "the reader chose 0.30" indistinguishable from "the reader
  * chose nothing", which matters because the second is the one the condition on
@@ -804,7 +760,7 @@ export const runParam = parseAsBlockId.withOptions({ history: "replace" });
  * Duplicates are dropped, because two ticks of one box is one tick.
  *
  * **The empty set serializes to `runs=none`, and that is load-bearing.** It is
- * the same trick `?cols=` plays with `NO_COLUMNS`, and here it is not merely
+ * the same trick `?cols=` played with `none` until it retired, and here it is not merely
  * tidy — without it the legacy fallback below resurrects a search the reader
  * has switched off. An empty list joined with commas is `""`, `""` parses back
  * to "no valid ids", and "no valid ids" is indistinguishable from *absent*, at

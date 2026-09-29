@@ -198,19 +198,16 @@ describe("unknownCitedIds — the citation contract's one silent failure", () =>
   });
 });
 
-describe("fitView in a mode — the band replaces the columns", () => {
-  const article = { gistDepths: [0, 1, 2], leafDepth: 3 };
+describe("fitView in a mode — the band beside the prose", () => {
   /* NOT called `fit`, which is what layout.test.ts calls its equivalent: Biome
      reads a bare `fit(` as Vitest's focused-test helper and flags the whole
      file (lint/suspicious/noFocusedTests). A human skimming can misread it the
      same way, which is the better reason. */
   const band = (windowWidth: number) =>
-    fitView({ ...article, showText: true, chosen: null, modeBand: true, windowWidth });
+    fitView({ modeBand: true, windowWidth });
 
   it("1600px: the band at its ideal width, the rest to the prose", () => {
     const f = band(1600);
-    // No gist columns at all — they are not squeezed, they are gone.
-    expect(f.columns).toEqual([]);
     expect(f.modeW).toBe(MODE_IDEAL);
     // 1600 - 12 of spine - 400 of band.
     expect(f.widths).toEqual([1188]);
@@ -365,9 +362,6 @@ describe("fitView in a mode — the band replaces the columns", () => {
      rule is that the rail is unconditional. */
   it("hides the rail in a mode too, when the reader has hidden it", () => {
     const f = fitView({
-      ...article,
-      showText: true,
-      chosen: null,
       modeBand: true,
       windowWidth: 1600,
       showSpine: false,
@@ -379,12 +373,10 @@ describe("fitView in a mode — the band replaces the columns", () => {
     expect(f.minWidth).toBe(1600);
   });
 
-  it("leaves the ToC layout untouched when there is no mode band", () => {
-    const f = fitView({ ...article, showText: true, chosen: null, windowWidth: 1600 });
+  it("takes no room for a band when there is none", () => {
+    const f = fitView({ windowWidth: 1600 });
     expect(f.modeW).toBe(0);
-    // Automatic fit's own default — spine + L1 + L2, never L0. See
-    // tests/layout.test.ts § "the default hierarchy view (no ?cols=)".
-    expect(f.columns).toEqual([1, 2]);
+    expect(f.alone).toBe(true);
   });
 });
 

@@ -15,12 +15,13 @@
  * anything of its own. There was a second public route until 2026-09-02; this
  * page never called it either.
  */
-import { ArrowLeft, ExternalLink } from "lucide-react";
+import { ExternalLink } from "lucide-react";
 
 import type { Article } from "../types.js";
 import type { PublicArtefacts, PublicTweets } from "../public-types.js";
 import { SHARED_LINK_CARRIES, TAKEDOWN_LINK } from "../messages.js";
 import { Dock } from "./Dock.js";
+import { BackLink } from "./BackLink.js";
 import { Link } from "./Link.js";
 import { carriedSearch, readHref, TAKEDOWN_HREF, type ArticleView } from "./router.js";
 import { webSource } from "./SourceLink.js";
@@ -396,13 +397,7 @@ export function VisitorTweetsPage({
 
 function BackToArticle({ slug }: { slug: string }) {
   return (
-    <Link
-      href={readHref(slug, carriedSearch(location.search), "article")}
-      className="tw:mb-6 tw:inline-flex tw:items-center tw:gap-1 tw:text-xs tw:text-ink-faint tw:no-underline tw:hover:text-highlight"
-    >
-      <ArrowLeft size={13} />
-      Back to the article
-    </Link>
+    <BackLink href={readHref(slug, carriedSearch(location.search), "article")} label="Back to the article" className="tw:mb-6" />
   );
 }
 

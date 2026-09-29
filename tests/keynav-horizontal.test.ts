@@ -4,8 +4,9 @@
  * horizontal handler (docs/plans/260928a-trajectory-mode-skim-a-paper-at-increasing-depth.md
  * § Keys, Sol F5).
  *
- * While Trajectory is the mode, ← / → step its stops; everywhere else they move
- * the stride across the columns, exactly as before. The existing guards hold for
+ * While Trajectory is the mode, ← / → step its stops; everywhere else they are
+ * the browser's (they moved the stride across Hierarchy's gist columns until
+ * 2026-09-29). The existing guards hold for
  * both: no modifiers, not while typing, not when a widget nearer the keypress
  * has already handled it, and no auto-repeat. ↑ / ↓ are untouched either way.
  *
@@ -39,8 +40,8 @@ function block(i: number): Block {
 }
 
 const blocks = Array.from({ length: 6 }, (_, i) => block(i));
-/** Two rungs, so → has somewhere to move the stride when nobody else takes it. */
-const plan: NavPlan = { ladder: [0, 1], starts: [[0, 3], [0, 1, 2, 3, 4, 5]] };
+/** Two levels: the fallback aim (0) steps by three rows. */
+const plan: NavPlan = { starts: [[0, 3], [0, 1, 2, 3, 4, 5]] };
 
 let container: HTMLDivElement;
 let root: Root;
@@ -48,11 +49,9 @@ let root: Root;
 let asked: number[];
 /** What it answers — whether it took the key. */
 let takes: boolean;
-/** The stride `useArrowNav` reports, so a test can see it did not move. */
-let stride = -1;
 
 function Harness({ withHandler }: { withHandler: boolean }) {
-  stride = useArrowNav(
+  useArrowNav(
     plan,
     blocks,
     0,
@@ -80,7 +79,6 @@ beforeEach(() => {
   jumps.length = 0;
   asked = [];
   takes = true;
-  stride = -1;
 });
 
 afterEach(() => {
@@ -110,12 +108,12 @@ describe("with a horizontal handler (Trajectory)", () => {
     await mount(true);
   });
 
-  it("hands ← and → to the handler, not to the stride", () => {
+  it("hands ← and → to the handler", () => {
     const right = press("ArrowRight");
     const left = press("ArrowLeft");
     expect(asked).toEqual([1, -1]);
     expect(right.defaultPrevented && left.defaultPrevented).toBe(true);
-    expect(stride, "the stride must not have moved").toBe(0);
+    expect(jumps, "a sideways key must not scroll the article").toEqual([]);
   });
 
   it("hands the key back to the browser when the handler has nowhere to go", () => {
@@ -123,7 +121,6 @@ describe("with a horizontal handler (Trajectory)", () => {
     const e = press("ArrowRight");
     expect(asked).toEqual([1]);
     expect(e.defaultPrevented).toBe(false);
-    expect(stride).toBe(0);
   });
 
   it("keeps every guard", () => {
@@ -154,10 +151,15 @@ describe("without one (every other mode)", () => {
     await mount(false);
   });
 
-  it("moves the stride, as it always has", () => {
-    /* The control: the same key, with no handler, is the stride's. */
+  it("leaves ← and → to the browser", () => {
     const e = press("ArrowRight");
-    expect(stride).toBe(1);
+    expect(e.defaultPrevented).toBe(false);
+    expect(jumps).toEqual([]);
+  });
+
+  it("still steps ↑ and ↓ — the control that the hook is listening at all", () => {
+    const e = press("ArrowDown");
     expect(e.defaultPrevented).toBe(true);
+    expect(jumps).toEqual(["spya-h3"]);
   });
 });

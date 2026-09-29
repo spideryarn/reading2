@@ -70,7 +70,7 @@ twitch and no progress. Measured over the real `stepTarget` and a thirty-block f
 removed: `[10, 10, 10, 10]`.
 
 **The rest of the app never had this bug, and the reason is worth keeping.** The arrow keys
-([`keynav.ts`](../../src/web/keynav.ts)) and the swipe gesture ([`swipe.ts`](../../src/web/swipe.ts))
+([`keynav.ts`](../../src/web/keynav.ts)) and the swipe gesture (`src/web/swipe.ts`)
 do exactly the same stepping, and both take their current row from `chain.current ?? measureRow()` —
 their own short-lived memory of the last target, falling back to measuring the DOM. Neither ever asks
 the address. The diagram panel was the first widget to use `?at=` as its own working state, and it

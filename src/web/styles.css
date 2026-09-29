@@ -33,7 +33,6 @@
 @import "./styles/spine.css";
 @import "./styles/tooltip.css";
 @import "./styles/annotations.css";
-@import "./styles/column-context.css";
 @import "./styles/dock.css";
 @import "./styles/design-page.css";
 @import "./styles/mode-band.css";
@@ -45,7 +44,6 @@
 @import "./styles/referee.css";
 @import "./styles/summary.css";
 @import "./styles/chat-actions.css";
-@import "./styles/touch.css";
 @import "./styles/profile.css";
 @import "./styles/diagram.css";
 @import "./styles/dialogs.css";

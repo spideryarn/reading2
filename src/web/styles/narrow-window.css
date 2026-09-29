@@ -1013,7 +1013,6 @@
   .controls,
   .dock,
   .install-hint,
-  td.gist .sticky,
   .spine,
   .mode-band,
   /* **The overflow fade was missing from this list and is not missing from the
@@ -1024,14 +1023,7 @@
      every width (F3, 2026-09-07): while only a phone hid its bars it was one
      unwanted 180ms slide on a narrow screen; on a laptop it is one on every
      scroll direction change, for a reader who asked for none. */
-  .reader:has(table.zoom.overflowing)::after,
-  /* **At the same specificity as the rule it overrides**, which is why this is
-     not a bare `.ctx-panel`: § the panels and the measuring stick writes
-     `:root[data-bar-moving] .ctx-panel`, (0,2,0), and a bare class is (0,1,0) —
-     it would lose whatever the source order, and the symptom is a reader who
-     asked for less motion getting the slide anyway. `:where()` is no help here
-     either; it would zero the very specificity being matched. */
-  :root[data-bar-moving] .ctx-panel {
+  .reader:has(table.zoom.overflowing)::after {
     transition: none;
   }
 }
@@ -1078,18 +1070,12 @@
    read when the finger goes **down**, so it cannot lock to whichever axis the
    gesture turns out to favour; it can only be decided per region, in advance.
 
-   So the axis is a property of what you put your finger on, which this view
-   already had a shape for (touch.md § what happens where):
+   So the axis is a property of what you put your finger on (touch.md § what
+   happens where): the prose scrolls down only. The gist columns beside it
+   took the sideways axis and a step gesture, until they went with the
+   Hierarchy mode on 2026-09-29.
 
-     the prose      → down only          (this rule)
-     a gist column  → across, or a step  ([data-swipe-step], § touch above)
-
-   That keeps sideways panning reachable when a manual `?cols=` overflows the
-   window, which is the one case left where there is anything out there — you
-   pan from a gist column rather than from the middle of a sentence. Nothing is
-   taken away that auto-fit ever needs.
-
-   Two declarations, not one, for the reason the swipe rules give: `pinch-zoom`
+   Two declarations, not one: `pinch-zoom`
    is a newer keyword, and a browser that does not know it drops the whole
    declaration — so the first line is the floor and the second is the upgrade.
    Getting this wrong disables pinch-to-zoom on the article, which is an

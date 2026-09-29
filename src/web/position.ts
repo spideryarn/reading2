@@ -51,7 +51,7 @@ export interface Section {
  * The leaves are one node per block, so using them would be storing the exact
  * position under another name. Depth 1 ("Parts") is far too coarse — nine of
  * them across the example article. `leafDepth - 1` is depth 2 for a normal
- * three-deep tree, which is what columnLabel already calls "Sections", and it
+ * three-deep tree — what the reader sees called "Sections" — and it
  * follows the article if a deeper or shallower tree gets generated. Clamped at
  * 1 so a pathologically shallow tree can never select the root, which spans
  * everything and would never change.

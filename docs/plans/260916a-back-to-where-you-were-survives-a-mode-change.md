@@ -49,7 +49,7 @@ not have to discover the exceptions by being surprised by one:
 - **↑ / ↓** — `scrollToBlock` direct ([`keynav.ts`](../../src/web/keynav.ts) § `useArrowNav`).
   *"A stride you take twenty times must not cost twenty presses of Back."*
 - **Swipe steps** — the same arithmetic and the same reason
-  ([`swipe.ts`](../../src/web/swipe.ts)).
+  (`src/web/swipe.ts`).
 - **Stepping between comments** — Stage B2 of 260906g
   ([`comment-jump.ts`](../../src/web/comment-jump.ts)).
 - **Arrival**: the `?at=` restore, and the once-only scroll to an arriving `?note=`

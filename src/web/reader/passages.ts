@@ -130,14 +130,13 @@ export function selectPassages(mode: Mode, slots: PassageSlots): PassageSlot {
        § Prose. */
     case "trajectory":
       return slots.trajectory;
-    /* The ones with nothing to mark. `plain` and `hierarchy` have no band at
-       all; `chat`, `glossary`, `summary`, `diagram`, `remember`, `structure`
-       and `debate` have one that publishes no passages — verified rather than
+    /* The ones with nothing to mark. `plain` has no band at all; `chat`,
+       `glossary`, `summary`, `diagram`, `remember`, `structure` and `debate`
+       have one that publishes no passages — verified rather than
        assumed for chat and remember when they moved
        (docs/plans/260906c… § Stage 2), and `glossary`'s selection is a
        different currency (`termSelections`) that never reaches this state. */
     case "plain":
-    case "hierarchy":
     case "chat":
     case "glossary":
     case "summary":

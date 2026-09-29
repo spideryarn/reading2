@@ -43,6 +43,27 @@ describe("the retired `outline` mode", () => {
     expect(readMode("/read/some-article?mode=outline&at=spya-k3m9qt")).toBe("structure");
   });
 
+});
+
+/* Retired on 2026-09-29, Greg (SPIDERYARN-READING2-4B): "Remove the Hierarchy
+   mode altogether. I think the Structure mode is better/sufficient."
+   docs/plans/260929d-remove-hierarchy-mode-and-heading-numbers.md. */
+describe("the retired `hierarchy` mode", () => {
+  it("is not a mode any more", () => {
+    expect((MODES as readonly string[]).includes("hierarchy")).toBe(false);
+  });
+
+  it("resolves to Structure on the client's parser and on the server's title", () => {
+    expect(modeFromParam("hierarchy")).toBe("structure");
+    expect(modeParam.parse("hierarchy")).toBe("structure");
+    expect(readMode("/read/some-article?mode=hierarchy")).toBe("structure");
+    /* The two parameters only Hierarchy read are ignored, not honoured: the
+       tab says Structure whatever they say. */
+    expect(readMode("/read/some-article?mode=hierarchy&text=0&cols=1,2")).toBe("structure");
+  });
+});
+
+describe("RETIRED_MODES", () => {
   it("names only real modes as successors, and nothing else resolves", () => {
     for (const successor of Object.values(RETIRED_MODES)) {
       expect(MODES).toContain(successor);

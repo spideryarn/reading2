@@ -2,10 +2,9 @@
  * Arrow-key navigation — the pure half: which row a keypress lands on, given
  * where the reader is and which level the pointer has aimed at.
  *
- * The stepping keys are ↑ / ↓; `dir` here is -1 for up and 1 for down. ← / →
- * choose which level they step by, which is the ladder arithmetic at the bottom. The arithmetic is
- * about document order, not about the keyboard, which is why switching the keys
- * from ← / → to ↑ / ↓ changed nothing below.
+ * The stepping keys are ↑ / ↓; `dir` here is -1 for up and 1 for down. The
+ * arithmetic is about document order, not about the keyboard, which is why
+ * switching the keys from ← / → to ↑ / ↓ changed nothing below.
  *
  * The DOM half (reading the pointer's zone, measuring the current row, the
  * chaining of rapid presses) is not tested here because it needs a real layout;
@@ -17,7 +16,7 @@ import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import type { Block, Tree } from "../src/types.js";
 import { buildGeometry } from "../src/web/tree.js";
-import { itemStarts, navPlan, nextAim, stepTarget } from "../src/web/keynav.js";
+import { itemStarts, navPlan, stepTarget } from "../src/web/keynav.js";
 
 const blocks: Block[] = JSON.parse(
   readFileSync("example/blocks.json", "utf8"),
@@ -109,104 +108,21 @@ describe("stepTarget", () => {
   });
 });
 
-/* ------------------------------------------------------- ← / →: the aim -- */
+/* ------------------------------------------------- the rows each level has -- */
 
 describe("navPlan", () => {
-  const leaf = geometry.leafDepth;
-  const ladder = (columns: number[], showText: boolean) =>
-    navPlan(geometry, columns, showText).ladder;
-
-  it("is the columns on screen, coarsest first", () => {
-    expect(ladder([1, 2], true)).toEqual([1, 2, leaf]);
-  });
-
-  /**
-   * **← stops at Parts.** Greg, 2026-08-26: "I need to be able to hit left all
-   * the way to be able to select L0 (the Argument), and to be able to hit
-   * right all the way to select the Text." Half of that was reversed on
-   * 2026-09-05 — "let's get rid of the 'Arg' button and functionality
-   * altogether" — and the later instruction wins: there is no L0 column left
-   * to select, so the coarse end of the ladder is Parts. The other half stands
-   * exactly as it did: → still runs all the way out to the prose.
-   *
-   * The arc artefact is untouched by this; Structure's list face still renders it
-   * (docs/project/keyboard.md § Choosing the level without a mouse).
-   */
-  it("runs from the parts to the prose, and offers no argument rung", () => {
-    expect(ladder([0, 1, 2], true)).toEqual([1, 2, leaf]);
-  });
-
-  // Depth 0 is one cell spanning the article, so both arrows are dead ends
-  // there — which is why a stray `?cols=0` cannot conjure a rung even though
-  // the tree still has a root.
-  it("drops a column with nothing to step through", () => {
-    expect(ladder([0, 1, 2], false)).toEqual([1, 2]);
-    expect(navPlan(geometry, [0], false).starts[0]).toEqual([0]);
-  });
-
-  // Outline mode: the leaf column is in `columns` already, and the prose is off.
-  it("does not invent a prose rung when the prose is hidden", () => {
-    expect(ladder([2, leaf], false)).toEqual([2, leaf]);
-  });
-
-  // The prose and the leaf column beside it are one paragraph either way, so
-  // they are one rung — → must not need two presses to leave them.
-  it("gives the prose and the leaf column the same rung", () => {
-    expect(ladder([1, leaf], true)).toEqual([1, leaf]);
-  });
-
-  // A mode owns the middle band, so there are no gist columns at all.
-  it("is the prose alone when a mode has taken the band", () => {
-    expect(ladder([], true)).toEqual([leaf]);
-  });
-
-  // The pointer can aim at a level the ladder does not carry — the spine is L1
-  // whether or not the Parts column survived the fit — so the rows are kept for
-  // every level, not just the rungs.
-  it("keeps rows for levels that are off the ladder", () => {
-    const plan = navPlan(geometry, [], true);
-    expect(plan.ladder).toEqual([leaf]);
+  // The pointer can aim at any level — the spine is L1, the prose is the leaf —
+  // so the rows are kept for every level of the tree. (← / → stepped a ladder
+  // of the gist columns on screen until 2026-09-29; that went with them.)
+  it("keeps rows for every level, the same rows itemStarts gives", () => {
+    const plan = navPlan(geometry);
+    expect(plan.starts).toHaveLength(geometry.cells.length);
     expect(plan.starts[1]).toEqual(itemStarts(geometry.cells[1] ?? []));
-  });
-});
-
-describe("nextAim", () => {
-  const ladder = [1, 2, 5];
-
-  it("moves one column at a time", () => {
-    expect(nextAim(ladder, 1, 1)).toBe(2);
-    expect(nextAim(ladder, 2, 1)).toBe(5);
-    expect(nextAim(ladder, 5, -1)).toBe(2);
+    expect(plan.starts[geometry.leafDepth]).toEqual(itemStarts(geometry.cells[geometry.leafDepth] ?? []));
   });
 
-  // Null rather than wrapping, so the caller can hand the key back to the
-  // browser and ← / → still pan a table wider than the window.
-  it("returns null at the ends rather than wrapping", () => {
-    expect(nextAim(ladder, 1, -1)).toBeNull();
-    expect(nextAim(ladder, 5, 1)).toBeNull();
-    expect(nextAim([], 2, 1)).toBeNull();
-    expect(nextAim([2], 2, 1)).toBeNull();
-  });
-
-  // The pointer can be aiming at a level with no column — the spine is L1 even
-  // when the Parts column has been dropped — so an off-ladder aim sits between
-  // rungs and the key takes the one on its side.
-  it("steps to the neighbour when the aim is not on the ladder", () => {
-    expect(nextAim(ladder, 3, 1)).toBe(5);
-    expect(nextAim(ladder, 3, -1)).toBe(2);
-    expect(nextAim(ladder, 0, 1)).toBe(1);
-    expect(nextAim(ladder, 0, -1)).toBeNull();
-    expect(nextAim(ladder, 9, -1)).toBe(5);
-    expect(nextAim(ladder, 9, 1)).toBeNull();
-  });
-
-  it("walks the ladder end to end and stops exactly once", () => {
-    const seen = [ladder[0]!];
-    for (;;) {
-      const next = nextAim(ladder, seen[seen.length - 1]!, 1);
-      if (next === null) break;
-      seen.push(next);
-    }
-    expect(seen).toEqual(ladder);
+  // Depth 0 is one cell spanning the article: nowhere to step.
+  it("gives the root one row, so ↑ / ↓ aimed at it are dead ends", () => {
+    expect(navPlan(geometry).starts[0]).toEqual([0]);
   });
 });

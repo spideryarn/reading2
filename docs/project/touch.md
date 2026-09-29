@@ -1,5 +1,10 @@
 # Touch: a swipe in a column steps, the prose scrolls
 
+> **Status, 2026-09-29.** The gist columns this doc is about were part of Hierarchy mode, which was
+> removed that day ([260929d](../plans/260929d-remove-hierarchy-mode-and-heading-numbers.md)), so there is no column to swipe now and the prose scrolls
+> natively everywhere. The design, the reasons and the accident notes below are history, kept for the
+> next time somebody wants stepped touch scrolling.
+
 > We're going to want to read on an iPad a lot.
 >
 > Can we play with the way touch-scrolling works so that it jumps step-by-step if I scroll within a
@@ -16,7 +21,7 @@ arithmetic — `stepTarget` and `scrollToBlock` — so a finger and a key cannot
 **A finger on the prose column gets ordinary iPad scrolling**, and that is the design rather than a
 limitation. See [§ why the prose is untouched](#why-the-prose-is-untouched).
 
-The code is [`src/web/swipe.ts`](../../src/web/swipe.ts) — one pure function and one hook over six
+The code is `src/web/swipe.ts` — one pure function and one hook over six
 window listeners. The reasoning, the sources and the two mechanisms we rejected are in
 [260826f-ipad-touch-scrolling.md](../research/260826f-ipad-touch-scrolling.md).
 
@@ -669,7 +674,7 @@ tooltip, it does not say on an iPad.**
 None of this is testable from a laptop, and the automation browser is worse than useless here — its
 tab is hidden, so `requestAnimationFrame` never runs and neither does anything downstream of it
 ([browser-testing.md](browser-testing.md)). The pure arithmetic is pinned in
-[`tests/swipe.test.ts`](../../tests/swipe.test.ts) and
+`tests/swipe.test.ts` and
 [`tests/scroll.test.ts`](../../tests/scroll.test.ts) — the latter added after a cross-family review
 pointed out that both bugs in the screenful step were arithmetic, and neither had needed a browser to
 find. Everything below is a hand check.

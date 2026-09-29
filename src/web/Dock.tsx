@@ -181,7 +181,6 @@ import {
   Info,
   Layers,
   ListOrdered,
-  ListTree,
   MessageSquareText,
   MessagesSquare,
   Search,
@@ -232,6 +231,7 @@ import { DEFAULT_MODE, diagramInSearch, type Mode, type Panel } from "./params.j
 import { modeFromParam } from "../modes.js";
 import { cn } from "@/lib/utils";
 import { Link } from "./Link.js";
+import { LogoLetters, LogoMark } from "./LogoGlyphs.js";
 import { useLogoAnimation } from "./logo-animation.js";
 /* The trigger only — the dialog and the `open` state stay mounted at the
    signed-in `App` level, where a `Dock` unmounting cannot destroy a draft.
@@ -534,8 +534,7 @@ interface Props {
  * § 1 has the reasoning.
  *
  *  - `exit` — Plain, alone: the way out of a mode.
- *  - `shape` — the article's shape, restated (Hierarchy, Structure, Summary,
- *    Diagram).
+ *  - `shape` — the article's shape, restated (Structure, Summary, Diagram).
  *  - `passages` — the article's own passages: a walk through its quotes, the
  *    quotes, questions answered by passages, and finding passages.
  *  - `dimensions` — one dimension of the piece pulled out (Glossary, Ideas,
@@ -635,25 +634,19 @@ const MODES_UI = [
     icon: AlignLeft,
     keepLabel: true,
   },
-  {
-    mode: "hierarchy",
-    group: "shape",
-    icon: ListTree,
-  },
-  /* Straight after Hierarchy, because it answers the same question — what shape
-     is this piece, and where am I in it — with linked columns, or a nested list
-     where there is no room for them, instead of columns you read across. Greg
-     set this order by hand and it runs from the article's own words outwards,
-     so the two structural views belong together at the near end.
+  /* First of the shape run: what shape is this piece, and where am I in it —
+     linked columns, or a nested list where there is no room for them. Greg set
+     this order by hand and it runs from the article's own words outwards. It
+     sat straight after Hierarchy until that mode retired into it on 2026-09-29
+     (docs/plans/260929d-remove-hierarchy-mode-and-heading-numbers.md).
 
      **This is Outline's slot.** Outline stood here from 2026-08-28 and
      Structure sat after it behind the experimental switch; on 2026-09-10
      Structure took Outline's list as its narrow face, Outline left the bar,
      and Structure came out from behind the switch into this place.
 
-     `Columns2` rather than another tree or list glyph: Hierarchy has
-     `ListTree`, and what distinguishes this mode where there is room is the
-     pair of linked columns rather than the tree both read. Outline's `Focus`
+     `Columns2` rather than a tree or list glyph: what distinguishes this mode
+     where there is room is the pair of linked columns. Outline's `Focus`
      went with it. docs/plans/260910g-structure-mode-subsumes-outline.md. */
   {
     mode: "structure",
@@ -2214,8 +2207,8 @@ export function withMode(search: string, mode: Mode): string {
  * because an off-by-one in it could only otherwise be caught in a browser.
  *
  * **All of it went on 2026-08-31**, and the reason is that on this page the
- * arrows are already spoken for. ↑ / ↓ step through the article and ← / →
- * choose the level they step by (keynav.ts, listening on `window`,
+ * arrows are already spoken for. ↑ / ↓ step through the article, and ← / →
+ * belonged to Hierarchy's columns then and to modes that claim them now (keynav.ts, listening on `window`,
  * docs/project/keyboard.md). That guard skips keys typed into an INPUT or a
  * TEXTAREA, and a `<button>` is neither — so this group called
  * `stopPropagation` to win the collision, and while focus sat anywhere in the
@@ -2590,16 +2583,13 @@ function DockHome({ knownSignedOut }: { knownSignedOut: boolean }) {
       {/* `alt=""` and not "Spideryarn": the wordmark beside it already says the
           name, and a screen reader reading it twice is how a decorative image
           becomes noise. HomeLogo.tsx says the same in the corner. */}
-      <span className="logo-mark">
-        <img className="logo-image" src="/spideryarn-logo.png" alt="" width={20} height={20} />
-      </span>
+      <LogoMark />
+      {/* `.dock-btn-label` is this copy's own wrapper — the bar's fit ladder
+          hides it — and the letters inside are the shared ones
+          (LogoGlyphs.tsx). `lettersDrawn` still sees them hidden when the
+          ladder takes the word, which is what 260915c was about. */}
       <span className="dock-btn-label">
-        {"Spideryarn".split("").map((ch, i) => (
-          // biome-ignore lint/suspicious/noArrayIndexKey: fixed string, rebuilt whole
-          <span className="logo-letter" key={i}>
-            {ch}
-          </span>
-        ))}
+        <LogoLetters />
       </span>
     </Link>
   );

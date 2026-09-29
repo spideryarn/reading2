@@ -23,7 +23,7 @@ import { groupStarts, visibleModes } from "../src/web/Dock.js";
 /** The runs, left to right. The bar is these, flattened. */
 const RUNS = [
   ["plain"],
-  ["hierarchy", "structure", "summary", "diagram"],
+  ["structure", "summary", "diagram"],
   ["trajectory", "quotes", "faq", "search"],
   ["glossary", "ideas", "timeline"],
   ["referee", "citations", "debate"],

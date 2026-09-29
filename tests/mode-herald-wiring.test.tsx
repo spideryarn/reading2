@@ -167,7 +167,7 @@ const OWNED: Article = {
   meta: { slug: SLUG, title: "A piece", url: "https://example.com/a" },
 };
 
-/** Hierarchy is behind the experimental switch, so the case that presses it turns it on. */
+/** The experimental switch, off unless a case turns it on. */
 let experimentalSince: string | null = null;
 
 function json(body: unknown, status = 200): Response {
@@ -303,14 +303,10 @@ describe("Reader hands the herald a press", () => {
     expect(herald(), "a Forward step is not a press").toBe("");
   });
 
-  it("Plain and Hierarchy have no band, so a press on either says nothing", async () => {
-    experimentalSince = "2026-09-01T00:00:00.000Z";
+  it("Plain has no band, so a press on it says nothing", async () => {
     await open("?mode=summary");
     await press(MODE_LABEL.plain);
     expect(modeInUrl()).toBe("plain");
-    expect(herald()).toBe("");
-    await press(MODE_LABEL.hierarchy);
-    expect(modeInUrl()).toBe("hierarchy");
     expect(herald()).toBe("");
   });
 });

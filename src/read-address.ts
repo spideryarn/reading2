@@ -36,18 +36,9 @@ import { DEFAULT_MODE, type Mode, modeFromParam } from "./modes.js";
  * on 2026-08-31, deliberately. src/modes.ts § DEFAULT_MODE.
  *
  * **A retired mode lands on its successor** — `?mode=outline` is Structure since
- * 2026-09-10 — through `modeFromParam`, the same function `modeParam` calls.
- *
- * **`?text=0` moves Hierarchy to Structure here too** (to Outline from
- * 2026-09-05 until Outline became Structure's narrow face), and this
- * is the second thing in this file that exists only because the client is about
- * to do it. `liftStrandedText` in src/web/router.ts rewrites the address before
- * React mounts; without the same answer here the tab would read
- * `Article · Hierarchy · Spideryarn` and be replaced a second later by
- * `Article · Structure · Spideryarn` — the eleventh of exactly that fault, and the
- * one `tests/address-settling.test.ts` exists to make arithmetic rather than
- * vigilance. `hidesProse` below is the shared predicate, the way `isMetadataPair`
- * is for the other rewrite: one function decides, so the two cannot come apart.
+ * 2026-09-10, and `?mode=hierarchy` since 2026-09-29 — through `modeFromParam`,
+ * the same function `modeParam` calls. (Until then `?mode=hierarchy&text=0` was a
+ * special case here, mirrored by a client rewrite; `?text=` means nothing now.)
  *
  * Deliberately tolerant of a malformed URL. This runs on a string a stranger
  * controls, and a throw here would be a 500 on an address that only wanted a
@@ -62,8 +53,7 @@ export function readMode(url: string): Mode {
   } catch {
     return DEFAULT_MODE;
   }
-  const mode = modeFromParam(asked) ?? DEFAULT_MODE;
-  return mode === "hierarchy" && hidesProse(url) ? "structure" : mode;
+  return modeFromParam(asked) ?? DEFAULT_MODE;
 }
 
 /**
@@ -176,46 +166,4 @@ export function redirectsToMetadata(search: string): boolean {
 
 export function viewFor(search: string): ArticleView {
   return redirectsToMetadata(search) ? "metadata" : "article";
-}
-
-/**
- * **Does this address ask for the article's prose to be hidden?**
- *
- * `?text=0`, and nothing else — `text=1` is the default and `parseAsBit` reads
- * any other value as absent (src/web/params.ts). Decoded on both halves for the
- * reason `isMetadataPair` is: a decoding decision paired with a literal removal
- * is how the ninth address bug worked, and this predicate is used both to
- * *decide* here and to *remove* in src/web/router.ts.
- *
- * **It only ever mattered in Hierarchy.** `inMode` is `mode !== "hierarchy"` and
- * `proseVisible` is `modeBand || showText`, so a mode band shows the article
- * whatever this says; a bare `?text=0` has always landed harmlessly in Plain.
- * That is why `readMode` above asks it only about `hierarchy`, and why the
- * client still drops the pair everywhere — an inert parameter that arms itself
- * the moment the reader presses Hierarchy on the Dock is not tidy, it is a
- * landmine with a delay on it.
- *
- * @param search the query with or without its `?`, or a whole URL containing one.
- */
-export function hidesProse(search: string): boolean {
-  /* **The FIRST `text` pair decides, and a later one gets no vote.** `nuqs` and
-     `URLSearchParams.get` both hand back the first match, so `?text=1&text=0`
-     is a reader with the prose on screen — and `.some()` here called them
-     stranded and moved them out of Hierarchy on the strength of a pair nothing
-     else in the app will ever read. The identical rule is already written out
-     for `mode` in `liftStrandedText`; this is the parameter that had not been
-     given it. GPT Sol, reviewing stage 3, 2026-09-05.
-
-     The later pair is still *removed* — see that function — because "no
-     `text=0` survives boot" is the rule, and an inert one left in the query is
-     the landmine this whole rewrite exists to defuse. Deciding and removing are
-     two questions, and only the first one is about which pair wins. */
-  const first = queryPairs(search).find((pair) => keyValue(pair).key === "text");
-  return first !== undefined && isTextOffPair(first);
-}
-
-/** The pair `hidesProse` is looking for, exported so the removal decodes too. */
-export function isTextOffPair(pair: string): boolean {
-  const { key, value } = keyValue(pair);
-  return key === "text" && value === "0";
 }

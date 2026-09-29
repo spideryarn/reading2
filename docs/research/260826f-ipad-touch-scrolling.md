@@ -344,7 +344,7 @@ narrower than the window, so there was nothing to pan.
 ## The decision
 
 **Mechanism (4): a scoped one-step swipe on the gist surfaces, prose untouched, reading mode only.**
-Built in [`swipe.ts`](../../src/web/swipe.ts); what it does and why is
+Built in `src/web/swipe.ts`; what it does and why is
 [touch.md](../project/touch.md).
 
 The web research and the cross-family reviewer disagreed — snap versus gesture — so it went to a

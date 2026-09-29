@@ -65,7 +65,7 @@ type LoadedArticle = Awaited<ReturnType<typeof readArticleFromDir>>;
 
 const DIR = "tests/fixtures/data-root/data/openai-huggingface";
 
-/* jsdom has no `ResizeObserver`, and the gist columns' geometry hook builds one
+/* jsdom has no `ResizeObserver`, in case anything under the table builds one
    on mount. A stand-in that never fires is right here: this test is about what
    a *render* does to the prose, not about anything a resize provokes. */
 class NoResize {
@@ -111,31 +111,16 @@ function propsFor(loaded: LoadedArticle, over: Record<string, unknown> = {}) {
     navLabelStatus: "ready",
   };
   const geometry = buildGeometry(article.tree, article.blocks);
-  /* The gist columns are every column but the leaf, as App.tsx derives them. */
-  const gistDepths = geometry.columnDepths.filter((d) => d < geometry.leafDepth);
-  const fit = fitView({
-    windowWidth: 1400,
-    gistDepths,
-    leafDepth: geometry.leafDepth,
-    showText: true,
-    chosen: null,
-  });
+  const fit = fitView({ windowWidth: 1400 });
   return {
     article,
     geometry,
-    columns: fit.columns,
     layout: fit,
-    showText: true,
     comments: [],
     openComment: null,
     chats: [],
     chatCounts: new Map<string, number>(),
     openChat: null,
-    /* The gist columns' live "which cell am I in" reads real geometry, which
-       jsdom does not have. Empty is the honest value for a test that is about
-       the prose column. */
-    sections: [],
-    layoutKey: "test",
     ...over,
   };
 }

@@ -114,7 +114,7 @@ describe("the round trip through the server's allowlist", () => {
       slug: "what-is-it-like-to-be-a-bat-k3m9qt",
       revisionId: REVISION_ID,
       view: "article",
-      mode: "hierarchy",
+      mode: "structure",
       level: 2,
       blockCount: 412,
       rootBlockId: ROOT_ID,

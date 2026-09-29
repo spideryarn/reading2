@@ -411,6 +411,21 @@
 }
 .spya-seam .logo-letter:nth-child(-n + 6) { transform: translateX(-3px); }
 .spya-seam .logo-letter:nth-child(n + 7) { transform: translateX(3px); }
+/* **"Reading" rides along with "yarn"** where the name is followed by it (the
+   marketing bar and every footer, SiteBits.tsx § Wordmark). Without this the
+   last four letters' 3px ate the word-gap and the bar read "Spider_yarnReading"
+   — browser check of docs/plans/260929c-…. `inline-block` because a transform
+   does nothing to a non-replaced inline box. */
+.site-wordmark-rest {
+  display: inline-block;
+}
+.site-wordmark-host.spya-seam .site-wordmark-rest {
+  transform: translateX(3px);
+  /* Scoped to the active class, like the letters' transition above, so both
+     parts snap home together when that class leaves. A resting transition
+     made `yarn` close immediately while `Reading` drifted after it for 300ms. */
+  transition: transform 300ms cubic-bezier(0.2, 0.8, 0.2, 1);
+}
 .spya-seam .logo-letter:nth-child(6)::after {
   content: "";
   position: absolute;
@@ -631,6 +646,14 @@
 @keyframes spya-blink {
   0%, 50% { opacity: 1; }
   50.01%, 100% { opacity: 0; }
+}
+/* **No cursor where the name is followed by "Reading"** — the marketing bar
+   and every footer (SiteBits.tsx § Wordmark, hosted as `.site-wordmark-host`).
+   The cursor lives in the empty space after the `n`, and there that space is
+   one word-gap before the R: it would sit on the letter. The typing still
+   plays. GPT Sol, reviewing docs/plans/260929c-…, finding 2. */
+.site-wordmark-host.spya-type .logo-letter:nth-child(10)::after {
+  content: none;
 }
 
 /* -- 11. Abseil ----------------------------------------------------------

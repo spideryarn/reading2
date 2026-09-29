@@ -424,9 +424,9 @@ describe("the keyboard contract", () => {
     const onMode = vi.fn();
     reading({ onMode });
     openBar();
-    /* Structure rather than Hierarchy since 2026-09-12, when Hierarchy went
-       behind the experimental switch and out of this default bar: the test is
-       about the keyboard, so it wants a mode every reader is offered. */
+    /* Structure: the test is about the keyboard, so it wants a mode every
+       reader is offered. (It was Hierarchy until that went behind the
+       experimental switch on 2026-09-12.) */
     type("structure");
     expect(listed()).toEqual([MODE_LABEL.structure]);
     press("Enter");
@@ -523,7 +523,6 @@ describe("the backdrop", () => {
  */
 const GENERATES: Record<Mode, boolean> = {
   plain: false,
-  hierarchy: false,
   /* Views of one already-built tree, in either of Structure's faces, so
      nothing to fill. */
   structure: false,
@@ -953,8 +952,7 @@ describe("the changelog command", () => {
   it("leaves the address alone when a mode row is taken", () => {
     reading({ onMode: () => {} });
     openBar();
-    /* An always-visible mode: Hierarchy's `toc` alias is absent from the
-       default bar now, and would make this pass without taking any row. */
+    /* An always-visible mode, typed by its own name. */
     type("structure");
     expect(listed()).toEqual([MODE_LABEL.structure]);
     press("Enter");
