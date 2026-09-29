@@ -1,0 +1,154 @@
+{
+  "arm": "before",
+  "slug": "entropy-24-00930-spya-pywwkq",
+  "version": "faq/3",
+  "faqSha256": "9c6f7a31f99efcb35ef1416a62d7fd0dd25b6c6687ff88b4619fe2dc74a4e5eb",
+  "at": "2026-09-29T17:46:46.083Z",
+  "tokens": {
+    "input": 21045,
+    "output": 3685,
+    "cacheRead": 0,
+    "cacheWrite": 0
+  },
+  "questions": [
+    {
+      "id": "spya-kfyn7r",
+      "question": "If mutual information can't capture directional flow, why is it introduced as a tool for tracking information through a circuit?",
+      "passages": [
+        {
+          "blockId": "spya-f6sbgx",
+          "quote": "It does not, however, quantify information transfer between the neurons, as it is an undirected measure that describes the instantaneous dependency between two variables",
+          "start": 626
+        },
+        {
+          "blockId": "spya-p4pyuy",
+          "quote": "Whereas mutual information is a measure of functional connectivity, transfer entropy measures effective connectivity",
+          "start": 765
+        }
+      ]
+    },
+    {
+      "id": "spya-s0gp82",
+      "question": "Since there's no single agreed way to define redundant information, how much should we trust results built on one particular choice?",
+      "passages": [
+        {
+          "blockId": "spya-bgsd4n",
+          "quote": "Unfortunately, classical Shannon information theory provides no unique solution to any of these, and so considerable work has been devoted to developing formal measures of each.",
+          "start": 257
+        },
+        {
+          "blockId": "spya-rc76qn",
+          "quote": "The majority of the studies discussed in this paper used the original Imin measure proposed in [1], although this measure has been criticized for unintuitive behavior",
+          "start": 758
+        }
+      ]
+    },
+    {
+      "id": "spya-knu8gq",
+      "question": "Why would feedback connections tend to lower synergy while recurrent connections between source neurons raise it?",
+      "passages": [
+        {
+          "blockId": "spya-sd9fzd",
+          "quote": "Feedback connections were less predictive of synergy but tended to correlate with reduced synergy.",
+          "start": 94
+        }
+      ]
+    },
+    {
+      "id": "spya-c8r3bp",
+      "question": "If synergy actually falls once source neurons become too similar, how does that square with rich-club neurons being both highly correlated and highly synergistic?",
+      "passages": [
+        {
+          "blockId": "spya-ybmve2",
+          "quote": "rich clubs consist of a disproportionate number of inhibitory neurons with correlated spiking activity that synergistically predict the dynamics of the rest of the network",
+          "start": 776
+        }
+      ]
+    },
+    {
+      "id": "spya-qqxav6",
+      "question": "If the networks were built with bivariate transfer entropy, which overestimates edge significance, does that call the rich-club synergy findings into question?",
+      "passages": [
+        {
+          "blockId": "spya-j4cy9j",
+          "quote": "it has been shown that bivariate analyses overestimate the significance of bivariate edges [51]",
+          "start": 315
+        }
+      ]
+    },
+    {
+      "id": "spya-dsy0ga",
+      "question": "Given that these circuits were cultured slices, not living behaving brains, can the rich-club and connectivity findings be trusted to generalize?",
+      "passages": [
+        {
+          "blockId": "spya-j4cy9j",
+          "quote": "the demands placed on a circuit in the context of a behaving animal are certain to differ from those placed on cultures in vitro",
+          "start": 861
+        },
+        {
+          "blockId": "spya-wr7f6y",
+          "quote": "Despite this difference, many aspects of the in vitro results were successfully replicated in animal models, including the presence of a rich club and an increase in synergy in high-degree nodes.",
+          "start": 792
+        }
+      ]
+    },
+    {
+      "id": "spya-sy07cp",
+      "question": "If brain activity is generally synergy-dominated, why does redundancy spike specifically during movement execution?",
+      "passages": [
+        {
+          "blockId": "spya-t8fayf",
+          "quote": "The researchers found that while brain activity was generally synergy-dominated (as opposed to redundancy-dominated), during movement execution (a reach-and-grasp action) the relative abundance of redundant information increased dramatically.",
+          "start": 189
+        }
+      ]
+    },
+    {
+      "id": "spya-x9m5d2",
+      "question": "Does finding statistical synergy actually tell us why a given neuron is synergy-dominated, or just that it is?",
+      "passages": [
+        {
+          "blockId": "spya-spdx0y",
+          "quote": "it does not necessarily provide a mechanistic explanation for why particular neurons are synergy-dominated or redundancy-dominated",
+          "start": 177
+        }
+      ]
+    },
+    {
+      "id": "spya-q75kkn",
+      "question": "With the number of information atoms exploding for more than a few inputs, how can PID ever be applied to real neurons with many upstream partners?",
+      "passages": [
+        {
+          "blockId": "spya-aby2dp",
+          "quote": "This issue may be partially addressed by the development of heuristic measures of redundancy and synergy such as the O-information",
+          "start": 733
+        }
+      ]
+    },
+    {
+      "id": "spya-dnund6",
+      "question": "The original Imin measure can't be broken down moment-by-moment, so how were the time-resolved, avalanche-level PID analyses done?",
+      "passages": [
+        {
+          "blockId": "spya-ckpq7e",
+          "quote": "The original measure Imin, proposed by Williams and Beer [1], did not satisfy this property",
+          "start": 117
+        },
+        {
+          "blockId": "spya-ckpq7e",
+          "quote": "To date, three local redundancy functions have been proposed: Ics by Ince [36], I± by Finn and Lizier [37], and Isx by Makkeh et al. [40]",
+          "start": 300
+        }
+      ]
+    }
+  ],
+  "dropped": {
+    "unknownIds": 0,
+    "unquoted": 1,
+    "tooLong": 0,
+    "duplicate": 0,
+    "unanchored": 0,
+    "overCap": 0,
+    "malformed": 0
+  }
+}

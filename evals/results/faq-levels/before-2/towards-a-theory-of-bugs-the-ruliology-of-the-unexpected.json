@@ -1,0 +1,122 @@
+{
+  "arm": "before-2",
+  "slug": "towards-a-theory-of-bugs-the-ruliology-of-the-unexpected",
+  "version": "faq/3",
+  "faqSha256": "9c6f7a31f99efcb35ef1416a62d7fd0dd25b6c6687ff88b4619fe2dc74a4e5eb",
+  "at": "2026-09-29T17:48:07.495Z",
+  "tokens": {
+    "input": 19751,
+    "output": 3574,
+    "cacheRead": 0,
+    "cacheWrite": 0
+  },
+  "questions": [
+    {
+      "id": "spya-grjxkz",
+      "question": "If a program always matches its own specification, in what sense can it ever be said to have a bug?",
+      "passages": [
+        {
+          "blockId": "spya-mhwnwh",
+          "quote": "Of course the program itself provides a specification for what it will do. And with respect to this specification the program will always just “do what it does”, with no possibility of “having a bug”.",
+          "start": 173
+        }
+      ]
+    },
+    {
+      "id": "spya-asgn6q",
+      "question": "How can a cellular automaton whose pattern looks just as tangled as the buggy ones still be shown to always work correctly?",
+      "passages": [
+        {
+          "blockId": "spya-n5acnw",
+          "quote": "So, yes, even though the patterns in this case look complicated, they must always eventually stabilize—and the underlying cellular automaton must always correctly “double its input”, with no bugs.",
+          "start": 0
+        },
+        {
+          "blockId": "spya-fg7dg2",
+          "quote": "And if it’s visually complicated we can be concerned that there might be bugs. But there are still cases where—despite that complexity—the feature of behavior that we are concerned about (here, the successful doubling of any input) still always reliably happens, without any bugs.",
+          "start": 111
+        }
+      ]
+    },
+    {
+      "id": "spya-cw6d2e",
+      "question": "If searching for a formal proof takes just as much unbounded effort as running the program itself, what's actually gained by proving correctness?",
+      "passages": [
+        {
+          "blockId": "spya-ymdpn2",
+          "quote": "And in the end, we don’t get any fundamental advantage by trying to make a proof rather than just running the Turing machine. In both cases we have to expend a potentially unbounded amount of computational effort.",
+          "start": 0
+        }
+      ]
+    },
+    {
+      "id": "spya-hfgs02",
+      "question": "Doesn't wanting a program's behavior to be completely foreseeable defeat the whole point of running it?",
+      "passages": [
+        {
+          "blockId": "spya-nd4kn9",
+          "quote": "if you can completely foresee what a program will do, what’s the point of running it? Why not, in effect, just immediately “write down the answer”, without ever having to run the program?",
+          "start": 180
+        }
+      ]
+    },
+    {
+      "id": "spya-v7kdhp",
+      "question": "Why does relying on repeated observation to infer a rule work so much better in physics than in biology?",
+      "passages": [
+        {
+          "blockId": "spya-ajc2n8",
+          "quote": "In our Physics Project we can see that there’s lots of computational irreducibility. It’s just that the physical laws relevant for observers like us manage to largely avoid it.",
+          "start": 112
+        }
+      ]
+    },
+    {
+      "id": "spya-naxpzg",
+      "question": "Why does mainstream pure mathematics mostly escape the kind of ruliology-style surprises seen everywhere else in the computational universe?",
+      "passages": [
+        {
+          "blockId": "spya-zcpn8u",
+          "quote": "But somehow in the mainstream of pure mathematics, such issues are not very common.",
+          "start": 0
+        },
+        {
+          "blockId": "spya-whd6dc",
+          "quote": "pure mathematics as it’s normally practiced tends to concentrate on what amount to more “human-level” questions, that in effect exist in pockets of computational reducibility, that avoid the generic computational irreducibility of ruliology.",
+          "start": 269
+        }
+      ]
+    },
+    {
+      "id": "spya-dvdw8b",
+      "question": "If good language design steers you away from bugs, does that mean the underlying computational irreducibility can eventually be designed away entirely?",
+      "passages": [
+        {
+          "blockId": "spya-wvj8uq",
+          "quote": "But however well designed your language is, any time you write a program that actually needs to be written (in the sense that it’s achieving at least some irreducible computation), it’ll have the possibility of doing something you didn’t expect or foresee—and that you might consider a bug.",
+          "start": 0
+        }
+      ]
+    },
+    {
+      "id": "spya-dsgktz",
+      "question": "If ruliological surprises count as scientific discoveries rather than failures, does that undercut calling them 'bugs' at all?",
+      "passages": [
+        {
+          "blockId": "spya-j4tprn",
+          "quote": "Well, if we’re trying to do engineering we’d consider this a failure. But if we’re doing science, we might consider it a success.",
+          "start": 145
+        }
+      ]
+    }
+  ],
+  "dropped": {
+    "unknownIds": 0,
+    "unquoted": 1,
+    "tooLong": 0,
+    "duplicate": 0,
+    "unanchored": 1,
+    "overCap": 0,
+    "malformed": 0
+  }
+}

@@ -39,11 +39,18 @@ import type { PublicCitations, PublicCitedWork } from "../public-types.js";
 import type { CiteOrder } from "./params.js";
 import type { FindNote, UseCitations } from "./useCitations.js";
 import { BlockRef } from "./BlockRef.js";
-import { floorToGateStep, GATE_STEP } from "./GlossaryPanel.js";
 import { JobProgress } from "./JobProgress.js";
 import { ModeSurface } from "./ModeSurface.js";
 import { useRenderCount } from "./perf.js";
-import { applyThreshold, hiddenNote, type ThresholdResult } from "./threshold.js";
+import {
+  applyThreshold,
+  canThreshold,
+  GATE_STEP,
+  hiddenNote,
+  thresholdMax,
+  thresholdTop,
+  type ThresholdResult,
+} from "./threshold.js";
 import { ControlTip, Tooltip } from "./Tooltip.js";
 
 /**
@@ -96,21 +103,16 @@ export function visibleWorks<W extends ShownWork>(works: readonly W[], bar: numb
 }
 
 /**
- * The highest position the bar needs, on the glossary's hundredth grid — the
- * same `floorToGateStep`, so the thumb's top stop always shows the top work.
+ * The highest position the bar needs, on the shared hundredth grid —
+ * `thresholdTop` in threshold.ts, so the thumb's top stop always shows the top work.
  */
 export function barTop(works: readonly ShownWork[]): number {
-  let top = 0;
-  for (const work of works) {
-    const p = priorityOf(work);
-    if (p !== undefined && p > top) top = p;
-  }
-  return floorToGateStep(top);
+  return thresholdTop(works, priorityOf);
 }
 
 /** The track's maximum: the data's top, the current bar, and one step at least. */
 export function barMax(works: readonly ShownWork[], bar: number): number {
-  return Math.max(barTop(works), bar, GATE_STEP);
+  return thresholdMax(works, bar, priorityOf);
 }
 
 /**
@@ -119,12 +121,7 @@ export function barMax(works: readonly ShownWork[], bar: number): number {
  * about the whole list, not about where the bar is now.
  */
 export function canPrioritise(works: readonly ShownWork[]): boolean {
-  const top = barTop(works);
-  for (const work of works) {
-    const p = priorityOf(work);
-    if (p !== undefined && p < top) return true;
-  }
-  return false;
+  return canThreshold(works, priorityOf);
 }
 
 /**
@@ -262,6 +259,49 @@ export const INFLUENCE_NOTE =
  * another model call. The timeline's `TIMELINE_NO_CHRONOLOGY` rule.
  */
 export const CITATIONS_NONE = "We found no works this piece cites.";
+
+/* ------------------------------------------- what we have and have not read --
+   Plan 260929g stage 1 (docs/plans/260929g-check-a-cited-paper-supports-the-claim.md).
+   Greg, 2026-09-29: *"be really careful to be clear about whether you could get
+   the actual paper, so that we can be sure you're not hallucinating"*.
+
+   `why` is a sentence the model wrote **from the article**, about what the
+   article uses the work for. Nothing here has read the work, and without saying
+   so `why` reads as a description of it. So `why` carries a label, and every
+   row says what we have not read. The band and the hover card (ProseHoverCard.tsx
+   § CiteCard) both draw these strings, so the two surfaces cannot drift. */
+
+/** The label on `why`, in the band and the hover card alike. */
+export const CITE_WHY_LABEL = "what the article uses it for";
+
+/** Every row, until something has read the work: nothing has. */
+export const CITE_NOT_READ = "We have not read this work, only the article that cites it.";
+
+/**
+ * **After *Find it* kept a page.** What code checked is that a search result's
+ * title or excerpt names the work (src/citation-find.ts § namesTitle), which a
+ * review of the paper can pass too — so this says a page *matching its title*,
+ * never that the page is the work, and still that we have not read it. The
+ * plan's R-1.
+ */
+export const CITE_PAGE_FOUND = "We found a web page matching its title, but have not read the work itself.";
+
+/** Which of the two a row says. Total over `linkFrom`, as `sourceOf` is. */
+export function readNoteOf(work: Pick<ShownWork, "linkFrom">): string {
+  switch (work.linkFrom) {
+    case "web":
+      return CITE_PAGE_FOUND;
+    case "doi":
+    case "arxiv":
+    case "article":
+    case "search":
+      return CITE_NOT_READ;
+    default: {
+      const unhandled: never = work.linkFrom;
+      return unhandled;
+    }
+  }
+}
 
 /* -------------------------------------------------------------- the panel -- */
 
@@ -612,7 +652,10 @@ function WorkRow({
         )}
       </p>
       {by && <p className="cite-by">{by}</p>}
-      <p className="cite-why">{work.why}</p>
+      <p className="cite-why">
+        <span className="cite-why-label">{CITE_WHY_LABEL}:</span> {work.why}
+      </p>
+      <p className="cite-read">{readNoteOf(work)}</p>
       <p className="cite-meta">
         {scores.length > 0 && <ScoreBars className="cite-scores" scores={scores} />}
         {source === null ? null : source.kind === "address" ? (
@@ -657,7 +700,10 @@ function WorkRow({
                      matches the title" is what is actually tested for.
                    — not a fixed price, because the attached search is variable
                      work. */
-                what="Searches the web for this work, and replaces the Scholar search on this row with a real link when a result clearly matches the title."
+                /* — not "a real link", and nothing about reading it. A title
+                     match is not a check that the page is the work (plan
+                     260929g R-1), and the row says so after a find. */
+                what="Searches the web for this work, and replaces the Scholar search on this row with a link to a result that clearly matches its title. It does not read the work."
                 how="It costs money: a paid web provider, and a few seconds. A press that finds nothing stores nothing — the Scholar search stays, and pressing again just spends again. Only rows the article gave no link for offer it."
               />
             }

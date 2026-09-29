@@ -14,6 +14,9 @@ import type { UseCitations } from "../src/web/useCitations.js";
 const {
   CAPPED_NOTE,
   CITATIONS_NONE,
+  CITE_NOT_READ,
+  CITE_PAGE_FOUND,
+  CITE_WHY_LABEL,
   CITATION_BAR_DEFAULT,
   CitationsPanel,
   INFLUENCE_NOTE,
@@ -21,6 +24,7 @@ const {
   effectiveOrder,
   orderWorks,
   priorityOf,
+  readNoteOf,
   scoresOf,
   sourceOf,
 } = await import("../src/web/CitationsPanel.js");
@@ -535,5 +539,113 @@ describe("CitationsPanel", () => {
     expect(row(CENTRAL.id).querySelector(".cite-first")?.textContent).toContain("first cited");
     expect(row(CENTRAL.id).querySelector(".block-ref")?.textContent).toBe("k3m9qt");
     expect(row(listed.id).querySelector(".cite-first")?.textContent).toContain("only in the references");
+  });
+});
+
+/* ------------------------------------------ what we have and have not read --
+   Plan 260929g stage 1. Greg, 2026-09-29: *"be really careful to be clear
+   about whether you could get the actual paper, so that we can be sure you're
+   not hallucinating"*. `why` is the article's use of the work, never a summary
+   of the work, and every row says we have not read the work — including a row
+   whose Find it matched a page, since a page whose title matches is not a
+   page we checked is the paper (the plan's R-1). Asserted on the element, not
+   on the row's whole text, which a tooltip's words could satisfy. */
+
+/** A row *Find it* upgraded: a result whose title matched, attached at read time. */
+const FOUND = work({
+  id: "spya-f2g3h4",
+  title: "Found",
+  relevance: 0.9,
+  influence: 0.9,
+  url: "https://arxiv.org/abs/2001.08361",
+  linkFrom: "web",
+  found: {
+    title: "Found — a page",
+    host: "arxiv.org",
+    searches: 1,
+    model: "test",
+    at: "2026-09-29T09:00:00.000Z",
+  },
+});
+
+describe("what a row says we have read", () => {
+  it("says, on a row nobody looked up, that we have not read the work", async () => {
+    await draw(owner());
+    const r = row(CENTRAL.id);
+    expect(r.querySelector(".cite-read")?.textContent).toBe(CITE_NOT_READ);
+    expect(CITE_NOT_READ).toMatch(/not read/i);
+    /* And `why` is labelled as the article's, not the work's. */
+    expect(r.querySelector(".cite-why-label")?.textContent).toContain(CITE_WHY_LABEL);
+    expect(CITE_WHY_LABEL).toMatch(/article/);
+  });
+
+  it("says only that a page matching the title was found, never that it is the paper", async () => {
+    await draw(owner({ citations: artefact([FOUND, CENTRAL]) }));
+    const said = row(FOUND.id).querySelector(".cite-read")?.textContent ?? "";
+    expect(said).toBe(CITE_PAGE_FOUND);
+    expect(said).toMatch(/not read/i);
+    expect(said).toMatch(/title/i);
+    expect(said).not.toMatch(/verif|confirm|from the (paper|work)|is the (paper|work)/i);
+    /* The other rows keep the plain line. */
+    expect(row(CENTRAL.id).querySelector(".cite-read")?.textContent).toBe(CITE_NOT_READ);
+  });
+
+  it("is one function over linkFrom, so the band and the hover card say the same", () => {
+    expect(readNoteOf(FOUND)).toBe(CITE_PAGE_FOUND);
+    for (const linkFrom of ["doi", "arxiv", "article", "search"] as const) {
+      expect(readNoteOf({ linkFrom })).toBe(CITE_NOT_READ);
+    }
+  });
+
+  it("says it to a visitor too, whose list never carries a Find it result", async () => {
+    await act(async () =>
+      root.render(
+        createElement(CitationsPanel, {
+          access: {
+            kind: "visitor",
+            citations: {
+              capped: false,
+              citations: [
+                {
+                  id: "spya-v2w3x4",
+                  title: "Public",
+                  why: "What the piece uses it for.",
+                  mentions: [],
+                  citedAt: [FIRST],
+                  firstCited: FIRST,
+                  citedInBody: true,
+                  url: "https://doi.org/10.1000/xyz",
+                  linkFrom: "doi",
+                },
+              ],
+            },
+          },
+          order: "document",
+          onOrder: () => {},
+          bar: null,
+          onBar: () => {},
+          onJump: () => {},
+        }),
+      ),
+    );
+    expect(row("spya-v2w3x4").querySelector(".cite-read")?.textContent).toBe(CITE_NOT_READ);
+    expect(row("spya-v2w3x4").querySelector(".cite-find")).toBeNull();
+  });
+
+  it("the Find it card claims no check that the page is the work", async () => {
+    const searched = work({
+      id: "spya-e2f3g4",
+      title: "Searched",
+      relevance: 0.9,
+      influence: 0.9,
+      url: "https://scholar.google.com/scholar?q=Searched",
+      linkFrom: "search",
+    });
+    await draw(owner({ citations: artefact([searched, PASSING]) }));
+    const card = await cardFor(findButton(searched.id));
+    const copy = `${card.head} ${card.body}`;
+    expect(copy).not.toMatch(/verif|confirm|real link/i);
+    expect(copy).toMatch(/title/i);
+    expect(copy, "the card no longer says a find does not read the work").toMatch(/(does )?not read/i);
   });
 });

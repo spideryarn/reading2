@@ -160,8 +160,10 @@ is the cadence [engineering-manager.md](../reusable/engineering-manager.md) alre
 
 This one is a list on purpose, because the test is uncomputable at 3am and the list is not:
 
-- no deploy, and no push to `main` — production is `npm run deploy` and it stays Greg's;
-- no write to the production database, and no script pointed at the remote;
+- no push to `main` except through `npm run deploy`, which is yours and nobody else's
+  ([Deploying](#deploying), below);
+- no write to the production database and no script pointed at the remote, except the migrations
+  `npm run deploy` applies;
 - no spending money;
 - no destroying work that has no second copy — which means `npm run worktree:check` **inside** a
   worktree before removing it, and refusing on anything you cannot account for, because `data/` and
@@ -459,6 +461,35 @@ that command unattended on 2026-09-09. `check` is the same thing without the res
 `sudo systemctl restart` is still refused, and so was one `npm run` form; if the script is ever
 refused too, it is Greg's. The daemon is separate: its relaunch is still the `tmux-job` pair under
 *Prove the relaunch before you stop a process*.
+
+### Deploying
+
+**You are the only one who deploys.** Greg, 2026-09-29: *"I want the Overseer on the server box to be
+able to deploy (including database migrations)"*, *"when successful, tell it to deploy automatically
+itself every so often"*, and *"only the Overseer is allowed to deploy"*. Any other agent that wants
+something in production asks you.
+
+The credentials are on the box: `~/code/spideryarn2/.env.prod`, copied from Greg's laptop, and the
+Vercel CLI login in `~/.local/share/com.vercel.cli/auth.json`. Both are readable by every agent on the
+box, and Greg accepted that risk (2026-09-29).
+
+Every few hours, as a tmux loop like the changelog's:
+
+1. In the primary `~/code/spideryarn2` on `dev` (a deploy refuses a worktree), pull. If
+   `git log origin/main..HEAD` is empty, there is nothing to deploy.
+2. Read every new migration and `.sql` file since `origin/main`. Additive ones you apply and name in
+   the report. Anything that would destroy reader data goes to Greg first — a dropped table or
+   column, a delete, a truncate, a destructive backfill.
+3. Run `npm run deploy` under `scripts/tmux-job.ts`, logging to a file. It applies the migrations by
+   default. `--force-gate=test` is allowed when the suite is red for reasons that are not the
+   release's; say which tests in the report. If it fails only because `dev` moved during the run
+   (*"level with origin/dev"*), pull and run it once more.
+4. It is not deployed until three things agree: the exit code, the `Target:` line naming the
+   production Supabase project, and the commit in `https://www.spideryarn.com/build.json` matching
+   HEAD and `origin/main`. The success line alone is not evidence —
+   [deployment.md](deployment.md).
+5. **Never `vercel rollback`**: it turns off automatic promotion of later deploys. A bad deploy goes
+   to Greg.
 
 ### Dispatching agents
 

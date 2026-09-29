@@ -52,6 +52,7 @@ export function DiagramBand({
   article,
   at,
   onJump,
+  onFollow,
 }: {
   /** Owner or visitor — DiagramPanel.tsx § DiagramAccess is the whole argument. */
   access: DiagramAccess;
@@ -78,6 +79,8 @@ export function DiagramBand({
    */
   at: BlockId | null;
   onJump(id: BlockId): void;
+  /** The picture being walked rather than pressed — DiagramPanel.tsx § `onFollow`. */
+  onFollow?(id: BlockId): void;
 }) {
   useRenderCount("DiagramBand");
   const [kind, setKind] = useQueryState("diagram", diagramParam);
@@ -116,6 +119,7 @@ export function DiagramBand({
       onKind={(next) => void setKind(next)}
       atRow={atRow}
       onJump={onJump}
+      {...(onFollow ? { onFollow } : {})}
       blocks={article.blocks}
       axis={axis}
       onAxis={(next) => void setAxis(next)}

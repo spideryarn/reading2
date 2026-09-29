@@ -375,3 +375,14 @@
   font-size: 0.76rem;
 }
 .prose-card-cite-where { margin-left: auto; }
+
+/* Under `why`: we have not read the work, or found only a page matching its
+   title. The band's sentence (CitationsPanel.tsx § readNoteOf), as quiet as the
+   foot's facts. Plan 260929g stage 1. */
+.prose-card-cite-read {
+  margin: 0.2rem 0 0;
+  color: var(--ink-faint);
+  font-family: var(--font-ui);
+  font-size: 0.76rem;
+  line-height: 1.35;
+}

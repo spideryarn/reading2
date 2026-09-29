@@ -1,0 +1,133 @@
+{
+  "arm": "after-2",
+  "slug": "spider-silk-spya-ge30uz",
+  "version": "faq/4",
+  "faqSha256": "8ded5d816427dcaf28f5660edff111ea37fab6673cce50e81c790ff6d72f1cfc",
+  "at": "2026-09-29T17:58:50.697Z",
+  "tokens": {
+    "input": 16810,
+    "output": 4807,
+    "cacheRead": 0,
+    "cacheWrite": 0
+  },
+  "questions": [
+    {
+      "id": "spya-qhp6ht",
+      "question": "If some spiders build no webs, what do they use their silk for instead?",
+      "passages": [
+        {
+          "blockId": "spya-ybqc4f",
+          "quote": "All spiders produce silk, although some spiders do not make webs.",
+          "start": 0
+        },
+        {
+          "blockId": "spya-jyg3uw",
+          "quote": "Spiders such as the Salticidae venture from shelter and leave a trail of silk, use that as an emergency line in case of falling from inverted or vertical surfaces.",
+          "start": 1377
+        }
+      ],
+      "difficulty": 0.2,
+      "centrality": 0.5
+    },
+    {
+      "id": "spya-ff2m63",
+      "question": "If the role of male-spun silk in mating has barely been studied, how do we know silk is tied to courtship at all?",
+      "passages": [
+        {
+          "blockId": "spya-ybqc4f",
+          "quote": "The function of male-produced silk in mating has received little study.[3]",
+          "start": 377
+        }
+      ],
+      "difficulty": 0.4,
+      "centrality": 0.4
+    },
+    {
+      "id": "spya-x3d8mj",
+      "question": "If Kevlar is stronger than spider silk, why is silk still held up as the superior material?",
+      "passages": [
+        {
+          "blockId": "spya-nwva2u",
+          "quote": "This enables a silk fibre to absorb a large amount of energy before breaking (toughness, the area under a stress-strain curve).",
+          "start": 171
+        },
+        {
+          "blockId": "spya-hv4xng",
+          "quote": "Weight for weight, silk is stronger than steel, but not as strong as Kevlar. Spider silk is, however, tougher than both.",
+          "start": 48
+        }
+      ],
+      "difficulty": 0.3,
+      "centrality": 0.7
+    },
+    {
+      "id": "spya-f3f06u",
+      "question": "Why does pulling silk on demand rather than growing it continuously make artificial synthesis so hard to replicate?",
+      "passages": [
+        {
+          "blockId": "spya-mepbwz",
+          "quote": "It is pulled on demand from a precursor out of specialised glands,[41] rather than continuously grown like plant cell walls.[26]",
+          "start": 93
+        },
+        {
+          "blockId": "spya-wgee6t",
+          "quote": "Few strategies have produced silk that can efficiently be synthesised into fibres.",
+          "start": 245
+        }
+      ],
+      "difficulty": 0.5,
+      "centrality": 0.7
+    },
+    {
+      "id": "spya-yvabwc",
+      "question": "What is the silk gland's valve actually thought to do, given that its purpose is still debated?",
+      "passages": [
+        {
+          "blockId": "spya-s5073r",
+          "quote": "Though discovered some time ago, its precise purpose is still under discussion.",
+          "start": 30
+        },
+        {
+          "blockId": "spya-s5073r",
+          "quote": "It is believed to assist in restarting and rejoining broken fibres,[61] acting much in the way of a helical pump, regulating the thickness of the fibre,[42] and/or clamping the fibre as a spider falls upon it.[61][62]",
+          "start": 110
+        }
+      ],
+      "difficulty": 0.7,
+      "centrality": 0.3
+    },
+    {
+      "id": "spya-qew0f8",
+      "question": "If artificial silk only reaches half the strength and flexibility of natural silk, how can some synthetic spidroins be said to fully replicate its performance?",
+      "passages": [
+        {
+          "blockId": "spya-gjan3e",
+          "quote": "Fibers spun from these synthetic spidroins are the first to fully replicate the mechanical performance of natural spider silk by all common metrics.",
+          "start": 645
+        },
+        {
+          "blockId": "spya-jzcepa",
+          "quote": "Artificial spider silks have fewer and simpler proteins than natural dragline silk, and consequently offer half the diameter, strength, and flexibility of natural dragline silk.",
+          "start": 573
+        }
+      ],
+      "difficulty": 0.6,
+      "centrality": 0.8
+    }
+  ],
+  "dropped": {
+    "unknownIds": 0,
+    "unquoted": 0,
+    "tooLong": 0,
+    "duplicate": 0,
+    "unanchored": 0,
+    "overCap": 0,
+    "malformed": 0
+  },
+  "scoreDrops": {
+    "difficultyAbsent": 0,
+    "difficultyRejected": 0,
+    "centralityAbsent": 0,
+    "centralityRejected": 0
+  }
+}

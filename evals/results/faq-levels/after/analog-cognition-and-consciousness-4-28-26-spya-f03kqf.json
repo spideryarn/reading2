@@ -1,0 +1,159 @@
+{
+  "arm": "after",
+  "slug": "analog-cognition-and-consciousness-4-28-26-spya-f03kqf",
+  "version": "faq/4",
+  "faqSha256": "8ded5d816427dcaf28f5660edff111ea37fab6673cce50e81c790ff6d72f1cfc",
+  "at": "2026-09-29T17:57:20.398Z",
+  "tokens": {
+    "input": 19150,
+    "output": 3836,
+    "cacheRead": 0,
+    "cacheWrite": 0
+  },
+  "questions": [
+    {
+      "id": "spya-nkwjmf",
+      "question": "If the classic model failed because a controller would need to know which synapses and neurons to coordinate, doesn't wave-based control face the same problem?",
+      "passages": [
+        {
+          "blockId": "spya-d73kfb",
+          "quote": "That would require a control system to “know” which synapses and neurons were employed for any given neural representation and selectively coordinate them with subsecond precision, a seemingly implausible computational demand.",
+          "start": 372
+        },
+        {
+          "blockId": "spya-gxyg0d",
+          "quote": "This scheme allows for flexible control over the neural expression of information in spiking, without the control system needing to know the precise neurons and synapses employed for any specific information",
+          "start": 0
+        }
+      ],
+      "difficulty": 0.3,
+      "centrality": 0.9
+    },
+    {
+      "id": "spya-y43eus",
+      "question": "If mixed-selectivity networks already show how synaptic weighting can produce flexible, context-dependent computation, why is a separate wave-based routing mechanism needed at all?",
+      "passages": [
+        {
+          "blockId": "spya-dtnkkk",
+          "quote": "Such flexible routing is difficult to reconcile with a purely connectionist framework based solely on changing synaptic weights. A more computationally tractable mechanism seems to be needed. Neural oscillations, i.e., brain waves, could serve that role.",
+          "start": 210
+        }
+      ],
+      "difficulty": 0.4,
+      "centrality": 0.8
+    },
+    {
+      "id": "spya-urxem5",
+      "question": "Given that ephaptic field effects on individual neurons are described as weak and only subthreshold, how could they actually drive large-scale control of spiking?",
+      "passages": [
+        {
+          "blockId": "spya-bzqaf5",
+          "quote": "even weak oscillatory extracellular fields can induce small subthreshold voltage changes that significantly modulate both spiking probability and spike timing in local populations of neurons",
+          "start": 1153
+        },
+        {
+          "blockId": "spya-bzqaf5",
+          "quote": "Individual ephaptic interactions, when synchronized and summed across neurons, create effects large enough to shape and coordinate neuron spiking at the mesoscale",
+          "start": 1426
+        }
+      ],
+      "difficulty": 0.5,
+      "centrality": 0.6
+    },
+    {
+      "id": "spya-fmht9j",
+      "question": "Why should the alpha/beta band specifically be the right scale for top-down control, rather than gamma or the slower theta/delta rhythms?",
+      "passages": [
+        {
+          "blockId": "spya-q606tk",
+          "quote": "Oscillations in the intermediate alpha/beta range, which extend over a range of a few millimeters, might be just the right spatial scale for top-down control",
+          "start": 623
+        }
+      ],
+      "difficulty": 0.6,
+      "centrality": 0.4
+    },
+    {
+      "id": "spya-cp2uds",
+      "question": "Does explaining mixed selectivity through alpha/beta \"stencils\" rule out the classical idea of dedicated context-coding neurons entirely?",
+      "passages": [
+        {
+          "blockId": "spya-ee45vr",
+          "quote": "there is no requirement for specialized “context neurons” or “object neurons” with fixed tuning predicted by classical connectionists views of cortex.",
+          "start": 14
+        }
+      ],
+      "difficulty": 0.5,
+      "centrality": 0.5
+    },
+    {
+      "id": "spya-z9x0sw",
+      "question": "If propofol, ketamine, and dexmedetomidine act on completely different molecular receptors, how can they all cause the same loss of consciousness?",
+      "passages": [
+        {
+          "blockId": "spya-wnqgmn",
+          "quote": "Despite acting on different molecular targets, different anesthetic agents, such as propofol (GABAergic), ketamine (NMDAergic), and dexmedetomidine (alpha-2 adrenergic), all converge on similar large-scale electrical effects in the cortex",
+          "start": 0
+        },
+        {
+          "blockId": "spya-k02vdw",
+          "quote": "This suggests that consciousness depends less on specific receptors or cell types and more on the integrity of large-scale wave organization.",
+          "start": 173
+        }
+      ],
+      "difficulty": 0.3,
+      "centrality": 0.7
+    },
+    {
+      "id": "spya-u235gd",
+      "question": "Doesn't putting moment-to-moment computation in waves rather than synapses undermine the established role of synaptic plasticity in learning and memory?",
+      "passages": [
+        {
+          "blockId": "spya-f0dqyd",
+          "quote": "Synaptic connections, shaped by experience, store long‑term information and define potential activity patterns.",
+          "start": 76
+        },
+        {
+          "blockId": "spya-z6esvz",
+          "quote": "Experience effectively “bakes” information about the world into the brain’s synaptic wiring",
+          "start": 0
+        }
+      ],
+      "difficulty": 0.4,
+      "centrality": 0.7
+    },
+    {
+      "id": "spya-wt28qu",
+      "question": "How does this wave-based theory actually differ from Global Workspace or Integrated Information Theory, which also stress large-scale integration?",
+      "passages": [
+        {
+          "blockId": "spya-m3dn2u",
+          "quote": "We, however, emphasize how this integration occurs via dynamic field interactions rather than broadcasting of information (GW) and spikes alone (GWNT).",
+          "start": 221
+        },
+        {
+          "blockId": "spya-m3dn2u",
+          "quote": "However, we locate its mechanisms not in a “hot zone,” but in the large‑scale wave dynamics that organize cortical computation.",
+          "start": 541
+        }
+      ],
+      "difficulty": 0.5,
+      "centrality": 0.5
+    }
+  ],
+  "dropped": {
+    "unknownIds": 0,
+    "unquoted": 0,
+    "tooLong": 0,
+    "duplicate": 0,
+    "unanchored": 0,
+    "overCap": 0,
+    "malformed": 0
+  },
+  "scoreDrops": {
+    "difficultyAbsent": 0,
+    "difficultyRejected": 0,
+    "centralityAbsent": 0,
+    "centralityRejected": 0
+  }
+}

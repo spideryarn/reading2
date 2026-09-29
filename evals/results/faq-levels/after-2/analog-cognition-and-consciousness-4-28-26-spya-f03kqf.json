@@ -1,0 +1,157 @@
+{
+  "arm": "after-2",
+  "slug": "analog-cognition-and-consciousness-4-28-26-spya-f03kqf",
+  "version": "faq/4",
+  "faqSha256": "8ded5d816427dcaf28f5660edff111ea37fab6673cce50e81c790ff6d72f1cfc",
+  "at": "2026-09-29T17:58:53.030Z",
+  "tokens": {
+    "input": 19150,
+    "output": 5308,
+    "cacheRead": 0,
+    "cacheWrite": 0
+  },
+  "questions": [
+    {
+      "id": "spya-yk2dn3",
+      "question": "If synapses are called critical and fundamental, why does the piece then dismiss synaptic change as too cumbersome for top-down control?",
+      "passages": [
+        {
+          "blockId": "spya-d73kfb",
+          "quote": "Spiking and synaptic connections are, of course, critical and fundamental. However, synaptic changes are likely too cumbersome for flexible top-down control.",
+          "start": 214
+        }
+      ],
+      "difficulty": 0.2,
+      "centrality": 0.8
+    },
+    {
+      "id": "spya-q3g9q0",
+      "question": "Are individual electric-field effects on nearby neurons strong enough to really act as a control mechanism, or just a minor nudge?",
+      "passages": [
+        {
+          "blockId": "spya-bzqaf5",
+          "quote": "even weak oscillatory extracellular fields can induce small subthreshold voltage changes that significantly modulate both spiking probability and spike timing in local populations of neurons",
+          "start": 1153
+        },
+        {
+          "blockId": "spya-bzqaf5",
+          "quote": "Individual ephaptic interactions, when synchronized and summed across neurons, create effects large enough to shape and coordinate neuron spiking at the mesoscale",
+          "start": 1426
+        }
+      ],
+      "difficulty": 0.5,
+      "centrality": 0.7
+    },
+    {
+      "id": "spya-jhwf0w",
+      "question": "Why should the alpha/beta frequency band specifically be the right one for top-down control, rather than gamma or slower rhythms?",
+      "passages": [
+        {
+          "blockId": "spya-q606tk",
+          "quote": "Oscillations in the intermediate alpha/beta range, which extend over a range of a few millimeters, might be just the right spatial scale for top-down control",
+          "start": 623
+        }
+      ],
+      "difficulty": 0.6,
+      "centrality": 0.4
+    },
+    {
+      "id": "spya-ckprj7",
+      "question": "If a neuron can be inside or outside the suppressive alpha/beta pattern depending on context, does it have any fixed identity at all?",
+      "passages": [
+        {
+          "blockId": "spya-ectcj5",
+          "quote": "the same neuron may receive many different sensory signals and may lie inside the inhibitory stencil in one context and outside it in another.",
+          "start": 446
+        },
+        {
+          "blockId": "spya-ee45vr",
+          "quote": "there is no requirement for specialized “context neurons” or “object neurons” with fixed tuning predicted by classical connectionists views of cortex.",
+          "start": 14
+        }
+      ],
+      "difficulty": 0.5,
+      "centrality": 0.6
+    },
+    {
+      "id": "spya-bm3z7y",
+      "question": "If single neurons are noisy and their tuning shifts with context, how can the population as a whole show such stable, structured behavior?",
+      "passages": [
+        {
+          "blockId": "spya-qsz9ur",
+          "quote": "Rather than independent units driven solely by local, specialized connections, cortical populations behave like a coordinated flock governed by shared dynamics.",
+          "start": 154
+        }
+      ],
+      "difficulty": 0.4,
+      "centrality": 0.6
+    },
+    {
+      "id": "spya-n97yvv",
+      "question": "What observation would confirm that traveling waves actually drive shifts in neural coding, rather than just accompanying them?",
+      "passages": [
+        {
+          "blockId": "spya-qaza0y",
+          "quote": "This hypothesis predicts that wave incidence should correlate with the overall temporal dynamics of population activity, but show little variation with specific sensory conditions.",
+          "start": 0
+        }
+      ],
+      "difficulty": 0.7,
+      "centrality": 0.4
+    },
+    {
+      "id": "spya-c3gpm8",
+      "question": "Since anesthetics with different molecular targets all produce the same slow-wave pattern, does that mean the specific receptor drugs act on barely matters for consciousness?",
+      "passages": [
+        {
+          "blockId": "spya-k02vdw",
+          "quote": "This suggests that consciousness depends less on specific receptors or cell types and more on the integrity of large-scale wave organization.",
+          "start": 173
+        }
+      ],
+      "difficulty": 0.4,
+      "centrality": 0.6
+    },
+    {
+      "id": "spya-nrdey3",
+      "question": "How exactly are separate, distributed neural representations tied together into one conscious experience under this framework?",
+      "passages": [
+        {
+          "blockId": "spya-tdqde5",
+          "quote": "Brain waves can thus help solve the binding problem by dynamically linking distributed neural representations into a unified conscious experience.",
+          "start": 456
+        }
+      ],
+      "difficulty": 0.3,
+      "centrality": 0.8
+    },
+    {
+      "id": "spya-tttyf2",
+      "question": "How does this wave-based account of global integration actually differ from Global Workspace theory's idea of broadcasting information?",
+      "passages": [
+        {
+          "blockId": "spya-m3dn2u",
+          "quote": "We, however, emphasize how this integration occurs via dynamic field interactions rather than broadcasting of information (GW) and spikes alone (GWNT).",
+          "start": 221
+        }
+      ],
+      "difficulty": 0.5,
+      "centrality": 0.5
+    }
+  ],
+  "dropped": {
+    "unknownIds": 0,
+    "unquoted": 0,
+    "tooLong": 0,
+    "duplicate": 0,
+    "unanchored": 0,
+    "overCap": 0,
+    "malformed": 0
+  },
+  "scoreDrops": {
+    "difficultyAbsent": 0,
+    "difficultyRejected": 0,
+    "centralityAbsent": 0,
+    "centralityRejected": 0
+  }
+}

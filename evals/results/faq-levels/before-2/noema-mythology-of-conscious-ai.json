@@ -1,0 +1,122 @@
+{
+  "arm": "before-2",
+  "slug": "noema-mythology-of-conscious-ai",
+  "version": "faq/3",
+  "faqSha256": "9c6f7a31f99efcb35ef1416a62d7fd0dd25b6c6687ff88b4619fe2dc74a4e5eb",
+  "at": "2026-09-29T17:48:27.156Z",
+  "tokens": {
+    "input": 19888,
+    "output": 5429,
+    "cacheRead": 0,
+    "cacheWrite": 0
+  },
+  "questions": [
+    {
+      "id": "spya-wfr786",
+      "question": "Turing computation is praised for running the same on any hardware — so why does that same flexibility become the problem when applied to brains?",
+      "passages": [
+        {
+          "blockId": "spya-p4vmm0",
+          "quote": "This matters because the idea of the brain as a meat-based (universal) Turing machine rests precisely on this sharp separation of scales, on the substrate independence that motivated Turing’s definition in the first place.",
+          "start": 0
+        }
+      ]
+    },
+    {
+      "id": "spya-qc0bp9",
+      "question": "Doesn't the thought experiment of swapping brain parts for silicon ones show consciousness could survive in a machine?",
+      "passages": [
+        {
+          "blockId": "spya-ahtr6e",
+          "quote": "But the argument fails at its first hurdle, given the impossibility of replacing any part of the brain with a perfect silicon equivalent.",
+          "start": 693
+        }
+      ]
+    },
+    {
+      "id": "spya-dh69jj",
+      "question": "If simulating a rainstorm doesn't make anything wet, why does the simulation hypothesis assume a simulated mind could still be conscious?",
+      "passages": [
+        {
+          "blockId": "spya-xdy4fe",
+          "quote": "This, perhaps unsurprisingly, is the assumption that “a computer running a suitable program would be conscious” (see page 2 of his paper).",
+          "start": 400
+        }
+      ]
+    },
+    {
+      "id": "spya-wjkmzn",
+      "question": "Given the author admits other theories of consciousness might be right, why insist nobody should ever try to build conscious AI?",
+      "passages": [
+        {
+          "blockId": "spya-qu7j89",
+          "quote": "I’ve made a case against conscious AI, but I might be wrong.",
+          "start": 127
+        },
+        {
+          "blockId": "spya-yverz7",
+          "quote": "nobody should be deliberately setting out to create conscious AI, whether in the service of some poorly thought-through techno-rapture, or for any other reason.",
+          "start": 81
+        }
+      ]
+    },
+    {
+      "id": "spya-u77q52",
+      "question": "If being alive matters for consciousness, which kind of technology should actually worry us more than chatbots?",
+      "passages": [
+        {
+          "blockId": "spya-vs0vpj",
+          "quote": "For my money, we ought to be more worried about the accidental emergence of consciousness in cerebral organoids (brain-like structures typically grown from human embryonic stem cells) than in any new wave of LLM.",
+          "start": 254
+        }
+      ]
+    },
+    {
+      "id": "spya-yems09",
+      "question": "If treating conscious-seeming AI as feelingless harms our own minds, doesn't that push us toward granting it rights anyway?",
+      "passages": [
+        {
+          "blockId": "spya-n0bnf9",
+          "quote": "More generally, either we decide to care about conscious-seeming AI, distorting our circles of moral concern, or we decide not to, and risk brutalizing our minds.",
+          "start": 182
+        }
+      ]
+    },
+    {
+      "id": "spya-ry2gkf",
+      "question": "If our gut feeling that an AI is conscious resists argument the way a visual illusion resists correction, what use is making this case at all?",
+      "passages": [
+        {
+          "blockId": "spya-xk9gne",
+          "quote": "Illusions of artificial consciousness might be as impenetrable to our minds as some visual illusions.",
+          "start": 148
+        }
+      ]
+    },
+    {
+      "id": "spya-n3h35q",
+      "question": "If our psychological biases mostly push us to see consciousness in machines that lack it, why worry about the opposite mistake — missing real machine consciousness?",
+      "passages": [
+        {
+          "blockId": "spya-mxxutn",
+          "quote": "It is reasonable to wonder whether withholding attributions of consciousness to AI may leave us once again on the wrong side of history.",
+          "start": 270
+        },
+        {
+          "blockId": "spya-d89xf7",
+          "quote": "Compared to non-human animals, the apparent wonders of AI may be more similar to us in ways that do not matter for consciousness, like linguistic ability, and less similar in ways that do, like being alive.",
+          "start": 170
+        }
+      ]
+    }
+  ],
+  "dropped": {
+    "unknownIds": 0,
+    "unquoted": 0,
+    "tooLong": 0,
+    "duplicate": 0,
+    "unanchored": 0,
+    "overCap": 0,
+    "malformed": 0
+  }
+}
