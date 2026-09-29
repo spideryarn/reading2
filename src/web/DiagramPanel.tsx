@@ -174,8 +174,17 @@ interface Props {
    * nodes are sections anyway.
    */
   atRow: number | null;
-  /** Jump the article to a block, exactly as a gist cell does. */
+  /** Jump the article to a block, exactly as a gist cell does — a press on a node or a row. */
   onJump(id: BlockId): void;
+  /**
+   * **The article following the picture** — the step buttons under it and the
+   * arrow keys in the tree — as against a press on something. Reader hands
+   * `onJump` its `bandJump`, which on a phone steps the band aside so the
+   * paragraph shows; walking the picture must not, or the first step would hide
+   * the picture being walked. Defaults to `onJump`. GPT Sol, plan review of
+   * docs/plans/260929g-on-a-phone-a-band-link-closes-the-band.md.
+   */
+  onFollow?(id: BlockId): void;
   /**
    * Every block of the article, in order — what the Force picture's graph is
    * built from (src/web/graph.ts), and what the two scatters name their lanes
@@ -635,6 +644,7 @@ export function DiagramPanel({
   onKind,
   atRow,
   onJump,
+  onFollow = onJump,
   blocks,
   axis,
   onAxis,
@@ -1267,7 +1277,7 @@ export function DiagramPanel({
     chainTimer.current = window.setTimeout(() => {
       chain.current = null;
     }, CHAIN_MS);
-    onJump(stop.blockId);
+    onFollow(stop.blockId);
   };
   /**
    * Whether that press would go anywhere, for the greyed-out look.
@@ -1433,7 +1443,7 @@ export function DiagramPanel({
       const next = nodes[Math.min(nodes.length - 1, Math.max(0, i + d))];
       if (!next) return;
       rove(next.id);
-      if (next.blockId !== node.blockId) onJump(next.blockId);
+      if (next.blockId !== node.blockId) onFollow(next.blockId);
     };
     switch (e.key) {
       case "ArrowDown":

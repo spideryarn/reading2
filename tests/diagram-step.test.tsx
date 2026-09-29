@@ -161,6 +161,8 @@ let table: HTMLTableElement;
 /** The row the fake reading line is on — see `scrollTo`. */
 let onRow = 0;
 let jumped: BlockId[] = [];
+/** What `onFollow` was handed, when a case gives one — see "walking the picture" below. */
+let followed: BlockId[] = [];
 
 /**
  * Put the fake article in the document and place its rows.
@@ -197,6 +199,7 @@ async function scrollTo(row: number) {
 beforeEach(() => {
   onRow = 0;
   jumped = [];
+  followed = [];
   observers.length = 0;
   vi.stubGlobal("ResizeObserver", FakeResizeObserver);
   for (const [prop, value] of [
@@ -225,7 +228,7 @@ afterEach(() => {
  * anything still reading `?at=` instead of measuring shows up as a mark that
  * never moves. That is the bug, stated as a fixture.
  */
-async function mount(opts: { atRow?: number | null } = {}) {
+async function mount(opts: { atRow?: number | null; follow?: boolean } = {}) {
   const { root: tree, blocks } = article();
   layoutArticle(blocks);
   vi.stubGlobal(
@@ -243,6 +246,7 @@ async function mount(opts: { atRow?: number | null } = {}) {
         onKind={() => {}}
         atRow={opts.atRow ?? 0}
         onJump={(id) => jumped.push(id)}
+        {...(opts.follow && { onFollow: (id: BlockId) => followed.push(id) })}
         blocks={blocks}
         axis="spread"
         onAxis={() => {}}
@@ -451,5 +455,68 @@ describe("a reader inside the apparatus", () => {
     await scrollTo(6);
     await press("Next");
     expect(jumped).toEqual([blocks[7]?.id]);
+  });
+});
+
+describe("walking the picture, as against pressing something in it (260929g)", () => {
+  /* Reader hands the Diagram band two callbacks: `onJump` is `bandJump`, which
+     on a phone steps the band aside so the paragraph shows, and `onFollow` is
+     plain `jumpTo`. Walking — the step buttons, the arrow keys — must take the
+     second, or the first step on a phone would hide the picture being walked;
+     a press on a dot or on the card's title is the reader asking to go there,
+     and takes the first. GPT Sol, plan review of
+     docs/plans/260929g-on-a-phone-a-band-link-closes-the-band.md, F3. */
+  const node = (i: number) => {
+    const el = host.querySelectorAll<HTMLElement>(".diag-node")[i];
+    if (!el) throw new Error(`no node ${i}`);
+    return el;
+  };
+  const key = async (el: HTMLElement, k: string) => {
+    await act(async () => {
+      el.dispatchEvent(new KeyboardEvent("keydown", { key: k, bubbles: true }));
+    });
+  };
+
+  it("hands a step button's move to onFollow, not onJump", async () => {
+    const blocks = await mount({ follow: true });
+    await scrollTo(1);
+    await press("Next");
+    await press("Previous");
+    expect({ followed, jumped }).toEqual({ followed: [blocks[2]?.id, blocks[1]?.id], jumped: [] });
+  });
+
+  it("hands an arrow key's move to onFollow, not onJump", async () => {
+    /* Drift is flat, so ↓ and → both step to the next dot and take the article
+       with them — DiagramPanel.tsx § `follow`. The dots are on rows 0, 3 and 9. */
+    const blocks = await mount({ follow: true });
+    await key(node(0), "ArrowDown");
+    await key(node(1), "ArrowRight");
+    expect({ followed, jumped }).toEqual({ followed: [blocks[3]?.id, blocks[9]?.id], jumped: [] });
+  });
+
+  it("hands a click on a dot, Enter or Space on one, and the card's title to onJump", async () => {
+    const blocks = await mount({ follow: true });
+    /* The dot is an SVG `<g>`, which has no `.click()` in jsdom. */
+    await act(async () => void node(1).dispatchEvent(new MouseEvent("click", { bubbles: true })));
+    await key(node(2), "Enter");
+    await key(node(0), " ");
+    const title = host.querySelector<HTMLButtonElement>(".diag-card-title");
+    expect(title, "the card drew no title to press").not.toBeNull();
+    await act(async () => title?.click());
+    expect(jumped.slice(0, 3)).toEqual([blocks[3]?.id, blocks[9]?.id, blocks[0]?.id]);
+    expect(jumped, "the card's title press did not reach onJump").toHaveLength(4);
+    expect(followed).toEqual([]);
+  });
+
+  it("falls back to onJump for a step when no onFollow is given", async () => {
+    /* Stated once on its own rather than only implied by every case above,
+       none of which passes `onFollow`: another caller of DiagramPanel keeps the
+       old behaviour. */
+    const blocks = await mount();
+    await key(node(0), "ArrowDown");
+    /* The step bar measures the reader, not the dot, and the fake reading line
+       is still on row 0 — so Next is row 1. */
+    await press("Next");
+    expect(jumped).toEqual([blocks[3]?.id, blocks[1]?.id]);
   });
 });
