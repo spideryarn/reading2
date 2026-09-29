@@ -185,4 +185,4 @@ Sol reviewed commit `807e2a2c` with write access and fixed what it found. Kept:
   by mutation — nine mutations of the code, all killed.
 - [x] Stage 2: dictation.md § A closed tab, privacy.md, `/privacy`, the note.
 - [x] Sol code review (above), gates re-run: typecheck, 23 scoped files / 473 tests, full suite
-- [ ] Landed on dev
+- [x] Landed on dev, 2026-09-29 (`0e6392f4`). Not deployed.
