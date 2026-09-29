@@ -1,0 +1,36 @@
+{
+  "a": "after:reading",
+  "b": "after:default",
+  "key": [
+    {
+      "slug": "analog-cognition-and-consciousness-4-28-26-spya-f03kqf",
+      "X": "after:default",
+      "Y": "after:reading"
+    },
+    {
+      "slug": "entropy-24-00930-spya-pywwkq",
+      "X": "after:default",
+      "Y": "after:reading"
+    },
+    {
+      "slug": "noema-mythology-of-conscious-ai",
+      "X": "after:reading",
+      "Y": "after:default"
+    },
+    {
+      "slug": "scaling-hypothesis",
+      "X": "after:default",
+      "Y": "after:reading"
+    },
+    {
+      "slug": "spider-silk-spya-ge30uz",
+      "X": "after:reading",
+      "Y": "after:default"
+    },
+    {
+      "slug": "towards-a-theory-of-bugs-the-ruliology-of-the-unexpected",
+      "X": "after:reading",
+      "Y": "after:default"
+    }
+  ]
+}

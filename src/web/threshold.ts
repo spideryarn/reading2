@@ -2,7 +2,7 @@
  * **The one threshold rule every slider shares.**
  *
  * Glossary (`?gate=`), Quotes (`?bar=`) and Search (`?conf=`) each put a
- * threshold under the reader's hand — Citations (`?citebar=`) joined them later,
+ * threshold under the reader's hand — Citations (`?citebar=`) and the FAQ (`?faqbar=`) joined them later,
  * and Debate's categorical bar (`?name=`, debate-levels.ts) uses the same pass —
  * and until 2026-09-03 the first three disagreed about
  * what one is for: Search hid what was below it, while the other two moved it
@@ -165,4 +165,89 @@ export function hiddenNote(hidden: number, total: number, noun: ThresholdNoun): 
   const all = hidden === total && hidden > 1 ? "All " : "";
   const them = hidden === 1 ? "it" : "them";
   return `${all}${subject} hidden by this threshold. Drag the slider left to show ${them}.`;
+}
+
+/* ------------------------------------------------------------ the track --
+   The arithmetic of a slider that ends where the data does. It was the
+   Glossary's (GlossaryPanel.tsx § prioritised) and was copied once into
+   Citations; the FAQ would have been the third copy, so since 2026-09-29 it
+   lives here, taking a score accessor like `applyThreshold` does
+   (docs/plans/260929g-faq-difficulty-centrality-and-a-threshold.md, Sol F4).
+   The Glossary and Citations keep their own names as one-line wrappers. The
+   reasoning behind each rule is in GlossaryPanel.tsx beside `gateTop` and
+   `canPrioritise`, and it is the same for every caller. */
+
+/**
+ * How far a threshold slider moves in one step, and therefore how precise its
+ * URL value gets: two decimal places, which is what `gateParam`, `citeBarParam`
+ * and `faqBarParam` serialize.
+ */
+export const GATE_STEP = 0.01;
+
+/** How many steps span 0-1, and therefore the grid the URL values are written on. */
+const GATE_STEPS = Math.round(1 / GATE_STEP);
+
+/**
+ * **The largest position of the slider at or below a score.**
+ *
+ * `Math.floor(score / GATE_STEP)` loses a whole step wherever the quotient
+ * lands a hair under an integer — `0.58 / 0.01` is `57.99999999999999` — so
+ * round the quotient to a sane number of places before flooring, and divide by
+ * 100 rather than multiplying by `0.01`, since `57 / 100` is exactly the double
+ * `0.57` the URL round-trips. Never above its argument: the item a number was
+ * computed from always survives that number.
+ */
+export function floorToGateStep(score: number): number {
+  const steps = Math.floor(Math.round((score / GATE_STEP) * 1e9) / 1e9);
+  return steps / GATE_STEPS;
+}
+
+/**
+ * The right-hand end of the track **as the data alone decides it**: the largest
+ * score in the list, floored to a stop. Zero when nothing is scored.
+ * Floored, not rounded up, so the top stop always shows the top item.
+ */
+export function thresholdTop<T>(
+  items: readonly T[],
+  scoreOf: (item: T) => number | null | undefined,
+): number {
+  let top = 0;
+  for (const item of items) {
+    const s = scoreOf(item);
+    if (s != null && s > top) top = s;
+  }
+  return floorToGateStep(top);
+}
+
+/**
+ * The track's rendered maximum: the data's top, the current value (so a link's
+ * off-range value still has somewhere to sit), and one step at least (so an
+ * unscored list still has a track to render). **Never ask this whether the
+ * list can be thresholded** — it folds in the current value; ask `canThreshold`.
+ */
+export function thresholdMax<T>(
+  items: readonly T[],
+  threshold: number,
+  scoreOf: (item: T) => number | null | undefined,
+): number {
+  return Math.max(thresholdTop(items, scoreOf), threshold, GATE_STEP);
+}
+
+/**
+ * **Would any position of the bar hide anything?** True exactly when some score
+ * sits strictly below the track's top stop — equivalently, when the bar at
+ * `thresholdTop` hides something. A list that answers false has no prioritised
+ * order worth offering: every position the reader can reach would show the
+ * same list.
+ */
+export function canThreshold<T>(
+  items: readonly T[],
+  scoreOf: (item: T) => number | null | undefined,
+): boolean {
+  const top = thresholdTop(items, scoreOf);
+  for (const item of items) {
+    const s = scoreOf(item);
+    if (s != null && s < top) return true;
+  }
+  return false;
 }

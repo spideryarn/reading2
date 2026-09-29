@@ -448,12 +448,17 @@ export const MODE_CATALOG: Record<Mode, ModeCatalogEntry> = {
          nothing else (src/types.ts) — docs/plans/260916d-faq-mode.md § The one
          product call. This is the half a press would not tell somebody who
          expects an FAQ to have answers under it.
-       - "in reading order, not by how often they are asked": `inReadingOrder`
-         in src/faq.ts sorts each row by its earliest surviving passage, and no
-         frequency or priority score exists on `FaqQuestion`.
+       - "the broadest, most central first; reading order is one tap away":
+         since `faq/4` every question carries the model's `difficulty` and
+         `centrality` (src/types.ts), and the default order is
+         `orderQuestions` in src/web/faq-order.ts — highest
+         `centrality × (1 − difficulty)` first, under a threshold. The stored
+         order is still reading order (`inReadingOrder`, src/faq.ts), which
+         the *reading order* button shows and a list without scores falls back
+         to. No frequency score exists: nobody's asking is counted.
        Not the band foot's "checked against it" sentence, which is already on
        screen (GPT Sol D3). About the mode, not the press, and no price. */
-    how: "One model pass over the article, written once and stored. No answer is written: each question points to passages of the piece itself, in reading order rather than by how often anyone asks it.",
+    how: "One model pass over the article, written once and stored. No answer is written: each question points to passages of the piece itself. The broadest, most central questions come first, and reading order is one tap away.",
     /* Not `questions`: `question` is Chat's, and a prefix of it would tie the two
        in the command bar. `faq` itself is this mode's label, which an alias may
        not repeat (tests/mode-catalog.test.ts). */

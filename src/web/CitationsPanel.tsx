@@ -39,11 +39,18 @@ import type { PublicCitations, PublicCitedWork } from "../public-types.js";
 import type { CiteOrder } from "./params.js";
 import type { FindNote, UseCitations } from "./useCitations.js";
 import { BlockRef } from "./BlockRef.js";
-import { floorToGateStep, GATE_STEP } from "./GlossaryPanel.js";
 import { JobProgress } from "./JobProgress.js";
 import { ModeSurface } from "./ModeSurface.js";
 import { useRenderCount } from "./perf.js";
-import { applyThreshold, hiddenNote, type ThresholdResult } from "./threshold.js";
+import {
+  applyThreshold,
+  canThreshold,
+  GATE_STEP,
+  hiddenNote,
+  thresholdMax,
+  thresholdTop,
+  type ThresholdResult,
+} from "./threshold.js";
 import { ControlTip, Tooltip } from "./Tooltip.js";
 
 /**
@@ -96,21 +103,16 @@ export function visibleWorks<W extends ShownWork>(works: readonly W[], bar: numb
 }
 
 /**
- * The highest position the bar needs, on the glossary's hundredth grid — the
- * same `floorToGateStep`, so the thumb's top stop always shows the top work.
+ * The highest position the bar needs, on the shared hundredth grid —
+ * `thresholdTop` in threshold.ts, so the thumb's top stop always shows the top work.
  */
 export function barTop(works: readonly ShownWork[]): number {
-  let top = 0;
-  for (const work of works) {
-    const p = priorityOf(work);
-    if (p !== undefined && p > top) top = p;
-  }
-  return floorToGateStep(top);
+  return thresholdTop(works, priorityOf);
 }
 
 /** The track's maximum: the data's top, the current bar, and one step at least. */
 export function barMax(works: readonly ShownWork[], bar: number): number {
-  return Math.max(barTop(works), bar, GATE_STEP);
+  return thresholdMax(works, bar, priorityOf);
 }
 
 /**
@@ -119,12 +121,7 @@ export function barMax(works: readonly ShownWork[], bar: number): number {
  * about the whole list, not about where the bar is now.
  */
 export function canPrioritise(works: readonly ShownWork[]): boolean {
-  const top = barTop(works);
-  for (const work of works) {
-    const p = priorityOf(work);
-    if (p !== undefined && p < top) return true;
-  }
-  return false;
+  return canThreshold(works, priorityOf);
 }
 
 /**

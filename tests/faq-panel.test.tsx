@@ -9,6 +9,8 @@ import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { BlockId, Faq, FaqDropped, FaqQuestion, Job } from "../src/types.js";
 import type { UseFaq } from "../src/web/useFaq.js";
+import type { FaqAccess } from "../src/web/FaqPanel.js";
+import { FAQ_BAR_DEFAULT, type FaqOrder } from "../src/web/faq-order.js";
 
 const { FAQ_NONE, FAQ_PROMISE, FaqPanel, droppedCount, droppedNote } = await import(
   "../src/web/FaqPanel.js"
@@ -101,11 +103,34 @@ afterEach(async () => {
 });
 
 const jumps: BlockId[] = [];
+const orders: FaqOrder[] = [];
+const bars: (number | null)[] = [];
 
-async function draw(o: UseFaq) {
+/** `?faqby=` and `?faqbar=` as the panel is handed them — the default is "untouched". */
+interface Controls {
+  order?: FaqOrder;
+  bar?: number | null;
+}
+
+async function draw(o: UseFaq, controls: Controls = {}) {
+  await drawAccess({ kind: "owner", owner: o }, controls);
+}
+
+async function drawAccess(access: FaqAccess, { order = "prioritised", bar = null }: Controls = {}) {
   jumps.length = 0;
+  orders.length = 0;
+  bars.length = 0;
   await act(async () =>
-    root.render(createElement(FaqPanel, { access: { kind: "owner", owner: o }, onJump: (id: BlockId) => void jumps.push(id) })),
+    root.render(
+      createElement(FaqPanel, {
+        access,
+        order,
+        onOrder: (next: FaqOrder) => void orders.push(next),
+        bar,
+        onBar: (next: number | null) => void bars.push(next),
+        onJump: (id: BlockId) => void jumps.push(id),
+      }),
+    ),
   );
 }
 
@@ -276,5 +301,91 @@ describe("FaqPanel", () => {
     await draw(owner());
     const r = row(ISOLATED.id);
     expect(r.textContent).toBe(`${ISOLATED.question}we will assume the box is sealedr8z3nh`);
+  });
+});
+
+/* ---------------------------------------------- the prioritised order, faq/4 --
+   docs/plans/260929g-faq-difficulty-centrality-and-a-threshold.md. The compound
+   is centrality × (1 − difficulty); the numbers below are chosen so the
+   priorities are well apart: BROAD 0.72, FRIDGE 0.40, NARROW 0.05. */
+
+const BROAD: FaqQuestion = {
+  id: "faq-broad",
+  question: "Does the whole argument need the system to be closed?",
+  passages: [{ blockId: LATER, quote: "we will assume the box is sealed", start: 40 }],
+  difficulty: 0.1,
+  centrality: 0.8,
+};
+const FRIDGE_SCORED: FaqQuestion = { ...FRIDGE, difficulty: 0.5, centrality: 0.8 };
+const NARROW: FaqQuestion = {
+  id: "faq-narrow",
+  question: "Why is the exported heat counted twice in the second table?",
+  passages: [{ blockId: LATER, quote: "only by exporting more to its surroundings", start: 0 }],
+  difficulty: 0.9,
+  centrality: 0.5,
+};
+/* Stored in reading order, as src/faq.ts writes them. */
+const SCORED = [FRIDGE_SCORED, NARROW, BROAD];
+const questionsShown = () => [...host.querySelectorAll(".faq-question")].map((h) => h.textContent);
+
+describe("the prioritised order", () => {
+  it("opens on the broadest, most central question, and draws the two raw scores on each row", async () => {
+    await draw(owner({ faq: artefact(SCORED) }));
+    expect(questionsShown()).toEqual([BROAD.question, FRIDGE.question]);
+    const bars = row(BROAD.id).querySelector(".score-bars");
+    expect(bars?.getAttribute("aria-label")).toMatch(/centrality .* 80 out of 100, difficulty .* 10 out of 100/);
+    /* The compound is ours, never drawn: 0.72 appears nowhere on the row. */
+    expect(row(BROAD.id).innerHTML).not.toContain("0.72");
+  });
+
+  it("hides what is under the default bar, and says so under the slider", async () => {
+    expect(FAQ_BAR_DEFAULT).toBeGreaterThan(0.05);
+    await draw(owner({ faq: artefact(SCORED) }));
+    const slider = host.querySelector<HTMLInputElement>("#faq-bar");
+    expect(slider).not.toBeNull();
+    expect(host.querySelector(".gloss-gate-value")?.textContent).toContain("2 of 3");
+    expect(host.querySelector(".gloss-gate-note")?.textContent).toBe(
+      "1 question is hidden by this threshold. Drag the slider left to show it.",
+    );
+  });
+
+  it("trims from the bottom as the bar rises", async () => {
+    await draw(owner({ faq: artefact(SCORED) }), { bar: 0.5 });
+    expect(questionsShown()).toEqual([BROAD.question]);
+    await draw(owner({ faq: artefact(SCORED) }), { bar: 0 });
+    expect(questionsShown()).toEqual([BROAD.question, FRIDGE.question, NARROW.question]);
+  });
+
+  it("offers reading order one tap away, and in it draws every question, stored order, no bar, no scores", async () => {
+    await draw(owner({ faq: artefact(SCORED) }));
+    const reading = [...host.querySelectorAll<HTMLButtonElement>(".gloss-sort-btn")].find(
+      (b) => b.textContent === "reading order",
+    );
+    await act(async () => reading?.click());
+    expect(orders).toEqual(["document"]);
+    await draw(owner({ faq: artefact(SCORED) }), { order: "document" });
+    expect(questionsShown()).toEqual([FRIDGE.question, NARROW.question, BROAD.question]);
+    expect(host.querySelector("#faq-bar")).toBeNull();
+    expect(host.querySelector(".score-bars")).toBeNull();
+  });
+
+  it("puts an unscored question after the scored ones, and never hides it", async () => {
+    await draw(owner({ faq: artefact([ISOLATED, ...SCORED]) }), { bar: 0.5 });
+    expect(questionsShown()).toEqual([BROAD.question, ISOLATED.question]);
+    expect(row(ISOLATED.id).title).toMatch(/Not scored/);
+  });
+
+  it("draws a list from before faq/4 exactly as before: reading order, no order row, no slider", async () => {
+    await draw(owner({ faq: artefact([ISOLATED, FRIDGE]) }));
+    expect(questionsShown()).toEqual([ISOLATED.question, FRIDGE.question]);
+    expect(host.querySelector(".gloss-sort")).toBeNull();
+    expect(host.querySelector("#faq-bar")).toBeNull();
+    expect(host.querySelector(".score-bars")).toBeNull();
+  });
+
+  it("gives a visitor the same order and the same bar", async () => {
+    await drawAccess({ kind: "visitor", faq: { questions: SCORED } });
+    expect(questionsShown()).toEqual([BROAD.question, FRIDGE.question]);
+    expect(host.querySelector("#faq-bar")).not.toBeNull();
   });
 });

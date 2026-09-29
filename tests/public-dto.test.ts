@@ -1008,7 +1008,7 @@ describe("the artefacts a shared link carries", () => {
    * panel prints it and a visitor's must not be sent it. Plan 260929c stage 2.
    */
   const FAQ: Faq = {
-    version: "faq/3",
+    version: "faq/4",
     generator: "some-model",
     slug: "noema",
     sourceHash: "abc123",
@@ -1017,6 +1017,17 @@ describe("the artefacts a shared link carries", () => {
         id: "q-one",
         question: "What does the measurement have to carry?",
         passages: [{ blockId: "spya-bbbbbb" as BlockId, quote: "the measurement", start: 4 }],
+        /* Scored, and one score zero: zero is a score, and a spread guarded
+           by truthiness would drop it on the way out (plan 260929g, Sol F7). */
+        difficulty: 0,
+        centrality: 0.85,
+      },
+      {
+        /* A question from before `faq/4`, with neither score: it must cross
+           without growing an `undefined` key. */
+        id: "q-two",
+        question: "Why would a copy not do?",
+        passages: [{ blockId: "spya-bbbbbb" as BlockId, quote: "a copy", start: 20 }],
       },
     ],
     dropped: { unknownIds: 1, unquoted: 2, tooLong: 0, duplicate: 0, unanchored: 3, overCap: 0, malformed: 0 },
@@ -1573,6 +1584,8 @@ describe("the artefacts a shared link carries", () => {
     expect(pathsUnder("faq")).toEqual(
       [
         "questions",
+        "questions[].centrality",
+        "questions[].difficulty",
         "questions[].id",
         "questions[].passages",
         "questions[].passages[].blockId",
@@ -1582,6 +1595,8 @@ describe("the artefacts a shared link carries", () => {
       ].sort(),
     );
     expect(built.faq).toEqual({ questions: FAQ.questions });
+    expect(built.faq?.questions[0]).toMatchObject({ difficulty: 0, centrality: 0.85 });
+    expect(Object.keys(built.faq?.questions[1] ?? {}).sort()).toEqual(["id", "passages", "question"]);
     expect(JSON.stringify(built.faq)).not.toContain("dropped");
   });
 

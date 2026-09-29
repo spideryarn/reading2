@@ -1,0 +1,170 @@
+{
+  "arm": "after-2",
+  "slug": "noema-mythology-of-conscious-ai",
+  "version": "faq/4",
+  "faqSha256": "8ded5d816427dcaf28f5660edff111ea37fab6673cce50e81c790ff6d72f1cfc",
+  "at": "2026-09-29T17:59:03.306Z",
+  "tokens": {
+    "input": 20481,
+    "output": 6504,
+    "cacheRead": 0,
+    "cacheWrite": 0
+  },
+  "questions": [
+    {
+      "id": "spya-sfg866",
+      "question": "Doesn't the pace of AI's exponential progress make a conscious breakthrough increasingly likely?",
+      "passages": [
+        {
+          "blockId": "spya-cke6sj",
+          "quote": "But on an exponential curve, every point is an inflection point.",
+          "start": 716
+        }
+      ],
+      "difficulty": 0.2,
+      "centrality": 0.3
+    },
+    {
+      "id": "spya-emhvsa",
+      "question": "Doesn't the classic thought experiment of swapping brain parts for identical silicon replacements show consciousness could survive in a machine?",
+      "passages": [
+        {
+          "blockId": "spya-ahtr6e",
+          "quote": "But the argument fails at its first hurdle, given the impossibility of replacing any part of the brain with a perfect silicon equivalent.",
+          "start": 693
+        }
+      ],
+      "difficulty": 0.5,
+      "centrality": 0.7
+    },
+    {
+      "id": "spya-fb82e8",
+      "question": "If computers can simulate continuous or random processes, why doesn't that simulation count as really producing them?",
+      "passages": [
+        {
+          "blockId": "spya-npjt4j",
+          "quote": "Computational simulations generally lack the causal powers and intrinsic properties of the things being simulated.",
+          "start": 0
+        }
+      ],
+      "difficulty": 0.4,
+      "centrality": 0.4
+    },
+    {
+      "id": "spya-sq7gm7",
+      "question": "If an incredibly detailed brain simulation still wouldn't be conscious, does that mean mind-uploading for digital immortality is a fantasy?",
+      "passages": [
+        {
+          "blockId": "spya-xvm37k",
+          "quote": "If an exquisitely detailed brain model is needed, then you are no more likely to exist in the simulation than a hailstorm is likely to arise inside the computers of the U.K. meteorological office.",
+          "start": 277
+        }
+      ],
+      "difficulty": 0.5,
+      "centrality": 0.5
+    },
+    {
+      "id": "spya-mxfyfu",
+      "question": "If digital computation can't produce consciousness, doesn't that undermine the idea that we might be living in a computer simulation?",
+      "passages": [
+        {
+          "blockId": "spya-xdy4fe",
+          "quote": "If this assumption doesn’t hold, then the simple fact that we are conscious would rule out that we exist in a simulation.",
+          "start": 539
+        }
+      ],
+      "difficulty": 0.6,
+      "centrality": 0.5
+    },
+    {
+      "id": "spya-tc7fvu",
+      "question": "Does ruling out consciousness in ordinary digital computers mean artificial consciousness is impossible altogether?",
+      "passages": [
+        {
+          "blockId": "spya-rn8y3y",
+          "quote": "At the same time, nothing in what I’ve said rules out the possibility of artificial consciousness altogether.",
+          "start": 0
+        }
+      ],
+      "difficulty": 0.5,
+      "centrality": 0.7
+    },
+    {
+      "id": "spya-mnuaje",
+      "question": "If the case against machine consciousness is admittedly uncertain, why insist firmly that nobody should try to build it?",
+      "passages": [
+        {
+          "blockId": "spya-qu7j89",
+          "quote": "I’ve made a case against conscious AI, but I might be wrong.",
+          "start": 127
+        },
+        {
+          "blockId": "spya-yverz7",
+          "quote": "nobody should be deliberately setting out to create conscious AI, whether in the service of some poorly thought-through techno-rapture, or for any other reason.",
+          "start": 81
+        }
+      ],
+      "difficulty": 0.3,
+      "centrality": 0.8
+    },
+    {
+      "id": "spya-ddyxjk",
+      "question": "Even if today's digital AI can't be conscious, could newer technologies like neuromorphic chips or synthetic biology eventually succeed?",
+      "passages": [
+        {
+          "blockId": "spya-vs0vpj",
+          "quote": "Even if I’m right that standard digital computers aren’t up to the job, other emerging technologies might yet be, whether alternative forms of computation (analogue, neuromorphic, biological and so on) or rapidly developing methods in synthetic biology.",
+          "start": 0
+        }
+      ],
+      "difficulty": 0.4,
+      "centrality": 0.5
+    },
+    {
+      "id": "spya-grn8pt",
+      "question": "If we already know an AI isn't conscious, can that knowledge stop us from feeling that it is anyway?",
+      "passages": [
+        {
+          "blockId": "spya-xk9gne",
+          "quote": "even if we know, or believe, that an AI is not conscious, we still might be unable to resist feeling that it is.",
+          "start": 35
+        }
+      ],
+      "difficulty": 0.3,
+      "centrality": 0.5
+    },
+    {
+      "id": "spya-z9xgxc",
+      "question": "Given how often moral status has wrongly been denied to animals and other humans, might refusing it to AI repeat that mistake?",
+      "passages": [
+        {
+          "blockId": "spya-mxxutn",
+          "quote": "It is reasonable to wonder whether withholding attributions of consciousness to AI may leave us once again on the wrong side of history.",
+          "start": 270
+        },
+        {
+          "blockId": "spya-d89xf7",
+          "quote": "Our psychological biases are more likely to lead to false positives than false negatives.",
+          "start": 80
+        }
+      ],
+      "difficulty": 0.4,
+      "centrality": 0.6
+    }
+  ],
+  "dropped": {
+    "unknownIds": 0,
+    "unquoted": 0,
+    "tooLong": 0,
+    "duplicate": 0,
+    "unanchored": 0,
+    "overCap": 0,
+    "malformed": 0
+  },
+  "scoreDrops": {
+    "difficultyAbsent": 0,
+    "difficultyRejected": 0,
+    "centralityAbsent": 0,
+    "centralityRejected": 0
+  }
+}

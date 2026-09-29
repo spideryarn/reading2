@@ -64,6 +64,11 @@ import { articleText } from "./article-prompt.js";
 import { articleWordCounts, isBodyEvidence } from "./block-policy.js";
 import { PROFILE_RULES, hashProfile, profileSection } from "./profile.js";
 import { plainWords } from "./plain-words.js";
+import {
+  type DifficultyCentralityDrops,
+  noDifficultyCentralityDrops,
+  scoreCounting,
+} from "./score-fields.js";
 import type {
   Block,
   BlockId,
@@ -219,80 +224,20 @@ export function safeUrl(value: unknown): string | undefined {
   }
 }
 
-/** 0–1, or nothing. Anything outside the range is a model error, not a signal to clamp silently. */
-function score(value: unknown): number | undefined {
-  if (typeof value !== "number" || !Number.isFinite(value)) return undefined;
-  if (value < 0 || value > 1) return undefined;
-  return value;
-}
-
 /**
  * **The scores the prompt required, and did not get. Counts of FIELDS.**
  *
- * The twin of `QuoteScoreDrops` in src/quotes.ts — same flat shape, same
- * naming, same *absent vs rejected* split, and that docstring carries the
- * reasoning, which is identical. Two differences worth stating rather than
- * inferring:
- *
- * - **The glossary prompt REQUIRES both scores** (see `SYSTEM` below), where
- *   the quotes prompt explicitly permits omitting one. So `*Absent` here is
- *   the model disobeying an instruction rather than taking an offer, which is
- *   the whole reason it is a counter of its own: nothing firing inside
- *   `score()` could ever see it.
- * - **Counted in `toEntries`, before `dedupe`.** `dedupe` does
- *   `winner.difficulty ?? loser.difficulty`, so two half-scored duplicates
- *   merge into one fully-scored entry — counting afterwards would report zero
- *   for a run in which the model omitted two scores. Entries inherited from a
- *   previous pass are not counted either; the run that parsed them counted
- *   them. docs/reusable/silent-success.md.
- *
- * Like its twin it does **not** ride the artefact. `Glossary` has no
- * `discarded` field and is not getting one — a score the model failed to write
- * is a fact about our prompt, not about the reader's article, and there is
- * nothing they could do with it.
+ * The validator and its counter live in src/score-fields.ts since 2026-09-29,
+ * when the FAQ started asking for the same two scores; the reasoning — *absent*
+ * versus *rejected*, counted in `toEntries` before `dedupe` can borrow a missing
+ * score off a duplicate, and never on the artefact — is there. The glossary
+ * prompt REQUIRES both, so `*Absent` here is the model disobeying rather than
+ * taking an offer. The twin is `QuoteScoreDrops` in src/quotes.ts.
  */
-export interface GlossaryScoreDrops {
-  /** `difficulty` was not there at all. */
-  difficultyAbsent: number;
-  /** `difficulty` was there and `score()` refused it. */
-  difficultyRejected: number;
-  /** `centrality` was not there at all. */
-  centralityAbsent: number;
-  /** `centrality` was there and `score()` refused it. */
-  centralityRejected: number;
-}
+export type GlossaryScoreDrops = DifficultyCentralityDrops;
 
 /** A fresh set. One per run, threaded by hand so nothing sums two runs. */
-export function noGlossaryScoreDrops(): GlossaryScoreDrops {
-  return { difficultyAbsent: 0, difficultyRejected: 0, centralityAbsent: 0, centralityRejected: 0 };
-}
-
-/**
- * Read one 0–1 score and say, in the counters, what happened to it.
- *
- * **`undefined` is absent; everything else `score()` refuses is rejected.** A
- * JSON `null` therefore lands in `rejected` — the model wrote a value and it
- * was not a number, and calling that "absent" would let a model answer `null`
- * on every entry without ever moving the counter that means it stopped obeying.
- *
- * Called only where an entry is about to be kept, so an entry `toEntries`
- * refuses never contributes a missing score. The twin of `scoreCounting` in
- * src/quotes.ts.
- */
-function scoreCounting(
-  value: unknown,
-  scores: GlossaryScoreDrops,
-  absent: "difficultyAbsent" | "centralityAbsent",
-  rejected: "difficultyRejected" | "centralityRejected",
-): number | undefined {
-  if (value === undefined) {
-    scores[absent]++;
-    return undefined;
-  }
-  const kept = score(value);
-  if (kept === undefined) scores[rejected]++;
-  return kept;
-}
+export const noGlossaryScoreDrops = noDifficultyCentralityDrops;
 
 /** One entry as the model returns it, before any of it has been believed. */
 interface RawEntry {

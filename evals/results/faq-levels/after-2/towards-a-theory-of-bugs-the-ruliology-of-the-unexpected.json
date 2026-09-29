@@ -1,0 +1,190 @@
+{
+  "arm": "after-2",
+  "slug": "towards-a-theory-of-bugs-the-ruliology-of-the-unexpected",
+  "version": "faq/4",
+  "faqSha256": "8ded5d816427dcaf28f5660edff111ea37fab6673cce50e81c790ff6d72f1cfc",
+  "at": "2026-09-29T17:58:57.158Z",
+  "tokens": {
+    "input": 20344,
+    "output": 6099,
+    "cacheRead": 0,
+    "cacheWrite": 0
+  },
+  "questions": [
+    {
+      "id": "spya-vvwdeg",
+      "question": "If visually complex behavior is supposed to be a warning sign of bugs, how can a complex-looking cellular automaton still be proven completely bug-free?",
+      "passages": [
+        {
+          "blockId": "spya-fg7dg2",
+          "quote": "And if it’s visually complicated we can be concerned that there might be bugs. But there are still cases where—despite that complexity—the feature of behavior that we are concerned about (here, the successful doubling of any input) still always reliably happens, without any bugs.",
+          "start": 111
+        }
+      ],
+      "difficulty": 0.45,
+      "centrality": 0.4
+    },
+    {
+      "id": "spya-urcjws",
+      "question": "When a proof search comes up empty, how do we know the machine actually has a bug rather than the proof just not being found yet?",
+      "passages": [
+        {
+          "blockId": "spya-vs44ga",
+          "quote": "because, in fact, the result we’re trying to prove isn’t true, so there isn’t a proof. And we know that because, if we test sufficiently many cases of the Turing machine, we can explicitly find the bug.",
+          "start": 0
+        },
+        {
+          "blockId": "spya-ymdpn2",
+          "quote": "And in the end, we don’t get any fundamental advantage by trying to make a proof rather than just running the Turing machine. In both cases we have to expend a potentially unbounded amount of computational effort.",
+          "start": 0
+        }
+      ],
+      "difficulty": 0.5,
+      "centrality": 0.6
+    },
+    {
+      "id": "spya-j4fgsg",
+      "question": "If a program worth running must contain behavior you can't foresee, doesn't that make truly bug-free software an impossible goal to even aim for?",
+      "passages": [
+        {
+          "blockId": "spya-nd4kn9",
+          "quote": "if you can completely foresee what a program will do, what’s the point of running it? Why not, in effect, just immediately “write down the answer”, without ever having to run the program?",
+          "start": 180
+        },
+        {
+          "blockId": "spya-uj0h88",
+          "quote": "Computational irreducibility is in a sense what makes computation powerful. But it’s also what makes it unpredictable.",
+          "start": 0
+        }
+      ],
+      "difficulty": 0.3,
+      "centrality": 0.9
+    },
+    {
+      "id": "spya-kkkvha",
+      "question": "Doesn't proving some Turing machines correct show that computational irreducibility doesn't really block us from ruling out bugs?",
+      "passages": [
+        {
+          "blockId": "spya-y9hee0",
+          "quote": "One important feature of computational irreducibility is that whenever it’s present, there must also be pockets of computational reducibility present.",
+          "start": 203
+        },
+        {
+          "blockId": "spya-zz4up4",
+          "quote": "But there’s no (static) finite summary that can be given of everything a computationally irreducible system does. And proofs about a computationally irreducible process will inevitably get longer and longer as one tries to talk about more and more steps in the process.",
+          "start": 373
+        }
+      ],
+      "difficulty": 0.45,
+      "centrality": 0.85
+    },
+    {
+      "id": "spya-pg3zz0",
+      "question": "If ruling out bugs would take an infinite number of facts about a system, can any collection of established facts ever really guarantee a program is bug-free?",
+      "passages": [
+        {
+          "blockId": "spya-ucy0sf",
+          "quote": "But if there’s computational irreducibility one would in effect need an infinite number of facts to do that.",
+          "start": 270
+        }
+      ],
+      "difficulty": 0.5,
+      "centrality": 0.5
+    },
+    {
+      "id": "spya-mtv7nv",
+      "question": "If a program could be clever enough to \"decode\" the randomness used to test it, how can any random sampling scheme ever be trusted to reveal its bugs?",
+      "passages": [
+        {
+          "blockId": "spya-ehtbrx",
+          "quote": "Is the program “computationally strong enough” to “decode” the randomness, and do something special in those cases?",
+          "start": 291
+        },
+        {
+          "blockId": "spya-utamf4",
+          "quote": "But if the randomness is “computationally strong enough” there won’t be any “special corners” that can “hide” from it.",
+          "start": 170
+        }
+      ],
+      "difficulty": 0.5,
+      "centrality": 0.6
+    },
+    {
+      "id": "spya-h0ajja",
+      "question": "Since even arithmetic can be as computationally rich as any ruliological system, why doesn't mainstream mathematics keep tripping over these same kinds of bugs?",
+      "passages": [
+        {
+          "blockId": "spya-zcpn8u",
+          "quote": "But somehow in the mainstream of pure mathematics, such issues are not very common. And in a sense this seems to reflect something about the fundamental nature of the activity we call mathematics.",
+          "start": 0
+        },
+        {
+          "blockId": "spya-whd6dc",
+          "quote": "We know from Gödel’s theorem that questions—even, say, about arithmetic equations involving integers—can be equivalent to arbitrary computations, and therefore are in principle exposed to all the phenomena we see in ruliology.",
+          "start": 0
+        }
+      ],
+      "difficulty": 0.4,
+      "centrality": 0.55
+    },
+    {
+      "id": "spya-hupz04",
+      "question": "Can a well-designed language like Wolfram Language ever fully eliminate the possibility of bugs, or only push the problem back?",
+      "passages": [
+        {
+          "blockId": "spya-wvj8uq",
+          "quote": "But however well designed your language is, any time you write a program that actually needs to be written (in the sense that it’s achieving at least some irreducible computation), it’ll have the possibility of doing something you didn’t expect or foresee—and that you might consider a bug.",
+          "start": 0
+        }
+      ],
+      "difficulty": 0.3,
+      "centrality": 0.6
+    },
+    {
+      "id": "spya-ucuqt0",
+      "question": "Are AI systems actually able to catch the deep, irreducibility-driven bugs discussed here, or only the ordinary human-style coding mistakes?",
+      "passages": [
+        {
+          "blockId": "spya-j4rcwn",
+          "quote": "And modern AIs are typically quite good at finding bugs that follow the patterns of typical human missteps.",
+          "start": 394
+        },
+        {
+          "blockId": "spya-sggbeh",
+          "quote": "They are bugs that do not follow any human-related patterns. They are, in a sense, bugs that arise from the very nature of computation itself.",
+          "start": 84
+        }
+      ],
+      "difficulty": 0.3,
+      "centrality": 0.45
+    },
+    {
+      "id": "spya-f4jxph",
+      "question": "Why would anyone deliberately allow bugs into a program just to make it shorter, rather than always striving for correctness?",
+      "passages": [
+        {
+          "blockId": "spya-xdwm97",
+          "quote": "But if our program is written at a lower level, say as a Turing machine, then we can expect (as we saw above) that allowing some bugs can allow the program to be shorter.",
+          "start": 222
+        }
+      ],
+      "difficulty": 0.4,
+      "centrality": 0.35
+    }
+  ],
+  "dropped": {
+    "unknownIds": 0,
+    "unquoted": 0,
+    "tooLong": 0,
+    "duplicate": 0,
+    "unanchored": 0,
+    "overCap": 0,
+    "malformed": 0
+  },
+  "scoreDrops": {
+    "difficultyAbsent": 0,
+    "difficultyRejected": 0,
+    "centralityAbsent": 0,
+    "centralityRejected": 0
+  }
+}

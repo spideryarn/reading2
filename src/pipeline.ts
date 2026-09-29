@@ -3732,6 +3732,10 @@ export const STEPS: { [K in StepName]: PipelineStep<K> } = {
           /* Counts only — never a question or a quote. `unanchored` is the one
              to watch: the model asking about a theme rather than a passage. */
           ...run.dropped,
+          /* The two scores the prompt requires, absent or refused — the
+             glossary's four counters, src/score-fields.ts. A rise here is the
+             prioritised order quietly going away. */
+          ...run.scoreDrops,
         },
         `faq ${ctx.slug}: ${questions.length} questions`,
       );

@@ -1,0 +1,145 @@
+{
+  "arm": "before",
+  "slug": "analog-cognition-and-consciousness-4-28-26-spya-f03kqf",
+  "version": "faq/3",
+  "faqSha256": "9c6f7a31f99efcb35ef1416a62d7fd0dd25b6c6687ff88b4619fe2dc74a4e5eb",
+  "at": "2026-09-29T17:46:58.257Z",
+  "tokens": {
+    "input": 18557,
+    "output": 5108,
+    "cacheRead": 0,
+    "cacheWrite": 0
+  },
+  "questions": [
+    {
+      "id": "spya-rb6r95",
+      "question": "Since spikes shape waves and waves shape spikes, which one is actually doing the top-down controlling here?",
+      "passages": [
+        {
+          "blockId": "spya-z9g2s3",
+          "quote": "Spikes shape brain waves, while the waves in turn influence when and where spikes occur.",
+          "start": 602
+        }
+      ]
+    },
+    {
+      "id": "spya-vcnxdp",
+      "question": "If each neuron had one fixed job, wouldn't learning just a few tasks use up all the prefrontal cortex's capacity?",
+      "passages": [
+        {
+          "blockId": "spya-amx5qf",
+          "quote": "Under the traditional connectionist model, this would imply that we can only learn about three different cognitive functions before essentially all prefrontal neurons have been “assigned a function”, and its computational capacity is saturated.",
+          "start": 425
+        }
+      ]
+    },
+    {
+      "id": "spya-yyvcuj",
+      "question": "If brain waves are caused by spiking, why treat them as a control mechanism rather than just a side effect?",
+      "passages": [
+        {
+          "blockId": "spya-trb3jf",
+          "quote": "Neural oscillations are not just a passive byproduct of spiking activity, they help actively shape it.",
+          "start": 465
+        }
+      ]
+    },
+    {
+      "id": "spya-gz39j4",
+      "question": "How can brief, sparse spikes and their weak electric fields add up to control spiking across large populations of neurons?",
+      "passages": [
+        {
+          "blockId": "spya-bzqaf5",
+          "quote": "Individual ephaptic interactions, when synchronized and summed across neurons, create effects large enough to shape and coordinate neuron spiking at the mesoscale",
+          "start": 1426
+        }
+      ]
+    },
+    {
+      "id": "spya-ymsevx",
+      "question": "If most cortex neurons do many jobs rather than one fixed job, how can a control system know which ones to coordinate for a given task?",
+      "passages": [
+        {
+          "blockId": "spya-gxyg0d",
+          "quote": "without the control system needing to know the precise neurons and synapses employed for any specific information",
+          "start": 94
+        }
+      ]
+    },
+    {
+      "id": "spya-s3x3dk",
+      "question": "Why should alpha/beta rhythms specifically be the right frequency for top-down control, rather than gamma or theta?",
+      "passages": [
+        {
+          "blockId": "spya-q606tk",
+          "quote": "Oscillations in the intermediate alpha/beta range, which extend over a range of a few millimeters, might be just the right spatial scale for top-down control",
+          "start": 623
+        }
+      ]
+    },
+    {
+      "id": "spya-y6qv3e",
+      "question": "What pattern of evidence would show that traveling waves, not just static beta oscillations, actually drive shifts in neural coding?",
+      "passages": [
+        {
+          "blockId": "spya-qaza0y",
+          "quote": "This hypothesis predicts that wave incidence should correlate with the overall temporal dynamics of population activity, but show little variation with specific sensory conditions.",
+          "start": 0
+        }
+      ]
+    },
+    {
+      "id": "spya-vkm9r7",
+      "question": "If anesthetic drugs act on totally different molecular targets, why would they all disrupt consciousness the same way?",
+      "passages": [
+        {
+          "blockId": "spya-wnqgmn",
+          "quote": "Despite acting on different molecular targets, different anesthetic agents, such as propofol (GABAergic), ketamine (NMDAergic), and dexmedetomidine (alpha-2 adrenergic), all converge on similar large-scale electrical effects in the cortex",
+          "start": 0
+        }
+      ]
+    },
+    {
+      "id": "spya-bytfz4",
+      "question": "If brain waves decide which representations are active, does that make synaptic storage irrelevant to moment-to-moment cognition?",
+      "passages": [
+        {
+          "blockId": "spya-tdqde5",
+          "quote": "Synapses provide representational capacity for storing information, while brain waves determine which representations are active at any given moment.",
+          "start": 306
+        }
+      ]
+    },
+    {
+      "id": "spya-u898cc",
+      "question": "How does explaining unified consciousness through wave interactions differ from theories that already explain it through broadcasting information globally?",
+      "passages": [
+        {
+          "blockId": "spya-m3dn2u",
+          "quote": "We, however, emphasize how this integration occurs via dynamic field interactions rather than broadcasting of information (GW) and spikes alone (GWNT).",
+          "start": 221
+        }
+      ]
+    },
+    {
+      "id": "spya-mnxjkk",
+      "question": "Does explaining consciousness through top-down wave organization mean we no longer need a separate observer system to make a state conscious?",
+      "passages": [
+        {
+          "blockId": "spya-nkg5v2",
+          "quote": "Rather than a separate observer system making representations “conscious,” we emphasize the very act of top‑down organization in generating conscious integration.",
+          "start": 887
+        }
+      ]
+    }
+  ],
+  "dropped": {
+    "unknownIds": 0,
+    "unquoted": 0,
+    "tooLong": 0,
+    "duplicate": 0,
+    "unanchored": 0,
+    "overCap": 0,
+    "malformed": 0
+  }
+}
