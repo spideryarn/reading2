@@ -1,0 +1,9 @@
+{
+  "judge": "the implementing agent (Opus 5.5), key unopened when written; per added stop D = adds detail/subtlety/complexity, F = new but framing/background, R = repeats the pass before",
+  "vb-spya-vu3xen d2": { "A": "D R D", "B": "D R D", "pick": "tie", "why": "same three stops; cues differ only in wording" },
+  "vb-spya-vu3xen d3": { "A": "D D D D", "B": "D D D D", "pick": "tie", "why": "same four stops, near-identical cues" },
+  "entropy-24-00930-spya-pywwkq d2": { "A": "D D D D D D", "B": "F D D D D F", "pick": "A", "why": "A adds the 7% synergy peak (complicates the Gist's MI result) and the no-mechanism caveat; B adds the historical obstacles and a headline-level result" },
+  "entropy-24-00930-spya-pywwkq d3": { "A": "F F F D D D D D D D", "B": "F F F F D D D D D R", "pick": "A", "why": "A's additions carry the caveats and the redundancy explanation; B spends four on background and ends on the closing summary, a second telling of the Gist's synergy point" },
+  "source-spya-furjgs d2": { "A": "D D D F", "B": "R D D D", "pick": "A", "why": "A adds Gerlach's measured speed (evidence); B's first addition restates the Gist's hard-to-observe, anecdotal point" },
+  "source-spya-furjgs d3": { "A": "R D D D D D", "B": "D D D D D D", "pick": "B", "why": "A's first addition is the random/anecdotal line again; B's cues point at what each case adds" }
+}
