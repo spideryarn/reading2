@@ -154,3 +154,9 @@ React's `autoFocus` scrolls.
   focus after Back → skip; F2 Caps Lock → case-insensitive letters; F3 guarded `media()` and a real
   touch context in the browser check; F4 research inventory corrected; F5 the button rule reframed
   as policy; F6 the missing test cases added.
+- 2026-09-29: stage 1 built (Opus subagent). `src/web/key-chord.ts` holds `isTyping` and
+  `isModChord`; the three copies are gone. `useMetadataChord` in Dock.tsx is on when
+  `view === "article"` (not ⌘-K's owner-only gate: visitors' reading view draws the Metadata button
+  too), and one `metadataHref` feeds both the button and the chord. "On screen" for the shelf box
+  means wholly on screen. Side effect, intended: ⌘-K now also ignores presses during IME
+  composition. Red first: 7 tests; every guard mutated and seen to go red.

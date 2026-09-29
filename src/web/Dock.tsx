@@ -241,8 +241,14 @@ import {
   type ArticleView,
   carriedSearch,
   LIBRARY_HREF,
+  navigate,
   readHref,
 } from "./router.js";
+/* **Is the reader writing, and is this our chord?** This file kept its own
+   copy of `isTyping` until 2026-09-29, because the only shared one lived in
+   keynav.ts and importing that drags the article's geometry into the bar's
+   import graph. key-chord.ts imports nothing, so that argument is answered. */
+import { isModChord, isTyping } from "./key-chord.js";
 import { ControlTip, Tooltip, TooltipGroup } from "./Tooltip.js";
 import { useSlow } from "./useSlow.js";
 import { InstallHint } from "./InstallHint.js";
@@ -1222,32 +1228,6 @@ export function fitSignature(
 }
 
 /**
- * **Is the reader writing?** Then a chord that means something in a text box
- * is theirs, not ours.
- *
- * A second copy of `isTyping` in keynav.ts, and the duplication is deliberate:
- * that module reaches `position.ts` and `scroll.ts` — the article's geometry,
- * and another agent's ground — so importing it here to borrow four lines would
- * drag the whole reading machinery into the bottom bar's import graph, and into
- * every test that renders the bar. Four lines are cheaper than that edge, and
- * they cannot drift in a way that matters: this is the DOM's own vocabulary
- * rather than a policy of ours.
- *
- * `SELECT` is in the list for the reason PlaceOnCriterion gives: a native
- * dropdown is a control taking its own keys, whatever it looks like.
- */
-function isTyping(target: EventTarget | null): boolean {
-  const el = target as HTMLElement | null;
-  if (!el || typeof el.tagName !== "string") return false;
-  return (
-    el.tagName === "INPUT" ||
-    el.tagName === "TEXTAREA" ||
-    el.tagName === "SELECT" ||
-    el.isContentEditable === true
-  );
-}
-
-/**
  * **⌘-K on a Mac, Ctrl-K everywhere else, and the four presses it refuses.**
  *
  * One `window` listener holding whether the command bar is open. A hook rather
@@ -1264,8 +1244,8 @@ function isTyping(target: EventTarget | null): boolean {
  *    the arrows keep — docs/project/keyboard.md § auto-repeat is ignored.
  *  - **Not while a text field has focus.** The chat box, the comment box, the
  *    search field and the referee's criteria are all places a reader is
- *    writing, and ⌘-K is a text-editing chord in several editors. `isTyping`
- *    above is the list.
+ *    writing, and ⌘-K is a text-editing chord in several editors. key-chord.ts
+ *    § `isTyping` is the list.
  *  - **Not over another native modal.** `showModal()` on a dialog while another
  *    modal dialog is showing stacks two in the top layer and traps focus in the
  *    newer one — the Feedback dialog, the Lightbox and the comment dialogs are
@@ -1312,12 +1292,12 @@ function useCommandBarChord(
   useEffect(() => {
     if (!enabled) return;
     const onKey = (e: KeyboardEvent) => {
-      if (e.key !== "k" && e.key !== "K") return;
       /* **Shift is rejected, not ignored.** Ctrl-Shift-K is Firefox's Web
          Console, and matching it here would both steal a browser feature and
-         `preventDefault()` it. Alt likewise. `e.key` is matched in both cases
-         for Caps Lock, which is not a modifier. GPT Sol's F3 on stage 2. */
-      if (!(e.metaKey || e.ctrlKey) || e.altKey || e.shiftKey || e.repeat) return;
+         `preventDefault()` it. Alt likewise, and either case of the letter for
+         Caps Lock, which is not a modifier. GPT Sol's F3 on stage 2; the test
+         is key-chord.ts's now, so ⌘-Enter below cannot drift from it. */
+      if (!isModChord(e, "k")) return;
       if (isTyping(document.activeElement)) return;
       /* Checked here as well as inside `show`, because this one decides whether
          the press is *claimed* — calling `preventDefault()` and then declining
@@ -1334,6 +1314,51 @@ function useCommandBarChord(
      split twice for Biome's complexity ceiling. */
   const hide = useCallback(() => setOpen(false), []);
   return { open, show, hide };
+}
+
+/**
+ * **⌘-Enter on a Mac, Ctrl-Enter everywhere else, opens the Metadata page** —
+ * the same href the Metadata button below carries, so the chord and the button
+ * cannot disagree about where the reader lands or what `?at=` comes with them.
+ *
+ * > In the Reading view, if I hit Command Enter, that should open up the
+ * > Metadata mode.
+ * >
+ * > — Greg, 2026-09-29
+ *
+ * Ctrl rather than Alt off a Mac, the pairing ⌘-K already uses: Alt-Enter on a
+ * link is a download. docs/research/260929a-keyboard-shortcut-libraries.md.
+ * The ⌘-K rules, plus one of its own:
+ *
+ *  - **Not while typing.** ⌘/Ctrl-Enter already means *send* in five text
+ *    boxes (Feedback, Comment, Annotate, Quiz, Profile); skipping text fields
+ *    is what keeps them working.
+ *  - **Not on a focused link**, or anything inside one: there it is a
+ *    modified click, a new tab, and stealing it would break a browser feature
+ *    on every link in the prose. A focused *button* is app policy rather than
+ *    a browser fact — no button here binds a modified Enter — so the chord
+ *    wins there.
+ *  - Not over an open native `<dialog>`, and not once a handler nearer the
+ *    press has `preventDefault`ed it.
+ *
+ * `preventDefault()` only when claimed. Reading view only (`enabled`): on the
+ * metadata page there is nothing to toggle back to — plan 260929g,
+ * assumption 3.
+ */
+function useMetadataChord(enabled: boolean, href: string): void {
+  useEffect(() => {
+    if (!enabled) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (!isModChord(e, "Enter") || e.defaultPrevented) return;
+      const focused = document.activeElement;
+      if (isTyping(focused) || focused?.closest("a[href]")) return;
+      if (document.querySelector("dialog[open]") !== null) return;
+      e.preventDefault();
+      navigate(href);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [enabled, href]);
 }
 
 /**
@@ -1567,6 +1592,11 @@ export function Dock({
    * anyway.
    */
   const commandBar = useCommandBarChord(onMode !== undefined && !isVisitor, onPanel);
+  /* One value for the Metadata button and its chord, so the two cannot send
+     the reader to different places. Keyed on `view` rather than `onMode`, unlike
+     ⌘-K: a visitor's reading view draws the Metadata button too. */
+  const metadataHref = readHref(slug, search, "metadata");
+  useMetadataChord(view === "article", metadataHref);
 
   /**
    * ## The drawer takes focus, and gives it back
@@ -1938,7 +1968,7 @@ export function Dock({
               the bar, which is the right end for it: it is the machinery behind
               the article rather than a way of reading it. */}
           <DockLink
-            href={readHref(slug, search, "metadata")}
+            href={metadataHref}
             current={view === "metadata"}
             icon={Info}
             label="Metadata"
@@ -2101,7 +2131,9 @@ const NOT_A_MODE = {
     how: "Saving one costs nothing and asks the model nothing — the tick-box that brings the AI in saves your words first, then opens a chat about the passage. Each stores the passage's permanent id as well as the exact words it quotes, and after the article is re-fetched the saved comment stays in the list even when those words are gone and the underline can no longer be drawn.",
   },
   metadata: {
-    what: "Where this article came from, what shape it is, and what the pipeline wrote",
+    /* The chord in the Commands card's own format. Said on the metadata page
+       too, where it does not fire — hence "from the article". */
+    what: "Where this article came from, what shape it is, and what the pipeline wrote. ⌘Enter / Ctrl-Enter opens it from the article",
     /* **"Opening it spends nothing" — and the two wider claims that came
        before it were each false, a few hours apart.**
 

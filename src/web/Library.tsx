@@ -45,7 +45,7 @@
  * See docs/plans/260826k-library-shelf-actions-and-search.md and
  * docs/plans/260826y-library-sorting.md.
  */
-import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { throttle, useQueryState } from "nuqs";
 import type { OnChangeFn, SortingState } from "@tanstack/react-table";
 import { functionalUpdate } from "@tanstack/react-table";
@@ -79,6 +79,7 @@ import { ShelfTerms } from "./ShelfTerms.js";
 import { useShelfTopics } from "./useShelfTerms.js";
 import { pageTitle, useDocumentTitle } from "./page-title.js";
 import { ADMIN_HREF, PROFILE_HREF } from "./router.js";
+import { media } from "./media.js";
 import { ShelfCard } from "./ShelfEntry.js";
 import { ShelfControls, type ShelfFilter } from "./ShelfControls.js";
 import { useShelfHiddenColumns } from "./shelf-hidden-columns.js";
@@ -906,7 +907,49 @@ function ShowAllRows({ total, onShowAll }: { total: number; onShowAll: () => voi
 /* The cards' own matcher — `filterEntries` — lives in shelf-narrow.ts since
    2026-09-28, so the archived list is searched by the same rule. */
 
+/**
+ * **Does the search box take the focus as the shelf arrives?**
+ *
+ * > When I open the logged-in Spideryarn homepage with the shelf, let's put
+ * > the focus by default on the search box.
+ * >
+ * > — Greg, 2026-09-29
+ *
+ * Yes, unless one of four readers would be worse off for it:
+ *
+ *  - **a finger is the primary pointer** — the on-screen keyboard would cover
+ *    half the shelf they came to look at. `pointer`, not `any-pointer`, so a
+ *    touchscreen laptop with a trackpad still gets it; and `media()` answers
+ *    `false` where it cannot tell, so an unknown pointer gets it too;
+ *  - **the page arrived with a query in it** — they are reading results, and a
+ *    stray key would change their query;
+ *  - **something else already has the focus** — the shelf takes it from nobody;
+ *  - **the box is not wholly on screen** — scroll restoration is manual
+ *    (main.tsx), so Back from far down an article can mount the shelf scrolled,
+ *    and typing into a box you cannot see is worse than no focus. Scrolling to
+ *    it would yank the page instead.
+ *
+ * docs/plans/260929g-shelf-search-focus-and-metadata-chord.md § Part A.
+ */
+function takesFocusOnArrival(input: HTMLInputElement, arrivingQuery: string): boolean {
+  if (media("(pointer: coarse)") || arrivingQuery !== "") return false;
+  const active = document.activeElement;
+  if (active !== null && active !== document.body) return false;
+  const box = input.getBoundingClientRect();
+  return box.top >= 0 && box.bottom <= window.innerHeight;
+}
+
 function SearchBox({ value, onChange }: { value: string; onChange: (v: string) => void }) {
+  const input = useRef<HTMLInputElement>(null);
+  /* **Decided once, on mount**, from the query the page arrived with: clearing
+     a query must not re-grab the focus, and neither must the shelf's data
+     landing. Back from an article remounts the shelf, so it asks again — that
+     is arriving too. `preventScroll`, so arriving never moves the page. */
+  const arrivingQuery = useRef(value);
+  useEffect(() => {
+    const el = input.current;
+    if (el && takesFocusOnArrival(el, arrivingQuery.current)) el.focus({ preventScroll: true });
+  }, []);
   return (
     <div className="tw:mb-4">
       <div className="tw:relative">
@@ -915,6 +958,7 @@ function SearchBox({ value, onChange }: { value: string; onChange: (v: string) =
           className="tw:pointer-events-none tw:absolute tw:left-3 tw:top-1/2 tw:-translate-y-1/2 tw:text-muted-foreground"
         />
         <input
+          ref={input}
           type="search"
           value={value}
           onChange={(e) => onChange(e.target.value)}
