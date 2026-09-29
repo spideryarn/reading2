@@ -347,7 +347,12 @@ export async function resolveAccess(
      **One object, `presentable`, reaches both draws and the fallback** — the
      plan's F10. Were the fallback a separate, unrendered local, an image that
      failed to arrive would put raw TeX back on the page. */
-  const presentable = await renderArticleMaths(sanitizeArticle(found.article), {
+  /* A visitor's payload never carries a guessed web address — `sourceGuess` is
+     owner-only (src/types.ts § `Article.sourceGuess`) — so the public arm says
+     *nobody has looked* in so many words. */
+  const drawn: Article =
+    found.kind === "owned" ? found.article : { ...found.article, sourceGuess: undefined };
+  const presentable = await renderArticleMaths(sanitizeArticle(drawn), {
     signal: load.signal,
   });
   const rehosted = await rehostImages(

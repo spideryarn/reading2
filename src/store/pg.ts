@@ -183,6 +183,7 @@ export function notFound(slug: string): Error {
    re-imported at each of them. */
 export { requireSlug } from "./require-slug.js";
 import { requireSlug } from "./require-slug.js";
+import { sourceGuessFor } from "./source-guess-row.js";
 
 /**
  * The four shelf columns, as the shape `describeArticle` wants.
@@ -2508,7 +2509,12 @@ const rawPgArticleReader: ArticleReader = {
     const found = await currentRevision(slug, "article");
     if (!found) throw notFound(slug);
 
-    const blocks = await blocksFor(found.revision.id);
+    /* The guess is one primary-key read beside the blocks, not after them.
+       Owner-scoped already: `found` came through `ownedSlug`. */
+    const [blocks, sourceGuess] = await Promise.all([
+      blocksFor(found.revision.id),
+      sourceGuessFor(found.article.id),
+    ]);
     const tree = found.revision.tree;
     // A revision with no tree is not a readable article — the same bar
     // src/api.ts set by requiring both blocks.json and tree.json.
@@ -2559,6 +2565,9 @@ const rawPgArticleReader: ArticleReader = {
          drizzle/0024) is a two-member union TypeScript cannot see the
          guarantee for. */
       visibility: found.article.visibility as Visibility,
+      /* Named, for `assets`' reason: required on `Article`, so a projection
+         that forgot it is a type error (src/types.ts § `sourceGuess`). */
+      sourceGuess,
     };
   },
 

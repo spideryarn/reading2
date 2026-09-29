@@ -415,6 +415,7 @@ function propsFor(
     tree: loaded.tree,
     assets: undefined,
     navLabelStatus: "ready",
+    sourceGuess: undefined,
   };
   const geometry = buildGeometry(article.tree, article.blocks);
   const fit = fitView({ windowWidth: 1400 });

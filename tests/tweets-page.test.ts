@@ -35,6 +35,7 @@ function article(url: string | null = "https://paulgraham.com/writes.html"): Art
        `assets` step, so the reader hot-links exactly as before. src/assets.ts. */
     assets: undefined,
     navLabelStatus: "ready",
+    sourceGuess: undefined,
     tree: { rootId: "spya-root", nodes: {} } as unknown as Article["tree"],
   };
 }

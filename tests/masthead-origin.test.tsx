@@ -87,6 +87,7 @@ function article(meta: Partial<Meta>): Article {
     ],
     assets: undefined,
     navLabelStatus: "ready",
+    sourceGuess: undefined,
     tree: {
       version: "t",
       generator: "t",

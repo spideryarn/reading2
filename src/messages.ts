@@ -311,6 +311,7 @@ export const CODE_KINDS: Record<string, FailureKind> = {
   "live-upstream": "retry",
   "jb-slot-held": "bug",
   "cite-resting": "blocked",
+  "guess-resting": "blocked",
   "ai-not-set-up": "ours",
   "ai-overflowed": "retry",
   "ai-slow": "retry",
@@ -5079,6 +5080,21 @@ export const CITATION_FIND_RESTING: ReaderFacingFailure = {
     "Find it has done as many searches as it can for today, so asking again today will get the " +
     "same answer. Try again tomorrow — the Scholar " +
     "search is still there. [cite-resting]",
+};
+
+/* ------------------------------------ an upload looking for its own page --
+   src/source-guess-run.ts. The request is fired when an owner opens an upload
+   and nobody waits on it, so these are rarely read — but a refusal is still
+   an answer, and a 503 reaches a reader only when it is coded. */
+export const SOURCE_GUESS_BUSY =
+  "We are already looking for where your uploaded papers came from. This one will be looked for next time you open it.";
+export const SOURCE_GUESS_LIMITED =
+  "We have looked for a lot of your uploads' web pages recently. This one will be looked for another time.";
+export const SOURCE_GUESS_RESTING: ReaderFacingFailure = {
+  kind: "blocked",
+  message:
+    "We have done as many web searches for uploaded papers as we can for today, so opening it " +
+    "again today will get the same answer. It will be looked for another day. [guess-resting]",
 };
 
 /* ------------------------------------------ citations: reading the paper --

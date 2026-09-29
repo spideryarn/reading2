@@ -40,6 +40,7 @@
  *   GET    /api/trajectory/:slug a route through the quotes at three depths, whether it still matches them, and the profile
  *   GET    /api/debate/:slug     what the rest of the web says about this piece, and staleness
  *   GET    /api/citations/:slug  every work the piece cites, with a link the article gave, and staleness
+ *   POST   /api/source-guess/:slug   an upload looks for its own page on the web, once → SourceGuess
  *   GET    /api/reading-time/:slug   → { seconds: { <block id>: n } }, the owner's time on each block
  *   POST   /api/reading-time/:slug   { seconds: { <block id>: n } } → 204, ADDED to the totals
  *   POST   /api/quiz/:slug/mark  one answer, marked against one question — SSE, stateless
@@ -150,6 +151,7 @@ import {
   loadDebate,
   loadCitations,
   findCitation,
+  guessSource,
   loadTimeline,
   loadTweets,
 } from "./store/index.js";
@@ -7846,6 +7848,31 @@ const AUTH_ROUTES: readonly AuthRoute[] = [
           findCitation(at, slugPart(captures, 2)),
         ),
       );
+    },
+  },
+
+  /* **Look for an uploaded paper on the web, once** —
+     docs/plans/260929g-canonical-link-for-an-uploaded-paper.md. Fired by the
+     owner's reading view when an upload's `sourceGuess` is neither `found` nor
+     `none`; answers the settled `SourceGuess`, or `{ status: "searching" }`
+     when another request holds the claim. Owner-only (the reader seam is
+     owner-scoped), 409 for an article that was not uploaded. Nothing is read
+     off the body, so it cannot be made to search for text of the caller's
+     choosing.
+
+     **The answer is sent only after the work is done**, never before: a
+     Vercel function is frozen once it has answered, and a search left running
+     behind a sent response would be killed with its claim held.
+
+     Rate-limited per owner on the `upload-source-guess` bucket, taken after
+     every free refusal. src/source-guess-run.ts § `GUESS_RATE_POLICY`. */
+  {
+    kind: "pattern",
+    method: "POST",
+    pattern: /^\/api\/source-guess\/([\w.%-]+)$/,
+    handler: async ({ request: { res } }, captures) => {
+      const at = slugPart(captures, 1);
+      send(res, 200, await withSpendAttribution({ articleSlug: at }, () => guessSource(at)));
     },
   },
 

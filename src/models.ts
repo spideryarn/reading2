@@ -603,6 +603,13 @@ export type Task =
    * per search — folding them would hide the searches in the step's line.
    */
   | "citations-find"
+  /**
+   * **An uploaded paper's own page, found on the web** — the second caller of
+   * `findWorkPage` (src/source-guess.ts). The same call as `citations-find`,
+   * under its own name so the ledger can tell a reader pressing *Find it* from
+   * an article opening and looking for itself.
+   */
+  | "upload-source-guess"
   | "link-summary";
 
 /**
@@ -830,6 +837,8 @@ export const TASK_TIER: Record<Task, Tier> = {
      own page. A shallow pick costs little here — code refuses a page whose
      title does not match — but a refusal is a work the reader goes without. */
   "citations-find": "capable",
+  /* `citations-find`'s tier and its reason: the same prompt, the same pick. */
+  "upload-source-guess": "capable",
   /**
    * **The first `quick` row in this table**, and the one place its two
    * unmeasured caveats got measured. `openai/gpt-5.6-luna` at roughly a tenth
@@ -1032,6 +1041,8 @@ export const TASK_WIRE: Record<Task, Wire> = {
   /* Chat, because `openrouter:web_search` is a server tool on chat/completions
      and does not exist on the Messages shape — `debate`'s reason. */
   "citations-find": "chat",
+  /* Chat, for `citations-find`'s reason: it is the same web-search call. */
+  "upload-source-guess": "chat",
   /* Chat, and for this one task the wire is not a free choice: it is the only
      one `QUICK_MODEL_OPENROUTER` is served on, which is what the throw at the
      bottom of this file is about. A reader is watching it stream, so it would
@@ -1129,6 +1140,7 @@ export const MODEL_ENV_VAR: Record<Task, string | null> = {
      for — does a cheaper model pick the right page as often — is answered by
      running the real feature against another model. */
   "citations-find": "SPIDERYARN_CITATIONS_FIND_MODEL",
+  "upload-source-guess": "SPIDERYARN_UPLOAD_SOURCE_GUESS_MODEL",
   explain: "SPIDERYARN_EXPLAIN_MODEL",
   chat: "SPIDERYARN_CHAT_MODEL",
   "quiz-mark": "SPIDERYARN_QUIZ_MARK_MODEL",

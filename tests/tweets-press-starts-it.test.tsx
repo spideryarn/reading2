@@ -154,6 +154,7 @@ const ARTICLE: Article = {
   blocks: [],
   assets: undefined,
   navLabelStatus: "ready",
+  sourceGuess: undefined,
   tree: { rootId: "spya-root", nodes: {} } as unknown as Article["tree"],
 };
 

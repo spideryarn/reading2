@@ -241,7 +241,7 @@ const ALLOWED: readonly AllowGroup[] = [
     /* `MODEL_ENV_VAR` in src/models.ts, one per task that has an override, and
        they exist for exactly one purpose: running the real feature against a
        different model for an evening to see whether the cheap one is good
-       enough. Thirteen names as a group rather than thirteen identical comments —
+       enough. Fourteen names as a group rather than fourteen identical comments —
        they are one decision, not thirteen.
 
        **Set on a deployment one of these really would change what a request
@@ -266,6 +266,7 @@ const ALLOWED: readonly AllowGroup[] = [
       "SPIDERYARN_DEBATE_MODEL",
       "SPIDERYARN_LINK_SUMMARY_MODEL",
       "SPIDERYARN_CITATIONS_FIND_MODEL",
+      "SPIDERYARN_UPLOAD_SOURCE_GUESS_MODEL",
     ],
   },
 ];

@@ -1183,6 +1183,7 @@ const OWNED: Article = {
   tree: TREE,
   assets: undefined,
   navLabelStatus: "ready",
+  sourceGuess: undefined,
   meta: { slug: SLUG, title: "A piece", url: "https://example.com/a" },
 };
 
