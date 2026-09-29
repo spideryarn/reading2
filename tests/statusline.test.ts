@@ -163,10 +163,19 @@ describe("context window segment", () => {
 });
 
 describe("the rest of the line", () => {
-  it("names the model and the last two directory segments", () => {
-    const { out } = render(payload());
-    expect(plain(out)).toContain("[Opus 5]");
-    expect(plain(out)).toContain("outer/inner");
+  it("names the model and the directory, by its own name only", () => {
+    // One location, and short: the TUI cuts the line at the terminal's width
+    // with a `…`, and on 2026-09-29 the path, branch and worktree between them
+    // pushed the context bar off the end.
+    // From an empty directory with no TMUX: run here, the suite's own worktree
+    // would rightly take the location's place.
+    const env = Object.fromEntries(
+      Object.entries(process.env).filter(([k]) => k !== "TMUX" && !k.startsWith("GIT_")),
+    );
+    const cwd = mkdtempSync(path.join(tmpdir(), "gjd-statusline-dir-"));
+    const out = spawnSync("bash", ["-c", SCRIPT], { input: payload(), cwd, env, encoding: "utf8" }).stdout ?? "";
+    expect(plain(out)).toContain("[Opus 5] inner");
+    expect(plain(out)).not.toContain("outer/");
   });
 
   it("falls back to the model id when there is no display name", () => {
@@ -307,6 +316,71 @@ describe("the rest of the line", () => {
       // The suffix earns its place by being absent in the main checkout; a
       // marker every prompt carries tells you nothing about where you are.
       expect(renderIn(repo)).not.toContain("⑂");
+    });
+
+    /**
+     * Greg, 2026-09-29: "I don't need both the worktree *and* the branch name
+     * *and* the session name." One location — the worktree, or the directory —
+     * and the branch only when it says something that location does not.
+     */
+    describe("one location, and the branch only when it adds something", () => {
+      /** A linked worktree named `dir`, on `branch`, as EnterWorktree makes one. */
+      function linkedOn(branch: string, dir = "sidecar"): string {
+        const repo = tempRepo("dev");
+        const linked = path.join(path.dirname(repo), dir);
+        git(repo, ["worktree", "add", "--quiet", "-b", branch, linked]);
+        return linked;
+      }
+
+      it("shows the worktree and not the directory in place of it", () => {
+        const out = renderIn(linkedOn("worktree-sidecar"));
+        expect(out).toContain("[Opus 5] ⑂ sidecar");
+        // The payload's directory is `/tmp/outer/inner`; inside a worktree the
+        // worktree IS the location, so the directory name is not repeated.
+        expect(out).not.toContain("inner");
+      });
+
+      it("hides a branch that is just worktree-<its own name>", () => {
+        const out = renderIn(linkedOn("worktree-sidecar"));
+        expect(out).not.toContain("worktree-sidecar");
+        expect(out).not.toContain("(");
+      });
+
+      it("hides a branch named exactly like its worktree", () => {
+        expect(renderIn(linkedOn("sidecar"))).not.toContain("(sidecar");
+      });
+
+      it("shows a branch that is not the worktree's own", () => {
+        const out = renderIn(linkedOn("feature-x"));
+        expect(out).toContain("⑂ sidecar (feature-x)");
+      });
+
+      it("keeps the dirty marker when the branch is hidden", () => {
+        const wt = linkedOn("worktree-sidecar");
+        writeFileSync(path.join(wt, "tracked.txt"), "x\n");
+        git(wt, ["add", "tracked.txt"]);
+        expect(renderIn(wt)).toContain("⑂ sidecar*");
+      });
+
+      it("shows the branch in the primary checkout, where the directory does not name it", () => {
+        const out = renderIn(tempRepo("dev"));
+        expect(out).toContain("inner (dev)");
+        expect(out).not.toContain("⑂");
+      });
+
+      it("matches the branch against Claude's worktree.name as well", () => {
+        const wt = linkedOn("worktree-sidecar");
+        const out = plain(
+          spawnSync("bash", ["-c", SCRIPT], {
+            input: payload({ worktree: { name: "sidecar" } }),
+            cwd: wt,
+            env: hermeticEnv(),
+            encoding: "utf8",
+          }).stdout ?? "",
+        );
+        expect(out).toContain("⑂ sidecar");
+        expect(out).not.toContain("worktree-sidecar");
+      });
     });
   });
 });
