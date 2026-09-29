@@ -52,5 +52,42 @@ export function isModChord(e: KeyboardEvent, key: string): boolean {
   const matches = key.length === 1 ? e.key.toLowerCase() === key.toLowerCase() : e.key === key;
   if (!matches) return false;
   if (!(e.metaKey || e.ctrlKey) || e.shiftKey || e.altKey || e.repeat) return false;
-  return !(e.isComposing || e.keyCode === 229);
+  return !composing(e);
+}
+
+/**
+ * A key press as either a DOM or a React event, as far as these helpers read it.
+ * React's synthetic event has no `isComposing` of its own — only `nativeEvent`
+ * does — so both places are named and `composing` reads both. (Measured: drop
+ * the `nativeEvent` read and every component-level IME test goes red.)
+ */
+interface KeyPress {
+  key: string;
+  shiftKey: boolean;
+  keyCode?: number;
+  isComposing?: boolean;
+  nativeEvent?: { isComposing?: boolean };
+}
+
+/**
+ * **Is an IME mid-composition?** Then Enter accepts a candidate word, and is
+ * the IME's. `keyCode` 229 is the older sentinel some engines send instead of
+ * the flag.
+ */
+function composing(e: Pick<KeyPress, "keyCode" | "isComposing" | "nativeEvent">): boolean {
+  return e.isComposing === true || e.nativeEvent?.isComposing === true || e.keyCode === 229;
+}
+
+/**
+ * **Enter sends, in a chat-style box** — Enter without Shift, and not the Enter
+ * that ends an IME composition, which a reader typing Japanese or Chinese
+ * presses to pick a word, not to send half a question.
+ *
+ * ⌘/Ctrl are deliberately not refused: ⌘/Ctrl-Enter sends in every other box
+ * that sends, so it sends here too. Paragraph boxes (Feedback, Comment, …) do
+ * not use this — Enter is their newline. docs/project/keyboard.md § Enter in a
+ * text box.
+ */
+export function isSendEnter(e: KeyPress): boolean {
+  return e.key === "Enter" && !e.shiftKey && !composing(e);
 }

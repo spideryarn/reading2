@@ -196,3 +196,8 @@ React's `autoFocus` scrolls.
 - 2026-09-29: Sol code review of stage 1 — approve after F7 (P1, fixed by Sol, red→green): the
   on-screen test only checked vertical bounds. It confirmed `view="article"` on both owner and
   visitor reading views. Greg's follow-up on chat added Part C.
+- 2026-09-29: Part C built (Opus subagent). `isSendEnter` in key-chord.ts, sharing one `composing()`
+  helper with `isModChord` (React exposes `isComposing` only on `nativeEvent` — a mutation proved
+  the read matters). Chat's Send now uses `aria-disabled` rather than `disabled`, so its tooltip
+  opens on an empty box (tooltips.md); the click is stopped and `submit` refuses the same states.
+  touch.md now names all three Enter-sends boxes. Red first: 10 tests.

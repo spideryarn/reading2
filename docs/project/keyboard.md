@@ -396,6 +396,18 @@ claimed — and adds three where it does not fire:
 
 The Metadata button's card says so: *"⌘Enter / Ctrl-Enter opens it from the article"*. Tests: `tests/metadata-chord.test.tsx`.
 
+### Enter in a text box
+
+**Chat-style boxes send on Enter; Shift+Enter is a newline** — the chat composer, the box that
+edits a question already asked, and Referee's Candidates box, all through `isSendEnter` in
+[`key-chord.ts`](../../src/web/key-chord.ts), and ⌘/Ctrl-Enter sends there too. **Paragraph boxes
+keep ⌘/Ctrl-Enter** — Feedback, Comment, Annotate, Quiz, Profile — because Enter is their newline.
+**An Enter that ends an IME composition never sends**: a reader typing Japanese or Chinese presses it
+to accept a word. Chat's Send button carries the two keys on its card, and stays `aria-disabled`
+rather than `disabled` so the card still opens on an empty box
+([260929g § Part C](../plans/260929g-shelf-search-focus-and-metadata-chord.md)). Tests:
+`tests/the-enter-key-really-sends.test.tsx`.
+
 ## G, the one letter
 
 **G opens the glossary on a term in the paragraph you are on**, focused on that term's row with its

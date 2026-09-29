@@ -207,7 +207,7 @@ describe("what the Enter key promises", () => {
    * tests/the-enter-key-really-sends.test.tsx. This is the part that also covers
    * the two that are not exported — `chat-edit-box` and `cnd-box`.
    *
-   * **Red first:** deleting the `if (e.key === "Enter" …)` branch from
+   * **Red first:** deleting the `if (isSendEnter(e))` branch (then `e.key === "Enter"`) from
    * `.chat-input`'s `onKeyDown` failed this on 2026-09-04.
    */
   it("labels a textarea Send only where that tag's own handler sends on Enter", () => {
@@ -223,8 +223,10 @@ describe("what the Enter key promises", () => {
 
     for (const box of sending) {
       expect(box.text, `${box.key} says Send with no onKeyDown`).toMatch(/onKeyDown=\{/);
+      /* `isSendEnter` (key-chord.ts) since 2026-09-29: Enter without Shift,
+         and not the Enter that ends an IME composition. */
       expect(box.text, `${box.key} has a handler that never looks for Enter`).toMatch(
-        /["']Enter["']/,
+        /["']Enter["']|isSendEnter\(e\)/,
       );
     }
   });

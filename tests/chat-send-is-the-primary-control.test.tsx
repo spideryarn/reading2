@@ -117,7 +117,7 @@ describe("the send button", () => {
     expect(base).toMatch(/border:\s*1px solid var\(--highlight\)/);
     expect(base).toMatch(/background:\s*transparent/);
 
-    const pressable = rule('.chat-send[type="submit"]:not(:disabled)');
+    const pressable = rule('.chat-send[type="submit"]:not([aria-disabled="true"])');
     expect(pressable).toMatch(/background:\s*var\(--primary\)/);
     expect(pressable).toMatch(/border-color:\s*var\(--primary\)/);
     expect(pressable).toMatch(/color:\s*var\(--primary-foreground\)/);
@@ -131,23 +131,25 @@ describe("the send button", () => {
      suspect for the missing icon is a disabled button drawn at opacity < 1; this
      does not prove that was the cause, but the new state has no need of it. */
   it("says 'not yet' with colour rather than opacity", () => {
-    const disabled = rule(".chat-send:disabled");
+    const disabled = rule('.chat-send[aria-disabled="true"]');
     expect(disabled).not.toMatch(/opacity/);
     expect(disabled).toMatch(/background:\s*transparent/);
     expect(disabled).toMatch(/color:\s*var\(--ink-faint\)/);
 
     /* `.cmt-spinner` sets orange on the SVG itself, which otherwise beats the
        grey inherited from the disabled button. */
-    expect(rule(".chat-send:disabled .cmt-spinner")).toMatch(/color:\s*inherit/);
+    expect(rule('.chat-send[aria-disabled="true"] .cmt-spinner')).toMatch(/color:\s*inherit/);
   });
 
   it("keeps every matching selector inside the reviewed state matrix", () => {
     expect(chatSendSelectors()).toEqual([
       ".chat-send",
-      ".chat-send:disabled",
-      ".chat-send:disabled .cmt-spinner",
-      '.chat-send[type="submit"]:not(:disabled)',
-      '.chat-send[type="submit"]:not(:disabled):hover',
+      /* `aria-disabled`, not `:disabled`, so Send's card opens when it cannot
+         send — tests/the-enter-key-really-sends.test.tsx § the send card. */
+      '.chat-send[aria-disabled="true"]',
+      '.chat-send[aria-disabled="true"] .cmt-spinner',
+      '.chat-send[type="submit"]:not([aria-disabled="true"])',
+      '.chat-send[type="submit"]:not([aria-disabled="true"]):hover',
       ".chat-send:focus-visible",
       ".remember .chat-send",
       ".chat-send.stop",
