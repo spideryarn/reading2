@@ -39,8 +39,9 @@ export const MAX_AUDIO_BASE64 = 3_000_000;
 /**
  * The raw bytes that fit in it. Base64 is four characters per three bytes.
  *
- * `mic-recording.ts` stops the recorder below this, so in the ordinary case a
- * dictation ends by itself rather than being refused. This is the figure the
+ * `mic-recording.ts` keeps every part of a recording below this — it starts a
+ * new part at 80% of its own bound — so in the ordinary case no request comes
+ * near it, however long the dictation. This is the figure the
  * two ends check against, for the case where the recorder's own accounting and
  * reality disagree — which is exactly the case a bitrate *hint* creates.
  */

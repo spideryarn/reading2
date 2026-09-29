@@ -215,6 +215,47 @@ noted. What changed:
   ordered `parts` array, not a bare list; per-part upload state lives in the session. The strip
   shows one Save per part, or today's single button when there is one part.
 
+### The spike
+
+Run 2026-09-29 on the Hetzner box, before building on it. Playwright 1.62.1 drove a page whose
+track came from Web Audio (an oscillator sweeping 200 Hz upward at 50 Hz/s into a
+`MediaStreamDestination` — the box has no microphone), recorded with the product's own container
+ladder, rotated every 3 s, four rotations (five parts), and decoded each part on its own with
+`decodeAudioData`. The sweep makes the audio's own time recoverable: the frequency at a part's last
+sound and the next part's first sound says how much was lost at the seam. Two orders were tried:
+**start the new recorder, then stop the old** (what the plan asks for), and stop-then-start.
+
+| browser | container | parts decoded alone | seam loss, per seam | sum of parts vs wall clock |
+|---|---|---|---|---|
+| Chrome 152.0.7977.75 (system, headless) | `audio/webm;codecs=opus` | 5 of 5, both orders | 5–65 ms (overlap); 6–68 ms (stop-then-start) | −0.12 s over 15 s |
+| Chromium 151.0.7922.34 (Playwright) | `audio/webm;codecs=opus` | 5 of 5, both orders | 6–55 ms (overlap); 8–71 ms (stop-then-start) | −0.07 to −0.13 s over 15 s |
+| WebKit (Playwright, build 2336) | — | **not run**: `MediaRecorder` does not exist in this build | — | — |
+
+What it says:
+
+- **Every part is a complete file.** Each of the ten Chromium runs' parts decoded on its own.
+- **Overlap buys nothing measurable in Chromium, and costs nothing.** Starting the new recorder
+  first did not make the two parts share any audio: the new part begins about when it was started,
+  and the old part's last ~60 ms (one Opus packet's worth, judging by decoded lengths of 2.94 s
+  against 3.00 s) is simply not in its file. The loss is the old recorder's final packet, not a
+  gap between recorders, which is why both orders measure the same. **Up to ~70 ms per seam**, one
+  seam every two minutes — at worst part of a syllable. Nothing was built to hide it (R8: measure
+  first); if real speech shows garbled words at seams, that is the evidence for a boundary detector.
+- **AAC is unverified.** Neither headless Chrome on Linux offered `audio/mp4;codecs=mp4a.40.2`
+  (Chrome's AAC recorder uses the platform's encoder, which Linux does not have), so every number
+  above is WebM/Opus. The Mac and Windows path, which records AAC, is reasoned rather than measured.
+- **WebKit is unverified**, and so is physical iOS Safari: the Playwright WebKit build on Linux has
+  no `MediaRecorder` at all, so whether WebKit will run two recorders on one track, and what its
+  seam costs, could not be observed from here. The code starts the new recorder first on every
+  engine. If WebKit refuses to construct or start a second one, the old part simply keeps
+  recording (each later chunk tries again) — and at WebKit's ~6 KB/s the five-minute ceiling
+  arrives before the per-part byte bound, so that dictation would be one part, as before this
+  change. If it starts one and then errors, that is a capture failure, `[mic-broken]` — loud, not
+  silent. An iPad dictation over two minutes is the check.
+
+The script is not kept in the repo; it was a throwaway in the session's scratchpad
+(`segB-spike.mjs`).
+
 ### Cancellation — who aborts the in-flight segment uploads (R4)
 
 The session's `AbortController` is created when the session is, before any segment can upload.

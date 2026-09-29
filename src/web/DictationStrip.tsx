@@ -49,7 +49,7 @@ import { useEffect, useState } from "react";
 import { MicLevel } from "./MicLevel.js";
 import { type MicDevice, listInputs } from "./mic-devices.js";
 import { type MicRecording, formatDuration, recordingFilename } from "./mic-recording.js";
-import type { UseDictation } from "./useDictation.js";
+import type { DictationRecording, UseDictation } from "./useDictation.js";
 import { useNow } from "./useNow.js";
 import { useOnline } from "./useOnline.js";
 
@@ -429,7 +429,7 @@ function SaveRecording({
   onDiscard,
   onRetry,
 }: {
-  recording: MicRecording;
+  recording: DictationRecording;
   onDiscard(): void;
   /**
    * Send the same audio again, or null when that could not help.
@@ -444,16 +444,19 @@ function SaveRecording({
      Same rule and same direction as the microphone button above: `false` is
      trusted, `true` is not. */
   const online = useOnline();
-  const save = () => {
-    const url = URL.createObjectURL(recording.blob);
+  const save = (part: MicRecording, n?: number) => {
+    const url = URL.createObjectURL(part.blob);
     const a = document.createElement("a");
     a.href = url;
-    a.download = recordingFilename(new Date(), recording.ext);
+    a.download = recordingFilename(new Date(), part.ext, n);
     document.body.appendChild(a);
     a.click();
     a.remove();
     setTimeout(() => URL.revokeObjectURL(url), 60_000);
   };
+
+  /* One part is today's single button, unchanged; several get one each. */
+  const only = recording.parts.length === 1 ? recording.parts[0] : undefined;
 
   return (
     <p className="prof-recording">
@@ -480,12 +483,29 @@ function SaveRecording({
           <RotateCcw size={12} /> Try again
         </button>
       )}
-      <button type="button" className="prof-recording-save" onClick={save}>
-        <Download size={12} />{" "}
-        {/* Says which it is when it is only part of it, because "the recording"
-            would be a claim about the whole of a session that ran past the cap. */}
-        {recording.capped ? "Save the first" : "Save"} {formatDuration(recording.ms)}
-      </button>
+      {only ? (
+        <button type="button" className="prof-recording-save" onClick={() => save(only)}>
+          <Download size={12} />{" "}
+          {/* Says which it is when it is only part of it, because "the recording"
+              would be a claim about the whole of a session that ran past the cap. */}
+          {only.capped ? "Save the first" : "Save"} {formatDuration(only.ms)}
+        </button>
+      ) : (
+        /* **One button per part** for a dictation long enough to have been
+           recorded in several (plan 260929f): each part is its own file, and
+           there is no joining two into one playable file in the browser. */
+        recording.parts.map((part, i) => (
+          <button
+            // biome-ignore lint/suspicious/noArrayIndexKey: the parts are a fixed, ordered list for the life of this row
+            key={i}
+            type="button"
+            className="prof-recording-save"
+            onClick={() => save(part, i + 1)}
+          >
+            <Download size={12} /> Save part {i + 1} ({formatDuration(part.ms)})
+          </button>
+        ))
+      )}
       {/* Deleting it is the reader's to do, rather than something that happens
           to them eventually. */}
       <button
