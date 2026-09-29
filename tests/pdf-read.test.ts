@@ -510,6 +510,7 @@ describe("the whole stage, with the model stubbed out", () => {
     const pass = await pass0(bytes);
     return runPdfExtract({
       frontMatter: null,
+      authors: null,
       bytes,
       url: "https://example.test/paper.pdf",
       checkpoints: into ?? memoryCheckpoints({ slug: "paper", articleId: "article-paper" }),
@@ -756,6 +757,7 @@ describe("the whole stage, with the model stubbed out", () => {
       asks = 0;
       const result = await runPdfExtract({
         frontMatter: null,
+        authors: null,
         bytes,
         url: "https://example.test/paper.pdf",
         checkpoints: angry,

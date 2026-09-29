@@ -1,0 +1,227 @@
+/**
+ * **The provenance check on a PDF's authors** — src/pdf-authors.ts, plan
+ * 260929d § 3. The byline and affiliation texts are the real records from
+ * evals/pdf/titles/ (transcribed first pages), so the marker shapes are the ones
+ * that actually arrive: digits glued and spaced, superscripts, asterisks, and a
+ * letter glued to the surname.
+ */
+import { describe, expect, it } from "vitest";
+import {
+  AuthorsUnreadable,
+  type AuthorsReader,
+  authorsPrompt,
+  parseAuthors,
+  readAuthors,
+  trimName,
+  verifyAuthors,
+  words,
+} from "../src/pdf-authors.js";
+import type { PdfRecord } from "../src/pdf.js";
+import { frontMatterWindow } from "../src/pdf-frontmatter.js";
+
+const FRONTIERS_BYLINE = "Mei-jun Ou1, Xiang-hua Xu2, Hong Chen1, Fu-rong Chen3 and Shuai Shen4*";
+const FRONTIERS_AFFILIATIONS =
+  "1 Head and Neck Surgery Department, Hunan Cancer Hospital, Changsha, China, 2 Health Service Center, Hunan Cancer Hospital, Changsha, China";
+const ARNN_BYLINE = "Salim Rukhsara,∗\n, Anil K.Tiwaria\n aDepartment of Electrical Engineering, IIT Jodhpur, 342037, India";
+const COPERNICUS_BYLINE = "Alexander G. Keul¹,☆";
+const COPERNICUS_AFFILIATION = "¹Environmental Psychology, Salzburg University, Salzburg, Austria\n☆retired";
+
+const one = (name: string, affiliations: string[] = []) => ({ name, affiliations });
+
+describe("words", () => {
+  it("folds case and diacritics, reads a superscript as its digit, and splits on everything else", () => {
+    expect(words("María Angélica ¹Farfán-Casadiego")).toEqual(["maria", "angelica", "1farfan", "casadiego"]);
+  });
+});
+
+describe("verifyAuthors", () => {
+  it("takes names with their glued digit markers dropped, and affiliations cut out of a packed record", () => {
+    const verdict = verifyAuthors(
+      [
+        one("Mei-jun Ou", ["Head and Neck Surgery Department, Hunan Cancer Hospital, Changsha, China"]),
+        one("Xiang-hua Xu", ["Health Service Center, Hunan Cancer Hospital, Changsha, China"]),
+        one("Hong Chen"),
+        one("Fu-rong Chen"),
+        one("Shuai Shen"),
+      ],
+      FRONTIERS_BYLINE,
+      [`${FRONTIERS_BYLINE}\n${FRONTIERS_AFFILIATIONS}`],
+    );
+    expect(verdict.authors?.map((a) => a.name)).toEqual(["Mei-jun Ou", "Xiang-hua Xu", "Hong Chen", "Fu-rong Chen", "Shuai Shen"]);
+    expect(verdict.authors?.[1]?.affiliations).toEqual(["Health Service Center, Hunan Cancer Hospital, Changsha, China"]);
+  });
+
+  it("takes a name with an affiliation LETTER glued to the surname dropped — Rukhsara is Rukhsar", () => {
+    const verdict = verifyAuthors(
+      [one("Salim Rukhsar", ["Department of Electrical Engineering, IIT Jodhpur, 342037, India"]), one("Anil K. Tiwari")],
+      ARNN_BYLINE,
+      [ARNN_BYLINE],
+    );
+    /* The PAGE's characters, not the model's: it printed "K.Tiwari", no space. */
+    expect(verdict.authors?.map((a) => a.name)).toEqual(["Salim Rukhsar", "Anil K.Tiwari"]);
+  });
+
+  it("reads a superscript marker glued before an affiliation", () => {
+    const verdict = verifyAuthors(
+      [one("Alexander G. Keul", ["Environmental Psychology, Salzburg University, Salzburg, Austria"])],
+      COPERNICUS_BYLINE,
+      [`${COPERNICUS_BYLINE}\n${COPERNICUS_AFFILIATION}`],
+    );
+    expect(verdict.authors).toEqual([
+      { name: "Alexander G. Keul", affiliations: ["Environmental Psychology, Salzburg University, Salzburg, Austria"] },
+    ]);
+  });
+
+  it("says nothing when nothing was offered — the byline stands as printed, with no note", () => {
+    expect(verifyAuthors([], FRONTIERS_BYLINE, [FRONTIERS_BYLINE])).toEqual({ authors: null, note: null });
+  });
+
+  describe("refuses the whole list, with a note, when any author was not copied", () => {
+    const refused = (answer: Parameters<typeof verifyAuthors>[0], pages = [FRONTIERS_BYLINE + FRONTIERS_AFFILIATIONS]) => {
+      const verdict = verifyAuthors(answer, FRONTIERS_BYLINE, pages);
+      expect(verdict.authors).toBeNull();
+      expect("note" in verdict && verdict.note).toMatch(/Kept the byline as printed/);
+    };
+
+    it("an invented name", () => refused([one("Mei-jun Ou"), one("Ignore Previous Instructions")]));
+    it("a respelt name", () => refused([one("Meijun Oh")]));
+    it("a name's last word truncated rather than a marker dropped", () => refused([one("Mei-jun O")]));
+    it("a name's earlier word truncated", () => refused([one("Mei-j Ou")]));
+    it("a name with an invented word inside it", () => refused([one("Mei-jun 999 Ou")]));
+    it("a name with no words at all", () => refused([one("--- ,,, ***")]));
+    it("names reordered", () => refused([one("Ou Mei-jun")]));
+    it("a name stitched from two authors", () => refused([one("Hong Xu")]));
+    it("a name with a word the page does not print after it", () => refused([one("Mei-jun Ou <b>")]));
+    it("an affiliation not on the page", () => refused([one("Mei-jun Ou", ["Evil Corp, visit example dot com"])]));
+    it("an affiliation that skips a word", () => refused([one("Mei-jun Ou", ["Head and Surgery Department"])]));
+    it("an affiliation stitched across two pages", () =>
+      refused([one("Mei-jun Ou", ["China 2 Health Service Center"])], ["Hunan Cancer Hospital, Changsha, China", "2 Health Service Center"]));
+    it("too many authors", () => refused(Array.from({ length: 101 }, () => one("Hong Chen"))));
+  });
+
+  it("cuts off the digit and symbol markers a model copies along — which is what it does, measured", () => {
+    const verdict = verifyAuthors(
+      [
+        one("Mei-jun Ou1", ["1 Head and Neck Surgery Department, Hunan Cancer Hospital, Changsha, China"]),
+        one("Shuai Shen4*"),
+      ],
+      FRONTIERS_BYLINE,
+      [FRONTIERS_AFFILIATIONS],
+    );
+    expect(verdict.authors).toEqual([
+      { name: "Mei-jun Ou", affiliations: ["Head and Neck Surgery Department, Hunan Cancer Hospital, Changsha, China"] },
+      { name: "Shuai Shen", affiliations: [] },
+    ]);
+    const keul = verifyAuthors([one("Alexander G. Keul¹,☆", ["¹Environmental Psychology, Salzburg University"])], COPERNICUS_BYLINE, [
+      COPERNICUS_AFFILIATION,
+    ]);
+    expect(keul.authors).toEqual([{ name: "Alexander G. Keul", affiliations: ["Environmental Psychology, Salzburg University"] }]);
+  });
+
+  it("never cuts a LETTER off a name by rule — Costa keeps its a unless the model dropped it", () => {
+    expect(trimName("Ana Costa")).toBe("Ana Costa");
+    expect(verifyAuthors([one("Salim Rukhsara")], ARNN_BYLINE, [ARNN_BYLINE]).authors?.[0]?.name).toBe("Salim Rukhsara");
+  });
+
+  it("stores the page's characters, so decoration the model added between the words is gone", () => {
+    const verdict = verifyAuthors(
+      [one("Mei-jun\n--- Ou", ["Head   and\nNeck ** Surgery Department"])],
+      FRONTIERS_BYLINE,
+      [FRONTIERS_AFFILIATIONS],
+    );
+    expect(verdict.authors).toEqual([{ name: "Mei-jun Ou", affiliations: ["Head and Neck Surgery Department"] }]);
+  });
+
+  it("refuses a found span that is not shaped like a name — digits the page printed inside it", () => {
+    expect(verifyAuthors([one("Jane Doe")], "Jane 42 Doe", ["Jane 42 Doe"]).authors).toBeNull();
+    /* …and the control: the same call without the digits passes. */
+    expect(verifyAuthors([one("Jane Doe")], "Jane Doe", ["Jane Doe"]).authors).toEqual([{ name: "Jane Doe", affiliations: [] }]);
+  });
+
+  it("refuses an affiliation over the character cap even when it is on the page", () => {
+    const long = Array.from({ length: 40 }, () => "Laboratory").join(" ");
+    expect(verifyAuthors([one("Hong Chen", [long])], FRONTIERS_BYLINE, [long]).authors).toBeNull();
+    const short = Array.from({ length: 20 }, () => "Laboratory").join(" ");
+    expect(verifyAuthors([one("Hong Chen", [short])], FRONTIERS_BYLINE, [short]).authors).not.toBeNull();
+  });
+
+  it("lets a marker be glued only after a name's words and only before an affiliation's first", () => {
+    /* A marker in the MIDDLE of an affiliation is not a marker. */
+    const verdict = verifyAuthors([one("Hong Chen", ["Hunan Cancer Hospital"])], FRONTIERS_BYLINE, ["Hunan 1Cancer Hospital"]);
+    expect(verdict.authors).toBeNull();
+  });
+
+  it("drops a repeated affiliation and squashes whitespace", () => {
+    const verdict = verifyAuthors(
+      [one("  Hong   Chen ", ["Hunan Cancer Hospital", "Hunan  Cancer Hospital"])],
+      FRONTIERS_BYLINE,
+      [FRONTIERS_AFFILIATIONS],
+    );
+    expect(verdict.authors).toEqual([{ name: "Hong Chen", affiliations: ["Hunan Cancer Hospital"] }]);
+  });
+});
+
+describe("the authors pass (a call of its own, plan 260929d)", () => {
+  const record = (text: string, over: Partial<PdfRecord> = {}): PdfRecord => ({
+    page: 1,
+    type: "paragraph",
+    text,
+    continues: false,
+    uncertain: false,
+    ...over,
+  });
+  const records = [
+    record("A paper", { type: "heading1" }),
+    record("Mei-jun Ou1, Xiang-hua Xu2*"),
+    record("1 Hunan Cancer Hospital, Changsha, China, 2 Health Service Center"),
+  ];
+  const items = frontMatterWindow(records);
+  const stub = (answer: unknown, seen: string[] = []): AuthorsReader => ({
+    id: "test/stub",
+    usage: () => ({ input: 0, output: 0 }),
+    async ask(prompt) {
+      seen.push(prompt);
+      return parseAuthors(JSON.stringify(answer));
+    },
+  });
+
+  it("tells the model which records are the byline, and shows it the page as inert JSON lines", () => {
+    const prompt = authorsPrompt(items, ["p1-r2"]);
+    expect(prompt.split("\n")[0]).toBe('BYLINE RECORDS: ["p1-r2"]');
+    expect(prompt).toContain(JSON.stringify({ id: "p1-r2", page: 1, type: "paragraph", text: "Mei-jun Ou1, Xiang-hua Xu2*" }));
+  });
+
+  it("returns the page's names and affiliations, markers off", async () => {
+    const verdict = await readAuthors(
+      items,
+      ["p1-r2"],
+      stub({
+        authors: [
+          { name: "Mei-jun Ou1", affiliations: ["1 Hunan Cancer Hospital, Changsha, China"] },
+          { name: "Xiang-hua Xu2*", affiliations: ["Health Service Center"] },
+        ],
+      }),
+    );
+    expect(verdict.authors).toEqual([
+      { name: "Mei-jun Ou", affiliations: ["Hunan Cancer Hospital, Changsha, China"] },
+      { name: "Xiang-hua Xu", affiliations: ["Health Service Center"] },
+    ]);
+  });
+
+  it("does not ask at all when there is no byline", async () => {
+    const seen: string[] = [];
+    expect(await readAuthors(items, [], stub({ authors: [] }, seen))).toEqual({ authors: null, note: null });
+    expect(seen).toEqual([]);
+  });
+
+  it("cannot take a name from a record that is not the byline", async () => {
+    const verdict = await readAuthors(items, ["p1-r2"], stub({ authors: [{ name: "Health Service Center", affiliations: [] }] }));
+    expect(verdict.authors).toBeNull();
+  });
+
+  it("refuses an answer that is not the schema's shape", () => {
+    for (const bad of ["not json", "{}", '{"authors":{}}', '{"authors":["A B"]}', '{"authors":[{"name":"A"}]}']) {
+      expect(() => parseAuthors(bad)).toThrow(AuthorsUnreadable);
+    }
+  });
+});

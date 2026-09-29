@@ -268,6 +268,7 @@ import { cameOffADisk, SourceLink, webSource } from "./SourceLink.js";
 import { articleStats } from "./stats.js";
 import { EditableTitle, useArticleRename } from "./TitleEditor.js";
 import { TipNote, Tooltip, TooltipGroup } from "./Tooltip.js";
+import { AuthorNames } from "./AuthorNames.js";
 import { howLong, timeAgo } from "./relative-time.js";
 import { useNow } from "./useNow.js";
 import { SLOW_AFTER_MS } from "./useSlow.js";
@@ -659,7 +660,9 @@ export function Metadata({
    * One derivation rather than the same two terms written out at each site.
    */
   const hasShelfRow = provenance !== null && !showingFixture;
-  const facts = [meta.byline, meta.siteName, meta.lang].filter(Boolean) as string[];
+  /* The byline leaves this line when the Authors section below says it one name
+     at a time — the same names twice on one screen is noise (plan 260929d). */
+  const facts = [meta.authors ? undefined : meta.byline, meta.siteName, meta.lang].filter(Boolean) as string[];
 
   /**
    * The one line that has to survive the section being shut.
@@ -849,6 +852,31 @@ export function Metadata({
                 </p>
               )}
             </div>
+          </Section>
+        )}
+
+        {/* ------------------------------------------------------ 2½. authors --
+            Who wrote it and where they work, one per line — Greg, 2026-09-29:
+            *"At the very least, display them in the Metadata section."* Only
+            when stage 2 knew the list (`meta.authors`, plan 260929d); otherwise
+            the byline is in the facts line under the title, as it always was.
+            The names link to the shelf searched for them, as in the masthead. */}
+        {meta.authors && (
+          <Section label="Authors" aside={`${meta.authors.length}`}>
+            <ol className={`${CARD} tw:m-0 tw:list-none tw:p-5 tw:text-sm`} data-testid="metadata-authors">
+              {meta.authors.map((author, i) => (
+                // biome-ignore lint/suspicious/noArrayIndexKey: two authors can share a name; order is the identity
+                <li key={i} className={i > 0 ? "tw:mt-3" : undefined}>
+                  <AuthorNames authors={[author]} linkToShelf={hasShelfRow} all />
+                  {author.affiliations.map((a, j) => (
+                    // biome-ignore lint/suspicious/noArrayIndexKey: static list, order is the identity
+                    <span key={j} className="tw:block tw:text-xs tw:leading-relaxed tw:text-ink-faint">
+                      {a}
+                    </span>
+                  ))}
+                </li>
+              ))}
+            </ol>
           </Section>
         )}
 

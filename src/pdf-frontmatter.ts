@@ -130,6 +130,12 @@ export interface FrontMatterDecision {
   /** Built from the named records' own text. `null` when none was named. */
   title: string | null;
   byline: string | null;
+  /**
+   * The window ids of the records `byline` was built from, in order — what the
+   * authors pass (src/pdf-authors.ts) is told to read names out of, and the
+   * only records it may take a name from. Empty when there is no byline.
+   */
+  bylineIds: string[];
   /** Indices into the caller's records, to be retyped `publisher` on a clone. */
   setAside: number[];
   /** Policy refusals and anything else a person should be able to read. */
@@ -312,6 +318,8 @@ export function assemble(items: FrontMatterItem[], answer: FrontMatterAnswer): F
 
   const title = join(titleItems);
   const byline = join(bylineItems);
+  /* Only when they produced some text, so "no byline" is one state here. */
+  const bylineIds = byline ? bylineItems.map((item) => item.id) : [];
   if (answer.titleIds.length && !title) {
     throw new FrontMatterUnreadable("titleIds names records with no text in them");
   }
@@ -340,12 +348,13 @@ export function assemble(items: FrontMatterItem[], answer: FrontMatterAnswer): F
         `${windowWords} words it was shown, over the ${Math.round(MAX_SET_ASIDE_FRACTION * 100)}% ` +
         `a publisher's furniture is allowed to be.`,
     );
-    return { title: title || null, byline: byline || null, setAside: [], notes };
+    return { title: title || null, byline: byline || null, bylineIds, setAside: [], notes };
   }
 
   return {
     title: title || null,
     byline: byline || null,
+    bylineIds,
     setAside: setAside.sort((a, b) => a - b),
     notes,
   };

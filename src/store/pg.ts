@@ -32,6 +32,7 @@
 import { and, asc, count, desc, eq, inArray, isNotNull, isNull, sql } from "drizzle-orm";
 
 import type { Assets } from "../assets.js";
+import { decodeAuthors } from "../authors.js";
 import { ASSETS_VERSION, assetsInputHash } from "../collect-assets.js";
 import { getDb } from "../db/client.js";
 import {
@@ -126,6 +127,7 @@ import type {
   ArcFound,
   Article,
   ArticleMetadata,
+  Author,
   StageState,
   Block,
   Citations,
@@ -695,6 +697,12 @@ const REVISION_READ_POLICY: Record<
     library: "presence",
   },
   arc: { article: "value", library: "presence", metadata: "value", arc: "value" },
+  /* **The reading view only.** Not the shelf, which would ship every paper's
+     twenty-five authors and their institutions on every homepage load to draw a
+     card that shows the byline; not any artefact's fingerprint, because no
+     prompt prints it and a column no prompt reads must not make anything stale.
+     Plan 260929d § 1. */
+  authors: { article: "value" },
 
   /* **The image manifest, and the reading view is the only read that takes
      it.** It is what tells the reader which `<img src>` we hold a copy of, so
@@ -1001,6 +1009,7 @@ export const REVISION_PROJECTIONS = {
   article: {
     id: articleRevisions.id,
     ...META_COLUMNS,
+    authors: articleRevisions.authors,
     tree: articleRevisions.tree,
     arc: articleRevisions.arc,
     assets: articleRevisions.assets,
@@ -1524,6 +1533,16 @@ export async function sourceHashFor(
  * scalars), and this is the part they share.
  */
 type MetaRow = { [C in keyof typeof META_COLUMNS]: Selected[C] };
+
+/**
+ * `Meta.authors` from its column, for the one read that selects it — the
+ * reading view's (`REVISION_READ_POLICY.authors`). Absent, never `[]`, when
+ * nothing was written; the extractor never writes an empty list either.
+ */
+function withAuthors(meta: Meta, stored: Author[] | null): Meta {
+  const authors = decodeAuthors(stored);
+  return authors ? { ...meta, authors } : meta;
+}
 
 function metaFrom(
   slug: string,
@@ -2489,7 +2508,10 @@ const rawPgArticleReader: ArticleReader = {
       /* Through `titleFor`, so the reading view's masthead calls a renamed
          article what the shelf calls it. The filesystem store does the same at
          the same seam; a review found this applied to the card only. */
-      meta: titleFor(metaFrom(slug, found.revision, headingTitleOf(blocks)), shelfFrom(found.article)),
+      meta: withAuthors(
+        titleFor(metaFrom(slug, found.revision, headingTitleOf(blocks)), shelfFrom(found.article)),
+        found.revision.authors,
+      ),
       blocks,
       tree: tree as Tree,
       ...(arc ? { arc: arc as Arc } : {}),

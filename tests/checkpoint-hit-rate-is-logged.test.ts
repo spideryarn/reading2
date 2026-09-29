@@ -118,6 +118,7 @@ async function extractInto(store: MemoryCheckpoints): Promise<void> {
   const pass = await pass0(bytes);
   await runPdfExtract({
     frontMatter: null,
+    authors: null,
     bytes,
     url: "https://example.test/paper.pdf",
     checkpoints: store,

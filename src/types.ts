@@ -1413,10 +1413,31 @@ export const MAX_PROFILE_CHARS = 1_500;
  */
 export const MAX_PURPOSE_CHARS = 600;
 
+/**
+ * **One author of the piece, as the piece declares them** — the page's
+ * `citation_author` and `citation_author_institution` tags, or the names and
+ * affiliations the PDF front-matter pass copied off the front page with their
+ * footnote markers left off (src/pdf-frontmatter.ts § the provenance check).
+ * `affiliations` is empty, never absent, when none was declared.
+ * docs/plans/260929d-authors-and-affiliations-at-import-shown-and-linked.md.
+ */
+export interface Author {
+  name: string;
+  affiliations: string[];
+}
+
 export interface Meta {
   slug: string;
   title: string;
+  /**
+   * Free text, and what every prompt's `BY:` line and Referee mode read. When
+   * `authors` is present the byline is derived from it (names joined `"; "`),
+   * so the two cannot disagree — except where Readability's own byline already
+   * named everybody, which 260928b keeps byte-identical.
+   */
   byline?: string;
+  /** Absent when we do not know the list — see `Author`. Never an empty array. */
+  authors?: Author[];
   siteName?: string;
   lang?: string;
   url?: string;

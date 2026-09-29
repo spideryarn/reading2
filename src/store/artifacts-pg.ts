@@ -209,6 +209,7 @@ function readMeta(ref: JobDraftRef, row: RevisionRow): Meta | null {
     slug: ref.slug,
     title: row.title,
     byline: row.byline,
+    authors: row.authors,
     siteName: row.siteName,
     lang: row.lang,
     url: row.finalUrl,
@@ -795,6 +796,7 @@ export async function stampForStep(
 const META_COLUMNS = [
   "title",
   "byline",
+  "authors",
   "siteName",
   "lang",
   "excerpt",
@@ -817,6 +819,10 @@ function metaColumns(meta: Meta): Partial<typeof articleRevisions.$inferInsert> 
   const columns: Partial<typeof articleRevisions.$inferInsert> = {
     title: meta.title ?? null,
     byline: meta.byline ?? null,
+    /* `?? null` like its neighbours, so a re-extraction that finds no declared
+       authors clears the list rather than leaving the last one beside a new
+       byline. Plan 260929d § 1. */
+    authors: meta.authors ?? null,
     siteName: meta.siteName ?? null,
     lang: meta.lang ?? null,
     excerpt: meta.excerpt ?? null,

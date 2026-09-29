@@ -544,6 +544,7 @@ describe("the stage as it actually runs", () => {
 
     const result = await runPdfExtract({
       frontMatter: null,
+      authors: null,
       bytes,
       checkpoints: memoryCheckpoints({ slug: "seam", articleId: "article-seam" }),
       slug: "seam",

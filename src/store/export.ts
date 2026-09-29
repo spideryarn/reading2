@@ -369,6 +369,7 @@ export async function exportArticle(
     slug,
     title: revision.title,
     byline: revision.byline,
+    authors: revision.authors,
     siteName: revision.siteName,
     lang: revision.lang,
     url: revision.finalUrl,

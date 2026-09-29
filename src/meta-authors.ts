@@ -20,6 +20,8 @@
  * docs/plans/260928b-multi-author-bylines-from-citation-meta.md;
  * docs/postmortems/260928a-a-library-field-that-holds-one-value-for-a-list-keeps-one.md.
  */
+import { AUTHOR_LIMITS } from "./authors.js";
+import type { Author } from "./types.js";
 
 /**
  * `dc.creator` in the spellings publishers use, compared lower-cased with `.`
@@ -27,35 +29,84 @@
  */
 const DC_CREATOR = new Set(["dc.creator", "dcterms.creator", "dcterm.creator"]);
 
-/** Every author the page's metadata declares, in document order and natural order, or `null`. */
-export function metaAuthors(doc: Document): string[] | null {
-  const citation: string[] = [];
-  const dc: string[] = [];
+/**
+ * `citation_author_institution`, and the older Highwire spelling. Each belongs
+ * to the nearest `citation_author` before it — the convention Nature and PLOS
+ * both follow, measured 2026-09-29. One before any author belongs to nobody
+ * and is dropped.
+ */
+const CITATION_INSTITUTION = new Set(["citation_author_institution", "citation_author_affiliation"]);
+
+/**
+ * Every author the page's metadata declares, with the affiliations it declares
+ * for each, in document order and natural order — or `null`.
+ * docs/plans/260929d-authors-and-affiliations-at-import-shown-and-linked.md § 2.
+ */
+export function metaAuthors(doc: Document): Author[] | null {
+  const citation: Author[] = [];
+  const dc: Author[] = [];
   for (const el of Array.from(doc.querySelectorAll("meta[name][content]"))) {
     const name = (el.getAttribute("name") ?? "").trim().toLowerCase().replace(/:/g, ".");
     const content = el.getAttribute("content") ?? "";
-    if (name === "citation_author") citation.push(content);
-    else if (DC_CREATOR.has(name)) dc.push(content);
+    if (name === "citation_author") citation.push({ name: content, affiliations: [] });
+    else if (CITATION_INSTITUTION.has(name)) citation.at(-1)?.affiliations.push(content);
+    else if (DC_CREATOR.has(name)) dc.push({ name: content, affiliations: [] });
   }
   const fromCitation = cleaned(citation);
-  if (fromCitation.length > 0) return inNaturalOrder(fromCitation);
+  if (fromCitation.length > 0) return naturalAuthors(fromCitation);
   const fromDc = cleaned(dc);
-  return fromDc.length > 1 ? inNaturalOrder(fromDc) : null;
+  return fromDc.length > 1 ? naturalAuthors(fromDc) : null;
 }
 
-/** Whitespace collapsed, empties and case-insensitive repeats dropped. */
-function cleaned(raw: readonly string[]): string[] {
-  const seen = new Set<string>();
-  const out: string[] = [];
-  for (const value of raw) {
-    const name = value.replace(/\s+/gu, " ").trim();
-    const key = name.toLowerCase();
-    if (name === "" || seen.has(key)) continue;
-    seen.add(key);
-    out.push(name);
-  }
-  return out;
+/**
+ * The declared list inside `AUTHOR_LIMITS` — the first hundred authors, ten
+ * affiliations each, and no value longer than a name or an address runs to.
+ * Applied before the byline is built from it, so the cap holds for every
+ * prompt's `BY:` line too.
+ */
+function withinLimits(authors: Author[]): Author[] {
+  const { maxAuthors, maxAffiliations, maxNameChars, maxAffiliationChars } = AUTHOR_LIMITS;
+  return authors
+    .filter((a) => a.name.length <= maxNameChars)
+    .slice(0, maxAuthors)
+    .map((a) => ({
+      name: a.name,
+      affiliations: a.affiliations.filter((x) => x.length <= maxAffiliationChars).slice(0, maxAffiliations),
+    }));
 }
+
+/** `inNaturalOrder` over the names, the affiliations kept beside the name they belong to. */
+function naturalAuthors(authors: readonly Author[]): Author[] {
+  const names = inNaturalOrder(authors.map((a) => a.name));
+  return authors.map((a, i) => ({ name: names[i] ?? a.name, affiliations: a.affiliations }));
+}
+
+/**
+ * Whitespace collapsed, empties and case-insensitive repeats dropped — a
+ * repeated author's affiliations merged into the first, since a publisher that
+ * lists somebody twice has usually split their institutions across the two.
+ */
+function cleaned(raw: readonly Author[]): Author[] {
+  const byKey = new Map<string, Author>();
+  const out: Author[] = [];
+  for (const author of raw) {
+    const name = squash(author.name);
+    const key = name.toLowerCase();
+    if (name === "") continue;
+    const affiliations = author.affiliations.map(squash).filter((a) => a !== "");
+    const seen = byKey.get(key);
+    if (seen) {
+      for (const a of affiliations) if (!seen.affiliations.includes(a)) seen.affiliations.push(a);
+      continue;
+    }
+    const kept: Author = { name, affiliations: [...new Set(affiliations)] };
+    byKey.set(key, kept);
+    out.push(kept);
+  }
+  return withinLimits(out);
+}
+
+const squash = (s: string) => s.replace(/\s+/gu, " ").trim();
 
 /** `Jr.`, `III`, `PhD` — what follows a comma without being a given name. */
 const SUFFIX = /^(jr|sr|[ivx]+|phd|md|dphil|esq)\.?$/i;
@@ -146,6 +197,34 @@ export function chooseByline(authors: readonly string[] | null, readability: str
     if (namesEverybody) return readability;
   }
   return bylineFromAuthors(authors);
+}
+
+/** What may sit between names in a byline without being somebody. */
+const BYLINE_GLUE = new Set(["and", "by", "with"]);
+
+/**
+ * **The structured list, but only when it is the whole byline.**
+ *
+ * `chooseByline` can keep Readability's byline when it already names every
+ * declared author — and that byline can name *more* people than were declared:
+ * one `citation_author` beside a complete JSON-LD list is the case its tests
+ * hold. Storing the one-name list beside the two-name byline would have the
+ * masthead show fewer authors than the byline it replaces. So the list is kept
+ * when the byline is the one built from it, or when taking every declared
+ * name out of the byline leaves only separators; otherwise the byline is left
+ * to stand alone, as it did before 260929d.
+ */
+export function authorsForByline(authors: Author[] | null, byline: string | undefined): Author[] | null {
+  if (!authors || authors.length === 0 || !byline) return null;
+  if (byline === bylineFromAuthors(authors.map((a) => a.name))) return authors;
+  let rest = ` ${fold(byline)} `;
+  for (const author of authors) {
+    const name = fold(author.name);
+    if (name === "" || !rest.includes(` ${name} `)) return null;
+    rest = rest.replace(` ${name} `, " ");
+  }
+  const leftover = rest.split(" ").filter((w) => w !== "" && !BYLINE_GLUE.has(w));
+  return leftover.length === 0 ? authors : null;
 }
 
 /** Lower-cased, diacritics stripped, every run of non-letters a single space. */

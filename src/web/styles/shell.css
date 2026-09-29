@@ -344,10 +344,24 @@ h1 a:hover { text-decoration: underline; text-decoration-color: var(--highlight)
   font-size: 0.82rem;
   color: var(--ink-faint);
 }
-.facts span + span::before {
+/* `>`: only the line's own items. The author list inside the first one is
+   spans too, and each name would otherwise get a dot (plan 260929d). */
+.facts > span + span::before {
   content: "·";
   margin: 0 0.45rem;
   opacity: 0.6;
+}
+
+/* One author in the masthead or on the Metadata page: a name first, a link
+   second, so it keeps the line's colour until you point at it. AuthorNames.tsx. */
+.author-name {
+  color: inherit;
+  text-decoration: none;
+  border-bottom: 1px dotted currentColor;
+}
+.author-name:hover,
+.author-name:focus-visible {
+  color: var(--highlight);
 }
 
 /* `.about` was here: the provenance list, first behind the masthead's ▾ and

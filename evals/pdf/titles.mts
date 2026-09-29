@@ -84,9 +84,18 @@ import {
   type FrontMatterAnswer,
   frontMatterWindow,
   openRouterFrontMatterReader,
+  parseAnswer,
   promptFor,
   withFrontMatterHidden,
 } from "../../src/pdf-frontmatter.js";
+import {
+  type AuthorsReader,
+  openRouterAuthorsReader,
+  parseAuthors,
+  readAuthors,
+  words,
+} from "../../src/pdf-authors.js";
+import type { Author } from "../../src/types.js";
 import {
   openRouterReader,
   promptFingerprint,
@@ -106,6 +115,13 @@ export interface Fixture {
   title: string;
   /** The authors as printed, or null where the document names none. */
   byline?: string | null;
+  /**
+   * **Each author and their affiliations, as a reader of the front page would
+   * state them** — markers off, spelling kept. Scored per author, name and
+   * affiliations both, so an arm that hands every affiliation to the wrong
+   * person scores wrong rather than right-by-count. Plan 260929d § 3.
+   */
+  authors?: Author[];
   /** What this one is chosen to break. */
   breaks: string;
   /**
@@ -272,6 +288,7 @@ export async function transcribe(fixtures: Fixture[], samples: number): Promise<
         checkpoints: nullCheckpointStore(),
         reader: openRouterReader(),
         frontMatter: null,
+        authors: null,
         filename: `${fixture.slug}.pdf`,
       });
       const sample: Sample = {
@@ -310,6 +327,10 @@ export async function transcribe(fixtures: Fixture[], samples: number): Promise<
 export interface ArmAnswer {
   title: string;
   byline?: string | null;
+  /** The structured list, where the arm offers one — only the tidy arms do. */
+  authors?: Author[] | null;
+  /** The front-matter pass's byline ids, for `tidy-authors` to hand the authors pass. */
+  bylineIds?: string[];
   /** Indices into the sample's transcript that this arm keeps out of the reading view. */
   setAside: number[];
 }
@@ -360,7 +381,7 @@ const tidyPass: Arm = async (sample, pass, fixture) => {
   const items = frontMatterWindow(sample.transcript);
   let answer: FrontMatterAnswer;
   if (existsSync(at)) {
-    answer = JSON.parse(await readFile(at, "utf8")) as FrontMatterAnswer;
+    answer = parseAnswer(await readFile(at, "utf8"));
   } else {
     answer = await reader.ask(promptFor(items));
     await writeFile(at, JSON.stringify(answer, null, 2) + "\n");
@@ -370,6 +391,7 @@ const tidyPass: Arm = async (sample, pass, fixture) => {
     return {
       title: decision.title ?? titleFrom(sample.transcript, pass, `${fixture.slug}.pdf`),
       byline: decision.byline,
+      bylineIds: decision.bylineIds,
       setAside: decision.setAside,
     };
   } catch {
@@ -378,6 +400,37 @@ const tidyPass: Arm = async (sample, pass, fixture) => {
        measuring a code path production never takes. */
     return { title: titleFrom(sample.transcript, pass, `${fixture.slug}.pdf`), setAside: [] };
   }
+};
+
+/**
+ * **`tidy`, then the authors pass** (src/pdf-authors.ts, plan 260929d) — the
+ * same front-matter decision, so the title and furniture columns are `tidy`'s
+ * by construction and only the byline and author columns can differ. The
+ * authors answer is cached beside the tidy one, so re-scoring is free.
+ */
+const authorsAt = (slug: string, prompt: string, n: number, reader: string) =>
+  path.join(CORPUS, slug, `authors-${prompt}-${reader.replace(/[^a-z0-9]+/gi, "-")}-${n}.json`);
+
+const tidyWithAuthors: Arm = async (sample, pass, fixture) => {
+  const front = await tidyPass(sample, pass, fixture);
+  const bylineIds = front.bylineIds ?? [];
+  if (bylineIds.length === 0) return front;
+  const live = openRouterAuthorsReader();
+  const at = authorsAt(fixture.slug, sample.prompt, sample.sample, live.id);
+  /* The cache is the reader: an answer on disk is replayed rather than bought. */
+  const reader: AuthorsReader = existsSync(at)
+    ? { id: live.id, usage: () => ({ input: 0, output: 0 }), ask: async () => parseAuthors(await readFile(at, "utf8")) }
+    : {
+        ...live,
+        async ask(prompt, signal) {
+          const answer = await live.ask(prompt, signal);
+          await writeFile(at, `${JSON.stringify({ authors: answer }, null, 2)}\n`);
+          return answer;
+        },
+      };
+  const verdict = await readAuthors(frontMatterWindow(sample.transcript), bylineIds, reader);
+  const authors = verdict.authors;
+  return authors ? { ...front, byline: authors.map((a) => a.name).join("; "), authors } : front;
 };
 
 /**
@@ -395,11 +448,12 @@ export const ARMS: Record<string, Arm> = {
   incumbent: incumbentLadder,
   ladder: shippedLadder,
   tidy: tidyPass,
+  "tidy-authors": tidyWithAuthors,
   overdelete,
 };
 
 /** Which arms cost money. `score` refuses to run one of these without `--spend`. */
-export const PAID_ARMS = new Set(["tidy"]);
+export const PAID_ARMS = new Set(["tidy", "tidy-authors"]);
 
 // ─────────────────────────────────────────────────────────────── the scoring
 
@@ -451,6 +505,12 @@ export interface Verdict {
   bylineAnswer: string | null;
   /** `false` when the arm offered none, so read it beside `bylineAnswer` and not alone. */
   bylineRight: boolean;
+  /** The structured list this arm offered, or `null` — only `tidy-authors` offers one. */
+  authorsAnswer: Author[] | null;
+  /** Every name, in order, equal to the gold's. `false` when none offered. */
+  namesRight: boolean;
+  /** …and every author's affiliations equal to that author's gold, as sets. `false` when none offered. */
+  affiliationsRight: boolean;
   /** How many records this arm hid. Zero for both ladder arms, which is why the report says so. */
   setAside: number;
   /** Of `mustNotRender`, the ones an arm *could* remove: rendered when nothing is set aside. */
@@ -468,6 +528,40 @@ export interface Verdict {
   /** Retention over **every** declared snippet, reachable or not, so the gap cannot be forgotten. */
   keptRaw: number;
   keptOf: number;
+}
+
+/**
+ * A name or an affiliation as its words — letters and digits, folded — so
+ * `Anil K.Tiwari` (what the page printed, and what 260929d stores) and the
+ * gold's `Anil K. Tiwari` are one name, and a gold that collapsed three stacked
+ * lines without commas matches the page's own text.
+ */
+const asWords = (s: string) => words(s).join(" ");
+
+/** A byline as its names: split on `;`, `,` and a spaced `and`, each as its words. */
+export const bylineNames = (s: string) =>
+  s
+    .split(/\s*[;,]\s*|\s+and\s+/u)
+    .map(asWords)
+    .filter(Boolean);
+
+const sameList = (a: readonly string[], b: readonly string[]) =>
+  a.length === b.length && a.every((x, i) => x === b[i]);
+
+/**
+ * Name by name, and each author's affiliations as a set — so the scoring sees
+ * *which* author an affiliation was handed to, not how many there were (GPT
+ * Sol, plan review of 260929d, P1).
+ */
+function authorsVerdict(
+  gold: Author[] | undefined,
+  offered: Author[] | null,
+): Pick<Verdict, "authorsAnswer" | "namesRight" | "affiliationsRight"> {
+  if (!offered || !gold) return { authorsAnswer: offered, namesRight: false, affiliationsRight: false };
+  const namesRight = sameList(offered.map((a) => asWords(a.name)), gold.map((a) => asWords(a.name)));
+  const set = (a: Author) => [...new Set(a.affiliations.map(asWords))].sort();
+  const affiliationsRight = namesRight && offered.every((a, i) => sameList(set(a), set(gold[i]!)));
+  return { authorsAnswer: offered, namesRight, affiliationsRight };
 }
 
 export function judge(fixture: Fixture, sample: Sample, arm: string, answer: ArmAnswer): Verdict {
@@ -519,10 +613,15 @@ export function judge(fixture: Fixture, sample: Sample, arm: string, answer: Arm
         return ff.length > 0 && (folded.startsWith(ff) || ff.startsWith(folded));
       }),
     bylineAnswer,
+    /* **Compared as lists of names**, since 260929d: a byline built from the
+       author list is joined with `; ` and the golds are written with `, ` and
+       `and`, and a separator is not what this column is measuring. A marker
+       left on a name still fails it, which is the point. */
     bylineRight:
       goldByline === null
         ? bylineAnswer === null
-        : bylineAnswer !== null && foldTitle(bylineAnswer) === foldTitle(goldByline),
+        : bylineAnswer !== null && sameList(bylineNames(bylineAnswer), bylineNames(goldByline)),
+    ...authorsVerdict(fixture.authors, answer.authors ?? null),
     setAside: answer.setAside.length,
     removable: removable.length,
     removed: removable.filter((s) => !there(s, shown)).length,
@@ -635,7 +734,8 @@ function failures(fixtures: Fixture[], arm: string, mine: Verdict[]): string[] {
   const wrong = mine.filter((v) => !v.folded);
   const badByline = mine.filter((v) => v.bylineAnswer !== null && !v.bylineRight);
   const eaten = mine.filter((v) => v.lost.length);
-  if (!wrong.length && !badByline.length && !eaten.length) return [];
+  const badAuthors = mine.filter((v) => v.authorsAnswer !== null && !v.affiliationsRight);
+  if (!wrong.length && !badByline.length && !eaten.length && !badAuthors.length) return [];
   const goldOf = (slug: string) => fixtures.find((f) => f.slug === slug);
   const lines = ["", `${arm}:`];
   for (const v of wrong) {
@@ -650,6 +750,15 @@ function failures(fixtures: Fixture[], arm: string, mine: Verdict[]): string[] {
       `  wrong byline ${v.slug} #${v.sample}`,
       `      got:  ${JSON.stringify((v.bylineAnswer ?? "").slice(0, 160))}`,
       `      want: ${JSON.stringify((goldOf(v.slug)?.byline ?? "").slice(0, 160))}`,
+    );
+  }
+  for (const v of badAuthors) {
+    const show = (as: Author[] | null | undefined) =>
+      JSON.stringify((as ?? []).map((a) => `${a.name} [${a.affiliations.join(" | ")}]`)).slice(0, 400);
+    lines.push(
+      `  wrong authors ${v.slug} #${v.sample}`,
+      `      got:  ${show(v.authorsAnswer)}`,
+      `      want: ${show(goldOf(v.slug)?.authors)}`,
     );
   }
   for (const v of eaten) {
@@ -791,7 +900,8 @@ export function report(
   const sum = (vs: Verdict[], k: (v: Verdict) => number) => vs.reduce((n, v) => n + k(v), 0);
 
   lines.push(
-    "arm           docs-right    samples-right   exact  stolen   furniture-gone   must-keep-kept    byline",
+    "arm           docs-right    samples-right   exact  stolen   furniture-gone   must-keep-kept    byline" +
+      "          names     +affiliations",
   );
   for (const arm of arms) {
     const mine = forArm(arm);
@@ -812,7 +922,12 @@ export function report(
         `  ${rate(mine.filter((v) => v.stoleFalseTitle).length, mine.length).padStart(6)}` +
         `  ${cell(sum(mine, (v) => v.removed), sum(mine, (v) => v.removable))}` +
         `  ${cell(sum(mine, (v) => v.kept), sum(mine, (v) => v.reachable))}` +
-        `  ${offered.length ? cell(offered.filter((v) => v.bylineRight).length, offered.length, 5) : "  none offered"}`,
+        `  ${offered.length ? cell(offered.filter((v) => v.bylineRight).length, offered.length, 5) : "  none offered"}` +
+        /* Over EVERY sample, not over the ones that offered a list: an author
+           list refused by the provenance check is the byline falling back, and
+           that is a miss this column exists to count (plan 260929d). */
+        `  ${cell(mine.filter((v) => v.namesRight).length, mine.length, 5)}` +
+        `  ${cell(mine.filter((v) => v.affiliationsRight).length, mine.length, 5)}`,
     );
   }
 

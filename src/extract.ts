@@ -44,10 +44,10 @@ import {
 } from "./protect.js";
 /* The namespace and its scrub — src/reserved.ts is the only file allowed to
    name one of these attributes. See `stampSourceIds`. */
-import { chooseByline, metaAuthors } from "./meta-authors.js";
+import { authorsForByline, chooseByline, metaAuthors } from "./meta-authors.js";
 import { RESERVED_ATTRS, scrubReserved } from "./reserved.js";
 import { sanitizeHtml } from "./sanitize.js";
-import type { Meta } from "./types.js";
+import type { Author, Meta } from "./types.js";
 
 /**
  * Text going into markup, made text again.
@@ -394,7 +394,7 @@ export function readArticle(
    * Readability — src/meta-authors.ts. Kept apart from `article` so an eval
    * asking what Readability said still gets what Readability said.
    */
-  authors: string[] | null;
+  authors: Author[] | null;
   refusal: TooLittleTextToRead | null;
   notes: NoteStats;
   callouts: CalloutStats;
@@ -435,7 +435,7 @@ function readingArm(
   protect: ProtectOptions,
 ): ProtectedArm & {
   article: ReturnType<Readability["parse"]>;
-  authors: string[] | null;
+  authors: Author[] | null;
   notes: NoteStats;
   callouts: CalloutStats;
   removed: FurnitureRemovals;
@@ -1215,11 +1215,18 @@ export async function runExtract(opts: {
      page's declared author list replaces it where it has dropped somebody,
      because Readability keeps only the last of a repeated tag —
      src/meta-authors.ts. */
-  const byline = chooseByline(authors, tidyMetaText(article.byline));
+  const byline = chooseByline(authors?.map((a) => a.name) ?? null, tidyMetaText(article.byline));
+  const declared = authorsForByline(authors, byline);
   const meta: Meta = {
     slug,
     title: article.title ?? slug,
     ...(byline ? { byline } : {}),
+    /* The same list, structured: names and the affiliations the page declares
+       for each, for the masthead and the Metadata page to show one at a time.
+       Absent rather than `[]` when the page declares nobody, and absent when
+       the byline names people the list does not — `authorsForByline`.
+       Plan 260929d § 2. */
+    ...(declared ? { authors: declared } : {}),
     ...(article.siteName ? { siteName: article.siteName } : {}),
     ...(article.lang ? { lang: article.lang } : {}),
     /* **Spread rather than assigned**, since 2026-09-07, for the same reason

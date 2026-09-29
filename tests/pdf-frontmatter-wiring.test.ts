@@ -105,6 +105,7 @@ async function run(frontMatter: FrontMatterReader | null) {
   const pass = await pass0(bytes);
   return runPdfExtract({
     frontMatter,
+    authors: null,
     bytes,
     url: "https://example.test/paper.pdf",
     checkpoints: memoryCheckpoints({ slug: "paper", articleId: "article-paper" }),
@@ -205,6 +206,7 @@ describe("the front-matter pass inside the stage", () => {
         checkpoints: memoryCheckpoints({ slug: "paper", articleId: "article-paper" }),
         reader: stubReader(pass.pages),
         signal: controller.signal,
+        authors: null,
         frontMatter: {
           id: "test/aborts-then-succeeds",
           usage: () => ({ input: 0, output: 0 }),
@@ -228,6 +230,7 @@ describe("the front-matter pass inside the stage", () => {
         checkpoints: memoryCheckpoints({ slug: "paper", articleId: "article-paper" }),
         reader: stubReader(pass.pages),
         signal: controller.signal,
+        authors: null,
         frontMatter: {
           id: "test/aborting",
           usage: () => ({ input: 0, output: 0 }),
