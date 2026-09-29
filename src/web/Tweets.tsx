@@ -153,7 +153,7 @@ export function TweetsPanel({
       )}
 
       {ready && thread && (
-        <div className="tw:px-4 tw:pb-4">
+        <div className="tw:min-h-0 tw:flex-1 tw:overflow-y-auto tw:px-4 tw:pb-4">
           {/* The article has moved and the thread has not. Everything below is
               now a claim about a version of the piece that no longer exists, and
               a passage link may land somewhere else. */}

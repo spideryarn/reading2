@@ -1224,8 +1224,12 @@ function liftLegacyTweets(at: Address): Address {
 export function navigate(to: string, options: { replace?: boolean } = {}): void {
   /* The thread's old page is a mode now; an old link goes to the mode rather
      than to *not found*. § `liftedTweetsHref`. */
-  const href = liftedTweetsHref(to) ?? to;
-  if (href === location.pathname + location.search) return;
+  const lifted = liftedTweetsHref(to);
+  const href = lifted ?? to;
+  /* The hash counts only for a lifted link — GPT Sol's code review found an old
+     hashless link could otherwise leave a stale hash behind. Every other
+     navigation keeps the comparison it always had, hash excluded. */
+  if (href === location.pathname + location.search + (lifted === null ? "" : location.hash)) return;
   // nuqs's patched pushState/replaceState notices the new query string and
   // updates every useQueryState from it, so navigation and view state stay in
   // step without us telling it anything.
@@ -1734,6 +1738,7 @@ export function useRoute(): Route {
      reaches here without passing `settleAddress` or `navigate()`. Rewritten in
      place, and parsed as where it is going meanwhile, so the frame before the
      rewrite shows the article rather than *not found*. § `liftedTweetsHref`. */
+  // biome-ignore lint/correctness/useExhaustiveDependencies: pathname is the subscribed signal; the effect must rewrite the complete address as it stands when the effect runs.
   useEffect(() => {
     const lifted = liftedTweetsHref(`${location.pathname}${location.search}${location.hash}`);
     if (lifted !== null) history.replaceState(history.state, "", lifted);

@@ -423,9 +423,9 @@ describe("lifting the old Tweets address", () => {
        touches are posed — which also lets the test read exactly what was
        written to history, rather than trusting a URL jsdom resolved. */
     const written: string[] = [];
-    function pose(pathname: string, search = ""): void {
+    function pose(pathname: string, search = "", hash = ""): void {
       written.length = 0;
-      vi.stubGlobal("location", { pathname, search, hash: "" });
+      vi.stubGlobal("location", { pathname, search, hash });
       vi.stubGlobal("history", {
         pushState: (_s: unknown, _t: string, href: string) => written.push(`push ${href}`),
         replaceState: (_s: unknown, _t: string, href: string) => written.push(`replace ${href}`),
@@ -454,6 +454,15 @@ describe("lifting the old Tweets address", () => {
       pose("/read/x", "?mode=tweets");
       navigate("/read/x/tweets");
       expect(written).toEqual([]);
+    });
+
+    it("clears a hash when the old link does not carry it", () => {
+      /* A hash is part of the destination. Comparing only path and search made
+         this look like the same address after the legacy link was lifted, so
+         the hash from the page being left survived the navigation. */
+      pose("/read/x", "?mode=tweets", "#old-section");
+      navigate("/read/x/tweets");
+      expect(written).toEqual(["push /read/x?mode=tweets"]);
     });
 
     it("the positive control: an ordinary address goes through as written", () => {

@@ -272,6 +272,18 @@ describe("the Tweets band, pressed in the reading view's bar", () => {
     expect(host.textContent).toContain("1 post ·");
     expect(posts).toHaveLength(0);
   });
+
+  it("keeps a populated thread scrollable inside the fixed-height band", async () => {
+    threadStatus = 200;
+    await openAt(`/read/${SLUG}?mode=tweets`);
+
+    const list = host.querySelector(".mode-band.tweets ol");
+    const scroll = list?.parentElement;
+    expect(scroll).toBeTruthy();
+    expect(scroll?.classList.contains("tw:flex-1")).toBe(true);
+    expect(scroll?.classList.contains("tw:min-h-0")).toBe(true);
+    expect(scroll?.classList.contains("tw:overflow-y-auto")).toBe(true);
+  });
 });
 
 describe("the Tweets band, arrived in without a press", () => {
