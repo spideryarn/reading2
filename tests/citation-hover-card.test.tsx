@@ -34,6 +34,7 @@
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { CITE_NOT_READ, CITE_PAGE_FOUND, CITE_WHY_LABEL } from "../src/web/CitationsPanel.js";
 import { ProseHoverCard } from "../src/web/ProseHoverCard.js";
 import { annotateHtml, citeMarks, termMarks } from "../src/web/annotate.js";
 import { buildNoteIndex } from "../src/web/notes-view.js";
@@ -383,5 +384,34 @@ describe("resting on a citation", () => {
     row.innerHTML = `<p>A claim <mark class="cite" data-cite="spya-zzzzzz">(Nobody 1999)</mark> here.</p>`;
     hover(row.querySelector("mark.cite") as HTMLElement);
     expect(card()).toBe(null);
+  });
+});
+
+/* Plan 260929g stage 1: the card says what the band says about whether we read
+   the work, from the same strings, so the two surfaces cannot drift. */
+describe("what the card says we have read", () => {
+  const read = () => card()?.querySelector(".prose-card-cite-read")?.textContent;
+
+  it("says we have not read the work, and labels why as the article's", () => {
+    paint();
+    hover(cite(0));
+    expect(read()).toBe(CITE_NOT_READ);
+    expect(card()?.querySelector(".prose-card-part-why .prose-card-label")?.textContent).toBe(CITE_WHY_LABEL);
+    /* A searched row too: a Scholar search is not the work either. */
+    hover(cite(1));
+    expect(read()).toBe(CITE_NOT_READ);
+  });
+
+  it("after Find it, says only that a page matching the title was found", () => {
+    const found: CitedWork = {
+      ...KAPLAN,
+      url: "https://arxiv.org/abs/2001.08361",
+      linkFrom: "web",
+      found: { title: "Scaling Laws", host: "arxiv.org", searches: 1, model: "test", at: "2026-09-29T09:00:00.000Z" },
+    };
+    paint([TULVING, found, BROADBENT]);
+    hover(cite(1));
+    expect(read()).toBe(CITE_PAGE_FOUND);
+    expect(read()).not.toMatch(/verif|confirm|from the (paper|work)/i);
   });
 });
