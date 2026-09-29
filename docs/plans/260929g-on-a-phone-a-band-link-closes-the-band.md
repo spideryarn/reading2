@@ -1,6 +1,6 @@
 # On a phone, a link in a band closes the band
 
-Status: planned, 2026-09-29. Follow-on to
+Status: **built**, on `dev` 2026-09-29, not deployed. Follow-on to
 [260929f](260929f-tweets-become-a-mode-with-a-wide-band-and-block-links.md), whose browser check
 found it.
 
@@ -81,6 +81,25 @@ way back, and the Dock's mode buttons do not say that the band is merely hidden.
 5. **The herald is not drawn while the band is away.**
 6. **No × on the pill**, so the way back is always on screen; the pill keeps the `.return-chip`
    class the Dock strip's spacing reads.
+
+## As built
+
+- **GPT Sol's code review**
+  ([…-code-review-sol.md](260929g-on-a-phone-a-band-link-closes-the-band-code-review-sol.md)) fixed
+  two focus defects itself, each red-first: Trajectory's own `onAway` path skipped the focus
+  handoff (now shared, `rememberBandFocus`), and focus was restored on `bandAway` rather than on the
+  band actually being hidden, so widening the window lost it. It found no in-band jump that fires
+  from a mount or a restore other than Trajectory's.
+- **Browser check** at 390×844 and 1440×900 (Sonnet, Playwright, "How to Do Great Work"; shots in
+  [260929g-shots/](260929g-shots/)): Summary, Structure, Search and a Diagram node each stepped the
+  band aside with the paragraph flashing and "↩ back to ⟨mode⟩" showing; the pill and the Dock
+  button each brought the band back as it was — Summary's scroll position and Search's unsent query
+  kept; Trajectory stayed open on opening; Diagram's step buttons did not hide it; nothing hid at
+  1440. Tweets, Quotes and FAQ were not exercised (nothing generated on that article; they share the
+  same `bandJump` and the whole-App test covers the rule).
+- **Noticed, not changed:** once the band is back, the *back to ⟨section⟩* chip from the jump shows
+  again — that is the existing jump-origin chip doing its job. The pill shares its translucent
+  look over the prose.
 
 ## Stages
 
