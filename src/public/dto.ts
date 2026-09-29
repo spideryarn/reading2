@@ -70,6 +70,8 @@ import type {
   SearchRun,
   Timeline,
   TimelineEvent,
+  Trajectory,
+  TrajectoryStop,
   TimelineOccurrence,
   Tree,
   TreeNode,
@@ -89,6 +91,7 @@ import type {
   PublicSearchRun,
   PublicSketch,
   PublicTimeline,
+  PublicTrajectory,
   PublicTweets,
 } from "../public-types.js";
 import { publicCitationUrl, publicSourceUrl } from "../urls.js";
@@ -432,6 +435,30 @@ function publicTimeline(timeline: Timeline): PublicTimeline {
 }
 
 /**
+ * **The Trajectory route, rebuilt stop by stop** — since 2026-09-29
+ * (SPIDERYARN-READING2-56).
+ *
+ * Four fields of a stop and `offered`, and nothing else: `profileHash` is
+ * who the route was planned for and never crosses, and the rest of the
+ * document is pipeline provenance. `cue` is optional on a stored stop (routes
+ * before `trajectory/5` have none), so it goes through `opt`.
+ * src/public-types.ts § `PublicTrajectory` is the argument for each.
+ */
+function publicTrajectory(trajectory: Trajectory): PublicTrajectory {
+  return {
+    stops: trajectory.stops.map(
+      (stop): TrajectoryStop => ({
+        quoteId: stop.quoteId,
+        depth: stop.depth,
+        role: stop.role,
+        ...opt(stop, "cue"),
+      }),
+    ),
+    offered: trajectory.offered,
+  };
+}
+
+/**
  * The owner's comments, rebuilt comment by comment and citation by citation.
  *
  * **The filtering is not here**, and that is deliberate rather than an
@@ -629,6 +656,7 @@ export function publicArticle(row: {
   quotes: Quotes | null;
   tweets: TweetThread | null;
   timeline: Timeline | null;
+  trajectory: Trajectory | null;
   comments: readonly Comment[];
   searches: readonly (SearchRun & { stale: boolean })[];
   sketch: Sketch | null;
@@ -675,6 +703,7 @@ export function publicArticle(row: {
     ...(row.quotes !== null ? { quotes: publicQuotes(row.quotes) } : {}),
     ...(row.tweets !== null ? { tweets: publicTweets(row.tweets) } : {}),
     ...(row.timeline !== null ? { timeline: publicTimeline(row.timeline) } : {}),
+    ...(row.trajectory !== null ? { trajectory: publicTrajectory(row.trajectory) } : {}),
     ...(row.sketch !== null ? { sketch: publicSketch(row.sketch) } : {}),
     /* **A required key, so leaving this line out is a type error** — unlike the
        artefacts above it, where an absent key is the meaning. An article with

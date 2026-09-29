@@ -2179,6 +2179,14 @@ export interface PublicArtefacts {
    * docs/project/security-map.md § the hazard this section is really about.
    */
   sketch: boolean;
+  /**
+   * **The eighth, since 2026-09-29** — a stored Trajectory route. It was
+   * `owners-only` for the cost of *planning* one, which a visitor was never
+   * going to pay; reading one is a column on the row the public read already
+   * fetches. SPIDERYARN-READING2-56,
+   * docs/plans/260929c-a-visitor-sees-every-stored-mode-on-a-public-article.md.
+   */
+  trajectory: boolean;
 }
 
 export interface ArticleSharing extends VisibilityState {

@@ -161,6 +161,7 @@ async function visitor(meta: Partial<Meta>) {
           quotes: false,
           timeline: false,
           sketch: false,
+          trajectory: false,
         },
         signedIn: false,
         /* This file is about where the piece came from; the session is beside

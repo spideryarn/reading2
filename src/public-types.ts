@@ -70,6 +70,7 @@ import type {
   QuoteDrops,
   SearchHit,
   TimelineEvent,
+  TrajectoryStop,
   Tree,
   Tweet,
 } from "./types.js";
@@ -297,6 +298,7 @@ export interface PublicArtefactSet {
   quotes?: PublicQuotes;
   tweets?: PublicTweets;
   timeline?: PublicTimeline;
+  trajectory?: PublicTrajectory;
   sketch?: PublicSketch;
 }
 
@@ -408,6 +410,39 @@ export interface PublicTweets {
 export interface PublicTimeline {
   /** In the order they are to be shown. **Never re-sorted by a reader.** */
   events: TimelineEvent[];
+}
+
+/**
+ * **The Trajectory route, as a visitor gets it** — since 2026-09-29, when a
+ * signed-out reader of a public article with a stored route was shown the
+ * owners-only boundary instead (SPIDERYARN-READING2-56). Reading a route costs
+ * nothing; only planning one spends, and nothing in a visitor's client can.
+ * docs/plans/260929c-a-visitor-sees-every-stored-mode-on-a-public-article.md.
+ *
+ * **The stops cross field by field** — `{ quoteId, depth, role, cue }`, all of
+ * them about the article: a quote id the payload's `quotes` resolves, a pass,
+ * and the model's one line on what to look for there.
+ *
+ * **`offered` crosses** for `PublicQuotes.discarded`'s reason: the panel prints
+ * it at the deepest pass (*"stops at 12 of the 15 quotes offered to this
+ * route"*), so a visitor is shown it and stripping it would make that sentence
+ * true for owners only.
+ *
+ * **What does not cross**: `profileHash`, above all — it is *who the route was
+ * planned for*, a fact about a person, and the same rule keeps it off
+ * `PublicSketch`. A visitor must not learn from the payload whether the owner
+ * has a profile. Then the pipeline facts as everywhere in this file: `version`,
+ * `generator`, `slug`, `sourceHash`, `visible`, `dropped`, `generatedAt`,
+ * `elapsedMs`.
+ *
+ * The cues *may* have been shaped by the owner's profile and their *why I'm
+ * reading this*, exactly as the glossary, ideas, quotes, tweets and sketch may;
+ * `PROFILE_RULES` (src/profile.ts) forbids a sentence about the reader, and
+ * /features/public-readable-sharing tells the author so.
+ */
+export interface PublicTrajectory {
+  stops: TrajectoryStop[];
+  offered: number;
 }
 
 /**

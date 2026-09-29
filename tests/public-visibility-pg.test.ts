@@ -54,7 +54,7 @@ import { pgPublicReader } from "../src/store/public-reader.js";
 import { documentTitle } from "../src/title-text.js";
 import { safePublicCanonical } from "../src/urls.js";
 import { currentOwnerId, type OwnerId, runInRequest } from "../src/owner.js";
-import type { Glossary, Ideas, TweetThread } from "../src/types.js";
+import type { Glossary, Ideas, Trajectory, TweetThread } from "../src/types.js";
 
 loadEnvLocal();
 
@@ -101,6 +101,8 @@ const PRIVATE_PROFILE_HASH = "profilehash-nobodyelsesbusiness";
 const PUBLIC_TERM = "Integrated information theory";
 const PUBLIC_IDEA = "You cannot theorise about what you have no way to measure.";
 const PUBLIC_TWEET = "The first post of the thread.";
+/** A stored Trajectory stop's cue — on the wire once published, never before. */
+const PUBLIC_CUE = "Look for what the measurement is being asked to carry.";
 
 /* ── The owner's own work, which crosses since 2026-09-04 ────────────────────
    Four strings a visitor must see and six rows they must not. Real prose in
@@ -153,6 +155,7 @@ const ARTEFACTS: {
   glossary: Glossary;
   ideas: Ideas;
   tweets: TweetThread;
+  trajectory: Trajectory;
 } = {
   glossary: {
     version: "glossary/2",
@@ -209,6 +212,32 @@ const ARTEFACTS: {
     profileHash: PRIVATE_PROFILE_HASH,
     limit: 280,
     tweets: [{ text: PUBLIC_TWEET, chars: 29 }],
+    generatedAt: "2026-02-02T00:00:00.000Z",
+    elapsedMs: 1,
+  },
+  /* **The stored route, since 2026-09-29** (SPIDERYARN-READING2-56), with the
+     profile hash planted like every artefact above: it is who the route was
+     planned for, and `publicTrajectory` must drop it. The quote id need not
+     resolve — the projection does not look it up. */
+  trajectory: {
+    version: "trajectory/7",
+    generator: "test",
+    slug: SLUG,
+    sourceHash: "abc",
+    profileHash: PRIVATE_PROFILE_HASH,
+    stops: [{ quoteId: "spya-wpvvqq", depth: 1, role: null, cue: PUBLIC_CUE }],
+    visible: [1, 1, 1],
+    offered: 4,
+    dropped: {
+      collapsed: 0,
+      unknownQuote: 0,
+      duplicate: 0,
+      sameBlock: 0,
+      malformed: 0,
+      badRole: 0,
+      badCue: 0,
+      overCap: 0,
+    },
     generatedAt: "2026-02-02T00:00:00.000Z",
     elapsedMs: 1,
   },
@@ -647,7 +676,9 @@ describe("sharing one article", { timeout: 60_000 }, () => {
        the visibility predicate would put a private article's glossary,
        ideas and thread at a public URL, and the assertions further
        down would not notice, because they all run after publication. */
-    for (const canary of [PUBLIC_TERM, PUBLIC_IDEA, PUBLIC_TWEET]) {
+    /* The route's cue joined 2026-09-29: a private article's stored
+       Trajectory is on this row too, and must not be readable either. */
+    for (const canary of [PUBLIC_TERM, PUBLIC_IDEA, PUBLIC_TWEET, PUBLIC_CUE]) {
       expect(r.text, canary).not.toContain(canary);
     }
   });
@@ -880,6 +911,27 @@ describe("sharing one article", { timeout: 60_000 }, () => {
     expect(body.ideas?.ideas[0]?.statement).toBe(PUBLIC_IDEA);
     expect(body.tweets?.tweets[0]?.text).toBe(PUBLIC_TWEET);
     expect(body.tweets?.limit).toBe(280);
+  });
+
+  /**
+   * **The stored Trajectory route, since 2026-09-29** — the bug was a visitor
+   * to a public article with a built route being refused it
+   * (SPIDERYARN-READING2-56). The stops and `offered` cross; who the route was
+   * planned for does not, and neither does the pipeline around it. Read off a
+   * real row, because the question is whether the public `select` fetches the
+   * column at all — a DTO test only ever sees what it was handed.
+   */
+  it("serves the stored trajectory, and not who it was planned for", async () => {
+    const r = await call("GET", `/api/public/article/${SLUG}`);
+    expect(r.status).toBe(200);
+    const body = r.body as { trajectory?: Record<string, unknown> };
+    expect(body.trajectory).toEqual({
+      stops: [{ quoteId: "spya-wpvvqq", depth: 1, role: null, cue: PUBLIC_CUE }],
+      offered: 4,
+    });
+    expect(r.text).toContain(PUBLIC_CUE);
+    expect(JSON.stringify(body.trajectory)).not.toContain("profileHash");
+    expect(r.text).not.toContain(PRIVATE_PROFILE_HASH);
   });
 
   /**
@@ -1134,13 +1186,13 @@ describe("sharing one article", { timeout: 60_000 }, () => {
          The order is `STEP_ORDER`'s, which is what the store walks.
          The case below plants a mixed set, and asserts the empty reading too,
          so this is not the only shape this field is ever seen in. */
-      personalised: ["tweets", "glossary", "ideas"],
+      personalised: ["tweets", "glossary", "ideas", "trajectory"],
       /**
        * **What a shared link would carry, against a real Postgres** — and the
        * only place that claim is checked end to end.
        *
        * `shareableArtefacts` (src/store/pg.ts) reads presence off the revision
-       * row, and the fixture plants three artefacts and not the other two — so
+       * row, and the fixture plants four artefacts and not the rest — so
        * this asymmetry is the assertion. A unit test cannot make it: the whole
        * question is whether the columns the projection publishes are the
        * columns this field reports, and only a row answers that.
@@ -1164,6 +1216,8 @@ describe("sharing one article", { timeout: 60_000 }, () => {
         quotes: false,
         timeline: false,
         sketch: false,
+        /* Planted since 2026-09-29, so present. */
+        trajectory: true,
       },
     });
   });
@@ -1231,7 +1285,7 @@ describe("sharing one article", { timeout: 60_000 }, () => {
        canary, so it is asserted deliberately here instead of being lost. */
     await db
       .update(articleRevisions)
-      .set({ glossary: null, ideas: null, tweets: null })
+      .set({ glossary: null, ideas: null, tweets: null, trajectory: null })
       .where(eq(articleRevisions.id, REVISION_ID));
     const none = await call("GET", `/api/metadata/${SLUG}`, { as: OWNER });
     expect((none.body.sharing as { personalised: string[] }).personalised).toEqual([]);
@@ -1268,8 +1322,10 @@ describe("sharing one article", { timeout: 60_000 }, () => {
         },
         /* Nulled with the rest: this case's whole claim is about which
            artefacts are listed, and a thread left over from the fixture — which
-           carries a `profileHash` — would put another name in the list. */
+           carries a `profileHash` — would put another name in the list. The
+           route, since 2026-09-29, for the same reason. */
         tweets: null,
+        trajectory: null,
       })
       .where(eq(articleRevisions.id, REVISION_ID));
     try {

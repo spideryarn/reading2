@@ -69,6 +69,7 @@ const NOTHING_BUILT: PublicArtefacts = {
   quotes: false,
   timeline: false,
   sketch: false,
+  trajectory: false,
 };
 const EVERYTHING_BUILT: PublicArtefacts = {
   arc: true,
@@ -78,6 +79,7 @@ const EVERYTHING_BUILT: PublicArtefacts = {
   quotes: true,
   timeline: true,
   sketch: true,
+  trajectory: true,
 };
 
 /**
@@ -108,6 +110,7 @@ function only(built: keyof PublicArtefacts): PublicArtefacts {
     ideas: built === "ideas",
     timeline: built === "timeline",
     sketch: built === "sketch",
+    trajectory: built === "trajectory",
   };
 }
 
@@ -304,13 +307,16 @@ describe("what a visitor is told, mode by mode", () => {
        src/web/visitor.ts § POLICY.citations. */
     /* `faq` joined on 2026-09-16, owners-only for the same reason —
        src/web/visitor.ts § POLICY.faq. */
-    /* `trajectory` joined on 2026-09-28, owners-only for the same reason —
-       src/web/visitor.ts § POLICY.trajectory. */
+    /* `trajectory` joined on 2026-09-28, owners-only for the same reason, and
+       **left on 2026-09-29** the way `timeline` did: a stored route is on the
+       public payload now, with a `PublicArtefacts` flag to drop out on
+       (SPIDERYARN-READING2-56, src/web/visitor.ts § POLICY.trajectory,
+       docs/plans/260929c-a-visitor-sees-every-stored-mode-on-a-public-article.md). */
     expect([...markedModes(EVERYTHING_BUILT).keys()].sort()).toEqual(
-      ["chat", "citations", "debate", "faq", "referee", "remember", "trajectory"].sort(),
+      ["chat", "citations", "debate", "faq", "referee", "remember"].sort(),
     );
     /* And one at a time, so a mode reading the wrong flag shows up. */
-    for (const built of ["glossary", "ideas", "quotes", "timeline"] as const) {
+    for (const built of ["glossary", "ideas", "quotes", "timeline", "trajectory"] as const) {
       expect([...markedModes(only(built)).keys()], built).not.toContain(built);
     }
   });
@@ -331,6 +337,9 @@ describe("what a visitor is told, mode by mode", () => {
         mode === "ideas" ||
         mode === "quotes" ||
         mode === "timeline" ||
+        /* An artefact mode since 2026-09-29, like the timeline: the stored
+           route rides on the payload (SPIDERYARN-READING2-56). */
+        mode === "trajectory" ||
         /* Free since 2026-09-04: the picture is drawn from the tree in the
            payload, and the panel's visitor arm buys nothing.
            docs/plans/260904c-more-modes-on-a-shared-link.md § Stage 2. */
@@ -445,6 +454,7 @@ describe("what the payload says it has", () => {
       quotes: false,
       timeline: false,
       sketch: false,
+      trajectory: false,
     });
     expect(
       artefactsIn({

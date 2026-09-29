@@ -73,6 +73,7 @@ const AVAILABLE: PublicArtefacts = {
   quotes: true,
   timeline: true,
   sketch: true,
+  trajectory: true,
 };
 
 const PRIVATE: ArticleSharing = {

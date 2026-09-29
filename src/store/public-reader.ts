@@ -324,8 +324,15 @@ const PUBLIC_PROJECTIONS = {
        public path**: the value arrives `undefined`, the reader hands `null` to
        the projection, the key is absent, and the article reports itself as
        never having had a timeline. Nothing goes red anywhere.
-       tests/public-projection-columns.test.ts is what would. */
+       tests/public-reads.test.ts § the artefacts on the row is what would. */
     timeline: articleRevisions.timeline,
+    /* **The eighth, 2026-09-29: the Trajectory route**, another `jsonb` column
+       on this row. It was withheld for the cost of *planning* one, which a
+       visitor never pays; reading it costs nothing (SPIDERYARN-READING2-56).
+       `profileHash` comes across inside the document and is dropped by
+       `publicTrajectory` in ../public/dto.ts.
+       docs/plans/260929c-a-visitor-sees-every-stored-mode-on-a-public-article.md. */
+    trajectory: articleRevisions.trajectory,
     /* **The seventh, and the one that cost real money to make.** A visitor sees
        the Sketch the owner already paid for; nothing on their side can start
        another. docs/project/security-map.md § the hazard this section is really
@@ -751,6 +758,7 @@ export const pgPublicReader: PublicArticleReader = {
         quotes: found.revision.quotes,
         tweets: found.revision.tweets,
         timeline: found.revision.timeline,
+        trajectory: found.revision.trajectory,
         sketch: found.revision.sketch,
         navLabelStatus: found.revision.navLabelStatus,
         /* `null` columns become absent keys, exactly as the artefacts do — the

@@ -38,6 +38,7 @@ import type {
   Quotes,
   NodeId,
   Timeline,
+  Trajectory,
   Tree,
   TreeNode,
   TweetThread,
@@ -57,6 +58,7 @@ const NO_ARTEFACTS = {
   quotes: null,
   tweets: null,
   timeline: null,
+  trajectory: null,
   /* **An empty array, not `null`** — comments are not an artefact, so there is
      no "nobody built one" state for them to be in. src/public-types.ts
      § PublicArticle.comments. */
@@ -954,6 +956,39 @@ describe("the artefacts a shared link carries", () => {
   };
 
   /**
+   * **A stored route with every field set**, `profileHash` above all: it is who
+   * the route was planned for, and an assertion about a route with a `null`
+   * hash would pass a projection that spread the document. One stop carries a
+   * `cue` and one does not (routes before `trajectory/5`), so `opt` is
+   * exercised both ways. src/public-types.ts § `PublicTrajectory`.
+   */
+  const TRAJECTORY: Trajectory = {
+    version: "trajectory/7",
+    generator: "some-model",
+    slug: "noema",
+    sourceHash: "abc123",
+    profileHash: "profile-of-a-person",
+    stops: [
+      { quoteId: "spya-quote1", depth: 1, role: null, cue: "Look for what the first example costs the claim." },
+      { quoteId: "spya-quote2", depth: 2, role: "Names the trouble" },
+    ],
+    visible: [1, 2, 2],
+    offered: 12,
+    dropped: {
+      collapsed: 1,
+      unknownQuote: 2,
+      duplicate: 0,
+      sameBlock: 1,
+      malformed: 0,
+      badRole: 0,
+      badCue: 1,
+      overCap: 0,
+    },
+    generatedAt: "2026-09-29T10:00:00.000Z",
+    elapsedMs: 12_000,
+  };
+
+  /**
    * Everything `publicArticle` needs that is not the thing under test, so the
    * comment cases below can name only their comments.
    */
@@ -984,6 +1019,7 @@ describe("the artefacts a shared link carries", () => {
     quotes: QUOTES,
     tweets: THREAD,
     timeline: TIMELINE,
+    trajectory: TRAJECTORY,
     comments: [],
     searches: [],
     sketch: null,
@@ -1382,6 +1418,30 @@ describe("the artefacts a shared link carries", () => {
   });
 
   /**
+   * **The route's stops and `offered`, and nothing else** — not who it was
+   * planned for (`profileHash`), and not the pipeline's counts and timings.
+   * Asserted twice: the key set would pass a renamed `profileHash`, and the
+   * string search would not.
+   */
+  it("carries the route's stops and the offered count, and not who it was planned for", () => {
+    expect(pathsUnder("trajectory")).toEqual(
+      ["offered", "stops", "stops[].cue", "stops[].depth", "stops[].quoteId", "stops[].role"].sort(),
+    );
+    expect(built.trajectory).toEqual({
+      stops: [
+        { quoteId: "spya-quote1", depth: 1, role: null, cue: "Look for what the first example costs the claim." },
+        { quoteId: "spya-quote2", depth: 2, role: "Names the trouble" },
+      ],
+      offered: 12,
+    });
+    /* The cue-less stop crosses with no `cue` key, not an `undefined` one. */
+    expect("cue" in (built.trajectory?.stops[1] ?? {})).toBe(false);
+    const json = JSON.stringify(built);
+    expect(json).not.toContain("profileHash");
+    expect(json).not.toContain("profile-of-a-person");
+  });
+
+  /**
    * **And the artefacts are really there**, which every assertion above passes
    * without. A DTO returning `{}` for all four satisfies every key set and
    * every "does not contain", and it is the failure this repo keeps writing up:
@@ -1438,6 +1498,7 @@ describe("the artefacts a shared link carries", () => {
       quotes: null,
       tweets: null,
       timeline: null,
+      trajectory: null,
       comments: [],
       searches: [],
       sketch: null,
@@ -1466,7 +1527,7 @@ describe("the artefacts a shared link carries", () => {
       assets: null,
       ...NO_ARTEFACTS,
     });
-    for (const key of ["glossary", "ideas", "tweets"]) {
+    for (const key of ["glossary", "ideas", "tweets", "trajectory"]) {
       expect(key in bare, key).toBe(false);
     }
   });

@@ -41,11 +41,13 @@ import {
   armTrajectoryOpening,
   firstTrajectoryArrival,
   TrajectoryBand,
+  VisitorTrajectoryBand,
   type TrajectoryArrival,
   type TrajectoryControl,
 } from "../modes/trajectory/TrajectoryMode.js";
 import { TrajectoryDoor } from "../TrajectoryPanel.js";
 import type { CardTarget } from "../stop-card.js";
+import type { Quote } from "../../types.js";
 import { GlossaryBand, VisitorGlossaryBand } from "../modes/glossary/GlossaryMode.js";
 import { SearchBand, VisitorSearchBand } from "../modes/search/SearchMode.js";
 import { StructureBand } from "../modes/structure/StructureMode.js";
@@ -137,6 +139,9 @@ import { FEEDBACK_BLOCK_IDS, setFeedbackArticleContext } from "../feedback-conte
 import { useWindowWidth, useRootFontPx } from "./measure.js";
 import { useReadingPosition } from "./useReadingPosition.js";
 import { proseFound, selectPassages } from "./passages.js";
+
+/** A module constant for `NO_QUOTES`'s reason: the visitor's Trajectory band keys memos on it by identity. */
+const NO_PUBLIC_QUOTES: Quote[] = [];
 
 /**
  * The owner's `marked` map: nothing is marked, and it is one object for the
@@ -1958,13 +1963,43 @@ export function Reader({
          is a jump, not a selection. docs/plans/260916d-faq-mode.md. */
       case "faq":
         return owner ? <FaqBand slug={slug} onJump={jumpTo} /> : null;
-      /* **The owner alone** — `POLICY.trajectory` is `owners-only` for v1. A
-         passage producer (the current stop) and a controller (← / → and the
-         door after the stop's block), both published up here and both cleared
-         when the band unmounts.
-         docs/plans/260928a-trajectory-mode-skim-a-paper-at-increasing-depth.md. */
+      /* **The owner/visitor pair, since 2026-09-29.** A passage producer (the
+         current stop) and a controller (← / → and the door after the stop's
+         block), both published up here and both cleared when the band
+         unmounts — for either band, since they share `useTrajectoryMode`.
+         docs/plans/260928a-trajectory-mode-skim-a-paper-at-increasing-depth.md.
+
+         The visitor's branch is gated on the route itself, like the timeline's:
+         an absent key means `visitorGap` said `not-built` and the `VisitorBand`
+         is in the slot. It was the owner alone until SPIDERYARN-READING2-56,
+         when a public article's stored route was refused to a signed-out
+         reader. docs/plans/260929c-a-visitor-sees-every-stored-mode-on-a-public-article.md. */
       case "trajectory":
-        return owner ? (
+        if (!owner)
+          return artefacts?.trajectory ? (
+            <VisitorTrajectoryBand
+              route={artefacts.trajectory}
+              quotes={artefacts.quotes?.quotes ?? NO_PUBLIC_QUOTES}
+              glossary={artefacts.glossary}
+              ideas={artefacts.ideas}
+              timeline={artefacts.timeline}
+              blocks={article.blocks}
+              tree={article.tree}
+              quoteMarks={quotes.found}
+              covers={fit.modeW === 0}
+              away={bandAway && fit.modeW === 0}
+              onAway={bandStepsAside}
+              onJump={jumpTo}
+              onFound={setTrajectoryFound}
+              openKey={openTrajectoryKey}
+              onOpenKey={setOpenTrajectoryKey}
+              onControl={setTrajectoryControl}
+              onOpen={openFromStopCard}
+              canOpen={canOpenFromStopCard}
+              arrival={trajectoryArrival.current}
+            />
+          ) : null;
+        return (
           <TrajectoryBand
             slug={slug}
             blocks={article.blocks}
@@ -1984,7 +2019,7 @@ export function Reader({
             canOpen={canOpenFromStopCard}
             arrival={trajectoryArrival.current}
           />
-        ) : null;
+        );
       /* **The owner/visitor pair, since 2026-09-04.** It was the owner alone
          until then, because search is the one mode where the reader's own
          question is the artefact. Greg drew the line at *making* one: a

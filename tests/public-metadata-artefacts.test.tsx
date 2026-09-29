@@ -121,6 +121,7 @@ const NONE: PublicArtefacts = {
   quotes: false,
   timeline: false,
   sketch: false,
+  trajectory: false,
 };
 const ALL: PublicArtefacts = {
   arc: true,
@@ -130,6 +131,7 @@ const ALL: PublicArtefacts = {
   quotes: true,
   timeline: true,
   sketch: true,
+  trajectory: true,
 };
 
 /* The nouns as the list renders them: `NOUN` is written for the middle of a

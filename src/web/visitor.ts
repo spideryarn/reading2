@@ -91,6 +91,7 @@ export const NOUN: Record<keyof PublicArtefacts, string> = {
   quotes: "a set of quotes",
   tweets: "a tweet thread",
   timeline: "a timeline",
+  trajectory: "a trajectory",
   sketch: "a sketch",
 };
 
@@ -329,16 +330,23 @@ const POLICY: Record<Mode, VisitorPolicy> = {
    */
   faq: { kind: "owners-only" },
   /**
-   * **`owners-only` for v1**, FAQ's staging decision: a visitor branch needs a
-   * public projection of the `trajectory` column and a `PublicArtefacts` flag,
-   * and neither is built. The route is also written for the owner's profile,
-   * which is a second reason to think before showing it to a stranger.
-   * docs/plans/260928a-trajectory-mode-skim-a-paper-at-increasing-depth.md.
+   * **An artefact mode since 2026-09-29**, and it was `owners-only` for the
+   * wrong reason. The comment here said *"It spends: one small model pass over
+   * the Quotes"* — true of *planning* a route, and nothing to do with *showing*
+   * one, which is a column on the row the public read already fetches. So a
+   * signed-out reader of a public article whose route had been built was told
+   * it was *"for whoever added this article — asking costs a model call"*.
+   * Greg, SPIDERYARN-READING2-56: *"It's a public article, and the Trajectory
+   * has already been generated, so it should show it."*
    *
-   * It spends: one small model pass over the Quotes — and the Quotes' own pass
-   * first, when there are none.
+   * The visitor gets `VisitorTrajectoryBand`, which mounts no `useTrajectory`
+   * and so can neither read the owner's route nor plan one
+   * (src/web/modes/trajectory/TrajectoryMode.tsx). The route was planned for
+   * the owner, possibly shaped by their profile, on the same terms as the
+   * glossary, ideas and quotes above — and `profileHash` does not cross.
+   * docs/plans/260929c-a-visitor-sees-every-stored-mode-on-a-public-article.md.
    */
-  trajectory: { kind: "owners-only" },
+  trajectory: { kind: "artefact", key: "trajectory" },
 };
 
 /**

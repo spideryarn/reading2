@@ -189,7 +189,7 @@ export function asArticleSharing(value: unknown): ArticleSharing | undefined {
  * (tests/shared-inventory.test.ts) so a sixth artefact cannot be validated into
  * existence by being forgotten.
  */
-export const ARTEFACT_KEYS = ["arc", "tweets", "glossary", "ideas", "quotes", "timeline", "sketch"] as const satisfies
+export const ARTEFACT_KEYS = ["arc", "tweets", "glossary", "ideas", "quotes", "timeline", "sketch", "trajectory"] as const satisfies
   readonly (keyof PublicArtefacts)[];
 
 export function asPublicArtefacts(value: unknown): PublicArtefacts | undefined {
@@ -204,6 +204,7 @@ export function asPublicArtefacts(value: unknown): PublicArtefacts | undefined {
     quotes: row.quotes as boolean,
     timeline: row.timeline as boolean,
     sketch: row.sketch as boolean,
+    trajectory: row.trajectory as boolean,
   };
 }
 

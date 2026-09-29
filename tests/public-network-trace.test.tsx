@@ -166,6 +166,7 @@ const SLUG = "a-piece";
 const PUBLIC_TERM = "Integrated information theory";
 const PUBLIC_IDEA = "Measurement precedes theory";
 const PUBLIC_TWEET = "The first post.";
+const PUBLIC_CUE = "Watch the example carry the claim.";
 
 /**
  * A **PDF** article, because the private source control only mounts for one.
@@ -871,6 +872,12 @@ const BAND_SAYS: Record<Mode, { where: string | null; says: string | null }> = {
      2026-09-04, when the payload grew a flag to be sure with.
      docs/plans/260904c-more-modes-on-a-shared-link.md § Stage 1. */
   timeline: { where: VISITOR_BAND, says: "Nobody has built a timeline for this piece yet" },
+  /* No route on the payload either, so the *nobody built one* sentence — it
+     moved out of the owners-only group below on 2026-09-29, when the payload
+     grew a flag for it, exactly as `timeline` did (SPIDERYARN-READING2-56).
+     The drawn route is "draws a stored trajectory from the payload" below.
+     docs/plans/260929c-a-visitor-sees-every-stored-mode-on-a-public-article.md. */
+  trajectory: { where: VISITOR_BAND, says: "Nobody has built a trajectory for this piece yet" },
   /* **Free since 2026-09-04, and it is the only one here that draws a real
      picture for a visitor.** Force is built from the tree in the payload; the
      panel's three fetching hooks are off and the picker is hidden. The string
@@ -911,8 +918,6 @@ const BAND_SAYS: Record<Mode, { where: string | null; says: string | null }> = {
   citations: { where: VISITOR_BAND, says: "Citations is for whoever added this article" },
   /* Owners-only for v1 — src/web/visitor.ts § POLICY.faq. */
   faq: { where: VISITOR_BAND, says: "FAQ is for whoever added this article" },
-  /* Owners-only for v1 — src/web/visitor.ts § POLICY.trajectory. */
-  trajectory: { where: VISITOR_BAND, says: "Trajectory is for whoever added this article" },
 };
 
 /**
@@ -1153,6 +1158,50 @@ describe("a signed-out browser on a shared document", () => {
        Asserted here rather than left to the sweep, because the sweep runs
        against the fixture that has no quotes and so cannot see a fetch this
        branch alone would make. */
+    expect(trace.map((r) => r.url)).toEqual([`/api/public/article/${SLUG}`]);
+    expect(trace.filter((r) => r.method !== "GET")).toEqual([]);
+  });
+
+  /**
+   * **A stored Trajectory is shown to a visitor, and nothing is spent.**
+   *
+   * SPIDERYARN-READING2-56, Greg, 2026-09-29: a public article whose route had
+   * already been built told a signed-out reader *"Trajectory is for whoever
+   * added this article — asking costs a model call"*. Showing a stored route
+   * asks nothing; only planning one spends. So with a route and its quotes on
+   * the payload, the band draws the route's rows — the quote's own words and
+   * its cue — and the trace stays the one public GET.
+   * docs/plans/260929c-a-visitor-sees-every-stored-mode-on-a-public-article.md.
+   */
+  it("draws a stored trajectory from the payload, asking nothing", async () => {
+    await remount();
+    served = {
+      ...ARTICLE,
+      quotes: {
+        quotes: [
+          { id: "spya-qte001", blockId: "spya-bbbbbb", text: "The first paragraph", importance: 0.9 },
+          { id: "spya-qte002", blockId: "spya-cccccc", text: "an argument made elsewhere", importance: 0.8 },
+        ],
+      },
+      trajectory: {
+        stops: [
+          { quoteId: "spya-qte002", depth: 1, role: null, cue: PUBLIC_CUE },
+          { quoteId: "spya-qte001", depth: 2, role: null, cue: "Where it starts." },
+        ],
+        offered: 2,
+      },
+    };
+    await open("?mode=trajectory");
+
+    const band = host.querySelector(".mode-band");
+    expect(band, "a band is open").not.toBeNull();
+    expect(band?.matches(VISITOR_BAND), "not the owners-only boundary").toBe(false);
+    expect(readable(band as Element)).toContain(PUBLIC_CUE);
+    expect(readable(band as Element)).toContain("an argument made elsewhere");
+    expect(host.textContent).not.toContain("Trajectory is for whoever added this article");
+    /* None of the owner's verbs: no plan, no re-plan, no retry. */
+    expect(host.textContent).not.toContain("Plan it again");
+    expect(host.textContent).not.toContain("Plan the route");
     expect(trace.map((r) => r.url)).toEqual([`/api/public/article/${SLUG}`]);
     expect(trace.filter((r) => r.method !== "GET")).toEqual([]);
   });

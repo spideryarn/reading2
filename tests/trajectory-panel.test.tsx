@@ -402,7 +402,7 @@ const CARD: StopCard = {
 
 async function draw(o: UseTrajectory, v: TrajectoryView) {
   calls.length = 0;
-  await act(async () => root.render(createElement(TrajectoryPanel, { owner: o, view: v, away: false })));
+  await act(async () => root.render(createElement(TrajectoryPanel, { access: { kind: "owner", owner: o }, view: v, away: false })));
 }
 
 const text = (sel: string) => host.querySelector(sel)?.textContent ?? null;

@@ -212,7 +212,12 @@ Then the residue nothing refuses at compile time:
   staleness contract, which is why there is no generic one. *Nothing.*
 - **The put-chain in [`src/store/export.ts`](../../src/store/export.ts)** — one `await put(…)` per
   artefact, and a missing line exports nothing and says nothing. *Nothing.*
-- **`PUBLIC_PROJECTIONS` and the public DTO**, if a visitor may read it:
+- **`PUBLIC_PROJECTIONS` and the public DTO** — and a visitor may read it by default. A mode that
+  stores what it generates shows the stored output to a visitor on a public article, and only
+  *making* it is the owner's; `owners-only` is for a mode whose stored output is the reader's own
+  writing (Chat, Remember, Referee). Four modes took `owners-only` as "a staging decision" and a
+  visitor was refused a Trajectory that had already been paid for —
+  [the postmortem](../postmortems/260929a-one-policy-row-decided-who-may-make-a-mode-and-who-may-see-it.md):
   [`public-reader.ts`](../../src/store/public-reader.ts) and
   [`src/public/dto.ts`](../../src/public/dto.ts).
   *[`tests/store-revision-columns.test.ts`](../../tests/store-revision-columns.test.ts)* pins each

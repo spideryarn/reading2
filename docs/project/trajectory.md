@@ -4,7 +4,7 @@ A mode for going round a piece more than once, a little deeper each time: a hand
 first time round, about a dozen the second, a larger share of the piece the third. The stops need
 not come in the paper's order — the results first, say, and then a quick tour of the methods.
 
-**Status (2026-09-28): built, and out of Experimental** — shown to every owner, still owner-only — the plan is
+**Status (2026-09-29): built, out of Experimental, and a stored route is shown to visitors** — planning one stays owner-only — the plan is
 [260928a](../plans/260928a-trajectory-mode-skim-a-paper-at-increasing-depth.md). This doc is the
 vision; the plan is the build.
 
@@ -304,7 +304,10 @@ chosen, is written below when it lands.
 
 - ~~**Behind the experimental switch, for now**~~ — Greg, 2026-09-28, above; **reversed the same day**:
   *"take Trajectory and Quotes modes out of Experimental features, i.e. into mainstream features."*
-  The button is in every owner's bar; visitors still get the explanatory band
+  The button is in every owner's bar. A visitor to a public article sees a route that has already
+  been planned, from the page's own payload, and cannot plan one — since 2026-09-29, when Greg found
+  the explanatory band refusing a stored route (SPIDERYARN-READING2-56,
+  [260929c](../plans/260929c-a-visitor-sees-every-stored-mode-on-a-public-article.md))
   ([experimental-features.md](experimental-features.md)).
 - **v2 is the scrapbook, not web search** — Greg, 2026-09-28, above.
 

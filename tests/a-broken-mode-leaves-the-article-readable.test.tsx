@@ -1446,6 +1446,7 @@ const NOTHING_AVAILABLE: PublicArtefacts = {
   tweets: false,
   timeline: false,
   sketch: false,
+  trajectory: false,
 };
 
 /**
