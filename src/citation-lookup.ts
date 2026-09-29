@@ -19,10 +19,14 @@
  *   show a thing says nothing about the full paper.
  * - **`paperDoes` goes only with its verified quote**, or it is dropped.
  * - **The result must be this work (R-1)**, more strictly than *Find it*'s
- *   link rule (`pageNamesTitle`): a row the article linked by DOI or arXiv id
- *   needs that id in the result's URL; any other row needs the work's whole
- *   title inside the result's own title, plus the first author's surname or
- *   the year where the list has them.
+ *   link rule (`pageNamesTitle`): a row the article linked by arXiv id needs
+ *   that id in the result's URL; one linked by DOI needs the DOI in the URL,
+ *   or in the extract *and* a result title that names the work; any other row
+ *   needs a title that names the work — its whole title, or a cut-short one
+ *   covering enough of it (`titleNamesWork`) — plus the first author's surname
+ *   or the year where the list has them.
+ * - **A quote or `paperDoes` past its cap is dropped on its own**; only an
+ *   unreadable verdict drops the whole reading (R-5).
  * - **No extract is its own state** (R-2), never `not-in-extract`.
  * - **A lookup is attached only to the list it was made against (R-4)**: the
  *   context fingerprint covers every capped string the model was sent, the
@@ -66,7 +70,7 @@ import type {
  * user turn, or any rule in this file changes what a lookup would say** — it is
  * inside the context fingerprint, so a bump detaches every stored lookup.
  */
-export const CITATION_LOOKUP_VERSION = "citation-lookup/2";
+export const CITATION_LOOKUP_VERSION = "citation-lookup/3";
 
 /** R-7: the citing passage sent, in characters. */
 export const PASSAGE_CAP = 1_200;
@@ -209,6 +213,34 @@ function yearOf(year: string | null): string | null {
   return year?.match(/\b(1[5-9]|20)\d{2}\b/)?.[0] ?? null;
 }
 
+/** A result title the search engine cut short, ending "..." or "…". */
+const ELLIPSIS_END = /\s*(?:\.{3}|…)\s*$/u;
+/** A cut title must still be this many tokens of the work's title… */
+const MIN_TRUNCATED_TOKENS = 5;
+/** …and at least this share of them. */
+const MIN_TRUNCATED_SHARE = 0.5;
+
+/**
+ * **Does the result's title name the work?** The work's whole title as a
+ * token run inside the result's. A title the engine cut short ("Conclusions
+ * from the Functional Reconstruction of ...") cannot hold the whole title, so
+ * one ending in an ellipsis passes instead when what is left is a run of the
+ * work's title at least `MIN_TRUNCATED_TOKENS` long and at least half of it —
+ * "Scaling laws for ..." names too many papers to count.
+ */
+function titleNamesWork(pageTitle: string | undefined, workTitle: string): boolean {
+  if (!pageTitle) return false;
+  const want = tokens(workTitle);
+  if (containsRun(tokens(pageTitle), want)) return true;
+  if (!ELLIPSIS_END.test(pageTitle)) return false;
+  const kept = tokens(pageTitle.replace(ELLIPSIS_END, ""));
+  return (
+    kept.length >= MIN_TRUNCATED_TOKENS &&
+    kept.length >= want.length * MIN_TRUNCATED_SHARE &&
+    containsRun(want, kept)
+  );
+}
+
 /**
  * **Is this result the work? (R-1)** Stricter than `pageNamesTitle`, which
  * stays *Find it*'s rule for choosing a link.
@@ -216,17 +248,27 @@ function yearOf(year: string | null): string | null {
 export function resultIsTheWork(page: SearchEvidence, context: LookupContext): boolean {
   const anchor = context.anchor;
   if (anchor) {
-    /* The same id in the result's own URL, not merely a prefix of a longer
-       one: 2001.08361 must not be found inside 2001.083612. */
+    /* The same id, not merely a prefix of a longer one: 2001.08361 must not
+       be found inside 2001.083612. */
     const id = anchor.kind === "arxiv" ? anchor.id.replace(/v\d+$/i, "") : anchor.id;
     const pattern =
       anchor.kind === "arxiv"
         ? new RegExp(`(?<![0-9])${escapeRegExp(id.toLowerCase())}(?![0-9])`)
         : new RegExp(`${escapeRegExp(id.toLowerCase())}(?![a-z0-9-])`);
-    return pattern.test(decoded(page.url));
+    if (pattern.test(decoded(page.url))) return true;
+    /* A publisher's own page is often named by a short id rather than the
+       DOI (nature.com/articles/nature05357 for 10.1038/nature05357), and the
+       DOI turns up in the extract instead. The DOI there alone is not enough —
+       a citing paper's reference list carries it too — so the result's title
+       must name the work as well. arXiv ids stay URL-only. */
+    return (
+      anchor.kind === "doi" &&
+      pattern.test((page.excerpt ?? "").toLowerCase()) &&
+      titleNamesWork(page.title, context.title)
+    );
   }
 
-  if (!page.title || !containsRun(tokens(page.title), tokens(context.title))) return false;
+  if (!titleNamesWork(page.title, context.title)) return false;
   const surname = surnameOf(context.authors);
   const year = yearOf(context.year);
   if (!surname && !year) return true;
@@ -244,32 +286,34 @@ export interface Judgement {
   paperDoesQuote: string | null;
 }
 
-/** A string within `cap`, `null`/absent as `null`; anything else is `undefined`, a malformed field. */
-function boundedOrNull(value: unknown, cap: number): string | null | undefined {
-  if (value === undefined || value === null) return null;
-  if (typeof value !== "string") return undefined;
+/** A non-empty string within `cap`, else `null` — absent, the wrong type and over-cap alike. */
+function boundedOrNull(value: unknown, cap: number): string | null {
+  if (typeof value !== "string") return null;
   const trimmed = value.trim();
-  if (trimmed === "") return null;
-  return trimmed.length <= cap ? trimmed : undefined;
+  return trimmed !== "" && trimmed.length <= cap ? trimmed : null;
 }
 
 /**
- * **The judgement fields of a parsed answer, or `null` when they are
- * malformed** — no `support`, a verdict outside the enum by even a letter, a
- * field of the wrong type, or prose or a quote past its cap. A malformed
- * judgement is dropped whole; the URL pick is `readFind`'s and stands on its
- * own.
+ * **The judgement fields of a parsed answer, or `null` when the verdict is
+ * unreadable** — no `support`, or a verdict outside the enum by even a letter.
+ * A quote or `paperDoes` of the wrong type or past its cap becomes `null` on
+ * its own (the eval saw a 417-character quote sink a sound reading), and
+ * `judgeLookup`'s downgrades do the rest: `supports`/`partly` without a
+ * verified quote is `not-in-extract`, `paperDoes` without its quote is dropped.
+ * Nothing unchecked reaches the reader either way. The URL pick is
+ * `readFind`'s and stands on its own.
  */
 export function parseJudgement(answer: unknown): Judgement | null {
   if (!answer || typeof answer !== "object" || Array.isArray(answer)) return null;
   const a = answer as Record<string, unknown>;
   const support = a.support;
   if (typeof support !== "string" || !(CITATION_SUPPORTS as readonly string[]).includes(support)) return null;
-  const supportQuote = boundedOrNull(a.supportQuote, QUOTE_CAP);
-  const paperDoes = boundedOrNull(a.paperDoes, PROSE_CAP);
-  const paperDoesQuote = boundedOrNull(a.paperDoesQuote, QUOTE_CAP);
-  if (supportQuote === undefined || paperDoes === undefined || paperDoesQuote === undefined) return null;
-  return { support: support as CitationSupport, supportQuote, paperDoes, paperDoesQuote };
+  return {
+    support: support as CitationSupport,
+    supportQuote: boundedOrNull(a.supportQuote, QUOTE_CAP),
+    paperDoes: boundedOrNull(a.paperDoes, PROSE_CAP),
+    paperDoesQuote: boundedOrNull(a.paperDoesQuote, QUOTE_CAP),
+  };
 }
 
 /**

@@ -1,6 +1,6 @@
 # Citations: say whether we saw the cited paper, and quote it when we did
 
-Status: **re-scoped 2026-09-29 on Greg's clarification; stage 1 building.** Feedback report
+Status: **re-scoped 2026-09-29 on Greg's clarification; stages 1–3 built; waiting on a push credential.** Feedback report
 SPIDERYARN-READING2-5G (`spya-emvua7`), Greg, dictated:
 
 > Okay, so when in citations mode, like the questions that we might want to ask, what were they? You
@@ -164,6 +164,46 @@ extract of N words at host.
 2. **The extract assessment**, as amended above. Tests red-first. GPT Sol code review.
 3. **Real runs, docs, and the feedback note.** The A/B on real citations, citations.md, the note.
 
+## Real runs (stage 3), 2026-09-29
+
+14 works cited by three local articles (5 DOI rows, 4 arXiv rows, 5 unlinked), each sent to the old
+*Find it* request (A) and the new *Look it up* request (B) through the real `openRouterJson`
+(`anthropic/claude-sonnet-5`), and judged by the real `readFind` and `judgeLookup`. No ledger rows
+and no database writes. **Total cost $0.73 for 28 calls.**
+
+| | A (Find it) | B (Look it up) |
+|---|---|---|
+| searches per call | 1.0 | 1.0 |
+| prompt / completion tokens | 7,167 / 123 | 9,798 / 401 |
+| latency | 6.2 s | 8.1 s |
+| cost per press | $0.023 | $0.029 (+27%) |
+
+- **URL pick:** the same URL on 10 of 14 works. The other 4 were a different page of the same work.
+  `readFind` kept or refused identically on both arms. No regression.
+- **B's states:**
+  - 5 assessed: 3 supports, 1 partly, 1 not-in-extract;
+  - 5 not-identified;
+  - 1 unreadable;
+  - 2 with no find in either arm.
+- **Quotes:** 9 offered, 8 kept. The one dropped was a Kaplan sentence the model wrote from memory,
+  not present in the 803-character extract. Code dropped it and downgraded *partly* to
+  not-in-extract, which is the property working.
+- **Honesty read of the assessed rows:** no *supports* looked wrong. The nearest to misleading was
+  *1000 spider silkomes*. It supports `why` (it is the database the article uses), but its quote
+  does not show the specific figure in the citing paragraph. The verdict is worded against *what the
+  article uses it for*, which is `why`, so it is accurate as labelled.
+
+**Three rules refused correct results, fixed after the run:**
+
+1. **DOI rows (4 of 5 not-identified).** Publisher URLs omit the DOI. Now a DOI row also accepts
+   the DOI in the extract, provided the title rule passes too.
+2. **Truncated titles.** Exa ends long titles with "…". A truncated title now matches as a long
+   enough prefix run.
+3. **One quote over its cap discarded the whole reading.** Now only that field is dropped.
+
+Unchanged: a row titled only "Thompson et al 2020" can never be found by title. That is *Find
+it*'s existing rule, and out of scope here.
+
 ## Proposed later stage: read the paper itself (not built; a question for Greg)
 
 A search extract is usually the abstract. That answers *what were they doing in that paper* well,
@@ -180,7 +220,7 @@ plan, commit above, and its Sol review
 - concurrency 1 per owner.
 
 It costs perhaps 5–10¢ a check, and needs new moving parts: a model job, a table, a route. The
-half-built code is parked in the worktree (`parked-stage2/`), not in git.
+half-built code was never committed; this section and the Sol review are what survive of it.
 
 ## Assumptions (product calls taken the simple way)
 

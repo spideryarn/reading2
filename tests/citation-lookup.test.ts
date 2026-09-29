@@ -154,7 +154,7 @@ describe("judgeLookup — every shown quote is checked, and a verdict needs one"
 
 /* ------------------------------------------------------- the strict parse -- */
 
-describe("parseJudgement — strict (R-5); a malformed reading is dropped whole", () => {
+describe("parseJudgement — strict (R-5); a bad verdict drops the reading, a bad field only itself", () => {
   it("reads a well-formed answer", () => {
     expect(parseJudgement(answer())).toEqual({
       support: "supports",
@@ -168,11 +168,37 @@ describe("parseJudgement — strict (R-5); a malformed reading is dropped whole"
     ["no support at all", { support: undefined }],
     ["a verdict outside the enum", { support: "Supports" }],
     ["a categorical no", { support: "does-not-support" }],
-    ["a quote that is not a string", { supportQuote: ["a", "b"] }],
-    ["prose past its cap", { paperDoes: "x".repeat(241) }],
-    ["a quote past its cap", { supportQuote: "word ".repeat(100) }],
+    ["a verdict that is not a string", { support: 1 }],
   ])("refuses %s", (_name, over) => {
     expect(parseJudgement(answer(over))).toBeNull();
+  });
+
+  it.each([
+    ["a support quote past its cap", { supportQuote: "word ".repeat(100) }, "supportQuote"],
+    ["a support quote that is not a string", { supportQuote: ["a", "b"] }, "supportQuote"],
+    ["paperDoes past its cap", { paperDoes: "x".repeat(241) }, "paperDoes"],
+    ["a paperDoes quote that is not a string", { paperDoesQuote: 7 }, "paperDoesQuote"],
+  ])("nulls only the field for %s, and keeps the rest", (_name, over, field) => {
+    const parsed = parseJudgement(answer(over));
+    expect(parsed).toEqual({ ...parseJudgement(answer()), [field]: null });
+  });
+
+  it("an over-cap support quote beside a good paperDoes is not-in-extract, with paperDoes kept (eval: 417 chars)", () => {
+    const longQuote = `${SUPPORT_QUOTE} ${"and more words besides ".repeat(20)}`.slice(0, 417);
+    expect(longQuote.length).toBe(417);
+    const { reading } = judgeLookup(answer({ supportQuote: longQuote }), PAGE, context());
+    expect(reading).toEqual({
+      state: "assessed",
+      excerptWords: EXTRACT.split(/\s+/).length,
+      verdict: { support: "not-in-extract" },
+      paperDoes: { says: "It measures how a language model's loss falls as it gets bigger.", quote: DOES_QUOTE },
+    });
+  });
+
+  it("paperDoes whose quote was over its cap is dropped, and the verdict stands", () => {
+    const { reading } = judgeLookup(answer({ paperDoesQuote: "word ".repeat(100) }), PAGE, context());
+    expect(reading).toMatchObject({ state: "assessed", verdict: { support: "supports", quote: SUPPORT_QUOTE } });
+    expect(reading).not.toHaveProperty("paperDoes");
   });
 
   it("an unreadable reading is its own state, and the URL pick is not this function's", () => {
@@ -223,6 +249,87 @@ describe("resultIsTheWork — R-1, stricter than Find it's title rule", () => {
     expect(resultIsTheWork({ ...PAGE, url: "https://arxiv.org/pdf/2001.08361v2" }, context(arxivRow))).toBe(true);
     expect(resultIsTheWork({ ...PAGE, url: "https://arxiv.org/abs/2001.083612" }, context(arxivRow))).toBe(false);
     expect(resultIsTheWork({ ...PAGE, url: "https://example.org/paper" }, context(arxivRow))).toBe(false);
+  });
+
+  /* The eval's shape: a publisher page named by its short id, the DOI only in the extract. */
+  const NATURE_TITLE = "Conclusions from the Functional Reconstruction of an Ancient Protein Family";
+  const natureRow = {
+    title: NATURE_TITLE,
+    authors: "Thornton, J. W.",
+    year: "2006",
+    url: "https://doi.org/10.1038/nature05357",
+    linkFrom: "doi" as const,
+  };
+  const NATURE_EXTRACT = "Nature volume 444, pages 1–4 (2006). doi:10.1038/NATURE05357. We resurrected ancestral proteins.";
+
+  it("on a DOI row, accepts a publisher URL without the DOI when the extract has it and the title matches", () => {
+    const page = { url: "https://www.nature.com/articles/nature05357", title: NATURE_TITLE, excerpt: NATURE_EXTRACT };
+    expect(resultIsTheWork(page, context(natureRow))).toBe(true);
+  });
+
+  it("on a DOI row, accepts the DOI in the extract beside a truncated title that passes the title rule", () => {
+    const page = {
+      url: "https://www.nature.com/articles/nature05357",
+      title: "Conclusions from the Functional Reconstruction of ...",
+      excerpt: NATURE_EXTRACT,
+    };
+    expect(resultIsTheWork(page, context(natureRow))).toBe(true);
+  });
+
+  it("on a DOI row, the DOI in the extract alone is not enough — a citing paper's reference list", () => {
+    const citing = {
+      url: "https://journals.example/a-later-paper",
+      title: "Epistasis in Protein Evolution: a Review",
+      excerpt: `References. 12. Thornton, J. W. (2006) ${NATURE_TITLE}. Nature. doi:10.1038/nature05357`,
+    };
+    expect(resultIsTheWork(citing, context(natureRow))).toBe(false);
+  });
+
+  it("on a DOI row, a longer DOI in the extract is not this DOI", () => {
+    const page = {
+      url: "https://www.nature.com/articles/nature053571",
+      title: NATURE_TITLE,
+      excerpt: "doi:10.1038/nature053571. Another paper.",
+    };
+    expect(resultIsTheWork(page, context(natureRow))).toBe(false);
+  });
+
+  it("accepts a truncated result title that is a long enough run of the work's title", () => {
+    const page = {
+      url: "https://journals.example/x",
+      title: "Conclusions from the Functional Reconstruction of …",
+      excerpt: "Thornton 2006.",
+    };
+    expect(resultIsTheWork(page, context({ title: NATURE_TITLE, authors: "Thornton, J. W.", year: "2006" }))).toBe(
+      true,
+    );
+    /* The surname-or-year rule still applies on top. */
+    expect(
+      resultIsTheWork({ ...page, excerpt: "An unrelated abstract." }, context({ title: NATURE_TITLE, authors: "Thornton, J. W.", year: "2006" })),
+    ).toBe(false);
+  });
+
+  it("refuses a short truncated title — fewer than five tokens", () => {
+    const page = { url: "https://blog.example/x", title: "Scaling laws for ...", excerpt: "Kaplan 2020." };
+    expect(resultIsTheWork(page, context())).toBe(false);
+  });
+
+  it("refuses a truncated title that covers less than half the work's title", () => {
+    const long = "one two three four five six seven eight nine ten eleven twelve";
+    const page = { url: "https://blog.example/x", title: "one two three four five ...", excerpt: "Kaplan 2020." };
+    expect(resultIsTheWork(page, context({ title: long }))).toBe(false);
+    const half = { ...page, title: "one two three four five six ..." };
+    expect(resultIsTheWork(half, context({ title: long }))).toBe(true);
+  });
+
+  it("refuses a truncated title whose words are not a run of the work's title", () => {
+    const page = { url: "https://x.example", title: "Conclusions from the Structural Reconstruction of ...", excerpt: "Thornton 2006." };
+    expect(resultIsTheWork(page, context({ title: NATURE_TITLE, authors: "Thornton, J. W.", year: "2006" }))).toBe(false);
+  });
+
+  it("an untruncated partial title is still refused — today's rule, exactly", () => {
+    const page = { url: "https://x.example", title: "Conclusions from the Functional Reconstruction of", excerpt: "Thornton 2006." };
+    expect(resultIsTheWork(page, context({ title: NATURE_TITLE, authors: "Thornton, J. W.", year: "2006" }))).toBe(false);
   });
 
   it("gives a searched or found row no anchor, and an article link none either", () => {
