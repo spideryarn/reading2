@@ -88,8 +88,9 @@ export function FeaturesPage({ signedIn }: { signedIn: boolean }) {
             under the paragraph rather than inside it: it is true, and it is a
             dispiriting second sentence for a stranger to read. */}
         <p className="site-reveal tw:mt-3 tw:max-w-[62ch] tw:text-sm tw:text-ink-faint">
-          Adding an article sends its text to AI providers to make the notes and summaries — so add
-          things you are allowed to share with a third party, not a confidential manuscript.
+          Adding an article sends its text to AI providers, to prepare it and to make the summaries,
+          the glossary and the rest — so add things you are allowed to share
+          with a third party, not a confidential manuscript.
         </p>
 
         {/* --------------------------------------- the landscape, and where you are --
@@ -270,7 +271,7 @@ export function FeaturesPage({ signedIn }: { signedIn: boolean }) {
           {/* Greg, 2026-08-26, the reader-profile request, rephrased. */}
           <Tile name="It knows who is reading." span="wide">
             Say once who you are and what you know, and for any article why you are reading it, and
-            the notes are written for you.
+            what the AI writes is written for you.
           </Tile>
           {/* Greg, 2026-09-01: "It's the reader's data." docs/project/export.md. */}
           <Tile name="It’s the reader’s data." span="wide">
