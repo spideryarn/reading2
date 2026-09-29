@@ -371,7 +371,7 @@ export function verdictText(support: CitationSupport): string {
     case "partly":
       return "partly supports what the article uses it for";
     case "not-in-extract":
-      return "the extract doesn't show what the article uses it for — the full work may";
+      return "the extract doesn't show what the article uses it for, though the full work might";
     default: {
       const unhandled: never = support;
       return unhandled;

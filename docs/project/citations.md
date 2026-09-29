@@ -188,7 +188,7 @@ code review, GPT Sol F11.
 Since 2026-09-29 (SPIDERYARN-READING2-5G) the same single call also judges the kept result's
 **search extract** — the text Exa returns with each result, up to `MAX_EVIDENCE_EXCERPT`, typically
 the abstract — against what the article uses the work for (`why` and the first citing paragraph):
-*supports*, *partly*, or *the extract doesn't show this — the full work may*. There is no
+*supports*, *partly*, or *the extract doesn't show it, though the full work might*. There is no
 *does not support*: an extract is not the work. Greg's clarification set the scope — *"I was
 basically thinking of ways to tweak that prompt/UI"* — so this rides on the retrieval Citations
 already had rather than fetching the paper; reading the paper itself is the plan's proposed later

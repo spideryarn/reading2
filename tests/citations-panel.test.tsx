@@ -757,7 +757,7 @@ describe("what a row says after Look it up", () => {
     const said = r.querySelector(".cite-verdict-text")?.textContent ?? "";
     expect(said).toBe(verdictText("not-in-extract"));
     expect(said).toMatch(/extract/);
-    expect(said).toMatch(/full work may/);
+    expect(said).toMatch(/though the full work might$/);
     for (const s of ["supports", "partly", "not-in-extract"] as const) {
       expect(verdictText(s)).not.toMatch(/does not support|doesn't support|unsupported|contradict/i);
     }
