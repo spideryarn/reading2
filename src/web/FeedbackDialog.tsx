@@ -343,6 +343,8 @@ export function FeedbackDialog({ open, onClose, where }: Props) {
      `close` event Escape does, so without this our own "shut it" comes straight
      back as a second `onClose`. */
   const closingOurselves = useRef(false);
+  /** Which actual opening is on screen; a late request may outlive its own one. */
+  const opening = useRef(0);
 
   const [body, setBody] = useState("");
   const [kind, setKind] = useState<FeedbackKind | null>(null);
@@ -439,12 +441,21 @@ export function FeedbackDialog({ open, onClose, where }: Props) {
     if (!dialog) return;
     if (open && !dialog.open) {
       closingOurselves.current = false;
+      opening.current += 1;
       dialog.showModal();
     } else if (!open && dialog.open) {
       closingOurselves.current = true;
       dialog.close();
     }
   }, [open]);
+
+  /** A completion owns the opening it began in, not any later one. */
+  const closeOpening = useCallback(
+    (sentOpening: number) => {
+      if (sentOpening === opening.current) onClose();
+    },
+    [onClose],
+  );
 
   /**
    * **A send the reader walked away from is not still in progress.**
@@ -521,11 +532,14 @@ export function FeedbackDialog({ open, onClose, where }: Props) {
   }, []);
 
   /**
-   * **The thank-you, as a toast outside the dialog** — `toast` below. Greg,
+   * **The thank-you, as a toast rather than a dialog stage** — `toast` below.
+   * Greg,
    * 2026-09-29: *"that post-Feedback message should be a toast in the corner
    * that disappears after a few seconds, rather than a blocking modal."* It is
-   * rendered beside the `<dialog>` rather than inside it, because a shut dialog
-   * paints nothing and a successful send shuts it. See `send` and Toast.tsx.
+   * rendered beside the `<dialog>` when that send shuts its opening, because a
+   * shut dialog paints nothing. A send from an earlier opening is the exception:
+   * it must not shut the dialog the reader reopened, so its toast renders inside
+   * the top-layer dialog instead of underneath it. See `send` and Toast.tsx.
    * Until then it was a `sent` stage with its own panel, and a `thanksSeen`
    * effect that emptied the form once the reader closed that panel; both went.
    *
@@ -760,6 +774,7 @@ export function FeedbackDialog({ open, onClose, where }: Props) {
      */
     const mine = reportId;
     const attempt = ++attempts.current;
+    const openingAtSend = opening.current;
     const stillMine = () => mine === reportIdRef.current && attempt === attempts.current;
 
     /* **A spinner that cannot paint until this line finishes.** `setStage`
@@ -814,17 +829,21 @@ export function FeedbackDialog({ open, onClose, where }: Props) {
          after a lost response looks like, and telling them about it would be
          explaining our idempotency to somebody reporting a bug. */
       if (!stillMine()) return;
-      /* **Filed: shut the dialog, start the next report, and say thank you in
-         the corner** — all in one commit, which the layout effect above turns
-         into one frame. `onClose()` is harmless if the reader had already shut
-         it mid-flight; the toast is then how they learn it went.
+      /* **Filed: finish this report and say thank you in the corner.** Its own
+         opening shuts in the same commit, which the layout effect above turns
+         into one frame. A later opening stays put; the toast rendered inside
+         that top-layer dialog is then how the reader learns the earlier send
+         went.
 
          `kind` and `body` here are the closure's — what was POSTed — and that is
          the point: the thank-you is a fact about the report, not about the form,
-         and `bodyRef` is the form as it is now. Focus goes back where the
-         `<dialog>` puts it on `close()`, to whatever opened it; the toast never
-         takes it (Toast.tsx). */
-      onClose();
+         and `bodyRef` is the form as it is now. When this opening closes, focus
+         goes back where the native `<dialog>` puts it, to whatever opened it;
+         the toast never takes it (Toast.tsx). */
+      /* The reader may have shut and reopened the same report while this request
+         was away. Its success still files that report, advances its id and keeps
+         any newer words, but it must not close the opening they are using now. */
+      closeOpening(openingAtSend);
       discard(bodyRef.current !== body);
       toastCount.current += 1;
       setToast({ id: toastCount.current, text: THANKS[kind ?? "none"] });
@@ -848,7 +867,7 @@ export function FeedbackDialog({ open, onClose, where }: Props) {
     shot,
     dictationBusy,
     showSendFailure,
-    onClose,
+    closeOpening,
     discard,
   ]);
 
@@ -1237,11 +1256,16 @@ export function FeedbackDialog({ open, onClose, where }: Props) {
           </button>
         </div>
       </form>
+      {/* A request can finish after the reader has closed and reopened the
+          dialog. That later opening stays open; its toast must join the native
+          dialog's top layer or every page-level z-index remains underneath it. */}
+      <Toast toast={open ? toast : null} onDismiss={dismissToast} />
     </dialog>
-    {/* **Outside the `<dialog>`, on purpose**: the send that shows it is the
-        send that shut the dialog, and nothing inside a shut dialog is painted.
-        See `toast` above. */}
-    <Toast toast={toast} onDismiss={dismissToast} />
+    {/* **Outside the `<dialog>` in the ordinary case**, because the send that
+        shows it also shuts the dialog and nothing inside a shut dialog is
+        painted. The sibling region is mounted before its words arrive, which
+        is what lets `aria-live` announce them. */}
+    <Toast toast={open ? null : toast} onDismiss={dismissToast} />
     </>
   );
 }

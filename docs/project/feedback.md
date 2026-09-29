@@ -207,26 +207,32 @@ can return, and a thank-you is not a failure
 >
 > — Greg, 2026-09-29
 
-So the three sentences lost *"It is filed"* and nothing else, and a successful send now **shuts the
-dialog at once** and shows the sentence in a small toast
+So the three sentences lost *"It is filed"* and nothing else, and a successful send now **shuts its
+dialog opening at once** and shows the sentence in a small toast
 ([`Toast.tsx`](../../src/web/Toast.tsx)): bottom-right on a wide window, along the bottom less a
-16px gutter on a phone, above the Dock and so clear of its Feedback button. It goes after about
-five seconds, **not while the pointer is over it or focus is inside it**, and has a close button.
+16px gutter on a phone, following the Dock when it slides away while staying above the home
+indicator. It goes after about five seconds, **not while the pointer is over it or focus is inside
+it**, and has a close button.
 `role="status"` with `aria-live="polite"` announces it without taking focus; focus goes back
 wherever the `<dialog>` returns it on `close()`, to whatever opened it. No animation under
 `prefers-reduced-motion`. A library (`sonner`) was passed over: one message from one caller does
 not earn a dependency.
 
-**It renders outside the `<dialog>`**, as a sibling in `FeedbackDialog`'s own return, because the
-send that shows it is the send that shut the dialog, and nothing inside a shut `<dialog>` is
-painted. **On failure nothing changes**: the dialog stays up with the recovery panel.
+**It ordinarily renders outside the `<dialog>`**, as a sibling in `FeedbackDialog`'s own return,
+because the send that shows it is the send that shut the dialog, and nothing inside a shut
+`<dialog>` is painted. A request can instead land after the reader has closed and reopened the
+dialog: that success does not shut the later opening, and its toast renders inside the native
+dialog's top layer rather than underneath it. **On failure nothing changes**: the dialog stays up
+with the recovery panel.
 
 **The form is emptied under the same rule as before**, only earlier — at the moment the send
 succeeds rather than when the reader closed the thank-you panel: `discard(body !== sentBody)`,
 which keeps any words typed after Send, since they were never in the POST (GPT Sol's P0, 2026-09-05).
 A send that lands after the reader shut the dialog mid-flight now thanks them in the corner, which
-is how they learn it went; until 2026-09-29 a `thanksSeen` guard held the thank-you panel for the
-next opening instead. [260929f](../plans/260929f-feedback-thank-you-as-a-toast-and-dictation-that-never-runs-out-of-tape.md).
+is how they learn it went. If they have already reopened it, the completion leaves that opening and
+any newer words alone, advances the report id, and shows the toast in that opening. Until 2026-09-29
+a `thanksSeen` guard held the thank-you panel for the next opening instead.
+[260929f](../plans/260929f-feedback-thank-you-as-a-toast-and-dictation-that-never-runs-out-of-tape.md).
 
 ### The delay was something extra being drawn
 
@@ -237,9 +243,9 @@ into a dialog that was still open — the frame the browser painted, because the
 passive effect and those run after the paint.
 
 The show/close sync has been a `useLayoutEffect` since, so the shutting lands in the same commit,
-before paint. **A successful send now depends on that directly**: it calls `onClose()` and
-`discard()` together, exactly the shape that flashed. **jsdom cannot see a paint**, so no test in
-`tests/feedback-dialog.test.tsx` can tell the layout effect from a passive one
+before paint. **A successful send from the current opening depends on that directly**: it calls
+`onClose()` and `discard()` together, exactly the shape that flashed. **jsdom cannot see a paint**,
+so no test in `tests/feedback-dialog.test.tsx` can tell the layout effect from a passive one
 ([silent-success.md](../reusable/silent-success.md)); it is a browser check.
 [260905c](../plans/260905c-contact-page-and-a-warmer-feedback-thank-you.md).
 

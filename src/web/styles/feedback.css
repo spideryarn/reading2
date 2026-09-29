@@ -515,10 +515,11 @@
    few seconds, rather than a blocking modal."* Toast.tsx; it replaced the
    `.fb-done` panel that used to fill the dialog.
 
-   **Bottom-right, clear of the bottom bar** — `bottom` is the same sum the
-   comment, chat and annotate dialogs use (dialogs.css), so it sits above the
-   Dock and the install hint rather than on top of the Dock's Feedback button.
-   The corner Feedback button is top-right, so it is clear of that one too.
+   **Bottom-right, clear of the bottom bar** — unlike a dialog somebody is
+   typing in, this follows the Dock and install hint when they slide away on a
+   narrow screen. `max(..., --safe-bottom)` keeps it above the home indicator
+   even then. The corner Feedback button is top-right, so it is clear of that
+   one too.
 
    **z-index 98**: above the Dock and its drawer (96/95) and the offline strip
    (97) so a thank-you is never half under a surface that happens to be open,
@@ -526,7 +527,7 @@
 .toast {
   position: fixed;
   right: calc(1.25rem + var(--safe-right));
-  bottom: calc(var(--dock-space) + var(--hint-h) + 0.75rem);
+  bottom: calc(max(var(--dock-bottom), var(--safe-bottom)) + var(--hint-now) + 0.75rem);
   z-index: 98;
   display: flex;
   align-items: flex-start;

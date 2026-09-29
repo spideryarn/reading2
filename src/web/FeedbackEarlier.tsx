@@ -20,9 +20,9 @@
  * The list is read the first time the tab is chosen and kept while the reader
  * flips back and forth. Nothing can be filed and then looked for within one
  * opening — a successful send shuts the dialog and thanks the reader in a
- * toast — so reading again would buy no freshness. Shutting the dialog forgets it, and a
- * generation counter drops an answer that lands after that: the same shape as
- * `shotGeneration` in the dialog.
+ * toast — so reading again would buy no freshness. Shutting the dialog forgets
+ * it, and a generation counter drops an answer that lands after that: the same
+ * shape as `shotGeneration` in the dialog.
  */
 import { LoaderCircle } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";

@@ -171,21 +171,36 @@ function mountStrict() {
  * at the top of this file maintains.
  */
 function mountControlled(): HTMLDialogElement {
+  return mountControlledHarness().dialog;
+}
+
+/** The controlled fixture plus the reader's ability to reopen it mid-request. */
+function mountControlledHarness(): {
+  dialog: HTMLDialogElement;
+  show(next: boolean): void;
+} {
   host = document.createElement("div");
   document.body.append(host);
   root = createRoot(host);
+  let setOpen: ((next: boolean) => void) | null = null;
   function Harness() {
-    const [open, setOpen] = useState(true);
+    const [open, updateOpen] = useState(true);
+    setOpen = updateOpen;
     return createElement(FeedbackDialog, {
       open,
-      onClose: () => setOpen(false),
+      onClose: () => updateOpen(false),
       where: { url: "https://www.spideryarn.com/read/a-piece", slug: "a-piece" },
     });
   }
   act(() => root.render(createElement(Harness)));
   const dialog = host.querySelector("dialog");
   if (!dialog) throw new Error("no dialog");
-  return dialog;
+  return {
+    dialog,
+    show(next) {
+      act(() => setOpen?.(next));
+    },
+  };
 }
 
 /**
@@ -1051,6 +1066,39 @@ describe("the thank-you, and getting out of it", () => {
 
     expect(host.querySelector(".toast")).not.toBeNull();
     expect(firstBox().value).toBe("");
+  });
+
+  it("does not shut a dialog the reader reopened while the send was in flight", async () => {
+    const controlled = mountControlledHarness();
+    type("The first thing.");
+    let release: (() => void) | null = null;
+    answer = () =>
+      new Promise<Response>((resolve) => {
+        release = () => resolve(new Response(JSON.stringify({ id: "x" }), { status: 201 }));
+      });
+    send();
+
+    controlled.show(false);
+    controlled.show(true);
+    type("The first thing. And another.");
+    act(() => release?.());
+    await act(async () => {});
+
+    expect(controlled.dialog.open, "a completion from the previous opening shut this one").toBe(true);
+    expect(firstBox().value, "words added after Send were lost").toBe(
+      "The first thing. And another.",
+    );
+    const toast = host.querySelector(".toast");
+    expect(toast, "the successful report was not acknowledged").not.toBeNull();
+    expect(
+      controlled.dialog.contains(toast),
+      "the toast was painted underneath the native dialog's top layer",
+    ).toBe(true);
+
+    answer = ok(201);
+    send();
+    await act(async () => {});
+    expect(idOf(1), "the kept draft reused the filed report's id").not.toBe(idOf(0));
   });
 
   /**

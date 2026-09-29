@@ -7,11 +7,12 @@
  * Fake timers, because "about five seconds" is the thing under test and a real
  * five-second wait per case is the kind of test that gets skipped.
  */
-import { act, createElement } from "react";
+import { act, createElement, StrictMode } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { Toast, TOAST_MS, type ToastMessage } from "../src/web/Toast.js";
+import { readerSheets, stripComments } from "./helpers/stylesheets.js";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -122,5 +123,38 @@ describe("Toast", () => {
     expect(card()?.textContent).toContain("Second.");
     act(() => vi.advanceTimersByTime(100));
     expect(dismissed).toBe(1);
+  });
+
+  it("has one clock in StrictMode and clears it on unmount", () => {
+    act(() => {
+      root.render(
+        createElement(
+          StrictMode,
+          null,
+          createElement(Toast, {
+            toast: { id: 1, text: "Thank you." },
+            onDismiss: () => (dismissed += 1),
+          }),
+        ),
+      );
+    });
+    act(() => vi.advanceTimersByTime(TOAST_MS));
+    expect(dismissed, "StrictMode left two live timers").toBe(1);
+
+    render({ id: 2, text: "Another." });
+    act(() => root.unmount());
+    act(() => vi.advanceTimersByTime(TOAST_MS));
+    expect(dismissed, "an unmounted toast still fired").toBe(1);
+  });
+
+  it("follows the dock's current position without entering the home-indicator area", () => {
+    const sheet = readerSheets().find((entry) => entry.path === "src/web/styles/feedback.css");
+    expect(sheet, "feedback.css is no longer loaded").toBeDefined();
+    const css = stripComments(sheet!.css);
+    const rule = css.match(/\.toast\s*\{([^}]*)\}/)?.[1];
+    expect(rule, "no base .toast rule").toBeDefined();
+    expect(rule).toContain(
+      "bottom: calc(max(var(--dock-bottom), var(--safe-bottom)) + var(--hint-now) + 0.75rem)",
+    );
   });
 });
