@@ -1,6 +1,8 @@
 // @vitest-environment jsdom
 /**
- * **Diagram is in everybody's bar; four of its five pictures are not.**
+ * **Four of Diagram's five pictures are behind the switch** — and since
+ * 2026-09-29 the mode itself is too (SPIDERYARN-READING2-4R), so this file is
+ * about the chips inside it.
  *
  * The gate moved down a level on 2026-09-04, on a reader's report
  * (SPIDERYARN-READING2-13):
@@ -10,8 +12,8 @@
  * > be only visible to people who have experimental features on, because they
  * > don't work so well yet.
  *
- * So Diagram is `experimental: false` in `MODE_CATALOG` (src/mode-catalog.ts)
- * and `KIND_UI`'s rows carry the flag instead, and both rows of controls are
+ * So Diagram was `experimental: false` in `MODE_CATALOG` (src/mode-catalog.ts)
+ * from then until 2026-09-29, and `KIND_UI`'s rows carry the flag, and both rows of controls are
  * drawn by one rule —
  * src/web/experimental-visibility.ts. This file is that rule seen from the chip
  * row's end; tests/dock-experimental-modes.test.tsx is the bar's end.
@@ -209,14 +211,18 @@ describe("which pictures the chip row offers", () => {
 
 describe("the mode itself", () => {
   /**
-   * The other half of the move: the gate came off Diagram at the same moment it
-   * went onto four of its pictures. If this ever goes red on its own, somebody
-   * has hidden the mode again and left the sketch — the picture the reader asked
-   * for — behind two switches.
+   * The gate came off Diagram on 2026-09-04 at the same moment it went onto
+   * four of its pictures, and went back on the whole mode on 2026-09-29 at
+   * Greg's request: *"Move all of Diagram mode into the 'Experimental
+   * features'. It's just not good enough yet."* (SPIDERYARN-READING2-4R). So a
+   * reader who has asked for nothing no longer has the button — unless they
+   * are in the mode by URL, where the bar keeps it so the radiogroup still has
+   * its checked button.
    */
-  it("is in the bar for a reader who has asked for nothing", () => {
-    const modes = visibleModes(false, undefined).map((m) => m.mode);
-    expect(modes).toContain("diagram");
+  it("is hidden from a reader who has asked for nothing, and kept while they are in it", () => {
+    expect(visibleModes(false, undefined).map((m) => m.mode)).not.toContain("diagram");
+    expect(visibleModes(false, "diagram").map((m) => m.mode)).toContain("diagram");
+    expect(visibleModes(true, undefined).map((m) => m.mode)).toContain("diagram");
     /* **And nothing here about which other modes are hidden.** This used to
        carry its own literal list of them, which named `quotes` for a day after
        it was promoted and never learned about `debate` at all — and stayed

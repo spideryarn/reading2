@@ -435,6 +435,53 @@
   opacity: 0.75;
 }
 
+/* -------------------------------------------------- the experimental switch --
+   **A track and a knob inside the bar's Experimental button**, so it reads as
+   a toggle rather than as one more mode. Greg, 2026-09-29
+   (SPIDERYARN-READING2-4F); Dock.tsx § `DockExperimentalSwitch` has the rest.
+
+   Sized in px against the 15px glyph beside it, and never hidden by the fit
+   ladder — the label goes first, and this is what is left saying "switch".
+   Off: an outline in the button's own colour, knob left, so hover and `.soon`
+   move it with the button. On: the brand colour, knob right. */
+.dock-switch {
+  position: relative;
+  flex: none;
+  box-sizing: border-box;
+  width: 22px;
+  height: 12px;
+  border: 1px solid currentColor;
+  border-radius: 999px;
+}
+.dock-switch::after {
+  content: "";
+  position: absolute;
+  top: 1px;
+  left: 1px;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: currentColor;
+  transition: transform 0.15s;
+}
+.dock-switch.is-on {
+  border-color: var(--highlight);
+  background: var(--highlight);
+}
+.dock-switch.is-on::after {
+  background: var(--page);
+  transform: translateX(10px);
+}
+/* No answer yet, or none we could read: the knob in the middle, a position
+   that is neither — Dock.tsx § `SWITCH_LOOK`. */
+.dock-switch.is-unknown { border-style: dashed; }
+.dock-switch.is-unknown::after { transform: translateX(5px); }
+/* A cached answer: shown, but quieter than one we have just read. */
+.dock-switch.is-stale { opacity: 0.55; }
+@media (prefers-reduced-motion: reduce) {
+  .dock-switch::after { transition: none; }
+}
+
 .dock-count {
   min-width: 1.05rem;
   padding: 0 0.25rem;
