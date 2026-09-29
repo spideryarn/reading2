@@ -32,6 +32,7 @@
  */
 import { useRef } from "react";
 import { DictationButton, DictationStrip } from "./DictationStrip.js";
+import { keepDictation } from "./dictation-keep.js";
 import { sendForTranscription } from "./dictation-upload.js";
 import { useDictationField } from "./useDictationField.js";
 
@@ -78,6 +79,7 @@ export function ProfileBox({
     box,
     context: { kind: "profile" },
     transcribe: sendForTranscription,
+    keep: keepDictation(`profile:${id}`),
   });
   const dictation = dictate.dictation;
 

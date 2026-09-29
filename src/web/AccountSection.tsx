@@ -24,6 +24,7 @@ import { useState } from "react";
 import { LogOut } from "lucide-react";
 
 import { supabase } from "./lib/supabase.js";
+import { forgetDictationsOf } from "./dictation-keep.js";
 import { useSession } from "./useSession.js";
 
 export function AccountSection() {
@@ -38,6 +39,12 @@ export function AccountSection() {
 
   const out = async () => {
     setBusy(true);
+    /* **Recordings kept on this device go with a deliberate sign-out**, as the
+       offline articles do, and for the same reason: the next person at this
+       keyboard. Only here, not on every lapsed session — a token that fails to
+       refresh must not delete minutes of dictation. Bounded inside. Plan
+       260929h. */
+    await forgetDictationsOf(user.id);
     await supabase.auth.signOut();
     /* See the header: a reload, not a re-render. `replace` so Back does not
        return to a page rendered for somebody who is no longer here. */

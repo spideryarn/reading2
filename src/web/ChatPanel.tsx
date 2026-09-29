@@ -92,6 +92,7 @@ import { DictationButton, DictationStrip } from "./DictationStrip.js";
 import { LiveButton } from "./live/LiveButton.js";
 import { LiveStatus } from "./live/LiveStatus.js";
 import type { LiveApi } from "./live/useLiveConversation.js";
+import { keepDictation } from "./dictation-keep.js";
 import { sendForTranscription } from "./dictation-upload.js";
 import { useDictationField } from "./useDictationField.js";
 import { isSendEnter } from "./key-chord.js";
@@ -1973,6 +1974,7 @@ export function Composer({
     box,
     context: { kind: "article", slug },
     transcribe: sendForTranscription,
+    keep: keepDictation(`chat:${slug}`),
   });
 
   // A Live ticket can still be pending before Live claims the microphone.
