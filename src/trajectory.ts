@@ -100,6 +100,12 @@ export type {
  * Ideas as the quotes allow at each pass — plan 260928a § Stage 6. Before it
  * was released, the same version also took the abstract out of what is offered
  * (`inAbstract`) and told the model why.
+ *
+ * A `trajectory/8` that told the deeper passes to add detail rather than
+ * retell (SPIDERYARN-READING2-51) was measured and NOT kept: it moved nothing
+ * beyond run-to-run noise, because Most is every offered quote, so a route
+ * prompt can only reshuffle them between More and Most —
+ * docs/plans/260929b-trajectory-stage2-deeper-passes-eval.md.
  */
 export const PROMPT_VERSION = "trajectory/7";
 

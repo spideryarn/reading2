@@ -117,8 +117,8 @@ export function stepStop(
  *
  * **Going round again is not here any more.** Until plan 260929a a depth-up on
  * the last stop of a pass jumped to the first stop new at the deeper pass. The
- * door at the end of a pass now names that choice itself — *Go round again* and
- * *More detail ›* (Greg, SPIDERYARN-READING2-4N) — so the depth buttons keep
+ * door at the end of a pass now names that choice itself — *More detail ›*
+ * (Greg, SPIDERYARN-READING2-4N and 51) — so the depth buttons keep
  * one rule, and the doors choose their own landing (`doorAfter`).
  */
 export function stopAfterDepthChange(
@@ -152,17 +152,17 @@ export function stopAfterDepthChange(
  * **What the door after the current stop's block offers.**
  *
  * - `next`: the next stop on this pass.
- * - `end`: the last stop of the pass. Two ways on, as Greg asked
- *   (SPIDERYARN-READING2-4N, plan 260929a): *Go round again* — `first`, stop 1
- *   of **this** pass — and, when a deeper offered pass exists, *More detail ›*
- *   — that `deeper` depth, landing on **its** stop 1. At the end of the deepest
- *   pass `deeper` is `null` and only going round again is offered.
+ * - `end`: the last stop of the pass. When a deeper offered pass exists, *More
+ *   detail ›* — that `deeper` depth, landing on **its** stop 1. At the end of
+ *   the deepest pass `deeper` is `null` and the door offers no button, only the
+ *   line saying which pass ended. *Go round again* (stop 1 of this pass) went in
+ *   plan 260929b: ← walks back (SPIDERYARN-READING2-51).
  *
  * `null` for a route with no stops on this pass.
  */
 export type Door =
   | { kind: "next"; quoteId: string }
-  | { kind: "end"; first: string; deeper: { depth: TrajectoryDepth; first: string } | null };
+  | { kind: "end"; deeper: { depth: TrajectoryDepth; first: string } | null };
 
 export function doorAfter(
   stops: readonly TrajectoryStop[],
@@ -177,7 +177,6 @@ export function doorAfter(
   const deeperFirst = d === undefined ? undefined : visibleRoute(stops, d)[0];
   return {
     kind: "end",
-    first: route[0]!.quoteId,
     deeper: d === undefined || deeperFirst === undefined ? null : { depth: d, first: deeperFirst.quoteId },
   };
 }

@@ -5,9 +5,22 @@
  * An offline eval — plan 260928a § "Stage 6 as it will be built", item 3, and
  * Sol's F65.
  *
- *     npx tsx scripts/eval/trajectory-coverage-eval.ts [--runs=2] [--old=<module>] [--new-only] [slug …]
+ *     npx tsx scripts/eval/trajectory-coverage-eval.ts [--runs=2] [--old=<module>] \
+ *       [--old-version=trajectory/6] [--new-version=trajectory/7] [--new-only] [slug …]
  *
- * Results: docs/plans/260928a-trajectory-mode-stage6-coverage-after.md.
+ * Results: docs/plans/260928a-trajectory-mode-stage6-coverage-after.md (6 vs
+ * 7), docs/plans/260929b-trajectory-stage2-deeper-passes-eval.md (7 vs a
+ * candidate 8, not kept).
+ *
+ * **Also used for `trajectory/7` vs a candidate `trajectory/8`** (plan 260929b
+ * § Stage 2): write the /7 module to `src/trajectory-v7-eval-tmp.ts` the same
+ * way as below, put the candidate in src/trajectory.ts, and pass
+ * `--old=src/trajectory-v7-eval-tmp.ts --old-version=trajectory/7
+ * --new-version=trajectory/8`. An OLD module at 7 or later has NEW's
+ * signature, so it is called exactly as NEW is — its own `trajectoryInput` and
+ * `generateTrajectory`. Each stop's
+ * full quote and paragraph are recorded (`quoteFull`, `paragraph`) so the
+ * stops a deeper pass adds can be read blind (scripts/eval/trajectory-depth-blind.ts).
  *
  * ## The two arms
  *
@@ -60,8 +73,12 @@ const runsArg = args.find((a) => a.startsWith("--runs="));
 const RUNS = runsArg ? Number(runsArg.slice("--runs=".length)) : 2;
 const oldArg = args.find((a) => a.startsWith("--old="));
 const OLD_MODULE = oldArg ? oldArg.slice("--old=".length) : "src/trajectory-v6-eval-tmp.ts";
+const oldVersionArg = args.find((a) => a.startsWith("--old-version="));
+const OLD_VERSION = oldVersionArg ? oldVersionArg.slice("--old-version=".length) : "trajectory/6";
+const newVersionArg = args.find((a) => a.startsWith("--new-version="));
+const NEW_VERSION = newVersionArg ? newVersionArg.slice("--new-version=".length) : "trajectory/7";
 /* `--new-only`: the NEW arm alone, with no old module to write first — for
-   measuring a change to `trajectory/7` against the stage-6 NEW numbers. */
+   measuring a change against an earlier run's NEW numbers. */
 const NEW_ONLY = args.includes("--new-only");
 const ARMS = NEW_ONLY ? (["new"] as const) : (["old", "new"] as const);
 const slugArgs = args.filter((a) => !a.startsWith("--"));
@@ -76,7 +93,9 @@ const { collectSpend, totalSpend } = await import("../../src/ai-spend.js");
 const NEW = await import("../../src/trajectory.js");
 /* The old module, loaded by path so nothing in the repo imports a file that
    exists only for the length of one eval. */
-type OldModule = {
+type RunOut = Promise<{ trajectory: Trajectory; offered: number; inputTokens: number; outputTokens: number; elapsedMs: number }>;
+/** `trajectory/6`'s signature: quotes only. */
+type OldModuleV6 = {
   PROMPT_VERSION: string;
   usableQuotes: (q: Quotes | null, b: readonly Block[]) => Quote[];
   generateTrajectory: (opts: {
@@ -86,13 +105,17 @@ type OldModule = {
     tree: Article["tree"];
     allQuotes: readonly Quote[];
     profile: string | null;
-  }) => Promise<{ trajectory: Trajectory; offered: number; inputTokens: number; outputTokens: number; elapsedMs: number }>;
+  }) => RunOut;
 };
+/** `trajectory/7` and later: the same signature as NEW. */
+type OldModuleV7 = Pick<typeof NEW, "PROMPT_VERSION" | "trajectoryInput" | "generateTrajectory">;
+type OldModule = OldModuleV6 | OldModuleV7;
+const isV6 = (m: OldModule): m is OldModuleV6 => m.PROMPT_VERSION === "trajectory/6";
 const OLD: OldModule | null = NEW_ONLY
   ? null
   : ((await import(pathToFileURL(resolve(OLD_MODULE)).href)) as OldModule);
-if (OLD && OLD.PROMPT_VERSION !== "trajectory/6") throw new Error(`old module is ${OLD.PROMPT_VERSION}, expected trajectory/6`);
-if (NEW.PROMPT_VERSION !== "trajectory/7") throw new Error(`new module is ${NEW.PROMPT_VERSION}, expected trajectory/7`);
+if (OLD && OLD.PROMPT_VERSION !== OLD_VERSION) throw new Error(`old module is ${OLD.PROMPT_VERSION}, expected ${OLD_VERSION}`);
+if (NEW.PROMPT_VERSION !== NEW_VERSION) throw new Error(`new module is ${NEW.PROMPT_VERSION}, expected ${NEW_VERSION}`);
 
 import type { Article, Block, Idea, Ideas, Quote, Quotes, Trajectory, TrajectoryDepth } from "../../src/types.js";
 
@@ -218,7 +241,16 @@ interface RunResult {
   elapsedMs: number;
   inputTokens: number;
   outputTokens: number;
-  stops: { depth: TrajectoryDepth; quote: string; cue: string | null; section: string; ideasIn: string[] }[];
+  stops: {
+    depth: TrajectoryDepth;
+    quote: string;
+    /** The whole quote, and the whole paragraph it sits in — for the blind read. */
+    quoteFull: string;
+    paragraph: string;
+    cue: string | null;
+    section: string;
+    ideasIn: string[];
+  }[];
   /** Stored quotes under an abstract heading (`NEW.inAbstract`), whichever arm — the NEW arm does not offer them. */
   abstractQuotes: number;
   /** Stops visible at depth ≤ 1, ≤ 2, ≤ 3 that sit under an abstract heading. */
@@ -234,6 +266,10 @@ async function runOne(inp: Input, arm: Arm, run: number): Promise<RunResult> {
         return NEW.generateTrajectory({ slug, input, profile: null });
       }
       if (!OLD) throw new Error("the old arm needs the old module (drop --new-only)");
+      if (!isV6(OLD)) {
+        const input = OLD.trajectoryInput({ quotes, blocks: article.blocks, tree: article.tree, ideas });
+        return OLD.generateTrajectory({ slug, input, profile: null });
+      }
       return OLD.generateTrajectory({
         slug,
         quotes: OLD.usableQuotes(quotes, article.blocks),
@@ -279,6 +315,8 @@ async function runOne(inp: Input, arm: Arm, run: number): Promise<RunResult> {
       return {
         depth: s.depth,
         quote: s.quote.text.replace(/\s+/g, " ").slice(0, 240),
+        quoteFull: s.quote.text.replace(/\s+/g, " "),
+        paragraph: (article.blocks[at]?.text ?? "").replace(/\s+/g, " "),
         cue: s.cue,
         section: sections.find((x) => x.lo <= at && at <= x.hi)?.title ?? "(none)",
         ideasIn: occBlocks.flatMap((set, k) => (set.has(s.blockId) ? [`I${k + 1}`] : [])),
