@@ -89,6 +89,7 @@ export function FaqPanel({ owner, onJump }: Props) {
   const questions = faq?.questions ?? [];
   const ready = faq !== null && owner.status === "ready";
   const dropped = ready ? droppedNote(faq.dropped) : null;
+  const showJob = ready && !owner.stale && (owner.job || owner.starting || owner.failed);
 
   /**
    * @param again whether this is the button beside a list that is already
@@ -120,13 +121,16 @@ export function FaqPanel({ owner, onJump }: Props) {
          Summary and Search have none. */
       /* Pinned under the scroller, so the promise is about the whole list rather
          than read as the last row's. No re-run here: a fresh list offers none,
-         the rule Greg set for the Glossary and Quotes; the stale and outdated
-         banners carry it. */
+         the rule Greg set for the Glossary and Quotes; the stale banner carries
+         it. A job started from Metadata still needs its progress, Stop and
+         failure here, including on an outdated list, so that transient status
+         shares this one footer with the permanent promise. */
       foot={
-        ready && questions.length > 0 ? (
+        ready && (questions.length > 0 || showJob) ? (
           <div className="faq-foot">
-            <p className="faq-note">{FAQ_PROMISE}</p>
-            {dropped && <p className="faq-note">{dropped}</p>}
+            {questions.length > 0 && <p className="faq-note">{FAQ_PROMISE}</p>}
+            {questions.length > 0 && dropped && <p className="faq-note">{dropped}</p>}
+            {showJob && run("Find them again", true)}
           </div>
         ) : null
       }
@@ -168,15 +172,11 @@ export function FaqPanel({ owner, onJump }: Props) {
               </p>
               {run("Find them again", true)}
             </div>
-          ) : owner.outdated ? (
-            <div className="gloss-stale">
-              <p>
-                <TriangleAlert size={13} />
-                These were written by an older version of the prompt.
-              </p>
-              {run("Find them again", true)}
-            </div>
           ) : null}
+          {/* No banner for an outdated list (older prompt, same article) —
+              Greg, 2026-09-29 (SPIDERYARN-READING2-55): *"it's not worth
+              bugging the user about it."* Re-running is in Metadata. Plan
+              260929c. */}
 
           {questions.length === 0 && <p className="gloss-quiet">{FAQ_NONE}</p>}
 

@@ -75,10 +75,10 @@ export interface UseTrajectory {
    */
   ensure(): Promise<void>;
   /**
-   * The forced run — *Plan it again*, under the route and on the outdated
-   * banner. It replaces the route, choosing the Quotes and finding the Ideas
-   * first (unforced) when `ensure` would — never merely because their prompt
-   * is older.
+   * The forced run — *Plan it again* in the stale/profile-changed banner, or
+   * the Trajectory row in Metadata. It replaces the route, choosing the Quotes
+   * and finding the Ideas first (unforced) when `ensure` would — never merely
+   * because their prompt is older.
    */
   regenerate(): Promise<void>;
   cancel(id: string): void;
@@ -181,7 +181,7 @@ export function useTrajectory(slug: string, quotes: QuotesRead, ideas: IdeasRead
      2026-09-28, ~$0.08 on a ~$0.02 press (the plan's F38, reverted). The
      narrow race it guarded — a Quotes read still revalidating — is left: the
      automatic run already waits for the read, and a route planned on Quotes
-     that turn out stale says so in its outdated banner. */
+     that turn out stale says so in its stale banner. */
   const quotesFirst =
     quotes.status === "none" || quotes.status === "error" || (quotes.status === "ready" && quotes.stale);
   /* **The Ideas go first by the same rule** — none, unreadable, or stale — and

@@ -77,9 +77,14 @@ Stage 5, asked for by Greg on 2026-09-28 (his words are in the
 - **Further left in the bar**: Quotes, then Trajectory, straight after Summary (`MODES_UI` in
   [`Dock.tsx`](../../src/web/Dock.tsx)).
 - **Plan it again** rebuilds the route only (`trajectory` is forced by name). **Since 2026-09-29 it
-  is offered only in the outdated banner**; the standing button in the foot went, and a current route
-  is re-planned from Metadata's *Re-run AI processing*, which has a Trajectory row
-  ([260929b](../plans/260929b-one-place-to-re-run-ai-processing.md)):
+  is offered only in the stale and profile-changed banners**; the standing button in the foot went,
+  and a current route is re-planned from Metadata's *Re-run AI processing*, which has a Trajectory
+  row ([260929b](../plans/260929b-one-place-to-re-run-ai-processing.md)). A route planned by an
+  older prompt over the same article (*outdated*) is not announced at all — Greg, 2026-09-29
+  (SPIDERYARN-READING2-55): *"There are probably lots of cases where the prompt will get out of
+  date, and it's not worth bugging the user about it."*
+  ([260929c](../plans/260929c-no-notice-when-a-mode-was-made-by-an-older-prompt.md)). Greg on the
+  foot's button:
 
   > In Trajectory mode, remove the "Plan it again" button. The user can do that from Metadata if they
   > really want.

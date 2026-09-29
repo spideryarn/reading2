@@ -255,8 +255,8 @@ export interface LoadOptions {
    *
    * ## When you must pass `true`
    *
-   * **A fixed slug**, and now only that. `articles_slug_unique`,
-   * `jobs_one_running_per_slug` on `(slug)`, and every article-scoped table
+   * **A fixed slug**, and now only that. `articles_slug_unique`, the
+   * article's job line on `slug`, and every article-scoped table
    * under it — two copies of one suite, or two suites naming the same corpus
    * article, are reading and deleting each other's rows. This is
    * `./run-lock.ts` § cause 2 and it has not changed.
@@ -410,7 +410,8 @@ async function withRunningJob<T>(
   /* The lock, when it is taken, wraps the whole window — insert, body, delete —
      and not just the insert. Holding it only for the insert would let a sibling
      start its own job on this article the moment this one had, which is the
-     race `jobs_one_running_per_slug` then reports as somebody else's failure. */
+     race the article's line then reports as somebody else's failure — a
+     `busy` claim, and until 2026-09-29 a `jobs_one_running_per_slug` violation. */
   return serialise ? await withRunLock(`loading ${slug}`, started) : await started();
 }
 

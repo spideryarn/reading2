@@ -416,15 +416,32 @@ live("every probe, against the schema this laptop actually has", () => {
     ).toContain("jobs_at_most_one_busy");
   });
 
-  it("does not mistake the per-article unique index for a global cap", async () => {
-    /* `jobs_one_running_per_slug` is unique on (slug) with a predicate that
-       mentions `running`, and it is on the live schema — so the probe above
-       passing at all is the assertion. Stated separately because a probe that
-       flagged it would make every future run of this repair refuse.
-       (It was `jobs_active_slug`, unique over (owner_id, slug), until
-       2026-09-02; the hazard is identical and the name moved.) */
+  it("does not mistake a per-article unique index for a global cap", async () => {
+    /* A unique index on (slug) with a predicate that mentions `running` is an
+       *article* mutex, not a global cap, because the slug tells rows apart —
+       and a probe that flagged one would make every future run of this repair
+       refuse on a schema that has one.
+
+       Until 2026-09-29 the live schema carried exactly such an index,
+       `jobs_one_running_per_slug`, so the probe passing on the live schema was
+       the assertion. It was dropped when compatible mode jobs started sharing an
+       article (drizzle/20260929052845_drop_jobs_one_running_per_slug.sql), and
+       a live-schema check would now pass whatever the probe did. So the shape
+       is made here, inside the rolled-back transaction. `slug is null` keeps
+       the index empty — `slug` is `not null` — so it cannot collide with a
+       peer's running rows on this shared database while it exists.
+       (Before 2026-09-02 the live example was `jobs_active_slug`, unique over
+       (owner_id, slug); the hazard is identical and the name moved twice.) */
     const p = probe("0032_jobs_concurrency_cap", "no other unique index");
-    expect(await ask(p)).toBeNull();
+    expect(
+      await whileBroken(
+        [
+          `create unique index "jobs_per_article_shape" on "spideryarn"."jobs" ("slug") ` +
+            `where status = 'running' and slug is null`,
+        ],
+        p,
+      ),
+    ).toBeNull();
   });
 
   /* ── the derived shape guards ────────────────────────────────────── */

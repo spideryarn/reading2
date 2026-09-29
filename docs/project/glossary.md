@@ -532,8 +532,11 @@ equally specific. Two new worked BAD/GOOD pairs carry the register and the field
 reason the section above gives. The concept-allusion pair was added in round-2 review after
 `after-6` still put the ordinary meanings of *Müller-Lyer illusion* and *pareidolia* in `senseHere`;
 `after-7` and `after-8` reran it, but ordinary definitions still landed in `senseHere` as often as
-under the old prompt. The bump shows every owner's older glossary the *written by a different
-version* banner, which is the migration.
+under the old prompt. The bump marked every owner's older glossary *outdated*, which at the time
+drew the *written by a different version* banner as the migration; since 2026-09-29 that banner is
+gone and an outdated glossary is not announced, has no *Find more* (its run would replace, not
+append), and is rewritten from Metadata — Greg, SPIDERYARN-READING2-55
+([260929c](../plans/260929c-no-notice-when-a-mode-was-made-by-an-older-prompt.md)).
 [260926a](../plans/260926a-plainer-summaries-and-glossary.md).
 
 ### Name the thing, not the topic
