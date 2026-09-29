@@ -263,9 +263,39 @@ paid control drawn), `tests/shared-inventory.test.ts`, `tests/access-sharing.tes
 
 ### Finally
 
-- [ ] `npm test`, `npm run typecheck`, lint on touched files.
-- [ ] Browser check in a Sonnet subagent, signed out, on a public article with a stored Trajectory and
+- [x] `npm test`, `npm run typecheck`, lint on touched files.
+- [x] Browser check in a Sonnet subagent, signed out, on a public article with a stored Trajectory and
   each of the other three.
-- [ ] Postmortem, feedback note, debrief.
+- [x] Postmortem, feedback note, debrief.
 
 ## Progress
+
+**Status as of 2026-09-29: built, on `dev`, not deployed** — evidence: the four commits below, and
+the gates.
+
+- **Stage 1, Trajectory** — `b0520cf5`. Red first: *draws a stored trajectory from the payload, asking
+  nothing*, red on `origin/dev` with the boundary band in the slot.
+- **Stages 2–3, FAQ and Citations** — `81905905`, built by an Opus subagent from stage 1 as template;
+  red first for both; column guards mutation-checked.
+- **Stage 4, Debate, and GPT Sol's code-review fixes** — `c4947431`. Sol's review
+  ([code-review-sol](260929c-a-visitor-sees-every-stored-mode-on-a-public-article-code-review-sol.md))
+  found and fixed a P0 (a query-bearing or percent-encoded copy of the article's private address could
+  survive in a Debate row) and a P1 (a public citation's `linkFrom: "web"` told a stranger the owner
+  had used *Find it*). Its verdict: the boundary is sound, once the claim *"only `/api/public/`"* is
+  narrowed for a **signed-in** non-owner, whose session still loads its own `/api/reader` and
+  `/api/jobs` — established architecture, unchanged here.
+- **The box refused every test run for memory for about four hours** (swap full, MemAvailable under
+  the 9.2 GB admission floor). Stage 4 was built blind, and its gates ran afterwards: red first against
+  the pre-change policy (4 of 69 in `public-network-trace`), the `debate` column mutation red, both
+  files restored and sha256-checked, then 13 runs / ~1,100 tests green.
+- **Full suite, after merging `origin/dev`:** 1,190 files passed, 5 red — `cold-start-lazy-imports`
+  and `pdf-bundle-trace` (no `api-dist/` in a fresh worktree) and the three `fleet-*` files (no
+  `tools/fleet/web/dist/`), all environment, none in code this touches, confirmed by re-running alone.
+  Typecheck clean.
+- **Browser check, signed out, 1280 and 390** (Sonnet subagent, local database; one private article
+  made public for the check and restored): all four modes draw their stored output with none of the
+  owner's buttons; missing ones say *Nobody has built…*; Quiz and Chat show the owners-only band;
+  no POST, no `/api/` request outside `/api/public/`, no console errors. Screenshots
+  `260929c-shot-{trajectory,faq,citations,debate}-*.png`. One cosmetic find, not from this change: a
+  Debate source title showing raw `<i>` markup.
+
