@@ -49,7 +49,7 @@ import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react
 import { throttle, useQueryState } from "nuqs";
 import type { OnChangeFn, SortingState } from "@tanstack/react-table";
 import { functionalUpdate } from "@tanstack/react-table";
-import { ChevronRight, Search, Shield, Undo2, User, X } from "lucide-react";
+import { Search, Shield, Undo2, User, X } from "lucide-react";
 import { isAdmin } from "../admin.js";
 import type { LibraryEntry, LibraryHit } from "../types.js";
 import { AddArticle } from "./AddArticle.js";
@@ -73,7 +73,7 @@ import {
   libraryViewParam,
   sortDirParam,
 } from "./params.js";
-import { narrowShelf, topicCountsForVisible } from "./shelf-narrow.js";
+import { isArchived, narrowShelf, topicCountsForVisible } from "./shelf-narrow.js";
 import { ShelfTerms } from "./ShelfTerms.js";
 import { useShelfTopics } from "./useShelfTerms.js";
 import { pageTitle, useDocumentTitle } from "./page-title.js";
@@ -191,7 +191,7 @@ export function Library({
      prints a relative date — see useNow.ts for both halves of why. */
   const now = useNow();
 
-  const columns = useMemo(() => libraryColumns(shelf, now), [shelf, now]);
+  const columns = useMemo(() => libraryColumns(shelf, now, archivedOn), [shelf, now, archivedOn]);
   const natural = useMemo(() => naturalDirections(columns), [columns]);
   /* `DEFAULT_BY` as the fallback: a URL naming nothing we recognise lands on
      the ordinary shelf rather than on an unsorted list with no chip pressed.
@@ -226,34 +226,52 @@ export function Library({
   });
   const { terms, inArchive, topics, members } = shelfTopics;
 
+  /* **The scope: one list.** The active shelf, and — with the Archived chip on
+     and the archive loaded — the archived articles in the same array, each
+     carrying its own `archivedAt` (plan 260929a, Greg's report 4V; Sol R4).
+     Combined here, **before** TanStack sorts, so the sort, the fixture sink
+     and the row cap below apply to both halves as one list; a second list at
+     the foot of the shelf could be neither sorted with the first nor capped
+     with it. While the archive is loading, or has failed, this is the active
+     shelf plus any archive mutations whose server answers we already hold —
+     never `null` because of the archive (Sol R3). */
+  const scope = useMemo(
+    () => shelfScope(articles, shelf.archivedVisible, archivedOn),
+    [articles, archivedOn, shelf.archivedVisible],
+  );
+
+  /* The archive is fetched when the chip is on and the list is missing — on a
+     press, on a direct `?archived=1` visit, and after anything sets the list
+     back to `null` (a change of reader). An effect rather than a call in the
+     chip's handler for the second and third. Keyed on exactly those, so a
+     failure is not retried in a loop: `archived` stays `null` and nothing
+     here changes until the chip is turned off and on again. */
+  const { archived: archivedList, loadArchived } = shelf;
+  useEffect(() => {
+    if (archivedOn && archivedList === null) void loadArchived();
+  }, [archivedOn, archivedList, loadArchived]);
+
   /* Matcher one: the shelf itself, filtered in the browser, then narrowed by
      the Unread chip, then by every chosen topic — one function, in one order,
-     for this list and for the archived one (shelf-narrow.ts). The *order* is no
-     longer ours — TanStack owns it below — but which rows exist still is.
+     over the one list (shelf-narrow.ts). The *order* is no longer ours —
+     TanStack owns it below — but which rows exist still is.
 
      `useMemo` because this runs on every keystroke over every article, and
      because the identity of the array it returns is what decides whether the
      whole table is rebuilt. */
   const rows = useMemo(
-    () => (articles ? narrowShelf(articles, { query, unread: show === "unread", topics: members }) : null),
-    [articles, query, show, members],
+    () => (scope ? narrowShelf(scope, { query, unread: show === "unread", topics: members }) : null),
+    [scope, query, show, members],
   );
-  /* The archived half, narrowed by the same function — search and Unread
-     included — whenever it is in scope. `null` while it is out of scope or
-     still loading. */
-  const archivedRows = useMemo(
-    () => (inArchive ? narrowShelf(inArchive, { query, unread: show === "unread", topics: members }) : null),
-    [inArchive, query, show, members],
-  );
-  /* The expensive search has already run in the two row memos. Count from
-     their result instead of repeating it over every article on each keypress. */
+  /* The expensive search has already run in the row memo. Count from its
+     result instead of repeating it over every article on each keypress. */
   const counts = useMemo(
     () =>
       topicCountsForVisible(
-        [...(rows ?? []), ...(archivedRows ?? [])].map((entry) => entry.slug),
+        (rows ?? []).map((entry) => entry.slug),
         terms.data?.terms ?? [],
       ),
-    [rows, archivedRows, terms.data?.terms],
+    [rows, terms.data?.terms],
   );
 
   /* Toggled against what the URL asks for rather than what applies, so a key
@@ -351,15 +369,14 @@ export function Library({
   const passages = useLibrarySearch(query);
 
   const searching = query.trim().length > 0;
-  const total = articles?.length ?? 0;
+  /* Every count is over the one list: `total` is what is in scope, `showing`
+     what survives the narrowing. The archived share of each is named in the
+     "n of m" line when the archive is in scope. */
+  const total = scope?.length ?? 0;
   const showing = rows?.length ?? 0;
-  /* The archived half's share, when it is in scope and loaded; zeros otherwise. */
-  const archivedTotal = inArchive?.length ?? 0;
-  const archivedShowing = archivedRows?.length ?? 0;
+  const archivedShowing = useMemo(() => (rows ?? []).filter(isArchived).length, [rows]);
   // Said only when something is actually being hidden. "12 of 12" is noise.
-  const narrowed =
-    (searching || show === "unread" || topics.length > 0) &&
-    (showing !== total || archivedShowing !== archivedTotal);
+  const narrowed = (searching || show === "unread" || topics.length > 0) && showing !== total;
 
   /* The slugs the Unread chip lets through, whatever the search box says — the
      passages are the answer to the search, so narrowing them by the search
@@ -561,9 +578,12 @@ export function Library({
             </div>
           </TooltipGroup>
         </div>
-        <p className="tw:mt-1 tw:text-sm tw:text-muted-foreground">
-          Read deeply, at whatever level of detail you need. Pick a piece.
-        </p>
+        {/* **No tagline, since 2026-09-29.** It read "Read deeply, at whatever
+            level of detail you need. Pick a piece." Greg, SPIDERYARN-READING2-4W:
+            *"Or maybe actually just remove the tagline from the logged-in
+            Homepage."* The reader here has already signed up for the pitch.
+            If it ever comes back, his wording was "Read deeply & efficiently".
+            docs/plans/260929a-logo-beside-the-wordmark-beta-to-the-right-no-shelf-tagline.md. */}
       </header>
 
       <AddArticle queue={queue} />
@@ -602,8 +622,11 @@ export function Library({
       <SearchBox value={query} onChange={(v) => void setQuery(v.trim() ? v : null)} />
 
       {/* The controls sit directly above the list they govern, and only once
-          there is a list. A sort control over an empty shelf is furniture. */}
-      {total > 0 && (
+          the shelf has answered. A sort control over an empty shelf is
+          furniture, so with nothing in scope only the Archived chip is drawn
+          (`bare`) — it has to be, or a reader whose every article is archived
+          could not reach them (plan 260929a, Sol R2). */}
+      {articles !== null && (
         <ShelfControls
           table={table}
           chipOrder={CHIP_ORDER}
@@ -611,13 +634,29 @@ export function Library({
           onView={(v) => pushView(() => void setView(v))}
           filter={show}
           onFilter={(f) => pushView(() => void setShow(f))}
+          archived={archivedOn}
+          onArchived={(on) => pushView(() => void setArchivedOn(on ? true : null))}
+          bare={total === 0}
+        />
+      )}
+
+      {/* The archive's own state, while the chip is on and there is no list
+          yet to merge. The active rows stay painted underneath either way
+          (Sol R3). "Nothing archived" too, or an on chip that changed nothing
+          would look like a chip that did nothing. */}
+      {archivedOn && articles !== null && (
+        <ArchiveStatus
+          archived={shelf.archived}
+          failed={shelf.archivedFailed}
+          /* An empty archive over an empty shelf is said once, below. */
+          saysEmpty={(articles?.length ?? 0) > 0}
         />
       )}
 
       {/* Between the controls and the count, so the count is visibly the
           result of everything above it. Only once there is a shelf and an
           answer: a failed request draws nothing (useShelfTerms.ts). */}
-      {total + archivedTotal > 0 && terms.data && (
+      {total > 0 && terms.data && (
         <ShelfTerms
           data={terms.data}
           counts={counts}
@@ -635,9 +674,8 @@ export function Library({
           scope, both halves are counted and each is named. */}
       {narrowed && (
         <p className="tw:mb-3 tw:mt-0 tw:text-xs tw:text-muted-foreground">
-          {showing + archivedShowing} of {total + archivedTotal}{" "}
-          {total + archivedTotal === 1 ? "article" : "articles"}
-          {inArchive && ` (${showing} active + ${archivedShowing} archived)`}
+          {showing} of {total} {total === 1 ? "article" : "articles"}
+          {inArchive && ` (${showing - archivedShowing} active + ${archivedShowing} archived)`}
         </p>
       )}
 
@@ -648,9 +686,15 @@ export function Library({
       {!error && articles === null && slow && (
         <p className="tw:text-sm tw:text-muted-foreground">Reading the shelf…</p>
       )}
-      {articles?.length === 0 && (
+      {/* From the combined scope (Sol R2): with Archived on and the archive
+          loaded, a shelf of archived articles is not "nothing on the shelf".
+          While the archive is still loading, it is not said at all — it may
+          be about to be untrue. */}
+      {articles !== null && total === 0 && (!archivedOn || inArchive !== null) && (
         <p className="tw:text-sm tw:text-muted-foreground">
-          Nothing on the shelf yet. Paste a URL above and it'll be here in a minute or two.
+          {archivedOn
+            ? "Nothing on the shelf, and nothing archived. Paste a URL above and it'll be here in a minute or two."
+            : "Nothing on the shelf yet. Paste a URL above and it'll be here in a minute or two."}
         </p>
       )}
       {showing === 0 && total > 0 && (
@@ -704,7 +748,12 @@ export function Library({
             <ul className="tw:m-0 tw:flex tw:list-none tw:flex-col tw:gap-3 tw:p-0">
               {capped.shown.map((row) => (
                 <li key={row.id}>
-                  <ShelfCard entry={row.original} shelf={shelf} note={note(row.original, now)} />
+                  <ShelfCard
+                    entry={row.original}
+                    shelf={shelf}
+                    note={note(row.original, now)}
+                    archivedShown={archivedOn}
+                  />
                 </li>
               ))}
             </ul>
@@ -729,17 +778,9 @@ export function Library({
           something you have already read" is the useful half of that answer. */}
       {searching && <Passages state={passages} query={query} only={unread} />}
 
-      {/* Drawn during a search too, since 2026-09-28: the archived list is now
-          narrowed by the same search, Unread and topics as the shelf, so there
-          is an honest answer to show (docs/project/shelf-terms.md). The
-          passages above still search active articles only. */}
-      <Archived
-        shelf={shelf}
-        open={archivedOn}
-        onToggle={() => pushView(() => void setArchivedOn(archivedOn ? null : true))}
-        rows={archivedRows}
-      />
-
+      {/* **No "Show archived" here any more** (plan 260929a): it was a
+          disclosure at the foot of the shelf, with its own second list, and
+          is the Archived chip beside Unread now — ShelfControls.tsx. */}
 
       {/* Greg's own example of a signed-in page that should carry one
           (2026-09-03). The shelf has a bottom, and it is where a reader who has
@@ -787,6 +828,21 @@ const slugOf = (entry: LibraryEntry) => entry.slug;
 
 /** One frozen empty array, so a shelf that has not loaded does not rebuild the table each render. */
 const EMPTY: LibraryEntry[] = [];
+
+/** One deduplicated scope, preferring the newer archived-side server answer. */
+function shelfScope(
+  active: readonly LibraryEntry[] | null,
+  archived: readonly LibraryEntry[],
+  archivedOn: boolean,
+): LibraryEntry[] | null {
+  if (!active || !archivedOn) return active ? [...active] : null;
+  /* `useShelf` normally prevents the same slug reaching both halves. Resolve
+     it here too so a transient stale response can never create duplicate
+     TanStack row ids; the archived copy carries the newer mutation state. */
+  const merged = new Map(active.map((entry) => [entry.slug, entry]));
+  for (const entry of archived) merged.set(entry.slug, entry);
+  return [...merged.values()];
+}
 
 /**
  * How many rows the table draws before it asks.
@@ -1083,114 +1139,52 @@ function marked(text: string, query: string) {
 /* ------------------------------------------------------------- archived --- */
 
 /**
- * The other half of the shelf, behind a disclosure.
+ * **What the archive is doing, while the Archived chip is on** — one quiet
+ * line under the controls, and only when there is something to say.
  *
- * Without this, Archive is **permanent from the interface**: the Undo strip is
- * gone after nine seconds and there is no other way back to an archived
- * article. Greg chose "archive, with an Undo" over a real delete precisely so
- * that nothing is destroyed — and an archive nobody can open is destruction
- * with extra steps. The plan deferred this ("a separate 'Show archived' view
- * can come later"); a cross-family review pointed out that "later" left the
- * feature contradicting its own reason for existing.
+ * The archived articles themselves are not drawn here any more. Until plan
+ * 260929a they were a second list behind a "Show archived" disclosure at the
+ * foot of the shelf; since Greg's report 4V they join the shelf's one list, so
+ * the sort, the search, Unread and the topics apply to them (the `scope` memo
+ * in `Library`). What is left for this line is the time before that list
+ * exists, and the case where it came back empty.
  *
- * **The words here said "deleted" until 2026-09-04**, over an act that has
- * always archived. docs/project/library.md § Archive, and Undo is the
- * confirmation has the report that made us change them.
+ * Why an archive has to be reachable at all is unchanged: without it Archive is
+ * **permanent from the interface** — the Undo strip is gone after nine seconds
+ * — and Greg chose "archive, with an Undo" over a real delete precisely so that
+ * nothing is destroyed. docs/project/library.md § Archive, and Undo is the
+ * confirmation.
  *
- * Closed by default, and it does not fetch until opened: most sessions never
- * archive anything, and a request per homepage load to say "nothing here" is a
- * request nobody asked for.
- *
- * **Open or closed is `?archived=1` since 2026-09-28**, not `useState`, because
- * the topics row reads it too: with the archive open, topics are chosen over
- * active and archived articles, and this list is narrowed by the same search,
- * Unread and topics as the shelf (shelf-narrow.ts). That is also why it is no
- * longer hidden during a search — until then the search did not look in here,
- * so the list could only have been wrong; now it is the search's answer for
- * the archive. The passages under the cards still search active articles only.
- * docs/project/shelf-terms.md.
+ * **The words said "deleted" until 2026-09-04**, over an act that has always
+ * archived; the same section has the report that changed them.
  */
-function Archived({
-  shelf,
-  open,
-  onToggle,
-  rows,
+function ArchiveStatus({
+  archived,
+  failed,
+  saysEmpty,
 }: {
-  shelf: ReturnType<typeof useShelf>;
-  open: boolean;
-  onToggle: () => void;
-  /** `shelf.archived` narrowed, or `null` while closed or still loading. */
-  rows: LibraryEntry[] | null;
+  /** `shelf.archived`: `null` until it has loaded. */
+  archived: LibraryEntry[] | null;
+  /** The last load failed; the reason is in the shelf's action error above. */
+  failed: boolean;
+  /** Whether "Nothing archived." is this line's to say. */
+  saysEmpty: boolean;
 }) {
-  const { archived, loadArchived } = shelf;
-
-  /* An effect rather than a call in the click handler, because the list is also
-     invalidated from *outside* this component: archiving or restoring sets it
-     back to null, and with the fetch living in the handler an open panel then
-     sat on "Looking…" for ever, waiting for a click that had already happened.
-     Keyed on "open and we have nothing", so it covers both cases with one rule.
-     Found in a browser pass, 2026-08-26. */
-  useEffect(() => {
-    if (open && archived === null) void loadArchived();
-  }, [open, archived, loadArchived]);
-
+  let text: string | null = null;
+  if (archived === null) {
+    text = failed
+      ? "Couldn't load the archived articles. Turn Archived off and on to try again."
+      : "Loading archived…";
+  } else if (archived.length === 0 && saysEmpty) {
+    text = "Nothing archived.";
+  }
+  if (!text) return null;
+  /* `status`, so a screen reader hears the load finish or fail when it gets
+     to it — the same politeness as the Undo strip below. */
   return (
-    <section className="tw:mt-10">
-      {/* A chevron, because this is a disclosure and nothing else said so — the
-          words alone changed from "Show" to "Hide", and that was the only thing
-          that moved. `-ml-2` keeps the *text* on the page's left margin while
-          the hit area extends past it, so giving it padding did not shunt the
-          label right. */}
-      <button
-        type="button"
-        onClick={onToggle}
-        aria-expanded={open}
-        className="tw:-ml-2 tw:inline-flex tw:h-7 tw:items-center tw:gap-1.5 tw:rounded-md tw:bg-transparent tw:px-2 tw:text-xs tw:text-muted-foreground tw:transition-colors tw:hover:bg-highlight/10 tw:hover:text-foreground"
-      >
-        <ChevronRight
-          size={13}
-          className={`tw:transition-transform ${open ? "tw:rotate-90" : ""}`}
-        />
-        {open ? "Hide archived" : "Show archived"}
-      </button>
-
-      {open && archived === null && (
-        <p className="tw:mt-2 tw:text-sm tw:text-muted-foreground">Looking…</p>
-      )}
-      {open && archived?.length === 0 && (
-        <p className="tw:mt-2 tw:text-sm tw:text-muted-foreground">Nothing archived.</p>
-      )}
-      {open && !!archived?.length && rows?.length === 0 && (
-        <p className="tw:mt-2 tw:text-sm tw:text-muted-foreground">
-          Nothing archived matches what is chosen above.
-        </p>
-      )}
-      {open && !!rows?.length && (
-        <ul
-          aria-label="Archived articles"
-          className="tw:m-0 tw:mt-3 tw:flex tw:list-none tw:flex-col tw:gap-2 tw:p-0"
-        >
-          {rows.map((a) => (
-            <li
-              key={a.slug}
-              className="tw:flex tw:items-center tw:gap-3 tw:rounded-md tw:border tw:border-border tw:px-4 tw:py-2 tw:text-sm"
-            >
-              <span className="tw:min-w-0 tw:flex-1 tw:truncate tw:text-muted-foreground">
-                {a.title}
-              </span>
-              <button
-                type="button"
-                onClick={() => void shelf.restore(a.slug)}
-                className="tw:inline-flex tw:h-7 tw:shrink-0 tw:items-center tw:gap-1.5 tw:rounded-md tw:px-2.5 tw:text-xs tw:text-highlight tw:transition-colors tw:hover:bg-highlight/10"
-              >
-                <Undo2 size={14} />
-                Put back
-              </button>
-            </li>
-          ))}
-        </ul>
-      )}
-    </section>
+    <p role="status" className="tw:mb-3 tw:mt-0 tw:text-xs tw:text-muted-foreground">
+      {text}
+    </p>
   );
 }
 

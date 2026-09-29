@@ -826,18 +826,23 @@ export function DebatePanel({ access, onJump, level: chosenLevel, onLevel }: Pro
           )}
         </>
       }
-      /* Below the lists: this is what you reach for after reading them and
-          wanting a fresher answer, not before. Pinned under the scroller
-          through `foot` rather than at the end of it — `debate.css` says so of
-          `.dbt-again` in as many words.
+      /* No standing redo button under the list any more. Greg, 2026-09-29
+          (SPIDERYARN-READING2-53): *"Same goes for any other modes that still
+          have a "redo this processing" button - let's just rely on the
+          Metadata mode for that."* Metadata's *Re-run AI processing* has a row
+          for this mode; the button inside the out-of-date banner stays, as a
+          repair the page is prompting rather than a standing redo.
+          docs/plans/260929b-one-place-to-re-run-ai-processing.md.
 
-          Offered even when both groups are empty, and that is the difference
-          from Timeline's equivalent — an empty timeline is a fact about the
-          article, which running it again cannot change, while an empty debate
-          is a fact about *one search on one day*, which is exactly what running
-          it again does change. */
+          Keep the footer only while a current search's job is starting,
+          running or failed. It remains the mode's one surface for progress,
+          Stop, a stall warning and the failure sentence. */
       foot={
-        debate && owner.status === "ready" && !owner.stale && !owner.outdated ? (
+        debate &&
+        owner.status === "ready" &&
+        !owner.stale &&
+        !owner.outdated &&
+        (owner.job || owner.starting || owner.failed) ? (
           <div className="dbt-again">{run("Search again", true)}</div>
         ) : null
       }

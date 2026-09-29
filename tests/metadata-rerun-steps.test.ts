@@ -1,5 +1,5 @@
 /**
- * **The nine steps the Metadata page offers a *Generate it again* button for**
+ * **The ten steps the Metadata page offers a *Re-run AI processing* row for**
  * — `METADATA_RERUN_STEPS` in src/rerun-steps.ts, and the two properties that
  * make each of them safe to press.
  *
@@ -22,8 +22,8 @@
  *    the pencil and for Archive — is that a control whose only outcome is a
  *    refusal is worse than no control, because pressing it is how you find out.
  *
- * **And the list stays explicit.** The last assertion pins the nine by name, so
- * a tenth mode step arriving in `STEP_ORDER` does not get a button by drifting
+ * **And the list stays explicit.** The last assertion pins the ten by name, so
+ * an eleventh mode step arriving in `STEP_ORDER` does not get a button by drifting
  * into one: somebody has to answer the three questions in the plan's § The list
  * of steps that get a button, and then come here and say so.
  * docs/plans/260907d-re-run-any-generated-mode-from-the-metadata-page.md.
@@ -48,7 +48,7 @@ const REFUSED: StepName[] = [
 ];
 
 describe("the steps the Metadata page will re-run", () => {
-  it("is exactly the nine the plan settled, in pipeline order", () => {
+  it("is exactly the ten the plans settled, in pipeline order", () => {
     expect([...METADATA_RERUN_STEPS]).toEqual([
       "arc",
       "tweets",
@@ -58,6 +58,7 @@ describe("the steps the Metadata page will re-run", () => {
       "timeline",
       "quiz",
       "sketch",
+      "trajectory",
       "debate",
     ]);
   });

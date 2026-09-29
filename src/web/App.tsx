@@ -349,7 +349,8 @@ function SignedIn({
 
   /* The shelf is home, so it gets no way-home logo — a link to the page you
      are already on is a dead control, and Library.tsx names the app in its own
-     `<h1>` anyway. Everywhere else, the corner. See HomeLogo.tsx.
+     `<h1>` anyway. Elsewhere, the page's own bar carries it when there is one;
+     standalone pages get the corner. See HomeLogo.tsx.
 
      Since 2026-09-08 that `<h1>` has the spider drawn beside it, so the shelf
      is no longer the one page with a wordmark and no mark. It is an `<img>` in
@@ -406,7 +407,10 @@ function SignedIn({
   if (route.kind === "features")
     return (
       <>
-        <HomeLogo />
+        {/* No `HomeLogo`, since 2026-09-29: the page's own top bar carries the
+            spider and the way home now, and the fixed corner copy sat on top
+            of it (z-index 60 over the bar's 40) — two spiders, two animation
+            hosts. GPT Sol, reviewing docs/plans/260929a-…, finding 1. */}
         {/* **`signedIn` is what keeps the top bar honest here.** Without it the
             nav drew *Sign in* → `/#sign-in`, and `/` is the shelf for this
             reader, which has no such panel: a link that visibly does nothing.
@@ -423,7 +427,10 @@ function SignedIn({
   if (route.kind === "public-sharing")
     return (
       <>
-        <HomeLogo />
+        {/* No `HomeLogo`, since 2026-09-29: the page's own top bar carries the
+            spider and the way home now, and the fixed corner copy sat on top
+            of it (z-index 60 over the bar's 40) — two spiders, two animation
+            hosts. GPT Sol, reviewing docs/plans/260929a-…, finding 1. */}
         <PublicReadableSharingPage signedIn />
       </>
     );
@@ -454,7 +461,10 @@ function SignedIn({
   if (route.kind === "pricing")
     return (
       <>
-        <HomeLogo />
+        {/* No `HomeLogo`, since 2026-09-29: the page's own top bar carries the
+            spider and the way home now, and the fixed corner copy sat on top
+            of it (z-index 60 over the bar's 40) — two spiders, two animation
+            hosts. GPT Sol, reviewing docs/plans/260929a-…, finding 1. */}
         {/* **`key`, for the same reason the shelf above has one.** A direct A→B
             sign-in leaves the route alone, so without this React keeps the
             instance and `useBilling`'s one effect never re-runs — B would read
@@ -477,13 +487,15 @@ function SignedIn({
      That is the rule the whole public namespace follows and it is worth saying
      here rather than only in the component: identical bytes either way, and the
      only thing `signedIn` decides is whether the top bar offers a *Sign in*
-     link that would go nowhere (SiteBits.tsx § `signedIn`). Dressed with the
-     corner logo like every other standalone page here, because signed in there
-     is a shelf for it to link at. */
+     link that would go nowhere (SiteBits.tsx § `signedIn`). Its top bar is
+     the way home, as on the other three pages that draw one. */
   if (route.kind === "public-library")
     return (
       <>
-        <HomeLogo />
+        {/* No `HomeLogo`, since 2026-09-29: the page's own top bar carries the
+            spider and the way home now, and the fixed corner copy sat on top
+            of it (z-index 60 over the bar's 40) — two spiders, two animation
+            hosts. GPT Sol, reviewing docs/plans/260929a-…, finding 1. */}
         <PublicLibraryPage signedIn />
       </>
     );

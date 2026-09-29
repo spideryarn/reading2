@@ -117,6 +117,7 @@ import type { ReactNode } from "react";
 
 import { GitHubMark } from "./GitHubMark.js";
 import { Link } from "./Link.js";
+import { useLogoAnimation } from "./logo-animation.js";
 import { Wordmark } from "./SiteBits.js";
 import { PUBLIC_SHELF_LABEL } from "../messages.js";
 import {
@@ -325,6 +326,10 @@ export function SiteFooter({
   const route = useRoute();
   const kind = here ?? route.kind;
   const links = LINKS.filter((l) => l.here !== kind);
+  /* A tap plays one, because a tap on the wordmark here does nothing else — it
+     is not a link (below). The shelf's spider makes the same call
+     (Library.tsx § ShelfSpider). */
+  const anim = useLogoAnimation({ tap: true });
 
   return (
     /* **A literal translucent white, not `border-border`.** `--border` is
@@ -416,7 +421,19 @@ export function SiteFooter({
               `/` here would be the one thing this component exists to prevent —
               an entry pointing at the page under the reader's feet — on every
               page that is `/`. */}
-          <Wordmark className="tw:text-sm" />
+          {/* **The spider animates here too**, since it joined the wordmark on
+              2026-09-29: Greg, 2026-09-12, *"wherever the logo is present"*.
+              A plain span, not a button: a tab stop whose only effect is a
+              flourish is noise (ShelfSpider says the same). Not `aria-hidden`
+              either, unlike the shelf's spider, because this one holds the
+              words. `self-start` so the hover target is the wordmark and not
+              the whole column's width. */}
+          <span
+            className={`site-wordmark-host tw:self-start ${anim.className}`}
+            {...anim.handlers}
+          >
+            <Wordmark className="tw:text-sm" />
+          </span>
           {children && (
             <p className="tw:m-0 tw:text-xs tw:leading-relaxed tw:text-ink-faint">{children}</p>
           )}

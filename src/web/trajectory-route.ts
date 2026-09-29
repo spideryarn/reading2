@@ -105,18 +105,21 @@ export function stepStop(
 }
 
 /**
- * **Where a change of depth lands** — "changing depth keeps your place, and
- * going round again starts again", exactly as the plan states it:
+ * **Where a change of depth lands** — "changing depth keeps your place":
  *
- * - **Depth up**, when you are on the **last stop of the current pass**: go to
- *   the first stop that is new at the new depth. That is going round again.
- * - **Depth up** otherwise: stay on the current stop.
+ * - **Depth up**: stay on the current stop. The deeper pass contains it.
  * - **Depth down**: stay on the current stop if the shallower pass has it.
  *   Otherwise go to the nearest earlier stop that it has, or to its first stop
  *   if none comes earlier.
  *
  * With no current stop, or one that is not on the pass being left, it lands on
  * the new pass's first stop. `null` only when the new pass is empty.
+ *
+ * **Going round again is not here any more.** Until plan 260929a a depth-up on
+ * the last stop of a pass jumped to the first stop new at the deeper pass. The
+ * door at the end of a pass now names that choice itself — *More detail ›*
+ * (Greg, SPIDERYARN-READING2-4N and 51) — so the depth buttons keep
+ * one rule, and the doors choose their own landing (`doorAfter`).
  */
 export function stopAfterDepthChange(
   stops: readonly TrajectoryStop[],
@@ -132,16 +135,7 @@ export function stopAfterDepthChange(
   if (at === -1) return first;
   const here = pass[at]!;
 
-  if (to > from) {
-    if (at === pass.length - 1) {
-      /* Going round again: the first stop the deeper pass adds. A depth that
-         adds nothing has no such stop, and then there is nowhere new to go. */
-      const fresh = next.find((s) => s.depth > from);
-      return fresh ? fresh.quoteId : here.quoteId;
-    }
-    return here.quoteId;
-  }
-  if (to === from) return here.quoteId;
+  if (to >= from) return here.quoteId;
 
   if (here.depth <= to) return here.quoteId;
   /* The nearest earlier stop the shallower pass has, walking back along the
@@ -158,26 +152,33 @@ export function stopAfterDepthChange(
  * **What the door after the current stop's block offers.**
  *
  * - `next`: the next stop on this pass.
- * - `again`: the end of a pass with a deeper one after it — *"Go round again —
- *   More ›"*. Pressing it is a depth change to `depth`, so it lands where
- *   `stopAfterDepthChange` says: the first stop new at that depth.
- * - `end`: the last stop of the deepest pass. Nothing further to offer.
+ * - `end`: the last stop of the pass. When a deeper offered pass exists, *More
+ *   detail ›* — that `deeper` depth, landing on **its** stop 1. At the end of
+ *   the deepest pass `deeper` is `null` and the door offers no button, only the
+ *   line saying which pass ended. *Go round again* (stop 1 of this pass) went in
+ *   plan 260929b: ← walks back (SPIDERYARN-READING2-51).
+ *
+ * `null` for a route with no stops on this pass.
  */
 export type Door =
   | { kind: "next"; quoteId: string }
-  | { kind: "again"; depth: TrajectoryDepth }
-  | { kind: "end" };
+  | { kind: "end"; deeper: { depth: TrajectoryDepth; first: string } | null };
 
 export function doorAfter(
   stops: readonly TrajectoryStop[],
   depth: TrajectoryDepth,
   current: string | null,
-): Door {
+): Door | null {
   const route = visibleRoute(stops, depth);
+  if (route.length === 0) return null;
   const next = stepStop(route, current, 1);
   if (next !== null) return { kind: "next", quoteId: next };
-  const deeper = offeredDepths(stops).find((d) => d > depth);
-  return deeper === undefined ? { kind: "end" } : { kind: "again", depth: deeper };
+  const d = offeredDepths(stops).find((x) => x > depth);
+  const deeperFirst = d === undefined ? undefined : visibleRoute(stops, d)[0];
+  return {
+    kind: "end",
+    deeper: d === undefined || deeperFirst === undefined ? null : { depth: d, first: deeperFirst.quoteId },
+  };
 }
 
 /**

@@ -62,18 +62,30 @@ import { useTimelineRead } from "../../useTimeline.js";
 export interface TrajectoryControl {
   /** The current stop's block — where the door hangs. `null` if its quote has gone. */
   blockId: BlockId | null;
-  /** The door's words, or `null` at the end of the deepest pass. */
-  door: string | null;
+  /** What the door after it offers — `DoorView`. */
+  door: DoorView | null;
   /**
-   * The cue of the stop the door leads to — the next one, or the first new one
-   * when it goes round again — drawn under the door. `null` without one.
+   * ← / →. `false` at the end of the pass, which does not wrap. ← on the first
+   * stop goes to the first stop's block again (Greg, SPIDERYARN-READING2-4K).
    */
-  doorCue: string | null;
-  /** ← / →. `false` at either end of the pass, which does not wrap. */
   step(dir: -1 | 1): boolean;
-  /** The door: the next stop, or round again one depth deeper. */
+  /** *Next stop ›*. */
   advance(): void;
+  /** *More detail ›* — stop 1 of the next deeper pass. */
+  deeper(): void;
 }
+
+/**
+ * **The door, as the prose draws it** (TrajectoryPanel.tsx § TrajectoryDoor).
+ * Mid-pass, *Next stop ›* with the cue of the stop it leads to. At the end of a
+ * pass, *More detail ›* when there is a deeper pass, and a line saying which
+ * pass just ended — at the deepest, the line alone. *Go round again* went in
+ * plan 260929b (SPIDERYARN-READING2-51): ← walks back, to stop 1 and its
+ * passage.
+ */
+export type DoorView =
+  | { kind: "next"; cue: string | null }
+  | { kind: "end"; pass: string; count: number; deeper: string | null };
 
 /**
  * The one deep-link arrival owned by the reading view, not by this band's
@@ -82,6 +94,72 @@ export interface TrajectoryControl {
  */
 export interface TrajectoryArrival {
   stop: string | null;
+  /**
+   * **Jump to the current stop when the band first has one** — armed by
+   * `Reader` when the reader switches into Trajectory by pressing something, or
+   * lands on a Trajectory address naming no `?stop=` and no `?at=`; never by
+   * Back or Forward, which restore an entry rather than make one (plan 260929a
+   * § 1, GPT Sol F4). Greg, SPIDERYARN-READING2-4K: *"activating Trajectory
+   * mode should automatically jump to the first step … then show one of the
+   * little "Back to ..." buttons in case that wasn't what the user wanted."*
+   */
+  open: boolean;
+}
+
+/* A mode-only pop keeps `Reader` mounted, but Back from another page can mount
+   it afresh. Remember that navigation above the component boundary too, or a
+   fresh `firstTrajectoryArrival` would mistake traversal for an opening and
+   push over Forward. The navigation-entry check covers a document restored by
+   browser history before this module's listener existed. */
+let poppedTrajectoryAddress: string | null = null;
+let documentTraversalAddress: string | null =
+  typeof window !== "undefined" &&
+  (performance.getEntriesByType?.("navigation")[0] as PerformanceNavigationTiming | undefined)?.type ===
+    "back_forward"
+    ? location.href
+    : null;
+if (typeof window !== "undefined") {
+  window.addEventListener("popstate", () => {
+    poppedTrajectoryAddress = location.href;
+  });
+}
+
+function takeTrajectoryTraversal(): boolean {
+  const traversed = poppedTrajectoryAddress === location.href || documentTraversalAddress === location.href;
+  poppedTrajectoryAddress = null;
+  documentTraversalAddress = null;
+  return traversed;
+}
+
+/**
+ * **The token for the page's first load.** A `?stop=` is a deep link. With no
+ * `?stop=` and no `?at=`, a Trajectory address is an opening — a link to the
+ * mode, say — and jumps to stop 1. With `?at=` and no stop it is a reading
+ * position (a reload before the first step), which is restored, not overruled.
+ */
+export function firstTrajectoryArrival(mode: string | null, search: string = location.search): TrajectoryArrival {
+  const traversed = takeTrajectoryTraversal();
+  if (mode !== "trajectory") return { stop: null, open: false };
+  const q = new URLSearchParams(search);
+  /* Back and Forward restore the entry through `?at=` and the browser history;
+     neither a surviving `?stop=` nor an otherwise bare address is a new
+     arrival. This also covers a traversal that remounted the whole Reader. */
+  if (traversed) return { stop: null, open: false };
+  const stop = q.get("stop");
+  return { stop, open: stop === null && !q.has("at") };
+}
+
+/** Arm the opening jump at the press, before nuqs writes the new address. */
+export function armTrajectoryOpening(
+  arrival: TrajectoryArrival,
+  from: string | null,
+  to: string | null,
+): void {
+  /* A direct press is stronger evidence than a remembered traversal to the
+     same href, and it owns its own opening token below. */
+  poppedTrajectoryAddress = null;
+  documentTraversalAddress = null;
+  if (from !== "trajectory" && to === "trajectory") arrival.open = true;
 }
 
 /** A module constant, for `NO_FOUND`'s reason (reader/passages.ts). */
@@ -96,6 +174,7 @@ export function TrajectoryBand({
   quotes,
   quoteMarks,
   covers,
+  away,
   onAway,
   onJump,
   onFound,
@@ -124,6 +203,12 @@ export function TrajectoryBand({
   quoteMarks: readonly Found[];
   /** The band is lying over the prose (a narrow window) — `fit.modeW === 0`. */
   covers: boolean;
+  /**
+   * The band has stepped aside (`onAway`) and is not drawn, so its list has no
+   * geometry to measure. When it comes back the list is measured again, to
+   * show the stop the reader moved to meanwhile (SPIDERYARN-READING2-54).
+   */
+  away: boolean;
   /** Get out of the way of the prose. Only meaningful while `covers`. */
   onAway(): void;
   /** A row press is a block jump narrowed to that stop's quote. */
@@ -186,7 +271,7 @@ export function TrajectoryBand({
     onControl,
     arrival,
   });
-  return <TrajectoryPanel owner={owner} view={view} />;
+  return <TrajectoryPanel owner={owner} view={view} away={away} />;
 }
 
 /** What the panel draws — see `TrajectoryPanel`. */
@@ -292,7 +377,7 @@ function useTrajectoryMode({
 
   /**
    * **Every direct movement along the route goes through here** — ‹ ›, ← →,
-   * the door, going round again, a depth change that moves you (Sol F29): the
+   * the door, a depth change that moves you (Sol F29): the
    * stop's block scrolled near the top and flashed when the glide settles
    * (`arrive`), and on a narrow window the band steps aside so the prose it
    * landed on can be seen. One helper, so the keys cannot do less than the
@@ -323,9 +408,10 @@ function useTrajectoryMode({
   );
 
   const changeDepth = useCallback(
-    (to: TrajectoryDepth) => {
+    /** @param land where to stand instead of where a depth change keeps you — *More detail ›*. */
+    (to: TrajectoryDepth, land?: string) => {
       if (depth === null) return;
-      const next = stopAfterDepthChange(stops, depth, to, current?.quoteId ?? null);
+      const next = land ?? stopAfterDepthChange(stops, depth, to, current?.quoteId ?? null);
       const moved = next !== null && next !== current?.quoteId;
       const block = moved ? blockOf(next) : null;
       if (moved && block === null) return;
@@ -341,7 +427,12 @@ function useTrajectoryMode({
 
   const step = useCallback(
     (dir: -1 | 1): boolean => {
-      const next = stepStop(route, current?.quoteId ?? null, dir);
+      /* ← on the first stop goes to it again: the reader asked to be taken to
+         the start, and "you are already there" is no answer when the page is
+         somewhere else (SPIDERYARN-READING2-4K). → at the end stays a no-op —
+         the door is the way on. */
+      const next =
+        stepStop(route, current?.quoteId ?? null, dir) ?? (dir === -1 ? (route[0]?.quoteId ?? null) : null);
       if (next === null) return false;
       return goStep(next);
     },
@@ -350,64 +441,101 @@ function useTrajectoryMode({
 
   const door = depth === null ? null : doorAfter(stops, depth, current?.quoteId ?? null);
   const advance = useCallback(() => {
-    if (door === null) return;
-    if (door.kind === "next") goStep(door.quoteId);
-    else if (door.kind === "again") changeDepth(door.depth);
-  }, [door, goStep, changeDepth]);
-  const doorWords =
-    door === null || door.kind === "end"
-      ? null
-      : door.kind === "next"
-        ? "Next stop ›"
-        : `Go round again — ${DEPTH_LABEL[door.depth]} ›`;
-  /* **Where the door leads**, in the words of that stop's cue: the next stop,
-     or the one going round again lands on — `stopAfterDepthChange`, the rule
-     `advance` itself follows, so the line and the press cannot disagree. */
-  const doorTarget =
-    door === null || depth === null || door.kind === "end"
-      ? null
-      : door.kind === "next"
-        ? door.quoteId
-        : stopAfterDepthChange(stops, depth, door.depth, current?.quoteId ?? null);
-  const doorStop = doorTarget === null ? undefined : stops.find((s) => s.quoteId === doorTarget);
-  const doorCue = doorStop ? cueOf(doorStop) : null;
+    if (door?.kind === "next") goStep(door.quoteId);
+  }, [door, goStep]);
+  const deeper = useCallback(() => {
+    if (door?.kind === "end" && door.deeper) changeDepth(door.deeper.depth, door.deeper.first);
+  }, [door, changeDepth]);
+  /* The door's view as primitives, so the published object below changes only
+     when what it draws does. */
+  const doorKind = door?.kind ?? null;
+  const nextStop = door?.kind === "next" ? stops.find((s) => s.quoteId === door.quoteId) : undefined;
+  const doorCue = nextStop ? cueOf(nextStop) : null;
+  const passLabel = depth === null ? "" : DEPTH_LABEL[depth];
+  const deeperLabel = door?.kind === "end" && door.deeper ? DEPTH_LABEL[door.deeper.depth] : null;
+  const passCount = route.length;
+  const doorView = useMemo<DoorView | null>(
+    () =>
+      doorKind === null
+        ? null
+        : doorKind === "next"
+          ? { kind: "next", cue: doorCue }
+          : { kind: "end", pass: passLabel, count: passCount, deeper: deeperLabel },
+    [doorKind, doorCue, passLabel, passCount, deeperLabel],
+  );
 
   /* ------------------------------------------------ published upward --
      The verbs through a ref, so the published object is stable and changes
      only with the stop's block and the door's words. See `TrajectoryControl`. */
-  const latest = useRef({ step, advance });
-  latest.current = { step, advance };
+  const latest = useRef({ step, advance, deeper });
+  latest.current = { step, advance, deeper };
   const stableStep = useCallback((dir: -1 | 1) => latest.current.step(dir), []);
   const stableAdvance = useCallback(() => latest.current.advance(), []);
+  const stableDeeper = useCallback(() => latest.current.deeper(), []);
   const stopBlock = quote?.blockId ?? null;
 
-  /* **A deep link's stop is brought into view and flashed, once** — the
-     plan's stage 5a and Sol F28. `?at=` is the only address the reading view
-     restores (useReadingPosition), so without this a link to a stop opened
-     wherever the page happened to be. Reader remembers the initial `?stop=`
-     above the mode boundary, and the first time a current stop resolves to a
-     block (the route and the Quotes arrive over the wire) it is `arrive`d at if
-     it is that stop, and forgotten either way — a link whose stop fell back to
-     the first one gets nothing. **One-shot, not an effect on `current`**, which
-     would move the reader a second time after every step and row press, or
-     re-arm when a mode switch remounts this band.
-
-     `arrive`, not `moveTo`: the band does not step aside. A shared link opens
-     the band (Reader.tsx § `bandAway`); on a narrow window the flash is held
-     behind it and fires when the band steps aside (flash.ts). */
-  useEffect(() => {
-    if (arrival.stop === null || current === null || stopBlock === null) return;
-    const named = arrival.stop === current.quoteId;
+  /* **This mount claims the arrival before it waits for data.** The mailbox is
+     cleared in a layout effect, while the claimed token stays in this band's
+     ref. If the reader leaves before the route or Quotes resolve, the ref goes
+     with the band: Back cannot inherit the old press and turn traversal into a
+     fresh push. A ref survives StrictMode's synthetic effect replay, so the
+     first setup may claim it without the second losing it (code review F2). */
+  const claimedArrival = useRef<TrajectoryArrival>({ stop: null, open: false });
+  useLayoutEffect(() => {
+    /* StrictMode runs this setup twice around a synthetic cleanup. The second
+       sees an empty mailbox and must leave the first setup's local claim alone. */
+    if (arrival.stop === null && !arrival.open) return;
+    claimedArrival.current = { stop: arrival.stop, open: arrival.open };
     arrival.stop = null;
-    if (named) arrive(stopBlock, current.quoteId);
-  }, [arrival, current, stopBlock]);
+    arrival.open = false;
+  }, [arrival]);
+
+  /* **Arriving in the mode: one effect, deep link first** — plan 260929a § 1,
+     GPT Sol F4. The mailbox lives on `Reader`'s `arrival`, above the mode
+     boundary; this mount has claimed it into `claimedArrival`, so a later mount
+     cannot inherit it. The action is consumed the first time a current stop
+     resolves to a block (the route and Quotes arrive over the wire), before
+     anything is done with it, so a second run — StrictMode, a re-render — finds
+     nothing to do. **One-shot, not an effect on `current`**, which would move
+     the reader again after every step.
+
+     - **A `?stop=` link** (the plan's stage 5a, Sol F28): brought into view and
+       flashed with `arrive` — no push, since `?at=` is the only address the
+       reading view restores and the link *is* the entry. A link whose stop
+       has gone falls back to the first stop, and is arrived at there, rather
+       than leaving the page wherever it opened (Sol F4). The band stays open:
+       on a narrow window the flash waits behind it (flash.ts).
+     - **Opening the mode**: a jump, through `onJump` → `beginJump` — one
+       pushed entry stamped with where the reader was, so the *Back to …* chip
+       offers the way home (ReturnChip.tsx), centred, the quote flashed. The
+       stop is the band's current one: stop 1 on a fresh opening, or where the
+       reader had got to if `?stop=` survived a mode switch. */
+  useEffect(() => {
+    if (current === null || stopBlock === null) return;
+    const claimed = claimedArrival.current;
+    if (claimed.stop !== null) {
+      claimed.stop = null;
+      claimed.open = false;
+      arrive(stopBlock, current.quoteId);
+      return;
+    }
+    if (!claimed.open) return;
+    claimed.open = false;
+    onJump(stopBlock, quoteMarkKey(current.quoteId, stopBlock));
+  }, [current, stopBlock, onJump]);
 
   const control = useMemo<TrajectoryControl | null>(
     () =>
       current === null
         ? null
-        : { blockId: stopBlock, door: doorWords, doorCue, step: stableStep, advance: stableAdvance },
-    [current, stopBlock, doorWords, doorCue, stableStep, stableAdvance],
+        : {
+            blockId: stopBlock,
+            door: doorView,
+            step: stableStep,
+            advance: stableAdvance,
+            deeper: stableDeeper,
+          },
+    [current, stopBlock, doorView, stableStep, stableAdvance, stableDeeper],
   );
   useLayoutEffect(() => {
     onControl(control);
@@ -495,7 +623,7 @@ function useTrajectoryMode({
 
 /**
  * **Arriving at a stop** — by stepping (`moveTo`, above) or by a deep link:
- * the block scrolled near the top, and flashed once the glide settles, the
+ * the stop's quote centred in view, and flashed once the glide settles, the
  * rule `beginJump` (keynav.ts) follows so a flash never finishes mid-glide.
  * Stepping elsewhere does not flash; a Trajectory step does, because the route
  * is out of paper order and each step lands anywhere in the article — flash.ts
@@ -523,9 +651,17 @@ function arrive(block: BlockId, quoteId: string): void {
   /* A landing still held behind a covering band belongs to the step before. */
   dropPendingFlash();
   const passage = quoteMarkKey(quoteId, block);
-  scrollToBlock(block, "smooth", (outcome) => {
-    if (outcome === "settled") flashBlock(block, { passage });
-  });
+  /* Centred on the quote, as every jump is since plan 260929a § 3 — the
+     route lands anywhere in the article, and the reader wants to see what is
+     round it (SPIDERYARN-READING2-4M). */
+  scrollToBlock(
+    block,
+    "smooth",
+    (outcome) => {
+      if (outcome === "settled") flashBlock(block, { passage });
+    },
+    { align: "centre", passage },
+  );
 }
 
 /** A stop's cue, or — on a route written before cues — its role. */

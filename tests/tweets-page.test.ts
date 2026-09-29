@@ -107,7 +107,7 @@ describe("the request the button sends", () => {
 });
 
 /**
- * The footer's "Write it again", which is a different request from the one
+ * Metadata's Thread row, which is a different request from the one
  * above and fails in a way that looks like success.
  *
  * A rewrite asked for without `force` is accepted, queued, and skipped — the
@@ -117,7 +117,7 @@ describe("the request the button sends", () => {
  * docs/reusable/silent-success.md exactly, and it is why the flag is pinned
  * here rather than left to the page.
  */
-describe("the request the rewrite sends", () => {
+describe("the request the Metadata rewrite sends", () => {
   it("keeps the force alongside the steps", () => {
     expect(parseJobRequest({ slug: "writes", steps: ["tweets"], force: ["tweets"] })).toEqual({
       slug: "writes",

@@ -62,7 +62,15 @@ import type { Block, BlockId } from "../types.js";
 import { armJump, clearArmedJump, type JumpOrigin } from "./jump-history.js";
 import { activeSectionIndex } from "./position.js";
 import { dropPendingFlash, flashBlock } from "./flash.js";
-import { SCROLL_MS, abandonScroll, scrollToBlock, stickyOffset } from "./scroll.js";
+import {
+  SCROLL_MS,
+  abandonScroll,
+  arrivalAnchor,
+  glideTarget,
+  isPassageOnScreen,
+  scrollToBlock,
+  stickyOffset,
+} from "./scroll.js";
 import { navigableItems, type Cell, type Geometry } from "./tree.js";
 
 /**
@@ -223,7 +231,19 @@ export function nextAim(
  * finger and a key must not disagree about which item the reader is in.
  */
 export function measureRow(): number {
-  return activeSectionIndex(rowTops(), readingLine());
+  /* A centred arrival sits below the reading line, and until the reader moves
+     it is the item they are in (scroll.ts § `anchor`, plan 260929a). */
+  const held = anchoredRow();
+  return held ?? activeSectionIndex(rowTops(), readingLine());
+}
+
+/** The anchored arrival's index among the article's rows, or `null`. */
+function anchoredRow(): number | null {
+  const a = arrivalAnchor();
+  if (a === null) return null;
+  const rows = document.querySelectorAll<HTMLElement>("tbody tr[data-block]");
+  for (let i = 0; i < rows.length; i++) if (rows[i]!.dataset.block === a.id) return i;
+  return null;
 }
 
 /** Every article row's distance from the top of the viewport, in order. */
@@ -286,6 +306,10 @@ function readingLine(): number {
  * back exactly.
  */
 export function measureOrigin(blocks: Block[]): JumpOrigin {
+  /* Standing on a centred arrival: that is where Back should return them, not
+     the block above it whose top happens to cross the line (plan 260929a, Sol F1). */
+  const a = arrivalAnchor();
+  if (a !== null && blocks.some((b) => b.id === a.id)) return { kind: "block", blockId: a.id as BlockId };
   const tops = rowTops();
   const first = tops[0];
   /* No rows at all — an empty article, or a mode not drawing the table — or
@@ -362,8 +386,10 @@ export function beginJump(
      destination. */
   dropPendingFlash();
   const origin = measureOrigin(blocks);
-  if (origin.kind === "block" && origin.blockId === target) {
-    abandonScroll();
+  if (alreadyThere(origin, target, passage)) {
+    /* Only a glide in flight needs stopping; with none, `abandonScroll` would
+       only drop the arrival anchor the reader is standing on (plan 260929a). */
+    if (glideTarget() !== null) abandonScroll();
     flashBlock(target, { passage });
     return false;
   }
@@ -377,10 +403,33 @@ export function beginJump(
     target,
   });
   push(target);
-  scrollToBlock(target, "smooth", (outcome) => {
-    if (outcome === "settled") flashBlock(target, { passage });
-  });
+  /* Centred, so the reader sees what surrounds it — Greg, SPIDERYARN-READING2-4M
+     (scroll.ts § `ScrollAlign`). */
+  scrollToBlock(
+    target,
+    "smooth",
+    (outcome) => {
+      if (outcome === "settled") flashBlock(target, { passage });
+    },
+    { align: "centre", passage },
+  );
   return true;
+}
+
+/**
+ * **Is the reader already looking at what this jump is for?** Then it flashes
+ * rather than moves (above). Passage-aware since plan 260929a (Sol F2): a jump
+ * that names a quote is "there" only when that quote is — the anchor of the
+ * last centred arrival names it exactly, or, with no anchor, its marks are in
+ * view — because the block under the reading line can be a long paragraph
+ * whose quote is a screen further down.
+ */
+function alreadyThere(origin: JumpOrigin, target: BlockId, passage: string | undefined): boolean {
+  if (origin.kind !== "block" || origin.blockId !== target) return false;
+  if (passage === undefined) return true;
+  const a = arrivalAnchor();
+  if (a !== null) return a.id === target && a.passage === passage;
+  return isPassageOnScreen(target, passage);
 }
 
 /** Typing somewhere? Then the arrows are the caret's, not ours. */

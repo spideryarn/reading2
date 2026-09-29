@@ -216,7 +216,7 @@ export function JobProgress({
    * nothing else. `label` and *Retry* are what the reader sees, and they are the
    * same words in every band; the mode's name sits beside the band as ordinary
    * text, which a screen reader's button list does not pick up. On a page with
-   * nine of these — Metadata's *Generate it again* — that list reads as eight
+   * ten of these — Metadata's *Re-run AI processing* — that list reads as nine
    * indistinguishable *Run it again* controls. Found by a cross-family review of
    * the built code, 2026-09-07 (§ F11 of the plan).
    *

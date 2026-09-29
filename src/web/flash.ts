@@ -37,7 +37,7 @@
  * be the wrong trade.
  */
 import type { BlockId } from "../types.js";
-import { blockRow } from "./rows.js";
+import { blockRow, passageMarks } from "./rows.js";
 import { reducedMotion } from "./scroll.js";
 
 /** "A second or so" — Greg, 2026-09-28. The CSS animation runs the same length. */
@@ -78,15 +78,6 @@ function stop(): void {
   clearTimeout(live.timer);
   for (const el of live.els) el.classList.remove(MOVING, STILL, PASSAGE_MOVING, PASSAGE_STILL);
   live = null;
-}
-
-/** Every fragment of the passage `key` in this cell — split across an `<em>`, it is several. */
-function passageMarks(cell: HTMLElement, key: string): HTMLElement[] {
-  /* `data-hit` is a space-separated list, and a key is `quote:block:n` — split
-     and compare rather than build a `~=` selector that would need escaping. */
-  return [...cell.querySelectorAll<HTMLElement>("mark.hit[data-hit]")].filter((m) =>
-    (m.dataset.hit ?? "").split(" ").includes(key),
-  );
 }
 
 export function flashBlock(id: BlockId, target: FlashTarget = {}): void {

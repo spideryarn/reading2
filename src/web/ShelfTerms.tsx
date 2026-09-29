@@ -19,6 +19,10 @@
  * ShelfTermsDetail.tsx. Each topic wears the colour of its rank
  * (topic-colour.ts), as a dot on its pill and a swatch on its row.
  *
+ * **Both views draw only the topics worth offering** — a topic with nothing
+ * left to show is not drawn unless it is chosen (`availableTopics`, plan
+ * 260929a, Greg's report 4Y). It used to be greyed in place.
+ *
  * This component draws; it decides nothing about which articles are shown.
  * The counts come in already computed by the one formula in shelf-narrow.ts,
  * and a click goes back up as a key. docs/project/shelf-terms.md.
@@ -28,6 +32,7 @@ import { ChevronRight } from "lucide-react";
 import { useQueryState } from "nuqs";
 import type { LibraryTermsResponse } from "../types.js";
 import { libraryTopicsViewParam } from "./params.js";
+import { availableTopics } from "./shelf-narrow.js";
 import { TermChip, type TermTipScope } from "./ShelfTermChip.js";
 import { ShelfTermsDetail } from "./ShelfTermsDetail.js";
 import { topicSlot } from "./topic-colour.js";
@@ -102,10 +107,17 @@ export function ShelfTerms({
   const slotOf = (key: string) => topicSlot(rank.get(key) ?? 0);
   /* **The server's rank order**, never re-sorted (plan 260928d): the chooser
      ranks for coverage, so the first few chips are the few that reach most of
-     the shelf, and nothing moves when you press one or the counts change. The
-     first COLLAPSED_CHIPS, plus any chosen topic further down, in its place —
-     or, with "All N topics", every one. */
-  const shown = all ? terms : terms.filter((t, i) => i < COLLAPSED_CHIPS || chosen.has(t.key));
+     the shelf. **Zeros go first, then the first twelve** (plan 260929a, Sol
+     R5): a topic with nothing left to show is dropped unless chosen, and only
+     then does the row take the first COLLAPSED_CHIPS, plus any chosen topic
+     further down, in its place — or, with "All N topics", every one. Taking
+     twelve and then dropping zeros would leave the row short with pills
+     waiting beyond it. The colour stays the rank's, above, so a chip keeps its
+     dot when its neighbours come and go. */
+  const available = availableTopics(terms, count, chosen);
+  const shown = all
+    ? available
+    : available.filter((t, i) => i < COLLAPSED_CHIPS || chosen.has(t.key));
   const tipScope: TermTipScope = {
     inScope,
     scopeWord: archived ? "on the shelf and in the archive" : "on the shelf",
@@ -144,9 +156,12 @@ export function ShelfTerms({
             Clear
           </button>
         )}
-        {!detail && terms.length > COLLAPSED_CHIPS && (
+        {available.length === 0 && (
+          <span className="tw:text-xs tw:text-muted-foreground">None of the topics is in this view.</span>
+        )}
+        {!detail && available.length > COLLAPSED_CHIPS && (
           <button type="button" onClick={() => setAll((v) => !v)} aria-expanded={all} className={QUIET_BUTTON}>
-            All {terms.length} topics
+            All {available.length} topics
             <ChevronRight size={12} className={`tw:transition-transform ${all ? "tw:rotate-90" : ""}`} />
           </button>
         )}
@@ -160,9 +175,9 @@ export function ShelfTerms({
         {reading}
       </div>
 
-      {detail && (
+      {detail && available.length > 0 && (
         <ShelfTermsDetail
-          terms={terms}
+          terms={available}
           slotOf={slotOf}
           count={count}
           chosen={chosen}

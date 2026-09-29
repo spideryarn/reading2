@@ -26,11 +26,17 @@
  * the FAQ question is text because its passage is the stop already open. The
  * tying-together is the juxtaposition, not a synthesis (Sol F21).
  *
- * ## The head is pinned
+ * ## The head is pinned, and the list follows the stop
  *
  * `‹ Stop k of N ›` and the depth control sit in `ModeSurface`'s head, which is
  * outside the scroller (`.band-head` is `flex: none`), so they stay put while
- * the list scrolls.
+ * the list scrolls. When the current stop changes, by any path, the list's own
+ * scroller (`.tl-scroll`) is nudged to show its row — `useFollow`, Summary's
+ * machinery, which sets that scroller's `scrollTop` and never touches the
+ * page, so it cannot fight the prose scroll landing the passage
+ * (SPIDERYARN-READING2-54). The promise about where the passages come from is
+ * an info button's tooltip in the head, not a paragraph in the foot
+ * (SPIDERYARN-READING2-52).
  *
  * ## The depth control is three buttons, not a slider
  *
@@ -39,11 +45,12 @@
  * (`offeredDepths`). Each is a real `<button>` and its own tab stop, with
  * `aria-pressed` — keyboard.md's rule that arrow keys belong to the article.
  */
-import { useEffect, useState } from "react";
-import { ChevronLeft, ChevronRight, RotateCw, Route, TriangleAlert } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
+import { ChevronLeft, ChevronRight, Info, RotateCw, Route, TriangleAlert } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import type { UseTrajectory } from "./useTrajectory.js";
-import type { TrajectoryView } from "./modes/trajectory/TrajectoryMode.js";
+import type { DoorView, TrajectoryView } from "./modes/trajectory/TrajectoryMode.js";
+import { FOLLOW_ATTR, useFollow } from "./follow.js";
 import { entryProse } from "./GlossaryPanel.js";
 import { JobProgress } from "./JobProgress.js";
 import { ModeSurface } from "./ModeSurface.js";
@@ -108,17 +115,20 @@ function rowWords(row: TrajectoryRow): { shown: string; whole: string | null } |
 }
 
 /**
- * **Where the stop sits in the article** — a thin track with a dot on it, the
- * same width on every row, so down the list the dots zig-zag when the route
- * jumps from the results back to the methods. A hint, not a chart: drawn for
- * the eye only, and said in words for a screen reader. The plan's stage 5b.
+ * **Where the stop sits in the article** — a short vertical hairline under the
+ * row's number, with a dot on it: the top of the line is the start of the
+ * article, the bottom its end, the way the spine draws it. A hint, not a chart:
+ * drawn for the eye only, and said in words for a screen reader. The plan's
+ * stage 5b; vertical, in the number's column, since plan 260929a § 4 — it was
+ * a horizontal track in a column of its own, about 53px of a band that can be
+ * 280px wide (Greg, SPIDERYARN-READING2-4D).
  */
 function StopPosition({ at, current }: { at: number; current: boolean }) {
   const pct = Math.round(Math.min(1, Math.max(0, at)) * 100);
   return (
     <>
       <span className="traj-pos" aria-hidden="true">
-        <span className={`traj-pos-dot${current ? " on" : ""}`} style={{ left: `${pct}%` }} />
+        <span className={`traj-pos-dot${current ? " on" : ""}`} style={{ top: `${pct}%` }} />
       </span>
       <span className="traj-pos-said sr-only">about {pct}% of the way through</span>
     </>
@@ -126,7 +136,8 @@ function StopPosition({ at, current }: { at: number; current: boolean }) {
 }
 
 /**
- * **The honest promise**, pinned under the list. The first half is what the
+ * **The honest promise**, in the tooltip of the head's info button — the
+ * foot's first line until SPIDERYARN-READING2-52. The first half is what the
  * mode can prove — the passages are the Quotes' own, checked against the
  * article by that step; the second is what it cannot.
  */
@@ -204,15 +215,20 @@ export function outdatedBy(
  * **The pinned head**: the stepper, and the depth control when there is more
  * than one depth to offer.
  */
-function RouteHead({ view, total }: { view: TrajectoryView; total: number }) {
+function RouteHead({ view, total, about }: { view: TrajectoryView; total: number; about: string[] }) {
+  const [aboutOpen, setAboutOpen] = useState(false);
   return (
     <div className="traj-head">
       <div className="traj-stepper">
+        {/* Enabled on stop 1 too, where it goes to stop 1's passage again —
+            ← does the same (SPIDERYARN-READING2-4K), and the keys may not do
+            more than the buttons. */}
         <button
           type="button"
           className="traj-arrow"
-          aria-label="Previous stop"
-          disabled={view.position <= 1}
+          aria-label={view.position <= 1 ? "Back to stop 1" : "Previous stop"}
+          title={view.position <= 1 ? "Back to stop 1" : undefined}
+          disabled={view.position < 1}
           onClick={() => view.onStep(-1)}
         >
           <ChevronLeft size={20} />
@@ -248,6 +264,34 @@ function RouteHead({ view, total }: { view: TrajectoryView; total: number }) {
           ))}
         </fieldset>
       )}
+      {/* **Where the passages come from**, said once and out of the way — the
+          two foot sentences Greg asked to move into a tooltip
+          (SPIDERYARN-READING2-52). Controlled, as Quotes' *Why this one* is,
+          so a tap toggles it on a touch device with no hover; hover and focus
+          open it too. */}
+      <Tooltip
+        content={
+          <>
+            {about.map((line) => (
+              <p key={line}>{line}</p>
+            ))}
+          </>
+        }
+        placement="bottom"
+        open={aboutOpen}
+        onOpenChange={setAboutOpen}
+        className="traj-about-card"
+      >
+        <button
+          type="button"
+          className={`traj-about${aboutOpen ? " on" : ""}`}
+          aria-label="About this route"
+          aria-expanded={aboutOpen}
+          onClick={() => setAboutOpen((was) => !was)}
+        >
+          <Info size={16} />
+        </button>
+      </Tooltip>
     </div>
   );
 }
@@ -255,9 +299,11 @@ function RouteHead({ view, total }: { view: TrajectoryView; total: number }) {
 interface Props {
   owner: UseTrajectory;
   view: TrajectoryView;
+  /** Stepped aside and not drawn — `TrajectoryBand`'s `away`. */
+  away: boolean;
 }
 
-export function TrajectoryPanel({ owner, view }: Props) {
+export function TrajectoryPanel({ owner, view, away }: Props) {
   useRenderCount("TrajectoryPanel");
   const route = owner.trajectory;
   const ready = route !== null && owner.status === "ready";
@@ -266,6 +312,14 @@ export function TrajectoryPanel({ owner, view }: Props) {
   const atMost = ready && view.depth !== null && view.depth === deepest && view.depth === 3;
   /** The row whose whole quote is up — one at a time, and only by mouse or focus. */
   const [tipFor, setTipFor] = useState<string | null>(null);
+  /** The list's own scroller, kept pointed at the current row (54). */
+  const scroller = useRef<HTMLDivElement>(null);
+  const currentId = ready ? (view.rows.find((row) => row.current)?.quoteId ?? null) : null;
+  /* The depth and the card reflow the list without changing the current row.
+     `away` is there because a band that stepped aside is `display: none`: a
+     step made from the prose's door measures nothing, so the list is measured
+     again when the band comes back (GPT Sol, plan review F1). */
+  useFollow(scroller, currentId, [view.depth, view.card, away]);
   /* A depth or route refresh can remove an open row, so its Tooltip unmounts
      before it can report that it closed. Do not let that stale id reopen if
      the row later returns. The enabled check also covers words disappearing. */
@@ -302,22 +356,31 @@ export function TrajectoryPanel({ owner, view }: Props) {
       /* **A head that stays put**: the stepper and the depth control, pinned
          above the scroller. Present only when there is a route to step — no
          empty row over the loading sentence (new-mode.md § the header row). */
-      head={ready && total > 0 && view.depth !== null ? <RouteHead view={view} total={total} /> : null}
+      head={
+        ready && total > 0 && view.depth !== null ? (
+          <RouteHead
+            view={view}
+            total={total}
+            about={[
+              trajectoryPromise(route.profileHash !== null),
+              ...(atMost ? [coverageNote(total, route.offered)].filter((n): n is string => n !== null) : []),
+            ]}
+          />
+        ) : null
+      }
       foot={
-        ready && total > 0 ? (
+        /* **A status-only foot.** The promise moved to the head's tooltip
+           (SPIDERYARN-READING2-52), and the standing *Plan it again* went —
+           Greg, 2026-09-29 (SPIDERYARN-READING2-53): *"remove the "Plan it
+           again" button … let's just rely on the Metadata mode for that."*
+           Metadata's *Re-run AI processing* has a Trajectory row, and the
+           outdated banner keeps its own button. What is left is a job's
+           progress, Stop and failure while one is starting, running or
+           failed; idle, there is no foot at all.
+           docs/plans/260929b-one-place-to-re-run-ai-processing.md. */
+        ready && !outdatedBy(owner) && (owner.job || owner.starting || owner.failed) ? (
           <div className="traj-foot">
-            <p className="traj-note">{trajectoryPromise(route.profileHash !== null)}</p>
-            {atMost && coverageNote(total, route.offered) && (
-              <p className="traj-note">{coverageNote(total, route.offered)}</p>
-            )}
-            {/* **Plan it again**, pinned under the list as Ideas' and
-                Timeline's are — the plan's stage 5e. It rebuilds the route
-                only: Quotes is an unforced prerequisite on the request, so the
-                server checks its currency, while `useStepJob` names only
-                Trajectory in `force`. Quotes has its own button for replacing
-                a current list. Not drawn while the outdated banner is up,
-                which offers the same press already. */}
-            {!outdatedBy(owner) && <div className="traj-again">{run("Plan it again", true)}</div>}
+            <div className="traj-again">{run("Plan it again", true)}</div>
           </div>
         ) : null
       }
@@ -359,7 +422,7 @@ export function TrajectoryPanel({ owner, view }: Props) {
           {total === 0 && <p className="gloss-quiet">This route has no stops.</p>}
 
           {total > 0 && (
-            <div className="tl-scroll">
+            <div className="tl-scroll" ref={scroller}>
               <TooltipGroup delay={{ open: 240, close: 90 }} timeoutMs={400}>
                 <ol className="traj-list">
                   {view.rows.map((row, index) => {
@@ -374,7 +437,10 @@ export function TrajectoryPanel({ owner, view }: Props) {
                         disabled={row.missing}
                         onClick={() => view.onRow(row.quoteId)}
                       >
-                        <span className="traj-n">{row.n}</span>
+                        <span className="traj-n">
+                          {row.n}
+                          {row.position !== null && <StopPosition at={row.position} current={row.current} />}
+                        </span>
                         <span className="traj-what">
                           {/* A repeated section is said, not drawn: a ditto mark
                               beside a quotation reads as another quotation mark,
@@ -387,7 +453,6 @@ export function TrajectoryPanel({ owner, view }: Props) {
                           {words && <span className="traj-words">“{words.shown}”</span>}
                           {row.current && row.cue && <span className="traj-cue">{row.cue}</span>}
                         </span>
-                        {row.position !== null && <StopPosition at={row.position} current={row.current} />}
                       </button>
                     );
                     return (
@@ -395,6 +460,7 @@ export function TrajectoryPanel({ owner, view }: Props) {
                         key={row.quoteId}
                         className={`traj-row${row.current ? " current" : ""}${row.seen ? " seen" : ""}`}
                         data-stop={row.quoteId}
+                        {...{ [FOLLOW_ATTR]: row.quoteId }}
                       >
                         {/* Always wrapped, enabled only while the row is cut, so the
                             button is never remounted as its row becomes current.
@@ -542,9 +608,13 @@ function StopCardView({
 }
 
 /**
- * **The door after the current stop's block** — "Next stop ›", or at the end
- * of a pass "Go round again — More ›". It is there because on an iPad the
- * reader's eyes and thumb are in the prose after reading a stop, and on a
+ * **The door after the current stop's block** — "Next stop ›" mid-pass, and at
+ * the end of a pass *More detail ›* (stop 1 of the next deeper pass), or no
+ * button at all at the end of the deepest, only the line saying which pass
+ * ended. *Go round again* sat beside it until Greg asked for it to go: ← walks
+ * back, and ← on stop 1 goes to its passage (SPIDERYARN-READING2-51 and 4K,
+ * plan 260929b). It is there because on an iPad
+ * the reader's eyes and thumb are in the prose after reading a stop, and on a
  * narrow window the band has stepped aside altogether (F4).
  *
  * Drawn by `TableView` after the block's prose, outside `.prose`, on the path
@@ -552,22 +622,18 @@ function StopCardView({
  * shifts no comment anchor.
  */
 export function TrajectoryDoor({
-  label,
-  cue,
-  onPress,
+  door,
+  onNext,
+  onDeeper,
   onRoute,
 }: {
-  label: string | null;
-  /**
-   * The cue of the stop the door leads to, drawn small and muted under it, so
-   * the door says where it goes. `null` for none, or an old route.
-   */
-  cue: string | null;
-  onPress(): void;
+  door: DoorView | null;
+  onNext(): void;
+  onDeeper(): void;
   /** Bring the band back — offered only while it has stepped aside. */
   onRoute: (() => void) | null;
 }) {
-  if (label === null && onRoute === null) return null;
+  if (door === null && onRoute === null) return null;
   return (
     <div className="traj-door">
       <div className="traj-door-row">
@@ -577,13 +643,30 @@ export function TrajectoryDoor({
             All stops
           </button>
         )}
-        {label && (
-          <button type="button" className="traj-door-btn" onClick={onPress}>
-            {label}
+        {door?.kind === "next" && (
+          <button type="button" className="traj-door-btn" onClick={onNext}>
+            Next stop ›
+          </button>
+        )}
+        {door?.kind === "end" && door.deeper && (
+          <button
+            type="button"
+            className="traj-door-btn"
+            title={`Go round at ${door.deeper}, with more stops between these`}
+            onClick={onDeeper}
+          >
+            More detail ›
           </button>
         )}
       </div>
-      {label && cue && <p className="traj-door-cue">{cue}</p>}
+      {/* Where the door leads: the next stop's cue, small and muted — or, at
+          the end of a pass, which pass has ended. */}
+      {door?.kind === "next" && door.cue && <p className="traj-door-cue">{door.cue}</p>}
+      {door?.kind === "end" && (
+        <p className="traj-door-cue">
+          End of {door.pass} — {door.count} {door.count === 1 ? "stop" : "stops"}.
+        </p>
+      )}
     </div>
   );
 }

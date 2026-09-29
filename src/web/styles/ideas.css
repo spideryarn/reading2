@@ -39,6 +39,14 @@
   padding: 0 0.7rem 0.7rem;
 }
 
+/* Status-only since plan 260929b: progress, Stop and failures stay pinned even
+   though the idle redo button moved to Metadata. */
+.ideas-again {
+  margin: 0;
+  padding: 0.45rem 0.7rem;
+  border-top: 1px solid var(--rule);
+}
+
 .ideas-group { margin: 0; padding: 0.5rem 0 0; }
 /* The two groups are the whole point of the mode, so the break between them is
    heavier than the rule between two ideas inside one — `--rule-strong` against
@@ -176,15 +184,6 @@
   color: var(--ink-faint);
   font-size: 0.86rem; /* `.gloss-part-text` — see the note on `.ideas-name` */
   line-height: 1.35;
-}
-
-/* Pinned under the scroller rather than at the end of it, the way the
-   glossary's `Foot` is: the control that regenerates these must not be
-   something you have to scroll ten ideas to reach. */
-.ideas-again {
-  margin: 0;
-  padding: 0.45rem 0.7rem;
-  border-top: 1px solid var(--rule);
 }
 
 /* ---- force: the graph picture ---- */
@@ -398,4 +397,3 @@
   font-variant-numeric: tabular-nums;
 }
 .diag-card-linkterms { overflow: hidden; text-overflow: ellipsis; }
-

@@ -432,6 +432,8 @@ describe("the Columns menu", () => {
         onView: () => {},
         filter: "all" as const,
         onFilter: () => {},
+        archived: false,
+        onArchived: () => {},
       });
     }
     act(() => root.render(createElement(Controls, { view: "table" })));

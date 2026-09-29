@@ -18,6 +18,7 @@ import {
   type ReactNode,
   useCallback,
   useEffect,
+  useLayoutEffect,
   useMemo,
   useRef,
   useState,
@@ -37,6 +38,8 @@ import { DebateBand } from "../modes/debate/DebateMode.js";
 import { CitationsBand } from "../modes/citations/CitationsMode.js";
 import { FaqBand } from "../modes/faq/FaqMode.js";
 import {
+  armTrajectoryOpening,
+  firstTrajectoryArrival,
   TrajectoryBand,
   type TrajectoryArrival,
   type TrajectoryControl,
@@ -101,7 +104,7 @@ import {
   threadParam,
   type Mode,
 } from "../params.js";
-import { arrivalTarget, isBlockOnScreen, scrollToBlock } from "../scroll.js";
+import { arrivalTarget, clearArrivalAnchor, isBlockOnScreen, scrollToBlock } from "../scroll.js";
 import { orderComments, positionOf, stepComment } from "../comment-nav.js";
 import { jumpToComment, stepToComment } from "../comment-jump.js";
 import { buildSections, sectionDepth } from "../position.js";
@@ -336,11 +339,17 @@ export function Reader({
   const [mode, setMode] = useQueryState("mode", modeParam);
   /* The pasted Trajectory stop belongs to this article arrival, not to each
      mount of its band. `ModeBoundary key={mode}` remounts the band on re-entry
-     while leaving mode-specific query state in the URL; this token survives
-     that boundary and is consumed by the first resolved arrival only. */
-  const trajectoryArrival = useRef<TrajectoryArrival>({
-    stop: mode === "trajectory" ? new URLSearchParams(location.search).get("stop") : null,
-  });
+     while leaving mode-specific query state in the URL; the first band mount
+     claims this mailbox, then owns the token while its data resolves. */
+  const trajectoryArrival = useRef<TrajectoryArrival>(firstTrajectoryArrival(mode));
+  /* A centred arrival belongs to this layout. A mode switch can remove the
+     passage marks and Trajectory's door without scrolling a pixel, so end the
+     hold before the new band can ask where the reader is. The first setup also
+     drops module state left by a reading view that just unmounted. */
+  // biome-ignore lint/correctness/useExhaustiveDependencies: `mode` is the layout-change trigger; the effect deliberately reads no mode value.
+  useLayoutEffect(() => {
+    clearArrivalAnchor();
+  }, [mode]);
 
   /* The tab: the article first, then the mode — and nothing for whichever mode
      is the default, which is the one most tabs are in and so the one that
@@ -1184,9 +1193,9 @@ export function Reader({
       blockId: trajectoryControl.blockId,
       node: (
         <TrajectoryDoor
-          label={trajectoryControl.door}
-          cue={trajectoryControl.doorCue}
-          onPress={trajectoryControl.advance}
+          door={trajectoryControl.door}
+          onNext={trajectoryControl.advance}
+          onDeeper={trajectoryControl.deeper}
           onRoute={bandBack ? () => setBandAway(false) : null}
         />
       ),
@@ -1963,6 +1972,7 @@ export function Reader({
             quotes={owner.quotes}
             quoteMarks={quotes.found}
             covers={fit.modeW === 0}
+            away={bandAway && fit.modeW === 0}
             onAway={bandStepsAside}
             onJump={jumpTo}
             onFound={setTrajectoryFound}
@@ -2707,6 +2717,11 @@ export function Reader({
         experimental={experimental}
         mode={mode}
         onMode={(next) => {
+          /* The callback itself is proof of a press. Arm before `setMode`:
+             nuqs updates React now but may leave `location.href` on the old
+             entry for ~50ms, so inferring intent from the address races. Back
+             and Forward never call this callback and therefore never arm. */
+          armTrajectoryOpening(trajectoryArrival.current, mode, next);
           void setMode(next);
           /* Pressing the mode you are in brings its band back if it had stepped
              aside — `bandAway` above. */

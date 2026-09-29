@@ -79,6 +79,33 @@
   font-variant-numeric: tabular-nums;
 }
 
+/* **Where the passages come from** — an info button, last in the head and
+   pushed to its right edge, whose tooltip holds the two sentences that were
+   the foot (SPIDERYARN-READING2-52). Quiet, like Quotes' `.quotes-why`: it
+   is a footnote, not a control the reader needs to walk the route. The
+   house height, so it sits level with the stepper's row when the head wraps. */
+.traj-about {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  width: var(--control-h);
+  height: var(--control-h);
+  margin-left: auto;
+  padding: 0;
+  border: 0;
+  border-radius: var(--radius);
+  background: none;
+  color: var(--ink-faint);
+  cursor: pointer;
+}
+.traj-about:hover { color: var(--ink); background: var(--surface-raised); }
+.traj-about.on { color: var(--highlight-ink); background: var(--surface-raised); }
+.traj-about:focus-visible { outline: 2px solid var(--highlight); outline-offset: 1px; }
+.traj-about-card { max-width: min(20rem, calc(100vw - 1.75rem)); }
+.traj-about-card p { margin: 0; }
+.traj-about-card p + p { margin-top: 0.4rem; }
+
 /* ------------------------------------------------------------------ rows -- */
 .traj-list { margin: 0.3rem 0 0; padding: 0; list-style: none; }
 .traj-go {
@@ -97,8 +124,13 @@
 }
 .traj-go:hover { background: var(--surface-raised); }
 .traj-go:disabled { cursor: default; opacity: 0.5; }
+/* The number, and under it the position mark (below): a column, so the mark
+   costs no width of its own. */
 .traj-n {
   flex: none;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
   min-width: 1.4em;
   color: var(--ink-faint);
   font-size: 0.8rem;
@@ -134,30 +166,32 @@
 }
 .traj-row.current .traj-place { font-weight: 600; color: var(--ink); }
 
-/* **Where the stop sits in the article** — a hairline track and a dot, at the
-   right of each row and the same width on every one, so the dots zig-zag down
-   the list when the route jumps about the paper (the plan's stage 5b). The
-   box is one line of `.traj-place` tall and pinned to the row's top, so the
-   dot stays level with the section path when the current row grows a cue.
+/* **Where the stop sits in the article** — a vertical hairline under the row's
+   number, top the article's start and bottom its end, as the spine draws it;
+   the dot is at the stop (the plan's stage 5b). Vertical and in the number's
+   column since plan 260929a § 4: the horizontal track had a column of its own,
+   about 53px of a band that can be 280px wide (SPIDERYARN-READING2-4D). The
+   same height on every row, so the dots still step up and down the list as
+   the route jumps about the paper. Centred under the digits' right edge, where
+   a one- and a two-digit number both end.
    A hint, not a chart: muted, the current row's dot in the accent. */
 .traj-pos {
   flex: none;
   position: relative;
-  align-self: flex-start;
-  width: 2.75rem;
-  height: calc(0.88rem * 1.35);
-  margin-left: auto;
+  width: 7px;
+  height: 1.6rem;
+  margin: 0.2rem 0.2em 0 0;
 }
 .traj-pos::before {
   content: "";
   position: absolute;
-  inset: 50% 0 auto;
-  height: 1px;
+  inset: 0 auto 0 50%;
+  width: 1px;
   background: var(--rule-strong);
 }
 .traj-pos-dot {
   position: absolute;
-  top: 50%;
+  left: 50%;
   width: 5px;
   height: 5px;
   border-radius: 50%;
@@ -173,17 +207,11 @@
 .traj-read-error { margin: 0.4rem 0.7rem 0; }
 .traj-read-error .gloss-error { margin: 0 0 0.5rem; }
 
-/* A rule above it, so the promise reads as being about the route rather than
+/* A rule above it, so the foot reads as being about the route rather than
    the last row's — citations.css's `.cite-foot`. */
 .traj-foot { padding: 0.4rem 0.7rem 0; border-top: 1px solid var(--rule); }
-.traj-note {
-  margin: 0 0 0.3rem;
-  color: var(--ink-faint);
-  font-size: 0.77rem;
-  line-height: 1.35;
-}
-/* **Plan it again**, under the promise: quiet, and in the foot so a thirty-stop
-   list does not have to be scrolled to reach it — `.ideas-again`, `.tl-again`. */
+/* **Plan it again**: quiet, and in the foot so a thirty-stop list does not
+   have to be scrolled to reach it — `.ideas-again`, `.tl-again`. */
 .traj-again { padding: 0.1rem 0 0.45rem; }
 
 /* ------------------------------------------------------ the door in the prose --

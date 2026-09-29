@@ -1,0 +1,21 @@
+Fixed five findings. No commit was made.
+
+1. **F1 — P1 — fixed:** Reader scrolling during the retained 150 ms quiet window was mistaken for the glide’s trailing event. This left the arrival anchor stale and made the controls bar ignore the gesture. The code now distinguishes events by the actual scroll position. Evidence: [scroll.ts](/home/greg/code/spideryarn2/.claude/worktrees/trajectory-four-suggestions/src/web/scroll.ts:491), [scroll.ts](/home/greg/code/spideryarn2/.claude/worktrees/trajectory-four-suggestions/src/web/scroll.ts:928), regression tests at [scroll-settlement.test.ts](/home/greg/code/spideryarn2/.claude/worktrees/trajectory-four-suggestions/tests/scroll-settlement.test.ts:333).
+
+2. **F2 — P1 — fixed:** `abandonScroll()` cleared a settled arrival anchor even when no glide existed. The comment dialog’s “already here” path therefore lost the logical position without moving the page. It now cancels only an active movement. Evidence: [scroll.ts](/home/greg/code/spideryarn2/.claude/worktrees/trajectory-four-suggestions/src/web/scroll.ts:1258), test at [scroll-settlement.test.ts](/home/greg/code/spideryarn2/.claude/worktrees/trajectory-four-suggestions/tests/scroll-settlement.test.ts:374).
+
+3. **F3 — P1 — fixed:** An opening token could remain armed while Trajectory waited for Quotes, survive the band unmount, and fire after Back remounted it—creating a new push and potentially truncating Forward. Each band now claims the token on mount; abandoning that mount retires it. Evidence: [TrajectoryMode.tsx](/home/greg/code/spideryarn2/.claude/worktrees/trajectory-four-suggestions/src/web/modes/trajectory/TrajectoryMode.tsx:476), test at [trajectory-panel.test.tsx](/home/greg/code/spideryarn2/.claude/worktrees/trajectory-four-suggestions/tests/trajectory-panel.test.tsx:1300).
+
+4. **F4 — P1 — fixed:** Opening was inferred from `mode`, `popstate`, and `location.href`; nuqs can update React roughly 50 ms before updating the address, making that inference race-prone. Opening is now armed directly in the press callback, while Back/Forward—including a complete Reader remount—produces no arrival token. Evidence: [Reader.tsx](/home/greg/code/spideryarn2/.claude/worktrees/trajectory-four-suggestions/src/web/reader/Reader.tsx:2719), [TrajectoryMode.tsx](/home/greg/code/spideryarn2/.claude/worktrees/trajectory-four-suggestions/src/web/modes/trajectory/TrajectoryMode.tsx:111), tests at [trajectory-panel.test.tsx](/home/greg/code/spideryarn2/.claude/worktrees/trajectory-four-suggestions/tests/trajectory-panel.test.tsx:152) and [trajectory-panel.test.tsx](/home/greg/code/spideryarn2/.claude/worktrees/trajectory-four-suggestions/tests/trajectory-panel.test.tsx:166).
+
+5. **F5 — P1 — fixed:** The anchor could survive a mode switch, a reflow with no `?at=`, or removal of its block without any scroll event. It is now explicitly cleared at those boundaries and validates that its row still exists. Evidence: [Reader.tsx](/home/greg/code/spideryarn2/.claude/worktrees/trajectory-four-suggestions/src/web/reader/Reader.tsx:345), [useReadingPosition.ts](/home/greg/code/spideryarn2/.claude/worktrees/trajectory-four-suggestions/src/web/reader/useReadingPosition.ts:135), [scroll.ts](/home/greg/code/spideryarn2/.claude/worktrees/trajectory-four-suggestions/src/web/scroll.ts:953). Reflow regression: [reading-position-holds-across-a-reflow.test.tsx](/home/greg/code/spideryarn2/.claude/worktrees/trajectory-four-suggestions/tests/reading-position-holds-across-a-reflow.test.tsx:391).
+
+The doors, stop-1 back action, vertical position mark, `alignedOffset`, passage-token union, and provisional passage aim had no further defects in the scoped diff.
+
+Verification:
+
+- Requested Vitest command: **passed**, 12 files and 313 tests.
+- Additional reflow suite: **passed**, 9 tests.
+- `npm run typecheck`: the exact wrapper could not start because this sandbox rejects tsx’s Unix IPC socket with `listen EPERM`.
+- The same typecheck script via `node --import tsx scripts/typecheck.ts`: **passed** all projects and all 2,298 source files.
+- `git diff --check`: **passed**.

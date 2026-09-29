@@ -449,9 +449,24 @@ export function QuizPanel({
           {subMode}
         </>
       }
-      /* Pinned under the question rather than at the end of it, on the same
-          guard it had as a trailing child of the band. */
-      foot={quiz && owner.status === "ready" ? <div className="quiz-rewrite">{run("Write them again")}</div> : null}
+      /* No standing *Write them again* under the question any more — Greg,
+          2026-09-29 (SPIDERYARN-READING2-53): *"let's just rely on the
+          Metadata mode for that."* Metadata's *Re-run AI processing* has a
+          Quiz row; the older-version notice keeps its own button.
+          docs/plans/260929b-one-place-to-re-run-ai-processing.md.
+
+          Keep the footer only while a current batch's job is starting,
+          running or failed. Otherwise removing the button also removes the
+          only place this mode can show that progress or failure. */
+      foot={
+        quiz &&
+        owner.status === "ready" &&
+        !owner.stale &&
+        !owner.outdated &&
+        (owner.job || owner.starting || owner.failed) ? (
+          <div className="quiz-rewrite">{run("Write them again")}</div>
+        ) : null
+      }
     >
 
       {owner.error && <p className="gloss-error">{owner.error}</p>}

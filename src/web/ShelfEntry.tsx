@@ -23,6 +23,7 @@ import {
 } from "react";
 import {
   Archive,
+  ArchiveRestore,
   Check,
   Copy,
   Ellipsis,
@@ -45,6 +46,12 @@ import { TitleEditor } from "./TitleEditor.js";
 import { ControlTip, Tooltip, TooltipGroup } from "./Tooltip.js";
 import type { useShelf } from "./useShelf.js";
 import { fetchOk } from "./lib/api.js";
+
+/* `archivedAt` read directly rather than through shelf-narrow.ts's `isArchived`:
+   this file is shared with the lazy /admin and /design routes, and importing
+   shelf-narrow would put it (and library-hits.ts behind it) into the reader's
+   startup bytes — tests/eager-client-graph.test.ts § SHARED_WITH_READER. */
+const isArchived = (entry: { archivedAt?: string | null }) => !!entry.archivedAt;
 
 export type Shelf = ReturnType<typeof useShelf>;
 
@@ -95,6 +102,26 @@ export function SharedBadge({
   );
 }
 
+/**
+ * **This one is archived, and on screen only because Archived is on** — plan
+ * 260929a, Greg's report 4V. Since then the archived articles join the shelf's
+ * one list rather than a second list at its foot, so each needs saying.
+ *
+ * Drawn by both renderers from here, for `SharedBadge`'s reason. Visible text,
+ * not a colour or an icon alone. `data-archived-mark` is what a test finds.
+ */
+export function ArchivedMark() {
+  return (
+    <span
+      data-archived-mark=""
+      className="tw:inline-flex tw:items-center tw:gap-1 tw:rounded tw:border tw:border-border tw:px-1.5 tw:py-0.5 tw:text-muted-foreground"
+    >
+      <Archive size={11} aria-hidden="true" />
+      Archived
+    </span>
+  );
+}
+
 /* -------------------------------------------------------------- card ------ */
 
 /**
@@ -115,6 +142,7 @@ export function ShelfCard({
   entry,
   shelf,
   note,
+  archivedShown = false,
 }: {
   entry: LibraryEntry;
   shelf: Shelf;
@@ -124,6 +152,11 @@ export function ShelfCard({
    * card cannot disagree with the chips about what it is sorted by.
    */
   note: string;
+  /**
+   * `?archived=1`: whether archived articles are on the shelf too, which
+   * changes what Archive's card promises (`TIPS.archiveShown`).
+   */
+  archivedShown?: boolean;
 }) {
   /* Shared with the table through the shelf hook rather than kept here: the
      table splits one article across two cells, and two cells cannot share a
@@ -174,7 +207,12 @@ export function ShelfCard({
         )}
 
         {!editing && (
-          <Actions entry={entry} shelf={shelf} onEdit={() => shelf.beginRename(entry.slug)} />
+          <Actions
+            entry={entry}
+            shelf={shelf}
+            onEdit={() => shelf.beginRename(entry.slug)}
+            archivedShown={archivedShown}
+          />
         )}
       </div>
 
@@ -185,6 +223,9 @@ export function ShelfCard({
             {f}
           </span>
         ))}
+        {/* First of the chips: it is the one that says why this card is here
+            at all when the reader's shelf, by default, would not show it. */}
+        {isArchived(entry) && <ArchivedMark />}
         {/* Ahead of the fixture chip: of the two, this is the one that says
             something about who else can see the article. */}
         {entry.visibility === "public" && <SharedBadge />}
@@ -427,6 +468,22 @@ const TIPS = {
     what: "Takes the article off the shelf, and offers an Undo for nine seconds afterwards.",
     how: "Nothing is destroyed and the link still opens — it is the listing it leaves, including the public one if you have shared it. The card goes when the server has agreed, not before, so a failed archive cannot leave you looking at a shelf it is missing from.",
   },
+  /**
+   * **Archive while Archived is on**, when the card does not leave: the
+   * archived articles are on the shelf too, so the promise above — *takes the
+   * article off the shelf*, *the card goes* — would be false as the reader
+   * watched it (plan 260929a, Sol R4). What changes is the mark and the button.
+   */
+  archiveShown: {
+    head: "Archive",
+    what: "Moves the article to the archive, and offers an Undo for nine seconds afterwards.",
+    how: "While Archived is on, the card stays where it is, marked Archived, with Put back in place of this button; turn Archived off and it is gone from the shelf. Nothing is destroyed and the link still opens — it is the listing it leaves, including the public one if you have shared it.",
+  },
+  restore: {
+    head: "Put back",
+    what: "Puts this archived article back on the shelf.",
+    how: "The card stays where it is and loses its Archived mark, and it stays on the shelf when Archived is turned off. The same un-archive as the Undo after archiving, and as Put back on the article's own page.",
+  },
 } as const;
 
 /**
@@ -527,8 +584,11 @@ function useShelfActions(entry: LibraryEntry, shelf: Shelf, onEdit: () => void) 
   const hasWebUrl = Boolean(entry.url) && isWebUrl(entry.url ?? "");
 
   const archive = useCallback(() => void shelf.archive(entry.slug), [entry.slug, shelf]);
+  /* The other half, for a card that is on the shelf because Archived is on
+     (plan 260929a). The same PATCH as Undo, through `shelf.restore`. */
+  const restore = useCallback(() => void shelf.restore(entry.slug), [entry.slug, shelf]);
 
-  return { copied, rerunning, hasWebUrl, copy, rerun, archive, edit: onEdit };
+  return { copied, rerunning, hasWebUrl, copy, rerun, archive, restore, edit: onEdit };
 }
 
 type ShelfActions = ReturnType<typeof useShelfActions>;
@@ -575,10 +635,13 @@ export function Actions({
   shelf,
   onEdit,
   inTooltipGroup = false,
+  archivedShown = false,
 }: {
   entry: LibraryEntry;
   shelf: Shelf;
   onEdit: () => void;
+  /** `?archived=1` — which of Archive's two cards is true. */
+  archivedShown?: boolean;
   /**
    * **A `TooltipGroup` is already above this row — join it, do not start one.**
    *
@@ -812,15 +875,35 @@ export function Actions({
             word for *this cannot be undone* and undoing it is the whole design
             (docs/project/library.md § Archive, and Undo is the confirmation).
             The card now says the same thing in a sentence. */}
-        <ActionTip id="archive" armed={armed} onArm={setArmed} tip={TIPS.archive} commits>
-          <IconButton
-            label="Archive"
-            titled={false}
-            onClick={actions.archive}
+        {/* **Put back in Archive's place on an archived card** — which is on
+            the shelf only while Archived is on (plan 260929a, Sol R4). One
+            slot, so the row is five buttons either way. "Put back" because the
+            metadata page already calls this act that: one act, one name. The
+            internal key stays `restore`, after `shelf.restore`, which it calls;
+            nothing visible is drawn from it. */}
+        {isArchived(entry) ? (
+          <ActionTip id="restore" armed={armed} onArm={setArmed} tip={TIPS.restore} commits>
+            <IconButton label="Put back" titled={false} onClick={actions.restore}>
+              <ArchiveRestore size={14} />
+            </IconButton>
+          </ActionTip>
+        ) : (
+          <ActionTip
+            id="archive"
+            armed={armed}
+            onArm={setArmed}
+            tip={archivedShown ? TIPS.archiveShown : TIPS.archive}
+            commits
           >
-            <Archive size={14} />
-          </IconButton>
-        </ActionTip>
+            <IconButton
+              label="Archive"
+              titled={false}
+              onClick={actions.archive}
+            >
+              <Archive size={14} />
+            </IconButton>
+          </ActionTip>
+        )}
       </RowGroup>
     </div>
     <ShelfActionsMenu entry={entry} actions={actions} />
@@ -908,7 +991,7 @@ const ITEM =
  * menu too. GPT Sol, 2026-09-15.
  */
 function ShelfActionsMenu({ entry, actions }: { entry: LibraryEntry; actions: ShelfActions }) {
-  const { copied, rerunning, hasWebUrl, copy, rerun, archive, edit } = actions;
+  const { copied, rerunning, hasWebUrl, copy, rerun, archive, restore, edit } = actions;
   const [open, setOpen] = useState(false);
 
   /**
@@ -1061,10 +1144,17 @@ function ShelfActionsMenu({ entry, actions }: { entry: LibraryEntry; actions: Sh
               <span>{copied ? "Copied" : "Copy link"}</span>
             </DropdownMenu.Item>
 
-            <DropdownMenu.Item className={ITEM} onSelect={archive}>
-              <Archive size={16} aria-hidden="true" className="tw:shrink-0" />
-              <span>Archive</span>
-            </DropdownMenu.Item>
+            {isArchived(entry) ? (
+              <DropdownMenu.Item className={ITEM} onSelect={restore}>
+                <ArchiveRestore size={16} aria-hidden="true" className="tw:shrink-0" />
+                <span>Put back</span>
+              </DropdownMenu.Item>
+            ) : (
+              <DropdownMenu.Item className={ITEM} onSelect={archive}>
+                <Archive size={16} aria-hidden="true" className="tw:shrink-0" />
+                <span>Archive</span>
+              </DropdownMenu.Item>
+            )}
           </DropdownMenu.Content>
         </DropdownMenu.Portal>
       </DropdownMenu.Root>
@@ -1079,7 +1169,7 @@ function ShelfActionsMenu({ entry, actions }: { entry: LibraryEntry; actions: Sh
  * The union is **derived from the list** rather than written beside it, so the
  * two cannot drift — a name added to one is added to both or neither.
  */
-const KEYS = ["edit", "rerun", "open", "copy", "archive"] as const;
+const KEYS = ["edit", "rerun", "open", "copy", "archive", "restore"] as const;
 export type ActionKey = (typeof KEYS)[number];
 
 /**

@@ -8,8 +8,10 @@
  */
 import { describe, expect, it } from "vitest";
 import {
+  adjacentSharedPairs,
   type ChooseArticle,
   chooseTerms,
+  passesVagueTest,
   type ShelfTerm,
   byArticleCount,
   shelfTermHeadMetrics,
@@ -169,10 +171,10 @@ describe("overlap is allowed", () => {
   it("puts one article in two topics", () => {
     const arts = shelf(10);
     give(arts, "spider", ["s00", "s01", "s02"]);
-    give(arts, "memory", ["s00", "s03", "s04"]);
+    give(arts, "silk", ["s00", "s03", "s04"]);
     const r = chooseTerms(arts);
     const inS00 = r.terms.filter((t) => t.articles.some((a) => a.slug === "s00"));
-    expect(inS00.map((t) => t.key).sort()).toEqual(["memory", "spider"]);
+    expect(inS00.map((t) => t.key).sort()).toEqual(["silk", "spider"]);
   });
 });
 
@@ -222,10 +224,10 @@ describe("redundancy skips", () => {
   it("leaves unrelated words at the same Jaccard alone", () => {
     const arts = shelf(20);
     give(arts, "spider", range(0, 4));
-    give(arts, "memory", range(2, 6));
+    give(arts, "silk", range(2, 6));
     const keys = keysOf(chooseTerms(arts).terms);
     expect(keys).toContain("spider");
-    expect(keys).toContain("memory");
+    expect(keys).toContain("silk");
   });
 });
 
@@ -375,6 +377,123 @@ describe("containment and coverage first (plan 260928d)", () => {
   });
 });
 
+describe("vague words (plan 260929a, Greg's 4T: following, entered)", () => {
+  /**
+   * Each key on three 1,000-word articles of its own, so no redundancy rule
+   * can be what removes it — used 3 times in each: enough for an ordinary word
+   * (2), not for a vague one (max(4, 2 per 1,000) = 4).
+   */
+  function spread(keys: string[], uses = 3): ChooseArticle[] {
+    const arts = shelf(3 * keys.length + 4);
+    for (const [i, k] of keys.entries()) give(arts, k, range(3 * i, 3 * i + 2), uses);
+    return arts;
+  }
+
+  it("does not count a word the norms rate abstract where it is used in passing", () => {
+    const arts = spread(["following", "process", "entered", "rat", "spider"]);
+    const keys = keysOf(chooseTerms(arts).terms);
+    expect(keys).not.toContain("following"); // by its lemma, follow 3.4
+    expect(keys).not.toContain("process"); // 3.0
+    expect(keys).not.toContain("entered"); // by its lemma, enter 4.1
+    expect(keys).toContain("rat"); // concrete, 6.7
+    expect(keys).toContain("spider"); // 6.7
+  });
+
+  it("tries the dropped-e lemma before a different word made by stripping -ing", () => {
+    /* staring → stare (4.1), not star (6.2): the latter would wrongly let a
+       non-concrete participle keep the ordinary density threshold. */
+    expect(passesVagueTest("staring", 4.5)).toBe(false);
+  });
+
+  it("with familiarityMin, lets an abstract word the norms rate unfamiliar keep the ordinary rule", () => {
+    /* neural: concreteness 4.1, familiarity 3.9; memory: 2.9, 6.4 */
+    expect(passesVagueTest("neural", 4.5)).toBe(false);
+    expect(passesVagueTest("neural", 4.5, 5)).toBe(true);
+    expect(passesVagueTest("memory", 4.5, 5)).toBe(false);
+  });
+
+  it("counts a vague word only where an article uses it heavily (Greg: common words must occur more often)", () => {
+    const arts = shelf(12);
+    /* 1,000-word articles: a vague word needs max(4, 2) = 4 uses; an ordinary one 2 */
+    give(arts, "memory", range(0, 2), 6);
+    give(arts, "memory", range(3, 5), 2);
+    const t = chooseTerms(arts).terms.find((x) => x.key === "memory");
+    expect(t?.articles.map((a) => a.slug)).toEqual(range(0, 2));
+    /* the report's other design: drop the vague word outright */
+    expect(keysOf(chooseTerms(arts, { vagueDensityPer1000: null }).terms)).not.toContain("memory");
+    /* a concrete word keeps the ordinary threshold */
+    give(arts, "rat", range(6, 8), 2);
+    expect(keysOf(chooseTerms(arts).terms)).toContain("rat");
+  });
+
+  it("treats a word the norms do not rate as ordinary: technical, proper-noun-like, or everyday", () => {
+    const arts = spread(["irreducibility", "wagan", "ruliology", "parent", "technology"]);
+    expect(keysOf(chooseTerms(arts).terms).sort()).toEqual([
+      "irreducibility",
+      "parent",
+      "ruliology",
+      "technology",
+      "wagan",
+    ]);
+  });
+
+  it("leaves phrases alone, even when every word in them is abstract", () => {
+    const arts = spread(["stolen generation", "natural language", "power station", "following"]);
+    const keys = keysOf(chooseTerms(arts).terms);
+    expect(keys).toContain("stolen generation");
+    expect(keys).toContain("natural language");
+    expect(keys).toContain("power station");
+    expect(keys).not.toContain("following");
+  });
+
+  it("keeps everything with the rule switched off, for the report's comparison", () => {
+    const arts = spread(["following", "process"]);
+    expect(keysOf(chooseTerms(arts, { dropVague: false }).terms).sort()).toEqual(["following", "process"]);
+  });
+});
+
+describe("a topic sharing a word with the one before it does not come next (plan 260929a R7)", () => {
+  it("puts another topic between neural networks and neural activity when one adds as many new works", () => {
+    const arts = shelf(30);
+    give(arts, "neural network", range(0, 5), 20);
+    give(arts, "neural activity", range(6, 10), 8);
+    give(arts, "zeta", range(11, 15), 3);
+    const unruled = keysOf(chooseTerms(arts, { adjacency: false }).terms);
+    expect(unruled.slice(0, 2)).toEqual(["neural network", "neural activity"]);
+    expect(keysOf(chooseTerms(arts).terms)).toEqual(["neural network", "zeta", "neural activity"]);
+  });
+
+  it("lets it come next when nothing else adds as many new works", () => {
+    const arts = shelf(30);
+    give(arts, "neural network", range(0, 5), 20);
+    give(arts, "neural activity", range(6, 10), 8);
+    give(arts, "zeta", range(11, 14), 3);
+    expect(keysOf(chooseTerms(arts).terms)).toEqual(["neural network", "neural activity", "zeta"]);
+  });
+
+  it("keeps the separator after a later superset replaces an earlier topic in its place", () => {
+    const arts = shelf(30);
+    give(arts, "ai system", range(0, 2), 1_000);
+    give(arts, "neural network", range(20, 25), 50);
+    give(arts, "ai neural", range(0, 9), 4);
+    give(arts, "zeta", range(10, 16), 2);
+
+    const terms = chooseTerms(arts, { maxTerms: 4 }).terms;
+    expect(keysOf(terms)).toEqual(["ai neural", "zeta", "neural network"]);
+    expect(adjacentSharedPairs(terms)).toEqual([]);
+  });
+
+  it("counts neighbours sharing a stem on the list as given", () => {
+    const t = (key: string): ShelfTerm => ({ key, label: key, articles: [] });
+    expect(adjacentSharedPairs([t("neural network"), t("zeta"), t("neural activity")])).toEqual([]);
+    expect(adjacentSharedPairs([t("zeta"), t("neural network"), t("neural activity")])).toEqual([
+      ["neural network", "neural activity"],
+    ]);
+    /* only the first k */
+    expect(adjacentSharedPairs([t("zeta"), t("neural network"), t("neural activity")], 2)).toEqual([]);
+  });
+});
+
 describe("K", () => {
   it("is 30 at most, and no more than the number of works on a small shelf", () => {
     const arts = shelf(10);
@@ -401,12 +520,12 @@ describe("the label", () => {
 
   it("prefers lowercase on a tie, then code point", () => {
     const arts = shelf(10);
-    arts[0] = art("s00", { memory: 4 }, { extra: { memory: { label: "Memory" } } });
-    arts[1] = art("s01", { memory: 4 }, { extra: { memory: { label: "memory" } } });
+    arts[0] = art("s00", { silk: 4 }, { extra: { silk: { label: "Silk" } } });
+    arts[1] = art("s01", { silk: 4 }, { extra: { silk: { label: "silk" } } });
     arts[2] = art("s02", { zorp: 4 }, { extra: { zorp: { label: "Zorp" } } });
     arts[3] = art("s03", { zorp: 4 }, { extra: { zorp: { label: "ZORP" } } });
     const terms = chooseTerms(arts).terms;
-    expect(terms.find((x) => x.key === "memory")?.label).toBe("memory");
+    expect(terms.find((x) => x.key === "silk")?.label).toBe("silk");
     expect(terms.find((x) => x.key === "zorp")?.label).toBe("ZORP");
   });
 });

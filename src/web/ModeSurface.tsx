@@ -154,12 +154,16 @@ export function ModeSurface({
    * its own**, because every one of them is already a direct child of the band
    * and the CSS says so.
    *
-   * **Six panels want it, not four**: `.gloss-foot`, `.ideas-again`,
+   * **Seven panels want it, not four**: `.gloss-foot`, `.ideas-again`,
    * `.quotes-foot`, `.tl-again`, and — missed by the first inventory and by the
-   * plan — Debate's `.dbt-again` and Quiz's `.quiz-rewrite`. Both are direct
+   * plan — Debate's `.dbt-again` and Quiz's `.quiz-rewrite`, plus Trajectory's
+   * `.traj-foot`. All are direct
    * children sitting after the scrolling child, and `debate.css` says of
    * `.dbt-again` in as many words: "Pinned under the scroller rather than at the
-   * end of it, like `.tl-again`". GPT Sol F22, 2026-09-06.
+   * end of it, like `.tl-again`". GPT Sol F22, 2026-09-06. Four of those —
+   * the standing redo buttons — went on 2026-09-29 (plan 260929b), when Metadata
+   * became the one place to ask for a mode again. Their footers still appear for
+   * a running or failed job; moving the action must not hide its status.
    *
    * Chat does not use it, and that is a documented exception rather than an
    * oversight: its composer is built deep inside `Conversation`, which owns the

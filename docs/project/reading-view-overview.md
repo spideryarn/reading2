@@ -162,7 +162,12 @@ That is every band mode; `plain` and `hierarchy` are the two that open no band.
 - **[touch.md](touch.md)** — reading on an iPad: a swipe over a gist column steps, the prose keeps
   momentum scrolling. Open it for why not `scroll-snap`.
 - **[url-state.md](url-state.md)** — every parameter, which push history and which replace, and why
-  position is a *section* rather than an offset.
+  position is a *section* rather than an offset. Also the home of the **↩ Back to …** chip: every
+  jump in every mode — a block link, a glossary term, a citation, a Trajectory row, opening
+  Trajectory — pushes one entry stamped with where you were, and the chip at the foot of the prose
+  takes you back there, even on a home-screen app with no Back button. Read
+  [§ The pushed entry says where you came from](url-state.md#the-pushed-entry-says-where-you-came-from)
+  and the two sections after it before adding a new way to move the reader.
 
 ### The command bar
 

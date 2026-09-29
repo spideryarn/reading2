@@ -28,7 +28,7 @@
  * That is narrower than *nothing here is generated*, which is what this line
  * said until 2026-09-08 and which had stopped being true twice over: the page
  * shows the hierarchy's `gist` and `summary` (§ In one sentence), and since
- * 2026-09-07 it can start a run of its own (§ Generate it again, below, one
+ * 2026-09-07 it can start a run of its own (§ Re-run AI processing, below, one
  * button per step). Neither happens on arrival, and *on arrival* is the half a
  * reader here is trusting.
  *
@@ -172,7 +172,7 @@
  * docs/plans/260907d-re-run-any-generated-mode-from-the-metadata-page.md.
  *
  * What has **not** changed is the rule: no verdict this page cannot stand
- * behind. *Generate it again* offers a re-run and claims nothing about whether
+ * behind. *Re-run AI processing* offers a re-run and claims nothing about whether
  * you need one, which is exactly why it could ship while the placeholder it
  * replaced could not.
  *
@@ -253,7 +253,7 @@ import type {
   Visibility,
 } from "../types.js";
 import { MAX_PURPOSE_CHARS } from "../types.js";
-/* The nine steps this page will re-run, from a leaf rather than from
+/* The ten steps this page will re-run, from a leaf rather than from
    `src/pipeline.ts` — which is a server module the client may not import
    (tests/client-imports.test.ts). See src/rerun-steps.ts. */
 import { METADATA_RERUN_STEPS, type MetadataRerunStep } from "../rerun-steps.js";
@@ -472,7 +472,7 @@ export function Metadata({
   const [provenanceOffline, setProvenanceOffline] = useState(false);
   const [slow, setSlow] = useState(false);
   /**
-   * **On `useOrderedRead`, because nine rows below can now ask for this again.**
+   * **On `useOrderedRead`, because ten rows below can now ask for this again.**
    *
    * This was a bare `useEffect` with a `live` flag until 2026-09-07, which is
    * exactly right for a page that reads once and never again — and *Generate it
@@ -1050,14 +1050,6 @@ export function Metadata({
           </div>
         </Section>
 
-        {/* ------------------------------------------- 7. generate it again --
-            After "Your reading" and before Export, because the page's order is
-            what the article is, then where it goes, then the reader's own work
-            on it, then the machinery — and asking for something to be generated
-            again is the reader's own work. Greg, 2026-09-06:
-            *"there should be a way to re-run any of the generated modes"*. */}
-        <RerunSection slug={slug} provenance={provenance} onFinished={refresh} />
-
         {/* -------------------------------------------------- 8. export it --
             Below sharing because both are decisions about where this article's
             data goes, and above the machinery because this one is a thing the
@@ -1082,17 +1074,21 @@ export function Metadata({
           arcGenerator={arc ? `${arc.generator} · ${arc.version}` : undefined}
         />
 
-        {/* ------------------------------------------ 9½. starting it again --
-            Just above Archive: it is the other act here that changes the
-            article itself rather than reading about it, and it belongs past
-            everything somebody came to read. Behind the experimental switch
-            while it earns a trial — docs/plans/260928a-reset-and-regenerate-article.md,
-            assumption 5. */}
-        <ResetSection
-          on={experimental.on}
+        {/* ------------------------------------- 9½. re-run AI processing --
+            One section for both ways of asking again — a mode at a time, or
+            the whole article — just above Archive, shut until opened. Greg,
+            2026-09-29 (SPIDERYARN-READING2-4Z): *"We have both a "Generate it
+            again" and "Start this article again". Let's somehow amalgamate
+            them … Perhaps this section should be default-collapsed … And maybe
+            position it above "Archive this article"."* It is also, since the
+            same morning, the only place a standing redo lives: the modes keep
+            only the button inside their out-of-date banner.
+            docs/plans/260929b-one-place-to-re-run-ai-processing.md. */}
+        <RerunSection
           slug={slug}
           provenance={provenance}
           onFinished={refresh}
+          reset={experimental.on}
         />
 
         {/* ---------------------------------------------- 10. archiving it --
@@ -1217,37 +1213,14 @@ function SharingSection({
 }
 
 /**
- * **Start this article again** — the section, and the experimental gate on it.
+ * **Re-run AI processing** — the ten things this page will ask for again, and,
+ * behind the experimental switch, starting the whole article again.
  *
- * A component rather than a `{experimental.on && …}` in the page body, for
- * `SharingSection`'s reason: the body is at the edge of its complexity budget.
- * The control itself is ./ResetArticle.tsx.
- */
-function ResetSection({
-  on,
-  slug,
-  provenance,
-  onFinished,
-}: {
-  /** `useExperimental().on` — the section does not exist without it. */
-  on: boolean;
-  slug: string;
-  provenance: ArticleMetadata | null;
-  /** `refresh`, never `reload` — see `RerunSection` below. */
-  onFinished: () => void;
-}) {
-  if (!on) return null;
-  return (
-    <Section label="Start this article again">
-      <div className={`${CARD} tw:p-4`}>
-        <ResetArticle slug={slug} provenance={provenance} onFinished={onFinished} />
-      </div>
-    </Section>
-  );
-}
-
-/**
- * **The nine things this page will ask for again.**
+ * One section since 2026-09-29, when Greg asked for *Generate it again* and
+ * *Start this article again* to be amalgamated, shut by default and moved above
+ * Archive — docs/plans/260929b-one-place-to-re-run-ai-processing.md. The reset
+ * is a block inside it rather than a section of its own; ./ResetArticle.tsx is
+ * the control, unchanged.
  *
  * Greg, 2026-09-06, declining a library-wide backfill and asking for this in the
  * same breath:
@@ -1261,7 +1234,7 @@ function ResetSection({
  *
  * The stage rows in *Technical details* answer a different question, and only
  * one of the two is a menu: that list is a **record** — all sixteen stages, when
- * each last wrote, no controls — and this is a **menu** of the nine you can ask
+ * each last wrote, no controls — and this is a **menu** of the ten you can ask
  * for. Interleaving them would put an eligibility branch inside `StageRow` and
  * rows with a button beside rows that cannot have one.
  *
@@ -1281,45 +1254,51 @@ function ResetSection({
  * § Deferred keeps the staleness half, including why *absent* and *stale* are
  * one boolean today.
  *
- * **Which nine, and why not the other seven**, is `METADATA_RERUN_STEPS`
+ * **Which ten, and why not the other six**, is `METADATA_RERUN_STEPS`
  * (src/rerun-steps.ts) — read it there rather than restating it here.
  *
- * ## No gate, unlike Export and Archive two sections down
+ * ## No gate, unlike Export and Archive
  *
  * Those two are withheld until we know there is a shelf row, because their only
  * possible outcome without one is a 404 and pressing them is how you would find
  * out. This is not that shape: a run is `POST /api/jobs`, whose refusal comes
  * back as a sentence written for a reader, and `JobProgress` is built to show
  * exactly that beside the row it belongs to. So the rows are drawn while the
- * metadata request is still out — which also keeps the nine `useStepJob`
- * subscriptions mounted for the whole visit rather than appearing under a
- * reader who has already scrolled past.
+ * metadata request is still out.
  *
- * The cost, said out loud: nine subscriptions to one shared engine
- * (`useJobs` is a `useSyncExternalStore` over `jobEngine`), so this is nine
- * store subscriptions and **not** nine polls.
+ * **Shut by default, and still mounted.** `keepMounted` hides the rows rather
+ * than unmounting them, so the ten `useStepJob` subscriptions live for the whole
+ * visit, and a run that finishes while the section is shut still refreshes the
+ * page — see `Section`'s `keepMounted` for what unmounting lost.
+ *
+ * The cost, said out loud: ten subscriptions to one shared engine
+ * (`useJobs` is a `useSyncExternalStore` over `jobEngine`), so this is ten
+ * store subscriptions and **not** ten polls.
  */
 function RerunSection({
   slug,
   provenance,
   onFinished,
+  reset,
 }: {
   slug: string;
   /** Null until the metadata request lands; the rows draw either way. */
   provenance: ArticleMetadata | null;
   /**
    * **`refresh`, never `reload`** — see the read in `Metadata` above and
-   * `useOrderedRead`'s header. The same function for all nine, so a completion
+   * `useOrderedRead`'s header. The same function for all ten, so a completion
    * in any row is one question asked of one reader.
    */
   onFinished: () => void;
+  /** `useExperimental().on` — the whole-article reset is drawn only with it. */
+  reset: boolean;
 }) {
   return (
-    <Section label="Generate it again">
+    <Section label="Re-run AI processing" collapsible keepMounted>
       {/* Two facts and no third. **It does not say anything is out of date** —
           nothing here can honestly tell you that, and the whole reason this
           shipped while the placeholder it replaces did not is that a button
-          saying *regenerate this* needs no such claim. And no timing: the nine
+          saying *regenerate this* needs no such claim. And no timing: the ten
           are not one speed, so a *"takes a minute or two"* here would be wrong
           about the Sketch, which says its own wait in its own confirm. */}
       <p className="tw:mt-0 tw:mb-3 tw:text-xs tw:text-ink-faint">
@@ -1341,15 +1320,25 @@ function RerunSection({
           />
         ))}
       </div>
+      {reset && (
+        <>
+          <h3 className="tw:mt-6 tw:mb-3 tw:text-sm tw:font-medium tw:text-ink">
+            Start the whole article again
+          </h3>
+          <div className={`${CARD} tw:p-4`}>
+            <ResetArticle slug={slug} provenance={provenance} onFinished={onFinished} />
+          </div>
+        </>
+      )}
     </Section>
   );
 }
 
 /**
- * The reader-facing name of each of the nine — a noun, not the present-tense
+ * The reader-facing name of each of the ten — a noun, not the present-tense
  * label the stage rows carry.
  *
- * `Record<MetadataRerunStep, string>`, so a tenth member of the list is a
+ * `Record<MetadataRerunStep, string>`, so an eleventh member of the list is a
  * typecheck failure here rather than a blank row.
  */
 const RERUN_LABEL: Record<MetadataRerunStep, string> = {
@@ -1361,6 +1350,7 @@ const RERUN_LABEL: Record<MetadataRerunStep, string> = {
   timeline: "Timeline",
   quiz: "Quiz",
   sketch: "Sketch",
+  trajectory: "Trajectory",
   debate: "Debate",
 };
 
@@ -1395,6 +1385,14 @@ const RERUN_CONFIRM_GLOSSARY = "Another model call. New terms are added only if 
  */
 const RERUN_CONFIRM_SKETCH = `${RERUN_CONFIRM} It is the slowest one here — ${SKETCH_WAIT} — and it costs ${SKETCH_PRICE}.`;
 /**
+ * Trajectory can refuse before it calls a model when Quotes do not exist, so
+ * the generic promise of *another model call* is too strong. This is also why
+ * the plan review narrowed the row's cost to *at most* one call.
+ */
+const RERUN_CONFIRM_TRAJECTORY =
+  "Up to one model call. It needs Quotes first; if they are missing, the run refuses and says so. " +
+  "The result changes only if the run succeeds.";
+/**
  * **The one row where *"another model call"* is not even the right number.**
  *
  * Debate makes **two separately metered calls** and not one call producing two
@@ -1420,7 +1418,7 @@ const RERUN_CONFIRM_SKETCH = `${RERUN_CONFIRM} It is the slowest one here — ${
  * which is exactly how the wrong number got here.
  *
  * `src/step-order.ts` calls the step the second dearest thing in the app; on
- * **this** page it is the dearest of the nine, which is the comparison the
+ * **this** page it is the dearest of the ten, which is the comparison the
  * reader in front of it can act on, and the Sketch's row next door is what
  * makes that legible.
  *
@@ -1439,6 +1437,14 @@ const RERUN_CONFIRM_DEBATE =
   "on this page — $0.20–0.40 for a completed run on a short article, and more on a " +
   "long one. The result changes only if the run succeeds.";
 
+/** Only the rows for which the generic one-call confirmation is not true. */
+const SPECIAL_RERUN_CONFIRM: Partial<Record<MetadataRerunStep, string>> = {
+  glossary: RERUN_CONFIRM_GLOSSARY,
+  sketch: RERUN_CONFIRM_SKETCH,
+  trajectory: RERUN_CONFIRM_TRAJECTORY,
+  debate: RERUN_CONFIRM_DEBATE,
+};
+
 /**
  * One row: the mode's name, and a control that asks before it spends anything.
  *
@@ -1455,12 +1461,12 @@ const RERUN_CONFIRM_DEBATE =
  * job creation, and Greg declined a per-reader spend cap on 2026-09-06 on the
  * strength of a **global** monthly cap at OpenRouter, whose failure mode is
  * every reader losing every paid feature until the month turns. So a one-click
- * repeatable paid button, on a page holding nine of them, is the wrong shape.
+ * repeatable paid button, on a page holding ten of them, is the wrong shape.
  *
- * The pattern is `Rewrite` in ./Tweets.tsx — an inline confirm row, no dialog,
- * nothing blocked, and a `busy` that survives the round trip so a press cannot
- * look ignored. Copied rather than imported: that component is welded to the
- * thread page's layout.
+ * The pattern came from the former `Rewrite` in ./Tweets.tsx — an inline
+ * confirm row, no dialog, nothing blocked, and a `busy` that survives the round
+ * trip so a press cannot look ignored. Copied rather than imported: that
+ * component was welded to the thread page's layout.
  *
  * **On every row, including the ones the pill says have not run.** The uniform
  * rule is one code path, and the branch it saves would live in the one place a
@@ -1561,7 +1567,7 @@ function RerunRow({
     if (asking) yesRef.current?.focus();
   }, [asking]);
   /**
-   * **The id the sentence is reachable by**, keyed on the step because nine of
+   * **The id the sentence is reachable by**, keyed on the step because ten of
    * these rows are on screen at once and a fixed id would give the reader
    * whichever row happened to be first in the document.
    */
@@ -1573,14 +1579,7 @@ function RerunRow({
      the `ran` / `not run` pill in Technical details cannot contradict each
      other — and `undefined` reads as "not that we know of". */
   const label = step === "glossary" ? "Find more terms" : done ? "Run it again" : "Run it";
-  const confirm =
-    step === "glossary"
-      ? RERUN_CONFIRM_GLOSSARY
-      : step === "sketch"
-        ? RERUN_CONFIRM_SKETCH
-        : step === "debate"
-          ? RERUN_CONFIRM_DEBATE
-          : RERUN_CONFIRM;
+  const confirm = SPECIAL_RERUN_CONFIRM[step] ?? RERUN_CONFIRM;
   /* **The same sentence for a Retry as for a run, and that is not laziness.**
      `JobProgress`'s Retry says *"skipping the stages that already worked"* in
      its tooltip, which is true of an ingest and vacuous here: our job has one
@@ -1605,7 +1604,7 @@ function RerunRow({
          would pass whatever the list happened to be — is never the way in. The
          same argument `data-section` on this page's headings makes.
 
-         **It is not what tells the nine buttons apart**, and reading it that way
+         **It is not what tells the ten buttons apart**, and reading it that way
          is how the missing accessible names went unnoticed: every actionable
          control in the row now carries the mode's name in its own `aria-label`,
          and the tests assert on those. */
@@ -1644,7 +1643,7 @@ function RerunRow({
               aria-describedby={confirmId}
               /* Every actionable control in this row carries the mode's name,
                  because the name itself is a sibling `<span>` and a screen
-                 reader's button list does not read those — nine rows of *Yes,
+                 reader's button list does not read those — ten rows of *Yes,
                  run it* and *Cancel* otherwise. The visible words come first, so
                  saying them still matches. ⟨Sol, F11.⟩ */
               aria-label={`${busy ? "Starting…" : yes} — ${RERUN_LABEL[step]}`}
@@ -1697,7 +1696,7 @@ function RerunRow({
             step={step}
             icon={<RefreshCw size={13} />}
             /* What the band's own two buttons are about, for their accessible
-               names — see `about` in JobProgress.tsx. Nine bands on one page is
+               names — see `about` in JobProgress.tsx. Ten bands on one page is
                the case that prop exists for. */
             about={RERUN_LABEL[step]}
             /* Only ever shown for the moment before the step reports a label of
@@ -2123,10 +2122,10 @@ function SubHeading({ children }: { children: ReactNode }) {
  * which is the test for what belongs.
  *
  * **That row has gone**, on 2026-09-07: its one entry was *"Re-run a stage"* and
- * it shipped, as *Generate it again* — a section of its own, further up, and
- * open. Which is the second half of the story this paragraph tells: burying it
- * here is exactly why nobody found it. See `RerunSection` above, and the note
- * where `SOON` stood.
+ * it shipped as *Generate it again*. Since 2026-09-29 it is the shut *Re-run AI
+ * processing* section immediately below this one. Which is the second half of
+ * the story this paragraph tells: burying it here is exactly why nobody found
+ * it. See `RerunSection` above, and the note where `SOON` stood.
  *
  * ## The rule this section inherits, and must not break
  *
@@ -2989,7 +2988,7 @@ function DeletePermanently({
      failed *first* load leaves `provenance` null and both halves agree; a
      failed **refresh** does not, because `readProvenance` deliberately keeps
      the previous answer so the page does not empty out over one lost
-     revalidation (see its header). Every row in *Generate it again* can fire
+     revalidation (see its header). Every row in *Re-run AI processing* can fire
      one. So this control arrived at `known=true, failed=true` — a state the
      first load cannot produce — and went on offering deletion over metadata
      the client had explicitly failed to re-establish, in the window where the
@@ -3231,12 +3230,23 @@ function Section({
   label,
   aside,
   collapsible,
+  keepMounted,
   children,
 }: {
   label: string;
   /** One line answering the section's question, on the heading row. */
   aside?: ReactNode;
   collapsible?: boolean;
+  /**
+   * **Shut hides the children rather than unmounting them.** For *Re-run AI
+   * processing*, whose rows each hold a `useStepJob` subscription: unmounted,
+   * a run that finished while the section was shut would never call
+   * `onFinished`, and reopening would not replay it — `useJobs` starts a new
+   * subscriber's cursor at the latest completion, and the fallback needs the
+   * row's own `startedId`, which went with it. GPT Sol, plan review of
+   * docs/plans/260929b-one-place-to-re-run-ai-processing.md, P1.
+   */
+  keepMounted?: boolean;
   children: ReactNode;
 }) {
   /* Local state, not a URL parameter, and this page's own `at` two hundred
@@ -3317,7 +3327,7 @@ function Section({
           </span>
         )}
       </h2>
-      {showing && children}
+      {keepMounted ? <div hidden={!showing}>{children}</div> : showing && children}
     </section>
   );
 }

@@ -1,7 +1,7 @@
 /**
- * **Which steps the Metadata page offers a "Generate it again" button for.**
+ * **Which steps the Metadata page offers a "Re-run AI processing" row for.**
  *
- * An explicit list of nine, and the explicitness is the design rather than a
+ * An explicit list of ten, and the explicitness is the design rather than a
  * shortcut: a control that spends our money on a press needs three answers the
  * pipeline's own sets do not give — how many metered calls one press buys,
  * whether the step has a prerequisite it will refuse without, and whether a
@@ -62,12 +62,19 @@
 import type { StepName } from "./types.js";
 
 /**
- * The nine, in `STEP_ORDER`'s order so the page's rows read down the pipeline.
+ * The ten, in `STEP_ORDER`'s order so the page's rows read down the pipeline.
+ *
+ * **`trajectory` joined on 2026-09-29**, when the modes lost their standing
+ * redo buttons and Metadata became the one place to ask for one
+ * (docs/plans/260929b-one-place-to-re-run-ai-processing.md). The three answers:
+ * one metered call (Quotes and Ideas are not named, so they do not run); it
+ * refuses without Quotes, and says so in the row; and a route that planned is
+ * safe to publish over the old one, draft-then-publish.
  *
  * `satisfies` rather than a `StepName[]` annotation, so the members stay
- * literal and `MetadataRerunStep` below is the nine rather than the sixteen —
+ * literal and `MetadataRerunStep` below is the ten rather than the sixteen —
  * which is what makes a per-step copy or label map a compile error when
- * somebody adds a tenth.
+ * somebody adds an eleventh.
  */
 export const METADATA_RERUN_STEPS = [
   "arc",
@@ -78,8 +85,9 @@ export const METADATA_RERUN_STEPS = [
   "timeline",
   "quiz",
   "sketch",
+  "trajectory",
   "debate",
 ] as const satisfies readonly StepName[];
 
-/** One of the nine. */
+/** One of the ten. */
 export type MetadataRerunStep = (typeof METADATA_RERUN_STEPS)[number];

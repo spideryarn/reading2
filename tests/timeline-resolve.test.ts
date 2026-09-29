@@ -48,6 +48,7 @@ import type {
   BlockId,
   Dating,
   DateRejection,
+  Job,
   TimelineEvent,
   TimelineModality,
   When,
@@ -443,9 +444,22 @@ describe("the panel, rendered", () => {
     expect(el.querySelector(".tl-again")).toBeNull();
     expect(el.querySelectorAll("button")).toHaveLength(0);
 
-    /* The control, so "no button" cannot start meaning "no panel": with events
-       the footer button is there. */
-    expect(draw([event({ id: "a" })]).querySelector(".tl-again")).not.toBeNull();
+    /* The control, so "no button" cannot start meaning "no panel": events
+       still draw the scroller, but an idle current timeline has no footer. */
+    const current = draw([event({ id: "a" })]);
+    expect(current.querySelector(".tl-scroll")).not.toBeNull();
+    expect(current.querySelector(".tl-again")).toBeNull();
+
+    /* A running re-run is status, not a standing action, so its footer remains. */
+    const running: Job = {
+      id: "job-timeline",
+      ownerId: "owner" as Job["ownerId"],
+      slug: "openai-huggingface",
+      status: "running",
+      createdAt: "2026-09-29T00:00:00.000Z",
+      steps: [{ name: "timeline", label: "Reading the timeline", status: "running" }],
+    };
+    expect(draw([event({ id: "a" })], { job: running }).querySelector(".tl-again")).not.toBeNull();
   });
 
   /**
