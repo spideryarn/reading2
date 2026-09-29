@@ -81,7 +81,12 @@ assumptions for Greg to overturn:
   ([experimental-features.md](../project/experimental-features.md) § *Hidden means hidden from the
   controls, not unreachable*), so every visitor rule here holds with it on or off, and nothing in this
   plan reads it.
-- **Diagram's Illustrated plates stay out of this fix**, a named follow-up.
+- **Diagram's Illustrated plates: not doing.** A visitor sees the stored Sketch and never the
+  Illustrated plates, and that is decided rather than deferred:
+
+  > We don't need Illustrated diagrams for visitors.
+  >
+  > — Greg, 2026-09-29
 - **Citations' *Find it* results stay private.**
 - **Ordering:** Trajectory, FAQ, Citations and Debate go to `dev` together once their gates and the
   Sol code review pass, and the Overseer gets that commit for Greg to deploy.
@@ -98,7 +103,7 @@ puts the explanatory band in the slot and it sends nothing.
 | plain, hierarchy, structure, summary | yes — drawn from the tree in the payload | no | yes | nothing |
 | glossary, ideas, quotes, timeline | yes — `{ kind: "artefact" }`, on the payload | yes (`useAutoRun` on press) — never mounted for a visitor | yes | nothing |
 | diagram — Sketch | yes — the stored Sketch; the fetching hooks off for a visitor | yes — pinned off by `DiagramAccess` | yes | nothing |
-| **diagram — Illustrated** | **no** — a visitor is pinned to Sketch (`DiagramPanel.tsx`), and the plates are a separate stored artefact | yes (`useIllustrated`: read, job poller, auto-run) | **no** (Sol, plan review 3) | Deferred — needs a public image-byte route; see *Deferred* |
+| **diagram — Illustrated** | **no** — a visitor is pinned to Sketch (`DiagramPanel.tsx`), and the plates are a separate stored artefact | yes (`useIllustrated`: read, job poller, auto-run) | no (Sol, plan review 3) — **not doing, by Greg's decision**, above | nothing |
 | search | yes — the owner's saved runs, read-only | yes — the composer is owner-only | yes | nothing |
 | comments (drawer, not a mode) | yes — read-only | yes — the composer is owner-only | yes | nothing |
 | tweets (its own page) | yes | yes — not mounted for a visitor | yes | nothing |
@@ -186,11 +191,6 @@ same fix. They are staged after Trajectory so the reported one ships first.
 
 ## Deferred
 
-- **Diagram's Illustrated plates.** A stored artefact a visitor cannot see today, and under Greg's
-  rule should. It needs a projected `PublicIllustrated`, a public-article-authorised route for the
-  plates' bytes, and a data-only visitor view with hostile `?diagram=illustrated` tests. That route is
-  a new public surface, bigger than everything else here put together, so it is its own follow-up
-  unless the Overseer says otherwise.
 - **Stale and outdated banners for a visitor.** No public artefact carries freshness
   (`PublicArtefactSet`'s rule: a visitor cannot act on it). A visitor sees the stored output as it is.
 

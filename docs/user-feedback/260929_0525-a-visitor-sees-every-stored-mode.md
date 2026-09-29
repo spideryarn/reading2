@@ -30,8 +30,8 @@ What they still don't get, and why:
 - **Remember** — Recall is your own answers. Quiz is left out, as you allowed: showing it read-only
   wasn't small, because Quiz is half of the Remember mode rather than a mode of its own.
 - **Referee** — your own criteria and marks.
-- **Diagram's Illustrated pictures** — a follow-up. Showing them needs a new public route for the
-  image files. The Sketch is already shown.
+- **Diagram's Illustrated pictures** — not for visitors, by your decision: *"We don't need
+  Illustrated diagrams for visitors."* The Sketch is shown.
 - **Citations' *Find it* results** — they record what you searched for, so they stay yours.
 
 Addresses are checked on the way out: a link to a cited work, or to a Debate source, that carries a
