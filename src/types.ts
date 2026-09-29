@@ -1759,6 +1759,12 @@ export interface Article {
  */
 export interface LibraryEntry {
   slug: string;
+  /**
+   * The current published revision, used by the shelf's derived views to know
+   * that the article changed even when its visible metadata and word count did
+   * not. Optional only for shelf rows cached before this field existed.
+   */
+  revisionId?: string;
   title: string;
   byline?: string;
   siteName?: string;
@@ -1889,6 +1895,18 @@ export interface LibraryTermsResponse {
   };
   /** In-scope articles not yet read; ask again until this is 0. */
   pending: number;
+  /**
+   * Whose ranking `terms` is: `"model"` when a stored model score for this
+   * scope was applied (possibly from an older shelf — the candidates it did not
+   * score are left out), `"program"` for the deterministic chooser alone.
+   * docs/project/shelf-terms.md.
+   */
+  chosenBy: "model" | "program";
+  /**
+   * A model refresh for this shelf is under way. Ask again a little later — a
+   * bounded number of times — and the model's pick will be in the answer.
+   */
+  refreshing: boolean;
 }
 
 /**

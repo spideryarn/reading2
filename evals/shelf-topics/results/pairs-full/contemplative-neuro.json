@@ -1,0 +1,208 @@
+{
+ "case": "contemplative-neuro",
+ "profile": "A meditator and neuroscience student interested in Buddhism, meditation research and the brain.",
+ "shelf": [
+  "1. The Self That Isn't There — An essay arguing that close inspection of experience does not turn up a fixed self, and that this no-self teaching works alongside the four noble truths to loosen clinging.",
+  "2. The Four Noble Truths, Plainly — A plain-language explainer walking through each of the four noble truths and why the diagnosis-and-cure structure still resonates.",
+  "3. Zen Mind, Ordinary Mind — A blog essay on Zen practice arguing that its austere forms are meant to strip away commentary rather than add mystique.",
+  "4. Ten Days of Silence: A Retreat Diary — A personal diary from a ten-day Theravada retreat, tracking the daily rhythm of practice, boredom, and small breakthroughs.",
+  "5. Metta: The Practice of Loving-Kindness — An explainer on the loving-kindness practice of metta, its traditional phrases, and what research on it has found so far.",
+  "6. What Happens to the Default Mode Network During Meditation — A science explainer on how brain-imaging studies link meditation to reduced activity in the default mode network, the brain's mind-wandering circuit.",
+  "7. Training the Mind: Attention and Meditation Research — A research explainer on how meditation training affects sustained attention and related cognitive tasks, and the mixed evidence behind the claims.",
+  "8. Neuroplasticity and the Meditating Brain — An essay on what long-term meditation studies suggest about neuroplasticity, structural brain change, and the limits of the current evidence.",
+  "9. Inside the Lab: EEG Studies of Monks — A news report on laboratory EEG studies of experienced monks, the unusual brainwave patterns recorded, and the practical difficulties of studying elite practitioners.",
+  "10. Mindfulness on the Morning Commute — A blog post about weaving mindfulness into an ordinary commute, and what changed after a month of treating the bus ride as practice rather than dead time.",
+  "11. A Week at Wat Suan Mokkh: Retreat Diary Two — A second retreat diary, this one from a forest monastery, tracking heat, insects, loving-kindness practice, and the strange comfort of a fixed daily bell schedule.",
+  "12. Sitting With Science: A Tour of Meditation Research — An overview piece touring the current state of meditation research across brain imaging, attention testing, and clinical trials, and what remains unsettled."
+ ],
+ "pairs": [
+  {
+   "id": "f017",
+   "A": [
+    "1. default mode network (3): What Happens to the Default Mode Network During Meditation; Sitting With Science: A Tour of Meditation Research; Inside the Lab: EEG Studies of Monks",
+    "2. noble truths (3): The Four Noble Truths, Plainly; The Self That Isn't There; Ten Days of Silence: A Retreat Diary",
+    "3. meditation (4): Sitting With Science: A Tour of Meditation Research; Training the Mind: Attention and Meditation Research; What Happens to the Default Mode Network During Meditation; Neuroplasticity and the Meditating Brain",
+    "4. retreat (3): A Week at Wat Suan Mokkh: Retreat Diary Two; Ten Days of Silence: A Retreat Diary; Mindfulness on the Morning Commute",
+    "5. sequence (2): Metta: The Practice of Loving-Kindness; Zen Mind, Ordinary Mind",
+    "6. Zen (3): Zen Mind, Ordinary Mind; Mindfulness on the Morning Commute; Inside the Lab: EEG Studies of Monks",
+    "7. loving-kindness (3): Metta: The Practice of Loving-Kindness; A Week at Wat Suan Mokkh: Retreat Diary Two; Ten Days of Silence: A Retreat Diary",
+    "8. no-self (3): The Self That Isn't There; The Four Noble Truths, Plainly; Zen Mind, Ordinary Mind",
+    "9. female (3): Inside the Lab: EEG Studies of Monks; Neuroplasticity and the Meditating Brain; Training the Mind: Attention and Meditation Research",
+    "10. neuroplasticity (3): Neuroplasticity and the Meditating Brain; Sitting With Science: A Tour of Meditation Research; Inside the Lab: EEG Studies of Monks",
+    "11. bell (3): A Week at Wat Suan Mokkh: Retreat Diary Two; Zen Mind, Ordinary Mind; Ten Days of Silence: A Retreat Diary",
+    "12. mindfulness (3): Mindfulness on the Morning Commute; Ten Days of Silence: A Retreat Diary; Zen Mind, Ordinary Mind"
+   ],
+   "B": [
+    "1. default mode network (3): What Happens to the Default Mode Network During Meditation; Sitting With Science: A Tour of Meditation Research; Inside the Lab: EEG Studies of Monks",
+    "2. noble truths (3): The Four Noble Truths, Plainly; The Self That Isn't There; Ten Days of Silence: A Retreat Diary",
+    "3. meditation (4): Sitting With Science: A Tour of Meditation Research; Training the Mind: Attention and Meditation Research; What Happens to the Default Mode Network During Meditation; Neuroplasticity and the Meditating Brain",
+    "4. retreat (3): A Week at Wat Suan Mokkh: Retreat Diary Two; Ten Days of Silence: A Retreat Diary; Mindfulness on the Morning Commute",
+    "5. sequence (2): Metta: The Practice of Loving-Kindness; Zen Mind, Ordinary Mind",
+    "6. Zen (3): Zen Mind, Ordinary Mind; Mindfulness on the Morning Commute; Inside the Lab: EEG Studies of Monks",
+    "7. loving-kindness (3): Metta: The Practice of Loving-Kindness; A Week at Wat Suan Mokkh: Retreat Diary Two; Ten Days of Silence: A Retreat Diary",
+    "8. no-self (3): The Self That Isn't There; The Four Noble Truths, Plainly; Zen Mind, Ordinary Mind",
+    "9. female (3): Inside the Lab: EEG Studies of Monks; Neuroplasticity and the Meditating Brain; Training the Mind: Attention and Meditation Research",
+    "10. neuroplasticity (3): Neuroplasticity and the Meditating Brain; Sitting With Science: A Tour of Meditation Research; Inside the Lab: EEG Studies of Monks",
+    "11. bell (3): A Week at Wat Suan Mokkh: Retreat Diary Two; Zen Mind, Ordinary Mind; Ten Days of Silence: A Retreat Diary",
+    "12. mindfulness (3): Mindfulness on the Morning Commute; Ten Days of Silence: A Retreat Diary; Zen Mind, Ordinary Mind"
+   ]
+  },
+  {
+   "id": "f018",
+   "A": [
+    "1. default mode network (3): What Happens to the Default Mode Network During Meditation; Sitting With Science: A Tour of Meditation Research; Inside the Lab: EEG Studies of Monks",
+    "2. noble truths (3): The Four Noble Truths, Plainly; The Self That Isn't There; Ten Days of Silence: A Retreat Diary",
+    "3. meditation (4): Sitting With Science: A Tour of Meditation Research; Training the Mind: Attention and Meditation Research; What Happens to the Default Mode Network During Meditation; Neuroplasticity and the Meditating Brain",
+    "4. retreat (3): A Week at Wat Suan Mokkh: Retreat Diary Two; Ten Days of Silence: A Retreat Diary; Mindfulness on the Morning Commute",
+    "5. sequence (2): Metta: The Practice of Loving-Kindness; Zen Mind, Ordinary Mind",
+    "6. Zen (3): Zen Mind, Ordinary Mind; Mindfulness on the Morning Commute; Inside the Lab: EEG Studies of Monks",
+    "7. loving-kindness (3): Metta: The Practice of Loving-Kindness; A Week at Wat Suan Mokkh: Retreat Diary Two; Ten Days of Silence: A Retreat Diary",
+    "8. no-self (3): The Self That Isn't There; The Four Noble Truths, Plainly; Zen Mind, Ordinary Mind",
+    "9. female (3): Inside the Lab: EEG Studies of Monks; Neuroplasticity and the Meditating Brain; Training the Mind: Attention and Meditation Research",
+    "10. neuroplasticity (3): Neuroplasticity and the Meditating Brain; Sitting With Science: A Tour of Meditation Research; Inside the Lab: EEG Studies of Monks",
+    "11. bell (3): A Week at Wat Suan Mokkh: Retreat Diary Two; Zen Mind, Ordinary Mind; Ten Days of Silence: A Retreat Diary",
+    "12. mindfulness (3): Mindfulness on the Morning Commute; Ten Days of Silence: A Retreat Diary; Zen Mind, Ordinary Mind"
+   ],
+   "B": [
+    "1. brain (4): What Happens to the Default Mode Network During Meditation; Neuroplasticity and the Meditating Brain; Inside the Lab: EEG Studies of Monks; Sitting With Science: A Tour of Meditation Research",
+    "2. loving-kindness (3): Metta: The Practice of Loving-Kindness; A Week at Wat Suan Mokkh: Retreat Diary Two; Ten Days of Silence: A Retreat Diary",
+    "3. no-self (3): The Self That Isn't There; The Four Noble Truths, Plainly; Zen Mind, Ordinary Mind",
+    "4. meditation (4): Sitting With Science: A Tour of Meditation Research; Training the Mind: Attention and Meditation Research; What Happens to the Default Mode Network During Meditation; Neuroplasticity and the Meditating Brain",
+    "5. mindfulness (3): Mindfulness on the Morning Commute; Ten Days of Silence: A Retreat Diary; Zen Mind, Ordinary Mind",
+    "6. noble truths (3): The Four Noble Truths, Plainly; The Self That Isn't There; Ten Days of Silence: A Retreat Diary",
+    "7. retreat (3): A Week at Wat Suan Mokkh: Retreat Diary Two; Ten Days of Silence: A Retreat Diary; Mindfulness on the Morning Commute",
+    "8. Zen (3): Zen Mind, Ordinary Mind; Mindfulness on the Morning Commute; Inside the Lab: EEG Studies of Monks"
+   ]
+  },
+  {
+   "id": "f019",
+   "A": [
+    "1. meditation (4): Sitting With Science: A Tour of Meditation Research; Training the Mind: Attention and Meditation Research; What Happens to the Default Mode Network During Meditation; Neuroplasticity and the Meditating Brain",
+    "2. no-self (3): The Self That Isn't There; The Four Noble Truths, Plainly; Zen Mind, Ordinary Mind",
+    "3. loving-kindness (3): Metta: The Practice of Loving-Kindness; A Week at Wat Suan Mokkh: Retreat Diary Two; Ten Days of Silence: A Retreat Diary",
+    "4. brain (4): What Happens to the Default Mode Network During Meditation; Neuroplasticity and the Meditating Brain; Inside the Lab: EEG Studies of Monks; Sitting With Science: A Tour of Meditation Research",
+    "5. retreat (3): A Week at Wat Suan Mokkh: Retreat Diary Two; Ten Days of Silence: A Retreat Diary; Mindfulness on the Morning Commute",
+    "6. noble truths (3): The Four Noble Truths, Plainly; The Self That Isn't There; Ten Days of Silence: A Retreat Diary",
+    "7. Zen (3): Zen Mind, Ordinary Mind; Mindfulness on the Morning Commute; Inside the Lab: EEG Studies of Monks",
+    "8. researchers (3): What Happens to the Default Mode Network During Meditation; Inside the Lab: EEG Studies of Monks; Training the Mind: Attention and Meditation Research",
+    "9. practitioners (2): Inside the Lab: EEG Studies of Monks; Metta: The Practice of Loving-Kindness",
+    "10. mindfulness (3): Mindfulness on the Morning Commute; Ten Days of Silence: A Retreat Diary; Zen Mind, Ordinary Mind"
+   ],
+   "B": [
+    "1. default mode network (3): What Happens to the Default Mode Network During Meditation; Sitting With Science: A Tour of Meditation Research; Inside the Lab: EEG Studies of Monks",
+    "2. loving-kindness (3): Metta: The Practice of Loving-Kindness; A Week at Wat Suan Mokkh: Retreat Diary Two; Ten Days of Silence: A Retreat Diary",
+    "3. no-self (3): The Self That Isn't There; The Four Noble Truths, Plainly; Zen Mind, Ordinary Mind",
+    "4. meditation (4): Sitting With Science: A Tour of Meditation Research; Training the Mind: Attention and Meditation Research; What Happens to the Default Mode Network During Meditation; Neuroplasticity and the Meditating Brain",
+    "5. mindfulness (3): Mindfulness on the Morning Commute; Ten Days of Silence: A Retreat Diary; Zen Mind, Ordinary Mind",
+    "6. neuroplasticity (3): Neuroplasticity and the Meditating Brain; Sitting With Science: A Tour of Meditation Research; Inside the Lab: EEG Studies of Monks",
+    "7. noble truths (3): The Four Noble Truths, Plainly; The Self That Isn't There; Ten Days of Silence: A Retreat Diary",
+    "8. retreat (3): A Week at Wat Suan Mokkh: Retreat Diary Two; Ten Days of Silence: A Retreat Diary; Mindfulness on the Morning Commute",
+    "9. Zen (3): Zen Mind, Ordinary Mind; Mindfulness on the Morning Commute; Inside the Lab: EEG Studies of Monks"
+   ]
+  },
+  {
+   "id": "f020",
+   "A": [
+    "1. brain (4): What Happens to the Default Mode Network During Meditation; Neuroplasticity and the Meditating Brain; Inside the Lab: EEG Studies of Monks; Sitting With Science: A Tour of Meditation Research",
+    "2. loving-kindness (3): Metta: The Practice of Loving-Kindness; A Week at Wat Suan Mokkh: Retreat Diary Two; Ten Days of Silence: A Retreat Diary",
+    "3. no-self (3): The Self That Isn't There; The Four Noble Truths, Plainly; Zen Mind, Ordinary Mind",
+    "4. meditation (4): Sitting With Science: A Tour of Meditation Research; Training the Mind: Attention and Meditation Research; What Happens to the Default Mode Network During Meditation; Neuroplasticity and the Meditating Brain",
+    "5. mindfulness (3): Mindfulness on the Morning Commute; Ten Days of Silence: A Retreat Diary; Zen Mind, Ordinary Mind",
+    "6. noble truths (3): The Four Noble Truths, Plainly; The Self That Isn't There; Ten Days of Silence: A Retreat Diary",
+    "7. retreat (3): A Week at Wat Suan Mokkh: Retreat Diary Two; Ten Days of Silence: A Retreat Diary; Mindfulness on the Morning Commute",
+    "8. Zen (3): Zen Mind, Ordinary Mind; Mindfulness on the Morning Commute; Inside the Lab: EEG Studies of Monks"
+   ],
+   "B": [
+    "1. default mode network (3): What Happens to the Default Mode Network During Meditation; Sitting With Science: A Tour of Meditation Research; Inside the Lab: EEG Studies of Monks",
+    "2. loving-kindness (3): Metta: The Practice of Loving-Kindness; A Week at Wat Suan Mokkh: Retreat Diary Two; Ten Days of Silence: A Retreat Diary",
+    "3. no-self (3): The Self That Isn't There; The Four Noble Truths, Plainly; Zen Mind, Ordinary Mind",
+    "4. meditation (4): Sitting With Science: A Tour of Meditation Research; Training the Mind: Attention and Meditation Research; What Happens to the Default Mode Network During Meditation; Neuroplasticity and the Meditating Brain",
+    "5. mindfulness (3): Mindfulness on the Morning Commute; Ten Days of Silence: A Retreat Diary; Zen Mind, Ordinary Mind",
+    "6. neuroplasticity (3): Neuroplasticity and the Meditating Brain; Sitting With Science: A Tour of Meditation Research; Inside the Lab: EEG Studies of Monks",
+    "7. noble truths (3): The Four Noble Truths, Plainly; The Self That Isn't There; Ten Days of Silence: A Retreat Diary",
+    "8. retreat (3): A Week at Wat Suan Mokkh: Retreat Diary Two; Ten Days of Silence: A Retreat Diary; Mindfulness on the Morning Commute",
+    "9. Zen (3): Zen Mind, Ordinary Mind; Mindfulness on the Morning Commute; Inside the Lab: EEG Studies of Monks"
+   ]
+  },
+  {
+   "id": "f021",
+   "A": [
+    "1. default mode network (3): What Happens to the Default Mode Network During Meditation; Sitting With Science: A Tour of Meditation Research; Inside the Lab: EEG Studies of Monks",
+    "2. noble truths (3): The Four Noble Truths, Plainly; The Self That Isn't There; Ten Days of Silence: A Retreat Diary",
+    "3. meditation (4): Sitting With Science: A Tour of Meditation Research; Training the Mind: Attention and Meditation Research; What Happens to the Default Mode Network During Meditation; Neuroplasticity and the Meditating Brain",
+    "4. retreat (3): A Week at Wat Suan Mokkh: Retreat Diary Two; Ten Days of Silence: A Retreat Diary; Mindfulness on the Morning Commute",
+    "5. sequence (2): Metta: The Practice of Loving-Kindness; Zen Mind, Ordinary Mind",
+    "6. Zen (3): Zen Mind, Ordinary Mind; Mindfulness on the Morning Commute; Inside the Lab: EEG Studies of Monks",
+    "7. loving-kindness (3): Metta: The Practice of Loving-Kindness; A Week at Wat Suan Mokkh: Retreat Diary Two; Ten Days of Silence: A Retreat Diary",
+    "8. no-self (3): The Self That Isn't There; The Four Noble Truths, Plainly; Zen Mind, Ordinary Mind",
+    "9. female (3): Inside the Lab: EEG Studies of Monks; Neuroplasticity and the Meditating Brain; Training the Mind: Attention and Meditation Research",
+    "10. neuroplasticity (3): Neuroplasticity and the Meditating Brain; Sitting With Science: A Tour of Meditation Research; Inside the Lab: EEG Studies of Monks",
+    "11. bell (3): A Week at Wat Suan Mokkh: Retreat Diary Two; Zen Mind, Ordinary Mind; Ten Days of Silence: A Retreat Diary",
+    "12. mindfulness (3): Mindfulness on the Morning Commute; Ten Days of Silence: A Retreat Diary; Zen Mind, Ordinary Mind"
+   ],
+   "B": [
+    "1. default mode network (3): What Happens to the Default Mode Network During Meditation; Sitting With Science: A Tour of Meditation Research; Inside the Lab: EEG Studies of Monks",
+    "2. loving-kindness (3): Metta: The Practice of Loving-Kindness; A Week at Wat Suan Mokkh: Retreat Diary Two; Ten Days of Silence: A Retreat Diary",
+    "3. no-self (3): The Self That Isn't There; The Four Noble Truths, Plainly; Zen Mind, Ordinary Mind",
+    "4. meditation (4): Sitting With Science: A Tour of Meditation Research; Training the Mind: Attention and Meditation Research; What Happens to the Default Mode Network During Meditation; Neuroplasticity and the Meditating Brain",
+    "5. mindfulness (3): Mindfulness on the Morning Commute; Ten Days of Silence: A Retreat Diary; Zen Mind, Ordinary Mind",
+    "6. neuroplasticity (3): Neuroplasticity and the Meditating Brain; Sitting With Science: A Tour of Meditation Research; Inside the Lab: EEG Studies of Monks",
+    "7. noble truths (3): The Four Noble Truths, Plainly; The Self That Isn't There; Ten Days of Silence: A Retreat Diary",
+    "8. retreat (3): A Week at Wat Suan Mokkh: Retreat Diary Two; Ten Days of Silence: A Retreat Diary; Mindfulness on the Morning Commute",
+    "9. Zen (3): Zen Mind, Ordinary Mind; Mindfulness on the Morning Commute; Inside the Lab: EEG Studies of Monks"
+   ]
+  },
+  {
+   "id": "f022",
+   "A": [
+    "1. default mode network (3): What Happens to the Default Mode Network During Meditation; Sitting With Science: A Tour of Meditation Research; Inside the Lab: EEG Studies of Monks",
+    "2. loving-kindness (3): Metta: The Practice of Loving-Kindness; A Week at Wat Suan Mokkh: Retreat Diary Two; Ten Days of Silence: A Retreat Diary",
+    "3. no-self (3): The Self That Isn't There; The Four Noble Truths, Plainly; Zen Mind, Ordinary Mind",
+    "4. meditation (4): Sitting With Science: A Tour of Meditation Research; Training the Mind: Attention and Meditation Research; What Happens to the Default Mode Network During Meditation; Neuroplasticity and the Meditating Brain",
+    "5. mindfulness (3): Mindfulness on the Morning Commute; Ten Days of Silence: A Retreat Diary; Zen Mind, Ordinary Mind",
+    "6. neuroplasticity (3): Neuroplasticity and the Meditating Brain; Sitting With Science: A Tour of Meditation Research; Inside the Lab: EEG Studies of Monks",
+    "7. noble truths (3): The Four Noble Truths, Plainly; The Self That Isn't There; Ten Days of Silence: A Retreat Diary",
+    "8. retreat (3): A Week at Wat Suan Mokkh: Retreat Diary Two; Ten Days of Silence: A Retreat Diary; Mindfulness on the Morning Commute",
+    "9. Zen (3): Zen Mind, Ordinary Mind; Mindfulness on the Morning Commute; Inside the Lab: EEG Studies of Monks"
+   ],
+   "B": [
+    "1. brain (4): What Happens to the Default Mode Network During Meditation; Neuroplasticity and the Meditating Brain; Inside the Lab: EEG Studies of Monks; Sitting With Science: A Tour of Meditation Research",
+    "2. loving-kindness (3): Metta: The Practice of Loving-Kindness; A Week at Wat Suan Mokkh: Retreat Diary Two; Ten Days of Silence: A Retreat Diary",
+    "3. no-self (3): The Self That Isn't There; The Four Noble Truths, Plainly; Zen Mind, Ordinary Mind",
+    "4. meditation (4): Sitting With Science: A Tour of Meditation Research; Training the Mind: Attention and Meditation Research; What Happens to the Default Mode Network During Meditation; Neuroplasticity and the Meditating Brain",
+    "5. mindfulness (3): Mindfulness on the Morning Commute; Ten Days of Silence: A Retreat Diary; Zen Mind, Ordinary Mind",
+    "6. noble truths (3): The Four Noble Truths, Plainly; The Self That Isn't There; Ten Days of Silence: A Retreat Diary",
+    "7. retreat (3): A Week at Wat Suan Mokkh: Retreat Diary Two; Ten Days of Silence: A Retreat Diary; Mindfulness on the Morning Commute",
+    "8. Zen (3): Zen Mind, Ordinary Mind; Mindfulness on the Morning Commute; Inside the Lab: EEG Studies of Monks"
+   ]
+  },
+  {
+   "id": "f023",
+   "A": [
+    "1. default mode network (3): What Happens to the Default Mode Network During Meditation; Sitting With Science: A Tour of Meditation Research; Inside the Lab: EEG Studies of Monks",
+    "2. loving-kindness (3): Metta: The Practice of Loving-Kindness; A Week at Wat Suan Mokkh: Retreat Diary Two; Ten Days of Silence: A Retreat Diary",
+    "3. no-self (3): The Self That Isn't There; The Four Noble Truths, Plainly; Zen Mind, Ordinary Mind",
+    "4. meditation (4): Sitting With Science: A Tour of Meditation Research; Training the Mind: Attention and Meditation Research; What Happens to the Default Mode Network During Meditation; Neuroplasticity and the Meditating Brain",
+    "5. mindfulness (3): Mindfulness on the Morning Commute; Ten Days of Silence: A Retreat Diary; Zen Mind, Ordinary Mind",
+    "6. neuroplasticity (3): Neuroplasticity and the Meditating Brain; Sitting With Science: A Tour of Meditation Research; Inside the Lab: EEG Studies of Monks",
+    "7. noble truths (3): The Four Noble Truths, Plainly; The Self That Isn't There; Ten Days of Silence: A Retreat Diary",
+    "8. retreat (3): A Week at Wat Suan Mokkh: Retreat Diary Two; Ten Days of Silence: A Retreat Diary; Mindfulness on the Morning Commute",
+    "9. Zen (3): Zen Mind, Ordinary Mind; Mindfulness on the Morning Commute; Inside the Lab: EEG Studies of Monks"
+   ],
+   "B": [
+    "1. meditation (4): Sitting With Science: A Tour of Meditation Research; Training the Mind: Attention and Meditation Research; What Happens to the Default Mode Network During Meditation; Neuroplasticity and the Meditating Brain",
+    "2. mindfulness (3): Mindfulness on the Morning Commute; Ten Days of Silence: A Retreat Diary; Zen Mind, Ordinary Mind",
+    "3. brain (4): What Happens to the Default Mode Network During Meditation; Neuroplasticity and the Meditating Brain; Inside the Lab: EEG Studies of Monks; Sitting With Science: A Tour of Meditation Research",
+    "4. research (2): Sitting With Science: A Tour of Meditation Research; Inside the Lab: EEG Studies of Monks",
+    "5. retreat (3): A Week at Wat Suan Mokkh: Retreat Diary Two; Ten Days of Silence: A Retreat Diary; Mindfulness on the Morning Commute",
+    "6. noble truths (3): The Four Noble Truths, Plainly; The Self That Isn't There; Ten Days of Silence: A Retreat Diary",
+    "7. no-self (3): The Self That Isn't There; The Four Noble Truths, Plainly; Zen Mind, Ordinary Mind",
+    "8. loving-kindness (3): Metta: The Practice of Loving-Kindness; A Week at Wat Suan Mokkh: Retreat Diary Two; Ten Days of Silence: A Retreat Diary",
+    "9. default mode network (3): What Happens to the Default Mode Network During Meditation; Sitting With Science: A Tour of Meditation Research; Inside the Lab: EEG Studies of Monks",
+    "10. neuroplasticity (3): Neuroplasticity and the Meditating Brain; Sitting With Science: A Tour of Meditation Research; Inside the Lab: EEG Studies of Monks",
+    "11. Zen (3): Zen Mind, Ordinary Mind; Mindfulness on the Morning Commute; Inside the Lab: EEG Studies of Monks",
+    "12. meditators (2): What Happens to the Default Mode Network During Meditation; Neuroplasticity and the Meditating Brain"
+   ]
+  }
+ ]
+}

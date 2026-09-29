@@ -57,7 +57,7 @@ let activeFails: boolean;
 /** The stale-while-revalidate first paint, when a test needs one. */
 let cached: LibraryEntry[] | null;
 
-const NO_TERMS: LibraryTermsResponse = { terms: [], scope: { articles: 0, works: 0, skipped: 0 }, pending: 0 };
+const NO_TERMS: LibraryTermsResponse = { terms: [], scope: { articles: 0, works: 0, skipped: 0 }, pending: 0, chosenBy: "program", refreshing: false };
 
 async function activeResponse(json: (body: unknown, status?: number) => Response) {
   const answer = [...active];

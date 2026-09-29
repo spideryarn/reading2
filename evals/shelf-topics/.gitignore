@@ -5,3 +5,5 @@ cases/
 results/*/
 !results/pairs/
 !results/judgements/
+!results/pairs-full/
+!results/judgements-full/

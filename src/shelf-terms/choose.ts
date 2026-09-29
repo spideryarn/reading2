@@ -651,10 +651,14 @@ function buildPool(articles: ChooseArticle[], N: number, o: Required<ChooseOptio
 }
 
 /** `ChooseOptions.quality` over the pool: named keys take their score, the rest 0. */
-function withExternalQuality(pool: Pool[], quality: ReadonlyMap<string, number>): Pool[] {
+function validateExternalQuality(quality: ReadonlyMap<string, number> | null): void {
+  if (!quality) return;
   for (const [key, q] of quality)
     if (!Number.isFinite(q) || q < 0)
       throw new RangeError(`external quality for "${key}" must be finite and ≥ 0, got ${q}`);
+}
+
+function withExternalQuality(pool: Pool[], quality: ReadonlyMap<string, number>): Pool[] {
   return pool.map((p) => ({ ...p, quality: quality.get(p.key) ?? 0 }));
 }
 
@@ -665,6 +669,7 @@ function withExternalQuality(pool: Pool[], quality: ReadonlyMap<string, number>)
  */
 export function candidateTopics(articles: ChooseArticle[], opts: ChooseOptions = {}): ShelfTerm[] {
   const o = { ...DEFAULTS, ...opts };
+  validateExternalQuality(o.quality);
   const N = new Set(articles.map((a) => a.textHash)).size;
   if (N < o.minWorks) return [];
   return eligible(buildPool(articles, N, o), opts.qualityPool ?? Number.POSITIVE_INFINITY).map(
@@ -692,6 +697,7 @@ export interface PoolCandidate extends ShelfTerm {
  */
 export function candidatePool(articles: ChooseArticle[], opts: ChooseOptions = {}): PoolCandidate[] {
   const o = { ...DEFAULTS, ...opts };
+  validateExternalQuality(o.quality);
   const N = new Set(articles.map((a) => a.textHash)).size;
   if (N < o.minWorks) return [];
   return buildPool(articles, N, o)
@@ -705,6 +711,7 @@ export function candidatePool(articles: ChooseArticle[], opts: ChooseOptions = {
  */
 export function chooseTerms(articles: ChooseArticle[], opts: ChooseOptions = {}): ChooseResult {
   const o = { ...DEFAULTS, ...opts };
+  validateExternalQuality(o.quality);
   const N = new Set(articles.map((a) => a.textHash)).size;
   /* On the 000…002 test shelf, 6 articles that are 2 works, every
      configuration the spike tried chose nothing useful. */

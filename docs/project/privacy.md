@@ -393,6 +393,18 @@ behind the switch — Fable's recommendation in
 
 It goes with the article (a cascade through `block_identities`), and is in both exports.
 
+## Shelf topics
+
+**Added 2026-09-29**, with [shelf-terms.md § The model's judgement](shelf-terms.md#the-models-judgement):
+the topic row above the shelf is now chosen with `gpt-6-luna`, which is shown each read article's
+title (the reader's rename when there is one) and one-sentence gist, the program's candidate
+topics with three example titles each, and the reader's profile if they wrote one. **This is a new
+flow of the reader's reading list to a model**, not a new subprocessor — OpenRouter and OpenAI are
+already on the page — so the page names the model and what it is shown, in the models paragraph,
+and `LAST_UPDATED` moved. The scores it returns are stored against the reader
+(`shelf_topic_scores`), deleted with the account, and never logged; nor are the titles, gists or
+profile it was sent. It runs only for the shelf's owner — the public shelf gets no topics at all.
+
 ## What is pinned by a test, and what is not
 
 [`tests/privacy-page.test.ts`](../../tests/privacy-page.test.ts) holds the **model names** to

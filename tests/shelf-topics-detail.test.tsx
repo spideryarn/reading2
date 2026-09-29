@@ -45,6 +45,8 @@ const DATA: LibraryTermsResponse = {
   })),
   scope: { articles: 20, works: 20, skipped: 0 },
   pending: 0,
+  chosenBy: "program",
+  refreshing: false,
 };
 const SLUGS = Array.from({ length: 20 }, (_, i) => `a${i}`);
 const countOf = (key: string) => 14 - KEYS.indexOf(key);
@@ -272,6 +274,8 @@ describe("copies of one article", () => {
     ],
     scope: { articles: 7, works: 5, skipped: 0 },
     pending: 0,
+    chosenBy: "program",
+    refreshing: false,
   };
   const TITLES: Record<string, string> = {
     "ball-1": "A brief history of ball lightning",

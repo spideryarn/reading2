@@ -288,6 +288,25 @@ export const PDF_READER_MODEL = "openai/gpt-5.6-luna";
 export const PDF_FIGURE_LOCATOR_MODEL = "google/gemini-3-flash-preview";
 
 /**
+ * **What judges the shelf's candidate topics** — the model shown a reader's
+ * shelf (titles and one-sentence gists, and their profile when they wrote one)
+ * and the program's candidate topics, asked to score each 0–3 as a filter for
+ * this reader. Our own greedy then chooses from the scores
+ * (src/shelf-terms/model-scores.ts, docs/project/shelf-terms.md).
+ *
+ * Chosen by measurement, 2026-09-29: nine shelves, four arms, three runs each,
+ * blind Opus judges. Luna's scores beat the program-only list 9–0 in both
+ * rounds and were level with or ahead of Jev, a cheaper decisions model on an
+ * alpha endpoint the gateway does not speak. About $0.001 and 6–20 s a call.
+ * docs/plans/260929c-shelf-topics-chosen-by-a-model.md § Stage 1.
+ *
+ * The undated id, like every other Luna constant in this file. OpenRouter's
+ * models list gives its canonical slug as `openai/gpt-6-luna-20260922`; the
+ * listed id is this one, and it is the one the eval measured.
+ */
+export const SHELF_TOPICS_MODEL = "openai/gpt-6-luna";
+
+/**
  * **What turns a dictation into text.** Not on a tier, for the same reason the
  * PDF reader is not: a tier is a judgment about how much reasoning a job needs,
  * and this one needs none — it needs ears and a vocabulary list.
@@ -602,7 +621,16 @@ export type Task =
  * the inventory the profile page shows and the jobs the meter can name are the
  * same three by construction.
  */
-export type NonTaskAiJob = "pdf" | "embeddings" | "dictation" | "pdf-figure-locate";
+export type NonTaskAiJob =
+  | "pdf"
+  | "embeddings"
+  | "dictation"
+  | "pdf-figure-locate"
+  /* **The shelf's topics, judged** — src/shelf-terms/model-scores.ts. Not a
+     `Task`, for the PDF reader's reason: a tier is a judgment about how much
+     reasoning a job needs, and this job's model was chosen by an eval rather
+     than by a tier (`SHELF_TOPICS_MODEL` below). */
+  | "shelf-topics";
 
 /**
  * **Every model call this app pays for**, whether or not it is a tier decision.
@@ -947,7 +975,14 @@ export type Wire =
    * on both calls anybody has measured, which is a second reason a row on this
    * wire should not be read like a chat row.
    */
-  | "transcription";
+  | "transcription"
+  /**
+   * OpenRouter's Decisions API. It returns named typed answers rather than a
+   * chat completion. The product gateway does not speak it; the shelf-topics
+   * eval's declared Jev bypass does, and its ledger row must name the protocol
+   * it actually used rather than calling those tokens chat tokens.
+   */
+  | "decisions";
 
 /**
  * **Which wire each task is on** — and the reason this is a `Record` rather
@@ -1022,6 +1057,8 @@ export const AI_JOB_WIRE: Record<AiJob, Wire> = {
   ...TASK_WIRE,
   pdf: "chat",
   "pdf-figure-locate": "chat",
+  /* A strict JSON schema back, on chat/completions like the eval that chose it. */
+  "shelf-topics": "chat",
   dictation: "transcription",
   embeddings: "embeddings",
   /* **What an eval would use if it went through the gateway** — and `rescue`,
@@ -1213,6 +1250,7 @@ export const DISPLAY_NAME: Record<string, string> = {
      reaches somewhere it does not. docs/plans/260907c-dictation-onto-an-openai-transcriber.md. */
   "openai/gpt-transcribe": "gpt-transcribe",
   "google/gemini-3-flash-preview": "gemini-3-flash-preview",
+  "openai/gpt-6-luna": "gpt-6-luna",
 };
 
 /**
@@ -1244,6 +1282,7 @@ export const NON_TASK_MODELS: readonly {
   { job: "embeddings", id: EMBEDDING_MODEL, provider: "openrouter" },
   { job: "dictation", id: DICTATION_MODEL, provider: "openrouter" },
   { job: "pdf-figure-locate", id: PDF_FIGURE_LOCATOR_MODEL, provider: "openrouter" },
+  { job: "shelf-topics", id: SHELF_TOPICS_MODEL, provider: "openrouter" },
 ];
 
 /**

@@ -1,0 +1,9 @@
+{"case":"mind-and-machines","judgements":[
+{"id":"f010","winner":"B","scoreA":5,"scoreB":6,"reason":"Same core pills, but A adds the incidental 'machine' pill, while B stops before it (both still carry the vague 'model' pill)."},
+{"id":"f011","winner":"A","scoreA":8,"scoreB":5,"reason":"A leads with real themes and adds moral status, interpretability and reward hacking, all specific to this reader; B spends slots on the vague 'model' and 'machine' pills."},
+{"id":"f012","winner":"B","scoreA":3,"scoreB":6,"reason":"A leads with the vague 'model' pill, leaves out consciousness and scaling laws, and fills its tail with junk pills (dog, car, window, phone); B covers the main themes cleanly."},
+{"id":"f013","winner":"A","scoreA":5,"scoreB":3,"reason":"A covers the core themes; B leaves out consciousness and scaling laws and is padded with incidental pills like car, window and phone."},
+{"id":"f014","winner":"tie","scoreA":3,"scoreB":3,"reason":"Identical lists."},
+{"id":"f015","winner":"A","scoreA":6,"scoreB":5,"reason":"Same core pills; B adds the incidental 'machine' pill, while A is shorter and cleaner."},
+{"id":"f016","winner":"B","scoreA":5,"scoreB":6,"reason":"Same core pills; A adds the incidental 'machine' pill, while B is shorter and cleaner."}
+]}

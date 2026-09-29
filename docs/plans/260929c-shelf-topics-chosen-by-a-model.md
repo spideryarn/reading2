@@ -92,8 +92,10 @@ greedy as a variant if their own order under-covers.)
   anonymised lists; asked which a reader of this shelf would rather filter with, and to score each
   list 1–10 for *meaningful to this reader*, *covers the shelf*, *no near-duplicates*. Sides
   shuffled with `crypto.randomInt`, **the key's side counts checked before judging** (a JS float LCG
-  once put one arm on the same side 94 times in 95), and a same-arm control pair to measure the
-  judge's noise. Plus the numbers the report script already prints: coverage@5/8/12, overlap.
+  once put one arm on the same side 94 times in 95). An identical-baseline pair checks judge/side
+  noise; Luna runs 1 and 2 measure model variation plus judge variation; a side-swapped duplicate
+  checks side bias but is not a second independent vote. Plus the numbers the report script already
+  prints: coverage@5/8/12, overlap.
 - **Output**: a table per shelf — arm, judge wins and mean score, coverage, cost per refresh,
   latency — and the lists themselves, read by me. **This goes to the Overseer before anything is
   built**, unless the pick is clear-cut and cheap as Greg described.
@@ -127,12 +129,21 @@ sides from `crypto.randomInt`, balanced within chance):
 |---|---|
 | Luna (scores) vs today's list | **9–0** |
 | Jev (floor) vs today's list | **9–0** |
-| Jev (floor) vs Luna (scores) | 8–6, 4 ties — level; *greg-like* 0–2 |
+| Jev (floor) vs Luna (scores) | **4–3, 2 ties — level; *greg-like* 0–1.** The nine side-swapped duplicates reproduced every verdict, so counting them as extra votes would give the former 8–6, 4-tie figure. |
 | Luna (orders) vs Luna (scores) | 6–3 |
 | controls: identical lists | 9 of 9 ties |
 | controls: Luna run 1 vs run 2 | split 4–4–1 |
 
-Mean judge score (1–10): Luna-order 6.6, Jev-floor 6.3, Luna-score 6.1, baseline 3.7.
+Raw mean judge score over every appearance (1–10): Luna-order 6.6, Jev-floor 6.3, Luna-score 6.1,
+baseline 3.7. These are descriptive, not a four-way ranking: the arms appeared in different
+contrasts, and the Jev/Luna side-swapped duplicate and the controls are included.
+
+**Review limitation.** R6 required the judge to see every member title for each topic. The built
+pairs showed the first five and only a `+N more` count after that. The verdicts are still evidence
+about the labels, ordering and visible memberships, but they are weaker evidence that every topic's
+full membership is coherent. Fixing the historical comparison means regenerating the pairs with all
+titles and re-judging them; this Stage 1 review made no paid calls, so it has not rewritten the
+evidence as though that had happened.
 
 *greg-like*, first 12:
 - **today:** model, predictive coding, global workspace theory, neural networks, reinforcement
@@ -149,10 +160,31 @@ Reading the lists shows **our greedy costs quality in the score arms**: its cont
 swallows *predictive coding* into *prediction*, and it drops small, precise topics (*global
 workspace theory*, *integrated information*) that Luna's own order keeps.
 
-**The pick, sent to the Overseer for Greg:** Luna choosing and ordering from our candidates —
-~$0.001 and ~15 s per refresh, on the existing chat wire, run after the response so nobody waits.
-Jev is cheaper and faster but level overall, weaker on the Greg-shaped shelf, needs an alpha endpoint
-and a new wire, and needs an arbitrary floor. **Awaiting Greg** before Stage 2.
+**Re-judged with full membership** (R6 / Sol S1-3; `make-pairs.ts --full`, a fresh shuffle, nine
+fresh Opus judges, `tally.ts --full`; independent votes, swapped duplicates excluded):
+
+| contrast | first round | full membership |
+|---|---|---|
+| Luna (scores) vs today's list | 9–0 | **9–0** |
+| Jev (floor) vs today's list | 9–0 | **9–0** |
+| Luna (scores) vs Jev (floor) | 3–4, 2 ties | **5–3, 1 tie** |
+| Luna (orders) vs Luna (scores) | 6–3 | **3–6** |
+| identical lists tie | 9 of 9 | 9 of 9 |
+| swapped duplicates agree | 9 of 9 | 9 of 9 |
+
+Mean judge score (full membership): Luna-score 6.25, Jev-floor 5.9, Luna-order 5.9, baseline 3.8.
+The order-vs-score contrast **flipped between rounds**, so it is noise; the earlier reading that
+"our greedy costs quality" was drawn from one list and is withdrawn — with every member title
+visible, the judge preferred the greedy's lists. On *greg-like* the Luna-score list (*Buddhism,
+consciousness, dopamine, neural networks, prediction, reinforcement learning, hippocampus,
+meditation, language…*) won five of nine pairs.
+
+**The pick, sent to the Overseer for Greg: GPT-6 Luna scores each candidate 0–3; our greedy
+chooses from the scores.** ~$0.001 and ~15 s per refresh on the existing chat wire. It is at worst
+level in both rounds and top with full membership; it keeps coverage, dead-pill hiding and the
+neighbour rule in our code; Jev is cheaper and faster but behind, alpha, a new wire, and needs a
+floor chosen after the fact. (A first pick of "Luna orders" was sent and then withdrawn when the
+full-membership round reversed that contrast.) Building unless Greg says otherwise.
 
 ## Stage 2 — the build (after the pick)
 
@@ -169,6 +201,19 @@ and a new wire, and needs an arbitrary floor. **Awaiting Greg** before Stage 2.
 - **Fallback**: no key, a failed or refused call, or a malformed answer → today's deterministic list,
   silently to the reader, loudly in the log.
 - Docs: shelf-terms.md's design section rewritten; ai-gateway.md for a new wire or job.
+
+**Landed (2026-09-29, uncommitted at the time of writing):** job `shelf-topics` on the chat wire,
+`openai/gpt-6-luna`, provider default reasoning (what the eval measured); the scorer
+`src/shelf-terms/model-scores.ts` (the eval's prompt and `promptCandidates`, moved; a strict
+parser; `inputHash` over the exact messages + prompt version + model); `src/shelf-topics.ts` (stored
+scores applied — unscored keys left out, program's list if that leaves nothing; claim → allowance →
+send → await → fenced write; backoff 2 min ×4 to 6 h; `shelf-topics` rate bucket 12/h, 40/day,
+3,000/day global); table `shelf_topic_scores` (`drizzle/20260929065031_shelf_topic_scores.sql`,
+additive, with its `auth.users` FK) — **production is Greg's to apply**; the client asks again every
+8 s, at most four times, while `refreshing`. Where the text above differs, this is what was built:
+the hash is of the model's input (R2), not of revision ids, and a stale row is **used** (not the
+program's list) until its refresh lands. The eval's `luna-score` arm now calls the production
+scorer. [shelf-terms.md § The model's judgement](../project/shelf-terms.md#the-models-judgement).
 
 ## Reviews
 
@@ -199,3 +244,29 @@ and a new wire, and needs an arbitrary floor. **Awaiting Greg** before Stage 2.
     a per-owner daily fuse; a new `shelf-topics` `AiJob`, request scope, the owner's, not the ingest
     quota; the privacy page names any new provider (and Jev's data-collection terms are checked
     first); no titles, gists or prompts in logs.
+- **GPT Sol, stage 1 code** —
+  [260929c-shelf-topics-chosen-by-a-model-stage1-review-sol.md](260929c-shelf-topics-chosen-by-a-model-stage1-review-sol.md),
+  reviewing 10a21a0e. *Conditional pass.* Fixed S1-1 (Jev's calls were recorded as `wire: "chat"`;
+  now a `decisions` wire), S1-2 (**the swapped duplicates had been counted as votes** — the Jev/Luna
+  contrast was 4–3–2, not 8–6–4; corrected here and to the Overseer), S1-4 (invalid external scores
+  unvalidated on small shelves), S1-5 (the summary's claims). S1-3 (the judge saw five member titles,
+  not all) was fixed by the full-membership re-judge recorded above, which reversed the
+  order-vs-score contrast and changed the pick.
+- **GPT Sol, stage 2 code** —
+  [260929c-shelf-topics-chosen-by-a-model-stage2-review-sol.md](260929c-shelf-topics-chosen-by-a-model-stage2-review-sol.md)
+  (prompt: [260929c-shelf-topics-chosen-by-a-model-stage2-review-prompt.md](260929c-shelf-topics-chosen-by-a-model-stage2-review-prompt.md)),
+  reviewing the uncommitted tree on 10a21a0e. *Approve after its fixes*, no P0–P2 left: S2-1 (the
+  client's refetch key missed a re-extraction with the same word count and title/gist changes —
+  now keyed on revision, title and gist), S2-2 (a concurrent tab that lost the claim stopped
+  polling), S2-3 (candidate labels were an unbounded part of a paid prompt — clipped at 160
+  characters), S2-4 (the "data, not instructions" line now covers labels; prompt version 2).
+
+**Status, 2026-09-29 ~12:30:** memory freed; the stage's 15 test files ran (one failure, a pure
+test placed inside a block whose teardown unmounts a root it never mounted — moved out). The new
+route and scorer tests had never been seen red, so a mutation check broke nine behaviours one at a
+time: seven were caught; **two were not** — nothing tested owner isolation of the score row, and the
+no-titles-in-logs test caught a leaked title only if it sorted first. Both tests were added and each
+shown red under its mutation, then green; the production files were restored byte for byte (`cmp`).
+A fixture uuid shared with `library.test.ts` (from S2-1's fix) was made unique. **Push waits for
+fb4c's migration `20260929052845` to reach `origin/dev`** — the watermark order is fb4c, this
+(`20260929065031`), then fb4j (`20260929091412`). Applying it to production is Greg's.

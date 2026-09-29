@@ -175,6 +175,8 @@ const ALLOWED: Readonly<Record<string, string>> = {
   "src/spend-declarations.ts": "The register. Data, not transport.",
   "tests/public-visibility-pg.test.ts":
     "A positive control for its own fetch spy — `globalThis.fetch` is mocked for the length of the assertion, so no request leaves. Listed by name because a test that really did reach a provider is a thing worth being told about.",
+  "tests/shelf-topics-route.test.ts":
+    "Sets OPENROUTER_API_KEY to a fake value, and deletes it for the no-key case, around a stubbed global fetch — so the route's presence check can be exercised both ways and no request leaves. Listed by name for the reason the two beside it are.",
   "tests/declared-spend.test.ts":
     "Exercises the guarded transport against a stubbed global fetch. Listed by name rather than by a blanket tests/ exemption, because a test that really did reach a provider is a thing worth being told about.",
   "tests/no-provider-calls-guard.test.ts":
@@ -202,6 +204,8 @@ const ALLOWED: Readonly<Record<string, string>> = {
   "src/referee-mirror.ts": "Presence check only; the call goes through openRouterStream.",
   "src/transcribe.ts": "Presence check only; the call goes through openRouterJson.",
   "src/pdf-read.ts": "Presence check only; the call goes through openRouterJson.",
+  "src/shelf-topics.ts":
+    "Presence check only; the call goes through openRouterJson in src/shelf-terms/model-scores.ts.",
   "src/embeddings.ts":
     "Presence check, plus a settings URL in a help message. The call goes through openRouterJson.",
 

@@ -178,7 +178,11 @@ export interface Observer {
     usage?: ObservedAnthropicUsage | null;
     model?: string | null;
   }) => void;
-  /** An OpenRouter JSON body, chat wire. Its own `usage.cost` is settled; ours is not. */
+  /**
+   * An OpenRouter JSON body whose usage has the chat field names. Used by the
+   * chat wire directly and by the Decisions bypass after its usage fields are
+   * mapped explicitly. Its own `usage.cost` is settled; ours is not.
+   */
   openRouter: (body: {
     usage?: (OpenRouterUsageLike & { cost?: number | null }) | null;
     model?: string | null;
@@ -326,12 +330,15 @@ export async function withDeclaredExternalCall<T>(
               seen.priceVersion = priced.priceVersion;
             }
           },
-    /* **Chat wire only.** On the Messages wire the usage is Anthropic-shaped and
-       this observer's body type has nowhere to put the half of it that matters —
-       see `messagesViaOpenRouter` below, and the note on `Observer`. */
+    /* **OpenRouter's flat usage shape only.** Chat has it directly; the
+       Decisions bypass maps `input_tokens` / `output_tokens` onto it. On the
+       Messages wire the usage is Anthropic-shaped and this observer's body type
+       has nowhere to put the half of it that matters — see
+       `messagesViaOpenRouter` below, and the note on `Observer`. */
     openRouter:
-      declaration.account !== "openrouter" || declaration.wire !== "chat"
-        ? wrongObserver("openRouter", "an OpenRouter call on the chat wire")
+      declaration.account !== "openrouter" ||
+      (declaration.wire !== "chat" && declaration.wire !== "decisions")
+        ? wrongObserver("openRouter", "an OpenRouter call with flat JSON usage")
         : (body) => {
             once();
             seen.answeredBy = body.model ?? seen.answeredBy;

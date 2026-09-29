@@ -1,6 +1,6 @@
 /**
  * **Can our OpenRouter key call Jev?** — the first spike of
- * docs/plans/260929b-shelf-topics-chosen-by-a-model.md.
+ * docs/plans/260929c-shelf-topics-chosen-by-a-model.md.
  *
  *     npx tsx evals/shelf-topics/spike-jev.ts
  *

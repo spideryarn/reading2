@@ -367,18 +367,18 @@ export const DECLARATIONS: readonly Declaration[] = [
   },
   {
     /* **Jev, on OpenRouter's Decisions endpoint** — the shelf-topics eval's
-       one arm that cannot use the gateway (plan 260929c, R5). `wire: "chat"`
-       is the nearest the `Wire` union has: the Decisions response reports
-       `input_tokens`/`output_tokens` and a settled `cost`, which the caller
-       maps onto the chat usage shape before `observe.openRouter`. A sixth wire
-       is Stage 2's to add, and only if Jev wins. */
+       one arm that cannot use the gateway (plan 260929c, R5). The response
+       reports `input_tokens`/`output_tokens` and a settled `cost`, which the
+       caller maps onto the OpenRouter observer's usage shape. The ledger names
+       the real wire even though adding a Decisions route to the product gateway
+       remains Stage 2's, and only if Jev wins. */
     id: "shelf-topics-jev",
     kind: "bypass",
     since: "2026-09-29",
     account: "openrouter",
     file: "evals/shelf-topics/jev.ts",
     job: "eval",
-    wire: "chat",
+    wire: "decisions",
     metered: true,
     why: "Jev is a decisions model: OpenRouter refuses it on /chat/completions and serves it only on POST /api/alpha/decisions, a path the gateway (src/ai-call.ts) has no route for. Adding one is Stage 2's decision, taken only if the eval says Jev is worth a sixth wire.",
   },
@@ -534,4 +534,3 @@ export function declarationFor(id: string): Declaration {
   }
   return found;
 }
-

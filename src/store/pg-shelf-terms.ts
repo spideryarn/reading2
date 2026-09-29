@@ -27,11 +27,14 @@
  * Nothing, and nothing is. Phrases are the reader's articles' words.
  */
 
+import { randomUUID } from "node:crypto";
+
 import { and, asc, desc, eq, inArray, isNull, sql } from "drizzle-orm";
 
 import { getDb, type Db } from "../db/client.js";
-import { articleRevisions, articles, revisionBlocks, revisionPhraseRuns } from "../db/schema.js";
-import { chooseTerms, type ChooseArticle } from "../shelf-terms/choose.js";
+import { articleRevisions, articles, revisionBlocks, revisionPhraseRuns, shelfTopicScores } from "../db/schema.js";
+import { currentOwnerId } from "../owner.js";
+import { type ChooseArticle, type ChooseResult, chooseTerms } from "../shelf-terms/choose.js";
 import {
   EXTRACTOR_VERSION,
   extractCandidates,
@@ -41,7 +44,14 @@ import {
   type SkipReason,
 } from "../shelf-terms/extract.js";
 import type { LibraryTermsResponse } from "../types.js";
-import type { ShelfTermsStore } from "./contracts.js";
+import type {
+  ShelfTermsSnapshot,
+  ShelfTermsStore,
+  ShelfTopicArticle,
+  StoredTopicScores,
+  TopicScope,
+  TopicScoresResult,
+} from "./contracts.js";
 import { guardDbStore } from "./db-errors.js";
 import { READ_COMMITTED } from "./isolation.js";
 import { ADDED_AT, onTheShelf, ownedByReader } from "./pg.js";
@@ -57,6 +67,14 @@ export interface ShelfRevision {
   archived: boolean;
   /** The revision's own title — not the reader's rename, so the row stays a function of the revision. */
   title: string | null;
+  /**
+   * The reader's rename, or null. Never read by step 1 (see `title`); the
+   * model is shown it, because it is the title the reader sees
+   * (src/shelf-topics.ts).
+   */
+  titleOverride: string | null;
+  /** `article_revisions.root_gist` — the card's one-sentence blurb. Shown to the model only. */
+  gist: string | null;
 }
 
 export interface ShelfScope {
@@ -77,6 +95,8 @@ export function shelfRevisionsQuery(db: Pick<Db, "select">, scope: ShelfScope) {
       slug: articles.slug,
       archivedAt: articles.archivedAt,
       title: articleRevisions.title,
+      titleOverride: articles.titleOverride,
+      gist: articleRevisions.rootGist,
     })
     .from(articles)
     .innerJoin(articleRevisions, eq(articleRevisions.id, articles.currentRevisionId))
@@ -111,6 +131,8 @@ export async function currentShelfRevisions(scope: ShelfScope): Promise<ShelfRev
     slug: r.slug,
     archived: r.archivedAt !== null,
     title: r.title,
+    titleOverride: r.titleOverride,
+    gist: r.gist,
   }));
 }
 
@@ -282,35 +304,185 @@ export function chooseInput(
 }
 
 /**
- * **The route's whole answer**: the owner-scoped set, its stored runs, a
- * bounded fill of the rest, and the chooser over everything known.
+ * **Everything the chooser needs**: the owner-scoped set, its stored runs, a
+ * bounded fill of the rest — and, for the model, each read article's title and
+ * gist, newest first.
  */
-export async function shelfTerms(
-  scope: ShelfScope,
-  opts: FillOptions = {},
-): Promise<LibraryTermsResponse> {
+export async function shelfSnapshot(scope: ShelfScope, opts: FillOptions = {}): Promise<ShelfTermsSnapshot> {
   const set = await currentShelfRevisions(scope);
   const runs = await readPhraseRuns(set);
   const { filled, pending } = await fillPhraseRuns(missingRuns(set, runs), opts);
   for (const [id, run] of filled) runs.set(id, run);
 
-  const input = chooseInput(set, runs);
-  const { terms, works } = chooseTerms(input);
   let skipped = 0;
   for (const run of runs.values()) if (run.skipped) skipped += 1;
+  const shown: ShelfTopicArticle[] = [];
+  for (const s of set) {
+    const run = runs.get(s.revisionId);
+    if (run && !run.skipped)
+      shown.push({ slug: s.slug, title: s.titleOverride ?? s.title ?? s.slug, gist: s.gist });
+  }
+  return { input: chooseInput(set, runs), articles: shown, scope: { articles: set.length, skipped }, pending };
+}
+
+/** The wire shape, from a snapshot and whatever the chooser picked from it. */
+export function termsResponse(snap: ShelfTermsSnapshot, chosen: ChooseResult): LibraryTermsResponse {
   return {
-    terms: terms.map((t) => ({
+    terms: chosen.terms.map((t) => ({
       key: t.key,
       label: t.label,
       articles: t.articles.map((a) => ({ slug: a.slug, count: a.count })),
     })),
-    scope: { articles: set.length, works, skipped },
-    pending,
+    scope: { articles: snap.scope.articles, works: chosen.works, skipped: snap.scope.skipped },
+    pending: snap.pending,
+    chosenBy: "program",
+    refreshing: false,
   };
+}
+
+/**
+ * **The program's answer, with no model anywhere** — the snapshot and the
+ * deterministic chooser. The route asks src/shelf-topics.ts instead, which
+ * starts from the same snapshot.
+ */
+export async function shelfTerms(scope: ShelfScope, opts: FillOptions = {}): Promise<LibraryTermsResponse> {
+  const snap = await shelfSnapshot(scope, opts);
+  return termsResponse(snap, chooseTerms(snap.input));
+}
+
+/* ------------------------------------------------- the model's scores -- */
+
+/**
+ * The model's scores for the ambient reader. Every statement names
+ * `ownedScoreRow()` — the owner from the request's own box — so one reader
+ * can neither read nor fence nor overwrite another's row. Nothing here is
+ * logged: the row is a map of the reader's own phrases.
+ */
+function ownedScoreRow(scope: TopicScope) {
+  return and(eq(shelfTopicScores.ownerId, currentOwnerId()), eq(shelfTopicScores.scope, scope));
+}
+
+export async function readTopicScores(scope: TopicScope): Promise<StoredTopicScores | null> {
+  const [r] = await getDb().select().from(shelfTopicScores).where(ownedScoreRow(scope));
+  if (!r) return null;
+  /* The CHECK constraints hold each group to all-or-nothing, so one field
+     stands for its group. */
+  const result =
+    r.inputHash !== null && r.model !== null && r.promptVersion !== null && r.scores !== null && r.computedAt !== null
+      ? {
+          inputHash: r.inputHash,
+          model: r.model,
+          promptVersion: r.promptVersion,
+          scores: r.scores,
+          computedAt: r.computedAt,
+        }
+      : null;
+  const claim =
+    r.claimId !== null && r.claimHash !== null && r.claimedUntil !== null
+      ? { hash: r.claimHash, until: r.claimedUntil }
+      : null;
+  return { result, claim, failures: r.failures, retryAfter: r.retryAfter };
+}
+
+/**
+ * **One statement, so two concurrent requests cannot both claim**: insert the
+ * row with the claim, or update the existing one — and the update's `where`
+ * refuses while a live claim stands, while the backoff has not passed, or when
+ * the stored result is already for this input. `returning` is empty exactly
+ * when it refused. The database's clock throughout, like the rate limiter.
+ */
+export async function claimTopicScores(scope: TopicScope, inputHash: string, leaseMs: number): Promise<string | null> {
+  const claimId = randomUUID();
+  const leaseSeconds = leaseMs / 1000;
+  const rows = await getDb()
+    .insert(shelfTopicScores)
+    .values({
+      ownerId: currentOwnerId(),
+      scope,
+      claimId,
+      claimHash: inputHash,
+      claimedUntil: sql`now() + make_interval(secs => ${leaseSeconds})`,
+    })
+    .onConflictDoUpdate({
+      target: [shelfTopicScores.ownerId, shelfTopicScores.scope],
+      set: {
+        claimId: sql`excluded.claim_id`,
+        claimHash: sql`excluded.claim_hash`,
+        claimedUntil: sql`excluded.claimed_until`,
+      },
+      setWhere: sql`(${shelfTopicScores.claimedUntil} is null or ${shelfTopicScores.claimedUntil} <= now())
+        and (${shelfTopicScores.retryAfter} is null or ${shelfTopicScores.retryAfter} <= now())
+        and ${shelfTopicScores.inputHash} is distinct from excluded.claim_hash`,
+    })
+    .returning({ claimId: shelfTopicScores.claimId });
+  return rows[0]?.claimId === claimId ? claimId : null;
+}
+
+export async function writeTopicScores(scope: TopicScope, claimId: string, result: TopicScoresResult): Promise<boolean> {
+  const rows = await getDb()
+    .update(shelfTopicScores)
+    .set({
+      inputHash: result.inputHash,
+      model: result.model,
+      promptVersion: result.promptVersion,
+      scores: result.scores,
+      computedAt: sql`now()`,
+      claimId: null,
+      claimHash: null,
+      claimedUntil: null,
+      failures: 0,
+      retryAfter: null,
+    })
+    .where(and(ownedScoreRow(scope), eq(shelfTopicScores.claimId, claimId)))
+    .returning({ scope: shelfTopicScores.scope });
+  return rows.length > 0;
+}
+
+/**
+ * **The backoff**: 2 minutes after the first failure, ×4 each time after —
+ * 2, 8, 32, 128 minutes — and never more than six hours. Counted in SQL so it
+ * is the database's clock, like the claim. A broken provider therefore costs
+ * each reader about a dozen calls on its first day and four a day after that,
+ * before the daily cap is even consulted.
+ */
+export const SCORE_BACKOFF_FIRST_SECONDS = 120;
+export const SCORE_BACKOFF_MAX_SECONDS = 6 * 60 * 60;
+
+export async function failTopicScores(scope: TopicScope, claimId: string): Promise<void> {
+  await getDb()
+    .update(shelfTopicScores)
+    .set({
+      claimId: null,
+      claimHash: null,
+      claimedUntil: null,
+      failures: sql`${shelfTopicScores.failures} + 1`,
+      retryAfter: sql`now() + make_interval(secs => least(
+        ${SCORE_BACKOFF_MAX_SECONDS}::double precision,
+        ${SCORE_BACKOFF_FIRST_SECONDS}::double precision * power(4, ${shelfTopicScores.failures})))`,
+    })
+    .where(and(ownedScoreRow(scope), eq(shelfTopicScores.claimId, claimId)));
+}
+
+export async function releaseTopicScores(scope: TopicScope, claimId: string, retryAfterMs: number): Promise<void> {
+  await getDb()
+    .update(shelfTopicScores)
+    .set({
+      claimId: null,
+      claimHash: null,
+      claimedUntil: null,
+      retryAfter: sql`now() + make_interval(secs => ${retryAfterMs / 1000})`,
+    })
+    .where(and(ownedScoreRow(scope), eq(shelfTopicScores.claimId, claimId)));
 }
 
 const rawPgShelfTermsStore: ShelfTermsStore = {
   terms: (scope, opts) => shelfTerms(scope, opts),
+  snapshot: (scope, opts) => shelfSnapshot(scope, opts),
+  readScores: (scope) => readTopicScores(scope),
+  claimScores: (scope, hash, leaseMs) => claimTopicScores(scope, hash, leaseMs),
+  writeScores: (scope, claimId, result) => writeTopicScores(scope, claimId, result),
+  failScores: (scope, claimId) => failTopicScores(scope, claimId),
+  releaseScores: (scope, claimId, retryAfterMs) => releaseTopicScores(scope, claimId, retryAfterMs),
 };
 
 /** Guarded where it is built, not where it is selected — src/store/db-errors.ts. */

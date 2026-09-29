@@ -622,6 +622,17 @@ describe("external quality: a model's per-candidate score in place of the comput
       expect(() => chooseTerms(fixture(), { quality: new Map([["alpha", bad]]) })).toThrow(RangeError);
   });
 
+  it("refuses an invalid score even when the shelf is too small to choose from", () => {
+    const arts = shelf(7);
+    give(arts, "alpha", range(0, 2));
+    expect(() => chooseTerms(arts, { quality: new Map([["alpha", Number.NaN]]) })).toThrow(
+      RangeError,
+    );
+    expect(() => candidatePool(arts, { quality: new Map([["alpha", Number.NaN]]) })).toThrow(
+      RangeError,
+    );
+  });
+
   it("gives the same topics however the input is ordered", () => {
     const quality = new Map([
       ["alpha", 1.5],

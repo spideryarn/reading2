@@ -6,8 +6,10 @@
  *
  * - `results/pairs/<case>.json` — what a fresh judge reads, one file per case:
  *   the reader's profile, the shelf (numbered titles and gists), and anonymous
- *   pairs of lists (A and B), each the first 12 topics with their member
- *   titles.
+ *   pairs of lists (A and B), each the first 12 topics with at most five member
+ *   titles and a count of the rest. This falls short of plan R6's requirement
+ *   to show every member title; changing it now also requires re-judging the
+ *   regenerated pairs, rather than silently changing the judge's evidence.
  * - `results/pairs-key.json` — which arm and run is on which side. The judge
  *   never sees it.
  *
@@ -20,11 +22,27 @@
  * - controls, every case: luna-score run 1 vs run 2, baseline run 1 vs run 2
  *   (the same list twice — the judge should call it a tie), and one swapped
  *   duplicate (jev-floor vs luna-score shown again with its sides reversed).
+ *   The Luna run pair mixes model run-to-run variation with judge variation;
+ *   only the identical baseline pair isolates the judge/side check. A swapped
+ *   duplicate is a side-bias check, not a second independent contrast vote.
  *
  * jev-floor was added after seeing the results (./case.ts `DERIVED_ARMS`).
  * Sides and pair order are shuffled with `crypto.randomInt` — a JS float LCG
  * once put one arm on the same side 94 times in 95 — and the key's side
  * counts per arm are printed before anyone judges.
+ *
+ * **`--full`** (added after GPT Sol's stage review, 2026-09-29) writes the
+ * SAME contrasts with **every** member title of each of the first 12 topics,
+ * as R6 asked. They go to `results/pairs-full/<case>.json` with their own key
+ * in `results/pairs-full-key.json`, a fresh shuffle, and ids `f001`…, so their
+ * verdicts can never be joined to the old key by mistake. In both modes the
+ * key marks each pair `independent` or not: a swapped duplicate carries
+ * `independent: false` and `duplicateOf` (the pair it repeats). It must not
+ * be counted as a second vote, and evals/shelf-topics/tally.ts excludes it.
+ *
+ * The default mode reproduces the judged first-round files and **refuses to
+ * overwrite** `results/pairs-key.json` once it exists, because the verdicts
+ * in `results/judgements/` can only be read through that key.
  */
 import { randomInt } from "node:crypto";
 import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
@@ -34,8 +52,12 @@ import { type Arm, loadCases, RESULTS_DIR, type RunFile, type ShelfCase } from "
 import { shelfText, titleOf } from "./prompt.js";
 
 const HEAD = 12;
-const TITLES_PER_TOPIC = 5;
-const PAIRS_DIR = path.join(RESULTS_DIR, "pairs");
+const FULL = process.argv.includes("--full");
+/** The judged first round showed five titles and "+N more"; `--full` shows all of them. */
+const TITLES_PER_TOPIC = FULL ? Number.POSITIVE_INFINITY : 5;
+const PAIRS_DIR = path.join(RESULTS_DIR, FULL ? "pairs-full" : "pairs");
+const KEY_FILE = path.join(RESULTS_DIR, FULL ? "pairs-full-key.json" : "pairs-key.json");
+const ID_PREFIX = FULL ? "f" : "p";
 
 type Side = { arm: Arm; run: number };
 type Kind = "contrast" | "same-arm-control" | "swapped-duplicate";
@@ -56,6 +78,19 @@ interface Planned {
   kind: Kind;
   a: Side;
   b: Side;
+  /** A swapped duplicate's original, so the key can name it. */
+  repeats?: Planned;
+}
+
+export interface KeyEntry {
+  case: string;
+  kind: Kind;
+  A: Side;
+  B: Side;
+  /** False for a swapped duplicate: it is a side-bias check, not a second vote. */
+  independent: boolean;
+  /** The pair a swapped duplicate repeats with its sides reversed. */
+  duplicateOf?: string;
 }
 
 function readRun(caseId: string, s: Side): RunFile | null {
@@ -68,7 +103,7 @@ function readRun(caseId: string, s: Side): RunFile | null {
 function render(c: ShelfCase, r: RunFile): string[] {
   const title = titleOf(c);
   return r.list.slice(0, HEAD).map((t, i) => {
-    const shown = t.slugs.slice(0, TITLES_PER_TOPIC).map((s) => title(s).slice(0, 60));
+    const shown = t.slugs.slice(0, TITLES_PER_TOPIC).map((s) => (FULL ? title(s) : title(s).slice(0, 60)));
     const more = t.slugs.length > TITLES_PER_TOPIC ? `; +${t.slugs.length - TITLES_PER_TOPIC} more` : "";
     return `${i + 1}. ${t.label} (${t.count}): ${shown.join("; ")}${more}`;
   });
@@ -99,21 +134,26 @@ function plan(caseId: string): Planned[] {
     const [a, b] = coin({ arm, run: 1 }, { arm, run: 2 });
     out.push({ kind: "same-arm-control", a, b });
   }
-  if (duplicateOf) out.push({ kind: "swapped-duplicate", a: duplicateOf.b, b: duplicateOf.a });
+  if (duplicateOf) out.push({ kind: "swapped-duplicate", a: duplicateOf.b, b: duplicateOf.a, repeats: duplicateOf });
   return out;
 }
 
+if (!FULL && existsSync(KEY_FILE) && !process.argv.includes("--overwrite")) {
+  console.error(
+    `${KEY_FILE} exists and results/judgements/ is read through it. Refusing to overwrite: pass --full for the full-membership pairs, or --overwrite if you mean it.`,
+  );
+  process.exit(1);
+}
 rmSync(PAIRS_DIR, { recursive: true, force: true });
 mkdirSync(PAIRS_DIR, { recursive: true });
-/* The first round's single file, superseded by the per-case files. */
-rmSync(path.join(RESULTS_DIR, "pairs.json"), { force: true });
 
-const keyOut: Record<string, { case: string; kind: Kind; A: Side; B: Side }> = {};
+const keyOut: Record<string, KeyEntry> = {};
 const sides = new Map<string, { A: number; B: number }>();
 let n = 0;
 for (const c of loadCases()) {
-  const pairs: { id: string; A: string[]; B: string[] }[] = [];
   const skipped: string[] = [];
+  /* Ids first, so a duplicate can name its original wherever the shuffle put it. */
+  const kept: { id: string; p: Planned; ra: RunFile; rb: RunFile }[] = [];
   for (const p of shuffle(plan(c.id))) {
     const ra = readRun(c.id, p.a);
     const rb = readRun(c.id, p.b);
@@ -121,9 +161,21 @@ for (const c of loadCases()) {
       skipped.push(`${p.a.arm}-${p.a.run} vs ${p.b.arm}-${p.b.run}`);
       continue;
     }
-    const id = `p${String(++n).padStart(3, "0")}`;
+    kept.push({ id: `${ID_PREFIX}${String(++n).padStart(3, "0")}`, p, ra, rb });
+  }
+  const idOf = new Map(kept.map((k) => [k.p, k.id]));
+  const pairs: { id: string; A: string[]; B: string[] }[] = [];
+  for (const { id, p, ra, rb } of kept) {
     pairs.push({ id, A: render(c, ra), B: render(c, rb) });
-    keyOut[id] = { case: c.id, kind: p.kind, A: p.a, B: p.b };
+    const original = p.repeats ? idOf.get(p.repeats) : undefined;
+    keyOut[id] = {
+      case: c.id,
+      kind: p.kind,
+      A: p.a,
+      B: p.b,
+      independent: p.kind !== "swapped-duplicate",
+      ...(original ? { duplicateOf: original } : {}),
+    };
     for (const [side, s] of [
       ["A", p.a],
       ["B", p.b],
@@ -140,7 +192,7 @@ for (const c of loadCases()) {
   console.log(`${c.id}: ${pairs.length} pairs${skipped.length ? ` (skipped, a side missing or errored: ${skipped.join("; ")})` : ""}`);
 }
 
-writeFileSync(path.join(RESULTS_DIR, "pairs-key.json"), `${JSON.stringify(keyOut, null, 1)}\n`);
+writeFileSync(KEY_FILE,`${JSON.stringify(keyOut, null, 1)}\n`);
 console.log(`${n} pairs in all`);
 console.log("Side balance per arm (A / B):");
 for (const [arm, k] of [...sides].sort()) console.log(`  ${arm.padEnd(15)} ${k.A} / ${k.B}`);

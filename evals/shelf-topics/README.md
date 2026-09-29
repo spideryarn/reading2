@@ -13,7 +13,8 @@ npx tsx evals/shelf-topics/build-cases.ts        # cases/*.json: synthetic + the
 npx tsx evals/shelf-topics/run-arms.ts           # PAID: every arm × case × runs 1–3 → results/<case>/<arm>-<run>.json
 npx tsx evals/shelf-topics/derive-jev-floor.ts   # free: jev-floor arms from the SAVED Jev scores
 npx tsx evals/shelf-topics/summarise.ts          # results/summary.md: coverage, overlap, distractors, topics, cost, latency
-npx tsx evals/shelf-topics/make-pairs.ts         # results/pairs/<case>.json + results/pairs-key.json for a blind judge
+npx tsx evals/shelf-topics/make-pairs.ts --full  # results/pairs-full/<case>.json + results/pairs-full-key.json: every member title
+npx tsx evals/shelf-topics/tally.ts [--full]     # join judgements to their key: independent votes, duplicates, controls, scores
 ```
 
 **`jev-floor` and `jev-floor-0.75` were added after seeing the results. They were not predeclared.**
@@ -46,9 +47,11 @@ every arm and run sees the same list.
 ## The judge
 
 The judge is a fresh Opus subagent that reads **only** `results/pairs/<case>.json`, one case per
-file, and never the key. Brief it to answer, for each pair: which list would this reader rather
-filter with (A, B or tie), and score each list 1–10 on *meaningful to this reader*, *covers the
-shelf* and *no near-duplicates*.
+file, and never the key. Each topic currently shows at most five member titles plus a count of any
+others; the plan's R6 required all member titles, so the committed verdicts are weaker on membership
+coherence than intended. Brief the judge to answer, for each pair: which list would this reader
+rather filter with (A, B or tie), and score each list 1–10 on *meaningful to this reader*, *covers
+the shelf* and *no near-duplicates*.
 
 Each case has these pairs, all using run 1:
 
@@ -56,9 +59,22 @@ Each case has these pairs, all using run 1:
   luna-order vs luna-score.
 - **greg-like only:** jev-score vs jev-floor, and deepseek-score vs luna-score.
 - **Controls:**
-  - luna-score run 1 against run 2, which measures how much the judge disagrees with itself.
+  - luna-score run 1 against run 2, which measures the combined effect of model run-to-run
+    variation and the judge; the lists are not identical, so it does not isolate judge noise.
   - baseline against itself, which is the same list twice, so the answer should be a tie.
   - One swapped duplicate: jev-floor vs luna-score shown again with its sides reversed. It tests
-    whether the judge favours a side.
+    whether the judge favours a side; it is not a second independent vote on the contrast.
 
 `make-pairs.ts` prints the key's A/B counts per arm. Check them before judging.
+
+**The full-membership round.** `make-pairs.ts --full` writes the same contrasts again with every
+member title, as R6 asks. It uses a fresh shuffle and ids `f001`…, and puts them in
+`results/pairs-full/`, keyed by `results/pairs-full-key.json`. Save that round's verdicts to
+`results/judgements-full/<case>.json`.
+
+Without `--full`, `make-pairs.ts` refuses to overwrite `results/pairs-key.json`. The first round's
+verdicts in `results/judgements/` can only be read through that key.
+
+Both keys mark a swapped duplicate as `independent: false`. The new key also names the pair it
+repeats (`duplicateOf`). `tally.ts` counts only independent votes per contrast and reports the
+duplicates' agreement separately.

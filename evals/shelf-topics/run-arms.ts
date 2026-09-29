@@ -19,7 +19,7 @@
  * | baseline       | `chooseTerms` with today's defaults |
  * | jev-score      | Jev scores each prompt candidate 0–3 (expected score); `chooseTerms({quality})` |
  * | deepseek-score | the same rubric on the chat wire, integer scores; `chooseTerms({quality})` |
- * | luna-score     | the same, GPT-6 Luna |
+ * | luna-score     | GPT-6 Luna — since Stage 2, the production scorer itself (`lunaScore` below) |
  * | deepseek-order | the chat model returns ~30 candidate ids in order; taken as given |
  * | luna-order     | the same, GPT-6 Luna |
  *
@@ -33,7 +33,9 @@ import path from "node:path";
 import { openRouterJson } from "../../src/ai-call.js";
 import { withLedger } from "../../src/cli-ledger.js";
 import { loadEnvLocal } from "../../src/env.js";
+import { SHELF_TOPICS_MODEL } from "../../src/models.js";
 import { type ChooseArticle, candidatePool, chooseTerms, type ShelfTerm } from "../../src/shelf-terms/choose.js";
+import { type JsonGateway, scoreCandidates, scorerInput } from "../../src/shelf-terms/model-scores.js";
 import { type CallRecord, RUN_ARMS, type RunArm, chooseInput, loadCases, RESULTS_DIR, RUNS, type RunFile, type ShelfCase } from "./case.js";
 import { JEV_MODEL, jevDecide } from "./jev.js";
 import {
@@ -52,8 +54,8 @@ loadEnvLocal();
 
 /** `~deepseek/deepseek-v4-flash-latest` pinned to its dated id (OpenRouter models list, 2026-09-29). */
 export const DEEPSEEK_MODEL = "deepseek/deepseek-v4-flash-0731";
-/** No dated id is listed; the canonical slug is openai/gpt-6-luna-20260922. */
-export const LUNA_MODEL = "openai/gpt-6-luna";
+/** Production's pin (src/models.ts § `SHELF_TOPICS_MODEL`), so this arm moves when production does. */
+export const LUNA_MODEL = SHELF_TOPICS_MODEL;
 /**
  * Nine minutes. DeepSeek V4 Flash at the provider's default reasoning spent
  * 8,000+ reasoning tokens and 225 s on a 44-candidate case in the first trial,
@@ -171,7 +173,7 @@ const ARM_BODY: Record<RunArm, ArmBody> = {
   },
   "jev-score": jevScore,
   "deepseek-score": (out, c, input, cands) => chatScore(DEEPSEEK_MODEL, out, c, input, cands),
-  "luna-score": (out, c, input, cands) => chatScore(LUNA_MODEL, out, c, input, cands),
+  "luna-score": lunaScore,
   "deepseek-order": (out, c, _input, cands) => chatOrder(DEEPSEEK_MODEL, out, c, cands),
   "luna-order": (out, c, _input, cands) => chatOrder(LUNA_MODEL, out, c, cands),
 };
@@ -216,6 +218,44 @@ async function chatScore(
   out.invalid = invalid;
   out.list = toList(chooseTerms(input, { quality: scores }).terms);
   return r.raw;
+}
+
+/**
+ * **The production scorer, unchanged** (src/shelf-terms/model-scores.ts, plan
+ * 260929c § Stage 2): its prompt, its request, its parser, its model — so this
+ * arm measures what ships. The call is recorded as job `shelf-topics` in eval
+ * scope (`withLedger("eval")` below), which is ai-gateway.md's rule for an eval
+ * that exercises a product job. The wrapper around the gateway only keeps the
+ * raw body for the call record; it changes nothing sent.
+ *
+ * A refusal from `parseScores` (a score outside 0–3, bad JSON) is an error for
+ * this run, where the Stage 1 arm counted the bad rows as `invalid` and kept the
+ * rest — production refuses the whole answer, and so does this arm now.
+ */
+async function lunaScore(out: RunFile, c: ShelfCase, input: ChooseArticle[], cands: PromptCandidate[]): Promise<unknown> {
+  let raw: unknown = null;
+  const gateway: JsonGateway = async (job, body, opts) => {
+    const call = await openRouterJson(job, body, opts);
+    raw = call.json;
+    return call;
+  };
+  const articles = c.articles
+    .filter((a) => a.skipped === null)
+    .map((a) => ({ slug: a.slug, title: a.title, gist: a.gist }));
+  const t0 = performance.now();
+  try {
+    const got = await scoreCandidates(scorerInput(articles, c.profile, cands), {
+      model: LUNA_MODEL,
+      gateway,
+      signal: AbortSignal.timeout(CHAT_TIMEOUT_MS),
+    });
+    out.scores = Object.fromEntries(got.scores);
+    out.missing = cands.length - got.scored;
+    out.list = toList(chooseTerms(input, { quality: got.scores }).terms);
+  } finally {
+    out.call = chatRecord(LUNA_MODEL, raw, Math.round(performance.now() - t0));
+  }
+  return raw;
 }
 
 async function chatOrder(model: string, out: RunFile, c: ShelfCase, cands: PromptCandidate[]): Promise<unknown> {
