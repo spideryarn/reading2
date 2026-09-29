@@ -1574,6 +1574,15 @@ function mountDebate(debate: Debate | null, over: Partial<DebateOwner> = {}): Re
     onJump: noop,
     level: null,
     onLevel: noop,
+    /* What a reader who has never touched `?debateby=` sends. The fixture has
+       one row, so no two orders differ and no order bar is drawn — which is why
+       `DEBATE_SHAPE` has no `.gloss-sort`. */
+    order: "prioritised",
+    onOrder: noop,
+    blockOrder: new Map(),
+    relevance: null,
+    onRelevance: noop,
+    articleYear: null,
   });
 }
 
@@ -1822,7 +1831,9 @@ const DEBATE_SHAPE: BandShape = {
   children: [
     "div.band-head",
     "p.dbt-frame",
-    "div.dbt-bar",
+    /* `.dbt-name` since 2026-09-29, when the relevance bar (`.dbt-rel`, drawn
+       only in *prioritised*) joined it and one component draws both. */
+    "div.dbt-bar.dbt-name",
     "div.dbt-scroll",
   ],
   headChildren: [

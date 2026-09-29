@@ -1,6 +1,6 @@
 # Debate mode: say what each source is, and let the reader order the list
 
-Status: **plan, before the plan review.** Report SPIDERYARN-READING2-5P (spya-w7t24d), from Greg's
+Status: **plan, reviewed once by GPT Sol (§ After the plan review); stage 1 building.** Report SPIDERYARN-READING2-5P (spya-w7t24d), from Greg's
 own account, 2026-09-29.
 
 ## What Greg asked
@@ -116,7 +116,7 @@ every quotation already is, and each is dropped on its own — never the row —
 |---|---|---|
 | `workTitle` | found in the extract by the spaced matcher | the extract's characters |
 | `authors` | each name found in the extract; kept if at least one is | the extract's spellings, at most 12 |
-| `published` | parses as `YYYY`, `YYYY-MM` or `YYYY-MM-DD`, and its year is in the extract or the URL | the ISO string |
+| `publishedYear` | a four-digit year that is in the extract (never the URL alone) — F1 | a number |
 | `bears` | one of `directly` · `partly` · `loosely` | the word — a model judgment, labelled as one |
 
 `workTitle` is drawn only where the engine's `title` is missing or cut short (ends in `...`/`…`);
@@ -139,7 +139,7 @@ and lower-case:
 
 | order | what it does | needs |
 |---|---|---|
-| **prioritised** | rows about this piece first, then `directly`, `partly`, `loosely`; a three-stop bar hides below a stop, default `partly` (`?bears=`) | `bears` |
+| **prioritised** | rows about this piece first, then `directly`, `partly`, `loosely`; a three-stop bar hides below a stop, claim rows only, default `loosely` so nothing is hidden until the reader moves it (`?bears=`; F5, F7) | `bears` |
 | **by claim** | rows about this piece as the first group, then one group per claim in article order, headed by the claim's own words and its jump | nothing new |
 | **date** | oldest first; a marker at the article's own date where it has one (*"← this piece, 2022"*); undated rows last, under a line saying so | `published` |
 | **stance** | critical, could not tell, neither, supportive — critical first, because *interrogate* is what this mode is for | nothing new |
@@ -183,6 +183,8 @@ and lower-case:
    its bar, and *date* with its marker. Measured with `npm run eval:debate` on two local articles,
    old prompt twice and new once: kept rows must not fall outside the old prompt's own spread, and
    the fill and verification rates of the four fields are reported.
+   **As landed: `bears` only on the search side** — § What that decided. The client half is built
+   in full.
 3. **Docs, the note, after-screenshots** of the same five views, and the visitor half written up.
 
 Done means: a row's source is identifiable without hovering, three or more rows fit on a phone
@@ -193,8 +195,9 @@ screen in *by claim*, and every order that is offered changes the list.
 - **The public DTO.** `src/public/dto.ts` is a listed defence (security-map.md § Where the defences
   physically live) and this run is unattended, so the stage-2 fields **do not cross to a visitor** —
   the allowlist's default-absent behaviour. A visitor keeps stage 1 in full and is offered *by
-  claim* and *stance*. Crossing them is four `opt(row, "…")` lines plus the `carriesRefused` list;
-  left for Greg.
+  claim* and *stance*. Crossing them means `PublicDebateRowBase` in src/public-types.ts, the
+  explicit `publicDebateRowBase` projection, the `carriesRefused` scan over every new string
+  (authors is an array), and the security tests in `tests/public-dto.test.ts`; left for Greg.
 - **Study type, species, method, peer-reviewed or not** (researcher). Valuable, and each is a model
   judgment about a stranger's page that nothing here can check. Not in v1.
 - **Tagging each claim as the paper's own result or background it cites** (researcher). A real
@@ -209,9 +212,149 @@ screen in *by claim*, and every order that is offered changes the list.
 - **A standing note that a search cannot show a claim is uncontested** (researcher). Worth a line of
   copy; it goes to `messages.ts` if the review agrees, not as a design change.
 
-## Open for review
+## After the plan review (GPT Sol, round 1, 2026-09-29)
 
-- Two sliders on an article with both kinds of row.
-- *by claim* as the fallback default and *prioritised* as the default once `bears` exists — the
-  researcher would make *by claim* the default outright. Greg asked for prioritised.
-- Whether folding the ⓘ card into `more` loses anything a hover gave.
+No P0. Eleven P1s and five P2s; what changed, by finding:
+
+- **F7 — the two sliders own disjoint rows.** The identification bar (`?name=`) filters rows about
+  this piece, as now; the relevance bar (`?bears=`) filters **claim rows only**. Each has its own
+  `ThresholdResult`, its own `N of M` and `hiddenNote`, and the list is their concatenation, so no
+  row can be double-hidden and neither count changes meaning. This also settles § Open's two-slider
+  question: two sliders only on an article that has both kinds of row, each about its own kind.
+- **F5 — nothing is hidden by default.** `bears` is a new, unevaluated model judgment, so the
+  relevance bar's default is **`loosely`** — prioritised *orders* by it and hides nothing until the
+  reader moves the bar. Tightening the default waits for a labelled evaluation. The prompt change
+  stays one change (one version bump, one eval) rather than two; the reviewer's split was about the
+  default hiding rows, which this answers.
+- **F1 — a year, not a date.** Stored as `publishedYear` (a number), accepted only when that year
+  is in the page's **extract** — never the URL alone. Same-year rows keep search order, and the
+  *this piece* marker does not claim before or after within the article's own year.
+- **F2 — occurrence is not role.** Title, authors and year are found in the extract, which proves
+  they are on the page, not that they are *this* page's byline. So they are labelled for what they
+  are: the byline line is drawn as the AI's reading of the page (the `more` disclosure says *"Title,
+  authors and year as the AI read them off the page; each was found in its extract"*). Authors are
+  filtered **name by name**, and the list is dropped if none is found. Negative fixtures: an extract
+  that cites another paper's title, its authors and its year.
+- **F3 — the fields must be read, not only typed.** `readShared` in src/debate.ts builds rows field
+  by field, so one tested reader of the new fields is called from it, with a positive and a
+  rejection control each. The panel's row type becomes the owner's row *or* the public one, read
+  through accessors, rather than pretending the public type carries owner-only fields.
+- **F4 — the measurement.** Both old-prompt runs are captured before the prompt is edited, with the
+  prompt hash; the run report is extended to count, per field, *omitted / offered / kept / refused*;
+  and a small hand label of title, authors, year and `bears` on the kept rows is part of stage 2's
+  evidence. Kept rows within the old spread is necessary, not sufficient.
+- **F6 — one `effectiveDebateOrder`**, Glossary's `effectiveSort`: a known order that is not
+  available on these rows (a visitor, an old artefact) resolves to *by claim*, and the bar shows the
+  order actually drawn. Rows with no `bears` or no year are kept, at an explicit stable position
+  (last, in search order), under a line that says so. `?bears=` applies only while prioritised is
+  in effect.
+- **F8 — the band is handed what it needs.** Article order comes from the blocks, and the marker
+  from `Meta.publishedAt`; both go from `Reader` into both bands. Neither is in the artefact.
+- **F9 — the claim's identity is `(blockId, claimQuote)`.** Rows about this piece are the first
+  group. Two quotes in one block are two groups, in first-seen order; rows sharing a URL stay
+  separate rows.
+- **F10 — every existing truth, kept.** `leadNote`'s two empty sentences per search and
+  `sharedLeadNote` for a visitor; a group emptied by a bar never gets a search-empty sentence;
+  `keptNote` on stored counts; `sourcesNote` on the final visible rows of each search; visitors'
+  `withheldLines` unchanged; each `hiddenNote` from its own result; the header from the final list.
+  What moves is only *where* the lead sentence sits, not what it says or when.
+- **F11 — stance sorts on `readStoredLean`**, keeps search order within a stance, says it is the
+  AI's reading, and is tested on a legacy `valence` row.
+- **F12 — `more` holds the witness too**: `articleReferenceQuote` and `DEBATE_EXTRACTS_ONLY` go in
+  the disclosure. A button with `aria-expanded` and `aria-controls` and a title-specific name.
+- **F13 — the header says *"6 excerpts from 5 pages"*** when they differ.
+- **F14 — an order is offered only when it would change the list**, not only when the field exists.
+- **F15 — the deferred DTO note is corrected** below: `PublicDebateRowBase`, `publicDebateRowBase`,
+  the `carriesRefused` scan (authors is an array) and the security tests.
+- **F16 — `DEBATE_NO_RANKING`** is replaced by the per-order sentences, with the stale comments and
+  the panel test updated. The prompt's own "no ranking by prominence" line is true of the search and
+  stays.
+
+## The measurement, as it runs
+
+**Before (old prompt `debate/2`, commit 47de0acd, before any edit to src/debate.ts)**, 2026-09-29,
+`npm run eval:debate -- run`, runs in `output/debate-runs/` (gitignored):
+
+| article | run | about this piece | about its claims | searches | cost |
+|---|---|---|---|---|---|
+| cargocult-spya-rz663q | 1 (`21-48-55`) | 0 | 6 | 10 | $0.2285 |
+| cargocult-spya-rz663q | 2 (`21-50-44`) | 0 | 6 | 13 | $0.2514 |
+| the-mythology-of-conscious-ai | 1 (`21-53-17`) | 0 | 6 | 10 | $0.2265 |
+| the-mythology-of-conscious-ai | 2 (`21-54-23`) | 1 | 5 | 11 | $0.2203 |
+
+The old prompt against itself: six rows kept in every run (0+6, 0+6; 0+6, 1+5). The caps are twelve
+per pass (`MAX_DIRECT_ROWS`, `MAX_CLAIM_ROWS`), so six is the model's own choice, not a ceiling.
+
+**After (`debate/3` as first built: title, authors, year and `bears`)**, one run per article:
+
+| article | run | reported → kept (claims) | about this piece | title kept | authors kept | year kept | `bears` kept |
+|---|---|---|---|---|---|---|---|
+| cargocult | `22-09-23` | 6 → 5 | 0 of 0 | 0 of 6 offered | 0 of 1 | 0 of 1 | 6 of 6 |
+| mythology | `22-11-29` | 4 → 4 | 0 of 1 | 1 of 5 | 1 of 3 | 1 of 3 | 5 of 5 |
+
+For comparison, the baseline's claims pass, from a free replay of its journals: 7 → 6, 7 → 6
+(cargocult) and 7 → 6, 6 → 5 (mythology).
+
+**Two findings, and the first one kills most of the plan's stage 2.**
+
+1. **The title, authors and year are almost never in the extract, so they almost never verify.**
+   The extract the search hands back is a *passage from the middle of the page* — the part that
+   matched the query — not its head. The model copied the right title every time (it matches the
+   engine's own title), and it is refused because the title is not in the passage. On cargocult
+   0 of 6 titles verified; the one author and one year offered were refused. The check is doing
+   its job: there is nothing on our side of the wire that says who wrote a page or when.
+2. **Asking for them cost rows.** The claims pass reported 6 and 4 rows against a baseline of 7, 7,
+   7, 6, and kept 5 and 4 against 6, 6, 6, 5 — both below the old prompt's own spread, which is the
+   line this plan set. One run each, so not proof; a `bears`-only variant was measured to separate
+   the two asks.
+
+**`bears` only (the prompt without title, authors and year)**, two runs per article:
+
+| article | run | kept (claims) | `bears` offered → kept |
+|---|---|---|---|
+| cargocult | 1 | 6 | 11 → 11 |
+| cargocult | 2 | 4 | 5 → 5 |
+| mythology | 1 | 4 | 7 → 7 |
+| mythology | 2 | 6 | 9 → 9 |
+
+So the row count swings 4–6 on the same prompt, and the full version's 5 and 4 sit inside that: **the
+fall was not the fields' doing**, or not provably. `bears` came back on every row the model reported,
+in the vocabulary, every time. Cost of all ten runs: about $2.35.
+
+### What that decided
+
+- **The search stops being asked for title, authors and year.** They verify on one row in eleven,
+  and a check that almost never passes is a prompt instruction that buys nothing. **`bears` stays**,
+  and is the whole of `debate/3`. The *prioritised* order and its relevance bar light up on a
+  re-run.
+- **The fields stay on the row type, and the client stays ready for them** — the byline
+  (`authors · year · site`), the `workTitle` rule, the *date* order and its *this piece* marker are
+  built and tested, and dormant: no stored row carries the fields, so none of them draws.
+- **Authors and year need a bibliographic source, which is Greg's call** — § Deferred: authors and
+  year from a lookup.
+
+## Deferred: authors and year from a lookup
+
+Greg asked for the authors by name. The page's own text, as the search returns it, does not carry
+them. What would:
+
+- **By identifier, where the address has one.** `nature.com/articles/nn.4304` is DOI
+  `10.1038/nn.4304`; `arxiv.org/pdf/1809.10635` is an arXiv id; `doi.org/…` is itself. Crossref or
+  OpenAlex answers a DOI with authors and year, exactly; arXiv's API answers an id. On the reported
+  article that is two or three of the five pages.
+- **By title, for the rest.** OpenAlex's search on the engine's title, kept only on an exact title
+  match. Papers mostly; blogs never.
+
+What it costs: a new outside service (free, rate-limited, no key for OpenAlex), a network call per
+row at search time, a cache, and a rule for what counts as a match. That is the "third exception to
+prefer boring" question vision.md asks to be weighed, so it is written up here rather than built.
+Everything on the client side is already in place for it.
+
+## Settled after the review
+
+- **Two sliders**: disjoint rows, F7 above.
+- **The default is *prioritised*** where `bears` exists, as Greg asked, and *by claim* otherwise.
+  The researcher would make *by claim* the default outright; with the relevance bar hiding nothing
+  by default (F5), *prioritised* costs a reader nothing that *by claim* would have shown.
+- **The ⓘ card goes into `more`**: it loses the instant hover preview, and gains keyboard and touch
+  parity and removes the portalled-dialog Tab-order defect (F12).

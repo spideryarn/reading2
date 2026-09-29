@@ -341,7 +341,8 @@ function CardOver({ behind }: { behind: ReactNode }) {
       return id ? { id } : null;
     },
     tapSelector: "mark.term",
-    /* **Both real consumers pass this** — `ProseHoverCard` and `DebatePanel` —
+    /* **The real consumer passes this** — `ProseHoverCard` (and `DebatePanel`
+       did, until its ⓘ card became a `more` disclosure on 2026-09-29) —
        and it is not inert: it installs the `focusin` listener that closes the
        card when focus leaves for somewhere else. Omitting it here made this
        harness quietly unlike the thing it stands for. GPT Sol, round 2. */

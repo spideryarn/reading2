@@ -13,11 +13,13 @@
    the band shell, the head, the run button, the stale banner, the counts and
    the two empty-state faces all come from § glossary mode unchanged.
 
-   What is here is only what a debate row has and an event does not: a **host**
-   that has to be the first thing the eye lands on, a quotation from a
-   stranger's page, and a fenced-off block of things a model guessed. Those
-   three are the design (DebatePanel.tsx), and the whole job of this section is
-   to make them look like three different kinds of claim.
+   What is here is only what a debate row has and an event does not: the
+   **work** — its title, the headline, and its site — a quotation from a
+   stranger's page, and a model's reading of it, labelled *AI* on one line and
+   fenced off in full behind `more`. Those three are the design
+   (DebatePanel.tsx), and the whole job of this section is to make them look
+   like three different kinds of claim. The order buttons are `.gloss-sort`'s,
+   unchanged.
 
    **No meter, no number, and one bar that is not one.** Greg asked for a
    positive/negative icon and a red/green scheme *"but without a score"*, so
@@ -124,25 +126,50 @@
   line-height: 1.35;
 }
 
-/* **There are no group headings, and that is the design** (DebatePanel.tsx §
-   One list). Two searches run, but which of them a row came from is our
-   epistemics rather than the reader's question, and drawn as two headed
-   sections it produced two headings, two blurbs, an empty-state paragraph and
-   two foot lines stacked over zero rows. `.dbt-mark` below is what replaced
-   them: the label moved onto the row, where it can say something per row that a
-   heading could only say per section. */
+/* **Headings only in *by claim*, and only ones we can stand behind**
+   (DebatePanel.tsx § One list): *About this piece*, and each claim in the
+   article's own words with the way to it. The two searches are not headings —
+   that split was our epistemics, and drawn as two sections it produced two
+   headings, two blurbs and two foot lines over zero rows — and stance is never
+   one, because a heading saying *Critical* would be the model's reading in our
+   voice. Small and quiet, so a heading reads as a label on the rows under it
+   rather than as a section of a document. */
+.dbt-group + .dbt-group { margin-top: 0.3rem; }
+.dbt-group-head {
+  margin: 0;
+  padding: 0.5rem 0 0.15rem;
+  color: var(--ink-faint);
+  font-family: var(--font-ui);
+  font-size: 0.72rem;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  line-height: 1.4;
+  text-transform: uppercase;
+}
+/* A claim heading is a quotation of the article, so it is set as one — in the
+   reading face, sentence case, the dotted rule `.dbt-claim` uses — not in
+   capitals, which would turn the piece's words into a label of ours. */
+.dbt-group-claim {
+  padding-left: 0.55rem;
+  border-left: 2px dotted var(--rule-strong);
+  margin-top: 0.35rem;
+  color: var(--ink-soft);
+  font-family: inherit;
+  font-size: 0.85rem;
+  font-weight: 500;
+  letter-spacing: 0;
+  text-transform: none;
+}
 
 /* **The lead sentence is drawn like an answer, not like a gap.** Finding no
    page that responds to a piece is this mode's commonest correct output, so it
    gets the ordinary quiet ink and ordinary padding — dimming it further, or
    setting it in italics as an aside, would teach the reader that the honest
-   answer is a failure. */
+   answer is a failure. After the list it sits below a rule, like the foot. */
 .dbt-empty { padding: 0.4rem 0 0.7rem; font-size: 0.86rem; line-height: 1.45; }
+.dbt-empty.dbt-after { margin-top: 0.5rem; border-top: 1px dotted var(--rule); }
 
-/* **The row's own label**, carrying what the two headings used to. It is a
-   chip rather than a line of text so it reads as a property of the row at a
-   glance, and it sits between the host and the title because it answers *why
-   is this here*, which a reader asks before they read a title.
+/* **The chip on a row about this piece**, on the small line under the title.
 
    **The three identification levels are drawn identically**, and that is a
    decision this file must not quietly undo. They are ordered — a link is
@@ -151,10 +178,8 @@
    (docs/project/quotes.md). The order is in the threshold, where the reader
    sets it; on the row it is a name.
 
-   The claim chip is the one that differs, because it is a different *kind* of
-   thing rather than a weaker one: dotted where the others are solid, the same
-   distinction `.dbt-claim` draws against `.dbt-quote` two rules down. */
-.dbt-mark-line { margin: 0.3rem 0 0; }
+   Claim rows have had no chip since 2026-09-29: *On what it claims* said the
+   same thing on every row, and the claim itself now says it. */
 .dbt-mark {
   display: inline-flex;
   align-items: center;
@@ -170,19 +195,13 @@
   text-transform: uppercase;
 }
 /* A button, because it opens a card — and it does nothing on press, which is
-   what `help` says. Same affordance as the ⓘ at the end of the row above it. */
+   what `help` says. */
 button.dbt-mark { cursor: help; }
 button.dbt-mark:hover { color: var(--ink); border-color: var(--ink-faint); }
 button.dbt-mark:focus-visible { outline: 2px solid var(--highlight); outline-offset: 2px; }
-.dbt-mark-claim {
-  border-style: dotted;
-  border-color: var(--rule);
-  color: var(--ink-faint);
-}
 
-/* The card behind the chip: every signal found, one to a line. Narrow like the
-   ⓘ card next door, and for the same reason — the band it hangs off is 288px at
-   its narrowest (`MODE_MIN` in layout.ts). */
+/* The card behind the chip: every signal found, one to a line. Narrow because
+   the band it hangs off is 288px at its narrowest (`MODE_MIN` in layout.ts). */
 .tooltip.dbt-mark-card { max-width: 21rem; }
 .dbt-mark-card-head {
   display: block;
@@ -207,90 +226,185 @@ button.dbt-mark:focus-visible { outline: 2px solid var(--highlight); outline-off
 .dbt-mark-card-list li { overflow-wrap: anywhere; }
 
 .dbt-list { margin: 0; padding: 0; list-style: none; }
-.dbt-item { padding: 0.55rem 0; border-top: 1px solid var(--rule); }
+.dbt-item { padding: 0.5rem 0; border-top: 1px solid var(--rule); }
 .dbt-item:first-child { border-top: none; }
 
-.dbt-row {
-  display: flex;
-  align-items: baseline;
-  gap: 0.4rem;
-}
+/* **The row's headline: what the work is.** The title, in the full ink and the
+   largest type on the row — it was the site until 2026-09-29, and three readers
+   and a product manager all said a row did not say what its source was
+   (docs/plans/260929h-debate-mode-clearer-sources-and-orders.md). It is the link
+   out, so it takes `--highlight-ink` for the reason every outward link in this
+   app does: leaving for somebody else's page is the one thing on the row worth
+   colouring.
 
-/* **The row's headline, and the only authority signal a reader can judge.**
-   Larger and in the full ink than anything else on the row, because there is no
-   honest ranking to draw and this is what a reader ranks with instead
-   (`DEBATE_NO_RANKING`). It is `--highlight-ink` rather than plain `--ink` for
-   the reason every other outward link in this app is: leaving for somebody
-   else's page is the one thing on the row worth colouring. */
-.dbt-host {
-  display: inline-flex;
-  align-items: baseline;
-  gap: 0.25rem;
-  min-width: 0;
+   **Two lines, then an ellipsis**, by `line-clamp` — so the whole title stays in
+   the accessibility tree and in the link's accessible name; only the paint is
+   cut. `more` (`.dbt-item.open`) lifts the clamp. */
+.dbt-title {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  overflow: hidden;
   overflow-wrap: anywhere;
   color: var(--highlight-ink);
   font-family: var(--font-ui);
   font-size: 0.92rem;
   font-weight: 600;
-  letter-spacing: 0.01em;
+  line-height: 1.3;
   text-decoration: none;
 }
-.dbt-host:hover { text-decoration: underline; text-underline-offset: 2px; }
-.dbt-host svg { flex: none; align-self: center; opacity: 0.7; }
+.dbt-title:hover { text-decoration: underline; text-underline-offset: 2px; }
+.dbt-title svg { display: inline; margin-left: 0.25rem; vertical-align: -1px; opacity: 0.7; }
+.dbt-title:focus-visible { outline: 2px solid var(--highlight); outline-offset: 2px; }
 
-/* The ⓘ. Pushed to the far end and quiet, because it is a reveal rather than
-   the thing to press — the row is already readable without it. It is a real
-   button so it is a tab stop and `useHoverCard`'s `focusable` gives a keyboard
-   reader the same card a pointer gets. */
-.dbt-info {
-  margin-left: auto;
-  flex: none;
-  display: inline-flex;
+/* The small line under the title: the site, and on a row about this piece its
+   identification chip. Stage 2 adds *authors · year* in front of the site in
+   `.dbt-byline`. The site stays readable text rather than fading to nothing —
+   it is still the one authority signal a reader can judge for themselves. */
+.dbt-meta {
+  display: flex;
+  flex-wrap: wrap;
   align-items: center;
-  padding: 0.1rem;
-  border: 0;
-  background: none;
-  color: var(--ink-faint);
-  cursor: help;
-}
-.dbt-info:hover { color: var(--ink); }
-.dbt-info:focus-visible { outline: 2px solid var(--highlight); outline-offset: 2px; }
-
-/* The search result's own title, never the model's. Under the host and quieter
-   than it, because on a lot of pages it is the publication's boilerplate. */
-.dbt-title {
+  gap: 0.2rem 0.45rem;
   margin: 0.15rem 0 0;
   color: var(--ink-soft);
   font-family: var(--font-ui);
-  font-size: 0.83rem;
+  font-size: 0.78rem;
   line-height: 1.35;
 }
+.dbt-site { overflow-wrap: anywhere; }
+/* **Authors and year, as the AI read them off the page** (the plan's F2) —
+   found in the extract, not proven to be this page's byline. So quieter than
+   the site beside them and in italics, the way this app sets a reading rather
+   than a record, with the caveat on hover and in words inside `more`. */
+.dbt-byline {
+  color: var(--ink-faint);
+  font-style: italic;
+  overflow-wrap: anywhere;
+  cursor: help;
+}
+
+/* The two lines inside a flat order that say what is **missing** — *not
+   judged for relevance*, *no year found* — and the marker at the article's own
+   year in *date*. Quiet, small, and ruled like the foot: facts about the rows
+   below, not headings in our voice. */
+.dbt-gap {
+  margin: 0.5rem 0 0;
+  padding: 0.35rem 0 0.1rem;
+  border-top: 1px dotted var(--rule);
+  color: var(--ink-faint);
+  font-family: var(--font-ui);
+  font-size: 0.74rem;
+  line-height: 1.35;
+}
+.dbt-marker {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  margin: 0.35rem 0;
+  color: var(--highlight-ink);
+  font-family: var(--font-ui);
+  font-size: 0.74rem;
+  font-weight: 600;
+  line-height: 1.35;
+}
+.dbt-marker::before,
+.dbt-marker::after {
+  content: "";
+  flex: 1;
+  border-top: 1px solid var(--highlight);
+  opacity: 0.6;
+}
+.dbt-marker::before { flex: 0 0 0.6rem; }
+
+/* Every author, in `more` — the byline shows three at most. */
+.dbt-authors {
+  margin: 0.3rem 0 0;
+  color: var(--ink-soft);
+  font-size: 0.81rem;
+  font-style: italic;
+  line-height: 1.4;
+}
+
+/* **The AI's reading, one line, labelled.** The small *AI* tag is the fence's
+   label at the size of a line: everything after it is a model's reading of a
+   stranger's page. Up here rather than last because it is what a reader
+   decides with. The paragraph behind it lives in `.dbt-ai`, under `more`. */
+.dbt-ai-line {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.2rem 0.4rem;
+  margin: 0.3rem 0 0;
+}
+.dbt-ai-tag {
+  padding: 0 0.3rem;
+  border: 1px dashed var(--rule-strong);
+  border-radius: 3px;
+  color: var(--ink-faint);
+  font-family: var(--font-ui);
+  font-size: 0.64rem;
+  font-weight: 600;
+  letter-spacing: 0.07em;
+  line-height: 1.5;
+  cursor: help;
+}
+.dbt-dot { color: var(--ink-faint); font-size: 0.76rem; }
 
 /* **Characters we located in that page's own extract.** The solid rule down the
    left is the provenance mark this app already uses for "these are not our
    words" (`.gloss-part-senseHere`, and § timeline mode reuses it for the same
    reason) — a third way of drawing the same distinction would teach the reader
-   it means three things. */
+   it means three things. Three lines until `more`, by the same clamp as the
+   title and for the same reason. */
 .dbt-quote {
-  margin: 0.35rem 0 0;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
+  line-clamp: 3;
+  overflow: hidden;
+  margin: 0.3rem 0 0;
   padding: 0 0 0 0.55rem;
   border-left: 2px solid var(--rule-strong);
   color: var(--ink);
   font-size: 0.88rem;
   line-height: 1.5;
 }
+.dbt-item.open .dbt-title,
+.dbt-item.open .dbt-quote {
+  display: block;
+  -webkit-line-clamp: unset;
+  line-clamp: none;
+  overflow: visible;
+}
 
-/* Group two only: the article's own words for the claim being answered. Same
-   rule down the left as the quotation above, because it is the same kind of
-   thing — a located quotation — from the other side of the row. */
+/* A claim row outside *by claim*: the article's own words for the claim it
+   answers, on **one** line, with the jump to its block kept whole at the end —
+   so the text truncates rather than the whole line, and the block reference
+   never falls off. Same dotted rule as the claim heading, because it is the
+   same thing. */
 .dbt-claim {
-  margin: 0.35rem 0 0;
+  display: flex;
+  align-items: baseline;
+  gap: 0.3rem;
+  min-width: 0;
+  margin: 0.25rem 0 0;
   padding: 0 0 0 0.55rem;
   border-left: 2px dotted var(--rule-strong);
   color: var(--ink-soft);
   font-size: 0.84rem;
   line-height: 1.45;
 }
+.dbt-claim-text {
+  flex: 0 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.dbt-claim > :not(.dbt-claim-text) { flex: none; }
+.dbt-item.open .dbt-claim-text { white-space: normal; }
 .dbt-claim-label {
   color: var(--ink-faint);
   font-family: var(--font-ui);
@@ -298,15 +412,39 @@ button.dbt-mark:focus-visible { outline: 2px solid var(--highlight); outline-off
   font-weight: 600;
   letter-spacing: 0.05em;
   text-transform: uppercase;
-  margin-right: 0.3rem;
 }
+.dbt-group-claim .dbt-claim-label { margin-right: 0.15rem; }
 
-/* **The fence.** Everything above it is the wire's or the article's; everything
-   inside it is a model's reading of a stranger's page. Tinted and inset rather
-   than merely labelled, because a label alone is read once and the boundary has
-   to survive a reader scanning twelve rows. */
+/* **`more`** — the disclosure that replaced the ⓘ card. Quiet, like
+   `.gloss-sort-btn`, because the row is readable without it; a real button, so a
+   tap and a keyboard get what a pointer gets. The chevron turns when open. */
+.dbt-more {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.15rem;
+  margin: 0.1rem 0 0;
+  padding: 0.05rem 0.3rem 0.05rem 0;
+  border: 0;
+  background: none;
+  color: var(--ink-faint);
+  font-family: var(--font-ui);
+  font-size: 0.76rem;
+  cursor: pointer;
+}
+.dbt-more:hover { color: var(--ink); }
+.dbt-more:focus-visible { outline: 2px solid var(--highlight); outline-offset: 1px; }
+.dbt-more svg { transition: transform 120ms ease; }
+.dbt-more[aria-expanded="true"] svg { transform: rotate(180deg); }
+
+/* What `more` opens. `hidden` does the hiding — this is only its spacing. */
+.dbt-detail { margin: 0.15rem 0 0; }
+
+/* **The fence.** Everything outside it is the wire's or the article's;
+   everything inside it is a model's reading of a stranger's page. Tinted and
+   inset rather than merely labelled, because a label alone is read once and the
+   boundary has to survive a reader scanning twelve rows. */
 .dbt-ai {
-  margin: 0.45rem 0 0;
+  margin: 0.3rem 0 0;
   padding: 0.4rem 0.5rem;
   border: 1px dashed var(--rule);
   border-radius: 4px;
@@ -321,16 +459,12 @@ button.dbt-mark:focus-visible { outline: 2px solid var(--highlight); outline-off
   letter-spacing: 0.07em;
   text-transform: uppercase;
 }
-.dbt-ai-fields {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 0.3rem 0.5rem;
-  margin: 0 0 0.3rem;
-}
 /* What the page does to what it answers. A word, not a badge with a colour of
-   its own: `relation` groups the list and `lean` draws the colour, and
-   colouring both would make the row look as though it carried two verdicts. */
+   its own: `lean` draws the colour beside it, and colouring both would make the
+   row look as though it carried two verdicts. */
+/* `bears`, the relevance judgment, drawn exactly like `relation` beside it: a
+   word, no colour, no weight that would make one stop look better than another. */
+.dbt-bears,
 .dbt-relation {
   color: var(--ink-soft);
   font-family: var(--font-ui);
@@ -401,8 +535,8 @@ button.dbt-mark:focus-visible { outline: 2px solid var(--highlight); outline-off
 /* The third disclosure, at the foot of the scroller rather than in the head —
    what the quotations were checked against is a question you ask *of a
    quotation*, and all three sentences at the top were an eight-line wall over
-   the first row at `MODE_MIN`. It is on every ⓘ card as well, which is the other
-   point of use. */
+   the first row at `MODE_MIN`. It is inside every row's `more` as well, which
+   is the other point of use. */
 .dbt-verified {
   margin: 0.9rem 0 0;
   padding: 0.5rem 0 0;
@@ -412,65 +546,46 @@ button.dbt-mark:focus-visible { outline: 2px solid var(--highlight); outline-off
   line-height: 1.4;
 }
 
-/* The ⓘ card. Narrower than the prose card next door because it holds one
-   quotation and a link rather than a whole footnote, and the band it hangs off
-   is 288px at its narrowest (`MODE_MIN` in layout.ts). */
-.tooltip.dbt-card { max-width: 22rem; }
-.dbt-card-body { display: block; }
-.dbt-card-title {
-  margin: 0 0 0.2rem;
-  color: var(--ink);
-  font-family: var(--font-ui);
-  font-size: 0.85rem;
-  font-weight: 600;
-  line-height: 1.35;
-}
-/* The full address, which the row shows only the host of. Wrapping rather than
-   truncating: half a URL is not an address, and the reader is looking at this
-   card precisely to decide whether to follow it. */
-.dbt-card-url {
-  margin: 0 0 0.35rem;
+/* What `more` holds under the fence — what the ⓘ card held until 2026-09-29.
+   The full address, which the row shows only the host of: wrapping rather than
+   truncating, because half a URL is not an address and the reader is looking
+   at this precisely to decide whether to follow it. */
+.dbt-url {
+  margin: 0.35rem 0 0;
   color: var(--ink-faint);
   font-family: var(--font-mono);
   font-size: 0.72rem;
   line-height: 1.35;
   overflow-wrap: anywhere;
 }
-.dbt-card-quote {
-  margin: 0 0 0.35rem;
-  padding: 0 0 0 0.55rem;
-  border-left: 2px solid var(--rule-strong);
-  color: var(--ink);
-  font-size: 0.87rem;
-  line-height: 1.5;
-}
-/* Group one's witness that this page names *this* article — the check that is
-   the whole difference between the two groups, so it is on the card rather than
-   buried. */
-.dbt-card-ref {
-  margin: 0 0 0.35rem;
+/* A direct row's witness that this page names *this* article — the check that
+   is the whole difference between the two kinds of row. */
+.dbt-ref {
+  margin: 0.3rem 0 0;
   color: var(--ink-soft);
   font-size: 0.81rem;
   line-height: 1.45;
 }
-.dbt-card-note {
-  margin: 0 0 0.45rem;
+.dbt-note {
+  margin: 0.3rem 0 0;
   color: var(--ink-faint);
   font-size: 0.74rem;
   line-height: 1.4;
 }
-.dbt-card-out {
+.dbt-out {
   display: inline-flex;
   align-items: center;
   gap: 0.3rem;
+  margin: 0.35rem 0 0;
   color: var(--highlight-ink);
   font-family: var(--font-ui);
   font-size: 0.8rem;
   font-weight: 600;
   text-decoration: none;
 }
-.dbt-card-out:hover { text-decoration: underline; text-underline-offset: 2px; }
-.dbt-card-out svg { flex: none; }
+.dbt-out:hover { text-decoration: underline; text-underline-offset: 2px; }
+.dbt-out:focus-visible { outline: 2px solid var(--highlight); outline-offset: 2px; }
+.dbt-out svg { flex: none; }
 
 /* Status-only since plan 260929b: progress, Stop and failures stay pinned even
    though the idle redo button moved to Metadata. */

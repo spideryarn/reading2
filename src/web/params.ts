@@ -29,7 +29,7 @@
  * `popstate` for everything else. One query string, one listener.
  */
 import { createParser, debounce } from "nuqs";
-import type { IdentificationLevel, TrajectoryDepth } from "../types.js";
+import type { DebateBears, IdentificationLevel, TrajectoryDepth } from "../types.js";
 import { isSpideryarnId } from "../ids.js";
 import { isIdentificationLevel } from "./debate-levels.js";
 import { DIAGRAMS, type DiagramKind } from "./diagram.js";
@@ -39,6 +39,8 @@ import { sameList } from "./lib/table-sort.js";
 /* Type-only: a value import would put faq-order.ts on the reader's startup
    path (tests/eager-client-graph.test.ts). faq-order.ts § FaqOrder. */
 import type { FaqOrder } from "./faq-order.js";
+/* Type-only, for the same reason: debate-order.ts § DebateOrder. */
+import type { DebateOrder } from "./debate-order.js";
 import type { ShelfFilter, ShelfView } from "./ShelfControls.js";
 
 /* Which article is NOT in here. It is the path — `/read/<slug>` — and has been
@@ -1251,6 +1253,58 @@ export const rememberParam = createParser<RememberView>({
  */
 export const nameParam = createParser<IdentificationLevel>({
   parse: (v) => (isIdentificationLevel(v) ? v : null),
+  serialize: (v) => v,
+}).withOptions({ history: "replace" });
+
+/**
+ * **How Debate's list is ordered** — `?debateby=`, since 2026-09-29
+ * (SPIDERYARN-READING2-5P, docs/plans/260929h-debate-mode-clearer-sources-and-orders.md).
+ *
+ * `prioritised`, `claim` (*by claim*), `date` or `stance`. The parser's default
+ * is `prioritised`, as Greg asked — and on a debate whose rows cannot support
+ * it (every one before stage 2's `debate/3`, and every visitor's) the panel
+ * draws *by claim* instead (debate-order.ts § `effectiveDebateOrder`), which is
+ * Glossary's `?sort=` arrangement. An unknown value parses to the default.
+ *
+ * **Its own key**, for `citeby`'s reason: every parameter survives a mode
+ * switch, so a shared `?sort=` would carry one mode's order into another. `push`,
+ * like `?citeby=`: changing the order is a deliberate act on the view, and Back
+ * should undo it.
+ */
+export const DEBATE_ORDERS = ["prioritised", "claim", "date", "stance"] as const satisfies readonly DebateOrder[];
+/* And the other way: every `DebateOrder` is in the list, or this line stops compiling. */
+const _everyDebateOrderListed: Exclude<DebateOrder, (typeof DEBATE_ORDERS)[number]> extends never ? true : never =
+  true;
+void _everyDebateOrderListed;
+
+export const debateOrderParam = createParser<DebateOrder>({
+  parse: (v) => (DEBATE_ORDERS.includes(v as DebateOrder) ? (v as DebateOrder) : null),
+  serialize: (v) => v,
+})
+  .withDefault("prioritised")
+  .withOptions({ history: "push" });
+
+/**
+ * **How directly a page has to bear on its claim to stay on Debate's list** —
+ * `?bears=loosely`, `?bears=partly` or `?bears=directly`; the relevance bar,
+ * shown only while *prioritised* is the order drawn.
+ *
+ * `?name=`'s shape exactly, for `?name=`'s reasons: **the word, not a number**
+ * (three named stops of one model judgment — a number would read as a
+ * measurement), **no parser default** (absent is *nobody has touched it*,
+ * which the panel resolves to `RELEVANCE_DEFAULT` in debate-order.ts — and that
+ * default is `loosely`, which hides nothing), an unknown word parses to `null`,
+ * and `replace`, not debounced. It filters claim rows only; `?name=` owns the
+ * rows about this piece. docs/plans/260929h-debate-mode-clearer-sources-and-orders.md F5, F7.
+ */
+export const DEBATE_BEARS_WORDS = ["directly", "partly", "loosely"] as const satisfies readonly DebateBears[];
+/* And the other way: every `DebateBears` is in the list, or this stops compiling. */
+const _everyBearsListed: Exclude<DebateBears, (typeof DEBATE_BEARS_WORDS)[number]> extends never ? true : never =
+  true;
+void _everyBearsListed;
+
+export const bearsParam = createParser<DebateBears>({
+  parse: (v) => (DEBATE_BEARS_WORDS.includes(v as DebateBears) ? (v as DebateBears) : null),
   serialize: (v) => v,
 }).withOptions({ history: "replace" });
 
